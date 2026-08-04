@@ -3,6 +3,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Activity,
@@ -21,7 +22,9 @@ import type { ThreadGoalSnapshot } from '../services/goalService';
 import { Tooltip, IconButton } from '@/component-library';
 import { useGitState } from '@/tools/git/hooks/useGitState';
 import type { SessionExecutionTarget } from '@/infrastructure/api/service-api/WorktreeAPI';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { DispatchResultDialog } from '@/features/dispatch/DispatchResultDialog';
 import { DispatchTargetPicker } from '@/features/dispatch/DispatchTargetPicker';
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
@@ -108,8 +111,19 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const { t: tWorktrees } = useI18n('worktrees');
   const { t: tCommon } = useI18n('common');
   const permissionRootRef = useRef<HTMLDivElement>(null);
+  const permissionTriggerRef = useRef<HTMLButtonElement>(null);
+  const permissionMenuRef = useRef<HTMLDivElement>(null);
   const [permissionMenuOpen, setPermissionMenuOpen] = useState(false);
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
+  const permissionMenuLayout = useAnchoredPopoverPosition({
+    open: permissionMenuOpen,
+    anchorRef: permissionTriggerRef,
+    popoverRef: permissionMenuRef,
+    preferredPlacement: 'top',
+    alignment: 'end',
+    gap: 7,
+    layoutRevision: `${permissionControl?.options?.length ?? 0}:${Boolean(permissionControl?.onHide)}`,
+  });
   const trimmedPath = repositoryPath.trim();
   const label = workspaceLabel.trim();
 
@@ -177,7 +191,11 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     if (!permissionMenuOpen) return;
 
     const handlePointerDown = (event: PointerEvent) => {
-      if (!permissionRootRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        !permissionRootRef.current?.contains(target)
+        && !permissionMenuRef.current?.contains(target)
+      ) {
         setPermissionMenuOpen(false);
       }
     };
@@ -388,6 +406,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
             >
               <Tooltip content={permissionTooltip} placement="top">
                 <button
+                  ref={permissionTriggerRef}
                   type="button"
                   className={[
                     'bitfun-chat-input-workspace-strip__permission-trigger',
@@ -418,12 +437,19 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                 </button>
               </Tooltip>
 
-              {permissionMenuOpen && permissionMode !== 'acp' ? (
+              {permissionMenuOpen && permissionMode !== 'acp' ? createPortal(
                 <div
+                  ref={permissionMenuRef}
                   data-bf-component="chat-input-workspace-strip"
                   data-bf-part="permissionMenu"
                   data-bf-state="open"
+                  data-bf-placement={permissionMenuLayout?.placement ?? 'top'}
                   className="bitfun-chat-input-workspace-strip__permission-menu"
+                  style={{
+                    top: `${permissionMenuLayout?.top ?? 0}px`,
+                    left: `${permissionMenuLayout?.left ?? 0}px`,
+                    visibility: permissionMenuLayout ? 'visible' : 'hidden',
+                  }}
                   role="menu"
                   aria-label={t('chatInput.permissionMode.menuLabel')}
                   data-testid="chat-input-permission-menu"
@@ -493,7 +519,8 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                       </button>
                     </>
                   ) : null}
-                </div>
+                </div>,
+                getAppearanceOverlayHost(),
               ) : null}
             </div>
           ) : null}

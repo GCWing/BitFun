@@ -14,6 +14,7 @@ import { SessionTreePopover, type SessionTreeSelection } from './SessionTreePopo
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { createReviewPlatformTab } from '@/shared/utils/tabUtils';
 import './FlowChatHeader.scss';
 
@@ -109,6 +110,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const headerRef = useRef<HTMLDivElement | null>(null);
   const leftActionsRef = useRef<HTMLDivElement | null>(null);
   const rightActionsRef = useRef<HTMLDivElement | null>(null);
+  const backgroundCommandRootRef = useRef<HTMLDivElement | null>(null);
+  const backgroundCommandTriggerRef = useRef<HTMLButtonElement | null>(null);
   const backgroundCommandPanelRef = useRef<HTMLDivElement | null>(null);
   const backgroundCommandMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
   const backgroundCommandMenuRef = useRef<HTMLDivElement | null>(null);
@@ -137,6 +140,15 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const hasOpenBackgroundCommandMenu =
     isBackgroundCommandSectionMenuOpen ||
     openBackgroundCommandMenuId !== null;
+  const backgroundCommandPanelLayout = useAnchoredPopoverPosition({
+    open: isBackgroundCommandPanelOpen,
+    anchorRef: backgroundCommandTriggerRef,
+    popoverRef: backgroundCommandPanelRef,
+    preferredPlacement: 'bottom',
+    alignment: 'end',
+    gap: 8,
+    layoutRevision: backgroundCommandCount,
+  });
 
   const updateBackgroundCommandMenuPosition = useCallback(() => {
     const anchor = backgroundCommandMenuAnchorRef.current;
@@ -164,6 +176,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
       if (
+        !backgroundCommandRootRef.current?.contains(target) &&
         !backgroundCommandPanelRef.current?.contains(target) &&
         !backgroundCommandMenuRef.current?.contains(target)
       ) {
@@ -401,7 +414,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
         {openBackgroundCommandMenuId === command.execSessionKey && backgroundCommandMenuPosition ? createPortal(
           <div
             ref={backgroundCommandMenuRef}
-            className="flowchat-header__background-command-menu"
+            className="flowchat-header__background-command-menu flowchat-header__background-command-menu--portal"
             data-bf-component="flow-chat-header"
             data-bf-part="commandMenu"
             role="menu"
@@ -519,11 +532,12 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
         />
         <div
           className="flowchat-header__background-command-nav"
-          ref={backgroundCommandPanelRef}
+          ref={backgroundCommandRootRef}
           data-bf-component="flow-chat-header"
           data-bf-part="backgroundActivity"
         >
           <IconButton
+            ref={backgroundCommandTriggerRef}
             className={[
               'flowchat-header__background-command-nav-button',
               isBackgroundCommandPanelOpen && 'flowchat-header__background-command-nav-button--active',
@@ -549,13 +563,20 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             </span>
           </IconButton>
 
-          {isBackgroundCommandPanelOpen && (
+          {isBackgroundCommandPanelOpen && createPortal(
             <div
+              ref={backgroundCommandPanelRef}
               className="flowchat-header__background-command-panel"
               data-bf-component="flow-chat-header"
               data-bf-part="activityPanel"
+              data-bf-placement={backgroundCommandPanelLayout?.placement ?? 'bottom'}
               role="dialog"
               aria-label={backgroundCommandLabel}
+              style={{
+                top: `${backgroundCommandPanelLayout?.top ?? 0}px`,
+                left: `${backgroundCommandPanelLayout?.left ?? 0}px`,
+                visibility: backgroundCommandPanelLayout ? 'visible' : 'hidden',
+              }}
             >
               <div className="flowchat-header__background-command-panel-header">
                 <span>{backgroundCommandLabel}</span>
@@ -580,7 +601,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                   {isBackgroundCommandSectionMenuOpen && backgroundCommandMenuPosition ? createPortal(
                     <div
                       ref={backgroundCommandMenuRef}
-                      className="flowchat-header__background-command-menu"
+                      className="flowchat-header__background-command-menu flowchat-header__background-command-menu--portal"
                       data-bf-component="flow-chat-header"
                       data-bf-part="commandMenu"
                       role="menu"
@@ -640,7 +661,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                   </div>
                 )}
               </div>
-            </div>
+            </div>,
+            getAppearanceOverlayHost(),
           )}
         </div>
 

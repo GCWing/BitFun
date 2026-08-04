@@ -30,13 +30,15 @@ vi.mock('@/component-library', async () => {
 
   return {
     DotMatrixLoader: () => <span data-testid="dot-matrix-loader" />,
-    IconButton: ({
+    IconButton: ReactModule.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & {
+      tooltip?: string;
+    }>(({
       children,
       tooltip,
       ...props
-    }: React.ButtonHTMLAttributes<HTMLButtonElement> & { tooltip?: string }) => (
-      <button type="button" title={tooltip} {...props}>{children}</button>
-    ),
+    }, ref) => (
+      <button ref={ref} type="button" title={tooltip} {...props}>{children}</button>
+    )),
   };
 });
 
@@ -78,7 +80,7 @@ describe('SessionTreePopover', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
-    document.body.querySelector('[data-testid="flowchat-header-session-tree-menu"]')?.remove();
+    document.querySelector('[data-bf-overlay-host="true"]')?.remove();
     vi.restoreAllMocks();
   });
 
@@ -102,11 +104,14 @@ describe('SessionTreePopover', () => {
       await Promise.resolve();
     });
 
-    const actionButton = container.querySelector<HTMLButtonElement>(
+    const panel = document.querySelector<HTMLElement>('.session-tree-popover__panel');
+    expect(panel?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
+    expect(panel?.style.visibility).toBe('visible');
+    const actionButton = panel?.querySelector<HTMLButtonElement>(
       '[aria-label="flowChatHeader.agentTreeActions"]',
     );
     expect(actionButton).not.toBeNull();
-    const childNode = Array.from(container.querySelectorAll('[role="treeitem"]'))
+    const childNode = Array.from(panel?.querySelectorAll('[role="treeitem"]') ?? [])
       .find(node => node.textContent?.includes('Running child'));
     const status = childNode?.querySelector('.session-tree-popover__status');
     expect(childNode).not.toBeUndefined();

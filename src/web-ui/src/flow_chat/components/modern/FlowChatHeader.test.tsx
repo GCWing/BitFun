@@ -25,21 +25,21 @@ vi.mock('@/component-library', async () => {
     Tooltip: ({ children }: { children: React.ReactNode }) => (
       <ReactModule.Fragment>{children}</ReactModule.Fragment>
     ),
-    IconButton: ({
+    IconButton: ReactModule.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & {
+      size?: string;
+      tooltip?: string;
+      variant?: string;
+    }>(({
       children,
       size,
       tooltip,
       variant,
       ...props
-    }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-      size?: string;
-      tooltip?: string;
-      variant?: string;
-    }) => (
-      <button type="button" title={tooltip} {...props}>
+    }, ref) => (
+      <button ref={ref} type="button" title={tooltip} {...props}>
         {children}
       </button>
-    ),
+    )),
     Input: ReactModule.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>((props, ref) => (
       <input ref={ref} {...props} />
     )),
@@ -93,6 +93,7 @@ describe('FlowChatHeader', () => {
     act(() => {
       root.unmount();
     });
+    document.querySelector('[data-bf-overlay-host="true"]')?.remove();
     container.remove();
     vi.restoreAllMocks();
   });
@@ -171,8 +172,10 @@ describe('FlowChatHeader', () => {
       commandButton?.click();
     });
 
-    const panel = container.querySelector('.flowchat-header__background-command-panel');
+    const panel = document.querySelector<HTMLElement>('.flowchat-header__background-command-panel');
     expect(panel?.textContent).toContain('flowChatHeader.backgroundCommandEmpty');
+    expect(panel?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
+    expect(panel?.style.visibility).toBe('visible');
   });
 
   it('renders background command menus in a portal outside the scrollable panel', () => {
@@ -204,7 +207,7 @@ describe('FlowChatHeader', () => {
       commandButton?.click();
     });
 
-    const panel = container.querySelector('.flowchat-header__background-command-panel');
+    const panel = document.querySelector('.flowchat-header__background-command-panel');
     const menuButton = panel?.querySelector<HTMLButtonElement>(
       '.flowchat-header__background-command-panel-header-actions [aria-label="flowChatHeader.backgroundCommandActions"]',
     );
@@ -217,11 +220,12 @@ describe('FlowChatHeader', () => {
     const menu = document.querySelector<HTMLDivElement>('[data-testid="flowchat-header-background-menu"]');
     expect(menu).not.toBeNull();
     expect(panel?.contains(menu ?? null)).toBe(false);
+    expect(menu?.classList.contains('flowchat-header__background-command-menu--portal')).toBe(true);
 
     act(() => {
       menu?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     });
-    expect(container.querySelector('.flowchat-header__background-command-panel')).not.toBeNull();
+    expect(document.querySelector('.flowchat-header__background-command-panel')).not.toBeNull();
 
     const stopButton = menu?.querySelector<HTMLButtonElement>('[role="menuitem"]');
     act(() => {

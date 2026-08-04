@@ -210,18 +210,20 @@
   }
 
   &__permission-menu {
-    position: absolute;
-    right: 0;
-    bottom: calc(100% + 7px);
-    z-index: 10;
+    position: fixed;
+    z-index: $z-popover;
     box-sizing: border-box;
-    width: min(286px, calc(100vw - 24px));
+    width: min(286px, calc(100vw - 16px));
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
     padding: 6px;
     border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: $size-radius-base;
     background: var(--bf-appearance-token-color-bg-elevated);
     box-shadow: var(--bf-appearance-token-shadow-lg);
     color: var(--bf-appearance-token-color-text-primary);
+    font-family: var(--bf-appearance-token-font-family-sans);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
     user-select: none;
   }
 

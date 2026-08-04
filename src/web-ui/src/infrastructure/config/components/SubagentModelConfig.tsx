@@ -126,6 +126,7 @@ export const SubagentModelConfig: React.FC = () => {
         size="small"
         searchable
         className="model-select-presentation__select"
+        dropdownClassName="model-select-presentation__dropdown"
         options={modelOptions}
         value={selectionValue(selection)}
         onChange={(value) => void handleChange(value)}

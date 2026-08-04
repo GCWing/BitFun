@@ -145,10 +145,10 @@ $ins-label:   12px;
     padding-bottom: 5px;
   }
 
-  .select__dropdown {
-    width: 340px;
-    right: auto;
-  }
+}
+
+.insights-scene__model-select-dropdown {
+  width: min(340px, calc(100vw - 48px));
 }
 
 .insights-model-select {
@@ -684,7 +684,6 @@ $ins-label:   12px;
     width: 100%;
     flex: 0 0 100%;
 
-    .select__dropdown { width: 100%; right: 0; }
   }
   .insights-scene__control-label { width: 100%; }
   .insights-meta-card__top { align-items: flex-start; flex-direction: column; }

@@ -1,9 +1,12 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Bot, Check, Pencil, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button, IconButton, Input } from '@/component-library';
 import type { IdentitySaveStatus } from '@/app/scenes/my-agent/useAgentIdentityDocument';
 import { ASSISTANT_AVATAR_PRESETS, firstAvatarGrapheme } from './assistantAvatar';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 
 interface AssistantAvatarPickerProps {
   value: string;
@@ -23,9 +26,18 @@ const AssistantAvatarPicker: React.FC<AssistantAvatarPickerProps> = ({
   const titleId = `${pickerId}-title`;
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const displayedValue = useMemo(() => firstAvatarGrapheme(value), [value]);
   const [customValue, setCustomValue] = useState(displayedValue);
+  const popoverLayout = useAnchoredPopoverPosition({
+    open: isOpen,
+    anchorRef: triggerRef,
+    popoverRef,
+    preferredPlacement: 'bottom',
+    alignment: 'start',
+    gap: 8,
+  });
 
   useEffect(() => {
     setCustomValue(displayedValue);
@@ -35,7 +47,8 @@ const AssistantAvatarPicker: React.FC<AssistantAvatarPickerProps> = ({
     if (!isOpen) return;
 
     const handlePointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (!rootRef.current?.contains(target) && !popoverRef.current?.contains(target)) {
         setIsOpen(false);
       }
     };
@@ -93,12 +106,19 @@ const AssistantAvatarPicker: React.FC<AssistantAvatarPickerProps> = ({
         </span>
       </button>
 
-      {isOpen ? (
+      {isOpen ? createPortal(
         <div
+          ref={popoverRef}
           id={pickerId}
           className="acp-avatar-picker__popover"
           role="region"
           aria-labelledby={titleId}
+          data-bf-placement={popoverLayout?.placement ?? 'bottom'}
+          style={{
+            top: `${popoverLayout?.top ?? 0}px`,
+            left: `${popoverLayout?.left ?? 0}px`,
+            visibility: popoverLayout ? 'visible' : 'hidden',
+          }}
         >
           <div className="acp-avatar-picker__header">
             <div className="acp-avatar-picker__heading">
@@ -169,7 +189,8 @@ const AssistantAvatarPicker: React.FC<AssistantAvatarPickerProps> = ({
               {statusContent}
             </span>
           </div>
-        </div>
+        </div>,
+        getAppearanceOverlayHost(),
       ) : null}
     </div>
   );

@@ -30,6 +30,17 @@
   flex-direction: column;
   backdrop-filter: blur(20px) saturate(1.2);
   -webkit-backdrop-filter: blur(20px) saturate(1.2);
+
+  &--overlay {
+    position: fixed;
+    z-index: $z-popover;
+    width: min(400px, calc(100vw - 16px));
+    min-width: min(260px, calc(100vw - 16px));
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+    color: var(--bf-appearance-token-color-text-primary);
+    font-family: var(--bf-appearance-token-font-family-sans);
+  }
   
   // Entry animation
   animation: mentionPickerSlideUp 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);

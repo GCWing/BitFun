@@ -64,14 +64,12 @@
   }
 
   &__menu {
-    position: absolute;
-    right: 0;
-    bottom: calc(100% + 7px);
-    z-index: 10;
+    position: fixed;
+    z-index: $z-popover;
     box-sizing: border-box;
     display: flex;
-    width: min(300px, calc(100vw - 24px));
-    max-height: min(410px, calc(100vh - 24px));
+    width: min(300px, calc(100vw - 16px));
+    max-height: min(410px, calc(100vh - 16px));
     flex-direction: column;
     gap: 4px;
     padding: 6px;
@@ -83,6 +81,7 @@
     box-shadow: var(--bf-appearance-token-shadow-lg);
     color: var(--bf-appearance-token-color-text-primary);
     font-family: var(--bf-appearance-token-font-family-sans);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
     user-select: none;
   }
 

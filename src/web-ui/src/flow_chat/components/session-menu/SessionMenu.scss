@@ -3,6 +3,8 @@
  * Moved here from ToolbarMode.scss so both surfaces render the same menu.
  */
 
+@use '../../../component-library/styles/tokens' as tokens;
+
 $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
 
 .bitfun-session-menu {
@@ -47,13 +49,11 @@ $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .bitfun-session-menu__dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  margin-top: 4px;
-  width: max(100%, 220px);
-  max-width: min(360px, calc(100vw - 24px));
-  max-height: min(360px, calc(100vh - 80px));
+  --session-menu-entry-y: -4px;
+  position: fixed;
+  box-sizing: border-box;
+  width: min(220px, calc(100vw - 16px));
+  max-height: min(360px, calc(100vh - 16px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -61,9 +61,17 @@ $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
   border: 1px solid var(--bf-appearance-token-border-medium);
   border-radius: var(--bf-appearance-token-size-radius-base);
   box-shadow: var(--bf-appearance-token-shadow-xl);
-  z-index: 100;
+  z-index: tokens.$z-popover;
   animation: session-menu-appear 0.2s $session-menu-timing;
   transform-origin: top left;
+  font-family: var(--bf-appearance-token-font-family-sans);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  color: var(--bf-appearance-token-color-text-primary);
+
+  &[data-bf-placement='top'] {
+    --session-menu-entry-y: 4px;
+    transform-origin: bottom left;
+  }
 
   .bitfun-session-menu__actions .bitfun-session-menu__item--new:first-of-type {
     border-radius: 7px 7px 0 0;
@@ -179,7 +187,7 @@ $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
 @keyframes session-menu-appear {
   from {
     opacity: 0;
-    transform: translateY(-4px) scale(0.98);
+    transform: translateY(var(--session-menu-entry-y)) scale(0.98);
   }
   to {
     opacity: 1;

@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Check,
   ChevronDown,
@@ -19,7 +20,9 @@ import {
 import { Tooltip } from '@/component-library';
 import { SSHConnectionDialog } from '@/features/ssh-remote/SSHConnectionDialog';
 import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { DispatchInstallDialog } from './DispatchInstallDialog';
 import type {
   DispatchSelection,
@@ -52,12 +55,23 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
 }) => {
   const { t } = useI18n('flow-chat');
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [configureTarget, setConfigureTarget] = useState<DispatchTargetOption | null>(null);
   const [sshDialogOpen, setSshDialogOpen] = useState(false);
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
   const { loggedIn } = useAccountLoginState();
   const { targets, loading, error, refresh } = useDispatchTargets(open);
+  const menuLayout = useAnchoredPopoverPosition({
+    open,
+    anchorRef: triggerRef,
+    popoverRef: menuRef,
+    preferredPlacement: 'top',
+    alignment: 'end',
+    gap: 7,
+    layoutRevision: `${targets.length}:${loading}:${error ?? ''}`,
+  });
 
   const displayLabel = target.kind === 'local'
     ? t('chatInput.dispatch.local')
@@ -69,7 +83,11 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
   useEffect(() => {
     if (!open) return;
     const handlePointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
+      const targetNode = event.target as Node;
+      if (
+        !rootRef.current?.contains(targetNode)
+        && !menuRef.current?.contains(targetNode)
+      ) {
         setOpen(false);
       }
     };
@@ -101,9 +119,16 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
 
   const menu = open ? (
     <div
+      ref={menuRef}
       className="dispatch-target-picker__menu"
       data-bf-component="dispatch-target-picker"
       data-bf-part="menu"
+      data-bf-placement={menuLayout?.placement ?? 'top'}
+      style={{
+        top: `${menuLayout?.top ?? 0}px`,
+        left: `${menuLayout?.left ?? 0}px`,
+        visibility: menuLayout ? 'visible' : 'hidden',
+      }}
       role="menu"
       aria-label={t('chatInput.dispatch.menuLabel')}
       data-testid="dispatch-target-menu"
@@ -271,6 +296,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
       >
         <Tooltip content={tooltip} placement="top">
           <button
+            ref={triggerRef}
             type="button"
             className="dispatch-target-picker__trigger"
             data-bf-component="dispatch-target-picker"
@@ -301,7 +327,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
             ) : null}
           </button>
         </Tooltip>
-        {menu}
+        {menu && createPortal(menu, getAppearanceOverlayHost())}
       </div>
 
       <DispatchInstallDialog

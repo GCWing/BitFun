@@ -39,7 +39,7 @@ describe('ChatInputWorkspaceStrip layout styles', () => {
     expect(stylesheet).toContain('&--ask {');
     expect(stylesheet).toContain('border-color: var(--bf-appearance-token-color-success-border);');
     expect(stylesheet).toContain('background: var(--bf-appearance-token-color-success-bg);');
-    expect(stylesheet).toContain('width: min(286px, calc(100vw - 24px));');
+    expect(stylesheet).toContain('width: min(286px, calc(100vw - 16px));');
     expect(stylesheet).toContain('@media (max-width: 560px)');
     expect(stylesheet).toContain('&__permission-label');
     expect(stylesheet).toContain('display: none;');

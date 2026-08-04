@@ -155,11 +155,12 @@
   // ==================== Dropdown menu ====================
   
   &__dropdown {
-    position: absolute;
-    bottom: calc(100% + 6px);
-    left: 0;
+    position: fixed;
     min-width: clamp(0px, 220px, calc(100vw - 16px));
     max-width: clamp(0px, 280px, calc(100vw - 16px));
+    color: var(--bf-appearance-token-color-text-primary);
+    font-family: var(--bf-appearance-token-font-family-sans);
+    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
     background: var(--bf-appearance-token-color-bg-elevated);
     border: 1px solid var(--bf-appearance-token-color-overlay-white-12);
     border-radius: 6px;

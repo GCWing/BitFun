@@ -1,4 +1,5 @@
 import React, { useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertCircle,
   CheckCircle2,
@@ -6,6 +7,8 @@ import {
   Infinity as InfinityIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { useLiveElapsedTime } from '../hooks/useLiveElapsedTime';
 import { useSubagentTimeoutControl } from '../hooks/useSubagentTimeoutControl';
 import './ToolTimeoutIndicator.scss';
@@ -95,13 +98,28 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
   );
   remainingMsRef.current = remainingMs;
 
+  const controlRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const popoverLayout = useAnchoredPopoverPosition({
+    open: isPopoverOpen,
+    anchorRef: triggerRef,
+    popoverRef,
+    preferredPlacement: 'bottom',
+    alignment: 'end',
+    gap: 4,
+    layoutRevision: remainingAtDisable,
+  });
 
   // Close popover on outside click.
   useEffect(() => {
     if (!isPopoverOpen) return;
     const handleClick = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        !controlRef.current?.contains(target)
+        && !popoverRef.current?.contains(target)
+      ) {
         closePopover();
       }
     };
@@ -195,8 +213,9 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
       </span>
 
       {canControlTimeout && (
-        <div data-bf-component="tool-timeout-indicator" data-bf-part="controls" className="timeout-control-wrapper" ref={popoverRef}>
+        <div data-bf-component="tool-timeout-indicator" data-bf-part="controls" className="timeout-control-wrapper" ref={controlRef}>
           <button
+            ref={triggerRef}
             type="button"
             data-bf-component="tool-timeout-indicator"
             data-bf-part="toggle"
@@ -220,8 +239,19 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
             </span>
           </button>
 
-          {isPopoverOpen && (
-            <div data-bf-component="tool-timeout-indicator" data-bf-part="popover" className="timeout-extend-popover">
+          {isPopoverOpen && createPortal(
+            <div
+              ref={popoverRef}
+              data-bf-component="tool-timeout-indicator"
+              data-bf-part="popover"
+              data-bf-placement={popoverLayout?.placement ?? 'bottom'}
+              className="timeout-extend-popover"
+              style={{
+                top: `${popoverLayout?.top ?? 0}px`,
+                left: `${popoverLayout?.left ?? 0}px`,
+                visibility: popoverLayout ? 'visible' : 'hidden',
+              }}
+            >
               {remainingAtDisable > 0 ? (
                 <button
                   type="button"
@@ -272,7 +302,8 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
               >
                 +10m
               </button>
-            </div>
+            </div>,
+            getAppearanceOverlayHost(),
           )}
         </div>
       )}

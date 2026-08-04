@@ -84,6 +84,7 @@ describe('WelcomePanel Git summary loading', () => {
     act(() => {
       root.unmount();
     });
+    document.querySelector('[data-bf-overlay-host="true"]')?.remove();
     container.remove();
   });
 
@@ -119,5 +120,19 @@ describe('WelcomePanel Git summary loading', () => {
     expect(gitApiMock.getStatus).toHaveBeenCalledWith('D:/workspace/BitFun', 'welcome_panel');
     expect(container.querySelector('[data-bf-part="workspaceAction"]')).not.toBeNull();
     expect(container.querySelector('[data-bf-part="gitAction"]')).not.toBeNull();
+  });
+
+  it('portals the workspace menu outside the scrollable welcome panel', async () => {
+    gitApiMock.isGitRepository.mockResolvedValue(false);
+    await act(async () => {
+      root.render(<WelcomePanel sessionMode="agentic" />);
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>('[data-bf-part="workspaceAction"]');
+    await act(async () => trigger?.click());
+
+    const menu = document.querySelector<HTMLElement>('[data-bf-part="workspaceMenu"]');
+    expect(menu?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
+    expect(menu?.style.visibility).toBe('visible');
   });
 });

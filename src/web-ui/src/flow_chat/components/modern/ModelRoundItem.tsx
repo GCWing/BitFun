@@ -8,6 +8,7 @@
  */
 
 import React, { useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Copy, Check, CircleAlert } from 'lucide-react';
 import type { ModelRound, ModelRoundAttempt, ModelRoundAttemptDiagnostic, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem, TokenUsage, ToolRejectOptions } from '../../types/flow-chat';
@@ -41,6 +42,8 @@ import { buildModelRoundUsageMeta } from '../../utils/tokenUsageDisplay';
 import { buildDialogTurnCopyText } from '../../utils/dialogTurnCopy';
 import type { TranscriptExportScope } from '../../utils/dialogTranscriptExport';
 import { buildTranscriptExportLabels } from '../../utils/transcriptExportLabels';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import './ModelRoundItem.scss';
 import './SubagentItems.scss';
 
@@ -371,6 +374,14 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     const [isCopyMenuOpen, setIsCopyMenuOpen] = useState(false);
     const copyButtonRef = useRef<HTMLButtonElement>(null);
     const copyMenuRef = useRef<HTMLDivElement>(null);
+    const copyMenuLayout = useAnchoredPopoverPosition({
+      open: isCopyMenuOpen,
+      anchorRef: copyButtonRef,
+      popoverRef: copyMenuRef,
+      preferredPlacement: 'top',
+      alignment: 'end',
+      gap: 4,
+    });
     const renderTraceEnabled = isStartupRenderTraceEnabled();
     const renderTraceStartedAtMs = renderTraceEnabled ? performance.now() : null;
 
@@ -773,12 +784,18 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                 </button>
               </Tooltip>
 
-              {isCopyMenuOpen && (
+              {isCopyMenuOpen && createPortal(
                 <div
                   ref={copyMenuRef}
                   className="model-round-item__copy-menu"
                   role="menu"
                   data-testid="model-round-copy-menu"
+                  data-bf-placement={copyMenuLayout?.placement ?? 'top'}
+                  style={{
+                    top: `${copyMenuLayout?.top ?? 0}px`,
+                    left: `${copyMenuLayout?.left ?? 0}px`,
+                    visibility: copyMenuLayout ? 'visible' : 'hidden',
+                  }}
                 >
                   <button
                     type="button"
@@ -798,7 +815,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   >
                     {t('transcriptExport.copyResult')}
                   </button>
-                </div>
+                </div>,
+                getAppearanceOverlayHost(),
               )}
             </div>}
 

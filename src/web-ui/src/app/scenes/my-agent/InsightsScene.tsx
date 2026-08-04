@@ -248,6 +248,8 @@ const InsightsScene: React.FC = () => {
             <span className="insights-scene__control-label">{t('insights.modelLabel')}</span>
             <Select
               className="insights-scene__model-select"
+              dropdownClassName="insights-scene__model-select-dropdown"
+              dropdownMatchTriggerWidth={false}
               value={selectedModel}
               options={modelOptions}
               renderValue={renderModelValue}

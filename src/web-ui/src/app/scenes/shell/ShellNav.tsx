@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Plus,
   ChevronDown,
@@ -27,6 +28,8 @@ import { Button } from '@/component-library/components/Button';
 import { Tooltip } from '@/component-library/components/Tooltip';
 import ShellNavEntryItem from './components/ShellNavEntryItem';
 import ShellNavWorkspaceSwitcher from './components/ShellNavWorkspaceSwitcher';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import './ShellNav.scss';
 
 function extractShortVersion(version?: string): string {
@@ -73,10 +76,10 @@ const ShellNav: React.FC = () => {
     setWorkspaceMenuOpen,
     workspaceMenuPosition,
     menuRef,
+    menuPopoverRef,
     workspaceMenuRef,
     workspaceTriggerRef,
   } = useShellNavMenuState(hasMultipleWorkspaces);
-
   const loadAvailableShells = useCallback(async () => {
     try {
       const [shells, terminalConfig] = await Promise.all([
@@ -125,6 +128,15 @@ const ShellNav: React.FC = () => {
       })),
     [availableShells, defaultShellType, t],
   );
+  const createMenuLayout = useAnchoredPopoverPosition({
+    open: menuOpen,
+    anchorRef: menuRef,
+    popoverRef: menuPopoverRef,
+    preferredPlacement: 'bottom',
+    alignment: 'end',
+    gap: 6,
+    layoutRevision: shellMenuItems.length,
+  });
 
   const handleToggleWorkspaceMenu = useCallback(() => {
     if (!hasMultipleWorkspaces) {
@@ -286,8 +298,20 @@ const ShellNav: React.FC = () => {
             </Tooltip>
           </div>
 
-          {menuOpen ? (
-            <div data-bf-component="shell-nav" data-bf-part="menu" className="bitfun-shell-nav__dropdown-menu" role="menu">
+          {menuOpen ? createPortal(
+            <div
+              ref={menuPopoverRef}
+              data-bf-component="shell-nav"
+              data-bf-part="menu"
+              data-bf-placement={createMenuLayout?.placement ?? 'bottom'}
+              className="bitfun-shell-nav__dropdown-menu"
+              role="menu"
+              style={{
+                top: `${createMenuLayout?.top ?? 0}px`,
+                left: `${createMenuLayout?.left ?? 0}px`,
+                visibility: createMenuLayout ? 'visible' : 'hidden',
+              }}
+            >
               {shellMenuItems.map((shell) => (
                 <button
                   data-bf-component="shell-nav"
@@ -307,7 +331,8 @@ const ShellNav: React.FC = () => {
                 <RefreshCw size={14} />
                 <span>{t('nav.shell.actions.refresh')}</span>
               </button>
-            </div>
+            </div>,
+            getAppearanceOverlayHost(),
           ) : null}
         </div>
       </div>

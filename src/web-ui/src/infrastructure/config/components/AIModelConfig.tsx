@@ -2198,6 +2198,8 @@ const AIModelConfig: React.FC = () => {
                         options={categoryOptions}
                         size="small"
                         className="bitfun-ai-model-config__selected-model-category-select"
+                        dropdownClassName="bitfun-ai-model-config__selected-model-category-dropdown"
+                        dropdownMatchTriggerWidth={false}
                         renderValue={(option) => {
                           if (!option || Array.isArray(option)) {
                             return null;

@@ -234,17 +234,19 @@
 /* ── Dropdown ── */
 
 .welcome-panel__dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 100;
+  position: fixed;
+  z-index: 360;
   min-width: 210px;
-  max-width: 300px;
+  max-width: min(300px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
   background: var(--bf-appearance-token-color-bg-elevated);
   border: 1px solid var(--bf-appearance-token-border-base);
   border-radius: calc(var(--bf-appearance-token-flowchat-card-radius) + 2px);
   box-shadow: 0 8px 24px var(--bf-appearance-token-color-overlay-black-15);
-  overflow: hidden;
+  overflow-y: auto;
+  color: var(--bf-appearance-token-color-text-primary);
+  font-family: var(--bf-appearance-token-font-family-sans);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
   transform-origin: left top;
   animation: wp-dropdownIn 180ms cubic-bezier(0.23, 1, 0.32, 1);
 }

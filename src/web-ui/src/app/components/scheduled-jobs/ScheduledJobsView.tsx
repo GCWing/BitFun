@@ -1097,6 +1097,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                 searchable
                 clearable
                 className="asv__session-select"
+                dropdownClassName="asv__session-select-dropdown"
                 onChange={value => {
                   setValidationErrors(current => ({ ...current, sessionId: false }));
                   setDraft(c => ({ ...c, sessionId: String(value) }));
@@ -1118,6 +1119,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                 error={validationErrors.agentType}
                 disabled={workspaceKind === WorkspaceKind.Assistant}
                 className="asv__agent-select"
+                dropdownClassName="asv__agent-select-dropdown"
                 renderOption={option => (
                   <div className="asv__agent-option">
                     <span className="asv__agent-option-label">{option.label}</span>

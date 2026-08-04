@@ -13,6 +13,7 @@ import { DotMatrixLoader, IconButton } from '@/component-library';
 import { sessionAPI, type SessionLineageSnapshot } from '@/infrastructure/api/service-api/SessionAPI';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { flowChatStore } from '../../store/FlowChatStore';
 import {
   buildSessionLineageTree,
@@ -74,6 +75,8 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
   const [openActionSessionId, setOpenActionSessionId] = useState<string | null>(null);
   const [cancellingSessionIds, setCancellingSessionIds] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const actionMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
   const requestGenerationRef = useRef(0);
@@ -148,6 +151,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
     const handlePointerDown = (event: MouseEvent) => {
       if (
         !containerRef.current?.contains(event.target as Node) &&
+        !panelRef.current?.contains(event.target as Node) &&
         !actionMenuRef.current?.contains(event.target as Node)
       ) {
         setIsOpen(false);
@@ -208,6 +212,15 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
     );
   }, [liveRevision, sessionId, snapshot]);
   const descendantCount = countSessionLineageDescendants(tree);
+  const panelLayout = useAnchoredPopoverPosition({
+    open: isOpen,
+    anchorRef: triggerRef,
+    popoverRef: panelRef,
+    preferredPlacement: 'bottom',
+    alignment: 'end',
+    gap: 8,
+    layoutRevision: `${descendantCount}:${isLoading}:${loadFailed}`,
+  });
 
   useEffect(() => {
     if (!tree) return;
@@ -430,6 +443,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
       data-bf-part="sessionTree"
     >
       <IconButton
+        ref={triggerRef}
         className={[
           'session-tree-popover__trigger',
           isOpen && 'session-tree-popover__trigger--active',
@@ -459,13 +473,20 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
         </span>
       </IconButton>
 
-      {isOpen ? (
+      {isOpen ? createPortal(
         <div
+          ref={panelRef}
           className="session-tree-popover__panel"
           data-bf-component="flow-chat-header"
           data-bf-part="sessionTreePanel"
+          data-bf-placement={panelLayout?.placement ?? 'bottom'}
           role="dialog"
           aria-label={panelLabel}
+          style={{
+            top: `${panelLayout?.top ?? 0}px`,
+            left: `${panelLayout?.left ?? 0}px`,
+            visibility: panelLayout ? 'visible' : 'hidden',
+          }}
         >
           <div
             className="session-tree-popover__header"
@@ -523,7 +544,8 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
               </div>
             ) : null}
           </div>
-        </div>
+        </div>,
+        getAppearanceOverlayHost(),
       ) : null}
     </div>
   );

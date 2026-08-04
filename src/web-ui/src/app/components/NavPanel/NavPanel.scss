@@ -1730,16 +1730,20 @@ $_section-header-height: 24px;
 }
 
 .bitfun-nav-panel__footer-menu {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 0;
+  position: fixed;
   min-width: 148px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
   padding: $size-gap-1;
   background: var(--bf-appearance-token-color-bg-elevated);
   border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: $size-radius-base;
   box-shadow: 0 4px 12px var(--bf-appearance-token-color-overlay-black-30);
   z-index: 9999;
+  color: var(--bf-appearance-token-color-text-primary);
+  font-family: var(--bf-appearance-token-font-family-sans);
+  font-size: var(--bf-appearance-token-font-size-sm);
   transform-origin: bottom left;
   animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
 

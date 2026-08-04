@@ -402,18 +402,6 @@
     color: var(--bf-appearance-token-color-text-muted);
   }
 
-  &__agent-select {
-    .select__dropdown {
-      max-height: 156px;
-    }
-  }
-
-  &__session-select {
-    .select__dropdown {
-      max-height: 156px;
-    }
-  }
-
   &__warning {
     font-size: var(--bf-appearance-token-font-size-xs);
     color: var(--bf-appearance-token-color-error);
@@ -476,6 +464,11 @@
   &__action-btn--ghost.btn {
     color: var(--bf-appearance-token-color-text-secondary);
   }
+}
+
+.asv__agent-select-dropdown,
+.asv__session-select-dropdown {
+  max-height: min(156px, calc(100vh - 16px));
 }
 
 @media (max-width: 760px) {

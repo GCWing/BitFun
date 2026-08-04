@@ -2846,17 +2846,19 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
   }
 
   &__popover {
-    position: absolute;
-    top: calc(100% + #{$size-gap-2});
-    left: 0;
+    position: fixed;
     z-index: $z-popover;
     width: 328px;
-    max-width: calc(100vw - 48px);
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
     padding: $size-gap-3;
     border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: $size-radius-lg;
     background: var(--bf-appearance-token-color-bg-elevated);
     box-shadow: var(--bf-appearance-token-shadow-lg);
+    color: var(--bf-appearance-token-color-text-primary);
+    font-family: var(--bf-appearance-token-font-family-sans);
   }
 
   &__header {

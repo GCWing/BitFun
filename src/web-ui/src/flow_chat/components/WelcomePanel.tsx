@@ -4,6 +4,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen, FolderPlus, ChevronDown, Check, GitBranch } from 'lucide-react';
 import { gitAPI } from '../../infrastructure/api';
@@ -14,6 +15,8 @@ import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext'
 import type { WorkspaceInfo } from '@/shared/types';
 import CoworkExampleCards from './CoworkExampleCards';
 import { useAgentIdentityDocument } from '@/app/scenes/my-agent/useAgentIdentityDocument';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import './WelcomePanel.css';
 
 const log = createLogger('WelcomePanel');
@@ -38,6 +41,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   const [isSelectingWorkspace, setIsSelectingWorkspace] = useState(false);
   const workspaceDropdownRef = useRef<HTMLDivElement>(null);
   const workspaceTriggerRef = useRef<HTMLButtonElement>(null);
+  const workspaceMenuRef = useRef<HTMLDivElement>(null);
 
   const { switchLeftPanelTab } = useApp();
   const {
@@ -72,6 +76,15 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
     () => openedWorkspacesList.filter(ws => ws.id !== currentWorkspace?.id),
     [openedWorkspacesList, currentWorkspace?.id],
   );
+  const workspaceMenuLayout = useAnchoredPopoverPosition({
+    open: workspaceDropdownOpen,
+    anchorRef: workspaceTriggerRef,
+    popoverRef: workspaceMenuRef,
+    preferredPlacement: 'bottom',
+    alignment: 'start',
+    gap: 4,
+    layoutRevision: otherWorkspaces.length,
+  });
 
   const handleGitClick = useCallback(() => {
     switchLeftPanelTab('git');
@@ -151,7 +164,12 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   useEffect(() => {
     if (!workspaceDropdownOpen) return;
     const handlePointerDown = (e: MouseEvent) => {
-      if (workspaceDropdownRef.current && !workspaceDropdownRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        workspaceDropdownRef.current &&
+        !workspaceDropdownRef.current.contains(target) &&
+        !workspaceMenuRef.current?.contains(target)
+      ) {
         setWorkspaceDropdownOpen(false);
       }
     };
@@ -272,8 +290,19 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                           className={`welcome-panel__inline-chevron${workspaceDropdownOpen ? ' welcome-panel__inline-chevron--open' : ''}`}
                         />
                       </button>
-                      {workspaceDropdownOpen && (
-                        <div data-bf-component="welcome-panel" data-bf-part="workspaceMenu" className="welcome-panel__dropdown">
+                      {workspaceDropdownOpen && createPortal(
+                        <div
+                          ref={workspaceMenuRef}
+                          data-bf-component="welcome-panel"
+                          data-bf-part="workspaceMenu"
+                          data-bf-placement={workspaceMenuLayout?.placement ?? 'bottom'}
+                          className="welcome-panel__dropdown"
+                          style={{
+                            top: `${workspaceMenuLayout?.top ?? 0}px`,
+                            left: `${workspaceMenuLayout?.left ?? 0}px`,
+                            visibility: workspaceMenuLayout ? 'visible' : 'hidden',
+                          }}
+                        >
                           <button
                             type="button"
                             data-bf-component="welcome-panel"
@@ -311,7 +340,8 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                               ))}
                             </>
                           )}
-                        </div>
+                        </div>,
+                        getAppearanceOverlayHost(),
                       )}
                     </span>
                     {!isCoworkSession && gitState && (

@@ -1116,6 +1116,8 @@ const AgentsHomeView: React.FC = () => {
                     size="small"
                     searchable
                     className="bitfun-agents-scene__subagent-model-select model-select-presentation__select"
+                    dropdownClassName="model-select-presentation__dropdown"
+                    dropdownMode="inline"
                     options={subagentModelOptions}
                     value={selectedSubagentModelValue}
                     onChange={(value) => void handleSubagentModelChange(value)}

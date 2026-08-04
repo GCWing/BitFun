@@ -49,6 +49,7 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
   let root: Root;
 
   beforeEach(() => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -65,6 +66,7 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
       root.unmount();
     });
     container.remove();
+    document.querySelector('[data-bf-overlay-host="true"]')?.remove();
     vi.clearAllMocks();
   });
 
@@ -127,26 +129,30 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     await act(async () => {
       trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(container.querySelector('[data-testid="chat-input-permission-menu"]')).not.toBeNull();
+    const permissionMenu = document.querySelector<HTMLElement>(
+      '[data-testid="chat-input-permission-menu"]',
+    );
+    expect(permissionMenu).not.toBeNull();
+    expect(permissionMenu?.style.visibility).toBe('visible');
 
     await act(async () => {
-      container
+      document
         .querySelector<HTMLButtonElement>('[data-testid="chat-input-permission-option-auto"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onChange).toHaveBeenCalledWith('auto');
-    expect(container.querySelector('[data-testid="chat-input-permission-menu"]')).toBeNull();
+    expect(document.querySelector('[data-testid="chat-input-permission-menu"]')).toBeNull();
 
     await act(async () => {
       trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     await act(async () => {
-      container
+      document
         .querySelector<HTMLButtonElement>('[data-testid="chat-input-permission-hide-control"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onHide).toHaveBeenCalledOnce();
-    expect(container.querySelector('[data-testid="chat-input-permission-menu"]')).toBeNull();
+    expect(document.querySelector('[data-testid="chat-input-permission-menu"]')).toBeNull();
   });
 
   it('shows ACP ownership without exposing native permission choices', async () => {
@@ -190,13 +196,13 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     await act(async () => {
       trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(container.textContent).toContain('This dispatched session');
-    expect(container.querySelector(
+    expect(document.body.textContent).toContain('This dispatched session');
+    expect(document.querySelector(
       '[data-testid="chat-input-permission-option-full_access"]',
     )).toBeNull();
 
     await act(async () => {
-      container.querySelector<HTMLButtonElement>(
+      document.querySelector<HTMLButtonElement>(
         '[data-testid="chat-input-permission-option-auto"]',
       )?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });

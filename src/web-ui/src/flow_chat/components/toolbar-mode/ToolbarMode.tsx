@@ -11,6 +11,7 @@
  */
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
@@ -28,6 +29,8 @@ import { projectEffectiveToolItem } from '../../utils/toolInvocationIdentity';
 import { createLogger } from '@/shared/utils/logger';
 import { isMacOSDesktopRuntime } from '@/infrastructure/runtime';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { SessionMenu, useFlowChatSessions } from '../session-menu';
 
 const log = createLogger('ToolbarMode');
@@ -46,7 +49,16 @@ export const ToolbarMode: React.FC = () => {
   } = useToolbarModeContext();
 
   const [showHeaderOverflowMenu, setShowHeaderOverflowMenu] = useState(false);
+  const headerOverflowTriggerRef = useRef<HTMLButtonElement>(null);
   const headerOverflowRef = useRef<HTMLDivElement>(null);
+  const headerOverflowLayout = useAnchoredPopoverPosition({
+    open: showHeaderOverflowMenu,
+    anchorRef: headerOverflowTriggerRef,
+    popoverRef: headerOverflowRef,
+    preferredPlacement: 'bottom',
+    alignment: 'end',
+    gap: 4,
+  });
 
   const isMacOS = useMemo(() => isMacOSDesktopRuntime(), []);
   const { workspacePath } = useCurrentWorkspace();
@@ -239,6 +251,7 @@ export const ToolbarMode: React.FC = () => {
               <>
                 <Tooltip content={t('toolCards.toolbar.moreMenu')}>
                   <button
+                    ref={headerOverflowTriggerRef}
                     type="button"
                     className="toolbar-btn toolbar-btn--overflow bitfun-toolbar-mode__overflow-trigger"
                     data-bf-component="toolbar-mode"
@@ -251,14 +264,20 @@ export const ToolbarMode: React.FC = () => {
                     <MoreVertical size={14} />
                   </button>
                 </Tooltip>
-                {showHeaderOverflowMenu && (
+                {showHeaderOverflowMenu && createPortal(
                   <div
                     ref={headerOverflowRef}
                     className="bitfun-toolbar-mode__overflow-menu"
                     data-bf-component="toolbar-mode"
                     data-bf-part="overflowMenu"
                     data-bf-state="open"
+                    data-bf-placement={headerOverflowLayout?.placement ?? 'bottom'}
                     role="menu"
+                    style={{
+                      top: `${headerOverflowLayout?.top ?? 0}px`,
+                      left: `${headerOverflowLayout?.left ?? 0}px`,
+                      visibility: headerOverflowLayout ? 'visible' : 'hidden',
+                    }}
                     onMouseDown={(e) => e.stopPropagation()}
                   >
                     <button
@@ -289,7 +308,8 @@ export const ToolbarMode: React.FC = () => {
                       <Maximize2 size={14} />
                       <span>{t('session.restoreMain')}</span>
                     </button>
-                  </div>
+                  </div>,
+                  getAppearanceOverlayHost(),
                 )}
               </>
             ) : (

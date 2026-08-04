@@ -43,11 +43,9 @@
   }
 
   &__panel {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    width: min(380px, calc(100vw - 32px));
-    max-height: min(440px, calc(100vh - 96px));
+    position: fixed;
+    width: min(380px, calc(100vw - 16px));
+    max-height: min(440px, calc(100vh - 16px));
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -57,7 +55,9 @@
     box-shadow: var(--bf-appearance-token-shadow-lg);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    z-index: 30;
+    z-index: $z-popover;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-family: var(--bf-appearance-token-font-family-sans);
   }
 
   &__header {
@@ -73,7 +73,7 @@
 
   &__body {
     min-height: 42px;
-    max-height: min(390px, calc(100vh - 144px));
+    max-height: min(390px, calc(100vh - 64px));
     padding: $size-gap-1;
     overflow-y: auto;
     scrollbar-gutter: stable;

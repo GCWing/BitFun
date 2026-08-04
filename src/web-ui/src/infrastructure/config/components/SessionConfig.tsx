@@ -915,6 +915,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
           >
             <Select
               className="bitfun-func-agent-config__pet-select"
+              dropdownClassName="bitfun-func-agent-config__pet-select-dropdown"
               size="small"
               options={companionDisplayModeOptions}
               value={settings.agent_companion_display_mode}

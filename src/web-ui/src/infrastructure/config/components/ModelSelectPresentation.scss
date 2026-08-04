@@ -14,10 +14,6 @@
       align-self: center;
     }
 
-    .select__option {
-      padding: 8px 10px;
-      border-radius: 6px;
-    }
   }
 
   &__value {
@@ -76,4 +72,9 @@
     height: 11px;
     color: rgba(var(--model-select-thinking-rgb), 0.9);
   }
+}
+
+.model-select-presentation__dropdown .select__option {
+  padding: 8px 10px;
+  border-radius: 6px;
 }

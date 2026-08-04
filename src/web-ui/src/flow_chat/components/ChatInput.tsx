@@ -4,6 +4,7 @@
  */
 
 import React, { useRef, useCallback, useEffect, useReducer, useState, useMemo, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import path from 'path-browserify';
 import { useTranslation } from 'react-i18next';
 import { ArrowUp, BotMessageSquare, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus, Star } from 'lucide-react';
@@ -83,6 +84,8 @@ import { useWorkspaceModeCatalog } from '../hooks/useWorkspaceModeCatalog';
 import { useSessionModeSelection } from '../hooks/useSessionModeSelection';
 import { useComposerDefaultFocus } from '../hooks/useComposerDefaultFocus';
 import { ThreadGoalDialogs } from './thread-goal/ThreadGoalDialogs';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { FlowChatManager } from '@/flow_chat/services/FlowChatManager';
 import {
   getDeepReviewLaunchErrorMessage,
@@ -414,7 +417,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   
   const richTextInputRef = useRef<RichTextInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const mentionAnchorRef = useRef<HTMLDivElement>(null);
   const agentBoostRef = useRef<HTMLDivElement>(null);
+  const boostTriggerRef = useRef<HTMLSpanElement>(null);
+  const boostMenuRef = useRef<HTMLDivElement>(null);
+  const slashCommandPickerRef = useRef<HTMLDivElement>(null);
+  const boostMenuLayout = useAnchoredPopoverPosition({
+    open: modeState.dropdownOpen,
+    anchorRef: boostTriggerRef,
+    popoverRef: boostMenuRef,
+    preferredPlacement: 'top',
+    alignment: 'start',
+    gap: 6,
+  });
   const isImeComposingRef = useRef(false);
   // Ref so the queuedInput sync effect can read the latest value without it being a dep
   const inputValueRef = useRef('');
@@ -1488,6 +1503,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     query: '',
     selectedIndex: 0,
   });
+  const slashCommandPickerLayout = useAnchoredPopoverPosition({
+    open: slashCommandState.isActive,
+    anchorRef: mentionAnchorRef,
+    popoverRef: slashCommandPickerRef,
+    preferredPlacement: 'top',
+    alignment: 'start',
+    gap: 6,
+    layoutRevision: `${slashCommandState.kind}:${slashCommandState.query}`,
+  });
 
   const slashPickerWasActiveRef = useRef(false);
   useEffect(() => {
@@ -2473,9 +2497,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (agentBoostRef.current && !agentBoostRef.current.contains(event.target as Node)) {
-        dispatchMode({ type: 'CLOSE_DROPDOWN' });
-      }
+      const target = event.target as Node;
+      if (agentBoostRef.current?.contains(target) || boostMenuRef.current?.contains(target)) return;
+      dispatchMode({ type: 'CLOSE_DROPDOWN' });
     };
 
     if (modeState.dropdownOpen) {
@@ -5142,7 +5166,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 </button>
               </div>
             )}
-            <div className="bitfun-chat-input__input-area" data-bf-component="chat-input" data-bf-part="area">
+            <div ref={mentionAnchorRef} className="bitfun-chat-input__input-area" data-bf-component="chat-input" data-bf-part="area">
               {imageContexts.length > 0 && (
                 <div
                   className="bitfun-chat-input__image-strip"
@@ -5220,6 +5244,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   ? undefined
                   : effectiveTargetSession?.workspaceId || workspace?.id}
                 excludeSessionId={effectiveTargetSessionId || undefined}
+                anchorRef={mentionAnchorRef}
                 onSelect={(context: FileContext | DirectoryContext | SessionReferenceContext) => {
                   addContext(context);
                   
@@ -5235,11 +5260,24 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 }}
               />
               
-              {slashCommandState.isActive && (() => {
+              {slashCommandState.isActive && createPortal((() => {
                 if (slashCommandState.kind === 'actions') {
                   const actions = getFilteredActions();
                   return (
-                    <div data-bf-component="chat-input" data-bf-part="commandPicker" data-bf-command="actions" data-bf-state="open" className="bitfun-chat-input__slash-command-picker">
+                    <div
+                      ref={slashCommandPickerRef}
+                      data-bf-component="chat-input"
+                      data-bf-part="commandPicker"
+                      data-bf-command="actions"
+                      data-bf-state="open"
+                      data-bf-placement={slashCommandPickerLayout?.placement ?? 'top'}
+                      className="bitfun-chat-input__slash-command-picker"
+                      style={{
+                        top: `${slashCommandPickerLayout?.top ?? 0}px`,
+                        left: `${slashCommandPickerLayout?.left ?? 0}px`,
+                        visibility: slashCommandPickerLayout ? 'visible' : 'hidden',
+                      }}
+                    >
                       <div className="bitfun-chat-input__slash-command-header" data-bf-component="chat-input" data-bf-part="commandHeader">
                         <span>{t('chatInput.quickAction')}</span>
                         <span className="bitfun-chat-input__slash-command-hint">{t('chatInput.selectHint')}</span>
@@ -5276,7 +5314,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   const firstModeIndex = items.findIndex(item => item.kind === 'mode');
                   const firstSkillIndex = items.findIndex(item => item.kind === 'skill');
                   return (
-                    <div data-bf-component="chat-input" data-bf-part="commandPicker" data-bf-command="all" data-bf-state="open" className="bitfun-chat-input__slash-command-picker">
+                    <div
+                      ref={slashCommandPickerRef}
+                      data-bf-component="chat-input"
+                      data-bf-part="commandPicker"
+                      data-bf-command="all"
+                      data-bf-state="open"
+                      data-bf-placement={slashCommandPickerLayout?.placement ?? 'top'}
+                      className="bitfun-chat-input__slash-command-picker"
+                      style={{
+                        top: `${slashCommandPickerLayout?.top ?? 0}px`,
+                        left: `${slashCommandPickerLayout?.left ?? 0}px`,
+                        visibility: slashCommandPickerLayout ? 'visible' : 'hidden',
+                      }}
+                    >
                       <div className="bitfun-chat-input__slash-command-header" data-bf-component="chat-input" data-bf-part="commandHeader">
                         <span>{t('chatInput.commands')}</span>
                         <span className="bitfun-chat-input__slash-command-hint">{t('chatInput.selectHint')}</span>
@@ -5374,7 +5425,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 if (slashCommandState.kind === 'skills') {
                   const items = getActiveSlashPickerItems();
                   return (
-                    <div data-bf-component="chat-input" data-bf-part="commandPicker" data-bf-command="skills" data-bf-state="open" className="bitfun-chat-input__slash-command-picker">
+                    <div
+                      ref={slashCommandPickerRef}
+                      data-bf-component="chat-input"
+                      data-bf-part="commandPicker"
+                      data-bf-command="skills"
+                      data-bf-state="open"
+                      data-bf-placement={slashCommandPickerLayout?.placement ?? 'top'}
+                      className="bitfun-chat-input__slash-command-picker"
+                      style={{
+                        top: `${slashCommandPickerLayout?.top ?? 0}px`,
+                        left: `${slashCommandPickerLayout?.left ?? 0}px`,
+                        visibility: slashCommandPickerLayout ? 'visible' : 'hidden',
+                      }}
+                    >
                       <div className="bitfun-chat-input__slash-command-header" data-bf-component="chat-input" data-bf-part="commandHeader">
                         <span>{t('chatInput.boostSkills')}</span>
                         <span className="bitfun-chat-input__slash-command-hint">{t('chatInput.selectHint')}</span>
@@ -5450,7 +5514,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
                 const filteredModes = getFilteredSelectableModes();
                 return (
-                  <div data-bf-component="chat-input" data-bf-part="commandPicker" data-bf-command="modes" data-bf-state="open" className="bitfun-chat-input__slash-command-picker">
+                  <div
+                    ref={slashCommandPickerRef}
+                    data-bf-component="chat-input"
+                    data-bf-part="commandPicker"
+                    data-bf-command="modes"
+                    data-bf-state="open"
+                    data-bf-placement={slashCommandPickerLayout?.placement ?? 'top'}
+                    className="bitfun-chat-input__slash-command-picker"
+                    style={{
+                      top: `${slashCommandPickerLayout?.top ?? 0}px`,
+                      left: `${slashCommandPickerLayout?.left ?? 0}px`,
+                      visibility: slashCommandPickerLayout ? 'visible' : 'hidden',
+                    }}
+                  >
                     <div className="bitfun-chat-input__slash-command-header" data-bf-component="chat-input" data-bf-part="commandHeader">
                       <span>{t('chatInput.addModeMenuTitle')}</span>
                       <span className="bitfun-chat-input__slash-command-hint">{t('chatInput.selectHint')}</span>
@@ -5484,14 +5561,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     </div>
                   </div>
                 );
-              })()}
+              })(), getAppearanceOverlayHost())}
             </div>
             
             <div className="bitfun-chat-input__actions" data-bf-component="chat-input" data-bf-part="actions">
               <div className="bitfun-chat-input__actions-left" data-bf-component="chat-input" data-bf-part="actionsLeft">
                 <div className="bitfun-chat-input__agent-boost" data-bf-component="chat-input" data-bf-part="boost" ref={agentBoostRef}>
                   {!isAcpTargetSession && (
-                    <span data-bf-component="chat-input" data-bf-part="boostTrigger" data-bf-state={modeState.dropdownOpen ? 'open' : undefined}>
+                    <span ref={boostTriggerRef} data-bf-component="chat-input" data-bf-part="boostTrigger" data-bf-state={modeState.dropdownOpen ? 'open' : undefined}>
                       <Tooltip content={t('chatInput.addBoostTooltip')}>
                         <IconButton
                           className="bitfun-chat-input__agent-boost-add"
@@ -5543,8 +5620,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     </div>
                   )}
 
-                  {modeState.dropdownOpen && (
-                    <div className="bitfun-chat-input__mode-dropdown bitfun-chat-input__mode-dropdown--agent-boost" data-bf-component="chat-input" data-bf-part="boostMenu" data-bf-state="open">
+                  {modeState.dropdownOpen && createPortal(
+                    <div
+                      ref={boostMenuRef}
+                      className="bitfun-chat-input__mode-dropdown bitfun-chat-input__mode-dropdown--agent-boost"
+                      data-bf-component="chat-input"
+                      data-bf-part="boostMenu"
+                      data-bf-state="open"
+                      data-bf-placement={boostMenuLayout?.placement ?? 'top'}
+                      style={{
+                        top: `${boostMenuLayout?.top ?? 0}px`,
+                        left: `${boostMenuLayout?.left ?? 0}px`,
+                        visibility: boostMenuLayout ? 'visible' : 'hidden',
+                      }}
+                    >
                       {canSwitchModes && (
                         <>
                           <div className="bitfun-chat-input__boost-section" data-bf-component="chat-input" data-bf-part="boostSection">
@@ -5815,7 +5904,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                           <span>{t('chatInput.boostNewSession')}</span>
                         </div>
                       </div>
-                    </div>
+                    </div>,
+                    getAppearanceOverlayHost(),
                   )}
                 </div>
               </div>

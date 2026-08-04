@@ -1405,25 +1405,6 @@
       font-size: 12px;
     }
 
-    .bitfun-ai-model-config__selected-model-category-select {
-      .select__dropdown {
-        left: 0;
-        right: auto;
-        width: max-content;
-        min-width: max(100%, 176px);
-        max-width: min(240px, calc(100vw - 64px));
-      }
-
-      .select__option-text {
-        min-width: max-content;
-      }
-
-      .select__option-label {
-        overflow: visible;
-        text-overflow: clip;
-      }
-    }
-
     &--switch {
       align-items: flex-start;
 
@@ -1842,6 +1823,21 @@
     overflow-y: auto;
     overflow-x: hidden;
     padding: 0;
+  }
+}
+
+.bitfun-ai-model-config__selected-model-category-dropdown {
+  width: max-content;
+  min-width: min(176px, calc(100vw - 16px));
+  max-width: min(240px, calc(100vw - 16px));
+
+  .select__option-text {
+    min-width: max-content;
+  }
+
+  .select__option-label {
+    overflow: visible;
+    text-overflow: clip;
   }
 }
 

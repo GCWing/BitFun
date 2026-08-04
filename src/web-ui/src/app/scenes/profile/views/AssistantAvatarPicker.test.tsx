@@ -54,6 +54,7 @@ describe('AssistantAvatarPicker', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    document.querySelector('[data-bf-overlay-host="true"]')?.remove();
   });
 
   it('keeps a combined emoji sequence as one avatar', () => {
@@ -78,9 +79,10 @@ describe('AssistantAvatarPicker', () => {
 
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
     const compassOption = Array.from(
-      container.querySelectorAll<HTMLButtonElement>('.acp-avatar-picker__option'),
+      document.querySelectorAll<HTMLButtonElement>('.acp-avatar-picker__option'),
     ).find((option) => option.textContent === '🧭');
     expect(compassOption).toBeTruthy();
+    expect(document.querySelector('.acp-avatar-picker__popover')?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
 
     act(() => compassOption?.click());
     expect(onChange).toHaveBeenCalledWith('🧭');
@@ -100,7 +102,7 @@ describe('AssistantAvatarPicker', () => {
     const trigger = container.querySelector('.acp-avatar-picker__trigger') as HTMLButtonElement;
     act(() => trigger.click());
 
-    expect(container.querySelector('.acp-avatar-picker__status')?.textContent)
+    expect(document.querySelector('.acp-avatar-picker__status')?.textContent)
       .toContain('identity.avatarSaved');
   });
 });

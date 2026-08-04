@@ -225,11 +225,9 @@
   }
 
   &__background-command-panel {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    width: min(340px, calc(100vw - 32px));
-    max-height: min(360px, calc(100vh - 96px));
+    position: fixed;
+    width: min(340px, calc(100vw - 16px));
+    max-height: min(360px, calc(100vh - 16px));
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -239,7 +237,9 @@
     box-shadow: var(--bf-appearance-token-shadow-lg);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    z-index: 30;
+    z-index: $z-popover;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-family: var(--bf-appearance-token-font-family-sans);
   }
 
   &__background-command-panel-header {
@@ -377,6 +377,10 @@
       top: auto;
       right: auto;
       z-index: 10000;
+      max-height: calc(100vh - 16px);
+      overflow-y: auto;
+      color: var(--bf-appearance-token-color-text-primary);
+      font-family: var(--bf-appearance-token-font-family-sans);
     }
   }
 

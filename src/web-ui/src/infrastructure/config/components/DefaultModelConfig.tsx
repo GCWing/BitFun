@@ -184,6 +184,7 @@ export const DefaultModelConfig: React.FC = () => {
           renderOption={renderModelOption}
           renderValue={renderModelValue}
           className="model-select-presentation__select"
+          dropdownClassName="model-select-presentation__dropdown"
           disabled={enabledModels.length === 0}
           size="small"
         />
@@ -207,6 +208,7 @@ export const DefaultModelConfig: React.FC = () => {
           renderOption={renderModelOption}
           renderValue={renderModelValue}
           className="model-select-presentation__select"
+          dropdownClassName="model-select-presentation__dropdown"
           size="small"
         />
       </ConfigPageRow>
@@ -229,6 +231,7 @@ export const DefaultModelConfig: React.FC = () => {
           renderOption={renderModelOption}
           renderValue={renderModelValue}
           className="model-select-presentation__select"
+          dropdownClassName="model-select-presentation__dropdown"
           size="small"
         />
       </ConfigPageRow>

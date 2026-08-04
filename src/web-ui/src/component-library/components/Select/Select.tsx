@@ -6,11 +6,13 @@ import React, {
   useState,
   useRef,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useCallback,
 } from 'react';
+import { createPortal } from 'react-dom';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import './Select.scss';
 
 export interface SelectOption {
@@ -56,6 +58,12 @@ export interface SelectProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
   triggerAriaLabel?: string;
   triggerAriaLabelledBy?: string;
   triggerAriaDescribedBy?: string;
+  /** Additional class applied directly to the dropdown, including when portalled. */
+  dropdownClassName?: string;
+  /** Overlay escapes clipping by default; inline is reserved for layout-expanding selectors. */
+  dropdownMode?: 'overlay' | 'inline';
+  /** Match the trigger width, preserving the historical Select default. */
+  dropdownMatchTriggerWidth?: boolean;
 }
 
 export const Select: React.FC<SelectProps> = ({
@@ -90,6 +98,9 @@ export const Select: React.FC<SelectProps> = ({
   triggerAriaLabel,
   triggerAriaLabelledBy,
   triggerAriaDescribedBy,
+  dropdownClassName = '',
+  dropdownMode = 'overlay',
+  dropdownMatchTriggerWidth = true,
   ...rootProps
 }) => {
   const { t } = useI18n('components');
@@ -104,7 +115,6 @@ export const Select: React.FC<SelectProps> = ({
   const resolvedEmptyText = emptyText ?? t('select.emptyText');
   const resolvedCustomValueHint = customValueHint ?? t('select.customValueHint');
   const [isOpen, setIsOpen] = useState(false);
-  const [resolvedPlacement, setResolvedPlacement] = useState<'bottom' | 'top'>(placement);
   const [selectedValue, setSelectedValue] = useState<string | number | (string | number)[]>(
     value !== undefined ? value : defaultValue !== undefined ? defaultValue : multiple ? [] : ''
   );
@@ -113,6 +123,7 @@ export const Select: React.FC<SelectProps> = ({
   const hasMountedRef = useRef(false);
   
   const selectRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const isKeyboardNavigation = useRef(false);
@@ -133,43 +144,18 @@ export const Select: React.FC<SelectProps> = ({
     );
   }, [options, searchQuery, searchable]);
 
-  useLayoutEffect(() => {
-    if (!isOpen) {
-      setResolvedPlacement(placement);
-      return;
-    }
-
-    const selectElement = selectRef.current;
-    const dropdownElement = dropdownRef.current;
-    if (!selectElement || !dropdownElement || typeof window === 'undefined') {
-      setResolvedPlacement(placement);
-      return;
-    }
-
-    const triggerRect = selectElement.getBoundingClientRect();
-    const dropdownHeight = dropdownElement.offsetHeight || dropdownElement.scrollHeight || 240;
-    const spaceBelow = window.innerHeight - triggerRect.bottom;
-    const spaceAbove = triggerRect.top;
-
-    let nextPlacement: 'bottom' | 'top' = placement;
-    if (placement === 'bottom' && spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
-      nextPlacement = 'top';
-    } else if (placement === 'top' && spaceAbove < dropdownHeight && spaceBelow > spaceAbove) {
-      nextPlacement = 'bottom';
-    }
-
-    setResolvedPlacement(nextPlacement);
-  }, [
-    isOpen,
-    placement,
-    options.length,
-    searchable,
-    multiple,
-    showSelectAll,
-    allowCustomValue,
-    searchQuery,
-    filteredOptions.length,
-  ]);
+  const dropdownLayout = useAnchoredPopoverPosition({
+    open: isOpen && dropdownMode === 'overlay',
+    anchorRef: triggerRef,
+    popoverRef: dropdownRef,
+    preferredPlacement: placement,
+    gap: 0,
+    matchAnchorWidth: dropdownMatchTriggerWidth,
+    layoutRevision: `${filteredOptions.length}:${searchQuery}:${loading}`,
+  });
+  const resolvedPlacement = dropdownMode === 'inline'
+    ? 'bottom'
+    : dropdownLayout?.placement ?? placement;
 
   const groupedOptions = useMemo(() => {
     const groups: { [key: string]: SelectOption[] } = {};
@@ -365,7 +351,12 @@ export const Select: React.FC<SelectProps> = ({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (selectRef.current && !selectRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        selectRef.current
+        && !selectRef.current.contains(target)
+        && !dropdownRef.current?.contains(target)
+      ) {
         if (allowCustomValue && !multiple && searchQuery.trim()) {
           const trimmedValue = searchQuery.trim();
           const existingOption = options.find(opt => 
@@ -531,11 +522,175 @@ export const Select: React.FC<SelectProps> = ({
     );
   };
 
+  const dropdownNode = (
+    <div
+      id={listboxId}
+      className={[
+        'select__dropdown',
+        `select__dropdown--${resolvedPlacement}`,
+        `select__dropdown--${size}`,
+        `select__dropdown--${dropdownMode}`,
+        dropdownClassName,
+      ].filter(Boolean).join(' ')}
+      ref={dropdownRef}
+      style={dropdownMode === 'overlay' ? {
+        position: 'fixed',
+        top: `${dropdownLayout?.top ?? 0}px`,
+        left: `${dropdownLayout?.left ?? 0}px`,
+        width: dropdownLayout?.width === undefined ? undefined : `${dropdownLayout.width}px`,
+        visibility: dropdownLayout ? 'visible' : 'hidden',
+      } : undefined}
+      role="listbox"
+      aria-multiselectable={multiple || undefined}
+      aria-busy={loading || undefined}
+      data-testid={dropdownTestId}
+      data-bf-component="select"
+      data-bf-part="dropdown"
+      data-bf-placement={resolvedPlacement}
+    >
+      {searchable && (
+        <div className="select__search" data-bf-component="select" data-bf-part="search">
+          <input
+            ref={searchInputRef}
+            type="text"
+            className="select__search-input"
+            role="combobox"
+            aria-label={resolvedSearchPlaceholder}
+            aria-autocomplete="list"
+            aria-expanded={isOpen}
+            aria-controls={listboxId}
+            aria-activedescendant={highlightedIndex >= 0
+              ? `${listboxId}-option-${highlightedIndex}`
+              : undefined}
+            placeholder={resolvedSearchPlaceholder}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                if (highlightedIndex >= 0 && highlightedIndex < displayOptions.length) {
+                  handleSelect(displayOptions[highlightedIndex]);
+                } else if (allowCustomValue && searchQuery.trim()) {
+                  handleCustomValueSubmit();
+                }
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                setIsOpen(false);
+                setSearchQuery('');
+              } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                isKeyboardNavigation.current = true;
+                setHighlightedIndex((previous) => moveHighlight(previous, 1));
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                isKeyboardNavigation.current = true;
+                setHighlightedIndex((previous) => moveHighlight(
+                  previous < 0 ? displayOptions.length : previous,
+                  -1,
+                ));
+              }
+            }}
+            data-bf-component="select"
+            data-bf-part="searchInput"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              className="select__search-clear"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSearchQuery('');
+                setHighlightedIndex(-1);
+                searchInputRef.current?.focus();
+              }}
+              aria-label={t('search.clear')}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      )}
+
+      {multiple && showSelectAll && filteredOptions.length > 0 && (
+        <div
+          className="select__select-all"
+          onClick={handleSelectAll}
+          role="option"
+          aria-selected={filteredOptions.filter(opt => !opt.disabled).every(opt => isSelected(opt.value))}
+        >
+          <span className={`select__checkbox ${
+            filteredOptions.filter(opt => !opt.disabled).every(opt => isSelected(opt.value))
+              ? 'select__checkbox--checked' : ''
+          }`}>
+            {filteredOptions.filter(opt => !opt.disabled).every(opt => isSelected(opt.value)) && '✓'}
+          </span>
+          <span>{t('select.selectAll')}</span>
+        </div>
+      )}
+
+      <div className="select__options" data-bf-component="select" data-bf-part="options">
+        {filteredOptions.length === 0 ? (
+          loading ? (
+            <div className="select__empty select__empty--loading" data-bf-component="select" data-bf-part="empty">
+              <span className="select__loading-spinner" aria-hidden="true" />
+              <span>{t('select.loading')}</span>
+            </div>
+          ) : allowCustomValue && searchQuery.trim() ? (
+            <div className="select__custom-value-hint" onClick={() => handleCustomValueSubmit()}>
+              <span className="select__custom-value-text">"{searchQuery.trim()}"</span>
+              <span className="select__custom-value-action">{resolvedCustomValueHint}</span>
+            </div>
+          ) : (
+            <div className="select__empty" data-bf-component="select" data-bf-part="empty">{resolvedEmptyText}</div>
+          )
+        ) : groupedOptions.hasGroups ? (
+          (() => {
+            let globalIndex = 0;
+            return (
+              <>
+                {groupedOptions.ungrouped.map((option) => renderOptionItem(option, globalIndex++))}
+                {Object.entries(groupedOptions.groups).map(([groupName, groupOptions]) => (
+                  <div
+                    key={groupName}
+                    className="select__group"
+                    role="group"
+                    aria-label={groupName}
+                    data-bf-component="select"
+                    data-bf-part="group"
+                  >
+                    <div className="select__group-label" data-bf-component="select" data-bf-part="groupLabel">{groupName}</div>
+                    {groupOptions.map((option) => renderOptionItem(option, globalIndex++))}
+                  </div>
+                ))}
+              </>
+            );
+          })()
+        ) : (
+          <>
+            {filteredOptions.map((option, index) => renderOptionItem(option, index))}
+            {allowCustomValue && searchQuery.trim()
+              && !filteredOptions.some(opt => (
+                opt.label.toLowerCase() === searchQuery.trim().toLowerCase()
+                || String(opt.value).toLowerCase() === searchQuery.trim().toLowerCase()
+              )) && (
+              <div className="select__custom-value-hint" onClick={() => handleCustomValueSubmit()}>
+                <span className="select__custom-value-text">"{searchQuery.trim()}"</span>
+                <span className="select__custom-value-action">{resolvedCustomValueHint}</span>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div {...rootProps} className={classNames} ref={selectRef} data-bf-component="select" data-bf-part="root" data-bf-size={size} data-bf-placement={resolvedPlacement} data-bf-multiple={String(multiple)} data-bf-state={[isOpen && 'open', disabled && 'disabled', error && 'error', loading && 'loading'].filter(Boolean).join(' ') || undefined}>
       {label && <div id={labelId} className="select__label" data-bf-component="select" data-bf-part="label">{label}</div>}
-      
+
       <div
+        ref={triggerRef}
         className="select__trigger"
         onClick={() => !disabled && setIsOpen(!isOpen)}
         onKeyDown={handleKeyDown}
@@ -558,7 +713,7 @@ export const Select: React.FC<SelectProps> = ({
         data-bf-part="trigger"
       >
         {renderSelectedValue()}
-        
+
         <div className="select__suffix" data-bf-component="select" data-bf-part="suffix">
           {loading && (
             <span className="select__loading" data-bf-component="select" data-bf-part="loading">
@@ -576,166 +731,10 @@ export const Select: React.FC<SelectProps> = ({
         </div>
       </div>
 
-      {isOpen && (
-        <div
-          id={listboxId}
-          className={`select__dropdown select__dropdown--${resolvedPlacement}`}
-          ref={dropdownRef}
-          role="listbox"
-          aria-multiselectable={multiple || undefined}
-          aria-busy={loading || undefined}
-          data-testid={dropdownTestId}
-          data-bf-component="select"
-          data-bf-part="dropdown"
-          data-bf-placement={resolvedPlacement}
-        >
-          {searchable && (
-            <div className="select__search" data-bf-component="select" data-bf-part="search">
-              <input
-                ref={searchInputRef}
-                type="text"
-                className="select__search-input"
-                role="combobox"
-                aria-label={resolvedSearchPlaceholder}
-                aria-autocomplete="list"
-                aria-expanded={isOpen}
-                aria-controls={listboxId}
-                aria-activedescendant={highlightedIndex >= 0
-                  ? `${listboxId}-option-${highlightedIndex}`
-                  : undefined}
-                placeholder={resolvedSearchPlaceholder}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (highlightedIndex >= 0 && highlightedIndex < displayOptions.length) {
-                      handleSelect(displayOptions[highlightedIndex]);
-                    } else if (allowCustomValue && searchQuery.trim()) {
-                      handleCustomValueSubmit();
-                    }
-                  } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    setIsOpen(false);
-                    setSearchQuery('');
-                  } else if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    isKeyboardNavigation.current = true;
-                    setHighlightedIndex((previous) => moveHighlight(previous, 1));
-                  } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    isKeyboardNavigation.current = true;
-                    setHighlightedIndex((previous) => moveHighlight(
-                      previous < 0 ? displayOptions.length : previous,
-                      -1,
-                    ));
-                  }
-                }}
-                data-bf-component="select"
-                data-bf-part="searchInput"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  className="select__search-clear"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSearchQuery('');
-                    setHighlightedIndex(-1);
-                    searchInputRef.current?.focus();
-                  }}
-                  aria-label={t('search.clear')}
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          )}
-          
-          {multiple && showSelectAll && filteredOptions.length > 0 && (
-            <div
-              className="select__select-all"
-              onClick={handleSelectAll}
-              role="option"
-              aria-selected={filteredOptions.filter(opt => !opt.disabled).every(opt => isSelected(opt.value))}
-            >
-              <span className={`select__checkbox ${
-                filteredOptions.filter(opt => !opt.disabled).every(opt => isSelected(opt.value))
-                  ? 'select__checkbox--checked' : ''
-              }`}>
-                {filteredOptions.filter(opt => !opt.disabled).every(opt => isSelected(opt.value)) && '✓'}
-              </span>
-              <span>{t('select.selectAll')}</span>
-            </div>
-          )}
-          
-          <div className="select__options" data-bf-component="select" data-bf-part="options">
-            {filteredOptions.length === 0 ? (
-              loading ? (
-                <div className="select__empty select__empty--loading" data-bf-component="select" data-bf-part="empty">
-                  <span className="select__loading-spinner" aria-hidden="true" />
-                  <span>{t('select.loading')}</span>
-                </div>
-              ) : allowCustomValue && searchQuery.trim() ? (
-                <div 
-                  className="select__custom-value-hint"
-                  onClick={() => handleCustomValueSubmit()}
-                >
-                  <span className="select__custom-value-text">"{searchQuery.trim()}"</span>
-                  <span className="select__custom-value-action">{resolvedCustomValueHint}</span>
-                </div>
-              ) : (
-                <div className="select__empty" data-bf-component="select" data-bf-part="empty">{resolvedEmptyText}</div>
-              )
-            ) : groupedOptions.hasGroups ? (
-              (() => {
-                let globalIndex = 0;
-                return (
-                  <>
-                    {groupedOptions.ungrouped.map((option) => 
-                      renderOptionItem(option, globalIndex++)
-                    )}
-                    {Object.entries(groupedOptions.groups).map(([groupName, groupOptions]) => (
-                      <div
-                        key={groupName}
-                        className="select__group"
-                        role="group"
-                        aria-label={groupName}
-                        data-bf-component="select"
-                        data-bf-part="group"
-                      >
-                        <div className="select__group-label" data-bf-component="select" data-bf-part="groupLabel">{groupName}</div>
-                        {groupOptions.map((option) => 
-                          renderOptionItem(option, globalIndex++)
-                        )}
-                      </div>
-                    ))}
-                  </>
-                );
-              })()
-            ) : (
-              <>
-                {filteredOptions.map((option, index) => renderOptionItem(option, index))}
-                {allowCustomValue && searchQuery.trim() && 
-                 !filteredOptions.some(opt => (
-                   opt.label.toLowerCase() === searchQuery.trim().toLowerCase() ||
-                   String(opt.value).toLowerCase() === searchQuery.trim().toLowerCase()
-                 )) && (
-                  <div 
-                    className="select__custom-value-hint"
-                    onClick={() => handleCustomValueSubmit()}
-                  >
-                    <span className="select__custom-value-text">"{searchQuery.trim()}"</span>
-                    <span className="select__custom-value-action">{resolvedCustomValueHint}</span>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
-      
+      {isOpen && (dropdownMode === 'overlay'
+        ? createPortal(dropdownNode, getAppearanceOverlayHost())
+        : dropdownNode)}
+
       {error && errorMessage && (
         <div className="select__error-message" data-bf-component="select" data-bf-part="message">{errorMessage}</div>
       )}

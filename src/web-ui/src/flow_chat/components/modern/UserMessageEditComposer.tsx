@@ -47,6 +47,7 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
   excludeSessionId,
 }) => {
   const editorRef = useRef<RichTextInputElement>(null);
+  const mentionAnchorRef = useRef<HTMLDivElement>(null);
   const [contexts, setContexts] = useState<ContextItem[]>(() => (
     composerPresentationContexts(presentation)
   ));
@@ -115,7 +116,7 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
 
   return (
     <div className="user-message-edit-composer" data-bf-component="user-message-edit-composer" data-bf-part="root" data-bf-mode="rich" data-bf-state={isSubmitting ? 'submitting' : undefined}>
-      <div className="user-message-edit-composer__rich-input" data-bf-component="user-message-edit-composer" data-bf-part="input">
+      <div ref={mentionAnchorRef} className="user-message-edit-composer__rich-input" data-bf-component="user-message-edit-composer" data-bf-part="input">
         <RichTextInput
           ref={editorRef}
           value={value}
@@ -133,6 +134,7 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
           workspacePath={workspacePath}
           workspaceId={workspaceId}
           excludeSessionId={excludeSessionId}
+          anchorRef={mentionAnchorRef}
           onSelect={handleSelectContext}
           onClose={() => editorRef.current?.closeMention?.()}
         />

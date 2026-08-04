@@ -1,5 +1,7 @@
 /* Model round item styles (BEM). */
 
+@use '../../../component-library/styles/tokens.scss' as *;
+
 .model-round-item {
   /*
    * No bottom margin — the inter-round gap is covered by the same line-height rhythm
@@ -316,10 +318,8 @@
 }
 
 .model-round-item__copy-menu {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 4px);
-  z-index: 20;
+  position: fixed;
+  z-index: $z-popover;
   display: flex;
   flex-direction: column;
   min-width: 140px;
@@ -328,6 +328,8 @@
   border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: 8px;
   background: var(--bf-appearance-token-color-bg-elevated);
+  color: var(--bf-appearance-token-color-text-primary);
+  font-family: var(--bf-appearance-token-font-family-sans);
   box-shadow:
     0 12px 28px var(--bf-appearance-token-color-overlay-black-30),
     0 2px 8px var(--bf-appearance-token-color-overlay-black-12);
