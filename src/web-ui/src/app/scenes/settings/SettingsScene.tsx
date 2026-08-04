@@ -19,6 +19,7 @@ import {
   AppearanceConfig,
   ArchivedSessionsConfig,
   BasicsConfig,
+  ConnectorsConfig,
   EditorConfig,
   ExternalSourcesConfig,
   HooksConfig,
@@ -70,6 +71,7 @@ function resolveSettingsContent(tab: ConfigTab): React.ComponentType | null {
     case 'external-sources':        return ExternalSourcesConfig;
     case 'hooks':                   return HooksConfig;
     case 'acp-agents':              return AcpAgentsConfig;
+    case 'connectors':              return ConnectorsConfig;
     case 'editor':                  return EditorConfig;
     case 'keyboard':                return KeyboardShortcutsTab;
     default:                        return null;

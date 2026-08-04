@@ -1,0 +1,51 @@
+{
+  "connectors": {
+    "title": "連接器",
+    "description": "連接釘釘、銷售易等 SaaS 平台，讓 AI 助手取得並分析資料。",
+    "section": {
+      "configuredConnectors": "已設定連接器",
+      "availableProviders": "可用服務商"
+    },
+    "actions": {
+      "add": "新增連接器",
+      "save": "儲存",
+      "cancel": "取消",
+      "delete": "刪除",
+      "test": "測試",
+      "sync": "同步"
+    },
+    "status": {
+      "connected": "已連接",
+      "disconnected": "未連接",
+      "error": "錯誤",
+      "pending": "處理中"
+    },
+    "card": {
+      "lastSynced": "上次同步",
+      "testing": "測試中…",
+      "syncing": "同步中…",
+      "deleting": "刪除中…",
+      "test": "測試",
+      "sync": "同步",
+      "delete": "刪除"
+    },
+    "addDialog": {
+      "title": "新增連接器",
+      "provider": "服務商",
+      "name": "連接器名稱",
+      "namePlaceholder": "例如：正式環境釘釘",
+      "add": "新增",
+      "adding": "新增中…",
+      "cancel": "取消"
+    },
+    "emptyState": {
+      "title": "尚未設定連接器",
+      "description": "新增連接器，讓 AI 助手存取釘釘、銷售易等平台的資料。"
+    },
+    "provider": {
+      "dingtalk": "釘釘",
+      "xiaoshouyi": "銷售易 (Neocrm)",
+      "custom": "自訂"
+    }
+  }
+}

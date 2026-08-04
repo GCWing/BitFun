@@ -21,6 +21,7 @@ export type ConfigTab =
   | 'external-sources'
   | 'hooks'
   | 'acp-agents'
+  | 'connectors'
   // | 'lsp' // temporarily hidden from config center
   | 'editor'
   | 'keyboard';
@@ -284,6 +285,24 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'claude code',
           'codex',
           'stdio',
+        ],
+      },
+      {
+        id: 'connectors',
+        labelKey: 'configCenter.tabs.connectors',
+        descriptionKey: 'configCenter.tabDescriptions.connectors',
+        beta: true,
+        keywords: [
+          'connector',
+          'connectors',
+          'integration',
+          'dingtalk',
+          'dingding',
+          'xiaoshouyi',
+          'neocrm',
+          'saas',
+          'api',
+          'workbuddy',
         ],
       },
     ],

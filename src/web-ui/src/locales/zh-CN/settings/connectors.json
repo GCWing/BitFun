@@ -1,0 +1,51 @@
+{
+  "connectors": {
+    "title": "连接器",
+    "description": "连接钉钉、销售易等 SaaS 平台，让 AI 助手获取并分析数据。",
+    "section": {
+      "configuredConnectors": "已配置连接器",
+      "availableProviders": "可用服务商"
+    },
+    "actions": {
+      "add": "添加连接器",
+      "save": "保存",
+      "cancel": "取消",
+      "delete": "删除",
+      "test": "测试",
+      "sync": "同步"
+    },
+    "status": {
+      "connected": "已连接",
+      "disconnected": "未连接",
+      "error": "错误",
+      "pending": "处理中"
+    },
+    "card": {
+      "lastSynced": "上次同步",
+      "testing": "测试中…",
+      "syncing": "同步中…",
+      "deleting": "删除中…",
+      "test": "测试",
+      "sync": "同步",
+      "delete": "删除"
+    },
+    "addDialog": {
+      "title": "添加连接器",
+      "provider": "服务商",
+      "name": "连接器名称",
+      "namePlaceholder": "例如：生产环境钉钉",
+      "add": "添加",
+      "adding": "添加中…",
+      "cancel": "取消"
+    },
+    "emptyState": {
+      "title": "尚未配置连接器",
+      "description": "添加连接器，让 AI 助手访问钉钉、销售易等平台的数据。"
+    },
+    "provider": {
+      "dingtalk": "钉钉",
+      "xiaoshouyi": "销售易 (Neocrm)",
+      "custom": "自定义"
+    }
+  }
+}
