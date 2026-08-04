@@ -1,12 +1,14 @@
 import { create } from 'zustand';
 
 import type { ContextItem } from '@/shared/types/context';
+import type { ComposerPresentation } from '../utils/composerPresentation';
 
 export type PendingLargePasteMap = Record<string, string>;
 
 export interface SessionComposerDraft {
   value: string;
   contexts: ContextItem[];
+  presentation: ComposerPresentation | null;
   pendingLargePastes: PendingLargePasteMap;
   updatedAt: number;
 }
@@ -18,9 +20,11 @@ interface SessionComposerState {
     previousSessionId: string | null,
     nextSessionId: string | null,
     currentContexts: ContextItem[],
+    currentPresentation: ComposerPresentation | null,
   ) => SessionComposerDraft;
   setValue: (sessionId: string, value: string) => void;
   setContexts: (sessionId: string, contexts: ContextItem[]) => void;
+  setPresentation: (sessionId: string, presentation: ComposerPresentation | null) => void;
   setPendingLargePastes: (sessionId: string, pendingLargePastes: PendingLargePasteMap) => void;
   clearDraft: (sessionId: string) => void;
   removeDrafts: (sessionIds: Iterable<string>) => void;
@@ -33,6 +37,7 @@ function createEmptyDraft(): SessionComposerDraft {
   return {
     value: '',
     contexts: EMPTY_CONTEXTS,
+    presentation: null,
     pendingLargePastes: EMPTY_PENDING_LARGE_PASTES,
     updatedAt: 0,
   };
@@ -61,9 +66,15 @@ export const useSessionComposerStore = create<SessionComposerState>((set, get) =
 
   getDraft: (sessionId) => get().drafts[sessionId] ?? createEmptyDraft(),
 
-  activateDraft: (previousSessionId, nextSessionId, currentContexts) => {
+  activateDraft: (
+    previousSessionId,
+    nextSessionId,
+    currentContexts,
+    currentPresentation,
+  ) => {
     if (previousSessionId && previousSessionId !== nextSessionId) {
       get().setContexts(previousSessionId, currentContexts);
+      get().setPresentation(previousSessionId, currentPresentation);
     }
     return nextSessionId ? get().getDraft(nextSessionId) : createEmptyDraft();
   },
@@ -74,6 +85,10 @@ export const useSessionComposerStore = create<SessionComposerState>((set, get) =
 
   setContexts: (sessionId, contexts) => {
     set(state => updateDraft(state, sessionId, { contexts: [...contexts] }));
+  },
+
+  setPresentation: (sessionId, presentation) => {
+    set(state => updateDraft(state, sessionId, { presentation }));
   },
 
   setPendingLargePastes: (sessionId, pendingLargePastes) => {
@@ -91,6 +106,7 @@ export const useSessionComposerStore = create<SessionComposerState>((set, get) =
       return updateDraft(state, sessionId, {
         value: '',
         contexts: [],
+        presentation: null,
         pendingLargePastes: {},
       });
     });

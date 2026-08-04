@@ -221,7 +221,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       return;
     }
 
-    
+    // Close the menu before running the action. Some actions open a modal and
+    // wait for user input; keeping the menu mounted during that wait leaves it
+    // visible behind the modal.
+    onClose();
+
     if (item.onClick) {
       try {
         await Promise.resolve(item.onClick(context));
@@ -233,9 +237,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     if (onItemClick) {
       onItemClick(item, context);
     }
-
-    
-    onClose();
   }, [context, onItemClick, onClose]);
 
   
