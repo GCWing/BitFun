@@ -126,7 +126,9 @@
           "submitted": "審核中",
           "approved": "已通過",
           "rejected": "需修改",
-          "withdrawn": "已撤回"
+          "withdrawn": "已撤回",
+          "yanked": "版本已永久撤下",
+          "unpublished": "Skin 已下架"
         }
       },
       "review": {

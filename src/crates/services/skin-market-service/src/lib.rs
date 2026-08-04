@@ -217,6 +217,10 @@ mod tests {
     }
 
     fn appearance_package() -> Vec<u8> {
+        appearance_package_with_id("example.aurora")
+    }
+
+    fn appearance_package_with_id(package_id: &str) -> Vec<u8> {
         let mut preview_output = Cursor::new(Vec::new());
         image::DynamicImage::new_rgba8(8, 6)
             .write_to(&mut preview_output, image::ImageFormat::Png)
@@ -225,7 +229,7 @@ mod tests {
         let manifest = serde_json::json!({
             "schema": "bitfun.appearance",
             "schemaVersion": 1,
-            "id": "example.aurora",
+            "id": package_id,
             "name": "Aurora",
             "description": "A safe appearance",
             "version": "1.0.0",
@@ -282,6 +286,75 @@ mod tests {
             .as_str()
             .unwrap()
             .to_string()
+    }
+
+    async fn publish_submission(app: &Router, slug: &str) -> (String, String, String) {
+        let submission_id = create_submission(app, slug).await;
+        let mut upload = request(
+            "PUT",
+            &format!("/skin/api/v1/submissions/{submission_id}/package"),
+            Some("owner-token"),
+            Body::from(appearance_package_with_id(&format!(
+                "example.{}",
+                slug.replace('-', ".")
+            ))),
+        );
+        upload.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static(
+                bitfun_product_domains::appearance_market::APPEARANCE_MARKET_PACKAGE_CONTENT_TYPE,
+            ),
+        );
+        assert_eq!(
+            app.clone().oneshot(upload).await.unwrap().status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            app.clone()
+                .oneshot(request(
+                    "POST",
+                    &format!("/skin/api/v1/submissions/{submission_id}/submit"),
+                    Some("owner-token"),
+                    Body::empty(),
+                ))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK
+        );
+        let mut approve = request(
+            "POST",
+            &format!("/skin/api/v1/admin/submissions/{submission_id}/decision"),
+            Some("admin-token"),
+            Body::from(r#"{"decision":"approve","reason":""}"#),
+        );
+        approve.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        let response = app.clone().oneshot(approve).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let approved = json_body(response).await;
+        assert_eq!(approved["submission"]["publicationStatus"], "published");
+        let listing_id = approved["submission"]["listingId"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let detail = app
+            .clone()
+            .oneshot(request(
+                "GET",
+                &format!("/skin/api/v1/listings/{slug}"),
+                None,
+                Body::empty(),
+            ))
+            .await
+            .unwrap();
+        let release_id = json_body(detail).await["releases"][0]["releaseId"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        (submission_id, listing_id, release_id)
     }
 
     #[tokio::test]
@@ -660,5 +733,70 @@ mod tests {
             }
         }
         assert_eq!(seen.len(), 7);
+    }
+
+    #[tokio::test]
+    async fn submission_history_projects_release_and_listing_moderation() {
+        let temporary = tempfile::tempdir().unwrap();
+        let app = test_router(&temporary).await;
+        let (yanked_submission_id, _, release_id) = publish_submission(&app, "yanked-skin").await;
+        let (unpublished_submission_id, listing_id, _) =
+            publish_submission(&app, "unpublished-skin").await;
+
+        let mut yank = request(
+            "POST",
+            &format!("/skin/api/v1/admin/releases/{release_id}/yank"),
+            Some("admin-token"),
+            Body::from(r#"{"reason":"Unsafe package content"}"#),
+        );
+        yank.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        assert_eq!(
+            app.clone().oneshot(yank).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        let mut unpublish = request(
+            "POST",
+            &format!("/skin/api/v1/admin/listings/{listing_id}/unpublish"),
+            Some("admin-token"),
+            Body::from(r#"{"reason":"Policy violation"}"#),
+        );
+        unpublish.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        assert_eq!(
+            app.clone().oneshot(unpublish).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        let response = app
+            .clone()
+            .oneshot(request(
+                "GET",
+                "/skin/api/v1/submissions",
+                Some("owner-token"),
+                Body::empty(),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let history = json_body(response).await;
+        let items = history["items"].as_array().unwrap();
+        let yanked = items
+            .iter()
+            .find(|item| item["submissionId"] == yanked_submission_id)
+            .unwrap();
+        assert_eq!(yanked["status"], "approved");
+        assert_eq!(yanked["publicationStatus"], "yanked");
+        let unpublished = items
+            .iter()
+            .find(|item| item["submissionId"] == unpublished_submission_id)
+            .unwrap();
+        assert_eq!(unpublished["status"], "approved");
+        assert_eq!(unpublished["publicationStatus"], "unpublished");
     }
 }

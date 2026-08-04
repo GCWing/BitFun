@@ -4,7 +4,12 @@ import { sharedMarketLoginUrl } from './account';
 import { skinMarketApi } from './api';
 import { formatMarketDate } from './format';
 import type { Locale, Translate } from './i18n';
-import type { AppearanceSubmission, AppearanceSubmissionStatus, SharedMarketAccount } from './types';
+import type {
+  AppearancePublicationStatus,
+  AppearanceSubmission,
+  AppearanceSubmissionStatus,
+  SharedMarketAccount,
+} from './types';
 
 interface SubmissionsPageProps {
   account?: SharedMarketAccount;
@@ -13,13 +18,29 @@ interface SubmissionsPageProps {
   t: Translate;
 }
 
-function statusLabel(status: AppearanceSubmissionStatus, t: Translate): string {
+type AppearanceSubmissionDisplayStatus = AppearanceSubmissionStatus
+  | Exclude<AppearancePublicationStatus, 'published'>;
+
+export function submissionDisplayStatus(
+  submission: AppearanceSubmission,
+): AppearanceSubmissionDisplayStatus {
+  if (submission.status === 'approved'
+    && submission.publicationStatus
+    && submission.publicationStatus !== 'published') {
+    return submission.publicationStatus;
+  }
+  return submission.status;
+}
+
+function statusLabel(status: AppearanceSubmissionDisplayStatus, t: Translate): string {
   switch (status) {
     case 'draft': return t('submissionStatusDraft');
     case 'submitted': return t('submissionStatusSubmitted');
     case 'approved': return t('submissionStatusApproved');
     case 'rejected': return t('submissionStatusRejected');
     case 'withdrawn': return t('submissionStatusWithdrawn');
+    case 'yanked': return t('submissionStatusYanked');
+    case 'unpublished': return t('submissionStatusUnpublished');
   }
 }
 
@@ -122,8 +143,8 @@ export function SubmissionsPage({ account, accountResolved, locale, t }: Submiss
                 <div className="submission-card__body">
                   <div className="submission-card__title">
                     <h2>{submission.name || submission.slug}</h2>
-                    <span className={`status-pill status-pill--${submission.status}`}>
-                      {statusLabel(submission.status, t)}
+                    <span className={`status-pill status-pill--${submissionDisplayStatus(submission)}`}>
+                      {statusLabel(submissionDisplayStatus(submission), t)}
                     </span>
                   </div>
                   <p>{submission.description || submission.slug}</p>

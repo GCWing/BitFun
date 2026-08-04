@@ -15,12 +15,13 @@ use base64::Engine;
 use bitfun_product_domains::appearance_market::{
     compute_appearance_review_bundle_hash, validate_appearance_market_slug,
     AppearanceAdminSubmissionDetail, AppearanceCursorPage, AppearanceMarketListingDetail,
-    AppearanceMarketListingSummary, AppearanceMarketPackageMeta, AppearanceMarketRelease,
-    AppearanceMarketSort, AppearanceMarketSubmission, AppearanceMarketSubmissionDraftRequest,
-    AppearanceMarketSubmissionStatus, AppearanceMarketUserSummary, AppearanceReviewDecision,
-    AppearanceReviewDecisionRequest, APPEARANCE_MARKET_API_VERSION,
-    APPEARANCE_MARKET_DEFAULT_PAGE_SIZE, APPEARANCE_MARKET_MAX_PACKAGE_BYTES,
-    APPEARANCE_MARKET_MAX_PAGE_SIZE, APPEARANCE_MARKET_PACKAGE_CONTENT_TYPE,
+    AppearanceMarketListingSummary, AppearanceMarketPackageMeta, AppearanceMarketPublicationStatus,
+    AppearanceMarketRelease, AppearanceMarketSort, AppearanceMarketSubmission,
+    AppearanceMarketSubmissionDraftRequest, AppearanceMarketSubmissionStatus,
+    AppearanceMarketUserSummary, AppearanceReviewDecision, AppearanceReviewDecisionRequest,
+    APPEARANCE_MARKET_API_VERSION, APPEARANCE_MARKET_DEFAULT_PAGE_SIZE,
+    APPEARANCE_MARKET_MAX_PACKAGE_BYTES, APPEARANCE_MARKET_MAX_PAGE_SIZE,
+    APPEARANCE_MARKET_PACKAGE_CONTENT_TYPE,
 };
 use chrono::Utc;
 use hmac::{Hmac, Mac};
@@ -1088,7 +1089,7 @@ async fn yank_release(
         .begin()
         .await
         .map_err(SkinMarketError::internal)?;
-    let row = sqlx::query("SELECT listing_id, yanked_at FROM releases WHERE id = ?")
+    let row = sqlx::query("SELECT listing_id, submission_id, yanked_at FROM releases WHERE id = ?")
         .bind(&release_id)
         .fetch_optional(&mut *transaction)
         .await
@@ -1105,8 +1106,10 @@ async fn yank_release(
         ));
     }
     let listing_id: String = row.get("listing_id");
+    let submission_id: String = row.get("submission_id");
+    let now = Utc::now().timestamp();
     sqlx::query("UPDATE releases SET yanked_at = ?, yank_reason = ? WHERE id = ?")
-        .bind(Utc::now().timestamp())
+        .bind(now)
         .bind(reason)
         .bind(&release_id)
         .execute(&mut *transaction)
@@ -1126,11 +1129,17 @@ async fn yank_release(
     )
     .bind(&replacement)
     .bind(i64::from(replacement.is_some()))
-    .bind(Utc::now().timestamp())
+    .bind(now)
     .bind(&listing_id)
     .execute(&mut *transaction)
     .await
     .map_err(SkinMarketError::internal)?;
+    sqlx::query("UPDATE submissions SET updated_at = ? WHERE id = ? AND status = 'approved'")
+        .bind(now)
+        .bind(&submission_id)
+        .execute(&mut *transaction)
+        .await
+        .map_err(SkinMarketError::internal)?;
     insert_audit(
         &mut *transaction,
         admin.user.internal_id,
@@ -1164,11 +1173,12 @@ async fn unpublish_listing(
         .begin()
         .await
         .map_err(SkinMarketError::internal)?;
+    let now = Utc::now().timestamp();
     let updated = sqlx::query(
         "UPDATE listings SET is_published = 0, updated_at = ?
          WHERE id = ? AND is_published = 1",
     )
-    .bind(Utc::now().timestamp())
+    .bind(now)
     .bind(&listing_id)
     .execute(&mut *transaction)
     .await
@@ -1178,6 +1188,15 @@ async fn unpublish_listing(
             "Published appearance listing was not found.",
         ));
     }
+    sqlx::query(
+        "UPDATE submissions SET updated_at = ?
+         WHERE listing_id = ? AND status = 'approved'",
+    )
+    .bind(now)
+    .bind(&listing_id)
+    .execute(&mut *transaction)
+    .await
+    .map_err(SkinMarketError::internal)?;
     insert_audit(
         &mut *transaction,
         admin.user.internal_id,
@@ -1313,29 +1332,34 @@ async fn list_submissions(
         .clamp(1, APPEARANCE_MARKET_MAX_PAGE_SIZE);
     let cursor = decode_submission_cursor(cursor)?;
     let mut builder = QueryBuilder::<Sqlite>::new(
-        "SELECT id, listing_id, owner_user_id, slug, release_number, draft_json,
-                package_meta_json, status, package_sha256, package_size, preview_sha256,
-                rejection_reason, created_at, updated_at
-         FROM submissions WHERE 1 = 1",
+        "SELECT s.id, s.listing_id, s.owner_user_id, s.slug, s.release_number, s.draft_json,
+                s.package_meta_json, s.status, s.package_sha256, s.package_size,
+                s.preview_sha256, s.rejection_reason, s.created_at, s.updated_at,
+                l.is_published AS listing_is_published,
+                r.yanked_at AS release_yanked_at
+         FROM submissions s
+         LEFT JOIN listings l ON l.id = s.listing_id
+         LEFT JOIN releases r ON r.submission_id = s.id
+         WHERE 1 = 1",
     );
     if let Some(owner_user_id) = owner_user_id {
-        builder.push(" AND owner_user_id = ");
+        builder.push(" AND s.owner_user_id = ");
         builder.push_bind(owner_user_id);
     }
     if let Some(status) = status {
-        builder.push(" AND status = ");
+        builder.push(" AND s.status = ");
         builder.push_bind(status_string(status));
     }
     if let Some((updated_at, submission_id)) = cursor {
-        builder.push(" AND (updated_at < ");
+        builder.push(" AND (s.updated_at < ");
         builder.push_bind(updated_at);
-        builder.push(" OR (updated_at = ");
+        builder.push(" OR (s.updated_at = ");
         builder.push_bind(updated_at);
-        builder.push(" AND id < ");
+        builder.push(" AND s.id < ");
         builder.push_bind(submission_id);
         builder.push("))");
     }
-    builder.push(" ORDER BY updated_at DESC, id DESC LIMIT ");
+    builder.push(" ORDER BY s.updated_at DESC, s.id DESC LIMIT ");
     builder.push_bind(i64::from(limit + 1));
     let rows = builder
         .build()
@@ -1363,14 +1387,19 @@ async fn submission_by_id(
     owner_user_id: Option<i64>,
 ) -> SkinMarketResult<AppearanceMarketSubmission> {
     let mut builder = QueryBuilder::<Sqlite>::new(
-        "SELECT id, listing_id, owner_user_id, slug, release_number, draft_json,
-                package_meta_json, status, package_sha256, package_size, preview_sha256,
-                rejection_reason, created_at, updated_at
-         FROM submissions WHERE id = ",
+        "SELECT s.id, s.listing_id, s.owner_user_id, s.slug, s.release_number, s.draft_json,
+                s.package_meta_json, s.status, s.package_sha256, s.package_size,
+                s.preview_sha256, s.rejection_reason, s.created_at, s.updated_at,
+                l.is_published AS listing_is_published,
+                r.yanked_at AS release_yanked_at
+         FROM submissions s
+         LEFT JOIN listings l ON l.id = s.listing_id
+         LEFT JOIN releases r ON r.submission_id = s.id
+         WHERE s.id = ",
     );
     builder.push_bind(submission_id);
     if let Some(owner_user_id) = owner_user_id {
-        builder.push(" AND owner_user_id = ");
+        builder.push(" AND s.owner_user_id = ");
         builder.push_bind(owner_user_id);
     }
     let row = builder
@@ -1396,6 +1425,24 @@ fn submission_from_row(
     let preview_sha256 = row
         .try_get::<Option<String>, _>("preview_sha256")
         .map_err(SkinMarketError::internal)?;
+    let status = parse_submission_status(&row.get::<String, _>("status"))?;
+    let publication_status = if status == AppearanceMarketSubmissionStatus::Approved {
+        let release_yanked_at = row
+            .try_get::<Option<i64>, _>("release_yanked_at")
+            .map_err(SkinMarketError::internal)?;
+        let listing_is_published = row
+            .try_get::<Option<i64>, _>("listing_is_published")
+            .map_err(SkinMarketError::internal)?;
+        Some(if release_yanked_at.is_some() {
+            AppearanceMarketPublicationStatus::Yanked
+        } else if listing_is_published == Some(1) {
+            AppearanceMarketPublicationStatus::Published
+        } else {
+            AppearanceMarketPublicationStatus::Unpublished
+        })
+    } else {
+        None
+    };
     Ok(AppearanceMarketSubmission {
         submission_id: row.get("id"),
         listing_id: row
@@ -1416,7 +1463,8 @@ fn submission_from_row(
         changelog: draft.changelog,
         license: draft.license,
         repository_url: draft.repository_url,
-        status: parse_submission_status(&row.get::<String, _>("status"))?,
+        status,
+        publication_status,
         package_sha256: row
             .try_get("package_sha256")
             .map_err(SkinMarketError::internal)?,

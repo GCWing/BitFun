@@ -641,7 +641,9 @@
       color: var(--bf-appearance-token-color-accent-500);
     }
 
-    &--rejected {
+    &--rejected,
+    &--yanked,
+    &--unpublished {
       border-color: var(--bf-appearance-token-color-error);
       color: var(--bf-appearance-token-color-error);
     }

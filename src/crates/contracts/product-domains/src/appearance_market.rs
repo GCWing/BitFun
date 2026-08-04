@@ -24,6 +24,14 @@ pub enum AppearanceMarketSubmissionStatus {
     Withdrawn,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AppearanceMarketPublicationStatus {
+    Published,
+    Yanked,
+    Unpublished,
+}
+
 impl AppearanceMarketSubmissionStatus {
     pub fn can_transition_to(self, next: Self) -> bool {
         matches!(
@@ -156,6 +164,8 @@ pub struct AppearanceMarketSubmission {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub repository_url: Option<String>,
     pub status: AppearanceMarketSubmissionStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub publication_status: Option<AppearanceMarketPublicationStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub package_sha256: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -296,6 +306,18 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&AppearancePackageMode::Dark).unwrap(),
             "\"dark\""
+        );
+    }
+
+    #[test]
+    fn publication_status_serializes_as_a_stable_api_value() {
+        assert_eq!(
+            serde_json::to_string(&AppearanceMarketPublicationStatus::Yanked).unwrap(),
+            "\"yanked\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AppearanceMarketPublicationStatus::Unpublished).unwrap(),
+            "\"unpublished\""
         );
     }
 

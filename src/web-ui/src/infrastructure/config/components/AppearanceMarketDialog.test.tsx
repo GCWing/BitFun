@@ -296,6 +296,36 @@ describe('AppearanceMarketDialog', () => {
     expect(container.textContent).toContain('package.market.review.reject');
   });
 
+  it('shows a moderated Skin as unpublished instead of approved', async () => {
+    mocks.listSubmissions.mockResolvedValue([{
+      submissionId: 'submission-unpublished',
+      listingId: 'listing-unpublished',
+      slug: 'unpublished-skin',
+      releaseNumber: 1,
+      name: 'Unpublished Skin',
+      minBitfunVersion: '0.2.15',
+      requiredCapabilities: [],
+      changelog: 'Initial release',
+      license: { spdxExpression: 'MIT' },
+      status: 'approved',
+      publicationStatus: 'unpublished',
+      createdAt: 1,
+      updatedAt: 2,
+    }]);
+
+    await act(async () => {
+      root.render(<AppearanceMarketDialog isOpen onClose={() => undefined} />);
+      await Promise.resolve();
+    });
+    const submissionsTab = [...container.querySelectorAll('button')]
+      .find(button => button.textContent === 'package.market.views.submissions');
+    await act(async () => submissionsTab?.click());
+
+    await vi.waitFor(() => expect(container.textContent).toContain('Unpublished Skin'));
+    expect(container.textContent).toContain('package.market.submissions.status.unpublished');
+    expect(container.textContent).not.toContain('package.market.submissions.status.approved');
+  });
+
   it('submits a local Appearance package from the client workflow', async () => {
     await act(async () => {
       root.render(<AppearanceMarketDialog isOpen onClose={() => undefined} />);

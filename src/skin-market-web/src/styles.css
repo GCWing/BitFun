@@ -1626,7 +1626,9 @@ img {
   background: var(--accent-soft);
 }
 
-.status-pill--rejected {
+.status-pill--rejected,
+.status-pill--yanked,
+.status-pill--unpublished {
   border-color: color-mix(in srgb, var(--warning) 54%, var(--border));
   color: var(--warning);
   background: var(--warning-soft);

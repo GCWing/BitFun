@@ -126,7 +126,9 @@
           "submitted": "In review",
           "approved": "Approved",
           "rejected": "Changes requested",
-          "withdrawn": "Withdrawn"
+          "withdrawn": "Withdrawn",
+          "yanked": "Release permanently removed",
+          "unpublished": "Skin unpublished"
         }
       },
       "review": {

@@ -202,6 +202,7 @@ mod tests {
             },
             repository_url: None,
             status,
+            publication_status: None,
             package_sha256: None,
             package_size: None,
             preview_url: None,

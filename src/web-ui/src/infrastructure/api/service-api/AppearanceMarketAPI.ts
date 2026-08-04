@@ -60,6 +60,8 @@ export type AppearanceMarketSubmissionStatus =
   | 'rejected'
   | 'withdrawn';
 
+export type AppearanceMarketPublicationStatus = 'published' | 'yanked' | 'unpublished';
+
 export interface AppearanceMarketSubmission {
   submissionId: string;
   listingId?: string;
@@ -77,6 +79,7 @@ export interface AppearanceMarketSubmission {
   license: AppearanceMarketLicense;
   repositoryUrl?: string;
   status: AppearanceMarketSubmissionStatus;
+  publicationStatus?: AppearanceMarketPublicationStatus;
   packageSha256?: string;
   packageSize?: number;
   previewUrl?: string;

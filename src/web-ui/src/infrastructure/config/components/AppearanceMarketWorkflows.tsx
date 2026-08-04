@@ -25,6 +25,15 @@ function canWithdraw(submission: AppearanceMarketSubmission): boolean {
   return submission.status === 'draft' || submission.status === 'submitted';
 }
 
+function submissionDisplayStatus(submission: AppearanceMarketSubmission): string {
+  if (submission.status === 'approved'
+    && submission.publicationStatus
+    && submission.publicationStatus !== 'published') {
+    return submission.publicationStatus;
+  }
+  return submission.status;
+}
+
 type ManualLicenseKind = 'spdx' | 'custom';
 
 interface ManualSubmissionDraft {
@@ -408,8 +417,8 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
                   <div className="appearance-market__submission-body">
                     <div className="appearance-market__submission-title">
                       <strong>{submission.name || submission.slug}</strong>
-                      <span className={`appearance-market__submission-status appearance-market__submission-status--${submission.status}`}>
-                        {t(`package.market.submissions.status.${submission.status}`)}
+                      <span className={`appearance-market__submission-status appearance-market__submission-status--${submissionDisplayStatus(submission)}`}>
+                        {t(`package.market.submissions.status.${submissionDisplayStatus(submission)}`)}
                       </span>
                     </div>
                     <p>{submission.description || submission.slug}</p>
