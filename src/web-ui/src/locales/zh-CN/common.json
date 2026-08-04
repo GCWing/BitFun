@@ -1127,7 +1127,8 @@
     "fileBrowser": "文件浏览器",
     "editor": "编辑器",
     "markdown": "Markdown",
-    "settingsWithSection": "设置 - {{section}}"
+    "settingsWithSection": "设置 - {{section}}",
+    "fixIssues": "修复 Issue"
   },
   "welcome": {
     "greetingMorning": "早安，创造者",

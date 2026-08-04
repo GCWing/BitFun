@@ -20,6 +20,7 @@ import {
   Activity,
   GitPullRequest,
   Terminal,
+  Wrench,
 } from 'lucide-react';
 import { PanelContentType, PanelContentConfig } from './types';
 
@@ -229,6 +230,14 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
     type: 'review-platform-pr-detail',
     displayName: 'Pull Request',
     icon: GitPullRequest,
+    supportsCopy: false,
+    supportsDownload: false,
+    showHeader: false
+  },
+  'issue-fix': {
+    type: 'issue-fix',
+    displayName: 'Fix Issues',
+    icon: Wrench,
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false

@@ -46,7 +46,7 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
   sceneOverlay,
 }) => {
   const { workspace: currentWorkspace } = useCurrentWorkspace();
-  const { state, toggleLeftPanel } = useApp();
+  const { state, toggleLeftPanel, toggleChatPanel } = useApp();
   const isNavCollapsed = state.layout.leftPanelCollapsed;
   const [navWidth, setNavWidth] = useState(NAV_DEFAULT_WIDTH);
   const navAreaRef = useRef<HTMLDivElement>(null);
@@ -177,6 +177,8 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
           onMaximize={onMaximize}
           onClose={onClose}
           isMaximized={isMaximized}
+          onToggleChatPanel={toggleChatPanel}
+          chatCollapsed={state.layout.chatCollapsed}
         />
         <SceneViewport
           workspacePath={currentWorkspace?.rootPath}

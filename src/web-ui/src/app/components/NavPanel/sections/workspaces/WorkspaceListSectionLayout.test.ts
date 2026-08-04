@@ -120,4 +120,14 @@ describe('WorkspaceListSection layout styles', () => {
     expect(remoteMetaMarkup.indexOf('workspace-item-remote-name'))
       .toBeLessThan(remoteMetaMarkup.indexOf('workspace-item-status-dot'));
   });
+
+  it('renders the same icon type for active and inactive workspace rows', () => {
+    const source = readWorkspaceItemSource();
+
+    // The active workspace row must not render a different icon type
+    // (e.g. an arrow) from its siblings (folders / servers).
+    expect(source).not.toContain('DotMatrixArrowRightIcon');
+    expect(source).not.toContain('workspace-item-active-icon');
+    expect(source).not.toContain('assistant-item-active-icon');
+  });
 });

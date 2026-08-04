@@ -114,7 +114,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   } =
     useWindowControls({ isToolbarMode });
 
-  const { state, switchLeftPanelTab, toggleLeftPanel, toggleRightPanel } = useApp();
+  const { state, switchLeftPanelTab, toggleLeftPanel, toggleRightPanel, toggleChatPanel } = useApp();
   const [windowModeHint, setWindowModeHint] = useState<WindowModeHint | null>(null);
   const windowModeHintTimerRef = useRef<number | null>(null);
 
@@ -569,6 +569,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       }
     },
     { priority: 5, description: 'keyboard.shortcuts.panel.toggleBoth' }
+  );
+
+  // Toggle center (chat) panel: Ctrl+Shift+\
+  useShortcut(
+    'panel.toggleChat',
+    { key: '\\', ctrl: true, shift: true, scope: 'app' },
+    () => toggleChatPanel(),
+    { priority: 5, description: 'keyboard.shortcuts.panel.toggleChat' }
   );
 
   // Toolbar cancel task

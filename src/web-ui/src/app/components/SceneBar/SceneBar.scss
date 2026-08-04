@@ -37,6 +37,50 @@
     flex-shrink: 0;
     padding: 0 $size-gap-1;
   }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 0 $size-gap-1;
+  }
+
+  &__panel-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-appearance-token-element-bg-soft);
+    }
+
+    &.is-active {
+      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-appearance-token-element-bg-soft);
+    }
+
+    &:active {
+      transform: scale(0.96);
+      background: var(--bf-appearance-token-element-bg-medium);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--bf-appearance-token-color-accent-500);
+      outline-offset: -1px;
+    }
+  }
 }
 
 .bitfun-scene-bar--no-controls {
