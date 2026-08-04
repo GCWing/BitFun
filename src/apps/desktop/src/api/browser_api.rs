@@ -363,25 +363,30 @@ pub async fn browser_webview_set_bounds(
 
 }
 
-// OHOS-only commands for handle operations that desktop resolves via
-// `Webview.getByLabel(label)` from `@tauri-apps/api/webview`. The frontend's
-// `useEmbeddedBrowserWebview` falls back to these when `getByLabel` returns
-// null (the OHOS case — Tauri's webview registry doesn't track ArkUI Web
-// components). On desktop these commands are never invoked because
-// `getByLabel` returns a real handle.
+// Handle operations that the frontend drives via the command-based
+// `BrowserWebviewHandle` (createCommandBasedBrowserWebviewHandle). On desktop
+// these resolve the Tauri child webview by label and call its native method;
+// on OHOS they route through the ArkTS `BrowserWebviewService` via the
+// `ohos_browser_call` bridge. Using commands instead of `Webview.getByLabel`
+// from `@tauri-apps/api/webview` avoids the Tauri webview registry entirely
+// — ArkUI Web components created by `RustWebviewNodeController.addWebview`
+// are invisible to that registry, so `getByLabel` returns null / throws on
+// OHOS. The command path works uniformly on both platforms.
 
 #[tauri::command]
 pub async fn browser_webview_show(
-    _app: tauri::AppHandle,
+    app: tauri::AppHandle,
     request: WebviewLabelRequest,
 ) -> Result<(), String> {
     #[cfg(not(target_env = "ohos"))]
     {
-        let _ = request;
-        Err("browser_webview_show is OHOS-only".to_string())
+        find_browser_webview(&app, &request.label)?
+            .show()
+            .map_err(|e| format!("show failed: {e}"))
     }
     #[cfg(target_env = "ohos")]
     {
+        let _ = app;
         validate_browser_label(&request.label)?;
         let json = serde_json::to_string(&request)
             .map_err(|e| format!("failed to encode request: {e}"))?;
@@ -392,16 +397,18 @@ pub async fn browser_webview_show(
 
 #[tauri::command]
 pub async fn browser_webview_hide(
-    _app: tauri::AppHandle,
+    app: tauri::AppHandle,
     request: WebviewLabelRequest,
 ) -> Result<(), String> {
     #[cfg(not(target_env = "ohos"))]
     {
-        let _ = request;
-        Err("browser_webview_hide is OHOS-only".to_string())
+        find_browser_webview(&app, &request.label)?
+            .hide()
+            .map_err(|e| format!("hide failed: {e}"))
     }
     #[cfg(target_env = "ohos")]
     {
+        let _ = app;
         validate_browser_label(&request.label)?;
         let json = serde_json::to_string(&request)
             .map_err(|e| format!("failed to encode request: {e}"))?;
@@ -412,16 +419,18 @@ pub async fn browser_webview_hide(
 
 #[tauri::command]
 pub async fn browser_webview_close(
-    _app: tauri::AppHandle,
+    app: tauri::AppHandle,
     request: WebviewLabelRequest,
 ) -> Result<(), String> {
     #[cfg(not(target_env = "ohos"))]
     {
-        let _ = request;
-        Err("browser_webview_close is OHOS-only".to_string())
+        find_browser_webview(&app, &request.label)?
+            .close()
+            .map_err(|e| format!("close failed: {e}"))
     }
     #[cfg(target_env = "ohos")]
     {
+        let _ = app;
         validate_browser_label(&request.label)?;
         let json = serde_json::to_string(&request)
             .map_err(|e| format!("failed to encode request: {e}"))?;
@@ -432,16 +441,18 @@ pub async fn browser_webview_close(
 
 #[tauri::command]
 pub async fn browser_webview_set_focus(
-    _app: tauri::AppHandle,
+    app: tauri::AppHandle,
     request: WebviewLabelRequest,
 ) -> Result<(), String> {
     #[cfg(not(target_env = "ohos"))]
     {
-        let _ = request;
-        Err("browser_webview_set_focus is OHOS-only".to_string())
+        find_browser_webview(&app, &request.label)?
+            .set_focus()
+            .map_err(|e| format!("set_focus failed: {e}"))
     }
     #[cfg(target_env = "ohos")]
     {
+        let _ = app;
         validate_browser_label(&request.label)?;
         let json = serde_json::to_string(&request)
             .map_err(|e| format!("failed to encode request: {e}"))?;

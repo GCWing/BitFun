@@ -147,12 +147,13 @@ type TauriInvoke = (cmd: string, args?: Record<string, unknown> | unknown[]) => 
 
 /**
  * Build a `BrowserWebviewHandle` whose `close / hide / show / setFocus` ops
- * route through OHOS-only Tauri commands that bridge to the ArkTS
- * `BrowserWebviewService`. Used when `Webview.getByLabel(label)` returns null
- * — which is always the case on OHOS, because Tauri's webview registry
- * doesn't track ArkUI `Web` components created via the vendored
- * `RustWebviewNodeController`. On desktop `getByLabel` returns a real handle
- * and this fallback is never reached.
+ * route through Tauri commands (`browser_webview_close/hide/show/set_focus`)
+ * that the Rust side resolves to the platform's native webview handle —
+ * `app.get_webview(label)` on desktop (Tauri child webview), or the ArkTS
+ * `BrowserWebviewService` on OHOS (ArkUI Web component). This avoids the
+ * `@tauri-apps/api/webview` `Webview.getByLabel()` call entirely, which
+ * queries Tauri's own webview registry and returns null/throws for webviews
+ * created outside that registry (notably ArkUI Web components on OHOS).
  */
 function createCommandBasedBrowserWebviewHandle(
   label: string,
@@ -173,11 +174,14 @@ function createCommandBasedBrowserWebviewHandle(
   return { close, hide, label, setFocus, show };
 }
 
+/**
+ * Create a browser webview via the `browser_webview_create` Tauri command
+ * and return a command-based handle. The handle's show/hide/close/setFocus
+ * ops route through Tauri commands (not `Webview.getByLabel`) so they work
+ * uniformly on desktop (Tauri child webview) and OHOS (ArkUI Web component).
+ */
 async function createBrowserWebview(label: string, url: string, bounds: WebviewBounds): Promise<BrowserWebviewHandle> {
-  const [{ invoke }, { Webview }] = await Promise.all([
-    import('@tauri-apps/api/core'),
-    import('@tauri-apps/api/webview'),
-  ]);
+  const { invoke } = await import('@tauri-apps/api/core');
   await invoke('browser_webview_create', {
     request: {
       label,
@@ -188,16 +192,7 @@ async function createBrowserWebview(label: string, url: string, bounds: WebviewB
       height: bounds.height,
     },
   });
-  const handle = await Webview.getByLabel(label) as unknown as BrowserWebviewHandle | null;
-  if (!handle) {
-    // OHOS: Tauri's webview registry doesn't track ArkUI Web components, so
-    // getByLabel returns null even though browser_webview_create succeeded on
-    // the Rust side (it routed to the ArkTS BrowserWebviewService which
-    // created an embedded ArkUI Web node). Fall back to a handle whose
-    // close/hide/show/setFocus ops route through OHOS-only Tauri commands.
-    return createCommandBasedBrowserWebviewHandle(label, invoke as TauriInvoke);
-  }
-  return handle;
+  return createCommandBasedBrowserWebviewHandle(label, invoke as TauriInvoke);
 }
 
 export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOptions) {
@@ -367,7 +362,7 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
     const previous = webviewRef.current;
     if (previous) await closeWebview(previous);
 
-    const { Webview } = await import('@tauri-apps/api/webview');
+    const { invoke } = await import('@tauri-apps/api/core');
     const initialBounds = await waitForViewportBounds();
     let lastError: unknown = null;
 
@@ -389,8 +384,10 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
         return handle;
       } catch (creationError) {
         lastError = creationError;
-        const staleHandle = await Webview.getByLabel(label).catch(() => null);
-        await staleHandle?.close().catch(() => {});
+        // Clean up any partially-created webview via the command path — works
+        // on both desktop (Tauri child webview) and OHOS (ArkUI Web node).
+        // Swallow errors since the webview may not exist at all.
+        await invoke('browser_webview_close', { request: { label } }).catch(() => {});
         if (!isTransientWebviewCreationError(creationError)
           || attempt === WEBVIEW_CREATE_RETRY_DELAYS_MS.length - 1) {
           throw creationError;
