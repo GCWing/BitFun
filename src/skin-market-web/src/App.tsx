@@ -220,6 +220,7 @@ export default function App() {
       ) : route.kind === 'detail' && route.slug ? (
         <DetailPage
           catalogSearch={catalogSearch}
+          isAdmin={account?.isAdmin === true}
           locale={locale}
           onNavigate={navigate}
           slug={route.slug}

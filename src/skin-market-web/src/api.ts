@@ -124,4 +124,16 @@ export const skinMarketApi = {
         body: JSON.stringify({ decision, reason }),
       },
     ),
+  yankRelease: (releaseId: string, reason: string) =>
+    request<void>(`/admin/releases/${encodeURIComponent(releaseId)}/yank`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    }),
+  unpublishListing: (listingId: string, reason: string) =>
+    request<void>(`/admin/listings/${encodeURIComponent(listingId)}/unpublish`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    }),
 };

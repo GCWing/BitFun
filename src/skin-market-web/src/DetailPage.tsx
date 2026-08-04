@@ -4,7 +4,9 @@ import {
   CheckCircle,
   Desktop,
   DownloadSimple,
+  Prohibit,
   ShieldCheck,
+  WarningCircle,
 } from '@phosphor-icons/react';
 import { useEffect, useMemo, useState } from 'react';
 import { downloadUrl, skinMarketApi, SkinMarketApiError } from './api';
@@ -24,6 +26,7 @@ import type {
 
 interface DetailPageProps {
   catalogSearch: string;
+  isAdmin: boolean;
   locale: Locale;
   onNavigate: (path: string) => void;
   slug: string;
@@ -34,11 +37,14 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError';
 }
 
-export function DetailPage({ catalogSearch, locale, onNavigate, slug, t }: DetailPageProps) {
+export function DetailPage({ catalogSearch, isAdmin, locale, onNavigate, slug, t }: DetailPageProps) {
   const [detail, setDetail] = useState<AppearanceListingDetail>();
   const [error, setError] = useState<unknown>();
   const [loading, setLoading] = useState(true);
   const [retryKey, setRetryKey] = useState(0);
+  const [moderationReason, setModerationReason] = useState('');
+  const [moderationBusy, setModerationBusy] = useState<string>();
+  const [moderationError, setModerationError] = useState<Error>();
   const catalogPath = `/skin/${catalogSearch}`;
 
   useEffect(() => {
@@ -107,6 +113,42 @@ export function DetailPage({ catalogSearch, locale, onNavigate, slug, t }: Detai
   const modeLabel = detail.mode === 'light' ? t('lightMode') : t('darkMode');
   const customLicenseUrl = safeExternalUrl(detail.license.customUrl);
   const repositoryUrl = safeExternalUrl(detail.repositoryUrl);
+  const trimmedModerationReason = moderationReason.trim();
+
+  const yankRelease = async (release: AppearanceMarketRelease) => {
+    if (!trimmedModerationReason || moderationBusy) return;
+    if (!window.confirm(t('yankConfirm', { version: release.packageVersion }))) return;
+    setModerationBusy(release.releaseId);
+    setModerationError(undefined);
+    try {
+      await skinMarketApi.yankRelease(release.releaseId, trimmedModerationReason);
+      setModerationReason('');
+      const remainingReleaseCount = detail.releases.filter((item) => (
+        !item.yanked && item.releaseId !== release.releaseId
+      )).length;
+      if (remainingReleaseCount === 0) onNavigate(catalogPath);
+      else setRetryKey((value) => value + 1);
+    } catch (actionError) {
+      setModerationError(toError(actionError));
+    } finally {
+      setModerationBusy(undefined);
+    }
+  };
+
+  const unpublishListing = async () => {
+    if (!trimmedModerationReason || moderationBusy) return;
+    if (!window.confirm(t('unpublishConfirm', { name: detail.name }))) return;
+    setModerationBusy(detail.listingId);
+    setModerationError(undefined);
+    try {
+      await skinMarketApi.unpublishListing(detail.listingId, trimmedModerationReason);
+      onNavigate(catalogPath);
+    } catch (actionError) {
+      setModerationError(toError(actionError));
+    } finally {
+      setModerationBusy(undefined);
+    }
+  };
 
   return (
     <main id="main-content" className="detail-page">
@@ -166,7 +208,56 @@ export function DetailPage({ catalogSearch, locale, onNavigate, slug, t }: Detai
               <p className="long-copy">{detail.changelog || t('notDeclared')}</p>
             </section>
 
-            <ReleaseHistory detail={detail} locale={locale} t={t} />
+            <ReleaseHistory
+              detail={detail}
+              isAdmin={isAdmin}
+              locale={locale}
+              moderationBusy={moderationBusy}
+              moderationReasonReady={Boolean(trimmedModerationReason)}
+              onYank={yankRelease}
+              t={t}
+            />
+
+            {isAdmin ? (
+              <section className="content-section moderation-panel" aria-labelledby="moderation-heading">
+                <div className="moderation-panel__heading">
+                  <WarningCircle size={24} weight="regular" aria-hidden="true" />
+                  <div>
+                    <h2 id="moderation-heading">{t('moderationTitle')}</h2>
+                    <p>{t('moderationIntro')}</p>
+                  </div>
+                </div>
+                <label className="moderation-panel__reason" htmlFor="moderation-reason">
+                  <span>{t('moderationReason')}</span>
+                  <textarea
+                    id="moderation-reason"
+                    value={moderationReason}
+                    maxLength={1000}
+                    rows={3}
+                    placeholder={t('moderationReasonPlaceholder')}
+                    disabled={Boolean(moderationBusy)}
+                    onChange={(event) => setModerationReason(event.target.value)}
+                  />
+                </label>
+                {moderationError ? (
+                  <p className="moderation-panel__error" role="alert">
+                    <strong>{t('moderationFailed')}</strong>
+                    <span>{moderationError.message}</span>
+                  </p>
+                ) : null}
+                <div className="moderation-panel__actions">
+                  <button
+                    type="button"
+                    className="secondary-button danger-button"
+                    disabled={!trimmedModerationReason || Boolean(moderationBusy)}
+                    onClick={() => void unpublishListing()}
+                  >
+                    <Prohibit size={18} weight="bold" aria-hidden="true" />
+                    {moderationBusy === detail.listingId ? t('unpublishingListing') : t('unpublishListing')}
+                  </button>
+                </div>
+              </section>
+            ) : null}
           </div>
 
           <aside className="detail-aside">
@@ -226,9 +317,21 @@ export function safeExternalUrl(value?: string): string | undefined {
   }
 }
 
-function ReleaseHistory({ detail, locale, t }: {
+function ReleaseHistory({
+  detail,
+  isAdmin,
+  locale,
+  moderationBusy,
+  moderationReasonReady,
+  onYank,
+  t,
+}: {
   detail: AppearanceListingDetail;
+  isAdmin: boolean;
   locale: Locale;
+  moderationBusy?: string;
+  moderationReasonReady: boolean;
+  onYank: (release: AppearanceMarketRelease) => Promise<void>;
   t: Translate;
 }) {
   const releases = useMemo(
@@ -243,7 +346,17 @@ function ReleaseHistory({ detail, locale, t }: {
       <h2 id="releases-heading">{t('releases')}</h2>
       <div className="release-list">
         {visible.map((release) => (
-          <ReleaseItem key={release.releaseId} detail={detail} release={release} locale={locale} t={t} />
+          <ReleaseItem
+            key={release.releaseId}
+            detail={detail}
+            isAdmin={isAdmin}
+            locale={locale}
+            moderationBusy={moderationBusy}
+            moderationReasonReady={moderationReasonReady}
+            onYank={onYank}
+            release={release}
+            t={t}
+          />
         ))}
       </div>
       {older.length ? (
@@ -251,7 +364,17 @@ function ReleaseHistory({ detail, locale, t }: {
           <summary>{t('olderReleases', { count: older.length })}</summary>
           <div className="release-list">
             {older.map((release) => (
-              <ReleaseItem key={release.releaseId} detail={detail} release={release} locale={locale} t={t} />
+              <ReleaseItem
+                key={release.releaseId}
+                detail={detail}
+                isAdmin={isAdmin}
+                locale={locale}
+                moderationBusy={moderationBusy}
+                moderationReasonReady={moderationReasonReady}
+                onYank={onYank}
+                release={release}
+                t={t}
+              />
             ))}
           </div>
         </details>
@@ -260,9 +383,22 @@ function ReleaseHistory({ detail, locale, t }: {
   );
 }
 
-function ReleaseItem({ detail, locale, release, t }: {
+function ReleaseItem({
+  detail,
+  isAdmin,
+  locale,
+  moderationBusy,
+  moderationReasonReady,
+  onYank,
+  release,
+  t,
+}: {
   detail: AppearanceListingDetail;
+  isAdmin: boolean;
   locale: Locale;
+  moderationBusy?: string;
+  moderationReasonReady: boolean;
+  onYank: (release: AppearanceMarketRelease) => Promise<void>;
   release: AppearanceMarketRelease;
   t: Translate;
 }) {
@@ -284,13 +420,30 @@ function ReleaseItem({ detail, locale, release, t }: {
         <div><dt>{t('checksum')}</dt><dd><code title={release.packageSha256}>{shortHash(release.packageSha256)}</code></dd></div>
       </dl>
       {!release.yanked ? (
-        <a className="text-link" href={downloadUrl(detail.slug, release.releaseNumber)}>
-          <DownloadSimple size={17} weight="regular" aria-hidden="true" />
-          {t('downloadVersion', { version: release.packageVersion })}
-        </a>
+        <div className="release-item__actions">
+          <a className="text-link" href={downloadUrl(detail.slug, release.releaseNumber)}>
+            <DownloadSimple size={17} weight="regular" aria-hidden="true" />
+            {t('downloadVersion', { version: release.packageVersion })}
+          </a>
+          {isAdmin ? (
+            <button
+              type="button"
+              className="release-yank-button"
+              disabled={!moderationReasonReady || Boolean(moderationBusy)}
+              onClick={() => void onYank(release)}
+            >
+              <Prohibit size={16} weight="bold" aria-hidden="true" />
+              {moderationBusy === release.releaseId ? t('yankingRelease') : t('yankRelease')}
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </article>
   );
+}
+
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
 }
 
 function DetailSkeleton({ catalogPath, navigate, t }: {
