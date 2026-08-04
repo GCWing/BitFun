@@ -274,6 +274,14 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
     supportsDownload: false,
     showHeader: false
   },
+  'html-preview': {
+    type: 'html-preview',
+    displayName: 'HTML Preview',
+    icon: Globe,
+    supportsCopy: false,
+    supportsDownload: false,
+    showHeader: false
+  },
 };
 
 /**

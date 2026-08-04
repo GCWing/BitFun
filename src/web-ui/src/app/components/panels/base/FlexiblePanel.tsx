@@ -112,6 +112,10 @@ const BitfunCanvasPanel = React.lazy(() =>
   import('@/tools/bitfun-canvas/BitfunCanvasPanel')
 );
 
+const HtmlPreviewPanel = React.lazy(() =>
+  import('@/app/components/panels/content-canvas/html-preview/HtmlPreviewPanel')
+);
+
 const TaskDetailPanel = React.lazy(() => 
   import('@/flow_chat/components/TaskDetailPanel').then(module => ({ 
     default: module.TaskDetailPanel 
@@ -383,7 +387,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
 
       case 'image-viewer': {
         const imageViewerData = content.data || {};
-        
+
         return (
           <div className="bitfun-flexible-panel__image-viewer-container" data-bf-component="flexible-panel" data-bf-part="image">
             {renderLazyEditor(
@@ -392,6 +396,23 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
                 fileName={content.title}
                 workspacePath={workspacePath}
                 className="bitfun-flexible-panel__image-viewer"
+              />
+            )}
+          </div>
+        );
+      }
+
+      case 'html-preview': {
+        const htmlPreviewData = content.data || {};
+
+        return (
+          <div className="bitfun-flexible-panel__html-preview-container" data-bf-component="flexible-panel" data-bf-part="html-preview">
+            {renderLazyEditor(
+              <HtmlPreviewPanel
+                filePath={htmlPreviewData.filePath || ''}
+                fileName={content.title}
+                workspacePath={workspacePath}
+                isActiveTab={isActive}
               />
             )}
           </div>

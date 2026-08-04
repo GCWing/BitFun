@@ -20,6 +20,7 @@ export const FILE_VIEWER_TYPES: PanelContentType[] = [
   'image-viewer',
   'diff-code-editor',
   'plan-viewer',
+  'html-preview',
 ];
 
 /**

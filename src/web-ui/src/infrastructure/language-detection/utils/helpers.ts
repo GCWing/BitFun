@@ -107,7 +107,7 @@ export function getPrismLanguageFromAlias(alias: string): string {
 }
 
  
-export function getEditorType(filePathOrName: string): 'code-editor' | 'markdown-editor' | 'image-viewer' | 'plan-viewer' {
+export function getEditorType(filePathOrName: string): 'code-editor' | 'markdown-editor' | 'image-viewer' | 'plan-viewer' | 'html-preview' {
   const result = detectLanguage(filePathOrName);
   const iconType = result.language.iconType;
   
@@ -126,7 +126,12 @@ export function getEditorType(filePathOrName: string): 'code-editor' | 'markdown
   if (result.language.id === 'markdown') {
     return 'markdown-editor';
   }
-  
-  
+
+
+  if (result.language.id === 'html') {
+    return 'html-preview';
+  }
+
+
   return 'code-editor';
 }
