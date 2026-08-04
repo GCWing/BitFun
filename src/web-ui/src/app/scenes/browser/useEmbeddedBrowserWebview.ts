@@ -140,6 +140,39 @@ async function setWebviewBounds(label: string, bounds: WebviewBounds): Promise<v
   });
 }
 
+// Minimal `invoke` signature accepted by the command-based handle. Matches the
+// runtime shape of `@tauri-apps/api/core`'s `invoke` once its generic `T` is
+// erased to `unknown`.
+type TauriInvoke = (cmd: string, args?: Record<string, unknown> | unknown[]) => Promise<unknown>;
+
+/**
+ * Build a `BrowserWebviewHandle` whose `close / hide / show / setFocus` ops
+ * route through OHOS-only Tauri commands that bridge to the ArkTS
+ * `BrowserWebviewService`. Used when `Webview.getByLabel(label)` returns null
+ * — which is always the case on OHOS, because Tauri's webview registry
+ * doesn't track ArkUI `Web` components created via the vendored
+ * `RustWebviewNodeController`. On desktop `getByLabel` returns a real handle
+ * and this fallback is never reached.
+ */
+function createCommandBasedBrowserWebviewHandle(
+  label: string,
+  invoke: TauriInvoke,
+): BrowserWebviewHandle {
+  const close = async (): Promise<void> => {
+    await invoke('browser_webview_close', { request: { label } });
+  };
+  const hide = async (): Promise<void> => {
+    await invoke('browser_webview_hide', { request: { label } });
+  };
+  const show = async (): Promise<void> => {
+    await invoke('browser_webview_show', { request: { label } });
+  };
+  const setFocus = async (): Promise<void> => {
+    await invoke('browser_webview_set_focus', { request: { label } });
+  };
+  return { close, hide, label, setFocus, show };
+}
+
 async function createBrowserWebview(label: string, url: string, bounds: WebviewBounds): Promise<BrowserWebviewHandle> {
   const [{ invoke }, { Webview }] = await Promise.all([
     import('@tauri-apps/api/core'),
@@ -157,7 +190,12 @@ async function createBrowserWebview(label: string, url: string, bounds: WebviewB
   });
   const handle = await Webview.getByLabel(label) as unknown as BrowserWebviewHandle | null;
   if (!handle) {
-    throw new Error(`Webview not found after creation: ${label}`);
+    // OHOS: Tauri's webview registry doesn't track ArkUI Web components, so
+    // getByLabel returns null even though browser_webview_create succeeded on
+    // the Rust side (it routed to the ArkTS BrowserWebviewService which
+    // created an embedded ArkUI Web node). Fall back to a handle whose
+    // close/hide/show/setFocus ops route through OHOS-only Tauri commands.
+    return createCommandBasedBrowserWebviewHandle(label, invoke as TauriInvoke);
   }
   return handle;
 }

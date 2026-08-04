@@ -1571,6 +1571,10 @@ pub async fn _run() {
             api::browser_api::browser_webview_navigate,
             api::browser_api::browser_webview_reload,
             api::browser_api::browser_webview_set_bounds,
+            api::browser_api::browser_webview_show,
+            api::browser_api::browser_webview_hide,
+            api::browser_api::browser_webview_close,
+            api::browser_api::browser_webview_set_focus,
             api::browser_api::browser_get_url,
             // Browser Control API (CDP-based user browser control)
             api::browser_control_api::browser_control_list_browsers,

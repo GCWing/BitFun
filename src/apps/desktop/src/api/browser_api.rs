@@ -2,6 +2,18 @@
 //!
 //! Browser webviews are created as native child webviews by this desktop
 //! adapter so stream-specific initialization can run before page scripts.
+//!
+//! On OHOS the desktop child-webview APIs (`app.get_webview(label)`,
+//! `window.add_child(...)`) are unavailable, so the `browser_webview_*`
+//! commands route through ArkTS callbacks registered by
+//! `EntryAbility.onWindowStageCreate` (see `BrowserWebviewService.ets`).
+//! The Rust side serializes the request to JSON, calls the registered
+//! `ThreadsafeFunction` via `JS_THREADSAFE_FUNCTION`, awaits the returned
+//! `Promise<String>` envelope (`{ok:true}` / `{ok:true,result:"..."}` /
+//! `{error:"..."}`), and decodes it uniformly. Page-load lifecycle is
+//! forwarded back to the web-ui by the ArkTS service calling the
+//! `emit_browser_page_load` `#[napi]` function (mirrors the desktop
+//! `.on_page_load` handler in `lib.rs`).
 
 use serde::Deserialize;
 use tauri::Manager;
@@ -66,6 +78,7 @@ fn find_browser_webview(app: &tauri::AppHandle, label: &str) -> Result<tauri::We
     }
     #[cfg(target_env = "ohos")]
     {
+        let _ = app;
         Err("Unable to find browser webview".to_owned())
     }
 }
@@ -129,6 +142,61 @@ fn validate_webview_bounds(x: f64, y: f64, width: f64, height: f64) -> Result<()
     }
 }
 
+// #region OHOS ArkTS bridge helpers
+// Only compiled on the OHOS target. On desktop the child-webview APIs are used
+// directly (no ArkTS bridge involved).
+
+#[cfg(target_env = "ohos")]
+async fn ohos_browser_call(name: &str, json_arg: &str) -> Result<String, String> {
+    use bitfun_core::util::JS_THREADSAFE_FUNCTION;
+    let function = {
+        let lock = JS_THREADSAFE_FUNCTION.read();
+        lock.get(name).cloned()
+    };
+    let Some(function) = function else {
+        return Err(format!("{name} has not been registered by ArkTS"));
+    };
+    let res = function.call_async(Ok(json_arg.to_string())).await;
+    match res {
+        Ok(promise) => match promise.await {
+            Ok(json) => Ok(json),
+            Err(err) => Err(err.to_string()),
+        },
+        Err(err) => Err(err.to_string()),
+    }
+}
+
+/// Decode the JSON envelope returned by `BrowserWebviewService` methods.
+/// - `{ok:true}` / `{ok:true,result:"..."}` → `Ok(())`
+/// - `{error:"..."}` → `Err(error)`
+/// Anything else surfaces as an unexpected-response error so the frontend's
+/// `setError` shows a meaningful message instead of a silent failure.
+#[cfg(target_env = "ohos")]
+fn decode_ok_envelope(response: &str) -> Result<(), String> {
+    let value: serde_json::Value = serde_json::from_str(response)
+        .map_err(|e| format!("invalid json response from ArkTS: {e}: {response}"))?;
+    if value.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
+        Ok(())
+    } else if let Some(error) = value.get("error").and_then(|v| v.as_str()) {
+        Err(error.to_owned())
+    } else {
+        Err(format!("unexpected response from ArkTS: {response}"))
+    }
+}
+
+/// Shared URL-scheme validation for create / navigate. Returns the parsed
+/// `tauri::Url` so the caller can re-use it on desktop or discard it on OHOS.
+fn parse_browser_url(raw: &str) -> Result<tauri::Url, String> {
+    let url = raw
+        .parse::<tauri::Url>()
+        .map_err(|e| format!("invalid url: {e}"))?;
+    match url.scheme() {
+        "http" | "https" => Ok(url),
+        scheme => Err(format!("unsupported protocol: {scheme}")),
+    }
+}
+// #endregion
+
 #[tauri::command]
 pub async fn browser_webview_create(
     app: tauri::AppHandle,
@@ -139,14 +207,7 @@ pub async fn browser_webview_create(
         validate_browser_label(&request.label)?;
         validate_webview_bounds(request.x, request.y, request.width, request.height)?;
 
-        let url = request
-            .url
-            .parse::<tauri::Url>()
-            .map_err(|e| format!("invalid url: {e}"))?;
-        match url.scheme() {
-            "http" | "https" => {}
-            scheme => return Err(format!("unsupported protocol: {scheme}")),
-        }
+        let url = parse_browser_url(&request.url)?;
 
         let window = app
             .get_window("main")
@@ -163,20 +224,28 @@ pub async fn browser_webview_create(
         }
 
         let webview = window
-        .add_child(
-            builder,
-            tauri::LogicalPosition::new(request.x, request.y),
-            tauri::LogicalSize::new(request.width, request.height),
-        )
-        .map_err(|e| format!("failed to create browser webview: {e}"))?;
+            .add_child(
+                builder,
+                tauri::LogicalPosition::new(request.x, request.y),
+                tauri::LogicalSize::new(request.width, request.height),
+            )
+            .map_err(|e| format!("failed to create browser webview: {e}"))?;
 
         webview
             .hide()
             .map_err(|e| format!("failed to hide browser webview before positioning: {e}"))
     }
+
     #[cfg(target_env = "ohos")]
     {
-        Err("Unable to find browser webview".to_string())
+        let _ = app;
+        validate_browser_label(&request.label)?;
+        validate_webview_bounds(request.x, request.y, request.width, request.height)?;
+        let _ = parse_browser_url(&request.url)?;
+        let json = serde_json::to_string(&request)
+            .map_err(|e| format!("failed to encode request: {e}"))?;
+        let response = ohos_browser_call("browser_webview_create_ohos", &json).await?;
+        decode_ok_envelope(&response)
     }
 }
 
@@ -194,7 +263,12 @@ pub async fn browser_webview_eval(
 
     #[cfg(target_env = "ohos")]
     {
-        Err("Unable to find browser webview".to_string())
+        let _ = app;
+        validate_browser_label(&request.label)?;
+        let json = serde_json::to_string(&request)
+            .map_err(|e| format!("failed to encode request: {e}"))?;
+        let response = ohos_browser_call("browser_webview_eval_ohos", &json).await?;
+        decode_ok_envelope(&response)
     }
 
 }
@@ -204,19 +278,26 @@ pub async fn browser_webview_navigate(
     app: tauri::AppHandle,
     request: WebviewNavigateRequest,
 ) -> Result<(), String> {
-    let url = request
-        .url
-        .parse::<tauri::Url>()
-        .map_err(|e| format!("invalid url: {e}"))?;
+    let _ = parse_browser_url(&request.url)?;
 
-    match url.scheme() {
-        "http" | "https" => {}
-        scheme => return Err(format!("unsupported protocol: {scheme}")),
+    #[cfg(not(target_env = "ohos"))]
+    {
+        let url = request.url.parse::<tauri::Url>()
+            .map_err(|e| format!("invalid url: {e}"))?;
+        find_browser_webview(&app, &request.label)?
+            .navigate(url)
+            .map_err(|e| format!("navigate failed: {e}"))
     }
 
-    find_browser_webview(&app, &request.label)?
-        .navigate(url)
-        .map_err(|e| format!("navigate failed: {e}"))
+    #[cfg(target_env = "ohos")]
+    {
+        let _ = app;
+        validate_browser_label(&request.label)?;
+        let json = serde_json::to_string(&request)
+            .map_err(|e| format!("failed to encode request: {e}"))?;
+        let response = ohos_browser_call("browser_webview_navigate_ohos", &json).await?;
+        decode_ok_envelope(&response)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -230,9 +311,22 @@ pub async fn browser_webview_reload(
     app: tauri::AppHandle,
     request: WebviewLabelRequest,
 ) -> Result<(), String> {
-    find_browser_webview(&app, &request.label)?
-        .reload()
-        .map_err(|e| format!("reload failed: {e}"))
+    #[cfg(not(target_env = "ohos"))]
+    {
+        find_browser_webview(&app, &request.label)?
+            .reload()
+            .map_err(|e| format!("reload failed: {e}"))
+    }
+
+    #[cfg(target_env = "ohos")]
+    {
+        let _ = app;
+        validate_browser_label(&request.label)?;
+        let json = serde_json::to_string(&request)
+            .map_err(|e| format!("failed to encode request: {e}"))?;
+        let response = ohos_browser_call("browser_webview_reload_ohos", &json).await?;
+        decode_ok_envelope(&response)
+    }
 }
 
 #[tauri::command]
@@ -244,9 +338,9 @@ pub async fn browser_webview_set_bounds(
     {
         validate_webview_bounds(request.x, request.y, request.width, request.height)?;
 
-    let webview = app
-        .get_webview(&request.label)
-        .ok_or_else(|| format!("Webview not found: {}", request.label))?;
+        let webview = app
+            .get_webview(&request.label)
+            .ok_or_else(|| format!("Webview not found: {}", request.label))?;
 
         webview
             .set_bounds(tauri::Rect {
@@ -258,9 +352,102 @@ pub async fn browser_webview_set_bounds(
 
     #[cfg(target_env = "ohos")]
     {
-        Err("invalid webview bounds".to_string())
+        let _ = app;
+        validate_browser_label(&request.label)?;
+        validate_webview_bounds(request.x, request.y, request.width, request.height)?;
+        let json = serde_json::to_string(&request)
+            .map_err(|e| format!("failed to encode request: {e}"))?;
+        let response = ohos_browser_call("browser_webview_set_bounds_ohos", &json).await?;
+        decode_ok_envelope(&response)
     }
 
+}
+
+// OHOS-only commands for handle operations that desktop resolves via
+// `Webview.getByLabel(label)` from `@tauri-apps/api/webview`. The frontend's
+// `useEmbeddedBrowserWebview` falls back to these when `getByLabel` returns
+// null (the OHOS case — Tauri's webview registry doesn't track ArkUI Web
+// components). On desktop these commands are never invoked because
+// `getByLabel` returns a real handle.
+
+#[tauri::command]
+pub async fn browser_webview_show(
+    _app: tauri::AppHandle,
+    request: WebviewLabelRequest,
+) -> Result<(), String> {
+    #[cfg(not(target_env = "ohos"))]
+    {
+        let _ = request;
+        Err("browser_webview_show is OHOS-only".to_string())
+    }
+    #[cfg(target_env = "ohos")]
+    {
+        validate_browser_label(&request.label)?;
+        let json = serde_json::to_string(&request)
+            .map_err(|e| format!("failed to encode request: {e}"))?;
+        let response = ohos_browser_call("browser_webview_show_ohos", &json).await?;
+        decode_ok_envelope(&response)
+    }
+}
+
+#[tauri::command]
+pub async fn browser_webview_hide(
+    _app: tauri::AppHandle,
+    request: WebviewLabelRequest,
+) -> Result<(), String> {
+    #[cfg(not(target_env = "ohos"))]
+    {
+        let _ = request;
+        Err("browser_webview_hide is OHOS-only".to_string())
+    }
+    #[cfg(target_env = "ohos")]
+    {
+        validate_browser_label(&request.label)?;
+        let json = serde_json::to_string(&request)
+            .map_err(|e| format!("failed to encode request: {e}"))?;
+        let response = ohos_browser_call("browser_webview_hide_ohos", &json).await?;
+        decode_ok_envelope(&response)
+    }
+}
+
+#[tauri::command]
+pub async fn browser_webview_close(
+    _app: tauri::AppHandle,
+    request: WebviewLabelRequest,
+) -> Result<(), String> {
+    #[cfg(not(target_env = "ohos"))]
+    {
+        let _ = request;
+        Err("browser_webview_close is OHOS-only".to_string())
+    }
+    #[cfg(target_env = "ohos")]
+    {
+        validate_browser_label(&request.label)?;
+        let json = serde_json::to_string(&request)
+            .map_err(|e| format!("failed to encode request: {e}"))?;
+        let response = ohos_browser_call("browser_webview_close_ohos", &json).await?;
+        decode_ok_envelope(&response)
+    }
+}
+
+#[tauri::command]
+pub async fn browser_webview_set_focus(
+    _app: tauri::AppHandle,
+    request: WebviewLabelRequest,
+) -> Result<(), String> {
+    #[cfg(not(target_env = "ohos"))]
+    {
+        let _ = request;
+        Err("browser_webview_set_focus is OHOS-only".to_string())
+    }
+    #[cfg(target_env = "ohos")]
+    {
+        validate_browser_label(&request.label)?;
+        let json = serde_json::to_string(&request)
+            .map_err(|e| format!("failed to encode request: {e}"))?;
+        let response = ohos_browser_call("browser_webview_set_focus_ohos", &json).await?;
+        decode_ok_envelope(&response)
+    }
 }
 
 /// Return the current URL of a browser webview.

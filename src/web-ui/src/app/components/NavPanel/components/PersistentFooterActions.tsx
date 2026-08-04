@@ -220,7 +220,7 @@ const PersistentFooterActions: React.FC = () => {
   const isBrowserActive =
     activeTabId === 'browser' || (activeTabId === 'session' && isBrowserPanelActiveInCanvas);
 
-  const SHOW_BROWSER_ENTRY = false;
+  const SHOW_BROWSER_ENTRY = true;
 
   return (
     <>
