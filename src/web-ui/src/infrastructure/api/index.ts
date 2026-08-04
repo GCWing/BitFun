@@ -38,13 +38,15 @@ import { i18nAPI } from './service-api/I18nAPI';
 import { btwAPI } from './service-api/BtwAPI';
 import { editorAiAPI } from './service-api/EditorAiAPI';
 import { reviewPlatformAPI } from './service-api/ReviewPlatformAPI';
+import { issueFixAPI } from './service-api/IssueFixAPI';
 import { insightsApi } from './insightsApi';
 import { speechAPI } from './service-api/SpeechAPI';
 import { worktreeAPI } from './service-api/WorktreeAPI';
 
 // Export API modules
-export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, cronAPI, permissionAPI, pageAPI, gitAPI, gitAgentAPI, gitRepoHistoryAPI, startchatAgentAPI, sessionAPI, i18nAPI, btwAPI, editorAiAPI, reviewPlatformAPI, insightsApi, speechAPI, worktreeAPI };
+export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, cronAPI, permissionAPI, pageAPI, gitAPI, gitAgentAPI, gitRepoHistoryAPI, startchatAgentAPI, sessionAPI, i18nAPI, btwAPI, editorAiAPI, reviewPlatformAPI, issueFixAPI, insightsApi, speechAPI, worktreeAPI };
 export * from './service-api/ReviewPlatformAPI';
+export * from './service-api/IssueFixAPI';
 
 // Export types
 export type { GitRepoHistory };
@@ -75,6 +77,7 @@ export const bitfunAPI = {
   btw: btwAPI,
   editorAi: editorAiAPI,
   reviewPlatform: reviewPlatformAPI,
+  issueFix: issueFixAPI,
   insights: insightsApi,
   speech: speechAPI,
   worktree: worktreeAPI,

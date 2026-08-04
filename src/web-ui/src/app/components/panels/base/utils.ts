@@ -20,6 +20,7 @@ import {
   Activity,
   GitPullRequest,
   Terminal,
+  Wrench,
 } from 'lucide-react';
 import { PanelContentType, PanelContentConfig } from './types';
 
@@ -233,6 +234,14 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
     supportsDownload: false,
     showHeader: false
   },
+  'issue-fix': {
+    type: 'issue-fix',
+    displayName: 'Fix Issues',
+    icon: Wrench,
+    supportsCopy: false,
+    supportsDownload: false,
+    showHeader: false
+  },
   'terminal': {
     type: 'terminal',
     displayName: 'Terminal',
@@ -260,6 +269,14 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'browser': {
     type: 'browser',
     displayName: 'Browser',
+    icon: Globe,
+    supportsCopy: false,
+    supportsDownload: false,
+    showHeader: false
+  },
+  'html-preview': {
+    type: 'html-preview',
+    displayName: 'HTML Preview',
     icon: Globe,
     supportsCopy: false,
     supportsDownload: false,

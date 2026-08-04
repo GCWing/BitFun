@@ -30,10 +30,12 @@ export type PanelContentType =
   | 'background-command-output'
   | 'review-platform'
   | 'review-platform-pr-detail'
+  | 'issue-fix'
   | 'terminal'
   | 'generative-widget'
   | 'bitfun-canvas'
-  | 'browser';
+  | 'browser'
+  | 'html-preview';
 
 export interface PanelContent {
   type: PanelContentType;

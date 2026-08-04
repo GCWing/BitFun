@@ -112,6 +112,10 @@ const BitfunCanvasPanel = React.lazy(() =>
   import('@/tools/bitfun-canvas/BitfunCanvasPanel')
 );
 
+const HtmlPreviewPanel = React.lazy(() =>
+  import('@/app/components/panels/content-canvas/html-preview/HtmlPreviewPanel')
+);
+
 const TaskDetailPanel = React.lazy(() => 
   import('@/flow_chat/components/TaskDetailPanel').then(module => ({ 
     default: module.TaskDetailPanel 
@@ -138,6 +142,10 @@ const BackgroundCommandOutputPanel = React.lazy(() =>
 
 const ReviewPlatformPanel = React.lazy(() =>
   import('@/app/components/panels/review-platform/ReviewPlatformPanel')
+);
+
+const IssueFixPanel = React.lazy(() =>
+  import('@/app/components/panels/issue-fix/IssueFixPanel')
 );
 
 // CodePreview, ChartRenderer and CodeNode removed - visualization features disabled
@@ -379,7 +387,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
 
       case 'image-viewer': {
         const imageViewerData = content.data || {};
-        
+
         return (
           <div className="bitfun-flexible-panel__image-viewer-container" data-bf-component="flexible-panel" data-bf-part="image">
             {renderLazyEditor(
@@ -388,6 +396,23 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
                 fileName={content.title}
                 workspacePath={workspacePath}
                 className="bitfun-flexible-panel__image-viewer"
+              />
+            )}
+          </div>
+        );
+      }
+
+      case 'html-preview': {
+        const htmlPreviewData = content.data || {};
+
+        return (
+          <div className="bitfun-flexible-panel__html-preview-container" data-bf-component="flexible-panel" data-bf-part="html-preview">
+            {renderLazyEditor(
+              <HtmlPreviewPanel
+                filePath={htmlPreviewData.filePath || ''}
+                fileName={content.title}
+                workspacePath={workspacePath}
+                isActiveTab={isActive}
               />
             )}
           </div>
@@ -841,6 +866,17 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
               initialPullRequestId={content.data?.pullRequestId}
               initialPullRequestUrl={content.data?.pullRequestUrl}
               detailOnly
+            />
+          </React.Suspense>
+        );
+
+      case 'issue-fix':
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">Loading issues...</div>}>
+            <IssueFixPanel
+              workspacePath={content.data?.workspacePath || workspacePath}
+              projectPath={content.data?.projectPath}
+              host={content.data?.host}
             />
           </React.Suspense>
         );
