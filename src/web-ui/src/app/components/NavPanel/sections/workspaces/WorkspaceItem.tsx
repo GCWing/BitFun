@@ -142,7 +142,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const [acpClientsLoading, setAcpClientsLoading] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuAnchorRef = useRef<HTMLDivElement>(null);
-  const menuPopoverRef = useRef<HTMLDivElement>(null);
+  const menuPopoverRef = useRef<HTMLDivElement | null>(null);
+  const popoverResizeObserverRef = useRef<ResizeObserver | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const isNamedAssistantWorkspace =
@@ -383,6 +384,26 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     apply();
     requestAnimationFrame(apply);
   }, []);
+
+  // Callback ref for the menu popover. The popover only mounts once menuPosition
+  // is set (chicken-and-egg: menuPosition needs the popover's size), so a
+  // ResizeObserver created in the menuOpen effect would attach to a null ref.
+  // Attaching here ties the observer to the element's actual mount/unmount:
+  // on mount it fires once with the real size (fixing the stale initial height)
+  // and again whenever async content (ACP client rows, loading toggle, remote
+  // /git conditional rows, locale label width) changes the popover height.
+  const setMenuPopoverRef = useCallback((node: HTMLDivElement | null) => {
+    if (popoverResizeObserverRef.current) {
+      popoverResizeObserverRef.current.disconnect();
+      popoverResizeObserverRef.current = null;
+    }
+    menuPopoverRef.current = node;
+    if (node && typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(() => updateMenuPosition());
+      ro.observe(node);
+      popoverResizeObserverRef.current = ro;
+    }
+  }, [updateMenuPosition]);
 
   const handleMenuTriggerClick = useCallback(() => {
     const nextOpen = !menuOpen;
@@ -932,7 +953,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
 
             {menuOpen && menuPosition && createPortal(
               <div
-                ref={menuPopoverRef}
+                ref={setMenuPopoverRef}
                 className="bitfun-nav-panel__workspace-item-menu-popover"
                 role="menu"
                 style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }}
@@ -1315,7 +1336,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
 
             {menuOpen && menuPosition && createPortal(
               <div
-                ref={menuPopoverRef}
+                ref={setMenuPopoverRef}
                 className="bitfun-nav-panel__workspace-item-menu-popover"
                 role="menu"
                 style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }}
