@@ -3,7 +3,8 @@
 use crate::api::app_state::AppState;
 use bitfun_core::service::review_platform::{
     ReviewPlatformCiLog, ReviewPlatformDetailSection, ReviewPlatformError,
-    ReviewPlatformIssueEvidence, ReviewPlatformKind, ReviewPlatformPullRequestDetail,
+    ReviewPlatformIssueEvidence, ReviewPlatformIssuePage, ReviewPlatformIssueState,
+    ReviewPlatformKind, ReviewPlatformListIssuesRequest, ReviewPlatformPullRequestDetail,
     ReviewPlatformPullRequestDetailPage, ReviewPlatformPullRequestReviewTarget,
     ReviewPlatformService, ReviewPlatformWorkspaceSnapshot,
 };
@@ -186,6 +187,35 @@ pub async fn review_platform_get_issue(
     })
 }
 
+/// Enumerate a repository's issues.
+///
+/// Returns summary rows only; the caller fetches full evidence per issue when it
+/// needs a body and comments.
+#[tauri::command]
+pub async fn review_platform_list_issues(
+    _state: State<'_, AppState>,
+    request: ReviewPlatformListIssuesDto,
+) -> Result<ReviewPlatformIssuePage, String> {
+    ReviewPlatformService::list_issues(ReviewPlatformListIssuesRequest {
+        platform: request.platform,
+        host: &request.host,
+        project_path: &request.project_path,
+        state: request.state.unwrap_or_default(),
+        page: request.page,
+        per_page: request.per_page,
+        repository_path: request.repository_path.as_deref(),
+    })
+    .await
+    .map_err(|error| {
+        let safe_error = safe_review_platform_error(&error);
+        error!(
+            "Failed to list review platform Issues: platform={:?}, host={}, project_path={}, error={}",
+            request.platform, request.host, request.project_path, safe_error
+        );
+        format!("Failed to list provider Issues: {safe_error}")
+    })
+}
+
 #[tauri::command]
 pub async fn review_platform_get_pull_request_review_target_by_identity(
     _state: State<'_, AppState>,
@@ -331,6 +361,21 @@ pub struct ReviewPlatformIssueRequest {
     pub host: String,
     pub project_path: String,
     pub issue_id: String,
+    pub page: Option<u32>,
+    pub per_page: Option<u32>,
+    pub repository_path: Option<String>,
+}
+
+/// Owned mirror of `ReviewPlatformListIssuesRequest`, which borrows its strings
+/// and so cannot be deserialized directly.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewPlatformListIssuesDto {
+    pub platform: ReviewPlatformKind,
+    pub host: String,
+    pub project_path: String,
+    /// Defaults to open issues.
+    pub state: Option<ReviewPlatformIssueState>,
     pub page: Option<u32>,
     pub per_page: Option<u32>,
     pub repository_path: Option<String>,

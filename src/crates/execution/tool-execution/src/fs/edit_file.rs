@@ -141,25 +141,16 @@ fn find_actual_string(file_content: &str, search_string: &str) -> Option<String>
         return None;
     }
 
-    let normalized_search_chars: Vec<char> = search_chars
-        .iter()
-        .copied()
-        .map(normalize_quote_char)
-        .collect();
+    // Quote-normalized matching: build normalized versions of both strings
+    // and use str::find() (O(n) Two-Way) instead of a character-by-character
+    // scan (O(n*m)) to locate the match position (issue #1650).
+    let normalized_file_str: String = file_chars.iter().copied().map(normalize_quote_char).collect();
+    let normalized_search_str: String = search_chars.iter().copied().map(normalize_quote_char).collect();
 
-    for start in 0..=file_chars.len() - search_chars.len() {
-        let window_matches = file_chars[start..start + search_chars.len()]
-            .iter()
-            .copied()
-            .map(normalize_quote_char)
-            .eq(normalized_search_chars.iter().copied());
-        if window_matches {
-            return Some(
-                file_chars[start..start + search_chars.len()]
-                    .iter()
-                    .collect(),
-            );
-        }
+    if let Some(byte_pos) = normalized_file_str.find(&normalized_search_str) {
+        let char_start = normalized_file_str[..byte_pos].chars().count();
+        let char_end = char_start + search_chars.len();
+        return Some(file_chars[char_start..char_end].iter().collect());
     }
 
     None
@@ -238,8 +229,6 @@ fn edit_string_candidates(
             let tabs_to_spaces_new = convert_tabs_to_spaces(new_string, tab_width);
             push_candidate(tabs_to_spaces_old.clone(), tabs_to_spaces_new.clone());
 
-            // Also try quote-normalized variant (e.g. curly quotes in file
-            // after whitespace normalization).
             if let Some(actual_old) = find_actual_string(content, &tabs_to_spaces_old) {
                 push_candidate(actual_old, tabs_to_spaces_new);
             }
