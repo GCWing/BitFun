@@ -271,6 +271,11 @@ impl FileSystemService {
         Ok(outcome)
     }
 
+    /// Reads raw file bytes with the same access and size checks as [`Self::read_file`].
+    pub async fn read_file_bytes(&self, file_path: &str) -> FileSystemResult<Vec<u8>> {
+        self.file_operation_service.read_file_bytes(file_path).await
+    }
+
     /// Reads a file.
     pub async fn read_file(&self, file_path: &str) -> FileSystemResult<FileReadResult> {
         self.file_operation_service.read_file(file_path).await

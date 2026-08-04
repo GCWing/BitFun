@@ -3,6 +3,7 @@ import { Download, Copy, X, AlertCircle } from 'lucide-react';
 import { IconButton } from '@/component-library';
 import { Markdown as MarkdownRenderer } from '@/component-library/components/Markdown/Markdown';
 import { useI18n } from '@/infrastructure/i18n';
+import { getFileIconType } from '@/infrastructure/language-detection';
 import { createLogger } from '@/shared/utils/logger';
 import { globalEventBus } from '@/infrastructure/event-bus';
 
@@ -423,6 +424,9 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         const fileName = editorData.fileName || content.title;
         const editorLanguage = editorData.language;
         const editorWorkspacePath = editorData.workspacePath || workspacePath;
+        const isBinaryPreview = ['archive', 'binary'].includes(
+          getFileIconType(fileName)
+        );
         const syncGenerativeWidgetToolResult = async (nextWidgetCode: string, persistToSession: boolean) => {
           const source = editorData._source;
           if (
@@ -492,7 +496,8 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             workspacePath={editorWorkspacePath}
             fileName={fileName}
             language={editorLanguage}
-            readOnly={editorData.readOnly || false}
+            readOnly={isBinaryPreview || editorData.readOnly || false}
+            readEncoding={isBinaryPreview ? 'text-preview' : undefined}
             autoSave={editorData.autoSave === true}
             autoSaveDelayMs={typeof editorData.autoSaveDelayMs === 'number' ? editorData.autoSaveDelayMs : undefined}
             showLineNumbers={editorData.showLineNumbers !== false}

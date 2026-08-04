@@ -101,13 +101,12 @@ export class CommonUtils {
   /// writes the selected file URIs to the system pasteboard. This reads them
   /// back so the project's paste flow can reach them.
   ///
-  /// Iterates every record and collects whatever looks like a file URI — the
-  /// `uri` field when the record's mime hints at a file/URI, and any `plainText`
-  /// value that parses as a `file://` / `docs://` URI (some sources drop a bare
-  /// URI list into plain text). Each candidate is run through the same
-  /// normalization as the picker. Returns the same envelope as
-  /// `open_file_dialog`: `{ paths: string[] }` / `{ paths: [] }` (no files) /
-  /// `{ error: string }`.
+  /// Iterates every record and collects file URIs from both the legacy `uri` /
+  /// `plainText` fields and API 14+ URI/plain-text MIME entries. Some system
+  /// file managers store file lists only in those additional entries. Each
+  /// candidate is run through the same normalization as the picker. Returns the
+  /// same envelope as `open_file_dialog`: `{ paths: string[] }` /
+  /// `{ paths: [] }` (no files) / `{ error: string }`.
   static async read_clipboard_files(): Promise<string> {
     try {
       const systemPasteboard = pasteboard.getSystemPasteboard();
@@ -123,20 +122,32 @@ export class CommonUtils {
       for (let index = 0; index < recordCount; index++) {
         const record = data.getRecord(index);
         const candidates: string[] = [];
-
-        const uri = (record.uri || '').trim();
-        if (uri.length > 0) {
-          candidates.push(uri);
-        }
-
-        const plainText = (record.plainText || '').trim();
-        if (plainText.length > 0) {
-          // A bare URI list may come through as plain text (one per line).
-          for (const line of plainText.split(/\r?\n/)) {
+        const addStringCandidates = (value: string): void => {
+          for (const line of value.split(/\r?\n/)) {
             const trimmed = line.trim();
             if (trimmed.length > 0) {
               candidates.push(trimmed);
             }
+          }
+        };
+
+        addStringCandidates(record.uri || '');
+        addStringCandidates(record.plainText || '');
+
+        // File Manager can place URI and plain-text values in additional MIME
+        // entries. Those values are only available through getData().
+        const supportedTypes = record.getValidTypes([
+          pasteboard.MIMETYPE_TEXT_URI,
+          pasteboard.MIMETYPE_TEXT_PLAIN
+        ]);
+        for (const type of supportedTypes) {
+          try {
+            const value = await record.getData(type);
+            if (typeof value === 'string') {
+              addStringCandidates(value);
+            }
+          } catch (e) {
+            hilog.warn(0x0000, 'vnext', 'read_clipboard_files: failed to read mime entry ' + type + ': ' + e);
           }
         }
 

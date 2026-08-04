@@ -281,18 +281,27 @@ pub async fn read_text_file(
         resolve_desktop_path_target(app_state, raw_path, preferred_remote_connection_id).await?;
     match &target {
         DesktopPathTarget::Local { resolved_path, .. } => {
+            if encoding.is_some_and(|value| {
+                value.eq_ignore_ascii_case("base64") || value.eq_ignore_ascii_case("text-preview")
+            }) {
+                let bytes = app_state
+                    .filesystem_service
+                    .read_file_bytes(&resolved_path.to_string_lossy())
+                    .await
+                    .map_err(|e| format!("Failed to read file content: {}", e))?;
+
+                if encoding.is_some_and(|value| value.eq_ignore_ascii_case("base64")) {
+                    return Ok(BASE64.encode(bytes));
+                }
+                return Ok(String::from_utf8_lossy(&bytes).into_owned());
+            }
+
             let result = app_state
                 .filesystem_service
                 .read_file(&resolved_path.to_string_lossy())
                 .await
                 .map_err(|e| format!("Failed to read file content: {}", e))?;
-            if encoding.is_some_and(|value| value.eq_ignore_ascii_case("base64"))
-                && !result.encoding.eq_ignore_ascii_case("base64")
-            {
-                Ok(BASE64.encode(result.content.as_bytes()))
-            } else {
-                Ok(result.content)
-            }
+            Ok(result.content)
         }
         DesktopPathTarget::Remote {
             requested_path,
@@ -316,6 +325,10 @@ fn encode_remote_file_bytes(bytes: Vec<u8>, encoding: Option<&str>) -> Result<St
         return Ok(BASE64.encode(bytes));
     }
 
+    if encoding.is_some_and(|value| value.eq_ignore_ascii_case("text-preview")) {
+        return Ok(String::from_utf8_lossy(&bytes).into_owned());
+    }
+
     String::from_utf8(bytes).map_err(|e| format!("File is not valid UTF-8: {}", e))
 }
 
@@ -329,6 +342,15 @@ mod tests {
         assert_eq!(
             encode_remote_file_bytes(png_header, Some("base64")).expect("base64 should encode"),
             "iVBORw=="
+        );
+    }
+
+    #[test]
+    fn remote_file_bytes_support_lossy_text_preview() {
+        assert_eq!(
+            encode_remote_file_bytes(vec![b'M', b'Z', 0xff], Some("text-preview"))
+                .expect("text preview should decode lossily"),
+            "MZ�"
         );
     }
 

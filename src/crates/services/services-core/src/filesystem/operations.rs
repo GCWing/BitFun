@@ -103,37 +103,20 @@ impl FileOperationService {
         }
     }
 
+    pub async fn read_file_bytes(&self, file_path: &str) -> FileSystemResult<Vec<u8>> {
+        let path = Path::new(file_path);
+
+        self.validate_readable_file(path, file_path).await?;
+
+        fs::read(path)
+            .await
+            .map_err(|e| FileSystemError::service(format!("Failed to read file: {}", e)))
+    }
+
     pub async fn read_file(&self, file_path: &str) -> FileSystemResult<FileReadResult> {
         let path = Path::new(file_path);
 
-        self.validate_file_access(path, false).await?;
-
-        if !path.exists() {
-            return Err(FileSystemError::service(format!(
-                "File does not exist: {}",
-                file_path
-            )));
-        }
-
-        if path.is_dir() {
-            return Err(FileSystemError::service(format!(
-                "Path is a directory: {}",
-                file_path
-            )));
-        }
-
-        let metadata = fs::metadata(path).await.map_err(|e| {
-            FileSystemError::service(format!("Failed to read file metadata: {}", e))
-        })?;
-
-        let file_size = metadata.len();
-        if file_size > self.max_file_size_mb * 1024 * 1024 {
-            return Err(FileSystemError::service(format!(
-                "File too large: {}MB (max: {}MB)",
-                file_size / (1024 * 1024),
-                self.max_file_size_mb
-            )));
-        }
+        let file_size = self.validate_readable_file(path, file_path).await?;
 
         match fs::read_to_string(path).await {
             Ok(content) => {
@@ -518,6 +501,39 @@ impl FileOperationService {
 
     pub async fn is_file(&self, path: &str) -> bool {
         Path::new(path).is_file()
+    }
+
+    async fn validate_readable_file(&self, path: &Path, file_path: &str) -> FileSystemResult<u64> {
+        self.validate_file_access(path, false).await?;
+
+        if !path.exists() {
+            return Err(FileSystemError::service(format!(
+                "File does not exist: {}",
+                file_path
+            )));
+        }
+
+        if path.is_dir() {
+            return Err(FileSystemError::service(format!(
+                "Path is a directory: {}",
+                file_path
+            )));
+        }
+
+        let metadata = fs::metadata(path).await.map_err(|e| {
+            FileSystemError::service(format!("Failed to read file metadata: {}", e))
+        })?;
+
+        let file_size = metadata.len();
+        if file_size > self.max_file_size_mb * 1024 * 1024 {
+            return Err(FileSystemError::service(format!(
+                "File too large: {}MB (max: {}MB)",
+                file_size / (1024 * 1024),
+                self.max_file_size_mb
+            )));
+        }
+
+        Ok(file_size)
     }
 
     async fn validate_file_access(&self, path: &Path, is_write: bool) -> FileSystemResult<()> {
