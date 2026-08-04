@@ -175,6 +175,12 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
                 type="text"
                 value={projectName}
                 onChange={handleProjectNameChange}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !isCreating) {
+                    e.preventDefault();
+                    void handleConfirm();
+                  }
+                }}
                 placeholder={t('newProject.projectNamePlaceholder')}
                 disabled={isCreating}
                 autoFocus
