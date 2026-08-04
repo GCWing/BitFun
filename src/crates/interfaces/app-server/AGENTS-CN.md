@@ -31,15 +31,11 @@ JSON-RPC server/client 脚手架。role/transport 层不绑定 schema；使用�
   `bitfun_app_server::client::connect`。
 - Transport 构造器必须固定 `ByteStreams::new(outgoing, incoming)` 方向；不要暴露
   易出错的 swap API。
-- 本 crate 在 option C 下拥有**完整后端契约**：app-server schema 是前端面对的单一
-  JSON-RPC 接口，覆盖 agent kernel 操作（委托给 `bitfun-agent-runtime` SDK）和
-  host 服务（git/mcp/config/cron/snapshot/fs/workspace/...）。为覆盖 host 服务，它
-  直接依赖 `assembly/core`（`bitfun-core`，`features = "product-full"`）— 与
-  `bitfun-acp` 已有的模式相同（`bitfun-acp/Cargo.toml`）。Product assembly 构造
-  `AgentRuntime` 和 host 服务单例并通过 `BitfunAppRuntime` 注入两者；host 服务的
-  schema handler 调用 `bitfun_core::service::*`，与 Desktop host 相同（静态/全局
-  访问器），因此 `BitfunAppRuntime` 不需要按服务持有 host-services 字段。不要将本
-  crate 描述为 host 服务操作的 Core 无关；agent-kernel handler 仍由 SDK facade 支持。
+- 具体 schema 只覆盖已经交付且有消费者的能力。当前包括 Agent Runtime 的
+  Session/Turn/Permission 操作与事件投递，以及 Web client 已使用的 git/config/i18n
+  host-service 方法。Core 依赖必须保持精确的 `agent-runtime` feature 闭包。新增
+  host-service 家族必须先明确 schema owner 并复审 feature 边界；不得恢复
+  `product-full`，也不得把尚未实现的后端超集描述为当前能力。
 - Handler 将 runtime 调用卸载到后台任务或立即返回；不要在 handler 回调内调用
   `SentRequest::block_task`（`jsonrpc.rs` 中的上游 `DEADLOCK` 注释）。通过
   `responder.respond_with_result` 回复。

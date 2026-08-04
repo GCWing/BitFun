@@ -225,6 +225,9 @@ jobs:
       # blocking unrelated work.
       - name: Run file watch contract tests
         if: runner.os != 'macOS'
+        # Fail with bounded diagnostics instead of occupying a runner for the
+        # workflow-wide timeout if a native file-watch operation stalls.
+        timeout-minutes: 5
         run: cargo test --locked -p bitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts
 
       # Search tools resolve paths and symlinks directly, which also differs

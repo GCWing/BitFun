@@ -242,11 +242,29 @@ impl WorkspaceService {
     /// Creates a new workspace service.
     pub async fn new() -> BitFunResult<Self> {
         let config = WorkspaceManagerConfig::default();
-        Self::with_config(config).await
+        Self::with_config_and_workspace_preparation(config, true).await
+    }
+
+    /// Creates a workspace service that restores persisted metadata without
+    /// preparing any restored workspace.
+    ///
+    /// Runtime hosts that enforce workspace ownership use this constructor,
+    /// then perform an ownership-aware open before workspace-scoped startup
+    /// effects such as `.gitignore` updates or Runtime data migration.
+    pub async fn new_with_deferred_workspace_preparation() -> BitFunResult<Self> {
+        let config = WorkspaceManagerConfig::default();
+        Self::with_config_and_workspace_preparation(config, false).await
     }
 
     /// Creates a workspace service with a custom configuration.
     pub async fn with_config(config: WorkspaceManagerConfig) -> BitFunResult<Self> {
+        Self::with_config_and_workspace_preparation(config, true).await
+    }
+
+    async fn with_config_and_workspace_preparation(
+        config: WorkspaceManagerConfig,
+        prepare_workspaces: bool,
+    ) -> BitFunResult<Self> {
         let path_manager = try_get_path_manager_arc()?;
         let runtime_service = try_get_workspace_runtime_service_arc()?;
 
@@ -270,19 +288,26 @@ impl WorkspaceService {
             runtime_service,
         };
 
-        if let Err(e) = service.load_workspace_history_only().await {
+        let history_result = if prepare_workspaces {
+            service.load_workspace_history_only().await
+        } else {
+            service.load_workspace_history_metadata_only().await
+        };
+        if let Err(e) = history_result {
             warn!("Failed to load workspace history on startup: {}", e);
         }
 
-        if let Err(e) = service.remap_legacy_assistant_workspace_records().await {
-            warn!(
-                "Failed to remap legacy assistant workspace records on startup: {}",
-                e
-            );
-        }
+        if prepare_workspaces {
+            if let Err(e) = service.remap_legacy_assistant_workspace_records().await {
+                warn!(
+                    "Failed to remap legacy assistant workspace records on startup: {}",
+                    e
+                );
+            }
 
-        if let Err(e) = service.ensure_assistant_workspaces().await {
-            warn!("Failed to ensure assistant workspaces on startup: {}", e);
+            if let Err(e) = service.ensure_assistant_workspaces().await {
+                warn!("Failed to ensure assistant workspaces on startup: {}", e);
+            }
         }
 
         Ok(service)
@@ -1726,8 +1751,20 @@ impl WorkspaceService {
         Ok(())
     }
 
-    /// Loads workspace history only without restoring the current workspace (used on startup).
+    /// Loads persisted history and prepares restored workspaces for the default
+    /// single-host startup path.
     async fn load_workspace_history_only(&self) -> BitFunResult<()> {
+        self.load_workspace_history(true).await
+    }
+
+    /// Loads persisted workspace metadata without workspace-scoped startup
+    /// preparation. Runtime hosts use the restored current selection only as
+    /// an advisory candidate until they acquire ownership and open it.
+    async fn load_workspace_history_metadata_only(&self) -> BitFunResult<()> {
+        self.load_workspace_history(false).await
+    }
+
+    async fn load_workspace_history(&self, prepare_workspaces: bool) -> BitFunResult<()> {
         let workspace_data: Option<WorkspacePersistenceData> = self
             .persistence
             .load_json("workspace_data")
@@ -1825,8 +1862,10 @@ impl WorkspaceService {
             self.save_workspace_data().await?;
         }
 
-        self.prepare_startup_restored_workspaces(workspaces_to_restore)
-            .await;
+        if prepare_workspaces {
+            self.prepare_startup_restored_workspaces(workspaces_to_restore)
+                .await;
+        }
 
         Ok(())
     }
@@ -2135,7 +2174,10 @@ impl WorkspaceService {
             return options;
         }
 
-        if let Some(descriptor) = self.assistant_descriptor_from_path(path) {
+        if let Some(descriptor) = self
+            .assistant_descriptor_from_path(path)
+            .or_else(|| self.legacy_assistant_descriptor_from_path(path))
+        {
             options.workspace_kind = WorkspaceKind::Assistant;
             if options.assistant_id.is_none() {
                 options.assistant_id = descriptor.assistant_id;
@@ -2282,6 +2324,7 @@ impl WorkspaceService {
     /// Returns whether a path is a managed assistant workspace.
     pub fn is_assistant_workspace_path(&self, path: &Path) -> bool {
         self.assistant_descriptor_from_path(path).is_some()
+            || self.legacy_assistant_descriptor_from_path(path).is_some()
     }
 
     /// Clears all persisted data.
@@ -2471,6 +2514,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn legacy_assistant_path_is_classified_without_startup_migration() {
+        let env = TestEnvironment::new();
+        let service = build_test_workspace_service(env.path_manager.clone()).await;
+        let legacy = env
+            .path_manager
+            .legacy_default_assistant_workspace_dir(None);
+        std::fs::create_dir_all(&legacy).expect("legacy assistant workspace");
+
+        let options = service
+            .normalize_workspace_options_for_path(&legacy, WorkspaceCreateOptions::default());
+
+        assert_eq!(options.workspace_kind, WorkspaceKind::Assistant);
+        assert_eq!(options.assistant_id, None);
+        assert!(service.is_assistant_workspace_path(&legacy));
+        assert!(legacy.is_dir());
+        assert!(
+            !env.path_manager
+                .default_assistant_workspace_dir(None)
+                .exists(),
+            "classification must not migrate workspace data before ownership"
+        );
+    }
+
+    #[tokio::test]
     async fn load_workspace_history_only_ensures_all_opened_local_workspaces() {
         let env = TestEnvironment::new();
         let service = build_test_workspace_service(env.path_manager.clone()).await;
@@ -2586,6 +2653,66 @@ mod tests {
                 .join(&legacy_session.session_id)
                 .exists(),
             "legacy session directory should be removed after startup migration"
+        );
+    }
+
+    #[tokio::test]
+    async fn metadata_only_history_load_defers_workspace_side_effects_until_ownership() {
+        let env = TestEnvironment::new();
+        let service = build_test_workspace_service(env.path_manager.clone()).await;
+        let workspace_root = env.create_workspace_dir("deferred-workspace");
+        let gitignore_path = workspace_root.join(".gitignore");
+        std::fs::write(&gitignore_path, "target/\n").expect("gitignore should be seeded");
+
+        let workspace = WorkspaceInfo::new(
+            workspace_root.clone(),
+            WorkspaceOpenOptions {
+                auto_set_current: false,
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("workspace should initialize");
+        let workspace_data = WorkspacePersistenceData {
+            workspaces: HashMap::from([(workspace.id.clone(), workspace.clone())]),
+            opened_workspace_ids: vec![workspace.id.clone()],
+            current_workspace_id: Some(workspace.id.clone()),
+            recent_workspaces: vec![workspace.id.clone()],
+            recent_assistant_workspaces: Vec::new(),
+            saved_at: chrono::Utc::now(),
+        };
+        service
+            .persistence
+            .save_json("workspace_data", &workspace_data, StorageOptions::default())
+            .await
+            .expect("workspace data should save");
+
+        let runtime = service
+            .runtime_service
+            .context_for_local_workspace(&workspace_root);
+        assert!(!runtime.runtime_root.exists());
+
+        service
+            .load_workspace_history_metadata_only()
+            .await
+            .expect("workspace history metadata should restore");
+
+        assert_eq!(
+            service
+                .get_current_workspace()
+                .await
+                .map(|current| current.id),
+            Some(workspace.id),
+            "metadata restore should preserve the advisory current workspace selection"
+        );
+        assert_eq!(
+            std::fs::read_to_string(gitignore_path).expect("gitignore should be readable"),
+            "target/\n",
+            "metadata restore must not prepare the workspace before Runtime ownership"
+        );
+        assert!(
+            !runtime.runtime_root.exists(),
+            "metadata restore must not create or migrate Runtime data before ownership"
         );
     }
 

@@ -9,15 +9,33 @@ description = "BitFun Server - Web-based AI Code Assistant"
 name = "bitfun-server"
 path = "src/main.rs"
 
-[dependencies]
-bitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }
+[features]
+default = []
+# Compile and test the paused source references without registering their
+# handlers or changing the default Web Server runtime. This is a source-health
+# contract, not a product capability or compatibility feature.
+paused-web-server-source-check = [
+    "bitfun-core/dispatch-store",
+    "bitfun-core/external-sources",
+    "dep:base64",
+    "dep:chrono",
+    "dep:reqwest",
+    "dep:serde_json",
+]
 
-# App-server surface: an in-process JSON-RPC server/client pair over an
-# in-memory channel transport. The websocket handler routes agent kernel RPCs
-# through this client so agent interfaces uniformly go through app-server.
+[dependencies]
+# The embedded Agent Runtime needs the narrow runtime owner set. The bootstrap
+# also injects the concrete RemoteExecPort boundary, so keep ssh-remote even
+# though the paused Web Server's current host does not initialize the required
+# SSH manager. Dispatch/external-source product capabilities are preserved as
+# inactive source and are not part of the default host module graph.
+bitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["agent-runtime", "ssh-remote"] }
+
+# App Server surface. Each accepted WebSocket is adapted directly into a
+# JSON-RPC `Lines` transport and handed to `BitfunAppServer::serve`; there is no
+# shared in-process client in the current Server host.
 bitfun-app-server = { path = "../../crates/interfaces/app-server" }
 bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime" }
-bitfun-events = { path = "../../crates/contracts/events" }
 
 agent-client-protocol = { workspace = true }
 
@@ -28,16 +46,15 @@ tower-http = { workspace = true }
 # Inherited from workspace
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "sync"] }
 serde = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, optional = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
-base64 = { workspace = true }
+base64 = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 futures-util = { workspace = true }
-futures = { workspace = true }
-chrono = { workspace = true }
-dirs = { workspace = true }
 log = { workspace = true }
 
 [lints]

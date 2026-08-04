@@ -10,14 +10,10 @@ name = "bitfun_app_server"
 
 [dependencies]
 agent-client-protocol = { workspace = true }
-# Host services (git/mcp/config/cron/snapshot/fs/workspace/...) live in
-# `bitfun-core`. The app-server surface owns the full backend contract under
-# option C, so it depends on core directly -- mirroring `bitfun-acp`, which
-# already does the same (`bitfun-acp/Cargo.toml`). Product assembly constructs
-# the `AgentRuntime` and the host service singletons and injects both via
-# `BitfunAppRuntime`; the schema handlers call `bitfun_core::service::*` the
-# same way the Desktop host does (static/global accessors, no extra injection).
-bitfun-core = { path = "../../assembly/core", default-features = false, features = ["product-full"] }
+# The current schema exposes Agent Runtime operations plus the git/config/i18n
+# services already owned by the runtime closure. Keep this exact feature set;
+# adding a new host-service family requires a schema owner and feature review.
+bitfun-core = { path = "../../assembly/core", default-features = false, features = ["agent-runtime"] }
 bitfun-agent-runtime = { path = "../../execution/agent-runtime" }
 bitfun-events = { path = "../../contracts/events" }
 tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }

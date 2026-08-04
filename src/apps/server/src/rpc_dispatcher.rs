@@ -1,8 +1,10 @@
-//! WebSocket RPC command dispatcher.
+//! Inactive legacy WebSocket RPC command dispatcher.
 //!
-//! Maps Tauri command names (used by the frontend `api.invoke()`) to
-//! server-side handler functions. Each handler receives the raw JSON
-//! `params` and returns a JSON `result`.
+//! This source is preserved while the Web Server product is paused and compiled
+//! only by the non-default source-health profile. It is not connected to the
+//! current runtime. Future command exposure must use the App Server protocol and
+//! current capability owners instead of restoring this parallel Tauri-shaped
+//! dispatch path wholesale.
 
 use crate::bootstrap::ServerAppState;
 use anyhow::{anyhow, Result};
@@ -25,7 +27,7 @@ use std::time::Duration;
 /// `"open_workspace"`, `"terminal_create"`), so the frontend's
 /// `api.invoke(name, args)` works identically over both Tauri IPC and
 /// WebSocket.
-pub async fn dispatch(
+pub(crate) async fn dispatch(
     method: &str,
     params: serde_json::Value,
     state: &Arc<ServerAppState>,
@@ -430,7 +432,10 @@ pub async fn dispatch(
                     turn_id,
                     agent_type,
                     workspace_path,
+                    None,
+                    None,
                     DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi),
+                    None,
                     None,
                     None,
                 )

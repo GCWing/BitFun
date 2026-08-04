@@ -45,13 +45,10 @@
 //! avoid implying a stable public SDK. They will be replaced by a proper
 //! versioned event envelope and connection protocol in a follow-up.
 
-// Lifted from the default 128: the `AppServer` builder chains one
-// `ChainedHandler` layer per registered request handler, and with the
-// agent-kernel + permission + git + config surface all on one builder the
-// monomorphized handler tower overflows the default recursion limit when the
-// `agent_kernel` integration test instantiates the full `BitfunAppServer::serve`
-// connection. Raise it so the chain keeps compiling as more host-service groups
-// land under option C.
+// Lifted from the default 128: the current bounded request groups already form
+// a deep `ChainedHandler` type when `BitfunAppServer::serve` is instantiated by
+// the integration tests. This is an implementation limit for the delivered
+// surface, not a commitment to absorb every backend API into this crate.
 #![recursion_limit = "256"]
 
 pub mod agent;
@@ -75,8 +72,8 @@ pub use server::BitfunAppServer;
 /// Convenience prelude for consumers building an app-server connection.
 pub mod prelude {
     pub use crate::{
-        agent, client, schema, server, transport, AppClient, AppServer,
-        BitfunAppRuntime, BitfunAppServer,
+        agent, client, schema, server, transport, AppClient, AppServer, BitfunAppRuntime,
+        BitfunAppServer,
     };
     pub use agent_client_protocol::{
         Builder, ConnectionTo, Dispatch, Handled, JsonRpcNotification, JsonRpcRequest,

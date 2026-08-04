@@ -40,17 +40,104 @@ impl RuntimeOwnershipKey {
             }
         })?;
 
+        Ok(Self::from_canonical_workspace(
+            &canonical_workspace,
+            product_identity,
+        ))
+    }
+
+    /// Creates the key for a managed absolute workspace path that may not exist
+    /// yet. The deepest existing ancestor is canonicalized and the normalized
+    /// missing suffix is appended, so the key matches [`Self::for_workspace`]
+    /// after the caller creates the directory.
+    pub fn for_workspace_candidate(
+        workspace_root: &Path,
+        product_identity: &str,
+    ) -> Result<Self, RuntimeOwnershipError> {
+        validate_product_identity(product_identity)?;
+        if workspace_root.exists() {
+            return Self::for_workspace(workspace_root, product_identity);
+        }
+        if !workspace_root.is_absolute()
+            || workspace_root.components().any(|component| {
+                matches!(
+                    component,
+                    std::path::Component::CurDir | std::path::Component::ParentDir
+                )
+            })
+        {
+            return Err(RuntimeOwnershipError::CanonicalizeWorkspace {
+                path: workspace_root.to_path_buf(),
+                source: std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "managed workspace candidate must be an absolute normalized path",
+                ),
+            });
+        }
+
+        let mut existing_ancestor = workspace_root;
+        let mut missing_suffix = Vec::new();
+        loop {
+            match std::fs::symlink_metadata(existing_ancestor) {
+                Ok(_) => break,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    let name = existing_ancestor.file_name().ok_or_else(|| {
+                        RuntimeOwnershipError::CanonicalizeWorkspace {
+                            path: workspace_root.to_path_buf(),
+                            source: std::io::Error::new(
+                                std::io::ErrorKind::NotFound,
+                                "managed workspace candidate has no existing ancestor",
+                            ),
+                        }
+                    })?;
+                    missing_suffix.push(name.to_os_string());
+                    existing_ancestor = existing_ancestor.parent().ok_or_else(|| {
+                        RuntimeOwnershipError::CanonicalizeWorkspace {
+                            path: workspace_root.to_path_buf(),
+                            source: std::io::Error::new(
+                                std::io::ErrorKind::NotFound,
+                                "managed workspace candidate has no existing ancestor",
+                            ),
+                        }
+                    })?;
+                }
+                Err(source) => {
+                    return Err(RuntimeOwnershipError::CanonicalizeWorkspace {
+                        path: workspace_root.to_path_buf(),
+                        source,
+                    });
+                }
+            }
+        }
+
+        let mut canonical_workspace = dunce::canonicalize(existing_ancestor).map_err(|source| {
+            RuntimeOwnershipError::CanonicalizeWorkspace {
+                path: workspace_root.to_path_buf(),
+                source,
+            }
+        })?;
+        for component in missing_suffix.into_iter().rev() {
+            canonical_workspace.push(component);
+        }
+
+        Ok(Self::from_canonical_workspace(
+            &canonical_workspace,
+            product_identity,
+        ))
+    }
+
+    fn from_canonical_workspace(canonical_workspace: &Path, product_identity: &str) -> Self {
         let mut hasher = Sha256::new();
         hasher.update(b"bitfun-runtime-ownership-v2\0");
         hasher.update(product_identity.as_bytes());
         hasher.update(b"\0");
-        hash_canonical_path(&mut hasher, &canonical_workspace);
+        hash_canonical_path(&mut hasher, canonical_workspace);
         let digest = hasher.finalize();
         let mut encoded = String::with_capacity(digest.len() * 2);
         for byte in digest {
             write!(&mut encoded, "{byte:02x}").expect("writing to String cannot fail");
         }
-        Ok(Self(encoded))
+        Self(encoded)
     }
 
     pub fn as_str(&self) -> &str {

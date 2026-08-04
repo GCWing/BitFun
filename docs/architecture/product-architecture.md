@@ -304,7 +304,7 @@ flowchart LR
 
 ### 2.4 Physical View · Level 0
 
-Physical View 展示当前可执行单元到设备、主机和存储的映射。Desktop、CLI、ACP 和 SDK Host 使用 Embedded Runtime；交互式 TUI 可以显式连接 Shared Runtime。当前 Web Server 和 Relay Server 都不承载 Agent Runtime。
+Physical View 展示当前可执行单元到设备、主机和存储的映射。Desktop、CLI、ACP 和 SDK Host 使用 Embedded Runtime；交互式 TUI 可以显式连接 Shared Runtime。暂停演进的 Web Server 当前也通过 App Server 装配 Embedded Runtime，但实现尚不完整，不能据此声明生产 Web 能力；Relay Server 不承载 Agent Runtime。
 
 ```mermaid
 flowchart LR
@@ -312,7 +312,7 @@ flowchart LR
     direction TB
     subgraph EmbeddedNodes["Embedded"]
       direction LR
-      DesktopApp["Desktop App"] ~~~ CLIApp["CLI App"] ~~~ ACPApp["ACP"] ~~~ SDKHost["SDK Host"]
+      DesktopApp["Desktop App"] ~~~ CLIApp["CLI App"] ~~~ ACPApp["ACP"] ~~~ SDKHost["SDK Host"] ~~~ PausedWebServer["Paused Web Server"]
     end
     SharedRuntime["Shared Runtime"]
     WorkspaceData["Workspace Data"]
@@ -325,8 +325,6 @@ flowchart LR
     MobileClient["Mobile Client"]
   end
 
-  WebServer["Web Server"]
-
   subgraph RelayHost["Relay Node"]
     direction TB
     RelayServer["Relay Server"]
@@ -337,7 +335,7 @@ flowchart LR
   AIProviders["AI Providers"]
   RemoteHosts["Remote Hosts"]
 
-  WebClient -->|WebSocket| WebServer
+  WebClient -->|WebSocket| PausedWebServer
   MobileClient -->|HTTPS| RelayServer
   DesktopApp <-->|WebSocket| RelayServer
   CLIApp <-->|WebSocket| RelayServer
@@ -353,7 +351,7 @@ flowchart LR
   DesktopApp -->|SSH| RemoteHosts
 
   classDef unit fill:#ffffff,stroke:#737373,stroke-width:1.3px,color:#171717;
-  class DesktopApp,CLIApp,ACPApp,SDKHost,SharedRuntime,WorkspaceData,ToolProcesses,WebClient,MobileClient,WebServer,RelayServer,RelayDB,AssetStore,AIProviders,RemoteHosts unit;
+  class DesktopApp,CLIApp,ACPApp,SDKHost,PausedWebServer,SharedRuntime,WorkspaceData,ToolProcesses,WebClient,MobileClient,RelayServer,RelayDB,AssetStore,AIProviders,RemoteHosts unit;
   style LocalHost fill:#ffffff,stroke:#737373;
   style EmbeddedNodes fill:#ffffff,stroke:#a3a3a3;
   style UserDevice fill:#ffffff,stroke:#a3a3a3;
@@ -369,7 +367,7 @@ flowchart LR
 | Shared Runtime | 私有本机 IPC；当前只有交互式 TUI consumer |
 | ACP | Embedded Agent Runtime、ACP 协议生命周期 |
 | SDK Host | 私有跨进程 adapter；公开 SDK 产品尚未交付 |
-| Web Server | Health、Info、WebSocket 外壳；不包含 Agent Runtime |
+| Paused Web Server | 当前提供 Health、Info、WebSocket 与 App Server，并装配 Embedded Agent Runtime；产品演进暂停，现有实现不代表生产完整度 |
 | Relay Server | WebSocket/HTTP bridge、账户与同步；不包含 Agent Runtime |
 
 ### 2.5 Scenarios (+1) · Level 0
@@ -727,15 +725,23 @@ flowchart TB
   CLI["CLI / TUI"] --> CliClosure["Core owner feature closure"]
   ACP["ACP"] --> Parts["Runtime Parts"]
   SDKHost["SDK Host"] --> Parts
-  ServerBootstrap["Server agent bootstrap · dormant"] --> Full
+  ServerBootstrap["Paused Web Server current host"] --> ServerClosure["agent-runtime + ssh-remote"]
 
   Full --> Coordinator["ConversationCoordinator"]
   CliClosure --> Coordinator
   Parts --> Coordinator
+  ServerClosure --> Coordinator
   Ownership["CoreRuntimeOwnership"] -. "first-party composition injects once" .-> Coordinator
 ```
 
-当前公开 HTTP Server 不调用 agent bootstrap，因此不创建 Runtime 或 workspace ownership；图中的 Server 节点只记录已有 agent-enabled composition 边界，不能据此宣称 Server Agent API 已交付。
+暂停演进的 HTTP Server 当前会调用 agent bootstrap 并装配 Embedded Runtime。启动边界如下：
+
+- 显式 `--workspace` 必须是已存在且可规范化（canonicalize）的绝对本机路径。它是权威操作员输入；参数校验、打开或 ownership 失败均终止启动，不允许静默切换目录。
+- 无显式参数时只加载历史 metadata，不在 ownership 前准备 workspace。本机历史打开失败会告警，并通过同一门禁降级到默认 Assistant workspace；默认目录的首次创建也位于可回滚 ownership claim 内，默认 workspace 失败时才终止启动。
+- 当前 Host 没有 SSH manager，因此不尝试恢复 Remote 历史。新默认目录不存在时会原位使用并正确分类旧 Assistant 默认目录；目录迁移仍由正常产品启动流程持有。
+- Server 选择 `ssh-remote` 并注入 `RemoteExecPort`，但没有装配全局 remote-workspace/SSH manager，远程执行仍返回不可用。
+
+这些是当前实现缺口，不表示产品已弃用，也不表示生产 Server、Remote Connect 或 Desktop 完整能力已经交付。恢复 Web Server 演进时必须通过 App Server 和现有 owner 补齐这些边界，不能恢复平行的 WebSocket command path。
 
 当前 Peer 运行连接：
 
@@ -756,7 +762,8 @@ flowchart LR
 | Desktop | 使用 `product-full`；显示外部来源、审批、冲突、诊断和 Host 能力 | 可执行能力在事实所在 Host 运行；Safe Mode 只阻止新调用，不改来源、不取消正在运行的调用 |
 | CLI / TUI | 使用显式 Core owner feature closure（`agent-runtime`、`canvas-runtime`、`external-sources`、`plugin-runtime`、`ssh-remote`）；提供 `/extensions`、统一 `/hooks`（旧 `/hooks_external` 为别名）、`/tools` 和 `/agents`；Claude Code/Codex 命令 Hook 可经显式审阅复制为原生层 | 保持现有 CLI capability plan，但不自动继承 Desktop 后续加入 `product-full` 的能力；生态解析仍在适配器，不启动第二套 Agent Runtime；OpenCode Hook 仍只静态发现；远程能力未接入时不回退本机 |
 | ACP | 使用 `DeliveryProfile::Acp`、Runtime Parts，以及 `agent-runtime`/`canvas-runtime`/`external-sources`/`ssh-remote` Core owner feature | load 成功后才发布活动状态；close 排空后再卸载；完整历史、Canvas 工具物化、兼容指令来源和配置仍由 Core/ACP 管理 |
-| Peer / Server | Server 提供 control/catalog；Peer Host 执行真实工作区操作；当前 HTTP Server 不装配 Agent Runtime | 控制端不替远端发现或执行；旧 Host 明确降级，SSH Remote 未接入时返回不支持；只读 Server 不声明 Runtime ownership |
+| Peer | Peer Host 执行真实工作区操作 | 控制端不替远端发现或执行；SSH Remote 未接入时返回不支持 |
+| Paused HTTP Server | 当前装配 Embedded Runtime 和 App Server；Core feature closure 为 `agent-runtime,ssh-remote` | 产品演进暂停；显式本机 workspace 失败即终止，历史 metadata 不在 ownership 前准备；本机历史恢复失败或 Remote 历史不可执行时降级默认 Assistant workspace；SSH manager 未装配，不能声明远程执行能力或产品完整度 |
 | Web / Mobile Web | 依赖现有后端入口 | 不持有插件执行单元，也不能据空 profile 宣称独立能力 |
 | HarmonyOS 手机 Remote | phone-only ArkTS 远程入口 | 不等于 HarmonyOS PC 本地 Runtime、CLI/TUI 或 GUI |
 

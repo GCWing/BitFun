@@ -2,7 +2,7 @@
 
 > 最近核实：2026-08-04
 >
-> 快照基线：`gcwing/main@061024fb2` 加权限规划 owner 迁移
+> 快照基线：`gcwing/main@7f9bcf3a8`
 >
 > 稳定规则：[Rust 构建与依赖边界](../architecture/rust-build-dependency-boundaries.md)
 
@@ -13,10 +13,10 @@
 
 | 结论 | 说明 |
 |---|---|
-| 本轮收益是测试隔离，不是产品构建瘦身 | 权限纯策略测试从 Core 约 449 节点的闭包迁到 Agent Runtime 约 78 节点的闭包；产品依赖图不变 |
+| App Server / Server 已退出 `product-full` | normal/build 闭包分别从 545 降到 421、从 565 降到 497；这是产品入口构建图收敛，不据此宣称固定耗时收益 |
 | 不再用 `product-full` 解决 focused test | Core 权限编排测试当前最小闭包是 `agent-runtime,canvas-runtime`；纯策略直接在 Agent Runtime 验证 |
 | 不新增 CI 或测试入口 | 继续使用现有 test target 和 CI job；治理 PR 不复制同一闭包的验证 |
-| 下一优先级是 App Server / Server | 先核实真实生产调用链，再收敛其 Core `product-full` 边界；收益不足则停止 |
+| Server 保留 SSH 接口边界 | App Server 只选 `agent-runtime`；Server 为 bootstrap 注入的 `RemoteExecPort` 额外选择 `ssh-remote`。当前验证 host 未装配 SSH manager，不能据此宣称远程执行可用 |
 | 依赖多版本不能按数量批量清理 | 只处理仓库能控制、行为等价且能缩小真实构建图的版本路径 |
 
 权限 owner 的长期边界和功能不变量见
@@ -55,17 +55,20 @@
 | Core `agent-runtime` check | 约 391 个节点 | 窄 owner feature 可独立编译 |
 | Core 权限编排测试 | `agent-runtime,canvas-runtime`，约 449 个节点 | 保留真实 scope、Hook、请求生命周期和 Tool 执行 |
 | Core `product-full` test | 约 516 个节点 | 仅用于确实需要完整产品装配的兼容路径 |
+| App Server normal/build | 545 → 421 个节点 | 精确选择 `agent-runtime`，减少 124 个节点（约 22.8%） |
+| Paused Web Server normal/build | 565 → 497 个节点 | 默认入口选择 `agent-runtime,ssh-remote`，减少 68 个节点（约 12.0%）；非默认 source-check 为 544 个节点，不进入默认模块图 |
 | Agent Runtime integration target | 5 个显式 target | 已完成收敛；平台和进程边界继续独立 |
 
 节点数来自同一 Windows 环境下的 `cargo tree --locked` 相对统计，不是实际耗时，也不是跨平台阈值。
-权限纯策略路径理论上少进入约 371 个节点；产品构建闭包没有变化。
+权限纯策略路径理论上少进入约 371 个节点。App Server / Server 数字包含入口自身，使用同一
+Windows 环境和 normal/build edge 口径；没有混入全 workspace 的 feature union。
 
 ### 3.2 依赖与 feature
 
 | 状态 | 范围 | 处理结论 |
 |---|---|---|
 | 已稳定 | 根 `Cargo.lock`、Reqwest Rustls 单栈、Desktop 直接 `image 0.25`、workspace Tokio 最小基线 | 不重复治理 |
-| 下一步核实 | App Server / Server 的 Core `product-full` | 按生产 construction path 收敛，不先写 feature 清单 |
+| 已完成 | App Server / Server 的 Core `product-full` | App Server 固定 `agent-runtime`；Server 固定 `agent-runtime,ssh-remote`；边界检查防止回退 |
 | 可独立治理 | Installer 的 Reqwest 0.12、独立 lockfile、疑似无消费者的 `tokio/full` | 保持 Installer 独立 workspace，不顺手合并 |
 | 等待上游 | `screenshots 0.8.10 -> image 0.24.9` | 只有受维护且行为等价的上游替代出现后再处理 |
 | 明确保留 | `portable-pty 0.8/0.9` | 非 OHOS 与 OHOS 的平台兼容选择，不为去重破坏 |
@@ -100,25 +103,17 @@
 
 ## 5. 后续顺序
 
-### R1：收敛 App Server / Server 的 `product-full` 边界
+### R1：App Server / Server `product-full` 边界（已完成）
 
-这是下一 PR 的推荐范围，也是唯一需要优先设计的核心入口改造。
-
-先回答：
-
-- App Server 与 Server 的真实 construction、command 和 schema 路径分别消费哪些 Core owner？
-- Server 对未实现能力应保持什么 typed unsupported 行为？
-- 哪些能力由 Server 直接消费，哪些只是经 App Server 间接带入？
-
-实现边界：
-
-- 只替换一个端到端 capability slice 的依赖路径，不一次迁移全部 Core 调用；
-- 优先显式选择已有 owner feature，或消费现有 Runtime SDK/service port；
-- 不复制 Session、Tool、Permission、Hook、Event 状态，不建立第二 Runtime；
-- 未迁移能力保留现有兼容路径或明确 unsupported，禁止静默本机回退。
-
-验收必须覆盖 Server WebSocket/App Server round-trip、权限、取消、事件与恢复语义，并对比 App Server、
-Server 的 normal/build/test closure。若构建图收益不足或行为等价无法证明，则不删除兼容边界。
+- 真实入口是 Server bootstrap 构造一套 Embedded Agent Runtime，再由 `/ws` 直接 serve App Server；
+- App Server 的当前 schema 只消费 Runtime 以及 git/config/i18n 路径，因此固定为 `agent-runtime`；
+- Server 的 bootstrap 还注入 `RemoteExecPort`，因此显式保留 `ssh-remote`；当前未装配 SSH manager，
+  远程执行仍明确不可用；
+- 未注册的 dispatch/external-source 旧模块及其第二套 SSH 状态退出默认编译图；非默认 source-check
+  feature 只保护暂停源码的编译与既有单测。external-source 请求继续返回 typed `host_capability_unavailable`，
+  没有静默本机回退；
+- 默认解析闭包没有新增激活依赖；4 个 optional dependency 只服务于 source-check。没有新增 test target
+  或 CI job，也没有复制 Runtime owner。
 
 ### 后续队列
 

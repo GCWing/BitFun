@@ -22,6 +22,24 @@ const ALLOWED_TARGET_LAYERS = new Map([
   ['contracts', new Set(['contracts'])],
 ]);
 
+export const reviewedCoreFeatureClosures = new Map([
+  ['bitfun-cli', [
+    'agent-runtime',
+    'canvas-runtime',
+    'external-sources',
+    'plugin-runtime',
+    'ssh-remote',
+  ]],
+  ['bitfun-acp', [
+    'agent-runtime',
+    'canvas-runtime',
+    'external-sources',
+    'ssh-remote',
+  ]],
+  ['bitfun-app-server', ['agent-runtime']],
+  ['bitfun-server', ['agent-runtime', 'ssh-remote']],
+]);
+
 function normalizedPath(path) {
   const normalized = resolve(path).replace(/\\/g, '/');
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
@@ -258,6 +276,8 @@ const REQWEST_PACKAGE_PROFILES = new Map([
     allowedPackageFeatureRefs: new Set(['reqwest/rustls-tls']),
   }],
   ['bitfun-core', { dependencyFeatures: REQWEST_TRANSPORT_FEATURES, optional: true }],
+  // Used only by bitfun-server's non-default paused source-health profile.
+  ['bitfun-server', { dependencyFeatures: REQWEST_TRANSPORT_FEATURES, optional: true }],
   ['bitfun-services-integrations', {
     dependencyFeatures: REQWEST_TRANSPORT_FEATURES,
     optional: true,
@@ -770,27 +790,20 @@ export function findProductEntrypointCoreFeatureViolations(
   packages,
   { root, crateLayoutRules },
 ) {
-  const reviewedCoreFeatureClosures = new Map([
-    ['bitfun-cli', [
-      'agent-runtime',
-      'canvas-runtime',
-      'external-sources',
-      'plugin-runtime',
-      'ssh-remote',
-    ]],
-    ['bitfun-acp', [
-      'agent-runtime',
-      'canvas-runtime',
-      'external-sources',
-      'ssh-remote',
-    ]],
-  ]);
-  const acpActiveCoreFeatures = [
+  const appServerTsFeature = 'ts';
+  const expectedAppServerTsMembers = ['dep:ts-rs', 'bitfun-core/ts'];
+  const serverSourceCheckFeature = 'paused-web-server-source-check';
+  const expectedServerSourceCheckMembers = [
+    'bitfun-core/dispatch-store',
+    'bitfun-core/external-sources',
+    'dep:base64',
+    'dep:chrono',
+    'dep:reqwest',
+    'dep:serde_json',
+  ];
+  const agentRuntimeActiveCoreFeatures = [
     'agent-runtime',
     'ai-adapter-runtime',
-    'canvas-runtime',
-    'external-sources',
-    'file-watch',
     'filesystem',
     'git',
     'lsp',
@@ -802,20 +815,118 @@ export function findProductEntrypointCoreFeatureViolations(
     'remote-workspace',
     'review-platform',
     'runtime-services',
-    'ssh-remote',
     'terminal',
     'tool-packs',
     'workspace-runtime',
+  ];
+  const acpActiveCoreFeatures = [
+    ...agentRuntimeActiveCoreFeatures,
+    'canvas-runtime',
+    'external-sources',
+    'file-watch',
+    'ssh-remote',
     'workspace-watch',
   ];
   const reviewedActiveCoreFeatureClosures = new Map([
     ['bitfun-cli', [...acpActiveCoreFeatures, 'plugin-runtime']],
     ['bitfun-acp', acpActiveCoreFeatures],
+    ['bitfun-app-server', [...agentRuntimeActiveCoreFeatures, 'ts']],
+    ['bitfun-server', [
+      ...agentRuntimeActiveCoreFeatures,
+      'dispatch-store',
+      'external-sources',
+      'file-watch',
+      'ssh-remote',
+      'workspace-watch',
+    ]],
   ]);
   const packageByManifest = new Map(
     packages.map((pkg) => [normalizedPath(pkg.manifest_path), pkg]),
   );
   const violations = [];
+
+  const appServerPackage = packages.find((pkg) => pkg.name === 'bitfun-app-server');
+  if (appServerPackage) {
+    const reviewedFeatureNames = new Set(['default', appServerTsFeature]);
+    const unexpectedFeatureNames = Object.keys(appServerPackage.features ?? {})
+      .filter((featureName) => !reviewedFeatureNames.has(featureName))
+      .sort();
+    if (unexpectedFeatureNames.length > 0) {
+      violations.push({
+        path: appServerPackage.manifest_path,
+        line: 1,
+        message: `bitfun-app-server has unreviewed package feature(s): ${unexpectedFeatureNames.join(', ')}`,
+      });
+    }
+    const defaultFeatures = appServerPackage.features?.default ?? [];
+    if (defaultFeatures.length !== 0) {
+      violations.push({
+        path: appServerPackage.manifest_path,
+        line: 1,
+        message: 'bitfun-app-server default features must remain empty',
+      });
+    }
+    const actualMembers = new Set(
+      appServerPackage.features?.[appServerTsFeature] ?? [],
+    );
+    const expectedMembers = new Set(expectedAppServerTsMembers);
+    const missing = expectedAppServerTsMembers.filter(
+      (member) => !actualMembers.has(member),
+    );
+    const unexpected = [...actualMembers].filter(
+      (member) => !expectedMembers.has(member),
+    );
+    if (missing.length > 0 || unexpected.length > 0) {
+      violations.push({
+        path: appServerPackage.manifest_path,
+        line: 1,
+        message: `${appServerTsFeature} must keep its exact reviewed TypeScript closure`,
+      });
+    }
+  }
+
+  const serverPackage = packages.find((pkg) => pkg.name === 'bitfun-server');
+  if (serverPackage) {
+    const reviewedFeatureNames = new Set([
+      'default',
+      serverSourceCheckFeature,
+    ]);
+    const unexpectedFeatureNames = Object.keys(serverPackage.features ?? {})
+      .filter((featureName) => !reviewedFeatureNames.has(featureName))
+      .sort();
+    if (unexpectedFeatureNames.length > 0) {
+      violations.push({
+        path: serverPackage.manifest_path,
+        line: 1,
+        message: `bitfun-server has unreviewed package feature(s): ${unexpectedFeatureNames.join(', ')}`,
+      });
+    }
+    const defaultFeatures = serverPackage.features?.default ?? [];
+    if (defaultFeatures.length !== 0) {
+      violations.push({
+        path: serverPackage.manifest_path,
+        line: 1,
+        message: 'bitfun-server default features must remain empty',
+      });
+    }
+    const actualMembers = new Set(
+      serverPackage.features?.[serverSourceCheckFeature] ?? [],
+    );
+    const expectedMembers = new Set(expectedServerSourceCheckMembers);
+    const missing = expectedServerSourceCheckMembers.filter(
+      (member) => !actualMembers.has(member),
+    );
+    const unexpected = [...actualMembers].filter(
+      (member) => !expectedMembers.has(member),
+    );
+    if (missing.length > 0 || unexpected.length > 0) {
+      violations.push({
+        path: serverPackage.manifest_path,
+        line: 1,
+        message: `${serverSourceCheckFeature} must keep its exact reviewed source-health closure`,
+      });
+    }
+  }
 
   for (const sourcePackage of packages) {
     const sourceLayer = layerForManifest(sourcePackage.manifest_path, {
@@ -881,158 +992,213 @@ export function findProductEntrypointCoreFeatureViolations(
       'product-full',
       'announcement',
       'debug-log',
-      'dispatch-store',
     ];
     const reportedUnexpectedFeatures = new Set();
 
-    for (const [rootName, reviewedClosure] of reviewedCoreFeatureClosures) {
+    for (const [rootName] of reviewedCoreFeatureClosures) {
       const rootPackage = packages.find((pkg) => pkg.name === rootName);
       if (!rootPackage) {
         continue;
       }
-      const allowedCoreFeatures = new Set(
-        reviewedActiveCoreFeatureClosures.get(rootName) ?? [],
-      );
-      const rootSelectedFeatures = Object.keys(rootPackage.features ?? {})
+      const rootLabel = new Map([
+        ['bitfun-cli', 'CLI'],
+        ['bitfun-acp', 'ACP'],
+        ['bitfun-app-server', 'App Server'],
+        ['bitfun-server', 'Server'],
+      ]).get(rootName) ?? rootName;
+
+      const strongestSelectedFeatures = Object.keys(rootPackage.features ?? {})
         .filter((feature) => feature !== 'default');
-      const rootLabel = rootName === 'bitfun-cli' ? 'CLI' : 'ACP';
+      let profiles;
+      if (rootName === 'bitfun-server') {
+        profiles = [
+          {
+            label: ' default',
+            selectedFeatures: [],
+            allowedCoreFeatures: new Set([
+              ...agentRuntimeActiveCoreFeatures,
+              'ssh-remote',
+            ]),
+          },
+          {
+            label: ` ${serverSourceCheckFeature}`,
+            selectedFeatures: [serverSourceCheckFeature],
+            allowedCoreFeatures: new Set(
+              reviewedActiveCoreFeatureClosures.get(rootName) ?? [],
+            ),
+          },
+        ];
+      } else if (rootName === 'bitfun-app-server') {
+        profiles = [
+          {
+            label: ' default',
+            selectedFeatures: [],
+            allowedCoreFeatures: new Set(agentRuntimeActiveCoreFeatures),
+          },
+          {
+            label: ` ${appServerTsFeature}`,
+            selectedFeatures: [appServerTsFeature],
+            allowedCoreFeatures: new Set(
+              reviewedActiveCoreFeatureClosures.get(rootName) ?? [],
+            ),
+          },
+        ];
+      } else {
+        profiles = [{
+          label: '',
+          selectedFeatures: strongestSelectedFeatures,
+          allowedCoreFeatures: new Set(
+            reviewedActiveCoreFeatureClosures.get(rootName) ?? [],
+          ),
+        }];
+      }
 
-      const packageStates = new Map();
-      const pending = [];
-      const queued = new Set();
+      for (const profile of profiles) {
+        const {
+          label: profileLabel,
+          selectedFeatures: rootSelectedFeatures,
+          allowedCoreFeatures,
+        } = profile;
 
-      const mergePackageState = (
-        pkg,
-        dependencyKindContext,
-        selectedFeatures,
-        useDefaultFeatures,
-        packagePath,
-      ) => {
-        const key = [
-          normalizedPath(pkg.manifest_path),
+        const packageStates = new Map();
+        const pending = [];
+        const queued = new Set();
+
+        const mergePackageState = (
+          pkg,
           dependencyKindContext,
-        ].join('|');
-        let state = packageStates.get(key);
-        if (!state) {
-          state = {
-            pkg,
+          selectedFeatures,
+          useDefaultFeatures,
+          packagePath,
+        ) => {
+          const key = [
+            normalizedPath(pkg.manifest_path),
             dependencyKindContext,
-            selectedFeatures: new Set(),
-            useDefaultFeatures: false,
-            featureState: { active: new Set(), references: new Set() },
-            packagePath,
-            initialized: false,
-          };
-          packageStates.set(key, state);
-        }
+          ].join('|');
+          let state = packageStates.get(key);
+          if (!state) {
+            state = {
+              pkg,
+              dependencyKindContext,
+              selectedFeatures: new Set(),
+              useDefaultFeatures: false,
+              featureState: { active: new Set(), references: new Set() },
+              packagePath,
+              initialized: false,
+            };
+            packageStates.set(key, state);
+          }
 
-        let changed = false;
-        for (const feature of selectedFeatures) {
-          if (!state.selectedFeatures.has(feature)) {
-            state.selectedFeatures.add(feature);
+          let changed = false;
+          for (const feature of selectedFeatures) {
+            if (!state.selectedFeatures.has(feature)) {
+              state.selectedFeatures.add(feature);
+              changed = true;
+            }
+          }
+          if (useDefaultFeatures && !state.useDefaultFeatures) {
+            state.useDefaultFeatures = true;
             changed = true;
           }
-        }
-        if (useDefaultFeatures && !state.useDefaultFeatures) {
-          state.useDefaultFeatures = true;
-          changed = true;
-        }
-        if (!changed && state.initialized) {
+          if (!changed && state.initialized) {
+            return state;
+          }
+
+          state.featureState = expandedLocalFeatures(
+            pkg.features ?? {},
+            state.selectedFeatures,
+            state.useDefaultFeatures,
+          );
+          state.initialized = true;
+          if (!queued.has(key)) {
+            pending.push(key);
+            queued.add(key);
+          }
           return state;
-        }
+        };
 
-        state.featureState = expandedLocalFeatures(
-          pkg.features ?? {},
-          state.selectedFeatures,
-          state.useDefaultFeatures,
+        // This is an architecture declaration check, not a target simulator.
+        // Cargo target cfg facts are multi-valued and evolve with rustc, so all
+        // declared target edges remain reachable. Root feature profiles stay
+        // separate when their accepted Core owners intentionally differ.
+        mergePackageState(
+          rootPackage,
+          'normal',
+          rootSelectedFeatures,
+          true,
+          [rootPackage.name],
         );
-        state.initialized = true;
-        if (!queued.has(key)) {
-          pending.push(key);
-          queued.add(key);
-        }
-        return state;
-      };
 
-      // This is an architecture declaration check, not a target simulator.
-      // Cargo target cfg facts are multi-valued and evolve with rustc. Treating
-      // every declared target edge as reachable prevents a platform-only path
-      // from hiding an unreviewed Core owner. Products that genuinely need
-      // different owners must express that difference through package/module
-      // boundaries. Cargo features are additive, so all root features form the
-      // strongest buildable profile.
-      mergePackageState(
-        rootPackage,
-        'normal',
-        rootSelectedFeatures,
-        true,
-        [rootPackage.name],
-      );
+        while (pending.length > 0) {
+          const stateKey = pending.shift();
+          queued.delete(stateKey);
+          const {
+            pkg: sourcePackage,
+            dependencyKindContext,
+            featureState,
+            packagePath,
+          } = packageStates.get(stateKey);
 
-      while (pending.length > 0) {
-        const stateKey = pending.shift();
-        queued.delete(stateKey);
-        const {
-          pkg: sourcePackage,
-          dependencyKindContext,
-          featureState,
-          packagePath,
-        } = packageStates.get(stateKey);
-
-        for (const dependency of sourcePackage.dependencies ?? []) {
-          const kind = dependency.kind ?? 'normal';
-          if (
-            !dependency.path
-            || (kind !== 'normal' && kind !== 'build')
-            || repositoryPath(root, dependency.path) === null
-          ) {
-            continue;
-          }
-          const activation = dependencyActivation(dependency, featureState);
-          if (!activation) {
-            continue;
-          }
-          const targetPackage = packageByManifest.get(
-            normalizedPath(join(dependency.path, 'Cargo.toml')),
-          );
-          if (!targetPackage) {
-            continue;
-          }
-          const targetDependencyKindContext =
-            dependencyKindContext === 'build'
-              || kind === 'build'
-              || isProcMacroPackage(targetPackage)
-              ? 'build'
-              : 'normal';
-          const targetPath = [...packagePath, targetPackage.name];
-          const targetState = mergePackageState(
-            targetPackage,
-            targetDependencyKindContext,
-            activation.features,
-            activation.useDefaultFeatures,
-            targetPath,
-          );
-
-          if (targetPackage.name === 'bitfun-core') {
-            const activeCoreFeatures = targetState.featureState.active;
-            const unexpected = forbiddenCoreFeatures.find((feature) =>
-              activeCoreFeatures.has(feature))
-              ?? [...activeCoreFeatures]
-                .filter((feature) => !allowedCoreFeatures.has(feature))
-                .sort()[0];
-            const reportKey = [rootName, targetDependencyKindContext, unexpected].join('|');
-            if (unexpected && !reportedUnexpectedFeatures.has(reportKey)) {
-              reportedUnexpectedFeatures.add(reportKey);
-              violations.push({
-                path: sourcePackage.manifest_path,
-                line: 1,
-                message: `${rootLabel} dependency closure must not enable ${unexpected}: ${[
-                  ...packagePath,
-                  `${targetPackage.name}/${unexpected}`,
-                ].join(' -> ')}`,
-              });
+          for (const dependency of sourcePackage.dependencies ?? []) {
+            const kind = dependency.kind ?? 'normal';
+            if (
+              !dependency.path
+              || (kind !== 'normal' && kind !== 'build')
+              || repositoryPath(root, dependency.path) === null
+            ) {
+              continue;
             }
-            continue;
+            const activation = dependencyActivation(dependency, featureState);
+            if (!activation) {
+              continue;
+            }
+            const targetPackage = packageByManifest.get(
+              normalizedPath(join(dependency.path, 'Cargo.toml')),
+            );
+            if (!targetPackage) {
+              continue;
+            }
+            const targetDependencyKindContext =
+              dependencyKindContext === 'build'
+                || kind === 'build'
+                || isProcMacroPackage(targetPackage)
+                ? 'build'
+                : 'normal';
+            const targetPath = [...packagePath, targetPackage.name];
+            const targetState = mergePackageState(
+              targetPackage,
+              targetDependencyKindContext,
+              activation.features,
+              activation.useDefaultFeatures,
+              targetPath,
+            );
+
+            if (targetPackage.name === 'bitfun-core') {
+              const activeCoreFeatures = targetState.featureState.active;
+              const unexpected = forbiddenCoreFeatures.find((feature) =>
+                activeCoreFeatures.has(feature))
+                ?? [...activeCoreFeatures]
+                  .filter((feature) => !allowedCoreFeatures.has(feature))
+                  .sort()[0];
+              const reportKey = [
+                rootName,
+                profileLabel,
+                targetDependencyKindContext,
+                unexpected,
+              ].join('|');
+              if (unexpected && !reportedUnexpectedFeatures.has(reportKey)) {
+                reportedUnexpectedFeatures.add(reportKey);
+                violations.push({
+                  path: sourcePackage.manifest_path,
+                  line: 1,
+                  message: `${rootLabel}${profileLabel} dependency closure must not enable ${unexpected}: ${[
+                    ...packagePath,
+                    `${targetPackage.name}/${unexpected}`,
+                  ].join(' -> ')}`,
+                });
+              }
+              continue;
+            }
           }
         }
       }

@@ -6,10 +6,10 @@ use std::path::PathBuf;
 
 use crate::AppState;
 
-// NOTE(Step 2a): these host-local external-source dispatch helpers were wired
-// through the old `websocket.rs::handle_command` path. Under browser-direct
-// ACP-over-WS the browser connects straight to the in-process app-server, so
-// `external_sources` commands now hit the ACP `method_not_found` fallback
+// These host-local external-source dispatch helpers were wired through the old
+// `websocket.rs::handle_command` path. Under browser-direct App Server over
+// WebSocket the browser connects straight to the in-process app-server, so
+// `external_sources` commands now hit the App Server `method_not_found` fallback
 // (the desktop/Server Host external-source surface is temporarily unavailable
 // in web mode -- tracked for a later batch that brings them onto the app-server
 // schema). Kept here so the host capability plumbing stays intact for that

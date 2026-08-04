@@ -263,6 +263,11 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
     'cargo test --locked -p bitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts',
   );
   assert.equal(
+    rustJob.steps.find((step) => step.name === 'Run file watch contract tests')
+      ?.['timeout-minutes'],
+    5,
+  );
+  assert.equal(
     commandByStep.get('Run search tool tests'),
     'cargo test --locked -p tool-runtime --lib search::',
   );

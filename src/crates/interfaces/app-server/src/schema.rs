@@ -431,7 +431,7 @@ pub struct SessionEventNotification(pub AgenticEventEnvelope);
 /// to the browser by the server's `serve` main loop. Carrying the projected
 /// `event` name and `payload` lets the browser `listen(event)` dispatch on the
 /// same names it uses today, with zero call-site change. This is the
-/// browser-facing event surface under browser-direct ACP-over-WS (Step 2).
+/// browser-facing event surface under direct App Server JSON-RPC over WebSocket.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcNotification)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[notification(method = "agent/frontendEvent")]
@@ -444,8 +444,8 @@ pub struct FrontendEventNotification {
 
 // Git service surface ---------------------------------------------------------
 //
-// Under option C the app-server schema owns the full backend contract, not just
-// agent-kernel ops. These `git/*` messages expose the read-only `GitService`
+// The current App Server consumer needs this bounded read-only Git projection
+// alongside agent-kernel operations. These `git/*` messages expose `GitService`
 // operations (`bitfun_core::service::git::GitService`, which re-exports
 // `bitfun_services_integrations::git::GitService`). The handlers call the
 // static `GitService::xxx(&path)` associated functions the same way the
@@ -529,9 +529,8 @@ pub struct GitBranchesRequest {
 
 // Config service surface -----------------------------------------------------
 //
-// Read-only `ConfigService` / agent-profile canonicalizer operations. Under
-// option C these live on the app-server surface alongside the agent-kernel
-// and `git/*` groups. The handlers call the global config singletons the same
+// Read-only `ConfigService` / agent-profile canonicalizer operations required
+// by the current App Server consumer. The handlers call global config singletons the same
 // way the Desktop host does -- `bitfun_core::service::config::get_global_config_service`
 // (an `Arc<ConfigService>` initialized by the host's bootstrap) and the static
 // `mode_config_canonicalizer::get_agent_profile_views` -- so no service

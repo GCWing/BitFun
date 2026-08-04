@@ -34,7 +34,10 @@ import {
   unexpectedDependencyOwnerFeatures,
   unexpectedReachableLocalFeatures,
 } from './manifest-feature-helpers.mjs';
-import { checkCargoDependencyBoundariesSafely } from './cargo-dependency-boundaries.mjs';
+import {
+  checkCargoDependencyBoundariesSafely,
+  reviewedCoreFeatureClosures,
+} from './cargo-dependency-boundaries.mjs';
 import {
   agentRuntimeIntegrationTestTargets,
   checkAgentRuntimeIntegrationTestTopology,
@@ -1091,6 +1094,7 @@ export function runCoreBoundaryCheck() {
       ownerCrateFeatureAssemblyRules,
       parseManifestFeatures,
       optionalDependencyFeatureOwnerRules,
+      reviewedCoreFeatureClosures,
       lightweightBoundaryRules,
       dependencyProfileRules,
       forbiddenManifestDependencyRules,

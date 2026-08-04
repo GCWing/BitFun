@@ -1,6 +1,6 @@
 //! WebSocket handler.
 //!
-//! Under browser-direct ACP-over-WS (Step 2), the browser speaks raw JSON-RPC
+//! Under browser-direct App Server over WebSocket, the browser speaks raw JSON-RPC
 //! 2.0 over the WebSocket. Each connection is handed straight to
 //! [`bitfun_app_server::BitfunAppServer::serve`] via the [`super::ws_transport`]
 //! `Lines` adapter -- no custom `{type:"request"|...}` envelope, no
@@ -103,10 +103,12 @@ mod tests {
 
     fn state_with_allowed_origins(origins: &[&str]) -> AppState {
         AppState {
+            #[cfg(feature = "paused-web-server-source-check")]
             external_workspace_root: None,
             allowed_browser_origins: std::sync::Arc::new(
                 origins.iter().map(|origin| (*origin).to_string()).collect(),
             ),
+            #[cfg(feature = "paused-web-server-source-check")]
             dispatch_host: None,
         }
     }

@@ -1,12 +1,13 @@
 //! Axum WebSocket -> `agent_client_protocol::Lines` transport bridge.
 //!
 //! The browser speaks raw JSON-RPC 2.0 over WebSocket (one message per WS text
-//! frame). ACP's [`agent_client_protocol::Lines`] already implements
+//! frame). [`agent_client_protocol::Lines`] already implements
 //! [`agent_client_protocol::ConnectTo`] for any `futures::Sink<String, Error =
 //! io::Error>` + `futures::Stream<Item = io::Result<String>>` pair. This module
 //! adapts an axum `WebSocket` (after `split()`) into exactly that pair: outgoing
 //! wraps the `SplitSink` (each `String` -> `Message::Text`), incoming wraps the
-//! `SplitStream` (each `Message::Text` -> `Ok(String)`, everything else -> `Err`).
+//! `SplitStream` (each `Message::Text` -> `Ok(String)`, control frames ignored,
+//! binary frames rejected, and close frames ending the stream).
 //!
 //! The returned `Lines` is handed to [`bitfun_app_server::BitfunAppServer::serve`]
 //! per WebSocket connection, so the browser connects directly to the in-process
@@ -19,16 +20,16 @@ use std::task::{Context, Poll};
 
 use agent_client_protocol::Lines;
 use axum::extract::ws::{Message, WebSocket};
-use futures::{Sink, Stream};
 use futures_util::stream::{SplitSink, SplitStream};
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{Sink, SinkExt, Stream, StreamExt};
 
-/// Bridge an axum WebSocket into an ACP `Lines` transport for
+/// Bridge an axum WebSocket into an agent-client-protocol `Lines` transport for
 /// `BitfunAppServer::serve(lines)`.
 ///
 /// The WebSocket is split; the outgoing half becomes the `Lines` sink (one
 /// `String` per WS text frame), the incoming half becomes the stream (text
-/// frames only; binary/control frames surface as a stream end or `io::Error`).
+/// frames only; binary frames surface as `io::Error`, ping/pong are ignored,
+/// and close frames end the stream).
 pub(crate) fn ws_lines(socket: WebSocket) -> Lines<WSSink, WSStream> {
     let (sink, stream) = socket.split();
     Lines::new(WSSink { sink }, WSStream { stream })
@@ -76,34 +77,66 @@ impl Sink<String> for WSSink {
 }
 
 /// Incoming adapter: `futures::Stream<Item = io::Result<String>>` from axum
-/// `Message::Text`. Binary frames surface as `io::Error`; control frames close
-/// the stream (axum handles ping/pong internally).
-pub(crate) struct WSStream {
-    stream: SplitStream<WebSocket>,
+/// `Message::Text`. Binary frames surface as `io::Error`; ping/pong are ignored
+/// and only close frames terminate the JSON-RPC stream.
+pub(crate) struct WSStream<S = SplitStream<WebSocket>> {
+    stream: S,
 }
 
-impl Unpin for WSStream {}
+impl<S: Unpin> Unpin for WSStream<S> {}
 
-impl Stream for WSStream {
+impl<S> Stream for WSStream<S>
+where
+    S: Stream<Item = Result<Message, axum::Error>> + Unpin,
+{
     type Item = io::Result<String>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
-        match Stream::poll_next(Pin::new(&mut this.stream), cx) {
-            Poll::Ready(None) => Poll::Ready(None),
-            Poll::Ready(Some(Err(_))) => Poll::Ready(Some(Err(io::Error::new(
-                io::ErrorKind::ConnectionAborted,
-                "ws recv failed",
-            )))),
-            Poll::Ready(Some(Ok(Message::Text(text)))) => Poll::Ready(Some(Ok(text.to_string()))),
-            Poll::Ready(Some(Ok(Message::Binary(_)))) => Poll::Ready(Some(Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "binary ws frames not supported",
-            )))),
-            Poll::Ready(Some(Ok(Message::Ping(_) | Message::Pong(_) | Message::Close(_)))) => {
-                Poll::Ready(None)
+        loop {
+            match Stream::poll_next(Pin::new(&mut this.stream), cx) {
+                Poll::Ready(None) => return Poll::Ready(None),
+                Poll::Ready(Some(Err(_))) => {
+                    return Poll::Ready(Some(Err(io::Error::new(
+                        io::ErrorKind::ConnectionAborted,
+                        "ws recv failed",
+                    ))))
+                }
+                Poll::Ready(Some(Ok(Message::Text(text)))) => {
+                    return Poll::Ready(Some(Ok(text.to_string())))
+                }
+                Poll::Ready(Some(Ok(Message::Binary(_)))) => {
+                    return Poll::Ready(Some(Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "binary ws frames not supported",
+                    ))))
+                }
+                Poll::Ready(Some(Ok(Message::Ping(_) | Message::Pong(_)))) => continue,
+                Poll::Ready(Some(Ok(Message::Close(_)))) => return Poll::Ready(None),
+                Poll::Pending => return Poll::Pending,
             }
-            Poll::Pending => Poll::Pending,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn ping_and_pong_do_not_end_the_json_rpc_stream() {
+        let frames = futures_util::stream::iter(vec![
+            Ok::<_, axum::Error>(Message::Ping(Vec::new().into())),
+            Ok::<_, axum::Error>(Message::Pong(Vec::new().into())),
+            Ok::<_, axum::Error>(Message::Text("request".into())),
+            Ok::<_, axum::Error>(Message::Close(None)),
+        ]);
+        let mut incoming = WSStream { stream: frames };
+
+        assert_eq!(
+            incoming.next().await.transpose().expect("valid text frame"),
+            Some("request".to_string())
+        );
+        assert!(incoming.next().await.is_none());
     }
 }

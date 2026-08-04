@@ -64,7 +64,7 @@ describe('dispatch controller-only routing contract', () => {
       ...tables.map(table => table.source),
       read('./dispatchApi.ts'),
       read('./types.ts'),
-      read('../../../../../src/apps/server/src/routes/dispatch.rs'),
+      read('../../../../../src/apps/desktop/src/api/dispatch_api.rs'),
     ];
     for (const source of sources) {
       expect(source).not.toContain('dispatch_install_cli_source_start');

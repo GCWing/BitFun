@@ -1,4 +1,9 @@
-//! AI Relay - Lightweight HTTP proxy for AI API requests
+//! Inactive AI API relay draft for the paused Web Server.
+//!
+//! This module is preserved as source material and compiled only by the
+//! non-default source-health profile. It is not registered by the current
+//! Server runtime, and the command-line flags below are not available. It is
+//! separate from the supported Relay Server and SSH remote connection paths.
 //!
 //! When running BitFun Server on a remote machine that cannot directly access
 //! AI APIs (due to network restrictions), AI Relay acts as a local proxy:
@@ -11,7 +16,7 @@
 //! └─────────────┘                  └─────────────┘
 //! ```
 //!
-//! Usage:
+//! Historical intended usage (not currently wired):
 //! 1. Start AI Relay on local machine: `bitfun-server --ai-relay --port 9090`
 //! 2. SSH to remote with reverse tunnel: `ssh -R 9090:localhost:9090 user@remote`
 //! 3. Configure remote BitFun to use proxy: `proxy_url = "http://localhost:9090"`
@@ -28,12 +33,12 @@ use std::sync::Arc;
 
 /// AI Relay state
 #[derive(Clone)]
-pub struct RelayState {
+pub(crate) struct RelayState {
     pub client: Client,
 }
 
 /// Create the AI Relay router
-pub fn create_relay_router() -> Router {
+pub(crate) fn create_relay_router() -> Router {
     let client = Client::builder()
         .timeout(std::time::Duration::from_secs(300))
         .build()
@@ -41,9 +46,7 @@ pub fn create_relay_router() -> Router {
 
     let state = Arc::new(RelayState { client });
 
-    Router::new()
-        .fallback(handle_proxy)
-        .with_state(state)
+    Router::new().fallback(handle_proxy).with_state(state)
 }
 
 /// Handle all incoming requests and proxy them
@@ -57,11 +60,7 @@ async fn handle_proxy(
     // Reconstruct the target URL
     let target_url = reconstruct_target_url(&uri)?;
 
-    log::info!(
-        "AI Relay: proxying {} {}",
-        req.method(),
-        target_url
-    );
+    log::info!("AI Relay: proxying {} {}", req.method(), target_url);
 
     // Remove hop-by-hop headers
     let mut headers = req.headers().clone();
@@ -70,7 +69,7 @@ async fn handle_proxy(
     // Build the proxied request
     let method = reqwest::Method::from_bytes(req.method().as_str().as_bytes())
         .unwrap_or(reqwest::Method::GET);
-    
+
     let mut builder = state.client.request(method, &target_url);
 
     // Add headers
@@ -95,10 +94,7 @@ async fn handle_proxy(
         .await
         .map_err(|e| ProxyError::UpstreamError(format!("Failed to connect to upstream: {}", e)))?;
 
-    log::info!(
-        "AI Relay: received response status {}",
-        response.status()
-    );
+    log::info!("AI Relay: received response status {}", response.status());
 
     // Build response
     let status = response.status();
@@ -132,9 +128,9 @@ fn reconstruct_target_url(uri: &Uri) -> Result<String, ProxyError> {
     let path = uri.path();
 
     // Skip the leading slash and extract scheme
-    let path = path.strip_prefix('/').ok_or_else(|| {
-        ProxyError::InvalidRequest("Invalid path format".to_string())
-    })?;
+    let path = path
+        .strip_prefix('/')
+        .ok_or_else(|| ProxyError::InvalidRequest("Invalid path format".to_string()))?;
 
     let parts: Vec<&str> = path.splitn(3, '/').collect();
     if parts.is_empty() {
@@ -144,9 +140,9 @@ fn reconstruct_target_url(uri: &Uri) -> Result<String, ProxyError> {
     }
 
     let scheme = *parts.get(0).unwrap_or(&"https");
-    let host = parts.get(1).ok_or_else(|| {
-        ProxyError::InvalidRequest("Missing host in path".to_string())
-    })?;
+    let host = parts
+        .get(1)
+        .ok_or_else(|| ProxyError::InvalidRequest("Missing host in path".to_string()))?;
     let rest = parts.get(2).unwrap_or(&"");
 
     // Build the target URL
@@ -185,7 +181,7 @@ fn remove_hop_by_hop_headers(headers: &mut HeaderMap) {
 
 /// Proxy errors
 #[derive(Debug)]
-pub enum ProxyError {
+pub(crate) enum ProxyError {
     InvalidRequest(String),
     RequestError(String),
     UpstreamError(String),
@@ -198,9 +194,7 @@ impl IntoResponse for ProxyError {
             ProxyError::InvalidRequest(msg) => (StatusCode::BAD_REQUEST, msg),
             ProxyError::RequestError(msg) => (StatusCode::BAD_REQUEST, msg),
             ProxyError::UpstreamError(msg) => (StatusCode::BAD_GATEWAY, msg),
-            ProxyError::ResponseError(msg) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, msg)
-            }
+            ProxyError::ResponseError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
         };
 
         let body = serde_json::json!({
@@ -223,9 +217,7 @@ mod tests {
         assert_eq!(result, "https://api.openai.com/v1/chat/completions");
 
         // Test with query string
-        let uri: Uri = "/https/api.openai.com/v1/models?limit=10"
-            .parse()
-            .unwrap();
+        let uri: Uri = "/https/api.openai.com/v1/models?limit=10".parse().unwrap();
         let result = reconstruct_target_url(&uri).unwrap();
         assert_eq!(result, "https://api.openai.com/v1/models?limit=10");
 

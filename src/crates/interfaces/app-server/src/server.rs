@@ -24,18 +24,49 @@ use bitfun_agent_runtime::sdk::PermissionRequestEvent;
 use bitfun_core::service::git::GitService;
 use bitfun_events::project_agentic_frontend_event;
 
-/// Method-name substrings for the external-source operations that the old Server
-/// Host dispatched via `routes/external_sources.rs`. Under browser-direct ACP
-/// these are not yet on the app-server schema; the dispatch fallback returns a
-/// typed "not available in web mode" error so the frontend gets a clear signal
-/// rather than a bare `method_not_found`.
-const EXTERNAL_SOURCE_METHOD_MARKERS: &[&str] = &[
-    "external_source",
-    "external_tool",
-    "external_subagent",
-    "external_mcp",
-    "external_integration",
+/// Complete command set routed through the Web UI external-source error
+/// contract, including its external Hook facade. These methods are not on the
+/// paused Server Host's App Server schema yet, so the fallback preserves the
+/// domain error contract instead of relying on name substrings.
+const EXTERNAL_SOURCE_METHODS: &[&str] = &[
+    "plan_external_mcp_import_command",
+    "apply_external_mcp_import_command",
+    "get_external_source_snapshot",
+    "get_external_source_control_snapshot",
+    "reveal_external_source_location",
+    "get_workspace_reference_snapshot",
+    "expand_external_prompt_command_command",
+    "get_native_prompt_command_conflicts_command",
+    "set_native_prompt_command_conflict_choice_command",
+    "apply_external_source_control_action_command",
+    "set_external_source_enabled_command",
+    "set_external_source_conflict_choice_command",
+    "set_external_tool_target_decision_command",
+    "set_external_tool_conflict_choice_command",
+    "set_external_subagent_activation_command",
+    "set_external_subagent_model_binding_command",
+    "choose_external_subagent_conflict_command",
+    "set_external_mcp_server_decision_command",
+    "choose_external_mcp_conflict_command",
+    "update_external_integration_policy_command",
+    "get_external_hook_catalog",
+    "get_external_hook_import_snapshot",
+    "plan_external_hook_import_command",
+    "apply_external_hook_import_command",
+    "mutate_external_hook_import_command",
 ];
+
+fn unsupported_external_source_error(method: &str) -> Option<Error> {
+    EXTERNAL_SOURCE_METHODS
+        .contains(&method)
+        .then(|| {
+            Error::method_not_found().data(serde_json::json!({
+                "code": "host_capability_unavailable",
+                "detail": "External source operations are not available from the paused Server Host. Use an authenticated Desktop or Peer Host.",
+                "retryable": false
+            }))
+        })
+}
 
 use crate::agent::{
     bitfun_error, config_get_error, git_service_error, runtime_call, BitfunAppRuntime,
@@ -50,18 +81,18 @@ use crate::schema::{
     GetConfigsResponse, GetModelConfigsMessage, GetModelConfigsResponse, GitBranchesRequest,
     GitGetBranchesMessage, GitGetBranchesResponse, GitGetStatusMessage, GitGetStatusResponse,
     GitIsRepositoryMessage, GitIsRepositoryResponse, GitRepositoryPathRequest,
+    I18nGetConfigMessage, I18nGetConfigResponse, I18nGetCurrentLanguageMessage,
+    I18nGetCurrentLanguageResponse, I18nGetSupportedLanguagesMessage,
+    I18nGetSupportedLanguagesResponse, I18nLocaleMetadata, I18nSetConfigMessage,
+    I18nSetConfigResponse, I18nSetLanguageMessage, I18nSetLanguageResponse,
     ListPendingPermissionRequestsMessage, ListPendingPermissionRequestsResponse,
     ListProjectPermissionAuditMessage, ListProjectPermissionAuditResponse,
     ListProjectPermissionGrantsMessage, ListProjectPermissionGrantsResponse, ListSessionsMessage,
     ListSessionsResponse, RemoveProjectPermissionGrantMessage,
     RemoveProjectPermissionGrantResponse, RespondPermissionBatchMessage,
     RespondPermissionBatchResponse, RespondPermissionMessage, RespondPermissionResponse,
-    RunMessage, RunResponse, SetConfigMessage, SetConfigResponse,
-    SubmitDialogTurnMessage, SubmitDialogTurnResponse, SubmitTurnMessage, SubmitTurnResponse,
-    I18nGetCurrentLanguageMessage, I18nGetCurrentLanguageResponse, I18nGetConfigMessage,
-    I18nGetConfigResponse, I18nGetSupportedLanguagesMessage, I18nGetSupportedLanguagesResponse,
-    I18nLocaleMetadata, I18nSetConfigMessage, I18nSetConfigResponse, I18nSetLanguageMessage,
-    I18nSetLanguageResponse,
+    RunMessage, RunResponse, SetConfigMessage, SetConfigResponse, SubmitDialogTurnMessage,
+    SubmitDialogTurnResponse, SubmitTurnMessage, SubmitTurnResponse,
 };
 
 /// BitFun agent kernel server over the generic app-server role.
@@ -592,18 +623,8 @@ impl BitfunAppServer {
                         Dispatch::Request(req, _) => req.method().to_string(),
                         _ => String::new(),
                     };
-                    let is_external_source = EXTERNAL_SOURCE_METHOD_MARKERS
-                        .iter()
-                        .any(|marker| method.contains(marker));
-                    let error = if is_external_source {
-                        Error::method_not_found().data(serde_json::json!({
-                            "capability": "external_sources",
-                            "reason": "not_available_in_web_mode",
-                            "message": "External source operations are not yet available in web mode. Use the desktop host."
-                        }))
-                    } else {
-                        Error::method_not_found()
-                    };
+                    let error = unsupported_external_source_error(&method)
+                        .unwrap_or_else(Error::method_not_found);
                     message.respond_with_error(error, cx)
                 },
                 agent_client_protocol::on_receive_dispatch!(),
@@ -652,7 +673,7 @@ impl BitfunAppServer {
                                 // today, and push it as a `agent/frontendEvent`
                                 // notification. The browser's WS adapter dispatches on
                                 // `params.event`, so its existing `listen(...)` call
-                                // sites stay unchanged under browser-direct ACP.
+                                // sites stay unchanged with browser-direct App Server.
                                 if let Some(projected) =
                                     project_agentic_frontend_event(envelope.event)
                                 {
@@ -691,7 +712,7 @@ impl BitfunAppServer {
                                 // `app.emit("permission://event")`), and push it as a
                                 // `agent/frontendEvent` notification. The payload is the
                                 // serialized `PermissionRequestEvent` (the same shape
-                                // `client.rs` projected to before Step 2).
+                                // earlier in-process client path projected).
                                 if let Ok(payload) = serde_json::to_value(&event) {
                                     let notification = FrontendEventNotification {
                                         event: "permission://event".to_string(),
@@ -729,5 +750,66 @@ impl BitfunAppServer {
                 Ok(())
             })
             .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unsupported_external_source_error;
+    use agent_client_protocol::Error;
+
+    #[test]
+    fn external_source_methods_keep_the_typed_web_mode_error() {
+        for method in [
+            "plan_external_mcp_import_command",
+            "apply_external_mcp_import_command",
+            "get_external_source_snapshot",
+            "get_external_source_control_snapshot",
+            "reveal_external_source_location",
+            "get_workspace_reference_snapshot",
+            "expand_external_prompt_command_command",
+            "get_native_prompt_command_conflicts_command",
+            "set_native_prompt_command_conflict_choice_command",
+            "apply_external_source_control_action_command",
+            "set_external_source_enabled_command",
+            "set_external_source_conflict_choice_command",
+            "set_external_tool_target_decision_command",
+            "set_external_tool_conflict_choice_command",
+            "set_external_subagent_activation_command",
+            "set_external_subagent_model_binding_command",
+            "choose_external_subagent_conflict_command",
+            "set_external_mcp_server_decision_command",
+            "choose_external_mcp_conflict_command",
+            "update_external_integration_policy_command",
+            "get_external_hook_catalog",
+            "get_external_hook_import_snapshot",
+            "plan_external_hook_import_command",
+            "apply_external_hook_import_command",
+            "mutate_external_hook_import_command",
+        ] {
+            let error = unsupported_external_source_error(method)
+                .unwrap_or_else(|| panic!("{method} should be recognized"));
+
+            assert_eq!(error.code, Error::method_not_found().code);
+            assert_eq!(
+                error.data.as_ref().and_then(|data| data.get("code")),
+                Some(&serde_json::json!("host_capability_unavailable"))
+            );
+            assert_eq!(
+                error.data.as_ref().and_then(|data| data.get("retryable")),
+                Some(&serde_json::json!(false))
+            );
+            assert!(error
+                .data
+                .as_ref()
+                .and_then(|data| data.get("detail"))
+                .is_some());
+        }
+    }
+
+    #[test]
+    fn unrelated_unknown_methods_keep_the_generic_method_not_found_path() {
+        assert!(unsupported_external_source_error("unknown_method").is_none());
+        assert!(unsupported_external_source_error("get_external_source_snapshot_debug").is_none());
     }
 }

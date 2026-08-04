@@ -20,12 +20,80 @@ const DEFAULT_PRODUCT_IDENTITY: &str = "bitfun";
 
 enum CoreRuntimeOwnershipDeployment {
     Embedded {
-        leases: Mutex<HashMap<RuntimeOwnershipKey, WorkspaceRuntimeOwnership>>,
+        leases: Mutex<HashMap<RuntimeOwnershipKey, EmbeddedWorkspaceLease>>,
     },
     Shared {
         key: RuntimeOwnershipKey,
         _lease: WorkspaceRuntimeOwnership,
     },
+}
+
+struct EmbeddedWorkspaceLease {
+    _lease: WorkspaceRuntimeOwnership,
+    committed: bool,
+    provisional_claims: usize,
+}
+
+/// A local workspace lease held while the workspace owner performs its open.
+/// Dropping an uncommitted claim rolls back only a lease acquired for failed
+/// in-flight opens; an already committed process lease remains process-bound.
+pub(crate) struct ProvisionalLocalWorkspaceOwnership<'a> {
+    owner: &'a CoreRuntimeOwnership,
+    key: RuntimeOwnershipKey,
+    provisional: bool,
+}
+
+impl ProvisionalLocalWorkspaceOwnership<'_> {
+    pub(crate) fn commit(mut self) -> Result<(), CoreRuntimeOwnershipError> {
+        if !self.provisional {
+            return Ok(());
+        }
+        let CoreRuntimeOwnershipDeployment::Embedded { leases } = &self.owner.deployment else {
+            return Ok(());
+        };
+        let mut leases = leases
+            .lock()
+            .map_err(|_| CoreRuntimeOwnershipError::OwnershipStateUnavailable)?;
+        let lease = leases
+            .get_mut(&self.key)
+            .ok_or(CoreRuntimeOwnershipError::OwnershipStateUnavailable)?;
+        lease.provisional_claims = lease.provisional_claims.saturating_sub(1);
+        lease.committed = true;
+        self.provisional = false;
+        Ok(())
+    }
+
+    pub(crate) fn validate_workspace_path(
+        &self,
+        workspace: &Path,
+    ) -> Result<(), CoreRuntimeOwnershipError> {
+        let actual = RuntimeOwnershipKey::for_workspace(workspace, &self.owner.product_identity)?;
+        if actual != self.key {
+            return Err(CoreRuntimeOwnershipError::WorkspaceIdentityChangedDuringOpen);
+        }
+        Ok(())
+    }
+}
+
+impl Drop for ProvisionalLocalWorkspaceOwnership<'_> {
+    fn drop(&mut self) {
+        if !self.provisional {
+            return;
+        }
+        let CoreRuntimeOwnershipDeployment::Embedded { leases } = &self.owner.deployment else {
+            return;
+        };
+        let Ok(mut leases) = leases.lock() else {
+            return;
+        };
+        let should_remove = leases.get_mut(&self.key).is_some_and(|lease| {
+            lease.provisional_claims = lease.provisional_claims.saturating_sub(1);
+            !lease.committed && lease.provisional_claims == 0
+        });
+        if should_remove {
+            leases.remove(&self.key);
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -181,7 +249,8 @@ impl CoreRuntimeOwnership {
                 let mut leases = leases
                     .lock()
                     .map_err(|_| CoreRuntimeOwnershipError::OwnershipStateUnavailable)?;
-                if leases.contains_key(&key) {
+                if let Some(lease) = leases.get_mut(&key) {
+                    lease.committed = true;
                     return Ok(());
                 }
                 let lease = WorkspaceRuntimeOwnership::try_acquire(
@@ -198,12 +267,110 @@ impl CoreRuntimeOwnership {
                     );
                 })?;
                 log_acquired(self.entrypoint, RuntimeDeployment::Embedded, &key);
-                leases.insert(key, lease);
+                leases.insert(
+                    key,
+                    EmbeddedWorkspaceLease {
+                        _lease: lease,
+                        committed: true,
+                        provisional_claims: 0,
+                    },
+                );
                 Ok(())
             }
             CoreRuntimeOwnershipDeployment::Shared {
                 key: shared_key, ..
             } if shared_key == &key => Ok(()),
+            CoreRuntimeOwnershipDeployment::Shared { .. } => {
+                warn!(
+                    "Shared Agent Runtime rejected a second local workspace: entrypoint={}, error_code=shared_runtime_workspace_mismatch",
+                    self.entrypoint
+                );
+                Err(CoreRuntimeOwnershipError::SharedRuntimeWorkspaceMismatch)
+            }
+        }
+    }
+
+    /// Acquires a reversible local ownership claim for an in-flight workspace
+    /// open. The caller commits only after the Workspace owner accepts the
+    /// path; otherwise `Drop` releases a newly acquired process lease.
+    pub(crate) fn begin_local_workspace_open(
+        &self,
+        workspace: &Path,
+    ) -> Result<ProvisionalLocalWorkspaceOwnership<'_>, CoreRuntimeOwnershipError> {
+        let key = RuntimeOwnershipKey::for_workspace(workspace, &self.product_identity)?;
+        self.begin_local_workspace_with_key(key)
+    }
+
+    /// Acquires the same reversible claim for a product-managed workspace that
+    /// has not been created yet. This prevents directory allocation from
+    /// preceding Runtime ownership.
+    pub(crate) fn begin_managed_local_workspace_creation(
+        &self,
+        workspace: &Path,
+    ) -> Result<ProvisionalLocalWorkspaceOwnership<'_>, CoreRuntimeOwnershipError> {
+        let key = RuntimeOwnershipKey::for_workspace_candidate(workspace, &self.product_identity)?;
+        self.begin_local_workspace_with_key(key)
+    }
+
+    fn begin_local_workspace_with_key(
+        &self,
+        key: RuntimeOwnershipKey,
+    ) -> Result<ProvisionalLocalWorkspaceOwnership<'_>, CoreRuntimeOwnershipError> {
+        match &self.deployment {
+            CoreRuntimeOwnershipDeployment::Embedded { leases } => {
+                let mut leases = leases
+                    .lock()
+                    .map_err(|_| CoreRuntimeOwnershipError::OwnershipStateUnavailable)?;
+                if let Some(lease) = leases.get_mut(&key) {
+                    if lease.committed {
+                        return Ok(ProvisionalLocalWorkspaceOwnership {
+                            owner: self,
+                            key,
+                            provisional: false,
+                        });
+                    }
+                    lease.provisional_claims += 1;
+                    return Ok(ProvisionalLocalWorkspaceOwnership {
+                        owner: self,
+                        key,
+                        provisional: true,
+                    });
+                }
+                let lease = WorkspaceRuntimeOwnership::try_acquire(
+                    &self.ownership_root,
+                    &key,
+                    RuntimeDeployment::Embedded,
+                )
+                .inspect_err(|error| {
+                    log_acquisition_failure(
+                        self.entrypoint,
+                        RuntimeDeployment::Embedded,
+                        &key,
+                        error,
+                    );
+                })?;
+                log_acquired(self.entrypoint, RuntimeDeployment::Embedded, &key);
+                leases.insert(
+                    key.clone(),
+                    EmbeddedWorkspaceLease {
+                        _lease: lease,
+                        committed: false,
+                        provisional_claims: 1,
+                    },
+                );
+                Ok(ProvisionalLocalWorkspaceOwnership {
+                    owner: self,
+                    key,
+                    provisional: true,
+                })
+            }
+            CoreRuntimeOwnershipDeployment::Shared {
+                key: shared_key, ..
+            } if shared_key == &key => Ok(ProvisionalLocalWorkspaceOwnership {
+                owner: self,
+                key,
+                provisional: false,
+            }),
             CoreRuntimeOwnershipDeployment::Shared { .. } => {
                 warn!(
                     "Shared Agent Runtime rejected a second local workspace: entrypoint={}, error_code=shared_runtime_workspace_mismatch",
@@ -280,6 +447,8 @@ pub enum CoreRuntimeOwnershipError {
     Primitive(#[from] RuntimeOwnershipError),
     #[error("runtime ownership state is unavailable")]
     OwnershipStateUnavailable,
+    #[error("workspace identity changed while Runtime ownership was being acquired")]
+    WorkspaceIdentityChangedDuringOpen,
     #[error("Shared Agent Runtime is limited to its startup workspace")]
     SharedRuntimeWorkspaceMismatch,
     #[error("remote workspace binding was not verified by the Workspace owner")]
@@ -291,6 +460,7 @@ impl CoreRuntimeOwnershipError {
         match self {
             Self::Primitive(error) => error.code(),
             Self::OwnershipStateUnavailable => "ownership_state_unavailable",
+            Self::WorkspaceIdentityChangedDuringOpen => "workspace_identity_changed_during_open",
             Self::SharedRuntimeWorkspaceMismatch => "shared_runtime_workspace_mismatch",
             Self::UnverifiedRemoteWorkspaceScope => "unverified_remote_workspace_scope",
         }
@@ -381,4 +551,98 @@ fn log_acquisition_failure(
 
 fn key_prefix(key: &RuntimeOwnershipKey) -> &str {
     key.as_str().get(..12).unwrap_or(key.as_str())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn uncommitted_embedded_workspace_claim_is_released() {
+        let ownership_root = tempfile::tempdir().expect("ownership root");
+        let workspace = tempfile::tempdir().expect("workspace");
+        let owner = CoreRuntimeOwnership::embedded_with_facts(
+            ownership_root.path().to_path_buf(),
+            "bitfun".to_string(),
+            "test",
+        );
+
+        let claim = owner
+            .begin_local_workspace_open(workspace.path())
+            .expect("provisional owner");
+        drop(claim);
+
+        let key =
+            RuntimeOwnershipKey::for_workspace(workspace.path(), "bitfun").expect("ownership key");
+        WorkspaceRuntimeOwnership::try_acquire(
+            ownership_root.path(),
+            &key,
+            RuntimeDeployment::Shared,
+        )
+        .expect("a failed open must not retain its provisional lease");
+    }
+
+    #[test]
+    fn one_successful_concurrent_claim_commits_the_process_lease() {
+        let ownership_root = tempfile::tempdir().expect("ownership root");
+        let workspace = tempfile::tempdir().expect("workspace");
+        let owner = CoreRuntimeOwnership::embedded_with_facts(
+            ownership_root.path().to_path_buf(),
+            "bitfun".to_string(),
+            "test",
+        );
+
+        let failed_open = owner
+            .begin_local_workspace_open(workspace.path())
+            .expect("first provisional owner");
+        let successful_open = owner
+            .begin_local_workspace_open(workspace.path())
+            .expect("second provisional owner");
+        successful_open.commit().expect("commit successful open");
+        drop(failed_open);
+
+        let key =
+            RuntimeOwnershipKey::for_workspace(workspace.path(), "bitfun").expect("ownership key");
+        assert!(matches!(
+            WorkspaceRuntimeOwnership::try_acquire(
+                ownership_root.path(),
+                &key,
+                RuntimeDeployment::Shared,
+            ),
+            Err(RuntimeOwnershipError::OwnershipUnavailable { .. })
+        ));
+    }
+
+    #[test]
+    fn managed_workspace_creation_is_claimed_before_the_directory_exists() {
+        let ownership_root = tempfile::tempdir().expect("ownership root");
+        let managed_root = tempfile::tempdir().expect("managed root");
+        let workspace = managed_root
+            .path()
+            .join("personal_assistant")
+            .join("workspace");
+        let owner = CoreRuntimeOwnership::embedded_with_facts(
+            ownership_root.path().to_path_buf(),
+            "bitfun".to_string(),
+            "test",
+        );
+
+        let claim = owner
+            .begin_managed_local_workspace_creation(&workspace)
+            .expect("claim managed workspace before creation");
+        std::fs::create_dir_all(&workspace).expect("create managed workspace");
+        claim
+            .validate_workspace_path(&workspace)
+            .expect("candidate key must match the created workspace");
+
+        let key = RuntimeOwnershipKey::for_workspace(&workspace, "bitfun").expect("ownership key");
+        assert!(matches!(
+            WorkspaceRuntimeOwnership::try_acquire(
+                ownership_root.path(),
+                &key,
+                RuntimeDeployment::Shared,
+            ),
+            Err(RuntimeOwnershipError::OwnershipUnavailable { .. })
+        ));
+    }
 }

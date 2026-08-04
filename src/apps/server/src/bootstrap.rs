@@ -6,8 +6,86 @@ use bitfun_core::agentic::*;
 use bitfun_core::infrastructure::ai::AIClientFactory;
 use bitfun_core::infrastructure::try_get_path_manager_arc;
 use bitfun_core::service::{config, filesystem, mcp, token_usage, workspace};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+#[derive(Debug, PartialEq, Eq)]
+enum StartupWorkspacePlan {
+    Explicit(PathBuf),
+    RestoreThenDefault {
+        restored: Option<PathBuf>,
+        default: PathBuf,
+    },
+}
+
+fn startup_workspace_plan(
+    explicit: Option<PathBuf>,
+    restored: Option<PathBuf>,
+    default: PathBuf,
+) -> StartupWorkspacePlan {
+    match explicit {
+        Some(path) => StartupWorkspacePlan::Explicit(path),
+        None => StartupWorkspacePlan::RestoreThenDefault { restored, default },
+    }
+}
+
+fn restorable_local_workspace_path(
+    workspace_kind: workspace::WorkspaceKind,
+    root_path: PathBuf,
+) -> Option<PathBuf> {
+    (workspace_kind != workspace::WorkspaceKind::Remote).then_some(root_path)
+}
+
+fn default_assistant_workspace_path(
+    path_manager: &bitfun_core::infrastructure::PathManager,
+) -> PathBuf {
+    prefer_current_assistant_workspace(
+        path_manager.default_assistant_workspace_dir(None),
+        path_manager.legacy_default_assistant_workspace_dir(None),
+    )
+}
+
+fn prefer_current_assistant_workspace(current: PathBuf, legacy: PathBuf) -> PathBuf {
+    if !current.exists() && legacy.is_dir() {
+        legacy
+    } else {
+        current
+    }
+}
+
+async fn open_owned_workspace(
+    coordinator: &coordination::ConversationCoordinator,
+    workspace_service: &workspace::WorkspaceService,
+    path: PathBuf,
+    snapshot_log_context: &str,
+) -> anyhow::Result<workspace::WorkspaceInfo> {
+    let path_label = path.display().to_string();
+    coordinator
+        .open_local_workspace_with_runtime_ownership(workspace_service, path, snapshot_log_context)
+        .await
+        .map_err(|error| anyhow::anyhow!("Failed to open Server workspace '{path_label}': {error}"))
+}
+
+async fn open_default_assistant_workspace(
+    coordinator: &coordination::ConversationCoordinator,
+    workspace_service: &workspace::WorkspaceService,
+    path: PathBuf,
+) -> anyhow::Result<workspace::WorkspaceInfo> {
+    let path_label = path.display().to_string();
+    coordinator
+        .create_and_open_managed_local_workspace_with_runtime_ownership(
+            workspace_service,
+            path,
+            "default Assistant Server bootstrap",
+        )
+        .await
+        .map_err(|error| {
+            anyhow::anyhow!(
+                "Failed to open default Assistant Server workspace '{path_label}': {error}"
+            )
+        })
+}
 
 /// Shared application state for the server (mirrors Desktop's AppState).
 ///
@@ -34,7 +112,9 @@ pub(crate) struct ServerAppState {
 
 /// Initialize all core services and return the shared server state.
 ///
-/// The optional `workspace` path, when provided, is opened automatically.
+/// Opens an explicit `workspace` as an authoritative request. Without one,
+/// history is advisory and falls back to the default Assistant workspace when
+/// its ownership-aware open fails.
 pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<ServerAppState>> {
     log::info!("Initializing BitFun server core services");
 
@@ -141,20 +221,6 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
     coordinator.set_round_injection_source(scheduler.round_injection_monitor());
     coordination::set_global_scheduler(scheduler.clone());
 
-    // Cron service
-    let cron_service = bitfun_core::service::cron::CronService::new(
-        path_manager.clone(),
-        coordinator.clone(),
-        scheduler.clone(),
-    )
-    .await?;
-    bitfun_core::service::cron::set_global_cron_service(cron_service.clone());
-    let cron_subscriber = Arc::new(bitfun_core::service::cron::CronEventSubscriber::new(
-        cron_service.clone(),
-    ));
-    event_router.subscribe_internal("cron_jobs".to_string(), cron_subscriber);
-    cron_service.start();
-
     // Function agents
     let _ = bitfun_core::function_agents::git_func_agent::GitFunctionAgent::new(
         ai_client_factory.clone(),
@@ -164,7 +230,8 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
     );
 
     // 4. Services
-    let workspace_service = Arc::new(workspace::WorkspaceService::new().await?);
+    let workspace_service =
+        Arc::new(workspace::WorkspaceService::new_with_deferred_workspace_preparation().await?);
     workspace::set_global_workspace_service(workspace_service.clone());
     let filesystem_service = Arc::new(filesystem::FileSystemServiceFactory::create_default());
 
@@ -184,39 +251,91 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
         Arc::new(lock.get_all_tools())
     };
 
-    // 5. Open workspace if specified
-    let initial_workspace_path = if let Some(ws_path) = workspace {
-        let path = std::path::PathBuf::from(&ws_path);
-        match coordinator
-            .open_workspace_with_runtime_ownership(
+    // 5. Defer all restored-workspace preparation until Runtime ownership is
+    // held. An explicit path is authoritative and fails closed. Persisted
+    // history is only a startup hint; if it is stale or cannot acquire
+    // ownership, use the product-owned default Assistant workspace instead.
+    let restored_workspace = workspace_service.get_current_workspace().await.and_then(|workspace| {
+        let kind = workspace.workspace_kind;
+        let path = workspace.root_path;
+        let restored = restorable_local_workspace_path(kind.clone(), path.clone());
+        if restored.is_none() {
+            log::warn!(
+                "Skipping restored Remote workspace because the paused Server Host has no SSH manager; falling back to the default Assistant workspace: path={}",
+                path.display()
+            );
+        }
+        restored
+    });
+    let plan = startup_workspace_plan(
+        workspace.map(PathBuf::from),
+        restored_workspace,
+        default_assistant_workspace_path(path_manager.as_ref()),
+    );
+    let workspace_info = match plan {
+        StartupWorkspacePlan::Explicit(path) => {
+            open_owned_workspace(
+                coordinator.as_ref(),
                 workspace_service.as_ref(),
                 path,
-                None,
-                None,
-                "server bootstrap",
+                "explicit Server bootstrap",
+            )
+            .await?
+        }
+        StartupWorkspacePlan::RestoreThenDefault { restored, default } => match restored {
+            Some(path) => match open_owned_workspace(
+                coordinator.as_ref(),
+                workspace_service.as_ref(),
+                path,
+                "restored Server bootstrap",
             )
             .await
-        {
-            Ok(info) => {
-                log::info!(
-                    "Workspace opened: name={}, path={}",
-                    info.name,
-                    info.root_path.display()
-                );
-                Some(info.root_path)
+            {
+                Ok(info) => info,
+                Err(error) => {
+                    log::warn!(
+                        "Failed to restore Server workspace; falling back to the default Assistant workspace: {}",
+                        error
+                    );
+                    open_default_assistant_workspace(
+                        coordinator.as_ref(),
+                        workspace_service.as_ref(),
+                        default,
+                    )
+                    .await?
+                }
+            },
+            None => {
+                open_default_assistant_workspace(
+                    coordinator.as_ref(),
+                    workspace_service.as_ref(),
+                    default,
+                )
+                .await?
             }
-            Err(e) => {
-                log::error!("Failed to open workspace '{}': {}", ws_path, e);
-                None
-            }
-        }
-    } else {
-        // Try to restore last workspace
-        workspace_service
-            .get_current_workspace()
-            .await
-            .map(|w| w.root_path)
+        },
     };
+    log::info!(
+        "Workspace opened: name={}, path={}",
+        workspace_info.name,
+        workspace_info.root_path.display()
+    );
+    let initial_workspace_path = Some(workspace_info.root_path);
+
+    // Construction loads and reconciles persisted jobs, so create, register,
+    // and start Cron only after the Server has an owned workspace.
+    let cron_service = bitfun_core::service::cron::CronService::new(
+        path_manager.clone(),
+        coordinator.clone(),
+        scheduler.clone(),
+    )
+    .await?;
+    bitfun_core::service::cron::set_global_cron_service(cron_service.clone());
+    let cron_subscriber = Arc::new(bitfun_core::service::cron::CronEventSubscriber::new(
+        cron_service.clone(),
+    ));
+    event_router.subscribe_internal("cron_jobs".to_string(), cron_subscriber);
+    cron_service.start();
 
     // LSP
     if let Err(e) = bitfun_core::service::lsp::initialize_global_lsp_manager().await {
@@ -242,4 +361,110 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
 
     log::info!("BitFun server core services initialized");
     Ok(state)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn explicit_workspace_plan_has_no_fallback() {
+        let explicit = PathBuf::from("D:/requested-workspace");
+        let default = PathBuf::from("D:/default-assistant");
+
+        let plan = startup_workspace_plan(Some(explicit.clone()), None, default);
+
+        assert_eq!(plan, StartupWorkspacePlan::Explicit(explicit));
+    }
+
+    #[test]
+    fn implicit_workspace_plan_treats_history_as_advisory() {
+        let restored = PathBuf::from("D:/restored-workspace");
+        let default = PathBuf::from("D:/default-assistant");
+
+        let plan = startup_workspace_plan(None, Some(restored.clone()), default.clone());
+
+        assert_eq!(
+            plan,
+            StartupWorkspacePlan::RestoreThenDefault {
+                restored: Some(restored),
+                default,
+            }
+        );
+    }
+
+    #[test]
+    fn remote_history_is_not_restored_without_a_server_ssh_manager() {
+        let remote = PathBuf::from("/remote/workspace");
+        let local = PathBuf::from("D:/local/workspace");
+
+        assert_eq!(
+            restorable_local_workspace_path(workspace::WorkspaceKind::Remote, remote),
+            None
+        );
+        assert_eq!(
+            restorable_local_workspace_path(workspace::WorkspaceKind::Normal, local.clone()),
+            Some(local)
+        );
+    }
+
+    #[test]
+    fn legacy_default_assistant_workspace_remains_available_without_early_migration() {
+        let root = std::env::temp_dir().join(format!(
+            "bitfun-server-legacy-workspace-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time")
+                .as_nanos()
+        ));
+        let legacy = root.join("legacy-workspace");
+        let current = root.join("personal-assistant").join("workspace");
+        std::fs::create_dir_all(&legacy).expect("legacy Assistant workspace");
+
+        assert_eq!(
+            prefer_current_assistant_workspace(current.clone(), legacy.clone()),
+            legacy
+        );
+
+        std::fs::create_dir_all(&current).expect("current Assistant workspace");
+        assert_eq!(
+            prefer_current_assistant_workspace(current.clone(), legacy),
+            current
+        );
+
+        std::fs::remove_dir_all(root).expect("remove test workspace root");
+    }
+
+    #[test]
+    fn default_assistant_creation_stays_inside_the_ownership_aware_coordinator() {
+        let helper = include_str!("bootstrap.rs")
+            .split("async fn open_default_assistant_workspace")
+            .nth(1)
+            .and_then(|source| source.split("pub(crate) struct ServerAppState").next())
+            .expect("default Assistant workspace helper");
+
+        assert!(helper.contains("create_and_open_managed_local_workspace_with_runtime_ownership"));
+        assert!(!helper.contains("create_dir_all"));
+    }
+
+    #[test]
+    fn cron_service_is_constructed_and_started_only_after_startup_workspace_is_owned() {
+        let source = include_str!("bootstrap.rs");
+        let workspace_ready = source
+            .find("let initial_workspace_path = Some(workspace_info.root_path);")
+            .expect("owned startup workspace marker");
+        let cron_constructor = source
+            .find("let cron_service = bitfun_core::service::cron::CronService::new(")
+            .expect("Cron constructor");
+        let cron_start = source
+            .find("cron_service.start();")
+            .expect("Cron runner start");
+
+        assert!(
+            workspace_ready < cron_constructor && cron_constructor < cron_start,
+            "Cron reconciliation and execution must not run before startup workspace ownership succeeds"
+        );
+    }
 }

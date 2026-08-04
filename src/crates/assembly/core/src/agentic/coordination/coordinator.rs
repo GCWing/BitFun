@@ -2137,6 +2137,22 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 path.display()
             )));
         }
+        if known_remote.is_none() && !path.is_dir() {
+            return Err(BitFunError::service(format!(
+                "Workspace path is not a directory: {}",
+                path.display()
+            )));
+        }
+        if known_remote.is_none() {
+            return self
+                .open_local_workspace_with_runtime_ownership(
+                    workspace_service,
+                    path,
+                    snapshot_log_context,
+                )
+                .await;
+        }
+
         // Caller-provided remote facts only select a known workspace. They are
         // not authority to bypass the local Runtime ownership lease.
         let resolved_connection_id = known_remote
@@ -2150,32 +2166,113 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 .and_then(|value| value.as_str())
                 .map(ToOwned::to_owned)
         });
-        if let Some(connection_id) = resolved_connection_id.as_deref() {
-            self.ensure_verified_remote_workspace_runtime_ownership(
-                &path,
-                connection_id,
-                resolved_ssh_host.as_deref(),
-            )?;
-        } else {
-            self.ensure_runtime_ownership(&path, None, None)?;
-        }
+        let connection_id = resolved_connection_id
+            .as_deref()
+            .ok_or_else(|| BitFunError::service("Known remote workspace has no connection id"))?;
+        self.ensure_verified_remote_workspace_runtime_ownership(
+            &path,
+            connection_id,
+            resolved_ssh_host.as_deref(),
+        )?;
         let info = workspace_service
             .open_workspace_after_known_resolution(path, known_remote)
             .await?;
-        if info.workspace_kind != WorkspaceKind::Remote {
-            if let Err(error) = crate::service::snapshot::initialize_snapshot_manager_for_workspace(
-                info.root_path.clone(),
-                None,
-            )
-            .await
-            {
-                error!(
-                    "Failed to initialize snapshot after {}: {}",
-                    snapshot_log_context, error
-                );
-            }
-        }
+        Self::initialize_snapshot_after_workspace_open(&info, snapshot_log_context).await;
         Ok(info)
+    }
+
+    /// Opens an authoritative local path without consulting remote history.
+    /// This is the entrypoint for product hosts whose workspace source is known
+    /// to be local (CLI arguments, defaults, or local history records).
+    pub async fn open_local_workspace_with_runtime_ownership(
+        &self,
+        workspace_service: &WorkspaceService,
+        path: PathBuf,
+        snapshot_log_context: &str,
+    ) -> BitFunResult<WorkspaceInfo> {
+        if !path.exists() {
+            return Err(BitFunError::service(format!(
+                "Workspace path does not exist: {}",
+                path.display()
+            )));
+        }
+        if !path.is_dir() {
+            return Err(BitFunError::service(format!(
+                "Workspace path is not a directory: {}",
+                path.display()
+            )));
+        }
+        let ownership = self
+            .runtime_ownership
+            .begin_local_workspace_open(&path)
+            .map_err(|error| BitFunError::Service(self.runtime_ownership.error_message(&error)))?;
+        ownership
+            .validate_workspace_path(&path)
+            .map_err(|error| BitFunError::Service(self.runtime_ownership.error_message(&error)))?;
+        let info = workspace_service.open_workspace(path).await?;
+        ownership
+            .commit()
+            .map_err(|error| BitFunError::Service(self.runtime_ownership.error_message(&error)))?;
+        Self::initialize_snapshot_after_workspace_open(&info, snapshot_log_context).await;
+        Ok(info)
+    }
+
+    /// Creates and opens a product-managed local workspace while holding its
+    /// Runtime ownership claim across the first directory allocation.
+    pub async fn create_and_open_managed_local_workspace_with_runtime_ownership(
+        &self,
+        workspace_service: &WorkspaceService,
+        path: PathBuf,
+        snapshot_log_context: &str,
+    ) -> BitFunResult<WorkspaceInfo> {
+        if path.exists() {
+            return self
+                .open_local_workspace_with_runtime_ownership(
+                    workspace_service,
+                    path,
+                    snapshot_log_context,
+                )
+                .await;
+        }
+        let ownership = self
+            .runtime_ownership
+            .begin_managed_local_workspace_creation(&path)
+            .map_err(|error| BitFunError::Service(self.runtime_ownership.error_message(&error)))?;
+        tokio::fs::create_dir_all(&path).await.map_err(|error| {
+            BitFunError::service(format!(
+                "Failed to create managed workspace '{}': {error}",
+                path.display()
+            ))
+        })?;
+        ownership
+            .validate_workspace_path(&path)
+            .map_err(|error| BitFunError::Service(self.runtime_ownership.error_message(&error)))?;
+        let info = workspace_service.open_workspace(path).await?;
+        ownership
+            .commit()
+            .map_err(|error| BitFunError::Service(self.runtime_ownership.error_message(&error)))?;
+        Self::initialize_snapshot_after_workspace_open(&info, snapshot_log_context).await;
+        Ok(info)
+    }
+
+    async fn initialize_snapshot_after_workspace_open(
+        info: &WorkspaceInfo,
+        snapshot_log_context: &str,
+    ) {
+        if info.workspace_kind == WorkspaceKind::Remote {
+            return;
+        }
+        if let Err(error) = crate::service::snapshot::initialize_snapshot_manager_for_workspace(
+            info.root_path.clone(),
+            None,
+        )
+        .await
+        {
+            error!(
+                "Failed to initialize snapshot after {}: {}",
+                snapshot_log_context, error
+            );
+        }
     }
 
     /// Ensures ownership from the loaded session binding, or from a local
@@ -14540,24 +14637,53 @@ mod tests {
     #[test]
     fn workspace_open_owner_gates_before_open_and_guards_snapshot_by_kind() {
         let source = include_str!("coordinator.rs");
-        let helper = source
+        let remote_helper = source
             .split("pub async fn open_workspace_with_runtime_ownership")
+            .nth(1)
+            .and_then(|source| {
+                source
+                    .split("pub async fn open_local_workspace_with_runtime_ownership")
+                    .next()
+            })
+            .expect("remote-aware workspace open owner");
+        let remote_ownership_gate = remote_helper
+            .find("ensure_verified_remote_workspace_runtime_ownership")
+            .expect("verified remote ownership gate");
+        let remote_workspace_open = remote_helper
+            .find("open_workspace_after_known_resolution")
+            .expect("remote workspace open call");
+        assert!(remote_ownership_gate < remote_workspace_open);
+
+        let local_helper = source
+            .split("pub async fn open_local_workspace_with_runtime_ownership")
+            .nth(1)
+            .and_then(|source| {
+                source
+                    .split("async fn initialize_snapshot_after_workspace_open")
+                    .next()
+            })
+            .expect("local workspace open owner");
+        let local_ownership_gate = local_helper
+            .find("begin_local_workspace_open")
+            .expect("provisional local ownership gate");
+        let local_workspace_open = local_helper
+            .find("workspace_service.open_workspace")
+            .expect("local workspace open call");
+        let ownership_commit = local_helper.find(".commit()").expect("ownership commit");
+        assert!(local_ownership_gate < local_workspace_open);
+        assert!(local_workspace_open < ownership_commit);
+
+        let snapshot_helper = source
+            .split("async fn initialize_snapshot_after_workspace_open")
             .nth(1)
             .and_then(|source| {
                 source
                     .split("pub fn ensure_session_runtime_ownership")
                     .next()
             })
-            .expect("workspace open owner");
-        let ownership_gate = helper
-            .find("ensure_runtime_ownership")
-            .expect("workspace ownership gate");
-        let workspace_open = helper
-            .find("open_workspace_after_known_resolution")
-            .expect("workspace open call");
-        assert!(ownership_gate < workspace_open);
-        assert!(helper.contains("WorkspaceKind::Remote"));
-        assert!(helper.contains("initialize_snapshot_manager_for_workspace"));
+            .expect("snapshot initialization owner");
+        assert!(snapshot_helper.contains("WorkspaceKind::Remote"));
+        assert!(snapshot_helper.contains("initialize_snapshot_manager_for_workspace"));
 
         let bot_router = include_str!("../../service/remote_connect/bot/command_router.rs");
         assert!(bot_router.contains("open_workspace_with_runtime_ownership"));
@@ -14610,6 +14736,139 @@ mod tests {
 
         assert_eq!(opened.workspace_kind, WorkspaceKind::Remote);
         assert_eq!(opened.remote_ssh_connection_id(), Some("conn-known-remote"));
+    }
+
+    #[tokio::test]
+    async fn local_workspace_open_does_not_reclassify_a_same_path_remote_record() {
+        let root = tempfile::tempdir().expect("test root");
+        let workspace = tempfile::tempdir().expect("local workspace");
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(
+            root.path().join("user-root"),
+        ));
+        let workspace_service =
+            crate::service::workspace::WorkspaceService::new_for_test_path_manager(path_manager)
+                .await;
+        workspace_service
+            .track_workspace_activity(
+                workspace.path().to_path_buf(),
+                crate::service::workspace::WorkspaceCreateOptions {
+                    workspace_kind: WorkspaceKind::Remote,
+                    remote_connection_id: Some("same-path-remote".to_string()),
+                    remote_ssh_host: Some("remote-host".to_string()),
+                    ..Default::default()
+                },
+                crate::service::workspace::WorkspaceActivityMode::RefreshMetadata,
+            )
+            .await
+            .expect("remember same-path remote workspace");
+
+        let ownership_root = root.path().join("ownership");
+        let key = bitfun_services_core::runtime_ownership::RuntimeOwnershipKey::for_workspace(
+            workspace.path(),
+            "bitfun",
+        )
+        .expect("ownership key");
+        let _shared =
+            bitfun_services_core::runtime_ownership::WorkspaceRuntimeOwnership::try_acquire(
+                &ownership_root,
+                &key,
+                bitfun_services_core::runtime_ownership::RuntimeDeployment::Shared,
+            )
+            .expect("shared owner");
+        let owner = Arc::new(CoreRuntimeOwnership::embedded_with_facts(
+            ownership_root,
+            "bitfun".to_string(),
+            "test",
+        ));
+        let (coordinator, _) = test_coordinator_with_config_and_ownership(100, false, owner);
+
+        let error = coordinator
+            .open_local_workspace_with_runtime_ownership(
+                &workspace_service,
+                workspace.path().to_path_buf(),
+                "authoritative local test",
+            )
+            .await
+            .expect_err("same-path remote history must not bypass local ownership");
+
+        assert!(error.to_string().contains("ownership"));
+    }
+
+    #[tokio::test]
+    async fn workspace_open_rejects_non_directory_before_acquiring_ownership() {
+        let root = tempfile::tempdir().expect("test root");
+        let workspace_file = root.path().join("workspace-file");
+        std::fs::write(&workspace_file, "not a workspace").expect("workspace file");
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(
+            root.path().join("user-root"),
+        ));
+        let workspace_service =
+            crate::service::workspace::WorkspaceService::new_for_test_path_manager(
+                path_manager.clone(),
+            )
+            .await;
+        let owner = Arc::new(CoreRuntimeOwnership::embedded(
+            path_manager.as_ref(),
+            "test",
+        ));
+        let (coordinator, _) = test_coordinator_with_config_and_ownership(100, false, owner);
+
+        let error = coordinator
+            .open_workspace_with_runtime_ownership(
+                &workspace_service,
+                workspace_file.clone(),
+                None,
+                None,
+                "non-directory test",
+            )
+            .await
+            .expect_err("a workspace must be a directory");
+
+        assert!(error.to_string().contains("not a directory"));
+        assert!(
+            !CoreRuntimeOwnership::runtime_owner_present(path_manager.as_ref(), &workspace_file,)
+                .expect("ownership state should remain readable"),
+            "invalid workspace input must fail before it leaves a process lease"
+        );
+    }
+
+    #[tokio::test]
+    async fn managed_workspace_is_created_and_opened_under_runtime_ownership() {
+        let root = tempfile::tempdir().expect("test root");
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(
+            root.path().join("user-root"),
+        ));
+        let workspace_service =
+            crate::service::workspace::WorkspaceService::new_for_test_path_manager(
+                path_manager.clone(),
+            )
+            .await;
+        let owner = Arc::new(CoreRuntimeOwnership::embedded(
+            path_manager.as_ref(),
+            "test",
+        ));
+        let (coordinator, _) = test_coordinator_with_config_and_ownership(100, false, owner);
+        let workspace = root.path().join("managed").join("workspace");
+
+        let opened = coordinator
+            .create_and_open_managed_local_workspace_with_runtime_ownership(
+                &workspace_service,
+                workspace.clone(),
+                "managed workspace test",
+            )
+            .await
+            .expect("managed workspace should open");
+
+        assert_eq!(
+            opened.root_path,
+            dunce::canonicalize(&workspace).expect("canonical managed workspace")
+        );
+        assert!(opened.root_path.is_dir());
+        assert!(CoreRuntimeOwnership::runtime_owner_present(
+            path_manager.as_ref(),
+            &opened.root_path
+        )
+        .expect("ownership state should remain readable"));
     }
 
     #[tokio::test]

@@ -12,6 +12,7 @@ export function runManifestParserSelfTest({
   ownerCrateFeatureAssemblyRules,
   parseManifestFeatures,
   optionalDependencyFeatureOwnerRules,
+  reviewedCoreFeatureClosures,
   lightweightBoundaryRules,
   dependencyProfileRules,
   forbiddenManifestDependencyRules,
@@ -226,6 +227,21 @@ export function runManifestParserSelfTest({
     'bitfun-agent-runtime'
   ) {
     throw new Error('forbidden dependency checks must reject Cargo package aliases');
+  }
+
+  for (const [packageName, expectedClosure] of [
+    ['bitfun-app-server', ['agent-runtime']],
+    ['bitfun-server', ['agent-runtime', 'ssh-remote']],
+  ]) {
+    const reviewedClosure = reviewedCoreFeatureClosures?.get(packageName);
+    if (
+      reviewedClosure?.length !== expectedClosure.length
+      || expectedClosure.some((feature) => !reviewedClosure.includes(feature))
+    ) {
+      throw new Error(
+        `${packageName} must keep its reviewed Core feature closure`,
+      );
+    }
   }
 
   for (const featureName of [

@@ -36,18 +36,12 @@ role, unlike `bitfun-acp` which uses the built-in ACP `Agent` role.
   on the client half.
 - Transport constructors must pin `ByteStreams::new(outgoing, incoming)`
   direction; never expose a swap-prone API.
-- This crate owns the **full backend contract** under option C: the app-server
-  schema is the single JSON-RPC surface the frontend faces, covering both agent
-  kernel operations (delegated to `bitfun-agent-runtime` SDK) and host services
-  (git/mcp/config/cron/snapshot/fs/workspace/...). To cover host services it
-  depends directly on `assembly/core` (`bitfun-core`, `features = "product-full"`)
-  -- the same pattern `bitfun-acp` already follows (`bitfun-acp/Cargo.toml`).
-  Product assembly constructs the `AgentRuntime` and the host service singletons
-  and injects both via `BitfunAppRuntime`; schema handlers for host services call
-  `bitfun_core::service::*` the same way the Desktop host does (static/global
-  accessors), so `BitfunAppRuntime` does not need a host-services field per
-  service. Do not describe this crate as Core-independent for host-service
-  operations; the agent-kernel handlers remain backed by the SDK facade only.
+- Keep the concrete schema bounded to delivered consumers. It currently exposes
+  Agent Runtime session/turn/permission operations and event delivery, plus the
+  git/config/i18n host-service methods already used by the Web client. Its Core
+  dependency must keep the exact `agent-runtime` feature closure. A new
+  host-service family needs a reviewed schema owner and feature boundary; do not
+  restore `product-full` or describe an unimplemented backend superset as current.
 - Handlers offload runtime calls to background tasks or return immediately;
   do not call `SentRequest::block_task` inside a handler callback (upstream
   `DEADLOCK` note in `jsonrpc.rs`). Reply through `responder.respond_with_result`.

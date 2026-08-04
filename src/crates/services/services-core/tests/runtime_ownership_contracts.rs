@@ -71,6 +71,37 @@ fn ownership_key_is_stable_and_scoped_by_workspace_and_product() {
     assert!(first.as_str().bytes().all(|byte| byte.is_ascii_hexdigit()));
 }
 
+#[test]
+fn managed_workspace_candidate_keeps_the_same_key_after_creation() {
+    let root = tempdir().expect("managed workspace root");
+    let ownership_root = tempdir().expect("ownership root");
+    let workspace = root.path().join("personal_assistant").join("workspace");
+
+    let candidate_key = RuntimeOwnershipKey::for_workspace_candidate(&workspace, "bitfun")
+        .expect("candidate ownership key");
+    let embedded = WorkspaceRuntimeOwnership::try_acquire(
+        ownership_root.path(),
+        &candidate_key,
+        RuntimeDeployment::Embedded,
+    )
+    .expect("claim candidate before directory creation");
+
+    std::fs::create_dir_all(&workspace).expect("create managed workspace");
+    let opened_key = RuntimeOwnershipKey::for_workspace(&workspace, "bitfun")
+        .expect("canonical key after creation");
+
+    assert_eq!(candidate_key, opened_key);
+    assert!(matches!(
+        WorkspaceRuntimeOwnership::try_acquire(
+            ownership_root.path(),
+            &opened_key,
+            RuntimeDeployment::Shared,
+        ),
+        Err(RuntimeOwnershipError::OwnershipUnavailable { .. })
+    ));
+    drop(embedded);
+}
+
 #[cfg(unix)]
 #[test]
 fn ownership_key_preserves_non_utf8_workspace_bytes() {

@@ -416,6 +416,195 @@ test('explicit product entrypoint bitfun-core feature selections pass', () => {
   );
 });
 
+test('Server package features must remain limited to the reviewed source-health profile', () => {
+  const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
+  const sourceCheckMembers = [
+    'bitfun-core/dispatch-store',
+    'bitfun-core/external-sources',
+    'dep:base64',
+    'dep:chrono',
+    'dep:reqwest',
+    'dep:serde_json',
+  ];
+  const serverWithFeatures = (features) => ({
+    ...packageAt('bitfun-server', 'src/apps/server/Cargo.toml', [
+      pathDependency('src/crates/assembly/core', {
+        name: 'bitfun-core',
+        usesDefaultFeatures: false,
+        features: ['agent-runtime', 'ssh-remote'],
+      }),
+    ]),
+    features,
+  });
+  const violationsFor = (features) => findProductEntrypointCoreFeatureViolations(
+    [serverWithFeatures(features), core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+  const reviewedFeatures = {
+    default: [],
+    'paused-web-server-source-check': sourceCheckMembers,
+  };
+
+  assert.deepEqual(violationsFor(reviewedFeatures), []);
+  assert.match(
+    violationsFor({ ...reviewedFeatures, accidental_profile: ['dep:private-toggle'] })[0].message,
+    /unreviewed package feature.*accidental_profile/,
+  );
+  assert.match(
+    violationsFor({ ...reviewedFeatures, default: ['paused-web-server-source-check'] })[0].message,
+    /default features must remain empty/,
+  );
+  assert.match(
+    violationsFor({
+      ...reviewedFeatures,
+      'paused-web-server-source-check': sourceCheckMembers.slice(1),
+    })[0].message,
+    /exact reviewed source-health closure/,
+  );
+  assert.match(
+    violationsFor({
+      ...reviewedFeatures,
+      'paused-web-server-source-check': [...sourceCheckMembers, 'bitfun-core/product-full'],
+    })[0].message,
+    /exact reviewed source-health closure/,
+  );
+});
+
+test('Server default closure rejects source-check Core owners hidden behind an unconditional dependency', () => {
+  const core = {
+    ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
+    features: {
+      'agent-runtime': [],
+      'ssh-remote': [],
+      'dispatch-store': [],
+      'external-sources': [],
+    },
+  };
+  const bridge = packageAt('server-bridge', 'src/crates/assembly/server-bridge/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: ['external-sources'],
+    }),
+  ]);
+  const server = {
+    ...packageAt('bitfun-server', 'src/apps/server/Cargo.toml', [
+      pathDependency('src/crates/assembly/core', {
+        name: 'bitfun-core',
+        usesDefaultFeatures: false,
+        features: ['agent-runtime', 'ssh-remote'],
+      }),
+      pathDependency('src/crates/assembly/server-bridge', { name: 'server-bridge' }),
+    ]),
+    features: {
+      default: [],
+      'paused-web-server-source-check': [
+        'bitfun-core/dispatch-store',
+        'bitfun-core/external-sources',
+        'dep:base64',
+        'dep:chrono',
+        'dep:reqwest',
+        'dep:serde_json',
+      ],
+    },
+  };
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [server, bridge, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.ok(violations.some((violation) =>
+    /Server default dependency closure.*server-bridge.*bitfun-core\/external-sources/
+      .test(violation.message)));
+});
+
+test('App Server package features keep default empty and ts exact', () => {
+  const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
+  const appServerWithFeatures = (features) => ({
+    ...packageAt('bitfun-app-server', 'src/crates/interfaces/app-server/Cargo.toml', [
+      pathDependency('src/crates/assembly/core', {
+        name: 'bitfun-core',
+        usesDefaultFeatures: false,
+        features: ['agent-runtime'],
+      }),
+    ]),
+    features,
+  });
+  const violationsFor = (features) => findProductEntrypointCoreFeatureViolations(
+    [appServerWithFeatures(features), core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+  const reviewedFeatures = {
+    default: [],
+    ts: ['dep:ts-rs', 'bitfun-core/ts'],
+  };
+
+  assert.deepEqual(violationsFor(reviewedFeatures), []);
+  assert.match(
+    violationsFor({ ...reviewedFeatures, accidental_profile: ['bitfun-core/product-full'] })[0]
+      .message,
+    /unreviewed package feature.*accidental_profile/,
+  );
+  assert.match(
+    violationsFor({ ...reviewedFeatures, default: ['ts'] })[0].message,
+    /default features must remain empty/,
+  );
+  assert.match(
+    violationsFor({ ...reviewedFeatures, ts: ['bitfun-core/ts'] })[0].message,
+    /exact reviewed TypeScript closure/,
+  );
+  assert.match(
+    violationsFor({
+      ...reviewedFeatures,
+      ts: [...reviewedFeatures.ts, 'bitfun-core/product-full'],
+    })[0].message,
+    /exact reviewed TypeScript closure/,
+  );
+});
+
+test('App Server default closure rejects ts hidden behind an unconditional dependency', () => {
+  const core = {
+    ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
+    features: {
+      'agent-runtime': [],
+      ts: [],
+    },
+  };
+  const bridge = packageAt('app-server-bridge', 'src/crates/interfaces/app-server-bridge/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: ['ts'],
+    }),
+  ]);
+  const appServer = {
+    ...packageAt('bitfun-app-server', 'src/crates/interfaces/app-server/Cargo.toml', [
+      pathDependency('src/crates/assembly/core', {
+        name: 'bitfun-core',
+        usesDefaultFeatures: false,
+        features: ['agent-runtime'],
+      }),
+      pathDependency('src/crates/interfaces/app-server-bridge', {
+        name: 'app-server-bridge',
+      }),
+    ]),
+    features: {
+      default: [],
+      ts: ['dep:ts-rs', 'bitfun-core/ts'],
+    },
+  };
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [appServer, bridge, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.ok(violations.some((violation) =>
+    /App Server default dependency closure.*app-server-bridge.*bitfun-core\/ts/
+      .test(violation.message)));
+});
+
 test('ACP Core capability closure must retain its Canvas owner', () => {
   const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
   const acp = packageAt('bitfun-acp', 'src/crates/interfaces/acp/Cargo.toml', [

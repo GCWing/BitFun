@@ -1,11 +1,11 @@
 //! Server-host app-server wiring: build the in-process `BitfunAppServer` from
 //! the product-assembled [`AgentRuntime`] and return a cloneable handle.
 //!
-//! The containing Web Server was already deprecated before this refactor.
-//! This wiring exists to validate the App Server boundary and is not required
-//! to provide complete legacy Web/Desktop behavior or production compatibility.
+//! The containing Web Server is paused, not deprecated. This current partial
+//! wiring validates the App Server boundary and protects its live protocol
+//! behavior, but it is not yet a production-complete Web/Desktop surface.
 //!
-//! Under browser-direct ACP-over-WS (Step 2) the server host no longer pairs
+//! Under browser-direct App Server over WebSocket, the host does not pair
 //! the app-server with an in-process client over `in_memory_pair`. Instead each
 //! WebSocket connection is handed straight to [`BitfunAppServer::serve`] via the
 //! [`crate::routes::ws_transport`] `Lines` adapter, so the browser connects

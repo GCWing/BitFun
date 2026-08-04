@@ -1,5 +1,10 @@
 //! Narrow detached-dispatch capability for the lightweight Server Host.
 //!
+//! This source is preserved while the Web Server product is paused, but it is
+//! not registered as a current HTTP or App Server route. A future reactivation
+//! must expose the capability through the App Server protocol instead of
+//! reviving the removed parallel WebSocket command path.
+//!
 //! This route owns no Agent Runtime and no target session. It only exposes the
 //! same platform-neutral controller used by Desktop, backed by saved SSH
 //! profiles and the observer-only outbound index.
@@ -10,12 +15,11 @@ use bitfun_core::external_sources::{
 use bitfun_core::service::dispatch::{
     answer_dispatch, append_dispatch, cancel_dispatch, cancel_dispatch_cli_install,
     get_dispatch_status, list_dispatch_jobs, list_dispatch_targets, poll_dispatch_cli_install,
-    probe_dispatch_target, start_dispatch_cli_install, submit_dispatch,
-    sync_dispatch_model_config, sync_dispatch_result, DispatchAnswerRequest,
-    DispatchAppendRequest, DispatchConnectionRequest, DispatchInstallPollRequest,
-    DispatchInstallStartRequest, DispatchJobRequest, DispatchListJobsRequest,
-    DispatchListTargetsRequest, DispatchProbeTargetRequest, DispatchStatusRequest,
-    DispatchSubmitRequest, DispatchSyncResultRequest, OutboundDispatchStore,
+    probe_dispatch_target, start_dispatch_cli_install, submit_dispatch, sync_dispatch_model_config,
+    sync_dispatch_result, DispatchAnswerRequest, DispatchAppendRequest, DispatchConnectionRequest,
+    DispatchInstallPollRequest, DispatchInstallStartRequest, DispatchJobRequest,
+    DispatchListJobsRequest, DispatchListTargetsRequest, DispatchProbeTargetRequest,
+    DispatchStatusRequest, DispatchSubmitRequest, DispatchSyncResultRequest, OutboundDispatchStore,
 };
 use serde::de::DeserializeOwned;
 
