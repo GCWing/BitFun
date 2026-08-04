@@ -452,11 +452,23 @@ img {
   color: var(--accent);
 }
 
+.install-note > a {
+  color: inherit;
+  text-decoration: none;
+}
+
 .install-note strong {
-  display: block;
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 6px;
   margin-bottom: 7px;
   color: var(--text);
   font-size: 15px;
+}
+
+.install-note > a:hover strong {
+  color: var(--accent-strong);
 }
 
 .install-note p {
@@ -1048,18 +1060,27 @@ img {
   color: var(--accent);
 }
 
-.desktop-guidance p {
+.desktop-guidance a {
   display: flex;
-  margin: 0;
   flex-direction: column;
   gap: 5px;
+  color: inherit;
   font-size: 12px;
   line-height: 1.5;
+  text-decoration: none;
 }
 
 .desktop-guidance strong {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 5px;
   color: var(--text);
   font-size: 13px;
+}
+
+.desktop-guidance a:hover strong {
+  color: var(--accent-strong);
 }
 
 .detail-fact-strip {
@@ -1768,10 +1789,25 @@ img {
 }
 
 .site-footer__inner p {
+  flex: 1;
   max-width: 620px;
   margin: 0;
   text-align: right;
   line-height: 1.55;
+}
+
+.site-footer__link {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-soft);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.site-footer__link:hover {
+  color: var(--accent-strong);
 }
 
 @media (prefers-reduced-motion: no-preference) {

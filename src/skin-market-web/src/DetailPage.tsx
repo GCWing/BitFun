@@ -15,6 +15,7 @@ import {
   shortHash,
 } from './format';
 import type { Locale, Translate } from './i18n';
+import { BITFUN_RELEASES_URL } from './links';
 import { PosterImage } from './PosterImage';
 import type {
   AppearanceListingDetail,
@@ -141,7 +142,13 @@ export function DetailPage({ catalogSearch, locale, onNavigate, slug, t }: Detai
             ) : null}
             <div className="desktop-guidance">
               <Desktop size={21} weight="regular" aria-hidden="true" />
-              <p><strong>{t('desktopInstallTitle')}</strong><span>{t('desktopInstallNote')}</span></p>
+              <a href={BITFUN_RELEASES_URL} target="_blank" rel="noreferrer">
+                <strong>
+                  {t('desktopInstallTitle')}
+                  <ArrowSquareOut size={15} weight="regular" aria-hidden="true" />
+                </strong>
+                <span>{t('desktopInstallNote')}</span>
+              </a>
             </div>
           </div>
         </section>

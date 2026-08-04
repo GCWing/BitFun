@@ -1,5 +1,6 @@
 import {
   ArrowRight,
+  ArrowSquareOut,
   DownloadSimple,
   MagnifyingGlass,
 } from '@phosphor-icons/react';
@@ -12,6 +13,7 @@ import {
 import { skinMarketApi, SkinMarketApiError } from './api';
 import { formatCompactNumber, formatMarketDate } from './format';
 import type { Locale, Translate } from './i18n';
+import { BITFUN_RELEASES_URL } from './links';
 import { PosterImage } from './PosterImage';
 import type {
   AppearanceListingSummary,
@@ -160,10 +162,13 @@ export function CatalogPage({
         </div>
         <aside className="install-note" aria-labelledby="desktop-install-title">
           <DownloadSimple size={22} weight="regular" aria-hidden="true" />
-          <div>
-            <strong id="desktop-install-title">{t('desktopInstallTitle')}</strong>
+          <a href={BITFUN_RELEASES_URL} target="_blank" rel="noreferrer">
+            <strong id="desktop-install-title">
+              {t('desktopInstallTitle')}
+              <ArrowSquareOut size={16} weight="regular" aria-hidden="true" />
+            </strong>
             <p>{t('desktopInstallNote')}</p>
-          </div>
+          </a>
         </aside>
       </section>
 
