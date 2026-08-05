@@ -13,6 +13,7 @@ import {
   selectAllState,
   setAllSelected,
   toggleSelection,
+  userTodoDisplayText,
 } from './issueFixRunState';
 
 const ISSUES = ['1849', '1580', '1920'];
@@ -138,6 +139,25 @@ describe('light poll merge', () => {
     expect(withTodos.userTodos).toEqual([todo]);
     // A follow-up poll without the todo clears the block.
     expect(mergeLightState(withTodos, poll()).userTodos).toEqual([]);
+  });
+
+  it('drops the linked URL from the display text since the jump icon carries it', () => {
+    expect(
+      userTodoDisplayText({
+        todoId: 't',
+        taskClass: 'user_action',
+        text: 'Merge PR #2038 (https://github.com/o/r/pull/2038) — fixes #1980 · CI green',
+        link: 'https://github.com/o/r/pull/2038',
+      }),
+    ).toBe('Merge PR #2038 — fixes #1980 · CI green');
+    expect(
+      userTodoDisplayText({
+        todoId: 't',
+        taskClass: 'user_gate',
+        text: 'Authorize closing issue #2016',
+        link: null,
+      }),
+    ).toBe('Authorize closing issue #2016');
   });
 
   it('surfaces a gate discovered by the poll and clears an answered one', () => {

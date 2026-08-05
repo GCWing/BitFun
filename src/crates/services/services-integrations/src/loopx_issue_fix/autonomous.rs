@@ -53,6 +53,12 @@ if the contention persists, record a blocker todo instead of clearing processes.
 linking the gate to the blocked todo. BitFun's Issue-Fix panel projects open gates \
 to the user and records each decision through the LoopX todo lifecycle; a plain \
 chat reply never grants authority.
+- User-lane todo text is projected verbatim into BitFun's panel, so keep it to ONE \
+compact line (<=160 chars) in the shape \"<action> <PR/issue ref> — <which issue it \
+serves> · <state that justifies it now>\", e.g. \"Merge PR #2038 — fixes #1980 \
+stream truncation · CI green, validated\". Include the full URL of the primary \
+PR/issue. Drafted comments, long evidence, and reasoning go in --note or \
+--evidence, never in the todo text.
 - NOTIFY / DONT_NOTIFY in the contract below control only the final chat summary: \
 for NOTIFY end with a concise user-facing summary (in the contract's notification \
 language), for DONT_NOTIFY end with a single quiet status line.

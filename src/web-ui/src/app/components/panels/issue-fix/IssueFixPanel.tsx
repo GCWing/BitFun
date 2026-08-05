@@ -36,6 +36,7 @@ import {
   selectAllState,
   setAllSelected,
   toggleSelection,
+  userTodoDisplayText,
   type IssueFixRowState,
 } from './issueFixRunState';
 import { IssueFixUserQuestion } from './IssueFixUserQuestion';
@@ -651,7 +652,7 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
                   )}
                 </span>
                 <span className="issue-fix__user-todo-text" title={todo.text}>
-                  {todo.text}
+                  {userTodoDisplayText(todo)}
                 </span>
                 {todo.link ? (
                   <a

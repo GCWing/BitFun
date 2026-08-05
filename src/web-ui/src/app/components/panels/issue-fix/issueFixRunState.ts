@@ -1,9 +1,25 @@
 import type {
   IssueFixAutonomousPollResponse,
   IssueFixAutonomousStatusResponse,
+  IssueFixUserTodo,
 } from '@/infrastructure/api';
 
 export type IssueFixRowState = 'idle' | 'queued' | 'fixing' | 'done' | 'blocked';
+
+/**
+ * Display text for a pending user todo. The primary URL is already surfaced
+ * as a jump icon, so repeating it inline only costs density; drop it together
+ * with any now-empty "()" shell around it.
+ */
+export function userTodoDisplayText(todo: IssueFixUserTodo): string {
+  if (!todo.link) return todo.text;
+  return todo.text
+    .split(todo.link)
+    .join('')
+    .replace(/\(\s*\)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
 
 export interface IssueFixSelectionState {
   selectedIssueIds: Set<string>;
