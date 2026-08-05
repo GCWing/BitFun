@@ -20,6 +20,7 @@ import { isTauriRuntime } from '@/infrastructure/runtime';
 import { UpdateAvailableDialog } from '@/infrastructure/update/UpdateAvailableDialog';
 import { useUpdateInstallStore } from '@/infrastructure/update/updateInstallStore';
 import { formatUpdateInstallError } from '@/infrastructure/update/updateErrorMessage';
+import { PrivacyStatementDialog, usePrivacy } from '../Privacy';
 import './AboutDialog.scss';
 import './AboutDialogLinks.scss';
 import './AboutDialogOpenSource.scss';
@@ -118,7 +119,8 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
   const updateProgress = useUpdateInstallStore(state => state.progress);
   const updateError = useUpdateInstallStore(state => state.error);
   const startUpdateInstall = useUpdateInstallStore(state => state.startInstall);
-  const [subDialog, setSubDialog] = useState<'openSource' | null>(null);
+  const [subDialog, setSubDialog] = useState<'openSource' | 'privacy' | null>(null);
+  const { status: privacyStatus } = usePrivacy();
 
   const aboutInfo = getAboutInfo();
   const { version, license } = aboutInfo;
@@ -200,6 +202,16 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
     } catch (err) {
       log.error('Failed to copy to clipboard', err);
     }
+  };
+
+  const openPrivacyStatement = () => {
+    if (privacyStatus?.enabled && privacyStatus.policy) {
+      setSubDialog('privacy');
+      return;
+    }
+    void systemAPI.openExternal(
+      'https://agreement-drcn.hispace.dbankcloud.cn/index.html?lang=zh&agreementId=1959693293117791424',
+    );
   };
 
   return (
@@ -390,10 +402,13 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                 <span className="bitfun-about-dialog__link-sep">·</span>
                 <button
                     className="bitfun-about-dialog__link"
-                    onClick={() => systemAPI.openExternal('https://agreement-drcn.hispace.dbankcloud.cn/index.html?lang=zh&agreementId=1959693293117791424')}
+                    onClick={openPrivacyStatement}
                     type="button"
                 >
-                  {t('about.userAgreement')}
+                  {privacyStatus?.enabled ? t('about.privacyStatement') : t('about.userAgreement')}
+                  {privacyStatus?.enabled && privacyStatus.hasUnreadUpdate ? (
+                    <span className="bitfun-privacy-updated">{t('privacy.updated')}</span>
+                  ) : null}
                 </button>
               </div>
               <p className="bitfun-about-dialog__license">{license.text}</p>
@@ -492,6 +507,11 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
             </p>
           </div>
         </Modal>
+
+        <PrivacyStatementDialog
+            isOpen={subDialog === 'privacy'}
+            onClose={() => setSubDialog(null)}
+        />
 
     <UpdateAvailableDialog
               isOpen={manualOpen}

@@ -3889,6 +3889,9 @@ static SYNC_TX: OnceLock<mpsc::UnboundedSender<SyncRequest>> = OnceLock::new();
 /// Called once at app startup to start the settings sync engine and the
 /// debounced session sync background task.
 pub fn init_auto_sync() {
+    if SYNC_TX.get().is_some() {
+        return;
+    }
     start_settings_sync_engine();
     let (tx, rx) = mpsc::unbounded_channel::<SyncRequest>();
     let _ = SYNC_TX.set(tx);

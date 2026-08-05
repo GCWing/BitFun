@@ -39,6 +39,12 @@ export interface ConfirmDialogProps {
   confirmDanger?: boolean;
   /** Whether to show the cancel button */
   showCancel?: boolean;
+  /** Whether the confirm action is disabled */
+  confirmDisabled?: boolean;
+  /** Whether the cancel action is disabled */
+  cancelDisabled?: boolean;
+  /** Whether the confirm action is in progress */
+  confirmLoading?: boolean;
   /** Preview content (e.g. multi-line text) */
   preview?: string;
   /** Max preview height */
@@ -66,6 +72,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   cancelText,
   confirmDanger = false,
   showCancel = true,
+  confirmDisabled = false,
+  cancelDisabled = false,
+  confirmLoading = false,
   preview,
   previewMaxHeight = 200,
 }) => {
@@ -140,6 +149,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             <Button
               variant="secondary"
               size="medium"
+              disabled={cancelDisabled}
               onClick={handleCancel}
             >
               {resolvedCancelText}
@@ -158,6 +168,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             ref={confirmButtonRef}
             variant={confirmDanger ? 'danger' : 'primary'}
             size="medium"
+            disabled={confirmDisabled}
+            isLoading={confirmLoading}
             onClick={handleConfirm}
           >
             {resolvedConfirmText}

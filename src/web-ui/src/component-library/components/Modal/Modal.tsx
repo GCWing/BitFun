@@ -36,6 +36,58 @@ function lockBodyScroll(): () => void {
   };
 }
 
+interface OpenModalEntry {
+  id: string;
+  element: HTMLElement;
+  close: () => void;
+}
+
+const openModalStack: OpenModalEntry[] = [];
+let removeEscapeListener: (() => void) | null = null;
+
+function registerOpenModal(
+  modalId: string,
+  element: HTMLElement,
+  close: () => void,
+): () => void {
+  const existingIndex = openModalStack.findIndex(entry => entry.id === modalId);
+  if (existingIndex >= 0) openModalStack.splice(existingIndex, 1);
+  openModalStack.push({ id: modalId, element, close });
+
+  if (!removeEscapeListener) {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+
+      const renderedElements = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-modal-stack-id]'),
+      );
+      const topmostModal = renderedElements
+        .slice()
+        .reverse()
+        .map(element => openModalStack.find(entry => entry.element === element))
+        .find((entry): entry is OpenModalEntry => Boolean(entry))
+        ?? openModalStack.at(-1);
+      if (!topmostModal) return;
+      topmostModal.close();
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    removeEscapeListener = () => {
+      document.removeEventListener('keydown', handleEscape);
+      removeEscapeListener = null;
+    };
+  }
+
+  return () => {
+    const index = openModalStack.findIndex(entry => entry.id === modalId);
+    if (index >= 0) openModalStack.splice(index, 1);
+
+    if (openModalStack.length === 0) removeEscapeListener?.();
+  };
+}
+
 export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -94,8 +146,14 @@ export const Modal: React.FC<ModalProps> = ({
   const modalRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
   const generatedTitleId = useId();
   const isExiting = !isOpen && isPresent;
+  const modalId = useId();
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (isOpen) {
@@ -123,15 +181,9 @@ export const Modal: React.FC<ModalProps> = ({
   }, [isOpen, isPresent]);
 
   useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
-    };
-
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
-  }, [isOpen, onClose]);
+    if (!isOpen || !modalRef.current) return;
+    return registerOpenModal(modalId, modalRef.current, () => onCloseRef.current());
+  }, [isOpen, modalId]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -366,6 +418,7 @@ export const Modal: React.FC<ModalProps> = ({
     >
       <div
         ref={modalRef}
+        data-modal-stack-id={modalId}
         role="dialog"
         aria-modal="true"
         aria-hidden={isExiting || undefined}

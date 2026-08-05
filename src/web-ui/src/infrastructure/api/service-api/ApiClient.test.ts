@@ -34,7 +34,7 @@ vi.mock('@/shared/utils/startupTrace', () => ({
   startupTrace: traceMocks,
 }));
 
-describe('ApiClient startup trace classification', () => {
+describe('ApiClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete globalThis.__BITFUN_PERF_TRACE_ENABLED__;
@@ -238,5 +238,51 @@ describe('ApiClient startup trace classification', () => {
 
     const calls = traceMocks.recordApiCall.mock.calls.map(([call]) => call);
     expect(JSON.stringify(calls)).not.toContain('D:/workspace/BitFun');
+  });
+
+  it.each([
+    ['CREDENTIAL_SAVE_FAILED', 'Credential could not be saved'],
+    ['CAPABILITY_SAVE_FAILED', 'Capability could not be saved'],
+  ])('preserves %s returned by the desktop adapter', async (code, message) => {
+    adapterMocks.request.mockRejectedValueOnce({
+      code,
+      message,
+      retryable: true,
+      requestId: 'request-save-1',
+      retryAfterSeconds: 12,
+    });
+    const client = new ApiClient({ enableLogging: false, retries: 0 });
+
+    await expect(client.invoke('submit_feedback', { request: {} })).rejects.toMatchObject({
+      code,
+      message,
+      retryable: true,
+      requestId: 'request-save-1',
+      retryAfterSeconds: 12,
+    });
+  });
+
+  it('preserves structured command errors serialized into an error message', async () => {
+    adapterMocks.request.mockRejectedValueOnce(new Error(
+      'command rejected: {"code":"NETWORK_ERROR","message":"Network unavailable","retryable":true,"requestId":"request-network-1"}'
+    ));
+    const client = new ApiClient({ enableLogging: false, retries: 0 });
+
+    await expect(client.invoke('list_feedback', { request: {} })).rejects.toMatchObject({
+      code: 'NETWORK_ERROR',
+      message: 'Network unavailable',
+      retryable: true,
+      requestId: 'request-network-1',
+    });
+  });
+
+  it('uses COMMAND_FAILED only for non-structured command errors', async () => {
+    adapterMocks.request.mockRejectedValueOnce(new Error('plain command failure'));
+    const client = new ApiClient({ enableLogging: false, retries: 0 });
+
+    await expect(client.invoke('ping')).rejects.toMatchObject({
+      code: 'COMMAND_FAILED',
+      message: 'plain command failure',
+    });
   });
 });
