@@ -214,6 +214,11 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
     );
   };
 
+  const closeAfterPrivacyModeChange = useCallback(() => {
+    setSubDialog(null);
+    onClose();
+  }, [onClose]);
+
   return (
       <>
         <Modal
@@ -511,6 +516,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
         <PrivacyStatementDialog
             isOpen={subDialog === 'privacy'}
             onClose={() => setSubDialog(null)}
+            onModeChangeComplete={closeAfterPrivacyModeChange}
         />
 
     <UpdateAvailableDialog

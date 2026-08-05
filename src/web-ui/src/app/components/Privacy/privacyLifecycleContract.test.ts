@@ -22,9 +22,21 @@ describe('OpenHarmony privacy lifecycle contract', () => {
 
     expect(gate).toContain('const dismiss = useCallback');
     expect(gate).toContain('setDismissed(true)');
-    expect(gate).toContain("event.key === 'Escape'");
+    expect(gate).toContain('onClose={dismiss}');
     expect(gate).toContain('await enterNotAccepted');
     expect(gate).not.toContain('quitApp');
+  });
+
+  it('shows the first consent choice in the same modal size as the managed statement', () => {
+    const gate = readSource('./PrivacyGate.tsx');
+    const dialog = readSource('./PrivacyStatementDialog.tsx');
+
+    expect(gate).toContain('size="xlarge"');
+    expect(gate).toContain(
+      'contentClassName="bitfun-privacy-dialog bitfun-privacy-consent-dialog"',
+    );
+    expect(dialog).toContain('size="xlarge"');
+    expect(gate).not.toContain('className="bitfun-privacy-gate"');
   });
 
   it('uses the explicit lifecycle and collection-policy command surface', () => {
@@ -93,8 +105,8 @@ describe('OpenHarmony privacy lifecycle contract', () => {
   it('renders resource failure without an agreement action', () => {
     const gate = readSource('./PrivacyGate.tsx');
     const errorView = gate.slice(
-      gate.indexOf('data-testid="privacy-resource-error"'),
-      gate.indexOf('data-testid="privacy-consent-gate"'),
+      gate.indexOf('testId="privacy-resource-error"'),
+      gate.indexOf('testId="privacy-consent-gate"'),
     );
 
     expect(errorView).toContain('copy.closeAndContinue');

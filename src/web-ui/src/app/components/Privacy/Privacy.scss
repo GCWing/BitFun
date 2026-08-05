@@ -1,30 +1,11 @@
-.bitfun-privacy-gate {
-  position: fixed;
-  inset: 0;
-  z-index: 10000;
+.bitfun-privacy-resource-error {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  min-width: 320px;
-  min-height: 480px;
-  color: var(--color-text-primary);
-  background: var(--color-bg-primary);
-  font-family: var(--font-family-sans);
-}
-
-.bitfun-privacy-gate--status {
-  place-content: center;
   justify-items: center;
   gap: 16px;
   padding: 28px;
   text-align: center;
 
-  h1,
   p { margin: 0; }
-
-  h1 {
-    font-size: 18px;
-    letter-spacing: 0;
-  }
 
   p {
     max-width: 560px;
@@ -36,39 +17,6 @@
 
 .bitfun-privacy-gate__loading-icon { animation: bitfun-privacy-spin 1s linear infinite; }
 
-.bitfun-privacy-gate__header,
-.bitfun-privacy-gate__footer {
-  padding: 18px clamp(20px, 5vw, 64px);
-  border-color: var(--border-subtle);
-  background: var(--element-bg-subtle);
-}
-
-.bitfun-privacy-gate__header {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) 28px 32px;
-  align-items: center;
-  gap: 14px;
-  border-bottom: 1px solid var(--border-subtle);
-
-  h1 {
-    margin: 0 0 3px;
-    font-size: 20px;
-    line-height: 1.3;
-    letter-spacing: 0;
-  }
-
-  p {
-    margin: 0;
-    color: var(--color-text-secondary);
-    font-size: 13px;
-  }
-}
-
-.bitfun-privacy-gate__close {
-  width: 32px;
-  height: 32px;
-}
-
 .bitfun-privacy-loading {
   position: fixed;
   inset: auto 16px 16px auto;
@@ -76,24 +24,6 @@
   color: var(--color-text-muted);
 }
 
-.bitfun-privacy-gate__logo {
-  width: 42px;
-  height: 42px;
-  object-fit: contain;
-}
-
-.bitfun-privacy-gate__document {
-  overflow: auto;
-  padding: 24px clamp(20px, 8vw, 112px);
-}
-
-.bitfun-privacy-gate__footer {
-  display: grid;
-  gap: 12px;
-  border-top: 1px solid var(--border-subtle);
-}
-
-.bitfun-privacy-gate__metadata,
 .bitfun-privacy-dialog__metadata {
   display: flex;
   flex-wrap: wrap;
@@ -123,6 +53,21 @@
     font-size: 12px;
     line-height: 1.5;
   }
+}
+
+.bitfun-privacy-consent-dialog__intro {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.bitfun-privacy-consent-dialog__footer {
+  display: grid;
+  gap: 12px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .bitfun-privacy-gate__consent-row {
@@ -218,8 +163,6 @@
 }
 
 @media (max-width: 620px) {
-  .bitfun-privacy-gate__header { grid-template-columns: 36px minmax(0, 1fr) 32px; }
-  .bitfun-privacy-gate__header > svg:not(.lucide-x) { display: none; }
   .bitfun-privacy-gate__consent-row {
     align-items: stretch;
     flex-direction: column;

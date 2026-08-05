@@ -38,6 +38,17 @@ describe('OpenHarmony privacy policy management contract', () => {
     expect(`${native}\n${dialog}`).not.toContain('quitApp');
   });
 
+  it('returns to the main page after a managed consent mode change succeeds', () => {
+    const dialog = readSource('./PrivacyStatementDialog.tsx');
+    const about = readSource('../AboutDialog/AboutDialog.tsx');
+
+    expect(dialog).toContain('onModeChangeComplete?: () => void');
+    expect(dialog.match(/onModeChangeComplete\?\.\(\)/g)).toHaveLength(3);
+    expect(about).toContain('const closeAfterPrivacyModeChange = useCallback');
+    expect(about).toContain('setSubDialog(null);\n    onClose();');
+    expect(about).toContain('onModeChangeComplete={closeAfterPrivacyModeChange}');
+  });
+
   it('uses only the policy timestamp for editorial update state', () => {
     const service = readSource(
       '../../../../../crates/services/services-integrations/src/privacy/mod.rs',
