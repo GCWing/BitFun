@@ -133,9 +133,11 @@
   },
   "notifications": {
     "createFileSuccess": "File created successfully",
-    "createFileFailed": "Failed to create file: {{error}}",
+    "createFileFailed": "Failed to create file",
+    "createFileAlreadyExists": "Cannot create file: an item with the same name already exists",
     "createFolderSuccess": "Folder created successfully",
-    "createFolderFailed": "Failed to create folder: {{error}}",
+    "createFolderFailed": "Failed to create folder",
+    "createFolderAlreadyExists": "Cannot create folder: an item with the same name already exists",
     "renameSuccess": "Renamed successfully",
     "renameFailed": "Failed to rename: {{error}}",
     "deleteSuccess": "Deleted successfully",

@@ -209,6 +209,12 @@ export class ExplorerController {
     }
   }
 
+  collapseAll(): void {
+    this.model.collapseAll();
+    this.emit();
+    this.syncWatchers();
+  }
+
   async expandFolderLazy(folderPath: string): Promise<void> {
     const currentExpanded = expandedFoldersContains(this.model.getExpandedFolders(), folderPath);
     if (currentExpanded) {

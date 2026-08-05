@@ -590,7 +590,13 @@ pub async fn create_empty_file(
 ) -> Result<(), String> {
     match resolve_desktop_path_target(app_state, raw_path, preferred_remote_connection_id).await? {
         DesktopPathTarget::Local { resolved_path, .. } => {
-            let options = FileOperationOptions::default();
+            if resolved_path.exists() {
+                return Err("Path already exists".to_string());
+            }
+            let options = FileOperationOptions {
+                backup_on_overwrite: false,
+                ..FileOperationOptions::default()
+            };
             app_state
                 .filesystem_service
                 .write_file_with_options(&resolved_path.to_string_lossy(), "", options)
@@ -606,6 +612,13 @@ pub async fn create_empty_file(
                 .get_remote_file_service_async()
                 .await
                 .map_err(|e| format!("Remote file service not available: {}", e))?;
+            if remote_fs
+                .exists(&entry.connection_id, &requested_path)
+                .await
+                .map_err(|e| format!("Failed to check remote path: {}", e))?
+            {
+                return Err("Path already exists".to_string());
+            }
             remote_fs
                 .write_file(&entry.connection_id, &requested_path, b"")
                 .await
@@ -633,6 +646,13 @@ pub async fn create_directory(
                 .get_remote_file_service_async()
                 .await
                 .map_err(|e| format!("Remote file service not available: {}", e))?;
+            if remote_fs
+                .exists(&entry.connection_id, &requested_path)
+                .await
+                .map_err(|e| format!("Failed to check remote path: {}", e))?
+            {
+                return Err("Path already exists".to_string());
+            }
             remote_fs
                 .create_dir_all(&entry.connection_id, &requested_path)
                 .await

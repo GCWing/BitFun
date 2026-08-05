@@ -59,6 +59,26 @@ const FOCUS_REFRESH_THROTTLE_MS = 1000;
 const REMOTE_REFRESH_POLL_MS = 15000;
 const LARGE_FILE_THRESHOLD_BYTES = 2 * 1024 * 1024;
 
+function getChildNames(nodes: FileSystemNode[], parentPath: string): string[] {
+  for (const node of nodes) {
+    if (pathsEquivalentFs(node.path, parentPath)) {
+      return (node.children ?? []).map((child) => child.name);
+    }
+    if (node.children) {
+      const childNames = getChildNames(node.children, parentPath);
+      if (childNames.length > 0) {
+        return childNames;
+      }
+    }
+  }
+  return [];
+}
+
+function isAlreadyExistsError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /already exists|file exists|os error 17|os error 183|EEXIST/i.test(message);
+}
+
 /** Format a byte-per-second speed value for display, e.g. "1.4 MB/s". */
 function formatSpeed(bytesPerSec: number): string {
   return `${formatBytes(bytesPerSec)}/s`;
@@ -262,6 +282,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     expandFolder,
     expandFolderLazy,
     expandFolderEnsure,
+    collapseAll,
     removePath,
   } = useFileSystem({
     rootPath: workspacePath,
@@ -358,15 +379,23 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     });
   }, []);
 
-  const handleInputDialogClose = useCallback(() => {
-    setInputDialog({
-      isOpen: false,
-      type: null,
-      parentPath: '',
+  const focusFileTree = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      panelRef.current
+        ?.querySelector<HTMLElement>('[data-shortcut-scope="filetree"]')
+        ?.focus();
     });
   }, []);
 
-  const handleConfirmNewFile = useCallback(async (fileName: string) => {
+  const handleInputDialogClose = useCallback(() => {
+    setInputDialog((current) => ({
+      ...current,
+      isOpen: false,
+    }));
+    focusFileTree();
+  }, [focusFileTree]);
+
+  const handleConfirmNewFile = useCallback(async (fileName: string): Promise<boolean> => {
     const filePath = joinWorkspaceTargetPath(
       inputDialog.parentPath,
       fileName,
@@ -376,13 +405,17 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     try {
       await workspaceAPI.createFile(filePath, currentWorkspace?.connectionId);
       log.info('File created', { path: filePath });
-      handleInputDialogClose();
-      loadFileTree(workspacePath || '', true);
+      void loadFileTree(workspacePath || '', true);
+      return true;
     } catch (error) {
       log.error('Failed to create file', error);
-      notification.error(t('notifications.createFileFailed', { error: String(error) }));
+      const messageKey = isAlreadyExistsError(error)
+        ? 'notifications.createFileAlreadyExists'
+        : 'notifications.createFileFailed';
+      notification.error(t(messageKey));
+      return false;
     }
-  }, [inputDialog.parentPath, workspacePath, loadFileTree, notification, t, handleInputDialogClose, currentWorkspace]);
+  }, [inputDialog.parentPath, workspacePath, loadFileTree, notification, t, currentWorkspace]);
 
   const handleNewFolder = useCallback((data: { parentPath: string }) => {
     setInputDialog({
@@ -392,7 +425,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     });
   }, []);
 
-  const handleConfirmNewFolder = useCallback(async (folderName: string) => {
+  const handleConfirmNewFolder = useCallback(async (folderName: string): Promise<boolean> => {
     const folderPath = joinWorkspaceTargetPath(
       inputDialog.parentPath,
       folderName,
@@ -402,20 +435,26 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     try {
       await workspaceAPI.createDirectory(folderPath, currentWorkspace?.connectionId);
       log.info('Directory created', { path: folderPath });
-      handleInputDialogClose();
-      loadFileTree(workspacePath || '', true);
+      void loadFileTree(workspacePath || '', true);
+      return true;
     } catch (error) {
       log.error('Failed to create directory', error);
-      notification.error(t('notifications.createFolderFailed', { error: String(error) }));
+      const messageKey = isAlreadyExistsError(error)
+        ? 'notifications.createFolderAlreadyExists'
+        : 'notifications.createFolderFailed';
+      notification.error(t(messageKey));
+      return false;
     }
-  }, [inputDialog.parentPath, workspacePath, loadFileTree, notification, t, handleInputDialogClose, currentWorkspace]);
+  }, [inputDialog.parentPath, workspacePath, loadFileTree, notification, t, currentWorkspace]);
 
-  const handleInputDialogConfirm = useCallback((value: string) => {
+  const handleInputDialogConfirm = useCallback((value: string): Promise<boolean> | boolean => {
     if (inputDialog.type === 'newFile') {
-      handleConfirmNewFile(value);
-    } else if (inputDialog.type === 'newFolder') {
-      handleConfirmNewFolder(value);
+      return handleConfirmNewFile(value);
     }
+    if (inputDialog.type === 'newFolder') {
+      return handleConfirmNewFolder(value);
+    }
+    return false;
   }, [inputDialog.type, handleConfirmNewFile, handleConfirmNewFolder]);
 
   const handleStartRename = useCallback((data: { path: string; name: string }) => {
@@ -749,6 +788,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     { key: 'V', ctrl: true, scope: 'filetree' },
     () => handlePaste(),
     { enabled: Boolean(workspacePath) }
+  );
+  useShortcut(
+    'filetree.collapseAll',
+    { key: '[', ctrl: true, shift: true, scope: 'filetree' },
+    collapseAll,
+    { enabled: Boolean(workspacePath) && viewMode === 'tree' }
   );
 
   // macOS bridge: the native menu bar intercepts Cmd+V before the DOM sees a
@@ -1321,8 +1366,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
         confirmText={inputDialog.type === 'newFile' ? t('dialog.newFile.confirm') : t('dialog.newFolder.confirm')}
         cancelText={inputDialog.type === 'newFile' ? t('dialog.newFile.cancel') : t('dialog.newFolder.cancel')}
         validator={(value) => {
-          const errorKey = validateFileName(value, { isRemote: isRemoteCurrentWorkspace });
-          return errorKey ? t(errorKey) : null;
+          const siblingNames = getChildNames(fileTree, inputDialog.parentPath);
+          const errorKey = validateFileName(value, {
+            isRemote: isRemoteCurrentWorkspace,
+            siblings: siblingNames,
+          });
+          return errorKey ? t(errorKey, { name: value.trim() }) : null;
         }}
       />
     </div>
