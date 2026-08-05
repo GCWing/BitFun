@@ -108,6 +108,11 @@
       "sessionSearchHintDefault": "Type a keyword to search sessions in open workspaces",
       "sessionWorkspaceHint": "in {{workspace}}"
     },
+    "githubStar": {
+      "label": "Star",
+      "tooltip": "Star BitFun on GitHub",
+      "dismiss": "Don't show again"
+    },
     "displayModes": {
       "pro": "Expert Mode",
       "assistant": "Assistant Mode",

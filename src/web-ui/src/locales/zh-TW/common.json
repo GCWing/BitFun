@@ -108,6 +108,11 @@
       "sessionSearchHintDefault": "輸入關鍵詞，搜尋已開啟工作區內的會話",
       "sessionWorkspaceHint": "位於 {{workspace}}"
     },
+    "githubStar": {
+      "label": "Star",
+      "tooltip": "在 GitHub 上為 BitFun 點個 Star",
+      "dismiss": "不再顯示"
+    },
     "displayModes": {
       "pro": "專業模式",
       "assistant": "助理模式",

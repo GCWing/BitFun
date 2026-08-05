@@ -1607,6 +1607,104 @@ $_section-header-height: 24px;
 }
 
 // ──────────────────────────────────────────────
+// GitHub star invite — retires itself after one click
+// ──────────────────────────────────────────────
+
+.bitfun-nav-panel__footer-star {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding-right: 2px;
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: $size-radius-sm;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  transition: border-color $motion-fast $easing-standard,
+              background $motion-fast $easing-standard;
+
+  &:hover,
+  &:focus-within {
+    border-color: var(--bf-appearance-token-color-warning-border);
+    background: var(--bf-appearance-token-color-warning-bg);
+  }
+}
+
+.bitfun-nav-panel__footer-star-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+  min-width: 0;
+  padding: 0 4px 0 $size-gap-1;
+  border: none;
+  background: transparent;
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-xs);
+  line-height: 1;
+  cursor: pointer;
+  transition: color $motion-fast $easing-standard;
+
+  .bitfun-nav-panel__footer-btn-icon-swap {
+    width: 14px;
+    height: 14px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
+    outline-offset: -2px;
+  }
+}
+
+.bitfun-nav-panel__footer-star:hover .bitfun-nav-panel__footer-star-btn,
+.bitfun-nav-panel__footer-star-btn:focus-visible {
+  color: var(--bf-appearance-token-color-warning);
+}
+
+.bitfun-nav-panel__footer-star-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Dismiss keeps its slot reserved so revealing it never shifts the footer row.
+.bitfun-nav-panel__footer-star-dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: $size-radius-sm;
+  background: transparent;
+  color: var(--bf-appearance-token-color-text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity $motion-fast $easing-standard,
+              color $motion-fast $easing-standard,
+              background $motion-fast $easing-standard;
+
+  &:hover {
+    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-appearance-token-element-bg-soft);
+  }
+
+  &:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
+    outline-offset: -1px;
+  }
+}
+
+.bitfun-nav-panel__footer-star:hover .bitfun-nav-panel__footer-star-dismiss,
+.bitfun-nav-panel__footer-star:focus-within .bitfun-nav-panel__footer-star-dismiss {
+  opacity: 1;
+}
+
+// ──────────────────────────────────────────────
 // More-options popup menu
 // ──────────────────────────────────────────────
 
@@ -2438,6 +2536,14 @@ $_section-header-height: 24px;
 .bitfun-nav-panel__footer-btn--icon:active,
 .bitfun-nav-panel__footer .bitfun-notification-btn:active {
   transform: scale(0.94);
+}
+
+.bitfun-nav-panel__footer-star:active {
+  transform: scale(0.96);
+  transition:
+    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+    border-color 120ms ease,
+    background 120ms ease;
 }
 
 .bitfun-nav-panel__workspace-menu,
