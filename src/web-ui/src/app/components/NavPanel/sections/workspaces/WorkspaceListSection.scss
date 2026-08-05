@@ -105,6 +105,15 @@
       .bitfun-nav-panel__workspace-item-card {
         cursor: default;
       }
+
+      // Suppress focus outlines on children (icon/name/menu buttons) while
+      // dragging. The global :focus-visible ring around the icon, dimmed by the
+      // 0.42 opacity and baked into the native drag snapshot, reads as a thick
+      // whitish border around the icon. More specific than the global rule.
+      :focus,
+      :focus-visible {
+        outline: none;
+      }
     }
 
     &.is-active {
@@ -1036,6 +1045,14 @@
 
       .bitfun-nav-panel__assistant-item-card {
         cursor: default;
+      }
+
+      // See the pro-mode &.is-dragging rule: suppress the focus-visible ring
+      // around the icon that, dimmed and snapshotted into the drag image, looks
+      // like a thick whitish border.
+      :focus,
+      :focus-visible {
+        outline: none;
       }
     }
 

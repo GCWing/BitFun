@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { createLogger } from '@/shared/utils/logger';
-import { Modal, Button, Input } from '@/component-library';
+import { Modal, Button, Input, Tooltip } from '@/component-library';
 import './NewProjectDialog.scss';
 import {workspaceAPI} from "@/infrastructure";
 import { notificationService } from '@/shared/notification-system';
@@ -52,7 +52,10 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
   // Open directory picker dialog
   const handleSelectParentPath = useCallback(async () => {
     try {
-      const selected = await workspaceAPI.open_oh_file_dialog({ directory: true });
+      const selected = await workspaceAPI.open_oh_file_dialog({
+        directory: true,
+        defaultPath: parentPath || defaultParentPath,
+      });
 
       if (selected && typeof selected === 'string') {
         setParentPath(selected);
@@ -139,12 +142,14 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
             </label>
             <div className="new-project-dialog__path-selector">
               <div className="new-project-dialog__path-input">
-                <Input
-                  type="text"
-                  value={parentPath}
-                  readOnly
-                  placeholder={t('newProject.parentDirectoryPlaceholder')}
-                />
+                <Tooltip content={parentPath} placement="right" followCursor disabled={!parentPath}>
+                  <Input
+                    type="text"
+                    value={parentPath}
+                    readOnly
+                    placeholder={t('newProject.parentDirectoryPlaceholder')}
+                  />
+                </Tooltip>
               </div>
               <Button
                 type="button"
@@ -170,6 +175,12 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
                 type="text"
                 value={projectName}
                 onChange={handleProjectNameChange}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !isCreating) {
+                    e.preventDefault();
+                    void handleConfirm();
+                  }
+                }}
                 placeholder={t('newProject.projectNamePlaceholder')}
                 disabled={isCreating}
                 autoFocus
@@ -185,7 +196,9 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
               </div>
               <div className="new-project-dialog__preview-content">
                 <span className="new-project-dialog__preview-label">{t('newProject.fullPath')}</span>
-                <span className="new-project-dialog__preview-path">{fullPath}</span>
+                <Tooltip content={fullPath} placement="right" followCursor>
+                  <span className="new-project-dialog__preview-path">{fullPath}</span>
+                </Tooltip>
               </div>
             </div>
           )}
