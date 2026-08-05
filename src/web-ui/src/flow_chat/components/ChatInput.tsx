@@ -3938,9 +3938,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
     : null, [effectiveTargetSession, effectiveTargetSessionId]);
   const reportModeSelectionFailure = useCallback((error: unknown, modeId: string) => {
-      log.error('Failed to update Session agent mode', { error, modeId });
+      log.error('Failed to update Session agent mode', {
+        error,
+        modeId,
+        sessionId: effectiveTargetSessionId,
+        target: sessionModeSelectionTarget,
+      });
       notificationService.error(t('chatInput.modeChangeFailed'));
-  }, [t]);
+  }, [effectiveTargetSessionId, sessionModeSelectionTarget, t]);
   const {
     isModeChangePending,
     publishModeSelection,

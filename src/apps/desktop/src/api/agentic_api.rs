@@ -1723,14 +1723,22 @@ pub async fn update_session_mode(
         request.include_internal,
     )
     .await?;
-    runtime
+    let result = runtime
         .agent_runtime()
         .update_session_mode(AgentSessionModeUpdateRequest {
             session_id,
             mode_id: request.mode_id,
         })
-        .await
-        .map_err(|error| format!("Failed to update session mode: {}", error.into_message()))
+        .await;
+    if let Err(error) = &result {
+        log::error!(
+            "update_session_mode failed: session_id={}, mode_id={}, error={}",
+            request.session_id,
+            request.mode_id,
+            error
+        );
+    }
+    result.map_err(|error| format!("Failed to update session mode: {}", error.into_message()))
 }
 
 #[tauri::command]

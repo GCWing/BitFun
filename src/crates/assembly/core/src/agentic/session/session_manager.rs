@@ -3483,6 +3483,14 @@ impl SessionManager {
                     .save_session(&workspace_path, &updated_session)
                     .await
                 {
+                    error!(
+                        "Session agent binding persistence failed: session_id={}, agent_type={}, route_owner={:?}, storage_path={}, error={}",
+                        session_id,
+                        agent_type,
+                        route_owner,
+                        workspace_path.display(),
+                        error,
+                    );
                     if let Err(rollback_error) = self
                         .persistence_manager
                         .save_session(&workspace_path, &original_session)

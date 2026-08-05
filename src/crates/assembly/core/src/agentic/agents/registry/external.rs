@@ -435,19 +435,29 @@ impl AgentRegistry {
                     .and_then(|routes| routes.get(&logical_key))
                     .cloned()
                 {
-                    let binding = match route {
+                    let binding = match &route {
                         ExternalSubagentRoute::Local => self
                             .find_agent_entry(logical_id, Some(workspace_root))
                             .filter(|entry| entry.category == AgentCategory::Mode)
                             .map(|entry| local_primary_binding(entry.agent.id())),
                         ExternalSubagentRoute::External(runtime_key) => {
-                            self.external_subagents.acquire_primary(&runtime_key)
+                            self.external_subagents.acquire_primary(runtime_key)
                         }
                         ExternalSubagentRoute::Unavailable => None,
                     };
-                    return binding.filter(|binding| {
+                    let binding = binding.filter(|binding| {
                         expected_owner.is_none_or(|owner| binding.route_owner == owner)
                     });
+                    if binding.is_none() {
+                        log::warn!(
+                            "External route shadowed primary agent resolution: logical_id={}, workspace_root={:?}, route={:?}, expected_owner={:?}",
+                            logical_key,
+                            workspace_key,
+                            route,
+                            expected_owner,
+                        );
+                    }
+                    return binding;
                 }
             }
         }

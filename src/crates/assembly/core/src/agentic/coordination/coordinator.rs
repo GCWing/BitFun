@@ -1413,6 +1413,14 @@ impl ConversationCoordinator {
         );
 
         if !external_sources_supported {
+            if local_binding.is_none() {
+                warn!(
+                    "Primary agent resolution failed (local only): agent_type={}, workspace_root={:?}, is_external_route={}",
+                    agent_type,
+                    workspace_root,
+                    registry.is_external_subagent_route(agent_type, workspace_root),
+                );
+            }
             return local_binding.ok_or_else(|| {
                 BitFunError::Validation(format!("Unknown session mode: {agent_type}"))
             });
@@ -1439,6 +1447,10 @@ impl ConversationCoordinator {
             if expected_owner == Some(SessionAgentRouteOwner::External)
                 || registry.is_external_subagent_route(agent_type, workspace_root)
             {
+                warn!(
+                    "External agent source discovery failed; external candidate unavailable: agent_type={}, workspace_root={:?}, error={}",
+                    agent_type, workspace_root, error
+                );
                 return Err(BitFunError::Validation(format!(
                     "candidate_unavailable: external main agent {agent_type} could not be refreshed"
                 )));
@@ -1451,6 +1463,10 @@ impl ConversationCoordinator {
                 );
                 return Ok(local_binding);
             }
+            warn!(
+                "External agent source discovery failed and no fallback binding exists: agent_type={}, workspace_root={:?}, error={}",
+                agent_type, workspace_root, error
+            );
             return Err(BitFunError::Service(format!(
                 "External agent source discovery failed: {error}"
             )));
@@ -1464,6 +1480,13 @@ impl ConversationCoordinator {
                 expected_owner,
             )
             .ok_or_else(|| {
+                warn!(
+                    "Primary agent resolution failed (external-aware): agent_type={}, workspace_root={:?}, expected_owner={:?}, is_external_route={}",
+                    agent_type,
+                    workspace_root,
+                    expected_owner,
+                    registry.is_external_subagent_route(agent_type, workspace_root),
+                );
                 if expected_owner == Some(SessionAgentRouteOwner::External)
                     || registry.is_external_subagent_route(agent_type, workspace_root)
                 {
@@ -10510,10 +10533,19 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             None,
         )
         .await?;
-
-        self.session_manager
+        let result = self
+            .session_manager
             .update_session_agent_binding(session_id, mode_id, binding.route_owner)
-            .await
+            .await;
+        if let Err(error) = &result {
+            log::error!(
+                "update_session_mode binding update failed: session_id={}, mode_id={}, error={}",
+                session_id,
+                mode_id,
+                error
+            );
+        }
+        result
     }
 
     /// Update the session-level prompt-cache guard mode for the latest
