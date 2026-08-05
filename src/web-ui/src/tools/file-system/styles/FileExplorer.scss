@@ -353,7 +353,7 @@ $_indent-width: 8px;
 .bitfun-file-explorer__rename-error {
   position: fixed;
   z-index: 10000;
-  max-width: 280px;
+  max-width: min(280px, calc(100vw - 16px));
   padding: 4px 8px;
   border-radius: 4px;
   background: var(--color-overlay-black-80, rgba(0, 0, 0, 0.8));
@@ -362,9 +362,9 @@ $_indent-width: 8px;
   line-height: 1.4;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   pointer-events: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .bitfun-file-explorer__compressed-path {

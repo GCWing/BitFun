@@ -110,6 +110,7 @@
   },
   "validation": {
     "invalidFilename": "檔案名包含非法字符",
+    "invalidFolderName": "資料夾名包含非法字符",
     "emptyName": "請輸入名稱",
     "duplicateName": "名為 \"{{name}}\" 的檔案或資料夾已存在",
     "reservedName": "該名稱是系統保留名",

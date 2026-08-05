@@ -34,10 +34,7 @@ class NotificationService {
 
    
   error(message: string, options?: ToastOptions): string {
-    return this.toast('error', message, {
-      ...options,
-      duration: options?.duration ?? 0
-    });
+    return this.toast('error', message, options);
   }
 
    

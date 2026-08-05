@@ -110,6 +110,7 @@
   },
   "validation": {
     "invalidFilename": "File name contains invalid characters",
+    "invalidFolderName": "Folder name contains invalid characters",
     "emptyName": "Type a name",
     "duplicateName": "A file or folder with the name \"{{name}}\" already exists",
     "reservedName": "This name is a reserved device name",

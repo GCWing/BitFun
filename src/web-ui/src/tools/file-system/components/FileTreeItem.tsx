@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronRight, ChevronDown, FolderOpen, FileText, Loader2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, FolderOpen, FileText } from 'lucide-react';
 import { Input } from '../../../component-library/components/Input';
 import { dragManager } from '../../../shared/services/DragManager';
 import { fileTreeDragSource } from '../../../shared/context-system/drag-drop/FileTreeDragSource';
@@ -40,6 +40,7 @@ const RenameInput: React.FC<RenameInputProps> = ({ node, siblings, isRemote, onR
   const submittedRef = React.useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
   const [errorPos, setErrorPos] = useState<{ top: number; left: number } | null>(null);
 
   // 聚焦并选中名称主体（文件去掉扩展名，目录全选）。
@@ -63,7 +64,11 @@ const RenameInput: React.FC<RenameInputProps> = ({ node, siblings, isRemote, onR
   }, [node.name, node.isDirectory]);
 
   const validate = (nextValue: string): string | null => {
-    const errorKey = validateFileName(nextValue, { isRemote, siblings });
+    const errorKey = validateFileName(nextValue, {
+      isRemote,
+      isDirectory: node.isDirectory,
+      siblings,
+    });
     return errorKey ? t(errorKey, { name: nextValue.trim() }) : null;
   };
 
@@ -139,15 +144,20 @@ const RenameInput: React.FC<RenameInputProps> = ({ node, siblings, isRemote, onR
     }
 
     const rect = inputRef.current.getBoundingClientRect();
-    const bubbleHeight = 28; // 浮层预估高度（单行）
+    const bubbleRect = errorRef.current?.getBoundingClientRect();
+    const bubbleHeight = bubbleRect?.height ?? 28;
+    const bubbleWidth = bubbleRect?.width ?? Math.min(280, window.innerWidth - 16);
     const spaceBelow = window.innerHeight - rect.bottom;
     const flip = spaceBelow < bubbleHeight + ERROR_OFFSET;
+    const nextPos = {
+      top: Math.max(8, flip ? rect.top - bubbleHeight - ERROR_OFFSET : rect.bottom + ERROR_OFFSET),
+      left: Math.max(8, Math.min(rect.left, window.innerWidth - bubbleWidth - 8)),
+    };
 
-    setErrorPos({
-      top: flip ? rect.top - bubbleHeight - ERROR_OFFSET : rect.bottom + ERROR_OFFSET,
-      left: rect.left,
-    });
-  }, [error, value]);
+    if (errorPos?.top !== nextPos.top || errorPos.left !== nextPos.left) {
+      setErrorPos(nextPos);
+    }
+  }, [error, value, errorPos]);
 
   // 窗口尺寸变化时重算气泡位置。
   useEffect(() => {
@@ -163,6 +173,7 @@ const RenameInput: React.FC<RenameInputProps> = ({ node, siblings, isRemote, onR
     ? createPortal(
         <div
           className="bitfun-file-explorer__rename-error"
+          ref={errorRef}
           style={{ top: errorPos.top, left: errorPos.left }}
           role="alert"
         >
@@ -221,7 +232,6 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
   indentPx,
   isSelected = false,
   isExpanded = false,
-  isLoading = false,
   className = '',
   renamingPath,
   onRename,
@@ -311,9 +321,7 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
     >
       {node.isDirectory ? (
         <span className={`bitfun-file-explorer__expand-icon ${isExpanded ? 'bitfun-file-explorer__expand-icon--expanded' : ''}`} onClick={handleExpandClick}>
-          {isLoading ? (
-            <Loader2 size={16} className="bitfun-file-explorer__loading-icon" />
-          ) : isExpanded ? (
+          {isExpanded ? (
             <ChevronDown size={16} />
           ) : (
             <ChevronRight size={16} />

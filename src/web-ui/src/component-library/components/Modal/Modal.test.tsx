@@ -90,6 +90,35 @@ describe('Modal behavior', () => {
     expect(document.body.querySelector('.modal--exiting')).toBeNull();
   });
 
+  it('closes only when the pointer press and release both occur on the overlay', () => {
+    const onClose = vi.fn();
+    act(() => {
+      root.render(
+        <Modal isOpen onClose={onClose} title="Overlay behavior">
+          <input defaultValue="Selectable content" />
+        </Modal>,
+      );
+    });
+
+    const overlay = document.body.querySelector('.modal-overlay') as HTMLDivElement;
+    const input = document.body.querySelector('.modal input') as HTMLInputElement;
+
+    act(() => {
+      overlay.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      overlay.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      overlay.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    onClose.mockClear();
+    act(() => {
+      input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      overlay.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      overlay.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('closes a standalone modal on Escape', () => {
     const onClose = vi.fn();
     act(() => {

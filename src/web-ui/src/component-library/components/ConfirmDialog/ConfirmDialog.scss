@@ -74,6 +74,9 @@
     line-height: 1.55;
     color: var(--color-text-secondary);
     text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 
     > *:first-child {
       margin-top: 0;
