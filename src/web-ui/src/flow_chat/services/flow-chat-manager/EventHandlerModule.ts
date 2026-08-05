@@ -163,6 +163,7 @@ export const __test_only__ = {
   handleDialogTurnFailed,
   handleSubagentSessionLinked,
   handleModelRoundStart,
+  handleCompressionCompleted,
 };
 
 function shouldMarkUnreadCompletion(sessionId: string): boolean {
@@ -2241,12 +2242,12 @@ function handleCompressionStarted(_context: FlowChatContext, event: any): void {
  */
 function handleCompressionCompleted(context: FlowChatContext, event: any): void {
   const { 
-    sessionId, turnId, compressionId, compressionCount, 
+    sessionId, turnId, compressionId, compressionCount, applied,
     tokensBefore, tokensAfter, compressionRatio, durationMs, hasSummary, summarySource
   } = event;
   
   log.info('Context compression completed', {
-    sessionId, turnId, compressionId, compressionCount, 
+    sessionId, turnId, compressionId, compressionCount, applied,
     tokensBefore, tokensAfter, compressionRatio, durationMs
   });
   
@@ -2269,6 +2270,20 @@ function handleCompressionCompleted(context: FlowChatContext, event: any): void 
     status: 'completed',
     endTime: Date.now()
   } as any);
+
+  // Keep the input-box context usage display in sync: a completed compression
+  // shrinks the context immediately, but no TokenUsageUpdated event follows it
+  // (that event is only emitted after a model response). Reflect the compacted
+  // size here so the percentage and "last request input context" refresh right
+  // away. Do not pass a dialogTurnId: compression is not a model invocation, so
+  // it must not accumulate into the turn's token usage.
+  if (applied === true && typeof tokensAfter === 'number' && tokensAfter >= 0) {
+    store.updateTokenUsage(sessionId, {
+      inputTokens: tokensAfter,
+      totalTokens: tokensAfter,
+      outputTokens: undefined,
+    });
+  }
   
   immediateSaveDialogTurn(context, sessionId, turnId);
 }

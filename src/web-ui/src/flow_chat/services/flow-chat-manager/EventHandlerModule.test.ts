@@ -15,6 +15,8 @@ import type { DialogTurn, FlowToolItem, FlowUserSteeringItem, ModelRound, Sessio
 import type { FlowChatContext } from './types';
 import { markOptimisticDispatchTurnMetadata } from '@/features/dispatch/optimisticDispatchTurn';
 
+const { handleCompressionCompleted } = __test_only__;
+
 vi.mock('../../../shared/notification-system/services/NotificationService', () => ({
   notificationService: {
     error: vi.fn(),
@@ -1126,5 +1128,77 @@ describe('handleDialogTurnComplete', () => {
       ?.dialogTurns[0];
     expect(finalizedTurn?.status).toBe('completed');
     expect(finalizedTurn?.endTime).toBe(eventOwnedEndTime);
+  });
+});
+
+describe('handleCompressionCompleted', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  afterEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  it('writes the compacted token count into currentTokenUsage when applied', () => {
+    putFinishingSessionInStore();
+    const context = createFlowChatContext();
+
+    handleCompressionCompleted(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      compressionId: 'compression-1',
+      applied: true,
+      tokensBefore: 90_000,
+      tokensAfter: 15_000,
+      compressionRatio: 0.17,
+      durationMs: 500,
+      hasSummary: true,
+      summarySource: 'model',
+    });
+
+    const session = FlowChatStore.getInstance().getState().sessions.get('session-1');
+    expect(session?.currentTokenUsage).toEqual({
+      inputTokens: 15_000,
+      outputTokens: undefined,
+      totalTokens: 15_000,
+      timestamp: expect.any(Number),
+    });
+  });
+
+  it('does not touch currentTokenUsage when the compression was not applied', () => {
+    putFinishingSessionInStore();
+    const context = createFlowChatContext();
+
+    handleCompressionCompleted(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      compressionId: 'compression-1',
+      applied: false,
+      tokensBefore: 90_000,
+      tokensAfter: 90_000,
+    });
+
+    const session = FlowChatStore.getInstance().getState().sessions.get('session-1');
+    expect(session?.currentTokenUsage).toBeUndefined();
+  });
+
+  it('ignores invalid tokensAfter values even when applied', () => {
+    putFinishingSessionInStore();
+    const context = createFlowChatContext();
+
+    handleCompressionCompleted(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      compressionId: 'compression-1',
+      applied: true,
+      tokensAfter: undefined,
+    });
+
+    const session = FlowChatStore.getInstance().getState().sessions.get('session-1');
+    expect(session?.currentTokenUsage).toBeUndefined();
   });
 });
