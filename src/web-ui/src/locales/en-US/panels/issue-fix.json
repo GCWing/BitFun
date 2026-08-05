@@ -49,6 +49,12 @@
       "gateBadge": "Gate",
       "actionBadge": "Review",
       "openLink": "Open on the provider"
+    },
+    "notify": {
+      "gateTitle": "Issue-Fix needs a decision",
+      "actionTitle": "Issue-Fix pending review",
+      "actionBatch": "{{count}} new items await your review",
+      "open": "Open panel"
     }
   },
   "status": {

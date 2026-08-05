@@ -24,6 +24,8 @@ import {
 } from '@/infrastructure/api';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { i18nService } from '@/infrastructure/i18n';
+import { notificationService } from '@/shared/notification-system';
+import { createIssueFixTab } from '@/shared/utils/tabUtils';
 import { createLogger } from '@/shared/utils/logger';
 import {
   emptyRunState,
@@ -299,6 +301,51 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
     // activeTurnId is tracked inside the closure; depending on it would reset the interval each beat.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applyControl, available, hostLoopEnabled, loadControl, takeControlTicket, workspacePath]);
+
+  // Surface newly appearing user-lane work as app-level notification cards, so
+  // gates and review requests reach the user even while they work in another
+  // panel. The first projection seeds silently: pre-existing items are already
+  // visible in the pending block, only later arrivals should toast.
+  const notifiedTodoIdsRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!control) return;
+    if (!notifiedTodoIdsRef.current) {
+      notifiedTodoIdsRef.current = new Set([
+        ...(control.userTodos ?? []).map((todo) => todo.todoId),
+        ...(control.userQuestion ? [control.userQuestion.todoId] : []),
+      ]);
+      return;
+    }
+    const seen = notifiedTodoIdsRef.current;
+    const openPanelAction = {
+      label: t('autonomous.notify.open'),
+      onClick: () => createIssueFixTab({ workspacePath }),
+    };
+    if (control.userQuestion && !seen.has(control.userQuestion.todoId)) {
+      seen.add(control.userQuestion.todoId);
+      notificationService.warning(control.userQuestion.prompt, {
+        title: t('autonomous.notify.gateTitle'),
+        duration: 12_000,
+        actions: [openPanelAction],
+      });
+    }
+    const fresh = (control.userTodos ?? []).filter((todo) => !seen.has(todo.todoId));
+    fresh.forEach((todo) => seen.add(todo.todoId));
+    if (fresh.length > 3) {
+      // One digest card instead of a burst of toasts after a productive beat.
+      notificationService.info(t('autonomous.notify.actionBatch', { count: fresh.length }), {
+        title: t('autonomous.notify.actionTitle'),
+        actions: [openPanelAction],
+      });
+    } else {
+      for (const todo of fresh) {
+        notificationService.info(userTodoDisplayText(todo), {
+          title: t('autonomous.notify.actionTitle'),
+          actions: [openPanelAction],
+        });
+      }
+    }
+  }, [control, t, workspacePath]);
 
   const refresh = useCallback(async () => {
     await Promise.all([loadIssues(), loadControl()]);
