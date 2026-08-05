@@ -42,6 +42,7 @@ struct WorkspaceStateSnapshot {
     current_workspace: Option<WorkspaceInfoDto>,
     recent_workspaces: Vec<WorkspaceInfoDto>,
     opened_workspaces: Vec<WorkspaceInfoDto>,
+    primary_assistant_workspace_id: Option<String>,
     legacy_remote_workspace: Option<crate::api::RemoteWorkspace>,
 }
 
@@ -52,6 +53,7 @@ pub struct WorkspaceStartupStateSnapshotDto {
     pub current_workspace: Option<WorkspaceInfoDto>,
     pub recent_workspaces: Vec<WorkspaceInfoDto>,
     pub opened_workspaces: Vec<WorkspaceInfoDto>,
+    pub primary_assistant_workspace_id: Option<String>,
     pub legacy_remote_workspace: Option<crate::api::RemoteWorkspace>,
 }
 
@@ -404,6 +406,15 @@ pub struct SetActiveWorkspaceRequest {
 pub struct DeleteAssistantWorkspaceRequest {
     pub workspace_id: String,
 }
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetPrimaryAssistantWorkspaceRequest {
+    pub workspace_id: String,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct GetPrimaryAssistantWorkspaceRequest {}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1561,6 +1572,37 @@ pub async fn create_assistant_workspace(
 }
 
 #[tauri::command]
+pub async fn get_primary_assistant_workspace(
+    state: State<'_, AppState>,
+    _request: GetPrimaryAssistantWorkspaceRequest,
+) -> Result<Option<WorkspaceInfoDto>, String> {
+    Ok(state
+        .workspace_service
+        .get_primary_assistant_workspace()
+        .await
+        .map(|workspace| WorkspaceInfoDto::from_workspace_info(&workspace)))
+}
+
+#[tauri::command]
+pub async fn set_primary_assistant_workspace(
+    state: State<'_, AppState>,
+    request: SetPrimaryAssistantWorkspaceRequest,
+) -> Result<WorkspaceInfoDto, String> {
+    let workspace = state
+        .workspace_service
+        .set_primary_assistant_workspace(&request.workspace_id)
+        .await
+        .map_err(|error| format!("Failed to set primary assistant workspace: {}", error))?;
+
+    info!(
+        "Primary assistant workspace changed: workspace_id={}, assistant_id={:?}",
+        workspace.id, workspace.assistant_id
+    );
+
+    Ok(WorkspaceInfoDto::from_workspace_info(&workspace))
+}
+
+#[tauri::command]
 pub async fn delete_assistant_workspace(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
@@ -1579,10 +1621,13 @@ pub async fn delete_assistant_workspace(
         ));
     }
 
-    let assistant_id = workspace_info
-        .assistant_id
-        .clone()
-        .ok_or_else(|| "Default assistant workspace cannot be deleted".to_string())?;
+    if state
+        .workspace_service
+        .is_primary_assistant_workspace(&request.workspace_id)
+        .await
+    {
+        return Err("Primary assistant workspace cannot be deleted".to_string());
+    }
 
     if !state
         .workspace_service
@@ -1641,9 +1686,9 @@ pub async fn delete_assistant_workspace(
     }
 
     info!(
-        "Assistant workspace deleted: workspace_id={}, assistant_id={}, path={}",
+        "Assistant workspace deleted: workspace_id={}, assistant_id={:?}, path={}",
         request.workspace_id,
-        assistant_id,
+        workspace_info.assistant_id,
         workspace_info.root_path.display()
     );
 
@@ -1963,12 +2008,17 @@ async fn collect_workspace_state_snapshot(state: &State<'_, AppState>) -> Worksp
         .into_iter()
         .map(|info| WorkspaceInfoDto::from_workspace_info(&info))
         .collect();
+    let primary_assistant_workspace_id = workspace_service
+        .get_primary_assistant_workspace()
+        .await
+        .map(|workspace| workspace.id);
     let legacy_remote_workspace = state.get_remote_workspace_async().await;
 
     WorkspaceStateSnapshot {
         current_workspace,
         recent_workspaces,
         opened_workspaces,
+        primary_assistant_workspace_id,
         legacy_remote_workspace,
     }
 }
@@ -2085,6 +2135,7 @@ async fn initialize_workspace_startup_state_impl(
         current_workspace: snapshot.current_workspace,
         recent_workspaces: snapshot.recent_workspaces,
         opened_workspaces: snapshot.opened_workspaces,
+        primary_assistant_workspace_id: snapshot.primary_assistant_workspace_id,
         legacy_remote_workspace: snapshot.legacy_remote_workspace,
     })
 }
@@ -3215,7 +3266,12 @@ fn split_remote_archive_path(path: &str) -> Result<(String, String), String> {
     //
     // Checked against the input rather than the resolved parent, which is
     // synthesized for relative paths.
-    if trimmed.split('/').rev().skip(1).any(|component| component == "..") {
+    if trimmed
+        .split('/')
+        .rev()
+        .skip(1)
+        .any(|component| component == "..")
+    {
         return Err(format!(
             "Remote path '{}' must not contain '..' components",
             path

@@ -86,6 +86,7 @@ const MainNav: React.FC<MainNavProps> = ({
     recentWorkspaces,
     openedWorkspacesList,
     assistantWorkspacesList,
+    primaryAssistantWorkspaceId,
     normalWorkspacesList,
     switchWorkspace,
     setActiveWorkspace,
@@ -176,8 +177,18 @@ const MainNav: React.FC<MainNavProps> = ({
   const isAssistantWorkspaceActive = currentWorkspace?.workspaceKind === WorkspaceKind.Assistant;
 
   const primaryAssistantWorkspace = useMemo(
-    () => pickPrimaryAssistantWorkspace(assistantWorkspacesList),
-    [assistantWorkspacesList]
+    () => pickPrimaryAssistantWorkspace(assistantWorkspacesList, primaryAssistantWorkspaceId),
+    [assistantWorkspacesList, primaryAssistantWorkspaceId]
+  );
+
+  const orderedAssistantWorkspacesList = useMemo(
+    () => primaryAssistantWorkspace
+      ? [
+          primaryAssistantWorkspace,
+          ...assistantWorkspacesList.filter(workspace => workspace.id !== primaryAssistantWorkspace.id),
+        ]
+      : assistantWorkspacesList,
+    [assistantWorkspacesList, primaryAssistantWorkspace]
   );
 
   const defaultAssistantWorkspace =
@@ -699,7 +710,7 @@ const MainNav: React.FC<MainNavProps> = ({
           <div className={`bitfun-nav-panel__collapsible${expandedSections.has('assistant-sessions') ? '' : ' is-collapsed'}`} data-bf-component="nav-panel" data-bf-part="sectionContent" data-bf-state={expandedSections.has('assistant-sessions') ? 'open' : ''}>
             <div className="bitfun-nav-panel__collapsible-inner">
               <div className="bitfun-nav-panel__items bitfun-nav-panel__items--session-blocks">
-                {assistantWorkspacesList.map(workspace => {
+                {orderedAssistantWorkspacesList.map(workspace => {
                   const assistantDisplayName =
                     workspace.workspaceKind === WorkspaceKind.Assistant
                       ? workspace.identity?.name?.trim() || workspace.name

@@ -485,6 +485,45 @@ $nursery-gallery-gutter: clamp(24px, 4vw, 56px);
       cursor: wait;
     }
   }
+
+  &__footer-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-1;
+  }
+
+  &__set-primary-btn {
+    display: flex;
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-muted);
+    cursor: pointer;
+    transition:
+      background $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
+      color: var(--bf-appearance-token-color-accent-500);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--bf-appearance-token-color-accent-500);
+      outline-offset: 1px;
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: wait;
+    }
+  }
 }
 
 // ── Sub-page chrome (shared by AssistantDefaultsPage / AssistantConfigPage) ───

@@ -49,6 +49,7 @@ export type WorkspaceEvent =
   | { type: 'workspace:removed'; workspaceId: string }
   | { type: 'workspace:switched'; workspace: WorkspaceInfo }
   | { type: 'workspace:active-changed'; workspace: WorkspaceInfo | null }
+  | { type: 'workspace:primary-assistant-changed'; workspace: WorkspaceInfo }
   | { type: 'workspace:updated'; workspace: WorkspaceInfo }
   | { type: 'workspace:recent-updated' }
   | { type: 'workspace:loading'; loading: boolean }
@@ -62,6 +63,7 @@ export interface WorkspaceState {
   activeWorkspaceId: string | null;
   lastUsedWorkspaceId: string | null;
   recentWorkspaces: WorkspaceInfo[];
+  primaryAssistantWorkspaceId: string | null;
   loading: boolean;
   error: string | null;
 }
@@ -90,6 +92,7 @@ class WorkspaceManager {
       activeWorkspaceId: null,
       lastUsedWorkspaceId: null,
       recentWorkspaces: [],
+      primaryAssistantWorkspaceId: null,
       loading: true,
       error: null,
     };
@@ -503,6 +506,7 @@ class WorkspaceManager {
         recentWorkspaces,
         openedWorkspaces,
         currentWorkspace,
+        primaryAssistantWorkspaceId,
         legacyRemoteWorkspace,
       } = await globalStateAPI.initializeWorkspaceStartupState();
       if (!this.identityListenerReady) {
@@ -529,6 +533,7 @@ class WorkspaceManager {
       });
 
       const updateStateStartedAt = markWorkspaceStartupStepStart('update_workspace_state');
+      this.updateState({ primaryAssistantWorkspaceId });
       this.updateWorkspaceState(
         currentWorkspace,
         recentWorkspaces,
@@ -567,6 +572,7 @@ class WorkspaceManager {
       log.error('Failed to initialize workspace state', { error });
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.updateWorkspaceState(null, [], [], false, errorMessage);
+      this.updateState({ primaryAssistantWorkspaceId: null });
       this.emit({ type: 'workspace:error', error: errorMessage });
     } finally {
       this.isInitializing = false;
@@ -582,6 +588,7 @@ class WorkspaceManager {
     this.isInitialized = false;
     this.isInitializing = false;
     this.updateWorkspaceState(null, [], [], false, null);
+    this.updateState({ primaryAssistantWorkspaceId: null });
   }
 
   /**
@@ -738,6 +745,9 @@ class WorkspaceManager {
       this.setError(null);
 
       const workspace = await globalStateAPI.createAssistantWorkspace();
+      if (!this.state.primaryAssistantWorkspaceId) {
+        this.updateState({ primaryAssistantWorkspaceId: workspace.id });
+      }
       const [currentWorkspace, recentWorkspaces, openedWorkspaces] = await Promise.all([
         globalStateAPI.getCurrentWorkspace(),
         globalStateAPI.getRecentWorkspaces(),
@@ -861,6 +871,33 @@ class WorkspaceManager {
       log.error('Failed to delete assistant workspace', { workspaceId, error });
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.updateState({ loading: false, error: errorMessage }, { type: 'workspace:error', error: errorMessage });
+      throw error;
+    }
+  }
+
+  public async setPrimaryAssistantWorkspace(workspaceId: string): Promise<WorkspaceInfo> {
+    try {
+      this.setLoading(true);
+      this.setError(null);
+
+      log.info('Setting primary assistant workspace', { workspaceId });
+      const workspace = await globalStateAPI.setPrimaryAssistantWorkspace(workspaceId);
+      this.updateState(
+        {
+          primaryAssistantWorkspaceId: workspace.id,
+          loading: false,
+          error: null,
+        },
+        { type: 'workspace:primary-assistant-changed', workspace }
+      );
+      return workspace;
+    } catch (error) {
+      log.error('Failed to set primary assistant workspace', { workspaceId, error });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.updateState(
+        { loading: false, error: errorMessage },
+        { type: 'workspace:error', error: errorMessage }
+      );
       throw error;
     }
   }
@@ -1142,12 +1179,14 @@ class WorkspaceManager {
         return 0;
       }
 
-      const [currentWorkspace, recentWorkspaces, openedWorkspaces] = await Promise.all([
+      const [currentWorkspace, recentWorkspaces, openedWorkspaces, primaryAssistantWorkspace] = await Promise.all([
         globalStateAPI.getCurrentWorkspace(),
         globalStateAPI.getRecentWorkspaces(),
         globalStateAPI.getOpenedWorkspaces(),
+        globalStateAPI.getPrimaryAssistantWorkspace(),
       ]);
 
+      this.updateState({ primaryAssistantWorkspaceId: primaryAssistantWorkspace?.id ?? null });
       this.updateWorkspaceState(
         currentWorkspace,
         recentWorkspaces,

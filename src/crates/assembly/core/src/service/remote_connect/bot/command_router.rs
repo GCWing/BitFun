@@ -500,10 +500,9 @@ pub async fn bootstrap_im_chat_after_pairing(state: &mut BotChatState) -> String
         }
     }
 
-    let picked = assistants
-        .iter()
-        .find(|w| w.assistant_id.is_none())
-        .cloned()
+    let picked = ws_service
+        .get_primary_assistant_workspace()
+        .await
         .or_else(|| assistants.first().cloned());
 
     let Some(ws_info) = picked else {
@@ -1999,28 +1998,26 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
                     );
                 }
             };
-            let workspaces = ws_service.get_assistant_workspaces().await;
-            let resolved: Option<(String, String)> = if let Some(default_ws) =
-                workspaces.into_iter().find(|w| w.assistant_id.is_none())
-            {
-                Some((
-                    default_ws.root_path.to_string_lossy().to_string(),
-                    default_ws.name.clone(),
-                ))
-            } else {
-                match ws_service.create_assistant_workspace(None).await {
-                    Ok(ws_info) => Some((
-                        ws_info.root_path.to_string_lossy().to_string(),
-                        ws_info.name.clone(),
-                    )),
-                    Err(e) => {
-                        return result_from_menu(
-                            state,
-                            MenuView::plain(format!("{}{e}", s.assistant_create_failed_prefix)),
-                        );
+            let resolved: Option<(String, String)> =
+                if let Some(primary_ws) = ws_service.get_primary_assistant_workspace().await {
+                    Some((
+                        primary_ws.root_path.to_string_lossy().to_string(),
+                        primary_ws.name.clone(),
+                    ))
+                } else {
+                    match ws_service.create_assistant_workspace(None).await {
+                        Ok(ws_info) => Some((
+                            ws_info.root_path.to_string_lossy().to_string(),
+                            ws_info.name.clone(),
+                        )),
+                        Err(e) => {
+                            return result_from_menu(
+                                state,
+                                MenuView::plain(format!("{}{e}", s.assistant_create_failed_prefix)),
+                            );
+                        }
                     }
-                }
-            };
+                };
             if let Some((ref path, ref name)) = resolved {
                 state.current_assistant = Some(path.clone());
                 state.current_assistant_name = Some(name.clone());

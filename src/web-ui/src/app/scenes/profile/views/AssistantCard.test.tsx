@@ -50,6 +50,7 @@ describe('AssistantCard actions', () => {
     const onConfigure = vi.fn();
     const onNewSession = vi.fn();
     const onDelete = vi.fn();
+    const onSetPrimary = vi.fn();
 
     act(() => {
       root.render(
@@ -59,6 +60,7 @@ describe('AssistantCard actions', () => {
             onClick={onConfigure}
             onNewSession={onNewSession}
             onDelete={onDelete}
+            onSetPrimary={onSetPrimary}
           />
         </div>,
       );
@@ -68,6 +70,7 @@ describe('AssistantCard actions', () => {
     const configure = container.querySelector('.assistant-card__main') as HTMLButtonElement;
     const newSession = container.querySelector('.assistant-card__new-session-btn') as HTMLButtonElement;
     const remove = container.querySelector('.assistant-card__delete-btn') as HTMLButtonElement;
+    const setPrimary = container.querySelector('.assistant-card__set-primary-btn') as HTMLButtonElement;
 
     expect(card?.tagName).toBe('ARTICLE');
     expect(configure.getAttribute('aria-label')).toContain('Mira');
@@ -80,9 +83,40 @@ describe('AssistantCard actions', () => {
     expect(onNewSession).toHaveBeenCalledTimes(1);
     expect(onConfigure).toHaveBeenCalledTimes(1);
 
+    act(() => setPrimary.click());
+    expect(onSetPrimary).toHaveBeenCalledTimes(1);
+    expect(onConfigure).toHaveBeenCalledTimes(1);
+
     act(() => remove.click());
     expect(onDelete).toHaveBeenCalledTimes(1);
     expect(onConfigure).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables card actions while setting the primary assistant', () => {
+    act(() => {
+      root.render(
+        <div role="list">
+          <AssistantCard
+            workspace={workspace}
+            onClick={vi.fn()}
+            onNewSession={vi.fn()}
+            onDelete={vi.fn()}
+            onSetPrimary={vi.fn()}
+            isSettingPrimary
+          />
+        </div>,
+      );
+    });
+
+    const configure = container.querySelector('.assistant-card__main') as HTMLButtonElement;
+    const newSession = container.querySelector('.assistant-card__new-session-btn') as HTMLButtonElement;
+    const setPrimary = container.querySelector('.assistant-card__set-primary-btn') as HTMLButtonElement;
+    const remove = container.querySelector('.assistant-card__delete-btn') as HTMLButtonElement;
+    expect(configure.disabled).toBe(true);
+    expect(newSession.disabled).toBe(true);
+    expect(setPrimary.disabled).toBe(true);
+    expect(setPrimary.getAttribute('aria-busy')).toBe('true');
+    expect(remove.disabled).toBe(true);
   });
 
   it('disables session actions while a new session is starting', () => {

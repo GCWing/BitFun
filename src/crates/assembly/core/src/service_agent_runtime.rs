@@ -7,11 +7,11 @@
 
 use bitfun_agent_runtime::sdk::{
     AgentEventSource, AgentInteractionResponsePort, AgentRuntime, AgentRuntimeBuilder,
-    AgentSessionCompactionPort, AgentSessionForkPort, AgentSessionLineagePort, AgentSessionModePort,
-    AgentSessionModelPort,
-    AgentSessionModelSelection, AgentSessionModelSelectionUpdateRequest,
-    AgentSessionModelUpdateRequest, AgentSessionRestorePort, AgentSessionRevertPort,
-    AgentSessionUsagePort, AgentTurnSettlementPort, RuntimeError,
+    AgentSessionCompactionPort, AgentSessionForkPort, AgentSessionLineagePort,
+    AgentSessionModePort, AgentSessionModelPort, AgentSessionModelSelection,
+    AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest,
+    AgentSessionRestorePort, AgentSessionRevertPort, AgentSessionUsagePort,
+    AgentTurnSettlementPort, RuntimeError,
 };
 use bitfun_events::AgenticEvent;
 use bitfun_runtime_ports::{
@@ -1943,12 +1943,8 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
     async fn resolve_default_assistant_workspace_path(&self) -> Result<String, String> {
         let workspace_service = crate::service::workspace::get_global_workspace_service()
             .ok_or_else(|| "Workspace service not available".to_string())?;
-        let workspaces = workspace_service.get_assistant_workspaces().await;
-        if let Some(default_workspace) = workspaces
-            .into_iter()
-            .find(|workspace| workspace.assistant_id.is_none())
-        {
-            return Ok(default_workspace.root_path.to_string_lossy().to_string());
+        if let Some(primary_workspace) = workspace_service.get_primary_assistant_workspace().await {
+            return Ok(primary_workspace.root_path.to_string_lossy().to_string());
         }
 
         workspace_service

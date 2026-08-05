@@ -671,6 +671,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "get_opened_workspaces",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
+    (
+        "get_primary_assistant_workspace",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
     ("get_operation_diff", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "get_operation_summary",
@@ -1697,6 +1701,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     (
+        "set_primary_assistant_workspace",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "set_agent_profile_config",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
@@ -2299,6 +2307,7 @@ mod tests {
         "get_mode_skill_configs",
         "get_model_configs",
         "get_opened_workspaces",
+        "get_primary_assistant_workspace",
         "get_operation_diff",
         "get_operation_summary",
         "get_project_storage_paths",
@@ -2485,6 +2494,7 @@ mod tests {
         "send_mcp_app_message",
         "set_acp_session_model",
         "set_active_workspace",
+        "set_primary_assistant_workspace",
         "set_agent_profile_config",
         "set_config",
         "set_miniapp_draft_storage",
