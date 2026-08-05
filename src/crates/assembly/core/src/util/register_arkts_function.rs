@@ -25,6 +25,15 @@ pub fn register_arkts_function(
 /// mode changes. Defined here so rust and the web-ui reference the same string.
 pub const SYSTEM_COLOR_SCHEME_CHANGED_EVENT: &str = "bitfun:system-color-scheme-changed";
 
+/// Event name the embedded browser webview emits to signal page-load lifecycle
+/// (started/finished) so the web-ui's `useEmbeddedBrowserWebview` hook can
+/// update `isLoading`, the address bar URL, and re-inject the
+/// `BLANK_TARGET_INTERCEPT_SCRIPT` + `STREAM_RENDER_OPTIMIZATION_SCRIPT`.
+/// Mirrors the desktop `BROWSER_WEBVIEW_PAGE_LOAD_EVENT` constant in
+/// `apps/desktop/src/lib.rs` (kept duplicated to avoid a cross-crate visibility
+/// tweak for one string).
+pub const BROWSER_WEBVIEW_PAGE_LOAD_EVENT: &str = "browser-webview-page-load";
+
 /// Dedicated single-threaded tokio runtime for `notify_system_color_mode`. The
 /// `#[napi]` callback runs on a HarmonyOS thread that has no tokio runtime in
 /// context, so we cannot rely on `Handle::try_current()` captured at host init
@@ -51,7 +60,7 @@ fn system_color_mode_runtime() -> &'static tokio::runtime::Runtime {
 /// Called from ArkTS (`NativeModule.notifySystemColorMode`) when the HarmonyOS
 /// system color mode changes (via `EntryAbility.onConfigurationUpdate`) or on a
 /// cold-start best-effort initial report. Forwards the color mode
-/// (`"light"` | `"dark"`) to the web-ui through the global event system, which
+/// (`"light" | "dark"`) to the web-ui through the global event system, which
 /// re-resolves the "follow system" theme without polling. Runs the emit to
 /// completion on the dedicated runtime (blocking the HarmonyOS callback thread
 /// briefly, same as `get_app_config_bool`); `emit_global_event` is a fast
@@ -72,6 +81,53 @@ pub fn notify_system_color_mode(mode: String) {
         {
             log::warn!("Failed to emit system color mode change: {error}");
         }
+    });
+}
+
+/// Dedicated single-threaded tokio runtime for `emit_browser_page_load`. Same
+/// rationale as `system_color_mode_runtime`: the `#[napi]` callback runs on a
+/// HarmonyOS thread with no tokio runtime in context, so we lazily build a
+/// persistent runtime here to drive `emit_global_event` (a fast channel send,
+/// so blocking is negligible) without re-creating the reactor per page-load
+/// event.
+static BROWSER_PAGE_LOAD_RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+
+fn browser_page_load_runtime() -> &'static tokio::runtime::Runtime {
+    BROWSER_PAGE_LOAD_RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("failed to build browser page load runtime")
+    })
+}
+
+/// Called from ArkTS (`NativeModule.emitBrowserPageLoad`) by the embedded
+/// browser service when an ArkUI `Web` component fires `onPageBegin` /
+/// `onPageEnd`. Forwards the page-load lifecycle event
+/// `{ label, event: "started" | "finished", url }` to the web-ui through the
+/// global event system; the web-ui's `useEmbeddedBrowserWebview` hook listens
+/// on `BROWSER_WEBVIEW_PAGE_LOAD_EVENT` and updates `isLoading`, the address
+/// bar URL, and re-injects the page-init scripts. Mirrors the desktop path in
+/// `apps/desktop/src/lib.rs` `.on_page_load` handler that emits the same event
+/// to the `"main"` webview via `webview.emit_to(...)`.
+#[napi]
+pub fn emit_browser_page_load(label: String, event: String, url: String) {
+    browser_page_load_runtime().block_on(async move {
+        let payload = serde_json::json!({
+            "label": label,
+            "event": event,
+            "url": url,
+        });
+        if let Err(error) = emit_global_event(BackendEvent::Custom {
+            event_name: BROWSER_WEBVIEW_PAGE_LOAD_EVENT.to_string(),
+            payload,
+        })
+        .await
+        {
+            log::warn!("Failed to emit browser page load event: {error}");
+        }
+    });
+}
     });
 }
 

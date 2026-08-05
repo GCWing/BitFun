@@ -66,7 +66,17 @@ export interface UseEmbeddedBrowserWebviewOptions {
 }
 
 function isTauriEnvironment(): boolean {
-  return typeof window !== 'undefined' && '__TAURI__' in window;
+  // Check __TAURI_INTERNALS__ (what `invoke` actually needs) rather than
+  // __TAURI__ (the global API namespace, only set when withGlobalTauri is
+  // true AND the webview was created via Tauri's WebviewWindowBuilder). On
+  // OHOS the ArkUI Web component is created by @ohos-rs/ability, not Tauri's
+  // builder, so __TAURI__ may be absent even though __TAURI_INTERNALS__
+  // (and thus `invoke`) is available. Mirrors the pattern in
+  // src/infrastructure/runtime/environment.ts `isTauriRuntime`.
+  if (typeof window === 'undefined') return false;
+  const internals = (window as unknown as { __TAURI_INTERNALS__?: { invoke?: unknown } })
+    .__TAURI_INTERNALS__;
+  return typeof internals?.invoke === 'function';
 }
 
 function formatUnknownError(error: unknown): string {
@@ -140,11 +150,48 @@ async function setWebviewBounds(label: string, bounds: WebviewBounds): Promise<v
   });
 }
 
+// Minimal `invoke` signature accepted by the command-based handle. Matches the
+// runtime shape of `@tauri-apps/api/core`'s `invoke` once its generic `T` is
+// erased to `unknown`.
+type TauriInvoke = (cmd: string, args?: Record<string, unknown> | unknown[]) => Promise<unknown>;
+
+/**
+ * Build a `BrowserWebviewHandle` whose `close / hide / show / setFocus` ops
+ * route through Tauri commands (`browser_webview_close/hide/show/set_focus`)
+ * that the Rust side resolves to the platform's native webview handle —
+ * `app.get_webview(label)` on desktop (Tauri child webview), or the ArkTS
+ * `BrowserWebviewService` on OHOS (ArkUI Web component). This avoids the
+ * `@tauri-apps/api/webview` `Webview.getByLabel()` call entirely, which
+ * queries Tauri's own webview registry and returns null/throws for webviews
+ * created outside that registry (notably ArkUI Web components on OHOS).
+ */
+function createCommandBasedBrowserWebviewHandle(
+  label: string,
+  invoke: TauriInvoke,
+): BrowserWebviewHandle {
+  const close = async (): Promise<void> => {
+    await invoke('browser_webview_close', { request: { label } });
+  };
+  const hide = async (): Promise<void> => {
+    await invoke('browser_webview_hide', { request: { label } });
+  };
+  const show = async (): Promise<void> => {
+    await invoke('browser_webview_show', { request: { label } });
+  };
+  const setFocus = async (): Promise<void> => {
+    await invoke('browser_webview_set_focus', { request: { label } });
+  };
+  return { close, hide, label, setFocus, show };
+}
+
+/**
+ * Create a browser webview via the `browser_webview_create` Tauri command
+ * and return a command-based handle. The handle's show/hide/close/setFocus
+ * ops route through Tauri commands (not `Webview.getByLabel`) so they work
+ * uniformly on desktop (Tauri child webview) and OHOS (ArkUI Web component).
+ */
 async function createBrowserWebview(label: string, url: string, bounds: WebviewBounds): Promise<BrowserWebviewHandle> {
-  const [{ invoke }, { Webview }] = await Promise.all([
-    import('@tauri-apps/api/core'),
-    import('@tauri-apps/api/webview'),
-  ]);
+  const { invoke } = await import('@tauri-apps/api/core');
   await invoke('browser_webview_create', {
     request: {
       label,
@@ -155,11 +202,7 @@ async function createBrowserWebview(label: string, url: string, bounds: WebviewB
       height: bounds.height,
     },
   });
-  const handle = await Webview.getByLabel(label) as unknown as BrowserWebviewHandle | null;
-  if (!handle) {
-    throw new Error(`Webview not found after creation: ${label}`);
-  }
-  return handle;
+  return createCommandBasedBrowserWebviewHandle(label, invoke as TauriInvoke);
 }
 
 export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOptions) {
@@ -329,7 +372,7 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
     const previous = webviewRef.current;
     if (previous) await closeWebview(previous);
 
-    const { Webview } = await import('@tauri-apps/api/webview');
+    const { invoke } = await import('@tauri-apps/api/core');
     const initialBounds = await waitForViewportBounds();
     let lastError: unknown = null;
 
@@ -351,8 +394,10 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
         return handle;
       } catch (creationError) {
         lastError = creationError;
-        const staleHandle = await Webview.getByLabel(label).catch(() => null);
-        await staleHandle?.close().catch(() => {});
+        // Clean up any partially-created webview via the command path — works
+        // on both desktop (Tauri child webview) and OHOS (ArkUI Web node).
+        // Swallow errors since the webview may not exist at all.
+        await invoke('browser_webview_close', { request: { label } }).catch(() => {});
         if (!isTransientWebviewCreationError(creationError)
           || attempt === WEBVIEW_CREATE_RETRY_DELAYS_MS.length - 1) {
           throw creationError;
