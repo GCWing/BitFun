@@ -43,6 +43,12 @@
       "submit": "Submit decision",
       "submitting": "Submitting…",
       "waiting": "Waiting for your answer"
+    },
+    "userTodos": {
+      "title": "Pending your action ({{count}})",
+      "gateBadge": "Gate",
+      "actionBadge": "Review",
+      "openLink": "Open on the provider"
     }
   },
   "status": {

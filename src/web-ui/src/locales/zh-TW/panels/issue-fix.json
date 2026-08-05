@@ -43,6 +43,12 @@
       "submit": "提交決定",
       "submitting": "正在提交…",
       "waiting": "等待你的回答"
+    },
+    "userTodos": {
+      "title": "待你處理（{{count}}）",
+      "gateBadge": "決策",
+      "actionBadge": "待審",
+      "openLink": "在平台上開啟"
     }
   },
   "status": {

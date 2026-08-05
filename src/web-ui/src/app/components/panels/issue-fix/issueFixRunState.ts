@@ -48,6 +48,7 @@ export function mergeLightState(
       ...issue,
       selected: issue.todoId === control.selectedTodoId,
     })),
+    userTodos: poll.userTodos ?? [],
     hostLoop: poll.hostLoop,
   };
 }

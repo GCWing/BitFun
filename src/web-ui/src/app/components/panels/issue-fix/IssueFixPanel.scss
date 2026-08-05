@@ -751,3 +751,77 @@
     transform: rotate(360deg);
   }
 }
+
+// Read-only projection of open user-lane todos (gates + review/merge actions).
+.issue-fix__user-todos {
+  margin: 0 12px 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-primary, rgba(128, 128, 128, 0.25));
+  border-radius: 8px;
+  background: var(--bg-secondary, rgba(128, 128, 128, 0.05));
+}
+
+.issue-fix__user-todos-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #6b7280);
+}
+
+.issue-fix__user-todos-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.issue-fix__user-todo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.issue-fix__user-todo-badge {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 16px;
+
+  &--gate {
+    color: var(--color-warning, #b45309);
+    background: var(--color-warning-bg, rgba(180, 83, 9, 0.12));
+  }
+
+  &--action {
+    color: var(--color-info, #1d4ed8);
+    background: var(--color-info-bg, rgba(29, 78, 216, 0.1));
+  }
+}
+
+.issue-fix__user-todo-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary, #374151);
+}
+
+.issue-fix__user-todo-link {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-tertiary, #8a8f98);
+
+  &:hover {
+    color: var(--text-accent, #2563eb);
+  }
+}

@@ -628,6 +628,48 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
       ) : null}
       {controlError ? <p className="issue-fix__error issue-fix__error--banner">{controlError}</p> : null}
 
+      {control?.userTodos?.length ? (
+        <section
+          className="issue-fix__user-todos"
+          aria-label={t('autonomous.userTodos.title', { count: control.userTodos.length })}
+        >
+          <h4 className="issue-fix__user-todos-title">
+            {t('autonomous.userTodos.title', { count: control.userTodos.length })}
+          </h4>
+          <ul className="issue-fix__user-todos-list">
+            {control.userTodos.map((todo) => (
+              <li key={todo.todoId} className="issue-fix__user-todo">
+                <span
+                  className={`issue-fix__user-todo-badge issue-fix__user-todo-badge--${
+                    todo.taskClass === 'user_gate' ? 'gate' : 'action'
+                  }`}
+                >
+                  {t(
+                    todo.taskClass === 'user_gate'
+                      ? 'autonomous.userTodos.gateBadge'
+                      : 'autonomous.userTodos.actionBadge',
+                  )}
+                </span>
+                <span className="issue-fix__user-todo-text" title={todo.text}>
+                  {todo.text}
+                </span>
+                {todo.link ? (
+                  <a
+                    className="issue-fix__user-todo-link"
+                    href={todo.link}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={t('autonomous.userTodos.openLink')}
+                  >
+                    <ExternalLink size={12} aria-hidden="true" />
+                  </a>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <div className="issue-fix__body">
         <section className="issue-fix__list" aria-label={t('issuesLabel')}>
           <div className="issue-fix__list-header">

@@ -90,6 +90,19 @@ pub struct AutonomousUserQuestion {
     pub prompt: String,
 }
 
+/// One open user-lane todo for the panel's read-only "pending your action"
+/// block: gates answer through the question card, actions (e.g. "review PR
+/// #N") resolve on the provider side and close via the Kernel's monitors, so
+/// no mutation surface is offered here.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutonomousUserTodo {
+    pub todo_id: String,
+    pub task_class: String,
+    pub text: String,
+    pub link: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UserDecision {
@@ -121,6 +134,7 @@ pub struct AutonomousControlState {
     pub selected_todo_id: Option<String>,
     pub issues: Vec<AutonomousIssueTodo>,
     pub user_question: Option<AutonomousUserQuestion>,
+    pub user_todos: Vec<AutonomousUserTodo>,
 }
 
 /// A cheap projection for background polling: todo list only, no `quota
@@ -135,6 +149,7 @@ pub struct AutonomousLightState {
     pub action_required: bool,
     pub issues: Vec<AutonomousIssueTodo>,
     pub user_question: Option<AutonomousUserQuestion>,
+    pub user_todos: Vec<AutonomousUserTodo>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -222,6 +237,7 @@ impl AutonomousIssueFix {
             action_required: user_question.is_some(),
             issues,
             user_question,
+            user_todos: project_user_todos(&todos),
         })
     }
 
@@ -390,6 +406,7 @@ impl AutonomousIssueFix {
             selected_todo_id,
             issues,
             user_question,
+            user_todos: project_user_todos(&todos),
         })
     }
 
@@ -595,6 +612,47 @@ fn project_user_question(
         todo_id: todo.get("todo_id")?.as_str()?.to_string(),
         prompt: todo.get("text")?.as_str()?.to_string(),
     })
+}
+
+/// Project every open user-lane todo (gates and actions) for the panel's
+/// read-only "pending your action" block. Other user todo classes (reading
+/// queues, blockers) stay out — they are not actionable from this surface.
+fn project_user_todos(todos: &[Value]) -> Vec<AutonomousUserTodo> {
+    todos
+        .iter()
+        .filter_map(|todo| {
+            if todo.get("role").and_then(Value::as_str) != Some("user")
+                || todo.get("status").and_then(Value::as_str) != Some("open")
+            {
+                return None;
+            }
+            let task_class = todo.get("task_class").and_then(Value::as_str)?;
+            if task_class != "user_gate" && task_class != "user_action" {
+                return None;
+            }
+            let text = todo.get("text")?.as_str()?.to_string();
+            Some(AutonomousUserTodo {
+                todo_id: todo.get("todo_id")?.as_str()?.to_string(),
+                task_class: task_class.to_string(),
+                link: first_http_link(&text),
+                text,
+            })
+        })
+        .collect()
+}
+
+/// First http(s) URL in a todo text, so the panel can offer a jump link
+/// (typically the PR awaiting review or the issue awaiting closure).
+fn first_http_link(text: &str) -> Option<String> {
+    for token in text.split(|character: char| character.is_whitespace() || character == '(') {
+        let url = token.trim_matches(|character: char| {
+            matches!(character, ')' | ']' | ',' | '.' | ';' | '`' | '"' | '\'')
+        });
+        if url.starts_with("https://") || url.starts_with("http://") {
+            return Some(url.to_string());
+        }
+    }
+    None
 }
 
 fn user_decision_args(
@@ -893,6 +951,60 @@ mod tests {
 
         let question = project_user_question(&todos, &issues).expect("third gate projects");
         assert_eq!(question.todo_id, "gate_3");
+    }
+
+    #[test]
+    fn user_lane_todos_project_for_the_pending_block() {
+        let todos = vec![
+            serde_json::json!({
+                "todo_id": "todo_review",
+                "role": "user",
+                "status": "open",
+                "task_class": "user_action",
+                "text": "[P0] Review and merge PR #2054 (https://github.com/owner/repo/pull/2054)."
+            }),
+            serde_json::json!({
+                "todo_id": "gate_close",
+                "role": "user",
+                "status": "open",
+                "task_class": "user_gate",
+                "unblocks_todo_id": "todo_x",
+                "text": "Authorize closing issue #2016?"
+            }),
+            // Excluded: done, agent-lane, and non-actionable classes.
+            serde_json::json!({
+                "todo_id": "todo_done",
+                "role": "user",
+                "status": "done",
+                "task_class": "user_action",
+                "text": "Old action"
+            }),
+            serde_json::json!({
+                "todo_id": "todo_agent",
+                "role": "agent",
+                "status": "open",
+                "task_class": "advancement_task",
+                "text": "Agent work"
+            }),
+            serde_json::json!({
+                "todo_id": "todo_reading",
+                "role": "user",
+                "status": "open",
+                "task_class": "blocker",
+                "text": "Reading queue entry"
+            }),
+        ];
+
+        let projected = project_user_todos(&todos);
+        assert_eq!(projected.len(), 2);
+        assert_eq!(projected[0].todo_id, "todo_review");
+        assert_eq!(projected[0].task_class, "user_action");
+        assert_eq!(
+            projected[0].link.as_deref(),
+            Some("https://github.com/owner/repo/pull/2054")
+        );
+        assert_eq!(projected[1].todo_id, "gate_close");
+        assert_eq!(projected[1].link, None);
     }
 
     #[test]

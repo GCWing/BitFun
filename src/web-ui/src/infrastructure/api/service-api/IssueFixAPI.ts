@@ -33,6 +33,14 @@ export interface IssueFixUserQuestion {
   prompt: string;
 }
 
+/** Open user-lane todo shown read-only in the "pending your action" block. */
+export interface IssueFixUserTodo {
+  todoId: string;
+  taskClass: string;
+  text: string;
+  link?: string | null;
+}
+
 export type IssueFixUserDecision = 'approve' | 'reject' | 'cancel';
 
 export interface IssueFixAutonomousStatusResponse {
@@ -46,6 +54,7 @@ export interface IssueFixAutonomousStatusResponse {
   selectedTodoId?: string | null;
   issues: IssueFixKernelTodo[];
   userQuestion?: IssueFixUserQuestion | null;
+  userTodos?: IssueFixUserTodo[];
   hostLoop: IssueFixHostLoopState;
 }
 
@@ -56,6 +65,7 @@ export interface IssueFixAutonomousPollResponse {
   actionRequired: boolean;
   issues: IssueFixKernelTodo[];
   userQuestion?: IssueFixUserQuestion | null;
+  userTodos?: IssueFixUserTodo[];
   hostLoop: IssueFixHostLoopState;
 }
 

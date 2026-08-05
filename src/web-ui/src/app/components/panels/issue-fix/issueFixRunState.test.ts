@@ -127,6 +127,19 @@ describe('light poll merge', () => {
     expect(merged.hostLoop.activeTurnId).toBeNull();
   });
 
+  it('carries user todos from the poll into the merged projection', () => {
+    const todo = {
+      todoId: 'todo_review',
+      taskClass: 'user_action',
+      text: 'Review and merge PR #2054',
+      link: 'https://github.com/owner/repo/pull/2054',
+    };
+    const withTodos = mergeLightState(control(), poll({ userTodos: [todo] }));
+    expect(withTodos.userTodos).toEqual([todo]);
+    // A follow-up poll without the todo clears the block.
+    expect(mergeLightState(withTodos, poll()).userTodos).toEqual([]);
+  });
+
   it('surfaces a gate discovered by the poll and clears an answered one', () => {
     const question = { todoId: 'gate_1849', prompt: 'Publish the validated PR?' };
     const withGate = mergeLightState(control(), poll({ actionRequired: true, userQuestion: question }));
