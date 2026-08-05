@@ -236,7 +236,7 @@ Desktop 作为 ACP client 管理的外部 agent Session 不经过该 Runtime own
 sequenceDiagram
   participant C as Shared TUI client
   participant D as User-private discovery
-  participant S as Shared Runtime process
+  participant S as Shared Runtime Host process
 
   C->>D: read endpoint + token + identity + protocol
   C->>S: connect via Named Pipe / UDS
@@ -387,7 +387,7 @@ flowchart TB
     Headless["Headless / CI"] --> Runtime
   end
   subgraph Shared["显式 --shared"]
-    Clients["one or more TUI processes"] -->|"Named Pipe / UDS · current compatibility"| SharedRuntime["Shared Runtime process"]
+    Clients["one or more TUI processes"] -->|"Named Pipe / UDS · current compatibility"| SharedRuntime["Shared Runtime Host process"]
   end
   Runtime --> Data["workspace + Session storage"]
   SharedRuntime --> Data
@@ -461,7 +461,7 @@ sequenceDiagram
   T-->>U: remove only after applied
 ```
 
-Embedded 和 Shared 最终调用同一 `AgentRuntime::delete_session`。Shared Server 只在请求方没有活动 Turn、目标 Session 未被任何 Client 控制时调用 Runtime owner；`session_in_use` 和 `not_found` 保持结构化错误。TUI 复用现有单个 Session 异步任务槽位，不阻塞事件循环，也不自动重试结果不确定的删除。
+Embedded 和 Shared 最终调用同一个 Agent Runtime。Shared Runtime Host 通过 v17 handler 调用 Runtime；它不是 Shared App Server。Shared Runtime Host 只在请求方没有活动 Turn、目标 Session 未被任何 Client 控制时调用 Runtime owner；`session_in_use` 和 `not_found` 保持结构化错误。TUI 复用现有单个 Session 异步任务槽位，不阻塞事件循环，也不自动重试结果不确定的删除。
 
 ## 6. 隔离和生命周期原则
 

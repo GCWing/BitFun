@@ -2,7 +2,7 @@
 
 > 状态：Phase 0-2 已完成当前定义的边界、协议基础和核心聊天迁移；Phase 3-5 尚未开始。
 >
-> 当前状态基线：2026-08-05，head `e6705251`。
+> 当前状态基线：2026-08-05。一次性的运行证据保留在对应 PR/Actions 记录中；本文不绑定会因 rebase 失效的提交 SHA。
 >
 > 本文只记录当前差距、阶段和完成证据。稳定架构约束见相邻架构文档；Phase 0 的历史盘点已失效，不再作为当前能力清单。
 
@@ -52,7 +52,7 @@ Shared TUI (--shared)
   -> TuiBackend
   -> SharedTuiBackend compatibility adapter
   -> private Runtime IPC v17
-  -> Shared Runtime process
+  -> Shared Runtime Host process
   -> Runtime API / owners
 ```
 
@@ -177,11 +177,11 @@ Shared Runtime IPC v17 在 Shared App Server 的鉴权、实例身份、controll
 
 计划状态以完成条件和验证证据为准，不以 method 数量或文件存在为准：
 
-| 阶段 | 完成条件 | 验证方式 | 当前状态 | Head |
+| 阶段 | 完成条件 | 验证方式 | 当前状态 | 验证记录 |
 | --- | --- | --- | --- | --- |
-| Phase 0：边界 | `TuiBackend`、behavior-light protocol/client crate、source/Cargo guard 已建立 | Core boundary tests 和 dependency checks | 已完成 | `e6705251` |
-| Phase 1：协议基础 | initialize/health、typed events、connection-local cursor、resync、稳定错误和 Embedded connection 已接线 | App Server protocol/client/server focused tests | 已完成 | `e6705251` |
-| Phase 2：核心聊天 | Embedded 核心用例经 App Server；Shared 经同一 `TuiBackend` 映射 v17；TUI 核心不引用 Runtime SDK/IPC operation | CLI、App Server、Runtime IPC 和 boundary focused tests | 已完成当前定义 | `e6705251` |
+| Phase 0：边界 | `TuiBackend`、behavior-light protocol/client crate、source/Cargo guard 已建立 | Core boundary tests 和 dependency checks | 已完成 | [PR #2034 checks](https://github.com/GCWing/BitFun/pull/2034/checks) |
+| Phase 1：协议基础 | initialize/health、typed events、connection-local cursor、resync、稳定错误和 Embedded connection 已接线 | App Server protocol/client/server focused tests | 已完成 | [PR #2034 checks](https://github.com/GCWing/BitFun/pull/2034/checks) |
+| Phase 2：核心聊天 | Embedded 核心用例经 App Server；Shared 经同一 `TuiBackend` 映射 v17；TUI 核心不引用 Runtime SDK/IPC operation | CLI、App Server、Runtime IPC 和 boundary focused tests | 已完成当前定义 | [PR #2034 checks](https://github.com/GCWing/BitFun/pull/2034/checks) |
 | Phase 3：配置管理 | TUI 不再访问 config/registry/MCP compatibility owner；secret-safe typed APIs 完成 | owner tests、App Server contract tests、CLI behavior tests | 未开始 | - |
 | Phase 4：外部集成 | External Source、Hook、Account、Worktree 管理面经 typed backend；remote 不回落本机 | owner/remote/security contract tests | 未开始 | - |
 | Phase 5：Shared App Server | Shared Host 达到 v17 治理等价，opt-in 双栈验证完成，并有回滚与删除证据 | 跨 transport parity、故障、性能和安全测试 | 未开始，目标待评审 | - |
@@ -244,7 +244,7 @@ cargo test -p bitfun-cli
 pnpm run check:core-boundaries
 ```
 
-按本 PR 的 Phase 2 实施记录，`e6705251` 已通过 CLI、App Server、Runtime IPC、behavior-light interface crates 和 Core boundary 的 focused checks。两条 headless exec Ctrl+C 断言在隔离基线中同样失败，未计为 Phase 2 回归。后续阶段必须在各自 head 重新记录命令结果，不能沿用此处证据。
+Phase 0-2 的具体命令结果和 CI 状态保留在 [PR #2034 checks](https://github.com/GCWing/BitFun/pull/2034/checks) 中，本文只保留可重复执行的验证命令和阶段状态。后续阶段必须在各自变更中重新记录验证结果，不能沿用一次性提交 SHA 作为证据。
 
 ### 6.2 行为等价场景
 

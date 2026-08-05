@@ -99,7 +99,7 @@ App Server 的目标是提供一个可版本化、可生成 client、可跨 Embe
 - 强制 Headless CLI/CI、ACP、Peer Host 或公开 Agent SDK 使用 App Server。
 - 统一 GUI 与 TUI 的状态机、renderer、布局、主题键或键位模型。
 - 把 WebSocket transport 宣称为已具备多用户或公网安全性的公开 API。
-- 为旧 Tauri command、旧 Web route 或 Runtime IPC 永久建立平行兼容合同。
+- 不允许临时兼容路径在没有明确决策、维护责任、版本规则和退出条件的情况下意外变成永久协议。若最终选择候选 B/C，应把保留的 Shared wire 明确定义为正式的部署专用协议，而不是继续称为临时兼容路径。
 
 ## 4. 术语
 
