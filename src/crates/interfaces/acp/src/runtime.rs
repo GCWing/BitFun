@@ -19,6 +19,7 @@ use dashmap::DashMap;
 
 use crate::server::{AcpRuntime, AcpServer};
 
+mod commands;
 mod content;
 mod events;
 mod mcp;

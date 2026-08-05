@@ -144,6 +144,9 @@ impl BitfunAcpRuntime {
             }
             return Err(error);
         }
+        if let Some(conn) = self.connections.get(&acp_session.acp_session_id) {
+            super::commands::advertise_builtin_commands(conn.value(), &acp_session.acp_session_id);
+        }
         Ok(response)
     }
 
@@ -253,6 +256,9 @@ impl BitfunAcpRuntime {
                 return Err(cleanup_error);
             }
             return Err(error);
+        }
+        if let Some(conn) = self.connections.get(&acp_session.acp_session_id) {
+            super::commands::advertise_builtin_commands(conn.value(), &acp_session.acp_session_id);
         }
         Ok(response)
     }

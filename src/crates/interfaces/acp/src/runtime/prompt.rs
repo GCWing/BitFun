@@ -39,6 +39,14 @@ impl BitfunAcpRuntime {
             return Err(Error::invalid_params().data("empty prompt"));
         }
 
+        if let Some(response) = super::commands::try_handle_builtin_command(
+            &connection,
+            &acp_session,
+            &parsed_prompt.user_message,
+        )? {
+            return Ok(response);
+        }
+
         let mut event_rx = self
             .agent_runtime
             .subscribe_session_events(&acp_session.bitfun_session_id)
