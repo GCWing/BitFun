@@ -1767,6 +1767,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LocalOnly,
     ),
     ("show_main_window", RemoteWorkspacePolicy::LocalOnly),
+    ("create_session_window", RemoteWorkspacePolicy::LocalOnly),
     (
         "speech_append_audio_chunk",
         RemoteWorkspacePolicy::LocalOnly,

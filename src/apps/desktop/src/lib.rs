@@ -1118,6 +1118,7 @@ pub async fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             appearance::show_main_window,
+            appearance::create_session_window,
             hide_main_window_after_close_request,
             api::agentic_api::create_session,
             api::agentic_api::update_session_mode,

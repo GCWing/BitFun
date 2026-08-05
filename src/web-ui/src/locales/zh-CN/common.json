@@ -73,6 +73,7 @@
     "forward": "前进",
     "backShortcut": "后退 (Alt+←)",
     "forwardShortcut": "前进 (Alt+→)",
+    "newWindow": "新建窗口",
     "items": {
       "sessions": "会话",
       "project": "目录",

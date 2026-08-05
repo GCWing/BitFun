@@ -10,7 +10,7 @@
  */
 
 import React, { useCallback, useMemo, useRef } from 'react';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Plus } from 'lucide-react';
 import { Tooltip } from '@/component-library';
 import { useNavSceneStore } from '../../stores/navSceneStore';
 import { useI18n } from '../../../infrastructure/i18n';
@@ -80,6 +80,15 @@ const NavBar: React.FC<NavBarProps> = ({
     onMaximize?.();
   }, [onMaximize]);
 
+  const handleNewWindow = useCallback(async () => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('create_session_window');
+    } catch (error) {
+      log.error('Failed to create session window', error);
+    }
+  }, []);
+
   const rootClassName = `bitfun-nav-bar${isCollapsed ? ' bitfun-nav-bar--collapsed' : ''}${isMacOS ? ' bitfun-nav-bar--macos' : ''} ${className}`;
 
   if (isCollapsed) {
@@ -142,6 +151,20 @@ const NavBar: React.FC<NavBarProps> = ({
           aria-label={t('nav.forward')}
         >
           <ArrowRight size={15} />
+        </button>
+      </Tooltip>
+
+      {/* New window */}
+      <Tooltip content={t('nav.newWindow')} placement="bottom" followCursor>
+        <button
+          type="button"
+          className="bitfun-nav-bar__btn"
+          data-bf-component="nav-bar"
+          data-bf-part="newWindow"
+          onClick={handleNewWindow}
+          aria-label={t('nav.newWindow')}
+        >
+          <Plus size={15} />
         </button>
       </Tooltip>
 
