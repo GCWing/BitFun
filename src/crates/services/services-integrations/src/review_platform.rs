@@ -4078,15 +4078,30 @@ async fn acquire_issue_page(
 
     match context.remote.platform {
         ReviewPlatformKind::Github => {
-            let url = format!(
-                "{}/repos/{}/{}/issues",
-                context.api_base_url, context.remote.owner, context.remote.repository_name
+            // GitHub's `/repos/{o}/{r}/issues` endpoint interleaves pull
+            // requests with issues, so filtering PRs after the fetch starves a
+            // page down to a handful of issues once the repository carries many
+            // open PRs (the Issue-Fix panel then shows a truncated queue). The
+            // search endpoint filters to real issues server-side and reports an
+            // exact total, which keeps page counts honest.
+            let url = format!("{}/search/issues", context.api_base_url);
+            let mut search_query = format!(
+                "repo:{}/{} is:issue",
+                context.remote.owner, context.remote.repository_name
             );
+            // Search has no "all" literal — omitting the qualifier means all.
+            if state != ReviewPlatformIssueState::All {
+                search_query.push_str(&format!(" state:{}", state.github_value()));
+            }
             let response = github_api_get_json(
                 context,
                 &url,
                 &[
-                    ("state".to_string(), state.github_value().to_string()),
+                    ("q".to_string(), search_query),
+                    // Match the list endpoint's newest-first default; search
+                    // would otherwise order by relevance.
+                    ("sort".to_string(), "created".to_string()),
+                    ("order".to_string(), "desc".to_string()),
                     ("page".to_string(), page),
                     ("per_page".to_string(), per_page),
                 ],
@@ -4095,15 +4110,18 @@ async fn acquire_issue_page(
             .await
             .map_err(|error| review_evidence_error(error, "issue_list_response"))?;
 
-            let raw = array_items(&response);
-            // `gh` gives no Link headers here, so infer another page from a full
-            // one. Pull requests are filtered out *after* that check: a page that
-            // is all PRs still means more issues may follow.
-            let has_next = raw.len() == pagination.per_page as usize;
+            let total = response.get("total_count").and_then(Value::as_u64);
+            let raw = array_items(response.get("items").unwrap_or(&Value::Null));
+            // `is:issue` already excludes PRs; the summary mapper's own PR
+            // guard stays as a harmless second line of defense.
             let items = raw
                 .iter()
                 .filter_map(|issue| github_issue_summary_from_value(&host, &project_path, issue))
                 .collect::<Vec<_>>();
+            let has_next = match total {
+                Some(total) => u64::from(pagination.page) * u64::from(pagination.per_page) < total,
+                None => raw.len() == pagination.per_page as usize,
+            };
 
             Ok(ReviewPlatformIssuePage {
                 platform: ReviewPlatformKind::Github,
@@ -4113,7 +4131,7 @@ async fn acquire_issue_page(
                 pagination: ReviewPlatformPagination {
                     page: pagination.page,
                     per_page: pagination.per_page,
-                    total: None,
+                    total,
                     has_next,
                 },
             })
