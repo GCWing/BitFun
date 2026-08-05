@@ -451,6 +451,23 @@ impl ChatMode {
             return Ok(None);
         }
 
+        if chat_view.plugin_browser_visible() {
+            let action = chat_view.plugin_browser_handle_key(key);
+            match action {
+                PluginBrowserAction::Toggle(item) => {
+                    self.toggle_plugin(item, chat_view);
+                }
+                PluginBrowserAction::Install { spec, scope } => {
+                    self.install_plugin(spec, scope, chat_view);
+                }
+                PluginBrowserAction::Dismiss => {
+                    self.navigate_back(chat_view);
+                }
+                PluginBrowserAction::None => {}
+            }
+            return Ok(None);
+        }
+
         if chat_view.provider_selector_visible() {
             if let Some(selection) = chat_view.provider_selector_handle_key(key) {
                 self.handle_provider_selection(selection, chat_view);

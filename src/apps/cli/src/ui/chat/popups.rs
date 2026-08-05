@@ -485,6 +485,48 @@ impl ChatView {
         self.mcp_add_dialog.show();
     }
 
+    // ============ Plugin browser methods ============
+
+    pub(crate) fn show_plugin_browser(&mut self, items: Vec<PluginItem>) {
+        self.plugin_browser.show(items);
+        self.popup_stack.push(PopupType::PluginBrowser);
+    }
+
+    pub(crate) fn hide_plugin_browser(&mut self) {
+        self.plugin_browser.hide();
+    }
+
+    pub(crate) fn reshow_plugin_browser(&mut self) {
+        self.plugin_browser.reshow();
+    }
+
+    pub(crate) fn plugin_browser_visible(&self) -> bool {
+        self.plugin_browser.is_visible()
+    }
+
+    pub(crate) fn plugin_browser_handle_key(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+    ) -> PluginBrowserAction {
+        self.plugin_browser.handle_key_event(key)
+    }
+
+    pub(crate) fn plugin_browser_set_loading(&mut self, id: Option<String>) {
+        self.plugin_browser.set_loading(id);
+    }
+
+    pub(crate) fn plugin_browser_update_items(&mut self, items: Vec<PluginItem>) {
+        self.plugin_browser.update_items(items);
+    }
+
+    pub(crate) fn plugin_browser_set_install_busy(&mut self, busy: bool) {
+        self.plugin_browser.set_install_busy(busy);
+    }
+
+    pub(crate) fn plugin_browser_set_install_message(&mut self, msg: Option<String>) {
+        self.plugin_browser.set_install_message(msg);
+    }
+
     // ============ Session selector methods ============
 
     pub(crate) fn show_session_selector(

@@ -20,6 +20,7 @@ mod message_time;
 pub(crate) mod model_config_form;
 pub(crate) mod model_selector;
 pub(crate) mod permission;
+pub(crate) mod plugin_browser;
 pub(crate) mod prompt_command_shell_review;
 pub(crate) mod prompt_stash_selector;
 pub(crate) mod provider_selector;
