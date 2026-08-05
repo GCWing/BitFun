@@ -1290,6 +1290,7 @@ impl CoreServiceAgentRuntime {
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
         let workspace_references: Arc<dyn AgentWorkspaceReferencePort> = coordinator.clone();
         let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
+        let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_compaction: Arc<dyn AgentSessionCompactionPort> = coordinator.clone();
         let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
@@ -1302,6 +1303,7 @@ impl CoreServiceAgentRuntime {
             .with_session_management_port(session_management)
             .with_workspace_reference_port(workspace_references)
             .with_session_revert_port(session_revert)
+            .with_session_mode_port(session_mode)
             .with_session_model_port(session_model)
             .with_session_compaction_port(session_compaction)
             .with_local_command_turn_port(local_command_turn)
@@ -2436,7 +2438,7 @@ mod tests {
     }
 
     #[test]
-    fn session_surface_runtime_registers_local_command_turn_port() {
+    fn session_surface_runtime_registers_explicit_session_mutation_ports() {
         let source = include_str!("service_agent_runtime.rs");
         let builder = source
             .split("pub(crate) fn session_surface_agent_runtime")
@@ -2452,6 +2454,9 @@ mod tests {
             "let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();"
         ));
         assert!(builder.contains(".with_local_command_turn_port(local_command_turn)"));
+        assert!(builder
+            .contains("let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();"));
+        assert!(builder.contains(".with_session_mode_port(session_mode)"));
     }
 
     #[test]

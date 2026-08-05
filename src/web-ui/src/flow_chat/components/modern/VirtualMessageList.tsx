@@ -299,6 +299,19 @@ interface RetainedCollapseAnchorState {
   toolName: string | null;
 }
 
+type CollapseReservationOwnerKind =
+  | 'tool-collapse'
+  | 'retained-collapse'
+  | 'input-stack-shrink'
+  | 'preserved-element'
+  | 'late-shrink-clamp'
+  | 'protected-range';
+
+interface CollapseReservationOwnerState {
+  kind: CollapseReservationOwnerKind;
+  generation: number;
+}
+
 interface HistoryPresentationCommitQuietWaiter {
   cancel: () => void;
   restart: () => void;
@@ -572,6 +585,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const previousActiveSessionIdForOpenHandoffRef = useRef<string | null | undefined>(undefined);
   const viewportCoordinatorRef = useRef(new FlowChatViewportCoordinator());
   const bottomReservationStateRef = useRef<BottomReservationState>(createInitialBottomReservationState());
+  const collapseReservationOwnerRef = useRef<CollapseReservationOwnerState | null>(null);
+  const collapseReservationOwnerGenerationRef = useRef(0);
   const restoreScrollerMethodsRef = useRef<(() => void) | null>(null);
   const previousMeasuredHeightRef = useRef<number | null>(null);
   const previousScrollTopRef = useRef(0);
@@ -754,6 +769,24 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     return getReservationTotalPx(state.collapse) + getReservationTotalPx(state.pin);
   }, []);
 
+  const acquireCollapseReservationOwner = useCallback((kind: CollapseReservationOwnerKind) => {
+    const currentOwner = collapseReservationOwnerRef.current;
+    if (currentOwner?.kind === kind) {
+      return currentOwner;
+    }
+    const nextOwner: CollapseReservationOwnerState = {
+      kind,
+      generation: collapseReservationOwnerGenerationRef.current + 1,
+    };
+    collapseReservationOwnerGenerationRef.current = nextOwner.generation;
+    collapseReservationOwnerRef.current = nextOwner;
+    return nextOwner;
+  }, []);
+
+  const clearCollapseReservationOwner = useCallback(() => {
+    collapseReservationOwnerRef.current = null;
+  }, []);
+
   const clearRetainedCollapseSettlement = useCallback(() => {
     retainedCollapseSettleGenerationRef.current += 1;
     retainedCollapseGeometryGenerationRef.current = 0;
@@ -809,6 +842,18 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       clientHeight: scroller.clientHeight,
     };
   }, [canCoordinateViewport]);
+
+  const rebaseViewportMeasurements = useCallback(() => {
+    const scroller = scrollerElementRef.current;
+    if (!canProcessViewportGeometry(scroller)) {
+      previousMeasuredHeightRef.current = null;
+      previousScrollerGeometryRef.current = null;
+      return;
+    }
+    previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+    previousScrollTopRef.current = scroller.scrollTop;
+    recordScrollerGeometry(scroller);
+  }, [canProcessViewportGeometry, recordScrollerGeometry, snapshotMeasuredContentHeight]);
 
   const recordScrollerGeometryIfLayoutStable = useCallback((scroller: HTMLElement) => {
     const previousGeometry = previousScrollerGeometryRef.current;
@@ -1006,7 +1051,47 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   ) => {
     const previous = bottomReservationStateRef.current;
     const rawNext = typeof updater === 'function' ? updater(previous) : updater;
-    const next = sanitizeBottomReservationState(rawNext);
+    const sanitizedNext = sanitizeBottomReservationState(rawNext);
+    const hasNextCollapseReservation = (
+      sanitizedNext.collapse.px > COMPENSATION_EPSILON_PX ||
+      sanitizedNext.collapse.floorPx > COMPENSATION_EPSILON_PX
+    );
+    const next = hasNextCollapseReservation && collapseReservationOwnerRef.current === null
+      ? sanitizeBottomReservationState({
+        ...sanitizedNext,
+        collapse: {
+          ...sanitizedNext.collapse,
+          px: 0,
+          floorPx: 0,
+        },
+      })
+      : sanitizedNext;
+    if (
+      hasNextCollapseReservation &&
+      collapseReservationOwnerRef.current === null &&
+      flowChatDiagnostics.isEnabled()
+    ) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'C',
+        location: 'VirtualMessageList.updateBottomReservationState',
+        message: 'Anonymous collapse reservation was rejected',
+        data: () => ({
+          before: previous,
+          rejected: sanitizedNext,
+          accepted: next,
+          coordinatorMode: viewportCoordinatorRef.current.getMode(),
+          isFollowingOutput: isFollowingOutputRef.current,
+          isStreamingOutput: isStreamingOutputRef.current,
+        }),
+      });
+    }
+    if (
+      next.collapse.px <= COMPENSATION_EPSILON_PX &&
+      !pendingCollapseIntentRef.current.active &&
+      retainedCollapseAnchorRef.current === null
+    ) {
+      clearCollapseReservationOwner();
+    }
     if (
       flowChatDiagnostics.isEnabled() &&
       !areBottomReservationStatesEqual(previous, next)
@@ -1018,6 +1103,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         data: () => ({
           before: previous,
           after: next,
+          collapseReservationOwner: collapseReservationOwnerRef.current,
           coordinatorMode: viewportCoordinatorRef.current.getMode(),
           isFollowingOutput: isFollowingOutputRef.current,
           isStreamingOutput: isStreamingOutputRef.current,
@@ -1028,7 +1114,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     setBottomReservationState(prev => {
       return areBottomReservationStatesEqual(next, prev) ? prev : next;
     });
-  }, []);
+  }, [clearCollapseReservationOwner]);
 
   const clearTurnPinRequest = useCallback(() => {
     turnPinRequestGenerationRef.current += 1;
@@ -1086,8 +1172,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   }, []);
 
   const resetBottomReservations = useCallback(() => {
+    clearCollapseReservationOwner();
     updateBottomReservationState(createInitialBottomReservationState());
-  }, [updateBottomReservationState]);
+  }, [clearCollapseReservationOwner, updateBottomReservationState]);
 
   const consumeBottomCompensation = useCallback((
     amountPx: number,
@@ -1114,14 +1201,18 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     return resolvedNextState;
   }, [updateBottomReservationState]);
 
-  const applyFooterCompensationNow = useCallback((compensation: number | BottomReservationState) => {
+  const applyFooterCompensationNow = useCallback((compensation: BottomReservationState) => {
     const footer = footerElementRef.current;
     const scroller = scrollerElementRef.current;
     if (!footer || !scroller) return;
 
-    const compensationPx = typeof compensation === 'number'
+    const appliedState = areBottomReservationStatesEqual(
+      compensation,
+      bottomReservationStateRef.current,
+    )
       ? compensation
-      : getTotalBottomCompensationPx(compensation);
+      : bottomReservationStateRef.current;
+    const compensationPx = getTotalBottomCompensationPx(appliedState);
     applyFooterHeightToElement(footer, compensationPx);
     void footer.offsetHeight;
     void scroller.scrollHeight;
@@ -1146,6 +1237,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     const currentState = bottomReservationStateRef.current;
     const nextState = createInitialBottomReservationState();
     pendingCollapseIntentRef.current = createInactiveCollapseIntentState();
+    retainedCollapseAnchorRef.current = null;
+    clearCollapseReservationOwner();
 
     if (areBottomReservationStatesEqual(currentState, nextState)) {
       return;
@@ -1162,6 +1255,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     }
   }, [
     applyFooterCompensationNow,
+    clearCollapseReservationOwner,
     recordScrollerGeometry,
     snapshotMeasuredContentHeight,
     updateBottomReservationState,
@@ -1180,6 +1274,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     });
     const reservationChanged = !areBottomReservationStatesEqual(currentState, nextState);
     if (reservationChanged) {
+      if (
+        nextState.collapse.px > COMPENSATION_EPSILON_PX &&
+        collapseReservationOwnerRef.current === null
+      ) {
+        acquireCollapseReservationOwner('preserved-element');
+      }
       updateBottomReservationState(nextState);
       applyFooterCompensationNow(nextState);
     }
@@ -1220,6 +1320,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     return reservationChanged || scrollTopChanged;
   }, [
     applyFooterCompensationNow,
+    acquireCollapseReservationOwner,
     recordScrollerGeometry,
     snapshotMeasuredContentHeight,
     updateBottomReservationState,
@@ -1265,6 +1366,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         }
         retainedCollapseAnchorRef.current = null;
         retainedCollapseGeometryGenerationRef.current = 0;
+        if (bottomReservationStateRef.current.collapse.px <= COMPENSATION_EPSILON_PX) {
+          clearCollapseReservationOwner();
+        }
         if (flowChatDiagnostics.isEnabled()) {
           flowChatDiagnostics.trace({
             hypothesis: 'F',
@@ -1310,6 +1414,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     }
   }, [
     applyFooterCompensationNow,
+    clearCollapseReservationOwner,
     preserveCollapseAnchorScrollTop,
     updateBottomReservationState,
   ]);
@@ -1349,11 +1454,15 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     anchor: RetainedCollapseAnchorState,
     reason: string,
   ) => {
+    acquireCollapseReservationOwner(
+      anchor.toolName === 'late-shrink-clamp' ? 'late-shrink-clamp' : 'retained-collapse',
+    );
     const scroller = scrollerElementRef.current;
     const currentState = bottomReservationStateRef.current;
     if (currentState.collapse.px <= COMPENSATION_EPSILON_PX) {
       clearRetainedCollapseSettlement();
       retainedCollapseAnchorRef.current = null;
+      clearCollapseReservationOwner();
       return;
     }
     const previousRetainedAnchor = retainedCollapseAnchorRef.current;
@@ -1406,6 +1515,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     }
   }, [
     applyFooterCompensationNow,
+    acquireCollapseReservationOwner,
+    clearCollapseReservationOwner,
     clearRetainedCollapseSettlement,
     preserveCollapseAnchorScrollTop,
     scheduleRetainedCollapseSettlement,
@@ -1591,12 +1702,19 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         },
       };
 
+    if (
+      options.mode !== 'pinned-item' &&
+      collapseReservationOwnerRef.current === null
+    ) {
+      acquireCollapseReservationOwner('preserved-element');
+    }
     updateBottomReservationState(nextState);
     applyFooterCompensationNow(nextState);
     previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller, nextState);
     return true;
   }, [
     applyFooterCompensationNow,
+    acquireCollapseReservationOwner,
     canProcessViewportGeometry,
     snapshotMeasuredContentHeight,
     updateBottomReservationState,
@@ -1652,6 +1770,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         px: currentCollapsePx + shrinkAmount,
       },
     };
+    if (collapseReservationOwnerRef.current === null) {
+      acquireCollapseReservationOwner('input-stack-shrink');
+    }
     updateBottomReservationState(nextReservationState);
     applyFooterCompensationNow(nextReservationState);
 
@@ -1704,6 +1825,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     }
   }, [
     applyFooterCompensationNow,
+    acquireCollapseReservationOwner,
     canProcessViewportGeometry,
     inputStackFooterPx,
     updateBottomReservationState,
@@ -1946,16 +2068,17 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     const resolvedIntentCompensation = hasValidCollapseIntent
       ? collapseIntent.baseTotalCompensationPx + Math.max(0, cumulativeShrinkPx - collapseIntent.distanceFromBottomBeforeCollapse)
       : 0;
-    const reconciledUnsignaledState = hasValidCollapseIntent
+    const reconciledOwnedState = hasValidCollapseIntent
       ? null
       : reconcileUnsignaledShrinkReservation(
         bottomReservationStateRef.current,
         fallbackRequiredCollapseCompensation,
+        collapseReservationOwnerRef.current !== null,
       );
     const nextTotalCompensation = hasValidCollapseIntent
       ? Math.max(currentTotalCompensation, resolvedIntentCompensation)
       : getTotalBottomCompensationPx(
-        reconciledUnsignaledState ?? bottomReservationStateRef.current,
+        reconciledOwnedState ?? bottomReservationStateRef.current,
       );
     if (hasValidCollapseIntent) {
       pendingCollapseIntentRef.current = {
@@ -1974,7 +2097,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return;
     }
 
-    const nextReservationState: BottomReservationState = reconciledUnsignaledState ?? {
+    const nextReservationState: BottomReservationState = reconciledOwnedState ?? {
       ...bottomReservationStateRef.current,
       collapse: {
         ...bottomReservationStateRef.current.collapse,
@@ -2340,6 +2463,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     const snapshot = historyProjectionHandoffRef.current;
     historyProjectionHandoffRef.current = null;
     setHistoryProjectionHandoff(null);
+    if (reason === 'session-reset' || reason === 'session-changed') {
+      previousMeasuredHeightRef.current = null;
+      previousScrollerGeometryRef.current = null;
+    }
 
     if (snapshot) {
       startupTrace.markPhase('flowchat_history_projection_handoff_cleared', {
@@ -2351,6 +2478,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     }
   }, []);
   clearHistoryProjectionHandoffRef.current = clearHistoryProjectionHandoff;
+
+  useLayoutEffect(() => {
+    rebaseViewportMeasurements();
+  }, [historyProjectionHandoff, rebaseViewportMeasurements]);
 
   const scheduleHistoryProjectionHandoffRelease = useCallback((frames = 1) => {
     if (historyProjectionHandoffReleaseFrameRef.current !== null) {
@@ -3191,6 +3322,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       updateBottomReservationState(nextState);
       applyFooterCompensationNow(nextState);
     }
+    if (nextState.collapse.px <= COMPENSATION_EPSILON_PX) {
+      clearCollapseReservationOwner();
+    }
     if (flowChatDiagnostics.isEnabled()) {
       flowChatDiagnostics.trace({
         hypothesis: 'A',
@@ -3244,6 +3378,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   }, [
     applyFooterCompensationNow,
     clearCollapseIntentScheduling,
+    clearCollapseReservationOwner,
     drainCollapseReservationPreservingPinnedItem,
     reconcilePendingStickyPinGrowthSettlement,
     recordScrollerGeometry,
@@ -4134,6 +4269,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         })
         : null;
       if (followingTailShrinkClampRecovery) {
+        acquireCollapseReservationOwner('late-shrink-clamp');
         retainedCollapseAnchorRef.current = {
           anchorScrollTop: followingTailShrinkClampRecovery.targetScrollTop,
           toolId: null,
@@ -4452,6 +4588,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         filePath?: string | null;
         reason?: string | null;
       }>).detail;
+      acquireCollapseReservationOwner('tool-collapse');
       const previousIntent = pendingCollapseIntentRef.current;
       clearRetainedCollapseSettlement();
       if (flowChatDiagnostics.isEnabled()) {
@@ -4648,6 +4785,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     };
   }, [
     applyFooterCompensationNow,
+    acquireCollapseReservationOwner,
     canProcessViewportGeometry,
     cancelLatestEndAnchorStabilization,
     clearBottomReservationsForUserBrowsing,
@@ -5110,6 +5248,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     clearPendingStickyPinGrowth('clear-all-reservations');
     pendingCollapseIntentRef.current = createInactiveCollapseIntentState();
     retainedCollapseAnchorRef.current = null;
+    clearCollapseReservationOwner();
 
     if (!hasActiveReservation) {
       return;
@@ -5128,6 +5267,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     applyFooterCompensationNow,
     clearTurnPinRequest,
     clearCollapseIntentScheduling,
+    clearCollapseReservationOwner,
     clearPendingStickyPinGrowth,
     recordScrollerGeometry,
     snapshotMeasuredContentHeight,
@@ -5176,6 +5316,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       preserveCurrentRange: options?.preserveCurrentRange === true,
       ownsElementAnchor: viewportCoordinatorRef.current.ownsElementAnchor(),
     });
+    if (
+      nextReservationState.collapse.px > COMPENSATION_EPSILON_PX &&
+      collapseReservationOwnerRef.current === null
+    ) {
+      acquireCollapseReservationOwner('protected-range');
+    }
     if (flowChatDiagnostics.isEnabled()) {
       flowChatDiagnostics.trace({
         hypothesis: 'A',
@@ -5199,6 +5345,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     }
   }, [
     applyFooterCompensationNow,
+    acquireCollapseReservationOwner,
     clearPendingStickyPinGrowth,
     clearTurnPinRequest,
     recordScrollerGeometry,
@@ -5520,6 +5667,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
           ownsElementAnchor: true,
         },
       );
+      if (
+        releasedReservationState.collapse.px > COMPENSATION_EPSILON_PX &&
+        collapseReservationOwnerRef.current === null
+      ) {
+        acquireCollapseReservationOwner('protected-range');
+      }
       updateBottomReservationState(releasedReservationState);
       applyFooterCompensationNow(releasedReservationState);
     }
@@ -5570,6 +5723,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
   }, [
     applyFooterCompensationNow,
+    acquireCollapseReservationOwner,
     clearCollapseIntentScheduling,
     clearPendingStickyPinGrowth,
     clearTurnPinRequest,
