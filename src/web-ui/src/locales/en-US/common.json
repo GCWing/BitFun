@@ -179,6 +179,8 @@
       "newExternalAgentSessionShort": "{{agentName}} Session",
       "newClawSession": "New Claw session",
       "newPrimaryAssistantSession": "New primary assistant session",
+      "chooseAssistant": "Choose assistant",
+      "newAssistantSessionFor": "New session with {{assistantName}}",
       "modeCode": "Code",
       "modeCowork": "Cowork",
       "noSessions": "No sessions",

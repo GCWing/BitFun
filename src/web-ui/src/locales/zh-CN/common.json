@@ -179,6 +179,8 @@
       "newExternalAgentSessionShort": "{{agentName}} 会话",
       "newClawSession": "新建 Claw 会话",
       "newPrimaryAssistantSession": "新建主助理会话",
+      "chooseAssistant": "选择助理",
+      "newAssistantSessionFor": "为 {{assistantName}} 新建会话",
       "modeCode": "Code",
       "modeCowork": "Cowork",
       "noSessions": "暂无会话",
