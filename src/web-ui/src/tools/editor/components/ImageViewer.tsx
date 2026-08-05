@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ZoomIn, ZoomOut, RotateCw, Download, Maximize2 } from 'lucide-react';
 import { createLogger } from '@/shared/utils/logger';
+import { createBrowserImageDataUrl } from '@/shared/utils/imageDataUrl';
 import { Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './ImageViewer.scss';
@@ -51,23 +52,9 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fileSize, setFileSize] = useState<number>(0);
 
-  const getMimeType = useCallback((path: string): string => {
-    const ext = path.toLowerCase().split('.').pop();
-    const mimeTypes: Record<string, string> = {
-      'jpg': 'image/jpeg',
-      'jpeg': 'image/jpeg',
-      'png': 'image/png',
-      'gif': 'image/gif',
-      'bmp': 'image/bmp',
-      'webp': 'image/webp',
-      'svg': 'image/svg+xml',
-      'ico': 'image/x-icon',
-      'avif': 'image/avif'
-    };
-    return mimeTypes[ext || ''] || 'image/jpeg';
-  }, []);
-
   useEffect(() => {
+    let cancelled = false;
+
     const loadImage = async () => {
       if (!filePath) {
         setError(t('editor.imageViewer.filePathEmpty'));
@@ -83,24 +70,27 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
 
         const { workspaceAPI } = await import('@/infrastructure/api');
         const result = await workspaceAPI.readFileContent(filePath, 'base64');
+        const dataUrl = await createBrowserImageDataUrl(filePath, result);
 
-        const mimeType = getMimeType(filePath);
-
-        const dataUrl = `data:${mimeType};base64,${result}`;
-        
-        setImageUrl(dataUrl);
-        setFileSize(result.length);
-        setLoading(false);
-        
+        if (!cancelled) {
+          setImageUrl(dataUrl);
+          setFileSize(result.length);
+          setLoading(false);
+        }
       } catch (err) {
         log.error('Failed to load image', err);
-        setError(t('editor.imageViewer.loadImageFailedWithMessage', { message: String(err) }));
-        setLoading(false);
+        if (!cancelled) {
+          setError(t('editor.imageViewer.loadImageFailedWithMessage', { message: String(err) }));
+          setLoading(false);
+        }
       }
     };
 
     loadImage();
-  }, [filePath, getMimeType, t]);
+    return () => {
+      cancelled = true;
+    };
+  }, [filePath, t]);
 
   const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
