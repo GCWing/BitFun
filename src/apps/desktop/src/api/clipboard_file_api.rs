@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ClipboardFilesResponse {
     pub files: Vec<String>,
     pub is_cut: bool,
@@ -155,25 +156,26 @@ mod windows_clipboard {
                 return Ok(Vec::new());
             }
 
-            let file_count = DragQueryFileW(hdrop, 0xFFFFFFFF, std::ptr::null_mut(), 0);
+            let file_count = DragQueryFileW(hdrop, u32::MAX, std::ptr::null_mut(), 0);
             if file_count == 0 {
                 return Ok(Vec::new());
             }
 
             let mut files = Vec::with_capacity(file_count as usize);
-
-            for i in 0..file_count {
-                let len = DragQueryFileW(hdrop, i, std::ptr::null_mut(), 0);
+            for index in 0..file_count {
+                let len = DragQueryFileW(hdrop, index, std::ptr::null_mut(), 0);
                 if len == 0 {
                     continue;
                 }
 
-                let mut buffer: Vec<u16> = vec![0; (len + 1) as usize];
-                let actual_len = DragQueryFileW(hdrop, i, buffer.as_mut_ptr(), len + 1);
-
+                let mut buffer = vec![0_u16; len as usize + 1];
+                let actual_len = DragQueryFileW(hdrop, index, buffer.as_mut_ptr(), len + 1);
                 if actual_len > 0 {
-                    let path = OsString::from_wide(&buffer[..actual_len as usize]);
-                    files.push(path.to_string_lossy().into_owned());
+                    files.push(
+                        OsString::from_wide(&buffer[..actual_len as usize])
+                            .to_string_lossy()
+                            .into_owned(),
+                    );
                 }
             }
 
@@ -474,9 +476,21 @@ pub(crate) fn copy_directory_recursive(source: &Path, target: &Path) -> Result<(
 mod tests {
     use super::{
         copy_directory_recursive, decode_file_uri, generate_unique_path,
-        parse_clipboard_path_segments, parse_uri_list,
+        parse_clipboard_path_segments, parse_uri_list, ClipboardFilesResponse,
     };
     use std::path::Path;
+
+    #[test]
+    fn clipboard_files_response_uses_camel_case() {
+        let value = serde_json::to_value(ClipboardFilesResponse {
+            files: vec!["C:/example.txt".to_string()],
+            is_cut: true,
+        })
+        .expect("serialize clipboard response");
+
+        assert_eq!(value["isCut"], true);
+        assert!(value.get("is_cut").is_none());
+    }
 
     #[test]
     fn decode_unix_file_uri() {
