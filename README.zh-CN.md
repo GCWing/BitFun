@@ -33,6 +33,8 @@ Agentic Mini App · 自部署多设备互联互控 · 可以改到底的 Rust Ru
 
 **Agentic Mini App。** 多数 Agent 把所有任务都挤进同一个对话框，BitFun 选择为任务造一个专属界面——图表、看板、表单、面板——并让对话绑定这个界面的实时状态。你问的是眼前看到的东西，不必再把它复述一遍。社区已经做出从行情面板到各类垂直领域工具的版本。
 
+![小应用 Gallery](./png/miniapps_gallery.png)
+
 **自部署的多设备互联互控。** 账号登录、跨设备会话与配置同步、用一台设备操控另一台已登录设备，全部走**你自己部署**的 relay，不经任何第三方云中转——这往往直接决定了它在企业内网里能不能用。relay 是零知识设计：密钥在客户端本地派生，服务端只保存 Argon2id 哈希和 AES-GCM 封装后的材料。
 
 **可以改到底的 Runtime。** 从一个 Markdown 文件到 fork 整个 Runtime，四层连续：自定义 Agent → MCP / Skills / 兼容 Codex 的 Hooks → Mini App → 源码级改造。你可以用 BitFun 来扩展 BitFun。
