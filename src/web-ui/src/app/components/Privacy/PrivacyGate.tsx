@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, LoaderCircle, ShieldCheck, X } from 'lucide-react';
-import { Button, Checkbox } from '@/component-library';
+import { AlertTriangle, LoaderCircle } from 'lucide-react';
+import { Button, Checkbox, Modal } from '@/component-library';
 import { hideStartupOverlay } from '@/app/startup/startupOverlay';
 import { privacyAPI } from '@/infrastructure/api/service-api/PrivacyAPI';
 import { isTauriRuntime } from '@/infrastructure/runtime';
@@ -80,17 +80,9 @@ export const PrivacyGate: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     if (!overlayVisible) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        dismiss();
-      }
-    };
     const handleBack = () => dismiss();
-    window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('popstate', handleBack);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('popstate', handleBack);
     };
   }, [dismiss, overlayVisible]);
@@ -158,92 +150,84 @@ export const PrivacyGate: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <>
       {children}
-      {overlayVisible && resourceError && (
-        <main
-          className="bitfun-privacy-gate bitfun-privacy-gate--status"
-          data-testid="privacy-resource-error"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="privacy-resource-error-title"
-        >
-          <AlertTriangle size={28} aria-hidden />
-          <h1 id="privacy-resource-error-title">{copy.loadError}</h1>
-          <p>{copy.resourceErrorHint}</p>
-          <div className="bitfun-privacy-gate__actions">
-            <Button variant="secondary" disabled={submitting} onClick={dismiss}>
-              {copy.closeAndContinue}
-            </Button>
-            <Button disabled={submitting} onClick={() => void loadStatus()}>{copy.retry}</Button>
-          </div>
-        </main>
-      )}
-      {overlayVisible && choicePanelVisible && !resourceError && status?.policy && (
-        <main
-          className="bitfun-privacy-gate"
-          data-testid="privacy-consent-gate"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="privacy-gate-title"
-        >
-          <header className="bitfun-privacy-gate__header">
-            <img src="/Logo-ICON-128.png" alt="" className="bitfun-privacy-gate__logo" />
-            <div><h1 id="privacy-gate-title">{copy.title}</h1><p>{copy.intro}</p></div>
-            <ShieldCheck size={28} aria-hidden />
-            <Button
-              className="bitfun-privacy-gate__close"
-              variant="ghost"
-              iconOnly
-              aria-label={copy.closeAndContinue}
-              title={copy.closeAndContinue}
-              disabled={submitting}
-              onClick={dismiss}
-            >
-              <X size={16} aria-hidden />
-            </Button>
-          </header>
-          <section className="bitfun-privacy-gate__document" aria-label={copy.title}>
-            <PrivacyDocument content={status.policy.content} />
-          </section>
-          <footer className="bitfun-privacy-gate__footer">
-            <div className="bitfun-privacy-gate__metadata">
+      <Modal
+        isOpen={overlayVisible && resourceError}
+        onClose={dismiss}
+        title={copy.loadError}
+        size="medium"
+        contentClassName="bitfun-privacy-resource-error"
+        showCloseButton={!submitting}
+        closeOnOverlayClick={!submitting}
+        testId="privacy-resource-error"
+      >
+        <AlertTriangle size={28} aria-hidden />
+        <p>{copy.resourceErrorHint}</p>
+        <div className="bitfun-privacy-gate__actions">
+          <Button variant="secondary" disabled={submitting} onClick={dismiss}>
+            {copy.closeAndContinue}
+          </Button>
+          <Button disabled={submitting} onClick={() => void loadStatus()}>{copy.retry}</Button>
+        </div>
+      </Modal>
+      <Modal
+        isOpen={Boolean(
+          overlayVisible && choicePanelVisible && !resourceError && status?.policy,
+        )}
+        onClose={dismiss}
+        title={copy.title}
+        size="xlarge"
+        contentClassName="bitfun-privacy-dialog bitfun-privacy-consent-dialog"
+        showCloseButton={!submitting}
+        closeOnOverlayClick={!submitting}
+        testId="privacy-consent-gate"
+      >
+        {status?.policy ? (
+          <>
+            <div className="bitfun-privacy-dialog__metadata">
               <span>{copy.effective}: {status.policy.effectiveAt.slice(0, 10)}</span>
               <span>{copy.updated}: {status.policy.updatedAt.slice(0, 10)}</span>
             </div>
-            {!status.releaseReady && (
-              <div className="bitfun-privacy-gate__configuration-error">{copy.releaseBlocked}</div>
-            )}
-            {mutationError && (
-              <div className="bitfun-privacy-gate__configuration-error" role="alert">
-                {copy.saveFailed}
-              </div>
-            )}
-            <div className="bitfun-privacy-gate__consent-row">
-              {!applyRetryRequired ? (
-                <Checkbox
-                  checked={checked}
-                  disabled={submitting}
-                  onChange={event => setChecked(event.target.checked)}
-                  label={copy.checkbox}
-                  data-testid="privacy-consent-checkbox"
-                />
-              ) : <span />}
-              <div className="bitfun-privacy-gate__actions">
-                <Button variant="secondary" disabled={submitting} onClick={() => void handleNotAccepted()}>
-                  {copy.disagree}
-                </Button>
-                <Button
-                  disabled={!applyRetryRequired && (!checked || !status.releaseReady)}
-                  isLoading={submitting}
-                  onClick={() => void (applyRetryRequired ? handleApplyRetry() : handleAccept())}
-                  data-testid="privacy-accept"
-                >
-                  {applyRetryRequired ? copy.retryFullMode : copy.agree}
-                </Button>
+            <div className="bitfun-privacy-consent-dialog__intro">{copy.intro}</div>
+            <div className="bitfun-privacy-dialog__document" aria-label={copy.title}>
+              <PrivacyDocument content={status.policy.content} />
+            </div>
+            <div className="bitfun-privacy-consent-dialog__footer">
+              {!status.releaseReady && (
+                <div className="bitfun-privacy-gate__configuration-error">{copy.releaseBlocked}</div>
+              )}
+              {mutationError && (
+                <div className="bitfun-privacy-gate__configuration-error" role="alert">
+                  {copy.saveFailed}
+                </div>
+              )}
+              <div className="bitfun-privacy-gate__consent-row">
+                {!applyRetryRequired ? (
+                  <Checkbox
+                    checked={checked}
+                    disabled={submitting}
+                    onChange={event => setChecked(event.target.checked)}
+                    label={copy.checkbox}
+                    data-testid="privacy-consent-checkbox"
+                  />
+                ) : <span />}
+                <div className="bitfun-privacy-gate__actions">
+                  <Button variant="secondary" disabled={submitting} onClick={() => void handleNotAccepted()}>
+                    {copy.disagree}
+                  </Button>
+                  <Button
+                    disabled={!applyRetryRequired && (!checked || !status.releaseReady)}
+                    isLoading={submitting}
+                    onClick={() => void (applyRetryRequired ? handleApplyRetry() : handleAccept())}
+                    data-testid="privacy-accept"
+                  >
+                    {applyRetryRequired ? copy.retryFullMode : copy.agree}
+                  </Button>
+                </div>
               </div>
             </div>
-          </footer>
-        </main>
-      )}
+          </>
+        ) : null}
+      </Modal>
       {!status && isTauriRuntime() && !loadError && (
         <div className="bitfun-privacy-loading" aria-live="polite">
           <LoaderCircle className="bitfun-privacy-gate__loading-icon" size={18} aria-hidden />

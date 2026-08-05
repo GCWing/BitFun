@@ -10,6 +10,7 @@ const log = createLogger('PrivacyStatementDialog');
 interface PrivacyStatementDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  onModeChangeComplete?: () => void;
   variant?: 'about' | 'readonly';
 }
 
@@ -18,6 +19,7 @@ type OperationError = 'accept_save' | 'apply' | 'withdraw' | 'mark_viewed' | nul
 export const PrivacyStatementDialog: React.FC<PrivacyStatementDialogProps> = ({
   isOpen,
   onClose,
+  onModeChangeComplete,
   variant = 'about',
 }) => {
   const { t, currentLanguage, formatDate } = useI18n('common');
@@ -84,6 +86,7 @@ export const PrivacyStatementDialog: React.FC<PrivacyStatementDialogProps> = ({
         locale: policy.locale,
       });
       setChecked(false);
+      onModeChangeComplete?.();
     } catch (error) {
       log.warn('Privacy consent could not be saved or applied', error);
       try {
@@ -103,6 +106,7 @@ export const PrivacyStatementDialog: React.FC<PrivacyStatementDialogProps> = ({
     setOperationError(null);
     try {
       await applyCollectionPolicy('full', currentLanguage);
+      onModeChangeComplete?.();
     } catch (error) {
       log.warn('Full privacy mode could not be applied', error);
       setOperationError('apply');
@@ -118,6 +122,7 @@ export const PrivacyStatementDialog: React.FC<PrivacyStatementDialogProps> = ({
     setOperationError(null);
     try {
       await enterNotAccepted(policy?.locale ?? currentLanguage);
+      onModeChangeComplete?.();
     } catch (error) {
       log.warn('Privacy withdrawal state could not be saved', error);
       setOperationError('withdraw');
