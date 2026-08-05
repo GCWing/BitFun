@@ -128,8 +128,6 @@ pub fn emit_browser_page_load(label: String, event: String, url: String) {
         }
     });
 }
-    });
-}
 
 pub async fn call_arkts_string_function(
     function_name: &str,

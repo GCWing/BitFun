@@ -15,7 +15,7 @@
 //! `emit_browser_page_load` `#[napi]` function (mirrors the desktop
 //! `.on_page_load` handler in `lib.rs`).
 
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 use tauri::Manager;
 
 const VIDEO_DECODER_MODE_ENV: &str = "BITFUN_BROWSER_VIDEO_DECODER_MODE";
@@ -83,21 +83,21 @@ fn find_browser_webview(app: &tauri::AppHandle, label: &str) -> Result<tauri::We
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize,Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebviewEvalRequest {
     pub label: String,
     pub script: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize,Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebviewNavigateRequest {
     pub label: String,
     pub url: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize,Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebviewBoundsRequest {
     pub label: String,
@@ -107,7 +107,7 @@ pub struct WebviewBoundsRequest {
     pub height: f64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize,Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebviewCreateRequest {
     pub label: String,
@@ -300,7 +300,7 @@ pub async fn browser_webview_navigate(
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize,Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebviewLabelRequest {
     pub label: String,
