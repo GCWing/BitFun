@@ -637,7 +637,8 @@
     "errorSelectParent": "Please select a parent directory",
     "errorEnterName": "Please enter a project name",
     "errorCreateFailed": "Failed to create project",
-    "errorInvalidName": "Project name cannot contain these characters: / \\ : * ? \" < > |"
+    "errorInvalidName": "Project name cannot contain these characters: / \\ : * ? \" < > |",
+    "errorAlreadyExists": "A workspace with this name already exists at the selected location"
   },
   "peerDirectoryPicker": {
     "loading": "Loading remote directories…",

@@ -16,7 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { createLogger } from '@/shared/utils/logger';
 import { Modal, Button, Input, Tooltip } from '@/component-library';
 import './NewProjectDialog.scss';
-import {workspaceAPI} from "@/infrastructure";
+import {workspaceAPI, systemAPI} from "@/infrastructure";
 import { notificationService } from '@/shared/notification-system';
 
 const log = createLogger('NewProjectDialog');
@@ -80,6 +80,21 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
     if (INVALID_NAME_CHARS.test(projectName.trim())) {
       notificationService.warning(t('newProject.errorInvalidName'), { duration: 4500 });
       return;
+    }
+
+    // Pre-creation existence / case-collision check. On Windows/macOS the
+    // filesystem is case-insensitive, so "MyProject" and "myproject" resolve to
+    // the same folder; createDirectory is idempotent and would silently succeed
+    // without creating a new folder. Surface a clear error before attempting.
+    const trimmedName = projectName.trim();
+    const fullPath = `${parentPath.replace(/\\/g, '/')}/${trimmedName}`;
+    try {
+      if (await systemAPI.checkPathExists(fullPath)) {
+        setError(t('newProject.errorAlreadyExists'));
+        return;
+      }
+    } catch (error) {
+      log.error('Failed to check path existence', error);
     }
 
     setIsCreating(true);
