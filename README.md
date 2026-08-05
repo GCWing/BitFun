@@ -29,6 +29,21 @@ Agentic Mini Apps · self-hosted multi-device control · a Rust runtime you can 
 
 ---
 
+## Key features
+
+| Feature | What it does |
+| --- | --- |
+| **Agentic Mini Apps** | A task gets its own interface — chart, board, form, panel — with a conversation bound to that interface's live state |
+| **Self-hosted multi-device control** | Login, cross-device session sync, and controlling one device from another run through a relay you deploy. Zero-knowledge; no vendor cloud in the path |
+| **Coding** | Plan, edit, test, and commit inside real Git repositories. Agentic, Plan, Debug, Deep Review, long-horizon tasks |
+| **Office work** | Research, writing, PPT, DOCX, XLSX, PDF, meeting notes, reports |
+| **Desktop execution** | Browser, terminal, desktop applications, the filesystem, and remote workspaces |
+| **Four tiers of customization** | Custom Agents → MCP / Skills / Hooks → Mini Apps → source-level changes |
+| **Performance** | 98.67% average KV cache hit rate; flashgrep searches Chromium-scale trees ~36x faster |
+| **Cross-platform and open** | Windows, macOS, and Linux. MIT. Model-agnostic — you choose what it runs on |
+
+---
+
 ## Why BitFun
 
 **Agentic Mini Apps.** Most agents push every task through the same chat box. BitFun builds the task its own interface instead — a chart, a board, a form, a panel — and binds a conversation to that interface's live state. You ask about what is on screen rather than re-describing it. Community builds already range from market dashboards to domain-specific tools.
