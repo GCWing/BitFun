@@ -4,9 +4,9 @@
 
 ![BitFun](./png/BitFun_title.png)
 
-### 开源桌面 AI Agent —— 在真实仓库里交付代码，在真实桌面上动手干活。
+### 开源桌面 Agent —— 它为任务造一个界面，而不是把所有事都塞进一个聊天框。
 
-Code Agent · Cowork · Computer Use —— 本地优先，基于 Rust Runtime。
+Agentic Mini App · 自部署多设备互联互控 · 可以改到底的 Rust Runtime
 
 [**⬇ 下载 macOS · Windows · Linux 版**](https://github.com/GCWing/BitFun/releases/latest)
 
@@ -26,6 +26,20 @@ Code Agent · Cowork · Computer Use —— 本地优先，基于 Rust Runtime�
      录制脚本见 scripts/record-demo.sh —— 这是整个 README 里最值得做的一张图。 -->
 
 ![BitFun 桌面端](./png/first_screen_screenshot_CN.png)
+
+---
+
+## 为什么是 BitFun
+
+**Agentic Mini App。** 多数 Agent 把所有任务都挤进同一个对话框，BitFun 选择为任务造一个专属界面——图表、看板、表单、面板——并让对话绑定这个界面的实时状态。你问的是眼前看到的东西，不必再把它复述一遍。社区已经做出从行情面板到各类垂直领域工具的版本。
+
+**自部署的多设备互联互控。** 账号登录、跨设备会话与配置同步、用一台设备操控另一台已登录设备，全部走**你自己部署**的 relay，不经任何第三方云中转——这往往直接决定了它在企业内网里能不能用。relay 是零知识设计：密钥在客户端本地派生，服务端只保存 Argon2id 哈希和 AES-GCM 封装后的材料。
+
+**可以改到底的 Runtime。** 从一个 Markdown 文件到 fork 整个 Runtime，四层连续：自定义 Agent → MCP / Skills / 兼容 Codex 的 Hooks → Mini App → 源码级改造。你可以用 BitFun 来扩展 BitFun。
+
+**真正命中的 KV Cache。** Agent 的成本大头不是生成的 token，而是每轮重复发送的上下文；而一个时间戳、一次工具列表重排序，就会让缓存从那个字节开始全部失效。运行时保证 prompt 前缀逐字节稳定：一轮 SWE-Bench-Pro 实测平均命中率 **98.67%**。
+
+**flashgrep。** Agent 在一个任务里会把同一个仓库检索几十到上百次，每次工具调用都冷启动遍历，开销可能超过模型推理本身。跨轮次常驻索引在 Chromium 这类千万行仓库上把搜索耗时最高降低 **94.6%**，平均约 **36 倍**。
 
 ---
 
@@ -55,8 +69,9 @@ pnpm run desktop:dev
 
 **通用能力**
 
-- **桌面执行底座**：Computer Use、浏览器操作、桌面应用、文件系统、终端、远程工作区和 Mini App，让 Agent 能进入真实工作环境。
-- **可定制化扩展**：MCP、Skills、Agent 自定义、Mini App 和源码级扩展，让 BitFun 可以按你的工具链、角色和界面继续生长。
+- **界面层**：Mini App 为任务生成专属 UI，并让对话绑定这个 UI 的实时状态。
+- **执行层**：文件系统、终端、Git、浏览器操作、桌面应用、Computer Use 和远程工作区，让任务走出编辑器时 Agent 仍能触达真实环境。
+- **定制层**：MCP、Skills、Hooks、Agent 自定义和源码级扩展，让 BitFun 按你的工具链、角色和界面继续生长。
 
 ---
 

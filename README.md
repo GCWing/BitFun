@@ -4,9 +4,9 @@
 
 ![BitFun](./png/BitFun_title.png)
 
-### An open-source desktop AI agent — it ships code in your real repos, and drives your real desktop.
+### An open-source desktop agent that builds the interface your task needs.
 
-Code Agent · Cowork · Computer Use — local-first, on a Rust runtime.
+Agentic Mini Apps · self-hosted multi-device control · a Rust runtime you can reshape.
 
 [**⬇ Download for macOS · Windows · Linux**](https://github.com/GCWing/BitFun/releases/latest)
 
@@ -26,6 +26,20 @@ Code Agent · Cowork · Computer Use — local-first, on a Rust runtime.
      See scripts/record-demo.sh — this is the single highest-impact asset in this README. -->
 
 ![BitFun desktop app](./png/first_screen_screenshot.png)
+
+---
+
+## Why BitFun
+
+**Agentic Mini Apps.** Most agents push every task through the same chat box. BitFun builds the task its own interface instead — a chart, a board, a form, a panel — and binds a conversation to that interface's live state. You ask about what is on screen rather than re-describing it. Community builds already range from market dashboards to domain-specific tools.
+
+**Self-hosted multi-device control.** Account login, cross-device session and settings sync, and controlling one signed-in device from another all run through a relay *you* deploy. Nothing is brokered by a vendor's cloud — the distinction that decides whether this is allowed inside a company network at all. The relay is zero-knowledge: clients derive keys locally, and the server only ever holds Argon2id hashes and AES-GCM-wrapped material.
+
+**A runtime you can reshape.** Four continuous tiers, from a single Markdown file to forking the runtime: custom Agents → MCP / Skills / Codex-compatible Hooks → Mini Apps → source-level changes. You extend BitFun using BitFun.
+
+**KV cache that actually hits.** Agent cost is dominated not by generated tokens but by context re-sent every turn, and a single timestamp or reordered tool list invalidates the cache from that byte onward. Prompt assembly is byte-stable across turns: **98.67%** average cache hit rate over a SWE-Bench-Pro run.
+
+**flashgrep.** An agent re-searches the same repository dozens to hundreds of times per task, and cold traversal on every tool call can cost more than inference itself. A resident cross-turn index cuts search time by up to **94.6%** on Chromium-scale trees — roughly **36x** on average.
 
 ---
 
@@ -55,8 +69,9 @@ Two kinds of complex work: shipping code in real repositories, and turning sourc
 
 **Shared capabilities**
 
-- **Desktop execution layer**: Computer Use, browser operation, desktop apps, the filesystem, terminals, remote workspaces, and Mini Apps let the Agent enter real work environments.
-- **Customization layer**: MCP, Skills, custom Agents, Mini Apps, and source-level extension let BitFun keep growing around your tools, roles, and interfaces.
+- **Interface layer**: Mini Apps give a task its own UI, with the conversation bound to that UI's live state.
+- **Execution layer**: the filesystem, terminals, Git, browser operation, desktop applications, Computer Use, and remote workspaces let the Agent reach the real environment when a task leaves the editor.
+- **Customization layer**: MCP, Skills, Hooks, custom Agents, and source-level extension let BitFun keep growing around your tools, roles, and interfaces.
 
 ---
 
