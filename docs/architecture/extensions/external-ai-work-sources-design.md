@@ -5,11 +5,14 @@
 适配器负责，本文不建立跨生态通用配置格式或脚本 SDK。BitFun 自身能力如何通过 MCP、Skill、Plugin、Hook、
 SDK 或 Server 输出到外部宿主，以及内部能力组合、状态、事件和并发边界，见
 [`capability-runtime-integration-design.md`](capability-runtime-integration-design.md)；两条方向共用适用的身份事实和能力归属模块，
-但不共用一个大一统 adapter 或状态模型。
+但不共用一个大一统 adapter 或状态模型。外部应用的 Settings/TUI 信息架构、默认连接、批量确认和提示去重见
+[`external-ai-app-connection-experience-design.md`](external-ai-app-connection-experience-design.md)，对应实施顺序见
+[`../../plans/external-ai-app-connection-experience-plan.md`](../../plans/external-ai-app-connection-experience-plan.md)。
 
-本文同时记录当前可用端到端能力与目标架构。当前 BitFun 已具备通用外部来源目录、四条能力专属发现通道和单一
-`ExternalSourceControlPlane` 负责生命周期；`contracts/product-domains` 提供版本化控制事实、固定动作与错误语义，
-Desktop、交互式 TUI、Peer Host 和只读 Server 只显示宿主所需状态，不再各自派生另一套状态机。OpenCode Prompt Command
+本文同时记录当前可用端到端能力与目标架构。当前 BitFun 已具备通用外部来源目录、四条能力专属发现通道，并由
+`ExternalSourceControlPlane` 负责 provider-neutral 调度、generation fencing 和故障隔离；`assembly/core` 的
+`WorkspaceExternalSourceService` 负责产品级策略、偏好、聚合和运行装配，`contracts/product-domains` 提供版本化控制事实、固定动作与错误语义，
+Desktop、交互式 TUI 和 Peer Host 只显示宿主所需状态，不再各自派生另一套状态机。Server 仓库中保留了只读 external-source dispatch helper，但当前 `/ws` 已直连 in-process App Server，external-source 方法尚未进入 App Server schema，生产请求会得到 `method_not_found`；因此不能把 Server 只读投影列为已交付。OpenCode Prompt Command
 适配器已接入本地用户全局/项目来源；Desktop 可查看、刷新、抑制和处理跨来源冲突，交互式 TUI（ChatMode）可列出并执行
 Prompt Command；静态文件和经审阅的本地 shell 输出由共享归属模块完成装配。第二条端到端能力已让受支持的单文件 OpenCode `.js` standalone Tool 经静态
 预览、来源/能力确认和同名冲突选择后进入现有 Tool Runtime；Desktop 与交互式 TUI（ChatMode）使用同一决策状态。第三条纵向
@@ -117,8 +120,7 @@ stale，界面替换为服务端返回的新 plan，并只保留“旧选择与�
 ### 3.1 首次发现
 
 发现始终在后台进行。Desktop、交互式 TUI（ChatMode）和 Peer 控制界面消费事实所在 Host 的同一来源状态，但按
-宿主展示；Peer 控制界面只代理 Peer Host，不读取控制端同名来源。Server 当前只提供只读快照，未来 Web 入口必须
-通过已接入的 Host 能力消费，不能由浏览器扫描来源：
+宿主展示；Peer 控制界面只代理 Peer Host，不读取控制端同名来源。当前 Server `/ws` 尚未接入 external-source App Server 方法；未来只读 Web 入口必须先通过版本化 App Server schema 接入 Host 能力，不能由浏览器扫描来源：
 
 ```text
 已发现 OpenCode 工作内容
@@ -160,8 +162,8 @@ stale，界面替换为服务端返回的新 plan，并只保留“旧选择与�
 Safe Mode 是执行域/工作区实例内的易失控制状态，不写入来源偏好，也不把来源伪装成 `disabled`。进入后继续发现和
 展示 Command、Tool、Subagent 与 MCP，但立即撤下外部 Tool、Subagent 和 MCP 的新调用路由；Prompt Command 作为
 静态模板继续可见。退出后基于当前来源版本重新协调，不能恢复已删除、已撤销或已过期审批的旧路由。
-GUI 和 TUI 都通过同一个 `SetSafeMode` 动作请求该变化，Peer Host 在事实所在 Host 执行；只读 Server 通过
-`hostCapabilities` 明确拒绝变更。所有偏好写操作携带 `expectedPreferenceRevision`，旧视图必须得到 `stale_revision`
+GUI 和 TUI 都通过同一个 `SetSafeMode` 动作请求该变化，Peer Host 在事实所在 Host 执行；目标只读 Server 在完成 App Server 接线后通过
+`hostCapabilities` 明确拒绝变更，当前 Server external-source 方法仍是 `method_not_found`。所有偏好写操作携带 `expectedPreferenceRevision`，旧视图必须得到 `stale_revision`
 并重新读取，不能用界面本地状态覆盖并发进程的新决定。
 
 ### 3.3 兼容来源与显式导入
@@ -297,7 +299,7 @@ generation lease 的模型绑定形态，不建立第二套 Agent Runtime。
 Desktop、交互式 TUI 以及未来通过 Host 能力访问该状态的界面必须同时展示：来源请求、实际绑定、绑定方式和受影响候选数。
 例如“来源请求 `sonnet`；当前工作区由用户绑定到 Primary（实际为已配置模型 X）；影响 71 个 Agent”。用户可以选择其他
 已配置模型、`primary`、`fast` 或保持相关候选禁用。界面不得把用户选择的替代模型描述成来源原始要求，也不得逐项重复确认
-同一绑定。当前只读 Server 继续只投影脱敏状态，不获得写入能力。
+同一绑定。目标只读 Server 在完成 App Server V1 前置切片后只投影脱敏状态，不获得写入能力；当前 Server 尚不能消费该投影。
 
 绑定目标的配置 ID 与 `model_runtime_binding_fingerprint` 进入既有激活审批 envelope。来源引用改变、绑定目标被删除或停用，
 或者同一配置 ID 下的 provider、模型名、endpoint、认证来源及其他运行身份发生变化时，旧激活决定失效；进行中的调用继续
@@ -450,43 +452,107 @@ Theme、Keybind、完整插件清单，以及各生态新增的 managed/session/
 
 ## 6. 架构与职责
 
-### 6.1 发现来源
+当前 V1 生产路径是 `Desktop/TUI/Peer Host adapter → WorkspaceExternalSourceService → ExternalSourceControlPlane → 能力专属 provider`，宿主消费 `ExternalSourceControlSnapshotV1`、目录和既有能力级动作。它没有应用级连接状态、统一批量确认计划或任务依赖结果；当前 Server App Server 也尚未暴露这条只读路径。以下 6.1-6.3 全部是连接体验交付后的目标视图，不能作为现状证据。
+
+### 6.1 目标逻辑视图
 
 ```mermaid
-flowchart LR
-  Sources["外部来源"] --> Adapters["生态 adapter"]
-  Watch["文件变化"] --> Control["Source control"]
-  Adapters --> Provider["能力接口"]
-  Control --> Provider
-  Provider --> Catalog["来源目录"]
+flowchart TB
+  Sources["用户全局 / 项目 / 工作区外部来源"]
+  Adapters["同级生态适配器：OpenCode / Codex / Claude Code"]
+  Ports["能力专属 provider 契约"]
+  Discovery["ExternalSourceControlPlane\nprovider-neutral discovery"]
+  ProductCoordinator["WorkspaceExternalSourceService\n产品级协调"]
+  Policy["产品能力事实 / 接入策略 / 安全上限"]
+  Store["现有原子偏好存储"]
+  AppView["版本化应用级读模型 + 批量确认计划"]
+  Catalog["公共 catalog + 能力专属详情"]
+  Owners["Command / Tool / Subagent / MCP / Config owner"]
+  Surfaces["Desktop / TUI / Peer / future read-only Server"]
+
+  Sources --- Adapters
+  Adapters --- Ports
+  Ports --- Discovery
+  Discovery --- ProductCoordinator
+  Policy --- ProductCoordinator
+  Store --- ProductCoordinator
+  ProductCoordinator --- AppView
+  ProductCoordinator --- Catalog
+  ProductCoordinator ---|窄 typed owner boundary| Owners
+  Owners --- Catalog
+  AppView --- Surfaces
+  Catalog --- Surfaces
 ```
 
-### 6.2 展示
+图中连线只表示目标稳定逻辑关系，不表示调用顺序或用户动作；连接、断开和批量确认时序只在 6.3 描述。目标中，发现、连接和加载是三个独立阶段：适配层只产生候选；现有 `ExternalSourceControlPlane` 继续只协调能力专属提供方的发现、期限、代次和故障隔离；现有 `WorkspaceExternalSourceService` 增加产品级协调职责，结合产品事实、作用域化用户决定和安全上限派生应用级连接状态与确认计划，并通过窄类型化端口请求真实能力归属模块加载或撤下。应用级读模型不携带可执行载荷，也不取代公共目录或能力专属 DTO。这里不新增第二个公开控制面类型，也不声称这些新增职责已经接线。
+
+### 6.2 目标开发视图
 
 ```mermaid
-flowchart LR
-  Catalog["来源目录"] --> View["状态视图"] --> Surface["Desktop · TUI · Peer"]
+flowchart TB
+  ProductDomains["contracts/product-domains\n应用级状态、确认、类型化动作"]
+  AssemblyExternal["assembly/external-sources\nprovider-neutral 协调器"]
+  AssemblyCore["assembly/core\nWorkspaceExternalSourceService / 产品装配"]
+  EcosystemAdapters["adapters/*\n生态解析与原生覆盖"]
+  Services["services/*\n文件观察、原子存储、进程/网络"]
+  CapabilityOwners["execution / services / core owners\nCommand、Tool、Subagent、MCP"]
+  DesktopAdapter["apps/desktop\nTauri / Peer Host adapter"]
+  WebUi["web-ui\nOverview / Detail / Review / Advanced"]
+  Cli["apps/cli\n/extensions 与 action-required"]
+  Server["server / remote adapters\n目标能力约束与只读投影"]
+
+  WebUi --> DesktopAdapter
+  DesktopAdapter --> AssemblyCore
+  Cli --> AssemblyCore
+  Server --> AssemblyCore
+  AssemblyCore --> AssemblyExternal
+  AssemblyCore --> EcosystemAdapters
+  AssemblyCore --> Services
+  AssemblyCore --> CapabilityOwners
+  AssemblyCore --> ProductDomains
+  AssemblyExternal --> ProductDomains
+  EcosystemAdapters --> ProductDomains
+  CapabilityOwners --> ProductDomains
 ```
 
-### 6.3 启用
+箭头表示目标编译期/模块依赖方指向被依赖方，不是运行时数据流。依赖方向继续遵守 interfaces/apps → assembly → adapters/services/execution → contracts；`assembly/external-sources` 只依赖 product-domain 契约，不反向依赖 Core、app 或具体生态 adapter。产品默认连接事实由 assembly 选择并通过稳定 contract 投影；React、TUI 和远端 adapter 不按生态 ID 重算默认值、应用状态或推荐集合。Server 节点只有在先把 V1 external-source 只读方法接入 App Server schema、handler/client translation 并通过 WebSocket round-trip 后才能进入这张目标图。
+
+### 6.3 目标运行视图
 
 ```mermaid
-flowchart LR
-  Control["Source control"] --> Policy["确认与启用"]
-  Policy --> Assets["配置内容"] --> Config["配置服务"]
-  Policy --> Calls["Command · Tool · Subagent · MCP"] --> Owners["能力归属模块"]
-  Policy --> Plugin["Plugin"] --> Client["PluginRuntimeClient"]
+sequenceDiagram
+  participant Surface as Desktop / TUI
+  participant Product as WorkspaceExternalSourceService
+  participant Discovery as ExternalSourceControlPlane
+  participant Adapter as Ecosystem Adapter
+  participant Policy as Product Policy
+  participant Owner as Capability Owner
+  participant Store as Preference Store
+
+  Surface->>Product: 读取作用域化应用级 snapshot
+  Product->>Discovery: 按 execution domain / workspace scope 刷新
+  Discovery->>Adapter: 只读发现候选
+  Adapter-->>Discovery: 来源、版本、风险摘要
+  Discovery-->>Product: 同代能力专属发现结果
+  Product->>Policy: 计算默认连接、推荐集合与安全上限
+  Policy-->>Product: OpenCode 可默认连接；其他生态只发现
+  Product-->>Surface: 应用状态、主操作、review plan
+  Surface->>Product: ConnectApplication(scope, expected revision)
+  Product->>Store: 原子保存连接决定并推进权威 preference revision
+  Product->>Owner: 仅请求允许自动应用的低风险内容
+  Owner-->>Product: 已启用 / 受限 / 失败结果
+  Product-->>Surface: 连接完成摘要
+  Surface->>Product: SubmitApplicationReview(scope, generations, decision keys)
+  Product->>Product: 重验身份、revision、generation 与 safety ceiling
+  Product->>Owner: 按能力类型提交批准项
+  Owner-->>Product: 逐项权威结果
+  Product->>Store: 原子保存有效决定
+  Product-->>Surface: 同代 snapshot 与逐项结果
 ```
 
-### 6.4 执行插件
+目标运行语义中，发现不会产生执行副作用。连接先在目标执行域和工作区作用域中持久化应用级决定，再只协调共享策略允许的低风险内容；批量确认仍分派到各能力归属模块，并在提交前重新校验身份、作用域、偏好版本、发现代次、决策键、行为版本、宿主能力、Safe Mode 和安全上限。
 
-```mermaid
-flowchart LR
-  Runtime["能力模块"] <--> Client["PluginRuntimeClient"]
-  Client <--> Adapter["生态 adapter"]
-  Adapter <--> Service["Process service"]
-  Service <--> Host["Plugin Host"]
-```
+### 6.4 现有能力与连接体验的边界
 
 | 部分 | 负责 | 不能承担 |
 |---|---|---|
@@ -497,6 +563,7 @@ flowchart LR
 | 文件观察服务 | 提供可订阅、去抖的文件变化事实 | 解释生态路径、决定优先级、提交业务状态。 |
 | 本地 JSON 存储服务 | 提供跨进程锁、锁内读改写和同卷原子替换；替换失败时保留旧文件 | 定义外部来源偏好 schema、冲突策略或生态语义。 |
 | `ExternalSourceControlPlane` | 四类来源分别刷新；同一 provider 同一时间只扫描一次；超时只影响该 provider；旧结果不能覆盖新刷新；确认最新结果后，再通知对应能力模块切换 | 按生态 ID 分支业务行为、把四类数据合并为通用资产、解析生态文件、直接提交配置、工具、权限或界面状态。 |
+| `WorkspaceExternalSourceService` / 产品级协调 | 绑定执行域与工作区路由；组合产品事实、现有偏好和控制面发现结果；派生应用级投影；通过窄类型化端口分派连接、撤下和批量确认，并汇总归属模块的权威结果 | 复制提供方调度器、能力审批/冲突存储或 Runtime 归属；把无法撤下的能力宣称为已断开；成为新的公共跨生态执行 API。 |
 | 版本化控制状态视图 | 根据 discovery/desired/review/runtime/support 事实生成一级状态；向宿主提供同一版本的 control/catalog、`hostCapabilities`、恢复动作和固定通用操作 | 保存第二份权威状态、携带 Prompt/凭据/可执行数据、替代能力专属审批和冲突 DTO，或让 GUI/TUI 自行推导生命周期。 |
 | 界面状态 | 按使用范围、工作区或用户目录关系统一生成安全来源位置，清理诊断文本中的已知绝对路径，并按 `Source / Command / Tool / Subagent` 资源类型路由诊断 | 让 GUI/TUI 解析 provider 诊断码前缀、识别 `.opencode`、`.claude` 等私有目录结构，或接收原始用户/工作区路径。 |
 | 冲突解析 | 对独立 provider 或产品本地可执行能力的同名候选建立版本敏感内容摘要；未选择时不激活，选择后只在内容摘要不变时复用。现有 Skill 固定根顺序由 Skill 归属模块独立维护 | 用 adapter 优先级静默覆盖另一生态或本地可执行能力，或把选择写回外部文件。 |
@@ -522,8 +589,10 @@ provider discovery 必须是可独立调度的 request/result，不在协调器�
 未来网络 provider 仍应实现协作式超时和取消，
 但不改变目录、冲突或产品入口契约。
 
-控制请求的通用动作固定为 `Refresh`、`SetSourceEnabled` 和 `SetSafeMode`。能力专属的审批、冲突选择和执行参数继续由
-各归属模块的类型明确契约承担，不能为了“一个 API”塞入任意数据。错误以 `code + stage + retryable +
+控制请求保持闭合且类型化：严格 V1 只保留已有 `Refresh`、`SetSourceEnabled` 和 `SetSafeMode`；应用级连接体验在独立协商后的 V2 增加
+`ConnectApplication`、`DisconnectApplication`、`SetApplicationDeferred` 和 `SubmitApplicationReview`。批量 review 只封装
+一组带执行域、workspace route、能力类型、generation、decision key 和 behavior version 的选择，并由产品级协调 owner 分派给现有能力归属模块；它不能成为携带
+任意数据的通用执行 API。能力专属执行参数和调用时权限继续由各归属模块的类型明确契约承担。错误以 `code + stage + retryable +
 correlationId/causationId + recoveryActions` 表达；`detail` 只用于有界诊断，界面和远端协议不得解析文本
 决定控制流。日志只记录动作、阶段、关联 ID、错误类别和脱敏对象身份；产品打点可在同一结果上叠加，但不得反向改变状态。
 
@@ -533,8 +602,9 @@ Command；明确缺失且未被标记失败的 Command 是稳定删除。产品�
 
 ## 7. 状态与提示规则
 
-以下表格是各宿主唯一的一级用户状态集合；Host 的 `ready/restarting/paused` 等内部阶段只能作为详情和原因映射，
-不能再形成一套并列产品状态：
+本节定义底层来源/能力的正交生命周期状态；面向 Settings 首页和 TUI `/extensions` 的五种应用级摘要、优先级和主操作，统一见
+[外部 AI 应用连接与管理详细设计](external-ai-app-connection-experience-design.md#3-产品状态模型)。宿主不得把底层状态直接拼成第二套
+应用级规则，也不能用应用摘要替代底层事实。
 
 | 用户状态 | 含义 |
 |---|---|
@@ -551,9 +621,10 @@ Command；明确缺失且未被标记失败的 Command 是稳定删除。产品�
 
 提示遵守以下去噪规则：
 
-- 首次发现、首次应用、需要确认、更新失败、来源删除和权限扩大可以主动提示。
-- 普通文件变化、多个同源错误和多项目全局更新按来源聚合；详情进入设置页或 CLI 状态。
-- 每次重载最多产生一条摘要，不用 Toast 展示字段级错误。
+- 首次发现只允许聊天区一次性非阻塞轻提示、Settings 导航低侵入状态和 Settings 内摘要；不能使用启动弹窗，也不能暗示候选已经加载。
+- 用户关闭、确认、断开连接或选择暂不使用后，同一内容/行为与风险摘要版本不再主动提示；普通数量变化只更新应用摘要。
+- 再次主动提示仅限当前任务确实因待确认能力受阻或降级，或者已确认内容发生实质权限扩大。与当前任务无关的更新失败、来源删除和未连接应用变化只更新状态与恢复动作。
+- 普通文件变化、多个同源错误和多项目全局更新按应用/来源聚合；详情进入设置页或 CLI 状态，每次重载最多产生一条摘要，不用 Toast 展示字段级错误。
 - 非交互入口只有在当前操作实际依赖待确认资产时才返回类型化 `action-required`；无关待办只进入结构化状态或
   `stderr` 摘要，不阻塞当前操作，也不自动批准。
 
