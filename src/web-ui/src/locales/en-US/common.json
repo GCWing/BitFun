@@ -73,6 +73,7 @@
     "forward": "Forward",
     "backShortcut": "Back (Alt+←)",
     "forwardShortcut": "Forward (Alt+→)",
+    "newWindow": "New Window",
     "items": {
       "sessions": "Sessions",
       "project": "Directory",

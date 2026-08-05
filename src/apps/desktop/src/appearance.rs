@@ -1,6 +1,6 @@
 //! Desktop appearance bootstrap and window creation.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{OnceLock, RwLock};
 use std::time::Instant;
 
@@ -1025,6 +1025,68 @@ pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
         total_started_at.elapsed().as_millis()
     );
     Ok(())
+}
+
+static SESSION_WINDOW_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+/// Create a new session window so the user can work on multiple sessions in
+/// parallel. Each window gets a unique label (`session-window-<n>`) and loads
+/// the full app UI via `?bitfunWindow=session`. Session windows close normally
+/// (no tray/minimize interception) and are excluded from the main window's
+/// close-request event handling.
+#[tauri::command]
+pub async fn create_session_window(app: tauri::AppHandle) -> Result<String, String> {
+    let id = SESSION_WINDOW_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let label = format!("session-window-{id}");
+    let url = app_url("?bitfunWindow=session");
+
+    let mut builder = tauri::WebviewWindowBuilder::new(&app, &label, url)
+        .title("BitFun")
+        .inner_size(
+            crate::MAIN_WINDOW_DEFAULT_WIDTH,
+            crate::MAIN_WINDOW_DEFAULT_HEIGHT,
+        )
+        .min_inner_size(
+            crate::MAIN_WINDOW_MIN_WIDTH,
+            crate::MAIN_WINDOW_MIN_HEIGHT,
+        )
+        .center()
+        .resizable(true)
+        .fullscreen(false)
+        .visible(false)
+        .disable_drag_drop_handler();
+
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder
+            .decorations(true)
+            .title_bar_style(tauri::TitleBarStyle::Overlay)
+            .traffic_light_position(tauri::LogicalPosition::new(12.0, 15.0))
+            .hidden_title(true);
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        builder = builder.decorations(false);
+    }
+
+    let window = builder.build().map_err(|e| {
+        error!("Failed to create session window: error={}", e);
+        format!("Failed to create session window: {e}")
+    })?;
+
+    window.show().map_err(|e| {
+        error!("Failed to show session window: {}", e);
+        format!("Failed to show session window: {e}")
+    })?;
+
+    window.set_focus().map_err(|e| {
+        error!("Failed to focus session window: {}", e);
+        format!("Failed to focus session window: {e}")
+    })?;
+
+    debug!("Session window created: label={}", label);
+    Ok(label)
 }
 
 #[cfg(test)]

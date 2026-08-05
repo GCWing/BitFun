@@ -15,6 +15,7 @@ const log = createLogger('PeerDeviceTransport');
 const LOCAL_ONLY_COMMANDS = new Set([
   'show_main_window',
   'hide_main_window_after_close_request',
+  'create_session_window',
   'quit_app',
   'minimize_to_tray',
   'initialize_tray_after_startup',

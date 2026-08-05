@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "BitFun default capabilities",
-  "windows": ["main", "agent-companion-pet", "spotlight"],
+  "windows": ["main", "agent-companion-pet", "spotlight", "session-window-*"],
   "permissions": [
     "log:default",
     "autostart:default",
