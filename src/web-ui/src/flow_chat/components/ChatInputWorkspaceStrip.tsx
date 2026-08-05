@@ -349,7 +349,9 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                     aria-hidden
                   />
                 )}
-                <span>{tWorktrees('strip.toggleLabel')}</span>
+                <span className="bitfun-chat-input-workspace-strip__worktree-label">
+                  {tWorktrees('strip.toggleLabel')}
+                </span>
               </button>
             </Tooltip>
           ) : null}

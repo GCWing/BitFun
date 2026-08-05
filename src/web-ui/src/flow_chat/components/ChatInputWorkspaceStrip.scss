@@ -486,6 +486,18 @@
     }
   }
 
+  /*
+   * The UI font (Noto Sans SC) has CJK vertical metrics — 1.16em ascent against
+   * 0.32em descent — so `align-items: center` centers a line box whose glyphs sit
+   * ~0.06em below its middle. Beside the checkbox icon, which centers exactly,
+   * the label reads as low. The 1px bottom pad lifts the glyphs by half of it,
+   * matching what `__workspace` and `__branch` already carry; the icon still
+   * sets the 11px content box, so the chip's height is unchanged.
+   */
+  &__worktree-label {
+    padding-bottom: 1px;
+  }
+
   &__worktree-icon {
     flex-shrink: 0;
     width: 11px;
