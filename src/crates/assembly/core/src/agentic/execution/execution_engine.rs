@@ -2319,6 +2319,32 @@ impl ExecutionEngine {
         .filter(|text| !text.is_empty())
     }
 
+    /// A normalized fingerprint of assistant text content for text-loop detection.
+    ///
+    /// After context compression, the model may regenerate the same text
+    /// response repeatedly because the compressed summary triggers the same
+    /// output. This fingerprint strips whitespace and lowercases the text so
+    /// that trivial formatting differences do not mask a genuine loop.
+    fn assistant_text_fingerprint(message: &Message) -> Option<String> {
+        let text = Self::assistant_message_text(message)?;
+        let normalized: String = text
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .map(|c| c.to_ascii_lowercase())
+            .collect();
+        if normalized.is_empty() {
+            return None;
+        }
+        // Truncate to bound memory usage; 500 chars is enough to distinguish
+        // genuinely different responses while ignoring long trailing content.
+        let truncated = if normalized.len() > 500 {
+            &normalized[..500]
+        } else {
+            &normalized[..]
+        };
+        Some(truncated.to_string())
+    }
+
     /// Native hook session facts for a compaction or turn-lifecycle dispatch.
     fn native_hook_facts<'a>(
         session_id: &'a str,
@@ -3275,6 +3301,12 @@ impl ExecutionEngine {
         let mut recent_tool_signatures: Vec<String> = Vec::new();
         let mut recent_failed_tool_signatures: Vec<String> = Vec::new();
         let mut failed_tool_recovery_attempts: usize = 0;
+        // Track text-only response fingerprints for text-loop detection.
+        // After context compression, the model may regenerate the same text
+        // response repeatedly because it lost the full conversation context.
+        // The tool-based loop detectors only check tool-call signatures, so
+        // they cannot detect this pattern.
+        let mut recent_text_fingerprints: Vec<String> = Vec::new();
         const MAX_FAILED_TOOL_RECOVERY_ATTEMPTS: usize = 3;
         const MAX_PARTIAL_CONTINUATION_ATTEMPTS: usize = 3;
         let mut full_compression_count = 0usize;
@@ -3533,6 +3565,14 @@ impl ExecutionEngine {
                         full_compression_count += 1;
                         consecutive_compression_failures = 0;
                         send_pressure_reusable = false;
+                        // Clear loop-detection state after compression: the
+                        // compressed context is effectively a fresh start, so
+                        // stale pre-compression tool signatures must not bias
+                        // post-compression loop detection.
+                        recent_tool_signatures.clear();
+                        recent_failed_tool_signatures.clear();
+                        failed_tool_recovery_attempts = 0;
+                        recent_text_fingerprints.clear();
                     }
                     Ok(None) => {
                         debug!("No eligible multi-turn context available for compression");
@@ -3767,6 +3807,13 @@ impl ExecutionEngine {
                                 .await;
                             full_compression_count += 1;
                             consecutive_compression_failures = 0;
+                            // Clear loop-detection state after overflow
+                            // recovery compression, same rationale as the
+                            // primary compression path above.
+                            recent_tool_signatures.clear();
+                            recent_failed_tool_signatures.clear();
+                            failed_tool_recovery_attempts = 0;
+                            recent_text_fingerprints.clear();
                             continue;
                         }
                         Ok(None) => {
@@ -3880,6 +3927,8 @@ impl ExecutionEngine {
 
             if let Some(round_signature) = Self::tool_call_signature(&round_result.tool_calls) {
                 recent_tool_signatures.push(round_signature.clone());
+                // The model made tool calls, so it is not in a text-only loop.
+                recent_text_fingerprints.clear();
                 if Self::failed_tool_round_signature(
                     &round_result.tool_calls,
                     &round_result.tool_result_messages,
@@ -3892,9 +3941,25 @@ impl ExecutionEngine {
                     failed_tool_recovery_attempts = 0;
                 }
             } else {
+                // No tool calls in this round. Clear tool-signature tracking
+                // since the model switched away from tool usage, but track
+                // text-only responses for text-loop detection.
                 recent_tool_signatures.clear();
                 recent_failed_tool_signatures.clear();
                 failed_tool_recovery_attempts = 0;
+
+                // Track text-only response fingerprint for loop detection.
+                // After context compression, the model may regenerate the
+                // same text response repeatedly because it lost the full
+                // conversation context and the compressed summary triggers
+                // the same output.
+                if let Some(fingerprint) =
+                    Self::assistant_text_fingerprint(&round_result.assistant_message)
+                {
+                    recent_text_fingerprints.push(fingerprint);
+                } else {
+                    recent_text_fingerprints.clear();
+                }
             }
 
             let after_round_pressure = Self::estimate_auto_compression_pressure(
@@ -4021,6 +4086,28 @@ impl ExecutionEngine {
                             window_size, MAX_FAILED_TOOL_RECOVERY_ATTEMPTS
                     );
                     finalization_reason = Some("repeated_tool_failures");
+                    break;
+                }
+            }
+
+            // Text-only loop detection.
+            //
+            // After context compression, the model may enter a text-only loop:
+            // it produces the same assistant text response round after round
+            // without making any tool calls. The tool-based loop detectors
+            // above only check tool-call signatures, so they cannot detect
+            // this pattern. We track fingerprints of text-only responses and
+            // detect when the same content repeats consecutively, then
+            // finalize the turn to avoid wasting compute.
+            if recent_text_fingerprints.len() >= max_consec {
+                let tail = &recent_text_fingerprints
+                    [recent_text_fingerprints.len() - max_consec..];
+                if tail.windows(2).all(|w| w[0] == w[1]) {
+                    warn!(
+                        "Repeated text-only response detected: {} consecutive rounds with identical assistant text, finalizing turn",
+                        max_consec
+                    );
+                    finalization_reason = Some("repeated_text_responses");
                     break;
                 }
             }
