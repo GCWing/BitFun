@@ -424,14 +424,14 @@ export function consumeBottomReservationForContentGrowth(
 }
 
 export function shouldSyncPhysicalBottom(options: {
-  viewportGeometryChanged: boolean;
+  viewportHeightChanged: boolean;
   collapseProtectionActive: boolean;
   wasAtPhysicalBottom: boolean;
   ownsElementAnchor: boolean;
   isFollowingTail: boolean;
 }): boolean {
   return (
-    options.viewportGeometryChanged &&
+    options.viewportHeightChanged &&
     !options.collapseProtectionActive &&
     options.wasAtPhysicalBottom &&
     !options.ownsElementAnchor &&

@@ -950,11 +950,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return false;
     }
 
-    const viewportGeometryChanged =
-      Math.abs(scroller.scrollHeight - previousGeometry.scrollHeight) > COMPENSATION_EPSILON_PX ||
+    // A growing message/footer changes scrollHeight, not the viewport. Only a
+    // client-height change is a real viewport resize that should preserve a
+    // physical-bottom anchor; otherwise a newly appended footer would push the
+    // existing transcript upward by re-pinning to the new bottom.
+    const viewportHeightChanged =
       Math.abs(scroller.clientHeight - previousGeometry.clientHeight) > COMPENSATION_EPSILON_PX;
     if (
-      !viewportGeometryChanged ||
+      !viewportHeightChanged ||
       pendingCollapseIntentRef.current.active ||
       retainedCollapseAnchorRef.current !== null
     ) {
@@ -976,7 +979,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       viewportCoordinatorRef.current.getMode() === 'following-tail'
     );
     const willWrite = shouldSyncPhysicalBottom({
-      viewportGeometryChanged,
+      viewportHeightChanged,
       collapseProtectionActive: pendingCollapseIntentRef.current.active,
       wasAtPhysicalBottom,
       ownsElementAnchor,
@@ -1716,12 +1719,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     const currentScrollTop = scroller.scrollTop;
     const previousScrollTop = previousScrollTopRef.current;
     const previousScrollerGeometry = previousScrollerGeometryRef.current;
-    const viewportGeometryChanged = Boolean(
+    const viewportHeightChanged = Boolean(
       previousScrollerGeometry &&
-      (
-        Math.abs(scroller.scrollHeight - previousScrollerGeometry.scrollHeight) > COMPENSATION_EPSILON_PX ||
-        Math.abs(scroller.clientHeight - previousScrollerGeometry.clientHeight) > COMPENSATION_EPSILON_PX
-      )
+      Math.abs(scroller.clientHeight - previousScrollerGeometry.clientHeight) > COMPENSATION_EPSILON_PX
     );
     const wasAtPhysicalBottom = Boolean(
       previousScrollerGeometry &&
@@ -1783,7 +1783,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
           collapseIntentActive: pendingCollapseIntentRef.current.active,
           retainedCollapseAnchor: retainedCollapseAnchorRef.current,
           wasAtPhysicalBottom,
-          viewportGeometryChanged,
+          viewportHeightChanged,
         }),
       });
     }
@@ -1799,7 +1799,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       retainedCollapseAnchorRef.current !== null
     );
     if (shouldSyncPhysicalBottom({
-      viewportGeometryChanged,
+      viewportHeightChanged,
       collapseProtectionActive: hasCollapseAnchorProtection,
       wasAtPhysicalBottom,
       ownsElementAnchor,
@@ -5434,10 +5434,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     }
 
     const scroller = scrollerElementRef.current;
-    const distanceFromBottomBefore = scroller
-      ? Math.max(0, scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop)
-      : 0;
-    const wasNearBottom = distanceFromBottomBefore <= 80;
 
     // Collapse compensation can be much larger than the tail space needed to
     // keep a sticky user message pinned. Transfer it to the pin reservation in
@@ -5506,11 +5502,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       }
       if (scroller && ownsElementAnchorBefore) {
         viewportCoordinatorRef.current.restoreElementAnchor(scroller, 'stream-end-reservation-transfer');
-      }
-      // Footer height shrank: if we were following the bottom, re-pin in the
-      // same turn to avoid a one-frame whole-pane jump that looks like a flash.
-      if (scroller && wasNearBottom && !ownsElementAnchorBefore) {
-        scroller.scrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
       }
     }
 

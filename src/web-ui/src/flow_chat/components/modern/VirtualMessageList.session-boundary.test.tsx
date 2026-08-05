@@ -1411,27 +1411,34 @@ describe('VirtualMessageList session boundary', () => {
     });
   });
 
-  it('does not let physical-bottom follow compete with a semantic element anchor', () => {
+  it('syncs the physical bottom only for a real viewport-height change', () => {
     expect(shouldSyncPhysicalBottom({
-      viewportGeometryChanged: true,
+      viewportHeightChanged: true,
       collapseProtectionActive: false,
       wasAtPhysicalBottom: true,
       ownsElementAnchor: true,
       isFollowingTail: false,
     })).toBe(false);
     expect(shouldSyncPhysicalBottom({
-      viewportGeometryChanged: true,
+      viewportHeightChanged: true,
       collapseProtectionActive: false,
       wasAtPhysicalBottom: true,
       ownsElementAnchor: false,
       isFollowingTail: false,
     })).toBe(true);
     expect(shouldSyncPhysicalBottom({
-      viewportGeometryChanged: true,
+      viewportHeightChanged: true,
       collapseProtectionActive: false,
       wasAtPhysicalBottom: true,
       ownsElementAnchor: false,
       isFollowingTail: true,
+    })).toBe(false);
+    expect(shouldSyncPhysicalBottom({
+      viewportHeightChanged: false,
+      collapseProtectionActive: false,
+      wasAtPhysicalBottom: true,
+      ownsElementAnchor: false,
+      isFollowingTail: false,
     })).toBe(false);
   });
 

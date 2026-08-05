@@ -216,6 +216,10 @@ subpixel scroll limit.
 Physical-bottom synchronization must yield whenever the coordinator owns an
 element anchor. It also yields while streaming `following-tail` owns the
 viewport, because the single tail loop is the writer for content-growth motion.
+Outside tail follow, physical-bottom synchronization is limited to a real
+viewport `clientHeight` change. A message, round footer, or other content growth
+changes `scrollHeight` only and must remain below the existing viewport instead
+of moving the transcript upward to reach the new physical bottom.
 A sticky pin intentionally sits at the physical bottom created by its
 reservation; treating that geometry as tail-follow causes every content growth
 measurement to push the pinned header upward before the coordinator can restore
