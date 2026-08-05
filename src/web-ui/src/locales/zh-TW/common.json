@@ -638,7 +638,10 @@
     "errorEnterName": "請輸入工作區名稱",
     "errorCreateFailed": "建立工作區失敗",
     "errorInvalidName": "工作區名稱不能包含以下字符：/ \\ : * ? \" < > |",
-    "errorAlreadyExists": "所選位置已存在同名工作區"
+    "errorAlreadyExists": "所選位置已存在同名工作區",
+    "errorParentNoAccess": "沒有所選父目錄的存取權限",
+    "errorNameTooLong": "工作區名稱過長（最多 255 個字元）",
+    "errorPathNotFound": "工作區資料夾不存在或已被移動"
   },
   "peerDirectoryPicker": {
     "loading": "正在載入遠端目錄…",

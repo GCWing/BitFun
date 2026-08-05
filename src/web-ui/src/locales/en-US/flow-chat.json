@@ -2356,7 +2356,9 @@
     }
   },
   "errors": {
-    "sendFailed": "Failed to send message"
+    "sendFailed": "Failed to send message",
+    "thinkingProcessError": "Thinking process error",
+    "workspaceNotResolvable": "The workspace folder does not exist or has been moved"
   },
   "actions": {
     "send": "Send"

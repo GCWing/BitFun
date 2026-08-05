@@ -18,7 +18,7 @@ import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 import type { AIModelConfig, AgentModelDefaultsConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import type { FlowChatContext, SessionConfig } from './types';
 import type { Session } from '../../types/flow-chat';
-import { touchSessionActivity, cleanupSaveState } from './PersistenceModule';
+import { touchSessionActivity, cleanupSaveState, updateSessionMetadata } from './PersistenceModule';
 import { cleanupSessionBuffers } from './TextChunkModule';
 import {
   createTextSessionTitleDescriptor,
@@ -642,6 +642,12 @@ export async function createChatSession(
         remoteSshHost,
         titleDescriptor,
       );
+
+      // Persist the title metadata (incl. the i18n title key/params) at creation
+      // so an empty session can re-localize its default name on a later reload +
+      // locale switch. createSession only stored the localized sessionName string;
+      // without this, empty sessions have no title key on disk and can't re-localize.
+      await updateSessionMetadata(context, response.sessionId);
 
       return response.sessionId;
     });

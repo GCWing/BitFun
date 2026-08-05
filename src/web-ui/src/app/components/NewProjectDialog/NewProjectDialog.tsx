@@ -17,6 +17,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { Modal, Button, Input, Tooltip } from '@/component-library';
 import './NewProjectDialog.scss';
 import {workspaceAPI, systemAPI} from "@/infrastructure";
+import { isTauriCommandError } from '@/infrastructure/api/errors/TauriCommandError';
 import { notificationService } from '@/shared/notification-system';
 
 const log = createLogger('NewProjectDialog');
@@ -81,6 +82,10 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
       notificationService.warning(t('newProject.errorInvalidName'), { duration: 4500 });
       return;
     }
+    if (projectName.trim().length > 255) {
+      setError(t('newProject.errorNameTooLong'));
+      return;
+    }
 
     // Pre-creation existence / case-collision check. On Windows/macOS the
     // filesystem is case-insensitive, so "MyProject" and "myproject" resolve to
@@ -107,7 +112,14 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
       onClose();
     } catch (error) {
       log.error('Failed to create project', error);
-      const message = error instanceof Error && error.message ? error.message : t('newProject.errorCreateFailed');
+      let message: string;
+      if (isTauriCommandError(error) && error.isPermissionError()) {
+        message = t('newProject.errorParentNoAccess');
+      } else if (error instanceof Error && /does not exist|not a directory/i.test(error.message)) {
+        message = t('newProject.errorPathNotFound');
+      } else {
+        message = t('newProject.errorCreateFailed');
+      }
       setError(message);
       notificationService.error(message, { duration: 4500 });
     } finally {
