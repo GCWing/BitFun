@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, Info, Brain } from 'lucide-react';
-import { Button, Switch, Select, IconButton, NumberInput, Card, Modal, Input, Textarea, Tooltip, type SelectOption } from '@/component-library';
+import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Info, Brain } from 'lucide-react';
+import { Button, Switch, Select, IconButton, NumberInput, Card, Modal, Input, Search, Textarea, Tooltip, type SelectOption } from '@/component-library';
 import {
   AIModelConfig as AIModelConfigType, 
   ProxyConfig, 
@@ -22,6 +22,7 @@ import type {
   SubscriptionAccount,
   SubscriptionApiOffering,
 } from '@/infrastructure/api/service-api/AIApi';
+import type { ProviderRegion } from '@/shared/types';
 import type { OpenCodePlan, SubscriptionProvider } from '../types';
 import { useNotification } from '@/shared/notification-system';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow, ConfigCollectionItem } from './common';
@@ -40,6 +41,9 @@ import {
 import './AIModelConfig.scss';
 
 const log = createLogger('AIModelConfig');
+
+/** Rows the preset picker shows before the user searches or expands the list. */
+const COLLAPSED_PROVIDER_COUNT = 6;
 
 interface RemoteModelOption {
   id: string;
@@ -367,7 +371,7 @@ function configsNeedingAutoTest(
 }
 
 const AIModelConfig: React.FC = () => {
-  const { t } = useTranslation('settings/ai-model');
+  const { t, i18n } = useTranslation('settings/ai-model');
   const { t: tDefault } = useTranslation('settings/default-model');
   const { t: tComponents } = useTranslation('components');
   const [aiModels, setAiModels] = useState<AIModelConfigType[]>([]);
@@ -383,7 +387,9 @@ const AIModelConfig: React.FC = () => {
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
 
   const [creationMode, setCreationMode] = useState<'selection' | 'form' | null>(null);
-  
+  const [providerQuery, setProviderQuery] = useState('');
+  const [showAllProviders, setShowAllProviders] = useState(false);
+
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const [proxyConfig, setProxyConfig] = useState<ProxyConfig>({
     enabled: false,
@@ -566,20 +572,50 @@ const AIModelConfig: React.FC = () => {
       .map(provider => provider.id),
     [providerTemplates],
   );
+  // A Chinese UI leads with mainland providers, every other UI leads with the
+  // international ones. Both keep the full list, only the order changes.
+  const preferredProviderRegion: ProviderRegion = i18n.language.toLowerCase().startsWith('zh') ? 'cn' : 'global';
   const providers = useMemo(() => {
-    const sorted = Object.values(providerTemplates).sort((a, b) => {
-      const indexA = providerOrder.indexOf(a.id);
-      const indexB = providerOrder.indexOf(b.id);
-      return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
-    });
-    
+    const regionRank = (region: ProviderRegion) => {
+      if (region === 'any') return 0;
+      return region === preferredProviderRegion ? 1 : 2;
+    };
+
     // Dynamically get translated name and description
-    return sorted.map(provider => ({
-      ...provider,
-      name: t(`providers.${provider.id}.name`),
-      description: t(`providers.${provider.id}.description`)
-    }));
-  }, [providerOrder, providerTemplates, t]);
+    return Object.values(providerTemplates)
+      .map(provider => {
+        const localizedName = t(`providers.${provider.id}.name`);
+        const localizedDescription = t(`providers.${provider.id}.description`);
+        return {
+          ...provider,
+          name: localizedName,
+          description: localizedDescription,
+          // Keeps the catalog's English name searchable while a CJK locale renders the localized one.
+          searchText: [provider.id, provider.name, localizedName, localizedDescription, ...provider.models]
+            .join(' ')
+            .toLowerCase(),
+        };
+      })
+      .sort((left, right) => (
+        regionRank(left.region ?? 'any') - regionRank(right.region ?? 'any')
+        || (left.displayOrder ?? 999) - (right.displayOrder ?? 999)
+        || left.name.localeCompare(right.name)
+      ));
+  }, [preferredProviderRegion, providerTemplates, t]);
+
+  const normalizedProviderQuery = providerQuery.trim().toLowerCase();
+  const matchedProviders = useMemo(() => (
+    normalizedProviderQuery
+      ? providers.filter(provider => provider.searchText.includes(normalizedProviderQuery))
+      : providers
+  ), [normalizedProviderQuery, providers]);
+  // Searching always reveals every hit; only the resting list stays short.
+  const canToggleProviderList = !normalizedProviderQuery
+    && matchedProviders.length > COLLAPSED_PROVIDER_COUNT;
+  const isProviderListCollapsed = canToggleProviderList && !showAllProviders;
+  const visibleProviders = isProviderListCollapsed
+    ? matchedProviders.slice(0, COLLAPSED_PROVIDER_COUNT)
+    : matchedProviders;
 
   // Current template with translations (must be at top level, before any conditional returns)
   const currentTemplate = useMemo(() => {
@@ -910,6 +946,8 @@ const AIModelConfig: React.FC = () => {
     setManualModelInput('');
     setShowApiKey(false);
     setSelectedProviderId(null);
+    setProviderQuery('');
+    setShowAllProviders(false);
     setCreationMode('selection');
   };
 
@@ -1796,6 +1834,8 @@ const AIModelConfig: React.FC = () => {
     setEditingConfig(null);
     setCreationMode(null);
     setSelectedProviderId(null);
+    setProviderQuery('');
+    setShowAllProviders(false);
     setReasoningPanelDraftKey(null);
   };
 
@@ -1846,13 +1886,13 @@ const AIModelConfig: React.FC = () => {
               data-testid="settings-model-custom-config-btn"
               data-provider-id="custom"
               variant="default"
-              padding="medium"
+              padding="small"
               interactive
               className="bitfun-ai-model-config__custom-option"
               onClick={handleSelectCustom}
             >
               <div className="bitfun-ai-model-config__custom-option-content" data-bf-component="ai-model-config" data-bf-part="customOption">
-                <Settings size={24} />
+                <Settings size={18} />
                 <div>
                   <div className="bitfun-ai-model-config__custom-option-title" data-bf-component="ai-model-config" data-bf-part="customOptionTitle">{t('providerSelection.customTitle')}</div>
                   <div className="bitfun-ai-model-config__custom-option-description" data-bf-component="ai-model-config" data-bf-part="customOptionDescription">{t('providerSelection.customDescription')}</div>
@@ -1865,58 +1905,94 @@ const AIModelConfig: React.FC = () => {
               <span>{t('providerSelection.orSelectProvider')}</span>
             </div>
 
-            
-            <div className="bitfun-ai-model-config__provider-grid" data-bf-component="ai-model-config" data-bf-part="providerGrid">
-              {providers.map(provider => (
-                <Card
+
+            <Search
+              size="small"
+              className="bitfun-ai-model-config__provider-search"
+              data-testid="settings-model-provider-search"
+              data-bf-component="ai-model-config"
+              data-bf-part="providerSearch"
+              value={providerQuery}
+              placeholder={t('providerSelection.searchProviders')}
+              inputAriaLabel={t('providerSelection.searchProviders')}
+              onChange={setProviderQuery}
+              onSearch={() => {
+                const firstMatch = visibleProviders[0];
+                if (normalizedProviderQuery && firstMatch) handleSelectProvider(firstMatch.id);
+              }}
+            />
+
+
+            <div className="bitfun-ai-model-config__provider-list" data-bf-component="ai-model-config" data-bf-part="providerList">
+              {visibleProviders.map(provider => (
+                // The help link is a sibling of the select button, not a child:
+                // a button may not contain interactive content.
+                <div
                   key={provider.id}
-                  data-testid="settings-model-provider-option"
-                  data-provider-id={provider.id}
-                  variant="default"
-                  padding="medium"
-                  interactive
-                  className="bitfun-ai-model-config__provider-card"
-                  onClick={() => handleSelectProvider(provider.id)}
+                  className="bitfun-ai-model-config__provider-row"
+                  data-bf-component="ai-model-config"
+                  data-bf-part="providerRow"
                 >
-                  <div className="bitfun-ai-model-config__provider-card-content" data-bf-component="ai-model-config" data-bf-part="providerCard">
-                    <div className="bitfun-ai-model-config__provider-name" data-bf-component="ai-model-config" data-bf-part="providerName">{provider.name}</div>
-                    <div className="bitfun-ai-model-config__provider-description" data-bf-component="ai-model-config" data-bf-part="providerDescription">{provider.description}</div>
-                    <div className="bitfun-ai-model-config__provider-models" data-bf-component="ai-model-config" data-bf-part="providerModels">
-                      {provider.models.slice(0, 3).map(model => (
-                        <span key={model} className="bitfun-ai-model-config__provider-model-tag" data-bf-component="ai-model-config" data-bf-part="providerTag">{model}</span>
-                      ))}
-                      {provider.models.length > 3 && (
-                        <span className="bitfun-ai-model-config__provider-model-tag bitfun-ai-model-config__provider-model-tag--more" data-bf-component="ai-model-config" data-bf-part="providerTag">
-                          +{provider.models.length - 3}
-                        </span>
-                      )}
-                    </div>
-                    {provider.helpUrl && (
-                      <a
-                        href={provider.helpUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="bitfun-ai-model-config__provider-help-link"
-                        onClick={async (e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          try {
-                            await systemAPI.openExternal(provider.helpUrl!);
-                          } catch (error) {
-                            console.error('[AIModelConfig] Failed to open external URL:', error);
-                          }
-                        }}
-                      >
-                        <ExternalLink size={12} />
-                        {t('providerSelection.getApiKey')}
-                      </a>
-                    )}
-                  </div>
-                </Card>
+                  <button
+                    type="button"
+                    data-testid="settings-model-provider-option"
+                    data-provider-id={provider.id}
+                    className="bitfun-ai-model-config__provider-select"
+                    data-bf-component="ai-model-config"
+                    data-bf-part="providerSelect"
+                    onClick={() => handleSelectProvider(provider.id)}
+                  >
+                    <span className="bitfun-ai-model-config__provider-name" data-bf-component="ai-model-config" data-bf-part="providerName">{provider.name}</span>
+                    <span className="bitfun-ai-model-config__provider-description" data-bf-component="ai-model-config" data-bf-part="providerDescription">{provider.description}</span>
+                  </button>
+                  {provider.helpUrl && (
+                    <a
+                      href={provider.helpUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bitfun-ai-model-config__provider-help-link"
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        try {
+                          await systemAPI.openExternal(provider.helpUrl!);
+                        } catch (error) {
+                          console.error('[AIModelConfig] Failed to open external URL:', error);
+                        }
+                      }}
+                    >
+                      <ExternalLink size={12} />
+                      {t('providerSelection.getApiKey')}
+                    </a>
+                  )}
+                  <ChevronRight size={14} className="bitfun-ai-model-config__provider-chevron" aria-hidden="true" />
+                </div>
               ))}
+
+              {visibleProviders.length === 0 && (
+                <div className="bitfun-ai-model-config__provider-empty" data-bf-component="ai-model-config" data-bf-part="providerEmpty">
+                  {t('providerSelection.noProviderMatches')}
+                </div>
+              )}
+
+              {canToggleProviderList && (
+                <button
+                  type="button"
+                  data-testid="settings-model-provider-expand-btn"
+                  className="bitfun-ai-model-config__provider-more"
+                  data-bf-component="ai-model-config"
+                  data-bf-part="providerMore"
+                  onClick={() => setShowAllProviders(previous => !previous)}
+                >
+                  {isProviderListCollapsed
+                    ? t('providerSelection.showAllProviders', { count: matchedProviders.length })
+                    : t('providerSelection.collapseProviders')}
+                  {isProviderListCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                </button>
+              )}
             </div>
 
-            
+
             <div className="bitfun-ai-model-config__selection-actions" data-bf-component="ai-model-config" data-bf-part="selectionActions">
               <Button variant="secondary" onClick={() => setCreationMode(null)}>
                 {t('actions.cancel')}

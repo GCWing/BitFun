@@ -5,6 +5,7 @@
     {
       "id": "openbitfun",
       "display_order": 0,
+      "region": "any",
       "name": "OpenBitFun",
       "description": "OpenBitFun hosted AI service",
       "requires_api_key": true,
@@ -47,6 +48,7 @@
     {
       "id": "zhipu",
       "display_order": 10,
+      "region": "cn",
       "name": "Zhipu AI",
       "description": "Zhipu GLM series",
       "help_url": "https://open.bigmodel.cn/usercenter/apikeys",
@@ -69,6 +71,7 @@
     {
       "id": "qwen",
       "display_order": 20,
+      "region": "cn",
       "name": "Qwen (Alibaba)",
       "description": "Alibaba Qwen series",
       "help_url": "https://dashscope.console.aliyun.com/apiKey",
@@ -90,6 +93,7 @@
     {
       "id": "deepseek",
       "display_order": 30,
+      "region": "cn",
       "name": "DeepSeek",
       "description": "DeepSeek AI models",
       "help_url": "https://platform.deepseek.com/api_keys",
@@ -108,6 +112,7 @@
     {
       "id": "volcengine",
       "display_order": 40,
+      "region": "cn",
       "name": "Volcengine",
       "description": "ByteDance Volcengine",
       "help_url": "https://console.volcengine.com/ark/",
@@ -127,6 +132,7 @@
     {
       "id": "minimax",
       "display_order": 50,
+      "region": "cn",
       "name": "MiniMax",
       "description": "MiniMax AI models",
       "help_url": "https://platform.minimax.io/",
@@ -147,6 +153,7 @@
     {
       "id": "moonshot",
       "display_order": 60,
+      "region": "cn",
       "name": "Moonshot (Kimi)",
       "description": "Moonshot Kimi series",
       "help_url": "https://platform.kimi.ai/console",
@@ -168,6 +175,7 @@
     {
       "id": "gemini",
       "display_order": 70,
+      "region": "global",
       "name": "Google Gemini",
       "description": "Google Gemini API models",
       "help_url": "https://aistudio.google.com/app/apikey",
@@ -185,6 +193,7 @@
     {
       "id": "anthropic",
       "display_order": 80,
+      "region": "global",
       "name": "Anthropic",
       "description": "Anthropic Claude series",
       "help_url": "https://platform.claude.com/",
@@ -202,6 +211,7 @@
     {
       "id": "siliconflow",
       "display_order": 90,
+      "region": "cn",
       "name": "SiliconFlow",
       "description": "SiliconFlow model marketplace",
       "help_url": "https://cloud.siliconflow.cn/account/ak",
@@ -221,6 +231,7 @@
     {
       "id": "nvidia",
       "display_order": 100,
+      "region": "global",
       "name": "NVIDIA",
       "description": "NVIDIA NIM models",
       "help_url": "https://build.nvidia.com/settings/api-keys",
@@ -238,6 +249,7 @@
     {
       "id": "openrouter",
       "display_order": 110,
+      "region": "global",
       "name": "OpenRouter",
       "description": "OpenRouter model marketplace",
       "help_url": "https://openrouter.ai/keys",
@@ -255,6 +267,7 @@
     {
       "id": "tokendance",
       "display_order": 120,
+      "region": "cn",
       "name": "TokenDance",
       "description": "TokenDance unified AI model gateway",
       "help_url": "https://tokendance.space/keys",

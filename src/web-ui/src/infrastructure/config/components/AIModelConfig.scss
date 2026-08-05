@@ -1723,81 +1723,133 @@
 
   
   &__provider-selection {
-    max-width: 900px;
+    max-width: 640px;
     width: 100%;
     margin: 0 auto;
     padding: $size-gap-4;
   }
 
-  &__provider-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: $size-gap-4;
-    margin-bottom: $size-gap-6;
+  &__provider-search {
+    width: 100%;
+    margin-bottom: $size-gap-2;
   }
 
-  &__provider-card {
-    cursor: pointer;
-    transition: all $motion-base $easing-standard;
+  // One bordered container with hairline dividers keeps every provider on a row
+  // of the same height, instead of a card grid that stretches to its tallest cell.
+  &__provider-list {
+    display: flex;
+    flex-direction: column;
     border: 1px solid var(--bf-appearance-token-border-base);
+    border-radius: $size-radius-sm;
+    overflow: hidden;
+  }
+
+  &__provider-row {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    height: 38px;
+    padding: 0 $size-gap-3;
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    transition: background-color $motion-fast $easing-standard;
+
+    &:last-child {
+      border-bottom: none;
+    }
 
     &:hover {
-      border-color: var(--bf-appearance-token-color-accent-500);
-      background: var(--bf-appearance-token-color-accent-100);
-      transform: translateY(-2px);
+      background: var(--bf-appearance-token-element-bg-hover);
     }
   }
 
-  &__provider-card-content {
+  // Spans the row so the whole line is the click target for picking a provider.
+  &__provider-select {
     display: flex;
-    flex-direction: column;
+    align-items: center;
     gap: $size-gap-2;
+    flex: 1;
+    min-width: 0;
     height: 100%;
+    padding: 0;
+    background: transparent;
+    border: none;
+    text-align: start;
+    cursor: pointer;
   }
 
   &__provider-name {
-    font-size: var(--bf-appearance-token-font-size-base);
+    flex-shrink: 0;
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: $font-weight-semibold;
     color: var(--bf-appearance-token-color-text-primary);
-  }
+    white-space: nowrap;
 
-  &__provider-description {
-    font-size: var(--bf-appearance-token-font-size-sm);
-    color: var(--bf-appearance-token-color-text-secondary);
-    line-height: 1.4;
-  }
-
-  &__provider-models {
-    display: flex;
-    flex-wrap: wrap;
-    gap: $size-gap-1;
-    margin-top: $size-gap-1;
-  }
-
-  &__provider-model-tag {
-    padding: 2px 6px;
-    background: var(--bf-appearance-token-element-bg-subtle);
-    border-radius: $size-radius-sm;
-    font-size: 10px;
-    font-family: $font-family-mono;
-    color: var(--bf-appearance-token-color-text-muted);
-
-    &--more {
-      background: var(--bf-appearance-token-color-accent-100);
+    .bitfun-ai-model-config__provider-row:hover & {
       color: var(--bf-appearance-token-color-accent-500);
     }
   }
 
+  &__provider-description {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__provider-chevron {
+    flex-shrink: 0;
+    color: var(--bf-appearance-token-color-text-muted);
+  }
+
+  &__provider-empty {
+    padding: $size-gap-4 $size-gap-3;
+    text-align: center;
+    font-size: var(--bf-appearance-token-font-size-sm);
+    color: var(--bf-appearance-token-color-text-muted);
+  }
+
+  &__provider-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: $size-gap-1;
+    height: 34px;
+    padding: 0 $size-gap-3;
+    background: var(--bf-appearance-token-element-bg-subtle);
+    border: none;
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-secondary);
+    cursor: pointer;
+    transition:
+      background-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
+
+    &:hover {
+      background: var(--bf-appearance-token-element-bg-hover);
+      color: var(--bf-appearance-token-color-accent-500);
+    }
+  }
+
+  // Stays quiet on a dense row but never hidden: an invisible link inside a
+  // clickable row would swallow the click that should open the provider form.
   &__provider-help-link {
     display: inline-flex;
     align-items: center;
+    flex-shrink: 0;
     gap: 4px;
-    margin-top: auto;
-    padding-top: $size-gap-2;
     font-size: var(--bf-appearance-token-font-size-xs);
-    color: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-appearance-token-color-text-muted);
+    white-space: nowrap;
     text-decoration: none;
-    transition: color $motion-base $easing-standard;
+    transition: color $motion-fast $easing-standard;
+
+    .bitfun-ai-model-config__provider-row:hover & {
+      color: var(--bf-appearance-token-color-accent-500);
+    }
 
     &:hover {
       color: var(--bf-appearance-token-color-accent-400);
@@ -1808,10 +1860,10 @@
   &__selection-divider {
     display: flex;
     align-items: center;
-    gap: $size-gap-4;
-    margin: $size-gap-6 0;
+    gap: $size-gap-3;
+    margin: $size-gap-4 0 $size-gap-3;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-xs);
 
     &::before,
     &::after {
@@ -1837,7 +1889,8 @@
   &__custom-option-content {
     display: flex;
     align-items: center;
-    gap: $size-gap-4;
+    gap: $size-gap-3;
+    min-width: 0;
 
     svg {
       flex-shrink: 0;
@@ -1848,24 +1901,31 @@
     .bitfun-ai-model-config__custom-option:hover & svg {
       color: var(--bf-appearance-token-color-accent-500);
     }
+
+    > div {
+      min-width: 0;
+    }
   }
 
   &__custom-option-title {
-    font-size: var(--bf-appearance-token-font-size-base);
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: $font-weight-semibold;
     color: var(--bf-appearance-token-color-text-primary);
-    margin-bottom: 4px;
+    margin-bottom: 2px;
   }
 
   &__custom-option-description {
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-xs);
     color: var(--bf-appearance-token-color-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   &__selection-actions {
     display: flex;
     justify-content: center;
-    margin-top: $size-gap-6;
+    margin-top: $size-gap-4;
   }
 
   

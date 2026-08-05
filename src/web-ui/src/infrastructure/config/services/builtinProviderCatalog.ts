@@ -1,7 +1,7 @@
 import overlayDocument from '../../../../../shared/ai-provider-catalog/providers.json';
 
 import type { ProviderCatalog, ProviderCatalogProvider } from '@/infrastructure/api/service-api/AIApi';
-import type { ApiFormat, ProviderTemplate } from '@/shared/types';
+import type { ApiFormat, ProviderRegion, ProviderTemplate } from '@/shared/types';
 
 interface RawEndpoint {
   id: string;
@@ -14,6 +14,7 @@ interface RawEndpoint {
 interface RawProvider {
   id: string;
   display_order: number;
+  region?: string;
   name: string;
   description: string;
   help_url?: string;
@@ -28,6 +29,10 @@ function isApiFormat(value: string): value is ApiFormat {
   return ['openai', 'responses', 'anthropic', 'gemini', 'gemini-code-assist'].includes(value);
 }
 
+function toRegion(value: string | undefined): ProviderRegion {
+  return value === 'cn' || value === 'global' ? value : 'any';
+}
+
 function toTemplate(provider: RawProvider): ProviderTemplate {
   const defaultEndpoint = provider.endpoints.find(endpoint => endpoint.is_default)
     ?? provider.endpoints[0];
@@ -37,6 +42,7 @@ function toTemplate(provider: RawProvider): ProviderTemplate {
   return {
     id: provider.id,
     displayOrder: provider.display_order,
+    region: toRegion(provider.region),
     name: provider.name,
     baseUrl: defaultEndpoint.base_url,
     format: defaultEndpoint.api_format,

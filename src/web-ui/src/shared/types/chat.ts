@@ -58,9 +58,17 @@ export interface ProviderBaseUrlOption {
   note: string;
 }
 
+/**
+ * Home market of a preset provider. `any` marks region-neutral first-party
+ * entries; the preset picker ranks the group matching the UI language first and
+ * keeps every other provider listed below it.
+ */
+export type ProviderRegion = 'any' | 'cn' | 'global';
+
 export interface ProviderTemplate {
   id: string;
   displayOrder?: number;
+  region?: ProviderRegion;
   name: string;
   baseUrl: string;
   format: ApiFormat;

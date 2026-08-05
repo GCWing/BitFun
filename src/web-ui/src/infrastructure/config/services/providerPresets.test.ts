@@ -72,6 +72,17 @@ describe('provider presets', () => {
     }
   });
 
+  it('declares a home market for every preset provider', async () => {
+    const { PROVIDER_TEMPLATES } = await loadPresets();
+
+    // The preset picker ranks by region, so an overlay entry without one would
+    // silently land in the region-neutral group that sorts above everything else.
+    const regionless = Object.values(PROVIDER_TEMPLATES)
+      .filter(template => template.region !== 'cn' && template.region !== 'global')
+      .map(template => template.id);
+    expect(regionless, 'these providers need a "region" in the shared overlay').toEqual(['openbitfun']);
+  });
+
   it('shapes base URLs so the adapter appends the right suffix', async () => {
     const { PROVIDER_TEMPLATES } = await loadPresets();
 
