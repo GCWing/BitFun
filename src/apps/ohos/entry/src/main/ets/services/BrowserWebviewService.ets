@@ -140,7 +140,12 @@ export class BrowserWebviewService {
       javascriptEnable: true,
       devtools: true,
       onNavigationRequest: (url: string): boolean => {
-        return true;
+        // RustWebviewNodeController forwards this value to ArkUI Web's
+        // `onLoadIntercept`: `true` means the request is intercepted (and the
+        // page is not loaded), while `false` allows normal navigation.
+        // The embedded browser must allow both the initial URL and subsequent
+        // address-bar navigations to reach the Web component.
+        return false;
       },
       onPageBegin: (url: string): void => {
         RustModule.emitBrowserPageLoad(label, 'started', url);
