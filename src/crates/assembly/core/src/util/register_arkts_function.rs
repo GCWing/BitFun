@@ -75,6 +75,26 @@ pub fn notify_system_color_mode(mode: String) {
     });
 }
 
+pub async fn call_arkts_string_function(
+    function_name: &str,
+    input: String,
+) -> Result<String, String> {
+    let function = {
+        let lock = JS_THREADSAFE_FUNCTION.read();
+        lock.get(function_name).cloned()
+    };
+
+    let Some(function) = function else {
+        return Err(format!("{function_name} has not registered"));
+    };
+
+    let promise = function
+        .call_async(Ok(input))
+        .await
+        .map_err(|error| error.to_string())?;
+    promise.await.map_err(|error| error.to_string())
+}
+
 pub async fn open_dialog_file(options: &str) -> Result<String, String> {
     let function = {
         let lock = JS_THREADSAFE_FUNCTION.read();
