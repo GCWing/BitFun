@@ -92,3 +92,6 @@ external/
 /.flashgrep-index-engine/
 
 .design/
+
+target-isolated/
+

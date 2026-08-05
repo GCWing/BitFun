@@ -3276,6 +3276,14 @@ impl ExecutionEngine {
         let mut recent_failed_tool_signatures: Vec<String> = Vec::new();
         let mut failed_tool_recovery_attempts: usize = 0;
         const MAX_FAILED_TOOL_RECOVERY_ATTEMPTS: usize = 3;
+
+        // Track consecutive identical SUCCESSFUL tool-call signatures.
+        // The failed-signature detectors above only fire when tool results
+        // are errors; a loop of successful calls (e.g. leaked tool-call XML
+        // causing repeated Write/Read/Exec) trips no detector. Issue #1492.
+        let mut recent_successful_tool_signatures: Vec<String> = Vec::new();
+        let mut successful_tool_recovery_attempts: usize = 0;
+        const MAX_SUCCESSFUL_TOOL_RECOVERY_ATTEMPTS: usize = 3;
         const MAX_PARTIAL_CONTINUATION_ATTEMPTS: usize = 3;
         let mut full_compression_count = 0usize;
         let mut compression_failure_count = 0u32;
@@ -3880,21 +3888,29 @@ impl ExecutionEngine {
 
             if let Some(round_signature) = Self::tool_call_signature(&round_result.tool_calls) {
                 recent_tool_signatures.push(round_signature.clone());
-                if Self::failed_tool_round_signature(
+                let all_failed = Self::failed_tool_round_signature(
                     &round_result.tool_calls,
                     &round_result.tool_result_messages,
                 )
-                .is_some()
-                {
+                .is_some();
+                if all_failed {
                     recent_failed_tool_signatures.push(round_signature);
+                    // A failed round breaks the successful-call streak.
+                    recent_successful_tool_signatures.clear();
+                    successful_tool_recovery_attempts = 0;
                 } else {
                     recent_failed_tool_signatures.clear();
                     failed_tool_recovery_attempts = 0;
+                    // Track successful rounds for successful-loop detection
+                    // (issue #1492: loops of successful calls trip no detector).
+                    recent_successful_tool_signatures.push(round_signature);
                 }
             } else {
                 recent_tool_signatures.clear();
                 recent_failed_tool_signatures.clear();
                 failed_tool_recovery_attempts = 0;
+                recent_successful_tool_signatures.clear();
+                successful_tool_recovery_attempts = 0;
             }
 
             let after_round_pressure = Self::estimate_auto_compression_pressure(
@@ -4021,6 +4037,105 @@ impl ExecutionEngine {
                             window_size, MAX_FAILED_TOOL_RECOVERY_ATTEMPTS
                     );
                     finalization_reason = Some("repeated_tool_failures");
+                    break;
+                }
+            }
+
+            // Repeated successful tool-call detection (issue #1492).
+            //
+            // The failed-tool detectors above only fire when tool results are
+            // errors. A loop of SUCCESSFUL tool calls (e.g. leaked tool-call
+            // XML causing repeated Write/Read/Exec with identical arguments,
+            // where each call "succeeds" but makes no real progress) trips no
+            // detector. The model stays stuck for hundreds of rounds, each
+            // round adding content to context without advancing the task,
+            // causing unbounded context expansion.
+            if recent_successful_tool_signatures.len() >= max_consec {
+                let tail = &recent_successful_tool_signatures
+                    [recent_successful_tool_signatures.len() - max_consec..];
+                if tail.windows(2).all(|w| w[0] == w[1]) {
+                    if successful_tool_recovery_attempts < MAX_SUCCESSFUL_TOOL_RECOVERY_ATTEMPTS {
+                        successful_tool_recovery_attempts += 1;
+                        warn!(
+                            "Repeated successful tool calls detected: {} consecutive rounds with identical tool signatures, injecting recovery prompt #{}",
+                            max_consec, successful_tool_recovery_attempts
+                        );
+                        let reminder = format!(
+                            "<system_reminder>Repeated tool calls detected: the same tool call with identical arguments has been executed {} times in a row. \
+                            This may indicate a tool-call XML leak causing infinite context expansion. You MUST now change your strategy: \
+                            (1) stop calling the same tool with the same arguments; \
+                            (2) if your recent output contains tool-call XML tags like <tool_calls>, <invoke>, or function_call, you may be leaking tool syntax as plain text — review and remove it; \
+                            (3) if you are stuck, provide a clear summary to the user. \
+                            Do NOT repeat the same tool call again.</system_reminder>",
+                            max_consec
+                        );
+                        let user_msg = Message::internal_reminder(
+                            InternalReminderKind::LoopRecovery,
+                            reminder,
+                        )
+                        .with_turn_id(context.dialog_turn_id.clone());
+                        messages.push(user_msg.clone());
+                        if let Err(e) = self
+                            .session_manager
+                            .add_message(&context.session_id, user_msg)
+                            .await
+                        {
+                            warn!("Failed to persist successful-tool recovery reminder: {}", e);
+                        }
+                        recent_successful_tool_signatures.clear();
+                    } else {
+                        warn!(
+                            "Repeated successful tool calls detected: {} consecutive rounds with identical tool signatures, max recovery attempts ({}) exhausted, finalizing without tools",
+                            max_consec, MAX_SUCCESSFUL_TOOL_RECOVERY_ATTEMPTS
+                        );
+                        finalization_reason = Some("repeated_successful_tool_calls");
+                        break;
+                    }
+                }
+            }
+
+            // Periodic-pattern loop detection for successful rounds.
+            if Self::is_periodic_tool_signature_loop(
+                &recent_successful_tool_signatures,
+                max_consec,
+            ) {
+                let window_size = max_consec.max(1).saturating_mul(2);
+                if successful_tool_recovery_attempts < MAX_SUCCESSFUL_TOOL_RECOVERY_ATTEMPTS {
+                    successful_tool_recovery_attempts += 1;
+                    warn!(
+                        "Repeated successful tool calls detected: last {} successful rounds form a periodic tool-call pattern, injecting recovery prompt #{}",
+                        window_size, successful_tool_recovery_attempts
+                    );
+                    let reminder = format!(
+                        "<system_reminder>Repeated tool calls detected: your last {} tool calls form a repeating pattern with no new progress. \
+                        This may indicate a tool-call XML leak causing infinite context expansion. \
+                        You MUST now change your strategy: \
+                        (1) stop calling the same tools with the same arguments; \
+                        (2) if your recent output contains tool-call XML tags, you may be leaking tool syntax as plain text — review and remove it; \
+                        (3) provide a clear summary to the user. \
+                        Do NOT repeat the same pattern of tool calls.</system_reminder>",
+                        window_size
+                    );
+                    let user_msg = Message::internal_reminder(
+                        InternalReminderKind::PeriodicLoopRecovery,
+                        reminder,
+                    )
+                    .with_turn_id(context.dialog_turn_id.clone());
+                    messages.push(user_msg.clone());
+                    if let Err(e) = self
+                        .session_manager
+                        .add_message(&context.session_id, user_msg)
+                        .await
+                    {
+                        warn!("Failed to persist periodic successful-tool recovery reminder: {}", e);
+                    }
+                    recent_successful_tool_signatures.clear();
+                } else {
+                    warn!(
+                        "Repeated successful tool calls detected: last {} successful rounds form a periodic pattern, max recovery attempts ({}) exhausted, finalizing without tools",
+                        window_size, MAX_SUCCESSFUL_TOOL_RECOVERY_ATTEMPTS
+                    );
+                    finalization_reason = Some("repeated_successful_tool_calls");
                     break;
                 }
             }
