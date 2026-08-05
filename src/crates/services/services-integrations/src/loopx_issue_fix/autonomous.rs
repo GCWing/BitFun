@@ -47,10 +47,13 @@ tooling, or another agent's work, and killing it terminates you mid-turn. When a
 build or file lock is contended, wait and retry, keep your build outputs inside \
 your own worktree, or record a blocker todo — never clear processes.
 - Work each repository todo in an isolated worktree, created under one sibling \
-folder of the repository (<repository>-worktrees/). Worktrees and whatever build \
-caches you create inside them are yours to reclaim: at terminal closeout remove \
-the worktree (committed work lives on its branch), and never leave large build \
-outputs behind on completed or abandoned work.
+folder of the repository (<repository>-worktrees/). Base every fix branch on the \
+repository's DEFAULT branch (fetch the remote, then branch from origin/<default>), \
+never on the host checkout's current branch or HEAD — the checkout may sit on \
+unrelated in-flight work, and inheriting it bloats your pull request with foreign \
+changes. Worktrees and whatever build caches you create inside them are yours to \
+reclaim: at terminal closeout remove the worktree (committed work lives on its \
+branch), and never leave large build outputs behind on completed or abandoned work.
 - Repository-specific policy — toolchains, validation commands, path boundaries — \
 belongs in the goal's active state and registry, not in this prompt. Read it from \
 there, and write durable local rules back to the active state as you learn them.
