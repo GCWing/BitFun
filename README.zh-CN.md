@@ -4,9 +4,9 @@
 
 ![BitFun](./png/BitFun_title.png)
 
-### 开源桌面 Agent —— 它为任务造一个界面，而不是把所有事都塞进一个聊天框。
+### 开源桌面 AI Agent —— 每个任务，都给你一个能打开的应用
 
-Agentic Mini App · 自部署多设备互联互控 · 可以改到底的 Rust Runtime
+能写代码、能做文档、能操控桌面。小应用、Runtime、多设备互控的服务器，全部归你。MIT。
 
 [**⬇ 下载 macOS · Windows · Linux 版**](https://github.com/GCWing/BitFun/releases/latest)
 

@@ -4,9 +4,9 @@
 
 ![BitFun](./png/BitFun_title.png)
 
-### An open-source desktop agent that builds the interface your task needs.
+### An open-source desktop AI agent that turns every task into an app you can open
 
-Agentic Mini Apps · self-hosted multi-device control · a Rust runtime you can reshape.
+Writes code, produces documents, drives the desktop. The Mini Apps, the runtime, and the device-sync server are all yours. MIT.
 
 [**⬇ Download for macOS · Windows · Linux**](https://github.com/GCWing/BitFun/releases/latest)
 
