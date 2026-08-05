@@ -95,6 +95,19 @@ describe('deriveReviewDetailProjection', () => {
     });
   });
 
+  it('does not mark an unhydrated non-empty history as unavailable', () => {
+    const session = createSession({
+      historyState: 'ready',
+      dialogTurns: [],
+      totalTurnCount: 3,
+    });
+
+    expect(deriveReviewDetailProjection(session, false)).toEqual({
+      content: null,
+      execution: 'preparing',
+    });
+  });
+
   it('keeps an explicit user cancellation distinct from failure', () => {
     const session = createSession({
       historyState: 'ready',

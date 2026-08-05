@@ -11,6 +11,7 @@ import { stateMachineManager } from '../../state-machine';
 import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
 import { createLogger } from '@/shared/utils/logger';
 import type { FlowChatContext } from './types';
+import { isProjectedSessionEmpty } from '../../utils/flowChatTurnIdentity';
 import type { ImageContextData as ImageInputContextData } from '@/infrastructure/api/service-api/ImageContextTypes';
 import { pendingQueueManager } from './PendingQueueModule';
 import { isSessionInUseError } from '@/infrastructure/api/errors/TauriCommandError';
@@ -201,7 +202,8 @@ export async function sendMessage(
       throw new Error(`Session lost before starting dialog turn: ${sessionId}`);
     }
 
-    const isFirstMessage = readySession.dialogTurns.length === 0 && readySession.titleStatus !== 'generated';
+    const isFirstMessage = isProjectedSessionEmpty(readySession)
+      && readySession.titleStatus !== 'generated';
 
     const outcome = await driver.startTurn(
       context,

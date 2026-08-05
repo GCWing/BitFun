@@ -4504,6 +4504,229 @@ describe('FlowChatStore historical session hydration state', () => {
     });
   });
 
+  it('caches an optimistic turn after a partial restored tail at its absolute ordinal', async () => {
+    const catalog = createTurnCatalog(23);
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: {
+        sessionId: 'history-1',
+        sessionName: 'History 1',
+        agentType: 'agentic',
+        state: 'Idle',
+        turnCount: 23,
+        createdAt: 1,
+      },
+      turns: [20, 21, 22].map(index => createPersistedTurn(index)),
+      turnCatalog: catalog,
+      contextRestoreState: 'pending',
+      isPartial: true,
+      loadedTurnCount: 3,
+      totalTurnCount: 23,
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([[
+        'history-1',
+        createSession({
+          sessionId: 'history-1',
+          isHistorical: true,
+          historyState: 'metadata-only',
+        }),
+      ]]),
+      activeSessionId: 'history-1',
+    }));
+
+    await flowChatStore.loadSessionHistory('history-1', 'D:/workspace/BitFun');
+    flowChatStore.addDialogTurn('history-1', {
+      id: 'turn-23',
+      sessionId: 'history-1',
+      userMessage: { id: 'user-23', content: 'new prompt', timestamp: 24 },
+      modelRounds: [],
+      status: 'pending',
+      startTime: 24,
+    });
+
+    expect(flowChatStore.getState().sessions.get('history-1')).toMatchObject({
+      isPartial: true,
+      loadedTurnCount: 4,
+      totalTurnCount: 24,
+    });
+    const loadedRanges = flowChatStore.getSessionHistoryViewState('history-1')?.loadedRanges ?? [];
+    expect(loadedRanges).toMatchObject([{
+      startOrdinal: 20,
+      endOrdinalExclusive: 24,
+    }]);
+    expect(loadedRanges[0]?.turns.map(turn => turn.id)).toEqual([
+      'turn-20',
+      'turn-21',
+      'turn-22',
+      'turn-23',
+    ]);
+    expect(loadedRanges.some(range =>
+      range.startOrdinal <= 3
+      && range.endOrdinalExclusive > 3
+      && range.turns.some(turn => turn.id === 'turn-23')
+    )).toBe(false);
+  });
+
+  it('adopts an optimistic partial-tail turn in place without incrementing projected history twice', async () => {
+    const catalog = createTurnCatalog(23);
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: {
+        sessionId: 'history-1',
+        sessionName: 'History 1',
+        agentType: 'agentic',
+        state: 'Idle',
+        turnCount: 23,
+        createdAt: 1,
+      },
+      turns: [20, 21, 22].map(index => createPersistedTurn(index)),
+      turnCatalog: catalog,
+      contextRestoreState: 'pending',
+      isPartial: true,
+      loadedTurnCount: 3,
+      totalTurnCount: 23,
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([['history-1', createSession({
+        sessionId: 'history-1',
+        isHistorical: true,
+        historyState: 'metadata-only',
+      })]]),
+      activeSessionId: 'history-1',
+    }));
+    await flowChatStore.loadSessionHistory('history-1', 'D:/workspace/BitFun');
+    const optimistic = {
+      id: 'optimistic-23',
+      sessionId: 'history-1',
+      userMessage: { id: 'user-23', content: 'new prompt', timestamp: 24 },
+      modelRounds: [],
+      status: 'pending' as const,
+      startTime: 24,
+    };
+    flowChatStore.addDialogTurn('history-1', optimistic);
+
+    expect(flowChatStore.replaceOptimisticDialogTurn('history-1', optimistic.id, {
+      ...optimistic,
+      id: 'turn-23',
+      storageTurnIndex: 140,
+      backendTurnIndex: 140,
+    })).toBe(true);
+
+    expect(flowChatStore.getState().sessions.get('history-1')).toMatchObject({
+      loadedTurnCount: 4,
+      totalTurnCount: 24,
+      dialogTurns: [
+        { id: 'turn-20' },
+        { id: 'turn-21' },
+        { id: 'turn-22' },
+        { id: 'turn-23', storageTurnIndex: 140 },
+      ],
+    });
+    expect(flowChatStore.getSessionHistoryViewState('history-1')?.loadedRanges)
+      .toMatchObject([{ startOrdinal: 20, endOrdinalExclusive: 24 }]);
+  });
+
+  it('shifts cached ordinals after removing a counted optimistic turn', async () => {
+    const catalog = createTurnCatalog(23);
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: {
+        sessionId: 'history-1',
+        sessionName: 'History 1',
+        agentType: 'agentic',
+        state: 'Idle',
+        turnCount: 23,
+        createdAt: 1,
+      },
+      turns: [20, 21, 22].map(index => createPersistedTurn(index)),
+      turnCatalog: catalog,
+      contextRestoreState: 'pending',
+      isPartial: true,
+      loadedTurnCount: 3,
+      totalTurnCount: 23,
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([['history-1', createSession({
+        sessionId: 'history-1',
+        isHistorical: true,
+        historyState: 'metadata-only',
+      })]]),
+      activeSessionId: 'history-1',
+    }));
+    await flowChatStore.loadSessionHistory('history-1', 'D:/workspace/BitFun');
+
+    const createOptimisticTurn = (id: string, timestamp: number) => ({
+      id,
+      sessionId: 'history-1',
+      userMessage: { id: `user-${id}`, content: id, timestamp },
+      modelRounds: [],
+      status: 'pending' as const,
+      startTime: timestamp,
+    });
+    flowChatStore.addDialogTurn('history-1', createOptimisticTurn('optimistic-23', 24));
+    flowChatStore.addDialogTurn('history-1', createOptimisticTurn('optimistic-24', 25));
+
+    flowChatStore.deleteDialogTurn('history-1', 'optimistic-23');
+
+    expect(flowChatStore.getState().sessions.get('history-1')).toMatchObject({
+      loadedTurnCount: 4,
+      totalTurnCount: 24,
+      dialogTurns: [
+        { id: 'turn-20' },
+        { id: 'turn-21' },
+        { id: 'turn-22' },
+        { id: 'optimistic-24' },
+      ],
+    });
+    expect(flowChatStore.getSessionHistoryViewState('history-1')?.loadedRanges)
+      .toMatchObject([{ startOrdinal: 20, endOrdinalExclusive: 24 }]);
+  });
+
+  it('does not change projected counts when removing a provisional usage report', async () => {
+    const catalog = createTurnCatalog(23);
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: {
+        sessionId: 'history-1',
+        sessionName: 'History 1',
+        agentType: 'agentic',
+        state: 'Idle',
+        turnCount: 23,
+        createdAt: 1,
+      },
+      turns: [20, 21, 22].map(index => createPersistedTurn(index)),
+      turnCatalog: catalog,
+      contextRestoreState: 'pending',
+      isPartial: true,
+      loadedTurnCount: 3,
+      totalTurnCount: 23,
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([['history-1', createSession({
+        sessionId: 'history-1',
+        isHistorical: true,
+        historyState: 'metadata-only',
+      })]]),
+      activeSessionId: 'history-1',
+    }));
+    await flowChatStore.loadSessionHistory('history-1', 'D:/workspace/BitFun');
+    const provisional = flowChatStore.addLocalUsageReportTurn({
+      sessionId: 'history-1',
+      markdown: '# Loading',
+      reportId: 'usage-1',
+      schemaVersion: 1,
+      generatedAt: 24,
+      status: 'loading',
+    });
+
+    flowChatStore.deleteDialogTurn('history-1', provisional!.id);
+
+    expect(flowChatStore.getState().sessions.get('history-1')).toMatchObject({
+      loadedTurnCount: 3,
+      totalTurnCount: 23,
+      dialogTurns: [{ id: 'turn-20' }, { id: 'turn-21' }, { id: 'turn-22' }],
+    });
+    expect(flowChatStore.getSessionHistoryViewState('history-1')?.loadedRanges)
+      .toMatchObject([{ startOrdinal: 20, endOrdinalExclusive: 23 }]);
+  });
+
   it('invalidates cached history and catalog entries after truncating a complete session', async () => {
     const catalog = createTurnCatalog(10);
     const dialogTurns = Array.from({ length: 10 }, (_, index) => createPersistedTurn(index));

@@ -15,6 +15,7 @@ import {
   FlowTextItem
 } from '../types/flow-chat';
 import { flowChatStore } from '../store/FlowChatStore';
+import { isProjectedSessionEmpty } from '../utils/flowChatTurnIdentity';
 import { flowChatManager } from '../services/FlowChatManager';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { i18nService } from '@/infrastructure/i18n';
@@ -270,7 +271,7 @@ export const useFlowChat = () => {
     };
 
     const isFirstMessage =
-      session && session.dialogTurns.length === 0 && session.titleStatus !== 'generated';
+      session && isProjectedSessionEmpty(session) && session.titleStatus !== 'generated';
     
     flowChatStore.addDialogTurn(targetSessionId, dialogTurn);
 

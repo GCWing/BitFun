@@ -1,6 +1,7 @@
 import type { AnyFlowItem, DialogTurn, Session } from '../types/flow-chat';
 import type { VirtualItem } from '../store/modernFlowChatStore';
 import type { ReviewTaskOutcome } from './reviewTaskOutcome';
+import { isProjectedSessionEmpty } from './flowChatTurnIdentity';
 
 export type ReviewDetailContentState =
   | 'loading'
@@ -65,7 +66,7 @@ export function deriveReviewDetailProjection(
       ? 'loading'
       : session.historyState === 'failed'
         ? 'load-failed'
-        : session.historyState === 'ready' && session.dialogTurns.length === 0
+        : session.historyState === 'ready' && isProjectedSessionEmpty(session)
           ? 'unavailable'
           : null;
 

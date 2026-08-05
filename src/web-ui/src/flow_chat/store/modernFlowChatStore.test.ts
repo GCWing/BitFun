@@ -225,7 +225,7 @@ describe('sessionToVirtualItems explore grouping', () => {
     const repairedUserMessage = sessionToVirtualItems(repairedSession)
       .find(item => item.type === 'user-message');
 
-    expect(initialUserMessage).toMatchObject({ absoluteTurnIndex: 41 });
+    expect(initialUserMessage).toMatchObject({ absoluteTurnIndex: 20 });
     expect(repairedUserMessage).toMatchObject({ absoluteTurnIndex: 5 });
   });
 

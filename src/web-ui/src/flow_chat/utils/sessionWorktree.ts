@@ -1,18 +1,28 @@
 import type { Session } from '../types/flow-chat';
+import { isProjectedSessionEmpty } from './flowChatTurnIdentity';
 import { sessionProjectWorkspacePath } from './sessionWorkspace';
 
 type SessionWorktreeFacts = Pick<
   Session,
-  'dialogTurns' | 'totalTurnCount' | 'workspaceId' | 'workspacePath' | 'projectWorkspacePath' | 'config'
+  | 'sessionId'
+  | 'dialogTurns'
+  | 'isPartial'
+  | 'totalTurnCount'
+  | 'turnCatalog'
+  | 'workspaceId'
+  | 'workspacePath'
+  | 'projectWorkspacePath'
+  | 'config'
 >;
 
 export function isSessionWorktreeBindingLocked(
-  session: Pick<SessionWorktreeFacts, 'dialogTurns' | 'totalTurnCount'>,
+  session: Pick<
+    SessionWorktreeFacts,
+    'sessionId' | 'dialogTurns' | 'isPartial' | 'totalTurnCount' | 'turnCatalog'
+  >,
   isProcessing: boolean,
 ): boolean {
-  return session.dialogTurns.length > 0
-    || (session.totalTurnCount ?? 0) > 0
-    || isProcessing;
+  return !isProjectedSessionEmpty(session) || isProcessing;
 }
 
 export function isSessionWorktreeMaterialized(
@@ -66,6 +76,8 @@ export function sessionWorktreeBindingSubscriptionKey(session: SessionWorktreeFa
   return [
     session.dialogTurns.length,
     session.totalTurnCount ?? '',
+    session.turnCatalog?.revision ?? '',
+    session.turnCatalog?.totalTurnCount ?? '',
     session.workspaceId ?? '',
     session.workspacePath ?? '',
     session.projectWorkspacePath ?? '',
