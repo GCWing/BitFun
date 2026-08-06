@@ -463,6 +463,11 @@ pub struct ExecutionEngine {
 impl ExecutionEngine {
     const AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS: usize = 10_000;
     const MAX_COMPRESSION_OVERFLOW_ATTEMPTS: usize = 4;
+    /// Maximum wall-clock time to wait for an AI model compression summary.
+    /// If exceeded, fall back to local structured compression to avoid
+    /// blocking the conversation round loop.
+    const COMPRESSION_MODEL_SUMMARY_TIMEOUT: std::time::Duration =
+        std::time::Duration::from_secs(30);
     const MAX_MAIN_CONTEXT_OVERFLOW_RECOVERIES: usize = 2;
     const FINALIZE_AFTER_REPEATED_TOOL_FAILURES_REMINDER: &'static str = "This turn must end now because repeated tool failures have prevented further progress. Ignore any unfinished work. Your task now is to give the user a final answer. Do not call any more tools; any tool call will fail. Respond in plain text only. Summarize what was completed, what failed, the evidence available from the tool results, and the single best next step for the user.";
     const FINALIZE_AFTER_MAX_ROUNDS_REMINDER: &'static str = "This turn must end now because it has reached the round limit. Ignore any unfinished work. Your task now is to give the user a final answer. Do not call any more tools; any tool call will fail. Respond in plain text only. Summarize the most useful completed work and evidence collected so far, and clearly distinguish resolved items from anything still unresolved.";
@@ -2070,8 +2075,9 @@ impl ExecutionEngine {
                 plan.recent_tail_messages.len()
             );
 
-            let summary_result = self
-                .generate_compression_model_summary(CompressionModelSummaryInput {
+            let summary_result = match tokio::time::timeout(
+                Self::COMPRESSION_MODEL_SUMMARY_TIMEOUT,
+                self.generate_compression_model_summary(CompressionModelSummaryInput {
                     ai_client: ai_client.clone(),
                     runtime_messages: &plan.summary_request_messages,
                     dialog_turn_id,
@@ -2080,8 +2086,22 @@ impl ExecutionEngine {
                     prepended_prompt_reminders,
                     primary_supports_image_understanding,
                     trace_config: trace_config.clone(),
-                })
-                .await;
+                }),
+            )
+            .await
+            {
+                Ok(result) => result,
+                Err(_elapsed) => {
+                    warn!(
+                        "Compression model summary timed out after {:?}, falling back to structured local compression",
+                        Self::COMPRESSION_MODEL_SUMMARY_TIMEOUT
+                    );
+                    Err(BitFunError::Timeout(format!(
+                        "Compression model summary timed out after {:?}",
+                        Self::COMPRESSION_MODEL_SUMMARY_TIMEOUT
+                    )))
+                }
+            };
 
             match summary_result {
                 Ok(summary) => {
