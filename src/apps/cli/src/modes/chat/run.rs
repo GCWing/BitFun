@@ -443,7 +443,6 @@ impl ChatMode {
                 state.apply_workspace_binding(workspace_binding);
                 (session_id, state, Vec::new())
             };
-        chat_state.set_worktree_control_available(!self.agent.is_shared());
         self.auto_approve_ask_override = None;
         self.agent
             .set_approval_policy(crate::runtime::approval::CliApprovalPolicy::Ask);

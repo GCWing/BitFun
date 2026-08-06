@@ -470,6 +470,52 @@ fn interactive_tui_hook_management_stays_behind_the_typed_backend() {
 }
 
 #[test]
+fn interactive_tui_worktrees_stay_behind_the_typed_backend() {
+    const WORKTREE_CONTROLLER: &str = include_str!("../../src/modes/chat/worktree.rs");
+    const TUI_CLIENT: &str = include_str!("../../src/agent/tui_client.rs");
+    const TUI_BACKEND: &str = include_str!("../../src/tui_backend.rs");
+    const SHARED_BACKEND: &str = include_str!("../../src/shared_tui_backend.rs");
+    const WORKTREE_HOST: &str = include_str!("../../src/tui_worktree_management.rs");
+    const EMBEDDED_APP_SERVER: &str = include_str!("../../src/embedded_app_server.rs");
+
+    for direct_owner in [
+        "GitService",
+        "WorktreeService",
+        "WorktreeSessionBindingRequest",
+        "bitfun_core::",
+        "self.agent.is_shared()",
+    ] {
+        assert!(
+            !WORKTREE_CONTROLLER.contains(direct_owner),
+            "Worktree controller must not reference {direct_owner}"
+        );
+    }
+    for operation in [
+        "worktree_repository_status",
+        "worktree_bind_session",
+        "worktree_release_session",
+    ] {
+        assert!(
+            WORKTREE_CONTROLLER.contains(operation)
+                && TUI_CLIENT.contains(operation)
+                && TUI_BACKEND.contains(operation)
+                && SHARED_BACKEND.contains(operation),
+            "Worktree operation {operation} must stay behind the typed TUI backend"
+        );
+    }
+    assert!(
+        WORKTREE_HOST.contains("WorktreeService::bind_session")
+            && EMBEDDED_APP_SERVER.contains("CliWorktreeManagementHost"),
+        "the Embedded Host must inject the CLI Worktree owner"
+    );
+    assert!(
+        SHARED_BACKEND.contains("WORKTREES_CAPABILITY")
+            && SHARED_BACKEND.contains("does not fall back"),
+        "Shared Worktree management must fail closed"
+    );
+}
+
+#[test]
 fn runtime_ownership_policy_is_assembled_once_in_core() {
     const SHARED_RUNTIME: &str = include_str!("../../src/shared_runtime.rs");
     const CLI_RUNTIME: &str = include_str!("../../src/runtime/mod.rs");

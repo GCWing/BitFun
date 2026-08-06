@@ -39,6 +39,7 @@ mod shared_tui_backend;
 mod terminal_attention;
 mod tui_account_management;
 mod tui_backend;
+mod tui_worktree_management;
 mod ui;
 
 use anyhow::{anyhow, Result};

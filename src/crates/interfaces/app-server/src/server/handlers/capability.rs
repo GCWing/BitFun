@@ -2,6 +2,9 @@ use agent_client_protocol::Error;
 use bitfun_app_server_protocol::app::CapabilityAvailability;
 use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
 use bitfun_app_server_protocol::external_source::ExternalSourceErrorData;
+use bitfun_app_server_protocol::worktree::{
+    WorktreeErrorCode, WorktreeErrorData, WorktreeOperationError,
+};
 use bitfun_product_domains::external_sources::{
     ExternalSourceOperationError, ExternalSourceOperationErrorCode,
 };
@@ -47,6 +50,9 @@ pub(super) fn management_error(capability: &str, error: AppManagementError) -> E
     if let Some(external) = ExternalSourceOperationError::decode(&error.message) {
         return external_management_error(capability, external);
     }
+    if let Some(worktree) = WorktreeOperationError::decode(&error.message) {
+        return worktree_management_error(capability, worktree);
+    }
     match error.kind {
         AppManagementErrorKind::Unsupported => {
             error_with_data(AppServerErrorKind::Unsupported, capability, error.message)
@@ -55,6 +61,31 @@ pub(super) fn management_error(capability: &str, error: AppManagementError) -> E
         AppManagementErrorKind::NotFound => Error::resource_not_found(None).data(error.message),
         AppManagementErrorKind::Internal => Error::internal_error().data(error.message),
     }
+}
+
+fn worktree_management_error(capability: &str, error: WorktreeOperationError) -> Error {
+    let kind = match error.code {
+        WorktreeErrorCode::RemoteUnsupported => AppServerErrorKind::Unsupported,
+        WorktreeErrorCode::InvalidPath
+        | WorktreeErrorCode::InvalidBaseRef
+        | WorktreeErrorCode::RequestConflict => AppServerErrorKind::InvalidRequest,
+        WorktreeErrorCode::WorktreeNotFound => AppServerErrorKind::Internal,
+        WorktreeErrorCode::WorktreeBusy
+        | WorktreeErrorCode::WorktreeLocked
+        | WorktreeErrorCode::DirtyWorktree
+        | WorktreeErrorCode::UnpublishedCommits => AppServerErrorKind::SessionInUse,
+        _ => AppServerErrorKind::Internal,
+    };
+    let app = AppServerErrorData {
+        kind,
+        retryable: false,
+        outcome_unknown: false,
+        capability: Some(capability.to_string()),
+        request_id: error.operation_id.clone(),
+    };
+    Error::new(kind.json_rpc_code() as i32, error.message.clone()).data(
+        serde_json::to_value(WorktreeErrorData { app, error }).unwrap_or(serde_json::Value::Null),
+    )
 }
 
 fn external_management_error(capability: &str, error: ExternalSourceOperationError) -> Error {
@@ -101,7 +132,7 @@ fn error_with_data(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::management::{EXTERNAL_SOURCES_CAPABILITY, MODELS_CAPABILITY};
+    use crate::management::{EXTERNAL_SOURCES_CAPABILITY, MODELS_CAPABILITY, WORKTREES_CAPABILITY};
 
     #[test]
     fn missing_management_service_returns_structured_unsupported_without_fallback() {
@@ -172,5 +203,56 @@ mod tests {
         assert!(data.app.retryable);
         assert!(!data.app.outcome_unknown);
         assert_eq!(data.error.code, ExternalSourceOperationErrorCode::Timeout);
+    }
+
+    #[test]
+    fn worktree_remote_unsupported_preserves_typed_operation_context() {
+        let domain = WorktreeOperationError {
+            code: WorktreeErrorCode::RemoteUnsupported,
+            message: "Managed worktrees are not supported for remote workspaces".to_string(),
+            recovery_path: None,
+            operation_id: Some("tui-worktree-remote-1".to_string()),
+        };
+        let error = management_error(
+            WORKTREES_CAPABILITY,
+            AppManagementError::internal(domain.encode()),
+        );
+        let data: WorktreeErrorData = serde_json::from_value(
+            error
+                .data
+                .expect("worktree error should carry structured data"),
+        )
+        .expect("parse worktree error data");
+
+        assert_eq!(data.app.kind, AppServerErrorKind::Unsupported);
+        assert_eq!(data.app.capability.as_deref(), Some(WORKTREES_CAPABILITY));
+        assert_eq!(
+            data.app.request_id.as_deref(),
+            Some("tui-worktree-remote-1")
+        );
+        assert_eq!(data.error.code, WorktreeErrorCode::RemoteUnsupported);
+    }
+
+    #[test]
+    fn worktree_busy_maps_to_session_in_use() {
+        let domain = WorktreeOperationError {
+            code: WorktreeErrorCode::WorktreeBusy,
+            message: "The session is still active".to_string(),
+            recovery_path: None,
+            operation_id: Some("tui-worktree-busy-1".to_string()),
+        };
+        let error = management_error(
+            WORKTREES_CAPABILITY,
+            AppManagementError::internal(domain.encode()),
+        );
+        let data: WorktreeErrorData = serde_json::from_value(
+            error
+                .data
+                .expect("worktree busy error should carry structured data"),
+        )
+        .expect("parse worktree busy error data");
+
+        assert_eq!(data.app.kind, AppServerErrorKind::SessionInUse);
+        assert_eq!(data.error.code, WorktreeErrorCode::WorktreeBusy);
     }
 }

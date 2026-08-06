@@ -127,6 +127,7 @@ impl BitfunAppServer {
             .with_connection_builder(handlers::session::builder(runtime.clone()))
             .with_connection_builder(handlers::permission::builder(runtime.clone()))
             .with_connection_builder(handlers::workspace::builder(runtime.clone()))
+            .with_connection_builder(handlers::worktree::builder(management.clone()))
             .with_connection_builder(handlers::model::builder(management.clone()))
             .with_connection_builder(handlers::skill::builder(management.clone()))
             .with_connection_builder(handlers::subagent::builder(management.clone()))

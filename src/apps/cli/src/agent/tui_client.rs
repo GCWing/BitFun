@@ -19,6 +19,7 @@ use bitfun_app_server_protocol::session::*;
 use bitfun_app_server_protocol::skill::*;
 use bitfun_app_server_protocol::subagent::*;
 use bitfun_app_server_protocol::workspace::*;
+use bitfun_app_server_protocol::worktree::*;
 use bitfun_core_types::SessionUsageReport;
 use bitfun_events::{AgenticEvent, AgenticEventEnvelope, AgenticEventPriority};
 use bitfun_product_domains::external_source_control::ExternalSourceControlRequestV1;
@@ -633,7 +634,7 @@ impl TuiAgentClient {
                 workspace_path: self.project_workspace_path_string(),
             })
             .await
-            .map_err(Into::into)
+            .map_err(worktree_operation_error)
     }
 
     pub(crate) async fn account_login(
@@ -650,7 +651,7 @@ impl TuiAgentClient {
                 password,
             })
             .await
-            .map_err(Into::into)
+            .map_err(worktree_operation_error)
     }
 
     pub(crate) async fn account_finalize_login(
@@ -664,7 +665,7 @@ impl TuiAgentClient {
                 workspace_path: self.project_workspace_path_string(),
             })
             .await
-            .map_err(Into::into)
+            .map_err(worktree_operation_error)
     }
 
     pub(crate) async fn account_logout(&self) -> Result<AccountSnapshotResponse> {
@@ -813,6 +814,71 @@ impl TuiAgentClient {
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .apply_binding(binding);
+    }
+
+    pub(crate) async fn worktree_repository_status(
+        &self,
+        workspace_path: String,
+    ) -> Result<WorktreeRepositoryStatusResponse> {
+        let paths = self
+            .workspace_paths
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.backend
+            .worktree_repository_status(WorktreeRepositoryStatusRequest {
+                workspace_path,
+                remote_connection_id: paths.remote_connection_id.clone(),
+                remote_ssh_host: paths.remote_ssh_host.clone(),
+            })
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) async fn worktree_bind_session(
+        &self,
+        session_id: String,
+        project_workspace_path: Option<String>,
+    ) -> Result<WorktreeBindingResponse> {
+        let (remote_connection_id, remote_ssh_host) = self.remote_workspace_scope();
+        self.backend
+            .worktree_bind_session(WorktreeBindSessionRequest {
+                operation_id: worktree_operation_id(),
+                session_id,
+                project_workspace_path,
+                remote_connection_id,
+                remote_ssh_host,
+            })
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) async fn worktree_release_session(
+        &self,
+        session_id: String,
+        project_workspace_path: Option<String>,
+    ) -> Result<WorktreeBindingResponse> {
+        let (remote_connection_id, remote_ssh_host) = self.remote_workspace_scope();
+        self.backend
+            .worktree_release_session(WorktreeReleaseSessionRequest {
+                operation_id: worktree_operation_id(),
+                session_id,
+                project_workspace_path,
+                remote_connection_id,
+                remote_ssh_host,
+            })
+            .await
+            .map_err(Into::into)
+    }
+
+    fn remote_workspace_scope(&self) -> (Option<String>, Option<String>) {
+        let paths = self
+            .workspace_paths
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        (
+            paths.remote_connection_id.clone(),
+            paths.remote_ssh_host.clone(),
+        )
     }
 
     pub(crate) async fn list_sessions(&self) -> Result<Vec<AgentSessionSummary>> {
@@ -1509,6 +1575,27 @@ fn external_source_backend_error(error: TuiBackendError) -> ExternalSourceOperat
 
 fn account_operation_id() -> String {
     format!("tui-account-{}", uuid::Uuid::new_v4())
+}
+
+fn worktree_operation_error(error: TuiBackendError) -> anyhow::Error {
+    if let Some(worktree) = WorktreeOperationError::decode(&error.message) {
+        let recovery = worktree
+            .recovery_path
+            .as_deref()
+            .map(|path| format!(" Recovery path: {path}"))
+            .unwrap_or_default();
+        return anyhow::anyhow!(
+            "{}: {}{}",
+            worktree.code.as_str(),
+            worktree.message,
+            recovery
+        );
+    }
+    anyhow::anyhow!(error)
+}
+
+fn worktree_operation_id() -> String {
+    format!("tui-worktree-{}", uuid::Uuid::new_v4())
 }
 
 fn shared_receiver<T: Clone>(

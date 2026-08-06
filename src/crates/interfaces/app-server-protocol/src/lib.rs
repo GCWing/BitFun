@@ -17,7 +17,7 @@ pub use role::{AppClient, AppServer};
 // single physical directory.
 pub use schemas::{
     account, agent, app, error, event, external_source, hook, mcp, method, model, session, skill,
-    subagent, workspace,
+    subagent, workspace, worktree,
 };
 
 /// Current App Server protocol version.

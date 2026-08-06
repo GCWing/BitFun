@@ -16,3 +16,4 @@ pub(in crate::server) mod session;
 pub(in crate::server) mod skill;
 pub(in crate::server) mod subagent;
 pub(in crate::server) mod workspace;
+pub(in crate::server) mod worktree;

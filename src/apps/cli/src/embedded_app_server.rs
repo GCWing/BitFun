@@ -29,8 +29,10 @@ impl EmbeddedAppServerHost {
                 runtime.compatibility().clone(),
             ),
         );
-        let management =
-            Arc::new(AppManagementService::load_with_account_host(Some(account_host)).await?);
+        let worktree_host = Arc::new(crate::tui_worktree_management::CliWorktreeManagementHost);
+        let management = Arc::new(
+            AppManagementService::load_with_hosts(Some(account_host), Some(worktree_host)).await?,
+        );
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let server_thread = std::thread::Builder::new()
             .name("bitfun-embedded-app-server".to_string())

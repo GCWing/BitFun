@@ -15,10 +15,11 @@ use bitfun_app_server_protocol::mcp::*;
 use bitfun_app_server_protocol::model::*;
 use bitfun_app_server_protocol::skill::*;
 use bitfun_app_server_protocol::subagent::*;
+use bitfun_app_server_protocol::worktree::*;
 
 use super::{
     AccountManagementHost, AppManagementCapabilities, AppManagementError, AppManagementResult,
-    ACCOUNT_CAPABILITY, SETTINGS_SYNC_CAPABILITY,
+    WorktreeManagementHost, ACCOUNT_CAPABILITY, SETTINGS_SYNC_CAPABILITY, WORKTREES_CAPABILITY,
 };
 
 /// App Server adapter shared by Embedded and local Shared compatibility Hosts.
@@ -35,15 +36,23 @@ pub struct AppManagementService {
     )>,
     external_source_subscriptions: Arc<Mutex<HashSet<String>>>,
     account: Option<Arc<dyn AccountManagementHost>>,
+    worktree: Option<Arc<dyn WorktreeManagementHost>>,
 }
 
 impl AppManagementService {
     pub async fn load() -> Result<Self> {
-        Self::load_with_account_host(None).await
+        Self::load_with_hosts(None, None).await
     }
 
     pub async fn load_with_account_host(
         account: Option<Arc<dyn AccountManagementHost>>,
+    ) -> Result<Self> {
+        Self::load_with_hosts(account, None).await
+    }
+
+    pub async fn load_with_hosts(
+        account: Option<Arc<dyn AccountManagementHost>>,
+        worktree: Option<Arc<dyn WorktreeManagementHost>>,
     ) -> Result<Self> {
         let config = bitfun_core::service::config::get_global_config_service()
             .await
@@ -55,6 +64,7 @@ impl AppManagementService {
             external_source_updates,
             external_source_subscriptions: Arc::new(Mutex::new(HashSet::new())),
             account,
+            worktree,
         })
     }
 
@@ -62,6 +72,12 @@ impl AppManagementService {
         self.account
             .as_deref()
             .ok_or_else(|| AppManagementError::unsupported(format!("{capability} is unavailable")))
+    }
+
+    fn worktree_host(&self) -> AppManagementResult<&dyn WorktreeManagementHost> {
+        self.worktree.as_deref().ok_or_else(|| {
+            AppManagementError::unsupported(format!("{WORKTREES_CAPABILITY} is unavailable"))
+        })
     }
 
     async fn model_config(
@@ -823,7 +839,34 @@ impl AppManagementService {
             capabilities.settings_sync =
                 bitfun_app_server_protocol::app::CapabilityAvailability::Unavailable { reason };
         }
+        if self.worktree.is_none() {
+            capabilities.worktrees =
+                bitfun_app_server_protocol::app::CapabilityAvailability::Unavailable {
+                    reason: "The Host did not provide a Worktree owner".to_string(),
+                };
+        }
         capabilities
+    }
+
+    pub async fn worktree_repository_status(
+        &self,
+        request: WorktreeRepositoryStatusRequest,
+    ) -> AppManagementResult<WorktreeRepositoryStatusResponse> {
+        self.worktree_host()?.repository_status(request).await
+    }
+
+    pub async fn worktree_bind_session(
+        &self,
+        request: WorktreeBindSessionRequest,
+    ) -> AppManagementResult<WorktreeBindingResponse> {
+        self.worktree_host()?.bind_session(request).await
+    }
+
+    pub async fn worktree_release_session(
+        &self,
+        request: WorktreeReleaseSessionRequest,
+    ) -> AppManagementResult<WorktreeBindingResponse> {
+        self.worktree_host()?.release_session(request).await
     }
 
     pub async fn account_snapshot(

@@ -14,6 +14,7 @@ use bitfun_app_server_protocol::session::*;
 use bitfun_app_server_protocol::skill::*;
 use bitfun_app_server_protocol::subagent::*;
 use bitfun_app_server_protocol::workspace::*;
+use bitfun_app_server_protocol::worktree::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -93,6 +94,18 @@ pub(crate) trait TuiBackend: Send + Sync {
         &self,
         request: SettingsSyncLocalChangedRequest,
     ) -> Result<SettingsSyncResponse, TuiBackendError>;
+    async fn worktree_repository_status(
+        &self,
+        request: WorktreeRepositoryStatusRequest,
+    ) -> Result<WorktreeRepositoryStatusResponse, TuiBackendError>;
+    async fn worktree_bind_session(
+        &self,
+        request: WorktreeBindSessionRequest,
+    ) -> Result<WorktreeBindingResponse, TuiBackendError>;
+    async fn worktree_release_session(
+        &self,
+        request: WorktreeReleaseSessionRequest,
+    ) -> Result<WorktreeBindingResponse, TuiBackendError>;
 
     async fn list_sessions(
         &self,
@@ -397,6 +410,27 @@ impl TuiBackend for AppServerTuiBackend {
         request: SettingsSyncLocalChangedRequest,
     ) -> Result<SettingsSyncResponse, TuiBackendError> {
         map_client(self.client.settings_sync_local_changed(request).await)
+    }
+
+    async fn worktree_repository_status(
+        &self,
+        request: WorktreeRepositoryStatusRequest,
+    ) -> Result<WorktreeRepositoryStatusResponse, TuiBackendError> {
+        map(self.client.worktree_repository_status(request).await)
+    }
+
+    async fn worktree_bind_session(
+        &self,
+        request: WorktreeBindSessionRequest,
+    ) -> Result<WorktreeBindingResponse, TuiBackendError> {
+        map_client(self.client.worktree_bind_session(request).await)
+    }
+
+    async fn worktree_release_session(
+        &self,
+        request: WorktreeReleaseSessionRequest,
+    ) -> Result<WorktreeBindingResponse, TuiBackendError> {
+        map_client(self.client.worktree_release_session(request).await)
     }
 
     async fn list_sessions(
@@ -812,6 +846,23 @@ fn map_protocol_error(error: ProtocolError) -> TuiBackendError {
             return TuiBackendError {
                 message: external.error.encode(),
                 outcome_unknown: external.app.outcome_unknown,
+                kind,
+            };
+        }
+        if let Ok(worktree) = serde_json::from_value::<WorktreeErrorData>(value.clone()) {
+            let kind = if matches!(worktree.app.kind, AppServerErrorKind::Unsupported) {
+                worktree
+                    .app
+                    .capability
+                    .clone()
+                    .map(|capability| TuiBackendErrorKind::Unsupported { capability })
+                    .unwrap_or(TuiBackendErrorKind::Backend)
+            } else {
+                TuiBackendErrorKind::Backend
+            };
+            return TuiBackendError {
+                message: worktree.error.encode(),
+                outcome_unknown: worktree.app.outcome_unknown,
                 kind,
             };
         }

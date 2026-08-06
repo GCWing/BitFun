@@ -26,6 +26,7 @@ use bitfun_app_server_protocol::session::*;
 use bitfun_app_server_protocol::skill::*;
 use bitfun_app_server_protocol::subagent::*;
 use bitfun_app_server_protocol::workspace::*;
+use bitfun_app_server_protocol::worktree::*;
 use bitfun_app_server_protocol::{AppClient, AppServer};
 use tokio::sync::{broadcast, oneshot};
 
@@ -170,6 +171,29 @@ impl AppServerClient {
         &self,
     ) -> agent_client_protocol::Result<TuiModelCatalogResponse> {
         self.rpc(|cx| Ok(cx.send_request(TuiModelCatalogRequest {})))
+            .await
+    }
+
+    pub async fn worktree_repository_status(
+        &self,
+        request: WorktreeRepositoryStatusRequest,
+    ) -> agent_client_protocol::Result<WorktreeRepositoryStatusResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn worktree_bind_session(
+        &self,
+        request: WorktreeBindSessionRequest,
+    ) -> Result<WorktreeBindingResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn worktree_release_session(
+        &self,
+        request: WorktreeReleaseSessionRequest,
+    ) -> Result<WorktreeBindingResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
             .await
     }
 

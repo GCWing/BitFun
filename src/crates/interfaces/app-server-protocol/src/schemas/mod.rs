@@ -14,3 +14,4 @@ pub mod session;
 pub mod skill;
 pub mod subagent;
 pub mod workspace;
+pub mod worktree;

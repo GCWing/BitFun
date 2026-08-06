@@ -14,7 +14,7 @@ use bitfun_agent_runtime_ipc::{
 };
 use bitfun_app_server::management::{
     ACCOUNT_CAPABILITY, EXTERNAL_HOOKS_CAPABILITY, EXTERNAL_SOURCES_CAPABILITY, MODES_CAPABILITY,
-    NATIVE_HOOKS_CAPABILITY, SETTINGS_SYNC_CAPABILITY,
+    NATIVE_HOOKS_CAPABILITY, SETTINGS_SYNC_CAPABILITY, WORKTREES_CAPABILITY,
 };
 use bitfun_app_server::{
     AppManagementCapabilities, AppManagementError, AppManagementErrorKind, AppManagementService,
@@ -38,6 +38,7 @@ use bitfun_app_server_protocol::session::*;
 use bitfun_app_server_protocol::skill::*;
 use bitfun_app_server_protocol::subagent::*;
 use bitfun_app_server_protocol::workspace::*;
+use bitfun_app_server_protocol::worktree::*;
 use bitfun_app_server_protocol::{MIN_PROTOCOL_VERSION, PROTOCOL_VERSION};
 use bitfun_runtime_ports::{
     AgentSessionCompactionResult, AgentSessionForkResult, AgentSessionWorkspaceBinding,
@@ -273,6 +274,36 @@ impl TuiBackend for SharedTuiBackend {
             .settings_sync_local_changed(request)
             .await
             .map_err(|error| map_management_error(SETTINGS_SYNC_CAPABILITY, error))
+    }
+
+    async fn worktree_repository_status(
+        &self,
+        request: WorktreeRepositoryStatusRequest,
+    ) -> Result<WorktreeRepositoryStatusResponse, TuiBackendError> {
+        self.management_service(WORKTREES_CAPABILITY)?
+            .worktree_repository_status(request)
+            .await
+            .map_err(|error| map_management_error(WORKTREES_CAPABILITY, error))
+    }
+
+    async fn worktree_bind_session(
+        &self,
+        request: WorktreeBindSessionRequest,
+    ) -> Result<WorktreeBindingResponse, TuiBackendError> {
+        self.management_service(WORKTREES_CAPABILITY)?
+            .worktree_bind_session(request)
+            .await
+            .map_err(|error| map_management_error(WORKTREES_CAPABILITY, error))
+    }
+
+    async fn worktree_release_session(
+        &self,
+        request: WorktreeReleaseSessionRequest,
+    ) -> Result<WorktreeBindingResponse, TuiBackendError> {
+        self.management_service(WORKTREES_CAPABILITY)?
+            .worktree_release_session(request)
+            .await
+            .map_err(|error| map_management_error(WORKTREES_CAPABILITY, error))
     }
 
     async fn health(&self) -> Result<HealthResponse, TuiBackendError> {
@@ -1402,6 +1433,7 @@ mod tests {
             "tui.externalHooks",
             ACCOUNT_CAPABILITY,
             SETTINGS_SYNC_CAPABILITY,
+            WORKTREES_CAPABILITY,
         ] {
             let capability = capabilities
                 .iter()
@@ -1493,6 +1525,16 @@ mod tests {
             );
             assert!(account_error.message.contains("does not fall back"));
         }
+
+        let worktree_error = require_local_management_scope(false, WORKTREES_CAPABILITY)
+            .expect_err("Remote worktree management must not use the controller worktree owner");
+        assert_eq!(
+            worktree_error.kind,
+            TuiBackendErrorKind::Unsupported {
+                capability: WORKTREES_CAPABILITY.to_string()
+            }
+        );
+        assert!(worktree_error.message.contains("does not fall back"));
     }
 
     fn agent_event(text: &str) -> RuntimeIpcClientEvent {

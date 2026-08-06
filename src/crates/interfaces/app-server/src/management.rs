@@ -3,6 +3,7 @@
 use async_trait::async_trait;
 use bitfun_app_server_protocol::account::*;
 use bitfun_app_server_protocol::app::{CapabilityAvailability, CapabilityDescriptor};
+use bitfun_app_server_protocol::worktree::*;
 
 mod service;
 
@@ -18,6 +19,23 @@ pub const NATIVE_HOOKS_CAPABILITY: &str = "tui.nativeHooks";
 pub const EXTERNAL_HOOKS_CAPABILITY: &str = "tui.externalHooks";
 pub const ACCOUNT_CAPABILITY: &str = "tui.account";
 pub const SETTINGS_SYNC_CAPABILITY: &str = "tui.settingsSync";
+pub const WORKTREES_CAPABILITY: &str = "tui.worktrees";
+
+#[async_trait]
+pub trait WorktreeManagementHost: Send + Sync {
+    async fn repository_status(
+        &self,
+        request: WorktreeRepositoryStatusRequest,
+    ) -> AppManagementResult<WorktreeRepositoryStatusResponse>;
+    async fn bind_session(
+        &self,
+        request: WorktreeBindSessionRequest,
+    ) -> AppManagementResult<WorktreeBindingResponse>;
+    async fn release_session(
+        &self,
+        request: WorktreeReleaseSessionRequest,
+    ) -> AppManagementResult<WorktreeBindingResponse>;
+}
 
 #[async_trait]
 pub trait AccountManagementHost: Send + Sync {
@@ -67,6 +85,7 @@ pub struct AppManagementCapabilities {
     pub external_hooks: CapabilityAvailability,
     pub account: CapabilityAvailability,
     pub settings_sync: CapabilityAvailability,
+    pub worktrees: CapabilityAvailability,
 }
 
 impl AppManagementCapabilities {
@@ -82,6 +101,7 @@ impl AppManagementCapabilities {
             external_hooks: CapabilityAvailability::Available,
             account: CapabilityAvailability::Available,
             settings_sync: CapabilityAvailability::Available,
+            worktrees: CapabilityAvailability::Available,
         }
     }
 
@@ -98,6 +118,7 @@ impl AppManagementCapabilities {
             external_hooks: unavailable(&reason),
             account: unavailable(&reason),
             settings_sync: unavailable(&reason),
+            worktrees: unavailable(&reason),
         }
     }
 
@@ -113,6 +134,7 @@ impl AppManagementCapabilities {
             EXTERNAL_HOOKS_CAPABILITY => Some(&self.external_hooks),
             ACCOUNT_CAPABILITY => Some(&self.account),
             SETTINGS_SYNC_CAPABILITY => Some(&self.settings_sync),
+            WORKTREES_CAPABILITY => Some(&self.worktrees),
             _ => None,
         }
     }
@@ -202,6 +224,15 @@ impl AppManagementCapabilities {
                     "settingsSync/localChanged",
                 ],
             ),
+            descriptor(
+                WORKTREES_CAPABILITY,
+                self.worktrees.clone(),
+                &[
+                    "worktree/repositoryStatus",
+                    "worktree/bindSession",
+                    "worktree/releaseSession",
+                ],
+            ),
         ]
     }
 }
@@ -280,7 +311,7 @@ mod tests {
         let capabilities = AppManagementCapabilities::unavailable(reason);
         let descriptors = capabilities.descriptors();
 
-        assert_eq!(descriptors.len(), 10);
+        assert_eq!(descriptors.len(), 11);
         for descriptor in descriptors {
             assert!(matches!(
                 descriptor.availability,
@@ -347,6 +378,23 @@ mod tests {
                 "settingsSync/snapshot",
                 "settingsSync/cancel",
                 "settingsSync/localChanged",
+            ]
+        );
+    }
+
+    #[test]
+    fn worktree_capability_exposes_only_typed_session_operations() {
+        let capabilities = AppManagementCapabilities::available().descriptors();
+        let worktrees = capabilities
+            .iter()
+            .find(|descriptor| descriptor.id == WORKTREES_CAPABILITY)
+            .expect("worktree capability");
+        assert_eq!(
+            worktrees.methods,
+            [
+                "worktree/repositoryStatus",
+                "worktree/bindSession",
+                "worktree/releaseSession",
             ]
         );
     }
