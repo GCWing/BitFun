@@ -31,6 +31,7 @@ pub mod runtime;
 pub mod sleep_prevention;
 pub mod startup_trace;
 pub mod tray;
+mod webview_recovery;
 
 use bitfun_core::agentic::tools::computer_use_capability::set_computer_use_desktop_available;
 use bitfun_core::agentic::tools::computer_use_host::ComputerUseHostRef;

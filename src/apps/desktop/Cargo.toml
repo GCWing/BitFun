@@ -129,6 +129,7 @@ windows = { workspace = true, features = [
   "Win32_UI_WindowsAndMessaging",
 ] }
 windows-core = { workspace = true }
+webview2-com = { workspace = true }
 
 [features]
 default = []
