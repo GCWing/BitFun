@@ -6,6 +6,7 @@ import type { FileTabOptions } from '@/shared/services/FileTabManager';
 import { enqueuePendingTab } from '@/shared/services/pendingTabQueue';
 import { resolveAndFocusOpenTarget } from '@/shared/services/sceneOpenTargetResolver';
 import type { OpenSource } from '@/shared/services/sceneOpenTargetResolver';
+import { useSceneStore } from '@/app/stores/sceneStore';
 import { TAB_EVENTS } from '@/app/components/panels/content-canvas/types';
 export type TabTargetMode = 'agent' | 'project' | 'git';
 
@@ -279,8 +280,39 @@ export function createConfigCenterTab(
   window.dispatchEvent(new CustomEvent('scene:open', { detail: { sceneId: 'settings' } }));
 }
 
+/**
+ * Deliver a tab into the agent canvas (AuxPane), activating the session scene
+ * first. The canvas only listens for AGENT_CREATE_TAB while the session scene
+ * is mounted, so callers reachable from anywhere (notification actions, the
+ * composer strip) must not dispatch blindly: from another scene the event
+ * would fire into the void. When the scene was just opened the detail goes
+ * through the pending-tab queue, which the canvas drains right after mount.
+ */
+function deliverAgentTab(detail: TabCreationOptions & { duplicateCheckKey: string }): void {
+  const { openTabs, activeTabId, openScene } = useSceneStore.getState();
+  const sceneJustOpened =
+    activeTabId !== 'session' && !openTabs.some((tab) => tab.id === 'session');
+  openScene('session');
+
+  window.dispatchEvent(new CustomEvent(TAB_EVENTS.EXPAND_RIGHT_PANEL));
+
+  if (sceneJustOpened) {
+    enqueuePendingTab('agent', detail);
+    return;
+  }
+
+  if (isRightPanelCollapsed()) {
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
+    }, 300);
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
+}
+
 export function createReviewPlatformTab(workspacePath?: string): void {
-  const detail = {
+  deliverAgentTab({
     type: 'review-platform',
     title: i18nService.getT()('common:tabs.pullRequests'),
     data: { workspacePath },
@@ -291,18 +323,7 @@ export function createReviewPlatformTab(workspacePath?: string): void {
     checkDuplicate: true,
     duplicateCheckKey: `review-platform:${workspacePath || 'current'}`,
     replaceExisting: true,
-  };
-
-  window.dispatchEvent(new CustomEvent(TAB_EVENTS.EXPAND_RIGHT_PANEL));
-
-  if (isRightPanelCollapsed()) {
-    window.setTimeout(() => {
-      window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
-    }, 300);
-    return;
-  }
-
-  window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
+  });
 }
 
 /**
@@ -318,7 +339,7 @@ export function createIssueFixTab(options: {
 }): void {
   const { workspacePath, projectPath, host } = options;
   const duplicateCheckKey = `issue-fix:${projectPath || workspacePath || 'current'}`;
-  const detail = {
+  deliverAgentTab({
     type: 'issue-fix',
     title: i18nService.getT()('common:tabs.fixIssues'),
     data: { workspacePath, projectPath, host },
@@ -326,18 +347,7 @@ export function createIssueFixTab(options: {
     checkDuplicate: true,
     duplicateCheckKey,
     replaceExisting: true,
-  };
-
-  window.dispatchEvent(new CustomEvent(TAB_EVENTS.EXPAND_RIGHT_PANEL));
-
-  if (isRightPanelCollapsed()) {
-    window.setTimeout(() => {
-      window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
-    }, 300);
-    return;
-  }
-
-  window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
+  });
 }
 
 export function createBackgroundCommandOutputTab(options: {
