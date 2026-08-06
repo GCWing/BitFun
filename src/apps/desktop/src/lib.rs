@@ -337,16 +337,21 @@ fn has_standard_main_window_size(width: f64, height: f64) -> bool {
     width >= MAIN_WINDOW_MIN_WIDTH && height >= MAIN_WINDOW_MIN_HEIGHT
 }
 
-/// Re-clamp the undecorated main window to the monitor work area when maximized.
+/// Re-clamp the undecorated main window to the monitor work area.
 ///
-/// Tao clamps a borderless maximized window inside `WM_NCCALCSIZE`, but that
-/// only holds when the maximize goes through the normal `SW_MAXIMIZE` path
-/// while the window's placement already reports maximized. Some entry points —
-/// notably a double-click drag-region maximize racing a DPI change, or
-/// `ShowWindow(SW_MAXIMIZE)` from outside — leave the client rect covering the
-/// FULL monitor instead, so the app's bottom edge (nav footer, notification
-/// bell, composer strip) hides behind the taskbar. Detect that state and
-/// resize to the work area explicitly.
+/// Two ways the borderless window ends up hiding its bottom edge (nav footer,
+/// notification bell, composer strip) behind the taskbar:
+///
+/// - Maximized to the FULL monitor instead of the work area: tao clamps this
+///   in `WM_NCCALCSIZE`, but the clamp misses when a drag-region double-click
+///   maximize races a DPI change or the maximize comes from an external
+///   `ShowWindow(SW_MAXIMIZE)`.
+/// - Restored to oversized saved geometry: once the bug above happened, the
+///   window-state plugin persisted the taskbar-covering size, so every later
+///   restore reproduces it without being maximized at all.
+///
+/// Watching Resized events covers both: whenever the window is taller than
+/// the monitor work area, push it back inside.
 #[cfg(target_os = "windows")]
 fn clamp_maximized_undecorated_window(window: &tauri::Window) {
     use windows::Win32::Foundation::{HWND, RECT};
@@ -354,12 +359,10 @@ fn clamp_maximized_undecorated_window(window: &tauri::Window) {
         GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
-        GetClientRect, SetWindowPos, HWND_TOP, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOZORDER,
+        GetClientRect, GetWindowRect, SetWindowPos, HWND_TOP, SWP_FRAMECHANGED, SWP_NOACTIVATE,
+        SWP_NOZORDER,
     };
 
-    if !window.is_maximized().unwrap_or(false) {
-        return;
-    }
     let Ok(hwnd) = window.hwnd() else {
         return;
     };
@@ -378,36 +381,75 @@ fn clamp_maximized_undecorated_window(window: &tauri::Window) {
         let work_height = work.bottom - work.top;
         let work_width = work.right - work.left;
 
-        let mut client = RECT::default();
-        if GetClientRect(hwnd, &mut client).is_err() {
+        if window.is_maximized().unwrap_or(false) {
+            let mut client = RECT::default();
+            if GetClientRect(hwnd, &mut client).is_err() {
+                return;
+            }
+            // In the healthy path tao has already clamped the client rect to
+            // the work area (± the 1px auto-hide margin). Anything taller is
+            // overlapping the taskbar; push it back to the work area.
+            if client.bottom - client.top <= work_height + 2
+                && client.right - client.left <= work_width + 2
+            {
+                return;
+            }
+            log::info!(
+                "Re-clamping maximized undecorated window to the work area: client={}x{}, work={}x{}",
+                client.right - client.left,
+                client.bottom - client.top,
+                work_width,
+                work_height
+            );
+            if let Err(error) = SetWindowPos(
+                hwnd,
+                Some(HWND_TOP),
+                work.left,
+                work.top,
+                work_width,
+                work_height,
+                SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+            ) {
+                log::warn!("Failed to re-clamp the maximized window: {error}");
+            }
             return;
         }
-        let client_height = client.bottom - client.top;
-        let client_width = client.right - client.left;
 
-        // In the healthy path tao has already clamped the client rect to the
-        // work area (± the 1px auto-hide margin). Anything taller means the
-        // window is overlapping the taskbar; push it back to the work area.
-        if client_height <= work_height + 2 && client_width <= work_width + 2 {
+        // Restored window taller/wider than the work area: shrink it to fit
+        // and keep it inside. A window that big cannot be fully visible
+        // anyway, so resizing it cannot fight legitimate user placement.
+        let mut frame = RECT::default();
+        if GetWindowRect(hwnd, &mut frame).is_err() {
             return;
         }
+        let frame_height = frame.bottom - frame.top;
+        let frame_width = frame.right - frame.left;
+        if frame_height <= work_height && frame_width <= work_width {
+            return;
+        }
+        let new_height = frame_height.min(work_height);
+        let new_width = frame_width.min(work_width);
+        let new_top = frame.top.clamp(work.top, work.bottom - new_height);
+        let new_left = frame.left.clamp(work.left, work.right - new_width);
         log::info!(
-            "Re-clamping maximized undecorated window to the monitor work area: client={}x{}, work={}x{}",
-            client_width,
-            client_height,
+            "Shrinking oversized restored window into the work area: frame={}x{} at ({}, {}), work={}x{}",
+            frame_width,
+            frame_height,
+            frame.left,
+            frame.top,
             work_width,
             work_height
         );
         if let Err(error) = SetWindowPos(
             hwnd,
             Some(HWND_TOP),
-            work.left,
-            work.top,
-            work_width,
-            work_height,
+            new_left,
+            new_top,
+            new_width,
+            new_height,
             SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
         ) {
-            log::warn!("Failed to re-clamp the maximized window: {error}");
+            log::warn!("Failed to shrink the oversized restored window: {error}");
         }
     }
 }
