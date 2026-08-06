@@ -1049,6 +1049,14 @@ $_section-header-height: 24px;
     }
   }
 
+  &__section-indicator--collapsed {
+    transform: rotate(0deg);
+  }
+
+  &__section-indicator--expanded {
+    transform: rotate(90deg);
+  }
+
   &__section-action {
     display: inline-flex;
     align-items: center;
