@@ -334,4 +334,18 @@ describe('tiptap markdown compatibility', () => {
     expect(analysis.containsRawHtmlBlocks).toBe(true);
     expect(doc.content?.[0]?.type).toBe('rawHtmlBlock');
   });
+
+  it('doubles backslashes in LaTeX math during canonical round-trip', () => {
+    const markdown = String.raw`$$\int_0^1 x^2 dx = \frac13$$`;
+    const analysis = analyzeMarkdownEditability(markdown);
+
+    // Root cause of #1952: escapeMarkdownPlainText doubles every backslash
+    // during canonical serialization, turning \int into \\int, \frac into
+    // \\frac, etc. KaTeX interprets \\ as a line break, so the math renders
+    // incorrectly. This is why MarkdownEditor uses raw content instead of
+    // canonicalMarkdown for display.
+    expect(analysis.canonicalMarkdown).toContain(String.raw`\\int`);
+    expect(analysis.canonicalMarkdown).toContain(String.raw`\\frac`);
+    expect(analysis.canonicalMarkdown).not.toBe(markdown);
+  });
 });
