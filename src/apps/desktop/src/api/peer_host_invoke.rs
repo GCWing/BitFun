@@ -109,6 +109,7 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "dispatch_install_cli_start",
     "dispatch_install_cli_poll",
     "dispatch_install_cli_cancel",
+    "dispatch_provision_target",
     "dispatch_sync_model_config",
     "dispatch_submit",
     "dispatch_status",

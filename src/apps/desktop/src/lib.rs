@@ -31,6 +31,7 @@ pub mod runtime;
 pub mod sleep_prevention;
 pub mod startup_trace;
 pub mod tray;
+mod webview_recovery;
 
 use bitfun_core::agentic::tools::computer_use_capability::set_computer_use_desktop_available;
 use bitfun_core::agentic::tools::computer_use_host::ComputerUseHostRef;
@@ -1648,6 +1649,7 @@ pub async fn run() {
             get_global_config_status,
             subscribe_config_updates,
             get_model_configs,
+            get_ai_model_catalog,
             get_recent_workspaces,
             remove_recent_workspace,
             cleanup_invalid_workspaces,
@@ -1655,6 +1657,8 @@ pub async fn run() {
             open_workspace,
             open_remote_workspace,
             create_assistant_workspace,
+            get_primary_assistant_workspace,
+            set_primary_assistant_workspace,
             delete_assistant_workspace,
             reset_assistant_workspace,
             close_workspace,
@@ -1896,6 +1900,7 @@ pub async fn run() {
             api::dispatch_api::dispatch_install_cli_start,
             api::dispatch_api::dispatch_install_cli_poll,
             api::dispatch_api::dispatch_install_cli_cancel,
+            api::dispatch_api::dispatch_provision_target,
             api::dispatch_api::dispatch_sync_model_config,
             api::dispatch_api::dispatch_submit,
             api::dispatch_api::dispatch_status,

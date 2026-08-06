@@ -7,6 +7,7 @@ import type {
 } from '@/shared/types/session-history';
 import type { Session } from '../types/flow-chat';
 import { resolveSessionTitle } from './sessionTitle';
+import { canonicalSessionTurns, projectedSessionTurnCount } from './flowChatTurnIdentity';
 
 const CHILD_SESSION_KIND_TAGS = new Set<SessionKind>(['btw', 'review', 'deep_review', 'miniapp', 'subagent']);
 const RELATIONSHIP_METADATA_KEYS = new Set([
@@ -197,10 +198,14 @@ export function deriveLastFinishedAtFromMetadata(
 }
 
 export function calculateSessionStats(
-  session: Pick<Session, 'dialogTurns'>
+  session: Pick<
+    Session,
+    'sessionId' | 'dialogTurns' | 'isPartial' | 'totalTurnCount' | 'turnCatalog'
+  >
 ): Pick<SessionMetadata, 'turnCount' | 'messageCount' | 'toolCallCount'> {
-  const turnCount = session.dialogTurns.length;
-  const messageCount = session.dialogTurns.reduce((sum, turn) => {
+  const loadedPersistedTurns = canonicalSessionTurns(session);
+  const turnCount = projectedSessionTurnCount(session);
+  const messageCount = loadedPersistedTurns.reduce((sum, turn) => {
     return (
       sum +
       1 +
@@ -209,7 +214,7 @@ export function calculateSessionStats(
       }, 0)
     );
   }, 0);
-  const toolCallCount = session.dialogTurns.reduce((sum, turn) => {
+  const toolCallCount = loadedPersistedTurns.reduce((sum, turn) => {
     return sum + turn.modelRounds.reduce((roundSum, round) => {
       return roundSum + round.items.filter(item => item.type === 'tool').length;
     }, 0);
@@ -341,6 +346,9 @@ export function buildSessionMetadata(
     | 'remoteSshHost'
     | 'todos'
     | 'dialogTurns'
+    | 'isPartial'
+    | 'totalTurnCount'
+    | 'turnCatalog'
     | 'sessionKind'
     | 'parentSessionId'
     | 'btwOrigin'

@@ -46,6 +46,8 @@ export interface FlowChatContext {
   turnSaveInFlight: Map<string, Promise<void>>;
   /** Pending save marks for coalesced serial execution */
   turnSavePending: Set<string>;
+  /** Turns requested for persistence before the backend supplied storage identity. */
+  deferredStorageIdentitySaves?: Set<string>;
   /** Transient runtime status timers: key = "sessionId:turnId:roundId:scope" */
   runtimeStatusTimers: Map<string, ReturnType<typeof setTimeout>>;
   /** Session IDs that the user explicitly cancelled; used to skip unread marking */

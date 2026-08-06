@@ -107,6 +107,13 @@ temporary tail space, but keeps its own semantics:
 
 The rendered footer height is the sum of all active reservations.
 
+A non-zero `collapse` reservation must have an explicit semantic owner: an
+active or retained tool collapse, input-stack shrink, preserved-element range,
+late-shrink clamp, or protected-range transfer from a pin. Ordinary Virtuoso
+measurement convergence has no such owner. An idle measurement with no owner
+must only rebase the measured height and must never create Footer space from a
+negative `scrollHeight` delta alone.
+
 Reservation state is ref-owned first and mirrored into React state. A Virtuoso
 Footer remount must synchronously read the ref-owned value; otherwise one stale
 React commit can remove exactly the reserved scroll range for a frame.
@@ -199,11 +206,12 @@ Active preservation blocks automatic tail takeover, while retained preservation
 allows the tail controller to take ownership when its normal distance and intent
 rules say that following should resume.
 
-There is no persistent raw `scrollTop` lock or scroll-listener lock. For an unsignaled
-shrink with no semantic element anchor, `restoreScrollPositionOnce()` performs
-one clamped `scrollTop` fallback using the pre-change position. It is a bounded
-last resort, not a second controller: subsequent layout changes are handled by
-the semantic anchor (when present), the reservation model, or follow mode.
+There is no persistent raw `scrollTop` lock or scroll-listener lock. An
+unsignaled shrink may adjust an already owned protected range, but it may not
+create a collapse reservation from idle geometry alone. Without a semantic
+owner, the list accepts the new Virtuoso measurement and rebases its height and
+scroll baselines. Subsequent layout changes are handled by the semantic anchor
+(when present), the owned reservation transaction, or follow mode.
 
 An element anchor also owns the minimum physical scroll range needed to restore
 its offset. After writing `scrollTop`, the coordinator remeasures the actual DOM
@@ -216,6 +224,10 @@ subpixel scroll limit.
 Physical-bottom synchronization must yield whenever the coordinator owns an
 element anchor. It also yields while streaming `following-tail` owns the
 viewport, because the single tail loop is the writer for content-growth motion.
+Outside tail follow, physical-bottom synchronization is limited to a real
+viewport `clientHeight` change. A message, round footer, or other content growth
+changes `scrollHeight` only and must remain below the existing viewport instead
+of moving the transcript upward to reach the new physical bottom.
 A sticky pin intentionally sits at the physical bottom created by its
 reservation; treating that geometry as tail-follow causes every content growth
 measurement to push the pinned header upward before the coordinator can restore
@@ -688,6 +700,10 @@ If a future collapsible component shows the same "header drops" or "flash on col
 - Unsignaled shrink reconciliation must not reduce a protected collapse floor;
   only measured growth, downward navigation, bottom arrival, or an explicit
   reservation reset may consume it.
+- Unsignaled shrink reconciliation must not create a collapse reservation when
+  no collapse transaction owns the range. Session-open and history-projection
+  handoffs rebase their measurements instead of treating estimate convergence
+  as content collapse.
 - Pre-collapse intent must capture the anchor before the component shrinks.
 - Compensation must not be consumed too early during active layout transitions.
 - Session changes and empty-list resets must clear compensation and anchor state.

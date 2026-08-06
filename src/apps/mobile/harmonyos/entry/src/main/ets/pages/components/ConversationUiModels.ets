@@ -6,6 +6,7 @@ import {
   ImageAttachment,
   RemoteModelCatalog,
   RemoteModelConfig,
+  RemoteReasoningCatalogProjection,
   RemoteQuestionAnswerPayload,
   SelectedImageAttachment,
   SessionSummary,
@@ -29,9 +30,7 @@ export interface ConversationUiModel {
   context_window?: number;
   enabled: boolean;
   capabilities: string[];
-  enable_thinking_process?: boolean;
-  reasoning_mode?: string;
-  reasoning_effort?: string;
+  reasoning?: RemoteReasoningCatalogProjection;
 }
 
 export interface ConversationUiDefaultModels {
@@ -125,9 +124,7 @@ export function toConversationUiModel(source: RemoteModelConfig): ConversationUi
     context_window: source.context_window,
     enabled: source.enabled,
     capabilities: source.capabilities.slice(),
-    enable_thinking_process: source.enable_thinking_process,
-    reasoning_mode: source.reasoning_mode,
-    reasoning_effort: source.reasoning_effort
+    reasoning: source.reasoning
   };
 }
 

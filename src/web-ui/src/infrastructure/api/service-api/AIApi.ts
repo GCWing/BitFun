@@ -4,7 +4,22 @@ import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import type { SendMessageRequest } from './tauri-commands';
 import type { ConnectionTestMessageCode } from '@/shared/utils/aiConnectionTestMessages';
-import type { SubscriptionProvider } from '@/infrastructure/config/types';
+import type {
+  OpenCodePlan,
+  ReasoningCatalogProjection,
+  SubscriptionProvider,
+} from '@/infrastructure/config/types';
+export type {
+  ReasoningCatalogProjection,
+  ReasoningPresetAction,
+} from '@/infrastructure/config/types';
+
+export const AI_MODEL_CATALOG_UPDATED_EVENT = 'ai://model-catalog-updated';
+
+export interface AIModelCatalogUpdatedEvent {
+  sourceVersion: string;
+  sha256: string;
+}
 
 export interface CreateAISessionRequest {
   session_id?: string;
@@ -30,7 +45,123 @@ export interface RemoteModelInfo {
   display_name?: string;
 }
 
+export interface AIModelCatalogEntry {
+  id: string;
+  name: string;
+  provider: string;
+  base_url: string;
+  model_name: string;
+  context_window?: number;
+  enabled: boolean;
+  capabilities: string[];
+  reasoning?: ReasoningCatalogProjection;
+}
+
+export type ProviderCatalogSource = 'cache' | 'bundle' | 'bitfun' | 'mixed';
+export type ProviderCatalogModelSource = 'models_dev' | 'bitfun' | 'merged';
+
+export interface ProviderCatalogModelCapabilities {
+  chat: boolean;
+  tool_call: boolean;
+  reasoning: boolean;
+  attachment: boolean;
+  structured_output: boolean;
+  input_modalities?: string[];
+  output_modalities?: string[];
+}
+
+export interface ProviderCatalogModel {
+  id: string;
+  display_name?: string;
+  description?: string;
+  recommended: boolean;
+  source: ProviderCatalogModelSource;
+  family?: string;
+  status?: string;
+  release_date?: string;
+  last_updated?: string;
+  knowledge?: string;
+  open_weights?: boolean;
+  catalog_provider_ids?: string[];
+  endpoint_ids?: string[];
+  capabilities: ProviderCatalogModelCapabilities;
+  limits?: {
+    context?: number;
+    input?: number;
+    output?: number;
+  };
+  pricing?: {
+    input?: string;
+    output?: string;
+    cache_read?: string;
+    cache_write?: string;
+  };
+}
+
+export interface ProviderCatalogEndpoint {
+  id: string;
+  base_url: string;
+  api_format: string;
+  label: string;
+  is_default: boolean;
+  trusted_for_auto_detection: boolean;
+  catalog_provider_ids?: string[];
+}
+
+export interface ProviderCatalogProvider {
+  id: string;
+  display_order: number;
+  name: string;
+  description: string;
+  help_url?: string;
+  requires_api_key: boolean;
+  catalog_provider_ids?: string[];
+  catalog_providers?: Array<{
+    id: string;
+    name: string;
+    api?: string;
+    doc?: string;
+    env?: string[];
+  }>;
+  endpoints: ProviderCatalogEndpoint[];
+  models: ProviderCatalogModel[];
+}
+
+export interface ProviderCatalog {
+  revision: string;
+  source: ProviderCatalogSource;
+  providers: ProviderCatalogProvider[];
+}
+
+export interface AIModelCatalog {
+  version: number;
+  models: AIModelCatalogEntry[];
+  provider_catalog?: ProviderCatalog;
+  default_models: {
+    primary?: string | null;
+    fast?: string | null;
+    search?: string | null;
+    image_understanding?: string | null;
+    image_generation?: string | null;
+    speech_recognition?: string | null;
+  };
+  session_model_id?: string;
+}
+
 export type SubscriptionLoginStatus = 'pending' | 'authorized' | 'failed' | 'cancelled';
+
+export interface SubscriptionOfferingModel {
+  id: string;
+  display_name?: string | null;
+}
+
+export interface SubscriptionApiOffering {
+  plan: OpenCodePlan;
+  format: 'openai' | 'responses' | 'anthropic';
+  base_url: string;
+  suggested_model: string;
+  models: SubscriptionOfferingModel[];
+}
 
 export interface SubscriptionAccount {
   provider: SubscriptionProvider;
@@ -43,6 +174,7 @@ export interface SubscriptionAccount {
   suggested_format: string;
   suggested_base_url: string;
   suggested_model: string;
+  api_offerings: SubscriptionApiOffering[];
 }
 
 export interface SubscriptionLogoutResult {
@@ -79,6 +211,18 @@ export class AIApi {
     } catch (error) {
       throw createTauriCommandError('list_ai_models', error);
     }
+  }
+
+  async getModelCatalog(): Promise<AIModelCatalog> {
+    try {
+      return await api.invoke<AIModelCatalog>('get_ai_model_catalog', {});
+    } catch (error) {
+      throw createTauriCommandError('get_ai_model_catalog', error);
+    }
+  }
+
+  onModelCatalogUpdated(callback: (event: AIModelCatalogUpdatedEvent) => void): () => void {
+    return api.listen(AI_MODEL_CATALOG_UPDATED_EVENT, callback);
   }
 
    

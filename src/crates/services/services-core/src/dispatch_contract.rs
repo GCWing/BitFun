@@ -7,9 +7,9 @@
 
 use serde::{Deserialize, Serialize};
 
-pub const DISPATCH_PROTOCOL_VERSION: u32 = 4;
+pub const DISPATCH_PROTOCOL_VERSION: u32 = 5;
 
-/// Capabilities every v4 target advertises unconditionally.
+/// Capabilities every v5 target advertises unconditionally.
 pub const DISPATCH_BASE_TARGET_CAPABILITIES: &[&str] = &[
     "persistent_jobs",
     "cursor_events",
@@ -38,11 +38,53 @@ pub const DISPATCH_BASE_TARGET_CAPABILITIES: &[&str] = &[
     "session_query",
     // v4: inline image attachments on submit and follow-up turns.
     "inline_attachments",
+    // v5: target-owned canonical reasoning catalog and per-turn preset selection.
+    "reasoning_presets",
 ];
 
 /// Advertised only where detached workers can run (Linux/macOS), and
 /// required by every controller: a target that cannot detach cannot dispatch.
 pub const DISPATCH_DETACHED_WORKER_CAPABILITY: &str = "detached_worker";
+
+/// Optional capability for an SSH controller to turn a freshly installed CLI
+/// into an account-backed, always-on device. It is deliberately not part of
+/// [`dispatch_required_target_capabilities`]: detached SSH jobs work without
+/// an account daemon, while one-click account provisioning must fail closed on
+/// older CLIs that do not understand the secret-bearing bootstrap contract.
+pub const DISPATCH_ACCOUNT_DAEMON_PROVISIONING_CAPABILITY: &str = "account_daemon_provisioning";
+
+pub const DISPATCH_ACCOUNT_DAEMON_PROVISIONING_SCHEMA_VERSION: u32 = 1;
+
+/// Non-secret identity returned by the target before the relay issues a token.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DispatchAccountDaemonIdentity {
+    pub device_id: String,
+    pub device_name: String,
+}
+
+/// Owner-only bootstrap document staged over SFTP for one target invocation.
+///
+/// This value contains an account bearer token and master key. Callers must
+/// never log it, return it to a frontend, or leave it on disk after the target
+/// command finishes.
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DispatchAccountDaemonProvisionRequest {
+    pub schema_version: u32,
+    pub token: String,
+    pub user_id: String,
+    pub master_key_base64: String,
+    pub relay_url: String,
+    pub device_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DispatchAccountDaemonProvisionResponse {
+    pub device_id: String,
+    pub service_installed: bool,
+}
 
 /// Everything a controller refuses to submit without: the unconditional set
 /// plus the platform-conditional detached worker.
@@ -115,5 +157,20 @@ mod tests {
         for capability in DISPATCH_BASE_TARGET_CAPABILITIES {
             assert!(required.contains(capability));
         }
+        assert!(!required.contains(&DISPATCH_ACCOUNT_DAEMON_PROVISIONING_CAPABILITY));
+    }
+
+    #[test]
+    fn account_daemon_bootstrap_contract_rejects_unknown_fields() {
+        let value = serde_json::json!({
+            "schemaVersion": DISPATCH_ACCOUNT_DAEMON_PROVISIONING_SCHEMA_VERSION,
+            "token": "a".repeat(64),
+            "userId": "user-1",
+            "masterKeyBase64": "key",
+            "relayUrl": "https://relay.example.test",
+            "deviceId": "b".repeat(32),
+            "unexpected": true,
+        });
+        assert!(serde_json::from_value::<DispatchAccountDaemonProvisionRequest>(value).is_err());
     }
 }

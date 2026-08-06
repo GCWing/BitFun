@@ -2,11 +2,34 @@
 
 export const forbiddenContentRules = [
   {
+    path: 'src/apps/cli/src/tui_backend.rs',
+    reason:
+      'The CLI-local TUI backend may consume App Server client and wire contracts but must not depend on backend implementations, Runtime, services, or private IPC',
+    patterns: [
+      {
+        regex:
+          /\b(?:bitfun_core|bitfun_agent_runtime|bitfun_agent_runtime_ipc|bitfun_services_core|bitfun_services_integrations|bitfun_runtime_services|bitfun_product_capabilities|bitfun_external_sources|bitfun_app_server)::/,
+        message:
+          'CLI-local TuiBackend must stay on the App Server client/protocol boundary',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/interfaces/app-server/Cargo.toml',
+    reason: 'App Server must select explicit bitfun-core owner features',
+    patterns: [
+      {
+        regex: /features\s*=\s*\[[^\]]*"product-full"/,
+        message: 'app-server must not select the broad bitfun-core/product-full union',
+      },
+    ],
+  },
+  {
     path: 'src/crates/adapters/agent-runtime-ipc/src/operation.rs',
     reason: 'agent-runtime-ipc operation scope is frozen to the reviewed Shared TUI slice',
     patterns: [
       {
-        regex: /^\s+(?!(?:Health|ListAgentModes|ListSessions|CreateSession|RestoreSession|DeleteSession|ForkSession|RenameSession|UpdateSessionMode|UpdateSessionModel|ReloadSessionContext|CompactSession|UndoSession|RedoSession|SearchWorkspaceReferences|WorkspaceReferencesForMessage|GetSessionLineage|InspectLineageSession|CancelLineageSession|WorkspaceDiff|SubmitTurn|SteerTurn|RunUserShellCommand|CancelTurn|PendingPermissions|RespondPermission|SubmitUserAnswers|Unit|AgentModes|Sessions|SessionCreated|SessionRestored|SessionForked|SessionReverted|SessionLineage|LineageSessionInspection|WorkspaceReferenceSearch|WorkspaceReferences|TurnAccepted|TurnSteered|TurnCancelled|None|CurrentController|AttachExisting|UncontrolledTarget|Self|RuntimeIpcSessionRequirement|RuntimeIpcOperationRules|RuntimeSessionForkRequest|AgentContextReloadRequest|AgentDialogSteerRequest|AgentDialogTurnRequest|AgentMessageWorkspaceReferencesRequest|AgentSessionCompactionRequest|AgentSessionCreateRequest|AgentSessionCreateResult|AgentSessionLineageCancellationRequest|AgentSessionLineageInspection|AgentSessionLineageRequest|AgentSessionLineageSnapshot|AgentSessionLineageTranscriptRequest|AgentSessionListRequest|AgentSessionModeUpdateRequest|AgentSessionModelUpdateRequest|AgentSessionRevertRequest|AgentSessionRevertResult|AgentSessionSummary|AgentTurnCancellationRequest|AgentTurnCancellationResult|AgentUserShellCommandRequest|AgentWorkspaceReference|AgentWorkspaceReferenceSearchRequest|AgentWorkspaceReferenceSearchResult|SessionTranscript|WorkspaceDiffSnapshot)\b)[A-Z][A-Za-z0-9_]*\b/,
+        regex: /^\s+(?!(?:Health|ListAgentModes|ListSessions|CreateSession|RestoreSession|DeleteSession|ForkSession|RenameSession|UpdateSessionMode|UpdateSessionModel|ReloadSessionContext|CompactSession|UndoSession|RedoSession|SessionUsage|WaitForSettlement|RecordLocalCommandTurn|SearchWorkspaceReferences|WorkspaceReferencesForMessage|GetSessionLineage|InspectLineageSession|CancelLineageSession|WorkspaceDiff|SubmitTurn|SteerTurn|RunUserShellCommand|CancelTurn|PendingPermissions|RespondPermission|SubmitUserAnswers|Unit|AgentModes|Sessions|SessionCreated|SessionRestored|SessionForked|SessionReverted|SessionLineage|LineageSessionInspection|WorkspaceReferenceSearch|WorkspaceReferences|TurnAccepted|TurnSteered|TurnCancelled|LocalCommandTurnRecorded|Idle|Processing|Error|Starting|Compacting|Thinking|Streaming|ToolCalling|ToolConfirming|None|CurrentController|AttachExisting|UncontrolledTarget|Self|RuntimeIpcSessionRequirement|RuntimeIpcOperationRules|RuntimeSessionForkRequest|RuntimeSessionState|RuntimeSessionProcessingPhase|AgentContextReloadRequest|AgentDialogSteerRequest|AgentDialogTurnRequest|AgentLocalCommandTurnRecordRequest|AgentLocalCommandTurnRecordResult|AgentMessageWorkspaceReferencesRequest|AgentSessionCompactionRequest|AgentSessionCreateRequest|AgentSessionCreateResult|AgentSessionLineageCancellationRequest|AgentSessionLineageInspection|AgentSessionLineageRequest|AgentSessionLineageSnapshot|AgentSessionLineageTranscriptRequest|AgentSessionListRequest|AgentSessionModeUpdateRequest|AgentSessionModelUpdateRequest|AgentSessionRevertRequest|AgentSessionRevertResult|AgentSessionSummary|AgentSessionUsageRequest|AgentTurnCancellationRequest|AgentTurnCancellationResult|AgentTurnSettlementRequest|AgentUserShellCommandRequest|AgentWorkspaceReference|AgentWorkspaceReferenceSearchRequest|AgentWorkspaceReferenceSearchResult|SessionTranscript|SessionUsageReport|WorkspaceDiffSnapshot)\b)[A-Z][A-Za-z0-9_]*\b/,
         message:
           'agent-runtime-ipc may not add archive, replay, observer, general controller-transfer, or other operations beyond the reviewed Shared TUI slice',
       },

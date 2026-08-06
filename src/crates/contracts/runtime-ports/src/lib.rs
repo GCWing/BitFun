@@ -13,7 +13,8 @@ use tokio_util::sync::CancellationToken;
 
 pub use bitfun_core_types::{
     SessionExecutionTarget, SessionExecutionTargetKind, SessionExecutionTargetRequest,
-    WorktreeError, WorktreeErrorCode, WorktreeLifecycle, WorktreeSettings, WorktreeSummary,
+    SessionUsageReport, WorktreeError, WorktreeErrorCode, WorktreeLifecycle, WorktreeSettings,
+    WorktreeSummary,
 };
 
 mod local_workspace_snapshot;
@@ -1155,6 +1156,8 @@ pub struct AgentSessionSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_preset: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_user_dialog_agent_type: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_submitted_agent_type: Option<String>,
@@ -1177,6 +1180,7 @@ pub struct AgentSessionDeleteRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionRenameRequest {
     pub workspace_path: String,
@@ -1204,6 +1208,7 @@ pub struct AgentSessionArchiveRequest {
 /// This is separate from [`AgentSessionArchiveRequest`] so existing archive-only
 /// consumers keep their current request shape and behavior.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionArchiveStateRequest {
     pub workspace_path: String,
@@ -1265,13 +1270,32 @@ pub struct AgentUserShellCommandResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionModelUpdateRequest {
     pub session_id: String,
     pub model_id: String,
 }
 
+/// Atomically selects a model and an optional reasoning preset for the next
+/// turn. The legacy model-only request remains available for older clients.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionModelSelection {
+    pub model_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_preset: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionModelSelectionUpdateRequest {
+    pub session_id: String,
+    pub selection: AgentSessionModelSelection,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionModeUpdateRequest {
     pub session_id: String,
@@ -1321,7 +1345,29 @@ pub struct AgentContextReloadRequest {
     pub target: AgentContextReloadTarget,
 }
 
+#[async_trait::async_trait]
+pub trait AgentContextReloadPort: Send + Sync {
+    async fn reload_session_context(&self, request: AgentContextReloadRequest) -> PortResult<()>;
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+/// Delivers answers to a pending user-question tool call.
+pub struct AgentUserAnswersRequest {
+    pub tool_id: String,
+    pub answers: serde_json::Value,
+}
+
+#[async_trait::async_trait]
+/// Routes product responses to the existing user-input owner.
+///
+/// Implementations do not own approval policy or interaction lifecycle state.
+pub trait AgentInteractionResponsePort: Send + Sync {
+    async fn submit_user_answers(&self, request: AgentUserAnswersRequest) -> PortResult<()>;
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionForkRequest {
     pub workspace_path: String,
@@ -1337,6 +1383,7 @@ pub struct AgentSessionForkRequest {
 /// This is additive to [`AgentSessionForkRequest`] so existing Rust SDK
 /// consumers keep the source-compatible latest-turn request shape.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionForkAtTurnRequest {
     pub workspace_path: String,
@@ -1354,6 +1401,7 @@ pub struct AgentSessionForkAtTurnRequest {
 /// the fork. This stays separate from [`AgentSessionForkAtTurnRequest`] so its
 /// inclusive behavior remains source- and behavior-compatible.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionForkBeforeTurnRequest {
     pub workspace_path: String,
@@ -1366,6 +1414,7 @@ pub struct AgentSessionForkBeforeTurnRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionForkResult {
     pub session_id: String,
@@ -2488,8 +2537,24 @@ pub trait AgentUserShellCommandPort: Send + Sync {
 
 #[async_trait::async_trait]
 pub trait AgentSessionModelPort: Send + Sync {
-    async fn update_session_model(&self, request: AgentSessionModelUpdateRequest)
-        -> PortResult<()>;
+    async fn update_session_model_selection(
+        &self,
+        request: AgentSessionModelSelectionUpdateRequest,
+    ) -> PortResult<()>;
+
+    async fn update_session_model(
+        &self,
+        request: AgentSessionModelUpdateRequest,
+    ) -> PortResult<()> {
+        self.update_session_model_selection(AgentSessionModelSelectionUpdateRequest {
+            session_id: request.session_id,
+            selection: AgentSessionModelSelection {
+                model_id: request.model_id,
+                reasoning_preset: None,
+            },
+        })
+        .await
+    }
 }
 
 #[async_trait::async_trait]
@@ -4114,6 +4179,7 @@ mod tests {
             session_name: "Main".to_string(),
             agent_type: "agentic".to_string(),
             model_id: Some("provider/model".to_string()),
+            reasoning_preset: Some("high".to_string()),
             last_user_dialog_agent_type: Some("plan".to_string()),
             last_submitted_agent_type: Some("agentic".to_string()),
             turn_count: 3,

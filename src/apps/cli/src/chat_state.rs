@@ -378,6 +378,8 @@ pub(crate) struct ChatState {
     worktree_isolation_requested: Option<bool>,
     /// Current Session model identity reported by the Runtime owner.
     pub current_model_id: Option<String>,
+    /// Current canonical reasoning preset. `None` is the model default (Auto).
+    pub current_reasoning_preset: Option<String>,
     /// Current model display name (shown in shortcuts bar).
     pub current_model_name: String,
     /// Effective Auto mode for permission results that evaluate to Ask.
@@ -445,6 +447,7 @@ impl ChatState {
             worktree_control_available: true,
             worktree_isolation_requested: None,
             current_model_id: None,
+            current_reasoning_preset: None,
             current_model_name: String::new(),
             auto_approve_ask: false,
             messages: Vec::new(),

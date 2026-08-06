@@ -1,6 +1,6 @@
 [package]
 name = "bitfun-relay-server"
-version = "0.2.15" # x-release-please-version
+version = "0.2.16" # x-release-please-version
 authors = ["BitFun Team"]
 edition = "2021"
 description = "BitFun standalone Remote Connect relay server"

@@ -69,9 +69,11 @@ const NurseryGallery: React.FC = () => {
     assistantWorkspacesList,
     createAssistantWorkspace,
     deleteAssistantWorkspace,
+    primaryAssistantWorkspaceId,
     error: workspaceError,
     loading: workspaceLoading,
     setActiveWorkspace,
+    setPrimaryAssistantWorkspace,
   } = useWorkspaceContext();
   const openScene = useSceneStore(s => s.openScene);
   const { switchLeftPanelTab } = useApp();
@@ -79,6 +81,7 @@ const NurseryGallery: React.FC = () => {
   const notification = useNotification();
   const [creating, setCreating] = useState(false);
   const [deletingWorkspaceId, setDeletingWorkspaceId] = useState<string | null>(null);
+  const [settingPrimaryWorkspaceId, setSettingPrimaryWorkspaceId] = useState<string | null>(null);
   const [startingSessionWorkspaceId, setStartingSessionWorkspaceId] = useState<string | null>(null);
   const [templateStats, setTemplateStats] = useState<TemplateStats | null>(null);
   const [templateStatsStatus, setTemplateStatsStatus] = useState<TemplateStatsStatus>('loading');
@@ -130,12 +133,32 @@ const NurseryGallery: React.FC = () => {
 
   const sortedAssistantWorkspacesList = useMemo(
     () => {
-      const primary = assistantWorkspacesList.filter(w => !w.assistantId);
-      const secondary = assistantWorkspacesList.filter(w => w.assistantId);
+      const primary = assistantWorkspacesList.filter(w => w.id === primaryAssistantWorkspaceId);
+      const secondary = assistantWorkspacesList.filter(w => w.id !== primaryAssistantWorkspaceId);
       return [...primary, ...secondary];
     },
-    [assistantWorkspacesList]
+    [assistantWorkspacesList, primaryAssistantWorkspaceId]
   );
+
+  const handleSetPrimary = useCallback(async (workspace: WorkspaceInfo) => {
+    if (settingPrimaryWorkspaceId || workspace.id === primaryAssistantWorkspaceId) return;
+    setSettingPrimaryWorkspaceId(workspace.id);
+    try {
+      await setPrimaryAssistantWorkspace(workspace.id);
+      notification.success(t('nursery.card.setPrimarySuccess'));
+    } catch (e) {
+      log.error('Failed to set primary assistant workspace', e);
+      notification.error(t('nursery.card.setPrimaryFailed'));
+    } finally {
+      setSettingPrimaryWorkspaceId(null);
+    }
+  }, [
+    notification,
+    primaryAssistantWorkspaceId,
+    setPrimaryAssistantWorkspace,
+    settingPrimaryWorkspaceId,
+    t,
+  ]);
 
   const handleDeleteRequest = useCallback(async (workspace: WorkspaceInfo) => {
     if (deletingWorkspaceId) return;
@@ -328,7 +351,7 @@ const NurseryGallery: React.FC = () => {
               role="list"
             >
               {sortedAssistantWorkspacesList.map((workspace, i) => {
-                const isPrimary = !workspace.assistantId;
+                const isPrimary = workspace.id === primaryAssistantWorkspaceId;
                 return (
                   <AssistantCard
                     key={workspace.id}
@@ -336,9 +359,11 @@ const NurseryGallery: React.FC = () => {
                     isPrimary={isPrimary}
                     isDeleting={deletingWorkspaceId === workspace.id}
                     isStartingSession={startingSessionWorkspaceId === workspace.id}
+                    isSettingPrimary={settingPrimaryWorkspaceId === workspace.id}
                     onClick={() => openAssistant(workspace.id)}
                     onNewSession={() => { void handleNewAssistantSession(workspace); }}
                     onDelete={isPrimary ? undefined : () => { void handleDeleteRequest(workspace); }}
+                    onSetPrimary={isPrimary ? undefined : () => { void handleSetPrimary(workspace); }}
                     style={{ '--surface-stagger-index': i } as React.CSSProperties}
                   />
                 );

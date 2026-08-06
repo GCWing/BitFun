@@ -100,6 +100,16 @@ default = []
 # app-server's `ts` feature enables `product-full` which pulls `git`.
 ts = ["dep:ts-rs"]
 announcement = ["reqwest", "reqwest/rustls", "tokio/fs", "tokio/sync"]
+models-dev = [
+    "reqwest",
+    "reqwest/rustls",
+    "reqwest/system-proxy",
+    "sha2",
+    "tokio/fs",
+    "tokio/sync",
+    "tokio/time",
+    "windows",
+]
 browser-control = ["anyhow", "bitfun-services-core/process-runtime", "dirs", "reqwest", "reqwest/rustls", "thiserror", "tokio/time"]
 canvas-runtime = [
     "dep:bitfun-product-domains",
@@ -239,6 +249,7 @@ remote-connect = [
     "async-trait",
     "base64",
     "bitfun-agent-tools",
+    "dep:bitfun-core-types",
     "bitfun-services-core/local-storage",
     "bitfun-services-core/process-runtime",
     "bitfun-runtime-ports",
@@ -308,6 +319,7 @@ remote-ssh-concrete = [
     "russh",
     "russh-sftp",
     "russh-keys",
+    "semver",
     "shellexpand",
     "ssh_config",
     "terminal-core",
@@ -377,6 +389,7 @@ script-tool-runtime = [
 web-tools = ["reqwest", "reqwest/rustls", "thiserror"]
 product-full = [
     "announcement",
+    "models-dev",
     "browser-control",
     "canvas-runtime",
     "debug-log",
@@ -401,7 +414,7 @@ ssh_config = ["dep:ssh_config"]
 
 [dev-dependencies]
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "test-util"] }
 
 [[test]]
 name = "debug_log_owner_contracts"

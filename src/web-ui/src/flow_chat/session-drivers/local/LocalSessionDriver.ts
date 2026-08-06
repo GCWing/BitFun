@@ -33,6 +33,7 @@ import {
 } from '../../events/flowchatNavigation';
 import {
   getModelMaxTokens,
+  resolveReasoningPresetForSessionCreation,
 } from '../../utils/modelResolution';
 import { syncSessionModelSelection } from '../../utils/modelSync';
 import { markCurrentTurnItemsAsCancelled } from '../../utils/turnCancellation';
@@ -64,6 +65,10 @@ export const localSessionDriver: SessionDriver = {
     } = seed;
 
     const explicitModelName = config.modelName?.trim() || undefined;
+    const reasoningPreset = config.reasoningPreset
+      ?? (explicitModelName
+        ? await resolveReasoningPresetForSessionCreation(explicitModelName)
+        : undefined);
 
     const response = await agentAPI.createSession({
       sessionName,
@@ -77,6 +82,7 @@ export const localSessionDriver: SessionDriver = {
       remoteSshHost,
       config: {
         modelName: explicitModelName,
+        reasoningPreset,
         enableTools: true,
         safeMode: true,
         autoCompact: true,
@@ -91,6 +97,7 @@ export const localSessionDriver: SessionDriver = {
     const mergedConfig: SessionConfig = {
       ...config,
       modelName: sessionModelName,
+      reasoningPreset,
       workspaceId: workspaceId ?? config.workspaceId,
     };
 

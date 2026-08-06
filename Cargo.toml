@@ -9,6 +9,8 @@ members = [
     "src/apps/skin-market-server",
     "src/crates/interfaces/acp",
     "src/crates/interfaces/app-server",
+    "src/crates/interfaces/app-server-client",
+    "src/crates/interfaces/app-server-protocol",
     "src/crates/interfaces/sdk-host",
     "src/crates/adapters/agent-runtime-ipc",
     "src/crates/assembly/agent-content",
@@ -52,7 +54,7 @@ resolver = "2"
 
 # Shared package metadata — single source of truth for version
 [workspace.package]
-version = "0.2.15" # x-release-please-version
+version = "0.2.16" # x-release-please-version
 authors = ["BitFun Team"]
 edition = "2021"
 

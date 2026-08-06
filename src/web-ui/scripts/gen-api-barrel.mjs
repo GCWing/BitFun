@@ -10,7 +10,7 @@ const dir = join(here, '..', 'src', 'generated', 'api');
 
 const header = `// GENERATED CODE! DO NOT MODIFY BY HAND!
 //
-// Source: src/crates/interfaces/app-server/src/schema.rs (+ upstream contract
+// Source: src/crates/interfaces/app-server/src/schema/ (+ upstream contract
 // crates), exported via ts-rs (#[ts(export)], run by \`npm run gen:types\`).
 // This barrel re-exports every generated type so consumers can import from a
 // single path: \`import type { SubmitDialogTurnBody } from '@/generated/api'\`.
@@ -22,6 +22,14 @@ const files = (await readdir(dir, { withFileTypes: true }))
   .filter((e) => e.isFile() && e.name.endsWith('.ts') && e.name !== 'index.ts')
   .map((e) => basename(e.name, extname(e.name)))
   .sort();
+
+const requiredTypes = ['ConfigUpdate'];
+const missingTypes = requiredTypes.filter((typeName) => !files.includes(typeName));
+if (missingTypes.length > 0) {
+  throw new Error(
+    `TypeScript binding generation did not export required types: ${missingTypes.join(', ')}`,
+  );
+}
 
 const lines = files.map((f) => `export type { ${f} } from './${f}';`);
 await writeFile(join(dir, 'index.ts'), header + '\n' + lines.join('\n') + '\n');

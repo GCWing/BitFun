@@ -8,7 +8,8 @@
 use bitfun_agent_runtime::sdk::{
     AgentEventSource, AgentInteractionResponsePort, AgentRuntime, AgentRuntimeBuilder,
     AgentSessionCompactionPort, AgentSessionForkPort, AgentSessionLineagePort,
-    AgentSessionModePort, AgentSessionModelPort, AgentSessionModelUpdateRequest,
+    AgentSessionModePort, AgentSessionModelPort, AgentSessionModelSelection,
+    AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest,
     AgentSessionRestorePort, AgentSessionRevertPort, AgentSessionUsagePort,
     AgentTurnSettlementPort, RuntimeError,
 };
@@ -38,8 +39,8 @@ use bitfun_services_integrations::remote_connect::{
     RemoteDialogSubmitOutcome, RemoteDialogWorkspaceBinding, RemoteImageContext,
     RemoteInitialSyncRuntimeHost, RemoteInteractionRuntimeHost, RemoteModelCapabilityFact,
     RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelFacts, RemotePermissionMode,
-    RemotePollRuntimeHost, RemoteReasoningModeFact, RemoteRecentWorkspaceFacts,
-    RemoteSessionMetadata, RemoteSessionRuntimeHost, RemoteSessionStateTracker,
+    RemotePollRuntimeHost, RemoteRecentWorkspaceFacts, RemoteSessionMetadata,
+    RemoteSessionModelSelection, RemoteSessionRuntimeHost, RemoteSessionStateTracker,
     RemoteSessionTrackerHost, RemoteTerminalPrewarmRequest, RemoteWorkspaceFacts,
     RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind as RemoteConnectWorkspaceKind,
     RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
@@ -56,9 +57,13 @@ use crate::agentic::core::{Session, SessionKind};
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::session::session_store_port::CoreSessionStorePort;
 use crate::agentic::workspace::WorkspaceBinding;
+use crate::infrastructure::ai::provider_catalog::resolve_builtin_provider_catalog;
+use crate::infrastructure::ai::reasoning_catalog::{
+    load_models_dev_reasoning_catalog, project_model_reasoning_catalog, resolve_reasoning_preset,
+};
 use crate::service::remote_connect::remote_server::RemoteExecutionDispatcher;
 
-use crate::service::config::types::{AIConfig, GlobalConfig, ModelCapability, ReasoningMode};
+use crate::service::config::types::{AIConfig, GlobalConfig, ModelCapability};
 use crate::service::session::{DialogTurnData, ToolItemIdentityExt, TurnStatus};
 
 fn current_workspace_path() -> Option<std::path::PathBuf> {
@@ -247,15 +252,6 @@ fn remote_model_capability_fact(capability: ModelCapability) -> RemoteModelCapab
     }
 }
 
-fn remote_reasoning_mode_fact(reasoning_mode: ReasoningMode) -> RemoteReasoningModeFact {
-    match reasoning_mode {
-        ReasoningMode::Default => RemoteReasoningModeFact::Default,
-        ReasoningMode::Enabled => RemoteReasoningModeFact::Enabled,
-        ReasoningMode::Disabled => RemoteReasoningModeFact::Disabled,
-        ReasoningMode::Adaptive => RemoteReasoningModeFact::Adaptive,
-    }
-}
-
 /// Convert persisted turns into mobile ChatMessages.
 /// This is the same data source the desktop frontend uses.
 fn remote_chat_messages_from_turns(turns: &[DialogTurnData]) -> Vec<ChatMessage> {
@@ -330,23 +326,35 @@ fn remote_chat_history_turn_from_core_turn(turn: &DialogTurnData) -> RemoteChatH
     }
 }
 
-async fn resolve_session_model_id(session_id: &str) -> Option<String> {
-    let coordinator = get_global_coordinator()?;
+async fn resolve_session_model_selection(session_id: &str) -> (Option<String>, Option<String>) {
+    let Some(coordinator) = get_global_coordinator() else {
+        return (None, None);
+    };
     let session_manager = coordinator.get_session_manager();
 
     if let Some(session) = session_manager.get_session(session_id) {
-        return normalize_remote_session_model_id(session.config.model_id.as_deref());
+        return (
+            normalize_remote_session_model_id(session.config.model_id.as_deref()),
+            session.config.reasoning_preset.clone(),
+        );
     }
 
-    let session_storage_dir =
-        CoreServiceAgentRuntime::resolve_session_storage_dir(session_id).await?;
+    let Some(session_storage_dir) =
+        CoreServiceAgentRuntime::resolve_session_storage_dir(session_id).await
+    else {
+        return (None, None);
+    };
     coordinator
         .restore_session_view_from_storage_path_timed(&session_storage_dir, session_id)
         .await
         .ok()
-        .and_then(|(session, _, _)| {
-            normalize_remote_session_model_id(session.config.model_id.as_deref())
+        .map(|(session, _, _)| {
+            (
+                normalize_remote_session_model_id(session.config.model_id.as_deref()),
+                session.config.reasoning_preset,
+            )
         })
+        .unwrap_or_default()
 }
 
 fn core_dialog_submission_policy(policy: RemoteDialogSubmissionPolicy) -> DialogSubmissionPolicy {
@@ -932,13 +940,29 @@ impl CoreServiceAgentRuntime {
             .await
             .map_err(|e| format!("Failed to load global config: {e}"))?;
         let ai_config: AIConfig = global_config.ai;
+        let models_dev = load_models_dev_reasoning_catalog().await;
+        let provider_catalog = resolve_builtin_provider_catalog(
+            models_dev.catalog.as_deref(),
+            models_dev.sha256.clone(),
+            match models_dev.source {
+                bitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Cache => {
+                    bitfun_core_types::ProviderCatalogSource::Cache
+                }
+                bitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Bundled => {
+                    bitfun_core_types::ProviderCatalogSource::Bundle
+                }
+                bitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Empty => {
+                    bitfun_core_types::ProviderCatalogSource::Bitfun
+                }
+            },
+        );
 
         let models: Vec<RemoteModelFacts> = ai_config
             .models
             .into_iter()
             .map(|model| {
-                let reasoning_mode = model.effective_reasoning_mode();
-
+                let reasoning =
+                    project_model_reasoning_catalog(&model, models_dev.catalog.as_deref());
                 RemoteModelFacts {
                     id: model.id,
                     name: model.name,
@@ -952,22 +976,21 @@ impl CoreServiceAgentRuntime {
                         .into_iter()
                         .map(remote_model_capability_fact)
                         .collect(),
-                    enable_thinking_process: model.enable_thinking_process,
-                    reasoning_mode: Some(remote_reasoning_mode_fact(reasoning_mode)),
-                    reasoning_effort: model.reasoning_effort,
-                    thinking_budget_tokens: model.thinking_budget_tokens,
+                    reasoning: Some(reasoning),
                 }
             })
             .collect();
 
-        let session_model_id = if let Some(session_id) = session_id {
-            resolve_session_model_id(session_id).await
+        let (session_model_id, session_reasoning_preset) = if let Some(session_id) = session_id {
+            resolve_session_model_selection(session_id).await
         } else {
-            None
+            (None, None)
         };
         Ok(build_remote_model_catalog(RemoteModelCatalogFacts {
             last_modified_ms: global_config.last_modified.timestamp_millis(),
+            source_version: Some(models_dev.version),
             models,
+            provider_catalog,
             default_models: RemoteDefaultModelsConfig {
                 primary: ai_config.default_models.primary,
                 fast: ai_config.default_models.fast,
@@ -977,6 +1000,7 @@ impl CoreServiceAgentRuntime {
                 speech_recognition: ai_config.default_models.speech_recognition,
             },
             session_model_id,
+            session_reasoning_preset,
         }))
     }
 
@@ -985,8 +1009,11 @@ impl CoreServiceAgentRuntime {
         runtime: &AgentRuntime,
         session_id: &str,
         model_id: &str,
-    ) -> Result<String, String> {
-        let ai_config = if remote_model_selection_needs_config(model_id) {
+        reasoning_preset: Option<Option<&str>>,
+    ) -> Result<RemoteSessionModelSelection, String> {
+        let ai_config = if remote_model_selection_needs_config(model_id)
+            || reasoning_preset.is_some_and(|preset| preset.is_some())
+        {
             let config_service = crate::service::config::get_global_config_service()
                 .await
                 .map_err(|_| "Config service not available".to_string())?;
@@ -1000,6 +1027,41 @@ impl CoreServiceAgentRuntime {
             None
         };
         let normalized_model_id = normalize_remote_model_selection(model_id, ai_config.as_ref())?;
+        let normalized_reasoning_preset = reasoning_preset.map(|preset| {
+            preset
+                .map(str::trim)
+                .filter(|preset| !preset.is_empty() && !preset.eq_ignore_ascii_case("auto"))
+                .map(ToOwned::to_owned)
+        });
+
+        if let Some(Some(preset_id)) = normalized_reasoning_preset.as_ref() {
+            let ai_config = ai_config
+                .as_ref()
+                .ok_or_else(|| "Config service not available".to_string())?;
+            let concrete_model_id = match normalized_model_id.as_str() {
+                "auto" | "primary" => ai_config.resolve_model_selection("primary"),
+                "fast" => ai_config.resolve_model_selection("fast"),
+                model_id => ai_config.resolve_model_reference(model_id),
+            }
+            .ok_or_else(|| {
+                format!(
+                    "Cannot resolve a concrete model for reasoning preset: {}",
+                    normalized_model_id
+                )
+            })?;
+            let model = ai_config
+                .models
+                .iter()
+                .find(|model| model.enabled && model.id == concrete_model_id)
+                .ok_or_else(|| format!("Model is unavailable: {concrete_model_id}"))?;
+            let models_dev = load_models_dev_reasoning_catalog().await;
+            let reasoning = project_model_reasoning_catalog(model, models_dev.catalog.as_deref());
+            if resolve_reasoning_preset(&reasoning, preset_id).is_none() {
+                return Err(format!(
+                    "Reasoning preset '{preset_id}' is not available for model '{concrete_model_id}'"
+                ));
+            }
+        }
 
         if coordinator
             .get_session_manager()
@@ -1020,25 +1082,58 @@ impl CoreServiceAgentRuntime {
                 .map_err(|e| format!("Failed to restore session: {e}"))?;
         }
 
-        runtime
-            .update_session_model(AgentSessionModelUpdateRequest {
-                session_id: session_id.to_string(),
-                model_id: normalized_model_id.clone(),
-            })
-            .await
-            .map_err(Self::runtime_error_message)?;
-
-        if coordinator
+        let previous_model_id = coordinator
             .get_session_manager()
             .get_session(session_id)
-            .is_some_and(|session| session_uses_shared_mode_default(&session))
+            .and_then(|session| {
+                normalize_remote_session_model_id(session.config.model_id.as_deref())
+            });
+
+        if reasoning_preset.is_none() {
+            runtime
+                .update_session_model(AgentSessionModelUpdateRequest {
+                    session_id: session_id.to_string(),
+                    model_id: normalized_model_id.clone(),
+                })
+                .await
+                .map_err(Self::runtime_error_message)?;
+        } else {
+            runtime
+                .update_session_model_selection(AgentSessionModelSelectionUpdateRequest {
+                    session_id: session_id.to_string(),
+                    selection: AgentSessionModelSelection {
+                        model_id: normalized_model_id.clone(),
+                        reasoning_preset: normalized_reasoning_preset.clone().flatten(),
+                    },
+                })
+                .await
+                .map_err(Self::runtime_error_message)?;
+        }
+
+        let model_changed = previous_model_id.as_deref().unwrap_or("auto") != normalized_model_id;
+        if model_changed
+            && coordinator
+                .get_session_manager()
+                .get_session(session_id)
+                .is_some_and(|session| session_uses_shared_mode_default(&session))
         {
             // New sessions of every mode share one selector. Delegated
             // subagents intentionally keep their own defaults.
             Self::persist_mode_model(&normalized_model_id).await;
         }
 
-        Ok(normalized_model_id)
+        Ok(coordinator
+            .get_session_manager()
+            .get_session(session_id)
+            .map(|session| RemoteSessionModelSelection {
+                model_id: normalize_remote_session_model_id(session.config.model_id.as_deref())
+                    .unwrap_or_else(|| normalized_model_id.clone()),
+                reasoning_preset: session.config.reasoning_preset.clone(),
+            })
+            .unwrap_or(RemoteSessionModelSelection {
+                model_id: normalized_model_id,
+                reasoning_preset: normalized_reasoning_preset.flatten(),
+            }))
     }
 
     /// Persist the shared selector used by future mode sessions.
@@ -1195,6 +1290,7 @@ impl CoreServiceAgentRuntime {
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
         let workspace_references: Arc<dyn AgentWorkspaceReferencePort> = coordinator.clone();
         let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
+        let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_compaction: Arc<dyn AgentSessionCompactionPort> = coordinator.clone();
         let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
@@ -1207,6 +1303,7 @@ impl CoreServiceAgentRuntime {
             .with_session_management_port(session_management)
             .with_workspace_reference_port(workspace_references)
             .with_session_revert_port(session_revert)
+            .with_session_mode_port(session_mode)
             .with_session_model_port(session_model)
             .with_session_compaction_port(session_compaction)
             .with_local_command_turn_port(local_command_turn)
@@ -1848,12 +1945,8 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
     async fn resolve_default_assistant_workspace_path(&self) -> Result<String, String> {
         let workspace_service = crate::service::workspace::get_global_workspace_service()
             .ok_or_else(|| "Workspace service not available".to_string())?;
-        let workspaces = workspace_service.get_assistant_workspaces().await;
-        if let Some(default_workspace) = workspaces
-            .into_iter()
-            .find(|workspace| workspace.assistant_id.is_none())
-        {
-            return Ok(default_workspace.root_path.to_string_lossy().to_string());
+        if let Some(primary_workspace) = workspace_service.get_primary_assistant_workspace().await {
+            return Ok(primary_workspace.root_path.to_string_lossy().to_string());
         }
 
         workspace_service
@@ -1878,16 +1971,18 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
         CoreServiceAgentRuntime::load_remote_model_catalog(session_id).await
     }
 
-    async fn update_session_model(
+    async fn update_session_model_selection(
         &self,
         session_id: &str,
         model_id: &str,
-    ) -> Result<String, String> {
+        reasoning_preset: Option<Option<&str>>,
+    ) -> Result<RemoteSessionModelSelection, String> {
         CoreServiceAgentRuntime::update_remote_session_model(
             self.coordinator.as_ref(),
             &self.runtime,
             session_id,
             model_id,
+            reasoning_preset,
         )
         .await
     }
@@ -2264,7 +2359,7 @@ mod tests {
     fn remote_model_lookup_keeps_read_only_restore_lock_free() {
         let source = include_str!("service_agent_runtime.rs");
         let body = source
-            .split("async fn resolve_session_model_id")
+            .split("async fn resolve_session_model_selection")
             .nth(1)
             .and_then(|source| source.split("fn core_dialog_submission_policy").next())
             .expect("remote model lookup");
@@ -2343,7 +2438,7 @@ mod tests {
     }
 
     #[test]
-    fn session_surface_runtime_registers_local_command_turn_port() {
+    fn session_surface_runtime_registers_explicit_session_mutation_ports() {
         let source = include_str!("service_agent_runtime.rs");
         let builder = source
             .split("pub(crate) fn session_surface_agent_runtime")
@@ -2359,6 +2454,9 @@ mod tests {
             "let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();"
         ));
         assert!(builder.contains(".with_local_command_turn_port(local_command_turn)"));
+        assert!(builder
+            .contains("let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();"));
+        assert!(builder.contains(".with_session_mode_port(session_mode)"));
     }
 
     #[test]

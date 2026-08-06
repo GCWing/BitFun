@@ -22,9 +22,10 @@ pub use factory::WorkspaceFactory;
 #[cfg(feature = "workspace-watch")]
 pub use identity_watch::WorkspaceIdentityWatchService;
 pub use manager::{
-    GitInfo, RelatedPath, ScanOptions, WorkspaceIdentity, WorkspaceInfo, WorkspaceKind,
-    WorkspaceManager, WorkspaceManagerConfig, WorkspaceManagerStatistics, WorkspaceOpenOptions,
-    WorkspaceStatistics, WorkspaceStatus, WorkspaceSummary, WorkspaceType, WorkspaceWorktreeInfo,
+    GitInfo, PrimaryAssistantKey, RelatedPath, ScanOptions, WorkspaceIdentity, WorkspaceInfo,
+    WorkspaceKind, WorkspaceManager, WorkspaceManagerConfig, WorkspaceManagerStatistics,
+    WorkspaceOpenOptions, WorkspaceStatistics, WorkspaceStatus, WorkspaceSummary, WorkspaceType,
+    WorkspaceWorktreeInfo,
 };
 pub use provider::{WorkspaceCleanupResult, WorkspaceProvider, WorkspaceSystemSummary};
 pub use service::{

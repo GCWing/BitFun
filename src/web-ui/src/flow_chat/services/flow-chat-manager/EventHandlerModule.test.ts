@@ -105,7 +105,9 @@ describe('dispatch optimistic turn reconciliation', () => {
       activeSessionId: 'dispatch-session',
     }));
 
-    __test_only__.handleDialogTurnStarted(createFlowChatContext(), {
+    const context = createFlowChatContext();
+    context.deferredStorageIdentitySaves?.add('dispatch-session:dispatch_pending_job-1');
+    __test_only__.handleDialogTurnStarted(context, {
       sessionId: 'dispatch-session',
       turnId: 'target-turn-1',
       turnIndex: 0,
@@ -132,6 +134,9 @@ describe('dispatch optimistic turn reconciliation', () => {
     });
     expect(turns?.[0]?.userMessage.metadata)
       .not.toHaveProperty('__bitfunOptimisticDispatchJobId');
+    expect(context.deferredStorageIdentitySaves).not.toContain(
+      'dispatch-session:dispatch_pending_job-1',
+    );
   });
 
   it('hydrates the real prompt into an audit-only dispatch placeholder', () => {
@@ -861,6 +866,7 @@ function createFlowChatContext(): FlowChatContext {
     lastSaveHashes: new Map(),
     turnSaveInFlight: new Map(),
     turnSavePending: new Set(),
+    deferredStorageIdentitySaves: new Set(),
     runtimeStatusTimers: new Map(),
     userCancelledSessionIds: new Set(),
     handledTerminalTurnEvents: new Set(),

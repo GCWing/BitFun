@@ -89,4 +89,29 @@ describe('continuousHistoryProjection', () => {
       CONTINUOUS_HISTORY_PROJECTION_MAX_VIRTUAL_ITEM_COUNT + 1,
     )).toBe(false);
   });
+
+  it('does not let a provisional usage report shift the canonical tail', () => {
+    const presentation = createPresentation(10);
+    const provisional = {
+      ...createTurn(99, 'usage'),
+      userMessage: {
+        ...createTurn(99, 'usage').userMessage,
+        metadata: {
+          localCommandKind: 'usage_report',
+          usageReportProvisional: true,
+          modelVisible: false,
+        },
+      },
+    };
+    const canonicalTail = [createTurn(8, 'canonical'), createTurn(9, 'canonical'), provisional];
+    const result = buildContinuousHistoryProjection({
+      sessionId: 'session-1',
+      dialogTurns: canonicalTail,
+      isPartial: true,
+      totalTurnCount: 10,
+    }, presentation);
+
+    expect(result?.turns.slice(8).map(turn => turn.id)).toEqual(['turn-8', 'turn-9']);
+    expect(result?.range.endOrdinalExclusive).toBe(10);
+  });
 });

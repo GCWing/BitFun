@@ -18,9 +18,8 @@ use protocol::{
     DispatchCancelRequest, DispatchCancelResponse, DispatchContinueRequest,
     DispatchContinueResponse, DispatchJobListEntry, DispatchJobState, DispatchListRequest,
     DispatchProbeRequest, DispatchProbeResponse, DispatchQueryKind, DispatchQueryRequest,
-    DispatchStatusRequest, DispatchStatusResponse,
-    DispatchSubmitRequest, DispatchSubmitResponse, DispatchTurnKind,
-    DispatchWorkspaceBundleBeginRequest, DispatchWorkspaceBundleChunkRequest,
+    DispatchStatusRequest, DispatchStatusResponse, DispatchSubmitRequest, DispatchSubmitResponse,
+    DispatchTurnKind, DispatchWorkspaceBundleBeginRequest, DispatchWorkspaceBundleChunkRequest,
     DispatchWorkspaceBundleCommitRequest, DispatchWorkspaceProbe,
     DispatchWorkspaceProvisionRequest, DispatchWorkspaceSyncChunkRequest,
     DispatchWorkspaceSyncRequest, DISPATCH_PROTOCOL_VERSION, MAX_DISPATCH_TEXT_BYTES,
@@ -32,6 +31,7 @@ struct ModelReadiness {
     available_models: Vec<String>,
     default_model: Option<String>,
     diagnostic: Option<String>,
+    model_catalog: bitfun_core::AIModelCatalog,
 }
 
 impl ModelReadiness {
@@ -133,6 +133,10 @@ async fn probe(request: DispatchProbeRequest) -> Result<DispatchProbeResponse> {
             bitfun_services_core::dispatch_contract::DISPATCH_DETACHED_WORKER_CAPABILITY
                 .to_string(),
         );
+        capabilities.push(
+            bitfun_services_core::dispatch_contract::DISPATCH_ACCOUNT_DAEMON_PROVISIONING_CAPABILITY
+                .to_string(),
+        );
     }
     Ok(DispatchProbeResponse {
         protocol_version: DISPATCH_PROTOCOL_VERSION,
@@ -142,6 +146,7 @@ async fn probe(request: DispatchProbeRequest) -> Result<DispatchProbeResponse> {
         capabilities,
         model_configured: readiness.model_configured(),
         available_models: readiness.available_models,
+        model_catalog: readiness.model_catalog,
         default_model: readiness.default_model,
         model_diagnostic: readiness.diagnostic,
         workspace,
@@ -174,6 +179,7 @@ async fn submit(mut request: DispatchSubmitRequest) -> Result<DispatchSubmitResp
     let canonical_workspace = canonical_workspace(&request.workspace_path)?;
     request.workspace_path = canonical_workspace.to_string_lossy().to_string();
     let selected_model = select_ready_model(request.model.as_deref()).await?;
+    validate_reasoning_preset(&selected_model, request.reasoning_preset.as_deref()).await?;
     request.model = Some(selected_model);
 
     let title = request
@@ -240,6 +246,9 @@ fn continue_job(request: DispatchContinueRequest) -> Result<DispatchContinueResp
         if model.len() > 256 {
             bail!("dispatch model override exceeds the 256 byte limit");
         }
+    }
+    if let Some(preset) = &request.reasoning_preset {
+        validate_reasoning_preset_id(preset)?;
     }
     if !runner::is_supported() {
         bail!("dispatch detached workers are supported only on Linux and macOS");
@@ -576,6 +585,18 @@ async fn inspect_model_readiness() -> Result<ModelReadiness> {
         .get_config(None)
         .await
         .map_err(|error| anyhow!("Failed to load target model configuration: {error}"))?;
+    let mut model_catalog =
+        bitfun_core::get_ai_model_catalog()
+            .await
+            .unwrap_or(bitfun_core::AIModelCatalog {
+                version: 0,
+                models: Vec::new(),
+                provider_catalog: Default::default(),
+                default_models: Default::default(),
+                reasoning_preset_selection_supported: true,
+                session_model_id: None,
+                session_reasoning_preset: None,
+            });
 
     AIClientFactory::initialize_global()
         .await
@@ -602,6 +623,11 @@ async fn inspect_model_readiness() -> Result<ModelReadiness> {
         }
     }
     available_models.sort();
+    model_catalog.models.retain(|model| {
+        available_models
+            .iter()
+            .any(|available| available == &model.id)
+    });
     let selected_default = crate::model_selection::resolve_mode_model_id(&config.ai);
     let default_model = selected_default
         .filter(|model| available_models.iter().any(|available| available == model));
@@ -629,7 +655,45 @@ async fn inspect_model_readiness() -> Result<ModelReadiness> {
         available_models,
         default_model,
         diagnostic,
+        model_catalog,
     })
+}
+
+fn validate_reasoning_preset_id(preset: &str) -> Result<()> {
+    let preset = preset.trim();
+    if preset.is_empty() || preset.len() > 128 || preset.bytes().any(|byte| byte.is_ascii_control())
+    {
+        bail!("dispatch reasoning preset must contain 1-128 printable bytes");
+    }
+    Ok(())
+}
+
+async fn validate_reasoning_preset(model_id: &str, preset: Option<&str>) -> Result<()> {
+    let Some(preset) = preset.map(str::trim).filter(|preset| !preset.is_empty()) else {
+        return Ok(());
+    };
+    validate_reasoning_preset_id(preset)?;
+    if preset == "auto" {
+        return Ok(());
+    }
+    let catalog = bitfun_core::get_ai_model_catalog()
+        .await
+        .map_err(|error| anyhow!("Failed to load target reasoning catalog: {error}"))?;
+    let supported = catalog
+        .models
+        .iter()
+        .find(|model| model.id == model_id)
+        .and_then(|model| model.reasoning.as_ref())
+        .is_some_and(|reasoning| {
+            reasoning
+                .presets
+                .iter()
+                .any(|candidate| candidate.id == preset)
+        });
+    if !supported {
+        bail!("Reasoning preset '{preset}' is not available for target model '{model_id}'");
+    }
+    Ok(())
 }
 
 async fn select_ready_model(requested: Option<&str>) -> Result<String> {
@@ -828,6 +892,7 @@ mod tests {
             prompt: "task".to_string(),
             approval_policy: DispatchApprovalPolicy::RejectAndReport,
             model: Some("model-1".to_string()),
+            reasoning_preset: None,
             title: Some("Task".to_string()),
             attachments: Vec::new(),
             setup_audit: Vec::new(),

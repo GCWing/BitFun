@@ -57,6 +57,7 @@ export async function syncSessionModelSelection(
     await agentAPI.updateSessionModel({
       sessionId,
       modelName: sessionModelId,
+      reasoningPreset: session.config.reasoningPreset ?? null,
       workspacePath: sessionProjectWorkspacePath(session),
       remoteConnectionId: session.remoteConnectionId,
       remoteSshHost: session.remoteSshHost,
@@ -86,6 +87,7 @@ export async function syncSessionModelSelection(
   await agentAPI.updateSessionModel({
     sessionId,
     modelName: desiredModelId,
+    reasoningPreset: session.config.reasoningPreset ?? null,
     workspacePath: sessionProjectWorkspacePath(session),
     remoteConnectionId: session.remoteConnectionId,
     remoteSshHost: session.remoteSshHost,

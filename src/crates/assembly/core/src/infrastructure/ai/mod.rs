@@ -3,6 +3,8 @@
 //! Provides AI clients and related services
 
 pub mod client_factory;
+pub(crate) mod provider_catalog;
+pub(crate) mod reasoning_catalog;
 pub mod tool_call_accumulator;
 
 use std::time::Duration;
@@ -39,10 +41,10 @@ mod tests {
     use crate::service::config::types::AIModelConfig;
 
     #[test]
-    fn model_reasoning_mode_does_not_override_stream_timeouts() {
+    fn model_reasoning_config_does_not_override_stream_timeouts() {
         let config = AIConfig::default();
         let model = AIModelConfig {
-            reasoning_mode: Some(crate::service::config::types::ReasoningMode::Enabled),
+            reasoning: Some(bitfun_core_types::ReasoningConfig::default()),
             ..Default::default()
         };
 

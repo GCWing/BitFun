@@ -25,21 +25,24 @@ Desktop Tauri surface: `src/apps/desktop/src/api/relay_deploy_api.rs`
    and it never silently falls back to those operations. Manual
    `deploy.sh --build-from-source` remains an explicit maintenance escape hatch.
 
-3. **Authenticate the image before touching the server.** Each release publishes
-   `relay-image.json` and `relay-image.json.sig`. Desktop verifies the descriptor
-   using its compiled-in minisign trust root, validates the exact repository,
-   release tag, lowercase SHA256 digest, and both supported platforms, then sends
-   only that trusted repository + digest to the remote script.
+3. **Authenticate the latest image before touching the server.** Desktop reads
+   the latest `relay-image.json` and `relay-image.json.sig`, verifies the
+   descriptor using its compiled-in minisign trust root, validates the exact
+   repository, stable release tag/version, lowercase SHA256 digest, and both
+   supported platforms, then sends only that trusted repository + digest to the
+   remote script. The Desktop package version does not pin Relay deployment.
 
 4. **Always start by digest.** Tags are discovery metadata, not an execution
    identity. One-click deploy sets `BITFUN_REQUIRE_IMAGE_DIGEST=1`; Docker pulls
    and runs `<repository>@sha256:...`, so every manifest and layer remains
    content-addressed.
 
-5. **Regional prefixes are transport, not trust roots.** Global mode pulls
-   `ghcr.io/gcwing/bitfun-relay-server` directly. China mode tries, in order,
-   `ghcr.nju.edu.cn/...`, `m.daocloud.io/ghcr.io/...`, then official GHCR. Every
-   route uses the same signed digest and has a bounded attempt before failover.
+5. **Registry prefixes are transport, not trust roots.** Automatic mode keeps
+   official GHCR first when a 10-second GitHub byte probe reaches 512 KiB/s; a
+   slower or unreachable GitHub moves `ghcr.nju.edu.cn/...` and
+   `m.daocloud.io/ghcr.io/...` ahead of official GHCR. Explicit global/China
+   choices remain authoritative. Every route uses the same signed digest and
+   has a bounded attempt before failover.
 
 6. **The release must be publicly pullable.** `desktop-package.yml` builds one
    amd64/arm64 manifest, signs its descriptor, logs out of GHCR, and verifies an
@@ -104,10 +107,11 @@ Desktop Tauri surface: `src/apps/desktop/src/api/relay_deploy_api.rs`
     covers older arm64 Relay artifacts that required GLIBC 2.38 even though the
     current release builders assert a GLIBC 2.35 ceiling.
 
-20. **Release metadata has a China byte mirror, not a second authority.**
-    `openbitfun-release-sync.sh` mirrors the signed descriptor into the matching
-    version directory. Desktop may fetch those bytes when GitHub is unreachable,
-    but the same built-in minisign key must verify them.
+20. **Release metadata has a byte mirror, not a second authority.**
+    `openbitfun-release-sync.sh` mirrors the signed descriptor into both its
+    version directory and `/release/relay-image.json`. Desktop may fetch those
+    bytes when GitHub is unreachable, but the same built-in minisign key must
+    verify them.
 
 ## Related docs
 

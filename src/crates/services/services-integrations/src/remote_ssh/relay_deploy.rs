@@ -49,13 +49,12 @@ const RELAY_CONTAINER_DB: &str = "/app/data/bitfun_relay.db";
 const REPO_GIT_URL: &str = "https://github.com/GCWing/BitFun.git";
 /// Tarball fallback when git is unavailable or clone/fetch fails.
 const REPO_TARBALL_URL: &str = "https://github.com/GCWing/BitFun/archive/refs/heads/main.tar.gz";
-/// Release asset base. Asset names are stable across tags so the embedded
-/// Desktop version can address its matching server build without a GitHub API call.
+/// Release asset bases. GitHub is authoritative; OpenBitFun mirrors the same
+/// signed bytes and is used when GitHub metadata is unavailable.
 const RELEASE_BASE: &str = "https://github.com/GCWing/BitFun/releases";
 const OPENBITFUN_RELEASE_BASE: &str = "https://openbitfun.com/release";
 const RELAY_IMAGE_REPOSITORY: &str = "ghcr.io/gcwing/bitfun-relay-server";
 const RELAY_IMAGE_DESCRIPTOR_ASSET: &str = "relay-image.json";
-const RELEASE_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Canonical China-mirror helper (shared with `src/apps/relay-server/deploy.sh`).
 /// Embedded so Desktop orchestration can select Docker-install and image routes.
 const RELAY_MIRROR_SH: &str = include_str!(concat!(
@@ -463,8 +462,7 @@ pub async fn start_task(
             // Authenticate the registry digest here, where the compiled-in
             // release trust root exists. The remote host then only needs
             // Docker's normal content-addressed pull verification.
-            let descriptor =
-                verified_relay_image_descriptor(&release_tag_for_version(RELEASE_VERSION)).await?;
+            let descriptor = verified_latest_relay_image_descriptor().await?;
             deploy_body_script_with_image(port, &descriptor)
         }
     };
@@ -1383,14 +1381,12 @@ echo {TASK_DONE_MARKER}
 fn release_binary_deploy_bash() -> String {
     format!(
         r#"
-export BITFUN_RELEASE_TAG="{release_tag}"
 export BITFUN_GITHUB_RELEASE_BASE="{RELEASE_BASE}"
 export BITFUN_OPENBITFUN_RELEASE_BASE="{OPENBITFUN_RELEASE_BASE}"
 # --- begin BitFun relay release-download.sh ---
 {release_download}
 # --- end BitFun relay release-download.sh ---
 "#,
-        release_tag = release_tag_for_version(RELEASE_VERSION),
         RELEASE_BASE = RELEASE_BASE,
         OPENBITFUN_RELEASE_BASE = OPENBITFUN_RELEASE_BASE,
         release_download = RELAY_RELEASE_DOWNLOAD_SH,
@@ -1400,7 +1396,7 @@ export BITFUN_OPENBITFUN_RELEASE_BASE="{OPENBITFUN_RELEASE_BASE}"
 /// Download and authenticate the image descriptor before any remote mutation.
 /// The official release is preferred; openbitfun is a byte mirror and remains
 /// safe because the same compiled-in minisign key must verify its descriptor.
-async fn verified_relay_image_descriptor(release_tag: &str) -> Result<RelayImageDescriptor> {
+async fn verified_latest_relay_image_descriptor() -> Result<RelayImageDescriptor> {
     let pubkey = release_pubkey().ok_or_else(|| {
         anyhow!("this build has no Relay release trust root; refusing image deployment")
     })?;
@@ -1408,10 +1404,10 @@ async fn verified_relay_image_descriptor(release_tag: &str) -> Result<RelayImage
         .connect_timeout(Duration::from_secs(8))
         .timeout(Duration::from_secs(30))
         .build()?;
-    let mut bases = vec![format!("{RELEASE_BASE}/download/{release_tag}")];
-    if let Some(version) = release_tag.strip_prefix('v') {
-        bases.push(format!("{OPENBITFUN_RELEASE_BASE}/{version}"));
-    }
+    let bases = [
+        format!("{RELEASE_BASE}/latest/download"),
+        OPENBITFUN_RELEASE_BASE.to_string(),
+    ];
 
     let mut last_error = String::from("descriptor was unavailable from every source");
     for base in bases {
@@ -1436,7 +1432,7 @@ async fn verified_relay_image_descriptor(release_tag: &str) -> Result<RelayImage
                 continue;
             }
         };
-        if let Err(error) = validate_relay_image_descriptor(&descriptor, release_tag) {
+        if let Err(error) = validate_relay_image_descriptor(&descriptor) {
             last_error = format!("{descriptor_url} is invalid: {error}");
             log::warn!("Relay image descriptor rejected: {last_error}");
             continue;
@@ -1445,14 +1441,11 @@ async fn verified_relay_image_descriptor(release_tag: &str) -> Result<RelayImage
     }
 
     Err(anyhow!(
-        "could not verify the signed Relay image descriptor for {release_tag}: {last_error}"
+        "could not verify the latest signed Relay image descriptor: {last_error}"
     ))
 }
 
-fn validate_relay_image_descriptor(
-    descriptor: &RelayImageDescriptor,
-    release_tag: &str,
-) -> Result<()> {
+fn validate_relay_image_descriptor(descriptor: &RelayImageDescriptor) -> Result<()> {
     if descriptor.schema_version != 1 {
         return Err(anyhow!(
             "unsupported schema version {}",
@@ -1462,17 +1455,13 @@ fn validate_relay_image_descriptor(
     if descriptor.image != RELAY_IMAGE_REPOSITORY {
         return Err(anyhow!("unexpected image repository"));
     }
-    if descriptor.tag != release_tag {
-        return Err(anyhow!(
-            "descriptor tag does not match this Desktop release"
-        ));
+    let version = semver::Version::parse(&descriptor.version)
+        .map_err(|_| anyhow!("image version is not valid SemVer"))?;
+    if !version.pre.is_empty() || !version.build.is_empty() {
+        return Err(anyhow!("latest Relay image must be a stable release"));
     }
-    if let Some(version) = release_tag.strip_prefix('v') {
-        if descriptor.version != version {
-            return Err(anyhow!(
-                "descriptor version does not match this Desktop release"
-            ));
-        }
+    if descriptor.tag != release_tag_for_version(&descriptor.version) {
+        return Err(anyhow!("descriptor tag does not match its version"));
     }
     let digest = descriptor.digest.as_bytes();
     if digest.len() != 71
@@ -1491,9 +1480,6 @@ fn validate_relay_image_descriptor(
         {
             return Err(anyhow!("image does not declare {platform}"));
         }
-    }
-    if descriptor.version.trim().is_empty() {
-        return Err(anyhow!("image version is empty"));
     }
     Ok(())
 }
@@ -1523,6 +1509,8 @@ set -euo pipefail
 {release_binary_deploy}
 export BITFUN_RELAY_IMAGE={image}
 export BITFUN_RELAY_IMAGE_DIGEST={digest}
+export BITFUN_RELEASE_TAG={tag}
+export BITFUN_RELEASE_VERSION={version}
 export BITFUN_REQUIRE_IMAGE_DIGEST=1
 export DOCKER_CONFIG="${{DOCKER_CONFIG:-$HOME/.bitfun/docker-config}}"
 BITFUN_DOCKER_MODE="${{BITFUN_DOCKER_MODE:-direct}}"
@@ -1549,6 +1537,8 @@ echo {TASK_DONE_MARKER}
         release_binary_deploy = release_binary_deploy,
         image = shell_quote_posix(&descriptor.image),
         digest = shell_quote_posix(&descriptor.digest),
+        tag = shell_quote_posix(&descriptor.tag),
+        version = shell_quote_posix(&descriptor.version),
         DEPLOY_STATE_DIR = DEPLOY_STATE_DIR,
         port = port,
         TASK_DONE_MARKER = TASK_DONE_MARKER,
@@ -1570,8 +1560,8 @@ mod tests {
         RelayImageDescriptor {
             schema_version: 1,
             image: RELAY_IMAGE_REPOSITORY.to_string(),
-            tag: release_tag_for_version(super::RELEASE_VERSION),
-            version: super::RELEASE_VERSION.to_string(),
+            tag: "v1.2.3".to_string(),
+            version: "1.2.3".to_string(),
             digest: format!("sha256:{}", "a".repeat(64)),
             platforms: vec!["linux/amd64".into(), "linux/arm64".into()],
         }
@@ -1888,6 +1878,9 @@ sh -c "$(bitfun_shell_join printf '%s\n' 'a b' "it's" '{{{{.State.Running}}}}' '
         assert!(script.contains("m.daocloud.io/${BITFUN_RELAY_IMAGE}"));
         assert!(script.contains("ghcr.nju.edu.cn/${BITFUN_RELAY_IMAGE#ghcr.io/}"));
         assert!(script.contains("official GHCR fallback"));
+        assert!(script.contains("BITFUN_GITHUB_HEALTHY_BPS"));
+        assert!(script.contains("bitfun_probe_github_throughput"));
+        assert!(script.contains("524288"));
         assert!(script.contains("pull --platform"));
         assert!(script.contains("bitfun_restore_previous_relay"));
         assert!(script.contains("--name bitfun-relay"));
@@ -1898,7 +1891,10 @@ sh -c "$(bitfun_shell_join printf '%s\n' 'a b' "it's" '{{{{.State.Running}}}}' '
         assert!(script.contains("name=^bitfun-relay-before-image-"));
         assert!(!script.contains("docker build"));
         assert!(!script.contains("cargo build"));
-        assert!(!script.contains("bitfun-relay-server-${target}.tar.gz"));
+        assert!(
+            !script.contains("tar -x") && !script.contains("docker load"),
+            "the raw archive is only a throughput probe, never an install path"
+        );
     }
 
     /// `docker logs` relays the container's stderr on its own stderr, and the
@@ -1937,7 +1933,7 @@ sh -c "$(bitfun_shell_join printf '%s\n' 'a b' "it's" '{{{{.State.Running}}}}' '
     #[test]
     fn signed_descriptor_is_strictly_bound_to_repository_tag_digest_and_platforms() {
         let descriptor = test_image_descriptor();
-        validate_relay_image_descriptor(&descriptor, &descriptor.tag).unwrap();
+        validate_relay_image_descriptor(&descriptor).unwrap();
 
         for invalid in [
             RelayImageDescriptor {
@@ -1957,7 +1953,7 @@ sh -c "$(bitfun_shell_join printf '%s\n' 'a b' "it's" '{{{{.State.Running}}}}' '
                 ..descriptor.clone()
             },
         ] {
-            assert!(validate_relay_image_descriptor(&invalid, &descriptor.tag).is_err());
+            assert!(validate_relay_image_descriptor(&invalid).is_err());
         }
 
         let body = deploy_body_script_with_image(9700, &descriptor);
@@ -1966,6 +1962,8 @@ sh -c "$(bitfun_shell_join printf '%s\n' 'a b' "it's" '{{{{.State.Running}}}}' '
             "export BITFUN_RELAY_IMAGE_DIGEST={}",
             descriptor.digest
         )));
+        assert!(body.contains("export BITFUN_RELEASE_TAG=v1.2.3"));
+        assert!(body.contains("export BITFUN_RELEASE_VERSION=1.2.3"));
         assert!(body.contains("export BITFUN_REQUIRE_IMAGE_DIGEST=1"));
         assert!(!body.contains("bitfun_sync_source"));
         assert!(!body.contains("bitfun_run_deploy_sh"));
@@ -2060,6 +2058,49 @@ test "$selected" = "m.daocloud.io/ghcr.io/gcwing/bitfun-relay-server@$BITFUN_REL
         assert_eq!(routes.len(), 2);
         assert!(routes[0].contains("ghcr.nju.edu.cn/gcwing/bitfun-relay-server@sha256:"));
         assert!(routes[1].contains("m.daocloud.io/ghcr.io/gcwing/bitfun-relay-server@sha256:"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn automatic_image_pull_keeps_github_when_healthy_and_uses_mirror_when_slow() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let script_path = temp.path().join("release-image.sh");
+        std::fs::write(&script_path, release_binary_deploy_bash()).expect("write image script");
+
+        let output = std::process::Command::new("bash")
+            .arg("-c")
+            .arg(
+                r#"
+set -euo pipefail
+source "$1"
+export BITFUN_MIRROR_REQUESTED_MODE=auto
+export BITFUN_RELAY_IMAGE_DIGEST="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+bitfun_probe_github_throughput() { echo "$MOCK_SPEED"; }
+bitfun_image_docker_with_timeout() { return 0; }
+bitfun_image_docker() {
+  if [ "$1 $2" = "image inspect" ]; then echo amd64; return 0; fi
+  return 1
+}
+
+MOCK_SPEED=524288
+healthy="$(bitfun_pull_relay_image linux/amd64)"
+test "$healthy" = "ghcr.io/gcwing/bitfun-relay-server@$BITFUN_RELAY_IMAGE_DIGEST"
+
+MOCK_SPEED=524287
+slow="$(bitfun_pull_relay_image linux/amd64)"
+test "$slow" = "ghcr.nju.edu.cn/gcwing/bitfun-relay-server@$BITFUN_RELAY_IMAGE_DIGEST"
+"#,
+            )
+            .arg("image-speed-policy")
+            .arg(&script_path)
+            .output()
+            .expect("run image speed harness");
+        assert!(
+            output.status.success(),
+            "image speed harness failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     #[cfg(unix)]

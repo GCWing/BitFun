@@ -47,6 +47,8 @@ export const noCoreDependencyCrates = [
   'tool-call-jsonrepair',
   'agent-runtime',
   'agent-runtime-ipc',
+  'app-server-client',
+  'app-server-protocol',
   'harness',
   'plugin-runtime-client',
   'product-capabilities',
@@ -145,6 +147,57 @@ export const forbiddenManifestDependencyRules = [
 ];
 
 export const lightweightBoundaryRules = [
+  {
+    crateName: 'app-server-protocol',
+    reason:
+      'App Server wire contracts must stay behavior-light and independent of Runtime, Core, services, product assembly, and UI implementations',
+    forbiddenDeps: [
+      'bitfun-core',
+      'bitfun-agent-runtime',
+      'bitfun-agent-runtime-ipc',
+      'bitfun-services-core',
+      'bitfun-services-integrations',
+      'bitfun-runtime-services',
+      'bitfun-product-capabilities',
+      'bitfun-external-sources',
+      'bitfun-app-server',
+      'bitfun-app-server-client',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
+      'tauri',
+      'reqwest',
+      'git2',
+      'rmcp',
+    ],
+  },
+  {
+    crateName: 'app-server-client',
+    reason:
+      'App Server Rich Client support may depend on wire contracts and transport scaffolding but not backend or UI implementations',
+    forbiddenDeps: [
+      'bitfun-core',
+      'bitfun-agent-runtime',
+      'bitfun-agent-runtime-ipc',
+      'bitfun-services-core',
+      'bitfun-services-integrations',
+      'bitfun-runtime-services',
+      'bitfun-product-capabilities',
+      'bitfun-external-sources',
+      'bitfun-app-server',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
+      'tauri',
+      'reqwest',
+      'git2',
+      'rmcp',
+    ],
+  },
   {
     crateName: 'agent-runtime-ipc',
     reason:

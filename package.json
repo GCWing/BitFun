@@ -1,7 +1,7 @@
 {
   "name": "BitFun",
   "private": true,
-  "version": "0.2.15",
+  "version": "0.2.16",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
@@ -37,7 +37,9 @@
     "theme:color-audit:test": "node --test scripts/audit-theme-colors.test.mjs scripts/audit-cli-theme-colors.test.mjs",
     "theme:visual-contract": "node scripts/validate-theme-visual-contract.mjs",
     "appearance:contract-audit": "node scripts/audit-appearance-contracts.mjs",
-    "check:repo-hygiene": "node scripts/check-repo-hygiene.mjs",
+    "check:repo-hygiene": "node scripts/check-repo-hygiene.mjs && node scripts/update-models-dev-snapshot.mjs --check",
+    "models-dev:check": "node scripts/update-models-dev-snapshot.mjs --check",
+    "models-dev:update": "node scripts/update-models-dev-snapshot.mjs",
     "check:build-prereqs": "node scripts/check-build-prereqs.mjs",
     "check:core-boundaries": "node scripts/check-core-boundaries.mjs",
     "check:core-boundaries:test": "node --test scripts/check-core-boundaries.test.mjs",

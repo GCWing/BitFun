@@ -3,9 +3,9 @@
 //! Provides comprehensive workspace management functionality.
 
 use super::manager::{
-    RelatedPath, ScanOptions, WorkspaceIdentity, WorkspaceInfo, WorkspaceKind, WorkspaceManager,
-    WorkspaceManagerConfig, WorkspaceManagerStatistics, WorkspaceOpenOptions, WorkspaceStatus,
-    WorkspaceSummary, WorkspaceType,
+    PrimaryAssistantKey, RelatedPath, ScanOptions, WorkspaceIdentity, WorkspaceInfo, WorkspaceKind,
+    WorkspaceManager, WorkspaceManagerConfig, WorkspaceManagerStatistics, WorkspaceOpenOptions,
+    WorkspaceStatus, WorkspaceSummary, WorkspaceType,
 };
 use super::WorktreeTopologyFreshness;
 use crate::infrastructure::storage::{PersistenceService, StorageOptions};
@@ -733,7 +733,16 @@ impl WorkspaceService {
         // New assistant dirs get persona files at creation; coordinator also fills missing files when opening.
         initialize_workspace_persona_files(&path).await?;
 
-        self.create_workspace(path, options).await
+        let workspace = self.create_workspace(path, options).await?;
+        let selection_changed = {
+            let mut manager = self.manager.write().await;
+            manager.ensure_primary_assistant_selection()
+        };
+        if selection_changed {
+            self.save_workspace_data().await?;
+        }
+
+        Ok(workspace)
     }
 
     /// Closes the current workspace.
@@ -944,6 +953,45 @@ impl WorkspaceService {
             .filter(|workspace| workspace.workspace_kind == WorkspaceKind::Assistant)
             .cloned()
             .collect()
+    }
+
+    /// Returns the assistant workspace currently assigned the primary role.
+    pub async fn get_primary_assistant_workspace(&self) -> Option<WorkspaceInfo> {
+        let manager = self.manager.read().await;
+        manager.get_primary_assistant_workspace().cloned()
+    }
+
+    /// Assigns the primary role to an existing assistant workspace.
+    pub async fn set_primary_assistant_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> BitFunResult<WorkspaceInfo> {
+        let (workspace, previous_key) = {
+            let mut manager = self.manager.write().await;
+            let workspace = manager
+                .get_workspace(workspace_id)
+                .cloned()
+                .ok_or_else(|| {
+                    BitFunError::service(format!("Workspace not found: {}", workspace_id))
+                })?;
+            let previous_key = manager.set_primary_assistant_workspace(workspace_id)?;
+            (workspace, previous_key)
+        };
+
+        if let Err(error) = self.save_workspace_data().await {
+            let mut manager = self.manager.write().await;
+            manager.set_primary_assistant_key(previous_key);
+            return Err(error);
+        }
+
+        Ok(workspace)
+    }
+
+    /// Returns whether the workspace currently owns the primary assistant role.
+    pub async fn is_primary_assistant_workspace(&self, workspace_id: &str) -> bool {
+        self.get_primary_assistant_workspace()
+            .await
+            .is_some_and(|workspace| workspace.id == workspace_id)
     }
 
     /// Lists all workspaces.
@@ -1483,18 +1531,18 @@ impl WorkspaceService {
 
     /// Cleans up invalid workspaces.
     pub async fn cleanup_invalid_workspaces(&self) -> BitFunResult<usize> {
-        let result = {
+        let removed_count = {
             let mut manager = self.manager.write().await;
             manager.cleanup_invalid_workspaces().await
-        };
+        }?;
 
-        if result.is_ok() {
-            if let Err(e) = self.save_workspace_data().await {
-                warn!("Failed to save workspace data after cleanup: {}", e);
-            }
+        if removed_count > 0 {
+            self.ensure_assistant_workspaces().await?;
+        } else if let Err(e) = self.save_workspace_data().await {
+            warn!("Failed to save workspace data after cleanup: {}", e);
         }
 
-        result
+        Ok(removed_count)
     }
 
     /// Returns statistics.
@@ -1566,6 +1614,7 @@ impl WorkspaceService {
         Ok(WorkspaceExport {
             workspaces,
             current_workspace_id,
+            primary_assistant_key: manager.get_primary_assistant_key().cloned(),
             recent_workspaces: manager
                 .get_recent_workspace_infos()
                 .iter()
@@ -1587,6 +1636,7 @@ impl WorkspaceService {
         export: WorkspaceExport,
         overwrite: bool,
     ) -> BitFunResult<WorkspaceImportResult> {
+        let imported_primary_key = export.primary_assistant_key.clone();
         let mut result = WorkspaceImportResult {
             imported_workspaces: 0,
             skipped_workspaces: 0,
@@ -1618,6 +1668,8 @@ impl WorkspaceService {
 
         manager.set_recent_workspaces(export.recent_workspaces.clone());
         manager.set_recent_assistant_workspaces(export.recent_assistant_workspaces.clone());
+        manager.set_primary_assistant_key(imported_primary_key);
+        manager.ensure_primary_assistant_selection();
 
         if let Some(current_id) = export.current_workspace_id {
             if manager.get_workspaces().contains_key(&current_id) {
@@ -1634,6 +1686,8 @@ impl WorkspaceService {
         }
 
         drop(manager);
+
+        self.save_workspace_data().await?;
 
         Ok(result)
     }
@@ -1673,6 +1727,7 @@ impl WorkspaceService {
             current_workspace_id: manager.get_current_workspace().map(|w| w.id.clone()),
             recent_workspaces: manager.get_recent_workspaces().clone(),
             recent_assistant_workspaces: manager.get_recent_assistant_workspaces().clone(),
+            primary_assistant_key: manager.get_primary_assistant_key().cloned(),
             saved_at: chrono::Utc::now(),
         };
 
@@ -1700,6 +1755,7 @@ impl WorkspaceService {
             manager.set_opened_workspace_ids(data.opened_workspace_ids);
             manager.set_recent_workspaces(data.recent_workspaces);
             manager.set_recent_assistant_workspaces(data.recent_assistant_workspaces);
+            manager.set_primary_assistant_key(data.primary_assistant_key);
             let id_remap = manager.migrate_local_workspace_ids_to_stable_storage();
 
             if let Some(raw_current) = data.current_workspace_id {
@@ -1799,6 +1855,7 @@ impl WorkspaceService {
                 should_persist_cleaned_history = true;
             }
             manager.set_recent_assistant_workspaces(filtered_recent_assistant);
+            manager.set_primary_assistant_key(data.primary_assistant_key);
 
             let id_remap = manager.migrate_local_workspace_ids_to_stable_storage();
             if !id_remap.is_empty() {
@@ -2174,19 +2231,20 @@ impl WorkspaceService {
         })?;
 
         let default_workspace = self.path_manager.default_assistant_workspace_dir(None);
-        fs::create_dir_all(&default_workspace).await.map_err(|e| {
+        let mut descriptors = Vec::new();
+        if fs::try_exists(&default_workspace).await.map_err(|e| {
             BitFunError::service(format!(
-                "Failed to create default assistant workspace '{}': {}",
+                "Failed to inspect default assistant workspace '{}': {}",
                 default_workspace.display(),
                 e
             ))
-        })?;
-
-        let mut descriptors = vec![AssistantWorkspaceDescriptor {
-            path: default_workspace,
-            assistant_id: None,
-            display_name: Self::assistant_display_name(None),
-        }];
+        })? {
+            descriptors.push(AssistantWorkspaceDescriptor {
+                path: default_workspace.clone(),
+                assistant_id: None,
+                display_name: Self::assistant_display_name(None),
+            });
+        }
 
         let mut entries = fs::read_dir(&assistant_root).await.map_err(|e| {
             BitFunError::service(format!(
@@ -2229,6 +2287,24 @@ impl WorkspaceService {
             });
         }
 
+        // A fresh installation still gets the built-in assistant. Once the
+        // primary role has moved to a named assistant, deleting the built-in
+        // workspace must not cause it to reappear on the next launch.
+        if descriptors.is_empty() {
+            fs::create_dir_all(&default_workspace).await.map_err(|e| {
+                BitFunError::service(format!(
+                    "Failed to create default assistant workspace '{}': {}",
+                    default_workspace.display(),
+                    e
+                ))
+            })?;
+            descriptors.push(AssistantWorkspaceDescriptor {
+                path: default_workspace,
+                assistant_id: None,
+                display_name: Self::assistant_display_name(None),
+            });
+        }
+
         descriptors.sort_by(|left, right| {
             match (left.assistant_id.is_some(), right.assistant_id.is_some()) {
                 (false, true) => std::cmp::Ordering::Less,
@@ -2242,7 +2318,7 @@ impl WorkspaceService {
 
     async fn ensure_assistant_workspaces(&self) -> BitFunResult<()> {
         let descriptors = self.discover_assistant_workspaces().await?;
-        let mut has_current_workspace = self.get_current_workspace().await.is_some();
+        let has_current_workspace = self.get_current_workspace().await.is_some();
         let has_opened_remote = {
             let manager = self.manager.read().await;
             manager
@@ -2251,12 +2327,28 @@ impl WorkspaceService {
                 .any(|w| w.workspace_kind == WorkspaceKind::Remote)
         };
 
-        for descriptor in descriptors {
+        let persisted_primary = {
+            let manager = self.manager.read().await;
+            manager.get_primary_assistant_key().cloned()
+        };
+        let activation_index = persisted_primary
+            .as_ref()
+            .and_then(|key| {
+                descriptors.iter().position(|descriptor| match key {
+                    PrimaryAssistantKey::BuiltIn => descriptor.assistant_id.is_none(),
+                    PrimaryAssistantKey::Named { assistant_id } => {
+                        descriptor.assistant_id.as_deref() == Some(assistant_id.as_str())
+                    }
+                })
+            })
+            .unwrap_or(0);
+
+        for (index, descriptor) in descriptors.into_iter().enumerate() {
             // If a remote workspace tab exists but nothing is current yet (e.g. pending SSH
             // reconnect), do not auto-activate the default assistant workspace — that would look
             // like a spurious new local workspace.
             let should_activate =
-                !has_current_workspace && !has_opened_remote && descriptor.assistant_id.is_none();
+                !has_current_workspace && !has_opened_remote && index == activation_index;
             let options = WorkspaceCreateOptions {
                 auto_set_current: should_activate,
                 add_to_recent: false,
@@ -2268,10 +2360,14 @@ impl WorkspaceService {
 
             self.open_workspace_with_options(descriptor.path, options)
                 .await?;
-            has_current_workspace = true;
         }
 
-        Ok(())
+        {
+            let mut manager = self.manager.write().await;
+            manager.ensure_primary_assistant_selection();
+        }
+
+        self.save_workspace_data().await
     }
 
     /// Saves workspace data manually (public API).
@@ -2337,6 +2433,8 @@ pub struct WorkspaceHealthStatus {
 pub struct WorkspaceExport {
     pub workspaces: Vec<WorkspaceInfo>,
     pub current_workspace_id: Option<String>,
+    #[serde(default)]
+    pub primary_assistant_key: Option<PrimaryAssistantKey>,
     pub recent_workspaces: Vec<String>,
     #[serde(default)]
     pub recent_assistant_workspaces: Vec<String>,
@@ -2376,6 +2474,8 @@ struct WorkspacePersistenceData {
     pub recent_workspaces: Vec<String>,
     #[serde(default)]
     pub recent_assistant_workspaces: Vec<String>,
+    #[serde(default)]
+    pub primary_assistant_key: Option<PrimaryAssistantKey>,
     pub saved_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -2471,6 +2571,78 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn primary_assistant_role_can_move_to_a_named_workspace() {
+        let env = TestEnvironment::new();
+        let service = build_test_workspace_service(env.path_manager.clone()).await;
+
+        service
+            .ensure_assistant_workspaces()
+            .await
+            .expect("built-in assistant should initialize");
+        let built_in = service
+            .get_primary_assistant_workspace()
+            .await
+            .expect("built-in assistant should be primary by default");
+        assert!(built_in.assistant_id.is_none());
+
+        let named = service
+            .create_assistant_workspace(Some("named-primary".to_string()))
+            .await
+            .expect("named assistant should initialize");
+        service
+            .set_primary_assistant_workspace(&named.id)
+            .await
+            .expect("primary assistant role should move");
+
+        let primary = service
+            .get_primary_assistant_workspace()
+            .await
+            .expect("named assistant should resolve as primary");
+        assert_eq!(primary.id, named.id);
+        assert!(service.is_primary_assistant_workspace(&named.id).await);
+        assert!(!service.is_primary_assistant_workspace(&built_in.id).await);
+    }
+
+    #[tokio::test]
+    async fn deleted_built_in_assistant_is_not_recreated_when_named_assistant_exists() {
+        let env = TestEnvironment::new();
+        let service = build_test_workspace_service(env.path_manager.clone()).await;
+
+        service
+            .ensure_assistant_workspaces()
+            .await
+            .expect("built-in assistant should initialize");
+        let built_in = service
+            .get_primary_assistant_workspace()
+            .await
+            .expect("built-in assistant should be primary by default");
+        let named = service
+            .create_assistant_workspace(Some("surviving-primary".to_string()))
+            .await
+            .expect("named assistant should initialize");
+        service
+            .set_primary_assistant_workspace(&named.id)
+            .await
+            .expect("primary assistant role should move");
+
+        std::fs::remove_dir_all(&built_in.root_path)
+            .expect("built-in assistant directory should be removed");
+        service
+            .remove_workspace(&built_in.id)
+            .await
+            .expect("built-in assistant record should be removed");
+        service
+            .ensure_assistant_workspaces()
+            .await
+            .expect("remaining assistant should initialize");
+
+        let assistants = service.get_assistant_workspaces().await;
+        assert_eq!(assistants.len(), 1);
+        assert_eq!(assistants[0].id, named.id);
+        assert!(assistants[0].assistant_id.is_some());
+    }
+
+    #[tokio::test]
     async fn load_workspace_history_only_ensures_all_opened_local_workspaces() {
         let env = TestEnvironment::new();
         let service = build_test_workspace_service(env.path_manager.clone()).await;
@@ -2544,6 +2716,7 @@ mod tests {
             current_workspace_id: Some(first_workspace.id.clone()),
             recent_workspaces: vec![first_workspace.id.clone(), second_workspace.id.clone()],
             recent_assistant_workspaces: Vec::new(),
+            primary_assistant_key: None,
             saved_at: chrono::Utc::now(),
         };
 

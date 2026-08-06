@@ -5,14 +5,12 @@ use std::time::Duration;
 use anyhow::{anyhow, bail, Context, Result};
 use bitfun_agent_runtime::sdk::{
     AgentDialogSteerRequest, AgentDialogTurnRequest, AgentSessionCreateRequest,
+    AgentSessionModelSelection, AgentSessionModelSelectionUpdateRequest,
     AgentSessionRestoreRequest, AgentTurnCancellationRequest, AgentTurnSettlementRequest,
     PermissionReply, PermissionReplySource, PermissionRequest, PermissionRequestEvent,
 };
 use bitfun_events::{project_agentic_frontend_event, AgenticEvent};
-use bitfun_runtime_ports::{
-    AgentSessionModelUpdateRequest, AgentSubmissionSource, DialogSubmissionPolicy,
-    SessionExecutionTarget,
-};
+use bitfun_runtime_ports::{AgentSubmissionSource, DialogSubmissionPolicy, SessionExecutionTarget};
 
 use crate::{shutdown_mcp_servers, BootstrapProfile};
 
@@ -89,11 +87,18 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
         .as_ref()
         .and_then(|turn| turn.model.clone())
         .or_else(|| job.request.model.clone());
+    let effective_reasoning_preset = pending_turn
+        .as_ref()
+        .and_then(|turn| turn.reasoning_preset.clone())
+        .or_else(|| job.request.reasoning_preset.clone());
     let effective_policy = pending_turn
         .as_ref()
         .and_then(|turn| turn.approval_policy)
         .unwrap_or(job.request.approval_policy);
     super::ensure_selected_model_ready(effective_model.as_deref()).await?;
+    if let Some(model) = effective_model.as_deref() {
+        super::validate_reasoning_preset(model, effective_reasoning_preset.as_deref()).await?;
+    }
 
     // Every detached worker takes the same stable lock for a canonical target
     // workspace. Waiting workers remain Queued and are visible/cancellable.
@@ -116,8 +121,12 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
 
     // Persist the effective options before execution so `list`/`status` and
     // any replacement worker observe the same choices this turn runs with.
-    let (model_changed, policy_changed) =
-        store.update_job_request_options(job_id, effective_model.as_deref(), effective_policy)?;
+    let (model_changed, _, policy_changed) = store.update_job_request_options(
+        job_id,
+        effective_model.as_deref(),
+        effective_reasoning_preset.as_deref(),
+        effective_policy,
+    )?;
     if policy_changed {
         store.append_event(
             job_id,
@@ -194,17 +203,23 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
                 }
                 None => "create target-owned dispatch session".to_string(),
             })?;
-    } else if let Some(model) = effective_model.clone() {
-        // A restored session keeps the model of its previous turn; apply this
-        // turn's effective choice before submitting.
+    }
+    if let Some(model) = effective_model.clone() {
+        let reasoning_preset = effective_reasoning_preset
+            .as_deref()
+            .filter(|preset| *preset != "auto")
+            .map(str::to_string);
         agent_runtime
-            .update_session_model(AgentSessionModelUpdateRequest {
+            .update_session_model_selection(AgentSessionModelSelectionUpdateRequest {
                 session_id: job.request.session_id.clone(),
-                model_id: model,
+                selection: AgentSessionModelSelection {
+                    model_id: model,
+                    reasoning_preset,
+                },
             })
             .await
             .map_err(|error| anyhow!(error.into_message()))
-            .context("apply dispatch turn model to restored session")?;
+            .context("apply dispatch turn model and reasoning preset")?;
     }
 
     let turn_id = uuid::Uuid::new_v4().to_string();

@@ -119,6 +119,8 @@ pub struct AcpSessionConfigOption {
     pub name: String,
     #[serde(default)]
     pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
     #[serde(flatten)]
     pub kind: AcpSessionConfigKind,
 }
@@ -226,6 +228,16 @@ fn session_config_option_from_protocol(
         id: option.id.to_string(),
         name: option.name.clone(),
         description: option.description.clone(),
+        category: option
+            .category
+            .as_ref()
+            .and_then(|category| match category {
+                SessionConfigOptionCategory::Mode => Some("mode".to_string()),
+                SessionConfigOptionCategory::Model => Some("model".to_string()),
+                SessionConfigOptionCategory::ThoughtLevel => Some("thought_level".to_string()),
+                SessionConfigOptionCategory::Other(value) => Some(value.clone()),
+                _ => None,
+            }),
         kind,
     })
 }

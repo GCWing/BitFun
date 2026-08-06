@@ -57,7 +57,8 @@ impl ChatMode {
             context_window: Some(result.context_window),
             max_tokens: Some(result.max_tokens),
             enabled: true,
-            enable_thinking_process: result.enable_thinking || result.support_preserved_thinking,
+            reasoning: result.reasoning.clone(),
+            inline_think_in_text: result.inline_think_in_text,
             skip_ssl_verify: result.skip_ssl_verify,
             custom_headers,
             custom_headers_mode: if result.custom_headers_mode.is_empty()
@@ -142,12 +143,20 @@ impl ChatMode {
                 let config_service = GlobalConfigManager::get_service().await.ok()?;
                 let models: Vec<bitfun_core::service::config::AIModelConfig> =
                     config_service.get_ai_models().await.ok()?;
-                models.into_iter().find(|m| m.id == model_id)
+                let model = models.into_iter().find(|m| m.id == model_id)?;
+                let reasoning_preset_options = self
+                    .agent
+                    .model_catalog()
+                    .await
+                    .ok()
+                    .and_then(|catalog| catalog.reasoning_presets_by_model.get(&model.id).cloned())
+                    .unwrap_or_default();
+                Some((model, reasoning_preset_options))
             })
         });
 
         match result {
-            Some(model) => {
+            Some((model, reasoning_preset_options)) => {
                 let form_data = ModelFormResult {
                     editing_model_id: Some(model.id.clone()),
                     name: model.name,
@@ -157,8 +166,9 @@ impl ChatMode {
                     provider_format: model.provider.clone(),
                     context_window: model.context_window.unwrap_or(128000),
                     max_tokens: model.max_tokens.unwrap_or(8192),
-                    enable_thinking: model.enable_thinking_process,
-                    support_preserved_thinking: model.inline_think_in_text,
+                    reasoning_preset_options,
+                    reasoning: model.reasoning,
+                    inline_think_in_text: model.inline_think_in_text,
                     skip_ssl_verify: model.skip_ssl_verify,
                     custom_headers: model
                         .custom_headers
@@ -213,7 +223,8 @@ impl ChatMode {
             context_window: Some(result.context_window),
             max_tokens: Some(result.max_tokens),
             enabled: true,
-            enable_thinking_process: result.enable_thinking || result.support_preserved_thinking,
+            reasoning: result.reasoning.clone(),
+            inline_think_in_text: result.inline_think_in_text,
             skip_ssl_verify: result.skip_ssl_verify,
             custom_headers,
             custom_headers_mode: if result.custom_headers_mode.is_empty()

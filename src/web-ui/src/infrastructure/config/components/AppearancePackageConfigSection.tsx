@@ -280,6 +280,7 @@ export function AppearancePackageConfigSection() {
   return (
     <ConfigPageSection
       className="appearance-package-config"
+      mouseGlowSurface={false}
       title={t('package.title')}
       description={t('package.description')}
       data-bf-component="appearance-config"

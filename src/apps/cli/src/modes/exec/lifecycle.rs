@@ -19,7 +19,7 @@ use bitfun_agent_tools::effective_tool_invocation;
 use bitfun_events::{AgenticEvent, ToolEventIdentity};
 use tokio::time::Instant;
 
-use crate::agent::runtime_client::CliAgentRuntimeClient;
+use crate::agent::runtime_client::ExecAgentRuntimeClient;
 use crate::config::CliConfig;
 use crate::diagnostics::{
     cli_error_code, emit_exit_diagnostic, user_facing_error_message, ExitContext, ExitKind,
@@ -472,7 +472,7 @@ pub(crate) struct ExecMode {
     config: CliConfig,
     message: String,
     agent_type: String,
-    agent: Arc<CliAgentRuntimeClient>,
+    agent: Arc<ExecAgentRuntimeClient>,
     runtime: Arc<CliRuntimeContext>,
     pub(super) workspace_path: Option<PathBuf>,
     /// Git tree captured before execution so committed agent changes remain
@@ -509,7 +509,7 @@ impl ExecMode {
             | crate::runtime::approval::CliApprovalPolicy::DisableAuto
             | crate::runtime::approval::CliApprovalPolicy::Reject => ExecApprovalMode::Reject,
         };
-        let agent = Arc::new(CliAgentRuntimeClient::new(
+        let agent = Arc::new(ExecAgentRuntimeClient::new(
             runtime.as_ref(),
             workspace_path.clone(),
         ));
@@ -996,16 +996,15 @@ impl ExecMode {
                 Err(error) => (Vec::new(), Err(error)),
             };
             for envelope in buffered_events {
-                self
-                    .project_exec_nonterminal_event(
-                        &envelope,
-                        &session_id,
-                        &turn_id,
-                        &mut assistant_text,
-                        &mut usage,
-                        &mut total_tool_calls,
-                    )
-                    .await?;
+                self.project_exec_nonterminal_event(
+                    &envelope,
+                    &session_id,
+                    &turn_id,
+                    &mut assistant_text,
+                    &mut usage,
+                    &mut total_tool_calls,
+                )
+                .await?;
             }
             match resolve_cancelled_turn_observation(
                 observed_terminal,

@@ -38,6 +38,7 @@ bitfun-core = { path = "../../crates/assembly/core", default-features = false, f
     "ssh-remote",
 ] }
 bitfun-events = { path = "../../crates/contracts/events" }
+bitfun-core-types = { path = "../../crates/contracts/core-types" }
 bitfun-acp = { path = "../../crates/interfaces/acp" }
 bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime" }
 bitfun-agent-runtime-ipc = { path = "../../crates/adapters/agent-runtime-ipc" }
@@ -46,6 +47,9 @@ bitfun-runtime-services = { path = "../../crates/execution/runtime-services" }
 bitfun-services-core = { path = "../../crates/services/services-core", default-features = false, features = ["dispatch-workspace", "local-storage", "process-runtime", "runtime-ownership"] }
 bitfun-agent-tools = { path = "../../crates/execution/tool-contracts" }
 bitfun-product-domains = { path = "../../crates/contracts/product-domains", default-features = false, features = ["external-sources"] }
+bitfun-app-server = { path = "../../crates/interfaces/app-server" }
+bitfun-app-server-client = { path = "../../crates/interfaces/app-server-client" }
+bitfun-app-server-protocol = { path = "../../crates/interfaces/app-server-protocol" }
 
 # CLI framework
 clap = { workspace = true }

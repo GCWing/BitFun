@@ -2340,16 +2340,26 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     }
 
     pub async fn update_session_model(&self, session_id: &str, model_id: &str) -> BitFunResult<()> {
+        self.update_session_model_selection(session_id, model_id, None)
+            .await
+    }
+
+    pub async fn update_session_model_selection(
+        &self,
+        session_id: &str,
+        model_id: &str,
+        reasoning_preset: Option<&str>,
+    ) -> BitFunResult<()> {
         self.ensure_session_runtime_ownership(session_id, None)?;
         let normalized_model_id = normalize_model_selection(model_id).await?;
 
         self.session_manager
-            .update_session_model_id(session_id, &normalized_model_id)
+            .update_session_model_selection(session_id, &normalized_model_id, reasoning_preset)
             .await?;
 
         info!(
-            "Coordinator updated session model: session_id={}, model_id={}",
-            session_id, normalized_model_id
+            "Coordinator updated session model: session_id={}, model_id={}, reasoning_preset={:?}",
+            session_id, normalized_model_id, reasoning_preset
         );
 
         Ok(())
@@ -10563,6 +10573,23 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await;
     }
 
+    pub async fn emit_session_reasoning_preset_auto_cleared(
+        &self,
+        session_id: &str,
+        previous_preset_id: &str,
+        reason: &str,
+    ) {
+        let event = AgenticEvent::SessionReasoningPresetAutoCleared {
+            session_id: session_id.to_string(),
+            previous_preset_id: previous_preset_id.to_string(),
+            reason: reason.to_string(),
+        };
+        let _ = self
+            .event_queue
+            .enqueue(event, Some(EventPriority::High))
+            .await;
+    }
+
     pub async fn emit_deep_review_queue_state_changed(
         &self,
         session_id: &str,
@@ -11006,6 +11033,7 @@ fn runtime_session_summary(session: SessionSummary) -> bitfun_runtime_ports::Age
         session_name: session.session_name,
         agent_type: session.agent_type,
         model_id: session.model_id,
+        reasoning_preset: session.reasoning_preset,
         last_user_dialog_agent_type: session.last_user_dialog_agent_type,
         last_submitted_agent_type: session.last_submitted_agent_type,
         turn_count: session.turn_count,
@@ -11493,6 +11521,19 @@ impl bitfun_runtime_ports::AgentSessionModelPort for ConversationCoordinator {
             .await
             .map_err(runtime_port_error_preserving_message)
     }
+
+    async fn update_session_model_selection(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionModelSelectionUpdateRequest,
+    ) -> bitfun_runtime_ports::PortResult<()> {
+        self.update_session_model_selection(
+            &request.session_id,
+            &request.selection.model_id,
+            request.selection.reasoning_preset.as_deref(),
+        )
+        .await
+        .map_err(runtime_port_error_preserving_message)
+    }
 }
 
 #[async_trait::async_trait]
@@ -11540,6 +11581,7 @@ impl bitfun_agent_runtime::sdk::AgentSessionRestorePort for ConversationCoordina
                 session_name: session.session_name,
                 agent_type: session.agent_type,
                 model_id: session.config.model_id,
+                reasoning_preset: session.config.reasoning_preset,
                 last_user_dialog_agent_type: session.last_user_dialog_agent_type,
                 last_submitted_agent_type: session.last_submitted_agent_type,
                 turn_count: session.dialog_turn_ids.len(),
@@ -12898,6 +12940,7 @@ mod tests {
             session_name: "Session".to_string(),
             agent_type: "agentic".to_string(),
             model_id: Some("fast".to_string()),
+            reasoning_preset: Some("high".to_string()),
             last_user_dialog_agent_type: None,
             last_submitted_agent_type: None,
             created_by: None,

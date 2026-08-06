@@ -14,9 +14,14 @@ pub mod tool_image_attachment;
 pub mod worktree;
 
 pub use ai::{
-    AIConfig, ConnectionTestMessageCode, ConnectionTestResult, Message, ProxyConfig, ReasoningMode,
-    RemoteModelInfo, ToolCall, ToolCallConfirmationDetails, ToolCallRequestInfo,
-    ToolCallResponseInfo, ToolDefinition,
+    AIConfig, ConnectionTestMessageCode, ConnectionTestResult, Message, ProviderCatalog,
+    ProviderCatalogEndpoint, ProviderCatalogModel, ProviderCatalogModelCapabilities,
+    ProviderCatalogModelLimits, ProviderCatalogModelPricing, ProviderCatalogModelSource,
+    ProviderCatalogProvider, ProviderCatalogSource, ProviderCatalogUpstreamProvider, ProxyConfig,
+    ReasoningCapabilityStatus, ReasoningCatalogBinding, ReasoningCatalogProjection,
+    ReasoningConfig, ReasoningPreset, ReasoningPresetAction, ReasoningPresetDescriptor,
+    ReasoningPresetSource, RemoteModelInfo, ToolCall, ToolCallConfirmationDetails,
+    ToolCallRequestInfo, ToolCallResponseInfo, ToolDefinition,
 };
 pub use errors::{AiErrorDetail, ErrorCategory};
 pub use session::{

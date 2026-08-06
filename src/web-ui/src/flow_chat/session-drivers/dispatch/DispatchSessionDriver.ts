@@ -185,6 +185,7 @@ async function continueDispatchJob(
   // The composer edits these between turns; the follow-up carries them as
   // per-turn overrides which the target persists onto the job.
   const turnModel = followUpSession.config.dispatchModel?.trim() || undefined;
+  const turnReasoningPreset = followUpSession.config.dispatchReasoningPreset?.trim() || undefined;
   const turnApprovalPolicy = followUpSession.config.dispatchApprovalPolicy;
   const turnAttachments = dispatchAttachments(followUpSession, input.options?.imageContexts);
   // Reused across retries so a lost response cannot start two turns. The
@@ -197,6 +198,7 @@ async function continueDispatchJob(
     JSON.stringify([
       message,
       turnModel ?? null,
+      turnReasoningPreset ?? null,
       turnApprovalPolicy ?? null,
       turnAttachments?.map(attachment => attachment.id) ?? null,
     ]),
@@ -236,6 +238,7 @@ async function continueDispatchJob(
       displayMessage,
       {
         model: turnModel,
+        reasoningPreset: turnReasoningPreset,
         approvalPolicy: turnApprovalPolicy,
         ...(turnAttachments ? { attachments: turnAttachments } : {}),
       },
@@ -401,6 +404,8 @@ export const dispatchSessionDriver: SessionDriver = {
       // Do not inherit the controller's model selector. An omitted target
       // model lets the probed target use its own configured default.
       model: config.dispatchModel?.trim() || undefined,
+      reasoningPreset: config.dispatchReasoningPreset?.trim() || undefined,
+      modelCatalog: config.dispatchModelCatalog,
       availableModels: config.dispatchAvailableModels,
       defaultModel: config.dispatchDefaultModel,
       cursor: 0,
@@ -775,6 +780,7 @@ export const dispatchSessionDriver: SessionDriver = {
         prompt: message,
         approvalPolicy,
         model: readySession.config.dispatchModel?.trim() || undefined,
+        reasoningPreset: readySession.config.dispatchReasoningPreset?.trim() || undefined,
         ...(sourceWorkspacePath ? { sourceWorkspacePath } : {}),
         ...(sourceWorkspaceId ? { sourceWorkspaceId } : {}),
         ...(submitAttachments ? { attachments: submitAttachments } : {}),

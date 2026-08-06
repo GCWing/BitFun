@@ -2500,17 +2500,23 @@ impl PersistenceManager {
         let mut summaries = Vec::with_capacity(metadata_list.len());
 
         for metadata in metadata_list {
-            let state = self
+            let (state, reasoning_preset) = self
                 .load_stored_session_state(workspace_path, &metadata.session_id)
                 .await?
-                .map(|value| sanitize_persisted_session_state(&value.runtime_state))
-                .unwrap_or(SessionState::Idle);
+                .map(|value| {
+                    (
+                        sanitize_persisted_session_state(&value.runtime_state),
+                        value.config.reasoning_preset,
+                    )
+                })
+                .unwrap_or((SessionState::Idle, None));
 
             summaries.push(SessionSummary {
                 session_id: metadata.session_id,
                 session_name: metadata.session_name,
                 agent_type: metadata.agent_type,
                 model_id: (!metadata.model_name.trim().is_empty()).then_some(metadata.model_name),
+                reasoning_preset,
                 last_user_dialog_agent_type: metadata.last_user_dialog_agent_type,
                 last_submitted_agent_type: metadata.last_submitted_agent_type,
                 created_by: metadata.created_by,
@@ -4302,6 +4308,7 @@ mod tests {
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 model_id: Some("fast".to_string()),
+                reasoning_preset: Some("high".to_string()),
                 ..Default::default()
             },
         );
@@ -4317,6 +4324,7 @@ mod tests {
 
         assert_eq!(sessions.len(), 1);
         assert_eq!(sessions[0].model_id.as_deref(), Some("fast"));
+        assert_eq!(sessions[0].reasoning_preset.as_deref(), Some("high"));
     }
 
     #[tokio::test]

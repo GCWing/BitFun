@@ -18,6 +18,7 @@ import { createLogger } from '@/shared/utils/logger';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import type { WorkspaceInfo } from '@/shared/types';
 import { getRecentWorkspaceLineParts } from '@/shared/utils/recentWorkspaceDisplay';
+import { formatRecentWorkspaceDate } from './recentWorkspaceDate';
 import './WelcomeScene.scss';
 
 const log = createLogger('WelcomeScene');
@@ -95,14 +96,7 @@ const WelcomeScene: React.FC = () => {
 
   const formatDate = useCallback((dateString: string) => {
     try {
-      const date = new Date(dateString);
-      const now = new Date();
-      const diffMs = Math.abs(now.getTime() - date.getTime());
-      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-      if (diffDays <= 1) return t('time.yesterday');
-      if (diffDays < 7) return t('startup.daysAgo', { count: diffDays });
-      if (diffDays < 30) return t('startup.weeksAgo', { count: Math.ceil(diffDays / 7) });
-      return formatLocaleDate(date);
+      return formatRecentWorkspaceDate(dateString, new Date(), t, formatLocaleDate);
     } catch {
       return '';
     }

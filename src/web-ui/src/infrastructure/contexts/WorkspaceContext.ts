@@ -22,6 +22,7 @@ export interface WorkspaceContextValue extends WorkspaceState {
   assistantWorkspacesList: WorkspaceInfo[];
   openWorkspace: (path: string) => Promise<WorkspaceInfo>;
   createAssistantWorkspace: () => Promise<WorkspaceInfo>;
+  setPrimaryAssistantWorkspace: (workspaceId: string) => Promise<WorkspaceInfo>;
   closeWorkspace: () => Promise<void>;
   closeWorkspaceById: (workspaceId: string) => Promise<void>;
   deleteAssistantWorkspace: (workspaceId: string) => Promise<void>;
@@ -125,6 +126,8 @@ export const useWorkspaceEvents = (
           break;
         case 'workspace:switched':
           onWorkspaceSwitched?.(event.workspace);
+          break;
+        case 'workspace:primary-assistant-changed':
           break;
         case 'workspace:updated':
           onWorkspaceUpdated?.(event.workspace);

@@ -373,6 +373,19 @@
   text-overflow: ellipsis;
 }
 
+.chat-reasoning-selector__trigger {
+  max-width: 112px;
+}
+
+.chat-reasoning-selector__name {
+  max-width: 68px;
+}
+
+.chat-reasoning-selector__dropdown {
+  width: 160px;
+  max-width: min(160px, calc(100vw - 32px));
+}
+
 .chat-page__mode-pill {
   height: 24px;
   padding: 0 10px;

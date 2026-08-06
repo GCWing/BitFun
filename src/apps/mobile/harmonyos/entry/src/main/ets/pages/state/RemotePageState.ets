@@ -358,9 +358,7 @@ export class RemotePageState {
           context_window: model.context_window,
           enabled: model.enabled,
           capabilities: model.capabilities.slice(),
-          enable_thinking_process: model.enable_thinking_process,
-          reasoning_mode: model.reasoning_mode,
-          reasoning_effort: model.reasoning_effort
+          reasoning: model.reasoning
         };
       }),
       default_models: {

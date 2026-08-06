@@ -985,7 +985,7 @@ async fn record_failure(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_ai_adapters::{AIConfig, ReasoningMode};
+    use bitfun_ai_adapters::AIConfig;
     use std::collections::VecDeque;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex;
@@ -1002,13 +1002,10 @@ mod tests {
             max_tokens,
             temperature: None,
             top_p: None,
-            reasoning_mode: ReasoningMode::Default,
             inline_think_in_text: false,
             custom_headers: None,
             custom_headers_mode: None,
             skip_ssl_verify: false,
-            reasoning_effort: None,
-            thinking_budget_tokens: None,
             custom_request_body: None,
             custom_request_body_mode: None,
         }

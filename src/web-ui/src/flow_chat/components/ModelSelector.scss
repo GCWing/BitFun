@@ -82,11 +82,6 @@
     white-space: nowrap;
   }
   
-  &__thinking-icon {
-    color: var(--bf-appearance-token-color-text-muted);
-    flex-shrink: 0;
-  }
-
   &__fast-icon {
     color: var(--bf-appearance-token-color-warning);
     flex-shrink: 0;
@@ -106,21 +101,6 @@
     line-height: 1;
   }
 
-  &__effort-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1px 4px;
-    border-radius: 3px;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 15%, transparent);
-    color: color-mix(in srgb, var(--bf-appearance-token-color-success) 90%, var(--bf-appearance-token-color-text-primary));
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
-    font-weight: 600;
-    letter-spacing: 0.3px;
-    line-height: 1;
-    text-transform: uppercase;
-  }
-  
   &__ctx-usage {
     font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
     font-weight: 400;
@@ -347,11 +327,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-  
-  &__option-thinking {
-    color: var(--bf-appearance-token-color-text-muted);
-    flex-shrink: 0;
   }
   
   &__option-check {

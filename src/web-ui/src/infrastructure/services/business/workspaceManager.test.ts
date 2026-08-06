@@ -6,6 +6,7 @@ const globalStateMocks = vi.hoisted(() => ({
   getRecentWorkspaces: vi.fn(),
   getOpenedWorkspaces: vi.fn(),
   getCurrentWorkspace: vi.fn(),
+  getPrimaryAssistantWorkspace: vi.fn(),
   updateWorkspaceInfo: vi.fn(),
 }));
 
@@ -53,6 +54,7 @@ function configureGlobalState(): void {
   globalStateMocks.getRecentWorkspaces.mockResolvedValue([]);
   globalStateMocks.getOpenedWorkspaces.mockResolvedValue([]);
   globalStateMocks.getCurrentWorkspace.mockResolvedValue(null);
+  globalStateMocks.getPrimaryAssistantWorkspace.mockResolvedValue(null);
   globalStateMocks.updateWorkspaceInfo.mockReset();
 }
 

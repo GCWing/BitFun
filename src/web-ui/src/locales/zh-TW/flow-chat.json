@@ -2396,6 +2396,24 @@
     "xhigh": "Extra High",
     "xhighDesc": "最大推理深度（較慢）"
   },
+  "reasoningSelector": {
+    "title": "思考強度",
+    "auto": "自動",
+    "modelDefault": "模型預設值",
+    "current": "思考強度：{{preset}}",
+    "currentAuto": "思考強度：自動（{{preset}}）",
+    "updateFailed": "更新思考預設失敗",
+    "source": {
+      "models_dev": "models.dev",
+      "adapter_fallback": "內置",
+      "model_config": "自定義"
+    },
+    "sourceTooltip": {
+      "models_dev": "根據 models.dev 的模型中繼資料自動產生",
+      "adapter_fallback": "BitFun 為此模型適配器內置的預設",
+      "model_config": "在此模型的自定義設定中定義"
+    }
+  },
   "coworkScope": {
     "title": "選擇 Cowork 工作區",
     "description": "Cowork 模式需要一個工作區目錄用於讀寫檔案。你可以使用目前項目，或選擇另一個目錄。",

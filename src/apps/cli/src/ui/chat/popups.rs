@@ -642,8 +642,11 @@ impl ChatView {
 
     // ============ Provider selector methods (add model step 1) ============
 
-    pub(crate) fn show_provider_selector(&mut self) {
-        self.provider_selector.show();
+    pub(crate) fn show_provider_selector(
+        &mut self,
+        provider_catalog: bitfun_core_types::ProviderCatalog,
+    ) {
+        self.provider_selector.show(provider_catalog);
         self.popup_stack.push(PopupType::ProviderSelector);
     }
 
@@ -656,7 +659,7 @@ impl ChatView {
     }
 
     pub(crate) fn reshow_provider_selector(&mut self) {
-        self.provider_selector.show();
+        self.provider_selector.reshow();
     }
 
     pub(crate) fn provider_selector_handle_key(

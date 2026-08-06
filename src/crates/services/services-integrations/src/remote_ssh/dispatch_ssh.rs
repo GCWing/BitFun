@@ -5,14 +5,18 @@
 //! workspaces, sessions, transcripts, process detachment, supervision, and
 //! cancellation semantics.
 //!
-//! `probe` is read-only. Submission may automatically install a matching
-//! prebuilt release when the target is missing a compatible CLI;
+//! `probe` is read-only. Submission may automatically install the latest
+//! compatible prebuilt release when the target is missing a compatible CLI;
 //! `install_cli_start` still verifies the signed SHA256 sidecar and mandatory
 //! archive minisign signature before staging an owner-only installer. Source
 //! builds remain a separate, explicitly confirmed operation.
 
 use anyhow::{anyhow, Context, Result};
 use base64::Engine as _;
+use bitfun_services_core::dispatch_contract::{
+    DispatchAccountDaemonIdentity, DispatchAccountDaemonProvisionRequest,
+    DispatchAccountDaemonProvisionResponse, DISPATCH_ACCOUNT_DAEMON_PROVISIONING_CAPABILITY,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -27,14 +31,18 @@ use super::release_verify::{
 use super::remote_git::shell_quote_posix;
 use super::types::SSHCommandOptions;
 
-const RELEASE_BASE: &str = "https://github.com/GCWing/BitFun/releases";
-const RELEASE_VERSION: &str = env!("CARGO_PKG_VERSION");
+const GITHUB_RELEASE_BASE: &str = "https://github.com/GCWing/BitFun/releases";
+const OPENBITFUN_RELEASE_BASE: &str = "https://openbitfun.com/release";
+const GITHUB_LATEST_MANIFEST: &str =
+    "https://github.com/GCWing/BitFun/releases/latest/download/latest.json";
+const OPENBITFUN_LATEST_MANIFEST: &str = "https://openbitfun.com/release/latest.json";
 const INSTALL_STATE_DIR: &str = ".bitfun/dispatch/install";
 const REQUEST_STATE_DIR: &str = ".bitfun/dispatch/requests";
 const INSTALL_STEM: &str = "install-cli";
 const INSTALL_DONE_MARKER: &str = "BITFUN_DISPATCH_CLI_INSTALL_DONE";
 const INSTALL_PREPARE_GRACE_SECONDS: u64 = 30;
 const COMMAND_TIMEOUT_MS: u64 = 30_000;
+const ACCOUNT_DAEMON_COMMAND_TIMEOUT_MS: u64 = 90_000;
 const WORKSPACE_OPERATION_WAIT: Duration = Duration::from_secs(30 * 60);
 const WORKSPACE_OPERATION_POLL_INTERVAL: Duration = Duration::from_millis(750);
 /// A release archive is tens of megabytes and the target's uplink is unknown,
@@ -45,6 +53,9 @@ const CLI_INSTALL_POLL_INTERVAL: Duration = Duration::from_millis(750);
 /// this is a hung target rather than a slow one.
 const CLI_INSTALL_WAIT: Duration = Duration::from_secs(15 * 60);
 const RELEASE_READ_TIMEOUT_SECONDS: u64 = 30;
+const RELEASE_PROBE_WINDOW: Duration = Duration::from_secs(10);
+const RELEASE_PROBE_BYTES: u64 = 4 * 1024 * 1024;
+const GITHUB_HEALTHY_THROUGHPUT: u64 = 512 * 1024;
 const MAX_ARCHIVE_BYTES: usize = 512 * 1024 * 1024;
 /// A result bundle carries only commits since the dispatch baseline, so it is
 /// bounded well below a full repository clone in the usual case.
@@ -191,9 +202,7 @@ enum RemoteDigestTool {
 struct ResolvedRelease {
     public: DispatchCliRelease,
     filename: String,
-    checksum_url: String,
-    checksum_signature_url: String,
-    archive_signature_url: String,
+    sources: Vec<ReleaseArtifactSource>,
     /// Whether `public.sha256` came from a minisign signature this machine
     /// verified, rather than from an unauthenticated sidecar.
     ///
@@ -202,6 +211,26 @@ struct ResolvedRelease {
     /// publisher's. Without that proof the archive's own signature is the only
     /// protection, and only this machine can check it.
     checksum_signature_verified: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReleaseOrigin {
+    GitHub,
+    OpenBitFun,
+}
+
+#[derive(Debug, Clone)]
+struct ReleaseArtifactSource {
+    origin: ReleaseOrigin,
+    url: String,
+    checksum_url: String,
+    checksum_signature_url: String,
+    archive_signature_url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct LatestReleaseManifest {
+    version: String,
 }
 
 /// Probe the remote OS/architecture and, when present, the target CLI dispatch
@@ -260,16 +289,6 @@ pub async fn probe(
             (
                 None,
                 Some("remote target has no tar executable; install tar and retry".to_string()),
-            )
-        } else if !published_release_supports_required_dispatch_protocol(RELEASE_VERSION) {
-            // The controller is ahead of the latest stable artifact, so no
-            // published binary carries the capabilities it needs. Skip the
-            // release request and say so.
-            (
-                None,
-                Some(format!(
-                    "no published BitFun CLI yet carries the dispatch capabilities this controller requires (controller {RELEASE_VERSION})"
-                )),
             )
         } else {
             match resolve_release(&target.os, &target.arch).await {
@@ -477,7 +496,7 @@ pub fn validate_dispatch_protocol(protocol: &Value, approval_policy: Option<&str
     Ok(())
 }
 
-/// Explicitly install the matching BitFun CLI release on the SSH target.
+/// Explicitly install the latest confirmed BitFun CLI release on the SSH target.
 ///
 /// This function fails closed when the build has no release trust root, a
 /// checksum/signature is absent, or either verification fails. It never uses
@@ -637,11 +656,24 @@ async fn download_archive_on_target(
     let digest_tool = target
         .digest_tool
         .context("target download requires a SHA256 checker")?;
+    let github_url = release
+        .sources
+        .iter()
+        .find(|source| source.origin == ReleaseOrigin::GitHub)
+        .map(|source| source.url.as_str())
+        .context("release has no GitHub source")?;
+    let mirror_url = release
+        .sources
+        .iter()
+        .find(|source| source.origin == ReleaseOrigin::OpenBitFun)
+        .map(|source| source.url.as_str())
+        .unwrap_or("");
     let script = target_download_script(
         downloader,
         digest_tool,
         archive_path,
-        &release.public.url,
+        github_url,
+        mirror_url,
         &release.public.sha256,
     );
     let result = manager
@@ -670,23 +702,51 @@ fn target_download_script(
     downloader: RemoteDownloader,
     digest_tool: RemoteDigestTool,
     archive_path: &str,
-    url: &str,
+    github_url: &str,
+    mirror_url: &str,
     sha256: &str,
 ) -> String {
     // Download to a scratch name and only publish it once the digest matches,
     // so a truncated or tampered body can never be handed to the installer.
     let fetch = match downloader {
         RemoteDownloader::Curl => format!(
-            "curl -fsSL --retry 3 --retry-delay 1 --max-time {timeout} --max-filesize {max} -o \"$PART\" {url}",
+            "curl -fsSL --retry 3 --retry-delay 1 --max-time {timeout} --max-filesize {max} -o \"$PART\" \"$URL\"",
             timeout = TARGET_DOWNLOAD_TIMEOUT_MS / 1000,
             max = MAX_ARCHIVE_BYTES,
-            url = shell_quote_posix(url),
         ),
         // wget has no --max-filesize; the size ceiling is enforced below.
         RemoteDownloader::Wget => format!(
-            "wget -q --tries=3 --timeout={timeout} -O \"$PART\" {url}",
+            "wget -q --tries=3 --timeout={timeout} -O \"$PART\" \"$URL\"",
             timeout = TARGET_DOWNLOAD_TIMEOUT_MS / 1000,
-            url = shell_quote_posix(url),
+        ),
+    };
+    let probe = match downloader {
+        RemoteDownloader::Curl => format!(
+            r#"METRICS=$(curl -LsS --range 0-{probe_end} --connect-timeout 5 --max-time {window} -o /dev/null -w '%{{http_code}} %{{size_download}} %{{time_total}}' "$GITHUB_URL" 2>/dev/null || true)
+GITHUB_SPEED=$(printf '%s\n' "$METRICS" | awk '($1 == 200 || $1 == 206) && $3 > 0 {{ printf "%.0f\n", $2 / $3; ok=1 }} END {{ if (!ok) print 0 }}')"#,
+            probe_end = RELEASE_PROBE_BYTES - 1,
+            window = RELEASE_PROBE_WINDOW.as_secs(),
+        ),
+        RemoteDownloader::Wget => format!(
+            r#"GITHUB_SPEED=0
+PROBE="$ARCHIVE.probe"
+if command -v timeout >/dev/null 2>&1; then
+  rm -f "$PROBE"
+  START=$(date +%s)
+  timeout {window} wget -q --tries=1 --timeout={window} --header='Range: bytes=0-{probe_end}' -O "$PROBE" "$GITHUB_URL" || true
+  END=$(date +%s)
+  ELAPSED=$((END - START))
+  [ "$ELAPSED" -gt 0 ] || ELAPSED=1
+  if [ -f "$PROBE" ]; then
+    BYTES=$(wc -c <"$PROBE" | tr -d '[:space:]')
+  else
+    BYTES=0
+  fi
+  GITHUB_SPEED=$((BYTES / ELAPSED))
+  rm -f "$PROBE"
+fi"#,
+            probe_end = RELEASE_PROBE_BYTES - 1,
+            window = RELEASE_PROBE_WINDOW.as_secs(),
         ),
     };
     let verify = match digest_tool {
@@ -698,25 +758,49 @@ fn target_download_script(
 umask 077
 ARCHIVE={archive}
 PART="$ARCHIVE.part"
+GITHUB_URL={github_url}
+MIRROR_URL={mirror_url}
 EXPECTED={sha}
 MAX={max}
 rm -f "$PART"
 cleanup() {{ rm -f "$PART"; }}
 trap cleanup EXIT
-{fetch}
-SIZE=$(wc -c <"$PART" | tr -d '[:space:]')
-if [ "$SIZE" -gt "$MAX" ]; then
-  echo "ERROR: downloaded archive is larger than $MAX bytes" >&2
-  exit 1
+{probe}
+case "$GITHUB_SPEED" in ''|*[!0-9]*) GITHUB_SPEED=0 ;; esac
+FIRST_URL="$GITHUB_URL"
+SECOND_URL="$MIRROR_URL"
+if [ -n "$MIRROR_URL" ] && [ "$GITHUB_SPEED" -lt {healthy_bps} ]; then
+  echo "GitHub CLI probe: $((GITHUB_SPEED / 1024)) KiB/s; trying OpenBitFun mirror first."
+  FIRST_URL="$MIRROR_URL"
+  SECOND_URL="$GITHUB_URL"
+else
+  echo "GitHub CLI probe: $((GITHUB_SPEED / 1024)) KiB/s; keeping GitHub first."
 fi
-printf '%s  %s\n' "$EXPECTED" "$PART" | {verify}
-mv -f "$PART" "$ARCHIVE"
+INSTALLED=0
+for URL in "$FIRST_URL" "$SECOND_URL"; do
+  [ -n "$URL" ] || continue
+  rm -f "$PART"
+  echo "Downloading BitFun CLI from $URL"
+  if {fetch}; then
+    SIZE=$(wc -c <"$PART" | tr -d '[:space:]')
+    if [ "$SIZE" -le "$MAX" ] && printf '%s  %s\n' "$EXPECTED" "$PART" | {verify}; then
+      mv -f "$PART" "$ARCHIVE"
+      INSTALLED=1
+      break
+    fi
+  fi
+  echo "Download source failed verification; trying the next source." >&2
+done
+[ "$INSTALLED" = "1" ] || {{ echo "ERROR: every BitFun CLI source failed" >&2; exit 1; }}
 chmod 600 "$ARCHIVE"
 trap - EXIT
 "#,
         archive = shell_quote_posix(archive_path),
+        github_url = shell_quote_posix(github_url),
+        mirror_url = shell_quote_posix(mirror_url),
         sha = shell_quote_posix(sha256),
         max = MAX_ARCHIVE_BYTES,
+        healthy_bps = GITHUB_HEALTHY_THROUGHPUT,
     )
 }
 
@@ -891,6 +975,201 @@ pub async fn install_cli_cancel(manager: &SSHConnectionManager, connection_id: &
         ));
     }
     Ok(())
+}
+
+/// Read the SSH target's stable, non-secret device identity after verifying
+/// that its CLI advertises the account-daemon bootstrap contract.
+pub async fn account_daemon_identity(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+) -> Result<DispatchAccountDaemonIdentity> {
+    let cli_path = account_daemon_cli_path(manager, connection_id).await?;
+    let command = format!(
+        "{} daemon __dispatch_identity",
+        shell_quote_posix(&cli_path)
+    );
+    let result = manager
+        .execute_command_with_options(
+            connection_id,
+            &command,
+            SSHCommandOptions {
+                timeout_ms: Some(COMMAND_TIMEOUT_MS),
+                cancellation_token: None,
+            },
+        )
+        .await?;
+    ensure_command_completed(&result, "read BitFun daemon target identity")?;
+    if result.exit_code != 0 {
+        return Err(remote_command_error(
+            "read BitFun daemon target identity",
+            result.exit_code,
+            &result.stdout,
+            &result.stderr,
+        ));
+    }
+    let identity: DispatchAccountDaemonIdentity = serde_json::from_str(result.stdout.trim())
+        .context("BitFun daemon target returned an invalid identity")?;
+    if identity.device_id.len() != 32
+        || !identity
+            .device_id
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+        || identity.device_name.trim().is_empty()
+        || identity.device_name.len() > 256
+        || identity.device_name.chars().any(char::is_control)
+    {
+        return Err(anyhow!("BitFun daemon target returned an unsafe identity"));
+    }
+    Ok(identity)
+}
+
+/// Stage one secret-bearing account bootstrap document, consume it through the
+/// target CLI, and remove it regardless of command outcome.
+pub async fn provision_account_daemon(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    request: &DispatchAccountDaemonProvisionRequest,
+) -> Result<DispatchAccountDaemonProvisionResponse> {
+    let cli_path = account_daemon_cli_path(manager, connection_id).await?;
+    let target = probe_remote_target(manager, connection_id).await?;
+    let request_dir = format!("{}/{}", target.home, REQUEST_STATE_DIR);
+    exec_ok(
+        manager,
+        connection_id,
+        &format!(
+            "mkdir -p {dir} && chmod 700 {root} {dispatch} {dir}",
+            root = shell_quote_posix(&format!("{}/.bitfun", target.home)),
+            dispatch = shell_quote_posix(&format!("{}/.bitfun/dispatch", target.home)),
+            dir = shell_quote_posix(&request_dir),
+        ),
+    )
+    .await?;
+    let request_path = format!(
+        "{request_dir}/daemon-provision-{}.json",
+        uuid::Uuid::new_v4().as_simple()
+    );
+    let request_bytes =
+        serde_json::to_vec(request).context("encode daemon provisioning request")?;
+    exec_ok(
+        manager,
+        connection_id,
+        &format!(
+            "umask 077; : > {request}; chmod 600 {request}",
+            request = shell_quote_posix(&request_path),
+        ),
+    )
+    .await?;
+    if let Err(error) = manager
+        .sftp_write(connection_id, &request_path, &request_bytes)
+        .await
+        .context("stage daemon provisioning request")
+    {
+        let _ = manager.sftp_remove(connection_id, &request_path).await;
+        return Err(error);
+    }
+
+    let command = format!(
+        "request={request}; cleanup() {{ rm -f \"$request\"; }}; trap cleanup EXIT; \
+         trap 'exit 130' HUP INT TERM; {cli} daemon __dispatch_provision \"$request\"",
+        request = shell_quote_posix(&request_path),
+        cli = shell_quote_posix(&cli_path),
+    );
+    let result = manager
+        .execute_command_with_options(
+            connection_id,
+            &command,
+            SSHCommandOptions {
+                timeout_ms: Some(ACCOUNT_DAEMON_COMMAND_TIMEOUT_MS),
+                cancellation_token: None,
+            },
+        )
+        .await;
+    let _ = manager.sftp_remove(connection_id, &request_path).await;
+    let result = result?;
+    ensure_command_completed(&result, "provision persistent BitFun daemon")?;
+    if result.exit_code != 0 {
+        return Err(remote_command_error(
+            "provision persistent BitFun daemon",
+            result.exit_code,
+            &result.stdout,
+            &result.stderr,
+        ));
+    }
+    let response: DispatchAccountDaemonProvisionResponse =
+        serde_json::from_str(result.stdout.trim())
+            .context("BitFun daemon provisioning returned invalid JSON")?;
+    if response.device_id != request.device_id || !response.service_installed {
+        return Err(anyhow!(
+            "BitFun daemon provisioning returned an inconsistent result"
+        ));
+    }
+    Ok(response)
+}
+
+/// Best-effort rollback for a bootstrap whose relay-online verification did
+/// not complete. The target command refuses to touch a different session.
+pub async fn deprovision_account_daemon(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    device_id: &str,
+    user_id: &str,
+) -> Result<()> {
+    let cli_path = account_daemon_cli_path(manager, connection_id).await?;
+    let command = format!(
+        "{} daemon __dispatch_deprovision {} {}",
+        shell_quote_posix(&cli_path),
+        shell_quote_posix(device_id),
+        shell_quote_posix(user_id),
+    );
+    let result = manager
+        .execute_command_with_options(
+            connection_id,
+            &command,
+            SSHCommandOptions {
+                timeout_ms: Some(ACCOUNT_DAEMON_COMMAND_TIMEOUT_MS),
+                cancellation_token: None,
+            },
+        )
+        .await?;
+    ensure_command_completed(&result, "roll back BitFun daemon provisioning")?;
+    if result.exit_code != 0 {
+        return Err(remote_command_error(
+            "roll back BitFun daemon provisioning",
+            result.exit_code,
+            &result.stdout,
+            &result.stderr,
+        ));
+    }
+    Ok(())
+}
+
+async fn account_daemon_cli_path(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+) -> Result<String> {
+    ensure_plain_ssh_target(manager, connection_id).await?;
+    let probed = probe(manager, connection_id, None).await?;
+    let protocol = probed
+        .protocol
+        .as_ref()
+        .ok_or_else(|| anyhow!("the SSH target has no compatible BitFun dispatch protocol"))?;
+    validate_dispatch_protocol(protocol, None)?;
+    let supports_provisioning = protocol
+        .get("capabilities")
+        .and_then(Value::as_array)
+        .is_some_and(|capabilities| {
+            capabilities.iter().any(|capability| {
+                capability.as_str() == Some(DISPATCH_ACCOUNT_DAEMON_PROVISIONING_CAPABILITY)
+            })
+        });
+    if !supports_provisioning {
+        return Err(anyhow!(
+            "the target BitFun CLI does not support account daemon provisioning"
+        ));
+    }
+    probed
+        .cli_path
+        .ok_or_else(|| anyhow!("the SSH target has no BitFun CLI"))
 }
 
 /// Keys of the `ai` config section that make up "model configuration": the
@@ -1947,41 +2226,135 @@ fi
 async fn resolve_release(os: &str, arch: &str) -> Result<ResolvedRelease> {
     let pubkey = require_release_pubkey()?;
     let target = release_target(os, arch)?;
-    let version = RELEASE_VERSION.split('+').next().unwrap_or(RELEASE_VERSION);
-    let filename = format!("bitfun-cli-{version}-{target}.tar.gz");
-    let tag = release_tag_for_version(RELEASE_VERSION);
-    let url = format!("{RELEASE_BASE}/download/{tag}/{filename}");
-    let checksum_url = format!("{url}.sha256");
-    let checksum_signature_url = format!("{checksum_url}.sig");
-    let archive_signature_url = format!("{url}.sig");
     let client = release_http_client()?;
-    let checksum = fetch_required_text(&client, &checksum_url).await?;
+    let version = fetch_latest_release_version(&client).await?;
+    let filename = format!("bitfun-cli-{version}-{target}.tar.gz");
+    let sources = release_sources(&version, &filename);
     let (sha256, checksum_signature_verified) =
-        match fetch_optional_text(&client, &checksum_signature_url).await? {
-            Some(signature) => (
-                verify_signed_checksum(&checksum, &signature, pubkey, &filename)?,
-                true,
-            ),
-            // Releases published before the CLI checksum sidecars were signed have
-            // no `.sha256.sig`. The digest shown for consent is then provisional;
-            // install still verifies the archive's own minisign signature before
-            // staging anything, so a tampered sidecar can only fail the install.
-            None => (parse_sha256(&checksum, &filename)?, false),
-        };
+        resolve_release_digest(&client, &sources, pubkey, &filename).await?;
+    let canonical_url = sources
+        .iter()
+        .find(|source| source.origin == ReleaseOrigin::GitHub)
+        .map(|source| source.url.clone())
+        .context("release has no canonical GitHub source")?;
 
     Ok(ResolvedRelease {
         public: DispatchCliRelease {
-            version: version.to_string(),
+            version,
             target: target.to_string(),
-            url,
+            url: canonical_url,
             sha256,
         },
         filename,
-        checksum_url,
-        checksum_signature_url,
-        archive_signature_url,
+        sources,
         checksum_signature_verified,
     })
+}
+
+fn release_sources(version: &str, filename: &str) -> Vec<ReleaseArtifactSource> {
+    let tag = release_tag_for_version(version);
+    [
+        (
+            ReleaseOrigin::GitHub,
+            format!("{GITHUB_RELEASE_BASE}/download/{tag}"),
+        ),
+        (
+            ReleaseOrigin::OpenBitFun,
+            format!("{OPENBITFUN_RELEASE_BASE}/{version}"),
+        ),
+    ]
+    .into_iter()
+    .map(|(origin, base)| {
+        let url = format!("{base}/{filename}");
+        ReleaseArtifactSource {
+            origin,
+            checksum_url: format!("{url}.sha256"),
+            checksum_signature_url: format!("{url}.sha256.sig"),
+            archive_signature_url: format!("{url}.sig"),
+            url,
+        }
+    })
+    .collect()
+}
+
+async fn fetch_latest_release_version(client: &reqwest::Client) -> Result<String> {
+    let mut failures = Vec::new();
+    for manifest_url in [GITHUB_LATEST_MANIFEST, OPENBITFUN_LATEST_MANIFEST] {
+        let text = match fetch_required_text(client, manifest_url).await {
+            Ok(text) => text,
+            Err(error) => {
+                failures.push(format!("{manifest_url}: {error:#}"));
+                continue;
+            }
+        };
+        match latest_release_version_from_json(&text, manifest_url) {
+            Ok(version) => return Ok(version),
+            Err(error) => failures.push(format!("{manifest_url}: {error:#}")),
+        }
+    }
+    Err(anyhow!(
+        "could not resolve the latest BitFun release: {}",
+        failures.join("; ")
+    ))
+}
+
+fn latest_release_version_from_json(text: &str, source: &str) -> Result<String> {
+    let manifest: LatestReleaseManifest =
+        serde_json::from_str(text).with_context(|| format!("parse {source}"))?;
+    let version = manifest.version.trim();
+    let parsed = semver::Version::parse(version)
+        .with_context(|| format!("invalid release version {version}"))?;
+    if !parsed.pre.is_empty() || !parsed.build.is_empty() {
+        return Err(anyhow!(
+            "latest release {version} is not a stable asset version"
+        ));
+    }
+    Ok(version.to_string())
+}
+
+async fn resolve_release_digest(
+    client: &reqwest::Client,
+    sources: &[ReleaseArtifactSource],
+    pubkey: &str,
+    filename: &str,
+) -> Result<(String, bool)> {
+    let mut unsigned_digest = None;
+    let mut failures = Vec::new();
+    for source in sources {
+        let checksum = match fetch_required_text(client, &source.checksum_url).await {
+            Ok(checksum) => checksum,
+            Err(error) => {
+                failures.push(format!("{}: {error:#}", source.checksum_url));
+                continue;
+            }
+        };
+        match fetch_optional_text(client, &source.checksum_signature_url).await {
+            Ok(Some(signature)) => {
+                match verify_signed_checksum(&checksum, &signature, pubkey, filename) {
+                    Ok(digest) => return Ok((digest, true)),
+                    Err(error) => {
+                        failures.push(format!("{}: {error:#}", source.checksum_signature_url))
+                    }
+                }
+            }
+            Ok(None) => match parse_sha256(&checksum, filename) {
+                Ok(digest) => {
+                    unsigned_digest.get_or_insert(digest);
+                }
+                Err(error) => failures.push(format!("{}: {error:#}", source.checksum_url)),
+            },
+            Err(error) => failures.push(format!("{}: {error:#}", source.checksum_signature_url)),
+        }
+    }
+    if let Some(digest) = unsigned_digest {
+        // Older releases have only an archive signature. They remain usable,
+        // but must flow through the controller where minisign can be checked.
+        return Ok((digest, false));
+    }
+    Err(anyhow!(
+        "no release source published usable checksum metadata for {filename}: {}",
+        failures.join("; ")
+    ))
 }
 
 fn release_target(os: &str, arch: &str) -> Result<&'static str> {
@@ -2047,28 +2420,152 @@ async fn download_verified_archive(release: &ResolvedRelease) -> Result<Vec<u8>>
 
     // Re-fetch and verify the signed sidecar at install time instead of trusting
     // a possibly stale preflight result.
-    let checksum = fetch_required_text(&client, &release.checksum_url).await?;
-    let expected = match fetch_optional_text(&client, &release.checksum_signature_url).await? {
-        Some(signature) => {
-            verify_signed_checksum(&checksum, &signature, pubkey, &release.filename)?
-        }
-        // No `.sha256.sig` on this release: the confirmed digest and the
-        // mandatory archive minisign check below carry the verification.
-        None => parse_sha256(&checksum, &release.filename)?,
-    };
+    let (expected, _) =
+        resolve_release_digest(&client, &release.sources, pubkey, &release.filename).await?;
     if !expected.eq_ignore_ascii_case(&release.public.sha256) {
         return Err(anyhow!(
             "release checksum changed after preflight; refusing to install"
         ));
     }
 
+    let ordered = ordered_release_sources(&client, release).await;
+    let mut failures = Vec::new();
+    for source in &ordered {
+        let archive = match download_release_bytes(&client, &source.url).await {
+            Ok(archive) => archive,
+            Err(error) => {
+                failures.push(format!("{}: {error:#}", source.url));
+                continue;
+            }
+        };
+        if let Err(error) = verify_sha256(&archive, &expected, &release.filename) {
+            failures.push(format!("{}: {error:#}", source.url));
+            continue;
+        }
+
+        let mut signature_verified = false;
+        for signature_source in std::iter::once(source).chain(
+            ordered
+                .iter()
+                .filter(|candidate| candidate.url != source.url),
+        ) {
+            let signature =
+                match fetch_required_text(&client, &signature_source.archive_signature_url).await {
+                    Ok(signature) => signature,
+                    Err(error) => {
+                        failures.push(format!(
+                            "{}: {error:#}",
+                            signature_source.archive_signature_url
+                        ));
+                        continue;
+                    }
+                };
+            match verify_minisign(&archive, &signature, pubkey) {
+                Ok(()) => {
+                    signature_verified = true;
+                    break;
+                }
+                Err(error) => failures.push(format!(
+                    "{}: {error:#}",
+                    signature_source.archive_signature_url
+                )),
+            }
+        }
+        if signature_verified {
+            return Ok(archive);
+        }
+    }
+
+    Err(anyhow!(
+        "BitFun CLI archive failed from every source: {}",
+        failures.join("; ")
+    ))
+}
+
+async fn ordered_release_sources(
+    client: &reqwest::Client,
+    release: &ResolvedRelease,
+) -> Vec<ReleaseArtifactSource> {
+    let mut sources = release.sources.clone();
+    let Some(github_index) = sources
+        .iter()
+        .position(|source| source.origin == ReleaseOrigin::GitHub)
+    else {
+        return sources;
+    };
+    let github_speed = probe_release_throughput(client, &sources[github_index].url).await;
+    log::debug!(
+        "Dispatch CLI GitHub probe: {} B/s from {}",
+        github_speed,
+        sources[github_index].url
+    );
+    order_release_sources_for_speed(&mut sources, github_speed);
+    sources
+}
+
+fn order_release_sources_for_speed(sources: &mut [ReleaseArtifactSource], github_speed: u64) {
+    let Some(github_index) = sources
+        .iter()
+        .position(|source| source.origin == ReleaseOrigin::GitHub)
+    else {
+        return;
+    };
+    if github_speed >= GITHUB_HEALTHY_THROUGHPUT
+        || !sources
+            .iter()
+            .any(|source| source.origin == ReleaseOrigin::OpenBitFun)
+    {
+        sources.swap(0, github_index);
+    } else if let Some(mirror_index) = sources
+        .iter()
+        .position(|source| source.origin == ReleaseOrigin::OpenBitFun)
+    {
+        sources.swap(0, mirror_index);
+    }
+}
+
+async fn probe_release_throughput(client: &reqwest::Client, url: &str) -> u64 {
+    let started = std::time::Instant::now();
+    let request = client
+        .get(url)
+        .header(
+            reqwest::header::RANGE,
+            format!("bytes=0-{}", RELEASE_PROBE_BYTES - 1),
+        )
+        .send();
+    let Ok(Ok(mut response)) = tokio::time::timeout(RELEASE_PROBE_WINDOW, request).await else {
+        return 0;
+    };
+    if !response.status().is_success() {
+        return 0;
+    }
+    let mut received = 0u64;
+    loop {
+        let Some(remaining) = RELEASE_PROBE_WINDOW.checked_sub(started.elapsed()) else {
+            break;
+        };
+        if remaining.is_zero() {
+            break;
+        }
+        match tokio::time::timeout(remaining, response.chunk()).await {
+            Ok(Ok(Some(chunk))) => received += chunk.len() as u64,
+            _ => break,
+        }
+        if received >= RELEASE_PROBE_BYTES {
+            break;
+        }
+    }
+    (received as f64 / started.elapsed().as_secs_f64().max(0.001)) as u64
+}
+
+async fn download_release_bytes(client: &reqwest::Client, url: &str) -> Result<Vec<u8>> {
     let mut response = client
-        .get(&release.public.url)
+        .get(url)
         .send()
         .await
-        .with_context(|| format!("request {}", release.public.url))?
+        .with_context(|| format!("request {url}"))?
         .error_for_status()
-        .with_context(|| format!("download {}", release.public.url))?;
+        .with_context(|| format!("download {url}"))?;
     if response
         .content_length()
         .is_some_and(|length| length > MAX_ARCHIVE_BYTES as u64)
@@ -2082,14 +2579,10 @@ async fn download_verified_archive(release: &ResolvedRelease) -> Result<Vec<u8>>
     while let Some(chunk) = response
         .chunk()
         .await
-        .with_context(|| format!("read {}", release.public.url))?
+        .with_context(|| format!("read {url}"))?
     {
         extend_bounded_archive(&mut archive, &chunk, MAX_ARCHIVE_BYTES)?;
     }
-    verify_sha256(&archive, &expected, &release.filename)?;
-
-    let archive_signature = fetch_required_text(&client, &release.archive_signature_url).await?;
-    verify_minisign(&archive, &archive_signature, pubkey)?;
     Ok(archive)
 }
 
@@ -2645,18 +3138,29 @@ mod tests {
     }
 
     fn test_release(checksum_signature_verified: bool) -> ResolvedRelease {
+        let github_url = "https://github.example.invalid/bitfun-cli.tar.gz";
+        let mirror_url = "https://mirror.example.invalid/bitfun-cli.tar.gz";
         ResolvedRelease {
             public: DispatchCliRelease {
                 version: "1.2.3".to_string(),
                 target: "x86_64-unknown-linux-gnu".to_string(),
-                url: "https://example.invalid/bitfun-cli.tar.gz".to_string(),
+                url: github_url.to_string(),
                 sha256: "a".repeat(64),
             },
             filename: "bitfun-cli.tar.gz".to_string(),
-            checksum_url: "https://example.invalid/bitfun-cli.tar.gz.sha256".to_string(),
-            checksum_signature_url: "https://example.invalid/bitfun-cli.tar.gz.sha256.sig"
-                .to_string(),
-            archive_signature_url: "https://example.invalid/bitfun-cli.tar.gz.sig".to_string(),
+            sources: [
+                (ReleaseOrigin::GitHub, github_url),
+                (ReleaseOrigin::OpenBitFun, mirror_url),
+            ]
+            .into_iter()
+            .map(|(origin, url)| ReleaseArtifactSource {
+                origin,
+                url: url.to_string(),
+                checksum_url: format!("{url}.sha256"),
+                checksum_signature_url: format!("{url}.sha256.sig"),
+                archive_signature_url: format!("{url}.sig"),
+            })
+            .collect(),
             checksum_signature_verified,
         }
     }
@@ -2851,7 +3355,10 @@ mod tests {
             .lines()
             .find(|line| line.contains("mv -f \"$PRIMARY_NEW\""))
             .expect("commit fragment swaps the primary");
-        assert!(release.contains(shared), "release must use the shared commit");
+        assert!(
+            release.contains(shared),
+            "release must use the shared commit"
+        );
         assert!(
             release.contains(r#"PRIMARY_NEW="$STAGE/bitfun""#),
             "release must stage under real filenames"
@@ -2889,6 +3396,63 @@ mod tests {
         assert!(!published_release_supports_required_dispatch_protocol(
             "not-a-version"
         ));
+    }
+
+    #[test]
+    fn latest_release_manifest_accepts_only_stable_semver() {
+        assert_eq!(
+            latest_release_version_from_json(r#"{"version":"1.2.3"}"#, "fixture").unwrap(),
+            "1.2.3"
+        );
+        assert!(
+            latest_release_version_from_json(r#"{"version":"1.2.4-nightly.1"}"#, "fixture")
+                .is_err()
+        );
+        assert!(latest_release_version_from_json(r#"{"version":"latest"}"#, "fixture").is_err());
+    }
+
+    #[test]
+    fn latest_cli_sources_are_github_then_the_versioned_openbitfun_mirror() {
+        let filename = "bitfun-cli-1.2.3-x86_64-unknown-linux-gnu.tar.gz";
+        let sources = release_sources("1.2.3", filename);
+        assert_eq!(sources[0].origin, ReleaseOrigin::GitHub);
+        assert_eq!(
+            sources[0].url,
+            format!("https://github.com/GCWing/BitFun/releases/download/v1.2.3/{filename}")
+        );
+        assert_eq!(sources[1].origin, ReleaseOrigin::OpenBitFun);
+        assert_eq!(
+            sources[1].url,
+            format!("https://openbitfun.com/release/1.2.3/{filename}")
+        );
+    }
+
+    #[test]
+    fn dispatch_cli_uses_the_mirror_only_below_the_github_speed_floor() {
+        let mut slow = test_release(true).sources;
+        order_release_sources_for_speed(&mut slow, GITHUB_HEALTHY_THROUGHPUT - 1);
+        assert_eq!(slow[0].origin, ReleaseOrigin::OpenBitFun);
+
+        let mut healthy = test_release(true).sources;
+        healthy.swap(0, 1);
+        order_release_sources_for_speed(&mut healthy, GITHUB_HEALTHY_THROUGHPUT);
+        assert_eq!(healthy[0].origin, ReleaseOrigin::GitHub);
+    }
+
+    #[test]
+    fn target_download_script_contains_the_same_speed_policy_and_both_sources() {
+        let script = target_download_script(
+            RemoteDownloader::Curl,
+            RemoteDigestTool::Sha256Sum,
+            "/tmp/bitfun.tar.gz",
+            "https://github.example/bitfun.tar.gz",
+            "https://mirror.example/bitfun.tar.gz",
+            &"a".repeat(64),
+        );
+        assert!(script.contains("524288"));
+        assert!(script.contains("GITHUB_SPEED"));
+        assert!(script.contains("https://github.example/bitfun.tar.gz"));
+        assert!(script.contains("https://mirror.example/bitfun.tar.gz"));
     }
 
     #[test]
@@ -2982,6 +3546,7 @@ mod tests {
                 digest_tool,
                 &archive.to_string_lossy(),
                 &url,
+                "",
                 sha,
             );
             std::process::Command::new("bash")
@@ -3289,6 +3854,7 @@ mod tests {
                 RemoteDigestTool::Sha256Sum,
                 "/home/user/.bitfun/dispatch/install/archive.tar.gz",
                 "https://example.invalid/archive.tar.gz",
+                "https://openbitfun.example.invalid/archive.tar.gz",
                 &"a".repeat(64),
             ),
             target_download_script(
@@ -3296,6 +3862,7 @@ mod tests {
                 RemoteDigestTool::Shasum,
                 "/home/user/.bitfun/dispatch/install/archive.tar.gz",
                 "https://example.invalid/archive.tar.gz",
+                "https://openbitfun.example.invalid/archive.tar.gz",
                 &"a".repeat(64),
             ),
             install_poll_script(17),

@@ -632,6 +632,7 @@ pub fn create_main_window(
     match builder.build() {
         Ok(window) => {
             crate::restore_main_window_state(&window);
+            crate::webview_recovery::install(&window);
             startup_trace.record_elapsed_step("native_window", "webview_build", build_started_at);
             debug!(
                 "Main window creation step completed: step=build url_kind={} duration_ms={} total_duration_ms={}",

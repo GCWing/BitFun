@@ -16,6 +16,8 @@
 #   BITFUN_RELAY_IMAGE_DIGEST   sha256:<64 lowercase hex> (required by Desktop)
 #   BITFUN_RELAY_IMAGE_TAG      manual-script fallback tag (default release tag)
 #   BITFUN_IMAGE_PULL_TIMEOUT   per-route pull timeout in seconds (default 900)
+#   BITFUN_GITHUB_PROBE_WINDOW  GitHub throughput probe window (default 10s)
+#   BITFUN_GITHUB_HEALTHY_BPS   keep GitHub first at/above this rate (default 512 KiB/s)
 #   BITFUN_MIRROR_MODE          cn | global
 #   RELAY_PORT                  published/container port (default 9700)
 #   RELAY_HOST_BIND_IP          host bind address (default 0.0.0.0)
@@ -23,6 +25,9 @@
 BITFUN_RELAY_IMAGE="${BITFUN_RELAY_IMAGE:-ghcr.io/gcwing/bitfun-relay-server}"
 BITFUN_RELAY_IMAGE_TAG="${BITFUN_RELAY_IMAGE_TAG:-${BITFUN_RELEASE_TAG:-latest}}"
 BITFUN_IMAGE_PULL_TIMEOUT="${BITFUN_IMAGE_PULL_TIMEOUT:-900}"
+BITFUN_GITHUB_PROBE_WINDOW="${BITFUN_GITHUB_PROBE_WINDOW:-10}"
+BITFUN_GITHUB_HEALTHY_BPS="${BITFUN_GITHUB_HEALTHY_BPS:-524288}"
+BITFUN_GITHUB_RELEASE_BASE="${BITFUN_GITHUB_RELEASE_BASE:-https://github.com/GCWing/BitFun/releases}"
 
 # The embedded Desktop helpers call Docker through bitfun_docker; the manual
 # script exposes docker_cmd. Keep this file independent of either caller.
@@ -87,24 +92,98 @@ bitfun_relay_image_ref() {
   fi
 }
 
-# Pull through the fastest likely route for the selected region. The digest is
-# identical across registry proxies, so changing transport does not change the
-# image Desktop authenticated.
+bitfun_relay_archive_target() {
+  case "$1" in
+    linux/amd64) echo x86_64-unknown-linux-gnu ;;
+    linux/arm64) echo aarch64-unknown-linux-gnu ;;
+    *) return 1 ;;
+  esac
+}
+
+# Measure the GitHub release CDN that carries the exact Relay binary bytes.
+# Relay itself stays a digest-pinned OCI deployment; this byte probe decides
+# whether official GHCR or its accelerators are attempted first.
+bitfun_probe_github_throughput() {
+  local platform="$1" target tag url metrics speed
+  target="$(bitfun_relay_archive_target "$platform")" || {
+    echo 0
+    return 0
+  }
+  tag="${BITFUN_RELEASE_TAG:-latest}"
+  if [ "$tag" = latest ]; then
+    url="${BITFUN_GITHUB_RELEASE_BASE}/latest/download/bitfun-relay-server-${target}.tar.gz"
+  else
+    url="${BITFUN_GITHUB_RELEASE_BASE}/download/${tag}/bitfun-relay-server-${target}.tar.gz"
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    echo ">>> GitHub throughput probe skipped: curl is unavailable" >&2
+    echo 0
+    return 0
+  fi
+  case "$BITFUN_GITHUB_PROBE_WINDOW" in
+    '' | *[!0-9]*) BITFUN_GITHUB_PROBE_WINDOW=10 ;;
+  esac
+  case "$BITFUN_GITHUB_HEALTHY_BPS" in
+    '' | *[!0-9]*) BITFUN_GITHUB_HEALTHY_BPS=524288 ;;
+  esac
+  metrics="$(curl -LsS \
+    --range 0-4194303 \
+    --connect-timeout 5 \
+    --max-time "$BITFUN_GITHUB_PROBE_WINDOW" \
+    -o /dev/null \
+    -w '%{http_code} %{size_download} %{time_total}' \
+    "$url" 2>/dev/null || true)"
+  speed="$(printf '%s\n' "$metrics" | awk '
+    ($1 == 200 || $1 == 206) && $3 > 0 { printf "%.0f\n", $2 / $3; ok=1 }
+    END { if (!ok) print 0 }
+  ')"
+  case "$speed" in
+    '' | *[!0-9]*) speed=0 ;;
+  esac
+  echo ">>> GitHub Relay probe: $((speed / 1024)) KiB/s (healthy floor: $((BITFUN_GITHUB_HEALTHY_BPS / 1024)) KiB/s)" >&2
+  echo "$speed"
+}
+
+# GitHub is the default route. In auto mode, a measured GitHub rate below
+# 512 KiB/s moves the registry accelerators first. Explicit cn/global choices
+# remain authoritative. The digest is identical across routes, so transport
+# selection never changes the image Desktop authenticated.
 bitfun_pull_relay_image() {
   local platform="$1" routes route_name repository image_ref selected=""
+  local requested_mode github_speed mirror_first=0
   local pull_timeout="${BITFUN_IMAGE_PULL_TIMEOUT:-900}"
   case "$pull_timeout" in
     '' | *[!0-9]*) pull_timeout=900 ;;
   esac
 
   routes="$(mktemp)"
-  if [ "${BITFUN_MIRROR_MODE:-global}" = "cn" ]; then
+  requested_mode="${BITFUN_MIRROR_REQUESTED_MODE:-${BITFUN_MIRROR_MODE:-auto}}"
+  case "$BITFUN_GITHUB_HEALTHY_BPS" in
+    '' | *[!0-9]*) BITFUN_GITHUB_HEALTHY_BPS=524288 ;;
+  esac
+  case "$requested_mode" in
+    cn) mirror_first=1 ;;
+    global) mirror_first=0 ;;
+    *)
+      github_speed="$(bitfun_probe_github_throughput "$platform")"
+      if [ "$github_speed" -lt "$BITFUN_GITHUB_HEALTHY_BPS" ]; then
+        mirror_first=1
+      fi
+      ;;
+  esac
+
+  if [ "$requested_mode" = global ]; then
+    printf '%s\t%s\n' "official GHCR" "$BITFUN_RELAY_IMAGE" >"$routes"
+  elif [ "$mirror_first" = "1" ]; then
     printf '%s\t%s\n' \
       "NJU GHCR accelerator" "ghcr.nju.edu.cn/${BITFUN_RELAY_IMAGE#ghcr.io/}" \
       "DaoCloud GHCR accelerator" "m.daocloud.io/${BITFUN_RELAY_IMAGE}" \
       "official GHCR fallback" "$BITFUN_RELAY_IMAGE" >"$routes"
   else
-    printf '%s\t%s\n' "official GHCR" "$BITFUN_RELAY_IMAGE" >"$routes"
+    printf '%s\t%s\n' \
+      "official GHCR" "$BITFUN_RELAY_IMAGE" \
+      "NJU GHCR accelerator fallback" "ghcr.nju.edu.cn/${BITFUN_RELAY_IMAGE#ghcr.io/}" \
+      "DaoCloud GHCR accelerator fallback" "m.daocloud.io/${BITFUN_RELAY_IMAGE}" >"$routes"
   fi
 
   while IFS=$'\t' read -r route_name repository; do

@@ -2183,22 +2183,39 @@ impl ExecutionEngine {
         let ai_client_factory = get_global_ai_client_factory().await.map_err(|e| {
             BitFunError::AIClient(format!("Failed to get AI client factory: {}", e))
         })?;
+        let reasoning_preset = match self
+            .session_manager
+            .reconcile_session_reasoning_preset_for_turn(&session.session_id, "turn_resolution")
+            .await
+        {
+            Ok(reasoning_preset) => reasoning_preset,
+            Err(error) => {
+                warn!(
+                    "Failed to persist reasoning preset fallback; using Auto for this turn: session_id={}, error={}",
+                    session.session_id, error
+                );
+                None
+            }
+        };
         let ai_client_result = if matches!(
             session.config.model_binding_policy,
             SessionModelBindingPolicy::ApprovedImmutable
         ) {
             ai_client_factory
-                .get_client_by_approved_binding(
+                .get_client_by_approved_binding_with_reasoning_preset(
                     &model_id,
                     session
                         .config
                         .model_binding_fingerprint
                         .as_deref()
                         .unwrap_or_default(),
+                    reasoning_preset.as_deref(),
                 )
                 .await
         } else {
-            ai_client_factory.get_client_resolved(&model_id).await
+            ai_client_factory
+                .get_client_resolved_with_reasoning_preset(&model_id, reasoning_preset.as_deref())
+                .await
         };
         let ai_client = ai_client_result.map_err(|e| {
             BitFunError::AIClient(format!(
@@ -3068,22 +3085,39 @@ impl ExecutionEngine {
         })?;
 
         // Get AI client by model ID
+        let reasoning_preset = match self
+            .session_manager
+            .reconcile_session_reasoning_preset_for_turn(&session.session_id, "turn_resolution")
+            .await
+        {
+            Ok(reasoning_preset) => reasoning_preset,
+            Err(error) => {
+                warn!(
+                    "Failed to persist reasoning preset fallback; using Auto for this turn: session_id={}, error={}",
+                    session.session_id, error
+                );
+                None
+            }
+        };
         let ai_client_result = if matches!(
             session.config.model_binding_policy,
             SessionModelBindingPolicy::ApprovedImmutable
         ) {
             ai_client_factory
-                .get_client_by_approved_binding(
+                .get_client_by_approved_binding_with_reasoning_preset(
                     &model_id,
                     session
                         .config
                         .model_binding_fingerprint
                         .as_deref()
                         .unwrap_or_default(),
+                    reasoning_preset.as_deref(),
                 )
                 .await
         } else {
-            ai_client_factory.get_client_resolved(&model_id).await
+            ai_client_factory
+                .get_client_resolved_with_reasoning_preset(&model_id, reasoning_preset.as_deref())
+                .await
         };
         let ai_client = ai_client_result.map_err(|e| {
             BitFunError::AIClient(format!(

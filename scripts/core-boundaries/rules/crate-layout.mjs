@@ -31,6 +31,8 @@ export const crateLayoutRules = [
 
   { crateName: 'acp', layer: 'interfaces', path: 'src/crates/interfaces/acp' },
   { crateName: 'app-server', layer: 'interfaces', path: 'src/crates/interfaces/app-server' },
+  { crateName: 'app-server-client', layer: 'interfaces', path: 'src/crates/interfaces/app-server-client' },
+  { crateName: 'app-server-protocol', layer: 'interfaces', path: 'src/crates/interfaces/app-server-protocol' },
   { crateName: 'sdk-host', layer: 'interfaces', path: 'src/crates/interfaces/sdk-host' },
   { crateName: 'agent-runtime-ipc', layer: 'adapters', path: 'src/crates/adapters/agent-runtime-ipc' },
   { crateName: 'ai-adapters', layer: 'adapters', path: 'src/crates/adapters/ai-adapters' },

@@ -81,6 +81,8 @@ export interface DispatchProtocolProbe {
   capabilities: string[];
   modelConfigured: boolean;
   availableModels: string[];
+  /** Canonical capability projection produced by the target runtime. */
+  modelCatalog: import('@/infrastructure/api/service-api/AIApi').AIModelCatalog;
   defaultModel?: string;
   modelDiagnostic?: string;
   workspace?: DispatchWorkspaceProbe;
@@ -138,6 +140,11 @@ export interface DispatchInstallPoll {
   cursor: number;
   output: string;
   status: 'running' | 'succeeded' | 'failed';
+}
+
+export interface DispatchProvisionTargetResult {
+  accountStatus: 'synced' | 'skipped_not_logged_in';
+  daemonInstalled: boolean;
 }
 
 export type DispatchEvent =
@@ -217,6 +224,7 @@ export interface DispatchJobListEntry {
   agentType?: string;
   approvalPolicy?: DispatchApprovalPolicy;
   model?: string;
+  reasoningPreset?: string;
 }
 
 export interface OutboundDispatchRecord {
@@ -242,6 +250,7 @@ export interface OutboundDispatchRecord {
   agentType?: string;
   approvalPolicy?: DispatchApprovalPolicy;
   model?: string;
+  reasoningPreset?: string;
   lastCursor: number;
   lastState: DispatchJobState;
   createdAt: string;
@@ -285,6 +294,7 @@ export interface DispatchSelection {
   baseRef: string;
   approvalPolicy: DispatchApprovalPolicy;
   model?: string;
+  modelCatalog?: import('@/infrastructure/api/service-api/AIApi').AIModelCatalog;
   availableModels?: string[];
   defaultModel?: string;
 }

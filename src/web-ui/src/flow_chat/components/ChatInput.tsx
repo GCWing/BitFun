@@ -109,6 +109,7 @@ import { PendingQueuePanel } from './PendingQueuePanel';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import { openBtwSessionInAuxPane, selectActiveBtwSessionTab } from '../services/btwSessionPane';
 import { resolveSessionRelationship } from '../utils/sessionMetadata';
+import { isProjectedSessionEmpty } from '../utils/flowChatTurnIdentity';
 import {
   DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH,
   isChatInputActionVisibleForTarget,
@@ -1477,7 +1478,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [recommendationContext, setRecommendationContext] = React.useState<{
     workspacePath?: string;
     sessionId?: string;
-    turnIndex?: number;
+    turnId?: string;
     modifiedFiles?: string[];
   } | null>(null);
   
@@ -2131,6 +2132,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           // Undefined is intentional: the target's probed default model wins
           // unless a future preflight selector records an explicit choice.
           dispatchModel: selection.model,
+          dispatchModelCatalog: selection.modelCatalog,
           dispatchAvailableModels: selection.availableModels,
           dispatchDefaultModel: selection.defaultModel,
         },
@@ -2142,6 +2144,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [effectiveSendAgentType, t, workspace]);
 
+  const effectiveTargetSessionHasTurns = effectiveTargetSession
+    ? !isProjectedSessionEmpty(effectiveTargetSession)
+    : false;
   const dispatchControl = useMemo(() => {
     if (
       registration ||
@@ -2173,7 +2178,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       sourceWorkspacePath: workspacePath || undefined,
       locked:
         isNonLocalDispatchTarget(target) ||
-        (effectiveTargetSession?.dialogTurns.length ?? 0) > 0 ||
+        effectiveTargetSessionHasTurns ||
         !!derivedState?.isProcessing,
       onSelectTarget: handleSelectDispatchTarget,
       syncableJobId,
@@ -2186,7 +2191,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     effectiveTargetSession?.config.dispatchJobId,
     effectiveTargetSession?.config.dispatchJobState,
     effectiveTargetSession?.config.dispatchTarget,
-    effectiveTargetSession?.dialogTurns.length,
+    effectiveTargetSessionHasTurns,
     dispatchObserverJob?.baselineWorktreeMissing,
     dispatchObserverJob?.baselineWorktreePath,
     dispatchObserverJob?.branch,
@@ -2214,12 +2219,24 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       models: effectiveTargetSession.config.dispatchAvailableModels ?? [],
       selectedModelId: effectiveTargetSession.config.dispatchModel,
       defaultModelId: effectiveTargetSession.config.dispatchDefaultModel,
+      reasoningCatalog: effectiveTargetSession.config.dispatchModelCatalog,
+      selectedReasoningPreset: effectiveTargetSession.config.dispatchReasoningPreset,
       providerLabel,
       disabled: caps.submissionOptionsLocked,
       onSelect: (modelId: string) => {
         FlowChatStore.getInstance().updateSessionDispatchModel(sessionId, modelId);
         if (jobId) {
           dispatchJobStore.getState().updateModel(jobId, modelId);
+        }
+      },
+      onSelectReasoningPreset: (presetId: string | null) => {
+        const normalizedPreset = presetId?.trim() || 'auto';
+        FlowChatStore.getInstance().updateSessionDispatchReasoningPreset(
+          sessionId,
+          normalizedPreset,
+        );
+        if (jobId) {
+          dispatchJobStore.getState().updateReasoningPreset(jobId, normalizedPreset);
         }
       },
     };
@@ -2645,7 +2662,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         setRecommendationContext({
           workspacePath: sessionBoundWorkspacePath,
           sessionId: effectiveTargetSessionId,
-          turnIndex: lastTurn.backendTurnIndex ?? session.dialogTurns.length - 1,
+          turnId: lastTurn.id,
           modifiedFiles,
         });
       }

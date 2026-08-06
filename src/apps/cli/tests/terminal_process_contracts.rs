@@ -71,6 +71,7 @@ fn startup_bracketed_paste_attaches_an_image_path_without_rendering_the_path() {
         Duration::from_secs(30),
         "the image draft did not reach the model request",
     );
+    process.expect_idle_after_turn(1, Duration::from_secs(30));
     process.write(&[0x03]);
     let (status, output) = process.finish(Duration::from_secs(15));
     assert!(
@@ -275,6 +276,7 @@ fn external_editor_restores_the_tui_and_applies_the_edited_draft() {
         Duration::from_secs(30),
         "initial turn did not finish before /editor",
     );
+    process.expect_idle_after_turn(1, Duration::from_secs(30));
 
     process.write(b"/editor");
     process.expect_output(
@@ -288,8 +290,9 @@ fn external_editor_restores_the_tui_and_applies_the_edited_draft() {
         Duration::from_secs(30),
         "edited draft was not rendered after the editor closed",
     );
+    // Ratatui can emit each unchanged-separated word at a different cursor position.
     process.expect_output(
-        "Draft updated from external editor",
+        "updated",
         Duration::from_secs(15),
         "editor completion status was not rendered",
     );
@@ -326,7 +329,7 @@ fn export_dialog_writes_markdown_under_the_local_cli_directory() {
     process.expect_output("\x1b[?2004h", Duration::from_secs(30), "TUI did not start");
     process.write(b"export transcript contract");
     process.expect_output(
-        "transcript contract",
+        "script contract",
         Duration::from_secs(15),
         "startup prompt was not rendered",
     );
@@ -336,6 +339,7 @@ fn export_dialog_writes_markdown_under_the_local_cli_directory() {
         Duration::from_secs(30),
         "initial turn did not finish before /export",
     );
+    process.expect_idle_after_turn(1, Duration::from_secs(30));
 
     process.write(b"/export");
     process.expect_output(
@@ -344,8 +348,9 @@ fn export_dialog_writes_markdown_under_the_local_cli_directory() {
         "export command was not rendered",
     );
     process.write(b"\r");
+    // The title can be split by Ratatui's cursor movement; the file row is contiguous.
     process.expect_output(
-        "Export session",
+        "File: session-",
         Duration::from_secs(15),
         "export dialog did not open",
     );
@@ -695,6 +700,24 @@ impl PtyProcess {
         let output = self.output();
         self.terminate();
         panic!("{context}; output:\n{output}");
+    }
+
+    /// Waits for the status bar to fall back to its idle summary.
+    ///
+    /// `STREAM_COMPLETED_MARKER` is assistant text, so it lands in the transcript while
+    /// `is_processing` is still set. Commands declared `ActionAvailability::Idle` — `/export`
+    /// and `/editor` among them — are refused with a status message rather than opened during
+    /// that window, so gating on the marker alone races the end of the turn. The status bar
+    /// paints the "Thinking..." spinner for as long as `is_processing` holds and only renders
+    /// `Messages: … | Tool calls: …` once it clears, which makes that summary the first point
+    /// where those commands are actually accepted. Match only the idle-only prefix because
+    /// Ratatui can insert cursor movement between unchanged spans later in the status line.
+    fn expect_idle_after_turn(&mut self, messages: usize, timeout: Duration) {
+        self.expect_output(
+            &format!("Messages: {messages}"),
+            timeout,
+            "turn did not return to idle",
+        );
     }
 
     fn resize(&self, size: PtySize) {

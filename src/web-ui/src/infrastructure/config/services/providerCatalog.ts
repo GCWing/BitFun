@@ -1,101 +1,18 @@
+import { BUILTIN_PROVIDER_TEMPLATES } from './builtinProviderCatalog';
+
 export interface ProviderUrlCatalogItem {
   id: string;
   baseUrl: string;
   baseUrlOptions?: string[];
 }
 
-export const PROVIDER_URL_CATALOG: ProviderUrlCatalogItem[] = [
-  {
-    id: 'openbitfun',
-    baseUrl: 'https://api.openbitfun.com',
-  },
-  {
-    id: 'gemini',
-    baseUrl: 'https://generativelanguage.googleapis.com',
-  },
-  {
-    id: 'anthropic',
-    baseUrl: 'https://api.anthropic.com',
-  },
-  {
-    id: 'minimax',
-    baseUrl: 'https://api.minimaxi.com/anthropic',
-    baseUrlOptions: [
-      'https://api.minimaxi.com/anthropic',
-      'https://api.minimaxi.com/v1',
-      'https://api.minimax.io/anthropic',
-      'https://api.minimax.io/v1',
-    ],
-  },
-  {
-    id: 'moonshot',
-    baseUrl: 'https://api.moonshot.cn/v1',
-    baseUrlOptions: [
-      'https://api.moonshot.cn/v1',
-      'https://api.moonshot.cn/anthropic',
-      'https://api.moonshot.ai/v1',
-      'https://api.moonshot.ai/anthropic',
-      'https://api.kimi.com/coding',
-    ],
-  },
-  {
-    id: 'deepseek',
-    baseUrl: 'https://api.deepseek.com/v1',
-    baseUrlOptions: [
-      'https://api.deepseek.com/v1',
-      'https://api.deepseek.com/anthropic',
-    ],
-  },
-  {
-    id: 'zhipu',
-    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-    baseUrlOptions: [
-      'https://open.bigmodel.cn/api/paas/v4',
-      'https://open.bigmodel.cn/api/anthropic',
-      'https://open.bigmodel.cn/api/coding/paas/v4',
-      'https://api.z.ai/api/paas/v4',
-      'https://api.z.ai/api/anthropic',
-      'https://api.z.ai/api/coding/paas/v4',
-    ],
-  },
-  {
-    id: 'qwen',
-    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    baseUrlOptions: [
-      'https://dashscope.aliyuncs.com/compatible-mode/v1',
-      'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
-      'https://coding.dashscope.aliyuncs.com/v1',
-      'https://coding.dashscope.aliyuncs.com/apps/anthropic',
-      'https://coding-intl.dashscope.aliyuncs.com/v1',
-    ],
-  },
-  {
-    id: 'volcengine',
-    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
-    baseUrlOptions: [
-      'https://ark.cn-beijing.volces.com/api/v3',
-      'https://ark.cn-beijing.volces.com/api/coding/v3',
-      'https://ark.ap-southeast.bytepluses.com/api/v3',
-    ],
-  },
-  {
-    id: 'siliconflow',
-    baseUrl: 'https://api.siliconflow.cn/v1',
-    baseUrlOptions: [
-      'https://api.siliconflow.cn/v1',
-      'https://api.siliconflow.cn/v1/messages',
-      'https://api.siliconflow.com/v1',
-    ],
-  },
-  {
-    id: 'nvidia',
-    baseUrl: 'https://integrate.api.nvidia.com/v1',
-  },
-  {
-    id: 'openrouter',
-    baseUrl: 'https://openrouter.ai/api/v1',
-  },
-];
+export const PROVIDER_URL_CATALOG: ProviderUrlCatalogItem[] = Object.values(
+  BUILTIN_PROVIDER_TEMPLATES,
+).map(template => ({
+  id: template.id,
+  baseUrl: template.baseUrl,
+  baseUrlOptions: template.baseUrlOptions?.map(option => option.url),
+}));
 
 export function normalizeProviderBaseUrl(url: string): string {
   let normalized = url.trim().replace(/#$/, '').replace(/\/+$/, '');

@@ -2,9 +2,7 @@ fn session_update_blocks_typed_submission(pending_for_current_session: bool, inp
     pending_for_current_session && !input.trim().starts_with('/')
 }
 
-fn steering_unsupported_reason(
-    draft: &crate::ui::composer::ComposerDraft,
-) -> Option<&'static str> {
+fn steering_unsupported_reason(draft: &crate::ui::composer::ComposerDraft) -> Option<&'static str> {
     if draft.has_images() {
         return Some(
             "Images cannot steer an active turn yet. Wait for it to finish to send this draft.",
@@ -1054,7 +1052,14 @@ impl ChatMode {
                     "Theme selector: ↑↓ preview, Enter apply, Esc cancel".to_string(),
                 ));
             }
-            ActionHandler::AddModel => chat_view.show_provider_selector(),
+            ActionHandler::AddModel => {
+                let agent = self.agent.clone();
+                match tokio::task::block_in_place(|| rt_handle.block_on(agent.model_catalog())) {
+                    Ok(catalog) => chat_view.show_provider_selector(catalog.provider_catalog),
+                    Err(error) => chat_view
+                        .set_status(Some(format!("Failed to load model providers: {error}"))),
+                }
+            }
             ActionHandler::NewSession => {
                 return Ok(Some(ChatExitReason::NewSession));
             }
@@ -1065,7 +1070,9 @@ impl ChatMode {
                 self.show_session_lineage(chat_view, chat_state, rt_handle);
             }
             ActionHandler::Timeline => {
-                let points = self.displayed_chat_state(chat_state).session_timeline_points();
+                let points = self
+                    .displayed_chat_state(chat_state)
+                    .session_timeline_points();
                 if points.is_empty() {
                     chat_view.set_status(Some(
                         "No user messages are available in the current timeline".to_string(),
@@ -1660,10 +1667,8 @@ impl ChatMode {
     ) {
         let agent = self.agent.clone();
         let result = tokio::task::block_in_place(|| {
-            rt_handle.block_on(agent.steer_current_turn(
-                draft.text.clone(),
-                Some(draft.text.clone()),
-            ))
+            rt_handle
+                .block_on(agent.steer_current_turn(draft.text.clone(), Some(draft.text.clone())))
         });
         match result {
             Ok(steering_id) => {

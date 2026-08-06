@@ -123,6 +123,7 @@ function isProcMacroPackage(pkg) {
 
 const SERVICES_INTEGRATIONS_TOKIO_FEATURES = new Map([
   ['announcement', ['fs', 'sync']],
+  ['models-dev', ['fs', 'sync', 'time']],
   ['browser-control', ['time']],
   ['canvas-runtime', ['fs']],
   ['debug-log', ['rt']],
@@ -563,6 +564,7 @@ export function findServicesIntegrationsReqwestFeatureViolations(pkg) {
         reference !== 'reqwest'
         && reference !== 'dep:reqwest'
         && reference !== 'reqwest/rustls'
+        && !(featureName === 'models-dev' && reference === 'reqwest/system-proxy')
       ) {
         violations.push({
           path: pkg.manifest_path,

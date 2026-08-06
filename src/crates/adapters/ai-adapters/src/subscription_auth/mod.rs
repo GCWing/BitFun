@@ -1,7 +1,7 @@
 //! In-app subscription authentication.
 //!
 //! Lets BitFun sign in to another product's subscription (Codex/ChatGPT,
-//! Antigravity/Google, OpenCode Zen) with an OpenCode-style in-app OAuth flow,
+//! Antigravity/Google, OpenCode) with an OpenCode-style in-app OAuth flow,
 //! and use the resulting tokens to authenticate AI requests. Secret material
 //! is stored in the operating-system credential vault; the local JSON file
 //! contains non-secret account metadata only.
@@ -66,7 +66,7 @@ impl SubscriptionProvider {
         match self {
             Self::Codex => "Codex (ChatGPT)",
             Self::Antigravity => "Antigravity (Google)",
-            Self::Opencode => "OpenCode Zen",
+            Self::Opencode => "OpenCode",
         }
         .to_string()
     }
@@ -78,6 +78,40 @@ impl SubscriptionProvider {
             Self::Opencode => opencode::suggested(),
         }
     }
+}
+
+/// Billing/API product selected for an OpenCode-backed model.
+///
+/// The OAuth identity is shared by both plans; this value only chooses the
+/// trusted API namespace used for model discovery and inference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenCodePlan {
+    Zen,
+    Go,
+}
+
+/// One model exposed by an OpenCode plan + wire-format offering.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SubscriptionOfferingModel {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+}
+
+/// A homogeneous group of models that share one OpenCode plan and wire format.
+///
+/// OpenCode's catalog mixes Chat Completions, Responses, and Messages models
+/// within the same plan. Keeping those groups separate lets the UI create a
+/// model configuration whose protocol and endpoint are always paired.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SubscriptionApiOffering {
+    pub plan: OpenCodePlan,
+    pub format: String,
+    pub base_url: String,
+    pub suggested_model: String,
+    #[serde(default)]
+    pub models: Vec<SubscriptionOfferingModel>,
 }
 
 /// A subscription account entry surfaced to the UI.
@@ -100,6 +134,10 @@ pub struct SubscriptionAccount {
     pub suggested_format: String,
     pub suggested_base_url: String,
     pub suggested_model: String,
+    /// OpenCode plan/format groups available through this single account.
+    /// Empty for subscription providers that expose only one fixed endpoint.
+    #[serde(default)]
+    pub api_offerings: Vec<SubscriptionApiOffering>,
 }
 
 /// Structured sign-out result. Metadata removal determines connection state;
@@ -275,9 +313,9 @@ fn build_account(
     vault_unavailable: bool,
 ) -> SubscriptionAccount {
     let (format, base_url, model) = provider.suggested();
-    let (connected, account, expires_at) = match entry {
-        None => (false, None, None),
-        Some(StoredCredential::Api { .. }) => (true, None, None),
+    let (connected, account, expires_at, metadata) = match entry {
+        None => (false, None, None, None),
+        Some(StoredCredential::Api { metadata, .. }) => (true, None, None, metadata.as_ref()),
         Some(StoredCredential::Oauth {
             expires,
             account_id,
@@ -290,8 +328,13 @@ fn build_account(
                 .and_then(|value| value.as_str())
                 .map(str::to_string);
             let account = email.or_else(|| account_id.clone());
-            (true, account, Some(expires / 1000))
+            (true, account, Some(expires / 1000), metadata.as_ref())
         }
+    };
+    let api_offerings = if connected && provider == SubscriptionProvider::Opencode {
+        opencode::offerings_from_metadata(metadata)
+    } else {
+        Vec::new()
     };
     SubscriptionAccount {
         provider,
@@ -304,6 +347,7 @@ fn build_account(
         suggested_format: format.to_string(),
         suggested_base_url: base_url.to_string(),
         suggested_model: model.to_string(),
+        api_offerings,
     }
 }
 
@@ -653,9 +697,21 @@ pub async fn resolve(provider: SubscriptionProvider) -> Result<ResolvedCredentia
     }
 }
 
+/// Resolves an OpenCode credential for a concrete plan and request format.
+/// The adapter owns the endpoint mapping so an OAuth token can never be sent
+/// to an arbitrary URL supplied by model configuration.
+pub async fn resolve_opencode(plan: OpenCodePlan, format: &str) -> Result<ResolvedCredential> {
+    opencode::resolve_for(plan, format).await
+}
+
 /// Forces a resolve (which refreshes and saves), then returns the account entry.
 pub async fn refresh_account(provider: SubscriptionProvider) -> Result<SubscriptionAccount> {
-    resolve(provider).await?;
+    match provider {
+        SubscriptionProvider::Opencode => opencode::refresh_profile().await?,
+        _ => {
+            resolve(provider).await?;
+        }
+    }
     Ok(account_snapshot(provider).await)
 }
 

@@ -25,24 +25,32 @@ const OPENBITFUN_UPDATER_ENDPOINT: &str = "https://openbitfun.com/release/latest
 /// `src/apps/relay-server/release-download.sh`).
 const PROBE_WINDOW: std::time::Duration = std::time::Duration::from_secs(10);
 const PROBE_BYTES: u64 = 4 * 1024 * 1024;
-const HEALTHY_THROUGHPUT: u64 = 128 * 1024;
+const HEALTHY_THROUGHPUT: u64 = 512 * 1024;
 
-/// Order the updater endpoints fastest-first.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct UpdaterManifestInfo {
+    version: String,
+    package_url: String,
+}
+
+/// Keep GitHub first while its package clears the healthy floor. A slow or
+/// unreachable GitHub package moves the mirror first only when the mirror has
+/// synchronized the exact same latest version; a stale mirror must never hide
+/// a new release.
 ///
 /// Tauri walks `endpoints` and stops at the first that returns a usable
 /// manifest, then downloads from the URL *inside that manifest*. `latest.json`
 /// is ~2 KB, so a reachable-but-crawling GitHub always wins the race to answer
 /// and then pins an 80-160 MB download to itself — the mirror is only ever tried
-/// when GitHub errors outright. Probing the actual package each origin would
-/// serve, and ordering endpoints by that, makes the slow-link case fall to
-/// whichever origin can actually deliver.
+/// when GitHub errors outright. We therefore probe the actual GitHub package.
 ///
 /// Deliberately still routed through `Update::download`: minisign verification
 /// lives inside it, so fetching bytes by hand and calling `Update::install`
 /// would silently skip signature checking.
-async fn endpoints_fastest_first() -> Vec<tauri::Url> {
+async fn updater_endpoints_by_policy() -> Vec<tauri::Url> {
     let client = match reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(5))
+        .read_timeout(PROBE_WINDOW)
         .build()
     {
         Ok(client) => client,
@@ -54,32 +62,36 @@ async fn endpoints_fastest_first() -> Vec<tauri::Url> {
     // tells us nothing about an 80-160 MB transfer. Each manifest names its own
     // download URL, which is exactly the thing worth measuring.
     let platform = updater_platform_key();
-    let mut ranked = Vec::new();
-    for endpoint in [GITHUB_UPDATER_ENDPOINT, OPENBITFUN_UPDATER_ENDPOINT] {
-        let Ok(url) = endpoint.parse::<tauri::Url>() else {
-            continue;
-        };
-        let speed = match manifest_package_url(&client, endpoint, &platform).await {
-            Some(package) => probe_endpoint_throughput(&client, &package).await,
-            // Unreachable or no build for this platform: rank last, but still
-            // offer it — Tauri may succeed where a ranged probe did not.
-            None => 0,
-        };
-        log::debug!("Desktop updater probe: {} B/s via {}", speed, endpoint);
-        ranked.push((url, speed));
-    }
-    if ranked.is_empty() {
-        return default_endpoints();
-    }
-    ranked.sort_by(|left, right| right.1.cmp(&left.1));
-    if ranked[0].1 < HEALTHY_THROUGHPUT {
+    let (github_manifest, mirror_manifest) = tokio::join!(
+        fetch_updater_manifest(&client, GITHUB_UPDATER_ENDPOINT, &platform),
+        fetch_updater_manifest(&client, OPENBITFUN_UPDATER_ENDPOINT, &platform),
+    );
+    let Some(github_manifest) = github_manifest else {
+        log::info!("GitHub updater metadata is unavailable; trying the OpenBitFun mirror first");
+        return mirror_first_endpoints();
+    };
+    let github_speed = probe_endpoint_throughput(&client, &github_manifest.package_url).await;
+    log::debug!(
+        "Desktop updater GitHub probe: {} B/s from {}",
+        github_speed,
+        github_manifest.package_url
+    );
+    if prefer_mirror(&github_manifest, mirror_manifest.as_ref(), github_speed) {
         log::info!(
-            "Fastest updater origin is {} KB/s, under the {} KB/s bar; the download will be slow.",
-            ranked[0].1 / 1024,
+            "GitHub updater speed is {} KiB/s, under the {} KiB/s bar; trying the synchronized OpenBitFun mirror first.",
+            github_speed / 1024,
             HEALTHY_THROUGHPUT / 1024
         );
+        return mirror_first_endpoints();
     }
-    ranked.into_iter().map(|(url, _)| url).collect()
+    if github_speed < HEALTHY_THROUGHPUT {
+        log::info!(
+            "GitHub updater speed is {} KiB/s but the mirror has not synchronized {}; keeping GitHub first to preserve latest-version correctness.",
+            github_speed / 1024,
+            github_manifest.version
+        );
+    }
+    default_endpoints()
 }
 
 /// Tauri's `latest.json` platform key for this host, e.g. `darwin-aarch64`.
@@ -94,11 +106,11 @@ fn updater_platform_key() -> String {
 
 /// Read one updater manifest and return the download URL it advertises for this
 /// platform. Cheap: the manifest is a couple of kilobytes.
-async fn manifest_package_url(
+async fn fetch_updater_manifest(
     client: &reqwest::Client,
     endpoint: &str,
     platform: &str,
-) -> Option<String> {
+) -> Option<UpdaterManifestInfo> {
     let manifest = tokio::time::timeout(
         std::time::Duration::from_secs(10),
         client.get(endpoint).send(),
@@ -111,16 +123,37 @@ async fn manifest_package_url(
     .json::<serde_json::Value>()
     .await
     .ok()?;
-    manifest
+    let version = manifest.get("version")?.as_str()?.to_owned();
+    let package_url = manifest
         .get("platforms")?
         .get(platform)?
         .get("url")?
         .as_str()
-        .map(str::to_owned)
+        .map(str::to_owned)?;
+    Some(UpdaterManifestInfo {
+        version,
+        package_url,
+    })
+}
+
+fn prefer_mirror(
+    github: &UpdaterManifestInfo,
+    mirror: Option<&UpdaterManifestInfo>,
+    github_speed: u64,
+) -> bool {
+    github_speed < HEALTHY_THROUGHPUT
+        && mirror.is_some_and(|candidate| candidate.version == github.version)
 }
 
 fn default_endpoints() -> Vec<tauri::Url> {
     [GITHUB_UPDATER_ENDPOINT, OPENBITFUN_UPDATER_ENDPOINT]
+        .iter()
+        .filter_map(|endpoint| endpoint.parse().ok())
+        .collect()
+}
+
+fn mirror_first_endpoints() -> Vec<tauri::Url> {
+    [OPENBITFUN_UPDATER_ENDPOINT, GITHUB_UPDATER_ENDPOINT]
         .iter()
         .filter_map(|endpoint| endpoint.parse().ok())
         .collect()
@@ -166,7 +199,7 @@ async fn probe_endpoint_throughput(client: &reqwest::Client, url: &str) -> u64 {
 /// Build an updater whose endpoints are ordered by measured throughput.
 /// Falls back to the bundled configuration if the builder rejects them.
 async fn ranked_updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
-    let endpoints = endpoints_fastest_first().await;
+    let endpoints = updater_endpoints_by_policy().await;
     let builder = app.updater_builder();
     let builder = match builder.endpoints(endpoints) {
         Ok(builder) => builder,
@@ -875,6 +908,39 @@ mod tests {
             key.starts_with("darwin-"),
             "macOS must map to darwin, got {key}"
         );
+    }
+
+    #[test]
+    fn updater_uses_mirror_only_for_a_slow_github_and_the_same_release() {
+        let github = UpdaterManifestInfo {
+            version: "1.2.3".into(),
+            package_url: "https://github.example/bitfun.tar.gz".into(),
+        };
+        let synchronized_mirror = UpdaterManifestInfo {
+            version: "1.2.3".into(),
+            package_url: "https://mirror.example/bitfun.tar.gz".into(),
+        };
+        let stale_mirror = UpdaterManifestInfo {
+            version: "1.2.2".into(),
+            package_url: "https://mirror.example/old.tar.gz".into(),
+        };
+
+        assert!(prefer_mirror(
+            &github,
+            Some(&synchronized_mirror),
+            HEALTHY_THROUGHPUT - 1
+        ));
+        assert!(!prefer_mirror(
+            &github,
+            Some(&synchronized_mirror),
+            HEALTHY_THROUGHPUT
+        ));
+        assert!(!prefer_mirror(
+            &github,
+            Some(&stale_mirror),
+            HEALTHY_THROUGHPUT - 1
+        ));
+        assert!(!prefer_mirror(&github, None, HEALTHY_THROUGHPUT - 1));
     }
 
     use super::*;

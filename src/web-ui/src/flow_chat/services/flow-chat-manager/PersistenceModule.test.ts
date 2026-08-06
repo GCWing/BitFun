@@ -53,6 +53,7 @@ function createDialogTurn(status: DialogTurn['status'] = 'processing'): DialogTu
     status,
     startTime: 900,
     endTime: status === 'completed' ? 1200 : undefined,
+    storageTurnIndex: 0,
   };
 }
 
@@ -75,6 +76,7 @@ function createContext(dialogTurn: DialogTurn): any {
     lastSaveHashes: new Map(),
     turnSaveInFlight: new Map(),
     turnSavePending: new Set(),
+    deferredStorageIdentitySaves: new Set(),
     flowChatStore: {
       getState: () => ({
         sessions: new Map([[SESSION_ID, session]]),
@@ -339,5 +341,49 @@ describe('PersistenceModule', () => {
     await vi.advanceTimersByTimeAsync(500);
     await flushMicrotasks();
     expect(mockSaveSessionTurn).toHaveBeenCalledTimes(1);
+  });
+
+  it('defers partial-history saves until a storage identity is available', async () => {
+    const turn = createDialogTurn('completed');
+    delete turn.storageTurnIndex;
+    const context = createContext(turn);
+    const session = context.flowChatStore.getState().sessions.get(SESSION_ID);
+    session.isPartial = true;
+    session.totalTurnCount = 23;
+    session.dialogTurns = [turn];
+
+    await saveDialogTurnToDisk(context, SESSION_ID, TURN_ID);
+
+    expect(mockSaveSessionTurn).not.toHaveBeenCalled();
+    expect(context.deferredStorageIdentitySaves).toContain(`${SESSION_ID}:${TURN_ID}`);
+
+    turn.storageTurnIndex = 140;
+    await saveDialogTurnToDisk(context, SESSION_ID, TURN_ID);
+    expect(mockSaveSessionTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ turnIndex: 140 }),
+      expect.any(String),
+      undefined,
+      undefined,
+    );
+  });
+
+  it('uses explicit storage identity even when local history is only a tail', async () => {
+    const turn = createDialogTurn('completed');
+    turn.storageTurnIndex = 140;
+    const context = createContext(turn);
+    const session = context.flowChatStore.getState().sessions.get(SESSION_ID);
+    session.isPartial = true;
+    session.totalTurnCount = 23;
+    session.dialogTurns = [turn];
+
+    await saveDialogTurnToDisk(context, SESSION_ID, TURN_ID);
+    await flushMicrotasks();
+
+    expect(mockSaveSessionTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ turnIndex: 140 }),
+      expect.any(String),
+      undefined,
+      undefined,
+    );
   });
 });

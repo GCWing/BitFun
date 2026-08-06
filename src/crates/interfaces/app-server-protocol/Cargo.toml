@@ -1,0 +1,26 @@
+[package]
+name = "bitfun-app-server-protocol"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Behavior-light wire contracts and roles for the BitFun App Server"
+
+[lib]
+name = "bitfun_app_server_protocol"
+
+[dependencies]
+agent-client-protocol = { workspace = true }
+bitfun-events = { path = "../../contracts/events" }
+bitfun-core-types = { path = "../../contracts/core-types" }
+bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+ts-rs = { workspace = true, optional = true }
+
+[features]
+default = []
+ts = ["dep:ts-rs"]
+
+[lints]
+workspace = true

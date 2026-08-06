@@ -553,6 +553,72 @@ describe('VirtualMessageList session boundary', () => {
     expect(scroller.scrollHeight).toBeLessThan(40_000);
   });
 
+  it('does not convert Virtuoso estimate convergence into anonymous footer space', () => {
+    stateMocks.activeSession = createSessionWithTurns('session-a', ['turn-a', 'turn-b']);
+    stateMocks.virtualItems = ['turn-a', 'turn-b'].flatMap(turnId => [
+      createItem(turnId),
+      createModelItem(turnId),
+    ]);
+
+    act(() => {
+      root.render(<VirtualMessageList isViewportActive />);
+    });
+
+    const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+    const footer = container.querySelector<HTMLElement>('.message-list-footer');
+    expect(scroller).not.toBeNull();
+    expect(footer).not.toBeNull();
+    if (!scroller || !footer) {
+      return;
+    }
+
+    let naturalContentHeight = 14_457;
+    let scrollTop = 13_561.3330078125;
+    Object.defineProperties(scroller, {
+      clientHeight: { configurable: true, get: () => 1_020 },
+      scrollHeight: {
+        configurable: true,
+        get: () => naturalContentHeight + (Number.parseFloat(footer.style.height) || 0),
+      },
+      scrollTop: {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value: number) => {
+          scrollTop = value;
+        },
+      },
+    });
+    vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(createRect({
+      top: 0,
+      bottom: 1_020,
+      height: 1_020,
+    }));
+
+    act(() => {
+      root.render(<VirtualMessageList isViewportActive />);
+      resizeObserverMocks.callbacks.at(-1)?.();
+    });
+    for (let frame = 0; frame < 4; frame += 1) {
+      flushAnimationFrame();
+    }
+    const baselineFooterHeight = Number.parseFloat(footer.style.height);
+
+    const convergenceSteps = [10_902, 7_529, 4_601, 3_693];
+    for (const nextNaturalContentHeight of convergenceSteps) {
+      naturalContentHeight = nextNaturalContentHeight;
+      scrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+      act(() => {
+        resizeObserverMocks.callbacks.at(-1)?.();
+      });
+      for (let frame = 0; frame < 4; frame += 1) {
+        flushAnimationFrame();
+      }
+    }
+
+    expect(Number.parseFloat(footer.style.height)).toBeCloseTo(baselineFooterHeight, 2);
+    expect(scroller.scrollHeight).toBeLessThan(4_000);
+  });
+
   it('reconciles a stream that ends while its viewport is inactive after reactivation', () => {
     flowDiagnosticsMocks.enabled = true;
     const listRef = React.createRef<VirtualMessageListRef>();
@@ -1265,6 +1331,22 @@ describe('VirtualMessageList session boundary', () => {
       px: 2,
       floorPx: 0,
     });
+    expect(reconcileUnsignaledShrinkReservation({
+      ...protectedState,
+      collapse: { kind: 'collapse', px: 0, floorPx: 0 },
+    }, 907.333, false).collapse).toEqual({
+      kind: 'collapse',
+      px: 0,
+      floorPx: 0,
+    });
+    expect(reconcileUnsignaledShrinkReservation({
+      ...protectedState,
+      collapse: { kind: 'collapse', px: 0, floorPx: 0 },
+    }, 907.333, true).collapse).toEqual({
+      kind: 'collapse',
+      px: 907.333,
+      floorPx: 0,
+    });
   });
 
   it('extends and protects collapse range needed to restore a captured scroll position', () => {
@@ -1411,27 +1493,34 @@ describe('VirtualMessageList session boundary', () => {
     });
   });
 
-  it('does not let physical-bottom follow compete with a semantic element anchor', () => {
+  it('syncs the physical bottom only for a real viewport-height change', () => {
     expect(shouldSyncPhysicalBottom({
-      viewportGeometryChanged: true,
+      viewportHeightChanged: true,
       collapseProtectionActive: false,
       wasAtPhysicalBottom: true,
       ownsElementAnchor: true,
       isFollowingTail: false,
     })).toBe(false);
     expect(shouldSyncPhysicalBottom({
-      viewportGeometryChanged: true,
+      viewportHeightChanged: true,
       collapseProtectionActive: false,
       wasAtPhysicalBottom: true,
       ownsElementAnchor: false,
       isFollowingTail: false,
     })).toBe(true);
     expect(shouldSyncPhysicalBottom({
-      viewportGeometryChanged: true,
+      viewportHeightChanged: true,
       collapseProtectionActive: false,
       wasAtPhysicalBottom: true,
       ownsElementAnchor: false,
       isFollowingTail: true,
+    })).toBe(false);
+    expect(shouldSyncPhysicalBottom({
+      viewportHeightChanged: false,
+      collapseProtectionActive: false,
+      wasAtPhysicalBottom: true,
+      ownsElementAnchor: false,
+      isFollowingTail: false,
     })).toBe(false);
   });
 

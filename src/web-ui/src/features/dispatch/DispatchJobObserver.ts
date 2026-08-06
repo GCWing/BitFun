@@ -88,6 +88,7 @@ const RAW_EVENT_NAMES: Record<string, string> = {
   ThreadGoalUpdated: 'agentic://thread-goal-updated',
   DeepReviewQueueStateChanged: 'agentic://deep-review-queue-state-changed',
   SessionModelAutoMigrated: 'agentic://session-model-auto-migrated',
+  SessionReasoningPresetAutoCleared: 'agentic://session-reasoning-preset-auto-cleared',
   UserSteeringInjected: 'agentic://user-steering-injected',
 };
 
@@ -237,6 +238,8 @@ async function ensureProjection(
       jobId: job.jobId,
       approvalPolicy: job.approvalPolicy,
       model: job.model,
+      reasoningPreset: job.reasoningPreset,
+      modelCatalog: job.modelCatalog,
       availableModels: job.availableModels,
       defaultModel: job.defaultModel,
       state: job.state,

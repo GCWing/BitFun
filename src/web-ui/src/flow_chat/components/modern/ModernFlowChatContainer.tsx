@@ -103,6 +103,11 @@ import {
   buildContinuousHistoryProjection,
   canRetainContinuousHistoryProjection,
 } from './continuousHistoryProjection';
+import {
+  canonicalSessionTurns,
+  projectedSessionTurnCount,
+  resolveTurnOrdinal,
+} from '../../utils/flowChatTurnIdentity';
 
 const log = createLogger('ModernFlowChatContainer');
 
@@ -125,7 +130,7 @@ interface ModernFlowChatContainerProps {
 interface FlowChatTurnSummary {
   turnId: string;
   turnIndex: number;
-  backendTurnIndex?: number;
+  storageTurnIndex?: number;
 }
 
 interface FlowChatHistoryPresentationState extends SessionHistoryPresentation {
@@ -306,11 +311,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     ? viewportIntent
     : null;
   const activeSessionKnownTurnCount = activeSession
-    ? Math.max(
-      activeSession.totalTurnCount ?? 0,
-      activeSession.turnCatalog?.totalTurnCount ?? 0,
-      activeSession.dialogTurns.length,
-    )
+    ? projectedSessionTurnCount(activeSession)
     : 0;
   const activeHistoryPresentationFitsSession = Boolean(
     activeHistoryPresentation
@@ -785,18 +786,15 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   }, [t]);
 
   const turnSummaries = useMemo<FlowChatTurnSummary[]>(() => {
-    const turns = activeSession?.dialogTurns ?? [];
-    const result: FlowChatTurnSummary[] = [];
-    for (const turn of turns) {
-      if (!turn.userMessage || turn.userMessage.metadata?.usageReportProvisional === true) continue;
-      result.push({
-        turnId: turn.id,
-        turnIndex: result.length + 1,
-        backendTurnIndex: turn.backendTurnIndex,
-      });
+    if (!activeSession) {
+      return [];
     }
-    return result;
-  }, [activeSession?.dialogTurns]);
+    return canonicalSessionTurns(activeSession).map((turn, index) => ({
+        turnId: turn.id,
+        turnIndex: (resolveTurnOrdinal(activeSession, turn) ?? index) + 1,
+        storageTurnIndex: turn.storageTurnIndex ?? turn.backendTurnIndex,
+      }));
+  }, [activeSession]);
   const renderedTurns = useMemo(
     () => renderedHistoryPresentation
       ? renderedHistoryPresentation.turns
@@ -804,28 +802,20 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     [activeSession?.dialogTurns, renderedHistoryPresentation],
   );
   const renderedTurnSummaries = useMemo<FlowChatTurnSummary[]>(() => {
-    const result: FlowChatTurnSummary[] = [];
-    for (const turn of renderedTurns) {
-      if (!turn.userMessage || turn.userMessage.metadata?.usageReportProvisional === true) continue;
-      result.push({
+    return renderedTurns
+      .filter(turn => turn.userMessage?.metadata?.usageReportProvisional !== true)
+      .map((turn, index) => ({
         turnId: turn.id,
-        turnIndex: result.length + 1,
-        backendTurnIndex: turn.backendTurnIndex,
-      });
-    }
-    return result;
+        turnIndex: index + 1,
+        storageTurnIndex: turn.storageTurnIndex ?? turn.backendTurnIndex,
+      }));
   }, [renderedTurns]);
   const activeTurnCatalog = activeSession?.turnCatalog;
   const turnCatalog = activeTurnCatalog?.sessionId === activeSession?.sessionId
     ? activeTurnCatalog
     : undefined;
-  const sessionTotalTurnCount = Math.max(
-    activeSession?.totalTurnCount ?? 0,
-    turnCatalog?.totalTurnCount ?? 0,
-    turnSummaries.length,
-  );
-  const absoluteTurnIndexOffset = activeSession?.isPartial === true
-    ? Math.max(0, sessionTotalTurnCount - turnSummaries.length)
+  const sessionTotalTurnCount = activeSession
+    ? projectedSessionTurnCount(activeSession)
     : 0;
   const absoluteRenderedTurnSummaries = useMemo<FlowChatTurnSummary[]>(() => {
     if (renderedHistoryPresentation) {
@@ -834,18 +824,14 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         turnIndex: renderedHistoryPresentation.range.startOrdinal + index + 1,
       }));
     }
-    if (absoluteTurnIndexOffset === 0 && activeSession?.isPartial !== true) {
-      return renderedTurnSummaries;
-    }
     return renderedTurnSummaries.map(turn => ({
       ...turn,
-      turnIndex: typeof turn.backendTurnIndex === 'number'
-        ? turn.backendTurnIndex + 1
-        : turn.turnIndex + absoluteTurnIndexOffset,
+      turnIndex: activeSession
+        ? (resolveTurnOrdinal(activeSession, turn.turnId) ?? turn.turnIndex - 1) + 1
+        : turn.turnIndex,
     }));
   }, [
-    absoluteTurnIndexOffset,
-    activeSession?.isPartial,
+    activeSession,
     renderedHistoryPresentation,
     renderedTurnSummaries,
   ]);
@@ -867,8 +853,9 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       range.turns.forEach((turn, index) => {
         const loaded = { turnId: turn.id, content: turn.userMessage?.content ?? '' };
         loadedByOrdinal.set(range.startOrdinal + index, loaded);
-        if (typeof turn.backendTurnIndex === 'number') {
-          loadedByStorageIndex.set(turn.backendTurnIndex, loaded);
+        const storageTurnIndex = turn.storageTurnIndex ?? turn.backendTurnIndex;
+        if (typeof storageTurnIndex === 'number') {
+          loadedByStorageIndex.set(storageTurnIndex, loaded);
         }
       });
     }
@@ -878,8 +865,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         content: dialogTurnById.get(summary.turnId)?.userMessage?.content ?? '',
       };
       loadedByOrdinal.set(Math.max(0, summary.turnIndex - 1), loaded);
-      if (typeof summary.backendTurnIndex === 'number') {
-        loadedByStorageIndex.set(summary.backendTurnIndex, loaded);
+      if (typeof summary.storageTurnIndex === 'number') {
+        loadedByStorageIndex.set(summary.storageTurnIndex, loaded);
       }
     }
 
@@ -918,8 +905,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         continue;
       }
       items.push({
-        itemKey: typeof summary.backendTurnIndex === 'number'
-          ? `storage:${summary.backendTurnIndex}`
+        itemKey: typeof summary.storageTurnIndex === 'number'
+          ? `storage:${summary.storageTurnIndex}`
           : `live:${summary.turnId}`,
         turnId: summary.turnId,
         ordinal: Math.max(0, summary.turnIndex - 1),
@@ -1066,10 +1053,10 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     return {
       ...navigationVisibleTurnInfo,
       turnIndex: absoluteRenderedTurnSummaryById.get(navigationVisibleTurnInfo.turnId)?.turnIndex
-        ?? navigationVisibleTurnInfo.turnIndex + absoluteTurnIndexOffset,
+        ?? navigationVisibleTurnInfo.turnIndex,
       totalTurns: sessionTotalTurnCount,
     };
-  }, [absoluteTurnIndexOffset, absoluteRenderedTurnSummaryById, navigationVisibleTurnInfo, sessionTotalTurnCount]);
+  }, [absoluteRenderedTurnSummaryById, navigationVisibleTurnInfo, sessionTotalTurnCount]);
   useEffect(() => {
     visibleTurnInfoRef.current = visibleTurnInfo;
   }, [visibleTurnInfo]);

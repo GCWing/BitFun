@@ -3,8 +3,9 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use bitfun_agent_runtime::sdk::{
     AgentRuntimeBuilder, AgentSessionCreateRequest, AgentSessionCreateResult,
-    AgentSessionModelPort, AgentSessionModelUpdateRequest, AgentSubmissionPort,
-    AgentSubmissionRequest, AgentSubmissionResult, PortError, PortResult, RuntimeError,
+    AgentSessionModelPort, AgentSessionModelSelection, AgentSessionModelSelectionUpdateRequest,
+    AgentSessionModelUpdateRequest, AgentSubmissionPort, AgentSubmissionRequest,
+    AgentSubmissionResult, PortError, PortResult, RuntimeError,
 };
 use bitfun_runtime_ports::PortErrorKind;
 
@@ -42,6 +43,7 @@ impl AgentSubmissionPort for FakeSubmissionPort {
 #[derive(Default)]
 struct RecordingSessionModelPort {
     requests: Mutex<Vec<AgentSessionModelUpdateRequest>>,
+    selection_requests: Mutex<Vec<AgentSessionModelSelectionUpdateRequest>>,
 }
 
 #[async_trait]
@@ -51,6 +53,14 @@ impl AgentSessionModelPort for RecordingSessionModelPort {
         request: AgentSessionModelUpdateRequest,
     ) -> PortResult<()> {
         self.requests.lock().unwrap().push(request);
+        Ok(())
+    }
+
+    async fn update_session_model_selection(
+        &self,
+        request: AgentSessionModelSelectionUpdateRequest,
+    ) -> PortResult<()> {
+        self.selection_requests.lock().unwrap().push(request);
         Ok(())
     }
 }
@@ -97,5 +107,32 @@ async fn session_model_update_reports_a_missing_port_without_fallback() {
             PortErrorKind::NotAvailable,
             "agent session model port is not registered",
         ))
+    );
+}
+
+#[tokio::test]
+async fn session_model_selection_forwards_model_and_reasoning_preset_atomically() {
+    let model_port = Arc::new(RecordingSessionModelPort::default());
+    let runtime = AgentRuntimeBuilder::new()
+        .with_submission_port(Arc::new(FakeSubmissionPort))
+        .with_session_model_port(model_port.clone())
+        .build()
+        .expect("runtime");
+    let request = AgentSessionModelSelectionUpdateRequest {
+        session_id: "session-1".to_string(),
+        selection: AgentSessionModelSelection {
+            model_id: "provider/model".to_string(),
+            reasoning_preset: Some("high".to_string()),
+        },
+    };
+
+    runtime
+        .update_session_model_selection(request.clone())
+        .await
+        .expect("model selection update");
+
+    assert_eq!(
+        model_port.selection_requests.lock().unwrap().as_slice(),
+        &[request]
     );
 }

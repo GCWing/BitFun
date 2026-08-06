@@ -17,7 +17,8 @@ use crate::startup_trace::DesktopStartupTrace;
 use bitfun_agent_runtime::deep_review::sanitize_focused_review_public_metadata;
 use bitfun_agent_runtime::sdk::{
     AgentDialogSteerRequest, AgentDialogTurnExecution, AgentDialogTurnRequest,
-    AgentInputAttachment, AgentSessionCreateResult, AgentSessionModeUpdateRequest,
+    AgentInputAttachment, AgentSessionCreateResult, AgentSessionModelSelection,
+    AgentSessionModeUpdateRequest, AgentSessionModelSelectionUpdateRequest,
     AgentSessionModelUpdateRequest, AgentSubmissionSource, AgentTurnCancellationRequest,
     DialogSteerOutcome, PermissionAuditRecord, PermissionGrant, PermissionGrantKey,
     PermissionReply, PermissionRequest,
@@ -146,6 +147,8 @@ pub struct SessionConfigDTO {
     pub enable_context_compression: Option<bool>,
     pub model_name: Option<String>,
     #[serde(default)]
+    pub reasoning_preset: Option<String>,
+    #[serde(default)]
     pub remote_connection_id: Option<String>,
     #[serde(default)]
     pub remote_ssh_host: Option<String>,
@@ -228,6 +231,8 @@ fn is_idempotent_review_create(request: &CreateSessionRequest) -> bool {
 pub struct UpdateSessionModelRequest {
     pub session_id: String,
     pub model_name: String,
+    #[serde(default, deserialize_with = "deserialize_present_nullable")]
+    pub reasoning_preset: Option<Option<String>>,
     #[serde(default)]
     pub workspace_path: Option<String>,
     #[serde(default)]
@@ -236,6 +241,14 @@ pub struct UpdateSessionModelRequest {
     pub remote_ssh_host: Option<String>,
     #[serde(default)]
     pub include_internal: bool,
+}
+
+fn deserialize_present_nullable<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
 }
 
 #[derive(Debug, Deserialize)]
@@ -467,6 +480,7 @@ pub struct SessionResponse {
     pub agent_type: String,
     /// Current/default model selection for the next dialog turn.
     pub model_name: Option<String>,
+    pub reasoning_preset: Option<String>,
     /// Mode of the last surviving user dialog turn in session history.
     pub last_user_dialog_agent_type: Option<String>,
     /// Mode of the most recent user submission accepted by the scheduler.
@@ -1596,6 +1610,7 @@ pub async fn create_session(
             remote_connection_id: remote_conn.clone(),
             remote_ssh_host: remote_ssh_host.clone(),
             model_id: c.model_name,
+            reasoning_preset: c.reasoning_preset,
             ..Default::default()
         })
         .unwrap_or(SessionConfig {
@@ -1751,13 +1766,35 @@ pub async fn update_session_model(
         request.include_internal,
     )
     .await?;
-    runtime
-        .agent_runtime()
-        .update_session_model(AgentSessionModelUpdateRequest {
-            session_id,
-            model_id: request.model_name,
-        })
-        .await
+    let update_result = match request.reasoning_preset {
+        Some(reasoning_preset) => {
+            let reasoning_preset = reasoning_preset
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToOwned::to_owned);
+            runtime
+                .agent_runtime()
+                .update_session_model_selection(AgentSessionModelSelectionUpdateRequest {
+                    session_id,
+                    selection: AgentSessionModelSelection {
+                        model_id: request.model_name,
+                        reasoning_preset,
+                    },
+                })
+                .await
+        }
+        None => {
+            runtime
+                .agent_runtime()
+                .update_session_model(AgentSessionModelUpdateRequest {
+                    session_id,
+                    model_id: request.model_name,
+                })
+                .await
+        }
+    };
+    update_result
         .map_err(|error| format!("Failed to update session model: {}", error.into_message()))
 }
 
@@ -3273,6 +3310,7 @@ pub async fn list_sessions(
             session_name: summary.session_name,
             agent_type: summary.agent_type,
             model_name: None,
+            reasoning_preset: None,
             last_user_dialog_agent_type: summary.last_user_dialog_agent_type,
             last_submitted_agent_type: summary.last_submitted_agent_type,
             state: format!("{:?}", summary.state),
@@ -3477,6 +3515,7 @@ fn session_to_response_with_turn_count(session: Session, turn_count: usize) -> S
         session_name: session.session_name,
         agent_type: session.agent_type,
         model_name: session.config.model_id,
+        reasoning_preset: session.config.reasoning_preset,
         last_user_dialog_agent_type: session.last_user_dialog_agent_type,
         last_submitted_agent_type: session.last_submitted_agent_type,
         state: format!("{:?}", session.state),
@@ -3515,6 +3554,32 @@ mod tests {
         };
 
         assert!(!mode_catalog_supports_external_sources(&request, Some(&desktop_host_path)).await);
+    }
+
+    #[test]
+    fn update_session_model_distinguishes_omitted_null_and_explicit_reasoning_presets() {
+        let omitted: UpdateSessionModelRequest = serde_json::from_value(json!({
+            "sessionId": "session-1",
+            "modelName": "model-a"
+        }))
+        .expect("omitted reasoning preset");
+        assert_eq!(omitted.reasoning_preset, None);
+
+        let automatic: UpdateSessionModelRequest = serde_json::from_value(json!({
+            "sessionId": "session-1",
+            "modelName": "model-a",
+            "reasoningPreset": null
+        }))
+        .expect("null reasoning preset");
+        assert_eq!(automatic.reasoning_preset, Some(None));
+
+        let explicit: UpdateSessionModelRequest = serde_json::from_value(json!({
+            "sessionId": "session-1",
+            "modelName": "model-a",
+            "reasoningPreset": "high"
+        }))
+        .expect("explicit reasoning preset");
+        assert_eq!(explicit.reasoning_preset, Some(Some("high".to_string())));
     }
 
     #[test]

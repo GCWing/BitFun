@@ -1,4 +1,4 @@
-export const DISPATCH_PROTOCOL_VERSION = 4;
+export const DISPATCH_PROTOCOL_VERSION = 5;
 
 /**
  * Capabilities every dispatch target must advertise.
@@ -20,4 +20,5 @@ export const BASE_DISPATCH_CAPABILITIES = [
   'per_turn_options',
   'session_query',
   'inline_attachments',
+  'reasoning_presets',
 ] as const;

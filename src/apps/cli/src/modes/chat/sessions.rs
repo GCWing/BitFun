@@ -45,6 +45,7 @@ impl ChatMode {
             &transcript,
         );
         new_state.current_model_id = summary.model_id;
+        new_state.current_reasoning_preset = summary.reasoning_preset;
         new_state.apply_workspace_binding(workspace_binding);
 
         self.reset_lineage_navigation(chat_view);
@@ -109,6 +110,7 @@ impl ChatMode {
                         &transcript,
                     );
                     state.current_model_id = session_summary.model_id;
+                    state.current_reasoning_preset = session_summary.reasoning_preset;
                     state.apply_workspace_binding(workspace_binding);
 
                     Ok::<_, anyhow::Error>((state, restored_agent_type, migration_notices))

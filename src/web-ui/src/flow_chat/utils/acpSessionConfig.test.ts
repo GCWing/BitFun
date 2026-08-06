@@ -4,6 +4,7 @@ import type { AcpSessionConfigOption } from '@/infrastructure/api/service-api/AC
 import {
   buildAcpFastModeValue,
   getAcpModelProviderName,
+  resolveAcpReasoningState,
   resolveAcpFastModeState,
 } from './acpSessionConfig';
 
@@ -48,6 +49,37 @@ describe('ACP Fast mode config', () => {
     expect(resolveAcpFastModeState([])).toBeNull();
     expect(resolveAcpFastModeState([malformed])).toBeNull();
     expect(buildAcpFastModeValue(malformed, true)).toBeNull();
+  });
+});
+
+describe('ACP reasoning config', () => {
+  it('projects the standard thought-level select without inferring provider behavior', () => {
+    const option: AcpSessionConfigOption = {
+      id: 'reasoning-effort',
+      name: 'Reasoning effort',
+      category: 'thought_level',
+      type: 'select',
+      currentValue: 'high',
+      options: [
+        { value: 'low', name: 'Low' },
+        { value: 'high', name: 'High' },
+      ],
+    };
+
+    const state = resolveAcpReasoningState([option]);
+    expect(state?.option).toBe(option);
+    expect(state?.selectedPreset).toBe('high');
+    expect(state?.projection.presets?.map(preset => preset.id)).toEqual(['low', 'high']);
+  });
+
+  it('fails closed for uncategorized and malformed options', () => {
+    expect(resolveAcpReasoningState([{
+      id: 'reasoning-effort',
+      name: 'Reasoning effort',
+      type: 'select',
+      currentValue: 'high',
+      options: [{ value: 'high', name: 'High' }],
+    }])).toBeNull();
   });
 });
 

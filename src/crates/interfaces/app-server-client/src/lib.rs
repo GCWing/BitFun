@@ -1,0 +1,455 @@
+//! Lightweight App Server client used by Rich Client surfaces.
+
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use agent_client_protocol::{ConnectTo, ConnectionTo, JsonRpcResponse, SentRequest};
+use bitfun_app_server_protocol::app::{
+    HealthRequest, HealthResponse, InitializeRequest, InitializeResponse,
+};
+use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
+use bitfun_app_server_protocol::event::{
+    AgentEventNotification, ConfigEventNotification, EventStreamStateNotification,
+    PermissionEventNotification, SyncEventsRequest, SyncEventsResponse,
+};
+use bitfun_app_server_protocol::tui::*;
+use bitfun_app_server_protocol::{AppClient, AppServer};
+use tokio::sync::{broadcast, oneshot};
+
+const CLIENT_STARTUP_TIMEOUT: Duration = Duration::from_secs(5);
+const SIDE_EFFECT_TIMEOUT: Duration = Duration::from_secs(120);
+
+#[derive(Debug, Clone)]
+pub enum AppServerEvent {
+    Agent(AgentEventNotification),
+    Permission(PermissionEventNotification),
+    Config(ConfigEventNotification),
+    StreamState(EventStreamStateNotification),
+    ConnectionClosed,
+}
+
+#[derive(Debug)]
+pub enum ClientError {
+    Protocol(agent_client_protocol::Error),
+    Timeout(AppServerErrorData),
+}
+
+impl std::fmt::Display for ClientError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Protocol(error) => write!(formatter, "{error}"),
+            Self::Timeout(data) => write!(
+                formatter,
+                "App Server request {} timed out with unknown outcome",
+                data.request_id.as_deref().unwrap_or("unknown")
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ClientError {}
+
+#[derive(Clone)]
+pub struct AppServerClient {
+    connection: Arc<ConnectionTo<AppServer>>,
+    event_tx: broadcast::Sender<AppServerEvent>,
+    shutdown_tx: Arc<Mutex<Option<oneshot::Sender<()>>>>,
+}
+
+impl AppServerClient {
+    pub async fn initialize(
+        &self,
+        request: InitializeRequest,
+    ) -> agent_client_protocol::Result<InitializeResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn health(&self) -> agent_client_protocol::Result<HealthResponse> {
+        self.rpc(|cx| Ok(cx.send_request(HealthRequest {}))).await
+    }
+
+    pub async fn tui_model_catalog(
+        &self,
+    ) -> agent_client_protocol::Result<TuiModelCatalogResponse> {
+        self.rpc(|cx| Ok(cx.send_request(TuiModelCatalogRequest {})))
+            .await
+    }
+
+    pub fn subscribe_events(&self) -> broadcast::Receiver<AppServerEvent> {
+        self.event_tx.subscribe()
+    }
+
+    pub async fn sync_events(
+        &self,
+        request: SyncEventsRequest,
+    ) -> agent_client_protocol::Result<SyncEventsResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn list_sessions(
+        &self,
+        request: ListSessionsRequest,
+    ) -> agent_client_protocol::Result<ListSessionsResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn sync_session(
+        &self,
+        request: SyncSessionRequest,
+    ) -> agent_client_protocol::Result<SyncSessionResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn read_transcript(
+        &self,
+        request: ReadTranscriptRequest,
+    ) -> agent_client_protocol::Result<ReadTranscriptResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn resolve_workspace(
+        &self,
+        request: ResolveWorkspaceRequest,
+    ) -> agent_client_protocol::Result<ResolveWorkspaceResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn create_session(
+        &self,
+        request: CreateSessionRequest,
+    ) -> Result<CreateSessionResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn delete_session(
+        &self,
+        request: DeleteSessionRequest,
+    ) -> Result<DeleteSessionResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn rename_session(
+        &self,
+        request: RenameSessionRequest,
+    ) -> Result<RenameSessionResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn submit_dialog_turn(
+        &self,
+        request: SubmitDialogTurnRequest,
+    ) -> Result<SubmitDialogTurnResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn cancel_turn(
+        &self,
+        request: CancelTurnRequest,
+    ) -> Result<CancelTurnResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn steer_turn(
+        &self,
+        request: SteerTurnRequest,
+    ) -> Result<SteerTurnResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn run_user_shell_command(
+        &self,
+        request: RunUserShellCommandRequest,
+    ) -> Result<RunUserShellCommandResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn submit_user_answers(
+        &self,
+        request: SubmitUserAnswersRequest,
+    ) -> Result<SubmitUserAnswersResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn record_local_command_turn(
+        &self,
+        request: RecordLocalCommandTurnRequest,
+    ) -> Result<RecordLocalCommandTurnResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn respond_permission(
+        &self,
+        request: RespondPermissionRequest,
+    ) -> Result<RespondPermissionResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn pending_permissions(
+        &self,
+    ) -> agent_client_protocol::Result<PendingPermissionsResponse> {
+        self.rpc(|cx| Ok(cx.send_request(PendingPermissionsRequest {})))
+            .await
+    }
+
+    pub async fn compact_session(
+        &self,
+        request: CompactSessionRequest,
+    ) -> Result<CompactSessionResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn undo_session(
+        &self,
+        request: UndoSessionRequest,
+    ) -> Result<RevertSessionResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn redo_session(
+        &self,
+        request: RedoSessionRequest,
+    ) -> Result<RevertSessionResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn reload_context(
+        &self,
+        request: ReloadContextRequest,
+    ) -> Result<ReloadContextResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn session_usage(
+        &self,
+        request: SessionUsageRequest,
+    ) -> agent_client_protocol::Result<SessionUsageResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn wait_for_settlement(
+        &self,
+        request: WaitForSettlementRequest,
+    ) -> agent_client_protocol::Result<WaitForSettlementResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn workspace_diff(&self) -> agent_client_protocol::Result<WorkspaceDiffResponse> {
+        self.rpc(|cx| Ok(cx.send_request(WorkspaceDiffRequest {})))
+            .await
+    }
+
+    pub async fn search_workspace_references(
+        &self,
+        request: SearchWorkspaceReferencesRequest,
+    ) -> agent_client_protocol::Result<SearchWorkspaceReferencesResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn message_references(
+        &self,
+        request: MessageReferencesRequest,
+    ) -> agent_client_protocol::Result<MessageReferencesResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn session_lineage(
+        &self,
+        request: SessionLineageRequest,
+    ) -> agent_client_protocol::Result<SessionLineageResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn inspect_lineage(
+        &self,
+        request: InspectLineageRequest,
+    ) -> agent_client_protocol::Result<InspectLineageResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn cancel_lineage(
+        &self,
+        request: CancelLineageRequest,
+    ) -> Result<CancelLineageResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn fork_session(
+        &self,
+        request: ForkSessionRequest,
+    ) -> Result<ForkSessionResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn fork_session_before_turn(
+        &self,
+        request: ForkSessionBeforeTurnRequest,
+    ) -> Result<ForkSessionResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn update_session_model(
+        &self,
+        request: UpdateSessionModelRequest,
+    ) -> Result<UpdateSessionModelResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn update_session_mode(
+        &self,
+        request: UpdateSessionModeRequest,
+    ) -> Result<UpdateSessionModeResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn request_with_timeout<R: JsonRpcResponse>(
+        &self,
+        send: impl FnOnce(&ConnectionTo<AppServer>) -> agent_client_protocol::Result<SentRequest<R>>,
+        timeout: Duration,
+    ) -> Result<R, ClientError> {
+        let sent = send(&self.connection).map_err(ClientError::Protocol)?;
+        let request_id = sent.id().to_string();
+        let (tx, rx) = oneshot::channel();
+        sent.on_receiving_result(async move |result| {
+            tx.send(result)
+                .map_err(|_| agent_client_protocol::Error::internal_error())
+        })
+        .map_err(ClientError::Protocol)?;
+        match tokio::time::timeout(timeout, rx).await {
+            Ok(Ok(result)) => result.map_err(ClientError::Protocol),
+            Ok(Err(_)) => Err(ClientError::Protocol(
+                agent_client_protocol::Error::internal_error(),
+            )),
+            Err(_) => Err(ClientError::Timeout(AppServerErrorData {
+                kind: AppServerErrorKind::OutcomeUnknown,
+                retryable: false,
+                outcome_unknown: true,
+                capability: None,
+                request_id: Some(request_id),
+            })),
+        }
+    }
+
+    pub async fn shutdown(&self) {
+        if let Some(tx) = self
+            .shutdown_tx
+            .lock()
+            .ok()
+            .and_then(|mut guard| guard.take())
+        {
+            let _ = tx.send(());
+        }
+    }
+
+    async fn rpc<R: JsonRpcResponse>(
+        &self,
+        send: impl FnOnce(&ConnectionTo<AppServer>) -> agent_client_protocol::Result<SentRequest<R>>,
+    ) -> agent_client_protocol::Result<R> {
+        let sent = send(&self.connection)?;
+        let (tx, rx) = oneshot::channel();
+        sent.on_receiving_result(async move |result| {
+            tx.send(result)
+                .map_err(|_| agent_client_protocol::Error::internal_error())
+        })?;
+        rx.await
+            .map_err(|_| agent_client_protocol::Error::internal_error())?
+    }
+}
+
+pub async fn connect(
+    transport: impl ConnectTo<AppClient> + 'static,
+) -> Result<AppServerClient, anyhow::Error> {
+    let (event_tx, _) = broadcast::channel(1024);
+    let event_tx_for_task = event_tx.clone();
+    let (cx_tx, cx_rx) = oneshot::channel::<ConnectionTo<AppServer>>();
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+    let connect_task = tokio::spawn(async move {
+        let result = AppClient
+            .builder()
+            .name("bitfun-rich-client")
+            .on_receive_notification(
+                {
+                    let event_tx = event_tx_for_task.clone();
+                    async move |notification: AgentEventNotification, _cx| {
+                        let _ = event_tx.send(AppServerEvent::Agent(notification));
+                        Ok(())
+                    }
+                },
+                agent_client_protocol::on_receive_notification!(),
+            )
+            .on_receive_notification(
+                {
+                    let event_tx = event_tx_for_task.clone();
+                    async move |notification: PermissionEventNotification, _cx| {
+                        let _ = event_tx.send(AppServerEvent::Permission(notification));
+                        Ok(())
+                    }
+                },
+                agent_client_protocol::on_receive_notification!(),
+            )
+            .on_receive_notification(
+                {
+                    let event_tx = event_tx_for_task.clone();
+                    async move |notification: ConfigEventNotification, _cx| {
+                        let _ = event_tx.send(AppServerEvent::Config(notification));
+                        Ok(())
+                    }
+                },
+                agent_client_protocol::on_receive_notification!(),
+            )
+            .on_receive_notification(
+                {
+                    let event_tx = event_tx_for_task.clone();
+                    async move |notification: EventStreamStateNotification, _cx| {
+                        let _ = event_tx.send(AppServerEvent::StreamState(notification));
+                        Ok(())
+                    }
+                },
+                agent_client_protocol::on_receive_notification!(),
+            )
+            .connect_with(transport, async |cx: ConnectionTo<AppServer>| {
+                let _ = cx_tx.send(cx);
+                let _ = shutdown_rx.await;
+                Ok(())
+            })
+            .await;
+        let _ = event_tx_for_task.send(AppServerEvent::ConnectionClosed);
+        result
+    });
+
+    let connection = match tokio::time::timeout(CLIENT_STARTUP_TIMEOUT, cx_rx).await {
+        Ok(Ok(cx)) => cx,
+        Ok(Err(_)) => {
+            connect_task.abort();
+            anyhow::bail!("App Server connection closed before startup completed");
+        }
+        Err(_) => {
+            connect_task.abort();
+            anyhow::bail!("App Server connection startup timed out");
+        }
+    };
+
+    Ok(AppServerClient {
+        connection: Arc::new(connection),
+        event_tx,
+        shutdown_tx: Arc::new(Mutex::new(Some(shutdown_tx))),
+    })
+}

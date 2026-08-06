@@ -36,9 +36,16 @@ export interface SessionModelAutoMigratedEvent {
   reason: string;
 }
 
+export interface SessionReasoningPresetAutoClearedEvent {
+  sessionId: string;
+  previousPresetId: string;
+  reason: string;
+}
+
  
 export interface SessionConfig {
   modelName?: string;
+  reasoningPreset?: string;
   maxContextTokens?: number;
   autoCompact?: boolean;
   enableTools?: boolean;
@@ -167,6 +174,7 @@ export interface SessionInfo {
   agentType: string;
   /** Current/default model selection for the next dialog turn. */
   modelName?: string;
+  reasoningPreset?: string | null;
   /** Mode of the last surviving user dialog turn in session history. */
   lastUserDialogAgentType?: string;
   /** Mode of the most recent user submission accepted by the runtime. */
@@ -305,6 +313,7 @@ export interface EnsureAssistantBootstrapResponse {
 export interface UpdateSessionModelRequest {
   sessionId: string;
   modelName: string;
+  reasoningPreset?: string | null;
   workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -1076,6 +1085,15 @@ export class AgentAPI {
   ): () => void {
     return api.listen<SessionModelAutoMigratedEvent>(
       'agentic://session-model-auto-migrated',
+      callback
+    );
+  }
+
+  onSessionReasoningPresetAutoCleared(
+    callback: (event: SessionReasoningPresetAutoClearedEvent) => void
+  ): () => void {
+    return api.listen<SessionReasoningPresetAutoClearedEvent>(
+      'agentic://session-reasoning-preset-auto-cleared',
       callback
     );
   }

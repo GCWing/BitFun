@@ -217,6 +217,7 @@ export interface WorkspaceStartupState {
   currentWorkspace: WorkspaceInfo | null;
   recentWorkspaces: WorkspaceInfo[];
   openedWorkspaces: WorkspaceInfo[];
+  primaryAssistantWorkspaceId: string | null;
   legacyRemoteWorkspace: RemoteWorkspaceSnapshot | null;
 }
 
@@ -238,6 +239,8 @@ export interface GlobalStateAPI {
     sshHost?: string
   ): Promise<WorkspaceInfo>;
   createAssistantWorkspace(): Promise<WorkspaceInfo>;
+  getPrimaryAssistantWorkspace(): Promise<WorkspaceInfo | null>;
+  setPrimaryAssistantWorkspace(workspaceId: string): Promise<WorkspaceInfo>;
   deleteAssistantWorkspace(workspaceId: string): Promise<void>;
   resetAssistantWorkspace(workspaceId: string): Promise<WorkspaceInfo>;
   closeWorkspace(workspaceId: string): Promise<void>;
@@ -421,6 +424,7 @@ function mapWorkspaceStartupStateSnapshot(
     currentWorkspace: snapshot.currentWorkspace ? mapWorkspaceInfo(snapshot.currentWorkspace) : null,
     recentWorkspaces,
     openedWorkspaces: snapshot.openedWorkspaces.map(mapWorkspaceInfo),
+    primaryAssistantWorkspaceId: snapshot.primaryAssistantWorkspaceId ?? null,
     legacyRemoteWorkspace: mapRemoteWorkspaceSnapshot(snapshot.legacyRemoteWorkspace),
   };
 }
@@ -441,6 +445,11 @@ function isWorkspaceStartupStateSnapshot(
     (value.currentWorkspace === null || isRecord(value.currentWorkspace)) &&
     Array.isArray(value.recentWorkspaces) &&
     Array.isArray(value.openedWorkspaces) &&
+    (
+      value.primaryAssistantWorkspaceId === undefined ||
+      value.primaryAssistantWorkspaceId === null ||
+      typeof value.primaryAssistantWorkspaceId === 'string'
+    ) &&
     (
       value.legacyRemoteWorkspace === undefined ||
       value.legacyRemoteWorkspace === null ||
@@ -538,6 +547,15 @@ export function createGlobalStateAPI(): GlobalStateAPI {
 
     async createAssistantWorkspace(): Promise<WorkspaceInfo> {
       return mapWorkspaceInfo(await globalAPI.createAssistantWorkspace());
+    },
+
+    async getPrimaryAssistantWorkspace(): Promise<WorkspaceInfo | null> {
+      const workspace = await globalAPI.getPrimaryAssistantWorkspace();
+      return workspace ? mapWorkspaceInfo(workspace) : null;
+    },
+
+    async setPrimaryAssistantWorkspace(workspaceId: string): Promise<WorkspaceInfo> {
+      return mapWorkspaceInfo(await globalAPI.setPrimaryAssistantWorkspace(workspaceId));
     },
 
     async deleteAssistantWorkspace(workspaceId: string): Promise<void> {

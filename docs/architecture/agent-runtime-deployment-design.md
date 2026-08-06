@@ -4,48 +4,80 @@
 
 Agent Runtime 的模块职责见 [`agent-runtime-services-design.md`](agent-runtime-services-design.md)，公开 SDK 见
 [`agent-sdk-product-architecture.md`](agent-sdk-product-architecture.md)，第三方 JS/TS 进程见
-[`extensions/plugin-runtime-design.md`](extensions/plugin-runtime-design.md)。
+[`extensions/plugin-runtime-design.md`](extensions/plugin-runtime-design.md)。Rich Client 的 App Server 协议、Embedded/Shared Host
+和 transport 提案见 [`app-server-architecture.md`](app-server-architecture.md)。该提案通过架构评审前，当前部署和调用路径以本文及
+已接线代码为准。
 
 ## 1. 决策与当前状态
 
 BitFun 只有一套 Agent Runtime 行为。`Embedded` 和 `Shared` 只描述同一套 Runtime 的物理部署方式，不是两套实现。
 
+### 1.1 Current request paths
+
 ```mermaid
 flowchart TB
-  subgraph "产品入口"
-    GUI["Desktop GUI"]
-    TUI["TUI / Headless CLI"]
-    ACP["ACP"]
-    SDK["Agent SDK · SDK Host"]
-    Server["Server agent bootstrap"]
-  end
-
-  GUI --> Adapter["同级 first-party adapters"]
-  TUI --> Adapter
-  ACP --> Adapter
-  SDK --> Adapter
-  Server --> Adapter
-  Adapter --> API["Agent Runtime API"]
+  Desktop["Desktop GUI"] --> DesktopAdapter["Desktop / Tauri adapter"]
+  Web["Web UI"] --> WebAS["loopback WebSocket App Server"]
+  TUI["Interactive TUI"] --> Backend["TuiBackend"]
+  Backend -->|"Embedded"| EmbeddedAS["in-process App Server"]
+  Backend -->|"--shared"| SharedIPC["private Runtime IPC v17"]
+  Other["Headless CLI · ACP · Peer Host · SDK Host"] --> Adapter["独立 first-party adapters"]
+  DesktopAdapter --> API["Agent Runtime API / owner ports"]
+  WebAS --> API
+  EmbeddedAS --> API
+  SharedIPC --> API
+  Adapter --> API
   API --> Coordinator["ConversationCoordinator"]
   Coordinator --> Owners["Session / Tool / Permission / MCP owners"]
-  Coordinator -. "local attach / mutation" .-> Ownership["CoreRuntimeOwnership"]
 ```
 
-当前代码状态必须和目标设计分开阅读：
+Server bootstrap 是 composition root，不是客户端请求的第二条 Runtime 旁路：
+
+```mermaid
+flowchart LR
+  Bootstrap["Server bootstrap / product assembly"] -. "constructs" .-> Host["transport + BitfunAppServer"]
+  Bootstrap -. "constructs" .-> Runtime["Embedded Runtime / owners"]
+  Runtime -. "injects Runtime API and owner ports" .-> Host
+```
+
+两张图中的实线表示当前业务请求，虚线只表示启动期构造与依赖注入。
+
+### 1.2 Proposed Rich Client target
+
+```mermaid
+flowchart TB
+  Rich["Desktop GUI · Web UI · Interactive TUI"] --> Host["Rich Client Host"]
+  Host --> Client["App Server client"]
+  Client --> Transport["Host-selected Embedded / Shared transport"]
+  Transport --> AppServer["App Server"]
+  Other["Headless CLI · ACP · Peer Host"] --> Adapter["独立 first-party adapters"]
+  SDK["Public Agent SDK"] --> SDKHost["SDK Host adapter"]
+  AppServer --> API["Agent Runtime API / owner ports"]
+  Adapter --> API
+  SDKHost --> API
+```
+
+该图是待评审目标，不是当前调用链。Shared App Server 只有达到 v17 的连接治理、安全、恢复、取消、限制、性能和回滚门槛后，
+才可替换 compatibility transport；评审也可以决定保留 private v17 作为 Shared TUI 的物理 wire。
+
+### 1.3 Current implementation facts
 
 | 范围 | 当前状态 |
 |---|---|
-| Embedded Desktop GUI | 继续使用 Desktop 事件投影和 Tauri adapter；按实际打开的本机 workspace 延迟取得并持有 Embedded ownership，不增加后台进程 |
-| Embedded TUI/Headless CLI/Peer Host | Session、Turn、Permission 和事件订阅统一通过同一个 Rust Runtime SDK（当前 preview）；CLI crate 只保留第一方 adapter 和各形态自己的展示/断流策略 |
+| Embedded Desktop GUI | 继续使用 Desktop 事件投影和 Tauri adapter；按实际打开的本机 workspace 延迟取得并持有 Embedded ownership，不增加后台进程；目标迁入同进程私有 App Server |
+| Embedded interactive TUI | 已组装同进程私有 App Server，通过 in-memory transport、`AppServerClient` 和 `AppServerTuiBackend` 完成当前核心聊天与 Session 路径；剩余管理面继续迁移 |
+| Embedded Headless CLI/Peer Host | 保留各自独立 Runtime adapter、展示和断流策略；不因交互式 TUI 迁移而强制使用 App Server |
 | ACP/SDK Host | 使用同一个 Runtime 事件入口的 session-scoped 订阅；各自协议和进程生命周期保持独立 |
 | Runtime ownership | Desktop、CLI、ACP、SDK Host 和现有 Server agent bootstrap 共用 Core owner；Embedded 取得共享锁，Shared TUI 取得独占锁，同一 workspace 上两种 deployment 互斥 |
 | Session 写入 | BitFun Runtime 的持久化 Session 由 `SessionManager` 管理；同一存储位置中的同一 Session 同时只允许一个本机进程写入，list/view 等只读操作不受影响 |
-| 当前 HTTP Server | 只提供 health/info/WebSocket 外壳，未装配 Agent Runtime，因此不取得 workspace ownership；`bootstrap.rs` 仅保持 agent-enabled composition 的一致边界，不由当前入口启动 |
-| Shared local IPC | 未发布的本机协议已有 discovery、实例锁、严格握手、Session 控制权、有界事件流和 cleanup；唯一 consumer 是第一方交互式 TUI adapter |
+| 当前 HTTP Server | 已组装 Embedded Runtime 和 `BitfunAppServer`，每个 `/ws` 连接通过 WebSocket transport 运行一条 App Server connection；当前固定 loopback、单用户且缺少连接级身份与作用域绑定，不构成远程或多用户 Server API |
+| Shared local IPC | 未发布的 v17 本机协议已有 discovery、实例锁、严格握手、Session 控制权、有界事件流和 cleanup；唯一 consumer 是第一方交互式 TUI compatibility adapter；是否由 Shared App Server 替换仍待评审与等价证据 |
 | Shared TUI | `bitfun --shared` / `bitfun chat --shared` 可列出、创建、恢复 Session，删除未被控制的空闲非当前 Session，通过 `/fork` 从完整历史或选中提示词之前创建分支，重命名当前 Session，读取 transcript，通过 **View subagents** 只读查看当前根 Session 的子会话并定向取消子会话活动 Turn，切换当前 Session 的 Agent mode/model，通过 `/reload [skills|instructions]` 刷新声明式上下文，通过 `/compact` 或 `/summarize` 压缩当前 Session 上下文，在 Turn 空闲时通过 `/diff` 读取 Runtime 绑定工作区的只读差异，提交/取消 Turn，处理 Permission 和 UserInput；默认仍是 Embedded |
 | Shared GUI/Headless/ACP/SDK Host/Remote | 未交付，也不会由 `--shared` 隐式启用；Replay、Observer、通用 Controller transfer 和 Session archive 同样不在当前协议中 |
 
-因此当前交付的是一条窄的、显式启用的 Shared TUI deployment，不是通用本机 Server。具体 `EventQueue` 仍由 Core 产品装配；IPC 只把当前 TUI 必需的强类型操作和事件映射到同一个 Runtime owner，没有事件重放或公开协议承诺。
+因此当前交付的是 Embedded TUI App Server 与一条窄的、显式启用的 Shared TUI compatibility deployment，不是通用本机 Server。
+具体 `EventQueue` 仍由 Core 产品装配；当前 Shared IPC 只把 TUI 必需的强类型操作和事件映射到同一个 Runtime owner，
+没有公开协议承诺。是否以 App Server Shared transport 替换并删除它，由行为等价、性能、安全和回滚证据决定。
 
 ## 2. 最少名词
 
@@ -54,6 +86,8 @@ flowchart TB
 | Agent Runtime | 负责 Session、Turn、Tool、MCP、Permission、Hook、事件和持久化行为的既有模块 | 进程名、Server 或 SDK |
 | Embedded deployment | Runtime 与调用入口位于同一 Rust 进程 | 简化版 Runtime |
 | Shared deployment | 同一 Runtime 由一个本机进程承载，多个第一方 Client 通过私有 IPC 使用 | 新 Runtime、公开 Server 或 Agent SDK |
+| Embedded App Server | 与 Rich Client Host 同进程的私有 App Server 实例和 in-memory transport | Runtime 直连、后台进程或网络 Server |
+| Shared App Server | 独立本机 Host 承载、由多个已认证 Rich Client 通过受控 transport 使用的 App Server | 公网 API 或每个 Client 一个 Runtime |
 | Agent SDK Host | 将公开 SDK 合同映射到 Runtime API 的私有进程/adapter | CLI、Shared deployment 或 Plugin Host |
 | Plugin Host | 运行 Node/Bun 和第三方插件代码的受监督子进程 | Agent Runtime 或 Rust IPC client |
 
@@ -70,13 +104,21 @@ flowchart TB
     API --> Events["Authoritative events"]
   end
 
-  Embedded["Embedded adapter"] --> API
-  Shared["Shared local IPC adapter · opt-in TUI"] --> API
+  Desktop["Desktop GUI"] --> DesktopAdapter["Desktop / Tauri adapter"]
+  Web["Web UI"] --> AppServer["loopback WebSocket App Server"]
+  EmbeddedTUI["Embedded TUI"] --> AppServer
+  DesktopAdapter --> API
+  AppServer --> API
+  SharedCompat["Shared Runtime IPC · temporary compatibility"] --> API
+  Headless["Headless / ACP adapters"] --> API
   SDK["SDK Host adapter"] --> API
   Remote["Remote adapter"] --> API
 ```
 
-复用的是 Runtime API、权威事实和 owner；不复用 renderer、CLI 参数、SDK wire、远程认证或平台窗口生命周期。任何新能力必须先进入既有 Runtime owner，再由需要它的 adapter 映射，禁止在 Shared 路径复制业务实现。
+当前复用的是 Runtime API、权威事实和 owner；Web 与 Embedded TUI 额外复用 App Server wire，Shared TUI 使用 private v17，Desktop
+仍使用自己的 adapter。第 1.2 节目标只有通过评审并完成迁移后才扩大 App Server 复用范围。各入口不复用 renderer、CLI 参数、SDK
+wire、远程认证或平台窗口生命周期。任何新能力必须先进入既有 Runtime owner，再由 App Server 或需要它的独立 adapter 映射，禁止
+在 Embedded、Shared 或其他入口复制业务实现。
 
 ### 3.1 Embedded 事件交付
 
@@ -84,7 +126,9 @@ flowchart TB
 flowchart LR
   Queue["EventQueue"] --> Owner["Core product event queue owner"]
   Owner -->|"injects read-only AgentEventSource"| Runtime["Agent Runtime API"]
-  Runtime --> TUI["TUI adapter"]
+  Runtime --> AppServer["Embedded App Server"]
+  AppServer --> TUI["Interactive TUI client"]
+  AppServer --> GUI["Desktop GUI client · target"]
   Runtime --> Exec["Headless adapter"]
   Runtime --> Peer["Peer fanout adapter"]
   Runtime --> ACP["ACP adapter"]
@@ -92,11 +136,16 @@ flowchart LR
 ```
 
 - Core product assembly 创建事件 source，并维持旧消费队列的排空 task；第一方产品入口不再获得第二个订阅 API。
-- TUI、Headless CLI 和 Peer Host 只从 `AgentRuntime` 订阅，不能直接持有 Core-specific event source。
+- App Server server 从注入的 `AgentEventSource` 转发 Rich Client 权威事件；Rich Client 不得从 `AgentRuntime` 或 Core `EventQueue` 旁路订阅。
+- Headless CLI、Peer Host、ACP 和 SDK Host 从各自独立 Runtime adapter 订阅，不能直接持有 Core-specific event source。
 - `bitfun-core` 的旧 event-source/builder API 仅保留为 deprecated 源码兼容 facade；它们委托给同一个 Core owner，不形成第二套运行时或第一方调用路径。
 - 各 adapter 继续拥有自己的失败投影：TUI 标记当前视图不可信，Headless CLI 返回非成功终态，Peer Host 中断其拥有的 turns，ACP 取消 turn 并返回协议错误，SDK Host 终结 Query 并提供 `RestartHost` recovery。
-- 有界 receiver 的 `Lagged` 或 `Closed` 是显式失败；当前没有 cursor/replay 合同，禁止伪装成透明恢复。
-- 这条链路仍全部位于当前 Embedded 进程，不增加 SDK Host、IPC 或后台进程依赖。
+- 当前 App Server 为每条 connection/stream 发送单调 sequence 和 connection-local cursor；`app/syncEvents` 返回当前连接的 cursor
+  与 pending Permission snapshot，`session/sync` 恢复 Session state、transcript、workspace binding 和 pending Permission。它没有跨连接
+  持久化 replay/resume：重连后的旧 cursor 不能继续消费，client 必须重新 initialize 并执行权威 sync。
+- Shared Runtime IPC v17 不复用 App Server cursor。它按自己的有界队列规则处理 lag/closed：Agent 流失效后 fail closed；Permission lag
+  尝试从 Runtime 的 pending 集合重建，重建失败或流关闭时取消当前 Turn 并退出。任何路径都不能把流失效伪装成透明恢复。
+- 这条链路仍全部位于当前 Embedded 进程；Rich Client 使用 private in-memory transport，不增加 SDK Host、跨进程 IPC 或后台进程依赖。
 
 ## 4. Process View · Level 1
 
@@ -130,7 +179,7 @@ flowchart TD
 | Desktop 打开多个 workspace | 首次 attach/write 时逐个取得并持有文件锁 | 不把窗口数、Session 数等同于 Runtime 进程数 |
 | 只读 list/view | 不加锁 | ownership 只管理 Runtime deployment，不扩大成读取权限 |
 | 已解析且带有效 `connection_id` 的 remote workspace | 本机不加锁 | 与 Session storage 的远端判据一致；`host` 提示本身不能绕过本地锁 |
-| 当前只读 HTTP Server | 不创建 Core owner | 没有 Agent Runtime 就没有 ownership 可声明 |
+| 当前 loopback HTTP Server | 通过 server bootstrap 创建 Embedded Core owner | 只覆盖 Server Host 实际打开的本机 workspace；不因存在 WebSocket route 扩大为远程或多用户 ownership |
 
 `CoreRuntimeOwnership` 只选择 deployment、产品 identity 并在进程存活期间持有锁；`services-core` 只负责 canonical key 和跨进程锁。二者都不选择 workspace、不启动 Runtime，也不替代 Session 单写、数据库事务、文件冲突控制或安全沙箱。
 
@@ -187,7 +236,7 @@ Desktop 作为 ACP client 管理的外部 agent Session 不经过该 Runtime own
 sequenceDiagram
   participant C as Shared TUI client
   participant D as User-private discovery
-  participant S as Shared Runtime process
+  participant S as Shared Runtime Host process
 
   C->>D: read endpoint + token + identity + protocol
   C->>S: connect via Named Pipe / UDS
@@ -207,7 +256,7 @@ sequenceDiagram
   end
 ```
 
-当前私有协议（v16）只覆盖 TUI 已有用户旅程需要的窄操作：
+当前私有协议（v17）只覆盖 TUI 已有用户旅程需要的窄操作：
 
 | 已支持 | 明确不支持 |
 |---|---|
@@ -234,6 +283,9 @@ sequenceDiagram
 - v14 增加三个 current-root-controller 限定的 lineage operation：查询 Runtime 归一化后的扁平 lineage、读取已验证后代的权威 transcript，以及取消指定后代的活动执行子树。查询和读取可在根 Turn 活动时执行；取消复用现有 Session abort 语义，但不切换 controller，也不引入 observer、detach、分页或通用 Session RPC。
 - v15 为后代 transcript 读取增加 `required_settled_turn_ids` 一致性前置条件：Runtime 必须确认这些 Turn 已由 owner 持久化为终态，否则返回 `outcome_unknown`，由 TUI 在同一绝对期限内退避重试；TUI 只保留事件投影和该读屏障，不合并或重写权威 transcript。后代取消同时携带用户实际看到的 `expected_active_turn_id`，并在 owner 锁内拒绝已经切换的 Turn，避免迟到操作取消后续执行。lineage 查询和 transcript 读取是每连接至多一个的可抢占推测读取；更新的请求会取消旧读取，使后代取消和 Session 切换不会排在慢 transcript I/O 之后。该行为不放宽 controller 校验，不引入 observer 或通用多路复用。
 - v16 增加只读、workspace-scoped main Agent 摘要，用于 Shared TUI 与 Runtime host 的 selector 投影一致。启动页以 Runtime 启动工作区查询且不取得 Session lease；已有 Session 由 Runtime owner 解析其执行工作区并要求当前 controller。响应只包含逻辑 ID、描述、可选固定 model ID 与 ecosystem-neutral 的 external-source 分类；发现、审批、冲突消解、generation 与执行仍由既有 Agent Registry 和 external-source owner 负责，不经 IPC 暴露安装、变更、激活、Subagent 管理或 runtime lifecycle API。
+- v17 扩展原子 restore，使响应带回 Runtime Session state；增加结构化 Session usage、等待指定 Turn settlement，以及记录本地命令
+  transcript turn 的 operation。它只补齐当前 Shared TUI 与 `TuiBackend` 的行为等价，没有增加 replay、observer、通用 controller
+  transfer、多 Session multiplex 或公开 SDK 能力。
 - 一个连接最多控制一个 Session、同时最多提交一个活动 Turn；一个 Session 同时只有一个 controller。create/restore/fork 在完整结果通过大小检查后才原子切换控制权，失败时保留原 Session。fork 只接受当前 controller 的空闲 Session；无选中 Turn 时复制到最新持久化 Turn，指定 `before_turn_id` 时只复制该 Turn 之前的历史。活动 Turn 期间不能切换或 fork Session，也不能修改其名称、Agent mode 或 model；删除只作用于非当前且未被任何连接控制的 Session。
 - Submit 与手动 context compaction 都使用调用方已有的 `turn_id` 标识不确定结果；若操作超时，返回 `outcome_unknown`、关闭连接并按该 ID 取消。手动 compaction 要求当前 controller 且 Session 空闲，由 Core 通过与普通对话 Turn 共用的原子准入路径创建一个可审计 maintenance Turn，并在取得所有权后读取压缩上下文：planning 阶段允许取消，atomic commit 开始后忽略晚到取消并保持 Processing 直至终态持久化完成。maintenance Turn 保留在权威 transcript 中但不进入模型上下文，live/restored payload 使用同一 compression ID 和 `applied` 事实；commit 后的持久化故障发布明确失败终态而不是遗留 Processing。断连取消只有得到确认后才释放 Session 控制权；无法确认时继续隔离该 Session，直到 Runtime 进程退出。
 - Session delete/rename 和 Agent mode/model update 复用既有 Runtime 端口和校验，Runtime 对最终结果保持权威并拒绝无效目标。它们都是有副作用操作；发送前编码或 frame 上限失败表示请求未执行，连接仍可使用。rename 写入失败时恢复旧 metadata：确认恢复后返回明确失败，无法确认时返回 `outcome_unknown`。Shared Client 在请求写入后响应超时或丢失连接时也返回 `outcome_unknown` 并断开连接。两种情况都不自动重试：rename 由用户恢复 Session 并核对当前值；delete 由用户重新打开 `/sessions` 核对目标是否仍存在。模型目录以及完整 Agent/Subagent 管理仍是同版本第一方产品事实，不加入 IPC；v16 的 main Agent 摘要只是 host-owned selector 所需的最小只读投影。
@@ -261,7 +313,8 @@ flowchart LR
 
 | 路径 | 数据边界 | 性能约束 |
 |---|---|---|
-| Embedded | 第一方 adapter 以 Rust 类型直接调用 `AgentRuntime` | 不初始化本机 IPC，不执行 JSON framing、序列化或反序列化 |
+| Embedded Rich Client | `AppServerClient` 通过 private in-memory transport 调用同进程 App Server | 不初始化跨进程 IPC 或后台进程；保持与 Shared 相同的 JSON-RPC、DTO、错误和事件语义，编解码成本通过测量优化而不增加直连旁路 |
+| Embedded non-Rich Client | Headless、ACP、Peer 和 SDK Host 的独立 adapter 以 Rust 类型调用 Runtime API | 不因 Rich Client 合同承担 App Server wire；保持各自协议和生命周期 |
 | Shared request | Client 将 operation 编码一次并写入一个长度前缀 frame | 请求保持 128 KiB 上限；业务层只接收类型化 operation |
 | Shared response/event | Server 将结果或事件编码一次后写出 | 响应/事件保持 8 MiB 上限；超限使事件流明确失效，不能无界分配 |
 | Shared receive | 每个方向只有一个严格 transport decode 边界 | 未知信封字段和不兼容版本 fail closed；严格校验可以检查规范化 JSON，但不能把动态 JSON 传入 Runtime owner |
@@ -275,8 +328,13 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-  GUI["GUI adapter"] --> API["Agent Runtime API"]
-  TUI["TUI adapter"] --> API
+  GUI["Desktop GUI"] --> DesktopAdapter["Desktop / Tauri adapter"]
+  Web["Web UI"] --> AppServer["App Server"]
+  EmbeddedTUI["Embedded TUI"] --> AppServer
+  SharedTUI["Shared TUI"] --> SharedCompat["Runtime IPC v17 compatibility"]
+  DesktopAdapter --> API["Agent Runtime API / owner ports"]
+  AppServer --> API["Agent Runtime API / owner ports"]
+  SharedCompat --> API
   CLI["Headless CLI adapter"] --> API
   SDK["SDK Host adapter"] --> API
   ACP["ACP adapter"] --> API
@@ -285,7 +343,9 @@ flowchart TB
   Coordinator --> Behavior["single behavior owners"]
 
   GUI -. "composition" .-> Ownership["CoreRuntimeOwnership"]
-  TUI -. "Embedded / opt-in Shared" .-> Ownership
+  Web -. "composition" .-> Ownership
+  EmbeddedTUI -. "Embedded" .-> Ownership
+  SharedTUI -. "Shared" .-> Ownership
   CLI -. "Embedded" .-> Ownership
   SDK -. "Embedded" .-> Ownership
   ACP -. "Embedded" .-> Ownership
@@ -295,39 +355,47 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-  CLI["apps/cli"] --> Client["CLI Runtime client"]
-  Client -->|"Embedded"| Runtime["execution/agent-runtime"]
-  Client -->|"Shared only"| IPC["adapters/agent-runtime-ipc"]
+  TUI["Interactive TUI"] --> Backend["TuiBackend"]
+  Backend -->|"Embedded"| Client["AppServerClient"]
+  Client --> Memory["in-memory transport"]
+  Memory --> AppServer["BitfunAppServer"]
+  Backend -->|"Shared compatibility"| IPC["adapters/agent-runtime-ipc v17"]
   IPC --> Handler["CLI Shared handler"]
+  AppServer --> Runtime["execution/agent-runtime / owners"]
   Handler --> Runtime
-  Runtime --> Ports["runtime ports / owners"]
 ```
 
-CLI adapter 负责命令解析、TUI 状态和错误文案；私有 IPC 只负责本机传输、连接控制和类型映射；Agent Runtime 与 owner 负责 Session 校验、持久化和权威结果。业务代码通过同一个 CLI Runtime client 调用能力，不根据部署形态复制业务分支。
+CLI Host 负责命令解析、TUI 状态、错误文案、App Server 组装和 transport 生命周期；`TuiBackend` 隔离当前 Shared compatibility adapter。
+App Server 或私有 IPC 只负责协议、连接控制和类型映射；Agent Runtime 与 owner 负责 Session 校验、持久化和权威结果。
+TUI 业务代码不根据部署形态复制业务分支，Shared 达到 App Server 语义等价后替换 compatibility adapter。
 
 - CLI 不依赖 SDK Host，GUI/TUI 也不依赖公开 SDK package。
-- 交互式 TUI 的启动页和会话页复用一个 CLI 私有 Runtime client；Session、Turn、Permission 和事件订阅都使用 Rust Runtime SDK（当前 preview）。该 client 只是第一方 adapter，不是公开 SDK、SDK Host client 或第二套 Runtime。
+- 交互式 TUI 的启动页和会话页复用 app-local `TuiBackend`；Embedded backend 使用正式 `AppServerClient`，Shared backend 暂时映射 private Runtime IPC v17。TUI 不直接依赖 Rust Runtime SDK、Core/Service owner 或 IPC operation。
 - Headless CLI 和 Peer Host 使用同一 Runtime 订阅入口，但分别保留确定性退出与 Peer fanout 语义；共享订阅入口不等于共享 renderer 或产品生命周期。
-- TUI 不是 Server；未来是否连接 Shared deployment 是部署选择，不改变 TUI 的 renderer/键位职责。
+- TUI 不是 Server；Embedded Host 在同进程组装私有 App Server，是否连接 Shared deployment 是部署选择，不改变 TUI 的 renderer/键位职责或 App Server 行为合同。
 - Agent SDK Host 只服务外部 SDK 合同，不成为第一方 rich-client 的通用底座。
 - Headless CLI 默认继续 Embedded；CI 或测试可保持独立进程和独立 workspace，不承担后台实例成本。
-- Tauri 仍负责窗口和桌面能力；未来它可以管理 Shared process 的启动/重连，但不拥有 Agent Runtime 业务生命周期。
+- Tauri 仍负责窗口和桌面能力，并逐步收窄为 App Server Host adapter；未来它可以管理 Shared process 的启动/重连，但不拥有 Agent Runtime 业务生命周期。
 
 ### 5.2 Physical View
 
 ```mermaid
 flowchart TB
   subgraph Embedded["默认 Embedded"]
-    TUI["TUI / Headless / CI"] --> Direct["in-process Agent Runtime"]
+    TUI["Interactive TUI"] --> AppServer["private in-process App Server"]
+    AppServer --> Runtime["in-process Agent Runtime"]
+    Headless["Headless / CI"] --> Runtime
   end
   subgraph Shared["显式 --shared"]
-    Clients["one or more TUI processes"] -->|"Named Pipe / UDS"| SharedRuntime["Shared Runtime process"]
+    Clients["one or more TUI processes"] -->|"Named Pipe / UDS · current compatibility"| SharedRuntime["Shared Runtime Host process"]
   end
-  Direct --> Data["workspace + Session storage"]
+  Runtime --> Data["workspace + Session storage"]
   SharedRuntime --> Data
 ```
 
-默认交互式 TUI、Headless CLI 和 CI 保持 Embedded。只有显式 `--shared` 的交互式 TUI 进入 Shared；同一 workspace 的两种部署互斥。多开 TUI 增加 Client 进程和有界连接，不按 Client 数量复制 Runtime、Session owner 或 Plugin Host。
+默认交互式 TUI、Headless CLI 和 CI 保持 Embedded；交互式 TUI 通过 private in-process App Server，Headless/CI 保留独立 adapter。
+只有显式 `--shared` 的交互式 TUI 进入 Shared；同一 workspace 的两种部署互斥。多开 TUI 增加 Client 进程和有界连接，
+不按 Client 数量复制 Runtime、Session owner 或 Plugin Host。
 
 ### 5.3 Scenario (+1) · Rename current Session
 
@@ -335,16 +403,28 @@ flowchart TB
 sequenceDiagram
   participant U as User
   participant T as TUI adapter
-  participant C as CLI Runtime client
+  participant B as TuiBackend
+  participant E as Embedded App Server adapter
+  participant S as Shared Runtime IPC v17 adapter
   participant R as Agent Runtime
 
   U->>T: /rename Auth refactor
   T->>T: trim + require idle Session
-  T->>C: rename_session(id, name)
-  C->>R: direct call or one Shared frame
-  R->>R: validate ownership + persist
-  R-->>C: applied / failed / outcome_unknown
-  C-->>T: typed result
+  T->>B: typed TuiBackend request
+  alt Embedded
+    B->>E: typed App Server request
+    E->>R: owner port call
+    R->>R: validate ownership + persist
+    R-->>E: applied / failed / outcome_unknown
+    E-->>B: mapped typed result
+  else Shared compatibility
+    B->>S: Runtime IPC v17 request
+    S->>R: owner port call
+    R->>R: validate ownership + persist
+    R-->>S: applied / failed / outcome_unknown
+    S-->>B: mapped typed result
+  end
+  B-->>T: typed result
   T-->>U: update name only after applied
 ```
 
@@ -356,20 +436,32 @@ Embedded 和 Shared 最终调用同一 `AgentRuntime::rename_session`。Runtime 
 sequenceDiagram
   participant U as User
   participant T as TUI adapter
-  participant C as CLI Runtime client
+  participant B as TuiBackend
+  participant E as Embedded App Server adapter
+  participant S as Shared Runtime IPC v17 adapter
   participant R as Agent Runtime
 
   U->>T: /sessions then Ctrl+D
   T->>T: reject current or active target
-  T->>C: delete_session(id)
-  C->>R: direct call or one Shared frame
-  R->>R: existing delete owner
-  R-->>C: applied / failed / outcome_unknown
-  C-->>T: typed result
+  T->>B: typed TuiBackend request
+  alt Embedded
+    B->>E: typed App Server request
+    E->>R: owner port call
+    R->>R: existing delete owner
+    R-->>E: applied / failed / outcome_unknown
+    E-->>B: mapped typed result
+  else Shared compatibility
+    B->>S: Runtime IPC v17 request
+    S->>R: owner port call
+    R->>R: existing delete owner
+    R-->>S: applied / failed / outcome_unknown
+    S-->>B: mapped typed result
+  end
+  B-->>T: typed result
   T-->>U: remove only after applied
 ```
 
-Embedded 和 Shared 最终调用同一 `AgentRuntime::delete_session`。Shared Server 只在请求方没有活动 Turn、目标 Session 未被任何 Client 控制时调用 Runtime owner；`session_in_use` 和 `not_found` 保持结构化错误。TUI 复用现有单个 Session 异步任务槽位，不阻塞事件循环，也不自动重试结果不确定的删除。
+Embedded 和 Shared 最终调用同一个 Agent Runtime。Shared Runtime Host 通过 v17 handler 调用 Runtime；它不是 Shared App Server。Shared Runtime Host 只在请求方没有活动 Turn、目标 Session 未被任何 Client 控制时调用 Runtime owner；`session_in_use` 和 `not_found` 保持结构化错误。TUI 复用现有单个 Session 异步任务槽位，不阻塞事件循环，也不自动重试结果不确定的删除。
 
 ## 6. 隔离和生命周期原则
 
@@ -413,17 +505,20 @@ Session/Turn、事件恢复、Permission/UserInput、Controller、配置管理�
 
 | 产品 | 已验证做法 | BitFun 采用 | 不照搬 |
 |---|---|---|---|
-| [OpenCode Server/SDK](https://opencode.ai/docs/server/) | Server-first；类型化 SDK 直接消费 Server API | 一个 Runtime owner 可以服务多个第一方 Client | 不让默认 TUI 承担 HTTP/OpenAPI 编解码，也不把全量 route 固化为私有 Shared wire |
-| [Codex App Server](https://developers.openai.com/codex/app-server/) | App Server 为 rich client 和 remote TUI 提供 JSON-RPC；自动化继续使用 SDK；WebSocket transport 仍是实验性接口 | rich-client 私有协议与公开 SDK 分层，并为 Shared 入口保留有界本机 transport | 不让默认 CLI 依赖 App Server，也不复制其完整 schema 或实验性远程 transport |
-| [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/typescript) | Agent loop 由长期运行的 CLI 子进程承载，并提供 `startup()` 预热以减少首次请求成本 | 长期交互可以复用已启动进程，空闲后回收 | 不让第一方 Embedded TUI 为接口统一付出子进程和编解码成本，也不把多 TUI 映射为多个 Runtime |
+| [OpenCode Server/SDK](https://opencode.ai/docs/server/) | Server-first；类型化 SDK 直接消费 Server API | 一个 Runtime owner 可以服务多个第一方 Client | 不要求 Rich Client 使用 HTTP/OpenAPI，也不把全量 route 固化为私有 Shared wire |
+| [Codex App Server](https://developers.openai.com/codex/app-server/) | App Server 为 rich client 和 remote TUI 提供 JSON-RPC；自动化继续使用 SDK；WebSocket transport 仍是实验性接口 | Rich Client 使用 App Server，自动化/公开 SDK 保持独立，并为 Shared 入口保留有界本机 transport | 不复制其完整 schema，也不把实验性远程 transport 当作已交付公网 API |
+| [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/typescript) | Agent loop 由长期运行的 CLI 子进程承载，并提供 `startup()` 预热以减少首次请求成本 | 长期 Shared 交互可以复用已启动进程，空闲后回收 | Embedded Rich Client 不增加子进程，多 TUI 也不映射为多个 Runtime |
 
-三种产品说明了不同部署的有效边界：server-first 适合稳定多客户端协议，长期子进程适合语言 SDK，进程内调用适合默认本机交互。BitFun 采用混合部署，不把任何一种形态强制成所有入口的公共底座；当前也没有为了追赶功能表一次性增加 Session/Tool/Permission 超集。
+三种产品说明了不同部署的有效边界：稳定 Rich Client 合同可以同时承载进程内和多客户端 transport，长期子进程适合 Shared
+交互或语言 SDK，独立强类型 adapter 适合 Headless/ACP 等非 Rich Client。BitFun 采用混合部署，不把 App Server 强制成所有入口的
+公共底座；当前也没有为了追赶功能表一次性增加 Session/Tool/Permission 超集。
 
 ## 9. 不变量
 
 - 只有一套 Agent Runtime 业务实现；部署差异不能产生第二套 Session、Tool、Permission 或 MCP owner。
+- 当前入口使用第 1.1 节列出的 adapter；若第 1.2 节目标通过评审并迁移完成，Desktop GUI、Web UI 和交互式 TUI 才统一使用 App Server。
 - Client、窗口、Session 或 workspace 数量不会自动等量增加 Runtime 或 Plugin Host 进程。
-- 私有 IPC 不成为公开 SDK、Remote、Peer、HTTP 或浏览器协议。
+- 当前 Shared Runtime IPC 是第一方 TUI 的 private compatibility transport，不成为公开 SDK、Remote、Peer、HTTP 或浏览器协议；是否由 App Server Shared transport 替换仍待评审。
 - 默认 GUI/TUI/Headless CLI、ACP 与 SDK Host 保持 Embedded；只有交互式 TUI 的显式 `--shared` 选择 Shared。互斥按 `workspace + product` 生效，不再按入口名称缩窄。
 - Account/session cloud sync 仍使用既有 Core compatibility 边界，不属于 Shared Runtime 支持。
 - Remote workspace 的文件、凭据、进程和 Runtime 位于目标执行域，禁止静默回落本机。

@@ -390,6 +390,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
+        "dispatch_provision_target",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "dispatch_list_jobs",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
@@ -508,6 +512,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     (
         "get_agent_profile_configs",
         RemoteWorkspacePolicy::LegacyUnaudited,
+    ),
+    (
+        "get_ai_model_catalog",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
         "get_all_modified_files",
@@ -662,6 +670,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     (
         "get_opened_workspaces",
         RemoteWorkspacePolicy::LegacyUnaudited,
+    ),
+    (
+        "get_primary_assistant_workspace",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     ("get_operation_diff", RemoteWorkspacePolicy::LegacyUnaudited),
     (
@@ -1712,6 +1724,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     (
         "set_active_workspace",
         RemoteWorkspacePolicy::LegacyUnaudited,
+    ),
+    (
+        "set_primary_assistant_workspace",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
         "set_agent_profile_config",

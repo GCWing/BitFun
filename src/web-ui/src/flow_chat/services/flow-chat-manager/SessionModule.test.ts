@@ -1302,6 +1302,24 @@ describe('SessionModule historical session coordination', () => {
     });
   });
 
+  it('does not recreate metadata-only non-empty history when context restore fails', async () => {
+    const { context } = createContext(createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [],
+      totalTurnCount: 23,
+    } as any));
+    agentApiMocks.ensureCoordinatorSession.mockRejectedValueOnce(
+      new Error('Session metadata not found')
+    );
+
+    await expect(ensureBackendSession(context, 'history-1')).rejects.toThrow();
+
+    expect(agentApiMocks.ensureCoordinatorSession).toHaveBeenCalledTimes(1);
+    expect(agentApiMocks.createSession).not.toHaveBeenCalled();
+  });
+
   it('does not recreate a session that another BitFun instance is writing', async () => {
     const { context } = createContext(createSession({
       isHistorical: false,

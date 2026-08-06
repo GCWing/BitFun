@@ -1,0 +1,55 @@
+@use '../../../component-library/styles/tokens' as *;
+
+.bitfun-reasoning-config-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+
+  &__body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  &__footer {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: flex-end;
+    gap: $size-gap-3;
+    min-height: 52px;
+    padding: $size-gap-2 $size-gap-4;
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    background: var(--bf-appearance-token-color-bg-primary);
+  }
+
+  &__error {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: $size-gap-1;
+    color: var(--bf-appearance-token-color-warning);
+    font-size: var(--bf-appearance-token-font-size-2xs);
+  }
+
+  &__actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: $size-gap-2;
+  }
+}
+
+@media (max-width: 480px) {
+  .bitfun-reasoning-config-panel {
+    &__footer {
+      align-items: stretch;
+      flex-direction: column;
+      padding: $size-gap-3;
+    }
+
+    &__actions {
+      justify-content: flex-end;
+    }
+  }
+}

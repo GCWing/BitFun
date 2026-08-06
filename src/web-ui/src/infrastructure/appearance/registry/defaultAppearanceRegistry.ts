@@ -38,6 +38,7 @@ import { richTextInputAppearanceDescriptor } from '@/flow_chat/components/RichTe
 import { modelRoundItemAppearanceDescriptor } from '@/flow_chat/components/modern/ModelRoundItem.appearance';
 import { deepReviewActionBarAppearanceDescriptor } from '@/flow_chat/deep-review/action-bar/appearance';
 import { modelSelectorAppearanceDescriptor } from '@/flow_chat/components/ModelSelector.appearance';
+import { reasoningPresetSelectorAppearanceDescriptor } from '@/flow_chat/components/ReasoningPresetSelector.appearance';
 import { flowChatHeaderAppearanceDescriptor } from '@/flow_chat/components/modern/FlowChatHeader.appearance';
 import { flowChatTurnRailAppearanceDescriptor } from '@/flow_chat/components/modern/FlowChatTurnRail.appearance';
 import { sessionFilesBadgeAppearanceDescriptor } from '@/flow_chat/components/modern/SessionFilesBadge.appearance';
@@ -121,6 +122,8 @@ import { flexiblePanelAppearanceDescriptor } from '@/app/components/panels/base/
 import { btwSessionPanelAppearanceDescriptor } from '@/flow_chat/components/btw/BtwSessionPanel.appearance';
 import { modernFlowChatAppearanceDescriptor, virtualMessageListAppearanceDescriptor } from '@/flow_chat/components/modern/appearance';
 import { aiModelConfigAppearanceDescriptor } from '@/infrastructure/config/components/AIModelConfig.appearance';
+import { reasoningConfigPanelAppearanceDescriptor } from '@/infrastructure/config/components/ReasoningConfigPanel.appearance';
+import { reasoningPresetEditorAppearanceDescriptor } from '@/infrastructure/config/components/ReasoningPresetEditor.appearance';
 import { externalSourcesConfigAppearanceDescriptor } from '@/infrastructure/config/components/ExternalSourcesConfig.appearance';
 import { acpAgentsConfigAppearanceDescriptor } from '@/infrastructure/config/components/AcpAgentsConfig.appearance';
 import { sessionConfigAppearanceDescriptor } from '@/infrastructure/config/components/SessionConfig.appearance';
@@ -315,6 +318,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(modelRoundItemAppearanceDescriptor)
     .registerComponent(deepReviewActionBarAppearanceDescriptor)
     .registerComponent(modelSelectorAppearanceDescriptor)
+    .registerComponent(reasoningPresetSelectorAppearanceDescriptor)
     .registerComponent(flowChatHeaderAppearanceDescriptor)
     .registerComponent(flowChatTurnRailAppearanceDescriptor)
     .registerComponent(sessionFilesBadgeAppearanceDescriptor)
@@ -409,6 +413,8 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(modernFlowChatAppearanceDescriptor)
     .registerComponent(virtualMessageListAppearanceDescriptor)
     .registerComponent(aiModelConfigAppearanceDescriptor)
+    .registerComponent(reasoningConfigPanelAppearanceDescriptor)
+    .registerComponent(reasoningPresetEditorAppearanceDescriptor)
     .registerComponent(externalSourcesConfigAppearanceDescriptor)
     .registerComponent(acpAgentsConfigAppearanceDescriptor)
     .registerComponent(sessionConfigAppearanceDescriptor)

@@ -2,6 +2,7 @@
 
 use crate::api::session_storage_path::desktop_effective_session_storage_path;
 use crate::embedded_relay_host::DesktopEmbeddedRelayHost;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use bitfun_core::agentic::coordination::{
     get_global_coordinator, get_global_scheduler, ConversationCoordinator,
 };
@@ -10,6 +11,10 @@ use bitfun_core::agentic::tools::account_login_capability::set_account_login_ava
 use bitfun_core::agentic::tools::page_deploy_host::set_page_deploy_handler;
 use bitfun_core::agentic::tools::page_publish_host::set_page_publish_handler;
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
+use bitfun_core::service::dispatch::{
+    DispatchAccountDaemonIdentity, DispatchAccountDaemonProvisionRequest,
+    DISPATCH_ACCOUNT_DAEMON_PROVISIONING_SCHEMA_VERSION,
+};
 use bitfun_core::service::remote_connect::session_store::{
     clear_credential_hint, load_credential_hint, save_credential_hint, AccountHint,
 };
@@ -22,6 +27,7 @@ use bitfun_core::service::remote_connect::{
 use bitfun_core::service::session::{DialogTurnData, SessionMetadata};
 use bitfun_core::service::workspace::{get_global_workspace_service, WorkspaceKind};
 use bitfun_core::service::workspace_runtime::WorkspaceRuntimeService;
+use bitfun_events::AI_MODEL_CATALOG_UPDATED_EVENT;
 use bitfun_services_integrations::remote_connect::account::{
     ensure_relay_session_history_exportable, error_indicates_expired_token,
     mark_relay_session_history_import_complete, mark_relay_session_history_import_pending,
@@ -537,6 +543,7 @@ fn should_fanout_peer_ui_event(event: &str) -> bool {
             | "backend-event-toolawaitinguserinput"
             | "backend-event-toolcallconfirmation"
             | "permission://event"
+            | AI_MODEL_CATALOG_UPDATED_EVENT
     )
 }
 
@@ -851,6 +858,113 @@ pub(crate) async fn read_account_context_for_generation(
         return Err("account context changed".to_string());
     }
     Ok(context)
+}
+
+/// Secret-bearing, Rust-only handoff for one SSH target bootstrap. It is never
+/// serialized through Tauri; only its redacted outcome reaches the Web UI.
+pub(crate) struct DispatchAccountDeviceProvisioning {
+    pub(crate) request: DispatchAccountDaemonProvisionRequest,
+    target_session: AccountSession,
+    relay_url: String,
+}
+
+impl DispatchAccountDeviceProvisioning {
+    pub(crate) fn device_id(&self) -> &str {
+        &self.request.device_id
+    }
+
+    pub(crate) fn user_id(&self) -> &str {
+        &self.request.user_id
+    }
+}
+
+/// Mint a distinct full device credential for an SSH host. A finalized local
+/// login is optional: callers receive `None` and skip account/daemon setup when
+/// this Desktop is logged out or still awaiting the cloud/local sync choice.
+pub(crate) async fn provision_dispatch_account_device(
+    identity: &DispatchAccountDaemonIdentity,
+) -> Result<Option<DispatchAccountDeviceProvisioning>, String> {
+    if PENDING_SYNC_CHOICE.load(Ordering::Acquire) {
+        return Ok(None);
+    }
+    let generation = account_context_generation();
+    let Ok(_account_guard) = lock_account_sync(generation).await else {
+        return Ok(None);
+    };
+    let (session, relay_url) = match read_account_context_for_generation(generation).await {
+        Ok(context) => context,
+        Err(error) if error == "not logged in" => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let issued = AccountClient::new()
+        .provision_device_token(
+            &relay_url,
+            &session,
+            &identity.device_id,
+            &identity.device_name,
+            uuid::Uuid::new_v4(),
+        )
+        .await
+        .map_err(|error| format!("provision remote account device: {error}"))?;
+    let target_session = AccountSession {
+        token: issued.token.clone(),
+        user_id: issued.user_id.clone(),
+        master_key: session.master_key,
+    };
+    let provisioning = DispatchAccountDeviceProvisioning {
+        request: DispatchAccountDaemonProvisionRequest {
+            schema_version: DISPATCH_ACCOUNT_DAEMON_PROVISIONING_SCHEMA_VERSION,
+            token: issued.token,
+            user_id: issued.user_id,
+            master_key_base64: BASE64.encode(session.master_key),
+            relay_url: relay_url.clone(),
+            device_id: issued.device_id,
+        },
+        target_session,
+        relay_url,
+    };
+    if !account_context_matches(generation, &session.token).await {
+        let _ = remove_dispatch_account_device(&provisioning).await;
+        return Err("account context changed while provisioning the SSH target".to_string());
+    }
+    Ok(Some(provisioning))
+}
+
+pub(crate) async fn wait_for_dispatch_account_device_online(
+    provisioning: &DispatchAccountDeviceProvisioning,
+) -> Result<(), String> {
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        let devices = AccountClient::new()
+            .list_devices(&provisioning.relay_url, &provisioning.target_session)
+            .await
+            .map_err(|error| format!("verify remote daemon connection: {error}"))?;
+        if devices
+            .iter()
+            .any(|device| device.device_id == provisioning.request.device_id && device.online)
+        {
+            return Ok(());
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(
+                "remote BitFun daemon did not connect to the relay within 30 seconds".to_string(),
+            );
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+}
+
+pub(crate) async fn remove_dispatch_account_device(
+    provisioning: &DispatchAccountDeviceProvisioning,
+) -> Result<(), String> {
+    AccountClient::new()
+        .delete_device(
+            &provisioning.relay_url,
+            &provisioning.target_session,
+            &provisioning.request.device_id,
+        )
+        .await
+        .map_err(|error| format!("remove provisioned account device: {error}"))
 }
 
 async fn account_context_matches(generation: u64, token: &str) -> bool {
@@ -4792,5 +4906,10 @@ mod peer_event_tests {
     fn permission_events_are_fanned_out_to_peer_controllers() {
         assert!(should_fanout_peer_ui_event("permission://event"));
         assert!(!should_fanout_peer_ui_event("permission://internal"));
+    }
+
+    #[test]
+    fn model_catalog_updates_are_fanned_out_to_peer_controllers() {
+        assert!(should_fanout_peer_ui_event("ai://model-catalog-updated"));
     }
 }

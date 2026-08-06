@@ -29,6 +29,9 @@ use crate::agentic::skill_agent_snapshot::TurnSkillAgentSnapshot;
 use crate::agentic::workspace::WorkspaceBinding;
 use crate::agentic::ConversationCoordinator;
 use crate::infrastructure::ai::get_global_ai_client_factory;
+use crate::infrastructure::ai::reasoning_catalog::{
+    load_models_dev_reasoning_catalog_without_refresh, normalize_reasoning_preset_for_model,
+};
 use crate::service::config::{
     get_app_language_code, get_global_config_service, short_model_user_language_instruction,
     subscribe_config_updates, ConfigUpdateEvent,
@@ -126,6 +129,35 @@ fn should_auto_migrate_session_model(
 
 fn session_model_allows_automatic_migration(binding_policy: SessionModelBindingPolicy) -> bool {
     binding_policy == SessionModelBindingPolicy::Mutable
+}
+
+fn concrete_model_for_session_selection<'a>(
+    ai_config: &'a crate::service::config::types::AIConfig,
+    session: &Session,
+) -> Option<&'a crate::service::config::types::AIModelConfig> {
+    let configured_model_id = session
+        .config
+        .model_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|model_id| !model_id.is_empty())
+        .unwrap_or("auto");
+
+    let resolved_model_id = if matches!(
+        session.config.model_binding_policy,
+        SessionModelBindingPolicy::ApprovedImmutable
+    ) {
+        ai_config.resolve_model_reference(configured_model_id)
+    } else if SessionManager::is_auto_model_selector(configured_model_id) {
+        ai_config.resolve_model_selection("primary")
+    } else {
+        ai_config.resolve_model_selection(configured_model_id)
+    }?;
+
+    ai_config
+        .models
+        .iter()
+        .find(|model| model.enabled && model.id == resolved_model_id)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -610,6 +642,28 @@ impl SessionManager {
         let context_window = Self::session_context_window_from_ai_config(session, ai_config)?;
         session.config.max_context_tokens = context_window;
         Some(context_window)
+    }
+
+    async fn normalize_session_reasoning_preset(
+        session: &Session,
+        ai_config: &crate::service::config::types::AIConfig,
+    ) -> Option<String> {
+        let Some(preset_id) = session
+            .config
+            .reasoning_preset
+            .as_deref()
+            .map(str::trim)
+            .filter(|preset_id| !preset_id.is_empty() && !preset_id.eq_ignore_ascii_case("auto"))
+        else {
+            return None;
+        };
+        let Some(model) = concrete_model_for_session_selection(ai_config, session) else {
+            // Model reconciliation owns unavailable model selectors. Do not
+            // erase the preset while the concrete model is unresolved.
+            return Some(preset_id.to_string());
+        };
+        let models_dev = load_models_dev_reasoning_catalog_without_refresh().await;
+        normalize_reasoning_preset_for_model(model, models_dev.catalog.as_deref(), Some(preset_id))
     }
 
     fn normalize_session_title_input(title: &str) -> BitFunResult<String> {
@@ -2013,6 +2067,128 @@ impl SessionManager {
         }
     }
 
+    async fn reconcile_session_reasoning_preset_locked(
+        &self,
+        session_id: &str,
+        ai_config: &crate::service::config::types::AIConfig,
+        reason: &'static str,
+    ) -> BitFunResult<Option<String>> {
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
+        let Some(original_session) = self.sessions.get(session_id).map(|value| value.clone())
+        else {
+            return Err(BitFunError::NotFound(format!(
+                "Session not found: {session_id}"
+            )));
+        };
+        let Some(previous_preset_id) = original_session.config.reasoning_preset.clone() else {
+            return Ok(None);
+        };
+        let normalized =
+            Self::normalize_session_reasoning_preset(&original_session, ai_config).await;
+        if normalized.is_some() {
+            return Ok(normalized);
+        }
+
+        let mut updated_session = original_session.clone();
+        updated_session.config.reasoning_preset = None;
+        let now = SystemTime::now();
+        updated_session.updated_at = now;
+        updated_session.last_activity_at = now;
+        if self.config.enable_persistence && self.should_persist_session(&original_session) {
+            let workspace_path = self
+                .effective_session_storage_path(session_id)
+                .await
+                .ok_or_else(|| {
+                    BitFunError::session(format!(
+                        "Session storage path unavailable while clearing reasoning preset: {session_id}"
+                    ))
+                })?;
+            if let Err(error) = self
+                .persistence_manager
+                .save_session(&workspace_path, &updated_session)
+                .await
+            {
+                if let Err(rollback_error) = self
+                    .persistence_manager
+                    .save_session(&workspace_path, &original_session)
+                    .await
+                {
+                    return Err(BitFunError::session(format!(
+                        "Reasoning preset persistence failed and rollback did not complete: session_id={session_id}, error={error}, rollback_error={rollback_error}"
+                    )));
+                }
+                return Err(error);
+            }
+        }
+
+        if let Some(mut session) = self.sessions.get_mut(session_id) {
+            session.config.reasoning_preset = None;
+            session.updated_at = now;
+            session.last_activity_at = now;
+        } else {
+            return Err(BitFunError::NotFound(format!(
+                "Session not found: {session_id}"
+            )));
+        }
+        drop(_mutation_guard);
+
+        warn!(
+            "Session reasoning preset became unavailable; normalized to Auto: session_id={}, preset_id={}, reason={}",
+            session_id, previous_preset_id, reason
+        );
+        if let Some(coordinator) = crate::agentic::coordination::get_global_coordinator() {
+            coordinator
+                .emit_session_reasoning_preset_auto_cleared(session_id, &previous_preset_id, reason)
+                .await;
+        }
+        Ok(None)
+    }
+
+    /// Last-resort turn-time canonicalization. Normal write/restore/config
+    /// reconciliation paths should have already converged the Session.
+    pub(crate) async fn reconcile_session_reasoning_preset_for_turn(
+        &self,
+        session_id: &str,
+        reason: &'static str,
+    ) -> BitFunResult<Option<String>> {
+        let Some(ai_config) = Self::load_ai_config_for_model_resolution().await else {
+            return Ok(self
+                .sessions
+                .get(session_id)
+                .and_then(|session| session.config.reasoning_preset.clone()));
+        };
+        self.reconcile_session_reasoning_preset_locked(session_id, &ai_config, reason)
+            .await
+    }
+
+    async fn reconcile_loaded_session_reasoning_presets(&self, reason: &'static str) {
+        let Some(ai_config) = Self::load_ai_config_for_model_resolution().await else {
+            debug!(
+                "Skipping session reasoning preset reconciliation because AI config is unavailable: reason={}",
+                reason
+            );
+            return;
+        };
+        let candidates = self
+            .sessions
+            .iter()
+            .filter(|entry| entry.config.reasoning_preset.is_some())
+            .map(|entry| entry.session_id.clone())
+            .collect::<Vec<_>>();
+
+        for session_id in candidates {
+            if let Err(error) = self
+                .reconcile_session_reasoning_preset_locked(&session_id, &ai_config, reason)
+                .await
+            {
+                warn!(
+                    "Failed to reconcile session reasoning preset: session_id={}, reason={}, error={}",
+                    session_id, reason, error
+                );
+            }
+        }
+    }
+
     /// Best-effort: drop cached AI clients for invalidated models so the next
     /// request rebuilds against the reconciled config.
     async fn invalidate_ai_clients_for_models(invalidated_model_ids: &[String]) {
@@ -2093,6 +2269,23 @@ impl SessionManager {
                                 &invalidated_model_ids,
                                 "model_reconciled",
                             )
+                            .await;
+                    }
+                    Ok(
+                        ConfigUpdateEvent::ModelConfigurationUpdated
+                        | ConfigUpdateEvent::AIModelUpdated { .. }
+                        | ConfigUpdateEvent::DefaultAIModelUpdated { .. }
+                        | ConfigUpdateEvent::ConfigReloaded,
+                    ) => {
+                        manager
+                            .reconcile_loaded_session_reasoning_presets(
+                                "model_configuration_updated",
+                            )
+                            .await;
+                    }
+                    Ok(ConfigUpdateEvent::ReasoningCatalogUpdated) => {
+                        manager
+                            .reconcile_loaded_session_reasoning_presets("reasoning_catalog_updated")
                             .await;
                     }
                     Ok(_) => {}
@@ -2241,10 +2434,21 @@ impl SessionManager {
         };
         session.created_by = created_by;
         session.kind = kind;
-        if let Some(ai_config) = Self::load_ai_config_for_model_resolution().await {
+        let ai_config = Self::load_ai_config_for_model_resolution().await;
+        if let Some(ai_config) = ai_config.as_ref() {
+            let previous_reasoning_preset = session.config.reasoning_preset.clone();
+            session.config.reasoning_preset =
+                Self::normalize_session_reasoning_preset(&session, ai_config).await;
+            if previous_reasoning_preset.is_some() && session.config.reasoning_preset.is_none() {
+                warn!(
+                    "Session creation received an unavailable reasoning preset; normalizing to Auto: session_id={}, preset_id={}",
+                    session.session_id,
+                    previous_reasoning_preset.as_deref().unwrap_or_default()
+                );
+            }
             let previous_context_window = session.config.max_context_tokens;
             if let Some(resolved_context_window) =
-                Self::sync_session_context_window_from_ai_config(&mut session, &ai_config)
+                Self::sync_session_context_window_from_ai_config(&mut session, ai_config)
             {
                 if resolved_context_window != previous_context_window {
                     debug!(
@@ -2253,6 +2457,11 @@ impl SessionManager {
                     );
                 }
             }
+        } else if let Some(preset_id) = session.config.reasoning_preset.as_deref() {
+            session.config.reasoning_preset =
+                Some(preset_id.trim().to_string()).filter(|preset_id| {
+                    !preset_id.is_empty() && !preset_id.eq_ignore_ascii_case("auto")
+                });
         }
         let persist = self.config.enable_persistence
             && !transient
@@ -3436,6 +3645,7 @@ impl SessionManager {
                 session_id
             )));
         }
+        drop(_mutation_guard);
 
         debug!(
             "Session agent type updated: session_id={}, agent_type={}",
@@ -3677,8 +3887,20 @@ impl SessionManager {
         session_id: &str,
         model_id: &str,
     ) -> BitFunResult<()> {
+        self.update_session_model_selection(session_id, model_id, None)
+            .await
+    }
+
+    /// Atomically updates the model and optional reasoning preset.
+    pub async fn update_session_model_selection(
+        &self,
+        session_id: &str,
+        model_id: &str,
+        reasoning_preset: Option<&str>,
+    ) -> BitFunResult<()> {
         let ai_config = Self::load_ai_config_for_model_resolution().await;
         let mut resolved_context_window = None;
+        let mut auto_cleared_reasoning_preset = None;
 
         // If the session was evicted from memory (idle > 1h), try to restore it
         // using the storage path recorded when it was first created/restored.
@@ -3711,7 +3933,25 @@ impl SessionManager {
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
         let mut updated_session = original_session.clone();
         updated_session.config.model_id = Some(model_id.to_string());
+        updated_session.config.reasoning_preset = reasoning_preset
+            .map(str::trim)
+            .filter(|preset| !preset.is_empty() && !preset.eq_ignore_ascii_case("auto"))
+            .map(ToOwned::to_owned);
         if let Some(ai_config) = ai_config.as_ref() {
+            let requested_reasoning_preset = updated_session.config.reasoning_preset.clone();
+            updated_session.config.reasoning_preset =
+                Self::normalize_session_reasoning_preset(&updated_session, ai_config).await;
+            if requested_reasoning_preset.is_some()
+                && updated_session.config.reasoning_preset.is_none()
+            {
+                auto_cleared_reasoning_preset = requested_reasoning_preset.clone();
+                warn!(
+                    "Session reasoning preset is not available for the selected model; normalizing to Auto: session_id={}, model_id={}, preset_id={}",
+                    session_id,
+                    model_id,
+                    requested_reasoning_preset.as_deref().unwrap_or_default()
+                );
+            }
             resolved_context_window =
                 Self::sync_session_context_window_from_ai_config(&mut updated_session, ai_config);
         }
@@ -3743,6 +3983,7 @@ impl SessionManager {
 
         if let Some(mut session) = self.sessions.get_mut(session_id) {
             session.config.model_id = updated_session.config.model_id;
+            session.config.reasoning_preset = updated_session.config.reasoning_preset.clone();
             session.config.max_context_tokens = updated_session.config.max_context_tokens;
             session.updated_at = now;
             session.last_activity_at = now;
@@ -3754,9 +3995,24 @@ impl SessionManager {
         }
 
         debug!(
-            "Session model id updated: session_id={}, model_id={}, max_context_tokens={:?}",
-            session_id, model_id, resolved_context_window
+            "Session model selection updated: session_id={}, model_id={}, reasoning_preset={:?}, max_context_tokens={:?}",
+            session_id,
+            model_id,
+            updated_session.config.reasoning_preset,
+            resolved_context_window
         );
+
+        if let Some(previous_preset_id) = auto_cleared_reasoning_preset {
+            if let Some(coordinator) = crate::agentic::coordination::get_global_coordinator() {
+                coordinator
+                    .emit_session_reasoning_preset_auto_cleared(
+                        session_id,
+                        &previous_preset_id,
+                        "selection_unavailable",
+                    )
+                    .await;
+            }
+        }
 
         Ok(())
     }
@@ -5072,6 +5328,7 @@ impl SessionManager {
         let ai_config_for_restore = Self::load_ai_config_for_model_resolution().await;
         let mut should_persist_restored_session = false;
         let mut auto_migrated_model_id = None;
+        let mut auto_cleared_reasoning_preset = None;
 
         if !include_internal {
             let external_workspace_root =
@@ -5178,6 +5435,19 @@ impl SessionManager {
         }
 
         if let Some(ai_config) = ai_config_for_restore.as_ref() {
+            let previous_reasoning_preset = session.config.reasoning_preset.clone();
+            session.config.reasoning_preset =
+                Self::normalize_session_reasoning_preset(&session, ai_config).await;
+            if previous_reasoning_preset.is_some() && session.config.reasoning_preset.is_none() {
+                auto_cleared_reasoning_preset = previous_reasoning_preset.clone();
+                warn!(
+                    "Session restore detected stale reasoning preset; normalizing to Auto: session_id={}, preset_id={}",
+                    session_id,
+                    previous_reasoning_preset.as_deref().unwrap_or_default()
+                );
+                should_persist_restored_session = true;
+            }
+
             let previous_max_context_tokens = session.config.max_context_tokens;
             if let Some(context_window) =
                 Self::sync_session_context_window_from_ai_config(&mut session, ai_config)
@@ -5351,6 +5621,17 @@ impl SessionManager {
                         &previous_model_id,
                         "auto",
                         "model_unavailable_on_restore",
+                    )
+                    .await;
+            }
+        }
+        if let Some(previous_preset_id) = auto_cleared_reasoning_preset {
+            if let Some(coordinator) = crate::agentic::coordination::get_global_coordinator() {
+                coordinator
+                    .emit_session_reasoning_preset_auto_cleared(
+                        session_id,
+                        &previous_preset_id,
+                        "preset_unavailable_on_restore",
                     )
                     .await;
             }
@@ -5779,6 +6060,7 @@ impl SessionManager {
                         session_name: session.session_name.clone(),
                         agent_type: session.agent_type.clone(),
                         model_id: session.config.model_id.clone(),
+                        reasoning_preset: session.config.reasoning_preset.clone(),
                         last_user_dialog_agent_type: session.last_user_dialog_agent_type.clone(),
                         last_submitted_agent_type: session.last_submitted_agent_type.clone(),
                         created_by: session.created_by.clone(),
@@ -7730,7 +8012,10 @@ mod tests {
         TurnStatus, UserMessageData,
     };
     use crate::util::errors::BitFunError;
-    use bitfun_core_types::SessionExecutionTarget;
+    use bitfun_core_types::{
+        ReasoningCatalogBinding, ReasoningConfig, ReasoningPreset, ReasoningPresetAction,
+        SessionExecutionTarget,
+    };
     use bitfun_runtime_ports::SessionStoragePathRequest;
     use dashmap::{try_result::TryResult, DashMap};
     use serde_json::json;
@@ -9742,6 +10027,118 @@ mod tests {
             context_window: Some(context_window),
             ..Default::default()
         }
+    }
+
+    fn configured_reasoning_model(id: &str) -> ServiceAIModelConfig {
+        ServiceAIModelConfig {
+            id: id.to_string(),
+            name: id.to_string(),
+            model_name: id.to_string(),
+            enabled: true,
+            reasoning: Some(ReasoningConfig {
+                catalog: ReasoningCatalogBinding::Disabled,
+                presets: vec![ReasoningPreset {
+                    id: "high".to_string(),
+                    actions: vec![ReasoningPresetAction::Effort {
+                        value: "high".to_string(),
+                    }],
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn reasoning_preset_normalization_uses_the_updated_model() {
+        let ai_config = ServiceAIConfig {
+            models: vec![
+                configured_reasoning_model("model-a"),
+                test_model("model-b", 128_000),
+            ],
+            ..Default::default()
+        };
+        let mut session = Session::new_with_id(
+            "reasoning-selection".to_string(),
+            "Reasoning selection".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                model_id: Some("model-a".to_string()),
+                reasoning_preset: Some("high".to_string()),
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(
+            SessionManager::normalize_session_reasoning_preset(&session, &ai_config).await,
+            Some("high".to_string())
+        );
+        session.config.model_id = Some("model-b".to_string());
+        assert_eq!(
+            SessionManager::normalize_session_reasoning_preset(&session, &ai_config).await,
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn reasoning_preset_reconciliation_persists_auto_state() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Stale reasoning preset".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    model_id: Some("model-b".to_string()),
+                    reasoning_preset: Some("obsolete".to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        // The test config service is intentionally absent, so seed the legacy
+        // invalid state that reconciliation must canonicalize.
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("session remains loaded")
+            .config
+            .reasoning_preset = Some("obsolete".to_string());
+        let seeded = manager
+            .get_session(&session.session_id)
+            .expect("seeded session");
+        persistence_manager
+            .save_session(workspace.path(), &seeded)
+            .await
+            .expect("seeded preset should persist");
+        let ai_config = ServiceAIConfig {
+            models: vec![test_model("model-b", 128_000)],
+            ..Default::default()
+        };
+
+        manager
+            .reconcile_session_reasoning_preset_locked(&session.session_id, &ai_config, "test")
+            .await
+            .expect("reconciliation should succeed");
+
+        assert!(manager
+            .get_session(&session.session_id)
+            .expect("session remains loaded")
+            .config
+            .reasoning_preset
+            .is_none());
+        assert!(persistence_manager
+            .load_session(workspace.path(), &session.session_id)
+            .await
+            .expect("session should reload")
+            .config
+            .reasoning_preset
+            .is_none());
     }
 
     #[tokio::test]

@@ -46,6 +46,12 @@ cp "$LEGACY" "$STAGE_DIR/"
 cp "${REPO_ROOT}/LICENSE" "$STAGE_DIR/" 2>/dev/null || true
 cp "${REPO_ROOT}/src/apps/cli/README.md" "$STAGE_DIR/README.md"
 cp "${REPO_ROOT}/README.md" "$STAGE_DIR/PROJECT-README.md"
+cp "${REPO_ROOT}/THIRD_PARTY_NOTICES.md" "$STAGE_DIR/THIRD_PARTY_NOTICES.md"
+mkdir -p "$STAGE_DIR/third-party/models.dev"
+cp "${REPO_ROOT}/src/crates/services/services-integrations/assets/models-dev.LICENSE.txt" \
+  "$STAGE_DIR/third-party/models.dev/LICENSE.txt"
+cp "${REPO_ROOT}/src/crates/services/services-integrations/assets/models-dev.provenance.json" \
+  "$STAGE_DIR/third-party/models.dev/provenance.json"
 
 if [ -d "${REPO_ROOT}/src/apps/cli/themes" ]; then
   cp -R "${REPO_ROOT}/src/apps/cli/themes" "$STAGE_DIR/themes"
@@ -78,6 +84,9 @@ LEGACY_CANDIDATES=("$EXTRACT_DIR"/*/bitfun-cli)
 [ "${#LEGACY_CANDIDATES[@]}" -eq 1 ]
 [ -f "$EXTRACT_DIR/$STAGE_NAME/README.md" ]
 [ -f "$EXTRACT_DIR/$STAGE_NAME/PROJECT-README.md" ]
+[ -f "$EXTRACT_DIR/$STAGE_NAME/THIRD_PARTY_NOTICES.md" ]
+[ -f "$EXTRACT_DIR/$STAGE_NAME/third-party/models.dev/LICENSE.txt" ]
+[ -f "$EXTRACT_DIR/$STAGE_NAME/third-party/models.dev/provenance.json" ]
 "${PRIMARY_CANDIDATES[0]}" --version
 "${PRIMARY_CANDIDATES[0]}" --help >/dev/null
 assert_legacy_entrypoint "${LEGACY_CANDIDATES[0]}"

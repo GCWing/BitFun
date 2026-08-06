@@ -646,6 +646,7 @@ describe('MessageModule model synchronization', () => {
       sessionId: 'session-auto',
       config: {
         modelName: 'auto',
+        reasoningPreset: 'high',
         workspacePath: '/remote/repo',
       },
       remoteConnectionId: 'ssh-1',
@@ -670,6 +671,7 @@ describe('MessageModule model synchronization', () => {
     expect(mockUpdateSessionModel).toHaveBeenCalledWith({
       sessionId: 'session-auto',
       modelName: 'auto',
+      reasoningPreset: 'high',
       workspacePath: '/remote/repo',
       remoteConnectionId: 'ssh-1',
       remoteSshHost: 'example.test',
@@ -700,6 +702,7 @@ describe('MessageModule model synchronization', () => {
     expect(mockUpdateSessionModel).toHaveBeenCalledWith({
       sessionId: 'legacy-session',
       modelName: 'model-b',
+      reasoningPreset: null,
       workspacePath: '/local/repo',
       remoteConnectionId: undefined,
       remoteSshHost: undefined,

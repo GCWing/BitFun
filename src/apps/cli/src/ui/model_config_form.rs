@@ -5,7 +5,7 @@
 /// select fields (provider format), and toggle fields (booleans).
 ///
 /// - Basic fields are always shown
-/// - "Enable Thinking" is a toggle; when on, "Preserved Thinking" appears below it
+/// - Default reasoning selects a catalog preset ID or Auto
 /// - Ctrl+A toggles the Advanced Settings section which includes:
 ///   Skip SSL Verify, Custom Headers (JSON), Custom Headers Mode, Custom Request Body (JSON)
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -16,6 +16,8 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph},
     Frame,
 };
+
+use bitfun_core_types::ReasoningConfig;
 
 use crate::ui::theme::{StyleKind, Theme};
 
@@ -32,8 +34,9 @@ pub(crate) struct ModelFormResult {
     pub provider_format: String,
     pub context_window: u32,
     pub max_tokens: u32,
-    pub enable_thinking: bool,
-    pub support_preserved_thinking: bool,
+    pub reasoning_preset_options: Vec<String>,
+    pub reasoning: Option<ReasoningConfig>,
+    pub inline_think_in_text: bool,
     pub skip_ssl_verify: bool,
     /// JSON string for custom headers, empty if none
     pub custom_headers: String,
@@ -41,6 +44,20 @@ pub(crate) struct ModelFormResult {
     pub custom_headers_mode: String,
     /// JSON string for custom request body, empty if none
     pub custom_request_body: String,
+}
+
+fn reasoning_after_preset_selection(
+    existing: Option<&ReasoningConfig>,
+    initial_preset: Option<&str>,
+    selected_preset: Option<&str>,
+) -> Option<ReasoningConfig> {
+    if selected_preset == initial_preset {
+        return existing.cloned();
+    }
+
+    let mut reasoning = existing.cloned().unwrap_or_default();
+    reasoning.default_preset = selected_preset.map(ToOwned::to_owned);
+    Some(reasoning)
 }
 
 /// Action returned by the form
@@ -65,9 +82,7 @@ enum FormField {
     ProviderFormat,
     ContextWindow,
     MaxTokens,
-    EnableThinking,
-    /// Only visible when enable_thinking is true
-    PreservedThinking,
+    DefaultReasoningPreset,
     // ── Advanced fields (Ctrl+A) ──
     SkipSslVerify,
     CustomHeaders,
@@ -90,8 +105,11 @@ pub(super) struct ModelConfigFormState {
     provider_format_index: usize,
     context_window: String,
     max_tokens: String,
-    enable_thinking: bool,
-    support_preserved_thinking: bool,
+    reasoning_preset_options: Vec<String>,
+    reasoning_preset_index: usize,
+    initial_reasoning_preset: Option<String>,
+    reasoning: Option<ReasoningConfig>,
+    inline_think_in_text: bool,
     skip_ssl_verify: bool,
     custom_headers: String,
     custom_headers_mode_index: usize,
@@ -122,8 +140,11 @@ impl ModelConfigFormState {
             provider_format_index: 0,
             context_window: "128000".into(),
             max_tokens: "8192".into(),
-            enable_thinking: false,
-            support_preserved_thinking: false,
+            reasoning_preset_options: Vec::new(),
+            reasoning_preset_index: 0,
+            initial_reasoning_preset: None,
+            reasoning: None,
+            inline_think_in_text: true,
             skip_ssl_verify: false,
             custom_headers: String::new(),
             custom_headers_mode_index: 0, // "merge" by default
@@ -150,8 +171,11 @@ impl ModelConfigFormState {
         self.provider_format_index = 0;
         self.context_window = "128000".into();
         self.max_tokens = "8192".into();
-        self.enable_thinking = false;
-        self.support_preserved_thinking = false;
+        self.reasoning_preset_options.clear();
+        self.reasoning_preset_index = 0;
+        self.initial_reasoning_preset = None;
+        self.reasoning = None;
+        self.inline_think_in_text = true;
         self.skip_ssl_verify = false;
         self.custom_headers.clear();
         self.custom_headers_mode_index = 0; // "merge" by default
@@ -187,8 +211,11 @@ impl ModelConfigFormState {
             .unwrap_or(0);
         self.context_window = "128000".into();
         self.max_tokens = "8192".into();
-        self.enable_thinking = false;
-        self.support_preserved_thinking = false;
+        self.reasoning_preset_options.clear();
+        self.reasoning_preset_index = 0;
+        self.initial_reasoning_preset = None;
+        self.reasoning = None;
+        self.inline_think_in_text = true;
         self.skip_ssl_verify = false;
         self.custom_headers.clear();
         self.custom_headers_mode_index = 0; // "merge" by default
@@ -214,8 +241,23 @@ impl ModelConfigFormState {
             .unwrap_or(0);
         self.context_window = result.context_window.to_string();
         self.max_tokens = result.max_tokens.to_string();
-        self.enable_thinking = result.enable_thinking;
-        self.support_preserved_thinking = result.support_preserved_thinking;
+        self.reasoning_preset_options = result.reasoning_preset_options.clone();
+        let default_preset = result
+            .reasoning
+            .as_ref()
+            .and_then(|reasoning| reasoning.default_preset.clone());
+        self.reasoning_preset_index = default_preset
+            .as_ref()
+            .and_then(|preset| {
+                self.reasoning_preset_options
+                    .iter()
+                    .position(|id| id == preset)
+            })
+            .map(|index| index + 1)
+            .unwrap_or(0);
+        self.initial_reasoning_preset = default_preset;
+        self.reasoning = result.reasoning.clone();
+        self.inline_think_in_text = result.inline_think_in_text;
         self.skip_ssl_verify = result.skip_ssl_verify;
         self.custom_headers = result.custom_headers.clone();
         self.custom_headers_mode_index = CUSTOM_HEADERS_MODES
@@ -230,8 +272,7 @@ impl ModelConfigFormState {
         self.show_advanced = self.skip_ssl_verify
             || !self.custom_headers.is_empty()
             || self.custom_headers_mode_index != 0
-            || !self.custom_request_body.is_empty()
-            || (self.enable_thinking && self.support_preserved_thinking);
+            || !self.custom_request_body.is_empty();
     }
 
     pub(super) fn hide(&mut self) {
@@ -259,12 +300,9 @@ impl ModelConfigFormState {
             FormField::ProviderFormat,
             FormField::ContextWindow,
             FormField::MaxTokens,
-            FormField::EnableThinking,
+            FormField::DefaultReasoningPreset,
         ];
         if self.show_advanced {
-            if self.enable_thinking {
-                fields.push(FormField::PreservedThinking);
-            }
             fields.push(FormField::SkipSslVerify);
             fields.push(FormField::CustomHeaders);
             fields.push(FormField::CustomHeadersMode);
@@ -294,8 +332,7 @@ impl ModelConfigFormState {
     fn is_advanced_field(&self, field: FormField) -> bool {
         matches!(
             field,
-            FormField::PreservedThinking
-                | FormField::SkipSslVerify
+            FormField::SkipSslVerify
                 | FormField::CustomHeaders
                 | FormField::CustomHeadersMode
                 | FormField::CustomRequestBody
@@ -317,8 +354,7 @@ impl ModelConfigFormState {
             // Non-text fields
             FormField::ProviderFormat
             | FormField::CustomHeadersMode
-            | FormField::EnableThinking
-            | FormField::PreservedThinking
+            | FormField::DefaultReasoningPreset
             | FormField::SkipSslVerify => "",
         }
     }
@@ -343,31 +379,18 @@ impl ModelConfigFormState {
             self.active_field,
             FormField::ProviderFormat
                 | FormField::CustomHeadersMode
-                | FormField::EnableThinking
-                | FormField::PreservedThinking
+                | FormField::DefaultReasoningPreset
                 | FormField::SkipSslVerify
         )
     }
 
     /// Is the active field a boolean toggle?
     fn is_toggle_field(&self) -> bool {
-        matches!(
-            self.active_field,
-            FormField::EnableThinking | FormField::PreservedThinking | FormField::SkipSslVerify
-        )
+        matches!(self.active_field, FormField::SkipSslVerify)
     }
 
     fn toggle_active_bool(&mut self) {
         match self.active_field {
-            FormField::EnableThinking => {
-                self.enable_thinking = !self.enable_thinking;
-                if !self.enable_thinking {
-                    self.support_preserved_thinking = false;
-                }
-            }
-            FormField::PreservedThinking => {
-                self.support_preserved_thinking = !self.support_preserved_thinking;
-            }
             FormField::SkipSslVerify => {
                 self.skip_ssl_verify = !self.skip_ssl_verify;
             }
@@ -454,6 +477,17 @@ impl ModelConfigFormState {
     }
 
     fn build_result(&self) -> ModelFormResult {
+        let selected_reasoning_preset = self
+            .reasoning_preset_index
+            .checked_sub(1)
+            .and_then(|index| self.reasoning_preset_options.get(index))
+            .map(String::as_str);
+        let reasoning = reasoning_after_preset_selection(
+            self.reasoning.as_ref(),
+            self.initial_reasoning_preset.as_deref(),
+            selected_reasoning_preset,
+        );
+
         ModelFormResult {
             editing_model_id: self.editing_model_id.clone(),
             name: self.name.trim().to_string(),
@@ -463,8 +497,9 @@ impl ModelConfigFormState {
             provider_format: PROVIDER_FORMATS[self.provider_format_index].to_string(),
             context_window: self.context_window.trim().parse().unwrap_or(128000),
             max_tokens: self.max_tokens.trim().parse().unwrap_or(8192),
-            enable_thinking: self.enable_thinking,
-            support_preserved_thinking: self.support_preserved_thinking,
+            reasoning_preset_options: self.reasoning_preset_options.clone(),
+            reasoning,
+            inline_think_in_text: self.inline_think_in_text,
             skip_ssl_verify: self.skip_ssl_verify,
             custom_headers: self.custom_headers.trim().to_string(),
             custom_headers_mode: CUSTOM_HEADERS_MODES[self.custom_headers_mode_index].to_string(),
@@ -555,6 +590,22 @@ impl ModelConfigFormState {
                 if self.provider_format_index < PROVIDER_FORMATS.len() - 1 {
                     self.provider_format_index += 1;
                 }
+                ModelFormAction::None
+            }
+
+            (KeyCode::Left, KeyModifiers::NONE)
+                if matches!(self.active_field, FormField::DefaultReasoningPreset) =>
+            {
+                self.reasoning_preset_index = self.reasoning_preset_index.saturating_sub(1);
+                ModelFormAction::None
+            }
+            (KeyCode::Right, KeyModifiers::NONE)
+                if matches!(self.active_field, FormField::DefaultReasoningPreset) =>
+            {
+                self.reasoning_preset_index = self
+                    .reasoning_preset_index
+                    .saturating_add(1)
+                    .min(self.reasoning_preset_options.len());
                 ModelFormAction::None
             }
 
@@ -824,8 +875,7 @@ impl ModelConfigFormState {
             FormField::ProviderFormat => "Provider Format",
             FormField::ContextWindow => "Context Window",
             FormField::MaxTokens => "Max Output Tokens",
-            FormField::EnableThinking => "Enable Thinking",
-            FormField::PreservedThinking => "Preserved Thinking",
+            FormField::DefaultReasoningPreset => "Default Reasoning Preset",
             FormField::SkipSslVerify => "Skip SSL Verify",
             FormField::CustomHeaders => "Custom Headers (JSON)",
             FormField::CustomHeadersMode => "Custom Headers Mode",
@@ -873,6 +923,34 @@ impl ModelConfigFormState {
                 frame.render_widget(Paragraph::new(Line::from(spans)), area);
             }
 
+            FormField::DefaultReasoningPreset => {
+                let selected = self
+                    .reasoning_preset_index
+                    .checked_sub(1)
+                    .and_then(|index| self.reasoning_preset_options.get(index))
+                    .map(String::as_str)
+                    .unwrap_or("Auto");
+                let style = if is_active {
+                    Style::default()
+                        .bg(theme.primary)
+                        .fg(theme.selection_foreground())
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD)
+                };
+                frame.render_widget(
+                    Paragraph::new(Line::from(vec![
+                        Span::styled("  ", Style::default()),
+                        Span::styled(format!(" [{}] ", selected), style),
+                        Span::styled(
+                            "  \u{2190}\u{2192} to change",
+                            theme.style(StyleKind::Muted),
+                        ),
+                    ])),
+                    area,
+                );
+            }
+
             // ── Select field: Custom Headers Mode ──
             FormField::CustomHeadersMode => {
                 let mut spans = vec![Span::styled("  ", Style::default())];
@@ -905,10 +983,8 @@ impl ModelConfigFormState {
             }
 
             // ── Toggle (boolean) fields ──
-            FormField::EnableThinking | FormField::PreservedThinking | FormField::SkipSslVerify => {
+            FormField::SkipSslVerify => {
                 let value = match field {
-                    FormField::EnableThinking => self.enable_thinking,
-                    FormField::PreservedThinking => self.support_preserved_thinking,
                     FormField::SkipSslVerify => self.skip_ssl_verify,
                     _ => false,
                 };
@@ -1093,8 +1169,7 @@ impl ModelConfigFormState {
             FormField::ProviderFormat => "",
             FormField::ContextWindow => "128000",
             FormField::MaxTokens => "8192",
-            FormField::EnableThinking => "",
-            FormField::PreservedThinking => "",
+            FormField::DefaultReasoningPreset => "",
             FormField::SkipSslVerify => "",
             FormField::CustomHeaders => r#"e.g. {"X-Custom": "value"}"#,
             FormField::CustomHeadersMode => "",
@@ -1122,4 +1197,64 @@ fn char_to_byte(s: &str, char_idx: usize) -> usize {
         .nth(char_idx)
         .map(|(i, _)| i)
         .unwrap_or(s.len())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::reasoning_after_preset_selection;
+    use bitfun_core_types::{ReasoningConfig, ReasoningPreset, ReasoningPresetAction};
+
+    #[test]
+    fn unchanged_toggle_preserves_custom_reasoning_config() {
+        let existing = ReasoningConfig {
+            default_preset: Some("custom".to_string()),
+            presets: vec![ReasoningPreset {
+                id: "custom".to_string(),
+                actions: vec![ReasoningPresetAction::RequestPatch {
+                    body: serde_json::json!({"reasoning": {"effort": "high"}}),
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        assert_eq!(
+            reasoning_after_preset_selection(Some(&existing), Some("custom"), Some("custom")),
+            Some(existing)
+        );
+    }
+
+    #[test]
+    fn choosing_a_preset_changes_only_the_default_id() {
+        let reasoning =
+            reasoning_after_preset_selection(None, None, Some("high")).expect("reasoning config");
+
+        assert_eq!(reasoning.default_preset.as_deref(), Some("high"));
+        assert!(reasoning.presets.is_empty());
+    }
+
+    #[test]
+    fn disabling_thinking_returns_to_auto_without_dropping_presets() {
+        let existing = ReasoningConfig {
+            default_preset: Some("on".to_string()),
+            presets: vec![
+                ReasoningPreset {
+                    id: "on".to_string(),
+                    actions: vec![ReasoningPresetAction::Toggle { enabled: true }],
+                    ..Default::default()
+                },
+                ReasoningPreset {
+                    id: "custom".to_string(),
+                    actions: vec![ReasoningPresetAction::Toggle { enabled: false }],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let disabled =
+            reasoning_after_preset_selection(Some(&existing), Some("on"), None).expect("reasoning");
+        assert_eq!(disabled.default_preset, None);
+        assert_eq!(disabled.presets, existing.presets);
+    }
 }

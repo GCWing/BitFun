@@ -203,6 +203,7 @@ agent-runtime = [
     "bitfun-services-integrations/browser-control",
     "bitfun-services-integrations/deep-research",
     "bitfun-services-integrations/mcp",
+    "bitfun-services-integrations/models-dev",
     "bitfun-services-integrations/remote-connect",
     "bitfun-services-integrations/script-tool-runtime",
     "bitfun-services-integrations/web-tools",

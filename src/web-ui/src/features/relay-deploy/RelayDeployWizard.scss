@@ -134,6 +134,16 @@
     gap: 4px;
   }
 
+  &__search-empty {
+    display: grid;
+    place-items: center;
+    min-height: 42px;
+    padding: 8px 10px;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: 12px;
+    text-align: center;
+  }
+
   &__server-item {
     display: flex;
     align-items: center;

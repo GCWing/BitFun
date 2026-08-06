@@ -101,6 +101,13 @@ pub(crate) fn session_status_text(chat_state: &ChatState, shared_tui: bool) -> S
         format!("  State: {processing}"),
         format!("  Agent: {}", chat_state.agent_type),
         format!("  Model: {model}"),
+        format!(
+            "  Reasoning: {}",
+            chat_state
+                .current_reasoning_preset
+                .as_deref()
+                .unwrap_or("Auto")
+        ),
         format!("  Approval: {approval}"),
         String::new(),
         "Workspace".to_string(),
@@ -215,6 +222,7 @@ mod status_tests {
             "State: Idle",
             "Agent: agentic",
             "Model: Example Model",
+            "Reasoning: Auto",
             "Approval: Ask",
             "Path: /tmp/project",
             "Branch: main",

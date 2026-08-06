@@ -228,7 +228,13 @@ pub async fn submit_device(
     };
     if let Err(error) =
         dispatch_ssh::validate_dispatch_protocol(&protocol, Some(&request.approval_policy))
-            .and_then(|_| validate_submission_preflight(&protocol, request.model.as_deref()))
+            .and_then(|_| {
+                validate_submission_preflight(
+                    &protocol,
+                    request.model.as_deref(),
+                    request.reasoning_preset.as_deref(),
+                )
+            })
     {
         release_unbound_preparation_baseline(store, &request.job_id, &baseline).await;
         return Err(error);
@@ -269,6 +275,7 @@ pub async fn submit_device(
         request.agent_type.clone(),
         request.approval_policy.clone(),
         request.model.clone(),
+        request.reasoning_preset.clone(),
     )
     .with_source_workspace(
         request.source_workspace_path.clone(),
@@ -297,13 +304,18 @@ pub async fn submit_device(
     if let Some(model) = request.model.filter(|value| !value.trim().is_empty()) {
         payload["model"] = Value::String(model);
     }
+    if let Some(preset) = request
+        .reasoning_preset
+        .filter(|value| !value.trim().is_empty())
+    {
+        payload["reasoningPreset"] = Value::String(preset);
+    }
     if let Some(title) = request.title.filter(|value| !value.trim().is_empty()) {
         payload["title"] = Value::String(title);
     }
     if !request.attachments.is_empty() {
         validate_device_attachment_budget(&request.attachments)?;
-        payload["attachments"] =
-            serde_json::to_value(&request.attachments).unwrap_or(Value::Null);
+        payload["attachments"] = serde_json::to_value(&request.attachments).unwrap_or(Value::Null);
     }
 
     let response = match rpc

@@ -36,6 +36,7 @@ import {
   type DockerAccessMode,
   type RelayMirrorMode,
 } from './relayDeployApi';
+import { buildRelayServerSearchState, getRelayConnectionHost } from './serverSearch';
 import { ConnectedTerminal, getTerminalService } from '@/tools/terminal';
 import { createLogger } from '@/shared/utils/logger';
 import './RelayDeployWizard.scss';
@@ -478,9 +479,10 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
 
   const handleFillFromConfig = (entry: SSHConfigEntry) => {
     const hasKey = !!entry.identityFile?.trim();
+    const connectHost = getRelayConnectionHost(entry);
     setFormData({
       name: entry.host,
-      host: entry.host,
+      host: connectHost,
       port: entry.port ? String(entry.port) : '22',
       username: entry.user || '',
       authType: hasKey ? 'privateKey' : 'password',
@@ -676,31 +678,17 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
   };
 
   // ── derived view data ────────────────────────────────────────────────────
-  const filteredSavedConnections = savedConnections.filter((conn) => {
-    if (!savedSearch.trim()) return true;
-    const q = savedSearch.toLowerCase();
-    return (
-      conn.name.toLowerCase().includes(q) ||
-      conn.host.toLowerCase().includes(q) ||
-      conn.username.toLowerCase().includes(q)
-    );
-  });
-
-  const filteredSSHConfigHosts = sshConfigHosts.filter((entry) => {
-    const hostname = entry.hostname || entry.host;
-    const port = entry.port || 22;
-    const user = entry.user || '';
-    if (savedConnections.some((c) => c.host === hostname && c.port === port && c.username === user)) {
-      return false;
-    }
-    if (!configSearch.trim()) return true;
-    const q = configSearch.toLowerCase();
-    return (
-      entry.host.toLowerCase().includes(q) ||
-      hostname.toLowerCase().includes(q) ||
-      user.toLowerCase().includes(q)
-    );
-  });
+  const {
+    filteredSavedConnections,
+    filteredSSHConfigHosts,
+    hasSavedConnections,
+    hasSSHConfigHosts,
+  } = buildRelayServerSearchState(
+    savedConnections,
+    sshConfigHosts,
+    savedSearch,
+    configSearch,
+  );
 
   const accessMode = preflight?.dockerAccessMode;
   const dockerRecoverable = !!preflight && preflight.dockerInstalled
@@ -738,7 +726,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
     <div className="relay-deploy-wizard__scroll">
       <p className="relay-deploy-wizard__desc">{t('relayDeploy.selectServerDesc')}</p>
 
-      {savedConnections.length > 0 && (
+      {hasSavedConnections && (
         <div className="relay-deploy-wizard__section">
           <div className="relay-deploy-wizard__section-header">
             <h3 className="relay-deploy-wizard__section-title">{t('ssh.remote.savedConnections')}</h3>
@@ -752,7 +740,11 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
             />
           </div>
           <div className="relay-deploy-wizard__server-list">
-            {filteredSavedConnections.map((conn) => (
+            {filteredSavedConnections.length === 0 ? (
+              <div className="relay-deploy-wizard__search-empty" role="status">
+                {t('empty.noResults')}
+              </div>
+            ) : filteredSavedConnections.map((conn) => (
               <div
                 key={conn.id}
                 className="relay-deploy-wizard__server-item"
@@ -778,7 +770,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         </div>
       )}
 
-      {filteredSSHConfigHosts.length > 0 && (
+      {hasSSHConfigHosts && (
         <div className="relay-deploy-wizard__section">
           <div className="relay-deploy-wizard__section-header">
             <h3 className="relay-deploy-wizard__section-title">{t('ssh.remote.sshConfigHosts')}</h3>
@@ -792,7 +784,11 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
             />
           </div>
           <div className="relay-deploy-wizard__server-list">
-            {filteredSSHConfigHosts.map((entry) => (
+            {filteredSSHConfigHosts.length === 0 ? (
+              <div className="relay-deploy-wizard__search-empty" role="status">
+                {t('empty.noResults')}
+              </div>
+            ) : filteredSSHConfigHosts.map((entry) => (
               <div
                 key={entry.host}
                 className="relay-deploy-wizard__server-item relay-deploy-wizard__server-item--config"
@@ -819,7 +815,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         </div>
       )}
 
-      {(savedConnections.length > 0 || filteredSSHConfigHosts.length > 0) && (
+      {(hasSavedConnections || hasSSHConfigHosts) && (
         <div className="relay-deploy-wizard__divider"><span>{t('ssh.remote.newConnection')}</span></div>
       )}
 

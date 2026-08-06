@@ -23,6 +23,12 @@
 *.mjs               text eol=lf
 *.cjs               text eol=lf
 
+# models.dev provenance hashes exact redistributed bytes. Keep these assets
+# stable across checkout platforms so the offline release check is reproducible.
+src/crates/services/services-integrations/assets/models-dev.json text eol=lf
+src/crates/services/services-integrations/assets/models-dev.LICENSE.txt text eol=lf
+src/crates/services/services-integrations/assets/models-dev.provenance.json text eol=lf
+
 Dockerfile          text eol=lf
 Dockerfile.*        text eol=lf
 *.Dockerfile        text eol=lf

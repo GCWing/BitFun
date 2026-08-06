@@ -1,6 +1,8 @@
+import providerOverlay from '../../../src/shared/ai-provider-catalog/providers.json';
+
 import type { ModelConfig } from '../types/installer';
 
-/** Matches main app `src/web-ui/.../modelConfigs.ts` ApiFormat for presets. */
+/** Matches main app `ApiFormat` for installer presets. */
 export type ApiFormat = 'openai' | 'anthropic' | 'gemini' | 'responses';
 
 export interface ProviderUrlOption {
@@ -20,285 +22,67 @@ export interface ProviderTemplate {
   baseUrlOptions?: ProviderUrlOption[];
 }
 
-/** Same order as `AIModelConfig.tsx` `providerOrder`. */
-export const PROVIDER_DISPLAY_ORDER: string[] = [
-  'openbitfun',
-  'zhipu',
-  'qwen',
-  'deepseek',
-  'volcengine',
-  'minimax',
-  'moonshot',
-  'gemini',
-  'anthropic',
-  'siliconflow',
-  'nvidia',
-  'openrouter',
-];
+interface OverlayEndpoint {
+  base_url: string;
+  api_format: string;
+  label: string;
+  is_default?: boolean;
+}
 
-export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
-  openbitfun: {
-    id: 'openbitfun',
-    nameKey: 'model.providers.openbitfun.name',
-    descriptionKey: 'model.providers.openbitfun.description',
-    baseUrl: 'https://api.openbitfun.com',
-    format: 'anthropic',
-    models: [],
-  },
-  gemini: {
-    id: 'gemini',
-    nameKey: 'model.providers.gemini.name',
-    descriptionKey: 'model.providers.gemini.description',
-    baseUrl: 'https://generativelanguage.googleapis.com',
-    format: 'gemini',
-    models: ['gemini-3.1-pro-preview', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'],
-    helpUrl: 'https://aistudio.google.com/app/apikey',
-  },
-  anthropic: {
-    id: 'anthropic',
-    nameKey: 'model.providers.anthropic.name',
-    descriptionKey: 'model.providers.anthropic.description',
-    baseUrl: 'https://api.anthropic.com',
-    format: 'anthropic',
-    models: ['claude-opus-5', 'claude-fable-5', 'claude-sonnet-5', 'claude-haiku-4-5'],
-    helpUrl: 'https://platform.claude.com/',
-  },
-  minimax: {
-    id: 'minimax',
-    nameKey: 'model.providers.minimax.name',
-    descriptionKey: 'model.providers.minimax.description',
-    baseUrl: 'https://api.minimaxi.com/anthropic',
-    format: 'anthropic',
-    models: ['MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.7-highspeed'],
-    helpUrl: 'https://platform.minimax.io/',
-    baseUrlOptions: [
-      {
-        url: 'https://api.minimaxi.com/anthropic',
-        format: 'anthropic',
-        noteKey: 'model.providers.minimax.urlOptions.default',
-      },
-      {
-        url: 'https://api.minimaxi.com/v1',
-        format: 'openai',
-        noteKey: 'model.providers.minimax.urlOptions.openai',
-      },
-      {
-        url: 'https://api.minimax.io/anthropic',
-        format: 'anthropic',
-        noteKey: 'model.providers.minimax.urlOptions.intl',
-      },
-      {
-        url: 'https://api.minimax.io/v1',
-        format: 'openai',
-        noteKey: 'model.providers.minimax.urlOptions.intlOpenai',
-      },
+interface OverlayProvider {
+  id: string;
+  display_order: number;
+  help_url?: string;
+  endpoints: OverlayEndpoint[];
+  model_policy: { curated_models: string[]; additional_models?: string[] };
+}
+
+const overlayProviders = (providerOverlay as { providers: OverlayProvider[] }).providers;
+
+function isApiFormat(value: string): value is ApiFormat {
+  return ['openai', 'anthropic', 'gemini', 'responses'].includes(value);
+}
+
+function templateFromOverlay(provider: OverlayProvider): ProviderTemplate {
+  const defaultEndpoint = provider.endpoints.find(endpoint => endpoint.is_default)
+    ?? provider.endpoints[0];
+  if (!defaultEndpoint || !isApiFormat(defaultEndpoint.api_format)) {
+    throw new Error(`Installer provider '${provider.id}' has no supported default endpoint`);
+  }
+  const baseUrlOptions = provider.endpoints.length > 1
+    ? provider.endpoints.map(endpoint => {
+        if (!isApiFormat(endpoint.api_format)) {
+          throw new Error(`Installer provider '${provider.id}' has an unsupported API format`);
+        }
+        return {
+          url: endpoint.base_url,
+          format: endpoint.api_format,
+          noteKey: `model.providers.${provider.id}.urlOptions.${endpoint.label}`,
+        };
+      })
+    : undefined;
+  return {
+    id: provider.id,
+    nameKey: `model.providers.${provider.id}.name`,
+    descriptionKey: `model.providers.${provider.id}.description`,
+    baseUrl: defaultEndpoint.base_url,
+    format: defaultEndpoint.api_format,
+    models: [
+      ...provider.model_policy.curated_models,
+      ...(provider.model_policy.additional_models ?? []),
     ],
-  },
-  moonshot: {
-    id: 'moonshot',
-    nameKey: 'model.providers.moonshot.name',
-    descriptionKey: 'model.providers.moonshot.description',
-    baseUrl: 'https://api.moonshot.cn/v1',
-    format: 'openai',
-    models: ['kimi-k3', 'kimi-k2.7-code', 'kimi-k2.6'],
-    helpUrl: 'https://platform.kimi.ai/console',
-    baseUrlOptions: [
-      {
-        url: 'https://api.moonshot.cn/v1',
-        format: 'openai',
-        noteKey: 'model.providers.moonshot.urlOptions.default',
-      },
-      {
-        url: 'https://api.moonshot.cn/anthropic',
-        format: 'anthropic',
-        noteKey: 'model.providers.moonshot.urlOptions.anthropic',
-      },
-      {
-        url: 'https://api.moonshot.ai/v1',
-        format: 'openai',
-        noteKey: 'model.providers.moonshot.urlOptions.intl',
-      },
-      {
-        url: 'https://api.moonshot.ai/anthropic',
-        format: 'anthropic',
-        noteKey: 'model.providers.moonshot.urlOptions.intlAnthropic',
-      },
-      {
-        url: 'https://api.kimi.com/coding',
-        format: 'anthropic',
-        noteKey: 'model.providers.moonshot.urlOptions.kimiForCoding',
-      },
-    ],
-  },
-  deepseek: {
-    id: 'deepseek',
-    nameKey: 'model.providers.deepseek.name',
-    descriptionKey: 'model.providers.deepseek.description',
-    baseUrl: 'https://api.deepseek.com/v1',
-    format: 'openai',
-    models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
-    helpUrl: 'https://platform.deepseek.com/api_keys',
-    baseUrlOptions: [
-      {
-        url: 'https://api.deepseek.com/v1',
-        format: 'openai',
-        noteKey: 'model.providers.deepseek.urlOptions.default',
-      },
-      {
-        url: 'https://api.deepseek.com/anthropic',
-        format: 'anthropic',
-        noteKey: 'model.providers.deepseek.urlOptions.anthropic',
-      },
-    ],
-  },
-  zhipu: {
-    id: 'zhipu',
-    nameKey: 'model.providers.zhipu.name',
-    descriptionKey: 'model.providers.zhipu.description',
-    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-    format: 'openai',
-    models: ['glm-5.2', 'glm-5.1', 'glm-5'],
-    helpUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
-    baseUrlOptions: [
-      {
-        url: 'https://open.bigmodel.cn/api/paas/v4',
-        format: 'openai',
-        noteKey: 'model.providers.zhipu.urlOptions.default',
-      },
-      {
-        url: 'https://open.bigmodel.cn/api/anthropic',
-        format: 'anthropic',
-        noteKey: 'model.providers.zhipu.urlOptions.anthropic',
-      },
-      {
-        url: 'https://open.bigmodel.cn/api/coding/paas/v4',
-        format: 'openai',
-        noteKey: 'model.providers.zhipu.urlOptions.codingPlan',
-      },
-      {
-        url: 'https://api.z.ai/api/paas/v4',
-        format: 'openai',
-        noteKey: 'model.providers.zhipu.urlOptions.intl',
-      },
-      {
-        url: 'https://api.z.ai/api/anthropic',
-        format: 'anthropic',
-        noteKey: 'model.providers.zhipu.urlOptions.intlAnthropic',
-      },
-      {
-        url: 'https://api.z.ai/api/coding/paas/v4',
-        format: 'openai',
-        noteKey: 'model.providers.zhipu.urlOptions.intlCodingPlan',
-      },
-    ],
-  },
-  qwen: {
-    id: 'qwen',
-    nameKey: 'model.providers.qwen.name',
-    descriptionKey: 'model.providers.qwen.description',
-    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    format: 'openai',
-    models: ['qwen3.7-plus', 'qwen3.7-max', 'qwen3.6-flash'],
-    helpUrl: 'https://dashscope.console.aliyun.com/apiKey',
-    baseUrlOptions: [
-      {
-        url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-        format: 'openai',
-        noteKey: 'model.providers.qwen.urlOptions.default',
-      },
-      {
-        url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
-        format: 'openai',
-        noteKey: 'model.providers.qwen.urlOptions.intl',
-      },
-      {
-        url: 'https://coding.dashscope.aliyuncs.com/v1',
-        format: 'openai',
-        noteKey: 'model.providers.qwen.urlOptions.codingPlan',
-      },
-      {
-        url: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
-        format: 'anthropic',
-        noteKey: 'model.providers.qwen.urlOptions.codingPlanAnthropic',
-      },
-      {
-        url: 'https://coding-intl.dashscope.aliyuncs.com/v1',
-        format: 'openai',
-        noteKey: 'model.providers.qwen.urlOptions.intlCodingPlan',
-      },
-    ],
-  },
-  volcengine: {
-    id: 'volcengine',
-    nameKey: 'model.providers.volcengine.name',
-    descriptionKey: 'model.providers.volcengine.description',
-    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
-    format: 'openai',
-    models: ['doubao-seed-2-1-pro-260628', 'doubao-seed-2-0-code-preview-260215', 'doubao-seed-2-0-pro-260215'],
-    helpUrl: 'https://console.volcengine.com/ark/',
-    baseUrlOptions: [
-      {
-        url: 'https://ark.cn-beijing.volces.com/api/v3',
-        format: 'openai',
-        noteKey: 'model.providers.volcengine.urlOptions.default',
-      },
-      {
-        url: 'https://ark.cn-beijing.volces.com/api/coding/v3',
-        format: 'openai',
-        noteKey: 'model.providers.volcengine.urlOptions.codingPlan',
-      },
-      {
-        url: 'https://ark.ap-southeast.bytepluses.com/api/v3',
-        format: 'openai',
-        noteKey: 'model.providers.volcengine.urlOptions.intl',
-      },
-    ],
-  },
-  siliconflow: {
-    id: 'siliconflow',
-    nameKey: 'model.providers.siliconflow.name',
-    descriptionKey: 'model.providers.siliconflow.description',
-    baseUrl: 'https://api.siliconflow.cn/v1',
-    format: 'openai',
-    models: ['zai-org/GLM-5.2', 'deepseek-ai/DeepSeek-V4-Pro', 'deepseek-ai/DeepSeek-V4-Flash'],
-    helpUrl: 'https://cloud.siliconflow.cn/account/ak',
-    baseUrlOptions: [
-      {
-        url: 'https://api.siliconflow.cn/v1',
-        format: 'openai',
-        noteKey: 'model.providers.siliconflow.urlOptions.default',
-      },
-      {
-        url: 'https://api.siliconflow.cn/v1/messages',
-        format: 'anthropic',
-        noteKey: 'model.providers.siliconflow.urlOptions.anthropic',
-      },
-      {
-        url: 'https://api.siliconflow.com/v1',
-        format: 'openai',
-        noteKey: 'model.providers.siliconflow.urlOptions.intl',
-      },
-    ],
-  },
-  nvidia: {
-    id: 'nvidia',
-    nameKey: 'model.providers.nvidia.name',
-    descriptionKey: 'model.providers.nvidia.description',
-    baseUrl: 'https://integrate.api.nvidia.com/v1',
-    format: 'openai',
-    models: [],
-    helpUrl: 'https://build.nvidia.com/settings/api-keys',
-  },
-  openrouter: {
-    id: 'openrouter',
-    nameKey: 'model.providers.openrouter.name',
-    descriptionKey: 'model.providers.openrouter.description',
-    baseUrl: 'https://openrouter.ai/api/v1',
-    format: 'openai',
-    models: [],
-    helpUrl: 'https://openrouter.ai/keys',
-  },
-};
+    helpUrl: provider.help_url,
+    baseUrlOptions,
+  };
+}
+
+export const PROVIDER_DISPLAY_ORDER: string[] = [...overlayProviders]
+  .sort((left, right) => left.display_order - right.display_order)
+  .map(provider => provider.id);
+
+export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = Object.fromEntries(
+  overlayProviders.map(provider => [provider.id, templateFromOverlay(provider)]),
+);
 
 export function getOrderedProviders(): ProviderTemplate[] {
   const ordered: ProviderTemplate[] = [];
@@ -307,16 +91,14 @@ export function getOrderedProviders(): ProviderTemplate[] {
     if (template) ordered.push(template);
   }
   for (const template of Object.values(PROVIDER_TEMPLATES)) {
-    if (!PROVIDER_DISPLAY_ORDER.includes(template.id)) {
-      ordered.push(template);
-    }
+    if (!PROVIDER_DISPLAY_ORDER.includes(template.id)) ordered.push(template);
   }
   return ordered;
 }
 
 export function resolveProviderFormat(template: ProviderTemplate, baseUrl: string): ApiFormat {
   if (template.baseUrlOptions && template.baseUrlOptions.length > 0) {
-    const selected = template.baseUrlOptions.find((item) => item.url === baseUrl.trim());
+    const selected = template.baseUrlOptions.find(item => item.url === baseUrl.trim());
     if (selected) return selected.format;
   }
   return template.format;
@@ -324,7 +106,7 @@ export function resolveProviderFormat(template: ProviderTemplate, baseUrl: strin
 
 export function createModelConfigFromTemplate(
   template: ProviderTemplate,
-  previous: ModelConfig | null
+  previous: ModelConfig | null,
 ): ModelConfig {
   const modelName = previous?.modelName?.trim() || template.models[0] || '';
   const baseUrl = previous?.baseUrl?.trim() || template.baseUrl;

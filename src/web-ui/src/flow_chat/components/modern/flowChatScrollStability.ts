@@ -240,7 +240,22 @@ export function settleRetainedCollapseReservationForAnchor(
 export function reconcileUnsignaledShrinkReservation(
   currentState: BottomReservationState,
   fallbackRequiredCollapsePx: number,
+  hasCollapseOwner = (
+    currentState.collapse.px > COMPENSATION_EPSILON_PX ||
+    currentState.collapse.floorPx > COMPENSATION_EPSILON_PX
+  ),
 ): BottomReservationState {
+  if (!hasCollapseOwner) {
+    return sanitizeBottomReservationState({
+      ...currentState,
+      collapse: {
+        ...currentState.collapse,
+        px: 0,
+        floorPx: 0,
+      },
+    });
+  }
+
   return sanitizeBottomReservationState({
     ...currentState,
     collapse: {
@@ -424,14 +439,14 @@ export function consumeBottomReservationForContentGrowth(
 }
 
 export function shouldSyncPhysicalBottom(options: {
-  viewportGeometryChanged: boolean;
+  viewportHeightChanged: boolean;
   collapseProtectionActive: boolean;
   wasAtPhysicalBottom: boolean;
   ownsElementAnchor: boolean;
   isFollowingTail: boolean;
 }): boolean {
   return (
-    options.viewportGeometryChanged &&
+    options.viewportHeightChanged &&
     !options.collapseProtectionActive &&
     options.wasAtPhysicalBottom &&
     !options.ownsElementAnchor &&

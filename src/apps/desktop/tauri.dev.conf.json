@@ -18,7 +18,10 @@
     ],
     "resources": {
       "../../mobile-web/dist": "mobile-web/dist",
-      "resources/worker_host.js": "resources/worker_host.js"
+      "resources/worker_host.js": "resources/worker_host.js",
+      "../../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
+      "../../crates/services/services-integrations/assets/models-dev.LICENSE.txt": "third-party/models.dev/LICENSE.txt",
+      "../../crates/services/services-integrations/assets/models-dev.provenance.json": "third-party/models.dev/provenance.json"
     },
     "linux": {
       "deb": {

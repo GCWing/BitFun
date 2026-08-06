@@ -39,6 +39,9 @@ pub mod loopx_issue_fix;
 #[cfg(feature = "mcp")]
 pub mod mcp;
 
+#[cfg(feature = "models-dev")]
+pub mod models_dev;
+
 #[cfg(feature = "miniapp-runtime")]
 pub mod miniapp;
 

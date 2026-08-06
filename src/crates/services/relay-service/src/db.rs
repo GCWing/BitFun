@@ -747,6 +747,105 @@ impl AuthToken {
         Self::create_with_kind(pool, user_id, device_id, "device", Some(request_id)).await
     }
 
+    /// Atomically register a brand-new account device and issue its first full
+    /// device token. `None` means that device id already belongs to this
+    /// account and must not be silently taken over by a bootstrap retry.
+    /// Replaying the same request id returns the original token.
+    pub async fn provision_new_device(
+        pool: &DbPool,
+        user_id: &str,
+        device_id: &str,
+        device_name: &str,
+        request_id: &str,
+    ) -> Result<Option<AuthToken>> {
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|error| anyhow!("begin device provisioning: {error}"))?;
+        let now = Utc::now().timestamp();
+
+        if let Some(existing) = sqlx::query_as::<_, AuthToken>(
+            "SELECT token, user_id, device_id, token_kind, request_id, created_at, expires_at \
+             FROM auth_tokens WHERE request_id = ?",
+        )
+        .bind(request_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|error| anyhow!("find provisioned device token: {error}"))?
+        {
+            if existing.user_id != user_id
+                || existing.device_id != device_id
+                || !existing.is_device_token()
+                || existing.expires_at <= now
+            {
+                return Err(anyhow!(
+                    "device provisioning request id conflicts with another request"
+                ));
+            }
+            let stored_name = sqlx::query_scalar::<_, Option<String>>(
+                "SELECT device_name FROM devices WHERE user_id = ? AND device_id = ?",
+            )
+            .bind(user_id)
+            .bind(device_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|error| anyhow!("read provisioned device: {error}"))?
+            .flatten();
+            if stored_name.as_deref() != Some(device_name) {
+                return Err(anyhow!(
+                    "device provisioning request id conflicts with another device name"
+                ));
+            }
+            return Ok(Some(existing));
+        }
+
+        let inserted = sqlx::query(
+            "INSERT OR IGNORE INTO devices \
+             (device_id, user_id, device_name, public_key, last_seen_at, online) \
+             VALUES (?, ?, ?, NULL, ?, 0)",
+        )
+        .bind(device_id)
+        .bind(user_id)
+        .bind(device_name)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| anyhow!("register provisioned device: {error}"))?;
+        if inserted.rows_affected() == 0 {
+            return Ok(None);
+        }
+
+        let token = generate_token();
+        let expires_at = now + DEVICE_TOKEN_TTL_SECS;
+        sqlx::query(
+            "INSERT INTO auth_tokens \
+             (token, user_id, device_id, token_kind, request_id, created_at, expires_at) \
+             VALUES (?, ?, ?, 'device', ?, ?, ?)",
+        )
+        .bind(&token)
+        .bind(user_id)
+        .bind(device_id)
+        .bind(request_id)
+        .bind(now)
+        .bind(expires_at)
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| anyhow!("issue provisioned device token: {error}"))?;
+        tx.commit()
+            .await
+            .map_err(|error| anyhow!("commit device provisioning: {error}"))?;
+
+        Ok(Some(AuthToken {
+            token,
+            user_id: user_id.to_string(),
+            device_id: device_id.to_string(),
+            token_kind: "device".to_string(),
+            request_id: Some(request_id.to_string()),
+            created_at: now,
+            expires_at,
+        }))
+    }
+
     pub async fn create_delegated(
         pool: &DbPool,
         user_id: &str,

@@ -607,6 +607,7 @@ fn summary(session_id: &str) -> AgentSessionSummary {
         session_name: "Shared session".to_string(),
         agent_type: "agentic".to_string(),
         model_id: None,
+        reasoning_preset: None,
         last_user_dialog_agent_type: None,
         last_submitted_agent_type: None,
         turn_count: 0,
@@ -618,6 +619,7 @@ fn summary(session_id: &str) -> AgentSessionSummary {
 fn restored(session_id: &str) -> RuntimeIpcOperationResult {
     RuntimeIpcOperationResult::SessionRestored {
         session: summary(session_id),
+        state: crate::RuntimeSessionState::Idle,
         transcript: SessionTranscript {
             session_id: session_id.to_string(),
             messages: Vec::new(),

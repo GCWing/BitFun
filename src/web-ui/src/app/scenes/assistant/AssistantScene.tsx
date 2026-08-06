@@ -16,13 +16,16 @@ const AssistantScene: React.FC<AssistantSceneProps> = ({ workspacePath }) => {
   const { t } = useI18n('common');
   const selectedAssistantWorkspaceId = useMyAgentStore((s) => s.selectedAssistantWorkspaceId);
   const setSelectedAssistantWorkspaceId = useMyAgentStore((s) => s.setSelectedAssistantWorkspaceId);
-  const { currentWorkspace, assistantWorkspacesList } = useWorkspaceContext();
+  const { currentWorkspace, assistantWorkspacesList, primaryAssistantWorkspaceId } = useWorkspaceContext();
   const activeAssistantWorkspace =
     currentWorkspace?.workspaceKind === WorkspaceKind.Assistant ? currentWorkspace : null;
 
   const defaultAssistantWorkspace = useMemo(
-    () => assistantWorkspacesList.find((workspace) => !workspace.assistantId) ?? assistantWorkspacesList[0] ?? null,
-    [assistantWorkspacesList]
+    () => assistantWorkspacesList.find((workspace) => workspace.id === primaryAssistantWorkspaceId)
+      ?? assistantWorkspacesList.find((workspace) => !workspace.assistantId)
+      ?? assistantWorkspacesList[0]
+      ?? null,
+    [assistantWorkspacesList, primaryAssistantWorkspaceId]
   );
 
   const selectedAssistantWorkspace = useMemo(() => {

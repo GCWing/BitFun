@@ -3,21 +3,22 @@ import type {
   Session,
   SessionHistoryPresentation,
 } from '../../types/flow-chat';
+import {
+  canonicalSessionTurns,
+  projectedSessionTurnCount,
+  resolveTurnOrdinal,
+} from '../../utils/flowChatTurnIdentity';
 
 export const CONTINUOUS_HISTORY_PROJECTION_MAX_TURN_COUNT = 24;
 export const CONTINUOUS_HISTORY_PROJECTION_MAX_VIRTUAL_ITEM_COUNT = 200;
 
 type ContinuousHistorySession = Pick<
   Session,
-  'dialogTurns' | 'totalTurnCount' | 'turnCatalog'
+  'sessionId' | 'dialogTurns' | 'isPartial' | 'totalTurnCount' | 'turnCatalog'
 >;
 
 function sessionTotalTurnCount(session: ContinuousHistorySession): number {
-  return Math.max(
-    session.totalTurnCount ?? 0,
-    session.turnCatalog?.totalTurnCount ?? 0,
-    session.dialogTurns.length,
-  );
+  return projectedSessionTurnCount(session);
 }
 
 export function buildContinuousHistoryProjection(
@@ -38,7 +39,8 @@ export function buildContinuousHistoryProjection(
     return null;
   }
 
-  const canonicalTailStartOrdinal = totalTurnCount - session.dialogTurns.length;
+  const canonicalTurns = canonicalSessionTurns(session);
+  const canonicalTailStartOrdinal = totalTurnCount - canonicalTurns.length;
   if (canonicalTailStartOrdinal > presentedTurnCount) {
     return null;
   }
@@ -47,9 +49,14 @@ export function buildContinuousHistoryProjection(
     { length: totalTurnCount },
     (_, ordinal) => presentation.turns[ordinal],
   );
-  for (let index = 0; index < session.dialogTurns.length; index += 1) {
-    const ordinal = canonicalTailStartOrdinal + index;
-    const canonicalTurn = session.dialogTurns[index];
+  const identitySession: ContinuousHistorySession = {
+    ...session,
+    isPartial: true,
+  };
+  for (let index = 0; index < canonicalTurns.length; index += 1) {
+    const canonicalTurn = canonicalTurns[index];
+    const ordinal = resolveTurnOrdinal(identitySession, canonicalTurn)
+      ?? canonicalTailStartOrdinal + index;
     const cachedTurn = turns[ordinal];
     if (cachedTurn && cachedTurn.id !== canonicalTurn.id) {
       return null;

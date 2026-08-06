@@ -34,7 +34,8 @@ pub struct AdminKdfParams {
 impl Default for AdminKdfParams {
     fn default() -> Self {
         Self {
-            m: 65536,
+            // Resource-aware baseline: 16 MiB, 3 iterations, 4 lanes.
+            m: 16 * 1024,
             t: 3,
             p: 4,
         }

@@ -78,6 +78,7 @@ export interface WorkspaceStartupStateSnapshot {
   currentWorkspace: WorkspaceInfo | null;
   recentWorkspaces: WorkspaceInfo[];
   openedWorkspaces: WorkspaceInfo[];
+  primaryAssistantWorkspaceId?: string | null;
   legacyRemoteWorkspace?: RemoteWorkspaceSnapshot | null;
 }
 
@@ -120,6 +121,10 @@ export interface UpdateWorkspaceInfoRequest {
 }
 
 export interface DeleteAssistantWorkspaceRequest {
+  workspaceId: string;
+}
+
+export interface SetPrimaryAssistantWorkspaceRequest {
   workspaceId: string;
 }
 
@@ -207,6 +212,24 @@ export class GlobalAPI {
       });
     } catch (error) {
       throw createTauriCommandError('create_assistant_workspace', error);
+    }
+  }
+
+  async getPrimaryAssistantWorkspace(): Promise<WorkspaceInfo | null> {
+    try {
+      return await api.invoke('get_primary_assistant_workspace', { request: {} });
+    } catch (error) {
+      throw createTauriCommandError('get_primary_assistant_workspace', error);
+    }
+  }
+
+  async setPrimaryAssistantWorkspace(workspaceId: string): Promise<WorkspaceInfo> {
+    try {
+      return await api.invoke('set_primary_assistant_workspace', {
+        request: { workspaceId },
+      });
+    } catch (error) {
+      throw createTauriCommandError('set_primary_assistant_workspace', error, { workspaceId });
     }
   }
 

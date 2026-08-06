@@ -166,6 +166,7 @@ describe('dispatchJobStore', () => {
       agentType: 'debug',
       approvalPolicy: 'remote',
       model: 'configured-model',
+      reasoningPreset: 'high',
       sourceWorkspacePath: '/controller/repo',
       sourceWorkspaceId: 'workspace-1',
       baselineWorktreeId: 'worktree-1',
@@ -185,6 +186,7 @@ describe('dispatchJobStore', () => {
       agentType: 'debug',
       approvalPolicy: 'remote',
       model: 'configured-model',
+      reasoningPreset: 'high',
       sourceWorkspacePath: '/controller/repo',
       sourceWorkspaceId: 'workspace-1',
       branch: 'bitfun/dispatch/job-rest',
@@ -223,6 +225,51 @@ describe('dispatchJobStore', () => {
       baselineWorktreePath: '/source/.bitfun/worktrees/baseline',
       syncedHeadCommit: 'def456',
     });
+  });
+
+  it('hydrates a follow-up reasoning preset from the durable outbound index', () => {
+    registerJob();
+    dispatchJobStore.getState().updateReasoningPreset('job-1', 'low');
+    dispatchJobStore.getState().mergeOutboundRecords([{
+      jobId: 'job-1',
+      sessionId: 'session-1',
+      target: {
+        kind: 'ssh',
+        connectionId: 'ssh-1',
+        workspacePath: '/repo',
+        displayName: 'build-host',
+      },
+      sourceWorkspacePath: '/source',
+      workspacePath: '/repo',
+      promptPreview: 'Dispatch test',
+      reasoningPreset: 'auto',
+      lastCursor: 10,
+      lastState: 'running',
+      createdAt: '2026-07-28T00:00:00Z',
+      updatedAt: '2026-07-28T00:00:01Z',
+    }]);
+
+    expect(dispatchJobStore.getState().jobs['job-1'].reasoningPreset).toBe('auto');
+
+    dispatchJobStore.getState().mergeOutboundRecords([{
+      jobId: 'job-1',
+      sessionId: 'session-1',
+      target: {
+        kind: 'ssh',
+        connectionId: 'ssh-1',
+        workspacePath: '/repo',
+        displayName: 'build-host',
+      },
+      sourceWorkspacePath: '/source',
+      workspacePath: '/repo',
+      promptPreview: 'Legacy dispatch record',
+      lastCursor: 10,
+      lastState: 'running',
+      createdAt: '2026-07-28T00:00:00Z',
+      updatedAt: '2026-07-28T00:00:02Z',
+    }]);
+
+    expect(dispatchJobStore.getState().jobs['job-1'].reasoningPreset).toBe('auto');
   });
 
   it('marks a missing baseline worktree without changing job execution state', () => {
@@ -404,5 +451,29 @@ describe('dispatchJobStore', () => {
     ) as Record<string, unknown> | undefined;
     expect(persistedState?.transportByJobId).toBeUndefined();
     expect(persistedState?.dismissedSessionIds).toEqual([]);
+  });
+
+  it('resets reasoning to Auto when the dispatch model changes', () => {
+    registerJob();
+    dispatchJobStore.getState().updateReasoningPreset('job-1', 'high');
+
+    dispatchJobStore.getState().updateModel('job-1', 'model-2');
+
+    expect(dispatchJobStore.getState().jobs['job-1']).toMatchObject({
+      model: 'model-2',
+      reasoningPreset: 'auto',
+    });
+  });
+
+  it('persists the target reasoning preset in observer state', () => {
+    registerJob();
+    dispatchJobStore.getState().updateReasoningPreset('job-1', 'high');
+
+    const partialize = dispatchJobStore.persist.getOptions().partialize;
+    const persistedState = partialize?.(
+      dispatchJobStore.getState(),
+    ) as { jobs?: Record<string, { reasoningPreset?: string }> } | undefined;
+
+    expect(persistedState?.jobs?.['job-1']?.reasoningPreset).toBe('high');
   });
 });

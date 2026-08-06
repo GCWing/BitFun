@@ -236,7 +236,9 @@
 | 模型列表 | `settings-model-list` | 已配置模型行的容器。 |
 | 创建第一个模型配置按钮 | `settings-model-create-first-config-btn` | 从空状态启动第一个模型提供商配置流程。 |
 | 自定义模型配置按钮 | `settings-model-custom-config-btn` | 启动自定义提供商配置。包含 `data-provider-id="custom"`。 |
-| 模型提供商选项 | `settings-model-provider-option` | 重复的提供商卡片。配合 `data-provider-id` 使用，例如 `openbitfun`。 |
+| 模型提供商选项 | `settings-model-provider-option` | 重复的提供商行。配合 `data-provider-id` 使用，例如 `openbitfun`。列表默认只展示前几项，取用列表外的提供商需先经搜索框或下方展开按钮。 |
+| 模型提供商搜索框 | `settings-model-provider-search` | 按提供商名称、id 或模型名称过滤预设提供商列表。 |
+| 模型提供商展开按钮 | `settings-model-provider-expand-btn` | 将截断的预设提供商列表展开为全部提供商，再次点击收起。 |
 | 模型提供商名称输入框 | `settings-model-provider-name-input` | 提供商/配置展示名称字段，例如 mock LLM 提供商名称。 |
 | 模型 API key 输入框 | `settings-model-api-key-input` | 模型配置表单里的 API key 字段。测试中不要硬编码真实 key，应从 local config 读取。 |
 | 模型 Base URL 输入框 | `settings-model-base-url-input` | 自定义/OpenAI-compatible 提供商的 API base URL 字段。 |

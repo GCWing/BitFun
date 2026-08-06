@@ -45,10 +45,10 @@ pub use crate::post_call_hooks::{
     RuntimeHookRegistryBuildError,
 };
 pub use crate::runtime::{
-    AgentEventStream, AgentInteractionResponsePort, AgentRunHandle, AgentRunRequest,
-    AgentSessionRestorePort, AgentSessionRestoreRequest, AgentSessionRestoreResult,
-    AgentUserAnswersRequest, RuntimeAgentRegistry, RuntimeAgentRegistryQuery, RuntimeBuildError,
-    RuntimeError, RuntimeToolRegistry, SessionSelector,
+    AgentEventStream, AgentRunHandle, AgentRunRequest, AgentSessionRestorePort,
+    AgentSessionRestoreRequest, AgentSessionRestoreResult, RuntimeAgentRegistry,
+    RuntimeAgentRegistryQuery, RuntimeBuildError, RuntimeError, RuntimeToolRegistry,
+    SessionSelector,
 };
 pub use crate::session_state::{session_state_label_for_state, ProcessingPhase, SessionState};
 pub use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
@@ -63,28 +63,30 @@ pub use bitfun_harness::{
     HarnessRegistry, HarnessWorkflow,
 };
 pub use bitfun_runtime_ports::{
-    AgentBackgroundResultRequest, AgentDialogSteerRequest, AgentDialogTurnExecution,
-    AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
-    AgentLocalCommandTurnPort, AgentLocalCommandTurnRecordRequest,
-    AgentLocalCommandTurnRecordResult, AgentMessageWorkspaceReferencesRequest,
-    AgentSessionArchiveRequest, AgentSessionArchiveStateRequest, AgentSessionClosePort,
-    AgentSessionCompactionPort, AgentSessionCompactionRequest, AgentSessionCompactionResult,
-    AgentSessionComposerUpdate, AgentSessionCreateRequest, AgentSessionCreateResult,
-    AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest, AgentSessionForkBeforeTurnRequest,
-    AgentSessionForkPort, AgentSessionForkRequest, AgentSessionForkResult,
-    AgentSessionLifecycleStatus, AgentSessionLineageCancellationRequest, AgentSessionLineageEntry,
+    AgentBackgroundResultRequest, AgentContextReloadPort, AgentDialogSteerRequest,
+    AgentDialogTurnExecution, AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment,
+    AgentInteractionResponsePort, AgentLifecycleDeliveryPort, AgentLocalCommandTurnPort,
+    AgentLocalCommandTurnRecordRequest, AgentLocalCommandTurnRecordResult,
+    AgentMessageWorkspaceReferencesRequest, AgentSessionArchiveRequest,
+    AgentSessionArchiveStateRequest, AgentSessionClosePort, AgentSessionCompactionPort,
+    AgentSessionCompactionRequest, AgentSessionCompactionResult, AgentSessionComposerUpdate,
+    AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionDeleteRequest,
+    AgentSessionForkAtTurnRequest, AgentSessionForkBeforeTurnRequest, AgentSessionForkPort,
+    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionLifecycleStatus,
+    AgentSessionLineageCancellationRequest, AgentSessionLineageEntry,
     AgentSessionLineageInspection, AgentSessionLineagePort, AgentSessionLineageRequest,
     AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest, AgentSessionListRequest,
     AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
-    AgentSessionModelPort, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
-    AgentSessionRevertPort, AgentSessionRevertRequest, AgentSessionRevertResult,
-    AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
-    AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentSubmissionPort,
-    AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
-    AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
-    AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest,
-    AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, AgentTurnSettlementPort, AgentTurnSettlementRequest,
+    AgentSessionModelPort, AgentSessionModelSelection, AgentSessionModelSelectionUpdateRequest,
+    AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentSessionRevertPort,
+    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionSummary,
+    AgentSessionUsagePort, AgentSessionUsageRequest, AgentSessionWorkspaceBinding,
+    AgentSessionWorkspaceRequest, AgentSubmissionPort, AgentSubmissionRequest,
+    AgentSubmissionResult, AgentSubmissionSource, AgentThreadGoalCreateRequest,
+    AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest, AgentThreadGoalManagementPort,
+    AgentThreadGoalUpdateStatusRequest, AgentTransientSessionDiscardRequest,
+    AgentTurnCancellationPort, AgentTurnCancellationRequest, AgentTurnCancellationResult,
+    AgentTurnSettlementPort, AgentTurnSettlementRequest, AgentUserAnswersRequest,
     AgentUserShellCommandPort, AgentUserShellCommandRequest, AgentUserShellCommandResult,
     AgentWorkspaceReference, AgentWorkspaceReferenceKind, AgentWorkspaceReferencePort,
     AgentWorkspaceReferenceSearchEntry, AgentWorkspaceReferenceSearchRequest,
@@ -514,6 +516,13 @@ impl AgentRuntime {
         request: AgentSessionModelUpdateRequest,
     ) -> Result<(), RuntimeError> {
         self.inner.update_session_model(request).await
+    }
+
+    pub async fn update_session_model_selection(
+        &self,
+        request: AgentSessionModelSelectionUpdateRequest,
+    ) -> Result<(), RuntimeError> {
+        self.inner.update_session_model_selection(request).await
     }
 
     pub async fn update_session_mode(

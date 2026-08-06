@@ -82,7 +82,7 @@ Use this checklist on a machine you control (VPS, LAN server, or localhost).
 
 BitFun Desktop can SSH to your host without a manual clone. One click installs
 Docker when necessary, verifies the signed release image descriptor locally,
-pulls the matching amd64/arm64 image through the selected regional route, and
+pulls the latest amd64/arm64 image through the selected network route, and
 starts it by immutable digest. It never builds on the customer server and never
 silently falls back to source compilation. Pull completes before an existing
 Relay is stopped; startup or health failure restores the previous container.
@@ -105,6 +105,9 @@ descriptor fixes the canonical GHCR repository, release tag, amd64/arm64
 platform set, and multi-platform manifest digest. Desktop verifies it on the
 user's machine and sends the digest to the server; Docker then verifies every
 manifest and layer while pulling, even through a third-party accelerator.
+GitHub/GHCR stays first when a 10-second GitHub byte probe reaches 512 KiB/s;
+below that floor, automatic mode tries the NJU and DaoCloud GHCR accelerators
+first while retaining official GHCR as the final fallback.
 
 The raw Relay archives still carry `.sha256` and `.sig` files for direct binary
 use and for constructing the release image in CI.

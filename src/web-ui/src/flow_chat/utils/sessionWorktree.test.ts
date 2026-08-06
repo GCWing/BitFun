@@ -36,6 +36,19 @@ describe('session worktree control', () => {
     expect(isSessionWorktreeBindingLocked(session({ totalTurnCount: 1 }), false)).toBe(true);
   });
 
+  it('locks catalog-only history before its dialog turns are hydrated', () => {
+    expect(isSessionWorktreeBindingLocked(session({
+      turnCatalog: {
+        schemaVersion: 1,
+        sessionId: 'session-1',
+        revision: 'catalog-1',
+        totalTurnCount: 1,
+        complete: false,
+        entries: [],
+      },
+    }), false)).toBe(true);
+  });
+
   it('shows an armed worktree before it has been materialized', () => {
     const armed = session({
       workspacePath: '/repo',

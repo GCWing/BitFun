@@ -86,6 +86,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     setActiveWorkspace,
     closeWorkspaceById,
     deleteAssistantWorkspace,
+    primaryAssistantWorkspaceId,
     resetAssistantWorkspace,
     renameWorkspace,
   } = useWorkspaceContext();
@@ -123,12 +124,13 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const menuPopoverRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
-  const isNamedAssistantWorkspace =
-    workspace.workspaceKind === WorkspaceKind.Assistant &&
-    Boolean(workspace.assistantId);
   const isDefaultAssistantWorkspace =
     workspace.workspaceKind === WorkspaceKind.Assistant &&
-    !workspace.assistantId;
+    (workspace.id === primaryAssistantWorkspaceId ||
+      (!primaryAssistantWorkspaceId && !workspace.assistantId));
+  const isDeletableAssistantWorkspace =
+    workspace.workspaceKind === WorkspaceKind.Assistant &&
+    !isDefaultAssistantWorkspace;
   const workspaceDisplayName =
     workspace.workspaceKind === WorkspaceKind.Assistant
       ? workspace.identity?.name?.trim() || workspace.name
@@ -552,7 +554,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   }, []);
 
   const handleConfirmDeleteAssistant = useCallback(async () => {
-    if (!isNamedAssistantWorkspace || isDeletingAssistant) {
+    if (!isDeletableAssistantWorkspace || isDeletingAssistant) {
       return;
     }
 
@@ -568,7 +570,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     } finally {
       setIsDeletingAssistant(false);
     }
-  }, [deleteAssistantWorkspace, isDeletingAssistant, isNamedAssistantWorkspace, t, workspace.id]);
+  }, [deleteAssistantWorkspace, isDeletableAssistantWorkspace, isDeletingAssistant, t, workspace.id]);
 
   const handleConfirmResetWorkspace = useCallback(async () => {
     if (!isDefaultAssistantWorkspace || isResettingWorkspace) {
@@ -930,7 +932,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   <FolderSearch size={13} />
                   <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.reveal')}</span>
                 </button>
-                {(isDefaultAssistantWorkspace || isNamedAssistantWorkspace) ? (
+                {(isDefaultAssistantWorkspace || isDeletableAssistantWorkspace) ? (
                   <>
                     <div className="bitfun-nav-panel__workspace-item-menu-divider" data-bf-component="workspace-item" data-bf-part="menuDivider" />
                     {isDefaultAssistantWorkspace ? (
@@ -947,7 +949,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                         <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.resetWorkspace')}</span>
                       </button>
                     ) : null}
-                    {isNamedAssistantWorkspace ? (
+                    {isDeletableAssistantWorkspace ? (
                       <button
                         type="button"
                         data-bf-component="workspace-item"

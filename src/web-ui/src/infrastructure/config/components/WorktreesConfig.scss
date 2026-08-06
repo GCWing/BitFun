@@ -57,14 +57,6 @@
     padding-top: var(--bf-appearance-token-size-gap-1);
   }
 
-  &__management-section {
-    > .bitfun-config-page-section__body {
-      border: 0;
-      border-radius: 0;
-      background: transparent;
-    }
-  }
-
   &__projects {
     display: flex;
     flex-direction: column;

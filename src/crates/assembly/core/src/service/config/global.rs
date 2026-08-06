@@ -47,6 +47,9 @@ pub enum ConfigUpdateEvent {
     AppUpdated,
     /// Configuration fully reloaded.
     ConfigReloaded,
+    /// The models.dev reasoning catalog snapshot changed. Session owners use
+    /// this to reconcile persisted reasoning preset selections.
+    ReasoningCatalogUpdated,
     /// Debug-mode configuration updated.
     DebugModeConfigUpdated {
         /// The new ingest port.

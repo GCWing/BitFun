@@ -17,6 +17,16 @@ use tokio::fs;
 type ConfigMigrationFn = fn(Value) -> BitFunResult<Value>;
 type ConfigMigration = (&'static str, &'static str, ConfigMigrationFn);
 
+fn invalid_config_error(context: &str, result: &ConfigValidationResult) -> BitFunError {
+    let messages = result
+        .errors
+        .iter()
+        .map(|error| format!("{}: {}", error.path, error.message))
+        .collect::<Vec<_>>()
+        .join(", ");
+    BitFunError::validation(format!("{context}: {messages}"))
+}
+
 fn canonical_config_path(path: &str) -> &str {
     match path {
         "ai.review_teams.rate_limit_status" => "ai.review_team_rate_limit_status",
@@ -101,10 +111,42 @@ pub(crate) fn normalize_legacy_tool_permissions_config_value(mut config: Value) 
     config
 }
 
+/// Removes retired per-model reasoning controls without inferring a preset.
+///
+/// The canonical `reasoning` field, when present, remains authoritative. Older
+/// controls are intentionally discarded so an upgrade cannot silently create
+/// a surprising default preset.
+pub(crate) fn strip_removed_model_reasoning_fields(mut config: Value) -> Value {
+    let Some(models) = config
+        .get_mut("ai")
+        .and_then(Value::as_object_mut)
+        .and_then(|ai| ai.get_mut("models"))
+        .and_then(Value::as_array_mut)
+    else {
+        return config;
+    };
+
+    for model in models {
+        let Some(model) = model.as_object_mut() else {
+            continue;
+        };
+        for key in [
+            "enable_thinking_process",
+            "reasoning_mode",
+            "reasoning_effort",
+            "thinking_budget_tokens",
+        ] {
+            model.remove(key);
+        }
+    }
+
+    config
+}
+
 fn normalize_legacy_config_value(config: Value) -> Value {
-    normalize_legacy_tool_permissions_config_value(
+    strip_removed_model_reasoning_fields(normalize_legacy_tool_permissions_config_value(
         normalize_legacy_agent_model_defaults_config_value(config),
-    )
+    ))
 }
 
 fn config_value_for_persistence(config: &GlobalConfig) -> BitFunResult<Value> {
@@ -288,6 +330,14 @@ impl ConfigManager {
 
                 self.config = config;
 
+                let validation_result = self.validate_config().await?;
+                if !validation_result.valid {
+                    return Err(invalid_config_error(
+                        "Invalid configuration file",
+                        &validation_result,
+                    ));
+                }
+
                 if needs_migration || legacy_config_normalized {
                     self.config.version = current_version;
                     self.save_config().await?;
@@ -327,6 +377,14 @@ impl ConfigManager {
         Self::add_default_func_agent_models_config(&mut config.ai.func_agent_models);
 
         self.config = config;
+
+        let validation_result = self.validate_config().await?;
+        if !validation_result.valid {
+            return Err(invalid_config_error(
+                "Invalid merged configuration file",
+                &validation_result,
+            ));
+        }
 
         self.config.version = env!("CARGO_PKG_VERSION").to_string();
         self.save_config().await?;
@@ -438,9 +496,19 @@ impl ConfigManager {
         self.set_value_by_path(path, json_value)?;
         self.config.last_modified = chrono::Utc::now();
 
-        if let Err(e) = self.validate_config().await {
+        let validation_result = match self.validate_config().await {
+            Ok(result) => result,
+            Err(error) => {
+                self.config = old_config;
+                return Err(error);
+            }
+        };
+        if !validation_result.valid {
             self.config = old_config;
-            return Err(e);
+            return Err(invalid_config_error(
+                "Invalid configuration update",
+                &validation_result,
+            ));
         }
 
         self.notify_config_changed(path, &old_config).await?;
@@ -464,6 +532,21 @@ impl ConfigManager {
         }
 
         self.config.last_modified = chrono::Utc::now();
+
+        let validation_result = match self.validate_config().await {
+            Ok(result) => result,
+            Err(error) => {
+                self.config = old_config;
+                return Err(error);
+            }
+        };
+        if !validation_result.valid {
+            self.config = old_config;
+            return Err(invalid_config_error(
+                "Invalid configuration reset",
+                &validation_result,
+            ));
+        }
 
         if let Some(path) = path {
             let path = canonical_config_path(path);
@@ -506,15 +589,10 @@ impl ConfigManager {
 
         let validation_result = self.providers.validate_config(&imported_config).await?;
         if !validation_result.valid {
-            let error_messages: Vec<String> = validation_result
-                .errors
-                .iter()
-                .map(|e| e.message.clone())
-                .collect();
-            return Err(BitFunError::validation(format!(
-                "Invalid imported config: {}",
-                error_messages.join(", ")
-            )));
+            return Err(invalid_config_error(
+                "Invalid imported config",
+                &validation_result,
+            ));
         }
 
         self.config = imported_config;
@@ -832,7 +910,7 @@ mod tests {
     use super::{
         canonical_config_path, config_value_for_persistence,
         normalize_legacy_agent_model_defaults_config_value,
-        normalize_legacy_tool_permissions_config_value,
+        normalize_legacy_tool_permissions_config_value, strip_removed_model_reasoning_fields,
     };
     use crate::service::config::types::GlobalConfig;
 
@@ -846,6 +924,56 @@ mod tests {
             canonical_config_path("ai.review_teams.default"),
             "ai.review_teams.default"
         );
+    }
+
+    #[test]
+    fn removed_model_reasoning_fields_are_stripped_without_creating_a_preset() {
+        let normalized = strip_removed_model_reasoning_fields(serde_json::json!({
+            "ai": {
+                "models": [{
+                    "id": "model-1",
+                    "reasoning_mode": "adaptive",
+                    "reasoning_effort": "high",
+                    "thinking_budget_tokens": 12000
+                }]
+            }
+        }));
+        let model = &normalized["ai"]["models"][0];
+
+        assert!(model.get("reasoning").is_none());
+        assert!(model.get("reasoning_mode").is_none());
+        assert!(model.get("reasoning_effort").is_none());
+        assert!(model.get("thinking_budget_tokens").is_none());
+    }
+
+    #[test]
+    fn canonical_model_reasoning_is_preserved_and_removed_fields_are_stripped() {
+        let normalized = strip_removed_model_reasoning_fields(serde_json::json!({
+            "ai": {
+                "models": [{
+                    "id": "model-1",
+                    "reasoning": {
+                        "catalog": { "source": "disabled" },
+                        "default_preset": "custom",
+                        "presets": [{
+                            "id": "custom",
+                            "setting": { "type": "effort", "value": "xhigh" }
+                        }]
+                    },
+                    "reasoning_mode": "disabled",
+                    "reasoning_effort": "low"
+                }]
+            }
+        }));
+        let model = &normalized["ai"]["models"][0];
+
+        assert_eq!(model["reasoning"]["default_preset"], "custom");
+        assert_eq!(
+            model["reasoning"]["presets"][0]["setting"]["value"],
+            "xhigh"
+        );
+        assert!(model.get("reasoning_mode").is_none());
+        assert!(model.get("reasoning_effort").is_none());
     }
 
     #[test]

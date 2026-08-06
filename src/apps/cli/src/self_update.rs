@@ -17,16 +17,18 @@ const OPENBITFUN_MANIFEST: &str = "https://openbitfun.com/release/linux-binaries
 const AUTO_CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 const DEPRECATION_WARNING: &str = "Warning: `bitfun-cli` is deprecated; use `bitfun` instead.";
 
-/// Ranked-source download tuning. Mirrors the relay deploy path in
+/// Source-selection tuning. Mirrors the relay deploy path in
 /// `src/crates/services/services-integrations/src/remote_ssh/relay_deploy.rs`,
 /// which solves the same problem on the server side; keep the two in step.
 ///
-/// A fixed-length ranged request measures throughput: bytes delivered inside
-/// the window *is* the speed estimate, so one probe per source ranks them all.
+/// A fixed-length ranged request measures GitHub throughput: bytes delivered
+/// inside the window *is* the speed estimate used to keep GitHub first or move
+/// the synchronized mirror ahead of it.
 const PROBE_WINDOW: Duration = Duration::from_secs(10);
 const PROBE_BYTES: u64 = 4 * 1024 * 1024;
-/// A source at or above this is used without hesitation.
-const HEALTHY_THROUGHPUT: u64 = 128 * 1024;
+/// GitHub stays first at or above this rate. Below it, a synchronized
+/// OpenBitFun copy is preferred and GitHub remains the fallback.
+const HEALTHY_THROUGHPUT: u64 = 512 * 1024;
 /// Sustained below this counts as a dead link and we fail over. Deliberately
 /// far under the healthy bar: a genuinely slow but only available source must
 /// still be allowed to finish rather than loop forever.
@@ -269,7 +271,11 @@ impl InstallLock {
         // which two `bitfun update` processes both see no lock, and interleaving
         // their backup/stage/swap renames can leave no working binary at all.
         // Only a stale lock is cleared, and only then is the create retried.
-        match fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
             Ok(mut file) => {
                 use std::io::Write as _;
                 let _ = write!(file, "{}", std::process::id());
@@ -365,6 +371,11 @@ async fn update_from_configured_sources(check_only: bool) -> Result<UpdateOutcom
                     canonical_sig_url = asset.sig_url.clone();
                 }
                 candidates.push(AssetCandidate {
+                    source: if *source == "GitHub" {
+                        ReleaseSource::GitHub
+                    } else {
+                        ReleaseSource::OpenBitFun
+                    },
                     url: asset.url.clone(),
                     sha256_url: asset.sha256_url.clone(),
                     sig_url: asset.sig_url.clone(),
@@ -383,12 +394,18 @@ async fn update_from_configured_sources(check_only: bool) -> Result<UpdateOutcom
 
     // Every candidate is the same asset, so any one names the staging file.
     let asset_filename = candidates[0].filename.clone();
-    let ranked = rank_sources(&client, candidates).await;
-    if let Some(fastest) = ranked.first() {
-        if fastest.1 < HEALTHY_THROUGHPUT {
+    let ranked = order_sources(&client, candidates).await;
+    if ranked
+        .first()
+        .is_some_and(|(candidate, _)| candidate.source == ReleaseSource::OpenBitFun)
+    {
+        if let Some((_, github_speed)) = ranked
+            .iter()
+            .find(|(candidate, _)| candidate.source == ReleaseSource::GitHub)
+        {
             eprintln!(
-                "Fastest update source is {} KB/s, under the {} KB/s bar; the download will take a while.",
-                fastest.1 / 1024,
+                "GitHub update speed is {} KiB/s, under the {} KiB/s bar; trying the OpenBitFun mirror first.",
+                github_speed / 1024,
                 HEALTHY_THROUGHPUT / 1024
             );
         }
@@ -554,8 +571,15 @@ impl PartialDownload {
 }
 
 /// One source's copy of the same archive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReleaseSource {
+    GitHub,
+    OpenBitFun,
+}
+
 #[derive(Debug, Clone)]
 struct AssetCandidate {
+    source: ReleaseSource,
     url: String,
     sha256_url: String,
     sig_url: Option<String>,
@@ -664,7 +688,10 @@ async fn probe_throughput(client: &Client, url: &str, window: Duration) -> u64 {
     let started = Instant::now();
     let request = client
         .get(url)
-        .header(reqwest::header::RANGE, format!("bytes=0-{}", PROBE_BYTES - 1))
+        .header(
+            reqwest::header::RANGE,
+            format!("bytes=0-{}", PROBE_BYTES - 1),
+        )
         .send();
     let Ok(Ok(response)) = tokio::time::timeout(window, request).await else {
         return 0;
@@ -694,28 +721,60 @@ async fn probe_throughput(client: &Client, url: &str, window: Duration) -> u64 {
     (received as f64 / elapsed) as u64
 }
 
-/// Order candidates fastest-first. Every source serves the same artifact, so
-/// this only decides who to ask first, never what is acceptable.
-async fn rank_sources(
+/// Keep GitHub first while it clears the healthy floor. If it does not, put the
+/// mirror first and retain GitHub as the final fallback. Every candidate still
+/// carries the same release version and passes the integrity gates below.
+async fn order_sources(
     client: &Client,
     candidates: Vec<AssetCandidate>,
 ) -> Vec<(AssetCandidate, u64)> {
-    rank_sources_with_window(client, candidates, PROBE_WINDOW).await
+    order_sources_with_window(client, candidates, PROBE_WINDOW).await
 }
 
-async fn rank_sources_with_window(
+async fn order_sources_with_window(
     client: &Client,
-    candidates: Vec<AssetCandidate>,
+    mut candidates: Vec<AssetCandidate>,
     window: Duration,
 ) -> Vec<(AssetCandidate, u64)> {
-    let mut ranked = Vec::with_capacity(candidates.len());
-    for candidate in candidates {
-        let speed = probe_throughput(client, &candidate.url, window).await;
-        tracing::debug!("CLI update source probe: {speed} B/s from {}", candidate.url);
-        ranked.push((candidate, speed));
+    let Some(github_index) = candidates
+        .iter()
+        .position(|candidate| candidate.source == ReleaseSource::GitHub)
+    else {
+        return candidates
+            .into_iter()
+            .map(|candidate| (candidate, 0))
+            .collect();
+    };
+    let github_speed = probe_throughput(client, &candidates[github_index].url, window).await;
+    tracing::debug!(
+        "CLI update GitHub probe: {github_speed} B/s from {}",
+        candidates[github_index].url
+    );
+
+    if github_speed >= HEALTHY_THROUGHPUT
+        || !candidates
+            .iter()
+            .any(|candidate| candidate.source == ReleaseSource::OpenBitFun)
+    {
+        candidates.swap(0, github_index);
+    } else if let Some(mirror_index) = candidates
+        .iter()
+        .position(|candidate| candidate.source == ReleaseSource::OpenBitFun)
+    {
+        candidates.swap(0, mirror_index);
     }
-    ranked.sort_by(|left, right| right.1.cmp(&left.1));
-    ranked
+
+    candidates
+        .into_iter()
+        .map(|candidate| {
+            let speed = if candidate.source == ReleaseSource::GitHub {
+                github_speed
+            } else {
+                0
+            };
+            (candidate, speed)
+        })
+        .collect()
 }
 
 /// Stream a body, appending to `buffer`, aborting if throughput stays under
@@ -804,7 +863,6 @@ async fn download_resumable(client: &Client, url: &str, buffer: &mut Vec<u8>) ->
         .with_context(|| format!("download {url}"))?;
     stream_with_stall_guard(response, buffer, url).await
 }
-
 
 async fn download_text(client: &Client, url: &str) -> Result<String> {
     client
@@ -1118,7 +1176,10 @@ fn restart_managed_daemon() {
     // unit to `~/.config` on a host that sets `XDG_CONFIG_HOME` elsewhere; a
     // `try-restart` for a unit systemd does not know is a harmless no-op, while
     // missing one leaves a stale daemon behind.
-    let candidates = [dirs::config_dir(), dirs::home_dir().map(|it| it.join(".config"))];
+    let candidates = [
+        dirs::config_dir(),
+        dirs::home_dir().map(|it| it.join(".config")),
+    ];
     let installed = candidates
         .iter()
         .flatten()
@@ -1187,7 +1248,11 @@ mod tests {
                             return;
                         }
 
-                        let stop = if truncate { slice.len() / 3 } else { slice.len() };
+                        let stop = if truncate {
+                            slice.len() / 3
+                        } else {
+                            slice.len()
+                        };
                         let mut sent = 0usize;
                         while sent < stop {
                             let end = (sent + chunk).min(stop);
@@ -1206,8 +1271,9 @@ mod tests {
             Self { url }
         }
 
-        fn candidate(&self, filename: &str) -> AssetCandidate {
+        fn candidate(&self, source: ReleaseSource, filename: &str) -> AssetCandidate {
             AssetCandidate {
+                source,
                 url: self.url.clone(),
                 sha256_url: format!("{}.sha256", self.url),
                 sig_url: None,
@@ -1221,25 +1287,52 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ranking_prefers_the_faster_source() {
-        let body = payload(256 * 1024);
-        // One origin trickles 2 KB every 20 ms (~100 KB/s); the other is unthrottled.
-        let slow = StubOrigin::spawn(Arc::clone(&body), 2048, Duration::from_millis(20), false).await;
-        let fast = StubOrigin::spawn(Arc::clone(&body), 64 * 1024, Duration::ZERO, false).await;
+    async fn healthy_github_remains_first_even_when_the_mirror_is_available() {
+        let body = payload(1024 * 1024);
+        let github = StubOrigin::spawn(Arc::clone(&body), 64 * 1024, Duration::ZERO, false).await;
+        let mirror = StubOrigin::spawn(Arc::clone(&body), 64 * 1024, Duration::ZERO, false).await;
         let client = build_client().expect("client");
 
-        let ranked = rank_sources_with_window(
+        let ordered = order_sources_with_window(
             &client,
-            vec![slow.candidate("a.tar.gz"), fast.candidate("a.tar.gz")],
+            vec![
+                mirror.candidate(ReleaseSource::OpenBitFun, "a.tar.gz"),
+                github.candidate(ReleaseSource::GitHub, "a.tar.gz"),
+            ],
+            Duration::from_secs(1),
+        )
+        .await;
+
+        assert_eq!(ordered[0].0.source, ReleaseSource::GitHub);
+        assert!(ordered[0].1 >= HEALTHY_THROUGHPUT);
+    }
+
+    #[tokio::test]
+    async fn slow_github_moves_the_mirror_first() {
+        let body = payload(1024 * 1024);
+        // 2 KiB every 20 ms is roughly 100 KiB/s, below the 512 KiB/s floor.
+        let github =
+            StubOrigin::spawn(Arc::clone(&body), 2048, Duration::from_millis(20), false).await;
+        let mirror = StubOrigin::spawn(Arc::clone(&body), 64 * 1024, Duration::ZERO, false).await;
+        let client = build_client().expect("client");
+
+        let ordered = order_sources_with_window(
+            &client,
+            vec![
+                github.candidate(ReleaseSource::GitHub, "a.tar.gz"),
+                mirror.candidate(ReleaseSource::OpenBitFun, "a.tar.gz"),
+            ],
             Duration::from_millis(400),
         )
         .await;
 
-        assert_eq!(
-            ranked[0].0.url, fast.url,
-            "the faster origin must be attempted first, got {ranked:?}"
-        );
-        assert!(ranked[0].1 > ranked[1].1, "speeds must be ordered: {ranked:?}");
+        assert_eq!(ordered[0].0.source, ReleaseSource::OpenBitFun);
+        let github_speed = ordered
+            .iter()
+            .find(|(candidate, _)| candidate.source == ReleaseSource::GitHub)
+            .map(|(_, speed)| *speed)
+            .expect("GitHub candidate");
+        assert!(github_speed < HEALTHY_THROUGHPUT);
     }
 
     /// The regression that made slow links fail outright: a whole-request
@@ -1249,7 +1342,8 @@ mod tests {
     #[tokio::test]
     async fn slow_but_alive_source_completes() {
         let body = payload(128 * 1024);
-        let slow = StubOrigin::spawn(Arc::clone(&body), 4096, Duration::from_millis(15), false).await;
+        let slow =
+            StubOrigin::spawn(Arc::clone(&body), 4096, Duration::from_millis(15), false).await;
         let client = build_client().expect("client");
 
         let mut buffer = Vec::new();
@@ -1262,8 +1356,7 @@ mod tests {
     #[tokio::test]
     async fn partial_download_resumes_across_sources() {
         let body = payload(96 * 1024);
-        let truncating =
-            StubOrigin::spawn(Arc::clone(&body), 8192, Duration::ZERO, true).await;
+        let truncating = StubOrigin::spawn(Arc::clone(&body), 8192, Duration::ZERO, true).await;
         let complete = StubOrigin::spawn(Arc::clone(&body), 8192, Duration::ZERO, false).await;
         let client = build_client().expect("client");
 
@@ -1271,7 +1364,10 @@ mod tests {
         // First source hangs up early, leaving a partial body behind.
         let _ = download_resumable(&client, &truncating.url, &mut buffer).await;
         let partial = buffer.len();
-        assert!(partial > 0 && partial < body.len(), "expected a partial body");
+        assert!(
+            partial > 0 && partial < body.len(),
+            "expected a partial body"
+        );
 
         // Second source must continue from there, not restart.
         download_resumable(&client, &complete.url, &mut buffer)
@@ -1294,9 +1390,8 @@ mod tests {
     #[test]
     fn staged_partial_resumes_and_evicts_other_versions() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let stage = |version: &str, filename: &str| {
-            PartialDownload::open_in(dir.path(), version, filename)
-        };
+        let stage =
+            |version: &str, filename: &str| PartialDownload::open_in(dir.path(), version, filename);
 
         let first = stage("0.2.14", "bitfun-cli-0.2.14-x86_64.tar.gz");
         assert!(first.resume().is_empty(), "nothing staged yet");

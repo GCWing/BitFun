@@ -13,6 +13,7 @@ import {
   crateLayoutRules,
   cratePathForName,
 } from './rules/crate-layout.mjs';
+import { checkTuiLegacyBackendRatchet } from './tui-boundary-ratchet.mjs';
 import {
   coreClosedFeatureProfileRules,
   coreProductFullFeatureAssemblyRule,
@@ -1117,6 +1118,7 @@ export function runCoreBoundaryCheck() {
   }
 
   checkCrateLayoutRules();
+  failures.push(...checkTuiLegacyBackendRatchet(ROOT));
   failures.push(...checkCargoDependencyBoundariesSafely({ root: ROOT, crateLayoutRules }));
   failures.push(...checkAgentRuntimeIntegrationTestTopology(ROOT));
   failures.push(...checkCliIntegrationTestTopology(ROOT));

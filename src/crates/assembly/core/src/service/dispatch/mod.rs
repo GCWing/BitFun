@@ -20,6 +20,10 @@ use tokio::fs;
 
 use crate::infrastructure::PathManager;
 
+pub use bitfun_services_core::dispatch_contract::{
+    DispatchAccountDaemonIdentity, DispatchAccountDaemonProvisionRequest,
+    DISPATCH_ACCOUNT_DAEMON_PROVISIONING_SCHEMA_VERSION,
+};
 #[cfg(all(feature = "agent-runtime", feature = "ssh-remote"))]
 pub use controller::{
     answer as answer_dispatch, append as append_dispatch, cancel as cancel_dispatch,
@@ -80,6 +84,8 @@ struct DispatchTargetJobEntry {
     approval_policy: Option<String>,
     #[serde(default)]
     model: Option<String>,
+    #[serde(default)]
+    reasoning_preset: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -103,6 +109,11 @@ pub struct OutboundDispatchRecord {
     pub approval_policy: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    /// Target-owned reasoning preset carried across controller restarts.
+    /// The explicit value `auto` clears a previous override and is therefore
+    /// distinct from a missing field in a legacy record.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_preset: Option<String>,
     /// Managed worktree on this controller that this job was branched from.
     ///
     /// Recorded so sync-back knows where to fetch the target's branch into, and
@@ -157,6 +168,7 @@ impl OutboundDispatchRecord {
             agent_type: None,
             approval_policy: None,
             model: None,
+            reasoning_preset: None,
             baseline_worktree_id: None,
             baseline_project_workspace_path: None,
             baseline_worktree_path: None,
@@ -177,11 +189,13 @@ impl OutboundDispatchRecord {
         agent_type: String,
         approval_policy: String,
         model: Option<String>,
+        reasoning_preset: Option<String>,
     ) -> Self {
         self.title = title.filter(|value| !value.trim().is_empty());
         self.agent_type = Some(agent_type);
         self.approval_policy = Some(approval_policy);
         self.model = model.filter(|value| !value.trim().is_empty());
+        self.reasoning_preset = reasoning_preset.filter(|value| !value.trim().is_empty());
         self
     }
 
@@ -355,9 +369,10 @@ impl OutboundDispatchStore {
         &self,
         job_id: &str,
         model: Option<&str>,
+        reasoning_preset: Option<&str>,
         approval_policy: Option<&str>,
     ) -> Result<(), DispatchStoreError> {
-        if model.is_none() && approval_policy.is_none() {
+        if model.is_none() && reasoning_preset.is_none() && approval_policy.is_none() {
             return Ok(());
         }
         let path = self.record_path(job_id)?;
@@ -371,6 +386,10 @@ impl OutboundDispatchStore {
         };
         if let Some(model) = model {
             record.model = Some(model.to_string()).filter(|value| !value.trim().is_empty());
+        }
+        if let Some(reasoning_preset) = reasoning_preset {
+            record.reasoning_preset =
+                Some(reasoning_preset.to_string()).filter(|value| !value.trim().is_empty());
         }
         if let Some(policy) = approval_policy {
             record.approval_policy = Some(policy.to_string());
@@ -768,6 +787,9 @@ async fn adopt_target_jobs(
         requested.agent_type = entry.agent_type.filter(|value| !value.trim().is_empty());
         requested.approval_policy = entry.approval_policy;
         requested.model = entry.model.filter(|value| !value.trim().is_empty());
+        requested.reasoning_preset = entry
+            .reasoning_preset
+            .filter(|value| !value.trim().is_empty());
         if let Some(started_at) = entry
             .started_at
             .as_deref()
@@ -785,6 +807,14 @@ async fn adopt_target_jobs(
                 "dispatch jobId is already bound to another target or session on this controller"
             );
         }
+        store
+            .update_submission_options(
+                &requested.job_id,
+                requested.model.as_deref(),
+                requested.reasoning_preset.as_deref(),
+                requested.approval_policy.as_deref(),
+            )
+            .await?;
         store
             .update_progress(&requested.job_id, 0, entry.state)
             .await?;
@@ -974,6 +1004,74 @@ mod tests {
                 0o600
             );
         }
+    }
+
+    #[tokio::test]
+    async fn outbound_index_persists_initial_and_follow_up_reasoning_presets() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = OutboundDispatchStore::from_root(temp.path().join("dispatch/outbound"));
+        let record = OutboundDispatchRecord::new(
+            "job-reasoning".to_string(),
+            target(),
+            "session-1".to_string(),
+            "/srv/app".to_string(),
+            "Use explicit reasoning",
+            "queued",
+        )
+        .expect("record")
+        .with_submission_metadata(
+            Some("Reasoning job".to_string()),
+            "agentic".to_string(),
+            "remote".to_string(),
+            Some("target-model".to_string()),
+            Some("high".to_string()),
+        );
+
+        store.bind_if_absent(&record).await.expect("persist");
+        assert_eq!(
+            store
+                .get("job-reasoning")
+                .await
+                .expect("read")
+                .expect("record")
+                .reasoning_preset
+                .as_deref(),
+            Some("high")
+        );
+
+        store
+            .update_submission_options("job-reasoning", None, Some("auto"), None)
+            .await
+            .expect("persist explicit auto");
+        assert_eq!(
+            store
+                .get("job-reasoning")
+                .await
+                .expect("read")
+                .expect("record")
+                .reasoning_preset
+                .as_deref(),
+            Some("auto")
+        );
+    }
+
+    #[test]
+    fn legacy_outbound_record_without_reasoning_preset_remains_readable() {
+        let record = OutboundDispatchRecord::new(
+            "job-legacy".to_string(),
+            target(),
+            "session-1".to_string(),
+            "/srv/app".to_string(),
+            "Legacy dispatch",
+            "running",
+        )
+        .expect("record");
+        let value = serde_json::to_value(record).expect("serialize legacy-shaped record");
+        assert!(value.get("reasoningPreset").is_none());
+
+        let restored: OutboundDispatchRecord =
+            serde_json::from_value(value).expect("deserialize legacy-shaped record");
+        assert_eq!(restored.reasoning_preset, None);
     }
 
     #[tokio::test]
@@ -1434,7 +1532,8 @@ mod tests {
                 "title": "Observed task",
                 "agentType": "review",
                 "approvalPolicy": "remote",
-                "model": "target-model"
+                "model": "target-model",
+                "reasoningPreset": "high"
             }]),
         )
         .await
@@ -1450,10 +1549,40 @@ mod tests {
         assert_eq!(record.agent_type.as_deref(), Some("review"));
         assert_eq!(record.approval_policy.as_deref(), Some("remote"));
         assert_eq!(record.model.as_deref(), Some("target-model"));
+        assert_eq!(record.reasoning_preset.as_deref(), Some("high"));
         assert!(matches!(
             record.target,
             DispatchTarget::Ssh { workspace_path, .. }
                 if workspace_path == "/srv/canonical-app"
         ));
+
+        adopt_target_jobs(
+            &store,
+            &target(),
+            &serde_json::json!([{
+                "jobId": "job-observed",
+                "sessionId": "00000000-0000-4000-8000-000000000001",
+                "state": "running",
+                "startedAt": "2026-07-28T00:00:00Z",
+                "workspacePath": "/srv/canonical-app",
+                "title": "Observed task",
+                "agentType": "review",
+                "approvalPolicy": "remote",
+                "model": "target-model",
+                "reasoningPreset": "auto"
+            }]),
+        )
+        .await
+        .expect("refresh adopted target job");
+        assert_eq!(
+            store
+                .get("job-observed")
+                .await
+                .expect("read refreshed observer")
+                .expect("refreshed observer record")
+                .reasoning_preset
+                .as_deref(),
+            Some("auto")
+        );
     }
 }

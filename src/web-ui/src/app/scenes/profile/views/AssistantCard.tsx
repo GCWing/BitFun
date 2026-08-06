@@ -4,6 +4,7 @@ import {
   ChevronRight,
   LoaderCircle,
   MessageSquarePlus,
+  Pin,
   Settings2,
   Trash2,
 } from 'lucide-react';
@@ -16,9 +17,11 @@ interface AssistantCardProps {
   onClick: () => void;
   onNewSession?: () => void;
   onDelete?: () => void;
+  onSetPrimary?: () => void;
   isPrimary?: boolean;
   isDeleting?: boolean;
   isStartingSession?: boolean;
+  isSettingPrimary?: boolean;
   style?: React.CSSProperties;
 }
 
@@ -27,9 +30,11 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
   onClick,
   onNewSession,
   onDelete,
+  onSetPrimary,
   isPrimary,
   isDeleting = false,
   isStartingSession = false,
+  isSettingPrimary = false,
   style,
 }) => {
   const { t } = useTranslation('scenes/profile');
@@ -45,8 +50,8 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
       data-bf-component="assistant-card"
       data-bf-part="root"
       data-bf-primary={isPrimary ? 'true' : 'false'}
-      data-bf-state={isDeleting || isStartingSession ? 'busy' : undefined}
-      className={['assistant-card', isDeleting && 'assistant-card--busy'].filter(Boolean).join(' ')}
+      data-bf-state={isDeleting || isStartingSession || isSettingPrimary ? 'busy' : undefined}
+      className={['assistant-card', (isDeleting || isSettingPrimary) && 'assistant-card--busy'].filter(Boolean).join(' ')}
       role="listitem"
       style={style}
     >
@@ -57,7 +62,7 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
         className="assistant-card__main"
         onClick={onClick}
         aria-label={`${t('nursery.card.configure')}: ${name}`}
-        disabled={isDeleting}
+        disabled={isDeleting || isSettingPrimary}
       >
         <span className="assistant-card__header" data-bf-component="assistant-card" data-bf-part="header">
           <span className="assistant-card__avatar" data-bf-component="assistant-card" data-bf-part="avatar">
@@ -116,7 +121,7 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
             type="button"
             className="assistant-card__new-session-btn"
             onClick={onNewSession}
-            disabled={isStartingSession || isDeleting}
+            disabled={isStartingSession || isDeleting || isSettingPrimary}
             aria-busy={isStartingSession}
           >
             {isStartingSession ? (
@@ -132,25 +137,48 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
           <span />
         )}
 
-        {onDelete ? (
-          <Tooltip content={t('nursery.card.delete')} placement="top">
-            <button
-              data-bf-component="assistant-card"
-              data-bf-part="delete"
-              type="button"
-              className="assistant-card__delete-btn"
-              onClick={onDelete}
-              aria-label={t('nursery.card.delete')}
-              disabled={isDeleting || isStartingSession}
-            >
-              {isDeleting ? (
-                <LoaderCircle className="nursery-spinning" size={14} strokeWidth={1.8} aria-hidden="true" />
-              ) : (
-                <Trash2 size={14} strokeWidth={1.8} aria-hidden="true" />
-              )}
-            </button>
-          </Tooltip>
-        ) : null}
+        <span className="assistant-card__footer-actions">
+          {onSetPrimary ? (
+            <Tooltip content={t('nursery.card.setPrimary')} placement="top">
+              <button
+                data-bf-component="assistant-card"
+                data-bf-part="setPrimary"
+                type="button"
+                className="assistant-card__set-primary-btn"
+                onClick={onSetPrimary}
+                aria-label={t('nursery.card.setPrimary')}
+                aria-busy={isSettingPrimary}
+                disabled={isDeleting || isStartingSession || isSettingPrimary}
+              >
+                {isSettingPrimary ? (
+                  <LoaderCircle className="nursery-spinning" size={14} strokeWidth={1.8} aria-hidden="true" />
+                ) : (
+                  <Pin size={14} strokeWidth={1.8} aria-hidden="true" />
+                )}
+              </button>
+            </Tooltip>
+          ) : null}
+
+          {onDelete ? (
+            <Tooltip content={t('nursery.card.delete')} placement="top">
+              <button
+                data-bf-component="assistant-card"
+                data-bf-part="delete"
+                type="button"
+                className="assistant-card__delete-btn"
+                onClick={onDelete}
+                aria-label={t('nursery.card.delete')}
+                disabled={isDeleting || isStartingSession || isSettingPrimary}
+              >
+                {isDeleting ? (
+                  <LoaderCircle className="nursery-spinning" size={14} strokeWidth={1.8} aria-hidden="true" />
+                ) : (
+                  <Trash2 size={14} strokeWidth={1.8} aria-hidden="true" />
+                )}
+              </button>
+            </Tooltip>
+          ) : null}
+        </span>
       </footer>
     </article>
   );

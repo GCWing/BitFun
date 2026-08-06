@@ -93,8 +93,16 @@ export const ConfigPageSection: React.FC<ConfigPageSectionProps> = ({
   extra,
   children,
   className = '',
+  mouseGlowSurface = true,
   ...props
 }) => {
+  // A chrome-less body must drop the inset highlight too: the mouse glow treats any
+  // inset shadow as a visual boundary and would trace a box around empty space.
+  const bodyClassName = [
+    'bitfun-config-page-section__body',
+    !mouseGlowSurface && 'bitfun-config-page-section__body--flush',
+  ].filter(Boolean).join(' ');
+
   return (
     <section className={`bitfun-config-page-section ${className}`} data-bf-component="config" data-bf-part="section" {...props}>
       <div className="bitfun-config-page-section__header" data-bf-component="config" data-bf-part="sectionHeader">
@@ -113,7 +121,7 @@ export const ConfigPageSection: React.FC<ConfigPageSectionProps> = ({
           </div>
         )}
       </div>
-      <div className="bitfun-config-page-section__body" data-bf-component="config" data-bf-part="sectionBody">
+      <div className={bodyClassName} data-bf-component="config" data-bf-part="sectionBody">
         {children}
       </div>
     </section>

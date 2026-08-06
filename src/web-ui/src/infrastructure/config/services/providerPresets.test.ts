@@ -16,17 +16,17 @@ const LOCALES = { 'en-US': enUS, 'zh-CN': zhCN, 'zh-TW': zhTW } as Record<
 >;
 
 async function loadPresets() {
-  const [{ PROVIDER_TEMPLATES }, { PROVIDER_URL_CATALOG }] = await Promise.all([
+  const [{ PROVIDER_TEMPLATES }, { PROVIDER_URL_CATALOG }, { resolveProviderTemplates }] = await Promise.all([
     import('./modelConfigs'),
     import('./providerCatalog'),
+    import('./builtinProviderCatalog'),
   ]);
-  return { PROVIDER_TEMPLATES, PROVIDER_URL_CATALOG };
+  return { PROVIDER_TEMPLATES, PROVIDER_URL_CATALOG, resolveProviderTemplates };
 }
 
 /**
- * These presets are duplicated across the web UI, the installer, the URL catalog and
- * three locale bundles, so a drift between any two of them ships a provider entry that
- * silently fails at request time or renders an untranslated key. Assert the invariants.
+ * Provider product facts come from the shared overlay. These checks keep the Web
+ * projection, URL matcher and locale labels aligned with that single source.
  */
 describe('provider presets', () => {
   it('offers every preset URL through the provider URL catalog', async () => {
@@ -72,6 +72,17 @@ describe('provider presets', () => {
     }
   });
 
+  it('declares a home market for every preset provider', async () => {
+    const { PROVIDER_TEMPLATES } = await loadPresets();
+
+    // The preset picker ranks by region, so an overlay entry without one would
+    // silently land in the region-neutral group that sorts above everything else.
+    const regionless = Object.values(PROVIDER_TEMPLATES)
+      .filter(template => template.region !== 'cn' && template.region !== 'global')
+      .map(template => template.id);
+    expect(regionless, 'these providers need a "region" in the shared overlay').toEqual(['openbitfun']);
+  });
+
   it('shapes base URLs so the adapter appends the right suffix', async () => {
     const { PROVIDER_TEMPLATES } = await loadPresets();
 
@@ -105,5 +116,68 @@ describe('provider presets', () => {
         owner.set(url, template.id);
       }
     }
+  });
+
+  it('merges backend catalog models without allowing it to replace product endpoints', async () => {
+    const { PROVIDER_TEMPLATES, resolveProviderTemplates } = await loadPresets();
+    const fallback = PROVIDER_TEMPLATES.qwen;
+    const resolved = resolveProviderTemplates({
+      revision: 'test',
+      source: 'mixed',
+      providers: [{
+        id: 'qwen',
+        display_order: 20,
+        name: 'External display name',
+        description: 'Catalog description',
+        requires_api_key: true,
+        endpoints: [{
+          id: 'default',
+          base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+          api_format: 'openai',
+          label: 'default',
+          is_default: true,
+          trusted_for_auto_detection: true,
+        }],
+        models: [{
+          id: 'qwen-new',
+          recommended: false,
+          source: 'models_dev',
+          capabilities: {
+            chat: true,
+            tool_call: true,
+            reasoning: true,
+            attachment: false,
+            structured_output: false,
+          },
+        }],
+      }],
+    });
+
+    expect(resolved.qwen.models).toEqual(['qwen-new']);
+    expect(resolved.qwen.baseUrl).toBe(fallback.baseUrl);
+    expect(resolved.qwen.format).toBe(fallback.format);
+
+    const rejected = resolveProviderTemplates({
+      revision: 'test',
+      source: 'mixed',
+      providers: [{
+        id: 'qwen',
+        display_order: 20,
+        name: 'Qwen',
+        description: 'Qwen',
+        requires_api_key: true,
+        endpoints: [{
+          id: 'default',
+          base_url: 'https://gateway.example.com/v1',
+          api_format: 'openai',
+          label: 'default',
+          is_default: true,
+          trusted_for_auto_detection: false,
+        }],
+        models: [],
+      }],
+    });
+    expect(rejected.qwen.baseUrl).toBe(fallback.baseUrl);
+    expect(rejected.qwen.format).toBe(fallback.format);
   });
 });

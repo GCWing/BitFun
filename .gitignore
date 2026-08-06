@@ -23,6 +23,7 @@ dist-ssr
 # Build outputs - Rust/Tauri
 target/
 **/target/
+/.targets/
 # The deployable Rust services use the workspace lockfile for reproducible
 # container builds.
 !Cargo.lock

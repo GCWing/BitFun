@@ -50,6 +50,36 @@ describe('ConfigPageLayout', () => {
     expect(stack?.querySelectorAll(':scope > .bitfun-config-page-section')).toHaveLength(2);
   });
 
+  it('strips the body surface chrome when the section opts out of the mouse glow', () => {
+    act(() => {
+      root.render(
+        <ConfigPageSection title="Managed" mouseGlowSurface={false}>
+          <div>Body</div>
+        </ConfigPageSection>,
+      );
+    });
+
+    const section = container.querySelector('.bitfun-config-page-section');
+    const body = container.querySelector('.bitfun-config-page-section__body');
+
+    expect(body?.classList.contains('bitfun-config-page-section__body--flush')).toBe(true);
+    // The prop drives styling only; it must never leak onto the DOM node.
+    expect(section?.hasAttribute('mouseglowsurface')).toBe(false);
+  });
+
+  it('keeps the body surface chrome by default', () => {
+    act(() => {
+      root.render(
+        <ConfigPageSection title="Standard">
+          <div>Body</div>
+        </ConfigPageSection>,
+      );
+    });
+
+    const body = container.querySelector('.bitfun-config-page-section__body');
+    expect(body?.classList.contains('bitfun-config-page-section__body--flush')).toBe(false);
+  });
+
   it('forwards a feature-owned Appearance contract to the real layout nodes', () => {
     act(() => {
       root.render(

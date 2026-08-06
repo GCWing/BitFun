@@ -1,5 +1,9 @@
-import { BASE_DISPATCH_CAPABILITIES } from './dispatchPreflight';
 // @vitest-environment jsdom
+
+import {
+  BASE_DISPATCH_CAPABILITIES,
+  DISPATCH_PROTOCOL_VERSION,
+} from './dispatchPreflight';
 
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -10,6 +14,10 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const mocks = vi.hoisted(() => ({
   probeTarget: vi.fn(),
+  installCliStart: vi.fn(),
+  installCliPoll: vi.fn(),
+  installCliCancel: vi.fn(),
+  provisionTarget: vi.fn(),
   syncModelConfig: vi.fn(),
   confirmWarning: vi.fn(),
   getConfig: vi.fn(),
@@ -25,6 +33,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./dispatchApi', () => ({
   dispatchApi: {
     probeTarget: mocks.probeTarget,
+    installCliStart: mocks.installCliStart,
+    installCliPoll: mocks.installCliPoll,
+    installCliCancel: mocks.installCliCancel,
+    provisionTarget: mocks.provisionTarget,
     syncModelConfig: mocks.syncModelConfig,
   },
 }));
@@ -140,6 +152,23 @@ describe('DispatchInstallDialog target preparation', () => {
       },
     });
     mocks.confirmWarning.mockResolvedValue(true);
+    mocks.installCliStart.mockResolvedValue({
+      scriptPath: '/tmp/install.sh',
+      version: '1.2.3',
+      target: 'x86_64-unknown-linux-gnu',
+      url: 'https://example.test/bitfun',
+      sha256: 'abc123',
+    });
+    mocks.installCliPoll.mockResolvedValue({
+      cursor: 1,
+      output: '',
+      status: 'succeeded',
+    });
+    mocks.installCliCancel.mockResolvedValue(undefined);
+    mocks.provisionTarget.mockResolvedValue({
+      accountStatus: 'skipped_not_logged_in',
+      daemonInstalled: false,
+    });
     mocks.getConfig.mockResolvedValue([]);
     mocks.getFreshConfig.mockResolvedValue(undefined);
     mocks.resolveRevision.mockResolvedValue('a'.repeat(40));
@@ -153,9 +182,42 @@ describe('DispatchInstallDialog target preparation', () => {
     container.remove();
   });
 
-  it('shows the verified release as automatic and follows the worktree copy setting', async () => {
+  it('deploys the verified release with one click and follows the worktree copy setting', async () => {
     const onReady = vi.fn();
     mocks.getFreshConfig.mockResolvedValue({ copyLocalChanges: true });
+    let installed = false;
+    mocks.installCliPoll.mockImplementation(async () => {
+      installed = true;
+      return { cursor: 1, output: '', status: 'succeeded' };
+    });
+    mocks.probeTarget.mockImplementation(async () => installed
+      ? {
+          cliInstalled: true,
+          os: 'linux',
+          arch: 'x86_64',
+          installSupported: false,
+          protocol: {
+            protocolVersion: DISPATCH_PROTOCOL_VERSION,
+            cliVersion: '1.2.3',
+            os: 'linux',
+            arch: 'x86_64',
+            capabilities: [...BASE_DISPATCH_CAPABILITIES, 'approval_reject_and_report'],
+            modelConfigured: true,
+            availableModels: ['model-a'],
+          },
+        }
+      : {
+          cliInstalled: false,
+          os: 'linux',
+          arch: 'x86_64',
+          installSupported: true,
+          release: {
+            version: '1.2.3',
+            target: 'x86_64-unknown-linux-gnu',
+            url: 'https://example.test/bitfun',
+            sha256: 'abc123',
+          },
+        });
 
     await act(async () => {
       root.render(
@@ -175,17 +237,40 @@ describe('DispatchInstallDialog target preparation', () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain('dispatch.installAutomaticDescription');
+    expect(container.textContent).toContain('dispatch.oneClickDeployDescription');
+    expect(container.textContent).toContain('dispatch.oneClickDeploy');
     expect(container.textContent).toContain('1.2.3');
     expect(container.textContent).toContain('abc123');
     expect(container.querySelector('details')?.open).toBe(false);
-    expect(container.textContent).not.toContain('dispatch.installConfirm');
+    expect(container.textContent).not.toContain('dispatch.installAutomaticDescription');
     expect(mocks.modalLifecycleProps).toEqual({
       closeOnOverlayClick: true,
       showCloseButton: true,
     });
     const includeUncommitted = container.querySelector<HTMLInputElement>('input[type="checkbox"]');
     expect(includeUncommitted?.checked).toBe(true);
+
+    const useTargetBeforeSetup = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('dispatch.useTarget'));
+    expect(useTargetBeforeSetup?.disabled).toBe(true);
+
+    await act(async () => {
+      Array.from(container.querySelectorAll('button'))
+        .find(button => button.textContent?.includes('dispatch.oneClickDeploy'))
+        ?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.installCliStart).toHaveBeenCalledWith(
+      'ssh-1',
+      expect.objectContaining({ version: '1.2.3', sha256: 'abc123' }),
+    );
+    expect(mocks.installCliPoll).toHaveBeenCalledWith('ssh-1', 0);
+    expect(mocks.provisionTarget).toHaveBeenCalledWith('ssh-1');
+    expect(container.textContent).toContain('dispatch.prepareSucceededCliOnly');
 
     await act(async () => {
       Array.from(container.querySelectorAll('button'))
@@ -211,6 +296,85 @@ describe('DispatchInstallDialog target preparation', () => {
       approvalPolicy: 'reject-and-report',
       request: { kind: 'ssh', connectionId: 'ssh-1', workspacePath: '' },
     }));
+  });
+
+  it('retries only account and service provisioning after the CLI is installed', async () => {
+    let installed = false;
+    mocks.installCliPoll.mockImplementation(async () => {
+      installed = true;
+      return { cursor: 1, output: '', status: 'succeeded' };
+    });
+    mocks.probeTarget.mockImplementation(async () => installed
+      ? {
+          cliInstalled: true,
+          os: 'linux',
+          arch: 'x86_64',
+          installSupported: false,
+          protocol: {
+            protocolVersion: DISPATCH_PROTOCOL_VERSION,
+            cliVersion: '1.2.3',
+            os: 'linux',
+            arch: 'x86_64',
+            capabilities: BASE_DISPATCH_CAPABILITIES,
+            modelConfigured: true,
+            availableModels: ['model-a'],
+          },
+        }
+      : {
+          cliInstalled: false,
+          os: 'linux',
+          arch: 'x86_64',
+          installSupported: true,
+          release: {
+            version: '1.2.3',
+            target: 'x86_64-unknown-linux-gnu',
+            url: 'https://example.test/bitfun',
+            sha256: 'abc123',
+          },
+        });
+    mocks.provisionTarget
+      .mockRejectedValueOnce(new Error('relay temporarily unavailable'))
+      .mockResolvedValueOnce({ accountStatus: 'synced', daemonInstalled: true });
+
+    await act(async () => {
+      root.render(
+        <DispatchInstallDialog
+          open
+          target={{ kind: 'ssh', connectionId: 'ssh-1', displayName: 'build-host' }}
+          sourceWorkspacePath="/home/me/project"
+          onClose={vi.fn()}
+          onReady={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      Array.from(container.querySelectorAll('button'))
+        .find(button => button.textContent?.includes('dispatch.oneClickDeploy'))
+        ?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.installCliStart).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain('dispatch.retryProvisionDescription');
+
+    await act(async () => {
+      Array.from(container.querySelectorAll('button'))
+        .find(button => button.textContent?.includes('dispatch.retryProvision'))
+        ?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.installCliStart).toHaveBeenCalledTimes(1);
+    expect(mocks.provisionTarget).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain('dispatch.prepareSucceededWithAccount');
   });
 
   it('does not overwrite a user choice when the worktree default resolves late', async () => {
@@ -252,6 +416,21 @@ describe('DispatchInstallDialog target preparation', () => {
   it('keeps setup open and reports an invalid base revision before creating a session', async () => {
     const onReady = vi.fn();
     mocks.resolveRevision.mockRejectedValue(new Error('unknown revision'));
+    mocks.probeTarget.mockResolvedValue({
+      cliInstalled: true,
+      os: 'linux',
+      arch: 'x86_64',
+      installSupported: false,
+      protocol: {
+        protocolVersion: DISPATCH_PROTOCOL_VERSION,
+        cliVersion: '1.2.3',
+        os: 'linux',
+        arch: 'x86_64',
+        capabilities: [...BASE_DISPATCH_CAPABILITIES, 'approval_reject_and_report'],
+        modelConfigured: true,
+        availableModels: ['model-a'],
+      },
+    });
 
     await act(async () => {
       root.render(
@@ -351,7 +530,7 @@ describe('DispatchInstallDialog target preparation', () => {
       arch: 'x86_64',
       installSupported: false,
       protocol: {
-        protocolVersion: 4,
+        protocolVersion: DISPATCH_PROTOCOL_VERSION,
         cliVersion: '1.2.3',
         os: 'linux',
         arch: 'x86_64',
@@ -423,7 +602,7 @@ describe('DispatchInstallDialog target preparation', () => {
     expect(container.textContent).not.toContain('dispatch.snapshotResultLocationHint');
   });
 
-  it('preserves protocol v4 target model facts without a delivery-mode choice', async () => {
+  it('preserves target model facts without a delivery-mode choice', async () => {
     const onReady = vi.fn();
     mocks.probeTarget.mockResolvedValue({
       cliInstalled: true,
@@ -431,7 +610,7 @@ describe('DispatchInstallDialog target preparation', () => {
       arch: 'x86_64',
       installSupported: false,
       protocol: {
-        protocolVersion: 4,
+        protocolVersion: DISPATCH_PROTOCOL_VERSION,
         cliVersion: '1.2.3',
         os: 'linux',
         arch: 'x86_64',
@@ -498,7 +677,7 @@ describe('DispatchInstallDialog model configuration sync', () => {
       arch: 'x86_64',
       installSupported: true,
       protocol: {
-        protocolVersion: 4,
+        protocolVersion: DISPATCH_PROTOCOL_VERSION,
         cliVersion: '1.2.3',
         os: 'linux',
         arch: 'x86_64',
@@ -656,7 +835,7 @@ describe('DispatchInstallDialog target model readout', () => {
       arch: 'x86_64',
       installSupported: true,
       protocol: {
-        protocolVersion: 4,
+        protocolVersion: DISPATCH_PROTOCOL_VERSION,
         cliVersion: '1.2.3',
         os: 'linux',
         arch: 'x86_64',

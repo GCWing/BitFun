@@ -13,6 +13,7 @@ import {
 } from '../../utils/toolInvocationIdentity';
 import { requireSessionProjectWorkspacePath } from '../../utils/sessionWorkspace';
 import { resolveSessionDriverId } from '../../session-drivers/resolve';
+import { resolveStorageTurnIndex } from '../../utils/flowChatTurnIdentity';
 
 const log = createLogger('PersistenceModule');
 const COALESCED_IMMEDIATE_SAVE_DELAY_MS = 500;
@@ -222,6 +223,7 @@ export function cleanupSaveState(
     context.lastSaveTimestamps.delete(key);
     context.lastSaveHashes.delete(key);
     context.turnSavePending.delete(key);
+    context.deferredStorageIdentitySaves?.delete(key);
     context.turnSaveInFlight.delete(key);
   } else {
     const keysToDelete = new Set<string>();
@@ -254,12 +256,18 @@ export function cleanupSaveState(
         keysToDelete.add(key);
       }
     }
+    for (const key of context.deferredStorageIdentitySaves ?? []) {
+      if (key.startsWith(`${sessionId}:`)) {
+        keysToDelete.add(key);
+      }
+    }
 
     keysToDelete.forEach(key => {
       context.saveDebouncers.delete(key);
       context.lastSaveTimestamps.delete(key);
       context.lastSaveHashes.delete(key);
       context.turnSavePending.delete(key);
+      context.deferredStorageIdentitySaves?.delete(key);
       context.turnSaveInFlight.delete(key);
     });
   }
@@ -302,7 +310,12 @@ async function performSaveDialogTurnToDisk(
       return;
     }
 
-    const turnIndex = dialogTurn.backendTurnIndex ?? session.dialogTurns.indexOf(dialogTurn);
+    const turnIndex = resolveStorageTurnIndex(session, dialogTurn);
+    if (turnIndex === undefined) {
+      context.deferredStorageIdentitySaves?.add(`${sessionId}:${turnId}`);
+      log.debug('Dialog turn has no storage identity, deferring save', { sessionId, turnId });
+      return;
+    }
     const turnData = convertDialogTurnToBackendFormat(dialogTurn, turnIndex);
     await sessionAPI.saveSessionTurn(
       turnData,

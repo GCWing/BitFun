@@ -170,8 +170,8 @@ synchronization request can be retried after the lock clears.
 
 ## Protocol
 
-The target CLI owns transport-independent dispatch protocol version 3 and the
-durable store. Version 3 is intentionally incompatible with targets that do
+The target CLI owns transport-independent dispatch protocol version 4 and the
+durable store. Version 4 is intentionally incompatible with targets that do
 not implement Git worktree delivery. SSH submission can repair that mismatch
 through signed release installation; an account device must be upgraded as a
 BitFun device.
@@ -218,8 +218,12 @@ version equality is not evidence of this behavior.
 
 `probe` is read-only and never installs software. Immediately before SSH
 provisioning, submission probes again and automatically installs or upgrades a
-compatible prebuilt `bitfun` release when needed. Release resolution stays
-bound to the expected OS and architecture; the controller verifies the
+compatible latest prebuilt `bitfun` release when needed. Release resolution
+stays bound to the expected OS and architecture. GitHub is the default byte
+source; when its measured transfer rate is below 512 KiB/s, OpenBitFun is tried
+first and GitHub remains the fallback. The same policy applies whether the SSH
+target downloads directly or the controller has to push the archive. The
+controller verifies the
 checksum sidecar, its publisher signature when present, and the mandatory
 archive signature, pins the SHA-256 passed to the installer, waits with a
 bounded deadline, and probes the installed binary again before continuing.
@@ -229,6 +233,36 @@ compiles BitFun on a target, and exposes no command to do so: when no published
 binary can run there — an unsupported platform, a libc floor, a missing `tar`,
 an unreachable release, or a release that predates a required capability — the
 probe reports why and the target cannot be selected.
+
+### One-click SSH target bootstrap
+
+The Desktop readiness dialog may run the same signed installer before submit.
+After the post-install protocol probe succeeds, it optionally turns the SSH
+host into an account device:
+
+1. The target CLI returns its stable, non-secret machine identity through a
+   hidden capability-gated daemon command.
+2. If the controller has a finalized account login, its full device token calls
+   the Relay's authenticated device-provisioning endpoint. The Relay creates a
+   distinct target device and a full device token; a delegated control token
+   cannot call this endpoint. If the controller is signed out, this entire
+   account/daemon phase is skipped.
+3. The controller stages the target token, account master key, relay URL, and
+   target device id in a fresh owner-only file over SFTP. Secrets never enter a
+   shell argument or the renderer. The target verifies file ownership/mode and
+   its device id, consumes the file, and encrypts the session with its own
+   machine-bound key.
+4. The target installs and starts the existing CLI daemon through its user
+   service manager (systemd user service with linger on Linux, LaunchAgent on
+   macOS). The controller does not report success until the new device is
+   visible online through the Relay.
+
+Any failure after credential issuance removes the target service/session and
+deletes the Relay device best-effort. Stale rollback commands are bound to the
+expected user and device id, so they cannot log out a session that appeared on
+the target later. A signed-out controller installs only the CLI: detached SSH
+job workers already persist independently and an idle account daemon would
+provide no routing capability.
 
 Account-device transport wraps target verbs in names reserved for detached
 dispatch, such as `dispatch_target_submit`. They are handled before the

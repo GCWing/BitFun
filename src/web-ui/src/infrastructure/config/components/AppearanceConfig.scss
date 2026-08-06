@@ -144,11 +144,10 @@
 }
 
 .appearance-package-config {
+  // Chrome comes off via `mouseGlowSurface={false}`. Padding stays pinned here
+  // because appearance packages are allowed to set it on `sectionBody`.
   > .bitfun-config-page-section__body {
     padding: 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
   }
 
   &__file-input {

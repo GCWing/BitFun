@@ -14,6 +14,9 @@ for (const packageScript of [
   const content = read(packageScript);
   assert.match(content, /src[\\/]apps[\\/]cli[\\/]README\.md/);
   assert.match(content, /PROJECT-README\.md/);
+  assert.match(content, /THIRD_PARTY_NOTICES\.md/);
+  assert.match(content, /models-dev\.LICENSE\.txt/);
+  assert.match(content, /models-dev\.provenance\.json/);
 }
 
 for (const workflow of [

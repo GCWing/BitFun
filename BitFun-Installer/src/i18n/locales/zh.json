@@ -56,7 +56,11 @@
     "providers": {
       "openbitfun": {
         "name": "OpenBitFun",
-        "description": "OpenBitFun 大模型平台"
+        "description": "OpenBitFun 大模型平台",
+        "urlOptions": {
+          "default": "Anthropic格式-默认",
+          "openai": "OpenAI兼容格式"
+        }
       },
       "gemini": {
         "name": "Google Gemini",
@@ -143,6 +147,10 @@
       "openrouter": {
         "name": "OpenRouter",
         "description": "OpenRouter 大模型平台"
+      },
+      "tokendance": {
+        "name": "词元跳动",
+        "description": "统一的大模型 API 网关"
       }
     },
     "modelNameSelectPlaceholder": "选择模型",

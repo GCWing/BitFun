@@ -1,7 +1,4 @@
 use anyhow::{anyhow, Context, Result};
-use std::path::Path;
-use std::time::Duration;
-
 use bitfun_agent_runtime::sdk::AgentSessionUsageRequest;
 use bitfun_core::agentic::get_agent_registry;
 use bitfun_core::infrastructure::try_get_path_manager_arc;
@@ -18,6 +15,9 @@ use bitfun_core::product_assembly::ProductRuntimeParts;
 use bitfun_core::runtime_ports::PluginRuntimeAvailability;
 use bitfun_core::service::config::initialize_global_config;
 use bitfun_core::service::session_usage::render_usage_report_markdown;
+use std::io::Write;
+use std::path::Path;
+use std::time::Duration;
 
 async fn ensure_global_config_service(
 ) -> Result<std::sync::Arc<bitfun_core::service::config::ConfigService>> {
@@ -216,6 +216,252 @@ pub(crate) async fn set_mcp_server_enabled(server_id: &str, enabled: bool) -> Re
     Ok(())
 }
 
+/// User-facing input for `bitfun mcp add`.
+///
+/// All fields are optional so the CLI can pre-fill any subset via flags and
+/// resolve the rest through the three-step wizard.
+pub(crate) struct McpAddInput {
+    pub name: Option<String>,
+    pub r#type: Option<String>,
+    pub command: Option<String>,
+    pub url: Option<String>,
+    pub non_interactive: bool,
+}
+
+/// RAII guard that disables crossterm raw mode on drop, so an early return or
+/// panic in the wizard cannot leave the terminal stuck in raw mode.
+struct RawModeGuard;
+impl Drop for RawModeGuard {
+    fn drop(&mut self) {
+        let _ = crossterm::terminal::disable_raw_mode();
+    }
+}
+
+/// Add an MCP server through the three-step wizard.
+///
+/// Step 1 collects the server name (also used as id). Step 2 lets the user
+/// pick the type — `local` (stdio) or `remote` (streamable-http) — using the
+/// up/down arrow keys. Step 3 collects the launch command (local) or URL
+/// (remote); for local servers, the command string is split on whitespace
+/// into `command + args`, matching the behavior of the TUI MCP add dialog.
+/// Other `MCPServerConfig` fields use sensible defaults and are validated
+/// through the shared `MCPServerConfig::validate` contract before being
+/// persisted via `MCPConfigService::save_server_config`.
+pub(crate) async fn add_mcp_server(input: McpAddInput) -> Result<()> {
+    let config_service = ensure_global_config_service().await?;
+    let mcp_service = bitfun_core::service::mcp::MCPService::new(config_service.clone())
+        .map_err(|error| anyhow!(error.to_string()))?;
+
+    println!("Add MCP Server (1/3) — Name");
+    let name = read_required_field(
+        "Server name (also used as id; no spaces)",
+        input.name.as_deref(),
+        input.non_interactive,
+    )?;
+    if name.contains(' ') {
+        return Err(anyhow!("Server name cannot contain spaces"));
+    }
+
+    println!("Add MCP Server (2/3) — Type");
+    let is_local = select_server_type(input.r#type.as_deref(), input.non_interactive)?;
+    let server_type = if is_local {
+        bitfun_core::service::mcp::MCPServerType::Local
+    } else {
+        bitfun_core::service::mcp::MCPServerType::Remote
+    };
+    let transport = if is_local {
+        bitfun_core::service::mcp::MCPServerTransport::Stdio
+    } else {
+        bitfun_core::service::mcp::MCPServerTransport::StreamableHttp
+    };
+
+    println!("Add MCP Server (3/3) — Connection");
+    let (command, args, url) = if is_local {
+        let raw = read_required_field(
+            "Command (e.g. `npx -y @modelcontextprotocol/server-xxx`)",
+            input.command.as_deref(),
+            input.non_interactive,
+        )?;
+        let parts: Vec<String> = raw.split_whitespace().map(str::to_string).collect();
+        if parts.is_empty() {
+            return Err(anyhow!("Command cannot be empty"));
+        }
+        let command_value = parts[0].clone();
+        let args_value = parts[1..].to_vec();
+        (Some(command_value), args_value, None)
+    } else {
+        let url_value = read_required_field(
+            "URL (e.g. `https://mcp.example.com/mcp`)",
+            input.url.as_deref(),
+            input.non_interactive,
+        )?;
+        (None, Vec::new(), Some(url_value))
+    };
+
+    let config = bitfun_core::service::mcp::MCPServerConfig {
+        id: name.clone(),
+        name: name.clone(),
+        server_type,
+        transport: Some(transport),
+        command,
+        args,
+        env: std::collections::HashMap::new(),
+        working_directory: None,
+        inherit_parent_environment: None,
+        headers: std::collections::HashMap::new(),
+        url,
+        auto_start: true,
+        enabled: true,
+        location: bitfun_core::service::mcp::ConfigLocation::User,
+        capabilities: Vec::new(),
+        settings: std::collections::HashMap::new(),
+        oauth: None,
+        oauth_enabled: None,
+        xaa: None,
+        timeouts: Default::default(),
+    };
+
+    config
+        .validate()
+        .map_err(|error| anyhow!("Invalid MCP server config: {}", error))?;
+
+    mcp_service
+        .config_service()
+        .save_server_config(&config)
+        .await
+        .map_err(|error| anyhow!(error.to_string()))?;
+
+    println!("MCP server '{}' added.", name);
+    println!(
+        "Run `bitfun mcp list` to verify, `bitfun mcp disable {}` to toggle.",
+        name
+    );
+    Ok(())
+}
+
+/// Returns `true` for local, `false` for remote. Uses up/down arrow keys
+/// (also left/right, vim-style h/l and j/k) when no flag pre-fills the choice;
+/// falls back to the flag value or the default (`local`) in `--non-interactive`
+/// mode.
+fn select_server_type(pre_filled: Option<&str>, non_interactive: bool) -> Result<bool> {
+    if let Some(value) = pre_filled {
+        let trimmed = value.trim();
+        return match trimmed {
+            "local" => Ok(true),
+            "remote" => Ok(false),
+            other => Err(anyhow!("Type must be `local` or `remote`, got `{}`", other)),
+        };
+    }
+    if non_interactive {
+        return Ok(true);
+    }
+
+    use crossterm::event::{self, KeyCode, KeyEventKind};
+    use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+
+    enable_raw_mode().context("Failed to enable raw mode")?;
+    let _guard = RawModeGuard;
+
+    let mut is_local = true;
+    let mut stdout = std::io::stdout();
+    render_type_prompt(&mut stdout, is_local)?;
+
+    loop {
+        let event = match event::read() {
+            Ok(event) => event,
+            Err(error) => return Err(anyhow!("Failed to read key event: {}", error)),
+        };
+        let key_event = match event {
+            crossterm::event::Event::Key(key_event) => key_event,
+            _ => continue,
+        };
+        if !matches!(key_event.kind, KeyEventKind::Press | KeyEventKind::Repeat) {
+            continue;
+        }
+        match key_event.code {
+            KeyCode::Up | KeyCode::Left | KeyCode::Char('h') | KeyCode::Char('k') => {
+                is_local = true;
+                render_type_prompt(&mut stdout, is_local)?;
+            }
+            KeyCode::Down | KeyCode::Right | KeyCode::Char('l') | KeyCode::Char('j') => {
+                is_local = false;
+                render_type_prompt(&mut stdout, is_local)?;
+            }
+            KeyCode::Enter => break,
+            KeyCode::Esc => {
+                println!();
+                return Err(anyhow!("Cancelled by user"));
+            }
+            _ => {}
+        }
+    }
+
+    println!();
+    let _ = disable_raw_mode();
+    Ok(is_local)
+}
+
+fn render_type_prompt(stdout: &mut std::io::Stdout, is_local: bool) -> Result<()> {
+    use std::io::Write;
+    // `\r\x1b[2K` moves to column 0 and clears the current line so the prompt
+    // can be re-rendered in place while the user cycles between options.
+    write!(stdout, "\r\x1b[2K")?;
+    let label = if is_local {
+        "local (stdio)"
+    } else {
+        "remote (streamable-http)"
+    };
+    let marker = |selected: bool| if selected { "›" } else { " " };
+    write!(
+        stdout,
+        "  Type: [{}] {} local (stdio)  {} remote (streamable-http)  ↑/↓ select, Enter confirm, Esc cancel",
+        label,
+        marker(is_local),
+        marker(!is_local),
+    )?;
+    stdout.flush()?;
+    Ok(())
+}
+
+fn read_line_trimmed() -> Result<String> {
+    let mut buffer = String::new();
+    let bytes_read = std::io::stdin()
+        .read_line(&mut buffer)
+        .context("Failed to read from stdin")?;
+    if bytes_read == 0 {
+        return Err(anyhow!("Unexpected end of input (stdin closed)"));
+    }
+    Ok(buffer.trim_end_matches(['\r', '\n']).to_string())
+}
+
+fn read_required_field(
+    label: &str,
+    pre_filled: Option<&str>,
+    non_interactive: bool,
+) -> Result<String> {
+    if let Some(value) = pre_filled {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return Err(anyhow!("{} cannot be empty", label));
+        }
+        return Ok(trimmed.to_string());
+    }
+    if non_interactive {
+        return Err(anyhow!(
+            "{} is required (pass a flag or run without --non-interactive)",
+            label
+        ));
+    }
+    print!("  {}: ", label);
+    std::io::stdout()
+        .flush()
+        .context("Failed to flush stdout")?;
+    let value = read_line_trimmed()?;
+    if value.is_empty() {
+        return Err(anyhow!("{} cannot be empty", label));
+    }
+    Ok(value)
+}
 pub(crate) async fn print_mcp_json_config() -> Result<()> {
     let config_service = ensure_global_config_service().await?;
     let mcp_service = bitfun_core::service::mcp::MCPService::new(config_service.clone())

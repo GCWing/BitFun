@@ -5,12 +5,13 @@ import {
 } from './dispatchPreflight';
 
 describe('dispatch preflight', () => {
-  it('requires protocol v4 Git worktree delivery without a snapshot fallback', () => {
-    expect(DISPATCH_PROTOCOL_VERSION).toBe(4);
+  it('requires protocol v5 target reasoning and Git worktree delivery', () => {
+    expect(DISPATCH_PROTOCOL_VERSION).toBe(5);
     expect(BASE_DISPATCH_CAPABILITIES).toEqual(expect.arrayContaining([
       'workspace_git_worktree',
       'workspace_git_bundle_upload',
       'workspace_git_sync',
+      'reasoning_presets',
     ]));
     expect(BASE_DISPATCH_CAPABILITIES).not.toEqual(expect.arrayContaining([
       'workspace_snapshot_exact',

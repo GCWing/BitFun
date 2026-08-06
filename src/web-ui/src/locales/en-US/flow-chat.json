@@ -2396,6 +2396,24 @@
     "xhigh": "Extra High",
     "xhighDesc": "Maximum reasoning depth (slower)"
   },
+  "reasoningSelector": {
+    "title": "Reasoning",
+    "auto": "Auto",
+    "modelDefault": "model default",
+    "current": "Reasoning: {{preset}}",
+    "currentAuto": "Reasoning: Auto ({{preset}})",
+    "updateFailed": "Failed to update reasoning preset",
+    "source": {
+      "models_dev": "models.dev",
+      "adapter_fallback": "Built in",
+      "model_config": "Custom"
+    },
+    "sourceTooltip": {
+      "models_dev": "Generated automatically from models.dev model metadata",
+      "adapter_fallback": "Built into BitFun for this model adapter",
+      "model_config": "Defined in this model's custom configuration"
+    }
+  },
   "coworkScope": {
     "title": "Choose a Cowork workspace",
     "description": "Cowork mode needs a workspace folder to read/write files. Use the current project, or choose another folder.",

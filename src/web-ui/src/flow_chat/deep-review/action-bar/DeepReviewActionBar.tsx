@@ -65,6 +65,7 @@ import { openBtwSessionInAuxPane } from '../../services/btwSessionPane';
 import type { Session } from '../../types/flow-chat';
 import { useDeepReviewConsent } from '../../components/DeepReviewConsentDialog';
 import { deriveDeepReviewSessionConcurrencyGuard } from '../../utils/deepReviewCapacityGuard';
+import { isProjectedSessionEmpty } from '../../utils/flowChatTurnIdentity';
 import '../../components/btw/DeepReviewActionBar.scss';
 
 const log = createLogger('DeepReviewActionBar');
@@ -539,7 +540,8 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
     if (!['none', 'retry', 'failed', 'cancelled'].includes(currentFollowUpState)) {
       return;
     }
-    const recoverableEmptySessionRequestId = currentFollowUpSession?.dialogTurns.length === 0
+    const recoverableEmptySessionRequestId = currentFollowUpSession
+      && isProjectedSessionEmpty(currentFollowUpSession)
       ? currentFollowUpSession.btwOrigin?.requestId
       : undefined;
 

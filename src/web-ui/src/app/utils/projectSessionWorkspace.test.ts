@@ -83,6 +83,14 @@ describe('pickPrimaryAssistantWorkspace', () => {
     ).toBe(primaryAssistant);
   });
 
+  it('selects the configured primary assistant by workspace id', () => {
+    const firstAssistant = createAssistantWorkspace('first', 'assistant-1');
+    const configuredPrimary = createAssistantWorkspace('configured', 'assistant-2');
+
+    expect(pickPrimaryAssistantWorkspace([firstAssistant, configuredPrimary], 'configured'))
+      .toBe(configuredPrimary);
+  });
+
   it('does not fall back to a named assistant', () => {
     const namedAssistant = createAssistantWorkspace('named', 'assistant-1');
 

@@ -274,6 +274,12 @@ enum SessionMessageAgentType {
     Plan,
     #[serde(rename = "Cowork", alias = "cowork", alias = "COWORK")]
     Cowork,
+    #[serde(
+        rename = "DeepResearch",
+        alias = "deepresearch",
+        alias = "DEEPRESEARCH"
+    )]
+    DeepResearch,
 }
 
 impl SessionMessageAgentType {
@@ -282,6 +288,7 @@ impl SessionMessageAgentType {
             Self::Agentic => "agentic",
             Self::Plan => "Plan",
             Self::Cowork => "Cowork",
+            Self::DeepResearch => "DeepResearch",
         }
     }
 }
@@ -313,6 +320,7 @@ Allowed agent types when creating a session:
 - "agentic": Coding-focused agent for implementation, debugging, and code changes.
 - "Plan": Planning agent for clarifying requirements and producing an implementation plan before coding.
 - "Cowork": Collaborative agent for office-style work such as research, documentation, presentations, etc.
+- "DeepResearch": Research agent for systematic investigation and evidence-driven reports.
 "#
                 .to_string(),
         )
@@ -348,7 +356,7 @@ Allowed agent types when creating a session:
                 },
                 "agent_type": {
                     "type": "string",
-                    "enum": ["agentic", "Plan", "Cowork"],
+                    "enum": ["agentic", "Plan", "Cowork", "DeepResearch"],
                     "description": "Required when session_id is omitted. Not allowed when sending to an existing session."
                 }
             },
@@ -905,6 +913,7 @@ mod tests {
             session_name: "Worker".to_string(),
             agent_type: "agentic".to_string(),
             model_id: None,
+            reasoning_preset: None,
             last_user_dialog_agent_type: None,
             last_submitted_agent_type: None,
             turn_count: 0,
@@ -925,6 +934,7 @@ mod tests {
             session_name: "Worker".to_string(),
             agent_type: " ".to_string(),
             model_id: None,
+            reasoning_preset: None,
             last_user_dialog_agent_type: None,
             last_submitted_agent_type: None,
             turn_count: 0,
@@ -949,7 +959,7 @@ mod tests {
                     "workspace": workspace.as_string(),
                     "session_id": "worker_1",
                     "message": "hello",
-                    "agent_type": "Plan",
+                    "agent_type": "DeepResearch",
                 }),
                 Some(&session_context("source_1")),
             )
@@ -1019,7 +1029,7 @@ mod tests {
                     "workspace": workspace.as_string(),
                     "message": "hello",
                     "session_name": "Worker Session",
-                    "agent_type": "agentic",
+                    "agent_type": "DeepResearch",
                 }),
                 Some(&session_context("source_1")),
             )

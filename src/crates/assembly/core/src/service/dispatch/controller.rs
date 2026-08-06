@@ -73,6 +73,8 @@ pub struct DispatchSubmitRequest {
     #[serde(default)]
     pub model: Option<String>,
     #[serde(default)]
+    pub reasoning_preset: Option<String>,
+    #[serde(default)]
     pub title: Option<String>,
     /// Controller-side workspace that owns the observer session.
     #[serde(default)]
@@ -141,6 +143,8 @@ pub struct DispatchContinueRequest {
     /// Per-turn model override; carries forward as the job's model.
     #[serde(default)]
     pub model: Option<String>,
+    #[serde(default)]
+    pub reasoning_preset: Option<String>,
     /// Per-turn approval-policy override with the same carry-forward rule.
     #[serde(default)]
     pub approval_policy: Option<String>,
@@ -488,8 +492,15 @@ pub async fn submit(
         }
     };
     if let Err(error) =
-        dispatch_ssh::validate_dispatch_protocol(protocol, Some(&request.approval_policy))
-            .and_then(|_| validate_submission_preflight(protocol, request.model.as_deref()))
+        dispatch_ssh::validate_dispatch_protocol(protocol, Some(&request.approval_policy)).and_then(
+            |_| {
+                validate_submission_preflight(
+                    protocol,
+                    request.model.as_deref(),
+                    request.reasoning_preset.as_deref(),
+                )
+            },
+        )
     {
         release_unbound_preparation_baseline(store, &request.job_id, &baseline).await;
         return Err(error);
@@ -527,6 +538,7 @@ pub async fn submit(
         request.agent_type.clone(),
         request.approval_policy.clone(),
         request.model.clone(),
+        request.reasoning_preset.clone(),
     )
     .with_source_workspace(
         request.source_workspace_path.clone(),
@@ -556,6 +568,12 @@ pub async fn submit(
     });
     if let Some(model) = request.model.filter(|value| !value.trim().is_empty()) {
         protocol_request["model"] = Value::String(model);
+    }
+    if let Some(preset) = request
+        .reasoning_preset
+        .filter(|value| !value.trim().is_empty())
+    {
+        protocol_request["reasoningPreset"] = Value::String(preset);
     }
     if let Some(title) = request.title.filter(|value| !value.trim().is_empty()) {
         protocol_request["title"] = Value::String(title);
@@ -1060,6 +1078,14 @@ pub(super) fn continue_payload(request: &DispatchContinueRequest) -> Value {
     {
         payload["model"] = Value::String(model.to_string());
     }
+    if let Some(preset) = request
+        .reasoning_preset
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        payload["reasoningPreset"] = Value::String(preset.to_string());
+    }
     if let Some(policy) = request
         .approval_policy
         .as_deref()
@@ -1097,6 +1123,7 @@ pub(super) async fn record_follow_up_state(
         .update_submission_options(
             &record.job_id,
             request.model.as_deref(),
+            request.reasoning_preset.as_deref(),
             request.approval_policy.as_deref(),
         )
         .await
@@ -1293,6 +1320,7 @@ pub(super) fn same_target_identity(left: &DispatchTarget, right: &DispatchTarget
 pub(super) fn validate_submission_preflight(
     protocol: &Value,
     requested_model: Option<&str>,
+    requested_reasoning_preset: Option<&str>,
 ) -> anyhow::Result<()> {
     let workspace = protocol
         .get("workspace")
@@ -1304,7 +1332,7 @@ pub(super) fn validate_submission_preflight(
     {
         anyhow::bail!("Dispatch workspace is not a Git worktree on the target");
     }
-    if let Some(requested_model) = requested_model
+    let selected_model = if let Some(requested_model) = requested_model
         .map(str::trim)
         .filter(|model| !model.is_empty())
     {
@@ -1321,12 +1349,48 @@ pub(super) fn validate_submission_preflight(
                 "Requested model '{requested_model}' is not ready on the dispatch target"
             );
         }
+        requested_model
     } else if protocol.get("modelConfigured").and_then(Value::as_bool) != Some(true) {
         let diagnostic = protocol
             .get("modelDiagnostic")
             .and_then(Value::as_str)
             .unwrap_or("No ready default model is configured on the dispatch target");
         anyhow::bail!("{diagnostic}");
+    } else {
+        protocol
+            .get("defaultModel")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                anyhow::anyhow!("Dispatch target did not report a ready default model")
+            })?
+    };
+
+    if let Some(preset) = requested_reasoning_preset
+        .map(str::trim)
+        .filter(|preset| !preset.is_empty() && *preset != "auto")
+    {
+        let supported = protocol
+            .get("modelCatalog")
+            .and_then(|catalog| catalog.get("models"))
+            .and_then(Value::as_array)
+            .and_then(|models| {
+                models
+                    .iter()
+                    .find(|model| model.get("id").and_then(Value::as_str) == Some(selected_model))
+            })
+            .and_then(|model| model.get("reasoning"))
+            .and_then(|reasoning| reasoning.get("presets"))
+            .and_then(Value::as_array)
+            .is_some_and(|presets| {
+                presets
+                    .iter()
+                    .any(|candidate| candidate.get("id").and_then(Value::as_str) == Some(preset))
+            });
+        if !supported {
+            anyhow::bail!(
+                "Reasoning preset '{preset}' is not available for target model '{selected_model}'"
+            );
+        }
     }
     Ok(())
 }
@@ -1367,18 +1431,34 @@ mod tests {
         let ready = json!({
             "workspace": { "exists": true, "isDirectory": true, "isGitRepository": true },
             "modelConfigured": true,
-            "availableModels": ["target-model"]
+            "availableModels": ["target-model"],
+            "defaultModel": "target-model",
+            "modelCatalog": {
+                "models": [{
+                    "id": "target-model",
+                    "reasoning": { "presets": [{ "id": "high" }] }
+                }]
+            }
         });
-        validate_submission_preflight(&ready, None).expect("target default");
-        validate_submission_preflight(&ready, Some("target-model")).expect("selected model");
-        assert!(validate_submission_preflight(&ready, Some("local-only-model")).is_err());
+        validate_submission_preflight(&ready, None, None).expect("target default");
+        validate_submission_preflight(&ready, Some("target-model"), Some("high"))
+            .expect("selected model and preset");
+        validate_submission_preflight(&ready, Some("target-model"), Some("auto"))
+            .expect("explicit auto");
+        assert!(validate_submission_preflight(
+            &ready,
+            Some("target-model"),
+            Some("controller-only")
+        )
+        .is_err());
+        assert!(validate_submission_preflight(&ready, Some("local-only-model"), None).is_err());
 
         let missing_workspace = json!({
             "workspace": { "exists": false, "isDirectory": false, "isGitRepository": false },
             "modelConfigured": true,
             "availableModels": []
         });
-        assert!(validate_submission_preflight(&missing_workspace, None).is_err());
+        assert!(validate_submission_preflight(&missing_workspace, None, None).is_err());
 
         let missing_model = json!({
             "workspace": { "exists": true, "isDirectory": true, "isGitRepository": true },
@@ -1386,7 +1466,25 @@ mod tests {
             "modelDiagnostic": "configure a model",
             "availableModels": []
         });
-        assert!(validate_submission_preflight(&missing_model, None).is_err());
+        assert!(validate_submission_preflight(&missing_model, None, None).is_err());
+    }
+
+    #[test]
+    fn continue_payload_preserves_explicit_auto_reasoning_preset() {
+        let payload = continue_payload(&DispatchContinueRequest {
+            job_id: "job-1".to_string(),
+            turn_id: "turn-2".to_string(),
+            prompt: "Continue".to_string(),
+            display_content: None,
+            model: Some("target-model".to_string()),
+            reasoning_preset: Some("auto".to_string()),
+            approval_policy: None,
+            kind: None,
+            attachments: Vec::new(),
+        });
+
+        assert_eq!(payload["model"], "target-model");
+        assert_eq!(payload["reasoningPreset"], "auto");
     }
 
     #[test]

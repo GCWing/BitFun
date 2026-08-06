@@ -287,7 +287,7 @@ fn same_workspace_location(left: &Path, right: &Path) -> bool {
 
 /// CLI-owned client for the portable Agent Runtime SDK.
 /// Stateless regarding agent_type; callers pass it per call.
-pub(crate) struct CliAgentRuntimeClient {
+pub(crate) struct ExecAgentRuntimeClient {
     backend: CliAgentRuntimeBackend,
     approval_policy: Arc<RwLock<CliApprovalPolicy>>,
     workspace_paths: Arc<RwLock<CliWorkspacePaths>>,
@@ -316,7 +316,7 @@ pub(crate) struct CliAgentMode {
 
 type SharedBroadcast<T> = Arc<RwLock<Option<broadcast::Sender<T>>>>;
 
-impl CliAgentRuntimeClient {
+impl ExecAgentRuntimeClient {
     pub(crate) fn new(runtime: &CliRuntimeContext, workspace_path: Option<PathBuf>) -> Self {
         Self {
             backend: CliAgentRuntimeBackend::Embedded(runtime.agent_runtime().clone()),
@@ -743,6 +743,7 @@ impl CliAgentRuntimeClient {
                     workspace_binding,
                     transcript,
                     pending_permissions,
+                    ..
                 } => (
                     session,
                     transcript,
@@ -1270,7 +1271,7 @@ impl CliAgentRuntimeClient {
     }
 }
 
-impl CliAgentRuntimeClient {
+impl ExecAgentRuntimeClient {
     pub(crate) async fn ensure_session(&self, agent_type: &str) -> Result<String> {
         self.ensure_session_with_model(agent_type, None).await
     }
@@ -1972,7 +1973,7 @@ fn unexpected_shared_result(operation: &str) -> anyhow::Error {
 mod recovery_tests {
     use bitfun_agent_runtime::sdk::{PortError, PortErrorKind, RuntimeError};
 
-    use super::CliAgentRuntimeClient;
+    use super::ExecAgentRuntimeClient;
 
     #[test]
     fn session_recovery_requires_structured_not_found_error() {
@@ -1981,10 +1982,10 @@ mod recovery_tests {
         let unrelated_backend_error =
             RuntimeError::Port(PortError::new(PortErrorKind::Backend, "model not found"));
 
-        assert!(CliAgentRuntimeClient::is_session_not_found_error(
+        assert!(ExecAgentRuntimeClient::is_session_not_found_error(
             &missing_session
         ));
-        assert!(!CliAgentRuntimeClient::is_session_not_found_error(
+        assert!(!ExecAgentRuntimeClient::is_session_not_found_error(
             &unrelated_backend_error
         ));
     }
@@ -2434,6 +2435,7 @@ mod tests {
             session_name: "Workspace session".to_string(),
             agent_type: "agentic".to_string(),
             model_id: None,
+            reasoning_preset: None,
             last_user_dialog_agent_type: None,
             last_submitted_agent_type: None,
             turn_count: 1,

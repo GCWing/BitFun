@@ -732,7 +732,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-acp"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "agent-client-protocol",
  "async-trait",
@@ -755,11 +755,11 @@ dependencies = [
 
 [[package]]
 name = "bitfun-agent-content"
-version = "0.2.15"
+version = "0.2.16"
 
 [[package]]
 name = "bitfun-agent-runtime"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "async-trait",
  "bitfun-agent-stream",
@@ -785,7 +785,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-agent-runtime-ipc"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "async-trait",
  "bitfun-events",
@@ -805,7 +805,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-agent-stream"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -825,7 +825,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-agent-tools"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "async-trait",
  "bitfun-core-types",
@@ -838,7 +838,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-ai-adapters"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "anyhow",
  "apple-native-keyring-store",
@@ -872,14 +872,17 @@ dependencies = [
 
 [[package]]
 name = "bitfun-app-server"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
  "async-trait",
  "bitfun-agent-runtime",
+ "bitfun-app-server-client",
+ "bitfun-app-server-protocol",
  "bitfun-core",
  "bitfun-events",
+ "bitfun-runtime-ports",
  "futures",
  "log",
  "serde",
@@ -890,8 +893,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "bitfun-app-server-client"
+version = "0.2.16"
+dependencies = [
+ "agent-client-protocol",
+ "anyhow",
+ "bitfun-app-server-protocol",
+ "tokio",
+]
+
+[[package]]
+name = "bitfun-app-server-protocol"
+version = "0.2.16"
+dependencies = [
+ "agent-client-protocol",
+ "bitfun-core-types",
+ "bitfun-events",
+ "bitfun-product-domains",
+ "bitfun-runtime-ports",
+ "serde",
+ "serde_json",
+ "ts-rs",
+]
+
+[[package]]
 name = "bitfun-claude-code-adapter"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "bitfun-product-domains",
  "bitfun-services-core",
@@ -910,7 +937,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-cli"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "anyhow",
  "arboard",
@@ -920,7 +947,11 @@ dependencies = [
  "bitfun-agent-runtime",
  "bitfun-agent-runtime-ipc",
  "bitfun-agent-tools",
+ "bitfun-app-server",
+ "bitfun-app-server-client",
+ "bitfun-app-server-protocol",
  "bitfun-core",
+ "bitfun-core-types",
  "bitfun-events",
  "bitfun-product-domains",
  "bitfun-runtime-ports",
@@ -968,7 +999,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-codex-adapter"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "bitfun-product-domains",
  "bitfun-services-core",
@@ -985,7 +1016,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-core"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1056,7 +1087,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-core-types"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "serde",
  "serde_json",
@@ -1065,7 +1096,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-desktop"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "alloc-no-stdlib",
  "alloc-stdlib",
@@ -1139,6 +1170,7 @@ dependencies = [
  "tower-http",
  "urlencoding",
  "uuid",
+ "webview2-com",
  "win32job",
  "windows 0.61.3",
  "windows-core 0.61.2",
@@ -1149,7 +1181,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-events"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1163,7 +1195,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-external-sources"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "bitfun-product-domains",
  "futures",
@@ -1173,7 +1205,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-harness"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "async-trait",
  "thiserror 2.0.19",
@@ -1182,7 +1214,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-miniapp-market-server"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "anyhow",
  "axum",
@@ -1194,7 +1226,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-miniapp-market-service"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "anyhow",
  "axum",
@@ -1225,7 +1257,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-opencode-adapter"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "async-trait",
  "bitfun-plugin-runtime-client",
@@ -1253,7 +1285,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-page-function-runtime"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "rquickjs",
  "serde",
@@ -1264,7 +1296,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-plugin-runtime-client"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "async-trait",
  "bitfun-runtime-ports",
@@ -1273,7 +1305,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-product-capabilities"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "async-trait",
  "bitfun-agent-runtime",
@@ -1286,7 +1318,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-product-domains"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "dirs 6.0.0",
  "hex",
@@ -1303,7 +1335,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-relay-server"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "anyhow",
  "axum",
@@ -1320,7 +1352,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-relay-service"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -1349,7 +1381,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-runtime-ports"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1364,7 +1396,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-runtime-services"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1379,7 +1411,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-sdk-host"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "async-trait",
  "bitfun-agent-runtime",
@@ -1397,7 +1429,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-sdk-host-app"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1416,7 +1448,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-server"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
@@ -1442,7 +1474,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-services-core"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1478,7 +1510,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-services-integrations"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -1553,7 +1585,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-skin-market-server"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "anyhow",
  "axum",
@@ -1565,7 +1597,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-skin-market-service"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "anyhow",
  "axum",
@@ -1594,7 +1626,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-static-hook-support"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "bitfun-product-domains",
  "bitfun-services-core",
@@ -1607,7 +1639,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-tool-call-jsonrepair"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "serde",
  "serde_json",
@@ -1615,11 +1647,11 @@ dependencies = [
 
 [[package]]
 name = "bitfun-tool-packs"
-version = "0.2.15"
+version = "0.2.16"
 
 [[package]]
 name = "bitfun-transport"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1631,7 +1663,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-webdriver"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "anyhow",
  "axum",
@@ -4496,9 +4528,11 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "socket2",
+ "system-configuration",
  "tokio",
  "tower-service",
  "tracing",
+ "windows-registry",
 ]
 
 [[package]]
@@ -9725,6 +9759,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "system-configuration"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a13f3d0daba03132c0aa9767f98351b3488edc2c100cda2d2ec2b04f3d8d3c8b"
+dependencies = [
+ "bitflags 2.11.1",
+ "core-foundation 0.9.4",
+ "system-configuration-sys",
+]
+
+[[package]]
+name = "system-configuration-sys"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e1d1b10ced5ca923a1fcb8d03e96b8d3268065d724548c0211415ff6ac6bac4"
+dependencies = [
+ "core-foundation-sys",
+ "libc",
+]
+
+[[package]]
 name = "system-deps"
 version = "6.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10284,7 +10339,7 @@ dependencies = [
 
 [[package]]
 name = "terminal-core"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10715,7 +10770,7 @@ checksum = "7d56353a2a665ad0f41a421187180aab746c8c325620617ad883a99a1cbe66d2"
 
 [[package]]
 name = "tool-runtime"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "bitfun-agent-tools",
  "bitfun-events",
@@ -11874,6 +11929,17 @@ checksum = "6e2e40844ac143cdb44aead537bbf727de9b044e107a0f1220392177d15b0f26"
 dependencies = [
  "windows-core 0.62.2",
  "windows-link 0.2.1",
+]
+
+[[package]]
+name = "windows-registry"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02752bf7fbdcce7f2a27a742f798510f3e5ad88dbe84871e5168e2120c3d5720"
+dependencies = [
+ "windows-link 0.2.1",
+ "windows-result 0.4.1",
+ "windows-strings 0.5.1",
 ]
 
 [[package]]

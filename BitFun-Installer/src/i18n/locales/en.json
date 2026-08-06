@@ -56,7 +56,11 @@
     "providers": {
       "openbitfun": {
         "name": "OpenBitFun",
-        "description": "OpenBitFun Model Platform"
+        "description": "OpenBitFun Model Platform",
+        "urlOptions": {
+          "default": "Anthropic Format - Default",
+          "openai": "OpenAI Compatible Format"
+        }
       },
       "gemini": {
         "name": "Google Gemini",
@@ -143,6 +147,10 @@
       "openrouter": {
         "name": "OpenRouter",
         "description": "OpenRouter Model Platform"
+      },
+      "tokendance": {
+        "name": "TokenDance",
+        "description": "Unified AI model gateway"
       }
     },
     "modelNameSelectPlaceholder": "Select model",

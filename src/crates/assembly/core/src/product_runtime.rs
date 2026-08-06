@@ -23,7 +23,7 @@ use bitfun_agent_runtime::sdk::{
 };
 use bitfun_harness::HarnessRegistry;
 use bitfun_runtime_ports::{
-    AgentContextReloadRequest, ClockPort, LocalWorkspaceSnapshotPort,
+    AgentContextReloadPort, AgentContextReloadRequest, ClockPort, LocalWorkspaceSnapshotPort,
     LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotStats,
     LocalWorkspaceSnapshotTurnRequest, PortError, PortErrorKind, PortResult,
     RuntimeServiceCapability, RuntimeServicePort, SessionStoragePathRequest, SessionStorePort,
@@ -1282,6 +1282,23 @@ impl CoreAgentRuntimeCompatibility {
                 parent_dialog_turn_ids,
             )
             .await
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentContextReloadPort for CoreAgentRuntimeCompatibility {
+    async fn reload_session_context(
+        &self,
+        request: AgentContextReloadRequest,
+    ) -> bitfun_runtime_ports::PortResult<()> {
+        CoreAgentRuntimeCompatibility::reload_session_context(self, request)
+            .await
+            .map_err(|error| {
+                bitfun_runtime_ports::PortError::new(
+                    bitfun_runtime_ports::PortErrorKind::Backend,
+                    error.to_string(),
+                )
+            })
     }
 }
 

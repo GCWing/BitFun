@@ -3,6 +3,7 @@ import type {
   AcpSessionConfigValue,
   AcpSessionModelOption,
 } from '@/infrastructure/api/service-api/ACPClientAPI';
+import type { ReasoningCatalogProjection } from '@/infrastructure/api/service-api/AIApi';
 
 const FAST_MODE_CONFIG_ID = 'fast-mode';
 const FAST_MODE_ON_VALUE = 'on';
@@ -11,6 +12,36 @@ const FAST_MODE_OFF_VALUE = 'off';
 export interface AcpFastModeState {
   option: AcpSessionConfigOption;
   enabled: boolean;
+}
+
+export interface AcpReasoningState {
+  option: Extract<AcpSessionConfigOption, { type: 'select' }>;
+  projection: ReasoningCatalogProjection;
+  selectedPreset: string;
+}
+
+export function resolveAcpReasoningState(
+  options: AcpSessionConfigOption[],
+): AcpReasoningState | null {
+  const option = options.find(candidate => candidate.category === 'thought_level');
+  if (!option || option.type !== 'select' || option.options.length === 0) return null;
+  if (!option.options.some(candidate => candidate.value === option.currentValue)) return null;
+
+  return {
+    option,
+    selectedPreset: option.currentValue,
+    projection: {
+      status: 'known',
+      default_preset: option.currentValue,
+      presets: option.options.map((candidate, index) => ({
+        id: candidate.value,
+        label: candidate.name,
+        order: index,
+        actions: [{ type: 'effort', value: candidate.value }],
+        source: 'adapter_fallback',
+      })),
+    },
+  };
 }
 
 export function resolveAcpFastModeState(

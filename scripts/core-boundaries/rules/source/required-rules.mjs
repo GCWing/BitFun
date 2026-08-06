@@ -6010,8 +6010,8 @@ export const requiredContentRules = [
         message: 'missing remote model capability fact projection',
       },
       {
-        regex: /\bRemoteReasoningModeFact\b/,
-        message: 'missing remote reasoning mode fact projection',
+        regex: /\bproject_model_reasoning_catalog\b/,
+        message: 'missing remote reasoning preset catalog projection',
       },
       {
         regex: /\bbuild_remote_model_catalog\b/,
@@ -6655,8 +6655,8 @@ export const requiredContentRules = [
         message: 'missing remote model capability owner fact',
       },
       {
-        regex: /\bpub enum RemoteReasoningModeFact\b/,
-        message: 'missing remote reasoning mode owner fact',
+        regex: /\bReasoningCatalogProjection\b/,
+        message: 'missing remote reasoning preset catalog owner contract',
       },
       {
         regex: /\bpub struct RemoteModelFacts\b/,

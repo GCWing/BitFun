@@ -124,3 +124,25 @@ test('Desktop Tauri projection consumes only the resolved member identity', () =
     rmSync(fixture, { force: true, recursive: true });
   }
 });
+
+test('Desktop release config bundles models.dev notices and provenance', () => {
+  const config = JSON.parse(
+    readFileSync(join(ROOT, 'src', 'apps', 'desktop', 'tauri.conf.json'), 'utf8')
+  );
+  assert.equal(
+    config.bundle.resources['../../../THIRD_PARTY_NOTICES.md'],
+    'THIRD_PARTY_NOTICES.md'
+  );
+  assert.equal(
+    config.bundle.resources[
+      '../../crates/services/services-integrations/assets/models-dev.LICENSE.txt'
+    ],
+    'third-party/models.dev/LICENSE.txt'
+  );
+  assert.equal(
+    config.bundle.resources[
+      '../../crates/services/services-integrations/assets/models-dev.provenance.json'
+    ],
+    'third-party/models.dev/provenance.json'
+  );
+});

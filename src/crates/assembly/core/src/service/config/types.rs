@@ -5,6 +5,7 @@
 use crate::util::errors::*;
 use async_trait::async_trait;
 use bitfun_core_types::WorktreeSettings;
+pub use bitfun_core_types::{ReasoningConfig, ReasoningPreset, ReasoningPresetAction};
 use bitfun_runtime_ports::{PermissionRule, ToolPermissionConfig};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -539,8 +540,6 @@ pub enum ModelCategory {
     /// Speech recognition model.
     SpeechRecognition,
 }
-
-pub use bitfun_core_types::ReasoningMode;
 
 /// Default model configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1347,17 +1346,9 @@ pub struct AIModelConfig {
     /// Additional metadata (JSON, for extensibility).
     pub metadata: Option<serde_json::Value>,
 
-    /// Compatibility-only input field for older saved configs.
-    ///
-    /// New code should use `reasoning_mode`. This field is deserialized for migration and
-    /// compatibility, then omitted from future saves. When `reasoning_mode` is absent, `true`
-    /// maps to `enabled` and `false` maps to `default`.
-    #[serde(default, skip_serializing)]
-    pub enable_thinking_process: bool,
-
-    /// Provider-agnostic reasoning mode.
+    /// Canonical model reasoning presets and default selection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reasoning_mode: Option<ReasoningMode>,
+    pub reasoning: Option<ReasoningConfig>,
 
     /// Whether to parse OpenAI-compatible text chunks containing `<think>...</think>` into
     /// streaming reasoning content.
@@ -1376,15 +1367,6 @@ pub struct AIModelConfig {
     /// Whether to skip SSL certificate verification (advanced; use only when necessary).
     #[serde(default)]
     pub skip_ssl_verify: bool,
-
-    /// Reasoning effort level for providers that support explicit effort controls.
-    /// Valid values are provider-specific. None = use API default.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reasoning_effort: Option<String>,
-
-    /// Optional Anthropic manual thinking token budget.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub thinking_budget_tokens: Option<u32>,
 
     /// Custom request body (JSON string, used to override default request body fields).
     #[serde(default)]
@@ -1450,10 +1432,21 @@ pub enum SubscriptionProvider {
     Opencode,
 }
 
+/// OpenCode API product selected for a subscription-authenticated model.
+/// Zen and Go share one account credential but use different API namespaces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenCodePlan {
+    Zen,
+    Go,
+}
+
 /// Where to obtain the runtime auth material for an `AIModelConfig`.
 ///
 /// Stored on disk as `{"type":"api_key"}` or
 /// `{"type":"subscription","provider":"codex"|"antigravity"|"opencode"}`.
+/// OpenCode models may additionally persist `"plan":"zen"|"go"`; an absent
+/// plan preserves the legacy Zen Chat Completions behavior.
 /// Tokens live in the subscription auth store and are resolved at request time.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -1462,7 +1455,11 @@ pub enum AuthConfig {
     #[default]
     ApiKey,
     /// Use BitFun in-app subscription OAuth for the named provider.
-    Subscription { provider: SubscriptionProvider },
+    Subscription {
+        provider: SubscriptionProvider,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        plan: Option<OpenCodePlan>,
+    },
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -1484,15 +1481,12 @@ struct AIModelConfigCompat {
     capabilities: Vec<ModelCapability>,
     recommended_for: Vec<String>,
     metadata: Option<serde_json::Value>,
-    enable_thinking_process: Option<bool>,
-    reasoning_mode: Option<ReasoningMode>,
+    reasoning: Option<ReasoningConfig>,
     #[serde(default = "default_true")]
     inline_think_in_text: bool,
     custom_headers: Option<std::collections::HashMap<String, String>>,
     custom_headers_mode: Option<String>,
     skip_ssl_verify: bool,
-    reasoning_effort: Option<String>,
-    thinking_budget_tokens: Option<u32>,
     custom_request_body: Option<String>,
     custom_request_body_mode: Option<String>,
     /// Parsed flexibly so unknown legacy auth tags fall back to ApiKey.
@@ -1509,16 +1503,6 @@ fn parse_auth_config(value: Option<serde_json::Value>) -> AuthConfig {
 
 impl From<AIModelConfigCompat> for AIModelConfig {
     fn from(value: AIModelConfigCompat) -> Self {
-        let reasoning_mode = value.reasoning_mode.or_else(|| {
-            value.enable_thinking_process.map(|enabled| {
-                if enabled {
-                    ReasoningMode::Enabled
-                } else {
-                    ReasoningMode::Default
-                }
-            })
-        });
-
         Self {
             id: value.id,
             name: value.name,
@@ -1536,30 +1520,15 @@ impl From<AIModelConfigCompat> for AIModelConfig {
             capabilities: value.capabilities,
             recommended_for: value.recommended_for,
             metadata: value.metadata,
-            enable_thinking_process: value.enable_thinking_process.unwrap_or(false),
-            reasoning_mode,
+            reasoning: value.reasoning,
             inline_think_in_text: value.inline_think_in_text,
             custom_headers: value.custom_headers,
             custom_headers_mode: value.custom_headers_mode,
             skip_ssl_verify: value.skip_ssl_verify,
-            reasoning_effort: value.reasoning_effort,
-            thinking_budget_tokens: value.thinking_budget_tokens,
             custom_request_body: value.custom_request_body,
             custom_request_body_mode: value.custom_request_body_mode,
             auth: parse_auth_config(value.auth),
         }
-    }
-}
-
-impl AIModelConfig {
-    pub fn effective_reasoning_mode(&self) -> ReasoningMode {
-        self.reasoning_mode.unwrap_or({
-            if self.enable_thinking_process {
-                ReasoningMode::Enabled
-            } else {
-                ReasoningMode::Default
-            }
-        })
     }
 }
 
@@ -1858,14 +1827,11 @@ impl Default for AIModelConfig {
             capabilities: vec![],
             recommended_for: vec![],
             metadata: None,
-            enable_thinking_process: false,
-            reasoning_mode: None,
+            reasoning: None,
             inline_think_in_text: true,
             custom_headers: None,
             custom_headers_mode: None,
             skip_ssl_verify: false,
-            reasoning_effort: None,
-            thinking_budget_tokens: None,
             custom_request_body: None,
             custom_request_body_mode: None,
             auth: AuthConfig::ApiKey,
@@ -2049,9 +2015,10 @@ impl AIModelConfig {
 mod tests {
     use super::{
         AIConfig, AIExperienceConfig, AIModelConfig, AgentModelDefaultsConfig, AgentProfileConfig,
-        AgentProfileView, AppConfig, AppLoggingConfig, GlobalConfig, MemoryExternalContextPolicy,
-        ModelExchangeTracingMode, NotificationConfig, ReasoningMode, SubagentBatchExecutionPolicy,
-        SubagentModelSelection, UserSkillGroupsConfig, UserToolGroupsConfig,
+        AgentProfileView, AppConfig, AppLoggingConfig, AuthConfig, GlobalConfig,
+        MemoryExternalContextPolicy, ModelExchangeTracingMode, NotificationConfig, OpenCodePlan,
+        SubagentBatchExecutionPolicy, SubagentModelSelection, SubscriptionProvider,
+        UserSkillGroupsConfig, UserToolGroupsConfig,
     };
     use bitfun_runtime_ports::ToolPermissionConfig;
 
@@ -2062,6 +2029,40 @@ mod tests {
         let config: AppConfig =
             serde_json::from_value(serde_json::json!({})).expect("empty app config should default");
         assert!(!config.prevent_sleep);
+    }
+
+    #[test]
+    fn subscription_auth_preserves_legacy_opencode_and_roundtrips_go_plan() {
+        let legacy: AuthConfig = serde_json::from_value(serde_json::json!({
+            "type": "subscription",
+            "provider": "opencode"
+        }))
+        .expect("legacy OpenCode auth should deserialize");
+        assert_eq!(
+            legacy,
+            AuthConfig::Subscription {
+                provider: SubscriptionProvider::Opencode,
+                plan: None,
+            }
+        );
+        assert_eq!(
+            serde_json::to_value(&legacy).expect("legacy auth should serialize"),
+            serde_json::json!({
+                "type": "subscription",
+                "provider": "opencode"
+            })
+        );
+
+        let go = AuthConfig::Subscription {
+            provider: SubscriptionProvider::Opencode,
+            plan: Some(OpenCodePlan::Go),
+        };
+        let serialized = serde_json::to_value(&go).expect("Go auth should serialize");
+        assert_eq!(serialized["plan"], "go");
+        assert_eq!(
+            serde_json::from_value::<AuthConfig>(serialized).expect("Go auth should roundtrip"),
+            go
+        );
     }
 
     #[test]
@@ -2196,7 +2197,7 @@ mod tests {
     }
 
     #[test]
-    fn deserializes_compatibility_thinking_flag_into_reasoning_mode() {
+    fn removed_reasoning_fields_are_ignored_without_creating_reasoning_config() {
         let config: AIModelConfig = serde_json::from_value(serde_json::json!({
             "id": "model_1",
             "name": "Provider",
@@ -2205,12 +2206,14 @@ mod tests {
             "base_url": "https://example.com/v1",
             "api_key": "key",
             "enabled": true,
-            "enable_thinking_process": true
+            "enable_thinking_process": true,
+            "reasoning_mode": "adaptive",
+            "reasoning_effort": "high",
+            "thinking_budget_tokens": 12000
         }))
-        .expect("legacy config should deserialize");
+        .expect("config with removed fields should deserialize");
 
-        assert_eq!(config.reasoning_mode, Some(ReasoningMode::Enabled));
-        assert!(config.enable_thinking_process);
+        assert!(config.reasoning.is_none());
     }
 
     #[test]
@@ -2461,25 +2464,7 @@ mod tests {
     }
 
     #[test]
-    fn deserializes_compatibility_false_thinking_flag_into_default_reasoning_mode() {
-        let config: AIModelConfig = serde_json::from_value(serde_json::json!({
-            "id": "model_1",
-            "name": "Provider",
-            "provider": "openai",
-            "model_name": "test-model",
-            "base_url": "https://example.com/v1",
-            "api_key": "key",
-            "enabled": true,
-            "enable_thinking_process": false
-        }))
-        .expect("legacy config should deserialize");
-
-        assert_eq!(config.reasoning_mode, Some(ReasoningMode::Default));
-        assert!(!config.enable_thinking_process);
-    }
-
-    #[test]
-    fn serialization_omits_compatibility_thinking_flag() {
+    fn serialization_omits_removed_reasoning_fields() {
         let config: AIModelConfig = serde_json::from_value(serde_json::json!({
             "id": "model_1",
             "name": "Provider",
@@ -2490,15 +2475,15 @@ mod tests {
             "enabled": true,
             "enable_thinking_process": true
         }))
-        .expect("legacy config should deserialize");
+        .expect("config with removed fields should deserialize");
 
         let value = serde_json::to_value(&config).expect("config should serialize");
 
         assert!(value.get("enable_thinking_process").is_none());
-        assert_eq!(
-            value.get("reasoning_mode").and_then(|v| v.as_str()),
-            Some("enabled")
-        );
+        assert!(value.get("reasoning_mode").is_none());
+        assert!(value.get("reasoning_effort").is_none());
+        assert!(value.get("thinking_budget_tokens").is_none());
+        assert!(value.get("reasoning").is_none());
     }
 
     #[test]

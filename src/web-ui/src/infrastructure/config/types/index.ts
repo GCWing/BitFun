@@ -190,11 +190,46 @@ export type ModelCategory =
   | 'multimodal'
   | 'speech_recognition';
 
-export type ReasoningMode =
-  | 'default'
-  | 'enabled'
-  | 'disabled'
-  | 'adaptive';
+export type ReasoningCatalogBinding =
+  | { source: 'auto' }
+  | { source: 'models_dev'; provider: string; model: string }
+  | { source: 'disabled' };
+
+export type ReasoningPresetAction =
+  | { type: 'effort'; value: string }
+  | { type: 'toggle'; enabled: boolean }
+  | { type: 'budget_tokens'; value: number }
+  | { type: 'request_patch'; body: Record<string, unknown> };
+
+export interface ReasoningPreset {
+  id: string;
+  label?: string;
+  order?: number;
+  disabled?: boolean;
+  actions?: ReasoningPresetAction[];
+}
+
+export interface ReasoningConfig {
+  catalog?: ReasoningCatalogBinding;
+  default_preset?: string;
+  presets?: ReasoningPreset[];
+}
+
+export type ReasoningPresetSource = 'models_dev' | 'adapter_fallback' | 'model_config';
+
+export interface ReasoningPresetDescriptor {
+  id: string;
+  label: string;
+  order: number;
+  actions: ReasoningPresetAction[];
+  source: ReasoningPresetSource;
+}
+
+export interface ReasoningCatalogProjection {
+  status: 'unsupported' | 'known' | 'unknown';
+  default_preset?: string;
+  presets?: ReasoningPresetDescriptor[];
+}
 
 export interface ModelMetadata {
   category: ModelCategory;
@@ -243,13 +278,10 @@ export interface AIModelConfig {
   capabilities: ModelCapability[];
   recommended_for?: string[];
   metadata?: Record<string, any>;
-  reasoning_mode?: ReasoningMode;
+  /** Canonical reasoning preset configuration. */
+  reasoning?: ReasoningConfig;
   /** Parse `<think>...</think>` text chunks into streaming reasoning content. */
   inline_think_in_text?: boolean;
-  /** Provider-specific reasoning effort. */
-  reasoning_effort?: string;
-  /** Optional Anthropic manual thinking token budget. */
-  thinking_budget_tokens?: number;
   /** Authentication source. Defaults to inline `api_key`. */
   auth?: AuthConfig;
 }
@@ -257,10 +289,18 @@ export interface AIModelConfig {
 /** Subscription provider for in-app OAuth auth. */
 export type SubscriptionProvider = 'codex' | 'antigravity' | 'opencode';
 
+/** OpenCode billing/API product. Both plans reuse the same signed-in account. */
+export type OpenCodePlan = 'zen' | 'go';
+
 /** Authentication source persisted on each model entry. */
 export type AuthConfig =
   | { type: 'api_key' }
-  | { type: 'subscription'; provider: SubscriptionProvider };
+  | {
+      type: 'subscription';
+      provider: SubscriptionProvider;
+      /** Absent on legacy OpenCode configs, which continue to use Zen. */
+      plan?: OpenCodePlan;
+    };
 
 export interface ProxyConfig {
   enabled: boolean;

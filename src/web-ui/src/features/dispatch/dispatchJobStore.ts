@@ -141,6 +141,8 @@ export interface DispatchObserverJob {
   baselineWorktreeMissing?: boolean;
   syncedHeadCommit?: string;
   model?: string;
+  reasoningPreset?: string;
+  modelCatalog?: import('@/infrastructure/api/service-api/AIApi').AIModelCatalog;
   availableModels?: string[];
   defaultModel?: string;
   cursor: number;
@@ -219,6 +221,7 @@ interface DispatchJobStoreState {
   ) => void;
   updateTitle: (jobId: string, title: string) => void;
   updateModel: (jobId: string, model: string) => void;
+  updateReasoningPreset: (jobId: string, preset: string) => void;
   updateApprovalPolicy: (jobId: string, policy: DispatchApprovalPolicy) => void;
   dismissSession: (sessionId: string, knownJobId?: string) => void;
   dismissJob: (jobId: string) => void;
@@ -404,6 +407,7 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
                 agentType: record.agentType || existing.agentType,
                 approvalPolicy: record.approvalPolicy || existing.approvalPolicy,
                 model: record.model || existing.model,
+                reasoningPreset: record.reasoningPreset ?? existing.reasoningPreset,
                 branch: record.branch || existing.branch,
                 baselineWorktreePath: nextBaselinePath,
                 baselineWorktreeMissing:
@@ -442,6 +446,7 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
               baselineWorktreePath: record.baselineWorktreePath,
               syncedHeadCommit: record.syncedHeadCommit,
               model: record.model,
+              reasoningPreset: record.reasoningPreset,
               // A newly reconstructed projection must replay its own
               // transcript instead of inheriting another observer's cursor.
               cursor: 0,
@@ -657,6 +662,27 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
               [jobId]: {
                 ...current,
                 model: normalizedModel,
+                reasoningPreset: 'auto',
+                updatedAt: Date.now(),
+              },
+            },
+          };
+        });
+      },
+
+      updateReasoningPreset: (jobId, preset) => {
+        set(state => {
+          const current = state.jobs[jobId];
+          const normalizedPreset = preset.trim();
+          if (!current || !normalizedPreset || current.reasoningPreset === normalizedPreset) {
+            return state;
+          }
+          return {
+            jobs: {
+              ...state.jobs,
+              [jobId]: {
+                ...current,
+                reasoningPreset: normalizedPreset,
                 updatedAt: Date.now(),
               },
             },
