@@ -6303,6 +6303,9 @@ export class FlowChatStore {
             deepReviewRunManifest: metadata.deepReviewRunManifest,
             reviewTargetEvidence: metadata.reviewTargetEvidence,
             isTransient: false,
+            currentTokenUsage: !validatedAgentType.startsWith('acp:') && metadata.customMetadata?.lastRequestTokenUsage
+              ? { ...metadata.customMetadata.lastRequestTokenUsage, timestamp: Date.now() }
+              : undefined,
           };
 
           const newSessions = new Map(prev.sessions);
@@ -6678,6 +6681,9 @@ export class FlowChatStore {
               deepReviewRunManifest: metadata.deepReviewRunManifest,
               reviewTargetEvidence: metadata.reviewTargetEvidence,
               isTransient: false,
+              currentTokenUsage: !validatedAgentType.startsWith('acp:') && metadata.customMetadata?.lastRequestTokenUsage
+                ? { ...metadata.customMetadata.lastRequestTokenUsage, timestamp: Date.now() }
+                : undefined,
             };
 
             const newSessions = new Map(prev.sessions);
@@ -7306,6 +7312,20 @@ export class FlowChatStore {
         const session = prev.sessions.get(sessionId);
         if (!session) return prev;
 
+        // Fallback for sessions persisted before lastRequestTokenUsage metadata:
+        // backfill from the last completed turn only when it had a single model
+        // round, so the accumulated input-token sum equals one request.
+        let fallbackTokenUsage = session.currentTokenUsage;
+        if (!fallbackTokenUsage && !isAcpSession && dialogTurns.length > 0) {
+          for (let i = dialogTurns.length - 1; i >= 0; i--) {
+            const turn = dialogTurns[i];
+            if (turn.status === 'completed' && turn.tokenUsage && turn.modelRounds.length === 1) {
+              fallbackTokenUsage = { ...turn.tokenUsage };
+              break;
+            }
+          }
+        }
+
         const updatedSession = {
           ...session,
           dialogTurns,
@@ -7330,6 +7350,7 @@ export class FlowChatStore {
           lastUserDialogMode: restoredLastUserDialogMode,
           lastSubmittedMode:
             restoredSessionInfo?.lastSubmittedAgentType ?? session.lastSubmittedMode,
+          ...(fallbackTokenUsage ? { currentTokenUsage: fallbackTokenUsage } : {}),
         };
         
         const newSessions = new Map(prev.sessions);

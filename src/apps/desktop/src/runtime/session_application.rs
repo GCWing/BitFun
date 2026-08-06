@@ -36,7 +36,7 @@ use bitfun_runtime_ports::{AgentContextReloadRequest, SessionTurnWindowRequest};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
-const UI_CUSTOM_METADATA_KEYS: [&str; 3] = ["titleSource", "titleKey", "titleParams"];
+const UI_CUSTOM_METADATA_KEYS: [&str; 4] = ["titleSource", "titleKey", "titleParams", "lastRequestTokenUsage"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
