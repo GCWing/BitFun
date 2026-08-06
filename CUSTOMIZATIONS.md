@@ -36,6 +36,7 @@ to the files in this pull request.
 1. [Introduction](#1-introduction)
 2. [Related Work](#2-related-work)
 3. [Design: A Three-Branch Separation-of-Powers Coordination Model](#3-design-a-three-branch-separation-of-powers-coordination-model)
+   - 3.1 Problem statement · 3.2 Design goals · 3.3 Six-phase pipeline · 3.4 Separation of powers · 3.5 Recursive dispatch pattern · 3.6 Serial / parallel discipline · 3.7 Quality gate system · 3.8 Atomic step specification · 3.9 Both ends fixed, middle free · 3.10 Decision derivation
 4. [Implementation 1: ACP Channel](#4-implementation-1-acp-channel)
 5. [Implementation 2: Session and SessionControl](#5-implementation-2-session-and-sessioncontrol)
 6. [Implementation 3: Warden Guard System](#6-implementation-3-warden-guard-system)
@@ -222,7 +223,30 @@ full gate suite and makes the commit. During parallel execution each track
 runs only its own scoped tests; the full regression suite runs only at the
 convergence node.
 
-### 3.7 Atomic step specification
+### 3.7 Quality gate system
+
+At serial nodes, the artifact must pass **three gates**, run in parallel and
+all mandatory; a single gate failing returns the artifact for repair, after
+which all three gates are re-run:
+
+| Gate | Role | Criterion |
+|---|---|---|
+| Review | Reviewer | Logic, architecture, and compliance; full-chain; evidence with file:line |
+| Test | Executor | Compile clean, tests green, linter zero warnings |
+| Acceptance | Reviewer / Acceptor | Feature-by-feature comparison against the original requirements; check for empty stubs |
+
+Two additional laws govern the gates:
+
+- **Gate blind-spot law.** A green gate does not imply the delivery is
+  wireable — the gates must cover the real integration path (smoke tests),
+  not only the isolated modules.
+- **Review is reviewed.** Language and framework semantics asserted by a
+  review must themselves be verified empirically.
+
+Repeated gate failure indicates that the root cause lies in preparation: the
+task returns to Phase 0 rather than patching in place.
+
+### 3.8 Atomic step specification
 
 Every dispatched step is specified by **five elements**:
 
@@ -237,7 +261,7 @@ even one without background — following the step must obtain the same result.
 Executors may be lazy, misjudge, or misunderstand; the instruction is
 designed so that being wrong is difficult.
 
-### 3.8 Determinism: both ends fixed, middle free
+### 3.9 Determinism: both ends fixed, middle free
 
 The requirement (start) and the delivery (end) are fixed before execution
 begins; the path between them is free. Deviations in the middle are permitted,
@@ -247,7 +271,7 @@ the end are written before implementation. Deviation is a path fluctuation;
 it never changes the delivery. Preparation rounds are unbounded; execution is
 one-shot.
 
-### 3.9 Decision derivation
+### 3.10 Decision derivation
 
 During execution, all decisions are derived from three sources, in order:
 **(1) requirements** (original requirement id / authoritative source),
