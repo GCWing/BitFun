@@ -51,6 +51,71 @@ use tauri::Emitter;
 use tauri::Manager;
 use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
 
+/// Parsed CLI startup command (--agent, --model, --session).
+///
+/// When the desktop app is launched from the command line, the user may pass
+/// `--agent <name>`, `--model <name>`, or `--session <id>` to pre-select the
+/// agent, model, or session for the initial conversation. These are injected
+/// into the frontend bootstrap as `window.__BITFUN_STARTUP_COMMAND__`.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartupCommand {
+    /// Override the initial agent/mode (e.g. "agentic", "plan", "debug").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
+    /// Override the initial model id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// Restore an existing session by id instead of creating a new one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session: Option<String>,
+}
+
+/// Parse `--agent`, `--model`, and `--session` from process arguments.
+///
+/// Returns `None` when none of the flags are present. Unknown flags are
+/// silently ignored so that Tauri's own arguments (e.g. `--dev`) are not
+/// disturbed.
+fn parse_startup_command() -> Option<StartupCommand> {
+    let args: Vec<String> = std::env::args().collect();
+    let mut agent: Option<String> = None;
+    let mut model: Option<String> = None;
+    let mut session: Option<String> = None;
+
+    let mut i = 1; // skip program name
+    while i < args.len() {
+        match args[i].as_str() {
+            "--agent" if i + 1 < args.len() => {
+                agent = Some(args[i + 1].clone());
+                i += 2;
+                continue;
+            }
+            "--model" if i + 1 < args.len() => {
+                model = Some(args[i + 1].clone());
+                i += 2;
+                continue;
+            }
+            "--session" if i + 1 < args.len() => {
+                session = Some(args[i + 1].clone());
+                i += 2;
+                continue;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+
+    if agent.is_none() && model.is_none() && session.is_none() {
+        return None;
+    }
+
+    Some(StartupCommand {
+        agent,
+        model,
+        session,
+    })
+}
+
 // Re-export API
 pub use api::*;
 
@@ -426,6 +491,19 @@ fn get_startup_native_trace(
 /// Tauri application entry point
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() {
+    let startup_command = parse_startup_command();
+    let startup_command_json = startup_command
+        .as_ref()
+        .and_then(|cmd| serde_json::to_value(cmd).ok());
+    if let Some(ref cmd) = startup_command {
+        log::info!(
+            "Startup command parsed: agent={:?}, model={:?}, session={:?}",
+            cmd.agent,
+            cmd.model,
+            cmd.session
+        );
+    }
+
     let startup_started = Instant::now();
     let startup_trace_id = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -913,6 +991,7 @@ pub async fn run() {
                 &startup_trace_id,
                 &startup_trace,
                 workspace_startup_bootstrap_snapshot,
+                startup_command_json,
             );
             let window_duration_ms = elapsed_ms(window_started);
             startup_trace.record_step(
