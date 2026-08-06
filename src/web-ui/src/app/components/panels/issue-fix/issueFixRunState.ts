@@ -24,6 +24,13 @@ export function userTodoDisplayText(todo: IssueFixUserTodo): string {
 export interface IssueFixUserTodoPresentation {
   action: string;
   context: string | null;
+  /** Structured reading of the action for localized rendering; null when the
+   * free-form text did not match any known shape. */
+  kind:
+    | { type: 'mergePr'; pr: string; issue: string | null }
+    | { type: 'closeIssue'; issue: string; pr: string | null }
+    | { type: 'postComment'; issue: string }
+    | null;
 }
 
 const MAX_USER_TODO_ACTION_CHARS = 72;
@@ -36,6 +43,33 @@ function truncateUserTodoPart(value: string, maxChars: number): string {
 
 function capitalizeAscii(value: string): string {
   return value ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
+}
+
+/**
+ * Recognize the three action shapes the heartbeat contract produces, so the
+ * UI can phrase them in the user's language instead of echoing agent prose.
+ */
+function classifyUserTodoAction(
+  action: string,
+  context: string | null,
+): IssueFixUserTodoPresentation['kind'] {
+  const scan = `${action} ${context ?? ''}`;
+  const pr = /(?:\bPR\s*#|\bpull\/)(\d+)/i.exec(scan)?.[1] ?? null;
+  // "Issue #N", "fixes #N", or any bare "#N" that is not the PR number.
+  const issue =
+    /\b(?:issue|fix(?:es)?|resolv(?:es)?|clos(?:es|ing)?)\s*#?(\d+)/i.exec(scan)?.[1] ??
+    [...scan.matchAll(/#(\d+)/g)].map((m) => m[1]).find((n) => n !== pr) ??
+    null;
+  if (/\bmerge\b/i.test(action) && pr) {
+    return { type: 'mergePr', pr, issue: issue !== pr ? issue : null };
+  }
+  if (/\bclos(?:e|ing)\b/i.test(action) && issue) {
+    return { type: 'closeIssue', issue, pr };
+  }
+  if (/\b(?:comment|response|diagnos)/i.test(action) && issue) {
+    return { type: 'postComment', issue };
+  }
+  return null;
 }
 
 /**
@@ -52,27 +86,25 @@ export function userTodoPresentation(todo: IssueFixUserTodo): IssueFixUserTodoPr
     .replace(/\s+/g, ' ')
     .trim();
 
-  let context: string | null = null;
+  let trailing: string | null = null;
   const trailingContext = text.match(/\s+\(([^()]*)\)\s*[.!?]?$/);
   if (trailingContext?.index != null && trailingContext[1].trim()) {
-    context = trailingContext[1].trim();
+    trailing = trailingContext[1].trim();
     text = text.slice(0, trailingContext.index).trim();
   } else {
     const divider = text.match(/\s+(?:\u2014|\u2013|\u00b7)\s+|:\s+/);
     if (divider?.index != null) {
       const detailStart = divider.index + divider[0].length;
-      context = text.slice(detailStart).trim() || null;
+      trailing = text.slice(detailStart).trim() || null;
       text = text.slice(0, divider.index).trim();
     }
   }
 
   const action = truncateUserTodoPart(capitalizeAscii(text), MAX_USER_TODO_ACTION_CHARS);
-  return {
-    action,
-    context: context
-      ? truncateUserTodoPart(capitalizeAscii(context), MAX_USER_TODO_CONTEXT_CHARS)
-      : null,
-  };
+  const context = trailing
+    ? truncateUserTodoPart(capitalizeAscii(trailing), MAX_USER_TODO_CONTEXT_CHARS)
+    : null;
+  return { action, context, kind: classifyUserTodoAction(text, trailing) };
 }
 
 export interface IssueFixSelectionState {

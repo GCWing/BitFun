@@ -46,9 +46,6 @@
     },
     "userTodos": {
       "title": "待你處理（{{count}}）",
-      "gateBadge": "決策",
-      "actionBadge": "待審",
-      "openLink": "在平台上開啟",
       "openHistory": "查看歷史"
     },
     "notify": {
@@ -56,7 +53,14 @@
       "actionTitle": "持續修復待你處理",
       "actionBatch": "新增 {{count}} 項待處理",
       "open": "開啟面板",
-      "openLink": "開啟連結"
+      "openLink": "在 GitHub 上開啟"
+    },
+    "actionLine": {
+      "mergePr": "修復已就緒，請審查並合併 PR #{{pr}}",
+      "mergePrForIssue": "Issue #{{issue}} 已修復，請審查並合併 PR #{{pr}}",
+      "closeIssue": "已解決，請批准關閉 Issue #{{issue}}",
+      "closeIssueByPr": "Issue #{{issue}} 已由 PR #{{pr}} 修復，請批准關閉",
+      "postComment": "已為 Issue #{{issue}} 草擬回覆，請批准發布"
     }
   },
   "status": {

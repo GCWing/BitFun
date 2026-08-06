@@ -46,9 +46,6 @@
     },
     "userTodos": {
       "title": "Pending your action ({{count}})",
-      "gateBadge": "Gate",
-      "actionBadge": "Review",
-      "openLink": "Open on the provider",
       "openHistory": "History"
     },
     "notify": {
@@ -56,7 +53,14 @@
       "actionTitle": "Issue-Fix pending review",
       "actionBatch": "{{count}} new items await your review",
       "open": "Open panel",
-      "openLink": "Open link"
+      "openLink": "Open on GitHub"
+    },
+    "actionLine": {
+      "mergePr": "Fix ready — review and merge PR #{{pr}}",
+      "mergePrForIssue": "Issue #{{issue}} fixed — review and merge PR #{{pr}}",
+      "closeIssue": "Resolved — approve closing Issue #{{issue}}",
+      "closeIssueByPr": "Issue #{{issue}} resolved by PR #{{pr}} — approve closing it",
+      "postComment": "Reply drafted for Issue #{{issue}} — approve posting it"
     }
   },
   "status": {

@@ -172,6 +172,7 @@ describe('light poll merge', () => {
     ).toEqual({
       action: 'Posting maintainer diagnosis comment for Issue #2032',
       context: 'Comment_only route: diagnosis drafted',
+      kind: { type: 'postComment', issue: '2032' },
     });
 
     expect(
@@ -184,6 +185,7 @@ describe('light poll merge', () => {
     ).toEqual({
       action: 'Merge PR #2038',
       context: 'Fixes #1980 \u00b7 CI green, validated',
+      kind: { type: 'mergePr', pr: '2038', issue: '1980' },
     });
   });
 

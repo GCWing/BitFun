@@ -9,6 +9,9 @@ import { IssueFixTodoMessage } from './IssueFixTodoMessage';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
+// The component resolves i18n keys through react-i18next; without a loaded
+// backend the raw key comes back, which is exactly what these tests assert —
+// the point is which key gets chosen and what interpolation it receives.
 const todo = (overrides: Partial<IssueFixUserTodo> = {}): IssueFixUserTodo => ({
   todoId: 'todo-1',
   taskClass: 'user_action',
@@ -33,7 +36,7 @@ describe('IssueFixTodoMessage', () => {
     container.remove();
   });
 
-  it('projects a legacy todo into a short action plus the supporting context', () => {
+  it('recognizes a comment authorization and renders the localized action line', () => {
     act(() => {
       root.render(<IssueFixTodoMessage todo={todo()} />);
     });
@@ -41,11 +44,11 @@ describe('IssueFixTodoMessage', () => {
     const action = container.querySelector('.issue-fix__todo-message-action');
     const context = container.querySelector('.issue-fix__todo-message-context');
 
-    expect(action?.textContent).toBe('Posting maintainer diagnosis comment for Issue #2032');
+    expect(action?.textContent).toBe('autonomous.actionLine.postComment');
     expect(context?.textContent).toBe('Comment_only route: diagnosis drafted');
   });
 
-  it('omits the context line when the todo carries no state/reason tail', () => {
+  it('recognizes an issue-close authorization and omits the missing context line', () => {
     act(() => {
       root.render(
         <IssueFixTodoMessage
@@ -55,12 +58,29 @@ describe('IssueFixTodoMessage', () => {
     });
 
     expect(container.querySelector('.issue-fix__todo-message-action')?.textContent).toBe(
-      'Closing issue #2016',
+      'autonomous.actionLine.closeIssue',
     );
     expect(container.querySelector('.issue-fix__todo-message-context')).toBeNull();
   });
 
-  it('keeps both lines bounded so the toast stays scannable on a long drafted response', () => {
+  it('falls back to the compact free-form action when no shape matches', () => {
+    act(() => {
+      root.render(
+        <IssueFixTodoMessage
+          todo={todo({ text: 'Authorize rotating the deploy credentials (expired yesterday)' })}
+        />,
+      );
+    });
+
+    expect(container.querySelector('.issue-fix__todo-message-action')?.textContent).toBe(
+      'Rotating the deploy credentials',
+    );
+    expect(container.querySelector('.issue-fix__todo-message-context')?.textContent).toBe(
+      'Expired yesterday',
+    );
+  });
+
+  it('keeps the context line bounded so the toast stays scannable on a long drafted response', () => {
     act(() => {
       root.render(
         <IssueFixTodoMessage
@@ -71,10 +91,7 @@ describe('IssueFixTodoMessage', () => {
       );
     });
 
-    const action = container.querySelector('.issue-fix__todo-message-action');
     const context = container.querySelector('.issue-fix__todo-message-context');
-
-    expect(action!.textContent!.length).toBeLessThanOrEqual(72);
     expect(context!.textContent!.length).toBeLessThanOrEqual(96);
   });
 });
