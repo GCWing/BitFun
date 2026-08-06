@@ -354,6 +354,17 @@ fn resolve_subagent_model_selection(
     }
 }
 
+/// Whether a turn belongs to the review phase of a review child session.
+///
+/// Only `CodeReview`/`DeepReview` receive the `deep_review_run_manifest`
+/// context injection (from turn metadata or persisted session metadata).
+/// `ReviewFixer` is intentionally excluded: remediation runs outside the
+/// DeepReview execution policy gates (launching it during a review pass is
+/// rejected until explicit user approval), and its scope comes from the
+/// product-surface remediation prompt rather than the review-phase manifest.
+/// Keep this list in sync with the review session primary agents resolved by
+/// the agent registry (`is_builtin_session_primary_agent`), i.e. add a new
+/// review-phase agent type here, but keep the remediation agent out.
 fn is_review_agent_type(agent_type: &str) -> bool {
     matches!(
         agent_type.to_ascii_lowercase().as_str(),

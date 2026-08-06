@@ -16,6 +16,14 @@ This file applies to DeepReview runtime internals in this directory.
   reviewer agents in `src/crates/assembly/core/src/agentic/agents`.
 - Reviewer subagents stay read-only; `ReviewFixer` is not part of the review
   pass.
+- `ReviewFixer` may only act as a session primary in the user-approved
+  remediation phase of a review child session. The agent registry resolves it
+  through the builtin primary-agent path without itself checking an approval
+  flag, so product surfaces must obtain explicit user approval before starting
+  remediation (mirroring `DeepReviewExecutionPolicy::classify_subagent`, which
+  rejects `ReviewFixer` during review execution). Do not route `ReviewFixer`
+  through review-phase manifest injection in the coordinator; its scope is
+  carried by the remediation prompt.
 - When queue or report fields change, update the matching frontend DTOs and
   DeepReview UI state.
 

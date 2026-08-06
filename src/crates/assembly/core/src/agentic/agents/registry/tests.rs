@@ -1626,7 +1626,7 @@ fn non_session_primary_subagents_and_unknown_ids_do_not_resolve() {
         .resolve_primary_agent_for_turn("does-not-exist", None, false, None)
         .is_none());
     // The external-owner guard still fails closed for review agents.
-    for agent_type in ["CodeReview", "ReviewFixer"] {
+    for agent_type in ["CodeReview", "DeepReview", "ReviewFixer"] {
         assert!(
             registry
                 .resolve_primary_agent_for_turn(
@@ -1639,6 +1639,27 @@ fn non_session_primary_subagents_and_unknown_ids_do_not_resolve() {
             "{agent_type} must fail closed for an external owner"
         );
     }
+}
+
+#[test]
+fn non_builtin_same_name_review_agent_does_not_resolve_as_session_primary() {
+    let registry = AgentRegistry::new();
+
+    // Custom-agent loading currently filters ids that conflict with builtin
+    // entries, but the session-primary allowlist is source-gated regardless:
+    // a non-Builtin entry occupying the builtin "ReviewFixer" id must fail
+    // closed instead of inheriting the builtin primary path.
+    registry.write_agents().insert(
+        "ReviewFixer".to_string(),
+        test_source_custom_entry("ReviewFixer", "shadow", CustomSubagentKind::User),
+    );
+
+    assert!(
+        registry
+            .resolve_primary_agent_for_turn("ReviewFixer", None, false, None)
+            .is_none(),
+        "a non-Builtin entry named ReviewFixer must not resolve as a session primary agent"
+    );
 }
 
 #[test]
