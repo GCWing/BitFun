@@ -262,7 +262,9 @@
       "deleteAllArchivedFailed": "删除全部已归档会话失败",
       "archiveAllFailed": "归档会话失败",
       "bulkArchiveFailed": "批量归档会话失败",
-      "bulkDeleteFailed": "批量删除会话失败"
+      "bulkDeleteFailed": "批量删除会话失败",
+      "deleteScheduledConfirmTitle": "该会话承载着定时任务",
+      "deleteScheduledConfirmMessage": "一个定时任务（如持续修复 Issue 的心跳）正在此会话中运行，删除会话将停止该任务。修复进度保存在会话之外，重新点击启动即可从断点继续。"
     },
     "scheduledJobs": {
       "title": "定时任务",

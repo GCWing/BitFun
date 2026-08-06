@@ -17,6 +17,7 @@ import { hasPendingAskUserQuestion, resolveTrackedTurn } from '../../../../../fl
 import { useSceneStore } from '../../../../stores/sceneStore';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
+import { cronAPI } from '@/infrastructure/api/service-api/CronAPI';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import {
@@ -1005,13 +1006,29 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const handleDelete = useCallback(
     async (e: React.MouseEvent, sessionId: string) => {
       e.stopPropagation();
+      // Deleting a session that hosts scheduled jobs (e.g. the continuous
+      // Issue-Fix heartbeat) also stops those jobs — silently, from the
+      // user's point of view. Surface that consequence before acting; work
+      // state lives outside the session, so restarting later resumes it.
+      try {
+        const jobs = await cronAPI.listJobs({ sessionId });
+        if (jobs.some((job) => job.enabled)) {
+          const confirmed = await confirmWarning(
+            t('nav.sessions.deleteScheduledConfirmTitle'),
+            t('nav.sessions.deleteScheduledConfirmMessage')
+          );
+          if (!confirmed) return;
+        }
+      } catch (err) {
+        log.warn('Failed to check scheduled jobs before session delete', err);
+      }
       try {
         await flowChatManager.deleteChatSession(sessionId);
       } catch (err) {
         log.error('Failed to delete session', err);
       }
     },
-    []
+    [t]
   );
 
   const handleArchive = useCallback(
