@@ -516,6 +516,65 @@ fn interactive_tui_worktrees_stay_behind_the_typed_backend() {
 }
 
 #[test]
+fn phase4_tui_management_boundaries_have_zero_legacy_owner_budget() {
+    const CHAT_ACCOUNT: &str = include_str!("../../src/modes/chat/account.rs");
+    const CHAT_HOOKS: &str = include_str!("../../src/modes/chat/external_hooks.rs");
+    const CHAT_HOOK_REVIEW: &str = include_str!("../../src/modes/chat/external_review.rs");
+    const CHAT_PROVIDER_MODELS: &str = include_str!("../../src/modes/chat/provider_models.rs");
+    const CHAT_WORKTREE: &str = include_str!("../../src/modes/chat/worktree.rs");
+    const STARTUP: &str = include_str!("../../src/ui/startup.rs");
+    const BOUNDARY_RULES: &str =
+        include_str!("../../../../../scripts/core-boundaries/rules/tui-boundary-rules.mjs");
+
+    for (path, source, marker) in [
+        ("chat/account.rs", CHAT_ACCOUNT, "crate::account::"),
+        ("chat/account.rs", CHAT_ACCOUNT, "crate::account_sync::"),
+        ("chat/external_hooks.rs", CHAT_HOOKS, "bitfun_core::"),
+        ("chat/external_review.rs", CHAT_HOOK_REVIEW, "bitfun_core::"),
+        (
+            "chat/provider_models.rs",
+            CHAT_PROVIDER_MODELS,
+            "crate::account_sync::",
+        ),
+        ("chat/worktree.rs", CHAT_WORKTREE, "bitfun_core::"),
+        ("ui/startup.rs", STARTUP, "bitfun_core::"),
+        ("ui/startup.rs", STARTUP, "CoreAgentRuntimeCompatibility"),
+        ("ui/startup.rs", STARTUP, "crate::account::"),
+        ("ui/startup.rs", STARTUP, "crate::account_sync::"),
+    ] {
+        assert!(
+            !source.contains(marker),
+            "{path} must not reference {marker}"
+        );
+    }
+
+    for budget in [
+        "'src/apps/cli/src/modes/chat/account.rs': {",
+        "'src/apps/cli/src/modes/chat/external_hooks.rs': { 'bitfun_core::': 0 }",
+        "'src/apps/cli/src/modes/chat/external_review.rs': { 'bitfun_core::': 0 }",
+        "'src/apps/cli/src/modes/chat/provider_models.rs': {",
+        "'src/apps/cli/src/modes/chat/worktree.rs': { 'bitfun_core::': 0 },",
+        "'src/apps/cli/src/ui/startup.rs': {",
+    ] {
+        assert!(
+            BOUNDARY_RULES.contains(budget),
+            "missing zero-budget rule: {budget}"
+        );
+    }
+    for zero_budget in [
+        "'crate::account::': 0",
+        "'crate::account_sync::': 0",
+        "'bitfun_core::': 0",
+        "CoreAgentRuntimeCompatibility: 0",
+    ] {
+        assert!(
+            BOUNDARY_RULES.contains(zero_budget),
+            "Phase 4 migrated owner budget must stay at zero: {zero_budget}"
+        );
+    }
+}
+
+#[test]
 fn runtime_ownership_policy_is_assembled_once_in_core() {
     const SHARED_RUNTIME: &str = include_str!("../../src/shared_runtime.rs");
     const CLI_RUNTIME: &str = include_str!("../../src/runtime/mod.rs");

@@ -476,28 +476,30 @@ impl TuiAgentClient {
         &self,
         request: ExternalSourceControlRequestV1,
     ) -> std::result::Result<ExternalSourceControlResponse, ExternalSourceOperationError> {
+        let operation_id = request.operation_id.clone();
         self.backend
             .external_source_control(ExternalSourceControlRequest {
                 workspace_path: self.workspace_path_string(),
                 request,
             })
             .await
-            .map_err(external_source_backend_error)
+            .map_err(|error| external_source_backend_error_with_id(error, Some(&operation_id)))
     }
 
     pub(crate) async fn external_source_review(
         &self,
         action: ExternalSourceReviewAction,
     ) -> std::result::Result<ExternalSourceSnapshotResponse, ExternalSourceOperationError> {
+        let operation_id = format!("tui-{}", uuid::Uuid::new_v4());
         self.backend
             .external_source_review(ExternalSourceReviewRequest {
                 workspace_path: self.workspace_path_string(),
-                operation_id: format!("tui-{}", uuid::Uuid::new_v4()),
+                operation_id: operation_id.clone(),
                 action,
             })
             .await
             .map(|response| response.0)
-            .map_err(external_source_backend_error)
+            .map_err(|error| external_source_backend_error_with_id(error, Some(&operation_id)))
     }
 
     pub(crate) async fn set_native_command_choice(
@@ -506,16 +508,17 @@ impl TuiAgentClient {
         selected_candidate_id: String,
         expected_preference_revision: u64,
     ) -> std::result::Result<SetNativeCommandChoiceResponse, ExternalSourceOperationError> {
+        let operation_id = format!("tui-{}", uuid::Uuid::new_v4());
         self.backend
             .set_native_command_choice(SetNativeCommandChoiceRequest {
                 workspace_path: self.workspace_path_string(),
-                operation_id: format!("tui-{}", uuid::Uuid::new_v4()),
+                operation_id: operation_id.clone(),
                 native_commands,
                 selected_candidate_id,
                 expected_preference_revision,
             })
             .await
-            .map_err(external_source_backend_error)
+            .map_err(|error| external_source_backend_error_with_id(error, Some(&operation_id)))
     }
 
     pub(crate) async fn expand_external_command(
@@ -529,10 +532,11 @@ impl TuiAgentClient {
         expected_preference_revision: Option<u64>,
         shell_review_decision: Option<PromptCommandShellReviewDecision>,
     ) -> std::result::Result<ExpandExternalCommandResponse, ExternalSourceOperationError> {
+        let operation_id = format!("tui-{}", uuid::Uuid::new_v4());
         self.backend
             .expand_external_command(ExpandExternalCommandRequest {
                 workspace_path: self.workspace_path_string(),
-                operation_id: format!("tui-{}", uuid::Uuid::new_v4()),
+                operation_id: operation_id.clone(),
                 command_name,
                 arguments,
                 native_commands,
@@ -543,7 +547,7 @@ impl TuiAgentClient {
                 shell_review_decision,
             })
             .await
-            .map_err(external_source_backend_error)
+            .map_err(|error| external_source_backend_error_with_id(error, Some(&operation_id)))
     }
 
     pub(crate) async fn native_hook_overview(
@@ -1559,8 +1563,15 @@ impl TuiAgentClient {
 }
 
 fn external_source_backend_error(error: TuiBackendError) -> ExternalSourceOperationError {
+    external_source_backend_error_with_id(error, None)
+}
+
+fn external_source_backend_error_with_id(
+    error: TuiBackendError,
+    operation_id: Option<&str>,
+) -> ExternalSourceOperationError {
     if let Some(decoded) = ExternalSourceOperationError::decode(&error.message) {
-        return decoded;
+        return attach_operation_id(decoded, operation_id);
     }
     let code = if error.outcome_unknown {
         ExternalSourceOperationErrorCode::Timeout
@@ -1569,8 +1580,26 @@ fn external_source_backend_error(error: TuiBackendError) -> ExternalSourceOperat
     } else {
         ExternalSourceOperationErrorCode::Internal
     };
-    ExternalSourceOperationError::new(code, error.message, error.outcome_unknown)
-        .with_default_recovery_actions()
+    let message = error.message;
+    let retryable = error.outcome_unknown;
+    attach_operation_id(
+        ExternalSourceOperationError::new(code, message, retryable).with_default_recovery_actions(),
+        operation_id,
+    )
+}
+
+fn attach_operation_id(
+    mut error: ExternalSourceOperationError,
+    operation_id: Option<&str>,
+) -> ExternalSourceOperationError {
+    if let Some(operation_id) = operation_id.filter(|id| !id.is_empty()) {
+        if error.correlation_id.is_none() {
+            error = error.with_correlation_id(operation_id);
+        } else if error.causation_id.is_none() {
+            error = error.with_causation_id(operation_id);
+        }
+    }
+    error
 }
 
 fn account_operation_id() -> String {

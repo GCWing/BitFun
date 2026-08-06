@@ -36,6 +36,7 @@ impl EmbeddedAppServerHost {
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let server_thread = std::thread::Builder::new()
             .name("bitfun-embedded-app-server".to_string())
+            .stack_size(16 * 1024 * 1024)
             .spawn(move || {
                 let runtime = tokio::runtime::Builder::new_current_thread()
                     .enable_all()

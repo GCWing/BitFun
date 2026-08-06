@@ -1027,7 +1027,7 @@ async fn run_interactive(
     if let Some(ref session_spec) = session_override {
         let restore_session_id = resolve_startup_session_override(&agent, session_spec).await?;
 
-        let mut chat_mode = ChatMode::new(config, effective_agent, workspace, agent, compatibility)
+        let mut chat_mode = ChatMode::new(config, effective_agent, workspace, agent)
             .with_restore_session(restore_session_id);
         if let Some(mid) = model_id {
             chat_mode = chat_mode.with_model(mid);
@@ -1046,7 +1046,6 @@ async fn run_interactive(
     let mut startup_page = StartupPage::new(
         config,
         Arc::clone(&agent),
-        compatibility.clone(),
         effective_agent,
         workspace.clone(),
     );

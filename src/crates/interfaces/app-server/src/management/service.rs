@@ -181,6 +181,16 @@ fn external_source_string_error(error: String) -> AppManagementError {
     )
 }
 
+fn external_source_string_error_with_id(error: String, operation_id: &str) -> AppManagementError {
+    let mut typed = bitfun_core::external_sources::sanitize_external_source_operation_error(error);
+    if typed.correlation_id.is_none() {
+        typed = typed.with_correlation_id(operation_id);
+    } else if typed.causation_id.is_none() {
+        typed = typed.with_causation_id(operation_id);
+    }
+    external_source_error(typed)
+}
+
 fn validate_external_operation(operation_id: &str) -> AppManagementResult<()> {
     validate_operation_id(operation_id).map_err(AppManagementError::invalid_request)
 }
@@ -407,7 +417,7 @@ fn model_summary(model: &bitfun_core::service::config::AIModelConfig) -> ModelSu
         custom_request_body_configured: model.custom_request_body.is_some(),
         auth_source: Some(match model.auth {
             bitfun_core::service::config::AuthConfig::ApiKey => "api_key".to_string(),
-            bitfun_core::service::config::AuthConfig::Subscription { provider } => {
+            bitfun_core::service::config::AuthConfig::Subscription { provider, .. } => {
                 format!("subscription:{provider:?}").to_ascii_lowercase()
             }
         }),
@@ -1042,6 +1052,7 @@ impl AppManagementService {
     ) -> AppManagementResult<ExternalSourceReviewResponse> {
         validate_external_operation(&request.operation_id)?;
         let workspace = Path::new(&request.workspace_path);
+        let operation_id = request.operation_id.clone();
         let result = match request.action {
             ExternalSourceReviewAction::Refresh => {
                 bitfun_core::external_sources::external_source_snapshot(Some(workspace), true).await
@@ -1137,7 +1148,7 @@ impl AppManagementService {
                 .await
             }
         };
-        result.map_err(external_source_string_error)?;
+        result.map_err(|error| external_source_string_error_with_id(error, &operation_id))?;
         Ok(ExternalSourceReviewResponse(
             external_source_snapshot_response(workspace, false).await?,
         ))
@@ -1148,6 +1159,7 @@ impl AppManagementService {
         request: SetNativeCommandChoiceRequest,
     ) -> AppManagementResult<SetNativeCommandChoiceResponse> {
         validate_external_operation(&request.operation_id)?;
+        let operation_id = request.operation_id.clone();
         let conflicts = bitfun_core::external_sources::set_native_prompt_command_conflict_choice(
             Some(Path::new(&request.workspace_path)),
             request.native_commands,
@@ -1155,7 +1167,7 @@ impl AppManagementService {
             request.expected_preference_revision,
         )
         .await
-        .map_err(external_source_string_error)?;
+        .map_err(|error| external_source_string_error_with_id(error, &operation_id))?;
         Ok(SetNativeCommandChoiceResponse {
             conflicts,
             preferences: external_source_preferences().await?,
@@ -1167,6 +1179,7 @@ impl AppManagementService {
         request: ExpandExternalCommandRequest,
     ) -> AppManagementResult<ExpandExternalCommandResponse> {
         validate_external_operation(&request.operation_id)?;
+        let operation_id = request.operation_id.clone();
         bitfun_core::external_sources::expand_external_prompt_command(
             Some(Path::new(&request.workspace_path)),
             &request.command_name,
@@ -1180,7 +1193,7 @@ impl AppManagementService {
         )
         .await
         .map(ExpandExternalCommandResponse)
-        .map_err(external_source_string_error)
+        .map_err(|error| external_source_string_error_with_id(error, &operation_id))
     }
 
     pub async fn list_agent_modes(
