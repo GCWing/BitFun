@@ -120,4 +120,27 @@ mod tests {
             "export const value = 1;"
         );
     }
+
+    /// Regression test for issue #1492: when a model leaks `<tool_calls>` XML as
+    /// plain text content instead of structured tool-call deltas, the assistant
+    /// text must be detected and stripped so the artifacts do not pollute the
+    /// next round's context and cause infinite recursion.
+    #[test]
+    fn strips_leaked_tool_calls_xml_from_assistant_text() {
+        let leaked = concat!(
+            "I'll help you with that.\n",
+            "<tool_calls>\n",
+            "<invoke name=\"Read\">\n",
+            "<parameter name=\"file_path\">src/main.rs</parameter>\n",
+            "</invoke>\n",
+            "</tool_calls>\n",
+            "Let me read the file first."
+        );
+        assert!(contains_tool_invocation_artifacts(leaked));
+        let stripped = strip_tool_invocation_artifacts(leaked);
+        assert!(!stripped.contains("<tool_calls"));
+        assert!(!stripped.contains("<invoke"));
+        assert!(stripped.contains("I'll help you with that."));
+        assert!(stripped.contains("Let me read the file first."));
+    }
 }
