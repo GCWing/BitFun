@@ -1630,3 +1630,36 @@ fn non_session_primary_subagents_and_unknown_ids_do_not_resolve() {
         )
         .is_none());
 }
+
+#[test]
+fn local_route_resolves_review_agents_as_session_primaries() {
+    let registry = AgentRegistry::new();
+    let workspace = PathBuf::from("D:/workspace/review-local-route");
+    registry.install_external_subagent_routes(
+        &workspace,
+        Vec::new(),
+        [
+            ("CodeReview".to_string(), ExternalSubagentRoute::Local),
+            ("DeepReview".to_string(), ExternalSubagentRoute::Local),
+            ("ReviewWorker".to_string(), ExternalSubagentRoute::Local),
+        ]
+        .into_iter()
+        .collect(),
+    );
+
+    for agent_type in ["CodeReview", "DeepReview"] {
+        let binding = registry
+            .resolve_primary_agent_for_turn(agent_type, Some(&workspace), true, None)
+            .unwrap_or_else(|| panic!("{agent_type} must resolve through an explicit Local route"));
+        assert_eq!(binding.runtime_agent_key, agent_type);
+        assert_eq!(
+            binding.route_owner,
+            bitfun_core_types::SessionAgentRouteOwner::Local
+        );
+    }
+
+    // Non-session-primary subagents stay restricted even under a Local route.
+    assert!(registry
+        .resolve_primary_agent_for_turn("ReviewWorker", Some(&workspace), true, None)
+        .is_none());
+}

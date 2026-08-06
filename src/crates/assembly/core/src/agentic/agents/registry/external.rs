@@ -438,10 +438,23 @@ impl AgentRegistry {
                     .cloned()
                 {
                     let binding = match route {
-                        ExternalSubagentRoute::Local => self
-                            .find_agent_entry(logical_id, Some(workspace_root))
-                            .filter(|entry| entry.category == AgentCategory::Mode)
-                            .map(|entry| local_primary_binding(entry.agent.id())),
+                        ExternalSubagentRoute::Local => {
+                            match self.find_agent_entry(logical_id, Some(workspace_root)) {
+                                Some(entry) if is_local_session_primary_entry(&entry) => {
+                                    Some(local_primary_binding(entry.agent.id()))
+                                }
+                                Some(entry) => {
+                                    warn!(
+                                        "Session primary agent resolution rejected a registered non-mode agent under a Local route: logical_id={}, category={:?}, source={:?}",
+                                        logical_id,
+                                        entry.category,
+                                        entry.source
+                                    );
+                                    None
+                                }
+                                None => None,
+                            }
+                        }
                         ExternalSubagentRoute::External(runtime_key) => {
                             self.external_subagents.acquire_primary(&runtime_key)
                         }
@@ -457,11 +470,7 @@ impl AgentRegistry {
             return None;
         }
         match self.find_agent_entry(logical_id, workspace_root) {
-            Some(entry)
-                if entry.category == AgentCategory::Mode
-                    || (entry.source == AgentSource::Builtin
-                        && is_builtin_session_primary_agent(entry.agent.id())) =>
-            {
+            Some(entry) if is_local_session_primary_entry(&entry) => {
                 Some(local_primary_binding(entry.agent.id()))
             }
             Some(entry) => {
@@ -610,6 +619,18 @@ fn local_binding(logical_id: &str, runtime_agent_key: &str) -> ExternalSubagentI
 /// compaction. Other subagents (e.g. `ReviewWorker`) stay restricted.
 fn is_builtin_session_primary_agent(id: &str) -> bool {
     matches!(id, CODE_REVIEW_AGENT_TYPE | DEEP_REVIEW_AGENT_TYPE)
+}
+
+/// Whether a locally-resolved agent entry may act as a session primary agent.
+///
+/// Used by both the explicit `ExternalSubagentRoute::Local` branch and the
+/// no-route fallback so review child sessions (CodeReview/DeepReview) resolve
+/// identically regardless of whether a workspace route table pins them to the
+/// local implementation.
+fn is_local_session_primary_entry(entry: &AgentEntry) -> bool {
+    entry.category == AgentCategory::Mode
+        || (entry.source == AgentSource::Builtin
+            && is_builtin_session_primary_agent(entry.agent.id()))
 }
 
 fn local_primary_binding(runtime_agent_key: &str) -> ExternalPrimaryAgentTurnBinding {
