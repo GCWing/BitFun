@@ -4,7 +4,8 @@ use crate::agentic::agents::{
     Agent, AgenticMode, ClawMode, CodeReviewAgent, ComputerUseMode, CoworkMode, DebugMode,
     DeepResearchMode, DeepReviewAgent, ExploreAgent, FileFinderAgent, GeneralPurposeAgent,
     GenerateDocAgent, MultitaskMode, PlanMode, ResearchSpecialistAgent, ReviewFixerAgent,
-    ReviewJudgeAgent, ReviewWorkerAgent, TeamMode,
+    ReviewJudgeAgent, ReviewWorkerAgent, SwarmPlannerAgent, SwarmReviewerAgent, SwarmWorkerAgent,
+    TeamMode, UltraMode,
 };
 use crate::agentic::memories::MemoryPhase2Agent;
 use bitfun_agent_runtime::agents as runtime_agents;
@@ -38,6 +39,10 @@ fn builtin_agent_factory(id: &str) -> fn() -> Arc<dyn Agent> {
         "Claw" => || Arc::new(ClawMode::new()),
         "DeepResearch" => || Arc::new(DeepResearchMode::new()),
         "Team" => || Arc::new(TeamMode::new()),
+        "Ultra" => || Arc::new(UltraMode::new()),
+        "SwarmPlanner" => || Arc::new(SwarmPlannerAgent::new()),
+        "SwarmWorker" => || Arc::new(SwarmWorkerAgent::new()),
+        "SwarmReviewer" => || Arc::new(SwarmReviewerAgent::new()),
         "ComputerUse" => || Arc::new(ComputerUseMode::new()),
         "Explore" => || Arc::new(ExploreAgent::new()),
         "GeneralPurpose" => || Arc::new(GeneralPurposeAgent::new()),

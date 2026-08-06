@@ -1358,7 +1358,7 @@ impl CoreAgentRuntimeCompatibility {
         subagent_session_id: &str,
     ) -> BitFunResult<usize> {
         self.coordinator
-            .cancel_background_subagents_for_parent(parent_session_id, subagent_session_id)
+            .cancel_background_subagents_for_parent(parent_session_id, subagent_session_id, true)
             .await
     }
 

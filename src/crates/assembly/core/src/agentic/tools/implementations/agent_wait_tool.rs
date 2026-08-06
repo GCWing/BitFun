@@ -163,7 +163,7 @@ impl Tool for AgentWaitTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok("Wait for background subagent results.
+        Ok("Wait for background agent results.
 Set wait_mode to `any` to return after any selected task completes, or `all` to wait for every selected task.
 Provide bg_task_ids when known; omit it or pass [] to select all unconsumed background tasks.
 The selected task set is fixed when the call starts. wait_mode defaults to `all`; the tool also returns when `timeout_ms` has elapsed.".to_string())
@@ -180,7 +180,7 @@ The selected task set is fixed when the call starts. wait_mode defaults to `all`
                 "bg_task_ids": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "Optional background task IDs returned by Task tool. Omit this field or pass [] to select all unconsumed background subagent results."
+                    "description": "Optional background task IDs. Omit this field or pass [] to select all unconsumed background agent results."
                 },
                 "wait_mode": {
                     "type": "string",

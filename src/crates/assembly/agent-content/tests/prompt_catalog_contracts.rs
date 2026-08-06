@@ -114,8 +114,24 @@ const CATALOG_PROMPT_SOURCES: &[(&str, &[u8])] = &[
         include_bytes!("../prompts/agents/review_worker_agent.md"),
     ),
     (
+        "swarm_planner_agent",
+        include_bytes!("../prompts/agents/swarm_planner_agent.md"),
+    ),
+    (
+        "swarm_reviewer_agent",
+        include_bytes!("../prompts/agents/swarm_reviewer_agent.md"),
+    ),
+    (
+        "swarm_worker_agent",
+        include_bytes!("../prompts/agents/swarm_worker_agent.md"),
+    ),
+    (
         "team_mode",
         include_bytes!("../prompts/agents/team_mode.md"),
+    ),
+    (
+        "ultra_mode",
+        include_bytes!("../prompts/agents/ultra_mode.md"),
     ),
 ];
 
@@ -147,6 +163,23 @@ fn agent_prompt_catalog_preserves_every_stable_key() {
     }
 
     assert_eq!(agent_prompt("unknown_prompt"), None);
+}
+
+#[test]
+fn swarm_planner_prompts_define_the_closed_agent_spawn_catalog() {
+    for prompt_name in ["ultra_mode", "swarm_planner_agent"] {
+        let prompt = agent_prompt(prompt_name).expect("Swarm planner prompt");
+        for agent_type in ["SwarmPlanner", "SwarmWorker", "SwarmReviewer"] {
+            assert!(
+                prompt.contains(&format!("`{agent_type}`")),
+                "{prompt_name} must name {agent_type}"
+            );
+        }
+        assert!(prompt.contains("AgentSpawn accepts exactly these `agent_type` values"));
+        assert!(!prompt.contains("<available_agents>"));
+        assert!(!prompt.contains("GeneralPurpose"));
+        assert!(!prompt.contains("Explore"));
+    }
 }
 
 #[test]

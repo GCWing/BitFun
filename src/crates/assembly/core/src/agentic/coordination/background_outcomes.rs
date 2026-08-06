@@ -489,6 +489,49 @@ impl BackgroundSubagentOutcomeStore {
             .await
     }
 
+    pub(crate) async fn reserve_swarm_child(
+        &self,
+        parent_session_id: &str,
+        child_session_id: &str,
+        parent_agent_type: &str,
+        child_agent_type: &str,
+        child_depth: u8,
+    ) -> BitFunResult<()> {
+        self.coordination_store
+            .reserve_swarm_child(
+                parent_session_id,
+                child_session_id,
+                parent_agent_type,
+                child_agent_type,
+                child_depth,
+            )
+            .await
+    }
+
+    pub(crate) async fn rollback_swarm_child(&self, child_session_id: &str) -> BitFunResult<()> {
+        self.coordination_store
+            .rollback_swarm_child(child_session_id)
+            .await
+    }
+
+    pub(crate) async fn swarm_depth_for_session(
+        &self,
+        session_id: &str,
+    ) -> BitFunResult<Option<u8>> {
+        self.coordination_store
+            .swarm_depth_for_session(session_id)
+            .await
+    }
+
+    pub(crate) async fn swarm_descendant_session_ids(
+        &self,
+        session_id: &str,
+    ) -> BitFunResult<Vec<String>> {
+        self.coordination_store
+            .swarm_descendant_session_ids(session_id)
+            .await
+    }
+
     pub(crate) async fn delete_session_references(&self, session_id: &str) -> BitFunResult<()> {
         let deleted_task_pks = self
             .coordination_store

@@ -86,6 +86,7 @@ pub(super) struct TaskInvocation {
     pub(super) run_in_background: bool,
     pub(super) is_retry: bool,
     pub(super) requested_auto_retry: bool,
+    pub(super) cancel_descendants: bool,
 }
 
 impl TaskTool {
@@ -132,6 +133,7 @@ impl TaskTool {
                     .get("auto_retry")
                     .and_then(Value::as_bool)
                     .unwrap_or(false),
+                cancel_descendants: false,
             });
         }
 
@@ -198,6 +200,7 @@ impl TaskTool {
                     run_in_background,
                     is_retry: false,
                     requested_auto_retry: false,
+                    cancel_descendants: false,
                 })
             }
             TaskAction::SendInput => {
@@ -231,10 +234,13 @@ impl TaskTool {
                     run_in_background,
                     is_retry: false,
                     requested_auto_retry: false,
+                    cancel_descendants: false,
                 })
             }
             TaskAction::Cancel => {
                 let target_agent_id = Self::required_string_for_action(input, "agent_id", action)?;
+                let cancel_descendants =
+                    Self::optional_bool(input, "cancel_descendants")?.unwrap_or(true);
                 Self::ensure_fields_absent(
                     input,
                     &[
@@ -263,6 +269,7 @@ impl TaskTool {
                     run_in_background: false,
                     is_retry: false,
                     requested_auto_retry: false,
+                    cancel_descendants,
                 })
             }
         }

@@ -12,10 +12,11 @@ use crate::agentic::WorkspaceBinding;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 pub use bitfun_agent_runtime::agents::{
-    mode_config_profile_label, mode_config_profile_member_mode_ids, mode_presentation_rank,
-    resolve_mode_config_profile_id, shared_coding_mode_user_context_policy,
-    SHARED_CODING_MODE_CONFIG_PROFILE_ID, SHARED_CODING_MODE_CONFIG_PROFILE_LABEL,
-    SHARED_CODING_MODE_IDS, SHARED_CODING_MODE_PROMPT_TEMPLATE,
+    is_swarm_delegate_agent_type, is_swarm_planner_agent_type, mode_config_profile_label,
+    mode_config_profile_member_mode_ids, mode_presentation_rank, resolve_mode_config_profile_id,
+    shared_coding_mode_user_context_policy, SHARED_CODING_MODE_CONFIG_PROFILE_ID,
+    SHARED_CODING_MODE_CONFIG_PROFILE_LABEL, SHARED_CODING_MODE_IDS,
+    SHARED_CODING_MODE_PROMPT_TEMPLATE, SWARM_DELEGATE_AGENT_TYPES, SWARM_PLANNER_AGENT_TYPES,
 };
 pub use bitfun_agent_runtime::custom_agent::{
     custom_agent_model_or_default, custom_agent_review_writable_tools, default_custom_agent_tools,
@@ -28,12 +29,13 @@ pub(crate) use definitions::external::ExternalProvidedAgent;
 pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent};
 pub use definitions::modes::{
     AgenticMode, ClawMode, CoworkMode, DebugMode, DeepResearchMode, MultitaskMode, PlanMode,
-    TeamMode,
+    TeamMode, UltraMode,
 };
 pub use definitions::review::{ReviewFixerAgent, ReviewJudgeAgent, ReviewWorkerAgent};
 pub use definitions::shared::ReadonlySubagent;
 pub use definitions::subagents::{
     ComputerUseMode, ExploreAgent, FileFinderAgent, GeneralPurposeAgent, ResearchSpecialistAgent,
+    SwarmPlannerAgent, SwarmReviewerAgent, SwarmWorkerAgent,
 };
 use indexmap::IndexMap;
 pub use prompt_builder::{

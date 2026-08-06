@@ -12,7 +12,9 @@ use super::{
     turn_settlement::TurnSettlementTracker,
     BackgroundSubagentOutcomeStore, BackgroundSubagentWaitMode, BackgroundSubagentWaitResult,
 };
-use crate::agentic::agents::{get_agent_registry, ExternalSubagentModelBinding};
+use crate::agentic::agents::{
+    get_agent_registry, is_swarm_planner_agent_type, ExternalSubagentModelBinding,
+};
 use crate::agentic::context_profile::ContextProfilePolicy;
 use crate::agentic::core::{
     InternalReminderKind, Message, MessageContent, MessageSemanticKind, ProcessingPhase, Session,
@@ -133,6 +135,7 @@ const MANUAL_COMPACTION_COMMAND: &str = "/compact";
 const CONTEXT_COMPRESSION_TOOL_NAME: &str = "ContextCompression";
 const TASK_TOOL_NAME: &str = "Task";
 const DEFAULT_SUBAGENT_MAX_CONCURRENCY: usize = 5;
+const DEFAULT_SWARM_MAX_CONCURRENCY: usize = 16;
 const MAX_SUBAGENT_MAX_CONCURRENCY: usize = 64;
 const SUBAGENT_TIMEOUT_GRACE_PERIOD: Duration = Duration::from_secs(10);
 const SESSION_REFERENCES_METADATA_KEY: &str = "sessionReferences";
@@ -963,6 +966,28 @@ fn normalize_subagent_max_concurrency(raw: usize) -> usize {
     raw.clamp(1, MAX_SUBAGENT_MAX_CONCURRENCY)
 }
 
+fn delegation_policy_for_agent_turn(
+    agent_type: &str,
+    swarm_depth: Option<u8>,
+) -> BitFunResult<DelegationPolicy> {
+    match agent_type {
+        "Ultra" => Ok(DelegationPolicy::swarm_root()),
+        "SwarmPlanner" => {
+            let nesting_depth = swarm_depth.ok_or_else(|| {
+                BitFunError::tool(
+                    "SwarmPlanner session is missing its persisted tree node".to_string(),
+                )
+            })?;
+            Ok(DelegationPolicy {
+                allow_subagent_spawn: true,
+                nesting_depth,
+                scope: bitfun_runtime_ports::DelegationScope::Swarm,
+            })
+        }
+        _ => Ok(DelegationPolicy::top_level()),
+    }
+}
+
 /// Actions for dynamically adjusting a subagent's timeout.
 #[derive(Debug, Clone)]
 pub enum SubagentTimeoutAction {
@@ -1086,7 +1111,7 @@ fn lineage_post_admission_cancellation_error(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DialogTurnStopDisposition {
+pub(crate) enum DialogTurnStopDisposition {
     Cancelled,
     Interrupted,
 }
@@ -1154,6 +1179,7 @@ pub struct ConversationCoordinator {
     event_queue: Arc<EventQueue>,
     event_router: Arc<EventRouter>,
     subagent_concurrency_limiter: Arc<RwLock<Option<SubagentConcurrencyLimiter>>>,
+    swarm_concurrency_limiter: Arc<RwLock<Option<SubagentConcurrencyLimiter>>>,
     subagent_profile_concurrency_limiters: Arc<RwLock<HashMap<usize, SubagentConcurrencyLimiter>>>,
     /// Registry for dynamically adjusting subagent timeouts.
     subagent_timeout_registry: Arc<RwLock<HashMap<String, Arc<SubagentTimeoutHandle>>>>,
@@ -2212,6 +2238,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             event_queue,
             event_router,
             subagent_concurrency_limiter: Arc::new(RwLock::new(None)),
+            swarm_concurrency_limiter: Arc::new(RwLock::new(None)),
             subagent_profile_concurrency_limiters: Arc::new(RwLock::new(HashMap::new())),
             subagent_timeout_registry: Arc::new(RwLock::new(HashMap::new())),
             active_subagent_executions: Arc::new(DashMap::new()),
@@ -3720,7 +3747,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 &mut prepended_messages,
                 allow_skill_agent_listing_reminders,
                 diff.render_skill_listing_update(),
-                diff.render_agent_listing_update(),
+                (!is_swarm_planner_agent_type(agent_type))
+                    .then(|| diff.render_agent_listing_update())
+                    .flatten(),
             );
             if diff.is_empty() {
                 SkillAgentSnapshotPersistence::None
@@ -5695,6 +5724,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let runtime_agent_type = primary_agent_binding.runtime_agent_key.clone();
         let external_agent_generation_lease = primary_agent_binding.lease;
 
+        // Resolve Swarm lineage before creating or mutating any turn state. A
+        // persisted SwarmPlanner without its tree node cannot safely recover
+        // its delegation depth and must fail closed without leaving the
+        // Session in Processing.
+        let swarm_depth = if effective_agent_type == "SwarmPlanner" {
+            self.swarm_depth_for_session(&session_id).await?
+        } else {
+            None
+        };
+        let delegation_policy =
+            delegation_policy_for_agent_turn(&effective_agent_type, swarm_depth)?;
+
         Self::track_session_workspace_activity_best_effort(
             &session.config,
             WorkspaceActivityMode::TouchOnly,
@@ -6417,7 +6458,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             subagent_parent_info: persisted_subagent_context.subagent_parent_info,
             permission_delegation: persisted_subagent_context.permission_delegation,
             permission_runtime_ceiling: None,
-            delegation_policy: DelegationPolicy::top_level(),
+            delegation_policy,
             runtime_tool_restrictions,
             workspace_services,
             terminal_port: self.terminal_port(),
@@ -7375,7 +7416,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         .await
     }
 
-    async fn cancel_dialog_turn_with_descendant_policy(
+    pub(crate) async fn cancel_dialog_turn_with_descendant_policy(
         &self,
         session_id: &str,
         dialog_turn_id: &str,
@@ -9024,6 +9065,52 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         limiter
     }
 
+    async fn get_swarm_concurrency_limiter(&self) -> SubagentConcurrencyLimiter {
+        let configured = match GlobalConfigManager::get_service().await {
+            Ok(config_service) => match config_service
+                .get_config::<usize>(Some("ai.swarm_max_concurrency"))
+                .await
+            {
+                Ok(value) => value,
+                Err(error) => {
+                    warn!(
+                        "Failed to read ai.swarm_max_concurrency, using default {}: {}",
+                        DEFAULT_SWARM_MAX_CONCURRENCY, error
+                    );
+                    DEFAULT_SWARM_MAX_CONCURRENCY
+                }
+            },
+            Err(error) => {
+                warn!(
+                    "Config service unavailable while reading ai.swarm_max_concurrency, using default {}: {}",
+                    DEFAULT_SWARM_MAX_CONCURRENCY, error
+                );
+                DEFAULT_SWARM_MAX_CONCURRENCY
+            }
+        };
+        let normalized = normalize_subagent_max_concurrency(configured);
+        {
+            let guard = self.swarm_concurrency_limiter.read().await;
+            if let Some(limiter) = guard.as_ref() {
+                if limiter.max_concurrency == normalized {
+                    return limiter.clone();
+                }
+            }
+        }
+        let mut guard = self.swarm_concurrency_limiter.write().await;
+        if let Some(limiter) = guard.as_ref() {
+            if limiter.max_concurrency == normalized {
+                return limiter.clone();
+            }
+        }
+        let limiter = SubagentConcurrencyLimiter {
+            semaphore: Arc::new(Semaphore::new(normalized)),
+            max_concurrency: normalized,
+        };
+        *guard = Some(limiter.clone());
+        limiter
+    }
+
     async fn acquire_permit_from_limiter(
         &self,
         limiter: &SubagentConcurrencyLimiter,
@@ -9102,6 +9189,20 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         u128,
     )> {
         let started_waiting = Instant::now();
+
+        if agent_type == "SwarmPlanner" {
+            return Ok((Vec::new(), 0));
+        }
+        if matches!(agent_type, "SwarmWorker" | "SwarmReviewer") {
+            let limiter = self.get_swarm_concurrency_limiter().await;
+            let permit = self
+                .acquire_permit_from_limiter(&limiter, agent_type, cancel_token, deadline, "swarm")
+                .await?;
+            return Ok((
+                vec![(permit, limiter)],
+                started_waiting.elapsed().as_millis(),
+            ));
+        }
 
         let profile_limiter = self
             .get_subagent_profile_concurrency_limiter(profile_concurrency_cap)
@@ -11303,19 +11404,41 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         &self,
         parent_session_id: &str,
         subagent_session_id: &str,
+        cancel_descendants: bool,
     ) -> BitFunResult<usize> {
         self.ensure_subagent_session_loaded_for_reuse(subagent_session_id, parent_session_id)
             .await?;
 
+        let descendant_session_ids = if cancel_descendants {
+            let mut descendant_session_ids =
+                self.active_background_descendant_session_ids(subagent_session_id);
+            match self
+                .background_subagent_outcomes
+                .swarm_descendant_session_ids(subagent_session_id)
+                .await
+            {
+                Ok(persisted_descendants) => descendant_session_ids.extend(persisted_descendants),
+                Err(error) => warn!(
+                    "Failed to load persisted Swarm descendants during cascading cancellation: session_id={}, error={}",
+                    subagent_session_id, error
+                ),
+            }
+            descendant_session_ids
+        } else {
+            std::collections::HashSet::new()
+        };
         let controls = self.claim_background_subagent_controls(|control| {
-            control.parent_session_id == parent_session_id
-                && control.subagent_session_id == subagent_session_id
+            (control.parent_session_id == parent_session_id
+                && control.subagent_session_id == subagent_session_id)
+                || descendant_session_ids.contains(&control.subagent_session_id)
         });
         let task_pks = controls
             .iter()
             .map(|(task_pk, _)| *task_pk)
             .collect::<Vec<_>>();
-        let cancelled = self.cancel_background_subagent_controls(controls).await?;
+        let cancelled = self
+            .cancel_background_subagent_controls(controls, cancel_descendants)
+            .await?;
         self.background_subagent_outcomes.cancel(&task_pks).await;
         Ok(cancelled)
     }
@@ -11335,7 +11458,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .iter()
             .map(|(task_pk, _)| *task_pk)
             .collect::<Vec<_>>();
-        self.cancel_background_subagent_controls(controls).await?;
+        self.cancel_background_subagent_controls(controls, true)
+            .await?;
         self.background_subagent_outcomes.cancel(&task_pks).await;
         Ok(subagent_session_ids)
     }
@@ -11381,6 +11505,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
     }
 
+    pub(crate) async fn swarm_depth_for_session(
+        &self,
+        session_id: &str,
+    ) -> BitFunResult<Option<u8>> {
+        self.background_subagent_outcomes
+            .swarm_depth_for_session(session_id)
+            .await
+    }
+
     fn claim_background_subagent_controls(
         &self,
         matches: impl Fn(&BackgroundSubagentTaskControl) -> bool,
@@ -11406,9 +11539,29 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .collect()
     }
 
+    fn active_background_descendant_session_ids(
+        &self,
+        root_session_id: &str,
+    ) -> std::collections::HashSet<String> {
+        let mut descendants = std::collections::HashSet::new();
+        let mut frontier = vec![root_session_id.to_string()];
+        while let Some(parent_session_id) = frontier.pop() {
+            for entry in self.background_subagent_tasks.iter() {
+                let control = entry.value();
+                if control.parent_session_id == parent_session_id
+                    && descendants.insert(control.subagent_session_id.clone())
+                {
+                    frontier.push(control.subagent_session_id.clone());
+                }
+            }
+        }
+        descendants
+    }
+
     async fn cancel_background_subagent_controls(
         &self,
         controls: Vec<(i64, BackgroundSubagentTaskControl)>,
+        cancel_descendants: bool,
     ) -> BitFunResult<usize> {
         for (task_pk, control) in &controls {
             debug!(
@@ -11418,7 +11571,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             match &control.cancel_target {
                 BackgroundSubagentCancelTarget::Scheduler(handle) => {
                     if let Some(scheduler) = get_global_scheduler() {
-                        scheduler.request_hidden_subagent_cancellation(handle).await;
+                        scheduler
+                            .request_hidden_subagent_cancellation_with_descendant_policy(
+                                handle,
+                                cancel_descendants,
+                            )
+                            .await;
                     } else {
                         warn!(
                             "Cannot cancel scheduler-backed background subagent because scheduler is unavailable: task_pk={}, subagent_session_id={}",
@@ -11553,6 +11711,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let mut request = self
             .prepare_hidden_subagent_execution_request(request)
             .await?;
+        let is_swarm =
+            request.delegation_policy.scope == bitfun_runtime_ports::DelegationScope::Swarm;
         if tool_cancellation_token
             .as_ref()
             .is_some_and(CancellationToken::is_cancelled)
@@ -11583,7 +11743,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 ));
             }
         };
-        let _parent_session = match self
+        let parent_session = match self
             .session_manager
             .get_session(&subagent_parent_info.session_id)
         {
@@ -11597,9 +11757,33 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 )));
             }
         };
+        let is_new_swarm_node = is_swarm && request.prepared_session_created;
+        if is_new_swarm_node {
+            if let Err(error) = self
+                .background_subagent_outcomes
+                .reserve_swarm_child(
+                    &subagent_parent_info.session_id,
+                    &subagent_session_id,
+                    &parent_session.agent_type,
+                    &request.logical_agent_type,
+                    request.delegation_policy.nesting_depth,
+                )
+                .await
+            {
+                self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
+                    .await;
+                return Err(error);
+            }
+        }
         let coordinator = match get_global_coordinator() {
             Some(coordinator) => coordinator,
             None => {
+                if is_new_swarm_node {
+                    let _ = self
+                        .background_subagent_outcomes
+                        .rollback_swarm_child(&subagent_session_id)
+                        .await;
+                }
                 self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
                     .await;
                 return Err(BitFunError::service(
@@ -11621,6 +11805,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         {
             Ok(registered_task) => registered_task,
             Err(error) => {
+                if is_new_swarm_node {
+                    let _ = self
+                        .background_subagent_outcomes
+                        .rollback_swarm_child(&subagent_session_id)
+                        .await;
+                }
                 self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
                     .await;
                 return Err(error);
@@ -11641,14 +11831,27 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
             self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
                 .await;
+            if is_new_swarm_node {
+                let _ = self
+                    .background_subagent_outcomes
+                    .rollback_swarm_child(&subagent_session_id)
+                    .await;
+            }
             return Err(BitFunError::Cancelled(
                 "Background subagent start was cancelled".to_string(),
             ));
         }
-        let parent_cancel_token = self
-            .execution_engine
-            .cancel_token_for_dialog_turn(&subagent_parent_info.dialog_turn_id)
-            .map(|token| token.child_token());
+        let parent_cancel_token = (!is_swarm)
+            .then(|| {
+                self.execution_engine
+                    .cancel_token_for_dialog_turn(&subagent_parent_info.dialog_turn_id)
+                    .map(|token| token.child_token())
+            })
+            .flatten();
+        // A Swarm child is independent once its background launch has been
+        // accepted. Cancellation still prevents an unaccepted launch above,
+        // but it must not become a lifetime link to the parent Planner turn.
+        let tool_cancellation_token = (!is_swarm).then_some(tool_cancellation_token).flatten();
 
         if let Some(scheduler) = get_global_scheduler() {
             let submit_result = match scheduler
@@ -11667,6 +11870,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     }
                     self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
                         .await;
+                    if is_new_swarm_node {
+                        let _ = self
+                            .background_subagent_outcomes
+                            .rollback_swarm_child(&subagent_session_id)
+                            .await;
+                    }
                     return Err(BitFunError::tool(error));
                 }
             };
@@ -14267,8 +14476,8 @@ mod tests {
     use super::{
         append_skill_agent_listing_diff_reminders, apply_primary_agent_model_default,
         btw_session_memory_mode, build_subagent_session_relationship,
-        commit_interrupted_turn_intent, lineage_active_turn_after_transcript,
-        lineage_post_admission_cancellation_error,
+        commit_interrupted_turn_intent, delegation_policy_for_agent_turn,
+        lineage_active_turn_after_transcript, lineage_post_admission_cancellation_error,
         lineage_session_is_settling_without_active_state, logical_subagent_type_or_runtime,
         merge_prepended_messages_for_turn, normalize_subagent_max_concurrency,
         permission_mode_from_metadata, resolve_agent_session_create_created_by,
@@ -14458,6 +14667,34 @@ mod tests {
             Some(&ExternalSubagentModelBinding::InheritParent),
         );
         assert_eq!(inherited.model_id, None);
+    }
+
+    #[test]
+    fn agent_turn_delegation_policy_recovers_swarm_scope_and_depth() {
+        let ultra = delegation_policy_for_agent_turn("Ultra", None)
+            .expect("Ultra should start a Swarm tree");
+        assert!(ultra.allow_subagent_spawn);
+        assert_eq!(ultra.nesting_depth, 0);
+        assert_eq!(ultra.scope, bitfun_runtime_ports::DelegationScope::Swarm);
+
+        let planner = delegation_policy_for_agent_turn("SwarmPlanner", Some(2))
+            .expect("a persisted planner should recover its tree depth");
+        assert!(planner.allow_subagent_spawn);
+        assert_eq!(planner.nesting_depth, 2);
+        assert_eq!(planner.scope, bitfun_runtime_ports::DelegationScope::Swarm);
+
+        let worker = delegation_policy_for_agent_turn("SwarmWorker", Some(2))
+            .expect("workers use the standard non-recursive turn policy");
+        assert_eq!(worker, DelegationPolicy::top_level());
+    }
+
+    #[test]
+    fn swarm_planner_turn_fails_closed_without_persisted_depth() {
+        let error = delegation_policy_for_agent_turn("SwarmPlanner", None)
+            .expect_err("a planner without a persisted tree node must not execute");
+        assert!(error
+            .to_string()
+            .contains("missing its persisted tree node"));
     }
 
     #[test]

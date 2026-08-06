@@ -82,6 +82,13 @@ fn subagent_batch_policy_preserves_task_concurrency_contract() {
         0,
         SubagentBatchExecutionPolicy::Serial,
     ));
+
+    assert!(tool_call_concurrency_safe_for_batch(
+        "AgentSpawn",
+        false,
+        2,
+        SubagentBatchExecutionPolicy::ForceParallel,
+    ));
 }
 
 #[test]

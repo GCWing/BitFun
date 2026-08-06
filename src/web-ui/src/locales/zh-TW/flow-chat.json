@@ -885,7 +885,8 @@
       "Cowork": "協作模式：先澄清再推進，輕量跟蹤進度，隨時驗證結果",
       "ComputerUse": "獨立電腦操作智能體：感知本機環境，操作應用、瀏覽器與系統介面",
       "DeepResearch": "深度研究：並行派發多個子 Agent 同時調研不同章節，快速生成高質量研究報告",
-      "Team": "虛擬工程團隊：CEO、工程經理、設計師、QA 負責人、安全官、發佈工程師 — 按完整衝刺流程協同工作"
+      "Team": "虛擬工程團隊：CEO、工程經理、設計師、QA 負責人、安全官、發佈工程師 — 按完整衝刺流程協同工作",
+      "Ultra": "群體規劃模式：適合複雜任務，可能並行發起較多模型請求，從而增加 API 成本和供應商限流壓力"
     },
     "modeNames": {
       "agentic": "Agentic",
@@ -896,7 +897,8 @@
       "Cowork": "Cowork",
       "ComputerUse": "Computer Use",
       "DeepResearch": "Deep Research",
-      "Team": "Team"
+      "Team": "Team",
+      "Ultra": "Ultra"
     },
     "openFolder": "開啟資料夾…",
     "selectWorkspaceTitle": "選擇工作區目錄",

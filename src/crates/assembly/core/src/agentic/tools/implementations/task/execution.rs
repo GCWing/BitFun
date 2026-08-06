@@ -1,4 +1,5 @@
 use super::*;
+use crate::agentic::agents::{is_swarm_delegate_agent_type, is_swarm_planner_agent_type};
 use crate::agentic::core::{SessionContinuationPolicy, SessionModelBindingPolicy};
 
 fn resolve_focused_review_model_selection(
@@ -112,6 +113,43 @@ struct BackgroundTaskStartRequest<'a> {
     external_generation_lease: Option<crate::agentic::agents::ExternalSubagentGenerationLease>,
 }
 
+async fn child_delegation_policy(
+    context: &ToolUseContext,
+    coordinator: &crate::agentic::coordination::ConversationCoordinator,
+    subagent_type: Option<&str>,
+    target_session_id: Option<&str>,
+) -> BitFunResult<bitfun_runtime_ports::DelegationPolicy> {
+    let target_type = target_session_id
+        .and_then(|session_id| coordinator.get_session_manager().get_session(session_id))
+        .map(|session| session.agent_type);
+    let parent_policy = context.delegation_policy();
+    if parent_policy.scope == bitfun_runtime_ports::DelegationScope::Swarm {
+        if let Some(target_type) = target_type.as_deref() {
+            let target_depth = match target_session_id {
+                Some(session_id) => coordinator
+                    .swarm_depth_for_session(session_id)
+                    .await?
+                    .ok_or_else(|| {
+                        BitFunError::tool(
+                            "Swarm agent session is missing its persisted tree node".to_string(),
+                        )
+                    })?,
+                None => parent_policy.nesting_depth,
+            };
+            return Ok(bitfun_runtime_ports::DelegationPolicy {
+                allow_subagent_spawn: target_type == "SwarmPlanner",
+                nesting_depth: target_depth,
+                scope: bitfun_runtime_ports::DelegationScope::Swarm,
+            });
+        }
+    }
+    Ok(context.delegation_policy().spawn_child_for(
+        subagent_type
+            .or(target_type.as_deref())
+            .unwrap_or("SwarmWorker"),
+    ))
+}
+
 impl TaskTool {
     async fn derive_parent_permission_runtime_ceiling(
         context: &ToolUseContext,
@@ -199,7 +237,11 @@ impl TaskTool {
             .resolve_agent_id(parent_session_id, agent_id)
             .await?;
         let cancelled_count = coordinator
-            .cancel_background_subagents_for_parent(parent_session_id, &target_session_id)
+            .cancel_background_subagents_for_parent(
+                parent_session_id,
+                &target_session_id,
+                invocation.cancel_descendants,
+            )
             .await?;
 
         Ok(vec![ToolResult::Result {
@@ -207,6 +249,7 @@ impl TaskTool {
                 "action": "cancel",
                 "status": "cancelled",
                 "agent_id": agent_id,
+                "cascade": invocation.cancel_descendants,
                 "cancelled_background_tasks": cancelled_count,
             }),
             result_for_assistant: Some(format!(
@@ -240,6 +283,38 @@ impl TaskTool {
             Some(agent_id) => Some(coordinator.resolve_agent_id(&session_id, agent_id).await?),
             None => None,
         };
+        let parent_is_swarm_planner = context
+            .agent_type
+            .as_deref()
+            .is_some_and(is_swarm_planner_agent_type);
+        if let Some(requested_type) = invocation.subagent_type.as_deref() {
+            let requested_is_swarm = is_swarm_delegate_agent_type(requested_type);
+            if parent_is_swarm_planner && !requested_is_swarm {
+                return Err(BitFunError::tool(format!(
+                    "Swarm planners may launch only SwarmPlanner, SwarmWorker, or SwarmReviewer; got {requested_type}"
+                )));
+            }
+            if !parent_is_swarm_planner && requested_is_swarm {
+                return Err(BitFunError::tool(format!(
+                    "agent_type {requested_type} is available only inside an Ultra Swarm"
+                )));
+            }
+        }
+        if let Some(target_session_id) = target_session_id.as_deref() {
+            let target_agent_type = coordinator
+                .get_session_manager()
+                .get_session(target_session_id)
+                .map(|session| session.agent_type)
+                .ok_or_else(|| {
+                    BitFunError::tool("Target agent session was not found".to_string())
+                })?;
+            let target_is_swarm = is_swarm_delegate_agent_type(&target_agent_type);
+            if parent_is_swarm_planner != target_is_swarm {
+                return Err(BitFunError::tool(
+                    "The target agent is outside the current delegation scope".to_string(),
+                ));
+            }
+        }
         let mut model_id = invocation.model_id.clone();
         let mut inherit_parent_model = invocation.inherit_parent_model;
         let mut timeout_seconds = invocation.timeout_seconds;
@@ -270,7 +345,7 @@ impl TaskTool {
                         .resolve_subagent_for_fresh_invocation(
                             &subagent_type,
                             context.workspace_root(),
-                            !context.is_remote(),
+                            !parent_is_swarm_planner && !context.is_remote(),
                         )
                         .ok_or_else(|| {
                             BitFunError::tool(format!(
@@ -781,6 +856,13 @@ impl TaskTool {
             session_id,
             dialog_turn_id,
         };
+        let delegation_policy = child_delegation_policy(
+            context,
+            coordinator,
+            subagent_type.as_deref(),
+            target_session_id.as_deref(),
+        )
+        .await?;
         let request = SubagentExecutionRequest {
             task_description: prepared_prompt,
             context_mode,
@@ -795,7 +877,7 @@ impl TaskTool {
             subagent_parent_info: parent_info,
             context: subagent_context.unwrap_or_default(),
             permission_runtime_ceiling,
-            delegation_policy: context.delegation_policy().spawn_child(),
+            delegation_policy,
             external_generation_lease,
         };
         let coordinator = coordinator.clone();
@@ -898,7 +980,13 @@ impl TaskTool {
                 subagent_parent_info: parent_info,
                 context: subagent_context.clone().unwrap_or_default(),
                 permission_runtime_ceiling: permission_runtime_ceiling.clone(),
-                delegation_policy: context.delegation_policy().spawn_child(),
+                delegation_policy: child_delegation_policy(
+                    context,
+                    coordinator,
+                    subagent_type.as_deref(),
+                    target_session_id.as_deref(),
+                )
+                .await?,
                 external_generation_lease: external_generation_lease.clone(),
             };
             let coordinator = coordinator.clone();

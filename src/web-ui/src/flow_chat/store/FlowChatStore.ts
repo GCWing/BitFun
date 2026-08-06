@@ -324,6 +324,7 @@ const VALID_AGENT_TYPES = new Set([
   'Claw',
   'Team',
   'DeepResearch',
+  'Ultra',
 ]);
 const METADATA_LIST_RECENT_DEDUPE_TTL_MS = 1000;
 const HISTORICAL_SESSION_INITIAL_REMOTE_TAIL_TURN_COUNT = 3;

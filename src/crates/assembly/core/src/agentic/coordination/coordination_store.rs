@@ -7,7 +7,9 @@ use tokio::sync::OnceCell;
 use tokio::task;
 use uuid::Uuid;
 
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
+const SWARM_MAX_NODES: i64 = 32;
+const SWARM_MAX_DEPTH: i64 = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BackgroundTaskStatus {
@@ -170,6 +172,183 @@ impl CoordinationStore {
                 .map_err(db_error)?
                 .flatten()
                 .ok_or_else(|| BitFunError::tool(format!("Agent was not found: {agent_id}")))
+        })
+        .await
+    }
+
+    pub(crate) async fn reserve_swarm_child(
+        &self,
+        parent_session_id: &str,
+        child_session_id: &str,
+        parent_agent_type: &str,
+        child_agent_type: &str,
+        child_depth: u8,
+    ) -> BitFunResult<()> {
+        let parent_session_id = parent_session_id.to_string();
+        let child_session_id = child_session_id.to_string();
+        let parent_agent_type = parent_agent_type.to_string();
+        let child_agent_type = child_agent_type.to_string();
+        self.with_connection(move |connection| {
+            let transaction = connection
+                .transaction_with_behavior(TransactionBehavior::Immediate)
+                .map_err(db_error)?;
+            if !matches!(
+                child_agent_type.as_str(),
+                "SwarmPlanner" | "SwarmWorker" | "SwarmReviewer"
+            ) {
+                return Err(BitFunError::tool(format!(
+                    "Swarm cannot launch agent_type={child_agent_type}"
+                )));
+            }
+            let child_depth = i64::from(child_depth);
+            if child_depth == 0 || child_depth > SWARM_MAX_DEPTH {
+                return Err(BitFunError::tool(format!(
+                    "Swarm tree height limit exceeded: child depth {child_depth}, maximum {SWARM_MAX_DEPTH}"
+                )));
+            }
+            if child_depth == SWARM_MAX_DEPTH && child_agent_type == "SwarmPlanner" {
+                return Err(BitFunError::tool(
+                    "SwarmPlanner cannot be launched at the final tree level".to_string(),
+                ));
+            }
+
+            let root_session_id = transaction
+                .query_row(
+                    "SELECT root_session_id FROM swarm_nodes WHERE session_id = ?1",
+                    params![parent_session_id],
+                    |row| row.get::<_, String>(0),
+                )
+                .optional()
+                .map_err(db_error)?;
+            let root_session_id = match root_session_id {
+                Some(root_session_id) => root_session_id,
+                None if parent_agent_type == "Ultra" => parent_session_id.clone(),
+                None => {
+                    return Err(BitFunError::tool(
+                        "Swarm parent is not part of the current tree".to_string(),
+                    ));
+                }
+            };
+            transaction
+                .execute(
+                    "INSERT OR IGNORE INTO swarm_trees (root_session_id, created_at_ms) VALUES (?1, ?2)",
+                    params![root_session_id, unix_time_ms() as i64],
+                )
+                .map_err(db_error)?;
+            transaction
+                .execute(
+                    "INSERT OR IGNORE INTO swarm_nodes (session_id, root_session_id, parent_session_id, agent_type, depth, created_at_ms) VALUES (?1, ?1, NULL, 'Ultra', 0, ?2)",
+                    params![root_session_id, unix_time_ms() as i64],
+                )
+                .map_err(db_error)?;
+
+            let parent = transaction
+                .query_row(
+                    "SELECT root_session_id, depth, agent_type FROM swarm_nodes WHERE session_id = ?1",
+                    params![parent_session_id],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?, row.get::<_, String>(2)?)),
+                )
+                .optional()
+                .map_err(db_error)?
+                .ok_or_else(|| BitFunError::tool("Swarm parent is not part of the current tree".to_string()))?;
+            if parent.2 != parent_agent_type {
+                return Err(BitFunError::tool(
+                    "Swarm parent agent type does not match its persisted tree node".to_string(),
+                ));
+            }
+            if parent.0 != root_session_id || parent.1.saturating_add(1) != child_depth {
+                return Err(BitFunError::tool(
+                    "Swarm child depth does not match its parent lineage".to_string(),
+                ));
+            }
+            if !matches!(parent.2.as_str(), "Ultra" | "SwarmPlanner") {
+                return Err(BitFunError::tool(
+                    "Only a Swarm planner can launch child agents".to_string(),
+                ));
+            }
+            let node_count = transaction
+                .query_row(
+                    "SELECT COUNT(*) FROM swarm_nodes WHERE root_session_id = ?1",
+                    params![root_session_id],
+                    |row| row.get::<_, i64>(0),
+                )
+                .map_err(db_error)?;
+            if node_count >= SWARM_MAX_NODES {
+                return Err(BitFunError::tool(format!(
+                    "Swarm tree size limit reached: maximum {SWARM_MAX_NODES} agents including the root"
+                )));
+            }
+            transaction
+                .execute(
+                    "INSERT INTO swarm_nodes (session_id, root_session_id, parent_session_id, agent_type, depth, created_at_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    params![child_session_id, root_session_id, parent_session_id, child_agent_type, child_depth, unix_time_ms() as i64],
+                )
+                .map_err(|error| BitFunError::tool(format!("Failed to reserve Swarm node: {error}")))?;
+            transaction.commit().map_err(db_error)?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub(crate) async fn rollback_swarm_child(&self, child_session_id: &str) -> BitFunResult<()> {
+        let child_session_id = child_session_id.to_string();
+        self.with_connection(move |connection| {
+            connection
+                .execute(
+                    "DELETE FROM swarm_nodes WHERE session_id = ?1 AND parent_session_id IS NOT NULL",
+                    params![child_session_id],
+                )
+                .map_err(db_error)?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub(crate) async fn swarm_depth_for_session(
+        &self,
+        session_id: &str,
+    ) -> BitFunResult<Option<u8>> {
+        let session_id = session_id.to_string();
+        self.with_connection(move |connection| {
+            connection
+                .query_row(
+                    "SELECT depth FROM swarm_nodes WHERE session_id = ?1",
+                    params![session_id],
+                    |row| row.get::<_, i64>(0),
+                )
+                .optional()
+                .map_err(db_error)
+                .map(|depth| depth.and_then(|value| u8::try_from(value).ok()))
+        })
+        .await
+    }
+
+    pub(crate) async fn swarm_descendant_session_ids(
+        &self,
+        session_id: &str,
+    ) -> BitFunResult<Vec<String>> {
+        let session_id = session_id.to_string();
+        self.with_connection(move |connection| {
+            let mut statement = connection
+                .prepare(
+                    r#"
+WITH RECURSIVE descendants(session_id) AS (
+    SELECT session_id
+    FROM swarm_nodes
+    WHERE parent_session_id = ?1
+    UNION ALL
+    SELECT child.session_id
+    FROM swarm_nodes child
+    JOIN descendants parent ON child.parent_session_id = parent.session_id
+)
+SELECT session_id FROM descendants
+                    "#,
+                )
+                .map_err(db_error)?;
+            let rows = statement
+                .query_map(params![session_id], |row| row.get::<_, String>(0))
+                .map_err(db_error)?;
+            rows.collect::<rusqlite::Result<Vec<_>>>().map_err(db_error)
         })
         .await
     }
@@ -462,6 +641,12 @@ WHERE task_pk = ?3
             transaction
                 .execute(
                     "DELETE FROM coordination_sessions WHERE parent_session_id = ?1",
+                    params![session_id],
+                )
+                .map_err(db_error)?;
+            transaction
+                .execute(
+                    "DELETE FROM swarm_trees WHERE root_session_id = ?1",
                     params![session_id],
                 )
                 .map_err(db_error)?;
@@ -777,9 +962,10 @@ fn initialize_schema(connection: &Connection) -> BitFunResult<()> {
     if version == SCHEMA_VERSION {
         return Ok(());
     }
-    connection
-        .execute_batch(
-            r#"
+    if version == 0 {
+        connection
+            .execute_batch(
+                r#"
 CREATE TABLE coordination_sessions (
     parent_session_id TEXT PRIMARY KEY,
     next_auto_agent_seq INTEGER NOT NULL DEFAULT 1,
@@ -829,8 +1015,35 @@ CREATE INDEX idx_background_tasks_parent_turn
 
 PRAGMA user_version = 1;
             "#,
-        )
-        .map_err(db_error)?;
+            )
+            .map_err(db_error)?;
+    }
+    if version < 2 {
+        connection
+            .execute_batch(
+                r#"
+CREATE TABLE swarm_trees (
+    root_session_id TEXT PRIMARY KEY,
+    created_at_ms INTEGER NOT NULL
+);
+
+CREATE TABLE swarm_nodes (
+    session_id TEXT PRIMARY KEY,
+    root_session_id TEXT NOT NULL,
+    parent_session_id TEXT,
+    agent_type TEXT NOT NULL,
+    depth INTEGER NOT NULL,
+    created_at_ms INTEGER NOT NULL,
+    FOREIGN KEY(root_session_id) REFERENCES swarm_trees(root_session_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_swarm_nodes_root ON swarm_nodes(root_session_id);
+CREATE INDEX idx_swarm_nodes_parent ON swarm_nodes(parent_session_id);
+PRAGMA user_version = 2;
+                "#,
+            )
+            .map_err(db_error)?;
+    }
     Ok(())
 }
 
@@ -923,6 +1136,112 @@ mod tests {
                 .expect("resolve named agent"),
             "child-reviewer"
         );
+    }
+
+    #[tokio::test]
+    async fn swarm_admission_enforces_depth_and_tree_size_budgets() {
+        let (_root, store) = test_store();
+        store
+            .reserve_swarm_child("root", "planner", "Ultra", "SwarmPlanner", 1)
+            .await
+            .expect("reserve planner");
+        store
+            .reserve_swarm_child(
+                "unregistered-planner",
+                "orphan-worker",
+                "SwarmPlanner",
+                "SwarmWorker",
+                1,
+            )
+            .await
+            .expect_err("a non-Ultra session cannot create a new Swarm tree");
+        store
+            .reserve_swarm_child("planner", "spoofed-worker", "Ultra", "SwarmWorker", 2)
+            .await
+            .expect_err("the runtime parent type must match the persisted tree node");
+        store
+            .reserve_swarm_child("planner", "worker", "SwarmPlanner", "SwarmWorker", 2)
+            .await
+            .expect("reserve worker");
+        store
+            .reserve_swarm_child("worker", "invalid-child", "SwarmWorker", "SwarmWorker", 3)
+            .await
+            .expect_err("worker cannot launch children");
+        store
+            .reserve_swarm_child("worker", "leaf-reviewer", "SwarmWorker", "SwarmReviewer", 3)
+            .await
+            .expect_err("a worker cannot launch a reviewer either");
+        store
+            .reserve_swarm_child(
+                "planner",
+                "too-deep-planner",
+                "SwarmPlanner",
+                "SwarmPlanner",
+                3,
+            )
+            .await
+            .expect_err("final tree level cannot contain a planner");
+
+        store
+            .reserve_swarm_child(
+                "planner",
+                "nested-planner",
+                "SwarmPlanner",
+                "SwarmPlanner",
+                2,
+            )
+            .await
+            .expect("reserve nested planner");
+        store
+            .reserve_swarm_child(
+                "nested-planner",
+                "nested-worker",
+                "SwarmPlanner",
+                "SwarmWorker",
+                3,
+            )
+            .await
+            .expect("reserve nested worker");
+        assert_eq!(
+            store
+                .swarm_descendant_session_ids("planner")
+                .await
+                .expect("load persisted descendants")
+                .into_iter()
+                .collect::<std::collections::HashSet<_>>(),
+            [
+                "worker".to_string(),
+                "nested-planner".to_string(),
+                "nested-worker".to_string(),
+            ]
+            .into_iter()
+            .collect()
+        );
+
+        // A planner may use the rest of the tree budget for direct children.
+        // The five existing nodes plus these twenty-seven fill the 32-node tree.
+        for index in 0..27 {
+            store
+                .reserve_swarm_child(
+                    "planner",
+                    &format!("reviewer-{index}"),
+                    "SwarmPlanner",
+                    "SwarmReviewer",
+                    2,
+                )
+                .await
+                .expect("reserve direct planner child");
+        }
+        store
+            .reserve_swarm_child(
+                "planner",
+                "over-tree-budget",
+                "SwarmPlanner",
+                "SwarmReviewer",
+                2,
+            )
+            .await
+            .expect_err("whole-tree node budget should be enforced");
     }
 
     #[tokio::test]

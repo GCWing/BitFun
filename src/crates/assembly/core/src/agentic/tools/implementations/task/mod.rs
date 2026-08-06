@@ -1,5 +1,6 @@
 use crate::agentic::agents::{
-    get_agent_registry, AgentInfo, SubagentListScope, SubagentQueryContext,
+    get_agent_registry, is_swarm_planner_agent_type, AgentInfo, SubagentListScope,
+    SubagentQueryContext, SWARM_DELEGATE_AGENT_TYPES,
 };
 use crate::agentic::coordination::{get_global_coordinator, SubagentExecutionRequest};
 use crate::agentic::deep_review::task_adapter::{
@@ -35,6 +36,7 @@ use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::time::Instant;
 
+mod agent_control;
 mod background;
 mod deep_review;
 mod execution;
@@ -46,6 +48,9 @@ mod validation;
 pub use launch_review_agent::LaunchReviewAgentTool;
 
 pub struct TaskTool;
+pub struct AgentSpawnTool;
+pub struct AgentSendInputTool;
+pub struct AgentInterruptTool;
 
 const LARGE_TASK_PROMPT_SOFT_LINE_LIMIT: usize = 180;
 const LARGE_TASK_PROMPT_SOFT_BYTE_LIMIT: usize = 16 * 1024;
@@ -81,6 +86,12 @@ impl TaskTool {
     pub(crate) async fn build_available_agents_context_section(
         context: Option<&ToolUseContext>,
     ) -> Option<String> {
+        if context
+            .and_then(|context| context.agent_type.as_deref())
+            .is_some_and(is_swarm_planner_agent_type)
+        {
+            return None;
+        }
         let agents = Self::get_enabled_agents(context).await;
         let agent_descriptions = Self::format_agent_descriptions(&agents);
         if agent_descriptions.trim().is_empty() {
@@ -93,10 +104,11 @@ impl TaskTool {
     async fn get_enabled_agents(context: Option<&ToolUseContext>) -> Vec<AgentInfo> {
         let registry = get_agent_registry();
         let workspace_root = context.and_then(|ctx| ctx.workspace_root());
+        let parent_agent_type = context.and_then(|ctx| ctx.agent_type.as_deref());
         registry.load_custom_agents(workspace_root).await;
         registry
             .get_subagents_for_query(&SubagentQueryContext {
-                parent_agent_type: context.and_then(|ctx| ctx.agent_type.as_deref()),
+                parent_agent_type,
                 workspace_root,
                 list_scope: SubagentListScope::TaskVisible,
                 include_disabled: false,
@@ -106,6 +118,15 @@ impl TaskTool {
     }
 
     async fn get_agents_types(&self, context: Option<&ToolUseContext>) -> Vec<String> {
+        if context
+            .and_then(|context| context.agent_type.as_deref())
+            .is_some_and(is_swarm_planner_agent_type)
+        {
+            return SWARM_DELEGATE_AGENT_TYPES
+                .iter()
+                .map(|agent_type| (*agent_type).to_string())
+                .collect();
+        }
         let mut agent_types: Vec<String> = Self::get_enabled_agents(context)
             .await
             .into_iter()

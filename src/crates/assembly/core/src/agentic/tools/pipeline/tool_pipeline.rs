@@ -565,7 +565,7 @@ fn permission_resource_case_sensitivity(
     }
 }
 
-const SUBAGENT_LAUNCH_TOOL_NAME: &str = "Task";
+const SUBAGENT_LAUNCH_TOOL_NAMES: &[&str] = &["Task", "AgentSpawn"];
 
 /// Native hook session facts derived from one tool task.
 fn native_hook_session_facts<'a>(
@@ -1330,7 +1330,7 @@ impl ToolPipeline {
         let subagent_call_count = resolved_tool_calls
             .iter()
             .filter(|(_, invocation, _)| {
-                invocation.effective_tool_name == SUBAGENT_LAUNCH_TOOL_NAME
+                SUBAGENT_LAUNCH_TOOL_NAMES.contains(&invocation.effective_tool_name.as_str())
             })
             .count();
 

@@ -16,6 +16,8 @@
     "autoExecuteDesc": "跳過工具執行前的用戶確認步驟。",
     "subagentMaxConcurrency": "同時執行任務數",
     "subagentMaxConcurrencyDesc": "可同時執行的任務數量。",
+    "swarmMaxConcurrency": "Swarm 工作並發上限",
+    "swarmMaxConcurrencyDesc": "同一時間允許並行執行的 Swarm Worker 和 Reviewer 數量，與普通子智能體上限獨立。",
     "confirmTimeout": "確認超時",
     "confirmTimeoutDesc": "等待用戶確認工具調用的最長時間（秒）。",
     "confirmTimeoutHint": "設為 0 可關閉確認超時。",

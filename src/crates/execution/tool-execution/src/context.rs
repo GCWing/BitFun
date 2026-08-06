@@ -79,6 +79,10 @@ pub fn build_tool_runtime_custom_data(
         "delegation_nesting_depth".to_string(),
         serde_json::json!(input.delegation_policy.nesting_depth),
     );
+    map.insert(
+        "delegation_scope".to_string(),
+        serde_json::json!(input.delegation_policy.scope),
+    );
 
     insert_u64_context_var(input.context_vars, &mut map, "turn_index");
     insert_bool_context_var(input.context_vars, &mut map, "acp_transport");
@@ -116,10 +120,15 @@ pub fn delegation_policy_from_custom_data(
         .and_then(Value::as_u64)
         .and_then(|value| u8::try_from(value).ok())
         .unwrap_or(0);
+    let scope = custom_data
+        .get("delegation_scope")
+        .and_then(|value| serde_json::from_value(value.clone()).ok())
+        .unwrap_or_default();
 
     DelegationPolicy {
         allow_subagent_spawn,
         nesting_depth,
+        scope,
     }
 }
 
@@ -155,7 +164,7 @@ mod tests {
         ToolRuntimeCustomDataInput,
     };
     use bitfun_agent_tools::{ToolRuntimeRestrictions, ToolWorkspaceKind};
-    use bitfun_runtime_ports::DelegationPolicy;
+    use bitfun_runtime_ports::{DelegationPolicy, DelegationScope};
     use serde_json::json;
     use std::collections::{BTreeSet, HashMap};
 
@@ -176,6 +185,7 @@ mod tests {
 
         assert_eq!(custom_data["delegation_allow_subagent_spawn"], json!(false));
         assert_eq!(custom_data["delegation_nesting_depth"], json!(1));
+        assert_eq!(custom_data["delegation_scope"], json!("standard"));
         assert_eq!(custom_data["turn_index"], json!(7));
         assert_eq!(custom_data["acp_transport"], json!(true));
         assert_eq!(custom_data["remote_file_delivery"], json!(true));
@@ -234,7 +244,8 @@ mod tests {
             delegation_policy_from_custom_data(&custom_data),
             DelegationPolicy {
                 allow_subagent_spawn: false,
-                nesting_depth: 3
+                nesting_depth: 3,
+                scope: DelegationScope::Standard,
             }
         );
         assert!(PrimaryModelFacts::default().supports_image_inputs);

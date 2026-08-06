@@ -28,9 +28,10 @@ use bitfun_agent_tools::{
     resolve_readonly_enabled_tools, resolve_tool_manifest_policy, resolve_tool_path_with_context,
     resolve_tool_path_with_context_roots, resolve_workspace_tool_path,
     sort_tool_manifest_definitions, summarize_get_tool_spec_deferred_tools,
-    tool_path_is_effectively_absolute, validate_deferred_tool_usage, validate_get_tool_spec_input,
-    validate_tool_allowed_by_list, validate_tool_execution_admission, CallDeferredToolInputError,
-    DynamicMcpToolInfo, DynamicToolInfo, GetToolSpecDeferredToolSummary, GetToolSpecExecutionError,
+    tool_path_is_effectively_absolute, tool_restrictions_for_delegation_policy,
+    validate_deferred_tool_usage, validate_get_tool_spec_input, validate_tool_allowed_by_list,
+    validate_tool_execution_admission, CallDeferredToolInputError, DynamicMcpToolInfo,
+    DynamicToolInfo, GetToolSpecDeferredToolSummary, GetToolSpecExecutionError,
     GetToolSpecExecutionPlan, GetToolSpecLoadObservation, GetToolSpecRuntime, InputValidator,
     LoadedDeferredToolSpec, PromptVisibleToolManifestItem, ResolvedToolInvocation,
     ToolContextFacts, ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, ToolExposure,
@@ -830,6 +831,23 @@ fn runtime_restrictions_surface_custom_deny_messages() {
         denied.to_string(),
         "Recursive subagent delegation is blocked. Use direct tools instead."
     );
+}
+
+#[test]
+fn delegation_restrictions_cover_all_agent_spawn_surfaces() {
+    let restrictions = tool_restrictions_for_delegation_policy(
+        bitfun_runtime_ports::DelegationPolicy::top_level().spawn_child(),
+    );
+
+    for tool_name in ["Task", "AgentSpawn"] {
+        let denied = restrictions
+            .ensure_tool_allowed(tool_name)
+            .expect_err("agent spawning should be denied for child delegation");
+        assert_eq!(
+            denied.to_string(),
+            "Recursive subagent delegation is blocked. Use direct tools instead."
+        );
+    }
 }
 
 #[test]

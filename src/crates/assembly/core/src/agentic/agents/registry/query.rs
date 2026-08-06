@@ -6,8 +6,9 @@ use super::support::{
 use super::AgentRegistry;
 use crate::agentic::agents::registry::types::{is_review_agent_entry, AgentEntry, AgentSource};
 use crate::agentic::agents::{
-    mode_presentation_rank, resolve_mode_config_profile_id, AgentCategory, AgentInfo,
-    AgentToolPolicy, SubagentListScope, SubagentQueryContext,
+    is_swarm_delegate_agent_type, is_swarm_planner_agent_type, mode_presentation_rank,
+    resolve_mode_config_profile_id, AgentCategory, AgentInfo, AgentToolPolicy, SubagentListScope,
+    SubagentQueryContext,
 };
 use crate::agentic::deep_review_policy::canonical_review_worker_agent_type;
 use crate::agentic::tools::get_all_registered_tool_names;
@@ -266,6 +267,14 @@ impl AgentRegistry {
         user_overrides: &crate::service::config::types::AgentSubagentOverrideConfig,
     ) -> bool {
         if entry.category != AgentCategory::SubAgent {
+            return false;
+        }
+        if query.list_scope == SubagentListScope::TaskVisible
+            && query
+                .parent_agent_type
+                .is_some_and(is_swarm_planner_agent_type)
+            && !is_swarm_delegate_agent_type(entry.agent.id())
+        {
             return false;
         }
 

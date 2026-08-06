@@ -9,9 +9,9 @@ use super::round_executor::{ModelRoundLifecycle, RoundExecutor};
 use super::types::{ExecutionContext, ExecutionResult, RoundContext, RoundResult};
 use crate::agentic::agents::{
     build_prompt_context_for_workspace, get_agent_registry, get_embedded_prompt,
-    minimal_harness_tool_policy, render_direct_tool_listing_body, PrependedPromptReminders,
-    PromptBuilder, PromptBuilderContext, RuntimeContextNeeds, ToolListingSections,
-    UserContextPolicy, UserContextSection, MINIMAL_HARNESS_REQUIRED_TOOLS,
+    is_swarm_planner_agent_type, minimal_harness_tool_policy, render_direct_tool_listing_body,
+    PrependedPromptReminders, PromptBuilder, PromptBuilderContext, RuntimeContextNeeds,
+    ToolListingSections, UserContextPolicy, UserContextSection, MINIMAL_HARNESS_REQUIRED_TOOLS,
 };
 use crate::agentic::context_profile::{ContextProfilePolicy, ModelCapabilityProfile};
 use crate::agentic::coordination::scheduler::agent_dialog_turn_image_contexts;
@@ -1419,7 +1419,7 @@ impl ExecutionEngine {
             } else {
                 None
             },
-            agent_listing: if has_tool_definition("Task") {
+            agent_listing: if has_tool_definition("Task") || has_tool_definition("AgentSpawn") {
                 TaskTool::build_available_agents_context_section(Some(tool_context)).await
             } else {
                 None
@@ -1662,10 +1662,13 @@ impl ExecutionEngine {
             built_user_context
         };
         let runtime_context = prompt_builder.build_runtime_context_reminder().await;
-        let (skill_listing, agent_listing) = skill_agent_listing_reminders_for_profile(
+        let (skill_listing, mut agent_listing) = skill_agent_listing_reminders_for_profile(
             is_minimal_harness,
             baseline_tool_sections.as_ref(),
         );
+        if is_swarm_planner_agent_type(current_agent.id()) {
+            agent_listing = None;
+        }
 
         PrependedPromptReminders {
             deferred_tool_listing: (!is_minimal_harness)

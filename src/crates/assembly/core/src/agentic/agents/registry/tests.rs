@@ -241,6 +241,7 @@ fn top_level_modes_default_to_auto() {
         "Claw",
         "DeepResearch",
         "Team",
+        "Ultra",
     ] {
         assert_eq!(default_model_id_for_builtin_agent(agent_type), "auto");
     }
@@ -372,6 +373,8 @@ fn non_deep_review_builtin_subagents_default_to_primary() {
         "CodeReview",
         "GeneralPurpose",
         "MemoryPhase2",
+        "SwarmPlanner",
+        "SwarmWorker",
     ] {
         assert_eq!(
             default_model_id_for_builtin_agent(agent_type),
@@ -410,6 +413,7 @@ fn deep_review_family_defaults_to_fast() {
         "ReviewFrontend",
         "ReviewJudge",
         "ReviewFixer",
+        "SwarmReviewer",
     ] {
         assert_eq!(
             default_model_id_for_builtin_agent(agent_type),
@@ -530,6 +534,37 @@ async fn task_visible_subagents_are_filtered_by_parent_agent() {
     assert!(!deep_research_visible
         .iter()
         .any(|agent| agent.id == "ReviewWorker"));
+
+    let ultra_visible = registry
+        .get_subagents_for_query(&SubagentQueryContext {
+            parent_agent_type: Some("Ultra"),
+            workspace_root: None,
+            list_scope: SubagentListScope::TaskVisible,
+            include_disabled: false,
+            external_sources_supported: false,
+        })
+        .await;
+    for swarm_id in ["SwarmPlanner", "SwarmWorker", "SwarmReviewer"] {
+        assert!(ultra_visible.iter().any(|agent| agent.id == swarm_id));
+    }
+    assert_eq!(ultra_visible.len(), 3);
+    assert!(!ultra_visible
+        .iter()
+        .any(|agent| agent.id == "GeneralPurpose"));
+
+    let planner_visible = registry
+        .get_subagents_for_query(&SubagentQueryContext {
+            parent_agent_type: Some("SwarmPlanner"),
+            workspace_root: None,
+            list_scope: SubagentListScope::TaskVisible,
+            include_disabled: false,
+            external_sources_supported: false,
+        })
+        .await;
+    assert_eq!(planner_visible.len(), 3);
+    for swarm_id in ["SwarmPlanner", "SwarmWorker", "SwarmReviewer"] {
+        assert!(planner_visible.iter().any(|agent| agent.id == swarm_id));
+    }
 }
 
 #[test]

@@ -6,6 +6,7 @@ mod deep_research;
 mod multitask;
 mod plan;
 mod team;
+mod ultra;
 
 pub use agentic::AgenticMode;
 pub use claw::ClawMode;
@@ -15,3 +16,4 @@ pub use deep_research::DeepResearchMode;
 pub use multitask::MultitaskMode;
 pub use plan::PlanMode;
 pub use team::TeamMode;
+pub use ultra::UltraMode;

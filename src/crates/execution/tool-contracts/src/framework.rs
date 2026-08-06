@@ -2371,11 +2371,13 @@ pub fn tool_restrictions_for_delegation_policy(
 ) -> ToolRuntimeRestrictions {
     let mut restrictions = ToolRuntimeRestrictions::default();
     if !delegation_policy.allow_subagent_spawn {
-        restrictions.denied_tool_names.insert("Task".to_string());
-        restrictions.denied_tool_messages.insert(
-            "Task".to_string(),
-            "Recursive subagent delegation is blocked. Use direct tools instead.".to_string(),
-        );
+        for tool_name in ["Task", "AgentSpawn"] {
+            restrictions.denied_tool_names.insert(tool_name.to_string());
+            restrictions.denied_tool_messages.insert(
+                tool_name.to_string(),
+                "Recursive subagent delegation is blocked. Use direct tools instead.".to_string(),
+            );
+        }
     }
     restrictions
 }

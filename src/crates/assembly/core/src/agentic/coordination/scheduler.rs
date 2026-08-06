@@ -12,7 +12,7 @@
 
 use super::coordinator::{
     session_storage_workspace_locator, ConversationCoordinator, DialogTriggerSource,
-    HiddenSubagentExecutionRequest, SubagentResult,
+    DialogTurnStopDisposition, HiddenSubagentExecutionRequest, SubagentResult,
 };
 use super::turn_outcome::TurnOutcome;
 use super::turn_settlement::TurnSettlementRegistration;
@@ -1024,9 +1024,22 @@ impl DialogScheduler {
         &self,
         handle: &HiddenSubagentQueueCancelHandle,
     ) {
+        self.request_hidden_subagent_cancellation_with_descendant_policy(handle, true)
+            .await;
+    }
+
+    pub(crate) async fn request_hidden_subagent_cancellation_with_descendant_policy(
+        &self,
+        handle: &HiddenSubagentQueueCancelHandle,
+        cancel_descendants: bool,
+    ) {
         handle.cancellation.cancel();
         if let Err(error) = self
-            .cancel_queued_or_active_turn(&handle.session_id, &handle.turn_id)
+            .cancel_queued_or_active_turn_with_descendant_policy(
+                &handle.session_id,
+                &handle.turn_id,
+                cancel_descendants,
+            )
             .await
         {
             debug!(
@@ -1418,6 +1431,16 @@ impl DialogScheduler {
         session_id: &str,
         turn_id: &str,
     ) -> Result<bool, String> {
+        self.cancel_queued_or_active_turn_with_descendant_policy(session_id, turn_id, true)
+            .await
+    }
+
+    async fn cancel_queued_or_active_turn_with_descendant_policy(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        cancel_descendants: bool,
+    ) -> Result<bool, String> {
         let _operation_guard = self.lock_session_operation(session_id).await;
         let removed_turn = remove_queued_turn_by_id(&self.queues, session_id, turn_id);
         if let Some(removed_turn) = removed_turn {
@@ -1461,7 +1484,13 @@ impl DialogScheduler {
         }
 
         self.coordinator
-            .cancel_dialog_turn(session_id, turn_id)
+            .cancel_dialog_turn_with_descendant_policy(
+                session_id,
+                turn_id,
+                cancel_descendants,
+                Duration::from_millis(1500),
+                DialogTurnStopDisposition::Cancelled,
+            )
             .await?;
         // The coordinator may have committed an Interrupted recovery fact
         // while this hard-cancel request was waiting for the active execution
