@@ -1,6 +1,5 @@
 {
   "noRepository": "Open a workspace with a GitHub remote to fix its issues continuously.",
-  "loopxMissing": "loopx is not installed, so fixing is unavailable.",
   "loading": "Loading issues…",
   "noIssues": "No open issues.",
   "noSelection": "Select an issue to see its details.",
@@ -88,5 +87,10 @@
   "unsupportedPlatform": {
     "title": "GitHub repositories only, for now",
     "body": "This workspace's remote is on {{host}}. Continuous issue fixing currently reads issues and tracks pull requests through GitHub; support for other code hosts is planned."
+  },
+  "readiness": {
+    "loopxMissing": "The LoopX engine is unavailable, so continuous fixing cannot run. Reinstalling BitFun restores the bundled engine; developers can also `pip install -e <loopx>` and set LOOPX_BIN.",
+    "ghMissing": "GitHub CLI (gh) is not installed. The fix agent reads issues and publishes pull requests through gh — install it from https://cli.github.com and restart BitFun.",
+    "ghUnauthenticated": "GitHub CLI is not signed in. Run `gh auth login` in a terminal, then refresh this panel."
   }
 }

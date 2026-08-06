@@ -33,19 +33,65 @@ static HOST_LOOP_LOCK: Mutex<()> = Mutex::const_new(());
 pub struct IssueFixAvailability {
     pub available: bool,
     pub program: Option<String>,
+    /// Where the loopx binary came from: "override" (LOOPX_BIN), "path", or
+    /// null when unavailable. The desktop host points LOOPX_BIN at the bundled
+    /// sidecar on startup, so "override" also covers the shipped binary.
+    pub source: Option<&'static str>,
+    /// GitHub CLI presence — the agent's evidence/PR channel.
+    pub gh_installed: bool,
+    /// `gh auth status` reports an active github.com login.
+    pub gh_authenticated: bool,
 }
 
+/// One readiness probe for everything continuous Issue-Fix needs at runtime:
+/// the LoopX kernel CLI, the GitHub CLI, and a GitHub login. The panel renders
+/// targeted guidance for whichever tier is missing.
 #[tauri::command]
 pub async fn issue_fix_probe(_state: State<'_, AppState>) -> Result<IssueFixAvailability, String> {
-    match LoopxIssueFix::probe() {
-        Some(loopx) => Ok(IssueFixAvailability {
+    let loopx = LoopxIssueFix::probe();
+    let (gh_installed, gh_authenticated) = probe_github_cli().await;
+    Ok(match loopx {
+        Some(loopx) => IssueFixAvailability {
             available: true,
             program: Some(loopx.program().display().to_string()),
-        }),
-        None => Ok(IssueFixAvailability {
+            source: Some(if std::env::var_os("LOOPX_BIN").is_some() {
+                "override"
+            } else {
+                "path"
+            }),
+            gh_installed,
+            gh_authenticated,
+        },
+        None => IssueFixAvailability {
             available: false,
             program: None,
-        }),
+            source: None,
+            gh_installed,
+            gh_authenticated,
+        },
+    })
+}
+
+/// Detect the GitHub CLI and an active github.com login without touching any
+/// stored BitFun tokens: the heartbeat agent shells out to `gh` itself, so
+/// what matters is exactly what `gh` sees.
+async fn probe_github_cli() -> (bool, bool) {
+    let mut command = tokio::process::Command::new("gh");
+    command
+        .args(["auth", "status", "--hostname", "github.com"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    #[cfg(windows)]
+    {
+        // tokio's Command exposes creation_flags directly; suppress the
+        // console window that would otherwise flash on spawn.
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    match command.status().await {
+        Ok(status) => (true, status.success()),
+        Err(_) => (false, false),
     }
 }
 

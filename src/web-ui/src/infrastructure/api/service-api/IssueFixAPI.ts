@@ -7,6 +7,10 @@ const log = createLogger('IssueFixAPI');
 export interface IssueFixAvailability {
   available: boolean;
   program?: string | null;
+  /** "override" (LOOPX_BIN / bundled sidecar) or "path"; null when missing. */
+  source?: string | null;
+  ghInstalled?: boolean;
+  ghAuthenticated?: boolean;
 }
 
 export interface IssueFixKernelTodo {

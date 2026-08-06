@@ -25,7 +25,69 @@ use thiserror::Error;
 use tokio::process::Command;
 
 /// Override for the `loopx` program path, mirroring `FLASHGREP_DAEMON_BIN`.
+///
+/// Resolution order is override → PATH. The desktop host sets this variable at
+/// startup to the bundled sidecar binary (when present) unless the user
+/// already exported it, so one probe covers all three tiers: developer
+/// override, shipped sidecar, and a user-managed install on PATH.
 const LOOPX_BIN_ENV: &str = "LOOPX_BIN";
+
+/// Bundled sidecar binary names by target, mirroring the flashgrep layout
+/// (`resources/loopx/<name>` in the packaged app).
+pub fn loopx_sidecar_binary_names() -> &'static [&'static str] {
+    #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+    {
+        &["loopx-x86_64-pc-windows-msvc.exe"]
+    }
+    #[cfg(all(target_os = "windows", target_arch = "aarch64"))]
+    {
+        &["loopx-aarch64-pc-windows-msvc.exe"]
+    }
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    {
+        &["loopx-x86_64-apple-darwin"]
+    }
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    {
+        &["loopx-aarch64-apple-darwin"]
+    }
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    {
+        &[
+            "loopx-x86_64-unknown-linux-musl",
+            "loopx-x86_64-unknown-linux-gnu",
+        ]
+    }
+    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+    {
+        &[
+            "loopx-aarch64-unknown-linux-musl",
+            "loopx-aarch64-unknown-linux-gnu",
+        ]
+    }
+    #[cfg(not(any(
+        all(target_os = "windows", target_arch = "x86_64"),
+        all(target_os = "windows", target_arch = "aarch64"),
+        all(target_os = "macos", target_arch = "x86_64"),
+        all(target_os = "macos", target_arch = "aarch64"),
+        all(target_os = "linux", target_arch = "x86_64"),
+        all(target_os = "linux", target_arch = "aarch64"),
+    )))]
+    {
+        &["loopx"]
+    }
+}
+
+/// Point `LOOPX_BIN` at the bundled sidecar unless the user already set it.
+///
+/// Called once by the desktop host after resolving the packaged resource dir;
+/// keeping the write here (next to the read) makes the contract auditable.
+pub fn configure_loopx_bin_env(sidecar_path: &Path) {
+    if std::env::var_os(LOOPX_BIN_ENV).is_some() {
+        return;
+    }
+    std::env::set_var(LOOPX_BIN_ENV, sidecar_path);
+}
 
 /// LoopX's subprocess call sites pass `text=True` without `encoding=`, so on a
 /// non-UTF-8 locale (notably Chinese Windows, `cp936`) it decodes `gh`'s UTF-8

@@ -931,6 +931,48 @@ pub async fn run() {
                 );
             }
 
+            // Resolve the bundled LoopX sidecar for continuous Issue-Fix,
+            // mirroring the flashgrep resolution above. LOOPX_BIN set by the
+            // user (e.g. a development editable install) always wins; the
+            // sidecar fills the gap for packaged builds; PATH stays the last
+            // resort inside LoopxIssueFix::probe.
+            {
+                let step_started = Instant::now();
+                let sidecar_path = bitfun_services_integrations::loopx_issue_fix::loopx_sidecar_binary_names()
+                    .iter()
+                    .find_map(|binary_name| {
+                        let primary = format!("loopx/{}", binary_name);
+                        if let Ok(path) = app
+                            .path()
+                            .resolve(&primary, tauri::path::BaseDirectory::Resource)
+                        {
+                            if path.exists() {
+                                return Some(path);
+                            }
+                        }
+                        let resource_dir = app.path().resource_dir().ok()?;
+                        [
+                            resource_dir.join("loopx").join(binary_name),
+                            resource_dir.join("resources").join("loopx").join(binary_name),
+                        ]
+                        .into_iter()
+                        .find(|candidate| candidate.exists())
+                    });
+                if let Some(path) = sidecar_path {
+                    bitfun_services_integrations::loopx_issue_fix::configure_loopx_bin_env(&path);
+                    log::info!("LoopX sidecar resolved: path={}", path.display());
+                } else {
+                    log::info!(
+                        "No bundled LoopX sidecar found; Issue-Fix will use LOOPX_BIN or PATH"
+                    );
+                }
+                startup_trace.record_elapsed_step(
+                    "native_setup",
+                    "resolve_loopx_sidecar",
+                    step_started,
+                );
+            }
+
             // Register bundled mobile-web resource path for remote connect.
             // tauri.conf.json maps "../../mobile-web/dist" -> "mobile-web/dist",
             // so the primary candidate is "mobile-web/dist". Additional fallbacks

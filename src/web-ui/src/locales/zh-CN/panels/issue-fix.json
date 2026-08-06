@@ -1,6 +1,5 @@
 {
   "noRepository": "打开一个带 GitHub 远程仓库的工作区，即可持续修复其 Issue。",
-  "loopxMissing": "未安装 loopx，无法启动修复。",
   "loading": "正在加载 issue…",
   "noIssues": "没有开放的 issue。",
   "noSelection": "选择一个 issue 查看详情。",
@@ -88,5 +87,10 @@
   "unsupportedPlatform": {
     "title": "暂仅支持 GitHub 仓库",
     "body": "当前工作区的远程仓库在 {{host}}。持续修复 Issue 目前通过 GitHub 读取 Issue 并跟踪 PR 状态；其他平台的支持在计划中。"
+  },
+  "readiness": {
+    "loopxMissing": "LoopX 引擎不可用，无法运行持续修复。重新安装 BitFun 可恢复内置引擎；开发者也可 `pip install -e <loopx>` 并设置 LOOPX_BIN。",
+    "ghMissing": "未安装 GitHub CLI（gh）。修复 Agent 通过 gh 读取 Issue 并发布 PR，请从 https://cli.github.com 安装后重启 BitFun。",
+    "ghUnauthenticated": "GitHub CLI 未登录。请在终端运行 `gh auth login`，然后刷新本面板。"
   }
 }

@@ -18,6 +18,7 @@ import {
   agentAPI,
   issueFixAPI,
   reviewPlatformAPI,
+  type IssueFixAvailability,
   type IssueFixAutonomousStatusResponse,
   type IssueFixUserDecision,
   type IssueFixUserTodo,
@@ -114,6 +115,9 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
   const [control, setControl] = useState<IssueFixAutonomousStatusResponse | null>(null);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [available, setAvailable] = useState<boolean | null>(null);
+  // Full readiness picture: loopx presence is `available`; the gh tiers gate
+  // guidance banners (the agent's whole evidence/PR channel runs through gh).
+  const [readiness, setReadiness] = useState<IssueFixAvailability | null>(null);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [stopping, setStopping] = useState(false);
@@ -216,7 +220,9 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
   useEffect(() => {
     let cancelled = false;
     void issueFixAPI.probe().then((result) => {
-      if (!cancelled) setAvailable(result.available);
+      if (cancelled) return;
+      setAvailable(result.available);
+      setReadiness(result);
     });
     return () => {
       cancelled = true;
@@ -792,7 +798,17 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
       {available === false ? (
         <div className="issue-fix__notice issue-fix__notice--warning" role="status">
           <AlertTriangle size={14} />
-          <span>{t('loopxMissing')}</span>
+          <span>{t('readiness.loopxMissing')}</span>
+        </div>
+      ) : readiness && !readiness.ghInstalled ? (
+        <div className="issue-fix__notice issue-fix__notice--warning" role="status">
+          <AlertTriangle size={14} />
+          <span>{t('readiness.ghMissing')}</span>
+        </div>
+      ) : readiness && !readiness.ghAuthenticated ? (
+        <div className="issue-fix__notice issue-fix__notice--warning" role="status">
+          <AlertTriangle size={14} />
+          <span>{t('readiness.ghUnauthenticated')}</span>
         </div>
       ) : null}
       {control?.hostLoop.lastError &&
