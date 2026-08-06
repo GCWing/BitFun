@@ -147,6 +147,10 @@
       "title": "上次会话异常结束",
       "message": "BitFun 发现上次会话留下了崩溃报告。如需反馈问题，可以导出诊断包。"
     },
+    "configRecovery": {
+      "title": "配置已恢复",
+      "message": "BitFun 已修复或隔离 {{count}} 个配置问题，应用得以继续启动。请检查模型设置后再继续使用。"
+    },
     "levels": {
       "trace": "Trace",
       "debug": "Debug",

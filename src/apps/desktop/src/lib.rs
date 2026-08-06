@@ -113,6 +113,34 @@ static MAIN_WINDOW_CLOSE_PENDING_ON_MACOS: AtomicBool = AtomicBool::new(false);
 
 const MAIN_WINDOW_CLOSE_REQUESTED_EVENT: &str = "bitfun_main_window_close_requested";
 const BROWSER_WEBVIEW_PAGE_LOAD_EVENT: &str = "browser-webview-page-load";
+
+#[cfg(target_os = "windows")]
+fn show_fatal_startup_error(message: &str) {
+    use windows::core::PCWSTR;
+    use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
+
+    let title = "BitFun startup error"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    let message = message
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    unsafe {
+        let _ = MessageBoxW(
+            None,
+            PCWSTR(message.as_ptr()),
+            PCWSTR(title.as_ptr()),
+            MB_OK | MB_ICONERROR,
+        );
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn show_fatal_startup_error(message: &str) {
+    eprintln!("BitFun startup error: {message}");
+}
 const CRON_DESKTOP_START_FALLBACK_DELAY: Duration = Duration::from_secs(120);
 pub(crate) const MAIN_WINDOW_DEFAULT_WIDTH: f64 = 1200.0;
 pub(crate) const MAIN_WINDOW_DEFAULT_HEIGHT: f64 = 800.0;
@@ -468,7 +496,20 @@ pub async fn run() {
     let step_started = Instant::now();
     if let Err(e) = bitfun_core::service::config::initialize_global_config().await {
         log::error!("Failed to initialize global config service: {}", e);
+        show_fatal_startup_error(&format!(
+            "BitFun could not initialize its configuration and cannot continue.\n\n{e}\n\nSee early-startup.log for details."
+        ));
         return;
+    }
+    if let Ok(config_service) = bitfun_core::service::config::get_global_config_service().await {
+        for diagnostic in config_service.load_diagnostics().await {
+            log::warn!(
+                "Startup configuration diagnostic: code={}, path={}, recoverability={:?}",
+                diagnostic.code,
+                diagnostic.path,
+                diagnostic.recoverability
+            );
+        }
     }
     startup_timings.record_elapsed("initialize_global_config", step_started);
     startup_trace.record_elapsed_step("native_pre_tauri", "initialize_global_config", step_started);
@@ -1291,6 +1332,7 @@ pub async fn run() {
             computer_use_request_permissions,
             computer_use_open_system_settings,
             set_config,
+            save_cloud_speech_config,
             reset_config,
             export_config,
             import_config,

@@ -937,7 +937,7 @@ export function runManifestParserSelfTest({
     ['bitfun-core-types', ['local-storage', 'lsp']],
     ['bitfun-events', ['local-storage']],
     ['chrono', ['filesystem', 'local-storage']],
-    ['fs2', ['local-storage', 'runtime-ownership']],
+    ['fs2', ['json-io', 'local-storage', 'runtime-ownership']],
     ['git2', ['session-git']],
     ['globset', ['workspace-instructions']],
     ['ignore', ['filesystem']],
@@ -957,7 +957,7 @@ export function runManifestParserSelfTest({
     ],
     ['which', ['process-runtime']],
     ['win32job', ['process-runtime']],
-    ['windows', ['local-storage', 'process-runtime']],
+    ['windows', ['json-io', 'local-storage', 'process-runtime']],
     ['zip', ['lsp']],
   ]);
   for (const [dependencyName, ownerFeatures] of expectedServicesCoreOwners) {

@@ -2,6 +2,7 @@
 
 use crate::api::app_state::AppState;
 use crate::startup_trace::DesktopStartupTrace;
+use bitfun_core::service::config::{SaveCloudSpeechConfigRequest, SaveCloudSpeechConfigResult};
 use bitfun_core::util::errors::BitFunError;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
@@ -222,6 +223,31 @@ pub async fn set_config(
         trace_started,
     );
     result
+}
+
+#[tauri::command]
+pub async fn save_cloud_speech_config(
+    state: State<'_, AppState>,
+    request: SaveCloudSpeechConfigRequest,
+) -> Result<SaveCloudSpeechConfigResult, String> {
+    match state.config_service.save_cloud_speech_config(request).await {
+        Ok(result) => {
+            state.ai_client_factory.invalidate_cache();
+            crate::api::remote_connect_api::notify_settings_changed();
+            info!(
+                "Cloud speech configuration saved atomically: model_id={}, created={}",
+                result.model_id, result.created
+            );
+            Ok(result)
+        }
+        Err(error) => {
+            error!("Failed to save cloud speech configuration: {}", error);
+            Err(format!(
+                "Failed to save cloud speech configuration: {}",
+                error
+            ))
+        }
+    }
 }
 
 #[tauri::command]

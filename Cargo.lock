@@ -926,6 +926,7 @@ dependencies = [
  "agent-client-protocol",
  "anyhow",
  "bitfun-app-server-protocol",
+ "serde_json",
  "tokio",
 ]
 

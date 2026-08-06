@@ -108,6 +108,10 @@ describe('resolveWsMethod', () => {
       'config/resetAgentProfileConfig'
     );
     expect(resolveWsMethod('set_config')).toBe('config/setConfig');
+    expect(resolveWsMethod('save_cloud_speech_config')).toBe(
+      'config/saveCloudSpeechConfig'
+    );
+    expect(resolveWsMethod('validate_config')).toBe('config/validateConfig');
     expect(resolveWsMethod('i18n_get_current_language')).toBe(
       'i18n/getCurrentLanguage'
     );
@@ -134,11 +138,12 @@ describe('resolveWsMethod', () => {
     // Runtime sanity: the schema entry carries the method string and the table
     // covers the schema methods (key count is stable; ordering is not pinned
     // because the table is a plain object). Track B Batch 1 added config write +
-    // i18n and the P0 Session/Config control plane, raising the count to 31.
+    // i18n and the P0 Session/Config control plane. Atomic cloud-speech save
+    // and config validation raise the count to 33.
     expect(AGENT_COMMAND_SCHEMA.start_dialog_turn.method).toBe(
       'agent/submitDialogTurn'
     );
-    expect(Object.keys(AGENT_COMMAND_SCHEMA).length).toBe(31);
+    expect(Object.keys(AGENT_COMMAND_SCHEMA).length).toBe(33);
 
     // Touch the locals so noUnusedLocals does not flag them under vitest's
     // transformed build (tsc --noEmit is the real gate; this is belt-and-suspenders).

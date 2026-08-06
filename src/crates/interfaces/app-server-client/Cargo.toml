@@ -12,6 +12,7 @@ name = "bitfun_app_server_client"
 agent-client-protocol = { workspace = true }
 anyhow = { workspace = true }
 bitfun-app-server-protocol = { path = "../app-server-protocol" }
+serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync", "time"] }
 
 [lints]

@@ -77,6 +77,10 @@ pub struct GlobalConfig {
     /// Web UI font size preferences (`get_config` / `set_config` path `font`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub font: Option<FontPreferenceSnapshot>,
+    /// Version of the persisted configuration schema. This is intentionally
+    /// independent from the BitFun application version stored in `version`.
+    #[serde(default = "default_config_schema_version")]
+    pub schema_version: u32,
     pub version: String,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub last_modified: chrono::DateTime<chrono::Utc>,
@@ -336,6 +340,32 @@ impl Default for VoiceInputConfig {
     }
 }
 
+/// Domain request for atomically saving a cloud speech-recognition model and
+/// selecting it for voice input. Text-generation fields are intentionally not
+/// part of this contract.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct SaveCloudSpeechConfigRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config_id: Option<String>,
+    pub preset: String,
+    pub name: String,
+    pub base_url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_url: Option<String>,
+    pub model_name: String,
+    pub api_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct SaveCloudSpeechConfigResult {
+    pub model_id: String,
+    pub created: bool,
+}
+
 /// AI experience configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -517,6 +547,12 @@ pub enum ModelCapability {
     FunctionCalling,
     /// Speech-to-text.
     SpeechRecognition,
+}
+
+pub const CURRENT_CONFIG_SCHEMA_VERSION: u32 = 1;
+
+fn default_config_schema_version() -> u32 {
+    CURRENT_CONFIG_SCHEMA_VERSION
 }
 
 /// Model category (for UI display and filtering).
@@ -1578,6 +1614,33 @@ pub struct ConfigValidationResult {
     pub valid: bool,
     pub errors: Vec<ConfigValidationError>,
     pub warnings: Vec<ConfigValidationWarning>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<ConfigDiagnostic>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ConfigDiagnosticSeverity {
+    Error,
+    Warning,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ConfigDiagnosticRecoverability {
+    None,
+    AutoFix,
+    ModelDisabled,
+    DefaultsUsed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ConfigDiagnostic {
+    pub path: String,
+    pub message: String,
+    pub code: String,
+    pub severity: ConfigDiagnosticSeverity,
+    pub recoverability: ConfigDiagnosticRecoverability,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1611,6 +1674,7 @@ impl Default for GlobalConfig {
             acp_clients: None,
             appearance: AppearanceConfig::default(),
             font: None,
+            schema_version: CURRENT_CONFIG_SCHEMA_VERSION,
             version: "1.0.0".to_string(),
             last_modified: chrono::Utc::now(),
         }
@@ -1881,11 +1945,44 @@ impl Default for MinimapConfig {
 }
 
 impl AIModelConfig {
+    pub fn supports_capability(&self, capability: ModelCapability) -> bool {
+        if self.capabilities.is_empty() {
+            self.default_capabilities_for_category()
+                .contains(&capability)
+        } else {
+            self.capabilities.contains(&capability)
+        }
+    }
+
+    pub fn supports_text_generation(&self) -> bool {
+        self.supports_capability(ModelCapability::TextChat)
+    }
+
+    /// Canonicalizes fields that only have meaning for text-generation
+    /// requests. Returns the names of fields that were cleared.
+    pub fn normalize_inapplicable_generation_fields(&mut self) -> Vec<&'static str> {
+        if self.supports_text_generation() {
+            return Vec::new();
+        }
+
+        let mut cleared = Vec::new();
+        if self.context_window.take().is_some() {
+            cleared.push("context_window");
+        }
+        if self.max_tokens.take().is_some() {
+            cleared.push("max_tokens");
+        }
+        if self.temperature.take().is_some() {
+            cleared.push("temperature");
+        }
+        if self.top_p.take().is_some() {
+            cleared.push("top_p");
+        }
+        cleared
+    }
+
     pub fn supports_image_understanding(&self) -> bool {
-        self.capabilities
-            .iter()
-            .any(|cap| matches!(cap, ModelCapability::ImageUnderstanding))
-            || matches!(self.category, ModelCategory::Multimodal)
+        self.supports_capability(ModelCapability::ImageUnderstanding)
     }
 
     /// Legacy helper that infers the model category from the model name and provider.

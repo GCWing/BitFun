@@ -43,8 +43,8 @@ export const requiredContentRules = [
         message: 'missing filesystem capability source gate',
       },
       {
-        regex: /#\[cfg\(feature = "local-storage"\)\]\s*pub mod json_store;/,
-        message: 'missing local-storage JSON owner source gate',
+        regex: /#\[cfg\(any\(feature = "json-io", feature = "local-storage"\)\)\]\s*pub mod json_store;/,
+        message: 'missing json-io/local-storage JSON owner source gate',
       },
       {
         regex: /#\[cfg\(feature = "local-storage"\)\]\s*pub mod persistence;/,
