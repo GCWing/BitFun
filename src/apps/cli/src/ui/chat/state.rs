@@ -21,7 +21,7 @@ use super::mcp_selector::{McpAction, McpItem, McpSelectorState};
 use super::model_config_form::{ModelConfigFormState, ModelFormAction};
 use super::model_selector::{ModelItem, ModelSelectorState};
 use super::permission::render_permission_overlay;
-use super::plugin_browser::{PluginBrowserAction, PluginBrowserState, PluginItem};
+use super::plugin_browser::{PluginBrowserAction, PluginBrowserState};
 use super::prompt_stash_selector::PromptStashSelectorState;
 use super::provider_selector::{ProviderSelection, ProviderSelectorState};
 use super::question::render_question_overlay;
@@ -38,6 +38,7 @@ use super::workspace_diff::WorkspaceDiffViewState;
 use super::workspace_reference::{WorkspaceReferencePopupState, WorkspaceReferenceQuery};
 use crate::actions::{ActionState, ResolvedKeymap};
 use crate::chat_state::{ChatMessage, ChatState, FlowItem, MessageRole};
+use crate::plugin_ops::PluginItem;
 
 #[derive(Debug)]
 struct SubmittedDraftRecord {

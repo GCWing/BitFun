@@ -6,24 +6,7 @@ use super::image_paste::{self, ImagePaste};
 use super::login_form::{LoginFormAction, LoginFormState};
 use super::model_config_form::{ModelConfigFormState, ModelFormAction, ModelFormResult};
 use super::model_selector::{ModelItem, ModelSelectorState};
-use super::plugin_browser::{
-    plugin_items_from_snapshot, PluginBrowserAction, PluginBrowserState, PluginInstallScope,
-    PluginItem,
-};
-
-/// Install a managed plugin from a package specifier.
-///
-/// TODO: replace with `bitfun_core::plugin_source::install_managed_plugin`
-/// once the core install API lands. This skeleton placeholder reports the
-/// operation as not yet implemented so the install UI flow can be exercised
-/// without crashing the startup TUI.
-async fn install_managed_plugin(
-    _workspace: &std::path::Path,
-    _spec: &str,
-    _scope: PluginInstallScope,
-) -> std::result::Result<(), String> {
-    Err("plugin install is not yet implemented (TODO: wire core install API)".to_string())
-}
+use super::plugin_browser::{PluginBrowserAction, PluginBrowserState};
 use super::provider_selector::{ProviderSelection, ProviderSelectorState};
 use super::session_selector::{SessionAction, SessionItem, SessionSelectorState};
 use super::skill_selector::{SkillItem, SkillSelectorAction, SkillSelectorState};
@@ -40,6 +23,7 @@ use crate::actions::{
     SHARED_TUI_EMBEDDED_HANDOFF, SHARED_TUI_HELP_NOTE,
 };
 use crate::config::CliConfig;
+use crate::plugin_ops::{PluginInstallScope, PluginItem};
 /// Startup page module
 ///
 /// Full-featured startup page with:
@@ -2162,14 +2146,7 @@ impl StartupPage {
 
     fn get_plugin_items(&self) -> Vec<PluginItem> {
         let workspace = self.workspace_path_buf();
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                match bitfun_core::plugin_source::refresh_managed_plugin_sources(&workspace).await {
-                    Ok(snapshot) => plugin_items_from_snapshot(&snapshot),
-                    Err(_) => Vec::new(),
-                }
-            })
-        })
+        crate::plugin_ops::refresh_plugin_items(&workspace, &tokio::runtime::Handle::current())
     }
 
     fn toggle_plugin(&mut self, item: PluginItem) {
@@ -2180,19 +2157,13 @@ impl StartupPage {
         self.plugin_browser.set_loading(Some(plugin_id.clone()));
         let result = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
-                if was_activated {
-                    bitfun_core::plugin_runtime::deactivate_managed_plugin(&workspace, &plugin_id)
-                        .await
-                        .map(|_| ())
-                } else {
-                    bitfun_core::plugin_runtime::activate_managed_plugin(
-                        &workspace,
-                        &plugin_id,
-                        Some(&content_hash),
-                    )
-                    .await
-                    .map(|_| ())
-                }
+                crate::plugin_ops::toggle_managed_plugin(
+                    &workspace,
+                    &plugin_id,
+                    &content_hash,
+                    !was_activated,
+                )
+                .await
             })
         });
         match result {
@@ -2213,8 +2184,9 @@ impl StartupPage {
         let workspace = self.agent.workspace_path_buf();
         self.plugin_browser.set_install_busy(true);
         let result = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(async { install_managed_plugin(&workspace, &spec, scope).await })
+            tokio::runtime::Handle::current().block_on(async {
+                crate::plugin_ops::install_managed_plugin(&workspace, &spec, scope).await
+            })
         });
         match result {
             Ok(()) => {

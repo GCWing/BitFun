@@ -6,11 +6,8 @@
 /// the run loop renders the loading state, then spawns the toggle on
 /// `rt_handle`, stores the `JoinHandle` in `pending_plugin_tasks`, polls
 /// `is_finished()` each loop, and on completion refreshes the popup items
-/// via `refresh_managed_plugin_sources`.
-use bitfun_core::plugin_runtime::{activate_managed_plugin, deactivate_managed_plugin};
-use bitfun_core::plugin_source::refresh_managed_plugin_sources;
-
-use crate::ui::plugin_browser::plugin_items_from_snapshot;
+/// via `plugin_ops::refresh_plugin_items`.
+use crate::plugin_ops::{install_managed_plugin, refresh_plugin_items, toggle_managed_plugin};
 
 impl ChatMode {
     /// Show the plugin browser popup. Loads items synchronously via
@@ -25,20 +22,10 @@ impl ChatMode {
         chat_view.show_plugin_browser(items);
     }
 
-    /// Load current plugin items from the managed plugin source service.
+    /// Load current plugin items via the CLI-local plugin ops boundary.
     pub(super) fn get_plugin_items(&self, rt_handle: &tokio::runtime::Handle) -> Vec<PluginItem> {
         let workspace = self.agent.workspace_path_buf();
-        tokio::task::block_in_place(|| {
-            rt_handle.block_on(async {
-                match refresh_managed_plugin_sources(&workspace).await {
-                    Ok(snapshot) => plugin_items_from_snapshot(&snapshot),
-                    Err(error) => {
-                        tracing::error!("Failed to load plugin snapshot: {}", error);
-                        Vec::new()
-                    }
-                }
-            })
-        })
+        refresh_plugin_items(&workspace, rt_handle)
     }
 
     /// Schedule a plugin toggle (deferred to allow the loading state to render).
@@ -73,17 +60,7 @@ impl ChatMode {
         let was_activated = item.activated;
         let tracked_id = plugin_id.clone();
         let handle = rt_handle.spawn(async move {
-            if was_activated {
-                deactivate_managed_plugin(&workspace, &plugin_id)
-                    .await
-                    .map(|_| ())
-                    .map_err(|error| error.to_string())
-            } else {
-                activate_managed_plugin(&workspace, &plugin_id, Some(&content_hash))
-                    .await
-                    .map(|_| ())
-                    .map_err(|error| error.to_string())
-            }
+            toggle_managed_plugin(&workspace, &plugin_id, &content_hash, !was_activated).await
         });
         self.pending_plugin_tasks.push(PendingPluginTask::Toggle {
             plugin_id: tracked_id,
@@ -221,18 +198,4 @@ impl ChatMode {
         }
         changed
     }
-}
-
-/// Install a managed plugin from a package specifier.
-///
-/// TODO: replace with `bitfun_core::plugin_source::install_managed_plugin`
-/// once the core install API lands. This skeleton placeholder reports the
-/// operation as not yet implemented so the install UI flow can be exercised
-/// without crashing the TUI.
-async fn install_managed_plugin(
-    _workspace: &std::path::Path,
-    _spec: &str,
-    _scope: PluginInstallScope,
-) -> std::result::Result<(), String> {
-    Err("plugin install is not yet implemented (TODO: wire core install API)".to_string())
 }
