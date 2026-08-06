@@ -1960,6 +1960,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     }
 
     const tick = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       void checkFileModification();
     };
     const pollOffsetMs = getPollOffsetMs(filePath);

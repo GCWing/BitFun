@@ -178,6 +178,7 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
       if (metadata?.status && metadata.status !== 'running') {
         return;
       }
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       void readOutput(false);
     }, isPeerDeviceModeActive()
       ? PEER_MODE_BACKGROUND_COMMAND_POLL_MS

@@ -845,7 +845,7 @@ describe('DispatchJobObserver', () => {
     cleanup();
   });
 
-  it('continues polling while hidden so background notifications can observe changes', async () => {
+  it('pauses polling while hidden to reduce background CPU usage', async () => {
     registerRunningJob();
     mocks.status.mockResolvedValue(status({ state: 'running' }));
     Object.defineProperty(document, 'visibilityState', {
@@ -855,13 +855,37 @@ describe('DispatchJobObserver', () => {
     const cleanup = installDispatchJobObserver(createContext());
 
     await vi.advanceTimersByTimeAsync(0);
-    expect(mocks.status).toHaveBeenCalledTimes(1);
+    expect(mocks.status).not.toHaveBeenCalled();
 
     cleanup();
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       value: 'visible',
     });
+  });
+
+  it('resumes polling when the window becomes visible again', async () => {
+    registerRunningJob();
+    mocks.status.mockResolvedValue(status({ state: 'running' }));
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'hidden',
+    });
+    const cleanup = installDispatchJobObserver(createContext());
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.status).not.toHaveBeenCalled();
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.status).toHaveBeenCalled();
+
+    cleanup();
   });
 
   it('does not present target cancellation as a successful completion', async () => {
