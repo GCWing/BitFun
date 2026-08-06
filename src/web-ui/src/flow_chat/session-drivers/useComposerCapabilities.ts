@@ -13,6 +13,7 @@
 import { useRuntimeStatusStore } from '../store/runtimeStatusStore';
 import type { Session } from '../types/flow-chat';
 import { resolveSessionDriverId, type SessionDriverId } from './resolve';
+import { isAcpFlowSession } from '../utils/acpSession';
 
 export const DISPATCH_TRANSFER_ROUND_PREFIX = 'dispatch-transfer:';
 
@@ -87,7 +88,8 @@ export function useComposerCapabilities(input: ComposerCapabilityInput): Compose
     localSlashCommands: !dispatchTransport,
     ops: dispatchTransport ? DISPATCH_SLASH_OPS : LOCAL_SLASH_OPS,
     usageReport: true,
-    threadGoal: !displayAsChild && !dispatchTransport,
+    // UI-12: ACP 会话走 agent 协议自带 goal 编排，误显本地 threadGoal 入口。
+    threadGoal: !displayAsChild && !dispatchTransport && !isAcpFlowSession(session),
     transferInFlight,
     submissionOptionsLocked,
     sessionScopedApproval: dispatchTransport,

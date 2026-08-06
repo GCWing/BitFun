@@ -351,6 +351,12 @@ export interface AIConfig {
   subagent_batch_execution_policy?: 'safe_only' | 'force_parallel' | 'serial';
   computer_use_enabled?: boolean;
   browser_control_preferred_browser?: string;
+  /**
+   * User-controllable master switch for the RBAC/Warden mechanism (R-26).
+   * When false, RBAC tool-restriction checks and the Warden runtime are
+   * fully bypassed. Defaults to true.
+   */
+  rbac_enabled?: boolean;
 }
 
 export interface StoredAgentProfileConfigItem {

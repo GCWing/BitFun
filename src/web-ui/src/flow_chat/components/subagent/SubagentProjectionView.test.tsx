@@ -50,6 +50,7 @@ vi.mock('../../store/FlowChatStore', () => ({
       subscribe: () => () => {},
     }),
   },
+  isSessionConfirmedDeleted: () => false,
 }));
 
 vi.mock('../../services/btwSessionPane', () => ({

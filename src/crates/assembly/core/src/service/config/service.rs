@@ -114,6 +114,10 @@ impl ConfigService {
             .await;
         }
 
+        // Keep the cached RBAC/Warden master switch in sync with the settings
+        // document (R-26): the switch may be toggled via `ai.rbac_enabled`.
+        super::global::refresh_rbac_enabled_cache().await;
+
         Ok(())
     }
 
@@ -176,6 +180,9 @@ impl ConfigService {
             .await;
         }
 
+        // Keep the cached RBAC/Warden master switch in sync (R-26).
+        super::global::refresh_rbac_enabled_cache().await;
+
         Ok(())
     }
 
@@ -226,6 +233,8 @@ impl ConfigService {
                     super::global::ConfigUpdateEvent::ModelConfigurationUpdated,
                 )
                 .await;
+                // Keep the cached RBAC/Warden master switch in sync (R-26).
+                super::global::refresh_rbac_enabled_cache().await;
                 Ok(ConfigImportResult {
                     success: true,
                     errors: Vec::new(),

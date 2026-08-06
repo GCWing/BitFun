@@ -1378,14 +1378,18 @@ fn new_chunk_id() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        decode_utf8_stream, new_session_id, workspace_pipe_owner, HeadTailText, OutputState,
-        OutputStream, PendingUtf8Streams,
+        decode_utf8_stream, new_session_id, HeadTailText, OutputStream, PendingUtf8Streams,
     };
-    use crate::remote_ssh::transport::WorkspaceStdio;
     use std::collections::HashMap;
+
+    #[cfg(unix)]
+    use super::{workspace_pipe_owner, OutputState};
+    #[cfg(unix)]
+    use crate::remote_ssh::transport::WorkspaceStdio;
+    #[cfg(unix)]
     use std::sync::Arc;
-    use tokio::sync::mpsc;
-    use tokio::time::Duration;
+    #[cfg(unix)]
+    use tokio::{sync::mpsc, time::Duration};
 
     #[cfg(unix)]
     async fn pipe_owner_exit_code(script: &str) -> Option<i32> {

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::{
     path, shell_display_name, DetectedShell, ShellCandidate, ShellDetector, ShellDiscoverySource,
@@ -179,7 +179,7 @@ fn windows_known_pwsh_locations_cover_user_package_and_both_program_files_views(
     assert_eq!(candidates[2].source, ShellDiscoverySource::PackageManager);
     assert_eq!(candidates[3].source, ShellDiscoverySource::SystemInstall);
     assert!(candidates.iter().any(|candidate| candidate.path
-        == PathBuf::from(r"C:\Program Files (x86)\PowerShell\7\pwsh.exe")));
+        == Path::new(r"C:\Program Files (x86)\PowerShell\7\pwsh.exe")));
 }
 
 #[cfg(windows)]

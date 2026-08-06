@@ -1,0 +1,19 @@
+name: "example-ma-cross"
+version: "1.0"
+bar_gen:
+  modes:
+    - "time"
+  time_freqs:
+    - "1m"
+data_source:
+  type: "csv_replay"
+  config:
+    csv_path: "test_data/golden_tick/20260721/a2609/a2609_golden_20260721.csv"
+nodes:
+  - id: "ma_cross"
+    type: "ma_cross"
+    config:
+      fast_period: 5
+      slow_period: 20
+    input_keys: []
+    output_keys: ["out1"]

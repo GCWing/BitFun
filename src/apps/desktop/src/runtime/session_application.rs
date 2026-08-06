@@ -381,24 +381,59 @@ impl DesktopSessionApplication {
         &self,
         request: DesktopSessionScopeRequest,
     ) -> DesktopSessionApplicationResult<Vec<SessionMetadata>> {
+        self.list_persisted_sessions_with_options(request, false)
+            .await
+    }
+
+    pub(crate) async fn list_persisted_sessions_with_options(
+        &self,
+        request: DesktopSessionScopeRequest,
+        include_hidden: bool,
+    ) -> DesktopSessionApplicationResult<Vec<SessionMetadata>> {
         let scope = self.resolved_scope(request).await;
         let storage_path = self.storage_path(&scope);
         self.compatibility
-            .list_persisted_sessions(&storage_path)
+            .list_persisted_sessions_with_options(&storage_path, include_hidden)
             .await
             .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
     }
 
+    /// List session ids recorded in the workspace deletion tombstone registry
+    /// (frontend ghost-resurrection guard on the initialization path).
+    pub(crate) async fn list_deleted_session_ids(
+        &self,
+        request: DesktopSessionScopeRequest,
+    ) -> DesktopSessionApplicationResult<Vec<String>> {
+        let scope = self.resolved_scope(request).await;
+        let storage_path = self.storage_path(&scope);
+        self.coordinator
+            .list_deleted_session_ids(&storage_path)
+            .await
+            .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
+    }
+
+    #[allow(dead_code)]
     pub(crate) async fn list_persisted_sessions_page(
         &self,
         request: DesktopSessionScopeRequest,
         cursor: Option<&str>,
         limit: usize,
     ) -> DesktopSessionApplicationResult<SessionMetadataPage> {
+        self.list_persisted_sessions_page_with_options(request, cursor, limit, false)
+            .await
+    }
+
+    pub(crate) async fn list_persisted_sessions_page_with_options(
+        &self,
+        request: DesktopSessionScopeRequest,
+        cursor: Option<&str>,
+        limit: usize,
+        include_hidden: bool,
+    ) -> DesktopSessionApplicationResult<SessionMetadataPage> {
         let scope = self.resolved_scope(request).await;
         let storage_path = self.storage_path(&scope);
         self.compatibility
-            .list_persisted_sessions_page(&storage_path, cursor, limit)
+            .list_persisted_sessions_page_with_options(&storage_path, cursor, limit, include_hidden)
             .await
             .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
     }
@@ -692,6 +727,32 @@ impl DesktopSessionApplication {
             session_id,
         )
         .await
+    }
+
+    /// Cascade-delete a session and its full descendant subtree through the
+    /// coordinator, then notify the host for every removed session id.
+    pub(crate) async fn delete_session_tree(
+        &self,
+        request: DesktopSessionScopeRequest,
+        session_id: String,
+    ) -> DesktopSessionApplicationResult<Vec<String>> {
+        let scope = self.resolved_scope(request).await;
+        self.ensure_runtime_ownership(&scope)?;
+        let deleted_session_ids = self
+            .coordinator
+            .delete_session_tree(
+                Path::new(&scope.workspace_path),
+                scope.remote_connection_id.as_deref(),
+                scope.resolved_remote_ssh_host.as_deref(),
+                &session_id,
+            )
+            .await
+            .map_err(desktop_core_session_error)?;
+        for deleted_session_id in &deleted_session_ids {
+            self.host_effects.release_session(deleted_session_id).await;
+            self.host_effects.notify_session_deleted(deleted_session_id);
+        }
+        Ok(deleted_session_ids)
     }
 
     pub(crate) async fn rename_session(

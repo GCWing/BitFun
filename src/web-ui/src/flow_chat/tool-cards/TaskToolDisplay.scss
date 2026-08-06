@@ -239,6 +239,20 @@
     background: rgba(var(--task-failed-badge-rgb), 0.15);
   }
 
+  .task-deleted-session-badge {
+    --task-deleted-session-badge-rgb: 107, 114, 128;
+
+    display: inline-flex;
+    align-items: center;
+    padding: 0.1rem var(--bf-appearance-token-flowchat-inline-gap);
+    border-radius: 3px;
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-weight: 500;
+    flex-shrink: 0;
+    color: var(--bf-appearance-token-color-text-muted);
+    background: rgba(var(--task-deleted-session-badge-rgb), 0.15);
+  }
+
   .task-review-outcome {
     display: inline-flex;
     align-items: center;

@@ -545,6 +545,7 @@ impl DeepReviewBudgetTracker {
         )
     }
 
+    #[allow(clippy::too_many_arguments)] // policy-record API; grouping would churn all callers
     pub fn record_task_for_packet_with_focus(
         &self,
         parent_dialog_turn_id: &str,

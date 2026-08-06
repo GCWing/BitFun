@@ -4,15 +4,15 @@ use crate::events::turn_outcome_kind;
 use crate::thread_goal::{build_objective_updated_plan, build_thread_goal_continuation_plan};
 use bitfun_runtime_ports::{
     should_skip_agent_session_reply, should_suppress_agent_session_cancelled_reply,
-    AgentSessionReplyRoute, DialogQueuePriority, DialogRoundInjectionSource,
-    DialogSessionStateFact, DialogSteerOutcome, DialogSubmissionPolicy, DialogTriggerSource,
-    RoundInjection, RoundInjectionKind, RoundInjectionTarget, RoundInjectionToolPreemption,
-    ThreadGoal,
+    AgentDialogPrependedReminder, AgentSessionReplyRoute, DialogQueuePriority,
+    DialogRoundInjectionSource, DialogSessionStateFact, DialogSteerOutcome,
+    DialogSubmissionPolicy, DialogTriggerSource, RoundInjection, RoundInjectionKind,
+    RoundInjectionTarget, RoundInjectionToolPreemption, ThreadGoal,
 };
 use std::collections::VecDeque;
 use std::fmt;
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const DEFAULT_MAX_DIALOG_QUEUE_DEPTH: usize = 20;
 
@@ -30,6 +30,7 @@ pub struct ActiveDialogTurn {
 }
 
 impl ActiveDialogTurn {
+    #[allow(clippy::too_many_arguments)] // state constructor; mirrors the struct fields
     pub fn new(
         turn_id: String,
         workspace_path: Option<String>,
@@ -127,6 +128,7 @@ pub struct ActiveDialogTurnStore {
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)] // matched turn is inherently larger than control outcomes
 pub enum ActiveDialogTurnTakeResult {
     Matched(ActiveDialogTurn),
     Absent,
@@ -202,6 +204,15 @@ impl DialogReplySuppressionSet {
         self.inner
             .remove(&(session_id.to_string(), turn_id.to_string()))
             .is_some()
+    }
+
+    /// Remove every entry belonging to `session_id`, regardless of turn id.
+    ///
+    /// Session-end cleanup: a recycled session id must not inherit suppression
+    /// marks or retired-outcome tombstones from the previous session.
+    pub fn clear_session(&self, session_id: &str) {
+        self.inner
+            .retain(|(entry_session_id, _), _| entry_session_id != session_id);
     }
 }
 
@@ -701,6 +712,7 @@ pub fn resolve_background_delivery_injection(
         content,
         display_content,
         created_at,
+        prepended_reminders: Vec::new(),
     }
 }
 
@@ -893,8 +905,50 @@ pub fn resolve_turn_outcome_lifecycle_plan(
     }
 }
 
+/// Current UTC time formatted as ISO-8601 with second precision and a `Z`
+/// suffix (e.g. `2026-08-05T03:14:15Z`), matching the GetTime tool's `utc_time`
+/// shape (see `get_time_tool.rs` `to_rfc3339_opts(SecondsFormat::Secs, true)`).
+///
+/// std-only implementation: `bitfun-agent-runtime` deliberately has no
+/// `chrono` dependency, so the civil-date conversion uses Howard Hinnant's
+/// public-domain `civil_from_days` algorithm (from the C++ `<chrono>`
+/// compatibility paper), translated to Rust (not a Cargo dependency).
+pub fn utc_iso8601_now() -> String {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    let total_seconds = now.as_secs() as i64;
+    let days = total_seconds.div_euclid(86_400);
+    let seconds_of_day = total_seconds.rem_euclid(86_400);
+    let (year, month, day) = civil_from_days(days);
+    let hour = seconds_of_day / 3_600;
+    let minute = (seconds_of_day % 3_600) / 60;
+    let second = seconds_of_day % 60;
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
+}
+
+/// Days since 1970-01-01 to a civil (year, month, day) date.
+///
+/// Howard Hinnant's `civil_from_days` (public domain, C++ `<chrono>` paper),
+/// Rust translation, not a Cargo dependency.
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    let year = if month <= 2 { y + 1 } else { y };
+    (year, month, day)
+}
+
 pub fn resolve_agent_session_reply_action(
     responder_session_id: &str,
+    responder_role: Option<&str>,
+    responder_depth: Option<u32>,
     active_turn: &ActiveDialogTurn,
     outcome: &TurnOutcome,
     suppressed_cancelled_reply: bool,
@@ -915,19 +969,49 @@ pub fn resolve_agent_session_reply_action(
         .workspace_path()
         .unwrap_or("<unknown workspace>");
     let status = outcome.status();
+    let server_time = utc_iso8601_now();
+    let mut reminder_lines = vec![
+        "This message is an automated reply to a previous SessionMessage call, not a human user message."
+            .to_string(),
+        format!("From session: {responder_session_id}"),
+        format!("From workspace: {responder_workspace}"),
+        format!("Status: {status}"),
+        format!("Server time: {server_time}"),
+    ];
+    if let Some(role) = responder_role {
+        reminder_lines.push(format!("From role: {role}"));
+    }
+    if let Some(depth) = responder_depth {
+        reminder_lines.push(format!("From depth: {depth}"));
+    }
+    // Rewrite the forwarded request metadata with the *responder* identity so
+    // the reply message never carries the original sender's badge (R-23).
+    let mut reply_metadata = match active_turn.user_message_metadata() {
+        Some(serde_json::Value::Object(map)) => map.clone(),
+        _ => serde_json::Map::new(),
+    };
+    reply_metadata.retain(|key, _| !key.starts_with("sender"));
+    reply_metadata.insert(
+        "senderSessionId".to_string(),
+        serde_json::json!(responder_session_id),
+    );
+    // Server-side timestamp for audit/timeline cross-checks. The forwarding
+    // side only strips `sender*` keys, so this key passes through untouched.
+    reply_metadata.insert("serverTime".to_string(), serde_json::json!(server_time));
+    if let Some(role) = responder_role {
+        reply_metadata.insert("senderRole".to_string(), serde_json::json!(role));
+    }
+    if let Some(depth) = responder_depth {
+        reply_metadata.insert("senderDepth".to_string(), serde_json::json!(depth));
+    }
     AgentSessionReplyAction::Forward(AgentSessionReplyPlan {
         target_session_id: reply_route.source_session_id.clone(),
         target_workspace_path: reply_route.source_workspace_path.clone(),
         target_remote_connection_id: reply_route.source_remote_connection_id.clone(),
         target_remote_ssh_host: reply_route.source_remote_ssh_host.clone(),
         user_input: outcome.reply_text(),
-        reminder_text: format!(
-            "This message is an automated reply to a previous SessionMessage call, not a human user message.\n\
-From session: {responder_session_id}\n\
-From workspace: {responder_workspace}\n\
-Status: {status}"
-        ),
-        user_message_metadata: active_turn.user_message_metadata().cloned(),
+        reminder_text: reminder_lines.join("\n"),
+        user_message_metadata: Some(serde_json::Value::Object(reply_metadata)),
     })
 }
 
@@ -939,6 +1023,7 @@ pub fn resolve_dialog_steering_action(
     display_content: Option<String>,
     steering_id: String,
     created_at: SystemTime,
+    prepended_reminders: Vec<AgentDialogPrependedReminder>,
 ) -> DialogSteeringAction {
     if active_turn_id != Some(turn_id) {
         return DialogSteeringAction::Reject {
@@ -958,6 +1043,7 @@ pub fn resolve_dialog_steering_action(
             content,
             display_content: display,
             created_at,
+            prepended_reminders,
         },
         outcome: DialogSteerOutcome::Buffered {
             session_id: session_id.to_string(),
@@ -1099,5 +1185,62 @@ mod tests {
             GoalContinuationAfterTurnAction::SkipNoActiveTurn
         );
         assert!(plan.dispatch_next());
+    }
+
+    #[test]
+    fn dialog_steering_rejects_when_target_turn_is_not_running() {
+        let action = resolve_dialog_steering_action(
+            Some("turn-running"),
+            "session-1",
+            "turn-finished",
+            "urgent correction".to_string(),
+            None,
+            "steering-1".to_string(),
+            SystemTime::now(),
+            Vec::new(),
+        );
+
+        let DialogSteeringAction::Reject { error } = action else {
+            panic!("steering a non-running turn must be rejected");
+        };
+        assert!(error.contains("no longer running"));
+    }
+
+    #[test]
+    fn dialog_steering_buffers_user_steering_for_the_active_turn() {
+        let action = resolve_dialog_steering_action(
+            Some("turn-running"),
+            "session-1",
+            "turn-running",
+            "urgent correction".to_string(),
+            Some("display text".to_string()),
+            "steering-1".to_string(),
+            SystemTime::now(),
+            Vec::new(),
+        );
+
+        let DialogSteeringAction::Buffer { injection, outcome } = action else {
+            panic!("steering the active turn must be buffered");
+        };
+        assert_eq!(injection.kind, RoundInjectionKind::UserSteering);
+        assert_eq!(
+            injection.execution_policy,
+            RoundInjectionKind::UserSteering.default_execution_policy()
+        );
+        assert_eq!(
+            injection.target,
+            RoundInjectionTarget::ExactTurn("turn-running".to_string())
+        );
+        assert_eq!(injection.content, "urgent correction");
+        assert_eq!(injection.display_content.as_str(), "display text");
+
+        let DialogSteerOutcome::Buffered {
+            session_id,
+            turn_id,
+            steering_id,
+        } = outcome;
+        assert_eq!(session_id, "session-1");
+        assert_eq!(turn_id, "turn-running");
+        assert_eq!(steering_id, "steering-1");
     }
 }

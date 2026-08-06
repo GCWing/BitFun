@@ -81,6 +81,15 @@
       "rightAriaLabel": "调整右侧面板大小",
       "terminalBottomAriaLabel": "调整底部终端面板大小",
       "title": "拖拽调整面板大小 | 双击切换模式 | 当前: {{mode}}"
+    },
+    "beeColony": {
+      "title": "蜂群架构监视器",
+      "loading": "加载中...",
+      "notReady": "蜂群架构 MiniApp 尚未就绪",
+      "notReadyDetail": "{{error}}。请确认它已编译并部署。",
+      "restore": "还原",
+      "maximize": "最大化",
+      "close": "关闭"
     }
   },
   "runtimeStatus": {
@@ -347,7 +356,7 @@
         "complete": "证据充分后由代理调用 update_goal 标记为「已完成」"
       },
       "note": {
-        "active": "目标仍为进行中时，每轮对话结束会自动续跑（最多 100 次），直到代理调用 update_goal 标为已完成或达到上限。",
+        "active": "目标仍为进行中时，每轮对话结束会自动续跑（最多 10 次），直到代理调用 update_goal 标为已完成或达到上限。",
         "complete": "目标已标记完成。如需继续其他工作，可编辑或清除目标。",
         "paused": "目标已暂停，续跑与完成检查已停止。",
         "blocked": "目标已阻塞，需你介入或环境变化后再 /goal resume。",
@@ -922,6 +931,7 @@
     "cancel": "停止",
     "openThread": "打开子会话",
     "threadLabel": "子会话",
+    "deletedThreadLabel": "已删除会话",
     "emptyThreadLabel": "暂未打开{{label}}",
     "origin": "来自",
     "parent": "父会话",
@@ -1841,7 +1851,8 @@
       "reviewCheckUnavailable": "这项补充检查未能完成，主审核仍可继续。",
       "reviewPartialTimeout": "已超时，但返回了部分详情",
       "reviewTimedOut": "已超时",
-      "reviewStopped": "已停止"
+      "reviewStopped": "已停止",
+      "deletedSessionLabel": "会话已删除"
     },
     "taskDetailPanel": {
       "untitled": "未命名任务",
@@ -2495,7 +2506,16 @@
   },
   "subagent": {
     "showingLines": "当前仅显示 {{shown}} / {{total}} 行",
-    "showAll": "显示全部"
+    "showAll": "显示全部",
+    "completedNotification": "子代理任务已完成",
+    "errorNotification": "子代理任务执行失败",
+    "interruptedNotification": "子代理任务已取消",
+    "status": {
+      "completed": "任务完成",
+      "error": "执行出错",
+      "cancelled": "任务已取消"
+    },
+    "deletedSession": "会话已删除"
   },
   "pendingQueue": {
     "title": "待发送 ({{count}})",

@@ -85,6 +85,7 @@ impl Default for OpenCodeToolProviderOptions {
 pub struct OpenCodeToolProvider {
     options: OpenCodeToolProviderOptions,
     #[cfg(test)]
+    #[allow(clippy::type_complexity)] // injectable directory reader for tests
     directory_reader: Option<Arc<dyn Fn(&Path) -> std::io::Result<fs::ReadDir> + Send + Sync>>,
 }
 

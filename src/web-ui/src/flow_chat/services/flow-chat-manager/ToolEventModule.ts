@@ -9,6 +9,7 @@ import { createLogger } from '@/shared/utils/logger';
 import type { FlowChatContext, FlowToolItem, ToolEventOptions, DialogTurn } from './types';
 import { immediateSaveDialogTurn } from './PersistenceModule';
 import { applyPendingAcpPermissionForTool } from './AcpPermissionToolCardModule';
+import { ensureModelRoundExists } from './TextChunkModule';
 import { normalizeParamsPartialFragment } from '../EventBatcher';
 import { effectiveToolInvocation } from '../../utils/toolInvocationIdentity';
 import type {
@@ -89,7 +90,7 @@ export function processToolEvent(
     
     case 'Started': {
       flushPendingBatchedEvents(context);
-      handleStarted(store, sessionId, turnId, roundId, dialogTurn, toolEvent, attemptId, attemptIndex, options);
+      handleStarted(context, store, sessionId, turnId, roundId, dialogTurn, toolEvent, attemptId, attemptIndex, options);
       break;
     }
     
@@ -389,14 +390,8 @@ function handleEarlyDetected(
 
   const targetRound = dialogTurn.modelRounds.find(round => round.id === roundId);
   if (!targetRound) {
-    log.error('Tool EarlyDetected event references missing round (backend bug)', {
-      sessionId,
-      turnId,
-      roundId,
-      toolId: toolEvent.tool_id,
-      toolName: toolEvent.tool_name,
-    });
-    return;
+    // B1 防御：round 缺失时先惰性建 round，再追加 tool 项，避免工具事件被静默丢弃。
+    ensureModelRoundExists(context, sessionId, turnId, roundId);
   }
 
   store.addModelRoundItem(sessionId, turnId, preparingToolItem, roundId);
@@ -453,6 +448,7 @@ function handleWaiting(
  * Handle tool started event
  */
 function handleStarted(
+  context: FlowChatContext,
   store: FlowChatStore,
   sessionId: string,
   turnId: string,
@@ -506,13 +502,11 @@ function handleStarted(
       pendingTerminalSessionIds.delete(toolEvent.tool_id);
       applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
     } else {
-      log.error('Tool Started event references missing round (backend bug)', {
-        sessionId,
-        turnId,
-        roundId,
-        toolId: toolEvent.tool_id,
-        toolName: toolEvent.tool_name
-      });
+      // B1 防御：round 缺失时先惰性建 round，再追加 tool 项，避免工具事件被静默丢弃。
+      ensureModelRoundExists(context, sessionId, turnId, roundId);
+      store.addModelRoundItem(sessionId, turnId, toolItem, roundId);
+      pendingTerminalSessionIds.delete(toolEvent.tool_id);
+      applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
     }
   }
 }
@@ -787,4 +781,33 @@ export function handleToolTerminalReady(
     toolUseId: tool_use_id,
     terminalSessionId: terminal_session_id,
   });
+}
+
+/**
+ * UI-11: turn 到达终态（completed / failed / cancelled）时清理模块级
+ * pendingTerminalSessionIds 中属于该 turn 的滞留项——tool 尚未走到 Started
+ * 即被终态吞掉时，其 terminal_session_id 不再有机会消费，避免 Map 无限累积。
+ */
+export function cleanupPendingTerminalSessionIdsForTurn(
+  sessionId: string,
+  turnId: string,
+): void {
+  if (pendingTerminalSessionIds.size === 0) {
+    return;
+  }
+
+  const store = FlowChatStore.getInstance();
+  const session = store.getState().sessions.get(sessionId);
+  const turn = session?.dialogTurns.find(candidate => candidate.id === turnId);
+  if (!turn) {
+    return;
+  }
+
+  for (const round of turn.modelRounds) {
+    for (const item of round.items) {
+      if (item.type === 'tool' && typeof item.id === 'string') {
+        pendingTerminalSessionIds.delete(item.id);
+      }
+    }
+  }
 }

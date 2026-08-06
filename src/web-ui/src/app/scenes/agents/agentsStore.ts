@@ -35,7 +35,7 @@ export interface AgentWithCapabilities extends SubagentInfo {
 
 export const CAPABILITY_COLORS: Record<CapabilityCategory, string> = CAPABILITY_ACCENT;
 
-export type AgentsScenePage = 'home' | 'createAgent';
+export type AgentsScenePage = 'home' | 'createAgent' | 'createLegion';
 export type AgentEditorMode = 'create' | 'edit';
 export type AgentFilterLevel = 'all' | 'builtin' | 'user' | 'project' | 'external';
 export type AgentFilterType = 'all' | 'mode' | 'subagent';
@@ -53,6 +53,7 @@ interface AgentsStoreState {
   setAgentFilterType: (filter: AgentFilterType) => void;
   openHome: () => void;
   openCreateAgent: () => void;
+  openCreateLegion: () => void;
   openEditAgent: (agentId: string) => void;
 }
 
@@ -73,6 +74,7 @@ export const useAgentsStore = create<AgentsStoreState>((set) => ({
     agentEditorMode: 'create',
     editingAgentId: null,
   }),
+  openCreateLegion: () => set({ page: 'createLegion' }),
   openEditAgent: (agentId: string) => set({
     page: 'createAgent',
     agentEditorMode: 'edit',

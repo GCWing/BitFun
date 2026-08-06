@@ -81,6 +81,15 @@
       "rightAriaLabel": "Resize right panel",
       "terminalBottomAriaLabel": "Resize bottom terminal panel",
       "title": "Drag to resize | Double-click to switch mode | Current: {{mode}}"
+    },
+    "beeColony": {
+      "title": "Bee colony architecture monitor",
+      "loading": "Loading...",
+      "notReady": "Bee colony MiniApp not ready",
+      "notReadyDetail": "{{error}}. Make sure it is compiled and deployed.",
+      "restore": "Restore",
+      "maximize": "Maximize",
+      "close": "Close"
     }
   },
   "runtimeStatus": {
@@ -347,7 +356,7 @@
         "complete": "When proven, the agent calls update_goal to mark Complete"
       },
       "note": {
-        "active": "While active, each finished turn auto-continues toward the goal (up to 100 times) until the agent calls update_goal(complete) or the limit is reached.",
+        "active": "While active, each finished turn auto-continues toward the goal (up to 10 times) until the agent calls update_goal(complete) or the limit is reached.",
         "complete": "Marked complete. Edit or clear the goal to start different work.",
         "paused": "Paused — continuation and completion checks are stopped.",
         "blocked": "Blocked — resume with /goal resume after you unblock or the environment changes.",
@@ -922,6 +931,7 @@
     "cancel": "Stop",
     "openThread": "Open thread",
     "threadLabel": "Side thread",
+    "deletedThreadLabel": "Deleted session",
     "emptyThreadLabel": "No {{label}} open",
     "origin": "Asked from",
     "parent": "parent session",
@@ -1841,7 +1851,8 @@
       "reviewCheckUnavailable": "This additional check could not be completed. The main review can continue.",
       "reviewPartialTimeout": "Timed out after returning partial details",
       "reviewTimedOut": "Timed out",
-      "reviewStopped": "Stopped"
+      "reviewStopped": "Stopped",
+      "deletedSessionLabel": "Session deleted"
     },
     "taskDetailPanel": {
       "untitled": "Untitled Task",
@@ -2495,7 +2506,16 @@
   },
   "subagent": {
     "showingLines": "Showing {{shown}} of {{total}} lines",
-    "showAll": "Show all"
+    "showAll": "Show all",
+    "completedNotification": "Subagent completed",
+    "errorNotification": "Subagent failed",
+    "interruptedNotification": "Subagent interrupted",
+    "status": {
+      "completed": "Completed",
+      "error": "Error",
+      "cancelled": "Stopped"
+    },
+    "deletedSession": "Session deleted"
   },
   "pendingQueue": {
     "title": "Queued ({{count}})",

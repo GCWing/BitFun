@@ -461,6 +461,7 @@ mod tests {
                 turn_id: "turn-1".to_string(),
                 content: "check tests".to_string(),
                 display_content: None,
+                prepended_reminders: Vec::new(),
             },
         };
         let rules = operation.rules();

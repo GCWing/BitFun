@@ -109,6 +109,7 @@ fluent-bundle = { workspace = true }
 unic-langid = { workspace = true }
 
 sha2 = { workspace = true }
+rand = { workspace = true }
 
 # QR code generation
 

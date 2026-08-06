@@ -1072,6 +1072,7 @@ fn spawn_turn_cancellation(
 
 static PEER_HOST_STATE: OnceLock<PeerHostState> = OnceLock::new();
 
+#[allow(clippy::result_large_err)] // returns the rejected state itself; boxing would require callers to reconstruct it
 pub(crate) fn set_peer_host_state(state: PeerHostState) -> Result<(), PeerHostState> {
     PEER_HOST_STATE.set(state)
 }

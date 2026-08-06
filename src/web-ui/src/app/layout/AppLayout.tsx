@@ -53,6 +53,9 @@ const ToolbarMode = lazy(() =>
 const FloatingMiniChat = lazy(() =>
   import('./FloatingMiniChat').then(module => ({ default: module.FloatingMiniChat }))
 );
+const BeeColonyMonitor = lazy(() =>
+  import('./BeeColonyMonitor').then(module => ({ default: module.BeeColonyMonitor }))
+);
 const AboutDialog = lazy(() =>
   import('../components/AboutDialog').then(module => ({ default: module.AboutDialog }))
 );
@@ -772,6 +775,13 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
         {!isWelcomeScene && !isAgentScene && (
           <Suspense fallback={null}>
             <FloatingMiniChat />
+          </Suspense>
+        )}
+
+        {/* Agent scenes: bee colony architecture monitor (self-gates to agentic tabs) */}
+        {!isWelcomeScene && isAgentScene && (
+          <Suspense fallback={null}>
+            <BeeColonyMonitor />
           </Suspense>
         )}
       </div>

@@ -16,9 +16,10 @@ import {
   ShieldCheck,
   Square,
   SquareCheck,
+  Target,
 } from 'lucide-react';
 import { ThreadGoalStripButton } from './thread-goal/ThreadGoalStripButton';
-import type { ThreadGoalSnapshot } from '../services/goalService';
+import type { GoalChainEntry, ThreadGoalSnapshot } from '../services/goalService';
 import { Tooltip, IconButton } from '@/component-library';
 import { useGitState } from '@/tools/git/hooks/useGitState';
 import type { SessionExecutionTarget } from '@/infrastructure/api/service-api/WorktreeAPI';
@@ -44,6 +45,7 @@ export interface ChatInputWorkspaceStripProps {
   threadGoal?: {
     visible: boolean;
     goal: ThreadGoalSnapshot | null;
+    goalChain?: GoalChainEntry[];
     onOpen: () => void;
   };
   /** Global native-tool permission mode exposed as a compact strip control. */
@@ -527,10 +529,69 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
             </div>
           ) : null}
           {showGoal ? (
-            <ThreadGoalStripButton
-              goal={threadGoal.goal}
-              onOpen={threadGoal.onOpen}
-            />
+            threadGoal.goalChain && threadGoal.goalChain.length > 0 ? (
+              <div className="bitfun-chat-input-workspace-strip__goal-chain">
+                {threadGoal.goalChain.map((entry, index) => {
+                  const isLast = index === threadGoal.goalChain!.length - 1;
+                  const hasGoal = !!entry.goal?.objective;
+                  const objective = entry.goal?.objective ?? '';
+                  const truncated =
+                    objective.length > 24
+                      ? objective.slice(0, 24) + '\u2026'
+                      : objective;
+                  return (
+                    <React.Fragment key={entry.sessionId}>
+                      <span
+                        className={[
+                          'bitfun-chat-input-workspace-strip__goal-chain-chip',
+                          isLast && 'bitfun-chat-input-workspace-strip__goal-chain-chip--current',
+                          !hasGoal && 'bitfun-chat-input-workspace-strip__goal-chain-chip--empty',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        title={hasGoal ? objective : t('threadGoal.stripTooltipEmpty')}
+                        onClick={isLast ? threadGoal.onOpen : undefined}
+                        role={isLast ? 'button' : undefined}
+                        tabIndex={isLast ? 0 : undefined}
+                        onKeyDown={
+                          isLast
+                            ? (e: React.KeyboardEvent) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  threadGoal.onOpen();
+                                }
+                              }
+                            : undefined
+                        }
+                      >
+                        {hasGoal ? (
+                          <span className="bitfun-chat-input-workspace-strip__goal-chain-chip-text">
+                            {truncated}
+                          </span>
+                        ) : (
+                          <span
+                            className="bitfun-chat-input-workspace-strip__goal-chain-chip-icon"
+                            aria-hidden
+                          >
+                            <Target size={14} strokeWidth={2} />
+                          </span>
+                        )}
+                      </span>
+                      {!isLast && (
+                        <span className="bitfun-chat-input-workspace-strip__goal-chain-sep" aria-hidden>
+                          &rsaquo;
+                        </span>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            ) : (
+              <ThreadGoalStripButton
+                goal={threadGoal.goal}
+                onOpen={threadGoal.onOpen}
+              />
+            )
           ) : null}
           {showUsage ? (
             <Tooltip content={t('usage.runtime.tooltip')}>

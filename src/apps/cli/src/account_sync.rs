@@ -378,11 +378,10 @@ pub(crate) async fn run_auto_sync(
                 Ok((session_id, hash, Ok(Ok(version)))) => {
                     uploaded.push((session_id.clone(), hash, version));
                     let done = uploaded.len();
-                    let percent = if upload_total == 0 {
-                        95u8
-                    } else {
-                        20 + ((75 * done) / upload_total) as u8
-                    };
+                    let percent = (75 * done)
+                        .checked_div(upload_total)
+                        .map(|part| 20 + part as u8)
+                        .unwrap_or(95u8);
                     emit_progress(
                         "exporting_sessions",
                         percent.min(95),
@@ -467,7 +466,7 @@ pub(crate) fn sync_phase_label(progress: &SyncProgress) -> String {
         }
         "done" => format!("Sync complete (exported {})", progress.sessions_exported),
         "starting" => "Starting sync…".into(),
-        other if other.is_empty() => "Sync".into(),
+        "" => "Sync".into(),
         other => other.to_string(),
     }
 }

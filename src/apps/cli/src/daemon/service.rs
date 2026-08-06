@@ -85,6 +85,7 @@ fn render_launch_agent(executable: &Path) -> String {
     )
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 fn run_command(program: &str, args: &[&str]) -> Result<std::process::Output> {
     std::process::Command::new(program)
         .args(args)
@@ -110,6 +111,7 @@ fn run_systemctl_user(args: &[&str]) -> Result<std::process::Output> {
         .with_context(|| format!("run `systemctl --user {}`", args.join(" ")))
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 #[cfg(target_os = "macos")]
 fn ensure_success(program: &str, args: &[&str]) -> Result<()> {
     let output = run_command(program, args)?;

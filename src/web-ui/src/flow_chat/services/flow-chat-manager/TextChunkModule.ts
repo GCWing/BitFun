@@ -78,6 +78,32 @@ function findRound(
 }
 
 /**
+ * B1 惰性建 round 公共函数：ACP 直连投递等事件源可能跳过 model-round-started，
+ * round 缺失时先建 round（id=roundId）再追加内容，避免数据被静默丢弃。
+ * text-chunk 与 tool-event 路径共用。addModelRound 按 roundId 去重，重复调用安全。
+ */
+export function ensureModelRoundExists(
+  context: FlowChatContext,
+  sessionId: string,
+  turnId: string,
+  roundId: string
+): void {
+  if (findRound(context, sessionId, turnId, roundId)) {
+    return;
+  }
+  const lazyModelRound: import('../../types/flow-chat').ModelRound = {
+    id: roundId,
+    index: 0,
+    items: [],
+    isStreaming: true,
+    isComplete: false,
+    status: 'streaming',
+    startTime: Date.now(),
+  };
+  context.flowChatStore.addModelRound(sessionId, turnId, lazyModelRound);
+}
+
+/**
  * Process a normal text chunk without notifying the store.
  */
 export function processNormalTextChunkInternal(
@@ -152,7 +178,13 @@ export function processNormalTextChunkInternal(
       attemptId,
       attemptIndex,
     };
-    
+
+    // B1 防御：ACP 直连投递等事件源可能跳过 model-round-started，round 缺失时
+    // 先惰性建 round（id=roundId）再追加文本项，避免文本内容被静默丢弃。
+    if (!round) {
+      ensureModelRoundExists(context, sessionId, turnId, roundId);
+    }
+
     context.flowChatStore.addModelRoundItemSilent(sessionId, turnId, textItem, roundId);
     sessionActiveTextItems.set(streamKey, textItemId);
   } else {

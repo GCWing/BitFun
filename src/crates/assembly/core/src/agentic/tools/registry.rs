@@ -542,6 +542,7 @@ mod tests {
             "analyze_image",
             "Glob",
             "Grep",
+            "WorkspaceScan",
             "Write",
             "Edit",
             "Delete",
@@ -560,6 +561,9 @@ mod tests {
             "create_goal",
             "update_goal",
             "CreatePlan",
+            "PlanList",
+            "PlanRead",
+            "PlanUpdate",
             "submit_code_review",
             "GetToolSpec",
             "CallDeferredTool",
@@ -569,8 +573,12 @@ mod tests {
             "UpdateCanvas",
             "PatchCanvas",
             "SessionControl",
+            "LegionControl",
             "SessionMessage",
             "SessionHistory",
+            "acp_control",
+            "acp_message",
+            "acp_history",
             "Cron",
             "WebSearch",
             "WebFetch",
@@ -743,6 +751,9 @@ mod tests {
         assert!(!registry.is_tool_deferred("InitMiniApp"));
         assert!(!registry.is_tool_deferred("FinalizeMiniApp"));
         assert!(!registry.is_tool_deferred("PublishMiniApp"));
+        // 2026-08-04 user calibration: CreatePlan is a commander staple and is
+        // directly available without a GetToolSpec unlock round-trip.
+        assert!(!registry.is_tool_deferred("CreatePlan"));
         assert!(!registry.is_tool_deferred("PublishAppearance"));
     }
 
@@ -754,11 +765,14 @@ mod tests {
             registry.get_deferred_tool_names(),
             vec![
                 "ListModels",
-                "CreatePlan",
                 "GetFileDiff",
                 "SessionControl",
+                "LegionControl",
                 "SessionMessage",
                 "SessionHistory",
+                "acp_control",
+                "acp_message",
+                "acp_history",
                 "Cron",
                 "WebSearch",
                 "WebFetch",
@@ -796,18 +810,20 @@ mod tests {
                 "analyze_image",
                 "Glob",
                 "Grep",
+                "WorkspaceScan",
                 "GetTime",
                 "ListModels",
                 "Skill",
                 "AskUserQuestion",
-                "TodoWrite",
                 "get_goal",
-                "CreatePlan",
+                "PlanList",
+                "PlanRead",
                 "submit_code_review",
                 "GetToolSpec",
                 "GetFileDiff",
                 "ReadCanvas",
                 "SessionHistory",
+                "acp_history",
                 "WebSearch",
                 "WebFetch",
                 "ListMCPResources",

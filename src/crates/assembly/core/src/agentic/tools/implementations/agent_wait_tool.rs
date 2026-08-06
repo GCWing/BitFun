@@ -11,9 +11,11 @@ use serde_json::{json, Value};
 use std::collections::HashSet;
 use tokio::time::Duration;
 
-const DEFAULT_TIMEOUT_MS: u64 = 10 * 60 * 1_000;
+const DEFAULT_TIMEOUT_MS: u64 = 600_000;
 const MAX_TIMEOUT_MS: u64 = 60 * 60 * 1_000;
 
+/// DEPRECATED. Use SessionMessage for sub-agent communication (async, no waiting needed).
+/// Max 10min, only for short waits confirming session creation, not for long-running tasks.
 pub struct AgentWaitTool;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -116,6 +118,10 @@ impl AgentWaitTool {
         })
     }
 
+    /// 方向 C（并列返回面）：result_for_assistant 只内嵌极简状态（wait 状态 +
+    /// 每个 outcome 的 bg_task_id/agent_id/status），不嵌入 outcome.content 全文。
+    /// 全文留在 data JSON（outcome_json 含 content/error），父会话按需取 data；
+    /// 避免显式等待返回面携带「通知 + 全文」双路。
     fn assistant_result(result: &BackgroundSubagentWaitResult) -> String {
         if result.outcomes.is_empty() {
             return format!(
@@ -133,9 +139,6 @@ impl AgentWaitTool {
                 outcome.model_agent_id(),
                 outcome.status.as_str(),
             ));
-            if let Some(content) = &outcome.content {
-                message.push_str(content);
-            }
             if let Some(error) = &outcome.error {
                 message.push_str("\nError: ");
                 message.push_str(error);
@@ -190,7 +193,7 @@ The selected task set is fixed when the call starts. wait_mode defaults to `all`
                 },
                 "timeout_ms": {
                     "type": "integer",
-                    "description": "Maximum time to wait in milliseconds. Defaults to ten minutes."
+                    "description": "Maximum time to wait in milliseconds. Defaults to 10 minutes."
                 }
             },
             "additionalProperties": false

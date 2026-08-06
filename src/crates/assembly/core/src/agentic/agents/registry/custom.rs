@@ -694,6 +694,7 @@ impl AgentRegistry {
         self.replace_custom_agent_entry(agent_id, workspace_root, replacement)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn update_custom_subagent_definition(
         &self,
         agent_id: &str,

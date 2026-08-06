@@ -84,6 +84,7 @@ fn role(
     }
 }
 
+#[allow(clippy::too_many_arguments)] // strategy manifest builder; all params are profile fields
 fn strategy_profile(
     level: &str,
     label: &str,

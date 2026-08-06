@@ -88,6 +88,7 @@ vi.mock('../store/FlowChatStore', () => ({
       sessions,
       activeSessionId,
     }),
+    subscribe: () => () => {},
     addExternalSession: (...args: unknown[]) =>
       mocks.addExternalSession(...args),
     updateSessionRelationship: (...args: unknown[]) =>

@@ -372,6 +372,9 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     ("delete_session", RemoteWorkspacePolicy::LegacyUnaudited),
+    // Cascade deletion resolves the remote session storage path through the
+    // same desktop session scope as the single delete command.
+    ("delete_session_tree", RemoteWorkspacePolicy::RemoteRouted),
     ("delete_skill", RemoteWorkspacePolicy::LegacyUnaudited),
     ("delete_subagent", RemoteWorkspacePolicy::LegacyUnaudited),
     // Detached dispatch is routed by its own immutable target and observer
@@ -927,6 +930,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     (
         "list_persisted_sessions",
         RemoteWorkspacePolicy::LegacyUnaudited,
+    ),
+    (
+        "list_deleted_session_ids",
+        RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (
         "list_persisted_sessions_page",

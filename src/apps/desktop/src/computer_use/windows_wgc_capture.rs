@@ -4,6 +4,9 @@
 //! DirectComposition / UWP / WinUI3 surfaces. Requires Windows 10 1903+.
 
 #![allow(dead_code)]
+// All unsafe blocks are single Win32/WinRT API calls through the windows crate;
+// HWND validity is checked before any FFI call (see capture_window_bgra).
+#![allow(clippy::undocumented_unsafe_blocks)]
 
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use std::time::{Duration, Instant};

@@ -596,11 +596,9 @@ impl ChatMode {
                 chat_view.set_cursor_end();
             }
 
-            (KeyCode::Esc, _) => {
-                if chat_view.browse_mode {
-                    chat_view.scroll_to_bottom();
-                    chat_view.set_status(Some("Exited browse mode".to_string()));
-                }
+            (KeyCode::Esc, _) if chat_view.browse_mode => {
+                chat_view.scroll_to_bottom();
+                chat_view.set_status(Some("Exited browse mode".to_string()));
             }
 
             (KeyCode::Char('!'), KeyModifiers::NONE | KeyModifiers::SHIFT)

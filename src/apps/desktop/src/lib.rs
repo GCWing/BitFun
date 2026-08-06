@@ -600,6 +600,7 @@ pub async fn run() {
         app_state.workspace_service.clone(),
         app_state.ssh_manager.clone(),
         app_state.acp_client_service.clone(),
+        ai_client_factory.clone(),
     ) {
         Ok(runtime) => runtime,
         Err(error) => {
@@ -607,6 +608,24 @@ pub async fn run() {
             return;
         }
     };
+    // ACP session lifecycle bridge: keeps the external ACP client process in
+    // sync with agentic session lifecycle events (start on `acp__*` session
+    // creation, release on deletion, cancel on dialog turn cancellation).
+    // Registered after AppState is available; the event router is the same
+    // instance created by `init_agentic_system`.
+    event_router.subscribe_internal(
+        "acp_session_lifecycle".to_string(),
+        Arc::new(runtime::AcpSessionLifecycleSubscriber::new(
+            app_state.acp_client_service.clone(),
+        )),
+    );
+    // Dedicated ACP tool family (`acp_control`/`acp_message`/`acp_history`)
+    // reaches the real external ACP process through this port; core keeps no
+    // dependency on the ACP crate.
+    coordinator.set_acp_client_port(Arc::new(runtime::DesktopAcpClientPort::new(
+        app_state.acp_client_service.clone(),
+        Some(coordinator.clone()),
+    )));
     startup_timings.record_elapsed("initialize_desktop_agent_runtime", step_started);
     startup_trace.record_elapsed_step(
         "native_pre_tauri",
@@ -1164,6 +1183,7 @@ pub async fn run() {
             api::agentic_api::read_background_command_output,
             api::agentic_api::list_background_command_activities,
             api::agentic_api::delete_session,
+            api::agentic_api::delete_session_tree,
             api::agentic_api::restore_session,
             api::agentic_api::restore_session_view,
             api::agentic_api::load_session_turn_window,
@@ -1434,6 +1454,7 @@ pub async fn run() {
             list_persisted_sessions,
             search_referenceable_sessions,
             list_persisted_sessions_page,
+            list_deleted_session_ids,
             get_session_lineage,
             load_session_turns,
             get_session_usage_report,

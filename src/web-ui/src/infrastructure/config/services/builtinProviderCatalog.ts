@@ -26,7 +26,7 @@ interface RawProvider {
 const overlayProviders = (overlayDocument as { providers: RawProvider[] }).providers;
 
 function isApiFormat(value: string): value is ApiFormat {
-  return ['openai', 'responses', 'anthropic', 'gemini', 'gemini-code-assist'].includes(value);
+  return ['openai', 'responses', 'anthropic', 'gemini', 'gemini-code-assist', 'codebuddy'].includes(value);
 }
 
 function toRegion(value: string | undefined): ProviderRegion {

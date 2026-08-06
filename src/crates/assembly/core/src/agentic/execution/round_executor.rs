@@ -131,6 +131,7 @@ impl RoundExecutor {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn record_retry_diagnostic(
         &self,
         context: &RoundContext,

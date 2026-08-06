@@ -5,6 +5,7 @@
 mod definitions;
 mod prompt_builder;
 mod registry;
+pub mod team_presets;
 
 use crate::agentic::session::{SystemPromptCacheIdentity, UserContextCacheIdentity};
 use crate::agentic::tools::framework::ToolExposure;
@@ -32,7 +33,8 @@ pub use definitions::modes::{
 pub use definitions::review::{ReviewFixerAgent, ReviewJudgeAgent, ReviewWorkerAgent};
 pub use definitions::shared::ReadonlySubagent;
 pub use definitions::subagents::{
-    ComputerUseMode, ExploreAgent, FileFinderAgent, GeneralPurposeAgent, ResearchSpecialistAgent,
+    AcpAgent, ComputerUseMode, ExploreAgent, FileFinderAgent, GeneralPurposeAgent,
+    ResearchSpecialistAgent,
 };
 use indexmap::IndexMap;
 pub use prompt_builder::{
@@ -85,6 +87,11 @@ pub fn shared_coding_mode_tool_exposure_overrides() -> AgentToolPolicyOverrides 
     let mut overrides = AgentToolPolicyOverrides::default();
     overrides.insert("WebSearch".to_string(), ToolExposure::Direct);
     overrides.insert("WebFetch".to_string(), ToolExposure::Direct);
+    // 2026-08-04 user calibration: the plan tool family is a commander
+    // staple, so CreatePlan stays directly available in commander modes
+    // without a GetToolSpec unlock round-trip (its tool definition default
+    // exposure is Direct as well, see create_plan_tool.rs).
+    overrides.insert("CreatePlan".to_string(), ToolExposure::Direct);
     overrides
 }
 
@@ -117,8 +124,9 @@ fn append_provider_group_tools(tools: &mut Vec<String>, provider_id: &'static st
 pub fn shared_coding_mode_tools() -> Vec<String> {
     let mut tools = vec![
         "Task".to_string(),
+        "SessionMessage".to_string(),
+        "SessionHistory".to_string(),
         "ListModels".to_string(),
-        "AgentWait".to_string(),
         "Read".to_string(),
         "view_image".to_string(),
         "analyze_image".to_string(),
@@ -140,6 +148,9 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "Skill".to_string(),
         "AskUserQuestion".to_string(),
         "CreatePlan".to_string(),
+        "PlanList".to_string(),
+        "PlanRead".to_string(),
+        "PlanUpdate".to_string(),
         "Git".to_string(),
         "ReviewPlatform".to_string(),
         "ControlHub".to_string(),
@@ -151,6 +162,16 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "PagePublish".to_string(),
     ];
     append_provider_group_tools(&mut tools, "core.canvas");
+    tools
+}
+
+/// Unified tool set for all SubAgents (built-in + ACP + custom).
+/// Includes shared_coding_mode_tools() + SessionControl (fission core).
+pub fn subagent_default_tools() -> Vec<String> {
+    let mut tools = shared_coding_mode_tools();
+    if !tools.contains(&"SessionControl".to_string()) {
+        tools.push("SessionControl".to_string());
+    }
     tools
 }
 
@@ -323,6 +344,9 @@ mod tests {
 
         assert!(tools.contains(&"ListModels".to_string()));
         assert!(tools.contains(&"CreatePlan".to_string()));
+        assert!(tools.contains(&"PlanList".to_string()));
+        assert!(tools.contains(&"PlanRead".to_string()));
+        assert!(tools.contains(&"PlanUpdate".to_string()));
         assert!(tools.contains(&"get_goal".to_string()));
         assert!(tools.contains(&"update_goal".to_string()));
     }

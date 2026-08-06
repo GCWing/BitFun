@@ -390,6 +390,73 @@
     }
   }
 
+  /* Thread goal chain: compact chips, one per goal level. */
+  &__goal-chain {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    max-width: 260px;
+    overflow: hidden;
+  }
+
+  &__goal-chain-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 140px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 11px;
+    line-height: 16px;
+    color: var(--bf-appearance-token-color-text-muted);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 8%, var(--bf-appearance-token-element-bg-medium));
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    &--current {
+      color: var(--bf-appearance-token-color-warning);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 10%, var(--bf-appearance-token-element-bg-medium));
+      cursor: pointer;
+
+      &:hover,
+      &:focus-visible {
+        background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 16%, var(--bf-appearance-token-element-bg-medium));
+        outline: none;
+      }
+    }
+
+    /* Empty entry (no goal on this level): muted Target icon placeholder. */
+    &--empty {
+      color: var(--bf-appearance-token-color-text-muted);
+      opacity: 0.72;
+    }
+  }
+
+  &__goal-chain-chip-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__goal-chain-chip-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    svg {
+      color: currentColor;
+    }
+  }
+
+  &__goal-chain-sep {
+    color: var(--bf-appearance-token-color-text-muted);
+    opacity: 0.5;
+    font-size: 12px;
+    line-height: 16px;
+    user-select: none;
+  }
+
   /* Keep the usage action compact, but large enough to read beside the strip text. */
   &__usage-btn.icon-btn {
     width: 16px;

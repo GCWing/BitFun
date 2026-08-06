@@ -2342,6 +2342,9 @@ fn replace_file_atomically(temp_path: &Path, target_path: &Path) -> io::Result<(
         .encode_wide()
         .chain(std::iter::once(0))
         .collect::<Vec<_>>();
+    // SAFETY: `target`, `temp` and `backup` are NUL-terminated wide strings
+    // allocated above; the Win32 calls only read them for the duration of the
+    // call and require no Rust-side aliasing.
     let result = unsafe {
         if target_path.exists() {
             ReplaceFileW(
@@ -2396,6 +2399,8 @@ fn restore_windows_backup_after_replace_failure(
             .encode_wide()
             .chain(std::iter::once(0))
             .collect::<Vec<_>>();
+        // SAFETY: `backup` and `target` are NUL-terminated wide strings
+        // allocated above; both remain valid for the duration of the call.
         let restore = unsafe {
             MoveFileExW(
                 PCWSTR(backup.as_ptr()),
@@ -2504,6 +2509,8 @@ fn trust_file_identity(file: &std::fs::File) -> io::Result<TrustFileIdentity> {
     };
 
     let mut information = BY_HANDLE_FILE_INFORMATION::default();
+    // SAFETY: `file`'s handle is valid via AsRawHandle and `information` is a
+    // live mutable reference that the call fills in.
     unsafe {
         GetFileInformationByHandle(HANDLE(file.as_raw_handle()), &mut information)
             .map_err(|error| io::Error::other(error.to_string()))?;
@@ -2728,6 +2735,9 @@ fn windows_handle_path(file: &std::fs::File) -> io::Result<Vec<u16>> {
     let handle = HANDLE(file.as_raw_handle());
     let mut buffer = vec![0_u16; 512];
     loop {
+        // SAFETY: `handle` derives from a live File via AsRawHandle and
+        // `buffer` is a mutable slice with a capacity large enough for any
+        // path the API reports; the returned length drives resize/truncate.
         let length = unsafe { GetFinalPathNameByHandleW(handle, &mut buffer, VOLUME_NAME_DOS) };
         if length == 0 {
             return Err(io::Error::last_os_error());

@@ -116,8 +116,9 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
     });
   }, [applyExpandedState, isExpanded, todosToDisplay.length]);
 
-  const renderTodoItem = (todo: TodoLike, key: string) => (
-    <div key={key} data-bf-component="todo-write-display" data-bf-part="item" className={`todo-item status-${todo.status}`}>
+  const renderTodoItem = (todo: TodoLike, key: string, depth: number) => (
+    <div key={key} data-bf-component="todo-write-display" data-bf-part="item" className={`todo-item status-${todo.status}`}
+      style={depth > 0 ? { paddingLeft: 12 + depth * 16 } : undefined}>
       <div className="todo-item-left">
         {todo.status === 'completed' && (
           <CheckCircle2 size={12} className="todo-status-icon todo-status-icon--completed" />
@@ -230,7 +231,7 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
   const expandedContent = hasTodos ? (
     <div data-bf-component="todo-write-display" data-bf-part="expanded" className="todo-expanded-body">
       <div data-bf-component="todo-write-display" data-bf-part="list" className="todo-full-list">
-        {todoRenderItems.map(({ todo, key }) => renderTodoItem(todo, key))}
+        {todoRenderItems.map(({ todo, key, depth }) => renderTodoItem(todo, key, depth))}
       </div>
     </div>
   ) : undefined;

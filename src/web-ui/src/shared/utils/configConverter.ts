@@ -26,7 +26,7 @@ export function convertToRustConfig(config: ModelConfig): RustModelConfig {
     format: config.format,
     base_url: config.baseUrl,          
     api_key: config.apiKey,            
-    context_window: config.contextWindow || 128128,  
+    context_window: config.contextWindow || 1048576,
     max_tokens: config.maxTokens,      
   };
 }

@@ -493,6 +493,9 @@ impl JsonFileStore {
 
         let temp = Self::windows_extended_path(tmp_path)?;
         let target = Self::windows_extended_path(target_path)?;
+        // SAFETY: `temp` and `target` are extended-length UTF-16 paths owned by
+        // local `OsString`-backed buffers; their pointers stay valid for the
+        // duration of the call and both buffers are null-terminated.
         let result = unsafe {
             if target_path.exists() {
                 ReplaceFileW(

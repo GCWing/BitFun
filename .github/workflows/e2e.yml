@@ -1,0 +1,86 @@
+# E2E test CI pipeline
+#
+# Architecture guide §13.1 - CI pipeline skeleton
+#   job-e2e (on main/PR labeled e2e):
+#     ├── pnpm e2e:test:l0:all
+#     ├── pnpm e2e:test:l1
+#     └── (reserved) cargo test --test e2e
+#
+# Architecture guide §12.1 - Layer 3: end-to-end tests
+#   - Tauri desktop shell E2E (WebDriver) - WebDriverIO
+#   - Web frontend E2E (Playwright) - reserved
+
+name: E2E Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    # Run only when the PR is labeled e2e (per architecture guide §13.1)
+    types: [opened, synchronize, labeled]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  CI: true
+  BITFUN_E2E_APP_MODE: debug
+
+jobs:
+  # -- Tauri desktop shell E2E (WebDriverIO) --
+  desktop-e2e:
+    # Run only on main branch or PRs with the e2e label
+    if: >
+      github.ref == 'refs/heads/main' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'e2e'))
+
+    timeout-minutes: 30
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12
+          cache: 'pnpm'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install E2E dependencies
+        run: pnpm run e2e:install
+
+      - name: Build Tauri desktop app (debug)
+        run: cargo build -p bitfun-desktop
+
+      - name: Run L0 smoke tests
+        run: pnpm run e2e:test:l0:all
+        continue-on-error: false
+
+      - name: Run L1 functional tests (core)
+        run: pnpm run e2e:test:l1
+        continue-on-error: true
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report-${{ matrix.os }}
+          path: tests/e2e/reports/
+          retention-days: 7

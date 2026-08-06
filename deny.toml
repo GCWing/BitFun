@@ -1,0 +1,83 @@
+# =============================================================================
+# cargo-deny configuration
+# License compliance + dependency review + vulnerability gate
+# =============================================================================
+# Reference: https://embarkstudios.github.io/cargo-deny/
+
+[advisories]
+# Ignore the following advisories (each needs an explicit reason)
+# ignore = [
+#     # Example: { id = "RUSTSEC-2024-0001", reason = "explain why this is ignored" },
+# ]
+vulnerability = "deny"
+unmaintained = "warn"
+notice = "warn"
+severity-threshold = "high"
+# Ignore yanked crate warnings (decide per-case when upstream is unmaintained)
+ignore-yanked = false
+
+[bans]
+# Ban specific crates
+multiple-versions = "deny"        # multiple versions of the same crate are not allowed
+wildcard-predicates = "deny"      # "*" version requirements are not allowed
+deny = []
+# skip list - allow multiple versions for some crates (usually unavoidable via transitive deps)
+skip = []
+# skip-tree - allow multiple versions for an entire subtree rooted at a crate
+skip-tree = [
+    # tokio-util multiple versions are common via transitive dependencies
+    { name = "tokio-util", version = "0.6" },
+    { name = "tokio-util", version = "0.7" },
+    # Some crates depend on different versions of the object-storage SDK
+    { name = "aws-sdk-s3", version = "0.39" },
+    { name = "aws-sdk-s3", version = "1.0" },
+]
+
+[licenses]
+# Allowed licenses
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Unlicense",
+    "CC0-1.0",
+    "Zlib",
+    "MPL-2.0",
+]
+# Licenses requiring explicit approval
+deny = [
+    "AGPL-3.0",
+    "GPL-3.0",
+    "GPL-2.0",
+    "LGPL-3.0",
+    "CC-BY-4.0",   # some CC licenses may restrict commercial use
+]
+# Licenses requiring manual confirmation
+copyleft = "deny"
+allow-osi-fsf-free = "both"
+confidence-threshold = 0.8
+default = "deny"
+# Exceptions - crates with explicit license approval
+exceptions = [
+    # Allow specific licenses for specific crates
+    { allow = ["MPL-2.0"], name = "ring" },
+    { allow = ["MPL-2.0"], name = "webpki" },
+    { allow = ["MPL-2.0"], name = "untrusted" },
+    { allow = ["ISC"], name = "ipnetwork" },
+]
+
+[sources]
+# Allowed crate sources
+allow-git-registry = true
+allow-registry = true
+# Unknown sources (e.g. git deps not published to crates.io) need explicit approval
+unknown-registry = "deny"
+unknown-git = "deny"
+# Git dependency allowlist
+allow-git = [
+    # List git dependencies not published to crates.io here
+]

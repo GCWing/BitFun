@@ -3028,9 +3028,9 @@ impl SSHConnectionManager {
                 .or_else(|| entry.as_ref().and_then(|entry| entry.port))
                 .unwrap_or(22);
             let identity_file = entry.as_ref().and_then(|entry| entry.identity_file.clone());
-            let auth = if identity_file.is_some() {
+            let auth = if let Some(identity_file) = identity_file {
                 SSHAuthMethod::PrivateKey {
-                    key_path: identity_file.expect("identity_file.is_some was checked"),
+                    key_path: identity_file,
                     passphrase: None,
                     certificate_path: entry
                         .as_ref()

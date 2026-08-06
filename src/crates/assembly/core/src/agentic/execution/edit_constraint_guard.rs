@@ -36,7 +36,7 @@ use shell_targets::ShellMutationOperation;
 use shell_targets::{explicit_bash_mutation_targets, has_unresolved_bash_mutation};
 
 pub const EDIT_CONSTRAINT_METADATA_KEY: &str = "editConstraintGuard";
-const EDIT_CONSTRAINT_SCHEMA_VERSION: u32 = 6;
+const EDIT_CONSTRAINT_SCHEMA_VERSION: u32 = 7;
 const MAX_PROMPT_CHARS: usize = 8_000;
 const MAX_RESPONSE_TELEMETRY_CHARS: usize = 4_000;
 const MAX_MODEL_ATTEMPTS: usize = 2;
@@ -50,6 +50,16 @@ You receive the currently active prohibitions and the latest user message.
 
 - Add a prohibition only when the latest message explicitly forbids modifying
   certain files, file types, or categories of files.
+- An allow-list is NOT a prohibition. Phrases like "only modify X", "只修改 X",
+  "仅允许修改 X", or "limit changes to X" say which files MAY be edited; they
+  never prohibit editing anything. Never add a prohibition derived from an
+  allow-list.
+- A prohibition (deny-list) exists only when the message explicitly forbids
+  modifying something, e.g. "do not modify X", "X is off limits", "禁止修改 X",
+  "不得修改 X", "不要修改 X".
+- When the latest message defines a new task scope (for example a fresh
+  allow-list), the new scope supersedes older prohibitions: keep only
+  prohibitions that are explicit in this latest message.
 - Revoke an active prohibition only when the latest message explicitly cancels,
   relaxes, or contradicts it (e.g. "you may modify tests now"). A revocation
   MUST copy the exact constraint_id from the active list. Never invent an id.
@@ -151,9 +161,6 @@ fn has_prohibition_signal(message: &str) -> bool {
         "must remain untouched",
         "without modifying",
         "without changing",
-        "only modify",
-        "only change",
-        "non-test files only",
         "不得",
         "不能修改",
         "不能删除",
@@ -163,7 +170,50 @@ fn has_prohibition_signal(message: &str) -> bool {
         "不要更改",
         "不要删除",
         "测试文件保持不变",
+    ]
+    .iter()
+    .any(|signal| lower.contains(signal))
+}
+
+/// Recognizes allow-list phrasing ("only modify X", "只修改 X", ...). These
+/// phrases define which files MAY be edited; they are not prohibitions and
+/// must not trigger the deny-list extraction path (F3/F5 regression: the guard
+/// rejected files the task explicitly allowed).
+fn has_allow_set_signal(message: &str) -> bool {
+    let lower = message.to_lowercase();
+    [
+        "only modify",
+        "only change",
+        "only edit",
+        "only touch",
+        "only update",
+        "only write",
+        "modify only",
+        "change only",
+        "edit only",
+        "restrict changes to",
+        "restrict edits to",
+        "limit changes to",
+        "limit edits to",
+        "changes must be limited to",
+        "changes should be limited to",
+        "changes should be restricted to",
+        "non-test files only",
+        "只修改",
+        "只更改",
+        "只改动",
+        "只编辑",
+        "仅修改",
+        "仅更改",
+        "仅改动",
+        "仅编辑",
+        "仅允许修改",
+        "只能修改",
+        "只能更改",
+        "只能改",
         "仅修改非测试",
+        "仅限于修改",
+        "修改范围",
     ]
     .iter()
     .any(|signal| lower.contains(signal))
@@ -454,17 +504,21 @@ pub async fn extract_constraints_with_active_and_revocation_authorization(
         .into_iter()
         .collect::<Vec<_>>();
     let deterministic_constraint_count = constraints.len();
+    let allow_set = has_allow_set_signal(user_message);
     let (truncated, input_truncated) = truncate_for_extraction(user_message);
     let prompt_chars = truncated.chars().count();
 
     // Irrelevant follow-ups stay on the local fast path even when constraints
     // are active. Only messages that may add or relax a file-edit boundary use
-    // the model-backed classifier.
+    // the model-backed classifier. Allow-list phrasing ("only modify X") never
+    // reaches the model: it defines a new scope instead of a prohibition.
     if !has_prohibition_signal(user_message) && !has_relaxation_signal(user_message) {
         return ConstraintExtractionRecord {
             message_sha256,
             dialog_turn_id: None,
-            status: if constraints.is_empty() {
+            status: if allow_set {
+                ExtractionStatus::ScopeReplaced
+            } else if constraints.is_empty() {
                 ExtractionStatus::NoConstraints
             } else {
                 ExtractionStatus::Extracted
@@ -623,6 +677,11 @@ pub async fn extract_constraints_with_active_and_revocation_authorization(
         ExtractionStatus::Extracted
     } else if failure.is_some() {
         ExtractionStatus::Failed
+    } else if allow_set {
+        // Mixed message (e.g. "don't modify Y, only modify X") that the model
+        // found no explicit prohibition in: the new scope still supersedes
+        // older constraints.
+        ExtractionStatus::ScopeReplaced
     } else {
         ExtractionStatus::NoConstraints
     };
@@ -812,6 +871,7 @@ fn resolved_path(context: &ToolUseContext, file_path: &str) -> Option<String> {
         .map(|resolved| resolved.resolved_path)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn decision_result(
     context: Option<&ToolUseContext>,
     tool_name: &str,

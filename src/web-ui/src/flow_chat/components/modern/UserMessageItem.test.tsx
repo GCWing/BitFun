@@ -714,4 +714,72 @@ describe('UserMessageItem steering tag', () => {
       editedContent: 'edited older window prompt',
     }));
   });
+
+  it('renders a sender identity badge for forwarded agent messages', () => {
+    act(() => {
+      root.render(
+        <FlowChatContext.Provider value={{ allowUserMessageRollback: false }}>
+          <UserMessageItem
+            message={{
+              id: 'user-forwarded-1',
+              content: 'run the recon task',
+              timestamp: 1000,
+              metadata: {
+                senderSessionId: 'commander-session',
+                senderRole: 'Commander',
+                senderDepth: 0,
+                senderName: 'Mengdie',
+              },
+            }}
+            turnId="turn-1"
+          />
+        </FlowChatContext.Provider>,
+      );
+    });
+
+    const badge = container.querySelector('.user-message-item__sender-badge');
+    expect(badge?.textContent).toBe('[Commander L0] Mengdie');
+  });
+
+  it('renders a fallback role when sender metadata lacks role and depth', () => {
+    act(() => {
+      root.render(
+        <FlowChatContext.Provider value={{ allowUserMessageRollback: false }}>
+          <UserMessageItem
+            message={{
+              id: 'user-forwarded-2',
+              content: 'reply from an unregistered session',
+              timestamp: 1000,
+              metadata: {
+                senderSessionId: 'unknown-session',
+              },
+            }}
+            turnId="turn-2"
+          />
+        </FlowChatContext.Provider>,
+      );
+    });
+
+    const badge = container.querySelector('.user-message-item__sender-badge');
+    expect(badge?.textContent).toBe('[Agent]');
+  });
+
+  it('does not render a sender badge for plain user messages without metadata', () => {
+    act(() => {
+      root.render(
+        <FlowChatContext.Provider value={{ allowUserMessageRollback: false }}>
+          <UserMessageItem
+            message={{
+              id: 'user-plain-1',
+              content: 'a direct user question',
+              timestamp: 1000,
+            }}
+            turnId="turn-3"
+          />
+        </FlowChatContext.Provider>,
+      );
+    });
+
+    expect(container.querySelector('.user-message-item__sender-badge')).toBeNull();
+  });
 });

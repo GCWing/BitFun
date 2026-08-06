@@ -460,8 +460,8 @@ impl LoginFormState {
         let inner = outer.inner(area);
         frame.render_widget(outer, area);
 
-        let form_width = inner.width.min(72).max(40);
-        let form_height = 15u16.min(inner.height.max(12));
+        let form_width = inner.width.clamp(40, 72);
+        let form_height = inner.height.clamp(12, 15);
         let form_area = Rect {
             x: inner.x + (inner.width.saturating_sub(form_width)) / 2,
             y: inner.y + (inner.height.saturating_sub(form_height)) / 2,
@@ -536,8 +536,8 @@ impl LoginFormState {
         let inner = outer.inner(area);
         frame.render_widget(outer, area);
 
-        let form_width = inner.width.min(76).max(40);
-        let form_height = 14u16.min(inner.height.max(10));
+        let form_width = inner.width.clamp(40, 76);
+        let form_height = inner.height.clamp(10, 14);
         let form_area = Rect {
             x: inner.x + (inner.width.saturating_sub(form_width)) / 2,
             y: inner.y + (inner.height.saturating_sub(form_height)) / 2,

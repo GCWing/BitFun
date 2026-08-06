@@ -194,16 +194,14 @@ impl MarkdownRenderer {
                             // Headings: don't wrap, just push as-is
                             lines.push(Line::from(std::mem::take(&mut current_line_spans)));
                         }
-                        TagEnd::Paragraph => {
-                            if !in_code_block && !table_state.in_table {
-                                flush_with_wrap(
-                                    &mut current_line_spans,
-                                    &mut lines,
-                                    wrap_width,
-                                    true,
-                                );
-                                lines.push(Line::from(""));
-                            }
+                        TagEnd::Paragraph if !in_code_block && !table_state.in_table => {
+                            flush_with_wrap(
+                                &mut current_line_spans,
+                                &mut lines,
+                                wrap_width,
+                                true,
+                            );
+                            lines.push(Line::from(""));
                         }
                         TagEnd::BlockQuote => {
                             if let Some(StyleModifier::Quote) = style_stack.last() {
@@ -308,10 +306,10 @@ impl MarkdownRenderer {
                     }
                 }
 
-                Event::SoftBreak | Event::HardBreak => {
-                    if !in_code_block && !table_state.in_table {
-                        flush_with_wrap(&mut current_line_spans, &mut lines, wrap_width, true);
-                    }
+                Event::SoftBreak | Event::HardBreak
+                    if !in_code_block && !table_state.in_table =>
+                {
+                    flush_with_wrap(&mut current_line_spans, &mut lines, wrap_width, true);
                 }
 
                 Event::Rule => {

@@ -698,14 +698,14 @@ fn bundle_commit_in_store(
         // `git bundle verify` checks the bundle's own integrity and that every
         // prerequisite commit is already present, so a bundle that would leave
         // a broken history is rejected before it touches the object store.
-        git(&repo, &["bundle", "verify", path_arg(&bundle_path)?])
+        git(&repo, &["bundle", "verify", path_arg(&bundle_path)?.as_str()])
             .context("verify dispatch bundle")?;
         git(
             &repo,
             &[
                 "fetch",
                 "--no-tags",
-                path_arg(&bundle_path)?,
+                path_arg(&bundle_path)?.as_str(),
                 &format!("+refs/heads/{0}:refs/heads/{0}", provision.branch),
             ],
         )
@@ -1105,7 +1105,7 @@ fn sync_in_store(
     let bundle_range = format!("{sync_base}..{}", provision.branch);
     git(
         &worktree,
-        &["bundle", "create", path_arg(&bundle_path)?, &bundle_range],
+        &["bundle", "create", path_arg(&bundle_path)?.as_str(), &bundle_range],
     )
     .context("package dispatch result bundle")?;
     set_private_file_permissions(&bundle_path)?;
@@ -1358,7 +1358,7 @@ fn create_worktree(
         git(repo, &["update-ref", &branch_ref, base_commit])
             .context("point the dispatch branch at the requested base commit")?;
     }
-    git(repo, &["worktree", "add", path_arg(worktree_path)?, branch])
+    git(repo, &["worktree", "add", path_arg(worktree_path)?.as_str(), branch])
         .context("create the dispatch worktree")?;
     canonical_utf8(worktree_path)
 }
@@ -1466,9 +1466,13 @@ fn git_succeeds(dir: &Path, args: &[&str]) -> Result<bool> {
     Ok(status.success())
 }
 
-fn path_arg(path: &Path) -> Result<&str> {
-    path.to_str()
-        .ok_or_else(|| anyhow::anyhow!("dispatch path is not valid UTF-8: {}", path.display()))
+fn path_arg(path: &Path) -> Result<String> {
+    let text = path
+        .to_str()
+        .ok_or_else(|| anyhow::anyhow!("dispatch path is not valid UTF-8: {}", path.display()))?;
+    #[cfg(windows)]
+    let text = strip_verbatim_prefix(text);
+    Ok(text.to_string())
 }
 
 fn canonical_utf8(path: &Path) -> Result<String> {
@@ -1477,6 +1481,24 @@ fn canonical_utf8(path: &Path) -> Result<String> {
         .to_str()
         .map(ToOwned::to_owned)
         .ok_or_else(|| anyhow::anyhow!("dispatch path is not valid UTF-8"))
+}
+
+/// Strip the `\\?\` verbatim prefix that `fs::canonicalize` emits on Windows.
+///
+/// Git for Windows cannot create worktrees under a verbatim path (it sees
+/// `//?/C:/...` and fails to create leading directories), and persisted
+/// dispatch records must stay in the normal path form. The helper also covers
+/// records that were already persisted with the prefix before this fix.
+#[cfg(windows)]
+fn strip_verbatim_prefix(path: &str) -> String {
+    match path.strip_prefix(r"\\?\") {
+        Some(rest) => match rest.strip_prefix("UNC\\") {
+            // `\\?\UNC\server\share\...` is the verbatim form of `\\server\share\...`.
+            Some(unc_rest) => format!(r"\\{unc_rest}"),
+            None => rest.to_string(),
+        },
+        None => path.to_string(),
+    }
 }
 
 fn is_real_directory(path: &Path) -> bool {
@@ -1677,7 +1699,7 @@ mod tests {
     fn bundle_everything(source: &Path, bundle: &Path) {
         git(
             source,
-            &["bundle", "create", path_arg(bundle).expect("path"), "main"],
+            &["bundle", "create", path_arg(bundle).expect("path").as_str(), "main"],
         )
         .expect("bundle");
     }
@@ -1804,7 +1826,7 @@ mod tests {
                 "worktree",
                 "remove",
                 "--force",
-                path_arg(&worktree).unwrap(),
+                path_arg(&worktree).unwrap().as_str(),
             ],
         )
         .expect("remove checkout only");
@@ -1900,7 +1922,7 @@ mod tests {
         assert!(bundle.is_file());
         let prerequisites = git(
             &worktree,
-            &["bundle", "list-heads", path_arg(&bundle).unwrap()],
+            &["bundle", "list-heads", path_arg(&bundle).unwrap().as_str()],
         )
         .expect("list heads");
         assert!(prerequisites.contains("refs/heads/main"));
@@ -2045,6 +2067,9 @@ mod tests {
         );
     }
 
+    // Detached dispatch workers exist only on Linux and macOS
+    // (runner::is_supported), so these retry flows cannot run on Windows.
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     #[test]
     fn reported_sync_failure_allows_a_new_operation_to_take_over() {
         let temp = tempfile::tempdir().expect("tempdir");
@@ -2123,6 +2148,7 @@ mod tests {
         assert!(!replacement.failure_reported);
     }
 
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     #[test]
     fn legacy_sync_failure_without_operation_id_is_reported_then_retryable() {
         let temp = tempfile::tempdir().expect("tempdir");

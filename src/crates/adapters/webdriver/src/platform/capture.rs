@@ -493,6 +493,8 @@ mod imp {
             let response = if error_code.is_err() {
                 Err(format!("CapturePreview completion failed: {error_code:?}"))
             } else {
+                // SAFETY: `self.stream` is a valid COM IStream; `stat` is zeroed
+                // and filled by `Stat` before being read.
                 unsafe {
                     let mut stat = std::mem::zeroed();
                     if self.stream.Stat(&raw mut stat, STATFLAG_NONAME).is_err() {

@@ -111,6 +111,7 @@ pub fn custom_subagent_save_markdown_file(
     custom_agent_save_markdown_file(path, definition)
 }
 
+#[allow(clippy::too_many_arguments)] // markdown-part writer for the public subagent save path
 pub fn custom_subagent_save_markdown_parts(
     path: impl AsRef<std::path::Path>,
     name: &str,

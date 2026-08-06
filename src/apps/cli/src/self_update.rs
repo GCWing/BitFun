@@ -1,21 +1,17 @@
 use anyhow::{anyhow, Context, Result};
-use flate2::read::GzDecoder;
 use futures_util::StreamExt;
 use reqwest::Client;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::fs;
-use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime};
-use tar::Archive;
 
 const GITHUB_MANIFEST: &str =
     "https://github.com/GCWing/BitFun/releases/latest/download/linux-binaries.json";
 const OPENBITFUN_MANIFEST: &str = "https://openbitfun.com/release/linux-binaries.json";
 const AUTO_CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
-const DEPRECATION_WARNING: &str = "Warning: `bitfun-cli` is deprecated; use `bitfun` instead.";
 
 /// Source-selection tuning. Mirrors the relay deploy path in
 /// `src/crates/services/services-integrations/src/remote_ssh/relay_deploy.rs`,
@@ -1060,41 +1056,6 @@ fn install_archive(archive: &[u8], current_exe: &Path) -> Result<()> {
 #[cfg(not(unix))]
 fn install_archive(_archive: &[u8], _current_exe: &Path) -> Result<()> {
     Err(anyhow!("CLI self-update is only available on Linux"))
-}
-
-fn find_package_dir(root: &Path) -> Result<PathBuf> {
-    for entry in fs::read_dir(root).context("inspect CLI update archive")? {
-        let path = entry?.path();
-        if path.is_dir() && path.join("bitfun").is_file() && path.join("bitfun-cli").is_file() {
-            return Ok(path);
-        }
-    }
-    Err(anyhow!(
-        "CLI update archive does not contain the official entrypoint pair"
-    ))
-}
-
-fn validate_entrypoint_pair(primary: &Path, legacy: &Path) -> Result<()> {
-    let primary_status = Command::new(primary)
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .with_context(|| format!("run {}", primary.display()))?;
-    if !primary_status.success() {
-        return Err(anyhow!("{} --version failed", primary.display()));
-    }
-    let legacy_output = Command::new(legacy)
-        .arg("--version")
-        .stdout(Stdio::null())
-        .output()
-        .with_context(|| format!("run {}", legacy.display()))?;
-    if !legacy_output.status.success()
-        || String::from_utf8_lossy(&legacy_output.stderr).trim() != DEPRECATION_WARNING
-    {
-        return Err(anyhow!("deprecated bitfun-cli entrypoint contract failed"));
-    }
-    Ok(())
 }
 
 fn current_platform_key() -> Option<&'static str> {

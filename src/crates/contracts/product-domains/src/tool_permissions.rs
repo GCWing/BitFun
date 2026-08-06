@@ -427,6 +427,7 @@ pub enum PermissionReplySource {
     rename_all = "snake_case",
     rename_all_fields = "camelCase"
 )]
+#[allow(clippy::large_enum_variant)] // contract type; boxing changes the public API surface
 pub enum PermissionRequestEvent {
     Asked {
         request: PermissionRequest,

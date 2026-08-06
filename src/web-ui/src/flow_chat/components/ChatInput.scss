@@ -718,6 +718,7 @@
 
   &__target-switcher {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.125rem;
     padding-bottom: 7px;

@@ -1847,7 +1847,7 @@ impl StartupPage {
                     base_url: model.base_url,
                     api_key: model.api_key,
                     provider_format: model.provider.clone(),
-                    context_window: model.context_window.unwrap_or(128000),
+                    context_window: model.context_window.unwrap_or(1048576),
                     max_tokens: model.max_tokens.unwrap_or(8192),
                     reasoning_preset_options,
                     reasoning: model.reasoning,

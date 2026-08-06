@@ -192,6 +192,20 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           label: t('steering.statusPending'),
         }
       : null;
+    // Sender identity badge for forwarded agent messages (R-23). Only present
+    // when the backend attached sender metadata; historical messages without
+    // it render no badge at all (graceful degradation).
+    const senderBadge = useMemo(() => {
+      const meta = message?.metadata;
+      if (!meta?.senderSessionId) return null;
+      const role = typeof meta.senderRole === 'string' ? meta.senderRole : 'Agent';
+      const depth = typeof meta.senderDepth === 'number' ? ` L${meta.senderDepth}` : '';
+      const name =
+        typeof meta.senderName === 'string' && meta.senderName.trim()
+          ? ` ${meta.senderName.trim()}`
+          : '';
+      return `[${role}${depth}]${name}`;
+    }, [message?.metadata]);
 
     const { displayText, reproductionSteps } = useMemo(() => {
       const reproductionRegex = /<reproduction_steps>([\s\S]*?)<\/reproduction_steps\s*>?/g;
@@ -538,7 +552,6 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
             onCancel={cancelEdit}
             presentation={composerPresentation}
             workspacePath={currentSession?.workspacePath}
-            workspaceId={currentSession?.workspaceId}
             excludeSessionId={resolvedSessionId}
           />
         ) : (
@@ -555,6 +568,9 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                 : 'user-message-item__main-contents-bridge'
             }
           >
+            {senderBadge && (
+              <span className="user-message-item__sender-badge">{senderBadge}</span>
+            )}
             {isFailed ? (
               <div className="user-message-item__failed-body">
                 <div 

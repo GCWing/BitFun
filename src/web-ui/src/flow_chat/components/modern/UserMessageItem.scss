@@ -85,6 +85,7 @@
 
 .user-message-item__main {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: var(--bf-appearance-token-flowchat-inline-gap);
 }
@@ -92,6 +93,25 @@
 // Bridges children to `.user-message-item__main` flex without an extra layout box.
 .user-message-item__main-contents-bridge {
   display: contents;
+}
+
+.user-message-item__sender-badge {
+  display: inline-flex;
+  align-items: center;
+  /* The badge owns the first row; the message content wraps to the next one. */
+  flex: 0 0 100%;
+  width: fit-content;
+  margin: 0.1rem 0 0.25rem;
+  padding: 0.12rem 0.44rem;
+  border-radius: 999px;
+  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+  font-weight: 600;
+  line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+  letter-spacing: 0;
+  user-select: none;
+  color: var(--bf-appearance-token-color-accent-500);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 28%, transparent);
 }
 
 .user-message-item__steering-tag {

@@ -49,11 +49,13 @@ pub fn path_has_multiple_hard_links(path: &std::path::Path) -> std::io::Result<b
 
         let file = std::fs::File::open(path)?;
         let mut information = BY_HANDLE_FILE_INFORMATION::default();
+        // SAFETY: `file` owns an open handle from `File::open(path)` and outlives
+        // this call; `information` is a valid out-buffer for the call.
         unsafe {
             GetFileInformationByHandle(HANDLE(file.as_raw_handle()), &mut information)
                 .map_err(|error| std::io::Error::other(error.to_string()))?;
         }
-        return Ok(information.nNumberOfLinks > 1);
+        Ok(information.nNumberOfLinks > 1)
     }
 
     #[cfg(not(any(unix, windows)))]

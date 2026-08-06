@@ -29,6 +29,13 @@ pub use bitfun_runtime_ports::{
     MAX_GOAL_CONTINUATIONS, MAX_THREAD_GOAL_AUTO_CONTINUATIONS, MAX_THREAD_GOAL_OBJECTIVE_CHARS,
     THREAD_GOAL_METADATA_KEY,
 };
+
+/// Idle window before the goal safety net wakes the commander.
+///
+/// Immediate after-turn auto-continuation is disabled; a goal is only picked up
+/// again when a session with an active thread goal has been idle for this long
+/// with no new user submission.
+pub const GOAL_IDLE_WAKEUP_DELAY_MS: u64 = 600_000;
 use log::{info, warn};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -124,6 +131,7 @@ impl<'a> ThreadGoalStore<'a> {
             .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn set_thread_goal(
         &self,
         session_id: &str,
@@ -131,6 +139,7 @@ impl<'a> ThreadGoalStore<'a> {
         objective: Option<String>,
         status: Option<ThreadGoalStatus>,
         token_budget: Option<Option<i64>>,
+        reference_files: Option<Vec<String>>,
         replace_existing: bool,
     ) -> BitFunResult<SetThreadGoalResult> {
         let existing = self.get_thread_goal(session_id, workspace_path).await?;
@@ -145,6 +154,7 @@ impl<'a> ThreadGoalStore<'a> {
             objective,
             status,
             token_budget,
+            reference_files,
             replace_existing,
             now_epoch_seconds: now_epoch_seconds(),
             new_goal_id: Uuid::new_v4().to_string(),
@@ -170,6 +180,7 @@ impl<'a> ThreadGoalStore<'a> {
         workspace_path: &Path,
         objective: String,
         token_budget: Option<i64>,
+        reference_files: Vec<String>,
     ) -> BitFunResult<ThreadGoal> {
         if self
             .get_thread_goal(session_id, workspace_path)
@@ -187,6 +198,7 @@ impl<'a> ThreadGoalStore<'a> {
                 Some(objective),
                 Some(ThreadGoalStatus::Active),
                 Some(token_budget),
+                Some(reference_files),
                 false,
             )
             .await?;
@@ -287,15 +299,16 @@ mod tests {
             created_at: 1,
             updated_at: 2,
             auto_continuation_count: 2,
+            reference_files: Vec::new(),
         });
         assert!(plan.display_message.contains("completion check"));
-        assert!(plan.display_message.contains("2/100"));
+        assert!(plan.display_message.contains("2/10"));
         assert_eq!(
             plan.user_message_metadata["threadGoalContinuationCheck"],
             true
         );
         assert_eq!(plan.user_message_metadata["autoContinuationAttempt"], 2);
-        assert_eq!(plan.user_message_metadata["autoContinuationMax"], 100);
+        assert_eq!(plan.user_message_metadata["autoContinuationMax"], 10);
     }
 
     #[test]
@@ -311,6 +324,7 @@ mod tests {
             created_at: 1,
             updated_at: 2,
             auto_continuation_count: 0,
+            reference_files: Vec::new(),
         });
         assert!(prompt.contains("finish stack"));
         assert!(prompt.contains("update_goal"));
@@ -348,8 +362,8 @@ mod tests {
 
     #[test]
     fn max_goal_continuations_matches_legacy_limit() {
-        assert_eq!(MAX_GOAL_CONTINUATIONS, 100);
-        assert_eq!(MAX_THREAD_GOAL_AUTO_CONTINUATIONS, 100);
+        assert_eq!(MAX_GOAL_CONTINUATIONS, 10);
+        assert_eq!(MAX_THREAD_GOAL_AUTO_CONTINUATIONS, 10);
     }
 
     #[test]
@@ -391,6 +405,7 @@ mod tests {
             created_at: 1,
             updated_at: 2,
             auto_continuation_count: 0,
+            reference_files: Vec::new(),
         })
         .user_message_metadata;
         assert!(should_skip_goal_for_turn("Adjust work", Some(&metadata)));

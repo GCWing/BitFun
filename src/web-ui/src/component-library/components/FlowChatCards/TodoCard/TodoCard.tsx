@@ -14,6 +14,7 @@ export interface TodoItem {
   id: string;
   content: string;
   status: 'pending' | 'in_progress' | 'completed';
+  dependencies?: string[];
 }
 
 export interface TodoCardProps extends Omit<BaseToolCardProps, 'toolName' | 'displayName'> {

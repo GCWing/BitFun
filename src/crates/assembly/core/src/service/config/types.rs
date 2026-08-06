@@ -782,6 +782,15 @@ pub struct AIConfig {
     /// Maximum number of rounds per dialog turn before soft-pausing.
     #[serde(default = "default_max_rounds")]
     pub max_rounds: usize,
+
+    /// User-controllable master switch for the RBAC/Warden mechanism (R-26).
+    ///
+    /// When `false`, the RBAC tool-restriction checks and the Warden runtime
+    /// (turn/tool failure tracking, violation records, reminders) are fully
+    /// bypassed. Defaults to `true` (mechanism on). Users can turn it off in
+    /// the settings document under `ai.rbac_enabled`.
+    #[serde(default = "default_true")]
+    pub rbac_enabled: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -1289,7 +1298,7 @@ pub enum AgentSubagentOverrideState {
 pub type ParentSubagentOverrideConfig = HashMap<String, AgentSubagentOverrideState>;
 pub type AgentSubagentOverrideConfig = HashMap<String, ParentSubagentOverrideConfig>;
 
-pub const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS: u32 = 128_128;
+pub const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS: u32 = 1_048_576;
 pub const MIN_MODEL_CONTEXT_WINDOW_TOKENS: u32 = 32_000;
 pub const MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT: u32 = 40;
 const AUTOMATIC_MAX_OUTPUT_TOKEN_TIERS: [u32; 5] = [8_000, 16_000, 24_000, 32_000, 64_000];
@@ -1779,6 +1788,7 @@ impl Default for AIConfig {
             computer_use_enabled: false,
             browser_control_preferred_browser: String::new(),
             max_rounds: default_max_rounds(),
+            rbac_enabled: true,
         }
     }
 }

@@ -671,6 +671,7 @@ impl ChatMode {
         item
     }
 
+    #[allow(clippy::too_many_arguments)] // hook mutation entry carrying view, state and runtime handles
     fn start_hook_mutation(
         &mut self,
         import_number: usize,

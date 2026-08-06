@@ -19,7 +19,10 @@ interface NormalizedTurnCompletionNoticeState {
   hasFinalResponse?: boolean;
 }
 
-const NORMAL_FINISH_REASONS = new Set(['complete']);
+// 'complete' 是 BitFun 正常收尾码；'stop' 是模型原生正常终止码，防御其他事件源。
+// 'eos' / 'tool_calls' 同为模型原生正常终止码：流式 EOF 或模型最终转向工具调用，
+// 都不是"没有可用结果"的异常终止。
+const NORMAL_FINISH_REASONS = new Set(['complete', 'stop', 'eos', 'tool_calls']);
 
 const TURN_COMPLETION_NOTICE_CONFIG: Record<string, TurnCompletionNoticeConfig> = {
   repeated_tool_failures: {
