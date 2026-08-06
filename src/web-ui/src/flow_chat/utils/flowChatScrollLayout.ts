@@ -13,7 +13,7 @@ export const FLOWCHAT_MESSAGE_TAIL_CLEARANCE_PX = 24;
 export const SCROLL_TO_LATEST_INPUT_CLEARANCE_PX = 6;
 
 const FALLBACK_INPUT_BLOCK_ACTIVE_PX = 96;
-const NORMAL_INPUT_BLOCK_SAFE_PX = 96;
+const NORMAL_INPUT_BLOCK_SAFE_PX = 64;
 
 /**
  * Height of the Virtuoso footer spacer needed so the last message clears the floating input.

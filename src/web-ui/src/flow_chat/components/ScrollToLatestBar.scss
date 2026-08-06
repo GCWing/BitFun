@@ -13,8 +13,8 @@
   pointer-events: none;
   
   // Default height fallback (overridden by inline style when inputHeight is measured).
-  // Active non-expanded: ~80px input + 4px gap + 6px clearance + 24px gradient ≈ 114px.
-  height: 114px;
+  // Active non-expanded: ~64px input + 4px gap + 6px clearance + 24px gradient ≈ 98px.
+  height: 98px;
   
   // Height follows live composer measurements; do not animate layout.
   transition: none;
@@ -54,7 +54,7 @@
   // bottom is driven by inline style (inputHeight + 4 + 6); CSS value is fallback only.
   &__content {
     position: absolute;
-    bottom: 90px;
+    bottom: 74px;
     left: 0;
     right: 0;
     pointer-events: auto;
