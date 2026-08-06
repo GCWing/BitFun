@@ -31,6 +31,7 @@ import {
   resolveSessionTitle,
 } from '../../utils/sessionTitle';
 import { buildCreateSessionRelationship } from '../../utils/sessionMetadata';
+import { isAcpFlowSession } from '../../utils/acpSession';
 import {
   consumeRecentHistorySessionOpenIntent,
   hasRenderableSessionContent,
@@ -701,6 +702,7 @@ export async function switchChatSession(
         await hydrateHistoricalSession(context, sessionId, true, {
           isRetryStillRelevant: () => switchRequestId === latestSwitchRequestId,
           retryActiveStaleReuse: shouldActivateBeforeHydrate,
+          deferFullHistoryUntilActive: !isAcpFlowSession(session),
         });
       } catch {
         // The hydrate path already marks the session failed and notifies the user.
