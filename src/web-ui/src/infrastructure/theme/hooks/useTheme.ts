@@ -11,8 +11,11 @@ export function useTheme() {
     themes,
     loading,
     error,
+    systemLightId,
+    systemDarkId,
     initialize,
     setTheme,
+    setSystemThemeOverride,
     refreshThemes,
   } = useThemeStore();
   
@@ -31,9 +34,12 @@ export function useTheme() {
     themes,
     loading,
     error,
+    systemLightId,
+    systemDarkId,
     
     
     setTheme,
+    setSystemThemeOverride,
     refreshThemes,
     
     

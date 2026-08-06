@@ -24,16 +24,20 @@ export const DEFAULT_LIGHT_THEME_ID: ThemeId = 'bitfun-light';
 export const DEFAULT_DARK_THEME_ID: ThemeId = 'bitfun-dark';
 
 /**
- * Picks bitfun-dark vs bitfun-light from `prefers-color-scheme`.
- * Used when the user has no saved theme preference.
+ * Picks the configured dark vs light theme from `prefers-color-scheme`.
+ * When `lightId`/`darkId` are provided they override the built-in defaults,
+ * allowing the user to pick independent light/dark themes for system mode.
  */
-export function getSystemPreferredDefaultThemeId(): ThemeId {
+export function getSystemPreferredDefaultThemeId(
+  lightId: ThemeId = DEFAULT_LIGHT_THEME_ID,
+  darkId: ThemeId = DEFAULT_DARK_THEME_ID,
+): ThemeId {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return DEFAULT_LIGHT_THEME_ID;
+    return lightId;
   }
   return window.matchMedia('(prefers-color-scheme: dark)').matches
-    ? DEFAULT_DARK_THEME_ID
-    : DEFAULT_LIGHT_THEME_ID;
+    ? darkId
+    : lightId;
 }
 
 /** Static fallback when system preference is unavailable (e.g. SSR). */

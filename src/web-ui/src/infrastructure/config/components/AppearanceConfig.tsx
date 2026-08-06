@@ -22,7 +22,7 @@ import './AppearanceConfig.scss';
 
 function AppearanceThemeSection() {
   const { t } = useTranslation('settings/basics');
-  const { themeId, themes, setTheme, loading } = useTheme();
+  const { themeId, themes, setTheme, loading, systemLightId, systemDarkId, setSystemThemeOverride } = useTheme();
   const { currentLanguage, supportedLocales, selectLanguage, isChanging } = useLanguageSelector();
 
   const handleThemeChange = async (newThemeId: string) => {
@@ -66,6 +66,32 @@ function AppearanceThemeSection() {
     ],
     [themes, t, getThemeDisplayDescription, getThemeDisplayName]
   );
+
+  const lightThemeOptions = useMemo(
+    () =>
+      themes
+        .filter((theme) => theme.type === 'light')
+        .map((theme) => ({
+          value: theme.id,
+          label: getThemeDisplayName(theme),
+          testId: 'appearance-system-light-option',
+        })),
+    [themes, getThemeDisplayName]
+  );
+
+  const darkThemeOptions = useMemo(
+    () =>
+      themes
+        .filter((theme) => theme.type === 'dark')
+        .map((theme) => ({
+          value: theme.id,
+          label: getThemeDisplayName(theme),
+          testId: 'appearance-system-dark-option',
+        })),
+    [themes, getThemeDisplayName]
+  );
+
+  const isSystemMode = themeId === SYSTEM_THEME_ID;
 
   return (
     <div className="theme-config" data-testid="appearance-theme-section">
@@ -144,6 +170,42 @@ function AppearanceThemeSection() {
               </div>
             </div>
           </ConfigPageRow>
+          {isSystemMode && (
+            <>
+              <ConfigPageRow
+                label={t('appearance.systemLightTheme')}
+                description={t('appearance.systemLightThemeHint')}
+                align="center"
+              >
+                <Select
+                  value={systemLightId}
+                  onChange={(value) => {
+                    const lightId = String(Array.isArray(value) ? value[0] ?? '' : value);
+                    void setSystemThemeOverride(lightId, systemDarkId);
+                  }}
+                  disabled={loading}
+                  options={lightThemeOptions}
+                  triggerTestId="appearance-system-light-select"
+                />
+              </ConfigPageRow>
+              <ConfigPageRow
+                label={t('appearance.systemDarkTheme')}
+                description={t('appearance.systemDarkThemeHint')}
+                align="center"
+              >
+                <Select
+                  value={systemDarkId}
+                  onChange={(value) => {
+                    const darkId = String(Array.isArray(value) ? value[0] ?? '' : value);
+                    void setSystemThemeOverride(systemLightId, darkId);
+                  }}
+                  disabled={loading}
+                  options={darkThemeOptions}
+                  triggerTestId="appearance-system-dark-select"
+                />
+              </ConfigPageRow>
+            </>
+          )}
         </ConfigPageSection>
       </div>
     </div>

@@ -15,6 +15,10 @@
     "themeRowHint": "選擇界面配色主題。",
     "systemTheme": "跟隨系統",
     "systemThemeDescription": "根據系統淺色/深色外觀自動在亮暗主題間切換，並隨系統切換而更新。",
+    "systemLightTheme": "系統淺色主題",
+    "systemDarkTheme": "系統深色主題",
+    "systemLightThemeHint": "系統處於淺色模式時使用",
+    "systemDarkThemeHint": "系統處於深色模式時使用",
     "presets": {
       "bitfun-dark": {
         "name": "暗色",

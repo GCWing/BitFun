@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { ThemeConfig, ThemeId, ThemeMetadata, ThemeSelectionId } from '../types';
 import { themeService } from '../core/ThemeService';
+import { DEFAULT_LIGHT_THEME_ID, DEFAULT_DARK_THEME_ID } from '../presets';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('ThemeStore');
@@ -15,10 +16,13 @@ interface ThemeState {
   themes: ThemeMetadata[];
   loading: boolean;
   error: string | null;
+  systemLightId: ThemeId;
+  systemDarkId: ThemeId;
   
   
   initialize: () => Promise<void>;
   setTheme: (themeId: ThemeSelectionId) => Promise<void>;
+  setSystemThemeOverride: (lightId: ThemeId, darkId: ThemeId) => Promise<void>;
   refreshThemes: () => void;
   addTheme: (theme: ThemeConfig) => Promise<void>;
   removeTheme: (themeId: ThemeId) => Promise<void>;
@@ -33,6 +37,8 @@ export const useThemeStore = create<ThemeState>((set) => ({
   themes: [],
   loading: false,
   error: null,
+  systemLightId: DEFAULT_LIGHT_THEME_ID,
+  systemDarkId: DEFAULT_DARK_THEME_ID,
   
   
   initialize: async () => {
@@ -69,6 +75,8 @@ export const useThemeStore = create<ThemeState>((set) => ({
         loading: false,
         currentTheme: themeService.getCurrentTheme(),
         currentThemeId: themeService.getCurrentThemeId(),
+        systemLightId: themeService.getSystemLightId(),
+        systemDarkId: themeService.getSystemDarkId(),
       });
     } catch (error) {
       log.error('Failed to initialize', error);
@@ -95,6 +103,21 @@ export const useThemeStore = create<ThemeState>((set) => ({
         loading: false,
         error: error instanceof Error ? error.message : 'Failed to switch theme',
       });
+    }
+  },
+  
+  
+  setSystemThemeOverride: async (lightId: ThemeId, darkId: ThemeId) => {
+    try {
+      await themeService.setSystemThemeOverride(lightId, darkId);
+      set({
+        systemLightId: lightId,
+        systemDarkId: darkId,
+        currentTheme: themeService.getCurrentTheme(),
+        currentThemeId: themeService.getCurrentThemeId(),
+      });
+    } catch (error) {
+      log.error('Failed to set system theme override', { lightId, darkId, error });
     }
   },
   

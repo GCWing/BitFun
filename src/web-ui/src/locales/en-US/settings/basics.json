@@ -15,6 +15,10 @@
     "themeRowHint": "Choose the interface color theme.",
     "systemTheme": "Match system",
     "systemThemeDescription": "Use light or dark theme based on your OS appearance. Updates when the system switches.",
+    "systemLightTheme": "Light theme for system mode",
+    "systemDarkTheme": "Dark theme for system mode",
+    "systemLightThemeHint": "Used when OS is in light mode",
+    "systemDarkThemeHint": "Used when OS is in dark mode",
     "presets": {
       "bitfun-dark": {
         "name": "Dark",

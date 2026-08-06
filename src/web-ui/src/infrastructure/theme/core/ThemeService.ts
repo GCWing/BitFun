@@ -13,7 +13,7 @@ import {
   SYSTEM_THEME_ID,
   ThemeSelectionId,
 } from '../types';
-import { builtinThemes, getSystemPreferredDefaultThemeId } from '../presets';
+import { builtinThemes, getSystemPreferredDefaultThemeId, DEFAULT_LIGHT_THEME_ID, DEFAULT_DARK_THEME_ID } from '../presets';
 import { themeValidator } from '../utils/ThemeValidator';
 import { configAPI } from '@/infrastructure/api';
 import { monacoThemeSync } from '../integrations/MonacoThemeSync';
@@ -221,6 +221,9 @@ export class ThemeService {
   private lastSavedSelection: ThemeSelectionId | undefined = undefined;
   /** Currently applied built-in or custom theme (never `system`). */
   private resolvedThemeId: ThemeId = getSystemPreferredDefaultThemeId();
+  /** User-configured light/dark theme overrides for system mode. */
+  private systemLightId: ThemeId = DEFAULT_LIGHT_THEME_ID;
+  private systemDarkId: ThemeId = DEFAULT_DARK_THEME_ID;
   private systemThemeCleanup: (() => void) | null = null;
   private listeners: Map<ThemeEventType, Set<ThemeEventListener>> = new Map();
   private hooks: ThemeHooks = {};
@@ -228,6 +231,7 @@ export class ThemeService {
   private userThemesLoaded = false;
   private userThemesLoadPromise: Promise<void> | null = null;
   private pendingUserThemeSelection: ThemeId | null = null;
+  private systemOverridesLoaded = false;
 
   constructor() {
     this.initializeBuiltinThemes();
@@ -395,6 +399,52 @@ export class ThemeService {
     }
   }
 
+  private async loadSystemThemeOverrides(): Promise<void> {
+    if (this.systemOverridesLoaded) return;
+    this.systemOverridesLoaded = true;
+    try {
+      const light = await configAPI.getConfig('themes.systemLightId', {
+        skipRetryOnNotFound: true
+      }) as string | undefined;
+      const dark = await configAPI.getConfig('themes.systemDarkId', {
+        skipRetryOnNotFound: true
+      }) as string | undefined;
+      if (light && this.themes.has(light as ThemeId)) {
+        this.systemLightId = light as ThemeId;
+      }
+      if (dark && this.themes.has(dark as ThemeId)) {
+        this.systemDarkId = dark as ThemeId;
+      }
+    } catch (_error) {
+      // keep defaults on error
+    }
+  }
+
+  getSystemLightId(): ThemeId {
+    return this.systemLightId;
+  }
+
+  getSystemDarkId(): ThemeId {
+    return this.systemDarkId;
+  }
+
+  async setSystemThemeOverride(lightId: ThemeId, darkId: ThemeId): Promise<void> {
+    this.systemLightId = lightId;
+    this.systemDarkId = darkId;
+    try {
+      await configAPI.setConfig('themes.systemLightId', lightId);
+      await configAPI.setConfig('themes.systemDarkId', darkId);
+    } catch (error) {
+      log.warn('Failed to save system theme overrides', error);
+    }
+    if (this.themeSelection === SYSTEM_THEME_ID) {
+      const next = getSystemPreferredDefaultThemeId(this.systemLightId, this.systemDarkId);
+      if (next !== this.resolvedThemeId) {
+        await this.applyResolvedTheme(next);
+      }
+    }
+  }
+
 
 
 
@@ -536,7 +586,7 @@ export class ThemeService {
       if (this.themeSelection !== SYSTEM_THEME_ID) {
         return;
       }
-      const next = getSystemPreferredDefaultThemeId();
+      const next = getSystemPreferredDefaultThemeId(this.systemLightId, this.systemDarkId);
       if (next === this.resolvedThemeId) {
         return;
       }
@@ -601,8 +651,9 @@ export class ThemeService {
       } else {
         this.lastSavedSelection = SYSTEM_THEME_ID;
       }
+      await this.loadSystemThemeOverrides();
       this.attachSystemThemeListener();
-      const resolved = getSystemPreferredDefaultThemeId();
+      const resolved = getSystemPreferredDefaultThemeId(this.systemLightId, this.systemDarkId);
       await this.applyResolvedTheme(resolved);
     } else {
       this.themeSelection = themeId;
