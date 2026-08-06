@@ -337,6 +337,81 @@ fn has_standard_main_window_size(width: f64, height: f64) -> bool {
     width >= MAIN_WINDOW_MIN_WIDTH && height >= MAIN_WINDOW_MIN_HEIGHT
 }
 
+/// Re-clamp the undecorated main window to the monitor work area when maximized.
+///
+/// Tao clamps a borderless maximized window inside `WM_NCCALCSIZE`, but that
+/// only holds when the maximize goes through the normal `SW_MAXIMIZE` path
+/// while the window's placement already reports maximized. Some entry points —
+/// notably a double-click drag-region maximize racing a DPI change, or
+/// `ShowWindow(SW_MAXIMIZE)` from outside — leave the client rect covering the
+/// FULL monitor instead, so the app's bottom edge (nav footer, notification
+/// bell, composer strip) hides behind the taskbar. Detect that state and
+/// resize to the work area explicitly.
+#[cfg(target_os = "windows")]
+fn clamp_maximized_undecorated_window(window: &tauri::Window) {
+    use windows::Win32::Foundation::{HWND, RECT};
+    use windows::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetClientRect, SetWindowPos, HWND_TOP, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOZORDER,
+    };
+
+    if !window.is_maximized().unwrap_or(false) {
+        return;
+    }
+    let Ok(hwnd) = window.hwnd() else {
+        return;
+    };
+    let hwnd = HWND(hwnd.0);
+
+    unsafe {
+        let mut monitor_info = MONITORINFO {
+            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+            ..Default::default()
+        };
+        let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        if !GetMonitorInfoW(monitor, &mut monitor_info).as_bool() {
+            return;
+        }
+        let work = monitor_info.rcWork;
+        let work_height = work.bottom - work.top;
+        let work_width = work.right - work.left;
+
+        let mut client = RECT::default();
+        if GetClientRect(hwnd, &mut client).is_err() {
+            return;
+        }
+        let client_height = client.bottom - client.top;
+        let client_width = client.right - client.left;
+
+        // In the healthy path tao has already clamped the client rect to the
+        // work area (± the 1px auto-hide margin). Anything taller means the
+        // window is overlapping the taskbar; push it back to the work area.
+        if client_height <= work_height + 2 && client_width <= work_width + 2 {
+            return;
+        }
+        log::info!(
+            "Re-clamping maximized undecorated window to the monitor work area: client={}x{}, work={}x{}",
+            client_width,
+            client_height,
+            work_width,
+            work_height
+        );
+        if let Err(error) = SetWindowPos(
+            hwnd,
+            Some(HWND_TOP),
+            work.left,
+            work.top,
+            work_width,
+            work_height,
+            SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+        ) {
+            log::warn!("Failed to re-clamp the maximized window: {error}");
+        }
+    }
+}
+
 pub(crate) fn restore_main_window_state(window: &tauri::WebviewWindow) {
     if let Err(error) = window.restore_state(main_window_state_flags()) {
         log::warn!("Failed to restore main window state: {}", error);
@@ -1114,6 +1189,13 @@ pub async fn run() {
                             );
                         }
                     }
+                }
+
+                #[cfg(target_os = "windows")]
+                if window.label() == "main"
+                    && matches!(event, tauri::WindowEvent::Resized(_))
+                {
+                    clamp_maximized_undecorated_window(window);
                 }
             }
         })
