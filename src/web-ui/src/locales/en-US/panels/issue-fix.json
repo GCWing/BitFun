@@ -60,7 +60,8 @@
       "closeIssue": "Resolved — approve closing Issue #{{issue}}",
       "closeIssueByPr": "Issue #{{issue}} resolved by PR #{{pr}} — approve closing it",
       "postComment": "Reply drafted for Issue #{{issue}} — approve posting it"
-    }
+    },
+    "notConnected": "Not connected yet — select issues and press Start to begin"
   },
   "status": {
     "queued": "Queued",

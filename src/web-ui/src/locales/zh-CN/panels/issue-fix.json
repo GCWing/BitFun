@@ -60,7 +60,8 @@
       "closeIssue": "已解决，请批准关闭 Issue #{{issue}}",
       "closeIssueByPr": "Issue #{{issue}} 已由 PR #{{pr}} 修复，请批准关闭",
       "postComment": "已为 Issue #{{issue}} 草拟回复，请批准发布"
-    }
+    },
+    "notConnected": "尚未连接——勾选 Issue 后点击启动即可开始"
   },
   "status": {
     "queued": "排队中",

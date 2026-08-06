@@ -105,7 +105,14 @@ class IssueFixAPI {
     }
   }
 
-  async getAutonomousStatus(repositoryPath: string): Promise<IssueFixAutonomousStatusResponse> {
+  /**
+   * Full quota-backed projection, or null when the repository has never been
+   * connected to LoopX (pre-bootstrap — a normal state, not an error; the
+   * first Start bootstraps it).
+   */
+  async getAutonomousStatus(
+    repositoryPath: string,
+  ): Promise<IssueFixAutonomousStatusResponse | null> {
     const request = { repositoryPath };
     try {
       return await api.invoke('issue_fix_autonomous_status', { request });
@@ -118,9 +125,10 @@ class IssueFixAPI {
   /**
    * Background-poll variant of `getAutonomousStatus`: projects issue todos and
    * open gates from LoopX's todo list only, so an interval poll never invokes
-   * `quota should-run` (which appends a LoopX rollout event per call).
+   * `quota should-run` (which appends a LoopX rollout event per call). Null
+   * before the repository is bootstrapped.
    */
-  async pollAutonomous(repositoryPath: string): Promise<IssueFixAutonomousPollResponse> {
+  async pollAutonomous(repositoryPath: string): Promise<IssueFixAutonomousPollResponse | null> {
     const request = { repositoryPath };
     try {
       return await api.invoke('issue_fix_autonomous_poll', { request });

@@ -118,6 +118,9 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
   // Full readiness picture: loopx presence is `available`; the gh tiers gate
   // guidance banners (the agent's whole evidence/PR channel runs through gh).
   const [readiness, setReadiness] = useState<IssueFixAvailability | null>(null);
+  // True once the control probe answered (even with "not connected"), so the
+  // header can distinguish loading from pre-bootstrap.
+  const [controlProbed, setControlProbed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [stopping, setStopping] = useState(false);
@@ -271,7 +274,10 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
     const ticket = takeControlTicket();
     try {
       const status = await issueFixAPI.getAutonomousStatus(workspacePath);
+      // Null = repository not connected to LoopX yet (bootstraps on first
+      // Start); distinguish it from "still loading" for the header text.
       applyControl(ticket, () => status);
+      if (mountedRef.current) setControlProbed(true);
     } catch (error) {
       log.error('Failed to project continuous Issue-Fix state', { workspacePath, error });
       if (ticket >= appliedControlTicketRef.current && mountedRef.current) {
@@ -304,7 +310,7 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
       const ticket = takeControlTicket();
       try {
         const poll = await issueFixAPI.pollAutonomous(workspacePath);
-        if (cancelled) return;
+        if (cancelled || !poll) return;
         // A beat boundary shows up either as the active turn draining or as
         // the schedule advancing (which also catches beats shorter than one
         // poll interval); each boundary earns one full quota-backed refresh.
@@ -730,7 +736,9 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
                   state: control.kernelState,
                   queued: progress.queued,
                 })
-              : t('autonomous.loadingKernel')}
+              : controlProbed
+                ? t('autonomous.notConnected')
+                : t('autonomous.loadingKernel')}
           </span>
           {control && (control.userTodos ?? []).length > 0 ? (
             <button

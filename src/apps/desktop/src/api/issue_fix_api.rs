@@ -141,8 +141,13 @@ pub struct IssueFixAutonomousStatusResponse {
 pub async fn issue_fix_autonomous_status(
     _state: State<'_, AppState>,
     request: IssueFixAutonomousStatusRequest,
-) -> Result<IssueFixAutonomousStatusResponse, String> {
+) -> Result<Option<IssueFixAutonomousStatusResponse>, String> {
     let repository_path = required_repository_path(&request.repository_path)?;
+    // A repository that has never started continuous fixing has no LoopX
+    // control plane yet; that is a normal pre-bootstrap state, not an error.
+    if !AutonomousIssueFix::is_bootstrapped(repository_path) {
+        return Ok(None);
+    }
     let loopx =
         LoopxIssueFix::probe().ok_or_else(|| "loopx is not installed on this host".to_string())?;
     let control = AutonomousIssueFix::new(loopx)
@@ -153,7 +158,7 @@ pub async fn issue_fix_autonomous_status(
             format!("Failed to read LoopX Issue-Fix state: {error}")
         })?;
     let host_loop = host_loop_state(&control.goal_id, repository_path).await;
-    Ok(IssueFixAutonomousStatusResponse { control, host_loop })
+    Ok(Some(IssueFixAutonomousStatusResponse { control, host_loop }))
 }
 
 /// Background-poll response: LoopX todo projection without `quota should-run`.
@@ -172,8 +177,11 @@ pub struct IssueFixAutonomousPollResponse {
 pub async fn issue_fix_autonomous_poll(
     _state: State<'_, AppState>,
     request: IssueFixAutonomousStatusRequest,
-) -> Result<IssueFixAutonomousPollResponse, String> {
+) -> Result<Option<IssueFixAutonomousPollResponse>, String> {
     let repository_path = required_repository_path(&request.repository_path)?;
+    if !AutonomousIssueFix::is_bootstrapped(repository_path) {
+        return Ok(None);
+    }
     let loopx =
         LoopxIssueFix::probe().ok_or_else(|| "loopx is not installed on this host".to_string())?;
     let light = AutonomousIssueFix::new(loopx)
@@ -184,7 +192,7 @@ pub async fn issue_fix_autonomous_poll(
             format!("Failed to poll LoopX Issue-Fix state: {error}")
         })?;
     let host_loop = host_loop_state(&light.goal_id, repository_path).await;
-    Ok(IssueFixAutonomousPollResponse { light, host_loop })
+    Ok(Some(IssueFixAutonomousPollResponse { light, host_loop }))
 }
 
 #[derive(Debug, Deserialize)]
@@ -306,7 +314,18 @@ pub async fn issue_fix_start_autonomous(
         })
         .collect::<Vec<_>>();
 
-    let plan = AutonomousIssueFix::new(loopx)
+    let autonomous = AutonomousIssueFix::new(loopx);
+    // First use on a fresh repository: create the LoopX goal and the host
+    // agent lane before writing intake todos. No-op when already connected.
+    autonomous
+        .ensure_bootstrapped(repository_path)
+        .await
+        .map_err(|error| {
+            error!("Failed to bootstrap LoopX for continuous Issue-Fix: {error}");
+            format!("Failed to connect this repository to LoopX: {error}")
+        })?;
+
+    let plan = autonomous
         .start(repository_path, request.repo.trim(), &selections)
         .await
         .map_err(|error| {

@@ -16,6 +16,15 @@ use super::{LoopxIssueFix, LoopxIssueFixError};
 const ISSUE_INTAKE_ACTION: &str = "issue_fix_intake";
 const MAX_USER_REASON_CHARS: usize = 240;
 
+/// Default objective for goals BitFun bootstraps itself: one sentence,
+/// repository-agnostic. Per-repo policy accrues in the goal's active state.
+const BOOTSTRAP_OBJECTIVE: &str = "Continuously repair repository issues explicitly \
+selected in BitFun, keep each issue isolated, validate every change, and surface \
+authority gates for human decisions.";
+
+/// The registered agent id BitFun's host loop runs as.
+const BOOTSTRAP_AGENT_ID: &str = "bitfun-cron";
+
 /// Host preamble prepended to LoopX's generated heartbeat contract.
 ///
 /// LoopX owns every lifecycle rule (the `--compact` task body below it); this
@@ -228,6 +237,60 @@ impl AutonomousIssueFix {
     ) -> Result<AutonomousControlState, AutonomousIssueFixError> {
         let identity = read_identity(repository_path)?;
         self.inspect_with_identity(repository_path, &identity).await
+    }
+
+    /// True when the repository has a usable LoopX control plane (a registry
+    /// with exactly one active goal and one registered agent).
+    pub fn is_bootstrapped(repository_path: &Path) -> bool {
+        read_identity(repository_path).is_ok()
+    }
+
+    /// Bootstrap the repository into LoopX on first use: create the goal with
+    /// BitFun's continuous-repair objective and register the host agent lane.
+    ///
+    /// Idempotent at the call level — when a valid control plane already
+    /// exists this is a no-op. The goal id derives from the directory name,
+    /// mirroring `loopx bootstrap`'s own default.
+    pub async fn ensure_bootstrapped(
+        &self,
+        repository_path: &Path,
+    ) -> Result<(), AutonomousIssueFixError> {
+        if Self::is_bootstrapped(repository_path) {
+            return Ok(());
+        }
+        self.loopx
+            .json_in(
+                repository_path,
+                [
+                    "bootstrap",
+                    "--project",
+                    ".",
+                    "--objective",
+                    BOOTSTRAP_OBJECTIVE,
+                    "--role",
+                    "controller",
+                    "--no-onboarding-scan",
+                ],
+            )
+            .await?;
+        // The goal now exists but carries no registered agents yet, so the
+        // full identity read (which requires exactly one agent) cannot be
+        // used here — read the goal id alone.
+        let goal_id = read_active_goal_id(repository_path)?;
+        self.loopx
+            .json_in(
+                repository_path,
+                [
+                    "register-agent",
+                    "--goal-id",
+                    goal_id.as_str(),
+                    "--agent-id",
+                    BOOTSTRAP_AGENT_ID,
+                    "--execute",
+                ],
+            )
+            .await?;
+        Ok(())
     }
 
     /// Cheap read-only projection for background polling: `todo list` only.
@@ -523,35 +586,9 @@ fn scheduler_args(
 
 fn read_identity(repository_path: &Path) -> Result<ControlIdentity, AutonomousIssueFixError> {
     let path = repository_path.join(".loopx").join("registry.json");
-    let bytes = std::fs::read(&path).map_err(|source| AutonomousIssueFixError::RegistryRead {
-        path: path.clone(),
-        source,
-    })?;
-    let registry: Value =
-        serde_json::from_slice(&bytes).map_err(|source| AutonomousIssueFixError::RegistryJson {
-            path: path.clone(),
-            source,
-        })?;
-    let active_goals = registry
-        .get("goals")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter(|goal| goal.get("status").and_then(Value::as_str) == Some("active"))
-        .collect::<Vec<_>>();
-    if active_goals.len() != 1 {
-        return Err(AutonomousIssueFixError::ActiveGoalCount(active_goals.len()));
-    }
-    let goal = active_goals[0];
-    let goal_id = goal
-        .get("id")
-        .and_then(Value::as_str)
-        .filter(|value| !value.trim().is_empty())
-        .ok_or(AutonomousIssueFixError::MissingField {
-            command: "registry",
-            field: "goals[].id",
-        })?
-        .to_string();
+    let registry = read_registry(&path)?;
+    let goal = single_active_goal(&registry)?;
+    let goal_id = goal_id_of(goal)?;
     let agents = goal
         .pointer("/coordination/registered_agents")
         .and_then(Value::as_array)
@@ -570,6 +607,50 @@ fn read_identity(repository_path: &Path) -> Result<ControlIdentity, AutonomousIs
         goal_id,
         agent_id: agents[0].to_string(),
     })
+}
+
+/// The active goal id alone, for mid-bootstrap states where the agent lane is
+/// not registered yet.
+fn read_active_goal_id(repository_path: &Path) -> Result<String, AutonomousIssueFixError> {
+    let path = repository_path.join(".loopx").join("registry.json");
+    let registry = read_registry(&path)?;
+    goal_id_of(single_active_goal(&registry)?)
+}
+
+fn read_registry(path: &Path) -> Result<Value, AutonomousIssueFixError> {
+    let bytes = std::fs::read(path).map_err(|source| AutonomousIssueFixError::RegistryRead {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    serde_json::from_slice(&bytes).map_err(|source| AutonomousIssueFixError::RegistryJson {
+        path: path.to_path_buf(),
+        source,
+    })
+}
+
+fn single_active_goal(registry: &Value) -> Result<&Value, AutonomousIssueFixError> {
+    let active_goals = registry
+        .get("goals")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|goal| goal.get("status").and_then(Value::as_str) == Some("active"))
+        .collect::<Vec<_>>();
+    if active_goals.len() != 1 {
+        return Err(AutonomousIssueFixError::ActiveGoalCount(active_goals.len()));
+    }
+    Ok(active_goals[0])
+}
+
+fn goal_id_of(goal: &Value) -> Result<String, AutonomousIssueFixError> {
+    goal.get("id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_string)
+        .ok_or(AutonomousIssueFixError::MissingField {
+            command: "registry",
+            field: "goals[].id",
+        })
 }
 
 fn project_issue_todo(todo: &Value) -> Option<AutonomousIssueTodo> {

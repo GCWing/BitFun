@@ -60,7 +60,8 @@
       "closeIssue": "已解決，請批准關閉 Issue #{{issue}}",
       "closeIssueByPr": "Issue #{{issue}} 已由 PR #{{pr}} 修復，請批准關閉",
       "postComment": "已為 Issue #{{issue}} 草擬回覆，請批准發布"
-    }
+    },
+    "notConnected": "尚未連接——勾選 Issue 後點擊啟動即可開始"
   },
   "status": {
     "queued": "排隊中",
