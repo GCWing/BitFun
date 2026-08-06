@@ -189,7 +189,7 @@ describe('light poll merge', () => {
     });
   });
 
-  it('bounds both notification lines when an old todo contains a drafted response', () => {
+  it('bounds the action line but preserves the full context of an old drafted-response todo', () => {
     const presentation = userTodoPresentation({
       todoId: 'comment-1290',
       taskClass: 'user_action',
@@ -198,7 +198,11 @@ describe('light poll merge', () => {
     });
 
     expect(presentation.action.length).toBeLessThanOrEqual(72);
-    expect(presentation.context?.length).toBeLessThanOrEqual(96);
+    // The context is intentionally NOT truncated: it is the user's only view
+    // of the current state/reason, and the center wraps long text instead.
+    expect(presentation.context).toBe(
+      'Discussion question: user asks about a chat group; the drafted response includes every support channel and a long explanation',
+    );
   });
 
   it('surfaces a gate discovered by the poll and clears an answered one', () => {

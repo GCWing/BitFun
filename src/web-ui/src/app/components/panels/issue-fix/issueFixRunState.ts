@@ -34,7 +34,6 @@ export interface IssueFixUserTodoPresentation {
 }
 
 const MAX_USER_TODO_ACTION_CHARS = 72;
-const MAX_USER_TODO_CONTEXT_CHARS = 96;
 
 function truncateUserTodoPart(value: string, maxChars: number): string {
   if (value.length <= maxChars) return value;
@@ -101,9 +100,9 @@ export function userTodoPresentation(todo: IssueFixUserTodo): IssueFixUserTodoPr
   }
 
   const action = truncateUserTodoPart(capitalizeAscii(text), MAX_USER_TODO_ACTION_CHARS);
-  const context = trailing
-    ? truncateUserTodoPart(capitalizeAscii(trailing), MAX_USER_TODO_CONTEXT_CHARS)
-    : null;
+  // The context is the user's only view of "why now" — never truncate it;
+  // the notification center wraps long text across lines instead.
+  const context = trailing ? capitalizeAscii(trailing) : null;
   return { action, context, kind: classifyUserTodoAction(text, trailing) };
 }
 

@@ -80,7 +80,7 @@ describe('IssueFixTodoMessage', () => {
     );
   });
 
-  it('keeps the context line bounded so the toast stays scannable on a long drafted response', () => {
+  it('preserves the full context line on a long drafted response', () => {
     act(() => {
       root.render(
         <IssueFixTodoMessage
@@ -92,6 +92,7 @@ describe('IssueFixTodoMessage', () => {
     });
 
     const context = container.querySelector('.issue-fix__todo-message-context');
-    expect(context!.textContent!.length).toBeLessThanOrEqual(96);
+    // Full context is preserved; wrapping is the display layer's job.
+    expect(context!.textContent).toContain('drafted response includes every support channel');
   });
 });
