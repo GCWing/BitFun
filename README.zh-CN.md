@@ -39,7 +39,7 @@
 | **办公交付** | 调研、写作、PPT、DOCX、XLSX、PDF、会议纪要、报告 |
 | **桌面执行层** | 浏览器、终端、桌面软件、文件系统、远程工作区 |
 | **四层可定制** | 自定义 Agent → MCP / Skills / Hooks → Mini App → 源码级改造 |
-| **性能** | KV Cache 平均命中率 98.67%；flashgrep 在千万行仓库上搜索平均快约 36 倍 |
+| **效率机制** | 供应商上报的缓存指标，以及用于重复仓库检索的可选常驻 flashgrep 索引 |
 | **跨平台、模型自选** | Windows、macOS、Linux 三端，不绑定模型厂商 |
 
 ---
@@ -56,9 +56,9 @@
 
 **可以改到底的 Runtime。** 从一个 Markdown 文件到 fork 整个 Runtime，四层连续：自定义 Agent → MCP / Skills / 兼容 Codex 的 Hooks → Mini App → 源码级改造。你可以用 BitFun 来扩展 BitFun。
 
-**真正命中的 KV Cache。** Agent 的成本大头不是生成的 token，而是每轮重复发送的上下文；而一个时间戳、一次工具列表重排序，就会让缓存从那个字节开始全部失效。运行时保证 prompt 前缀逐字节稳定：一轮 SWE-Bench-Pro 实测平均命中率 **98.67%**。
+**面向缓存的 Prompt 组装。** BitFun 尽量让稳定的 Prompt 片段在多轮之间可复用，并在供应商提供相关字段时，将缓存读取与缓存写入分开记录。实际缓存复用率会随模型、供应商、会话历史和上下文压缩而变化。
 
-**flashgrep。** Agent 在一个任务里会把同一个仓库检索几十到上百次，每次工具调用都冷启动遍历，开销可能超过模型推理本身。跨轮次常驻索引在 Chromium 这类千万行仓库上把搜索耗时最高降低 **94.6%**，平均约 **36 倍**。
+**flashgrep。** BitFun 可为工作区维护跨轮次常驻索引，用于重复的仓库检索。实际性能会随仓库、查询、硬件、索引状态和对比方法而变化。
 
 ---
 
@@ -101,26 +101,9 @@ pnpm run desktop:dev
 
 ---
 
-## Agent 核心指标
+## 评测与可复现性
 
-下面的数据用于观察 BitFun Agent 的核心能力，统一使用 **Deepseek-V4-Pro** 测得。
-
-> [!NOTE]
-> 当前数据为每个 case 跑 1 次得到的 BitFun 初始评测结果。评测会受到任务抽样、模型版本、运行环境和单次执行偶然性的影响，存在一定波动；这组数据仅用于说明当前 Agent 已具备可用的基础竞争力，并不代表固定排名或最终上限。后续会持续优化并放出完整评测详情。
-
-**1. 初始完成效果快照** —— 下图对比了 **SWE-Bench-Pro**（复杂软件工程）和 **SWE-Bench-Verified**（人工验证的 GitHub issue 修复）当前的单次运行结果。
-
-![Agent benchmark scores](./png/agent_benchmark_scores.svg)
-
-评测集说明：[SWE-Bench-Pro](https://labs.scale.com/leaderboard/swe_bench_pro_public) / [SWE-Bench-Verified](https://www.swebench.com/verified.html)
-
-**2. Token 经济** —— Agent 执行是否经济，需要综合评估端到端 Token 消耗、执行耗时和 KV Cache 复用。同一轮 SWE-Bench-Pro 中，BitFun 的平均 KV Cache 命中率为 **98.67%**。后续完整评测会继续补充成本与耗时指标。
-
-![KV Cache hit rate distribution](./png/kv_cache_hit_rate.png)
-
-**3. 超大工程下的上下文检索** —— 成本之外，Agent 体验还取决于它能否在超大工程里快速找回上下文。面对 Chromium 这类千万行级代码仓库，BitFun 通过 **flashgrep** 最高降低约 **94.6%** 搜索耗时，平均加速约 **36.1x**。
-
-![flashgrep search speed](./png/flashgrep_search_speed.png)
+BitFun 会将供应商上报的缓存读取与缓存写入分开记录，并支持索引化的工作区检索路径。评测结果取决于数据集快照、模型端点与参数、Harness 与基线版本、运行限制、硬件、索引状态和聚合方法。只有在同时公开运行命令、原始输出和固定环境后，才会在这里发布数值结果。
 
 ---
 

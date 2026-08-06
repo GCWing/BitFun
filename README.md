@@ -39,7 +39,7 @@ Writes code, produces documents, and drives the desktop — with Mini Apps, a Ru
 | **Office work** | Research, writing, PPT, DOCX, XLSX, PDF, meeting notes, reports |
 | **Desktop execution** | Browser, terminal, desktop applications, the filesystem, and remote workspaces |
 | **Four tiers of customization** | Custom Agents → MCP / Skills / Hooks → Mini Apps → source-level changes |
-| **Performance** | 98.67% average KV cache hit rate; flashgrep searches Chromium-scale trees ~36x faster |
+| **Efficiency controls** | Provider-reported cache telemetry and an optional resident flashgrep index for repeated repository search |
 | **Cross-platform and model-agnostic** | Windows, macOS, and Linux. You choose what it runs on |
 
 ---
@@ -56,9 +56,9 @@ Writes code, produces documents, and drives the desktop — with Mini Apps, a Ru
 
 **A runtime you can reshape.** Four continuous tiers, from a single Markdown file to forking the runtime: custom Agents → MCP / Skills / Codex-compatible Hooks → Mini Apps → source-level changes. You extend BitFun using BitFun.
 
-**KV cache that actually hits.** Agent cost is dominated not by generated tokens but by context re-sent every turn, and a single timestamp or reordered tool list invalidates the cache from that byte onward. Prompt assembly is byte-stable across turns: **98.67%** average cache hit rate over a SWE-Bench-Pro run.
+**Cache-aware prompt assembly.** BitFun is designed to keep stable prompt components reusable across turns and records provider-reported cache reads separately from cache writes when those fields are available. Actual cache reuse varies by model, provider, session history, and compression events.
 
-**flashgrep.** An agent re-searches the same repository dozens to hundreds of times per task, and cold traversal on every tool call can cost more than inference itself. A resident cross-turn index cuts search time by up to **94.6%** on Chromium-scale trees — roughly **36x** on average.
+**flashgrep.** BitFun can keep a per-workspace search index alive across turns for repeated repository search. Performance varies with the repository, query, hardware, index state, and comparison method.
 
 ---
 
@@ -101,26 +101,9 @@ Two kinds of complex work: shipping code in real repositories, and turning sourc
 
 ---
 
-## Agent core metrics
+## Measurement and reproducibility
 
-The data below evaluates BitFun's core Agent capabilities, all measured with **Deepseek-V4-Pro**.
-
-> [!NOTE]
-> These are BitFun's initial evaluation results, with each case run once. Benchmarks fluctuate with task sampling, model versions, runtime environment, and single-run variance, so treat these as an initial sanity signal that the Agent is already reasonably capable — not as a fixed ranking claim or a final ceiling. Full benchmark details will follow.
-
-**1. Initial completion snapshot** — The chart below compares the current single-run results on **SWE-Bench-Pro** (complex software engineering) and **SWE-Bench-Verified** (human-verified GitHub issue fixes).
-
-![Agent benchmark scores](./png/agent_benchmark_scores.svg)
-
-Benchmark references: [SWE-Bench-Pro](https://labs.scale.com/leaderboard/swe_bench_pro_public) / [SWE-Bench-Verified](https://www.swebench.com/verified.html)
-
-**2. Token economy** — Agent economy needs to be evaluated across end-to-end token consumption, execution time, and KV Cache reuse. From the same SWE-Bench-Pro round, BitFun's average KV Cache hit rate was **98.67%**. The follow-up report will add broader cost and latency metrics.
-
-![KV Cache hit rate distribution](./png/kv_cache_hit_rate.png)
-
-**3. Context retrieval at scale** — Agent experience also depends on how quickly it retrieves context in very large projects. On tens-of-millions-line repositories such as Chromium, BitFun uses **flashgrep** to cut search time by up to **94.6%**, averaging a **36.1x** speedup.
-
-![flashgrep search speed](./png/flashgrep_search_speed.png)
+BitFun records provider-reported cache reads separately from cache writes and supports an indexed workspace-search path. Benchmark results depend on the exact dataset snapshot, model endpoint and settings, harness and baseline versions, limits, hardware, index state, and aggregation method. We will publish numerical results here only with the commands, raw outputs, and pinned environment needed to reproduce them.
 
 ---
 
