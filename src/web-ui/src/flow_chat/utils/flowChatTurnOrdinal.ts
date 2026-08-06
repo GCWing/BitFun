@@ -28,7 +28,9 @@ export function absoluteSessionTurnIndexForId(
   turnId: string,
 ): number | undefined {
   const ordinal = resolveTurnOrdinal(session, turnId);
-  return ordinal === undefined ? undefined : ordinal + 1;
+  if (ordinal !== undefined) return ordinal + 1;
+  const localIndex = session.dialogTurns.findIndex(turn => turn.id === turnId);
+  return localIndex < 0 ? undefined : absoluteSessionTurnIndexForLocalIndex(session, localIndex);
 }
 
 export function loadedSessionTurnIdForAbsoluteIndex(
