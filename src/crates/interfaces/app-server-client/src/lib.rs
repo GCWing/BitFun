@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use agent_client_protocol::{ConnectTo, ConnectionTo, JsonRpcResponse, SentRequest};
+use bitfun_app_server_protocol::account::*;
 use bitfun_app_server_protocol::agent::*;
 use bitfun_app_server_protocol::app::{
     HealthRequest, HealthResponse, InitializeRequest, InitializeResponse,
@@ -72,6 +73,68 @@ pub struct AppServerClient {
 }
 
 impl AppServerClient {
+    pub async fn account_snapshot(
+        &self,
+        request: AccountSnapshotRequest,
+    ) -> agent_client_protocol::Result<AccountSnapshotResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn account_login(
+        &self,
+        request: AccountLoginRequest,
+    ) -> Result<AccountLoginResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn account_finalize_login(
+        &self,
+        request: AccountFinalizeLoginRequest,
+    ) -> Result<AccountSnapshotResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn account_logout(
+        &self,
+        request: AccountLogoutRequest,
+    ) -> Result<AccountSnapshotResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn settings_sync_start(
+        &self,
+        request: SettingsSyncStartRequest,
+    ) -> Result<SettingsSyncResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn settings_sync_snapshot(
+        &self,
+        request: SettingsSyncSnapshotRequest,
+    ) -> agent_client_protocol::Result<SettingsSyncResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn settings_sync_cancel(
+        &self,
+        request: SettingsSyncCancelRequest,
+    ) -> Result<SettingsSyncResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn settings_sync_local_changed(
+        &self,
+        request: SettingsSyncLocalChangedRequest,
+    ) -> Result<SettingsSyncResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
     pub async fn initialize(
         &self,
         request: InitializeRequest,

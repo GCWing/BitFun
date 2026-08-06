@@ -72,7 +72,6 @@ use bitfun_app_server_protocol::external_source::ExternalSourceReviewAction;
 use bitfun_app_server_protocol::hook::{
     NativeHookOverview, NativeHookRuleSummary as NativeHookRuleView,
 };
-use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::session_usage::render_usage_report_markdown;
 use bitfun_product_domains::external_hook_catalog::{
     ExternalHookCatalogSnapshotV1, ExternalHookMatcherSummary, ExternalHookNativeActivation,
@@ -501,7 +500,6 @@ pub(crate) struct ChatMode {
     workspace: Option<String>,
     local_cwd: std::path::PathBuf,
     agent: Arc<TuiAgentClient>,
-    compatibility: Option<CoreAgentRuntimeCompatibility>,
     /// User-level default resolved from shared config for this TUI run.
     auto_approve_ask_default: bool,
     /// Temporary override for the current session only.
@@ -583,7 +581,6 @@ impl ChatMode {
         agent_type: String,
         workspace: Option<String>,
         agent: Arc<TuiAgentClient>,
-        compatibility: Option<CoreAgentRuntimeCompatibility>,
     ) -> Self {
         let keymap = ResolvedKeymap::new(&config.shortcuts);
         Self {
@@ -593,7 +590,6 @@ impl ChatMode {
             workspace,
             local_cwd: std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
             agent,
-            compatibility,
             auto_approve_ask_default: false,
             auto_approve_ask_override: None,
             restore_session_id: None,

@@ -8,6 +8,7 @@ use std::sync::{Arc, RwLock};
 use crate::tui_backend::{TuiBackend, TuiBackendError, TuiBackendErrorKind};
 use anyhow::Result;
 use bitfun_app_server_client::AppServerEvent;
+use bitfun_app_server_protocol::account::*;
 use bitfun_app_server_protocol::agent::*;
 use bitfun_app_server_protocol::event::EventStreamState;
 use bitfun_app_server_protocol::external_source::*;
@@ -624,6 +625,99 @@ impl TuiAgentClient {
             .await
             .map(|response| response.0)
             .map_err(external_source_backend_error)
+    }
+
+    pub(crate) async fn account_snapshot(&self) -> Result<AccountSnapshotResponse> {
+        self.backend
+            .account_snapshot(AccountSnapshotRequest {
+                workspace_path: self.project_workspace_path_string(),
+            })
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) async fn account_login(
+        &self,
+        relay_url: String,
+        username: String,
+        password: String,
+    ) -> Result<AccountLoginResponse> {
+        self.backend
+            .account_login(AccountLoginRequest {
+                operation_id: account_operation_id(),
+                relay_url,
+                username,
+                password,
+            })
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) async fn account_finalize_login(
+        &self,
+        choice: AccountSyncChoice,
+    ) -> Result<AccountSnapshotResponse> {
+        self.backend
+            .account_finalize_login(AccountFinalizeLoginRequest {
+                operation_id: account_operation_id(),
+                choice,
+                workspace_path: self.project_workspace_path_string(),
+            })
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) async fn account_logout(&self) -> Result<AccountSnapshotResponse> {
+        self.backend
+            .account_logout(AccountLogoutRequest {
+                operation_id: account_operation_id(),
+                workspace_path: self.project_workspace_path_string(),
+            })
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) async fn settings_sync_start(
+        &self,
+        is_first_login: bool,
+    ) -> Result<SettingsSyncResponse> {
+        self.backend
+            .settings_sync_start(SettingsSyncStartRequest {
+                operation_id: account_operation_id(),
+                workspace_path: self.project_workspace_path_string(),
+                is_first_login,
+            })
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) async fn settings_sync_snapshot(&self) -> Result<SettingsSyncResponse> {
+        self.backend
+            .settings_sync_snapshot(SettingsSyncSnapshotRequest {
+                workspace_path: self.project_workspace_path_string(),
+            })
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) async fn settings_sync_cancel(&self) -> Result<SettingsSyncResponse> {
+        self.backend
+            .settings_sync_cancel(SettingsSyncCancelRequest {
+                operation_id: account_operation_id(),
+                workspace_path: self.project_workspace_path_string(),
+            })
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) async fn settings_sync_local_changed(&self) -> Result<SettingsSyncResponse> {
+        self.backend
+            .settings_sync_local_changed(SettingsSyncLocalChangedRequest {
+                operation_id: account_operation_id(),
+                workspace_path: self.project_workspace_path_string(),
+            })
+            .await
+            .map_err(Into::into)
     }
 
     pub(crate) fn subscribe_events(&self) -> Result<broadcast::Receiver<AgenticEventEnvelope>> {
@@ -1411,6 +1505,10 @@ fn external_source_backend_error(error: TuiBackendError) -> ExternalSourceOperat
     };
     ExternalSourceOperationError::new(code, error.message, error.outcome_unknown)
         .with_default_recovery_actions()
+}
+
+fn account_operation_id() -> String {
+    format!("tui-account-{}", uuid::Uuid::new_v4())
 }
 
 fn shared_receiver<T: Clone>(

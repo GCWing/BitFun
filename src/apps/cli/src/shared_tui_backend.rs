@@ -13,13 +13,14 @@ use bitfun_agent_runtime_ipc::{
     RuntimeUserAnswersRequest,
 };
 use bitfun_app_server::management::{
-    EXTERNAL_HOOKS_CAPABILITY, EXTERNAL_SOURCES_CAPABILITY, MODES_CAPABILITY,
-    NATIVE_HOOKS_CAPABILITY,
+    ACCOUNT_CAPABILITY, EXTERNAL_HOOKS_CAPABILITY, EXTERNAL_SOURCES_CAPABILITY, MODES_CAPABILITY,
+    NATIVE_HOOKS_CAPABILITY, SETTINGS_SYNC_CAPABILITY,
 };
 use bitfun_app_server::{
     AppManagementCapabilities, AppManagementError, AppManagementErrorKind, AppManagementService,
 };
 use bitfun_app_server_client::AppServerEvent;
+use bitfun_app_server_protocol::account::*;
 use bitfun_app_server_protocol::agent::*;
 use bitfun_app_server_protocol::app::{
     CapabilityAvailability, CapabilityDescriptor, HealthResponse, HealthStatus, InitializeRequest,
@@ -192,6 +193,86 @@ impl TuiBackend for SharedTuiBackend {
 
     async fn model_catalog(&self) -> Result<TuiModelCatalogResponse, TuiBackendError> {
         load_model_catalog().await
+    }
+
+    async fn account_snapshot(
+        &self,
+        request: AccountSnapshotRequest,
+    ) -> Result<AccountSnapshotResponse, TuiBackendError> {
+        self.management_service(ACCOUNT_CAPABILITY)?
+            .account_snapshot(request)
+            .await
+            .map_err(|error| map_management_error(ACCOUNT_CAPABILITY, error))
+    }
+
+    async fn account_login(
+        &self,
+        request: AccountLoginRequest,
+    ) -> Result<AccountLoginResponse, TuiBackendError> {
+        self.management_service(ACCOUNT_CAPABILITY)?
+            .account_login(request)
+            .await
+            .map_err(|error| map_management_error(ACCOUNT_CAPABILITY, error))
+    }
+
+    async fn account_finalize_login(
+        &self,
+        request: AccountFinalizeLoginRequest,
+    ) -> Result<AccountSnapshotResponse, TuiBackendError> {
+        self.management_service(ACCOUNT_CAPABILITY)?
+            .account_finalize_login(request)
+            .await
+            .map_err(|error| map_management_error(ACCOUNT_CAPABILITY, error))
+    }
+
+    async fn account_logout(
+        &self,
+        request: AccountLogoutRequest,
+    ) -> Result<AccountSnapshotResponse, TuiBackendError> {
+        self.management_service(ACCOUNT_CAPABILITY)?
+            .account_logout(request)
+            .await
+            .map_err(|error| map_management_error(ACCOUNT_CAPABILITY, error))
+    }
+
+    async fn settings_sync_start(
+        &self,
+        request: SettingsSyncStartRequest,
+    ) -> Result<SettingsSyncResponse, TuiBackendError> {
+        self.management_service(SETTINGS_SYNC_CAPABILITY)?
+            .settings_sync_start(request)
+            .await
+            .map_err(|error| map_management_error(SETTINGS_SYNC_CAPABILITY, error))
+    }
+
+    async fn settings_sync_snapshot(
+        &self,
+        request: SettingsSyncSnapshotRequest,
+    ) -> Result<SettingsSyncResponse, TuiBackendError> {
+        self.management_service(SETTINGS_SYNC_CAPABILITY)?
+            .settings_sync_snapshot(request)
+            .await
+            .map_err(|error| map_management_error(SETTINGS_SYNC_CAPABILITY, error))
+    }
+
+    async fn settings_sync_cancel(
+        &self,
+        request: SettingsSyncCancelRequest,
+    ) -> Result<SettingsSyncResponse, TuiBackendError> {
+        self.management_service(SETTINGS_SYNC_CAPABILITY)?
+            .settings_sync_cancel(request)
+            .await
+            .map_err(|error| map_management_error(SETTINGS_SYNC_CAPABILITY, error))
+    }
+
+    async fn settings_sync_local_changed(
+        &self,
+        request: SettingsSyncLocalChangedRequest,
+    ) -> Result<SettingsSyncResponse, TuiBackendError> {
+        self.management_service(SETTINGS_SYNC_CAPABILITY)?
+            .settings_sync_local_changed(request)
+            .await
+            .map_err(|error| map_management_error(SETTINGS_SYNC_CAPABILITY, error))
     }
 
     async fn health(&self) -> Result<HealthResponse, TuiBackendError> {
@@ -1319,6 +1400,8 @@ mod tests {
             "tui.externalSources",
             "tui.nativeHooks",
             "tui.externalHooks",
+            ACCOUNT_CAPABILITY,
+            SETTINGS_SYNC_CAPABILITY,
         ] {
             let capability = capabilities
                 .iter()
@@ -1397,6 +1480,18 @@ mod tests {
                 }
             );
             assert!(hook_error.message.contains("does not fall back"));
+        }
+
+        for capability in [ACCOUNT_CAPABILITY, SETTINGS_SYNC_CAPABILITY] {
+            let account_error = require_local_management_scope(false, capability)
+                .expect_err("Remote account management must not use the controller account");
+            assert_eq!(
+                account_error.kind,
+                TuiBackendErrorKind::Unsupported {
+                    capability: capability.to_string()
+                }
+            );
+            assert!(account_error.message.contains("does not fall back"));
         }
     }
 

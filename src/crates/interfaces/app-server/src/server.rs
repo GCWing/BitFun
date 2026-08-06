@@ -123,6 +123,7 @@ impl BitfunAppServer {
                 runtime.clone(),
                 management.clone(),
             ))
+            .with_connection_builder(handlers::account::builder(management.clone()))
             .with_connection_builder(handlers::session::builder(runtime.clone()))
             .with_connection_builder(handlers::permission::builder(runtime.clone()))
             .with_connection_builder(handlers::workspace::builder(runtime.clone()))

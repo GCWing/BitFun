@@ -829,8 +829,7 @@ impl ChatMode {
             }
 
             if chat_view.login_form_visible() {
-                self.refresh_account_panel_live(&mut chat_view);
-                if crate::account_sync::sync_in_flight() {
+                if self.refresh_account_panel_live(&mut chat_view) {
                     needs_redraw = true;
                 }
             }

@@ -766,9 +766,9 @@ impl ChatView {
 
     pub(crate) fn show_account_panel(
         &mut self,
-        info: crate::account::AccountInfo,
-        devices: Vec<crate::account::AccountDevice>,
-        sync_progress: crate::account_sync::SyncProgress,
+        info: bitfun_app_server_protocol::account::AccountInfo,
+        devices: Vec<bitfun_app_server_protocol::account::AccountDevice>,
+        sync_progress: bitfun_app_server_protocol::account::SettingsSyncProgress,
     ) {
         self.login_form.show_account(info, devices, sync_progress);
         self.popup_stack.push(PopupType::LoginForm);
@@ -781,8 +781,8 @@ impl ChatView {
 
     pub(crate) fn update_account_panel_progress(
         &mut self,
-        devices: Option<Vec<crate::account::AccountDevice>>,
-        sync_progress: crate::account_sync::SyncProgress,
+        devices: Option<Vec<bitfun_app_server_protocol::account::AccountDevice>>,
+        sync_progress: bitfun_app_server_protocol::account::SettingsSyncProgress,
     ) {
         self.login_form
             .update_account_progress(devices, sync_progress);

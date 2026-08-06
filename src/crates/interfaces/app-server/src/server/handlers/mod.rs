@@ -1,5 +1,6 @@
 //! Domain-grouped JSON-RPC request handlers.
 
+pub(in crate::server) mod account;
 pub(in crate::server) mod agent;
 pub(in crate::server) mod app;
 mod capability;

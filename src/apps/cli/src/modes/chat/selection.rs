@@ -212,14 +212,21 @@ fn apply_session_model_migration(
 
 impl ChatMode {
     fn logout(&self, chat_state: &mut ChatState, rt_handle: &tokio::runtime::Handle) {
-        let logged_in =
-            tokio::task::block_in_place(|| rt_handle.block_on(crate::account::is_logged_in()));
-        if !logged_in {
-            chat_state.add_system_message("Not logged in.".to_string());
-            return;
+        let snapshot =
+            tokio::task::block_in_place(|| rt_handle.block_on(self.agent.account_snapshot()));
+        match snapshot {
+            Ok(snapshot) if !snapshot.logged_in => {
+                chat_state.add_system_message("Not logged in.".to_string());
+                return;
+            }
+            Err(error) => {
+                chat_state.add_system_message(format!("Logout failed: {error}"));
+                return;
+            }
+            Ok(_) => {}
         }
-        match tokio::task::block_in_place(|| rt_handle.block_on(crate::account::logout())) {
-            Ok(()) => chat_state.add_system_message("Logged out.".to_string()),
+        match tokio::task::block_in_place(|| rt_handle.block_on(self.agent.account_logout())) {
+            Ok(_) => chat_state.add_system_message("Logged out.".to_string()),
             Err(error) => chat_state.add_system_message(format!("Logout failed: {error}")),
         }
     }

@@ -1,5 +1,7 @@
 //! Host-injected management service and capability boundary.
 
+use async_trait::async_trait;
+use bitfun_app_server_protocol::account::*;
 use bitfun_app_server_protocol::app::{CapabilityAvailability, CapabilityDescriptor};
 
 mod service;
@@ -14,6 +16,44 @@ pub const MCP_CAPABILITY: &str = "tui.mcp";
 pub const EXTERNAL_SOURCES_CAPABILITY: &str = "tui.externalSources";
 pub const NATIVE_HOOKS_CAPABILITY: &str = "tui.nativeHooks";
 pub const EXTERNAL_HOOKS_CAPABILITY: &str = "tui.externalHooks";
+pub const ACCOUNT_CAPABILITY: &str = "tui.account";
+pub const SETTINGS_SYNC_CAPABILITY: &str = "tui.settingsSync";
+
+#[async_trait]
+pub trait AccountManagementHost: Send + Sync {
+    async fn account_snapshot(
+        &self,
+        request: AccountSnapshotRequest,
+    ) -> AppManagementResult<AccountSnapshotResponse>;
+    async fn account_login(
+        &self,
+        request: AccountLoginRequest,
+    ) -> AppManagementResult<AccountLoginResponse>;
+    async fn account_finalize_login(
+        &self,
+        request: AccountFinalizeLoginRequest,
+    ) -> AppManagementResult<AccountSnapshotResponse>;
+    async fn account_logout(
+        &self,
+        request: AccountLogoutRequest,
+    ) -> AppManagementResult<AccountSnapshotResponse>;
+    async fn settings_sync_start(
+        &self,
+        request: SettingsSyncStartRequest,
+    ) -> AppManagementResult<SettingsSyncResponse>;
+    async fn settings_sync_snapshot(
+        &self,
+        request: SettingsSyncSnapshotRequest,
+    ) -> AppManagementResult<SettingsSyncResponse>;
+    async fn settings_sync_cancel(
+        &self,
+        request: SettingsSyncCancelRequest,
+    ) -> AppManagementResult<SettingsSyncResponse>;
+    async fn settings_sync_local_changed(
+        &self,
+        request: SettingsSyncLocalChangedRequest,
+    ) -> AppManagementResult<SettingsSyncResponse>;
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppManagementCapabilities {
@@ -25,6 +65,8 @@ pub struct AppManagementCapabilities {
     pub external_sources: CapabilityAvailability,
     pub native_hooks: CapabilityAvailability,
     pub external_hooks: CapabilityAvailability,
+    pub account: CapabilityAvailability,
+    pub settings_sync: CapabilityAvailability,
 }
 
 impl AppManagementCapabilities {
@@ -38,6 +80,8 @@ impl AppManagementCapabilities {
             external_sources: CapabilityAvailability::Available,
             native_hooks: CapabilityAvailability::Available,
             external_hooks: CapabilityAvailability::Available,
+            account: CapabilityAvailability::Available,
+            settings_sync: CapabilityAvailability::Available,
         }
     }
 
@@ -52,6 +96,8 @@ impl AppManagementCapabilities {
             external_sources: unavailable(&reason),
             native_hooks: unavailable(&reason),
             external_hooks: unavailable(&reason),
+            account: unavailable(&reason),
+            settings_sync: unavailable(&reason),
         }
     }
 
@@ -65,6 +111,8 @@ impl AppManagementCapabilities {
             EXTERNAL_SOURCES_CAPABILITY => Some(&self.external_sources),
             NATIVE_HOOKS_CAPABILITY => Some(&self.native_hooks),
             EXTERNAL_HOOKS_CAPABILITY => Some(&self.external_hooks),
+            ACCOUNT_CAPABILITY => Some(&self.account),
+            SETTINGS_SYNC_CAPABILITY => Some(&self.settings_sync),
             _ => None,
         }
     }
@@ -132,6 +180,26 @@ impl AppManagementCapabilities {
                     "externalHook/plan",
                     "externalHook/apply",
                     "externalHook/mutate",
+                ],
+            ),
+            descriptor(
+                ACCOUNT_CAPABILITY,
+                self.account.clone(),
+                &[
+                    "account/snapshot",
+                    "account/login",
+                    "account/finalizeLogin",
+                    "account/logout",
+                ],
+            ),
+            descriptor(
+                SETTINGS_SYNC_CAPABILITY,
+                self.settings_sync.clone(),
+                &[
+                    "settingsSync/start",
+                    "settingsSync/snapshot",
+                    "settingsSync/cancel",
+                    "settingsSync/localChanged",
                 ],
             ),
         ]
@@ -212,7 +280,7 @@ mod tests {
         let capabilities = AppManagementCapabilities::unavailable(reason);
         let descriptors = capabilities.descriptors();
 
-        assert_eq!(descriptors.len(), 8);
+        assert_eq!(descriptors.len(), 10);
         for descriptor in descriptors {
             assert!(matches!(
                 descriptor.availability,
@@ -250,5 +318,36 @@ mod tests {
             .iter()
             .chain(external.methods.iter())
             .all(|method| !method.to_ascii_lowercase().contains("postcall")));
+    }
+
+    #[test]
+    fn account_and_settings_sync_have_separate_capabilities() {
+        let capabilities = AppManagementCapabilities::available().descriptors();
+        let account = capabilities
+            .iter()
+            .find(|descriptor| descriptor.id == ACCOUNT_CAPABILITY)
+            .expect("account capability");
+        assert_eq!(
+            account.methods,
+            [
+                "account/snapshot",
+                "account/login",
+                "account/finalizeLogin",
+                "account/logout",
+            ]
+        );
+        let sync = capabilities
+            .iter()
+            .find(|descriptor| descriptor.id == SETTINGS_SYNC_CAPABILITY)
+            .expect("settings sync capability");
+        assert_eq!(
+            sync.methods,
+            [
+                "settingsSync/start",
+                "settingsSync/snapshot",
+                "settingsSync/cancel",
+                "settingsSync/localChanged",
+            ]
+        );
     }
 }

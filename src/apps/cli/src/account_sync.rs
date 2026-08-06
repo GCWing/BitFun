@@ -105,10 +105,12 @@ pub(crate) enum SyncStatus {
     Syncing,
     Done,
     Failed,
+    Cancelled,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct SyncProgress {
+    pub operation_id: Option<String>,
     pub status: SyncStatus,
     pub phase: String,
     pub percent: u8,
@@ -123,6 +125,7 @@ pub(crate) struct SyncProgress {
 impl Default for SyncProgress {
     fn default() -> Self {
         Self {
+            operation_id: None,
             status: SyncStatus::Idle,
             phase: String::new(),
             percent: 0,
@@ -164,10 +167,6 @@ pub(crate) async fn current_sync_progress() -> SyncProgress {
     sync_progress_store().read().await.clone()
 }
 
-pub(crate) fn sync_in_flight() -> bool {
-    AUTO_SYNC_IN_FLIGHT.load(Ordering::SeqCst)
-}
-
 async fn set_progress(mut update: impl FnMut(&mut SyncProgress)) {
     let mut guard = sync_progress_store().write().await;
     update(&mut guard);
@@ -194,21 +193,29 @@ async fn emit_progress(
 
 /// Start auto-sync in the background. Returns immediately; progress is in
 /// [`current_sync_progress`].
-pub(crate) fn start_auto_sync_background(
+pub(crate) async fn start_auto_sync_background(
     compatibility: CoreAgentRuntimeCompatibility,
+    operation_id: String,
     is_first_login: bool,
     workspace_path: PathBuf,
-) {
+) -> bool {
     if AUTO_SYNC_IN_FLIGHT.swap(true, Ordering::SeqCst) {
         tracing::warn!("Account auto-sync already in flight; skipping duplicate start");
-        return;
+        return false;
     }
+    set_progress(|progress| {
+        progress.operation_id = Some(operation_id.clone());
+    })
+    .await;
     tokio::spawn(async move {
         let result = run_auto_sync(&compatibility, is_first_login, &workspace_path).await;
         AUTO_SYNC_IN_FLIGHT.store(false, Ordering::SeqCst);
         match result {
             Ok(r) => {
                 set_progress(|p| {
+                    if p.operation_id.as_deref() != Some(operation_id.as_str()) {
+                        return;
+                    }
                     p.status = SyncStatus::Done;
                     p.phase = "done".into();
                     p.percent = 100;
@@ -220,6 +227,9 @@ pub(crate) fn start_auto_sync_background(
             }
             Err(e) => {
                 set_progress(|p| {
+                    if p.operation_id.as_deref() != Some(operation_id.as_str()) {
+                        return;
+                    }
                     p.status = SyncStatus::Failed;
                     p.error = Some(e.to_string());
                 })
@@ -228,6 +238,17 @@ pub(crate) fn start_auto_sync_background(
             }
         }
     });
+    true
+}
+
+pub(crate) async fn mark_sync_cancelled(operation_id: String) {
+    set_progress(|progress| {
+        progress.operation_id = Some(operation_id.clone());
+        progress.status = SyncStatus::Cancelled;
+        progress.phase = "cancelled".to_string();
+        progress.error = None;
+    })
+    .await;
 }
 
 pub(crate) async fn run_auto_sync(
@@ -239,6 +260,7 @@ pub(crate) async fn run_auto_sync(
     let _sync_guard = lock_account_sync(generation).await?;
     set_progress(|p| {
         *p = SyncProgress {
+            operation_id: p.operation_id.clone(),
             status: SyncStatus::Syncing,
             phase: "starting".into(),
             percent: 1,
@@ -449,27 +471,6 @@ fn ensure_session_backup_complete(
     Err(anyhow!(
         "session backup incomplete: uploaded {uploaded} of {total}; {detail}"
     ))
-}
-
-pub(crate) fn sync_phase_label(progress: &SyncProgress) -> String {
-    match progress.phase.as_str() {
-        "uploading_settings" => "Uploading settings…".into(),
-        "downloading_settings" => "Downloading settings…".into(),
-        "applying_settings" => "Applying cloud settings…".into(),
-        "settings_done" => "Settings sync done".into(),
-        "listing_sessions" => "Listing local sessions…".into(),
-        "exporting_sessions" => {
-            if let (Some(c), Some(t)) = (progress.current, progress.total) {
-                format!("Uploading sessions ({c}/{t})…")
-            } else {
-                "Uploading sessions…".into()
-            }
-        }
-        "done" => format!("Sync complete (exported {})", progress.sessions_exported),
-        "starting" => "Starting sync…".into(),
-        other if other.is_empty() => "Sync".into(),
-        other => other.to_string(),
-    }
 }
 
 #[cfg(test)]

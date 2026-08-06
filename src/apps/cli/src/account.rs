@@ -259,6 +259,10 @@ pub(crate) async fn is_logged_in() -> bool {
     read_account_context().await.is_ok()
 }
 
+pub(crate) fn pending_sync_choice() -> bool {
+    PENDING_SYNC_CHOICE.load(Ordering::Acquire)
+}
+
 fn normalize_relay_url(relay_url: &str) -> Result<String> {
     let parsed = validate_relay_base_url(relay_url.trim())?;
     Ok(parsed.as_str().trim_end_matches('/').to_string())

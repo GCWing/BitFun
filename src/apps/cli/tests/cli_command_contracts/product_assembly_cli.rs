@@ -169,8 +169,13 @@ fn remaining_cli_local_persistence_stays_behind_explicit_owner_boundaries() {
         "account sync must receive the narrow Core compatibility facade"
     );
     assert!(
-        STARTUP_PAGE.contains("CoreAgentRuntimeCompatibility"),
-        "startup must pass the initialized Core compatibility facade to account sync"
+        STARTUP_PAGE.contains("self.agent.account_snapshot()")
+            && STARTUP_PAGE.contains("self.agent.account_login(")
+            && STARTUP_PAGE.contains("self.agent.account_finalize_login(")
+            && STARTUP_PAGE.contains("self.agent.settings_sync_start(")
+            && STARTUP_PAGE.contains("self.agent.settings_sync_snapshot()")
+            && STARTUP_PAGE.contains("self.agent.settings_sync_cancel()"),
+        "startup account and settings-sync operations must use the typed TUI client"
     );
     assert!(
         !CORE_RUNTIME_SERVICES.contains("pub fn persistence_manager"),

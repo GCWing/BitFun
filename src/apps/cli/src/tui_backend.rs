@@ -2,6 +2,7 @@
 
 use async_trait::async_trait;
 use bitfun_app_server_client::{AppServerClient, AppServerEvent, ClientError, ProtocolError};
+use bitfun_app_server_protocol::account::*;
 use bitfun_app_server_protocol::agent::*;
 use bitfun_app_server_protocol::app::{HealthResponse, InitializeRequest, InitializeResponse};
 use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
@@ -60,6 +61,38 @@ pub(crate) trait TuiBackend: Send + Sync {
     fn subscribe_events(&self) -> tokio::sync::broadcast::Receiver<AppServerEvent>;
 
     async fn model_catalog(&self) -> Result<TuiModelCatalogResponse, TuiBackendError>;
+    async fn account_snapshot(
+        &self,
+        request: AccountSnapshotRequest,
+    ) -> Result<AccountSnapshotResponse, TuiBackendError>;
+    async fn account_login(
+        &self,
+        request: AccountLoginRequest,
+    ) -> Result<AccountLoginResponse, TuiBackendError>;
+    async fn account_finalize_login(
+        &self,
+        request: AccountFinalizeLoginRequest,
+    ) -> Result<AccountSnapshotResponse, TuiBackendError>;
+    async fn account_logout(
+        &self,
+        request: AccountLogoutRequest,
+    ) -> Result<AccountSnapshotResponse, TuiBackendError>;
+    async fn settings_sync_start(
+        &self,
+        request: SettingsSyncStartRequest,
+    ) -> Result<SettingsSyncResponse, TuiBackendError>;
+    async fn settings_sync_snapshot(
+        &self,
+        request: SettingsSyncSnapshotRequest,
+    ) -> Result<SettingsSyncResponse, TuiBackendError>;
+    async fn settings_sync_cancel(
+        &self,
+        request: SettingsSyncCancelRequest,
+    ) -> Result<SettingsSyncResponse, TuiBackendError>;
+    async fn settings_sync_local_changed(
+        &self,
+        request: SettingsSyncLocalChangedRequest,
+    ) -> Result<SettingsSyncResponse, TuiBackendError>;
 
     async fn list_sessions(
         &self,
@@ -308,6 +341,62 @@ impl TuiBackend for AppServerTuiBackend {
 
     fn subscribe_events(&self) -> tokio::sync::broadcast::Receiver<AppServerEvent> {
         self.client.subscribe_events()
+    }
+
+    async fn account_snapshot(
+        &self,
+        request: AccountSnapshotRequest,
+    ) -> Result<AccountSnapshotResponse, TuiBackendError> {
+        map(self.client.account_snapshot(request).await)
+    }
+
+    async fn account_login(
+        &self,
+        request: AccountLoginRequest,
+    ) -> Result<AccountLoginResponse, TuiBackendError> {
+        map_client(self.client.account_login(request).await)
+    }
+
+    async fn account_finalize_login(
+        &self,
+        request: AccountFinalizeLoginRequest,
+    ) -> Result<AccountSnapshotResponse, TuiBackendError> {
+        map_client(self.client.account_finalize_login(request).await)
+    }
+
+    async fn account_logout(
+        &self,
+        request: AccountLogoutRequest,
+    ) -> Result<AccountSnapshotResponse, TuiBackendError> {
+        map_client(self.client.account_logout(request).await)
+    }
+
+    async fn settings_sync_start(
+        &self,
+        request: SettingsSyncStartRequest,
+    ) -> Result<SettingsSyncResponse, TuiBackendError> {
+        map_client(self.client.settings_sync_start(request).await)
+    }
+
+    async fn settings_sync_snapshot(
+        &self,
+        request: SettingsSyncSnapshotRequest,
+    ) -> Result<SettingsSyncResponse, TuiBackendError> {
+        map(self.client.settings_sync_snapshot(request).await)
+    }
+
+    async fn settings_sync_cancel(
+        &self,
+        request: SettingsSyncCancelRequest,
+    ) -> Result<SettingsSyncResponse, TuiBackendError> {
+        map_client(self.client.settings_sync_cancel(request).await)
+    }
+
+    async fn settings_sync_local_changed(
+        &self,
+        request: SettingsSyncLocalChangedRequest,
+    ) -> Result<SettingsSyncResponse, TuiBackendError> {
+        map_client(self.client.settings_sync_local_changed(request).await)
     }
 
     async fn list_sessions(

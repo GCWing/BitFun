@@ -37,6 +37,7 @@ mod self_update;
 mod shared_runtime;
 mod shared_tui_backend;
 mod terminal_attention;
+mod tui_account_management;
 mod tui_backend;
 mod ui;
 
@@ -983,9 +984,6 @@ async fn run_interactive(
             runtime::approval::CliApprovalPolicy::Ask,
         ))
     };
-    let compatibility = runtime
-        .as_ref()
-        .map(|runtime| runtime.compatibility().clone());
     // 3.5 Restore persisted account session (if any)
     if !shared {
         if let Some(user_id) = account::try_restore_session().await {
@@ -1079,7 +1077,7 @@ async fn run_interactive(
     // Use the current project workspace selected at process start.
     let workspace = startup_page.workspace();
     let config = startup_page.config().clone();
-    let mut chat_mode = ChatMode::new(config, agent_type, workspace, agent, compatibility);
+    let mut chat_mode = ChatMode::new(config, agent_type, workspace, agent);
     if let Some(session_id) = restore_session_id {
         chat_mode = chat_mode.with_restore_session(session_id);
     }
@@ -1567,7 +1565,6 @@ async fn run_interactive_with_session(
         false,
         runtime.approval_policy(),
     ));
-    let compatibility = runtime.compatibility().clone();
     let sessions = agent.list_sessions().await?;
     let agent_type = sessions
         .iter()
@@ -1580,8 +1577,8 @@ async fn run_interactive_with_session(
             )
         })?;
 
-    let mut chat_mode = ChatMode::new(config, agent_type, workspace, agent, Some(compatibility))
-        .with_restore_session(session_id);
+    let mut chat_mode =
+        ChatMode::new(config, agent_type, workspace, agent).with_restore_session(session_id);
     let run_result = chat_mode.run(Some(terminal));
 
     shutdown_mcp_servers().await;

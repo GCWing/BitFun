@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
+use bitfun_app_server_protocol::account::*;
 use bitfun_app_server_protocol::agent::{
     AgentModeSummary, ListAgentModesRequest, ListAgentModesResponse,
 };
@@ -15,7 +16,10 @@ use bitfun_app_server_protocol::model::*;
 use bitfun_app_server_protocol::skill::*;
 use bitfun_app_server_protocol::subagent::*;
 
-use super::{AppManagementCapabilities, AppManagementError, AppManagementResult};
+use super::{
+    AccountManagementHost, AppManagementCapabilities, AppManagementError, AppManagementResult,
+    ACCOUNT_CAPABILITY, SETTINGS_SYNC_CAPABILITY,
+};
 
 /// App Server adapter shared by Embedded and local Shared compatibility Hosts.
 ///
@@ -30,10 +34,17 @@ pub struct AppManagementService {
         bitfun_product_domains::external_sources::ExternalSourcePublicSnapshot,
     )>,
     external_source_subscriptions: Arc<Mutex<HashSet<String>>>,
+    account: Option<Arc<dyn AccountManagementHost>>,
 }
 
 impl AppManagementService {
     pub async fn load() -> Result<Self> {
+        Self::load_with_account_host(None).await
+    }
+
+    pub async fn load_with_account_host(
+        account: Option<Arc<dyn AccountManagementHost>>,
+    ) -> Result<Self> {
         let config = bitfun_core::service::config::get_global_config_service()
             .await
             .context("Failed to load the App Server management configuration owner")?;
@@ -43,7 +54,14 @@ impl AppManagementService {
             mcp: bitfun_core::service::mcp::get_global_mcp_service(),
             external_source_updates,
             external_source_subscriptions: Arc::new(Mutex::new(HashSet::new())),
+            account,
         })
+    }
+
+    fn account_host(&self, capability: &str) -> AppManagementResult<&dyn AccountManagementHost> {
+        self.account
+            .as_deref()
+            .ok_or_else(|| AppManagementError::unsupported(format!("{capability} is unavailable")))
     }
 
     async fn model_config(
@@ -796,7 +814,88 @@ impl AppManagementService {
                     reason: "The App Server Host MCP owner is unavailable".to_string(),
                 };
         }
+        if self.account.is_none() {
+            let reason = "The Host did not provide an account owner".to_string();
+            capabilities.account =
+                bitfun_app_server_protocol::app::CapabilityAvailability::Unavailable {
+                    reason: reason.clone(),
+                };
+            capabilities.settings_sync =
+                bitfun_app_server_protocol::app::CapabilityAvailability::Unavailable { reason };
+        }
         capabilities
+    }
+
+    pub async fn account_snapshot(
+        &self,
+        request: AccountSnapshotRequest,
+    ) -> AppManagementResult<AccountSnapshotResponse> {
+        self.account_host(ACCOUNT_CAPABILITY)?
+            .account_snapshot(request)
+            .await
+    }
+
+    pub async fn account_login(
+        &self,
+        request: AccountLoginRequest,
+    ) -> AppManagementResult<AccountLoginResponse> {
+        self.account_host(ACCOUNT_CAPABILITY)?
+            .account_login(request)
+            .await
+    }
+
+    pub async fn account_finalize_login(
+        &self,
+        request: AccountFinalizeLoginRequest,
+    ) -> AppManagementResult<AccountSnapshotResponse> {
+        self.account_host(ACCOUNT_CAPABILITY)?
+            .account_finalize_login(request)
+            .await
+    }
+
+    pub async fn account_logout(
+        &self,
+        request: AccountLogoutRequest,
+    ) -> AppManagementResult<AccountSnapshotResponse> {
+        self.account_host(ACCOUNT_CAPABILITY)?
+            .account_logout(request)
+            .await
+    }
+
+    pub async fn settings_sync_start(
+        &self,
+        request: SettingsSyncStartRequest,
+    ) -> AppManagementResult<SettingsSyncResponse> {
+        self.account_host(SETTINGS_SYNC_CAPABILITY)?
+            .settings_sync_start(request)
+            .await
+    }
+
+    pub async fn settings_sync_snapshot(
+        &self,
+        request: SettingsSyncSnapshotRequest,
+    ) -> AppManagementResult<SettingsSyncResponse> {
+        self.account_host(SETTINGS_SYNC_CAPABILITY)?
+            .settings_sync_snapshot(request)
+            .await
+    }
+
+    pub async fn settings_sync_cancel(
+        &self,
+        request: SettingsSyncCancelRequest,
+    ) -> AppManagementResult<SettingsSyncResponse> {
+        self.account_host(SETTINGS_SYNC_CAPABILITY)?
+            .settings_sync_cancel(request)
+            .await
+    }
+
+    pub async fn settings_sync_local_changed(
+        &self,
+        request: SettingsSyncLocalChangedRequest,
+    ) -> AppManagementResult<SettingsSyncResponse> {
+        self.account_host(SETTINGS_SYNC_CAPABILITY)?
+            .settings_sync_local_changed(request)
+            .await
     }
 
     pub async fn native_hook_overview(

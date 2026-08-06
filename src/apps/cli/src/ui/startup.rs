@@ -19,7 +19,7 @@ use super::theme_selector::{ThemeItem, ThemeSelectorState};
 use crate::actions::{
     action_by_id, action_for_alias, removed_management_command_hint, ActionContext, ActionHandler,
     ActionSpec, ActionState, ResolvedKeymap, IMAGE_ATTACHMENTS_REQUIRE_MESSAGE,
-    SHARED_TUI_EMBEDDED_HANDOFF, SHARED_TUI_HELP_NOTE,
+    SHARED_TUI_HELP_NOTE,
 };
 use crate::config::CliConfig;
 /// Startup page module
@@ -46,8 +46,6 @@ use ratatui::{
 };
 use std::sync::Arc;
 use std::time::Duration;
-
-use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 
 use crate::agent::tui_client::{TuiAgentClient, TuiAgentMode};
 
@@ -199,7 +197,6 @@ pub(crate) struct StartupPage {
 
     // ── System context ──
     agent: Arc<TuiAgentClient>,
-    compatibility: Option<CoreAgentRuntimeCompatibility>,
 
     // ── State ──
     /// Selected agent type (can be changed via /agent or Tab)
@@ -224,7 +221,6 @@ impl StartupPage {
     pub(crate) fn new(
         config: CliConfig,
         agent: Arc<TuiAgentClient>,
-        compatibility: Option<CoreAgentRuntimeCompatibility>,
         default_agent: String,
         workspace: Option<String>,
     ) -> Self {
@@ -286,7 +282,6 @@ impl StartupPage {
             login_form: LoginFormState::new(),
             theme_preview_original: None,
             agent,
-            compatibility,
             agent_type: default_agent,
             model_display_name: String::new(),
             selected_model_id: None,
@@ -1295,18 +1290,11 @@ impl StartupPage {
     }
 
     fn logout(&mut self) {
-        let logged_in = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(crate::account::is_logged_in())
-        });
-        if !logged_in {
-            self.status = Some("Not logged in.".to_string());
-            return;
-        }
         self.status = Some(
             match tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(crate::account::logout())
+                tokio::runtime::Handle::current().block_on(self.agent.account_logout())
             }) {
-                Ok(()) => "Logged out.".to_string(),
+                Ok(_) => "Logged out.".to_string(),
                 Err(error) => format!("Logout failed: {error}"),
             },
         );
@@ -1372,53 +1360,52 @@ impl StartupPage {
     fn show_login_form(&mut self) {
         self.close_all_popups();
         let logged_in = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(crate::account::is_logged_in())
+            tokio::runtime::Handle::current().block_on(self.agent.account_snapshot())
         });
-        if logged_in {
-            self.open_account_panel();
-        } else {
-            self.login_form.show();
-        }
-    }
-
-    fn workspace_path_for_sync(&self) -> std::path::PathBuf {
-        self.workspace_path_buf()
-    }
-
-    fn open_account_panel(&mut self) {
-        let (info, devices, progress) = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                let info = crate::account::account_info().await;
-                let devices = crate::account::list_devices().await.unwrap_or_default();
-                let progress = crate::account_sync::current_sync_progress().await;
-                (info, devices, progress)
-            })
-        });
-        match info {
-            Ok(info) => self.login_form.show_account(info, devices, progress),
-            Err(e) => {
-                self.status = Some(format!("Failed to load account: {e}"));
+        match logged_in {
+            Ok(snapshot) if snapshot.logged_in => self.open_account_panel(snapshot),
+            Ok(_) => self.login_form.show(),
+            Err(error) => {
                 self.login_form.show();
+                self.login_form
+                    .set_error(format!("Failed to load account: {error}"));
             }
         }
+    }
+
+    fn open_account_panel(
+        &mut self,
+        snapshot: bitfun_app_server_protocol::account::AccountSnapshotResponse,
+    ) {
+        let Some(info) = snapshot.info else {
+            self.login_form.show();
+            return;
+        };
+        self.login_form
+            .show_account(info, snapshot.devices, snapshot.sync);
     }
 
     fn refresh_account_panel_live(&mut self) {
         if !self.login_form.is_visible() {
             return;
         }
-        let progress = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(crate::account_sync::current_sync_progress())
-        });
+        let Ok(progress) = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(self.agent.settings_sync_snapshot())
+        }) else {
+            return;
+        };
+        let progress = progress.progress;
         // Refresh devices occasionally while syncing / after done.
         let devices = if matches!(
             progress.status,
-            crate::account_sync::SyncStatus::Syncing | crate::account_sync::SyncStatus::Done
+            bitfun_app_server_protocol::account::SettingsSyncStatus::Syncing
+                | bitfun_app_server_protocol::account::SettingsSyncStatus::Done
         ) {
             tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current()
-                    .block_on(crate::account::list_devices())
+                    .block_on(self.agent.account_snapshot())
                     .ok()
+                    .map(|snapshot| snapshot.devices)
             })
         } else {
             None
@@ -1427,16 +1414,19 @@ impl StartupPage {
     }
 
     fn start_sync_and_show_account(&mut self, is_first_login: bool) {
-        let Some(compatibility) = self.compatibility.clone() else {
-            self.open_account_panel();
-            self.status = Some(format!(
-                "Account settings sync is unavailable in Shared TUI preview. {SHARED_TUI_EMBEDDED_HANDOFF}"
-            ));
+        let result = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current()
+                .block_on(self.agent.settings_sync_start(is_first_login))
+        });
+        if let Err(error) = result {
+            self.status = Some(format!("Account settings sync failed: {error}"));
             return;
-        };
-        let workspace = self.workspace_path_for_sync();
-        crate::account_sync::start_auto_sync_background(compatibility, is_first_login, workspace);
-        self.open_account_panel();
+        }
+        if let Ok(snapshot) = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(self.agent.account_snapshot())
+        }) {
+            self.open_account_panel(snapshot);
+        }
         self.status = Some(if is_first_login {
             "Sync started (use local / upload settings).".to_string()
         } else {
@@ -1448,13 +1438,11 @@ impl StartupPage {
         match action {
             LoginFormAction::Submit(creds) => {
                 let result = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(
-                        crate::account::login_with_credentials(
-                            &creds.relay_url,
-                            &creds.username,
-                            &creds.password,
-                        ),
-                    )
+                    tokio::runtime::Handle::current().block_on(self.agent.account_login(
+                        creds.relay_url,
+                        creds.username,
+                        creds.password,
+                    ))
                 });
                 match result {
                     Ok(login) => {
@@ -1472,47 +1460,61 @@ impl StartupPage {
                 }
             }
             LoginFormAction::SyncUseLocal => {
-                if let Err(e) = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current()
-                        .block_on(crate::account::finalize_login_after_sync_choice())
-                }) {
-                    self.login_form
-                        .set_error(format!("Finalize login failed: {e}"));
-                    let _ = tokio::task::block_in_place(|| {
-                        tokio::runtime::Handle::current().block_on(crate::account::logout())
-                    });
-                    self.login_form.show();
-                    return None;
+                let result = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(self.agent.account_finalize_login(
+                        bitfun_app_server_protocol::account::AccountSyncChoice::Local,
+                    ))
+                });
+                match result {
+                    Ok(snapshot) => {
+                        self.open_account_panel(snapshot);
+                        self.status =
+                            Some("Sync started (use local / upload settings).".to_string());
+                    }
+                    Err(error) => {
+                        self.login_form
+                            .set_error(format!("Finalize login failed: {error}"));
+                        let _ = tokio::task::block_in_place(|| {
+                            tokio::runtime::Handle::current().block_on(self.agent.account_logout())
+                        });
+                        self.login_form.show();
+                    }
                 }
-                self.start_sync_and_show_account(true);
             }
             LoginFormAction::SyncUseCloud => {
-                if let Err(e) = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current()
-                        .block_on(crate::account::finalize_login_after_sync_choice())
-                }) {
-                    self.login_form
-                        .set_error(format!("Finalize login failed: {e}"));
-                    let _ = tokio::task::block_in_place(|| {
-                        tokio::runtime::Handle::current().block_on(crate::account::logout())
-                    });
-                    self.login_form.show();
-                    return None;
+                let result = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(self.agent.account_finalize_login(
+                        bitfun_app_server_protocol::account::AccountSyncChoice::Cloud,
+                    ))
+                });
+                match result {
+                    Ok(snapshot) => {
+                        self.open_account_panel(snapshot);
+                        self.status =
+                            Some("Sync started (use cloud / download settings).".to_string());
+                    }
+                    Err(error) => {
+                        self.login_form
+                            .set_error(format!("Finalize login failed: {error}"));
+                        let _ = tokio::task::block_in_place(|| {
+                            tokio::runtime::Handle::current().block_on(self.agent.account_logout())
+                        });
+                        self.login_form.show();
+                    }
                 }
-                self.start_sync_and_show_account(false);
             }
             LoginFormAction::SyncCancel => {
                 let _ = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(crate::account::logout())
+                    tokio::runtime::Handle::current().block_on(self.agent.settings_sync_cancel())
                 });
                 self.login_form.show();
                 self.status = Some("Sync cancelled; logged out.".to_string());
             }
             LoginFormAction::Logout => {
                 match tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(crate::account::logout())
+                    tokio::runtime::Handle::current().block_on(self.agent.account_logout())
                 }) {
-                    Ok(()) => {
+                    Ok(_) => {
                         self.login_form.show();
                         self.status = Some("Logged out.".to_string());
                     }
@@ -1669,7 +1671,10 @@ impl StartupPage {
             self.model_display_name = selected_display_name.clone();
             self.status = Some(format!("Model switched to: {}", selected_display_name));
             if persist_shared_default {
-                crate::account_sync::notify_local_settings_changed();
+                let _ = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current()
+                        .block_on(self.agent.settings_sync_local_changed())
+                });
             }
         } else {
             self.status = Some("Failed to switch model".to_string());
@@ -1722,7 +1727,9 @@ impl StartupPage {
             self.model_display_name = result_model_display;
             self.status = Some(format!("Model added: {}", result_name));
             tracing::info!("Added new AI model: {}", model_id);
-            crate::account_sync::notify_local_settings_changed();
+            let _ = tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(self.agent.settings_sync_local_changed())
+            });
             // Reload model name display
             self.load_current_model_name();
         } else {
@@ -1773,7 +1780,9 @@ impl StartupPage {
             self.model_display_name = result_model_display;
             self.status = Some(format!("Model updated: {}", result_name));
             tracing::info!("Updated AI model: {}", model_id);
-            crate::account_sync::notify_local_settings_changed();
+            let _ = tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(self.agent.settings_sync_local_changed())
+            });
             self.load_current_model_name();
         } else {
             self.status = Some("Failed to update model".to_string());

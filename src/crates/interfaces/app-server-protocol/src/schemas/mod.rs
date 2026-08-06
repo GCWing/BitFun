@@ -1,5 +1,6 @@
 //! App Server wire schemas grouped by JSON-RPC method domain.
 
+pub mod account;
 pub mod agent;
 pub mod app;
 pub mod error;
