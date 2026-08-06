@@ -2356,7 +2356,9 @@
     }
   },
   "errors": {
-    "sendFailed": "傳送訊息失敗"
+    "sendFailed": "傳送訊息失敗",
+    "thinkingProcessError": "思考過程錯誤",
+    "workspaceNotResolvable": "工作區資料夾不存在或已被移動"
   },
   "actions": {
     "send": "傳送"

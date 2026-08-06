@@ -637,7 +637,11 @@
     "errorSelectParent": "请选择父目录",
     "errorEnterName": "请输入工作区名称",
     "errorCreateFailed": "创建工作区失败",
-    "errorInvalidName": "工作区名称不能包含以下字符：/ \\ : * ? \" < > |"
+    "errorInvalidName": "工作区名称不能包含以下字符：/ \\ : * ? \" < > |",
+    "errorAlreadyExists": "所选位置已存在同名工作区",
+    "errorParentNoAccess": "没有所选父目录的访问权限",
+    "errorNameTooLong": "工作区名称过长（最多 255 个字符）",
+    "errorPathNotFound": "工作区文件夹不存在或已被移动"
   },
   "peerDirectoryPicker": {
     "loading": "正在加载远程目录…",

@@ -8,6 +8,7 @@ import { ACPClientAPI } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import type { AIModelConfig, AgentModelDefaultsConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import { notificationService } from '../../../shared/notification-system';
+import { i18nService } from '@/infrastructure/i18n';
 import { stateMachineManager } from '../../state-machine';
 import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
 import { generateTempTitle } from '../../utils/titleUtils';
@@ -358,9 +359,15 @@ export async function sendMessage(
 
   } catch (error) {
     log.error('Failed to send message', { sessionId: sessionId, error });
-    
-    const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
-    
+
+    // Map the "workspace folder deleted/moved" backend error to a localized
+    // message; other errors pass through verbatim for diagnostics. The
+    // "Thinking process error" notification title was also hardcoded English.
+    const rawErrorMessage = error instanceof Error ? error.message : '';
+    const errorMessage = /does not resolve to a local workspace/i.test(rawErrorMessage)
+      ? i18nService.t('flow-chat:errors.workspaceNotResolvable')
+      : (rawErrorMessage || i18nService.t('flow-chat:errors.sendFailed'));
+
     const currentState = stateMachineManager.getCurrentState(sessionId);
     if (currentState === SessionExecutionState.PROCESSING) {
       await stateMachineManager.transition(sessionId, SessionExecutionEvent.ERROR_OCCURRED, {
@@ -368,20 +375,20 @@ export async function sendMessage(
       });
       await stateMachineManager.transition(sessionId, SessionExecutionEvent.RESET);
     }
-    
+
     const state = context.flowChatStore.getState();
     const currentSession = state.sessions.get(sessionId);
     if (createdLocalTurnId && currentSession && !options?.preserveTurnOnStartError) {
       context.flowChatStore.deleteDialogTurn(sessionId, createdLocalTurnId);
     }
-    
+
     if (!options?.preserveTurnOnStartError) {
       notificationService.error(errorMessage, {
-        title: 'Thinking process error',
+        title: i18nService.t('flow-chat:errors.thinkingProcessError'),
         duration: 5000
       });
     }
-    
+
     throw error;
   }
 }

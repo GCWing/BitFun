@@ -1,5 +1,6 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
+import { i18nService } from '@/infrastructure/i18n';
 import path from 'path-browserify';
 import {CornerUpLeft, Link2, Square, Sparkles} from 'lucide-react';
 import {FlowChatContext} from '../modern/FlowChatContext';
@@ -83,8 +84,12 @@ const PANEL_CONFIG: FlowChatConfig = {
   theme: 'dark',
 };
 
-const resolveSessionTitle = (session?: Session | null, fallback = 'Side thread') =>
-  session?.title?.trim() || fallback;
+const resolveSessionTitle = (session?: Session | null, fallback = 'Side thread') => {
+  if (session?.titleSource === 'i18n' && session.titleI18nKey) {
+    return i18nService.t(session.titleI18nKey, session.titleI18nParams ?? {}) || fallback;
+  }
+  return session?.title?.trim() || fallback;
+};
 const log = createLogger('BtwSessionPanel');
 const REVIEW_ACTION_BOTTOM_BLANK_SPACE_PX = 96;
 const EMPTY_ACTION_ID_SET = new Set<string>();

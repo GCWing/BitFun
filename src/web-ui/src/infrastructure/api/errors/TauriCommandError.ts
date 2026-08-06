@@ -58,10 +58,12 @@ export class TauriCommandError extends Error {
    
   public isPermissionError(): boolean {
     const message = this.message.toLowerCase();
-    return message.includes('permission') || 
-           message.includes('access') || 
+    return message.includes('permission') ||
+           message.includes('permitted') ||
+           message.includes('access') ||
            message.includes('unauthorized') ||
-           message.includes('forbidden');
+           message.includes('forbidden') ||
+           message.includes('eperm');
   }
 
    
