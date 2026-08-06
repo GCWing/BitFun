@@ -1,5 +1,5 @@
 {
-  "noRepository": "開啟一個帶 GitHub 或 GitLab 遠端的工作區，才能列出它的 issue。",
+  "noRepository": "開啟一個帶 GitHub 遠程倉庫的工作區，即可持續修復其 Issue。",
   "loopxMissing": "未安裝 loopx，無法啟動修復。",
   "loading": "正在載入 issue…",
   "noIssues": "沒有開放的 issue。",
@@ -83,5 +83,10 @@
     "state": "狀態",
     "unknownAuthor": "未知作者",
     "updated": "更新"
+  },
+  "probingRemote": "正在偵測倉庫託管平台…",
+  "unsupportedPlatform": {
+    "title": "暫僅支援 GitHub 倉庫",
+    "body": "目前工作區的遠程倉庫在 {{host}}。持續修復 Issue 目前透過 GitHub 讀取 Issue 並追蹤 PR 狀態；其他平台的支援規劃中。"
   }
 }

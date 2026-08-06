@@ -4,6 +4,7 @@ import {
   CheckCircle,
   Circle,
   ExternalLink,
+  Github,
   History,
   Loader2,
   MessageSquare,
@@ -172,6 +173,12 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
       ? { projectPath: projectPathProp, host: hostProp ?? 'github.com', platform: 'github' }
       : null,
   );
+  // 'pending' while the remote probe runs; 'none' when the workspace has no
+  // recognizable remote. Continuous fixing is GitHub-only for now, so anything
+  // else renders an honest unsupported state instead of firing GitHub calls.
+  const [remoteProbe, setRemoteProbe] = useState<'pending' | 'resolved' | 'none'>(
+    projectPathProp ? 'resolved' : 'pending',
+  );
 
   useEffect(() => {
     if (projectPathProp || !workspacePath) return;
@@ -182,16 +189,23 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
         const remote =
           snapshot.remotes.find((candidate) => candidate.id === snapshot.selectedRemoteId) ??
           snapshot.remotes[0];
-        if (!cancelled && remote) {
+        if (cancelled) return;
+        if (remote) {
           setResolved({
             projectPath: remote.projectPath,
             host: remote.host,
             platform: remote.platform,
           });
+          setRemoteProbe('resolved');
+        } else {
+          setRemoteProbe('none');
         }
       } catch (error) {
         log.error('Failed to resolve the workspace remote', { workspacePath, error });
-        if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
+        if (!cancelled) {
+          setRemoteProbe('none');
+          setLoadError(error instanceof Error ? error.message : String(error));
+        }
       }
     })();
     return () => {
@@ -212,10 +226,15 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
   const projectPath = resolved?.projectPath;
   const host = resolved?.host ?? 'github.com';
   const platform = resolved?.platform ?? 'github';
+  // Product scope: continuous Issue-Fix is GitHub-only for now. Every data
+  // path below (issue enumeration via the GitHub API, the agent's `gh`-based
+  // evidence flow, LoopX's PR-lifecycle monitors) assumes GitHub; other
+  // platforms get an explicit unsupported state rather than broken requests.
+  const platformSupported = platform === 'github';
   const issueIds = useMemo(() => issues.map((issue) => issue.issueId), [issues]);
 
   const loadIssues = useCallback(async () => {
-    if (!projectPath) return;
+    if (!projectPath || !platformSupported) return;
     setLoading(true);
     setLoadError(null);
     try {
@@ -238,7 +257,7 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [host, platform, projectPath, workspacePath]);
+  }, [host, platform, platformSupported, projectPath, workspacePath]);
 
   const loadControl = useCallback(async () => {
     if (!workspacePath || available !== true) return;
@@ -659,10 +678,36 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
     }
   }, [applyControl, control?.userQuestion, loadControl, takeControlTicket, workspacePath]);
 
+  if (remoteProbe === 'pending') {
+    return (
+      <div className="issue-fix issue-fix--empty">
+        <p className="issue-fix__empty-text">{t('probingRemote')}</p>
+      </div>
+    );
+  }
+
   if (!projectPath) {
     return (
       <div className="issue-fix issue-fix--empty">
         <p className="issue-fix__empty-text">{t('noRepository')}</p>
+      </div>
+    );
+  }
+
+  if (!platformSupported) {
+    // An honest empty state beats a broken panel: the whole pipeline (issue
+    // enumeration, gh-based evidence, LoopX PR monitors) is GitHub-only today.
+    return (
+      <div className="issue-fix issue-fix--empty">
+        <div className="issue-fix__unsupported" role="status">
+          <Github size={28} aria-hidden="true" />
+          <h3>{t('unsupportedPlatform.title')}</h3>
+          <p>
+            {t('unsupportedPlatform.body', {
+              host,
+            })}
+          </p>
+        </div>
       </div>
     );
   }

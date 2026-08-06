@@ -1,5 +1,5 @@
 {
-  "noRepository": "Open a workspace with a GitHub or GitLab remote to list its issues.",
+  "noRepository": "Open a workspace with a GitHub remote to fix its issues continuously.",
   "loopxMissing": "loopx is not installed, so fixing is unavailable.",
   "loading": "Loading issues…",
   "noIssues": "No open issues.",
@@ -83,5 +83,10 @@
     "state": "State",
     "unknownAuthor": "Unknown author",
     "updated": "Updated"
+  },
+  "probingRemote": "Detecting the workspace's code host…",
+  "unsupportedPlatform": {
+    "title": "GitHub repositories only, for now",
+    "body": "This workspace's remote is on {{host}}. Continuous issue fixing currently reads issues and tracks pull requests through GitHub; support for other code hosts is planned."
   }
 }
