@@ -80,6 +80,7 @@ vi.mock('@/infrastructure/diagnostics/flowChatDiagnostics', () => ({
   flowChatDiagnostics: {
     isEnabled: () => flowDiagnosticsMocks.enabled,
     trace: flowDiagnosticsMocks.trace,
+    subscribe: vi.fn(() => () => {}),
   },
 }));
 

@@ -72,6 +72,32 @@ describe('flowChatDiagnostics', () => {
     });
   });
 
+  it('notifies subscribers when the enabled state changes', () => {
+    const listener = vi.fn();
+    const unsubscribe = flowChatDiagnostics.subscribe(listener);
+
+    flowChatDiagnostics.setEnabled(true);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenLastCalledWith(true);
+
+    flowChatDiagnostics.setEnabled(false);
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(listener).toHaveBeenLastCalledWith(false);
+
+    unsubscribe();
+    flowChatDiagnostics.setEnabled(true);
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not notify subscribers when the enabled state is unchanged', () => {
+    const listener = vi.fn();
+    flowChatDiagnostics.subscribe(listener);
+
+    flowChatDiagnostics.setEnabled(false);
+    flowChatDiagnostics.setEnabled(false);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
   it('flushes queued diagnostics when disabled', async () => {
     flowChatDiagnostics.setEnabled(true);
     flowChatDiagnostics.trace({

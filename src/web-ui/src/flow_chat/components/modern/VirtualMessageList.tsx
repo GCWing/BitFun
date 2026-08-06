@@ -291,6 +291,8 @@ interface PendingCollapseIntentState {
   distanceFromBottomBeforeCollapse: number;
   baseTotalCompensationPx: number;
   cumulativeShrinkPx: number;
+  /** Number of times finalization was deferred because the drain target was not renderable. */
+  finalizeRetries: number;
 }
 
 interface RetainedCollapseAnchorState {
@@ -335,6 +337,7 @@ function createInactiveCollapseIntentState(): PendingCollapseIntentState {
     distanceFromBottomBeforeCollapse: 0,
     baseTotalCompensationPx: 0,
     cumulativeShrinkPx: 0,
+    finalizeRetries: 0,
   };
 }
 
@@ -644,6 +647,13 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const retainedCollapseReleaseTimerRef = useRef<number | null>(null);
   const retainedCollapseSettleGenerationRef = useRef(0);
   const retainedCollapseGeometryGenerationRef = useRef(0);
+  // Diagnostics: continuous auto-follow suspension tracking (hypothesis D).
+  const autoFollowSuspendStartMsRef = useRef<number | null>(null);
+  const autoFollowSuspendLoggedRef = useRef(false);
+  // Diagnostics: subagent/task card height observation (hypothesis C).
+  const subagentHeightObserverRef = useRef<ResizeObserver | null>(null);
+  const observedSubagentElementsRef = useRef<WeakSet<Element>>(new WeakSet());
+  const subagentHeightCacheRef = useRef<Map<string, number>>(new Map());
   const pendingStickyPinGrowthRef = useRef<{
     targetTurnId: string | null;
     amountPx: number;
@@ -808,6 +818,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     const heightPx = getFooterHeightPx(compensationPx);
     footer.style.height = `${heightPx}px`;
     footer.style.minHeight = `${heightPx}px`;
+    // Diagnostics helper: expose the current bottom-reservation px on the DOM
+    // node so DevTools can read the synthetic tail space at a glance.
+    footer.dataset.reservationPx = String(Math.round(compensationPx));
   }, [getFooterHeightPx]);
 
   const handleFooterElementRef = useCallback((element: HTMLDivElement | null) => {
@@ -3307,7 +3320,31 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       }
     })();
     if (nextState === null) {
-      pendingCollapseIntentRef.current = intent;
+      const retriedIntent: PendingCollapseIntentState = {
+        ...intent,
+        finalizeRetries: intent.finalizeRetries + 1,
+      };
+      pendingCollapseIntentRef.current = retriedIntent;
+      if (flowChatDiagnostics.isEnabled()) {
+        const pinReservation = bottomReservationStateRef.current.pin;
+        const stickyPinTargetRendered = pinReservation.targetTurnId
+          ? getRenderedUserMessageElement(pinReservation.targetTurnId) !== null
+          : null;
+        flowChatDiagnostics.trace({
+          hypothesis: 'E',
+          location: 'VirtualMessageList.finalizeCollapseIntent',
+          message: 'Collapse intent finalization deferred (drain target not renderable)',
+          data: () => ({
+            reason,
+            finalizeRetries: retriedIntent.finalizeRetries,
+            coordinatorMode: viewportCoordinatorRef.current.getMode(),
+            pinMode: pinReservation.mode,
+            pinTargetTurnId: pinReservation.targetTurnId,
+            stickyPinTargetRendered,
+            reservation: bottomReservationStateRef.current,
+          }),
+        });
+      }
       collapseIntentFinalizeTimerRef.current = window.setTimeout(() => {
         collapseIntentFinalizeTimerRef.current = null;
         finalizeCollapseIntentRef.current('collapse-intent-target-retry', {
@@ -3380,6 +3417,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     clearCollapseIntentScheduling,
     clearCollapseReservationOwner,
     drainCollapseReservationPreservingPinnedItem,
+    getRenderedUserMessageElement,
     reconcilePendingStickyPinGrowthSettlement,
     recordScrollerGeometry,
     retainCollapseRangeForQuietSettlement,
@@ -3427,6 +3465,80 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   }, [clearCollapseIntentScheduling]);
 
   useEffect(() => clearCollapseIntentScheduling, [clearCollapseIntentScheduling]);
+
+  // Diagnostics (hypothesis C): periodic bottom-reservation ledger. Sampling
+  // only runs while flow_chat_diagnostics is enabled and stops as soon as the
+  // setting is turned off. It records which reservation owner holds the
+  // synthetic tail space, so a stuck/growing bottom blank can be attributed to
+  // the exact field (collapse vs pin) and owner without a debugger.
+  useEffect(() => {
+    let ledgerTimer: number | null = null;
+    const stopLedger = () => {
+      if (ledgerTimer !== null) {
+        window.clearInterval(ledgerTimer);
+        ledgerTimer = null;
+      }
+    };
+    const startLedger = () => {
+      if (ledgerTimer !== null) {
+        return;
+      }
+      ledgerTimer = window.setInterval(() => {
+        if (!flowChatDiagnostics.isEnabled()) {
+          return;
+        }
+        const scroller = scrollerElementRef.current;
+        const footer = footerElementRef.current;
+        flowChatDiagnostics.trace({
+          hypothesis: 'C',
+          location: 'VirtualMessageList.reservationLedger',
+          message: 'Bottom reservation ledger sample',
+          data: () => {
+            const state = bottomReservationStateRef.current;
+            const intent = pendingCollapseIntentRef.current;
+            return {
+              reservation: state,
+              ownerKind: collapseReservationOwnerRef.current?.kind ?? null,
+              ownerGeneration: collapseReservationOwnerRef.current?.generation ?? null,
+              intentActive: intent.active,
+              intentToolId: intent.toolId,
+              intentToolName: intent.toolName,
+              intentExpiresInMs: intent.active
+                ? Math.max(0, Math.round(intent.expiresAtMs - performance.now()))
+                : null,
+              intentFinalizeRetries: intent.finalizeRetries,
+              retainedCollapseAnchor: retainedCollapseAnchorRef.current,
+              coordinatorMode: viewportCoordinatorRef.current.getMode(),
+              isFollowingOutput: isFollowingOutputRef.current,
+              isStreamingOutput: isStreamingOutputRef.current,
+              scrollTop: scroller?.scrollTop ?? null,
+              scrollHeight: scroller?.scrollHeight ?? null,
+              clientHeight: scroller?.clientHeight ?? null,
+              distanceFromBottom: scroller
+                ? Math.max(0, scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop)
+                : null,
+              footerRenderedHeight: footer ? Math.round(footer.getBoundingClientRect().height) : null,
+              inputStackFooterPx: inputStackFooterPxRef.current,
+            };
+          },
+        });
+      }, 500);
+    };
+    if (flowChatDiagnostics.isEnabled()) {
+      startLedger();
+    }
+    const unsubscribe = flowChatDiagnostics.subscribe(enabled => {
+      if (enabled) {
+        startLedger();
+      } else {
+        stopLedger();
+      }
+    });
+    return () => {
+      unsubscribe();
+      stopLedger();
+    };
+  }, []);
 
   const handleScrollerRef = useCallback((el: HTMLElement | Window | null) => {
     restoreScrollerMethodsRef.current?.();
@@ -3956,11 +4068,46 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
   const shouldSuspendAutoFollow = useCallback(() => {
     const collapseIntent = pendingCollapseIntentRef.current;
-    return (
+    const suspended = (
       !isViewportActiveRef.current ||
       viewportGeometrySuspendedRef.current ||
       collapseIntent.active
     );
+    const now = performance.now();
+    if (suspended) {
+      if (autoFollowSuspendStartMsRef.current === null) {
+        autoFollowSuspendStartMsRef.current = now;
+        autoFollowSuspendLoggedRef.current = false;
+      } else if (
+        !autoFollowSuspendLoggedRef.current &&
+        now - autoFollowSuspendStartMsRef.current > 2000 &&
+        flowChatDiagnostics.isEnabled()
+      ) {
+        autoFollowSuspendLoggedRef.current = true;
+        const startedAtMs = autoFollowSuspendStartMsRef.current;
+        flowChatDiagnostics.trace({
+          hypothesis: 'D',
+          location: 'VirtualMessageList.shouldSuspendAutoFollow',
+          message: 'Auto-follow suspension persisted beyond 2s',
+          data: () => ({
+            suspendedForMs: Math.round(now - startedAtMs),
+            intentActive: pendingCollapseIntentRef.current.active,
+            intentToolId: pendingCollapseIntentRef.current.toolId,
+            intentToolName: pendingCollapseIntentRef.current.toolName,
+            intentFinalizeRetries: pendingCollapseIntentRef.current.finalizeRetries,
+            coordinatorMode: viewportCoordinatorRef.current.getMode(),
+            reservation: bottomReservationStateRef.current,
+            retainedCollapseAnchor: retainedCollapseAnchorRef.current,
+            isViewportActive: isViewportActiveRef.current,
+            viewportGeometrySuspended: viewportGeometrySuspendedRef.current,
+          }),
+        });
+      }
+    } else {
+      autoFollowSuspendStartMsRef.current = null;
+      autoFollowSuspendLoggedRef.current = false;
+    }
+    return suspended;
   }, []);
 
   const scheduleFollowToLatestWithViewportState = useCallback((reason: string) => {
@@ -4071,6 +4218,68 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       recordScrollerGeometry(scrollerElement);
     }
 
+    // Diagnostics (hypothesis C): track height changes of task/subagent cards
+    // so a "subagent wraps" event can be correlated with the reservation ledger
+    // and measureHeightChange deltas in flowchat.log.
+    const subagentHeightCache = subagentHeightCacheRef.current;
+    const readSubagentElementToolId = (element: Element): string => {
+      if (element instanceof HTMLElement && element.dataset.toolCardId) {
+        return element.dataset.toolCardId;
+      }
+      const closestCard = element.closest<HTMLElement>('[data-tool-card-id]');
+      return closestCard?.dataset.toolCardId ?? 'subagent-projection';
+    };
+    const syncSubagentHeightObservers = () => {
+      if (!flowChatDiagnostics.isEnabled()) {
+        return;
+      }
+      const nodes = Array.from(scrollerElement.querySelectorAll<HTMLElement>(
+        '[data-tool-card-id], .subagent-projection-wrapper',
+      ));
+      for (const node of nodes) {
+        if (observedSubagentElementsRef.current.has(node)) {
+          continue;
+        }
+        observedSubagentElementsRef.current.add(node);
+        const toolId = readSubagentElementToolId(node);
+        subagentHeightCache.set(toolId, Math.round(node.getBoundingClientRect().height));
+        subagentHeightObserverRef.current?.observe(node);
+      }
+    };
+    subagentHeightObserverRef.current?.disconnect();
+    subagentHeightObserverRef.current = new ResizeObserver((entries) => {
+      if (!flowChatDiagnostics.isEnabled()) {
+        return;
+      }
+      for (const entry of entries) {
+        const target = entry.target;
+        const toolId = readSubagentElementToolId(target);
+        const heightBefore = subagentHeightCache.get(toolId) ?? null;
+        const heightAfter = Math.round(target.getBoundingClientRect().height);
+        subagentHeightCache.set(toolId, heightAfter);
+        if (heightBefore === null || Math.abs(heightAfter - heightBefore) <= 1) {
+          continue;
+        }
+        flowChatDiagnostics.trace({
+          hypothesis: 'C',
+          location: 'VirtualMessageList.subagentHeightObserver',
+          message: 'Task/subagent card height changed',
+          data: () => ({
+            toolId,
+            heightBefore,
+            heightAfter,
+            heightDelta: heightAfter - heightBefore,
+            reservation: bottomReservationStateRef.current,
+            intentActive: pendingCollapseIntentRef.current.active,
+            coordinatorMode: viewportCoordinatorRef.current.getMode(),
+            scrollTop: scrollerElement.scrollTop,
+            scrollHeight: scrollerElement.scrollHeight,
+            clientHeight: scrollerElement.clientHeight,
+          }),
+        });
+      }
+    });
+
     // Batch observer-triggered work into a single rAF per frame
     let observerBatchPending = false;
     const scheduleObserverBatch = () => {
@@ -4078,6 +4287,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       observerBatchPending = true;
       requestAnimationFrame(() => {
         observerBatchPending = false;
+        syncSubagentHeightObservers();
         scheduleHeightMeasure(2);
         scheduleVisibleTurnMeasure(2);
         schedulePinReservationReconcile(2);
@@ -4664,6 +4874,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         distanceFromBottomBeforeCollapse: effectiveDistanceFromBottom,
         baseTotalCompensationPx,
         cumulativeShrinkPx,
+        finalizeRetries: 0,
       };
       pendingCollapseIntentRef.current = nextIntent;
       if (flowChatDiagnostics.isEnabled()) {
@@ -4754,6 +4965,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       resizeObserverRef.current = null;
       mutationObserverRef.current?.disconnect();
       mutationObserverRef.current = null;
+      subagentHeightObserverRef.current?.disconnect();
+      subagentHeightObserverRef.current = null;
+      observedSubagentElementsRef.current = new WeakSet();
+      subagentHeightCache.clear();
       touchScrollIntentStartYRef.current = null;
       scrollbarPointerInteractionActiveRef.current = false;
 

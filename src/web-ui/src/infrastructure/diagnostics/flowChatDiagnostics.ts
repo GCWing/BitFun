@@ -31,9 +31,22 @@ class FlowChatDiagnosticsRecorder {
   private flushInFlight: Promise<void> | null = null;
   private flushRequested = false;
   private droppedEntrySummary: DroppedEntrySummary | null = null;
+  private listeners = new Set<(enabled: boolean) => void>();
 
   isEnabled(): boolean {
     return this.enabled;
+  }
+
+  /**
+   * Registers a listener invoked whenever the enabled state changes. Returns
+   * an unsubscribe function. Used by viewport diagnostics that must start or
+   * stop periodic sampling when the logging setting is toggled at runtime.
+   */
+  subscribe(listener: (enabled: boolean) => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   setEnabled(enabled: boolean): void {
@@ -50,12 +63,12 @@ class FlowChatDiagnosticsRecorder {
         location: 'FlowChatDiagnosticsRecorder.setEnabled',
         message: 'Flow Chat diagnostics enabled',
       });
-      return;
+    } else {
+      window.removeEventListener('pagehide', this.handlePageHide);
+      this.clearFlushTimer();
+      void this.flush();
     }
-
-    window.removeEventListener('pagehide', this.handlePageHide);
-    this.clearFlushTimer();
-    void this.flush();
+    this.listeners.forEach(listener => listener(this.enabled));
   }
 
   trace(probe: FlowChatDiagnosticProbe): void {
@@ -113,6 +126,7 @@ class FlowChatDiagnosticsRecorder {
     this.droppedEntrySummary = null;
     this.clearFlushTimer();
     this.flushInFlight = null;
+    this.listeners.clear();
     if (typeof window !== 'undefined') {
       window.removeEventListener('pagehide', this.handlePageHide);
     }
