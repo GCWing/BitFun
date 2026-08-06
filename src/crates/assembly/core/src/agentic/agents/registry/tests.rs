@@ -1594,7 +1594,7 @@ fn external_primary_route_follows_the_session_execution_worktree() {
 fn builtin_review_agents_resolve_as_local_session_primaries() {
     let registry = AgentRegistry::new();
 
-    for agent_type in ["CodeReview", "DeepReview"] {
+    for agent_type in ["CodeReview", "DeepReview", "ReviewFixer"] {
         let binding = registry
             .resolve_primary_agent_for_turn(agent_type, None, false, None)
             .unwrap_or_else(|| {
@@ -1613,22 +1613,32 @@ fn non_session_primary_subagents_and_unknown_ids_do_not_resolve() {
     let registry = AgentRegistry::new();
 
     // Registered subagents that are not session-capable stay restricted.
-    assert!(registry
-        .resolve_primary_agent_for_turn("ReviewWorker", None, false, None)
-        .is_none());
+    for agent_type in ["ReviewWorker", "ReviewJudge"] {
+        assert!(
+            registry
+                .resolve_primary_agent_for_turn(agent_type, None, false, None)
+                .is_none(),
+            "{agent_type} must not resolve as a session primary agent"
+        );
+    }
     // Unknown ids remain unknown.
     assert!(registry
         .resolve_primary_agent_for_turn("does-not-exist", None, false, None)
         .is_none());
     // The external-owner guard still fails closed for review agents.
-    assert!(registry
-        .resolve_primary_agent_for_turn(
-            "CodeReview",
-            None,
-            false,
-            Some(bitfun_core_types::SessionAgentRouteOwner::External),
-        )
-        .is_none());
+    for agent_type in ["CodeReview", "ReviewFixer"] {
+        assert!(
+            registry
+                .resolve_primary_agent_for_turn(
+                    agent_type,
+                    None,
+                    false,
+                    Some(bitfun_core_types::SessionAgentRouteOwner::External),
+                )
+                .is_none(),
+            "{agent_type} must fail closed for an external owner"
+        );
+    }
 }
 
 #[test]
@@ -1641,13 +1651,15 @@ fn local_route_resolves_review_agents_as_session_primaries() {
         [
             ("CodeReview".to_string(), ExternalSubagentRoute::Local),
             ("DeepReview".to_string(), ExternalSubagentRoute::Local),
+            ("ReviewFixer".to_string(), ExternalSubagentRoute::Local),
             ("ReviewWorker".to_string(), ExternalSubagentRoute::Local),
+            ("ReviewJudge".to_string(), ExternalSubagentRoute::Local),
         ]
         .into_iter()
         .collect(),
     );
 
-    for agent_type in ["CodeReview", "DeepReview"] {
+    for agent_type in ["CodeReview", "DeepReview", "ReviewFixer"] {
         let binding = registry
             .resolve_primary_agent_for_turn(agent_type, Some(&workspace), true, None)
             .unwrap_or_else(|| panic!("{agent_type} must resolve through an explicit Local route"));
@@ -1659,7 +1671,12 @@ fn local_route_resolves_review_agents_as_session_primaries() {
     }
 
     // Non-session-primary subagents stay restricted even under a Local route.
-    assert!(registry
-        .resolve_primary_agent_for_turn("ReviewWorker", Some(&workspace), true, None)
-        .is_none());
+    for agent_type in ["ReviewWorker", "ReviewJudge"] {
+        assert!(
+            registry
+                .resolve_primary_agent_for_turn(agent_type, Some(&workspace), true, None)
+                .is_none(),
+            "{agent_type} must not resolve through a Local route"
+        );
+    }
 }
