@@ -98,6 +98,7 @@
       "filePathEmpty": "File path is empty",
       "loadImageFailedWithMessage": "Failed to load image: {{message}}",
       "decodeFailed": "Failed to load image: the browser couldn't decode the image data",
+      "fileTooLarge": "Image is too large to preview ({{size}}, limit {{limit}})",
       "zoomOut": "Zoom out (Ctrl + -)",
       "zoomReset": "Reset zoom (Ctrl + 0)",
       "zoomIn": "Zoom in (Ctrl + +)",

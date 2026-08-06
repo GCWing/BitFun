@@ -58,12 +58,14 @@ export class ContextResolver {
     // Inside the file explorer, file-node context must win over stray text selection;
     // otherwise delete/rename commands can silently fail or target the wrong context.
     const inFileExplorer = this.findAreaName(baseContext.targetElement) === 'file-explorer';
+    if (inFileExplorer) {
+      return this.resolveFileNode(baseContext) ?? this.resolveEmptySpace(baseContext);
+    }
 
     const context =
-      (inFileExplorer ? this.resolveFileNode(baseContext) : null) ??
       this.resolveSelection(baseContext) ??
       this.resolveTerminal(baseContext) ??
-      (!inFileExplorer ? this.resolveFileNode(baseContext) : null) ??
+      this.resolveFileNode(baseContext) ??
       this.resolveEditor(baseContext) ??
       this.resolveFlowChat(baseContext) ??
       this.resolveTab(baseContext) ??

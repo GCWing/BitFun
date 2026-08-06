@@ -41,6 +41,11 @@ import 'highlight.js/styles/github-dark.css';
 const log = createLogger('MarkdownEditor');
 
 const FILE_SYNC_POLL_INTERVAL_MS = 1000;
+export const MARKDOWN_RICH_EDITOR_MAX_BYTES = 2 * 1024 * 1024;
+
+export function shouldUseLargeMarkdownSourceMode(fileSize?: number): boolean {
+  return typeof fileSize === 'number' && fileSize > MARKDOWN_RICH_EDITOR_MAX_BYTES;
+}
 
 function getPollOffsetMs(filePath: string): number {
   let hash = 0;
@@ -100,6 +105,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   const [loading, setLoading] = useState(!!filePath);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [useLargeFileSourceMode, setUseLargeFileSourceMode] = useState(false);
   const [editability, setEditability] = useState<MarkdownEditabilityAnalysis>(() => analyzeMarkdownEditability(initialContent));
   const editorRef = useRef<EditorInstance>(null);
   const isUnmountedRef = useRef(false);
@@ -191,9 +197,6 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     try {
       const { workspaceAPI } = await import('@/infrastructure/api');
 
-      const fileContent = await workspaceAPI.readFileContent(filePath);
-      reportFileMissingFromDisk(false);
-
       try {
         const fileInfo = await fetchFileMetadata();
         if (isFileMissingFromMetadata(fileInfo)) {
@@ -204,6 +207,10 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           if (v) {
             diskVersionRef.current = v;
           }
+          if (shouldUseLargeMarkdownSourceMode(fileInfo.size)) {
+            setUseLargeFileSourceMode(true);
+            return;
+          }
         }
       } catch (err) {
         if (isLikelyFileNotFoundError(err)) {
@@ -211,6 +218,10 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         }
         log.warn('Failed to get file metadata', err);
       }
+
+      setUseLargeFileSourceMode(false);
+      const fileContent = await workspaceAPI.readFileContent(filePath);
+      reportFileMissingFromDisk(false);
 
       if (!isUnmountedRef.current) {
         const { nextEditability, nextContent } = toNormalizedMarkdown(fileContent);
@@ -282,7 +293,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   }, [filePath, initialContent, loadFileContent]);
 
   const syncMarkdownFromDisk = useCallback(async (source: 'poll' | 'event') => {
-    if (!filePath || isUnmountedRef.current || isCheckingDiskRef.current) {
+    if (useLargeFileSourceMode || !filePath || isUnmountedRef.current || isCheckingDiskRef.current) {
       return;
     }
 
@@ -398,7 +409,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       }
       isCheckingDiskRef.current = false;
     }
-  }, [fetchFileMetadata, filePath, isActiveTab, reportFileMissingFromDisk, t, toNormalizedMarkdown]);
+  }, [fetchFileMetadata, filePath, isActiveTab, reportFileMissingFromDisk, t, toNormalizedMarkdown, useLargeFileSourceMode]);
 
   const checkMarkdownDisk = useCallback(async () => {
     await syncMarkdownFromDisk('poll');
@@ -659,6 +670,37 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             </Button>
           )}
         </div>
+      </div>
+    );
+  }
+
+  if (useLargeFileSourceMode && filePath) {
+    return (
+      <div className={`bitfun-markdown-editor ${className}`}>
+        <CodeEditor
+          filePath={filePath}
+          workspacePath={workspacePath}
+          fileName={filePath.split(/[/\\]/).pop() || fileName}
+          language="markdown"
+          readOnly={readOnly}
+          showLineNumbers={true}
+          showMinimap={false}
+          jumpToLine={jumpToLine}
+          jumpToColumn={jumpToColumn}
+          isActiveTab={isActiveTab}
+          onFileMissingFromDiskChange={onFileMissingFromDiskChange}
+          onContentChange={(_newContent, dirty) => {
+            if (lastReportedDirtyRef.current === dirty) {
+              return;
+            }
+            lastReportedDirtyRef.current = dirty;
+            onContentChangeRef.current?.(_newContent, dirty);
+          }}
+          onSave={(savedContent) => {
+            lastReportedDirtyRef.current = false;
+            onContentChangeRef.current?.(savedContent, false);
+          }}
+        />
       </div>
     );
   }

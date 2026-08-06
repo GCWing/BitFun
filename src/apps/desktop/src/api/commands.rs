@@ -5,8 +5,8 @@ use crate::api::dto::WorkspaceInfoDto;
 use crate::api::path_target::{
     create_directory as create_desktop_directory, create_empty_file,
     delete_directory as delete_desktop_directory, delete_file as delete_desktop_file,
-    get_path_metadata, path_exists, read_text_file, read_text_file_prefix, rename_path,
-    resolve_desktop_path_target, write_text_file, DesktopPathTarget,
+    get_path_metadata, path_exists, read_binary_file, read_text_file, read_text_file_prefix,
+    rename_path, resolve_desktop_path_target, write_text_file, DesktopPathTarget,
 };
 use crate::api::search_api::{
     build_content_search_request, group_search_results, prepare_content_search_runner,
@@ -2635,6 +2635,15 @@ pub async fn read_file_content_prefix(
         request.remote_connection_id.as_deref(),
     )
     .await
+}
+
+#[tauri::command]
+pub async fn read_file_binary(
+    state: State<'_, AppState>,
+    request: ReadFileContentRequest,
+) -> Result<tauri::ipc::Response, String> {
+    let bytes = read_binary_file(&state, &request.file_path).await?;
+    Ok(tauri::ipc::Response::new(bytes))
 }
 
 #[tauri::command]

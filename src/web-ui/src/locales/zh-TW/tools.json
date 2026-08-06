@@ -98,6 +98,7 @@
       "filePathEmpty": "檔案路徑為空",
       "loadImageFailedWithMessage": "載入圖片失敗: {{message}}",
       "decodeFailed": "圖片載入失敗，瀏覽器無法解析圖片資料",
+      "fileTooLarge": "圖片檔案過大，暫不支援預覽（檔案 {{size}}，上限 {{limit}}）",
       "zoomOut": "縮小 (Ctrl + -)",
       "zoomReset": "重設縮放 (Ctrl + 0)",
       "zoomIn": "放大 (Ctrl + +)",
