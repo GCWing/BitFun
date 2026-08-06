@@ -86,6 +86,7 @@ impl TaskTool {
 When to use:
 - Delegate when a specialized subagent or separate context is likely to improve coverage, independence, or parallelism.
 - Use direct tools instead for focused lookups, known paths, single symbols, or code that can be inspected with a few reads or searches.
+- The Explore subagent is for broad, open-ended codebase exploration. Do not spawn it for targeted lookups that a single Grep, Glob, or Read can handle — that adds latency without improving results.
 
 Supported actions:
 - `spawn`: create and run a new subagent. The result contains an `agent_id` for future `send_input` or `cancel`.
