@@ -730,6 +730,8 @@ export interface ConfigPanelProps {
 export interface RuntimeLoggingInfo {
   effectiveLevel: BackendLogLevel;
   sessionLogDir: string;
+  earlyStartupLogPath: string;
+  nativeStartupTracePath: string;
   appLogPath: string;
   aiLogPath: string;
   flashgrepLogPath: string;

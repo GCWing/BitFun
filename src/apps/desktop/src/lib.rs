@@ -431,13 +431,30 @@ pub async fn run() {
         .duration_since(UNIX_EPOCH)
         .map(|duration| format!("desktop-{}", duration.as_millis()))
         .unwrap_or_else(|_| "desktop-unknown".to_string());
-    let startup_trace = DesktopStartupTrace::new(startup_trace_id.clone(), startup_started);
-    startup_trace.record_phase("native_process_start", "native");
     let mut startup_timings = TimingCollector::default();
     let in_debug = cfg!(debug_assertions) || std::env::var("DEBUG").unwrap_or_default() == "1";
     let log_config = logging::LogConfig::new(in_debug);
     let log_targets = logging::build_log_targets(&log_config);
     let session_log_dir = log_config.session_log_dir.clone();
+    if let Err(error) = logging::install_early_file_logging(&session_log_dir) {
+        eprintln!(
+            "Warning: Failed to install early startup logging: {}",
+            error
+        );
+    }
+    let native_startup_trace_path = logging::native_startup_trace_path(&session_log_dir);
+    let startup_trace = match DesktopStartupTrace::new_persisted(
+        startup_trace_id.clone(),
+        startup_started,
+        &native_startup_trace_path,
+    ) {
+        Ok(trace) => trace,
+        Err(error) => {
+            log::warn!("Native startup trace persistence is unavailable: {}", error);
+            DesktopStartupTrace::new(startup_trace_id.clone(), startup_started)
+        }
+    };
+    startup_trace.record_phase("native_process_start", "native");
     crash_diagnostics::initialize_run_state(session_log_dir.clone(), &startup_trace_id);
     setup_panic_hook();
 
@@ -624,7 +641,8 @@ pub async fn run() {
     }
 
     let app = builder
-        .plugin(logging::build_log_plugin(log_targets))
+        .plugin(logging::build_log_command_plugin())
+        .plugin(logging::build_log_handoff_plugin(log_targets))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -699,6 +717,7 @@ pub async fn run() {
                 "register_runtime_log_state_and_crash_diagnostics",
                 step_started,
             );
+            startup_trace.record_logging_ready_and_stop_persistence();
 
             // Ensure the Tauri NSIS registry install-location key points to the
             // actual install directory, so that auto-updates respect the custom
