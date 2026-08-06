@@ -761,11 +761,41 @@
   background: var(--bg-secondary, rgba(128, 128, 128, 0.05));
 }
 
-.issue-fix__user-todos-title {
+.issue-fix__user-todos-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin: 0 0 6px;
+}
+
+.issue-fix__user-todos-title {
+  margin: 0;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary, #6b7280);
+}
+
+.issue-fix__user-todos-history {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--border-primary, rgba(128, 128, 128, 0.25));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-tertiary, #8a8f98);
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    color: var(--text-accent, #2563eb);
+    border-color: color-mix(in srgb, var(--text-accent, #2563eb) 40%, transparent);
+    background: color-mix(in srgb, var(--text-accent, #2563eb) 8%, transparent);
+  }
 }
 
 .issue-fix__user-todos-list {
@@ -781,7 +811,7 @@
 
 .issue-fix__user-todo {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   min-width: 0;
   font-size: 12px;
@@ -810,9 +840,6 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
   color: var(--text-primary, #374151);
 }
 
@@ -820,9 +847,56 @@
   flex: none;
   display: inline-flex;
   align-items: center;
+  margin-top: 1px;
   color: var(--text-tertiary, #8a8f98);
 
   &:hover {
     color: var(--text-accent, #2563eb);
+  }
+}
+
+// Compact two-line body (action + why) shared by the pending block and the
+// app-wide toast so the wording stays identical across surfaces. Rendered
+// inside the notification center and toast message slots too, so it must not
+// assume any issue-fix-specific token; it inherits the host text color.
+.issue-fix__todo-message {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.issue-fix__todo-message-action {
+  font-weight: 500;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.issue-fix__todo-message-context {
+  font-size: 11px;
+  line-height: 1.35;
+  color: inherit;
+  opacity: 0.72;
+  overflow-wrap: anywhere;
+}
+
+// Header chip: pending-count entry into the notification center history.
+.issue-fix__pending-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border: 1px solid color-mix(in srgb, var(--color-warning) 35%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-warning) 10%, transparent);
+  color: var(--color-warning);
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    background: color-mix(in srgb, var(--color-warning) 18%, transparent);
   }
 }

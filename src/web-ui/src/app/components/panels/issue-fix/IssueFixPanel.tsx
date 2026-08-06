@@ -4,6 +4,7 @@ import {
   CheckCircle,
   Circle,
   ExternalLink,
+  History,
   Loader2,
   MessageSquare,
   Play,
@@ -18,6 +19,7 @@ import {
   reviewPlatformAPI,
   type IssueFixAutonomousStatusResponse,
   type IssueFixUserDecision,
+  type IssueFixUserTodo,
   type ReviewPlatformIssueEvidence,
   type ReviewPlatformIssueSummary,
   type ReviewPlatformKind,
@@ -41,6 +43,7 @@ import {
   userTodoDisplayText,
   type IssueFixRowState,
 } from './issueFixRunState';
+import { IssueFixTodoMessage } from './IssueFixTodoMessage';
 import { IssueFixUserQuestion } from './IssueFixUserQuestion';
 import './IssueFixPanel.scss';
 
@@ -302,47 +305,130 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applyControl, available, hostLoopEnabled, loadControl, takeControlTicket, workspacePath]);
 
-  // Surface newly appearing user-lane work as app-level notification cards, so
-  // gates and review requests reach the user even while they work in another
-  // panel. The first projection seeds silently: pre-existing items are already
-  // visible in the pending block, only later arrivals should toast.
+  // Surface user-lane work (gates + review/merge actions) through the app's
+  // own notification system so it reaches the user from any panel: the bell
+  // shows an unread badge, the center keeps a scrollable history, and new
+  // arrivals toast. The first projection seeds the center silently with the
+  // currently open items (no toast burst); a resolved item marks its card
+  // read so the unread badge stays truthful.
   const notifiedTodoIdsRef = useRef<Set<string> | null>(null);
+  const todoNotificationIdsRef = useRef<Map<string, string>>(new Map());
   useEffect(() => {
     if (!control) return;
-    if (!notifiedTodoIdsRef.current) {
-      notifiedTodoIdsRef.current = new Set([
-        ...(control.userTodos ?? []).map((todo) => todo.todoId),
-        ...(control.userQuestion ? [control.userQuestion.todoId] : []),
-      ]);
-      return;
-    }
-    const seen = notifiedTodoIdsRef.current;
     const openPanelAction = {
       label: t('autonomous.notify.open'),
       onClick: () => createIssueFixTab({ workspacePath }),
     };
-    if (control.userQuestion && !seen.has(control.userQuestion.todoId)) {
-      seen.add(control.userQuestion.todoId);
-      notificationService.warning(control.userQuestion.prompt, {
-        title: t('autonomous.notify.gateTitle'),
-        duration: 12_000,
-        actions: [openPanelAction],
-      });
+    const gate = control.userQuestion;
+    // A gate is also listed among the open todos; keep one card per todoId.
+    const openTodos = (control.userTodos ?? []).filter(
+      (todo) => todo.todoId !== gate?.todoId,
+    );
+    const linkAction = (todo: IssueFixUserTodo) =>
+      todo.link
+        ? [
+            {
+              label: t('autonomous.notify.openLink'),
+              onClick: () => {
+                if (todo.link) window.open(todo.link, '_blank', 'noreferrer');
+              },
+            },
+          ]
+        : [];
+
+    if (!notifiedTodoIdsRef.current) {
+      notifiedTodoIdsRef.current = new Set();
+      for (const todo of openTodos) {
+        notifiedTodoIdsRef.current.add(todo.todoId);
+        todoNotificationIdsRef.current.set(
+          todo.todoId,
+          notificationService.silent({
+            title: t('autonomous.notify.actionTitle'),
+            message: userTodoDisplayText(todo),
+            messageNode: <IssueFixTodoMessage todo={todo} />,
+            type: 'info',
+            metadata: {
+              source: 'issue-fix',
+              todoId: todo.todoId,
+              taskClass: todo.taskClass,
+              link: todo.link,
+            },
+            actions: [openPanelAction, ...linkAction(todo)],
+          }),
+        );
+      }
+      if (gate) {
+        notifiedTodoIdsRef.current.add(gate.todoId);
+        todoNotificationIdsRef.current.set(
+          gate.todoId,
+          notificationService.silent({
+            title: t('autonomous.notify.gateTitle'),
+            message: gate.prompt,
+            type: 'warning',
+            metadata: { source: 'issue-fix', todoId: gate.todoId },
+            actions: [openPanelAction],
+          }),
+        );
+      }
+      return;
     }
-    const fresh = (control.userTodos ?? []).filter((todo) => !seen.has(todo.todoId));
+
+    const seen = notifiedTodoIdsRef.current;
+    // Items that left the user lane were resolved or answered: they stop
+    // demanding attention but stay in the center history for review.
+    for (const todoId of [...seen]) {
+      if (openTodos.some((todo) => todo.todoId === todoId)) continue;
+      if (gate?.todoId === todoId) continue;
+      seen.delete(todoId);
+      const notificationId = todoNotificationIdsRef.current.get(todoId);
+      if (notificationId) {
+        notificationService.markAsRead(notificationId);
+        todoNotificationIdsRef.current.delete(todoId);
+      }
+    }
+
+    if (gate && !seen.has(gate.todoId)) {
+      seen.add(gate.todoId);
+      todoNotificationIdsRef.current.set(
+        gate.todoId,
+        notificationService.warning(gate.prompt, {
+          title: t('autonomous.notify.gateTitle'),
+          duration: 12_000,
+          metadata: { source: 'issue-fix', todoId: gate.todoId },
+          actions: [openPanelAction],
+        }),
+      );
+    }
+
+    const fresh = openTodos.filter((todo) => !seen.has(todo.todoId));
     fresh.forEach((todo) => seen.add(todo.todoId));
     if (fresh.length > 3) {
       // One digest card instead of a burst of toasts after a productive beat.
       notificationService.info(t('autonomous.notify.actionBatch', { count: fresh.length }), {
         title: t('autonomous.notify.actionTitle'),
+        metadata: { source: 'issue-fix' },
         actions: [openPanelAction],
       });
     } else {
       for (const todo of fresh) {
-        notificationService.info(userTodoDisplayText(todo), {
-          title: t('autonomous.notify.actionTitle'),
-          actions: [openPanelAction],
-        });
+        // Brief two-line body (action + why) keeps the toast scannable; the
+        // plain `message` stays the full text so the notification center
+        // search can still find it after the toast fades.
+        todoNotificationIdsRef.current.set(
+          todo.todoId,
+          notificationService.info(userTodoDisplayText(todo), {
+            title: t('autonomous.notify.actionTitle'),
+            messageNode: <IssueFixTodoMessage todo={todo} />,
+            duration: 6_000,
+            metadata: {
+              source: 'issue-fix',
+              todoId: todo.todoId,
+              taskClass: todo.taskClass,
+              link: todo.link,
+            },
+            actions: [openPanelAction, ...linkAction(todo)],
+          }),
+        );
       }
     }
   }, [control, t, workspacePath]);
@@ -595,6 +681,22 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
                 })
               : t('autonomous.loadingKernel')}
           </span>
+          {control && (control.userTodos ?? []).length > 0 ? (
+            <button
+              type="button"
+              className="issue-fix__pending-chip"
+              onClick={() => notificationService.toggleCenter(true)}
+              title={t('autonomous.userTodos.openHistory')}
+              aria-label={t('autonomous.userTodos.title', {
+                count: control.userTodos?.length ?? 0,
+              })}
+            >
+              <History size={11} aria-hidden="true" />
+              <span>
+                {t('autonomous.userTodos.title', { count: control.userTodos?.length ?? 0 })}
+              </span>
+            </button>
+          ) : null}
         </div>
         <div className="issue-fix__actions">
           {control?.hostLoop.sessionId ? (
@@ -681,9 +783,21 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
           className="issue-fix__user-todos"
           aria-label={t('autonomous.userTodos.title', { count: control.userTodos.length })}
         >
-          <h4 className="issue-fix__user-todos-title">
-            {t('autonomous.userTodos.title', { count: control.userTodos.length })}
-          </h4>
+          <div className="issue-fix__user-todos-title-row">
+            <h4 className="issue-fix__user-todos-title">
+              {t('autonomous.userTodos.title', { count: control.userTodos.length })}
+            </h4>
+            <button
+              type="button"
+              className="issue-fix__user-todos-history"
+              onClick={() => notificationService.toggleCenter(true)}
+              title={t('autonomous.userTodos.openHistory')}
+              aria-label={t('autonomous.userTodos.openHistory')}
+            >
+              <History size={12} aria-hidden="true" />
+              <span>{t('autonomous.userTodos.openHistory')}</span>
+            </button>
+          </div>
           <ul className="issue-fix__user-todos-list">
             {control.userTodos.map((todo) => (
               <li key={todo.todoId} className="issue-fix__user-todo">
@@ -699,7 +813,7 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
                   )}
                 </span>
                 <span className="issue-fix__user-todo-text" title={todo.text}>
-                  {userTodoDisplayText(todo)}
+                  <IssueFixTodoMessage todo={todo} />
                 </span>
                 {todo.link ? (
                   <a

@@ -48,13 +48,15 @@
       "title": "Pending your action ({{count}})",
       "gateBadge": "Gate",
       "actionBadge": "Review",
-      "openLink": "Open on the provider"
+      "openLink": "Open on the provider",
+      "openHistory": "History"
     },
     "notify": {
       "gateTitle": "Issue-Fix needs a decision",
       "actionTitle": "Issue-Fix pending review",
       "actionBatch": "{{count}} new items await your review",
-      "open": "Open panel"
+      "open": "Open panel",
+      "openLink": "Open link"
     }
   },
   "status": {

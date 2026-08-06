@@ -14,6 +14,7 @@ import {
   setAllSelected,
   toggleSelection,
   userTodoDisplayText,
+  userTodoPresentation,
 } from './issueFixRunState';
 
 const ISSUES = ['1849', '1580', '1920'];
@@ -158,6 +159,44 @@ describe('light poll merge', () => {
         link: null,
       }),
     ).toBe('Authorize closing issue #2016');
+  });
+
+  it('projects legacy user actions as a short action plus current context', () => {
+    expect(
+      userTodoPresentation({
+        todoId: 'comment-2032',
+        taskClass: 'user_action',
+        text: '[P0] Authorize posting maintainer diagnosis comment for GCWing/BitFun#2032 (comment_only route: diagnosis drafted)',
+        link: null,
+      }),
+    ).toEqual({
+      action: 'Posting maintainer diagnosis comment for Issue #2032',
+      context: 'Comment_only route: diagnosis drafted',
+    });
+
+    expect(
+      userTodoPresentation({
+        todoId: 'merge-2038',
+        taskClass: 'user_action',
+        text: 'Merge PR #2038 (https://github.com/o/r/pull/2038) \u2014 fixes #1980 \u00b7 CI green, validated',
+        link: 'https://github.com/o/r/pull/2038',
+      }),
+    ).toEqual({
+      action: 'Merge PR #2038',
+      context: 'Fixes #1980 \u00b7 CI green, validated',
+    });
+  });
+
+  it('bounds both notification lines when an old todo contains a drafted response', () => {
+    const presentation = userTodoPresentation({
+      todoId: 'comment-1290',
+      taskClass: 'user_action',
+      text: '[P0] Authorize posting response comment for GCWing/BitFun#1290 (discussion question: user asks about a chat group; the drafted response includes every support channel and a long explanation)',
+      link: null,
+    });
+
+    expect(presentation.action.length).toBeLessThanOrEqual(72);
+    expect(presentation.context?.length).toBeLessThanOrEqual(96);
   });
 
   it('surfaces a gate discovered by the poll and clears an answered one', () => {

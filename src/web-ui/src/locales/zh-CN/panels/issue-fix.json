@@ -48,13 +48,15 @@
       "title": "待你处理（{{count}}）",
       "gateBadge": "决策",
       "actionBadge": "待审",
-      "openLink": "在平台上打开"
+      "openLink": "在平台上打开",
+      "openHistory": "查看历史"
     },
     "notify": {
       "gateTitle": "持续修复需要你决策",
       "actionTitle": "持续修复待你处理",
       "actionBatch": "新增 {{count}} 项待处理",
-      "open": "打开面板"
+      "open": "打开面板",
+      "openLink": "打开链接"
     }
   },
   "status": {

@@ -21,6 +21,60 @@ export function userTodoDisplayText(todo: IssueFixUserTodo): string {
     .trim();
 }
 
+export interface IssueFixUserTodoPresentation {
+  action: string;
+  context: string | null;
+}
+
+const MAX_USER_TODO_ACTION_CHARS = 72;
+const MAX_USER_TODO_CONTEXT_CHARS = 96;
+
+function truncateUserTodoPart(value: string, maxChars: number): string {
+  if (value.length <= maxChars) return value;
+  return `${value.slice(0, Math.max(0, maxChars - 1)).trimEnd()}\u2026`;
+}
+
+function capitalizeAscii(value: string): string {
+  return value ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
+}
+
+/**
+ * Project legacy free-form todo text into the notification center's two-line
+ * layout. New heartbeats already write `action - state/reason`; the fallback
+ * also keeps older parenthesized and colon-delimited todos readable.
+ */
+export function userTodoPresentation(todo: IssueFixUserTodo): IssueFixUserTodoPresentation {
+  let text = userTodoDisplayText(todo)
+    .replace(/^\s*\[[^\]]+\]\s*/, '')
+    .replace(/^\s*authorize\s+/i, '')
+    .replace(/\b[\w.-]+\/[\w.-]+\s+issue\s+#(\d+)/gi, 'Issue #$1')
+    .replace(/\b[\w.-]+\/[\w.-]+#(\d+)/g, 'Issue #$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  let context: string | null = null;
+  const trailingContext = text.match(/\s+\(([^()]*)\)\s*[.!?]?$/);
+  if (trailingContext?.index != null && trailingContext[1].trim()) {
+    context = trailingContext[1].trim();
+    text = text.slice(0, trailingContext.index).trim();
+  } else {
+    const divider = text.match(/\s+(?:\u2014|\u2013|\u00b7)\s+|:\s+/);
+    if (divider?.index != null) {
+      const detailStart = divider.index + divider[0].length;
+      context = text.slice(detailStart).trim() || null;
+      text = text.slice(0, divider.index).trim();
+    }
+  }
+
+  const action = truncateUserTodoPart(capitalizeAscii(text), MAX_USER_TODO_ACTION_CHARS);
+  return {
+    action,
+    context: context
+      ? truncateUserTodoPart(capitalizeAscii(context), MAX_USER_TODO_CONTEXT_CHARS)
+      : null,
+  };
+}
+
 export interface IssueFixSelectionState {
   selectedIssueIds: Set<string>;
 }
