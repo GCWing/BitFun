@@ -117,11 +117,11 @@
     transition: all $motion-base $easing-standard;
 
     &--primary {
-      background: var(--color-accent-600);
-      color: var(--color-text-primary);
+      background: color-mix(in srgb, var(--color-accent-500) 25%, var(--element-bg-base));
+      color: var(--color-accent-500);
 
       &:hover {
-        background: var(--color-accent-500);
+        background: color-mix(in srgb, var(--color-accent-500) 35%, var(--element-bg-base));
       }
       
       &:active {

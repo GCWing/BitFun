@@ -241,7 +241,10 @@
   }
 
   &__empty {
-    padding: $size-gap-4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: $size-gap-6 $size-gap-4;
     color: var(--color-text-muted);
     font-size: var(--font-size-sm);
     text-align: center;

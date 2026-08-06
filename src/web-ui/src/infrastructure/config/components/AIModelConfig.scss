@@ -377,7 +377,7 @@
     
     border: 1px dashed var(--border-base);
     border-radius: $size-radius-sm;
-    background: transparent;
+    background: var(--element-bg-subtle);
 
     svg {
       opacity: 0.5;
