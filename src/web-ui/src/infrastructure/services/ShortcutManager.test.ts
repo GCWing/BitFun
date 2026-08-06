@@ -111,6 +111,47 @@ describe('ShortcutManager platform primary modifier', () => {
     expect(callback).not.toHaveBeenCalled();
   });
 
+  it('keeps the replacement registration when the previous cleanup runs', () => {
+    setPlatform('Win32');
+    const previousCallback = vi.fn();
+    const replacementCallback = vi.fn();
+    const cleanupPrevious = shortcutManager.register(
+      'filetree.refresh',
+      { key: 'r', ctrl: true, scope: 'filetree' },
+      previousCallback
+    );
+    shortcutManager.register(
+      'filetree.refresh',
+      { key: 'r', ctrl: true, scope: 'filetree' },
+      replacementCallback
+    );
+
+    cleanupPrevious();
+    dispatchScopedKey('filetree', { key: 'r', code: 'KeyR', ctrlKey: true });
+
+    expect(previousCallback).not.toHaveBeenCalled();
+    expect(replacementCallback).toHaveBeenCalledTimes(1);
+  });
+
+  it('matches shifted bracket shortcuts by their physical key code', () => {
+    setPlatform('Win32');
+    const callback = vi.fn();
+    shortcutManager.register(
+      'filetree.collapseAll',
+      { key: '[', ctrl: true, shift: true, scope: 'filetree' },
+      callback
+    );
+
+    dispatchScopedKey('filetree', {
+      key: '{',
+      code: 'BracketLeft',
+      ctrlKey: true,
+      shiftKey: true,
+    });
+
+    expect(callback).toHaveBeenCalledTimes(1);
+  });
+
   it('does not inherit canvas shortcuts when focus is inside terminal scope', () => {
     const canvasCallback = vi.fn();
     const terminalCallback = vi.fn();

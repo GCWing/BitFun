@@ -13,7 +13,7 @@ import './InputDialog.scss';
 export interface InputDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (value: string) => void;
+  onConfirm: (value: string) => void | boolean | Promise<void | boolean>;
   title: string;
   description?: string;
   placeholder?: string;
@@ -79,9 +79,13 @@ export const InputDialog: React.FC<InputDialogProps> = ({
     return true;
   };
 
-  const handleConfirm = () => {
-    if (validateInput(value)) {
-      onConfirm(value.trim());
+  const handleConfirm = async () => {
+    if (!validateInput(value)) {
+      return;
+    }
+
+    const shouldClose = await onConfirm(value.trim());
+    if (shouldClose !== false) {
       onClose();
     }
   };

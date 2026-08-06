@@ -133,9 +133,11 @@
   },
   "notifications": {
     "createFileSuccess": "文件创建成功",
-    "createFileFailed": "创建文件失败: {{error}}",
+    "createFileFailed": "创建文件失败",
+    "createFileAlreadyExists": "无法创建文件：同名文件或文件夹已存在",
     "createFolderSuccess": "文件夹创建成功",
-    "createFolderFailed": "创建文件夹失败: {{error}}",
+    "createFolderFailed": "创建文件夹失败",
+    "createFolderAlreadyExists": "无法创建文件夹：同名文件或文件夹已存在",
     "renameSuccess": "重命名成功",
     "renameFailed": "重命名失败: {{error}}",
     "deleteSuccess": "删除成功",

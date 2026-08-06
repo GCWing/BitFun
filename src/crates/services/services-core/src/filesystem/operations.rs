@@ -453,7 +453,7 @@ impl FileOperationService {
 
         self.validate_file_access(path, true).await?;
 
-        fs::create_dir_all(path)
+        fs::create_dir(path)
             .await
             .map_err(|e| FileSystemError::service(format!("Failed to create directory: {}", e)))?;
 

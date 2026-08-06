@@ -40,7 +40,7 @@ const FileViewerNav: React.FC = () => {
   }, []);
 
   return (
-    <div className="bitfun-file-viewer-nav">
+    <div className="bitfun-file-viewer-nav" data-shortcut-scope="filetree">
       <div className="bitfun-file-viewer-nav__header">
         <span className="bitfun-file-viewer-nav__icon" aria-hidden="true">
           <Folder size={15} />

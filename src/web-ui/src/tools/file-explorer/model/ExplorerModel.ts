@@ -125,6 +125,13 @@ export class ExplorerModel {
     this.replaceExpandedFolders(expandedFoldersDeleteEquivalent(this.expandedFolders, path));
   }
 
+  collapseAll(): void {
+    this.expandedFolders.clear();
+    if (this.rootPath) {
+      this.expandedFolders.add(this.rootPath);
+    }
+  }
+
   ensureRoot(rootPath: string): void {
     if (this.rootPath !== rootPath) {
       this.reset(rootPath);

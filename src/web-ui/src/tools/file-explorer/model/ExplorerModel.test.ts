@@ -10,6 +10,16 @@ describe('ExplorerModel path equivalence', () => {
     expect(model.resolveNodeKey('\\workspace\\project')).toBe('/workspace/project');
   });
 
+  it('collapses all directories while keeping the workspace root expanded', () => {
+    const model = new ExplorerModel();
+    model.reset('/workspace/project');
+    model.expand('/workspace/project/src');
+
+    model.collapseAll();
+
+    expect(model.getSnapshot().expandedFolders).toEqual(new Set(['/workspace/project']));
+  });
+
   it('removes a file using an equivalent path key', () => {
     const model = new ExplorerModel();
     model.reset('/workspace/project');

@@ -116,6 +116,10 @@ function eventKeyForLookup(event: KeyboardEvent): string {
   if (digit) return digit[1];
   const numpad = /^Numpad([1-9])$/.exec(code);
   if (numpad) return numpad[1];
+  // Shift changes event.key for bracket keys to "{" / "}". Use the physical
+  // bracket key so configurable shortcuts such as Ctrl+Shift+[ remain stable.
+  if (code === 'BracketLeft') return '[';
+  if (code === 'BracketRight') return ']';
   // Keep in sync with makeMapKey: always lower-case logical key (Tab, escape, w, etc.)
   return event.key.toLowerCase();
 }
@@ -211,7 +215,14 @@ export class ShortcutManager {
     this.addToLookupMap(registration);
     this.notifyRegistrationListeners();
 
-    return () => this.unregister(id);
+    return () => this.unregisterRegistration(registration);
+  }
+
+  private unregisterRegistration(registration: ShortcutRegistration): boolean {
+    if (this.registrations.get(registration.id) !== registration) {
+      return false;
+    }
+    return this.unregister(registration.id);
   }
 
   public unregister(id: string): boolean {
