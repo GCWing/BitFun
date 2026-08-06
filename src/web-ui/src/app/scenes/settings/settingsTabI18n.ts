@@ -36,6 +36,7 @@ export const SETTINGS_TAB_I18N_NAMESPACES: Record<ConfigTab, readonly I18nNamesp
   'external-sources': ['settings/external-sources', 'shared'],
   hooks: ['settings/hooks'],
   'acp-agents': ['settings/acp-agents'],
+  connectors: ['settings/connectors'],
   editor: ['settings/editor'],
   keyboard: ['settings'],
 };

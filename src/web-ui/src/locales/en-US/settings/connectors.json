@@ -1,0 +1,51 @@
+{
+  "connectors": {
+    "title": "Connectors",
+    "description": "Connect to DingTalk, XiaoShouYi, and other SaaS platforms to let your AI agent fetch and analyze data.",
+    "section": {
+      "configuredConnectors": "Configured Connectors",
+      "availableProviders": "Available Providers"
+    },
+    "actions": {
+      "add": "Add Connector",
+      "save": "Save",
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "test": "Test",
+      "sync": "Sync"
+    },
+    "status": {
+      "connected": "Connected",
+      "disconnected": "Disconnected",
+      "error": "Error",
+      "pending": "Pending"
+    },
+    "card": {
+      "lastSynced": "Last synced",
+      "testing": "Testing…",
+      "syncing": "Syncing…",
+      "deleting": "Deleting…",
+      "test": "Test",
+      "sync": "Sync",
+      "delete": "Delete"
+    },
+    "addDialog": {
+      "title": "Add Connector",
+      "provider": "Provider",
+      "name": "Connector Name",
+      "namePlaceholder": "e.g. Production DingTalk",
+      "add": "Add",
+      "adding": "Adding…",
+      "cancel": "Cancel"
+    },
+    "emptyState": {
+      "title": "No connectors configured",
+      "description": "Add a connector to let your AI agent access data from DingTalk, XiaoShouYi, and other platforms."
+    },
+    "provider": {
+      "dingtalk": "DingTalk",
+      "xiaoshouyi": "XiaoShouYi (Neocrm)",
+      "custom": "Custom"
+    }
+  }
+}

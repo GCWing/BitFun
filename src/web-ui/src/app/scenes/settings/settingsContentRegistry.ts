@@ -18,6 +18,7 @@ const loadArchivedSessionsConfig = () => import('./components/ArchivedSessionsCo
 const loadWorktreesConfig = () => import('../../../infrastructure/config/components/WorktreesConfig');
 const loadKeyboardShortcutsTab = () => import('./components/KeyboardShortcutsTab');
 const loadSessionConfig = () => import('../../../infrastructure/config/components/SessionConfig');
+const loadConnectorsConfig = () => import('../../../infrastructure/config/components/ConnectorsConfig');
 
 export const AIModelConfig = lazy(loadAIModelConfig);
 export const McpToolsConfig = lazy(loadMcpToolsConfig);
@@ -34,6 +35,7 @@ export const VoiceInputConfig = lazy(loadVoiceInputConfig);
 export const ArchivedSessionsConfig = lazy(loadArchivedSessionsConfig);
 export const WorktreesConfig = lazy(loadWorktreesConfig);
 export const KeyboardShortcutsTab = lazy(loadKeyboardShortcutsTab);
+export const ConnectorsConfig = lazy(loadConnectorsConfig);
 export const SessionPersonalizationConfig = lazy(() =>
   loadSessionConfig().then((module) => ({
     default: module.SessionPersonalizationConfig,
@@ -61,6 +63,7 @@ const SETTINGS_CONTENT_LOADERS: Partial<Record<ConfigTab, () => Promise<unknown>
   'external-sources': loadExternalSourcesConfig,
   hooks: loadHooksConfig,
   'acp-agents': loadAcpAgentsConfig,
+  connectors: loadConnectorsConfig,
   editor: loadEditorConfig,
   keyboard: loadKeyboardShortcutsTab,
 };
