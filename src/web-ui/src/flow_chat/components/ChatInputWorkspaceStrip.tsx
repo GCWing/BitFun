@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Square,
   SquareCheck,
+  Wrench,
 } from 'lucide-react';
 import { ThreadGoalStripButton } from './thread-goal/ThreadGoalStripButton';
 import type { ThreadGoalSnapshot } from '../services/goalService';
@@ -44,6 +45,11 @@ export interface ChatInputWorkspaceStripProps {
   threadGoal?: {
     visible: boolean;
     goal: ThreadGoalSnapshot | null;
+    onOpen: () => void;
+  };
+  /** Continuous Issue-Fix panel — icon on the right when visible. */
+  issueFix?: {
+    visible: boolean;
     onOpen: () => void;
   };
   /** Global native-tool permission mode exposed as a compact strip control. */
@@ -101,6 +107,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   workspaceLabel,
   usageReport,
   threadGoal,
+  issueFix,
   permissionControl,
   deferPassiveGitRefresh = false,
   executionTarget,
@@ -150,6 +157,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
 
   const showUsage = usageReport?.visible && !!usageReport.onOpen;
   const showGoal = threadGoal?.visible && !!threadGoal.onOpen;
+  const showIssueFix = issueFix?.visible && !!issueFix.onOpen;
   const showPermission = !!permissionControl;
   const showDispatchResult = !!dispatchControl?.syncableJobId;
   const isWorktree = !!executionTarget?.worktreeId;
@@ -163,7 +171,12 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const showWorktreeToggle = !!worktreeControl && isGitWorkspace;
   const showDispatchPicker = !!dispatchControl && isGitWorkspace;
   const showRightActions =
-    showDispatchPicker || showDispatchResult || showPermission || showUsage || showGoal;
+    showDispatchPicker ||
+    showDispatchResult ||
+    showPermission ||
+    showUsage ||
+    showGoal ||
+    showIssueFix;
   const permissionCopy = {
     ask: {
       label: t('chatInput.permissionMode.ask.label'),
@@ -529,6 +542,25 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
               goal={threadGoal.goal}
               onOpen={threadGoal.onOpen}
             />
+          ) : null}
+          {showIssueFix ? (
+            <Tooltip content={t('chatInput.issueFix.tooltip')}>
+              <IconButton
+                data-bf-component="chat-input-workspace-strip"
+                data-bf-part="issueFixAction"
+                className="bitfun-chat-input-workspace-strip__issue-fix-btn"
+                variant="ghost"
+                size="xs"
+                type="button"
+                aria-label={t('chatInput.issueFix.open')}
+                onClick={e => {
+                  e.stopPropagation();
+                  issueFix.onOpen();
+                }}
+              >
+                <Wrench size={14} strokeWidth={2} aria-hidden />
+              </IconButton>
+            </Tooltip>
           ) : null}
           {showUsage ? (
             <Tooltip content={t('usage.runtime.tooltip')}>

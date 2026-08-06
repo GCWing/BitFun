@@ -843,7 +843,11 @@
     "loadingMcpPrompts": "Loading MCP prompts...",
     "externalCommandsLoading": "Loading compatible commands...",
     "externalCommandsHostUnavailable": "External commands are not available on this host.",
-    "externalCommandsLoadFailed": "External commands could not be loaded. Reopen the command picker to retry."
+    "externalCommandsLoadFailed": "External commands could not be loaded. Reopen the command picker to retry.",
+    "issueFix": {
+      "tooltip": "Fix repository issues continuously",
+      "open": "Open Issue-Fix"
+    }
   },
   "planner": {
     "title": "Task Planning",

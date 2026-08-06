@@ -843,7 +843,11 @@
     "loadingMcpPrompts": "正在加载 MCP 提示词...",
     "externalCommandsLoading": "正在加载兼容命令...",
     "externalCommandsHostUnavailable": "当前主机不支持外部命令。",
-    "externalCommandsLoadFailed": "外部命令加载失败，请重新打开命令选择器重试。"
+    "externalCommandsLoadFailed": "外部命令加载失败，请重新打开命令选择器重试。",
+    "issueFix": {
+      "tooltip": "持续修复仓库 Issue",
+      "open": "打开修复 Issue"
+    }
   },
   "planner": {
     "title": "任务规划",

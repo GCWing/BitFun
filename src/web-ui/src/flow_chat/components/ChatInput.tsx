@@ -141,6 +141,7 @@ import {
   ChatInputWorkspaceStrip,
   type ChatInputPermissionMode,
 } from './ChatInputWorkspaceStrip';
+import { createIssueFixTab } from '@/shared/utils/tabUtils';
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
 import { isNonLocalDispatchTarget } from '@/features/dispatch/types';
 import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
@@ -5975,6 +5976,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onOpen: () => {
                   void threadGoalController.openGoalEntry();
                 },
+              }
+            : undefined
+        }
+        issueFix={
+          chatStripRepositoryPath
+            ? {
+                visible: true,
+                onOpen: () => createIssueFixTab({ workspacePath: chatStripRepositoryPath }),
               }
             : undefined
         }
