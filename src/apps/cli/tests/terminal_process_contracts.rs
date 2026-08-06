@@ -71,6 +71,7 @@ fn startup_bracketed_paste_attaches_an_image_path_without_rendering_the_path() {
         Duration::from_secs(30),
         "the image draft did not reach the model request",
     );
+    process.expect_idle_after_turn(1, Duration::from_secs(30));
     process.write(&[0x03]);
     let (status, output) = process.finish(Duration::from_secs(15));
     assert!(
