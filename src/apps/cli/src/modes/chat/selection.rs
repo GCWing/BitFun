@@ -462,52 +462,19 @@ impl ChatMode {
         let session_model_id = chat_state.current_model_id.clone();
         let result: Option<String> = tokio::task::block_in_place(|| {
             rt_handle.block_on(async {
-                let config_service = GlobalConfigManager::get_service().await.ok()?;
-                let models: Vec<bitfun_core::service::config::AIModelConfig> =
-                    config_service.get_ai_models().await.ok()?;
-                let global_config: bitfun_core::service::config::GlobalConfig =
-                    config_service.get_config(None).await.ok()?;
-
-                let model_id = crate::model_selection::resolve_session_model_display_id(
-                    &global_config.ai,
+                let catalog = self.agent.list_models().await.ok()?;
+                let model_id = crate::model_selection::resolve_tui_model_id(
+                    &catalog,
                     session_model_id.as_deref(),
                 )?;
-
-                fn provider_display_name(
-                    model: &bitfun_core::service::config::AIModelConfig,
-                ) -> String {
-                    let raw_name = model.name.trim();
-                    let model_name = model.model_name.trim();
-                    if !raw_name.is_empty() && !model_name.is_empty() {
-                        let dashed_suffix = format!(" - {}", model_name);
-                        let slash_suffix = format!("/{}", model_name);
-                        if let Some(provider) = raw_name.strip_suffix(&dashed_suffix) {
-                            return provider.trim().to_string();
-                        }
-                        if let Some(provider) = raw_name.strip_suffix(&slash_suffix) {
-                            return provider.trim().to_string();
-                        }
-                    }
-                    if raw_name.is_empty() {
-                        model.provider.clone()
-                    } else {
-                        raw_name.to_string()
-                    }
-                }
-
-                fn model_display_name(
-                    model: &bitfun_core::service::config::AIModelConfig,
-                ) -> String {
-                    format!("{} / {}", model.model_name, provider_display_name(model))
-                }
-
-                let model_name = models
-                    .iter()
-                    .find(|model| model.id == model_id)
-                    .map(model_display_name)
-                    .unwrap_or_else(|| model_id.clone());
-
-                Some(model_name)
+                Some(
+                    catalog
+                        .models
+                        .iter()
+                        .find(|model| model.id == model_id)
+                        .map(crate::model_selection::tui_model_display_name)
+                        .unwrap_or(model_id),
+                )
             })
         });
 
@@ -527,35 +494,22 @@ impl ChatMode {
     ) {
         let result = tokio::task::block_in_place(|| {
             rt_handle.block_on(async {
-                let config_service = match GlobalConfigManager::get_service().await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        tracing::error!("Failed to get config service: {}", e);
-                        return None;
-                    }
-                };
-
-                let models: Vec<bitfun_core::service::config::AIModelConfig> =
-                    config_service.get_ai_models().await.ok()?;
-                let global_config: bitfun_core::service::config::GlobalConfig =
-                    config_service.get_config(None).await.ok()?;
-                let current_model_id = crate::model_selection::resolve_session_model_display_id(
-                    &global_config.ai,
+                let catalog = self.agent.list_models().await.ok()?;
+                let current_model_id = crate::model_selection::resolve_tui_model_id(
+                    &catalog,
                     chat_state.current_model_id.as_deref(),
                 );
-
-                // Convert to ModelItem list (only enabled models)
-                let model_items: Vec<ModelItem> = models
+                let model_items: Vec<ModelItem> = catalog
+                    .models
                     .into_iter()
-                    .filter(|m| m.enabled)
-                    .map(|m| ModelItem {
-                        id: m.id,
-                        name: m.name,
-                        provider: m.provider,
-                        model_name: m.model_name,
+                    .filter(|model| model.enabled)
+                    .map(|model| ModelItem {
+                        id: model.id,
+                        name: model.name,
+                        provider: model.provider,
+                        model_name: model.model_name,
                     })
                     .collect();
-
                 Some((model_items, current_model_id))
             })
         });
@@ -655,20 +609,12 @@ impl ChatMode {
             chat_state.is_processing,
             self.pending_session_operation.is_some(),
         );
-        if self.agent.is_shared() {
-            chat_view.show_agent_modes_only(
-                agent_items,
-                Some(self.agent_type.clone()),
-                allow_mode_switch,
-            );
-        } else {
-            chat_view.show_agent_selector(
-                agent_items,
-                Some(self.agent_type.clone()),
-                true,
-                allow_mode_switch,
-            );
-        }
+        chat_view.show_agent_selector(
+            agent_items,
+            Some(self.agent_type.clone()),
+            !self.agent.is_shared(),
+            allow_mode_switch,
+        );
     }
 
     fn handle_agent_selector_action(

@@ -20,6 +20,9 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast::error::TryRecvError;
 
+use bitfun_app_server_protocol::model::{AddModelRequest, UpdateModelRequest};
+use bitfun_app_server_protocol::skill::SkillSummary;
+use bitfun_app_server_protocol::subagent::SubagentSummary;
 use bitfun_core_types::SessionUsageReport;
 use bitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
 use bitfun_runtime_ports::{
@@ -65,17 +68,6 @@ use crate::ui::theme::{
 };
 use crate::ui::theme_selector::ThemeItem;
 use crate::ui::{init_terminal, restore_terminal, TerminalGuard};
-use bitfun_core::agentic::agents::{
-    get_agent_registry, AgentInfo, SubAgentSource, SubagentListScope, SubagentQueryContext,
-};
-use bitfun_core::agentic::tools::implementations::skills::{
-    mode_overrides::{
-        load_project_mode_skills_document_local, save_project_mode_skills_document_local,
-        set_mode_skill_disabled_in_document, set_user_mode_skill_state,
-    },
-    registry::SkillRegistry,
-    ModeSkillInfo, SkillInfo,
-};
 use bitfun_core::external_hooks::{
     ExternalHookCatalogSnapshotV1, ExternalHookMatcherSummary, ExternalHookNativeActivation,
     ExternalHookProjectionStatus,
@@ -103,7 +95,6 @@ use bitfun_core::native_hooks::{
     overview as native_hook_overview, NativeHookOverview, NativeHookRuleView,
 };
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
-use bitfun_core::service::config::GlobalConfigManager;
 use bitfun_core::service::session_usage::render_usage_report_markdown;
 use bitfun_product_domains::external_hook_import::{
     ExternalHookImportApplyOutcomeV1, ExternalHookImportApplyRequestV1,
@@ -292,20 +283,20 @@ enum PendingMcpOp {
 enum PendingMcpTask {
     Toggle {
         server_id: String,
-        handle: tokio::task::JoinHandle<bitfun_core::util::errors::BitFunResult<()>>,
+        handle: tokio::task::JoinHandle<std::result::Result<(), String>>,
     },
     Add {
         name: String,
-        handle: tokio::task::JoinHandle<bitfun_core::util::errors::BitFunResult<()>>,
+        handle: tokio::task::JoinHandle<std::result::Result<(), String>>,
     },
     Delete {
         server_id: String,
-        handle: tokio::task::JoinHandle<bitfun_core::util::errors::BitFunResult<()>>,
+        handle: tokio::task::JoinHandle<std::result::Result<(), String>>,
     },
     External {
         item_id: String,
         item_name: String,
-        handle: tokio::task::JoinHandle<std::result::Result<ExternalSourceCatalogSnapshot, String>>,
+        handle: tokio::task::JoinHandle<std::result::Result<(), String>>,
     },
 }
 
@@ -464,7 +455,7 @@ fn terminal_event_allowed_while_local_effect_pending(event: &Event) -> bool {
 }
 
 const SESSION_OPERATION_SLOW_NOTICE: Duration = Duration::from_secs(15);
-const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI preview: this view controls sessions, including deleting an idle Session, turns, the current Session name, current Session Agent mode, current Session model, and declarative context via /reload [skills|instructions]; model management remains Embedded, along with local extension, MCP, account-sync, and Agent/Subagent management.";
+const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI preview: this view controls sessions, including deleting an idle Session, turns, the current Session name, current Session Agent mode, and declarative context via /reload [skills|instructions]. Model, Skill, Subagent, and MCP management use this CLI process's local compatibility owner; MCP process state and tool registration are local to this CLI process and do not reconfigure an already-running Shared Runtime Host. Local extension, account-sync, usage, and other management remain Embedded.";
 
 #[derive(Default)]
 struct NonKeyEventOutcome {

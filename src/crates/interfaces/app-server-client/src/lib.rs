@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use agent_client_protocol::{ConnectTo, ConnectionTo, JsonRpcResponse, SentRequest};
+use bitfun_app_server_protocol::agent::*;
 use bitfun_app_server_protocol::app::{
     HealthRequest, HealthResponse, InitializeRequest, InitializeResponse,
 };
@@ -16,9 +17,16 @@ use bitfun_app_server_protocol::event::{
     AgentEventNotification, ConfigEventNotification, EventStreamStateNotification,
     PermissionEventNotification, SyncEventsRequest, SyncEventsResponse,
 };
-use bitfun_app_server_protocol::tui::*;
+use bitfun_app_server_protocol::mcp::*;
+use bitfun_app_server_protocol::model::*;
+use bitfun_app_server_protocol::session::*;
+use bitfun_app_server_protocol::skill::*;
+use bitfun_app_server_protocol::subagent::*;
+use bitfun_app_server_protocol::workspace::*;
 use bitfun_app_server_protocol::{AppClient, AppServer};
 use tokio::sync::{broadcast, oneshot};
+
+pub use agent_client_protocol::Error as ProtocolError;
 
 const CLIENT_STARTUP_TIMEOUT: Duration = Duration::from_secs(5);
 const SIDE_EFFECT_TIMEOUT: Duration = Duration::from_secs(120);
@@ -340,6 +348,134 @@ impl AppServerClient {
         &self,
         request: UpdateSessionModeRequest,
     ) -> Result<UpdateSessionModeResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn list_agent_modes(
+        &self,
+        request: ListAgentModesRequest,
+    ) -> agent_client_protocol::Result<ListAgentModesResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn list_models(&self) -> agent_client_protocol::Result<ListModelsResponse> {
+        self.rpc(|cx| Ok(cx.send_request(ListModelsRequest {})))
+            .await
+    }
+
+    pub async fn get_model(
+        &self,
+        request: GetModelRequest,
+    ) -> agent_client_protocol::Result<GetModelResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn add_model(
+        &self,
+        request: AddModelRequest,
+    ) -> Result<AddModelResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn update_model(
+        &self,
+        request: UpdateModelRequest,
+    ) -> Result<UpdateModelResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn delete_model(
+        &self,
+        request: DeleteModelRequest,
+    ) -> Result<DeleteModelResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn set_model_default(
+        &self,
+        request: SetModelDefaultRequest,
+    ) -> Result<SetModelDefaultResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn list_skills(
+        &self,
+        request: ListSkillsRequest,
+    ) -> agent_client_protocol::Result<ListSkillsResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn set_skill_enabled(
+        &self,
+        request: SetSkillEnabledRequest,
+    ) -> Result<SetSkillEnabledResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn list_subagents(
+        &self,
+        request: ListSubagentsRequest,
+    ) -> agent_client_protocol::Result<ListSubagentsResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn set_subagent_enabled(
+        &self,
+        request: SetSubagentEnabledRequest,
+    ) -> Result<SetSubagentEnabledResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn list_mcp_servers(
+        &self,
+        request: ListMcpServersRequest,
+    ) -> agent_client_protocol::Result<ListMcpServersResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn toggle_mcp_server(
+        &self,
+        request: ToggleMcpServerRequest,
+    ) -> Result<ToggleMcpServerResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn add_mcp_server(
+        &self,
+        request: AddMcpServerRequest,
+    ) -> Result<AddMcpServerResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn delete_mcp_server(
+        &self,
+        request: DeleteMcpServerRequest,
+    ) -> Result<DeleteMcpServerResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn external_mcp_decision(
+        &self,
+        request: ExternalMcpDecisionRequest,
+    ) -> Result<ExternalMcpDecisionResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn mcp_conflict_choice(
+        &self,
+        request: McpConflictChoiceRequest,
+    ) -> Result<McpConflictChoiceResponse, ClientError> {
         self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
             .await
     }

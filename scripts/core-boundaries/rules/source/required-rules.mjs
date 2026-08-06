@@ -8042,9 +8042,71 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/interfaces/app-server/src/management/service.rs',
+    reason:
+      'App Server owns the concrete management adapter while Hosts retain explicit service injection and capability scope',
+    patterns: [
+      {
+        regex: /\bpub struct AppManagementService\b/,
+        message: 'missing concrete App Server management service',
+      },
+      {
+        regex: /\bimpl AppManagementService\b/,
+        message: 'missing concrete App Server management implementation',
+      },
+      {
+        regex: /\bAppManagementCapabilities::available\(\)/,
+        message: 'missing App Server management capability projection',
+      },
+    ],
+  },
+  {
+    path: 'src/apps/cli/src/shared_tui_backend.rs',
+    reason:
+      'Shared TUI must retain local Model, Skill, Subagent, and MCP compatibility management without expanding Runtime IPC or leaking owners into controllers',
+    patterns: [
+      {
+        regex: /management: Arc<AppManagementService>/,
+        message: 'missing injected Shared TUI App Server management service',
+      },
+      {
+        regex: /\bfn management_service\b/,
+        message: 'missing Shared TUI management capability gate',
+      },
+      {
+        regex: /\bfn set_management_scope_from_binding\b/,
+        message: 'missing Shared TUI Remote workspace compatibility guard',
+      },
+      {
+        regex: /\.list_models\(ListModelsRequest \{\}\)/,
+        message: 'missing Shared TUI model compatibility delegation',
+      },
+      {
+        regex: /\.list_skills\(request\)/,
+        message: 'missing Shared TUI skill compatibility delegation',
+      },
+      {
+        regex: /\.list_subagents\(request\)/,
+        message: 'missing Shared TUI subagent compatibility delegation',
+      },
+      {
+        regex: /\.list_mcp_servers\(request\)/,
+        message: 'missing Shared TUI MCP compatibility delegation',
+      },
+      {
+        regex: /\bshared_management_capabilities_follow_the_local_management_service\b/,
+        message: 'missing Shared TUI management capability regression',
+      },
+      {
+        regex: /\bremote_workspace_cannot_use_the_local_management_service\b/,
+        message: 'missing Shared TUI Remote management scope regression',
+      },
+    ],
+  },
+  {
     path: 'src/apps/cli/src/ui/startup.rs',
     reason:
-      'CLI mode-aware subagent management remains an app-layer product surface until agent registry migration has CLI equivalence coverage',
+      'CLI subagent presentation remains app-local while mode-aware reads and mutations cross the typed TUI backend boundary',
     patterns: [
       {
         regex: /\bfn show_available_subagent_list\b/,
@@ -8055,16 +8117,16 @@ export const requiredContentRules = [
         message: 'missing CLI subagent config surface',
       },
       {
-        regex: /\bget_subagents_for_query\b/,
-        message: 'missing CLI mode-scoped subagent query',
+        regex: /\bagent\.list_subagents\b/,
+        message: 'missing typed CLI mode-scoped subagent query',
       },
       {
-        regex: /\bSubagentQueryContext\b/,
-        message: 'missing CLI subagent query context',
+        regex: /\bSubagentSummary\b/,
+        message: 'missing secret-safe CLI subagent read projection',
       },
       {
-        regex: /\bupdate_subagent_override\b/,
-        message: 'missing CLI subagent availability update path',
+        regex: /\bagent\s*\.set_subagent_enabled\b/,
+        message: 'missing typed CLI subagent availability update path',
       },
     ],
   },

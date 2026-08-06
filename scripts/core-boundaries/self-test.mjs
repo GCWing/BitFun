@@ -4009,13 +4009,35 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/interfaces/app-server/src/management/service.rs',
+      contracts: [
+        'pub struct AppManagementService',
+        'impl AppManagementService',
+        'AppManagementCapabilities::available\\(\\)',
+      ],
+    },
+    {
+      path: 'src/apps/cli/src/shared_tui_backend.rs',
+      contracts: [
+        'management: Arc<AppManagementService>',
+        'fn management_service',
+        'fn set_management_scope_from_binding',
+        '\\.list_models\\(ListModelsRequest \\{\\}\\)',
+        '\\.list_skills\\(request\\)',
+        '\\.list_subagents\\(request\\)',
+        '\\.list_mcp_servers\\(request\\)',
+        'shared_management_capabilities_follow_the_local_management_service',
+        'remote_workspace_cannot_use_the_local_management_service',
+      ],
+    },
+    {
       path: 'src/apps/cli/src/ui/startup.rs',
       contracts: [
         'show_available_subagent_list',
         'show_subagent_config_selector',
-        'get_subagents_for_query',
-        'SubagentQueryContext',
-        'update_subagent_override',
+        'agent.list_subagents',
+        'SubagentSummary',
+        'agent\\s*\\.set_subagent_enabled',
       ],
     },
     {

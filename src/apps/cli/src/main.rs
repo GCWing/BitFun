@@ -46,7 +46,7 @@ use clap::{CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, OnceLock};
 
-use agent::tui_client::{TuiAgentClient, TuiHostCapabilities};
+use agent::tui_client::TuiAgentClient;
 use config::CliConfig;
 use hook_import::HookAction;
 use mcp_import::{McpImportCommand, McpImportOutputFormat};
@@ -88,6 +88,48 @@ fn final_change_verification_enabled(
 /// Get the global MCP service instance (if initialized)
 pub fn get_mcp_service() -> Option<&'static std::sync::Arc<bitfun_core::service::mcp::MCPService>> {
     MCP_SERVICE.get()
+}
+
+fn ensure_cli_mcp_service(
+    config_service: Arc<bitfun_core::service::config::ConfigService>,
+) -> Option<Arc<bitfun_core::service::mcp::MCPService>> {
+    if let Some(service) = get_mcp_service() {
+        return Some(service.clone());
+    }
+
+    let service = match bitfun_core::service::mcp::MCPService::new(config_service) {
+        Ok(service) => Arc::new(service),
+        Err(error) => {
+            tracing::warn!("Failed to create MCP service: {}", error);
+            get_mcp_init_status().store(3, Ordering::Relaxed);
+            return None;
+        }
+    };
+
+    if MCP_SERVICE.set(service.clone()).is_err() {
+        return get_mcp_service().cloned();
+    }
+    bitfun_core::service::mcp::set_global_mcp_service(service.clone());
+    get_mcp_init_status().store(1, Ordering::Relaxed);
+
+    // Shared TUI keeps the pre-migration CLI-local MCP compatibility path. It
+    // is intentionally separate from the MCP manager inside Shared Runtime;
+    // this process must not be mistaken for that Runtime's owner.
+    let initializing = service.clone();
+    tokio::spawn(async move {
+        match initializing.server_manager().initialize_all().await {
+            Ok(_) => {
+                tracing::info!("MCP servers initialized successfully");
+                get_mcp_init_status().store(2, Ordering::Relaxed);
+            }
+            Err(error) => {
+                tracing::warn!("Failed to initialize MCP servers: {}", error);
+                get_mcp_init_status().store(3, Ordering::Relaxed);
+            }
+        }
+    });
+
+    Some(service)
 }
 
 #[derive(Parser)]
@@ -836,38 +878,10 @@ async fn initialize_core_services_for_deployment(
         }
     }
 
-    // Initialize MCP service in background (non-blocking)
+    // Initialize MCP service in background (non-blocking).
     if bootstrap_profile.starts_mcp() {
-        if let Some(ref cfg_svc) = config_service {
-            match bitfun_core::service::mcp::MCPService::new(cfg_svc.clone()) {
-                Ok(mcp_service) => {
-                    let mcp_service = std::sync::Arc::new(mcp_service);
-                    MCP_SERVICE.set(mcp_service.clone()).ok();
-                    bitfun_core::service::mcp::set_global_mcp_service(mcp_service.clone());
-
-                    // Mark as in progress
-                    get_mcp_init_status().store(1, Ordering::Relaxed);
-
-                    // Background async initialization
-                    tokio::spawn(async move {
-                        let result = mcp_service.server_manager().initialize_all().await;
-                        match result {
-                            Ok(_) => {
-                                tracing::info!("MCP servers initialized successfully");
-                                get_mcp_init_status().store(2, Ordering::Relaxed);
-                            }
-                            Err(e) => {
-                                tracing::warn!("Failed to initialize MCP servers: {}", e);
-                                get_mcp_init_status().store(3, Ordering::Relaxed);
-                            }
-                        }
-                    });
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to create MCP service: {}", e);
-                    get_mcp_init_status().store(3, Ordering::Relaxed);
-                }
-            }
+        if let Some(config_service) = config_service {
+            ensure_cli_mcp_service(config_service);
         }
     }
 
@@ -933,21 +947,22 @@ async fn run_interactive(
             .as_ref()
             .expect("Embedded App Server should be started with the Runtime")
             .backend();
-        let host: Arc<dyn TuiHostCapabilities> =
-            Arc::new(embedded_app_server::EmbeddedTuiHostCapabilities);
         Arc::new(TuiAgentClient::new(
             backend,
-            host,
             Some(workspace_path.clone()),
             false,
             runtime.approval_policy(),
         ))
     } else {
         let client = shared_runtime::connect_or_start(&workspace_path).await?;
-        let backend: Arc<dyn tui_backend::TuiBackend> =
-            Arc::new(shared_tui_backend::SharedTuiBackend::new(client.clone()));
-        let host: Arc<dyn TuiHostCapabilities> =
-            Arc::new(shared_tui_backend::SharedTuiHostCapabilities::new(client));
+        let config_service = bitfun_core::service::config::get_global_config_service()
+            .await
+            .map_err(|error| anyhow!("Failed to load Shared TUI management config: {error}"))?;
+        ensure_cli_mcp_service(config_service);
+        let management = Arc::new(bitfun_app_server::AppManagementService::load().await?);
+        let backend: Arc<dyn tui_backend::TuiBackend> = Arc::new(
+            shared_tui_backend::SharedTuiBackend::new(client, management),
+        );
         let backend_initialized = backend
             .initialize(bitfun_app_server_protocol::app::InitializeRequest {
                 protocol_version: bitfun_app_server_protocol::PROTOCOL_VERSION,
@@ -963,7 +978,6 @@ async fn run_interactive(
         backend.health().await?;
         Arc::new(TuiAgentClient::new(
             backend,
-            host,
             Some(workspace_path.clone()),
             true,
             runtime::approval::CliApprovalPolicy::Ask,
@@ -1051,9 +1065,7 @@ async fn run_interactive(
     let startup_result = startup_page.run(&mut terminal)?;
 
     if let StartupResult::Exit = startup_result {
-        if !shared {
-            shutdown_mcp_servers().await;
-        }
+        shutdown_mcp_servers().await;
         ui::restore_terminal(terminal)?;
         println!("Goodbye!");
         return Ok(());
@@ -1090,9 +1102,7 @@ async fn run_interactive(
     let chat_result = chat_mode.run(Some(terminal));
 
     // 6. Cleanup, including fatal event-stream exits.
-    if !shared {
-        shutdown_mcp_servers().await;
-    }
+    shutdown_mcp_servers().await;
     let _exit_reason = chat_result?;
     println!("Goodbye!");
 
@@ -1561,11 +1571,8 @@ async fn run_interactive_with_session(
     let workspace_path = runtime.workspace_root().to_path_buf();
     let workspace = Some(workspace_path.to_string_lossy().to_string());
     let embedded_app_server = embedded_app_server::EmbeddedAppServerHost::start(&runtime).await?;
-    let host: Arc<dyn TuiHostCapabilities> =
-        Arc::new(embedded_app_server::EmbeddedTuiHostCapabilities);
     let agent = Arc::new(TuiAgentClient::new(
         embedded_app_server.backend(),
-        host,
         Some(workspace_path),
         false,
         runtime.approval_policy(),

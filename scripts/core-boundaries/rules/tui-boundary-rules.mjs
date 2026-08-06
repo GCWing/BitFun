@@ -40,12 +40,7 @@ export const tuiLegacyBackendBudgets = {
   },
   'src/apps/cli/src/modes/chat/external_hooks.rs': { 'bitfun_core::': 8 },
   'src/apps/cli/src/modes/chat/external_review.rs': { 'bitfun_core::': 5 },
-  'src/apps/cli/src/modes/chat/mcp.rs': {
-    'bitfun_core::': 38,
-    get_mcp_service: 4,
-  },
   'src/apps/cli/src/modes/chat/provider_models.rs': {
-    'bitfun_core::': 4,
     'crate::account_sync::': 2,
   },
   'src/apps/cli/src/modes/chat/run.rs': {
@@ -56,7 +51,7 @@ export const tuiLegacyBackendBudgets = {
   },
   'src/apps/cli/src/modes/chat/session_lineage.rs': { 'bitfun_agent_runtime::': 1 },
   'src/apps/cli/src/modes/chat/selection.rs': {
-    'bitfun_core::': 7,
+    'bitfun_core::': 1,
     'crate::account::': 2,
   },
   'src/apps/cli/src/modes/chat/tests.rs': {
@@ -82,7 +77,7 @@ export const tuiLegacyBackendBudgets = {
   'src/apps/cli/src/ui/permission.rs': { 'bitfun_agent_runtime::': 2 },
   'src/apps/cli/src/ui/session_lineage_selector.rs': { 'bitfun_agent_runtime::': 1 },
   'src/apps/cli/src/ui/startup.rs': {
-    'bitfun_core::': 14,
+    'bitfun_core::': 2,
     CoreAgentRuntimeCompatibility: 3,
     'crate::account::': 13,
     'crate::account_sync::': 8,

@@ -1,0 +1,1196 @@
+//! Concrete App Server management adapter over the existing product owners.
+
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use anyhow::{Context, Result};
+use bitfun_app_server_protocol::agent::{
+    AgentModeSummary, ListAgentModesRequest, ListAgentModesResponse,
+};
+use bitfun_app_server_protocol::mcp::*;
+use bitfun_app_server_protocol::model::*;
+use bitfun_app_server_protocol::skill::*;
+use bitfun_app_server_protocol::subagent::*;
+
+use super::{AppManagementCapabilities, AppManagementError, AppManagementResult};
+
+/// App Server adapter shared by Embedded and local Shared compatibility Hosts.
+///
+/// The service delegates to the existing config, registry, MCP, and external
+/// source owners. Hosts must inject it explicitly; constructing an App Server
+/// does not make local management capabilities available by default.
+pub struct AppManagementService {
+    config: Arc<bitfun_core::service::config::ConfigService>,
+    mcp: Option<Arc<bitfun_core::service::mcp::MCPService>>,
+}
+
+impl AppManagementService {
+    pub async fn load() -> Result<Self> {
+        let config = bitfun_core::service::config::get_global_config_service()
+            .await
+            .context("Failed to load the App Server management configuration owner")?;
+        Ok(Self {
+            config,
+            mcp: bitfun_core::service::mcp::get_global_mcp_service(),
+        })
+    }
+
+    async fn model_config(
+        &self,
+        model_id: &str,
+    ) -> AppManagementResult<bitfun_core::service::config::AIModelConfig> {
+        self.config
+            .get_ai_models()
+            .await
+            .map_err(core_error)
+            .and_then(|models| {
+                models
+                    .into_iter()
+                    .find(|model| model.id == model_id)
+                    .ok_or_else(|| {
+                        AppManagementError::not_found(format!(
+                            "AI model '{model_id}' was not found"
+                        ))
+                    })
+            })
+    }
+}
+
+fn core_error(error: bitfun_core::BitFunError) -> AppManagementError {
+    AppManagementError::internal(sanitize_management_error(error.to_string()))
+}
+
+fn sanitize_management_error(error: impl AsRef<str>) -> String {
+    let value = error.as_ref();
+    if value.to_ascii_lowercase().contains("api key")
+        || value.to_ascii_lowercase().contains("authorization")
+        || value.to_ascii_lowercase().contains("header")
+    {
+        "The management owner rejected the request".to_string()
+    } else {
+        value.to_string()
+    }
+}
+
+fn resolve_selector(
+    ai: &bitfun_core::service::config::AIConfig,
+    selector: &Option<String>,
+) -> Option<String> {
+    selector
+        .as_deref()
+        .and_then(|selector| ai.resolve_model_selection(selector))
+}
+
+fn resolve_model_selector(
+    ai: &bitfun_core::service::config::AIConfig,
+    selector: &str,
+) -> Option<String> {
+    match selector.trim() {
+        "" | "auto" | "default" => ai.resolve_model_selection("primary"),
+        selector => ai.resolve_model_selection(selector),
+    }
+}
+
+fn model_summary(model: &bitfun_core::service::config::AIModelConfig) -> ModelSummary {
+    let mut custom_header_names = model
+        .custom_headers
+        .as_ref()
+        .map(|headers| headers.keys().cloned().collect::<Vec<_>>())
+        .unwrap_or_default();
+    custom_header_names.sort();
+    ModelSummary {
+        id: model.id.clone(),
+        name: model.name.clone(),
+        provider: model.provider.clone(),
+        model_name: model.model_name.clone(),
+        base_url: model.base_url.clone(),
+        enabled: model.enabled,
+        context_window: model.context_window,
+        max_tokens: model.max_tokens,
+        api_key_configured: !model.api_key.is_empty(),
+        custom_header_names,
+        custom_request_body_configured: model.custom_request_body.is_some(),
+        auth_source: Some(match model.auth {
+            bitfun_core::service::config::AuthConfig::ApiKey => "api_key".to_string(),
+            bitfun_core::service::config::AuthConfig::Subscription { provider } => {
+                format!("subscription:{provider:?}").to_ascii_lowercase()
+            }
+        }),
+    }
+}
+
+fn model_edit_projection(
+    model: &bitfun_core::service::config::AIModelConfig,
+) -> ModelEditProjection {
+    ModelEditProjection {
+        summary: model_summary(model),
+        reasoning_preset_options: model
+            .reasoning
+            .as_ref()
+            .map(|reasoning| {
+                reasoning
+                    .presets
+                    .iter()
+                    .map(|preset| preset.id.clone())
+                    .collect()
+            })
+            .unwrap_or_default(),
+        reasoning: model.reasoning.clone(),
+        inline_think_in_text: model.inline_think_in_text,
+        skip_ssl_verify: model.skip_ssl_verify,
+        custom_headers_mode: model
+            .custom_headers_mode
+            .clone()
+            .unwrap_or_else(|| "merge".to_string()),
+    }
+}
+
+fn secret_update_value(
+    update: Option<SecretUpdate>,
+    existing: Option<String>,
+) -> AppManagementResult<String> {
+    Ok(match update.unwrap_or(SecretUpdate::Preserve) {
+        SecretUpdate::Preserve => Ok(existing.unwrap_or_default()),
+        SecretUpdate::Replace(value) => Ok(value),
+        SecretUpdate::Clear => Ok(String::new()),
+    }?)
+}
+
+fn headers_update(
+    update: Option<SecretUpdate>,
+    existing: Option<HashMap<String, String>>,
+) -> AppManagementResult<Option<HashMap<String, String>>> {
+    match update.unwrap_or(SecretUpdate::Preserve) {
+        SecretUpdate::Preserve => Ok(existing),
+        SecretUpdate::Clear => Ok(None),
+        SecretUpdate::Replace(value) => serde_json::from_str(&value)
+            .map(Some)
+            .map_err(|_| AppManagementError::invalid_request("Custom headers must be valid JSON")),
+    }
+}
+
+fn string_update(
+    update: Option<SecretUpdate>,
+    existing: Option<String>,
+) -> AppManagementResult<Option<String>> {
+    match update.unwrap_or(SecretUpdate::Preserve) {
+        SecretUpdate::Preserve => Ok(existing),
+        SecretUpdate::Clear => Ok(None),
+        SecretUpdate::Replace(value) => Ok((!value.is_empty()).then_some(value)),
+    }
+}
+
+fn model_from_mutation(
+    mutation: ModelMutation,
+    existing: Option<bitfun_core::service::config::AIModelConfig>,
+) -> AppManagementResult<bitfun_core::service::config::AIModelConfig> {
+    let current = existing.unwrap_or_default();
+    let api_key = secret_update_value(mutation.api_key, Some(current.api_key))?;
+    let custom_headers = headers_update(mutation.custom_headers, current.custom_headers)?;
+    let custom_request_body =
+        string_update(mutation.custom_request_body, current.custom_request_body)?;
+    Ok(bitfun_core::service::config::AIModelConfig {
+        id: mutation.id,
+        name: mutation.name,
+        provider: mutation.provider,
+        model_name: mutation.model_name,
+        base_url: mutation.base_url,
+        request_url: current.request_url,
+        api_key,
+        context_window: mutation.context_window,
+        max_tokens: mutation.max_tokens,
+        temperature: current.temperature,
+        top_p: current.top_p,
+        enabled: mutation.enabled,
+        category: current.category,
+        capabilities: current.capabilities,
+        recommended_for: current.recommended_for,
+        metadata: current.metadata,
+        reasoning: mutation.reasoning,
+        inline_think_in_text: mutation.inline_think_in_text,
+        custom_headers,
+        custom_headers_mode: mutation.custom_headers_mode.or(current.custom_headers_mode),
+        skip_ssl_verify: mutation.skip_ssl_verify,
+        custom_request_body,
+        custom_request_body_mode: current.custom_request_body_mode,
+        auth: current.auth,
+    })
+}
+
+fn validate_model_update_identity(
+    model_id: &str,
+    mutation: &ModelMutation,
+) -> AppManagementResult<()> {
+    if mutation.id != model_id {
+        return Err(AppManagementError::invalid_request(
+            "Model update identity does not match the request target",
+        ));
+    }
+    Ok(())
+}
+
+fn selector_is_unset(selector: &Option<String>) -> bool {
+    selector
+        .as_deref()
+        .is_none_or(|selector| selector.trim().is_empty())
+}
+
+fn skill_from_info(
+    info: bitfun_core::agentic::tools::implementations::skills::SkillInfo,
+) -> SkillSummary {
+    SkillSummary {
+        key: info.key,
+        name: info.name,
+        description: info.description,
+        level: info.level.as_str().to_string(),
+        source_slot: Some(info.source_slot),
+        source_label: Some(info.source_label),
+        enabled: true,
+        selected_for_runtime: true,
+        default_enabled: true,
+        is_shadowed: info.is_shadowed,
+        shadowed_by_key: info.shadowed_by_key,
+        argument_hint: info.argument_hint,
+    }
+}
+
+fn skill_from_mode_info(
+    info: bitfun_core::agentic::tools::implementations::skills::ModeSkillInfo,
+) -> SkillSummary {
+    let skill = info.skill;
+    SkillSummary {
+        key: skill.key,
+        name: skill.name,
+        description: skill.description,
+        level: skill.level.as_str().to_string(),
+        source_slot: Some(skill.source_slot),
+        source_label: Some(skill.source_label),
+        enabled: info.effective_enabled,
+        selected_for_runtime: info.selected_for_runtime,
+        default_enabled: info.default_enabled,
+        is_shadowed: skill.is_shadowed,
+        shadowed_by_key: skill.shadowed_by_key,
+        argument_hint: skill.argument_hint,
+    }
+}
+
+fn subagent_from_info(info: bitfun_core::agentic::agents::AgentInfo) -> SubagentSummary {
+    let is_external =
+        info.subagent_source == Some(bitfun_core::agentic::agents::SubAgentSource::External);
+    SubagentSummary {
+        key: info.key,
+        id: info.id,
+        name: info.name,
+        description: info.description,
+        source: format!(
+            "{:?}",
+            info.subagent_source
+                .unwrap_or(bitfun_core::agentic::agents::SubAgentSource::Builtin)
+        )
+        .to_ascii_lowercase(),
+        enabled: info.effective_enabled,
+        is_external,
+        supports_follow_up: info.supports_follow_up,
+    }
+}
+
+fn native_mcp_detail(config: &bitfun_core::service::mcp::MCPServerConfig) -> String {
+    let server_type = format!("{:?}", config.server_type).to_ascii_lowercase();
+    let transport = config.resolved_transport().as_str();
+    if config.server_type == bitfun_core::service::mcp::MCPServerType::Local {
+        format!("type: {server_type}; transport: {transport}; command: {}; arguments: {}; environment variables set: {}",
+            config.command.as_deref().unwrap_or("unknown"),
+            config.args.len(),
+            if config.env.is_empty() { "none" } else { "configured" })
+    } else {
+        let origin = config
+            .url
+            .as_deref()
+            .and_then(|value| url::Url::parse(value).ok())
+            .and_then(|url| {
+                let host = url.host_str()?;
+                Some(match url.port() {
+                    Some(port) => format!("{}://{}:{}", url.scheme(), host, port),
+                    None => format!("{}://{}", url.scheme(), host),
+                })
+            })
+            .unwrap_or_else(|| "unknown".to_string());
+        format!(
+            "type: {server_type}; transport: {transport}; remote origin: {}; HTTP headers: {}",
+            origin,
+            if config.headers.is_empty() {
+                "none"
+            } else {
+                "configured"
+            }
+        )
+    }
+}
+
+fn external_mcp_action(
+    entry: &bitfun_product_domains::external_sources::ExternalMcpCatalogEntry,
+    snapshot: &bitfun_product_domains::external_sources::ExternalSourceCatalogSnapshot,
+) -> McpServerAction {
+    use bitfun_product_domains::external_sources::ExternalMcpActivationState as State;
+    match &entry.activation_state {
+        State::ApprovalRequired | State::Declined | State::ConfigurationChanged => {
+            McpServerAction::ExternalDecision {
+                candidate_id: entry.candidate_id.clone(),
+                decision_key: entry.decision_key.clone(),
+                approved: true,
+                expected_mcp_generation: snapshot.mcp_generation,
+                expected_preference_revision: snapshot.preference_revision,
+            }
+        }
+        State::Starting | State::Active | State::RuntimeUnavailable { .. } => {
+            McpServerAction::ExternalDecision {
+                candidate_id: entry.candidate_id.clone(),
+                decision_key: entry.decision_key.clone(),
+                approved: false,
+                expected_mcp_generation: snapshot.mcp_generation,
+                expected_preference_revision: snapshot.preference_revision,
+            }
+        }
+        State::Conflict | State::Covered { .. } => snapshot
+            .mcp_conflicts
+            .iter()
+            .find(|conflict| {
+                conflict
+                    .candidates
+                    .iter()
+                    .any(|candidate| candidate.candidate_id == entry.candidate_id)
+            })
+            .map(|conflict| McpServerAction::ConflictChoice {
+                conflict_key: conflict.conflict_key.clone(),
+                candidate_id: entry.candidate_id.clone(),
+                approve_external: true,
+                expected_mcp_generation: snapshot.mcp_generation,
+                expected_preference_revision: snapshot.preference_revision,
+            })
+            .unwrap_or_else(|| McpServerAction::ReadOnly {
+                reason: "Refresh to review the current conflict".to_string(),
+            }),
+        State::Unsupported { reason } => McpServerAction::ReadOnly {
+            reason: format!("Not supported: {reason}"),
+        },
+        State::SourceDisabled => McpServerAction::ReadOnly {
+            reason: "Enable this server in the source application".to_string(),
+        },
+        State::Removed => McpServerAction::ReadOnly {
+            reason: "Removed".to_string(),
+        },
+        _ => McpServerAction::ReadOnly {
+            reason: "This external MCP state is read-only".to_string(),
+        },
+    }
+}
+
+async fn external_mcp_status(
+    entry: &bitfun_product_domains::external_sources::ExternalMcpCatalogEntry,
+    manager: &bitfun_core::service::mcp::MCPServerManager,
+) -> String {
+    use bitfun_product_domains::external_sources::ExternalMcpActivationState as State;
+    match &entry.activation_state {
+        State::Active => match entry.runtime_id.as_deref() {
+            Some(id) => match tokio::time::timeout(
+                std::time::Duration::from_millis(30),
+                manager.get_server_status(id),
+            )
+            .await
+            {
+                Ok(Ok(value)) => format!("{value:?}"),
+                Ok(Err(_)) => "Unavailable".to_string(),
+                Err(_) => "Starting".to_string(),
+            },
+            None => "Enabled".to_string(),
+        },
+        State::ApprovalRequired => "Confirmation required".to_string(),
+        State::Starting => "Starting".to_string(),
+        State::Declined => "Kept disabled".to_string(),
+        State::Conflict => "Choice required".to_string(),
+        State::Covered { .. } => "Not selected".to_string(),
+        State::SourceDisabled => "Source disabled".to_string(),
+        State::ConfigurationChanged => "Changed; confirm again".to_string(),
+        State::Unsupported { .. } => "Not supported".to_string(),
+        State::RuntimeUnavailable { reason } => format!("Unavailable - {reason}"),
+        State::Removed => "Removed".to_string(),
+        _ => "Unavailable".to_string(),
+    }
+}
+
+fn external_mcp_detail(
+    entry: &bitfun_product_domains::external_sources::ExternalMcpCatalogEntry,
+) -> String {
+    let definition = &entry.definition;
+    match definition.transport {
+        bitfun_product_domains::external_sources::ExternalMcpTransportKind::LocalStdio => format!(
+            "source MCP configuration; local command: {}; arguments: {}; environment variables set: {}",
+            definition.command_preview.as_deref().unwrap_or("unknown"),
+            definition.argument_count,
+            if definition.environment_keys.is_empty() { "none" } else { "configured" },
+        ),
+        bitfun_product_domains::external_sources::ExternalMcpTransportKind::StreamableHttp => format!(
+            "source MCP configuration; remote origin: {}; HTTP headers: {}",
+            definition.remote_url_preview.as_deref().unwrap_or("unknown"),
+            if definition.header_names.is_empty() { "none" } else { "configured" },
+        ),
+        _ => "unsupported external MCP transport".to_string(),
+    }
+}
+
+fn mcp_config_from_mutation(
+    name: &str,
+    mutation: McpServerMutation,
+) -> AppManagementResult<bitfun_core::service::mcp::MCPServerConfig> {
+    let (server_type, transport) = match mutation.transport {
+        McpTransport::Stdio => (
+            bitfun_core::service::mcp::MCPServerType::Local,
+            bitfun_core::service::mcp::MCPServerTransport::Stdio,
+        ),
+        McpTransport::Sse => (
+            bitfun_core::service::mcp::MCPServerType::Remote,
+            bitfun_core::service::mcp::MCPServerTransport::Sse,
+        ),
+        McpTransport::StreamableHttp => (
+            bitfun_core::service::mcp::MCPServerType::Remote,
+            bitfun_core::service::mcp::MCPServerTransport::StreamableHttp,
+        ),
+    };
+    let oauth = mutation
+        .oauth
+        .map(serde_json::from_value)
+        .transpose()
+        .map_err(|_| {
+            AppManagementError::invalid_request(
+                "MCP OAuth configuration does not match the supported schema",
+            )
+        })?;
+    let xaa = mutation
+        .xaa
+        .map(serde_json::from_value)
+        .transpose()
+        .map_err(|_| {
+            AppManagementError::invalid_request(
+                "MCP XAA configuration does not match the supported schema",
+            )
+        })?;
+    Ok(bitfun_core::service::mcp::MCPServerConfig {
+        id: name.to_string(),
+        name: name.to_string(),
+        server_type,
+        transport: Some(transport),
+        command: mutation.command,
+        args: mutation.args,
+        env: mutation.env,
+        working_directory: None,
+        inherit_parent_environment: None,
+        headers: mutation.headers,
+        url: mutation.url,
+        auto_start: mutation.auto_start,
+        enabled: mutation.enabled,
+        location: bitfun_core::service::mcp::ConfigLocation::User,
+        capabilities: Vec::new(),
+        settings: HashMap::new(),
+        oauth,
+        oauth_enabled: None,
+        xaa,
+        timeouts: Default::default(),
+    })
+}
+
+fn schedule_mcp_stop(manager: Arc<bitfun_core::service::mcp::MCPServerManager>, server_id: String) {
+    tokio::spawn(async move {
+        for attempt in 1..=20 {
+            let result = tokio::time::timeout(
+                std::time::Duration::from_millis(250),
+                manager.stop_server(&server_id),
+            )
+            .await;
+            match result {
+                Ok(Ok(())) | Ok(Err(bitfun_core::util::errors::BitFunError::NotFound(_))) => return,
+                Ok(Err(error)) => tracing::debug!(
+                    "Best-effort MCP stop failed: id={} attempt={} error={}",
+                    server_id,
+                    attempt,
+                    error
+                ),
+                Err(_) => tracing::debug!(
+                    "Best-effort MCP stop timed out: id={} attempt={}",
+                    server_id,
+                    attempt
+                ),
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        }
+        tracing::warn!("Best-effort MCP stop exhausted retries: id={}", server_id);
+    });
+}
+
+impl AppManagementService {
+    pub fn capabilities(&self) -> AppManagementCapabilities {
+        let mut capabilities = AppManagementCapabilities::available();
+        if self.mcp.is_none() {
+            capabilities.mcp =
+                bitfun_app_server_protocol::app::CapabilityAvailability::Unavailable {
+                    reason: "The App Server Host MCP owner is unavailable".to_string(),
+                };
+        }
+        capabilities
+    }
+
+    pub async fn list_agent_modes(
+        &self,
+        request: ListAgentModesRequest,
+    ) -> AppManagementResult<ListAgentModesResponse> {
+        let workspace = request.workspace_path.map(PathBuf::from);
+        if request.include_external {
+            if let Err(error) =
+                bitfun_core::external_sources::ensure_external_source_workspace_snapshot(
+                    workspace.as_deref(),
+                )
+                .await
+            {
+                tracing::warn!("Failed to initialize external agent sources: {error}");
+            }
+        }
+        let modes = bitfun_core::agentic::agents::get_agent_registry()
+            .get_modes_info_for_workspace(workspace.as_deref(), request.include_external)
+            .await
+            .into_iter()
+            .map(|mode| AgentModeSummary {
+                id: mode.id,
+                description: mode.description,
+                model_id: mode.model,
+                is_external: mode.source == bitfun_core::agentic::agents::AgentSource::External,
+            })
+            .collect();
+        Ok(ListAgentModesResponse { modes })
+    }
+
+    pub async fn list_models(
+        &self,
+        _request: ListModelsRequest,
+    ) -> AppManagementResult<ListModelsResponse> {
+        let models = self.config.get_ai_models().await.map_err(core_error)?;
+        let config: bitfun_core::service::config::GlobalConfig =
+            self.config.get_config(None).await.map_err(core_error)?;
+        Ok(ListModelsResponse {
+            models: models.iter().map(model_summary).collect(),
+            primary_model_id: resolve_selector(&config.ai, &config.ai.default_models.primary),
+            fast_model_id: resolve_selector(&config.ai, &config.ai.default_models.fast),
+            mode_default_model_id: resolve_model_selector(
+                &config.ai,
+                &config.ai.agent_model_defaults.mode,
+            ),
+        })
+    }
+
+    pub async fn get_model(
+        &self,
+        request: GetModelRequest,
+    ) -> AppManagementResult<GetModelResponse> {
+        Ok(GetModelResponse {
+            model: model_edit_projection(&self.model_config(&request.model_id).await?),
+        })
+    }
+
+    pub async fn tui_model_catalog(
+        &self,
+        _request: TuiModelCatalogRequest,
+    ) -> AppManagementResult<TuiModelCatalogResponse> {
+        let catalog = bitfun_core::get_ai_model_catalog()
+            .await
+            .map_err(AppManagementError::internal)?;
+        let reasoning_presets_by_model = catalog
+            .models
+            .into_iter()
+            .filter_map(|model| {
+                model.reasoning.map(|reasoning| {
+                    (
+                        model.id,
+                        reasoning
+                            .presets
+                            .into_iter()
+                            .map(|preset| preset.id)
+                            .collect(),
+                    )
+                })
+            })
+            .collect();
+        Ok(TuiModelCatalogResponse {
+            provider_catalog: catalog.provider_catalog,
+            reasoning_presets_by_model,
+        })
+    }
+
+    pub async fn add_model(
+        &self,
+        request: AddModelRequest,
+    ) -> AppManagementResult<AddModelResponse> {
+        let model = model_from_mutation(request.model, None)?;
+        let model_id = model.id.clone();
+        self.config.add_ai_model(model).await.map_err(core_error)?;
+        if request.make_primary_if_empty {
+            let config: bitfun_core::service::config::GlobalConfig =
+                self.config.get_config(None).await.map_err(core_error)?;
+            if selector_is_unset(&config.ai.default_models.primary) {
+                self.config
+                    .set_config("ai.default_models.primary", &Some(model_id))
+                    .await
+                    .map_err(core_error)?;
+            }
+        }
+        Ok(AddModelResponse {})
+    }
+
+    pub async fn update_model(
+        &self,
+        request: UpdateModelRequest,
+    ) -> AppManagementResult<UpdateModelResponse> {
+        validate_model_update_identity(&request.model_id, &request.model)?;
+        let existing = self.model_config(&request.model_id).await?;
+        let model = model_from_mutation(request.model, Some(existing))?;
+        self.config
+            .update_ai_model(&request.model_id, model)
+            .await
+            .map_err(core_error)?;
+        Ok(UpdateModelResponse {})
+    }
+
+    pub async fn delete_model(
+        &self,
+        request: DeleteModelRequest,
+    ) -> AppManagementResult<DeleteModelResponse> {
+        self.config
+            .delete_ai_model(&request.model_id)
+            .await
+            .map_err(core_error)?;
+        Ok(DeleteModelResponse {})
+    }
+
+    pub async fn set_model_default(
+        &self,
+        request: SetModelDefaultRequest,
+    ) -> AppManagementResult<SetModelDefaultResponse> {
+        match request.slot {
+            ModelDefaultSlot::Primary => self
+                .config
+                .set_config("ai.default_models.primary", &request.model_id)
+                .await
+                .map_err(core_error)?,
+            ModelDefaultSlot::Mode => self
+                .config
+                .set_config(
+                    "ai.agent_model_defaults.mode",
+                    request.model_id.as_deref().unwrap_or("auto"),
+                )
+                .await
+                .map_err(core_error)?,
+        }
+        Ok(SetModelDefaultResponse {})
+    }
+
+    pub async fn list_skills(
+        &self,
+        request: ListSkillsRequest,
+    ) -> AppManagementResult<ListSkillsResponse> {
+        let workspace = PathBuf::from(&request.workspace_path);
+        let registry = bitfun_core::agentic::tools::implementations::skills::get_skill_registry();
+        let skills = if request.manageable {
+            registry
+                .get_mode_skill_infos_for_workspace(Some(&workspace), &request.mode_id)
+                .await
+                .into_iter()
+                .map(skill_from_mode_info)
+                .collect()
+        } else {
+            registry
+                .get_user_invocable_skills_for_workspace(Some(&workspace), Some(&request.mode_id))
+                .await
+                .into_iter()
+                .map(skill_from_info)
+                .collect()
+        };
+        Ok(ListSkillsResponse { skills })
+    }
+
+    pub async fn set_skill_enabled(
+        &self,
+        request: SetSkillEnabledRequest,
+    ) -> AppManagementResult<SetSkillEnabledResponse> {
+        let workspace = PathBuf::from(&request.workspace_path);
+        match request.level.as_str() {
+            "user" => {
+                let _ = bitfun_core::agentic::tools::implementations::skills::mode_overrides::set_user_mode_skill_state(
+                    &request.mode_id,
+                    &request.skill_key,
+                    request.enabled,
+                    request.default_enabled,
+                )
+                .await
+                .map_err(core_error)?;
+            }
+            "project" => {
+                let mut document = bitfun_core::agentic::tools::implementations::skills::mode_overrides::load_project_mode_skills_document_local(&workspace)
+                    .await
+                    .map_err(core_error)?;
+                bitfun_core::agentic::tools::implementations::skills::mode_overrides::set_mode_skill_disabled_in_document(
+                    &mut document,
+                    &request.mode_id,
+                    &request.skill_key,
+                    !request.enabled,
+                )
+                .map_err(core_error)?;
+                bitfun_core::agentic::tools::implementations::skills::mode_overrides::save_project_mode_skills_document_local(
+                    &workspace,
+                    &document,
+                )
+                .await
+                .map_err(core_error)?;
+            }
+            level => {
+                return Err(AppManagementError::invalid_request(format!(
+                    "Unsupported skill level '{level}'"
+                )))
+            }
+        }
+        Ok(SetSkillEnabledResponse {})
+    }
+
+    pub async fn list_subagents(
+        &self,
+        request: ListSubagentsRequest,
+    ) -> AppManagementResult<ListSubagentsResponse> {
+        let workspace = PathBuf::from(&request.workspace_path);
+        let scope = if request.management {
+            bitfun_core::agentic::agents::SubagentListScope::RegistryManagement
+        } else {
+            bitfun_core::agentic::agents::SubagentListScope::TaskVisible
+        };
+        let values = bitfun_core::agentic::agents::get_agent_registry()
+            .get_subagents_for_query(&bitfun_core::agentic::agents::SubagentQueryContext {
+                parent_agent_type: Some(&request.parent_mode_id),
+                workspace_root: Some(&workspace),
+                list_scope: scope,
+                include_disabled: request.management,
+                external_sources_supported: true,
+            })
+            .await;
+        let has_external = values.iter().any(|info| {
+            info.subagent_source == Some(bitfun_core::agentic::agents::SubAgentSource::External)
+        });
+        Ok(ListSubagentsResponse {
+            subagents: values
+                .into_iter()
+                .filter(|info| {
+                    !request.management
+                        || info.subagent_source
+                            != Some(bitfun_core::agentic::agents::SubAgentSource::External)
+                })
+                .map(subagent_from_info)
+                .collect(),
+            has_external,
+        })
+    }
+
+    pub async fn set_subagent_enabled(
+        &self,
+        request: SetSubagentEnabledRequest,
+    ) -> AppManagementResult<SetSubagentEnabledResponse> {
+        let workspace = PathBuf::from(&request.workspace_path);
+        bitfun_core::agentic::agents::get_agent_registry()
+            .update_subagent_override(
+                &request.parent_mode_id,
+                &request.subagent_id,
+                request.enabled,
+                Some(&workspace),
+            )
+            .await
+            .map_err(core_error)?;
+        Ok(SetSubagentEnabledResponse {})
+    }
+
+    pub async fn list_mcp_servers(
+        &self,
+        request: ListMcpServersRequest,
+    ) -> AppManagementResult<ListMcpServersResponse> {
+        let mcp = self.mcp.as_ref().ok_or_else(|| {
+            AppManagementError::unsupported("The App Server Host MCP owner is unavailable")
+        })?;
+        let workspace = PathBuf::from(request.workspace_path);
+        let external =
+            bitfun_core::external_sources::external_source_snapshot(Some(&workspace), false)
+                .await
+                .map_err(|error| AppManagementError::internal(sanitize_management_error(error)))?;
+        let tool_registry = bitfun_core::agentic::tools::registry::get_global_tool_registry();
+        let tools = tool_registry.read().await.get_all_tools();
+        let configs = mcp
+            .config_service()
+            .load_all_configs()
+            .await
+            .map_err(core_error)?;
+        let manager = mcp.server_manager();
+        let mut servers = Vec::new();
+        for config in configs {
+            let status = if !config.enabled {
+                "Stopped".to_string()
+            } else {
+                match tokio::time::timeout(
+                    std::time::Duration::from_millis(30),
+                    manager.get_server_status(&config.id),
+                )
+                .await
+                {
+                    Ok(Ok(value)) => format!("{value:?}"),
+                    _ => "Starting".to_string(),
+                }
+            };
+            let prefix = format!("mcp_{}_", config.id);
+            let tool_count = tools
+                .iter()
+                .filter(|tool| tool.name().starts_with(&prefix))
+                .count();
+            let native_id = bitfun_core::external_sources::native_mcp_candidate_id(&config.id);
+            let conflict = external.mcp_conflicts.iter().find(|conflict| {
+                conflict
+                    .candidates
+                    .iter()
+                    .any(|candidate| candidate.candidate_id == native_id)
+            });
+            let action = match conflict {
+                Some(conflict)
+                    if conflict
+                        .candidates
+                        .iter()
+                        .find(|candidate| candidate.candidate_id == native_id)
+                        .is_some_and(|candidate| !candidate.available) =>
+                {
+                    let reason = conflict
+                        .candidates
+                        .iter()
+                        .find(|candidate| candidate.candidate_id == native_id)
+                        .and_then(|candidate| candidate.unavailable_reason.clone())
+                        .unwrap_or_else(|| {
+                            "Enable this BitFun server in its MCP configuration".to_string()
+                        });
+                    McpServerAction::ReadOnly { reason }
+                }
+                Some(conflict) if conflict.selected_candidate_id.as_deref() != Some(&native_id) => {
+                    McpServerAction::ConflictChoice {
+                        conflict_key: conflict.conflict_key.clone(),
+                        candidate_id: native_id,
+                        approve_external: false,
+                        expected_mcp_generation: external.mcp_generation,
+                        expected_preference_revision: external.preference_revision,
+                    }
+                }
+                _ => McpServerAction::NativeToggle,
+            };
+            servers.push(McpServerSummary {
+                id: config.id.clone(),
+                name: config.name.clone(),
+                server_type: format!("{:?}", config.server_type).to_lowercase(),
+                status,
+                tool_count,
+                source_label: "BitFun".to_string(),
+                external: false,
+                detail: native_mcp_detail(&config),
+                action,
+            });
+        }
+        for entry in &external.mcp_servers {
+            let source_label = external
+                .sources
+                .iter()
+                .find(|source| source.record.key == entry.definition.id.source)
+                .map(|source| source.record.display_name.clone())
+                .unwrap_or_else(|| "External AI app".to_string());
+            let action = external_mcp_action(&entry, &external);
+            let status = external_mcp_status(&entry, manager.as_ref()).await;
+            let tool_count = entry.runtime_id.as_deref().map_or(0, |runtime_id| {
+                let prefix = format!("mcp_{runtime_id}_");
+                tools
+                    .iter()
+                    .filter(|tool| tool.name().starts_with(&prefix))
+                    .count()
+            });
+            servers.push(McpServerSummary {
+                id: entry.candidate_id.clone(),
+                name: entry.definition.name.clone(),
+                server_type: "external".to_string(),
+                status,
+                tool_count,
+                source_label,
+                external: true,
+                detail: external_mcp_detail(&entry),
+                action,
+            });
+        }
+        if servers.is_empty() && external.discovery_pending {
+            servers.push(McpServerSummary {
+                id: "external-mcp-discovery-pending".to_string(),
+                name: "External MCP servers".to_string(),
+                server_type: "external".to_string(),
+                status: "Checking".to_string(),
+                tool_count: 0,
+                source_label: "External AI applications".to_string(),
+                external: true,
+                detail: "BitFun is still checking compatible MCP settings".to_string(),
+                action: McpServerAction::ReadOnly {
+                    reason: "Still checking; this list updates automatically".to_string(),
+                },
+            });
+        }
+        let config_path = bitfun_core::infrastructure::try_get_path_manager_arc()
+            .ok()
+            .map(|manager| manager.app_config_file().display().to_string());
+        Ok(ListMcpServersResponse {
+            servers,
+            config_path,
+        })
+    }
+
+    pub async fn toggle_mcp_server(
+        &self,
+        request: ToggleMcpServerRequest,
+    ) -> AppManagementResult<ToggleMcpServerResponse> {
+        let mcp = self.mcp.as_ref().ok_or_else(|| {
+            AppManagementError::unsupported("The App Server Host MCP owner is unavailable")
+        })?;
+        let manager = mcp.server_manager();
+        match manager.get_server_status(&request.server_id).await {
+            Ok(bitfun_core::service::mcp::MCPServerStatus::Connected)
+            | Ok(bitfun_core::service::mcp::MCPServerStatus::Healthy) => {
+                manager.stop_server(&request.server_id).await
+            }
+            _ => manager.start_server(&request.server_id).await,
+        }
+        .map_err(core_error)?;
+        Ok(ToggleMcpServerResponse {})
+    }
+
+    pub async fn add_mcp_server(
+        &self,
+        request: AddMcpServerRequest,
+    ) -> AppManagementResult<AddMcpServerResponse> {
+        let mcp = self.mcp.as_ref().ok_or_else(|| {
+            AppManagementError::unsupported("The App Server Host MCP owner is unavailable")
+        })?;
+        let config = mcp_config_from_mutation(&request.name, request.config)?;
+        mcp.server_manager()
+            .add_server(config)
+            .await
+            .map_err(core_error)?;
+        Ok(AddMcpServerResponse {})
+    }
+
+    pub async fn delete_mcp_server(
+        &self,
+        request: DeleteMcpServerRequest,
+    ) -> AppManagementResult<DeleteMcpServerResponse> {
+        let mcp = self.mcp.as_ref().ok_or_else(|| {
+            AppManagementError::unsupported("The App Server Host MCP owner is unavailable")
+        })?;
+        mcp.config_service()
+            .delete_server_config(&request.server_id)
+            .await
+            .map_err(core_error)?;
+        schedule_mcp_stop(mcp.server_manager(), request.server_id);
+        Ok(DeleteMcpServerResponse {})
+    }
+
+    pub async fn external_mcp_decision(
+        &self,
+        request: ExternalMcpDecisionRequest,
+    ) -> AppManagementResult<ExternalMcpDecisionResponse> {
+        bitfun_core::external_sources::set_external_mcp_server_decision(
+            Some(Path::new(&request.workspace_path)),
+            &request.candidate_id,
+            &request.decision_key,
+            request.approved,
+            request.expected_mcp_generation,
+            request.expected_preference_revision,
+        )
+        .await
+        .map_err(|error| AppManagementError::internal(sanitize_management_error(error)))?;
+        Ok(ExternalMcpDecisionResponse {})
+    }
+
+    pub async fn mcp_conflict_choice(
+        &self,
+        request: McpConflictChoiceRequest,
+    ) -> AppManagementResult<McpConflictChoiceResponse> {
+        bitfun_core::external_sources::choose_external_mcp_conflict(
+            Some(Path::new(&request.workspace_path)),
+            &request.conflict_key,
+            &request.candidate_id,
+            request.approve_external,
+            request.expected_mcp_generation,
+            request.expected_preference_revision,
+        )
+        .await
+        .map_err(|error| AppManagementError::internal(sanitize_management_error(error)))?;
+        Ok(McpConflictChoiceResponse {})
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::management::AppManagementErrorKind;
+
+    fn mutation() -> ModelMutation {
+        ModelMutation {
+            id: "model-1".to_string(),
+            name: "Model".to_string(),
+            provider: "openai".to_string(),
+            model_name: "gpt-test".to_string(),
+            base_url: "https://example.com/v1".to_string(),
+            api_key: Some(SecretUpdate::Preserve),
+            custom_headers: Some(SecretUpdate::Preserve),
+            custom_request_body: Some(SecretUpdate::Preserve),
+            context_window: Some(128_000),
+            max_tokens: Some(8_192),
+            enabled: true,
+            reasoning: None,
+            inline_think_in_text: true,
+            skip_ssl_verify: false,
+            custom_headers_mode: Some("merge".to_string()),
+        }
+    }
+
+    #[test]
+    fn model_mutation_preserves_and_replaces_write_only_values() {
+        let existing = bitfun_core::service::config::AIModelConfig {
+            api_key: "existing-key".to_string(),
+            custom_headers: Some(HashMap::from([(
+                "Authorization".to_string(),
+                "existing-header".to_string(),
+            )])),
+            custom_request_body: Some("existing-body".to_string()),
+            ..Default::default()
+        };
+
+        let preserved = model_from_mutation(mutation(), Some(existing.clone()))
+            .expect("preserve existing model secrets");
+        assert_eq!(preserved.api_key, "existing-key");
+        assert_eq!(preserved.custom_headers, existing.custom_headers);
+        assert_eq!(
+            preserved.custom_request_body.as_deref(),
+            Some("existing-body")
+        );
+
+        let mut replacement = mutation();
+        replacement.api_key = Some(SecretUpdate::Replace("new-key".to_string()));
+        replacement.custom_headers = Some(SecretUpdate::Clear);
+        replacement.custom_request_body = Some(SecretUpdate::Replace("new-body".to_string()));
+        let replaced =
+            model_from_mutation(replacement, Some(existing)).expect("replace model secrets");
+        assert_eq!(replaced.api_key, "new-key");
+        assert!(replaced.custom_headers.is_none());
+        assert_eq!(replaced.custom_request_body.as_deref(), Some("new-body"));
+    }
+
+    #[test]
+    fn model_update_rejects_a_mismatched_payload_identity() {
+        let error = validate_model_update_identity(
+            "model-1",
+            &ModelMutation {
+                id: "model-2".to_string(),
+                ..mutation()
+            },
+        )
+        .expect_err("mismatched model identity should be rejected");
+
+        assert_eq!(error.kind, AppManagementErrorKind::InvalidRequest);
+        assert!(!error.message.contains("model-1"));
+        assert!(!error.message.contains("model-2"));
+    }
+
+    #[test]
+    fn blank_primary_selector_is_treated_as_unset() {
+        assert!(selector_is_unset(&None));
+        assert!(selector_is_unset(&Some("  ".to_string())));
+        assert!(!selector_is_unset(&Some("primary-model".to_string())));
+    }
+
+    #[test]
+    fn model_summary_exposes_only_sorted_header_names() {
+        let model = bitfun_core::service::config::AIModelConfig {
+            api_key: "secret-key".to_string(),
+            custom_headers: Some(HashMap::from([
+                ("Z-Header".to_string(), "secret-z".to_string()),
+                ("A-Header".to_string(), "secret-a".to_string()),
+            ])),
+            ..Default::default()
+        };
+
+        let summary = model_summary(&model);
+        assert!(summary.api_key_configured);
+        assert_eq!(summary.custom_header_names, ["A-Header", "Z-Header"]);
+        let debug = format!("{summary:?}");
+        assert!(!debug.contains("secret-key"));
+        assert!(!debug.contains("secret-z"));
+        assert!(!debug.contains("secret-a"));
+    }
+
+    #[test]
+    fn mcp_mutation_rejects_invalid_auth_shapes_without_echoing_values() {
+        let error = mcp_config_from_mutation(
+            "server",
+            McpServerMutation {
+                transport: McpTransport::StreamableHttp,
+                command: None,
+                args: Vec::new(),
+                env: HashMap::new(),
+                headers: HashMap::new(),
+                url: Some("https://example.com".to_string()),
+                auto_start: true,
+                enabled: true,
+                oauth: Some(serde_json::Value::String("secret-oauth".to_string())),
+                xaa: None,
+            },
+        )
+        .expect_err("invalid OAuth shape should be rejected");
+
+        assert_eq!(error.kind, AppManagementErrorKind::InvalidRequest);
+        assert!(!error.message.contains("secret-oauth"));
+    }
+
+    #[test]
+    fn native_mcp_detail_omits_remote_credentials_path_and_query() {
+        let config = bitfun_core::service::mcp::MCPServerConfig {
+            id: "remote".to_string(),
+            name: "Remote".to_string(),
+            server_type: bitfun_core::service::mcp::MCPServerType::Remote,
+            transport: Some(bitfun_core::service::mcp::MCPServerTransport::StreamableHttp),
+            command: None,
+            args: Vec::new(),
+            env: HashMap::new(),
+            working_directory: None,
+            inherit_parent_environment: None,
+            headers: HashMap::new(),
+            url: Some(
+                "https://user:password@example.com:8443/private?token=secret#fragment".to_string(),
+            ),
+            auto_start: true,
+            enabled: true,
+            location: bitfun_core::service::mcp::ConfigLocation::User,
+            capabilities: Vec::new(),
+            settings: HashMap::new(),
+            oauth: None,
+            oauth_enabled: None,
+            xaa: None,
+            timeouts: Default::default(),
+        };
+
+        let detail = native_mcp_detail(&config);
+        assert!(detail.contains("https://example.com:8443"));
+        for secret in [
+            "user", "password", "/private", "token", "secret", "fragment",
+        ] {
+            assert!(!detail.contains(secret), "detail leaked {secret}");
+        }
+    }
+}

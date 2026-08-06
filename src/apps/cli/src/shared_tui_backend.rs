@@ -1,9 +1,9 @@
 //! CLI Host compatibility adapter from the private Shared Runtime IPC to TUI v2.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use crate::tui_backend::{TuiBackend, TuiBackendError};
+use crate::tui_backend::{TuiBackend, TuiBackendError, TuiBackendErrorKind};
 use async_trait::async_trait;
 use bitfun_agent_runtime_ipc::{
     RuntimeIpcClient, RuntimeIpcClientError, RuntimeIpcClientEvent, RuntimeIpcErrorCode,
@@ -12,7 +12,12 @@ use bitfun_agent_runtime_ipc::{
     RuntimeSessionRenameRequest, RuntimeSessionRestoreRequest, RuntimeSessionState,
     RuntimeUserAnswersRequest,
 };
+use bitfun_app_server::management::MODES_CAPABILITY;
+use bitfun_app_server::{
+    AppManagementCapabilities, AppManagementError, AppManagementErrorKind, AppManagementService,
+};
 use bitfun_app_server_client::AppServerEvent;
+use bitfun_app_server_protocol::agent::*;
 use bitfun_app_server_protocol::app::{
     CapabilityAvailability, CapabilityDescriptor, HealthResponse, HealthStatus, InitializeRequest,
     InitializeResponse, ServerInfo, TransportLimits,
@@ -21,68 +26,38 @@ use bitfun_app_server_protocol::event::{
     AgentEventNotification, EventCursor, EventStream, EventStreamState,
     EventStreamStateNotification, PermissionEventNotification, ResyncDirective,
 };
-use bitfun_app_server_protocol::tui::*;
+use bitfun_app_server_protocol::mcp::*;
+use bitfun_app_server_protocol::model::*;
+use bitfun_app_server_protocol::session::*;
+use bitfun_app_server_protocol::skill::*;
+use bitfun_app_server_protocol::subagent::*;
+use bitfun_app_server_protocol::workspace::*;
 use bitfun_app_server_protocol::{MIN_PROTOCOL_VERSION, PROTOCOL_VERSION};
 use bitfun_runtime_ports::{
-    AgentSessionCompactionResult, AgentSessionForkResult, AgentUserShellCommandResult,
+    AgentSessionCompactionResult, AgentSessionForkResult, AgentSessionWorkspaceBinding,
+    AgentUserShellCommandResult,
 };
 use tokio::sync::broadcast;
-
-use crate::agent::tui_client::{TuiAgentMode, TuiHostCapabilities};
 
 const EVENT_BUFFER: usize = 256;
 
 pub(crate) struct SharedTuiBackend {
     client: RuntimeIpcClient,
+    management: Arc<AppManagementService>,
+    local_management_scope: Arc<AtomicBool>,
     current_session_id: Arc<Mutex<Option<String>>>,
     events: broadcast::Sender<AppServerEvent>,
 }
 
-pub(crate) struct SharedTuiHostCapabilities {
-    client: RuntimeIpcClient,
-}
-
-impl SharedTuiHostCapabilities {
-    pub(crate) fn new(client: RuntimeIpcClient) -> Self {
-        Self { client }
-    }
-}
-
-#[async_trait]
-impl TuiHostCapabilities for SharedTuiHostCapabilities {
-    async fn available_agent_modes(
-        &self,
-        session_id: Option<String>,
-        _workspace: std::path::PathBuf,
-    ) -> anyhow::Result<Vec<TuiAgentMode>> {
-        match self
-            .client
-            .request(RuntimeIpcOperation::ListAgentModes { session_id })
-            .await?
-        {
-            RuntimeIpcOperationResult::AgentModes { modes } => Ok(modes
-                .into_iter()
-                .map(|mode| TuiAgentMode {
-                    id: mode.id,
-                    description: mode.description,
-                    model_id: mode.model_id,
-                    is_external: mode.is_external,
-                })
-                .collect()),
-            other => Err(anyhow::anyhow!(
-                "Shared Runtime returned an unexpected mode catalog result: {other:?}"
-            )),
-        }
-    }
-}
-
 impl SharedTuiBackend {
-    pub(crate) fn new(client: RuntimeIpcClient) -> Self {
+    pub(crate) fn new(client: RuntimeIpcClient, management: Arc<AppManagementService>) -> Self {
         let (events, _) = broadcast::channel(EVENT_BUFFER);
         let connection_id = format!("shared-runtime-{}", uuid::Uuid::new_v4());
         spawn_event_bridge(client.subscribe_events(), events.clone(), connection_id);
         Self {
             client,
+            management,
+            local_management_scope: Arc::new(AtomicBool::new(true)),
             current_session_id: Arc::new(Mutex::new(None)),
             events,
         }
@@ -93,6 +68,13 @@ impl SharedTuiBackend {
             .current_session_id
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(session_id.into());
+    }
+
+    fn set_management_scope_from_binding(&self, binding: &AgentSessionWorkspaceBinding) {
+        self.local_management_scope.store(
+            binding.remote_connection_id.is_none() && binding.remote_ssh_host.is_none(),
+            Ordering::Relaxed,
+        );
     }
 
     fn current_session(&self) -> Result<String, TuiBackendError> {
@@ -112,6 +94,50 @@ impl SharedTuiBackend {
             .await
             .map_err(map_client_error)
     }
+
+    fn management_service(
+        &self,
+        capability: &str,
+    ) -> Result<&AppManagementService, TuiBackendError> {
+        require_local_management_scope(
+            self.local_management_scope.load(Ordering::Relaxed),
+            capability,
+        )?;
+        match self.management.capabilities().availability(capability) {
+            Some(CapabilityAvailability::Available) => Ok(self.management.as_ref()),
+            Some(CapabilityAvailability::Unavailable { reason }) => Err(TuiBackendError {
+                message: reason.clone(),
+                outcome_unknown: false,
+                kind: TuiBackendErrorKind::Unsupported {
+                    capability: capability.to_string(),
+                },
+            }),
+            None => Err(TuiBackendError {
+                message: format!(
+                    "{capability} is not declared by the App Server management service"
+                ),
+                outcome_unknown: false,
+                kind: TuiBackendErrorKind::Unsupported {
+                    capability: capability.to_string(),
+                },
+            }),
+        }
+    }
+}
+
+fn require_local_management_scope(local: bool, capability: &str) -> Result<(), TuiBackendError> {
+    if local {
+        return Ok(());
+    }
+    Err(TuiBackendError {
+        message: format!(
+            "{capability} is unavailable for a Remote workspace; the Shared CLI adapter does not fall back to its local management service"
+        ),
+        outcome_unknown: false,
+        kind: TuiBackendErrorKind::Unsupported {
+            capability: capability.to_string(),
+        },
+    })
 }
 
 #[async_trait]
@@ -142,7 +168,7 @@ impl TuiBackend for SharedTuiBackend {
                 name: "bitfun-shared-runtime-host-adapter".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
             },
-            tui_capabilities(),
+            tui_capabilities(&self.management.capabilities()),
             TransportLimits {
                 max_frame_bytes: 16 * 1024 * 1024,
                 event_buffer_capacity: EVENT_BUFFER as u32,
@@ -203,6 +229,7 @@ impl TuiBackend for SharedTuiBackend {
                 pending_permissions,
             } => {
                 self.set_current_session(requested_session_id);
+                self.set_management_scope_from_binding(&workspace_binding);
                 Ok(SyncSessionResponse {
                     session,
                     state: map_session_state(state),
@@ -225,6 +252,7 @@ impl TuiBackend for SharedTuiBackend {
         {
             RuntimeIpcOperationResult::SessionCreated { session } => {
                 self.set_current_session(session.session_id.clone());
+                self.local_management_scope.store(true, Ordering::Relaxed);
                 Ok(CreateSessionResponse(session))
             }
             other => Err(unexpected("create_session", other)),
@@ -601,6 +629,191 @@ impl TuiBackend for SharedTuiBackend {
         )?;
         Ok(UpdateSessionModeResponse {})
     }
+
+    async fn list_agent_modes(
+        &self,
+        _request: ListAgentModesRequest,
+    ) -> Result<ListAgentModesResponse, TuiBackendError> {
+        let session_id = self
+            .current_session_id
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        match self
+            .request(RuntimeIpcOperation::ListAgentModes { session_id })
+            .await?
+        {
+            RuntimeIpcOperationResult::AgentModes { modes } => Ok(ListAgentModesResponse {
+                modes: modes
+                    .into_iter()
+                    .map(|mode| AgentModeSummary {
+                        id: mode.id,
+                        description: mode.description,
+                        model_id: mode.model_id,
+                        is_external: mode.is_external,
+                    })
+                    .collect(),
+            }),
+            other => Err(unexpected("list_agent_modes", other)),
+        }
+    }
+
+    async fn list_models(&self) -> Result<ListModelsResponse, TuiBackendError> {
+        self.management_service("tui.models")?
+            .list_models(ListModelsRequest {})
+            .await
+            .map_err(|error| map_management_error("tui.models", error))
+    }
+
+    async fn get_model(
+        &self,
+        request: GetModelRequest,
+    ) -> Result<GetModelResponse, TuiBackendError> {
+        self.management_service("tui.models")?
+            .get_model(request)
+            .await
+            .map_err(|error| map_management_error("tui.models", error))
+    }
+
+    async fn add_model(
+        &self,
+        request: AddModelRequest,
+    ) -> Result<AddModelResponse, TuiBackendError> {
+        self.management_service("tui.models")?
+            .add_model(request)
+            .await
+            .map_err(|error| map_management_error("tui.models", error))
+    }
+
+    async fn update_model(
+        &self,
+        request: UpdateModelRequest,
+    ) -> Result<UpdateModelResponse, TuiBackendError> {
+        self.management_service("tui.models")?
+            .update_model(request)
+            .await
+            .map_err(|error| map_management_error("tui.models", error))
+    }
+
+    async fn delete_model(
+        &self,
+        request: DeleteModelRequest,
+    ) -> Result<DeleteModelResponse, TuiBackendError> {
+        self.management_service("tui.models")?
+            .delete_model(request)
+            .await
+            .map_err(|error| map_management_error("tui.models", error))
+    }
+
+    async fn set_model_default(
+        &self,
+        request: SetModelDefaultRequest,
+    ) -> Result<SetModelDefaultResponse, TuiBackendError> {
+        self.management_service("tui.models")?
+            .set_model_default(request)
+            .await
+            .map_err(|error| map_management_error("tui.models", error))
+    }
+
+    async fn list_skills(
+        &self,
+        request: ListSkillsRequest,
+    ) -> Result<ListSkillsResponse, TuiBackendError> {
+        self.management_service("tui.skills")?
+            .list_skills(request)
+            .await
+            .map_err(|error| map_management_error("tui.skills", error))
+    }
+
+    async fn set_skill_enabled(
+        &self,
+        request: SetSkillEnabledRequest,
+    ) -> Result<SetSkillEnabledResponse, TuiBackendError> {
+        self.management_service("tui.skills")?
+            .set_skill_enabled(request)
+            .await
+            .map_err(|error| map_management_error("tui.skills", error))
+    }
+
+    async fn list_subagents(
+        &self,
+        request: ListSubagentsRequest,
+    ) -> Result<ListSubagentsResponse, TuiBackendError> {
+        self.management_service("tui.subagents")?
+            .list_subagents(request)
+            .await
+            .map_err(|error| map_management_error("tui.subagents", error))
+    }
+
+    async fn set_subagent_enabled(
+        &self,
+        request: SetSubagentEnabledRequest,
+    ) -> Result<SetSubagentEnabledResponse, TuiBackendError> {
+        self.management_service("tui.subagents")?
+            .set_subagent_enabled(request)
+            .await
+            .map_err(|error| map_management_error("tui.subagents", error))
+    }
+
+    async fn list_mcp_servers(
+        &self,
+        request: ListMcpServersRequest,
+    ) -> Result<ListMcpServersResponse, TuiBackendError> {
+        self.management_service("tui.mcp")?
+            .list_mcp_servers(request)
+            .await
+            .map_err(|error| map_management_error("tui.mcp", error))
+    }
+
+    async fn toggle_mcp_server(
+        &self,
+        request: ToggleMcpServerRequest,
+    ) -> Result<ToggleMcpServerResponse, TuiBackendError> {
+        self.management_service("tui.mcp")?
+            .toggle_mcp_server(request)
+            .await
+            .map_err(|error| map_management_error("tui.mcp", error))
+    }
+
+    async fn add_mcp_server(
+        &self,
+        request: AddMcpServerRequest,
+    ) -> Result<AddMcpServerResponse, TuiBackendError> {
+        self.management_service("tui.mcp")?
+            .add_mcp_server(request)
+            .await
+            .map_err(|error| map_management_error("tui.mcp", error))
+    }
+
+    async fn delete_mcp_server(
+        &self,
+        request: DeleteMcpServerRequest,
+    ) -> Result<DeleteMcpServerResponse, TuiBackendError> {
+        self.management_service("tui.mcp")?
+            .delete_mcp_server(request)
+            .await
+            .map_err(|error| map_management_error("tui.mcp", error))
+    }
+
+    async fn external_mcp_decision(
+        &self,
+        request: ExternalMcpDecisionRequest,
+    ) -> Result<ExternalMcpDecisionResponse, TuiBackendError> {
+        self.management_service("tui.mcp")?
+            .external_mcp_decision(request)
+            .await
+            .map_err(|error| map_management_error("tui.mcp", error))
+    }
+
+    async fn mcp_conflict_choice(
+        &self,
+        request: McpConflictChoiceRequest,
+    ) -> Result<McpConflictChoiceResponse, TuiBackendError> {
+        self.management_service("tui.mcp")?
+            .mcp_conflict_choice(request)
+            .await
+            .map_err(|error| map_management_error("tui.mcp", error))
+    }
 }
 
 impl SharedTuiBackend {
@@ -618,8 +831,13 @@ impl SharedTuiBackend {
             })
             .await?
         {
-            RuntimeIpcOperationResult::SessionForked { session, .. } => {
+            RuntimeIpcOperationResult::SessionForked {
+                session,
+                workspace_binding,
+                ..
+            } => {
                 self.set_current_session(session.session_id.clone());
+                self.set_management_scope_from_binding(&workspace_binding);
                 Ok(ForkSessionResponse(AgentSessionForkResult {
                     session_id: session.session_id,
                     session_name: session.session_name,
@@ -700,6 +918,23 @@ fn backend_error(message: impl Into<String>, outcome_unknown: bool) -> TuiBacken
     TuiBackendError {
         message: message.into(),
         outcome_unknown,
+        kind: TuiBackendErrorKind::Backend,
+    }
+}
+
+fn map_management_error(capability: &str, error: AppManagementError) -> TuiBackendError {
+    let kind = match error.kind {
+        AppManagementErrorKind::Unsupported => TuiBackendErrorKind::Unsupported {
+            capability: capability.to_string(),
+        },
+        AppManagementErrorKind::InvalidRequest
+        | AppManagementErrorKind::NotFound
+        | AppManagementErrorKind::Internal => TuiBackendErrorKind::Backend,
+    };
+    TuiBackendError {
+        message: error.message,
+        outcome_unknown: false,
+        kind,
     }
 }
 
@@ -728,8 +963,8 @@ fn map_session_state(state: RuntimeSessionState) -> SessionRuntimeState {
     }
 }
 
-fn tui_capabilities() -> Vec<CapabilityDescriptor> {
-    [
+fn tui_capabilities(management: &AppManagementCapabilities) -> Vec<CapabilityDescriptor> {
+    let mut capabilities = [
         (
             "agent",
             vec![
@@ -788,7 +1023,19 @@ fn tui_capabilities() -> Vec<CapabilityDescriptor> {
         availability: CapabilityAvailability::Available,
         methods: methods.into_iter().map(str::to_string).collect(),
     })
-    .collect()
+    .collect::<Vec<_>>();
+    capabilities.push(CapabilityDescriptor {
+        id: "tui.modes".to_string(),
+        availability: CapabilityAvailability::Available,
+        methods: vec!["agent/listModes".to_string()],
+    });
+    capabilities.extend(
+        management
+            .descriptors()
+            .into_iter()
+            .filter(|descriptor| descriptor.id != MODES_CAPABILITY),
+    );
+    capabilities
 }
 
 fn spawn_event_bridge(
@@ -895,6 +1142,69 @@ fn invalidation_reason(reason: RuntimeIpcStreamInvalidationReason) -> String {
 mod tests {
     use super::*;
     use bitfun_events::{AgenticEvent, AgenticEventEnvelope, AgenticEventPriority};
+
+    #[test]
+    fn shared_management_capabilities_follow_the_local_management_service() {
+        let capabilities = tui_capabilities(&AppManagementCapabilities::available());
+        for id in ["tui.models", "tui.skills", "tui.subagents", "tui.mcp"] {
+            let capability = capabilities
+                .iter()
+                .find(|capability| capability.id == id)
+                .expect("management capability should be declared");
+            assert_eq!(capability.availability, CapabilityAvailability::Available);
+            assert!(!capability.methods.is_empty());
+        }
+    }
+
+    #[test]
+    fn shared_management_preserves_availability_and_error_kind() {
+        let mut management = AppManagementCapabilities::available();
+        management.mcp = CapabilityAvailability::Unavailable {
+            reason: "local MCP compatibility owner unavailable".to_string(),
+        };
+        let capabilities = tui_capabilities(&management);
+        let mcp = capabilities
+            .iter()
+            .find(|capability| capability.id == "tui.mcp")
+            .expect("MCP capability");
+        assert!(matches!(
+            mcp.availability,
+            CapabilityAvailability::Unavailable { .. }
+        ));
+
+        let error = map_management_error(
+            "tui.mcp",
+            AppManagementError::unsupported("MCP compatibility owner unavailable"),
+        );
+        assert_eq!(
+            error.kind,
+            TuiBackendErrorKind::Unsupported {
+                capability: "tui.mcp".to_string()
+            }
+        );
+        assert!(!error.outcome_unknown);
+
+        let error = map_management_error(
+            "tui.models",
+            AppManagementError::invalid_request("invalid model mutation"),
+        );
+        assert_eq!(error.kind, TuiBackendErrorKind::Backend);
+        assert!(!error.outcome_unknown);
+    }
+
+    #[test]
+    fn remote_workspace_cannot_use_the_local_management_service() {
+        let remote_error = require_local_management_scope(false, "tui.models")
+            .expect_err("Remote workspace must not use the local service");
+        assert_eq!(
+            remote_error.kind,
+            TuiBackendErrorKind::Unsupported {
+                capability: "tui.models".to_string()
+            }
+        );
+        assert!(remote_error.message.contains("Remote workspace"));
+        assert!(remote_error.message.contains("does not fall back"));
+    }
 
     fn agent_event(text: &str) -> RuntimeIpcClientEvent {
         RuntimeIpcClientEvent::Runtime(RuntimeIpcEvent::Agent {

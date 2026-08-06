@@ -2186,13 +2186,16 @@ mod tests {
     }
 
     #[test]
-    fn shared_chat_status_separates_session_selection_from_management() {
+    fn shared_chat_status_describes_local_compatibility_management() {
         assert!(SHARED_TUI_CHAT_STATUS.contains("current Session Agent mode"));
-        assert!(SHARED_TUI_CHAT_STATUS.contains("current Session model"));
+        assert!(!SHARED_TUI_CHAT_STATUS.contains("current Session model"));
         assert!(SHARED_TUI_CHAT_STATUS.contains("current Session name"));
         assert!(SHARED_TUI_CHAT_STATUS.contains("/reload [skills|instructions]"));
-        assert!(SHARED_TUI_CHAT_STATUS.contains("Agent/Subagent management"));
-        assert!(SHARED_TUI_CHAT_STATUS.contains("model management remains Embedded"));
+        assert!(SHARED_TUI_CHAT_STATUS.contains("Model, Skill, Subagent, and MCP management"));
+        assert!(SHARED_TUI_CHAT_STATUS.contains("local compatibility owner"));
+        assert!(SHARED_TUI_CHAT_STATUS
+            .contains("do not reconfigure an already-running Shared Runtime Host"));
+        assert!(SHARED_TUI_CHAT_STATUS.contains("other management remain Embedded"));
     }
 
     #[test]

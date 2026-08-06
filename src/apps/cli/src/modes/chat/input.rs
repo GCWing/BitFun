@@ -423,7 +423,7 @@ impl ChatMode {
                         );
                     } else {
                         chat_view.hide_mcp_selector();
-                        self.open_mcp_config(chat_state);
+                        self.open_mcp_config(chat_state, rt_handle);
                     }
                 }
                 // Note: Esc is handled globally for navigation back

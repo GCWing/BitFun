@@ -7,10 +7,15 @@ use std::sync::{Arc, RwLock};
 
 use crate::tui_backend::{TuiBackend, TuiBackendError};
 use anyhow::Result;
-use async_trait::async_trait;
 use bitfun_app_server_client::AppServerEvent;
+use bitfun_app_server_protocol::agent::*;
 use bitfun_app_server_protocol::event::EventStreamState;
-use bitfun_app_server_protocol::tui::*;
+use bitfun_app_server_protocol::mcp::*;
+use bitfun_app_server_protocol::model::*;
+use bitfun_app_server_protocol::session::*;
+use bitfun_app_server_protocol::skill::*;
+use bitfun_app_server_protocol::subagent::*;
+use bitfun_app_server_protocol::workspace::*;
 use bitfun_core_types::SessionUsageReport;
 use bitfun_events::{AgenticEvent, AgenticEventEnvelope, AgenticEventPriority};
 use bitfun_product_domains::tool_permissions::{
@@ -41,15 +46,6 @@ pub(crate) struct TuiAgentMode {
     pub(crate) description: String,
     pub(crate) model_id: Option<String>,
     pub(crate) is_external: bool,
-}
-
-#[async_trait]
-pub(crate) trait TuiHostCapabilities: Send + Sync {
-    async fn available_agent_modes(
-        &self,
-        session_id: Option<String>,
-        workspace: PathBuf,
-    ) -> Result<Vec<TuiAgentMode>>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -190,7 +186,6 @@ impl TuiWorkspacePaths {
 
 pub(crate) struct TuiAgentClient {
     backend: Arc<dyn TuiBackend>,
-    host: Arc<dyn TuiHostCapabilities>,
     shared: bool,
     approval_policy: Arc<RwLock<CliApprovalPolicy>>,
     workspace_paths: Arc<RwLock<TuiWorkspacePaths>>,
@@ -204,7 +199,6 @@ pub(crate) struct TuiAgentClient {
 impl TuiAgentClient {
     pub(crate) fn new(
         backend: Arc<dyn TuiBackend>,
-        host: Arc<dyn TuiHostCapabilities>,
         workspace_path: Option<PathBuf>,
         shared: bool,
         approval_policy: CliApprovalPolicy,
@@ -224,7 +218,6 @@ impl TuiAgentClient {
         );
         Self {
             backend,
-            host,
             shared,
             approval_policy: Arc::new(RwLock::new(approval_policy)),
             workspace_paths: Arc::new(RwLock::new(TuiWorkspacePaths::new(workspace_path))),
@@ -245,12 +238,200 @@ impl TuiAgentClient {
     }
 
     pub(crate) async fn available_agent_modes(&self) -> Result<Vec<TuiAgentMode>> {
-        self.host
-            .available_agent_modes(
-                self.session_id.lock().await.clone(),
-                self.workspace_path_buf(),
-            )
+        let response = self
+            .backend
+            .list_agent_modes(ListAgentModesRequest {
+                workspace_path: Some(self.workspace_path_buf().to_string_lossy().to_string()),
+                include_external: true,
+            })
             .await
+            .map_err(|error| anyhow::anyhow!(error))?;
+        Ok(response
+            .modes
+            .into_iter()
+            .map(|mode| TuiAgentMode {
+                id: mode.id,
+                description: mode.description,
+                model_id: mode.model_id,
+                is_external: mode.is_external,
+            })
+            .collect())
+    }
+
+    pub(crate) async fn list_models(&self) -> Result<ListModelsResponse> {
+        self.backend
+            .list_models()
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn get_model(&self, model_id: String) -> Result<GetModelResponse> {
+        self.backend
+            .get_model(GetModelRequest { model_id })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn add_model(&self, request: AddModelRequest) -> Result<AddModelResponse> {
+        self.backend
+            .add_model(request)
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn update_model(
+        &self,
+        request: UpdateModelRequest,
+    ) -> Result<UpdateModelResponse> {
+        self.backend
+            .update_model(request)
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn delete_model(&self, model_id: String) -> Result<DeleteModelResponse> {
+        self.backend
+            .delete_model(DeleteModelRequest { model_id })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn set_model_default(
+        &self,
+        request: SetModelDefaultRequest,
+    ) -> Result<SetModelDefaultResponse> {
+        self.backend
+            .set_model_default(request)
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn list_skills(
+        &self,
+        mode_id: String,
+        manageable: bool,
+    ) -> Result<ListSkillsResponse> {
+        self.backend
+            .list_skills(ListSkillsRequest {
+                workspace_path: self.workspace_path_buf().to_string_lossy().to_string(),
+                mode_id,
+                manageable,
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn set_skill_enabled(
+        &self,
+        mode_id: String,
+        skill_key: String,
+        enabled: bool,
+        default_enabled: bool,
+        level: String,
+    ) -> Result<SetSkillEnabledResponse> {
+        self.backend
+            .set_skill_enabled(SetSkillEnabledRequest {
+                workspace_path: self.workspace_path_buf().to_string_lossy().to_string(),
+                mode_id,
+                skill_key,
+                enabled,
+                default_enabled,
+                level,
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn list_subagents(
+        &self,
+        parent_mode_id: String,
+        management: bool,
+    ) -> Result<ListSubagentsResponse> {
+        self.backend
+            .list_subagents(ListSubagentsRequest {
+                workspace_path: self.workspace_path_buf().to_string_lossy().to_string(),
+                parent_mode_id,
+                management,
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn set_subagent_enabled(
+        &self,
+        parent_mode_id: String,
+        subagent_id: String,
+        enabled: bool,
+    ) -> Result<SetSubagentEnabledResponse> {
+        self.backend
+            .set_subagent_enabled(SetSubagentEnabledRequest {
+                workspace_path: self.workspace_path_buf().to_string_lossy().to_string(),
+                parent_mode_id,
+                subagent_id,
+                enabled,
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn list_mcp_servers(&self) -> Result<ListMcpServersResponse> {
+        self.backend
+            .list_mcp_servers(ListMcpServersRequest {
+                workspace_path: self.workspace_path_buf().to_string_lossy().to_string(),
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn toggle_mcp_server(
+        &self,
+        server_id: String,
+    ) -> Result<ToggleMcpServerResponse> {
+        self.backend
+            .toggle_mcp_server(ToggleMcpServerRequest { server_id })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn add_mcp_server(
+        &self,
+        name: String,
+        config: McpServerMutation,
+    ) -> Result<AddMcpServerResponse> {
+        self.backend
+            .add_mcp_server(AddMcpServerRequest { name, config })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn delete_mcp_server(
+        &self,
+        server_id: String,
+    ) -> Result<DeleteMcpServerResponse> {
+        self.backend
+            .delete_mcp_server(DeleteMcpServerRequest { server_id })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn external_mcp_decision(
+        &self,
+        request: ExternalMcpDecisionRequest,
+    ) -> Result<ExternalMcpDecisionResponse> {
+        self.backend
+            .external_mcp_decision(request)
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn mcp_conflict_choice(
+        &self,
+        request: McpConflictChoiceRequest,
+    ) -> Result<McpConflictChoiceResponse> {
+        self.backend
+            .mcp_conflict_choice(request)
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
     }
 
     pub(crate) fn subscribe_events(&self) -> Result<broadcast::Receiver<AgenticEventEnvelope>> {

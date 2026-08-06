@@ -1,9 +1,16 @@
 //! CLI-local App Server boundary for the interactive TUI.
 
 use async_trait::async_trait;
-use bitfun_app_server_client::{AppServerClient, AppServerEvent, ClientError};
+use bitfun_app_server_client::{AppServerClient, AppServerEvent, ClientError, ProtocolError};
+use bitfun_app_server_protocol::agent::*;
 use bitfun_app_server_protocol::app::{HealthResponse, InitializeRequest, InitializeResponse};
-use bitfun_app_server_protocol::tui::*;
+use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
+use bitfun_app_server_protocol::mcp::*;
+use bitfun_app_server_protocol::model::*;
+use bitfun_app_server_protocol::session::*;
+use bitfun_app_server_protocol::skill::*;
+use bitfun_app_server_protocol::subagent::*;
+use bitfun_app_server_protocol::workspace::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -21,6 +28,13 @@ pub(crate) trait TuiEffect {
 pub(crate) struct TuiBackendError {
     pub message: String,
     pub outcome_unknown: bool,
+    pub kind: TuiBackendErrorKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum TuiBackendErrorKind {
+    Backend,
+    Unsupported { capability: String },
 }
 
 impl std::fmt::Display for TuiBackendError {
@@ -155,6 +169,72 @@ pub(crate) trait TuiBackend: Send + Sync {
         &self,
         request: UpdateSessionModeRequest,
     ) -> Result<UpdateSessionModeResponse, TuiBackendError>;
+
+    async fn list_agent_modes(
+        &self,
+        request: ListAgentModesRequest,
+    ) -> Result<ListAgentModesResponse, TuiBackendError>;
+    async fn list_models(&self) -> Result<ListModelsResponse, TuiBackendError>;
+    async fn get_model(
+        &self,
+        request: GetModelRequest,
+    ) -> Result<GetModelResponse, TuiBackendError>;
+    async fn add_model(
+        &self,
+        request: AddModelRequest,
+    ) -> Result<AddModelResponse, TuiBackendError>;
+    async fn update_model(
+        &self,
+        request: UpdateModelRequest,
+    ) -> Result<UpdateModelResponse, TuiBackendError>;
+    async fn delete_model(
+        &self,
+        request: DeleteModelRequest,
+    ) -> Result<DeleteModelResponse, TuiBackendError>;
+    async fn set_model_default(
+        &self,
+        request: SetModelDefaultRequest,
+    ) -> Result<SetModelDefaultResponse, TuiBackendError>;
+    async fn list_skills(
+        &self,
+        request: ListSkillsRequest,
+    ) -> Result<ListSkillsResponse, TuiBackendError>;
+    async fn set_skill_enabled(
+        &self,
+        request: SetSkillEnabledRequest,
+    ) -> Result<SetSkillEnabledResponse, TuiBackendError>;
+    async fn list_subagents(
+        &self,
+        request: ListSubagentsRequest,
+    ) -> Result<ListSubagentsResponse, TuiBackendError>;
+    async fn set_subagent_enabled(
+        &self,
+        request: SetSubagentEnabledRequest,
+    ) -> Result<SetSubagentEnabledResponse, TuiBackendError>;
+    async fn list_mcp_servers(
+        &self,
+        request: ListMcpServersRequest,
+    ) -> Result<ListMcpServersResponse, TuiBackendError>;
+    async fn toggle_mcp_server(
+        &self,
+        request: ToggleMcpServerRequest,
+    ) -> Result<ToggleMcpServerResponse, TuiBackendError>;
+    async fn add_mcp_server(
+        &self,
+        request: AddMcpServerRequest,
+    ) -> Result<AddMcpServerResponse, TuiBackendError>;
+    async fn delete_mcp_server(
+        &self,
+        request: DeleteMcpServerRequest,
+    ) -> Result<DeleteMcpServerResponse, TuiBackendError>;
+    async fn external_mcp_decision(
+        &self,
+        request: ExternalMcpDecisionRequest,
+    ) -> Result<ExternalMcpDecisionResponse, TuiBackendError>;
+    async fn mcp_conflict_choice(
+        &self,
+        request: McpConflictChoiceRequest,
+    ) -> Result<McpConflictChoiceResponse, TuiBackendError>;
 }
 
 pub(crate) struct AppServerTuiBackend {
@@ -173,13 +253,7 @@ impl TuiBackend for AppServerTuiBackend {
         &self,
         request: InitializeRequest,
     ) -> Result<InitializeResponse, TuiBackendError> {
-        self.client
-            .initialize(request)
-            .await
-            .map_err(|error| TuiBackendError {
-                message: error.to_string(),
-                outcome_unknown: false,
-            })
+        map(self.client.initialize(request).await)
     }
 
     async fn health(&self) -> Result<HealthResponse, TuiBackendError> {
@@ -390,25 +464,171 @@ impl TuiBackend for AppServerTuiBackend {
     ) -> Result<UpdateSessionModeResponse, TuiBackendError> {
         map_client(self.client.update_session_mode(request).await)
     }
+
+    async fn list_agent_modes(
+        &self,
+        request: ListAgentModesRequest,
+    ) -> Result<ListAgentModesResponse, TuiBackendError> {
+        map(self.client.list_agent_modes(request).await)
+    }
+
+    async fn list_models(&self) -> Result<ListModelsResponse, TuiBackendError> {
+        map(self.client.list_models().await)
+    }
+
+    async fn get_model(
+        &self,
+        request: GetModelRequest,
+    ) -> Result<GetModelResponse, TuiBackendError> {
+        map(self.client.get_model(request).await)
+    }
+
+    async fn add_model(
+        &self,
+        request: AddModelRequest,
+    ) -> Result<AddModelResponse, TuiBackendError> {
+        map_client(self.client.add_model(request).await)
+    }
+
+    async fn update_model(
+        &self,
+        request: UpdateModelRequest,
+    ) -> Result<UpdateModelResponse, TuiBackendError> {
+        map_client(self.client.update_model(request).await)
+    }
+
+    async fn delete_model(
+        &self,
+        request: DeleteModelRequest,
+    ) -> Result<DeleteModelResponse, TuiBackendError> {
+        map_client(self.client.delete_model(request).await)
+    }
+
+    async fn set_model_default(
+        &self,
+        request: SetModelDefaultRequest,
+    ) -> Result<SetModelDefaultResponse, TuiBackendError> {
+        map_client(self.client.set_model_default(request).await)
+    }
+
+    async fn list_skills(
+        &self,
+        request: ListSkillsRequest,
+    ) -> Result<ListSkillsResponse, TuiBackendError> {
+        map(self.client.list_skills(request).await)
+    }
+
+    async fn set_skill_enabled(
+        &self,
+        request: SetSkillEnabledRequest,
+    ) -> Result<SetSkillEnabledResponse, TuiBackendError> {
+        map_client(self.client.set_skill_enabled(request).await)
+    }
+
+    async fn list_subagents(
+        &self,
+        request: ListSubagentsRequest,
+    ) -> Result<ListSubagentsResponse, TuiBackendError> {
+        map(self.client.list_subagents(request).await)
+    }
+
+    async fn set_subagent_enabled(
+        &self,
+        request: SetSubagentEnabledRequest,
+    ) -> Result<SetSubagentEnabledResponse, TuiBackendError> {
+        map_client(self.client.set_subagent_enabled(request).await)
+    }
+
+    async fn list_mcp_servers(
+        &self,
+        request: ListMcpServersRequest,
+    ) -> Result<ListMcpServersResponse, TuiBackendError> {
+        map(self.client.list_mcp_servers(request).await)
+    }
+
+    async fn toggle_mcp_server(
+        &self,
+        request: ToggleMcpServerRequest,
+    ) -> Result<ToggleMcpServerResponse, TuiBackendError> {
+        map_client(self.client.toggle_mcp_server(request).await)
+    }
+
+    async fn add_mcp_server(
+        &self,
+        request: AddMcpServerRequest,
+    ) -> Result<AddMcpServerResponse, TuiBackendError> {
+        map_client(self.client.add_mcp_server(request).await)
+    }
+
+    async fn delete_mcp_server(
+        &self,
+        request: DeleteMcpServerRequest,
+    ) -> Result<DeleteMcpServerResponse, TuiBackendError> {
+        map_client(self.client.delete_mcp_server(request).await)
+    }
+
+    async fn external_mcp_decision(
+        &self,
+        request: ExternalMcpDecisionRequest,
+    ) -> Result<ExternalMcpDecisionResponse, TuiBackendError> {
+        map_client(self.client.external_mcp_decision(request).await)
+    }
+
+    async fn mcp_conflict_choice(
+        &self,
+        request: McpConflictChoiceRequest,
+    ) -> Result<McpConflictChoiceResponse, TuiBackendError> {
+        map_client(self.client.mcp_conflict_choice(request).await)
+    }
 }
 
-fn map<T, E: std::fmt::Display>(result: Result<T, E>) -> Result<T, TuiBackendError> {
-    result.map_err(|error| TuiBackendError {
-        message: error.to_string(),
-        outcome_unknown: false,
-    })
+fn map<T>(result: Result<T, ProtocolError>) -> Result<T, TuiBackendError> {
+    result.map_err(map_protocol_error)
 }
 
 fn map_client<T>(result: Result<T, ClientError>) -> Result<T, TuiBackendError> {
-    result.map_err(|error| TuiBackendError {
-        outcome_unknown: matches!(error, ClientError::Timeout(_)),
-        message: error.to_string(),
+    result.map_err(|error| match error {
+        ClientError::Protocol(error) => map_protocol_error(error),
+        ClientError::Timeout(data) => backend_error_from_data(
+            "App Server request timed out with unknown outcome".to_string(),
+            data,
+        ),
     })
+}
+
+fn map_protocol_error(error: ProtocolError) -> TuiBackendError {
+    let message = error.to_string();
+    match error
+        .data
+        .and_then(|value| serde_json::from_value::<AppServerErrorData>(value).ok())
+    {
+        Some(data) => backend_error_from_data(message, data),
+        None => TuiBackendError {
+            message,
+            outcome_unknown: false,
+            kind: TuiBackendErrorKind::Backend,
+        },
+    }
+}
+
+fn backend_error_from_data(message: String, data: AppServerErrorData) -> TuiBackendError {
+    let kind = match (data.kind, data.capability) {
+        (AppServerErrorKind::Unsupported, Some(capability)) => {
+            TuiBackendErrorKind::Unsupported { capability }
+        }
+        _ => TuiBackendErrorKind::Backend,
+    };
+    TuiBackendError {
+        message,
+        outcome_unknown: data.outcome_unknown,
+        kind,
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{TuiEffect, TuiEffectRoute};
+    use super::{map_protocol_error, TuiBackendErrorKind, TuiEffect, TuiEffectRoute};
+    use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
 
     struct LocalEffect;
 
@@ -422,5 +642,32 @@ mod tests {
     fn effect_routes_are_explicit() {
         assert_eq!(LocalEffect.route(), TuiEffectRoute::Local);
         assert_ne!(TuiEffectRoute::AppServer, TuiEffectRoute::HostCapability);
+    }
+
+    #[test]
+    fn protocol_unsupported_preserves_the_capability_id() {
+        let error = bitfun_app_server_client::ProtocolError::new(
+            AppServerErrorKind::Unsupported.json_rpc_code() as i32,
+            "not supported",
+        )
+        .data(
+            serde_json::to_value(AppServerErrorData {
+                kind: AppServerErrorKind::Unsupported,
+                retryable: false,
+                outcome_unknown: false,
+                capability: Some("tui.models".to_string()),
+                request_id: None,
+            })
+            .expect("serialize error data"),
+        );
+
+        let mapped = map_protocol_error(error);
+        assert_eq!(
+            mapped.kind,
+            TuiBackendErrorKind::Unsupported {
+                capability: "tui.models".to_string()
+            }
+        );
+        assert!(!mapped.outcome_unknown);
     }
 }

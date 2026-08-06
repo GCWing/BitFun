@@ -30,6 +30,11 @@ use crate::config::CliConfig;
 /// - Model/Agent/Session/Skill/Subagent selector popups
 /// - Random tips
 use anyhow::Result;
+use bitfun_app_server_protocol::model::{
+    AddModelRequest, ModelDefaultSlot, SetModelDefaultRequest, UpdateModelRequest,
+};
+use bitfun_app_server_protocol::skill::SkillSummary;
+use bitfun_app_server_protocol::subagent::SubagentSummary;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     backend::Backend,
@@ -42,19 +47,7 @@ use ratatui::{
 use std::sync::Arc;
 use std::time::Duration;
 
-use bitfun_core::agentic::agents::{
-    get_agent_registry, AgentInfo, SubAgentSource, SubagentListScope, SubagentQueryContext,
-};
-use bitfun_core::agentic::tools::implementations::skills::{
-    mode_overrides::{
-        load_project_mode_skills_document_local, save_project_mode_skills_document_local,
-        set_mode_skill_disabled_in_document, set_user_mode_skill_state,
-    },
-    registry::SkillRegistry,
-    ModeSkillInfo, SkillInfo,
-};
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
-use bitfun_core::service::config::GlobalConfigManager;
 
 use crate::agent::tui_client::{TuiAgentClient, TuiAgentMode};
 
@@ -1611,26 +1604,21 @@ impl StartupPage {
 
         let result = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
-                let config_service = GlobalConfigManager::get_service().await.ok()?;
-                let models: Vec<bitfun_core::service::config::AIModelConfig> =
-                    config_service.get_ai_models().await.ok()?;
-                let global_config: bitfun_core::service::config::GlobalConfig =
-                    config_service.get_config(None).await.ok()?;
-
+                let catalog = self.agent.list_models().await.ok()?;
                 let current_model_id = resolve_startup_model_id(
                     explicitly_selected_model_id,
                     profile_model_id,
-                    crate::model_selection::resolve_mode_model_id(&global_config.ai),
+                    catalog.mode_default_model_id.clone(),
                 );
-
-                let model_items: Vec<ModelItem> = models
+                let model_items: Vec<ModelItem> = catalog
+                    .models
                     .into_iter()
-                    .filter(|m| m.enabled)
-                    .map(|m| ModelItem {
-                        id: m.id,
-                        name: m.name,
-                        provider: m.provider,
-                        model_name: m.model_name,
+                    .filter(|model| model.enabled)
+                    .map(|model| ModelItem {
+                        id: model.id,
+                        name: model.name,
+                        provider: model.provider,
+                        model_name: model.model_name,
                     })
                     .collect();
 
@@ -1660,16 +1648,15 @@ impl StartupPage {
                 if !persist_shared_default {
                     return true;
                 }
-                let config_service = match GlobalConfigManager::get_service().await {
-                    Ok(s) => s,
-                    Err(_) => return false,
-                };
-
-                if let Err(e) = config_service
-                    .set_config("ai.agent_model_defaults.mode", &selected_id)
+                if let Err(error) = self
+                    .agent
+                    .set_model_default(SetModelDefaultRequest {
+                        slot: ModelDefaultSlot::Mode,
+                        model_id: Some(selected_id.clone()),
+                    })
                     .await
                 {
-                    tracing::error!("Failed to set future mode model: {}", e);
+                    tracing::error!("Failed to set future mode model: {error}");
                     return false;
                 }
 
@@ -1717,93 +1704,18 @@ impl StartupPage {
                 .as_millis()
         );
 
-        let custom_headers: Option<std::collections::HashMap<String, String>> =
-            if result.custom_headers.is_empty() {
-                None
-            } else {
-                serde_json::from_str(&result.custom_headers).ok()
-            };
-
-        let custom_request_body: Option<String> = if result.custom_request_body.is_empty() {
-            None
-        } else {
-            Some(result.custom_request_body.clone())
-        };
-
-        let model_config = bitfun_core::service::config::AIModelConfig {
-            id: model_id.clone(),
-            name: result.name.clone(),
-            provider: result.provider_format.clone(),
-            model_name: result.model_name.clone(),
-            base_url: result.base_url.clone(),
-            api_key: result.api_key.clone(),
-            context_window: Some(result.context_window),
-            max_tokens: Some(result.max_tokens),
-            enabled: true,
-            reasoning: result.reasoning.clone(),
-            inline_think_in_text: result.inline_think_in_text,
-            skip_ssl_verify: result.skip_ssl_verify,
-            custom_headers,
-            custom_headers_mode: if result.custom_headers_mode.is_empty()
-                || result.custom_headers_mode == "merge"
-            {
-                None
-            } else {
-                Some(result.custom_headers_mode.clone())
-            },
-            custom_request_body,
-            ..Default::default()
-        };
-
         let result_name = result.name.clone();
         let result_model_display = format!("{} / {}", result.model_name, result.name);
+        let request = AddModelRequest {
+            model: result.to_mutation(model_id.clone()),
+            make_primary_if_empty: true,
+        };
 
         let success = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                let config_service = match GlobalConfigManager::get_service().await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        tracing::error!("Failed to get config service: {}", e);
-                        return false;
-                    }
-                };
-
-                if let Err(e) = config_service.add_ai_model(model_config).await {
-                    tracing::error!("Failed to add AI model: {}", e);
-                    return false;
-                }
-
-                // Auto-set as primary model if no primary model exists
-                match config_service
-                    .get_config::<bitfun_core::service::config::GlobalConfig>(None)
-                    .await
-                {
-                    Ok(global_config) => {
-                        let has_primary = global_config
-                            .ai
-                            .default_models
-                            .primary
-                            .as_ref()
-                            .map(|p| !p.is_empty())
-                            .unwrap_or(false);
-                        if !has_primary {
-                            if let Err(e) = config_service
-                                .set_config("ai.default_models.primary", &model_id)
-                                .await
-                            {
-                                tracing::warn!("Failed to auto-set primary model: {}", e);
-                            } else {
-                                tracing::info!("Auto-set primary model: {}", model_id);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!("Failed to read config for auto-primary: {}", e);
-                    }
-                }
-
-                true
-            })
+            tokio::runtime::Handle::current()
+                .block_on(self.agent.add_model(request))
+                .map_err(|error| tracing::error!("Failed to add AI model: {error}"))
+                .is_ok()
         });
 
         if success {
@@ -1822,50 +1734,16 @@ impl StartupPage {
     fn edit_model(&mut self, selected: &ModelItem) {
         let model_id = selected.id.clone();
         let result = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                let config_service = GlobalConfigManager::get_service().await.ok()?;
-                let models: Vec<bitfun_core::service::config::AIModelConfig> =
-                    config_service.get_ai_models().await.ok()?;
-                let model = models.into_iter().find(|m| m.id == model_id)?;
-                let reasoning_preset_options = self
-                    .agent
-                    .model_catalog()
-                    .await
-                    .ok()
-                    .and_then(|catalog| catalog.reasoning_presets_by_model.get(&model.id).cloned())
-                    .unwrap_or_default();
-                Some((model, reasoning_preset_options))
-            })
+            tokio::runtime::Handle::current().block_on(self.agent.get_model(model_id.clone()))
         });
 
         match result {
-            Some((model, reasoning_preset_options)) => {
-                let form_data = ModelFormResult {
-                    editing_model_id: Some(model.id.clone()),
-                    name: model.name,
-                    model_name: model.model_name,
-                    base_url: model.base_url,
-                    api_key: model.api_key,
-                    provider_format: model.provider.clone(),
-                    context_window: model.context_window.unwrap_or(128000),
-                    max_tokens: model.max_tokens.unwrap_or(8192),
-                    reasoning_preset_options,
-                    reasoning: model.reasoning,
-                    inline_think_in_text: model.inline_think_in_text,
-                    skip_ssl_verify: model.skip_ssl_verify,
-                    custom_headers: model
-                        .custom_headers
-                        .map(|h| serde_json::to_string(&h).unwrap_or_default())
-                        .unwrap_or_default(),
-                    custom_headers_mode: model
-                        .custom_headers_mode
-                        .unwrap_or_else(|| "merge".to_string()),
-                    custom_request_body: model.custom_request_body.unwrap_or_default(),
-                };
-                self.model_config_form.show_for_edit(&model.id, &form_data);
+            Ok(response) => {
+                let form_data = ModelFormResult::from_projection(response.model);
+                self.model_config_form.show_for_edit(&model_id, &form_data);
             }
-            None => {
-                self.status = Some("Failed to load model configuration".to_string());
+            Err(error) => {
+                self.status = Some(format!("Failed to load model configuration: {error}"));
             }
         }
     }
@@ -1877,67 +1755,18 @@ impl StartupPage {
             None => return,
         };
 
-        let custom_headers: Option<std::collections::HashMap<String, String>> =
-            if result.custom_headers.is_empty() {
-                None
-            } else {
-                serde_json::from_str(&result.custom_headers).ok()
-            };
-
-        let custom_request_body: Option<String> = if result.custom_request_body.is_empty() {
-            None
-        } else {
-            Some(result.custom_request_body.clone())
-        };
-
-        let model_config = bitfun_core::service::config::AIModelConfig {
-            id: model_id.clone(),
-            name: result.name.clone(),
-            provider: result.provider_format.clone(),
-            model_name: result.model_name.clone(),
-            base_url: result.base_url.clone(),
-            api_key: result.api_key.clone(),
-            context_window: Some(result.context_window),
-            max_tokens: Some(result.max_tokens),
-            enabled: true,
-            reasoning: result.reasoning.clone(),
-            inline_think_in_text: result.inline_think_in_text,
-            skip_ssl_verify: result.skip_ssl_verify,
-            custom_headers,
-            custom_headers_mode: if result.custom_headers_mode.is_empty()
-                || result.custom_headers_mode == "merge"
-            {
-                None
-            } else {
-                Some(result.custom_headers_mode.clone())
-            },
-            custom_request_body,
-            ..Default::default()
-        };
-
         let result_name = result.name.clone();
         let result_model_display = format!("{} / {}", result.model_name, result.name);
+        let request = UpdateModelRequest {
+            model_id: model_id.clone(),
+            model: result.to_mutation(model_id.clone()),
+        };
 
         let success = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                let config_service = match GlobalConfigManager::get_service().await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        tracing::error!("Failed to get config service: {}", e);
-                        return false;
-                    }
-                };
-
-                if let Err(e) = config_service
-                    .update_ai_model(&model_id, model_config)
-                    .await
-                {
-                    tracing::error!("Failed to update AI model: {}", e);
-                    return false;
-                }
-
-                true
-            })
+            tokio::runtime::Handle::current()
+                .block_on(self.agent.update_model(request))
+                .map_err(|error| tracing::error!("Failed to update AI model: {error}"))
+                .is_ok()
         });
 
         if success {
@@ -1975,13 +1804,8 @@ impl StartupPage {
             })
             .collect();
 
-        if self.agent.is_shared() {
-            self.agent_selector
-                .show_modes_only(agent_items, Some(self.agent_type.clone()), true);
-        } else {
-            self.agent_selector
-                .show(agent_items, Some(self.agent_type.clone()), false, true);
-        }
+        self.agent_selector
+            .show(agent_items, Some(self.agent_type.clone()), false, true);
     }
 
     fn handle_agent_selector_action(&mut self, action: AgentSelectorAction) {
@@ -2123,18 +1947,16 @@ impl StartupPage {
 
     fn show_available_skill_list(&mut self) {
         let skills = tokio::task::block_in_place(|| {
-            let workspace = self.workspace_path_buf();
-            let agent_type = self.agent_type.clone();
-            tokio::runtime::Handle::current().block_on(async {
-                let registry = SkillRegistry::global();
-                registry
-                    .get_user_invocable_skills_for_workspace(
-                        Some(workspace.as_path()),
-                        Some(&agent_type),
-                    )
-                    .await
-            })
+            tokio::runtime::Handle::current()
+                .block_on(self.agent.list_skills(self.agent_type.clone(), false))
         });
+        let skills = match skills {
+            Ok(response) => response.skills,
+            Err(error) => {
+                self.status = Some(format!("Could not load skills: {error}"));
+                return;
+            }
+        };
 
         if skills.is_empty() {
             self.status = Some(format!(
@@ -2144,8 +1966,10 @@ impl StartupPage {
             return;
         }
 
-        let skill_items: Vec<SkillItem> =
-            skills.into_iter().map(Self::skill_item_from_info).collect();
+        let skill_items: Vec<SkillItem> = skills
+            .into_iter()
+            .map(Self::skill_item_from_summary)
+            .collect();
 
         if skill_items.is_empty() {
             self.status = Some("No skills found.".to_string());
@@ -2157,19 +1981,20 @@ impl StartupPage {
 
     fn show_skill_config_selector(&mut self) {
         let skills = tokio::task::block_in_place(|| {
-            let workspace = self.workspace_path_buf();
-            let agent_type = self.agent_type.clone();
-            tokio::runtime::Handle::current().block_on(async {
-                let registry = SkillRegistry::global();
-                registry
-                    .get_mode_skill_infos_for_workspace(Some(workspace.as_path()), &agent_type)
-                    .await
-            })
+            tokio::runtime::Handle::current()
+                .block_on(self.agent.list_skills(self.agent_type.clone(), true))
         });
+        let skills = match skills {
+            Ok(response) => response.skills,
+            Err(error) => {
+                self.status = Some(format!("Could not load skills: {error}"));
+                return;
+            }
+        };
 
         let skill_items: Vec<SkillItem> = skills
             .into_iter()
-            .map(Self::skill_item_from_mode_info)
+            .map(Self::skill_item_from_summary)
             .collect();
 
         if skill_items.is_empty() {
@@ -2196,49 +2021,21 @@ impl StartupPage {
     }
 
     fn set_skill_enabled(&mut self, selected: &SkillItem, enabled: bool) {
-        let workspace = self.workspace_path_buf();
         let mode_id = self.agent_type.clone();
         let skill = selected.clone();
 
-        let result: Result<(), String> = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                match skill.level.as_str() {
-                    "user" => {
-                        set_user_mode_skill_state(
-                            &mode_id,
-                            &skill.key,
-                            enabled,
-                            skill.default_enabled,
-                        )
-                        .await
-                        .map_err(|error| error.to_string())?;
-                    }
-                    "project" => {
-                        let mut document = load_project_mode_skills_document_local(&workspace)
-                            .await
-                            .map_err(|error| error.to_string())?;
-                        set_mode_skill_disabled_in_document(
-                            &mut document,
-                            &mode_id,
-                            &skill.key,
-                            !enabled,
-                        )
-                        .map_err(|error| error.to_string())?;
-                        save_project_mode_skills_document_local(&workspace, &document)
-                            .await
-                            .map_err(|error| error.to_string())?;
-                    }
-                    other => {
-                        return Err(format!("Unsupported skill level '{}'", other));
-                    }
-                }
-
-                Ok(())
-            })
+        let result = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(self.agent.set_skill_enabled(
+                mode_id,
+                skill.key,
+                enabled,
+                skill.default_enabled,
+                skill.level,
+            ))
         });
 
         self.status = Some(match result {
-            Ok(()) => format!(
+            Ok(_) => format!(
                 "Skill '{}' {} for mode '{}'.",
                 selected.name,
                 if enabled { "enabled" } else { "disabled" },
@@ -2248,37 +2045,20 @@ impl StartupPage {
         });
     }
 
-    fn skill_item_from_info(info: SkillInfo) -> SkillItem {
+    fn skill_item_from_summary(info: SkillSummary) -> SkillItem {
         SkillItem {
             key: info.key,
             name: info.name,
             description: info.description,
-            level: info.level.as_str().to_string(),
-            source_slot: info.source_slot,
-            source_label: info.source_label,
-            enabled: true,
-            selected_for_runtime: true,
-            default_enabled: true,
+            level: info.level,
+            source_slot: info.source_slot.unwrap_or_default(),
+            source_label: info.source_label.unwrap_or_default(),
+            enabled: info.enabled,
+            selected_for_runtime: info.selected_for_runtime,
+            default_enabled: info.default_enabled,
             is_shadowed: info.is_shadowed,
             shadowed_by_key: info.shadowed_by_key,
             argument_hint: info.argument_hint,
-        }
-    }
-
-    fn skill_item_from_mode_info(info: ModeSkillInfo) -> SkillItem {
-        SkillItem {
-            key: info.skill.key,
-            name: info.skill.name,
-            description: info.skill.description,
-            level: info.skill.level.as_str().to_string(),
-            source_slot: info.skill.source_slot,
-            source_label: info.skill.source_label,
-            enabled: info.effective_enabled,
-            selected_for_runtime: info.selected_for_runtime,
-            default_enabled: info.default_enabled,
-            is_shadowed: info.skill.is_shadowed,
-            shadowed_by_key: info.skill.shadowed_by_key,
-            argument_hint: info.skill.argument_hint,
         }
     }
 
@@ -2288,20 +2068,17 @@ impl StartupPage {
     }
 
     fn show_available_subagent_list(&mut self) {
-        let registry = get_agent_registry();
         let subagents = tokio::task::block_in_place(|| {
-            let workspace = self.workspace_path_buf();
-            let agent_type = self.agent_type.clone();
-            tokio::runtime::Handle::current().block_on(registry.get_subagents_for_query(
-                &SubagentQueryContext {
-                    parent_agent_type: Some(&agent_type),
-                    workspace_root: Some(workspace.as_path()),
-                    list_scope: SubagentListScope::TaskVisible,
-                    include_disabled: false,
-                    external_sources_supported: false,
-                },
-            ))
+            tokio::runtime::Handle::current()
+                .block_on(self.agent.list_subagents(self.agent_type.clone(), false))
         });
+        let subagents = match subagents {
+            Ok(response) => response.subagents,
+            Err(error) => {
+                self.status = Some(format!("Could not load subagents: {error}"));
+                return;
+            }
+        };
 
         if subagents.is_empty() {
             self.status = Some(format!(
@@ -2313,7 +2090,7 @@ impl StartupPage {
 
         let subagent_items: Vec<SubagentItem> = subagents
             .into_iter()
-            .map(Self::subagent_item_from_info)
+            .map(Self::subagent_item_from_summary)
             .collect();
 
         if subagent_items.is_empty() {
@@ -2325,25 +2102,21 @@ impl StartupPage {
     }
 
     fn show_subagent_config_selector(&mut self) {
-        let registry = get_agent_registry();
         let subagents = tokio::task::block_in_place(|| {
-            let workspace = self.workspace_path_buf();
-            let agent_type = self.agent_type.clone();
-            tokio::runtime::Handle::current().block_on(registry.get_subagents_for_query(
-                &SubagentQueryContext {
-                    parent_agent_type: Some(&agent_type),
-                    workspace_root: Some(workspace.as_path()),
-                    list_scope: SubagentListScope::RegistryManagement,
-                    include_disabled: true,
-                    external_sources_supported: false,
-                },
-            ))
+            tokio::runtime::Handle::current()
+                .block_on(self.agent.list_subagents(self.agent_type.clone(), true))
         });
-
-        let subagent_items: Vec<SubagentItem> = subagents
+        let response = match subagents {
+            Ok(response) => response,
+            Err(error) => {
+                self.status = Some(format!("Could not load subagents: {error}"));
+                return;
+            }
+        };
+        let subagent_items: Vec<SubagentItem> = response
+            .subagents
             .into_iter()
-            .filter(|info| info.subagent_source != Some(SubAgentSource::External))
-            .map(Self::subagent_item_from_info)
+            .map(Self::subagent_item_from_summary)
             .collect();
 
         if subagent_items.is_empty() {
@@ -2373,27 +2146,19 @@ impl StartupPage {
     }
 
     fn set_subagent_enabled(&mut self, selected: &SubagentItem, enabled: bool) {
-        let registry = get_agent_registry();
-        let workspace = self.workspace_path_buf();
         let mode_id = self.agent_type.clone();
         let subagent = selected.clone();
 
-        let result: Result<(), String> = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                registry
-                    .update_subagent_override(
-                        &mode_id,
-                        &subagent.id,
-                        enabled,
-                        Some(workspace.as_path()),
-                    )
-                    .await
-                    .map_err(|error| error.to_string())
-            })
+        let result = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(self.agent.set_subagent_enabled(
+                mode_id,
+                subagent.id,
+                enabled,
+            ))
         });
 
         self.status = Some(match result {
-            Ok(()) => format!(
+            Ok(_) => format!(
                 "Subagent '{}' {} for mode '{}'.",
                 selected.name,
                 if enabled { "enabled" } else { "disabled" },
@@ -2403,23 +2168,14 @@ impl StartupPage {
         });
     }
 
-    fn subagent_item_from_info(info: AgentInfo) -> SubagentItem {
-        let source = match info.subagent_source {
-            Some(SubAgentSource::Builtin) => "builtin",
-            Some(SubAgentSource::Project) => "project",
-            Some(SubAgentSource::User) => "user",
-            Some(SubAgentSource::External) => "external",
-            None => "builtin",
-        }
-        .to_string();
-
+    fn subagent_item_from_summary(info: SubagentSummary) -> SubagentItem {
         SubagentItem {
             key: info.key,
             id: info.id,
             name: info.name,
             description: info.description,
-            source,
-            enabled: info.effective_enabled,
+            source: info.source,
+            enabled: info.enabled,
         }
     }
 
@@ -2526,50 +2282,17 @@ impl StartupPage {
         let profile_model_id = self.selected_agent_mode().and_then(|mode| mode.model_id);
         let result: Option<String> = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
-                let config_service = GlobalConfigManager::get_service().await.ok()?;
-                let models: Vec<bitfun_core::service::config::AIModelConfig> =
-                    config_service.get_ai_models().await.ok()?;
-                let global_config: bitfun_core::service::config::GlobalConfig =
-                    config_service.get_config(None).await.ok()?;
-
+                let catalog = self.agent.list_models().await.ok()?;
                 let model_id = resolve_startup_model_id(
                     explicitly_selected_model_id,
                     profile_model_id,
-                    crate::model_selection::resolve_mode_model_id(&global_config.ai),
+                    catalog.mode_default_model_id.clone(),
                 )?;
-
-                fn provider_display_name(
-                    model: &bitfun_core::service::config::AIModelConfig,
-                ) -> String {
-                    let raw_name = model.name.trim();
-                    let model_name = model.model_name.trim();
-                    if !raw_name.is_empty() && !model_name.is_empty() {
-                        let dashed_suffix = format!(" - {}", model_name);
-                        let slash_suffix = format!("/{}", model_name);
-                        if let Some(provider) = raw_name.strip_suffix(&dashed_suffix) {
-                            return provider.trim().to_string();
-                        }
-                        if let Some(provider) = raw_name.strip_suffix(&slash_suffix) {
-                            return provider.trim().to_string();
-                        }
-                    }
-                    if raw_name.is_empty() {
-                        model.provider.clone()
-                    } else {
-                        raw_name.to_string()
-                    }
-                }
-
-                fn model_display_name(
-                    model: &bitfun_core::service::config::AIModelConfig,
-                ) -> String {
-                    format!("{} / {}", model.model_name, provider_display_name(model))
-                }
-
-                models
+                catalog
+                    .models
                     .iter()
                     .find(|model| model.id == model_id)
-                    .map(model_display_name)
+                    .map(crate::model_selection::tui_model_display_name)
             })
         });
 

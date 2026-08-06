@@ -1,28 +1,19 @@
-//! Typed App Server requests used by the interactive TUI.
-//!
-//! The payloads reuse stable contract DTOs only. Runtime implementation types
-//! are projected into the small wire-specific enums defined in this module by
-//! the server adapter.
+//! Session-domain App Server wire schemas.
 
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
-use bitfun_core_types::{ProviderCatalog, SessionUsageReport};
-use bitfun_product_domains::tool_permissions::{PermissionReply, PermissionRequest};
+use bitfun_core_types::SessionUsageReport;
+use bitfun_product_domains::tool_permissions::PermissionRequest;
 use bitfun_runtime_ports::{
-    AgentContextReloadRequest, AgentDialogSteerRequest, AgentDialogTurnRequest,
-    AgentLocalCommandTurnRecordRequest, AgentLocalCommandTurnRecordResult,
-    AgentMessageWorkspaceReferencesRequest, AgentSessionCompactionRequest,
-    AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionDeleteRequest,
+    AgentContextReloadRequest, AgentLocalCommandTurnRecordRequest,
+    AgentLocalCommandTurnRecordResult, AgentSessionCompactionRequest, AgentSessionCompactionResult,
     AgentSessionForkBeforeTurnRequest, AgentSessionForkRequest, AgentSessionForkResult,
     AgentSessionLineageCancellationRequest, AgentSessionLineageInspection,
     AgentSessionLineageRequest, AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest,
-    AgentSessionListRequest, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
-    AgentSessionRenameRequest, AgentSessionRevertRequest, AgentSessionRevertResult,
-    AgentSessionSummary, AgentSessionUsageRequest, AgentSessionWorkspaceBinding,
-    AgentSessionWorkspaceRequest, AgentTurnCancellationRequest, AgentTurnCancellationResult,
-    AgentTurnSettlementRequest, AgentUserShellCommandRequest, AgentUserShellCommandResult,
-    AgentWorkspaceReference, AgentWorkspaceReferenceSearchRequest,
-    AgentWorkspaceReferenceSearchResult, DialogSubmitOutcome, SessionTranscript,
-    SessionTranscriptRequest, WorkspaceDiffSnapshot,
+    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
+    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionSummary,
+    AgentSessionUsageRequest, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
+    AgentTurnCancellationResult, AgentTurnSettlementRequest, SessionTranscript,
+    SessionTranscriptRequest,
 };
 use serde::{Deserialize, Serialize};
 
@@ -31,28 +22,6 @@ macro_rules! unit_response {
         #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
         pub struct $name {}
     };
-}
-
-/// Provider and reasoning facts needed by TUI model configuration surfaces.
-/// API keys and provider-specific execution metadata remain host-owned.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "config/getTuiModelCatalog", response = TuiModelCatalogResponse)]
-pub struct TuiModelCatalogRequest {}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
-#[serde(rename_all = "camelCase")]
-pub struct TuiModelCatalogResponse {
-    pub provider_catalog: ProviderCatalog,
-    pub reasoning_presets_by_model: std::collections::BTreeMap<String, Vec<String>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/listSessions", response = ListSessionsResponse)]
-pub struct ListSessionsRequest(pub AgentSessionListRequest);
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
-pub struct ListSessionsResponse {
-    pub sessions: Vec<AgentSessionSummary>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
@@ -124,81 +93,11 @@ pub struct ResolveWorkspaceRequest(pub AgentSessionWorkspaceRequest);
 pub struct ResolveWorkspaceResponse(pub Option<AgentSessionWorkspaceBinding>);
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/steerTurn", response = SteerTurnResponse)]
-pub struct SteerTurnRequest(pub AgentDialogSteerRequest);
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
-pub struct SteerTurnResponse {
-    pub steering_id: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/runUserShellCommand", response = RunUserShellCommandResponse)]
-pub struct RunUserShellCommandRequest(pub AgentUserShellCommandRequest);
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
-pub struct RunUserShellCommandResponse(pub AgentUserShellCommandResult);
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/submitUserAnswers", response = SubmitUserAnswersResponse)]
-pub struct SubmitUserAnswersRequest {
-    pub tool_id: String,
-    pub answers: serde_json::Value,
-}
-
-unit_response!(SubmitUserAnswersResponse);
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
 #[request(method = "session/recordLocalCommandTurn", response = RecordLocalCommandTurnResponse)]
 pub struct RecordLocalCommandTurnRequest(pub AgentLocalCommandTurnRecordRequest);
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
 pub struct RecordLocalCommandTurnResponse(pub AgentLocalCommandTurnRecordResult);
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/createSession", response = CreateSessionResponse)]
-pub struct CreateSessionRequest(pub AgentSessionCreateRequest);
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
-pub struct CreateSessionResponse(pub AgentSessionCreateResult);
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/deleteSession", response = DeleteSessionResponse)]
-pub struct DeleteSessionRequest(pub AgentSessionDeleteRequest);
-
-unit_response!(DeleteSessionResponse);
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/submitDialogTurn", response = SubmitDialogTurnResponse)]
-pub struct SubmitDialogTurnRequest(pub AgentDialogTurnRequest);
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
-#[serde(rename_all = "camelCase", tag = "status")]
-pub enum SubmitDialogTurnResponse {
-    Started { session_id: String, turn_id: String },
-    Queued { session_id: String, turn_id: String },
-}
-
-impl From<DialogSubmitOutcome> for SubmitDialogTurnResponse {
-    fn from(outcome: DialogSubmitOutcome) -> Self {
-        match outcome {
-            DialogSubmitOutcome::Started {
-                session_id,
-                turn_id,
-            } => Self::Started {
-                session_id,
-                turn_id,
-            },
-            DialogSubmitOutcome::Queued {
-                session_id,
-                turn_id,
-            } => Self::Queued {
-                session_id,
-                turn_id,
-            },
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
 #[request(method = "session/rename", response = RenameSessionResponse)]
@@ -211,7 +110,7 @@ unit_response!(RenameSessionResponse);
 pub struct CompactSessionRequest(pub AgentSessionCompactionRequest);
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
-pub struct CompactSessionResponse(pub bitfun_runtime_ports::AgentSessionCompactionResult);
+pub struct CompactSessionResponse(pub AgentSessionCompactionResult);
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
 #[request(method = "session/undo", response = RevertSessionResponse)]
@@ -242,27 +141,6 @@ pub struct SessionUsageResponse(pub SessionUsageReport);
 pub struct WaitForSettlementRequest(pub AgentTurnSettlementRequest);
 
 unit_response!(WaitForSettlementResponse);
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "workspace/diff", response = WorkspaceDiffResponse)]
-pub struct WorkspaceDiffRequest {}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
-pub struct WorkspaceDiffResponse(pub WorkspaceDiffSnapshot);
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "workspace/searchReferences", response = SearchWorkspaceReferencesResponse)]
-pub struct SearchWorkspaceReferencesRequest(pub AgentWorkspaceReferenceSearchRequest);
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
-pub struct SearchWorkspaceReferencesResponse(pub AgentWorkspaceReferenceSearchResult);
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "workspace/messageReferences", response = MessageReferencesResponse)]
-pub struct MessageReferencesRequest(pub AgentMessageWorkspaceReferencesRequest);
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
-pub struct MessageReferencesResponse(pub Vec<AgentWorkspaceReference>);
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
 #[request(method = "session/lineage", response = SessionLineageResponse)]
@@ -307,28 +185,3 @@ unit_response!(UpdateSessionModelResponse);
 pub struct UpdateSessionModeRequest(pub AgentSessionModeUpdateRequest);
 
 unit_response!(UpdateSessionModeResponse);
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/respondPermission", response = RespondPermissionResponse)]
-pub struct RespondPermissionRequest {
-    pub request_id: String,
-    pub reply: PermissionReply,
-}
-
-unit_response!(RespondPermissionResponse);
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/listPendingPermissionRequests", response = PendingPermissionsResponse)]
-pub struct PendingPermissionsRequest {}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
-pub struct PendingPermissionsResponse {
-    pub requests: Vec<PermissionRequest>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/cancelTurn", response = CancelTurnResponse)]
-pub struct CancelTurnRequest(pub AgentTurnCancellationRequest);
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
-pub struct CancelTurnResponse(pub AgentTurnCancellationResult);

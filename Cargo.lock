@@ -909,6 +909,7 @@ dependencies = [
  "bitfun-app-server-protocol",
  "bitfun-core",
  "bitfun-events",
+ "bitfun-product-domains",
  "bitfun-runtime-ports",
  "futures",
  "log",
@@ -916,7 +917,9 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-util",
+ "tracing",
  "ts-rs",
+ "url",
 ]
 
 [[package]]

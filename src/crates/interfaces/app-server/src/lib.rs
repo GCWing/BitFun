@@ -56,6 +56,7 @@
 
 pub mod agent;
 pub mod client;
+pub mod management;
 pub mod role;
 pub mod schema;
 pub mod server;
@@ -69,14 +70,18 @@ pub use agent_client_protocol as protocol;
 // event envelope in a follow-up.
 #[doc(hidden)]
 pub use client::{connect, AppServerClient, FrontendEvent};
+pub use management::{
+    AppManagementCapabilities, AppManagementError, AppManagementErrorKind, AppManagementResult,
+    AppManagementService,
+};
 pub use role::{AppClient, AppServer};
 pub use server::BitfunAppServer;
 
 /// Convenience prelude for consumers building an app-server connection.
 pub mod prelude {
     pub use crate::{
-        agent, client, schema, server, transport, AppClient, AppServer,
-        BitfunAppRuntime, BitfunAppServer,
+        agent, client, schema, server, transport, AppClient, AppServer, BitfunAppRuntime,
+        BitfunAppServer,
     };
     pub use agent_client_protocol::{
         Builder, ConnectionTo, Dispatch, Handled, JsonRpcNotification, JsonRpcRequest,

@@ -2,51 +2,17 @@
 
 use std::sync::Arc;
 
+use crate::runtime::CliRuntimeContext;
 use crate::tui_backend::{AppServerTuiBackend, TuiBackend};
 use anyhow::{Context, Result};
-use bitfun_app_server::{BitfunAppRuntime, BitfunAppServer};
+use bitfun_app_server::{AppManagementService, BitfunAppRuntime, BitfunAppServer};
 use bitfun_app_server_protocol::app::{ClientInfo, HealthStatus, InitializeRequest};
 use bitfun_app_server_protocol::PROTOCOL_VERSION;
-
-use crate::agent::tui_client::{TuiAgentMode, TuiHostCapabilities};
-use crate::runtime::CliRuntimeContext;
 
 pub(crate) struct EmbeddedAppServerHost {
     backend: Arc<dyn TuiBackend>,
     shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
     server_thread: Option<std::thread::JoinHandle<()>>,
-}
-
-pub(crate) struct EmbeddedTuiHostCapabilities;
-
-#[async_trait::async_trait]
-impl TuiHostCapabilities for EmbeddedTuiHostCapabilities {
-    async fn available_agent_modes(
-        &self,
-        _session_id: Option<String>,
-        workspace: std::path::PathBuf,
-    ) -> Result<Vec<TuiAgentMode>> {
-        if let Err(error) =
-            bitfun_core::external_sources::ensure_external_source_workspace_snapshot(Some(
-                &workspace,
-            ))
-            .await
-        {
-            tracing::warn!("Failed to initialize external agent sources: {error}");
-        }
-        let registry = bitfun_core::agentic::agents::get_agent_registry();
-        Ok(registry
-            .get_modes_info_for_workspace(Some(&workspace), true)
-            .await
-            .into_iter()
-            .map(|mode| TuiAgentMode {
-                id: mode.id,
-                description: mode.description,
-                model_id: mode.model,
-                is_external: mode.source == bitfun_core::agentic::agents::AgentSource::External,
-            })
-            .collect())
-    }
 }
 
 impl EmbeddedAppServerHost {
@@ -58,6 +24,7 @@ impl EmbeddedAppServerHost {
             runtime.agent_event_source(),
         )
         .with_context_reload(Arc::new(runtime.compatibility().clone()));
+        let management = Arc::new(AppManagementService::load().await?);
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let server_thread = std::thread::Builder::new()
             .name("bitfun-embedded-app-server".to_string())
@@ -69,7 +36,9 @@ impl EmbeddedAppServerHost {
                 let local = tokio::task::LocalSet::new();
                 runtime.block_on(local.run_until(async move {
                     tokio::select! {
-                        result = BitfunAppServer::new(app_runtime).serve(server_transport) => {
+                        result = BitfunAppServer::new(app_runtime)
+                            .with_management(management)
+                            .serve(server_transport) => {
                             if let Err(error) = result {
                                 tracing::warn!("Embedded App Server stopped with an error: {error}");
                             }

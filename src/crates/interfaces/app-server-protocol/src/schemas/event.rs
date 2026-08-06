@@ -1,4 +1,4 @@
-//! Authoritative, sequenced App Server event contracts.
+//! Authoritative, sequenced App Server event schemas.
 
 use agent_client_protocol::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use bitfun_events::AgenticEventEnvelope;
