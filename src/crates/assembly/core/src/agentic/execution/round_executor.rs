@@ -5,6 +5,9 @@
 use super::model_exchange_trace::prepare_model_exchange_trace;
 use super::stream_processor::{StreamProcessOptions, StreamProcessor, StreamResult};
 use super::types::{FinishReason, RoundContext, RoundResult};
+use super::write_content_sanitizer::{
+    contains_tool_invocation_artifacts, strip_tool_invocation_artifacts,
+};
 use crate::agentic::core::{Message, ToolCall};
 use crate::agentic::events::{
     AgenticEvent, EventPriority, EventQueue, ModelRoundAttemptDiagnostic,
@@ -1180,6 +1183,12 @@ impl RoundExecutor {
         let parsed_memory_citation =
             Self::parsed_memory_citation_from_stream_result(&stream_result);
         let (clean_text, _) = strip_bitfun_memory_citations(&stream_result.full_text);
+        let clean_text = if contains_tool_invocation_artifacts(&clean_text) {
+            warn!("Detected tool invocation artifacts in assistant text, stripping to prevent context explosion");
+            strip_tool_invocation_artifacts(&clean_text)
+        } else {
+            clean_text
+        };
         let assistant_message =
             Message::assistant_with_reasoning(reasoning, clean_text, tool_calls.clone())
                 .with_turn_id(context.dialog_turn_id.clone())
