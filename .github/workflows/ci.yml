@@ -198,6 +198,12 @@ jobs:
       - name: Check compilation
         run: cargo check --locked --workspace
 
+      # The installer is intentionally excluded from the root Cargo workspace,
+      # so the workspace check above cannot catch drift in its shared Rust APIs.
+      - name: Check installer compilation
+        if: runner.os == 'Windows'
+        run: cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml
+
       - name: Run core and desktop library tests
         run: cargo test --locked -p bitfun-core -p bitfun-desktop --lib
 

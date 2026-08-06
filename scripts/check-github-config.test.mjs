@@ -258,6 +258,14 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
     commandByStep.get('Run subscription authentication tests'),
     'cargo test --locked -p bitfun-ai-adapters --features subscription-auth --lib subscription_auth',
   );
+  const installerCheck = rustJob.steps.find(
+    (step) => step.name === 'Check installer compilation',
+  );
+  assert.equal(installerCheck?.if, "runner.os == 'Windows'");
+  assert.equal(
+    installerCheck?.run,
+    'cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml',
+  );
   assert.equal(
     commandByStep.get('Run file watch contract tests'),
     'cargo test --locked -p bitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts',
