@@ -23,6 +23,8 @@ const NAV_DEFAULT_WIDTH = 240;
 const NAV_MIN_WIDTH = 240;
 const NAV_MAX_WIDTH = 480;
 const COLLAPSE_THRESHOLD = 64;
+const HOVER_EXPAND_DELAY = 200;
+const HOVER_COLLAPSE_DELAY = 200;
 
 interface WorkspaceBodyProps {
   className?: string;
@@ -49,16 +51,36 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
   const { state, toggleLeftPanel } = useApp();
   const isNavCollapsed = state.layout.leftPanelCollapsed;
   const [navWidth, setNavWidth] = useState(NAV_DEFAULT_WIDTH);
+  const [isHoverExpanded, setIsHoverExpanded] = useState(false);
   const navAreaRef = useRef<HTMLDivElement>(null);
   const navDividerRef = useRef<HTMLDivElement>(null);
   // Active drag cleanup, so window listeners never leak if we unmount mid-drag.
   const dragCleanupRef = useRef<(() => void) | null>(null);
+  // Hover-expand/collapse timeout, shared between collapsed-nav and nav-area.
+  const hoverTimeoutRef = useRef<number | null>(null);
+
+  // Clear any pending hover timeout (expand or collapse).
+  const clearHoverTimeout = useCallback(() => {
+    if (hoverTimeoutRef.current !== null) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+  }, []);
+
+  // When the panel is permanently expanded (toggleLeftPanel), reset hover state.
+  useEffect(() => {
+    if (!isNavCollapsed) {
+      clearHoverTimeout();
+      setIsHoverExpanded(false);
+    }
+  }, [isNavCollapsed, clearHoverTimeout]);
 
   useEffect(() => {
     return () => {
       dragCleanupRef.current?.();
+      clearHoverTimeout();
     };
-  }, []);
+  }, [clearHoverTimeout]);
 
   const handleNavCollapseDragStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (event.button !== 0 || isNavCollapsed) return;
@@ -130,6 +152,39 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
     dragCleanupRef.current = cleanup;
   }, [isNavCollapsed, navWidth, toggleLeftPanel]);
 
+  // --- Hover-to-expand (issue #1039) ---
+  // When the sidebar is collapsed, hovering the collapsed strip temporarily
+  // expands the nav panel as a floating overlay.  A shared timeout lets the
+  // cursor move between the collapsed strip and the flyout without collapsing.
+
+  const scheduleHoverExpand = useCallback(() => {
+    clearHoverTimeout();
+    hoverTimeoutRef.current = window.setTimeout(() => {
+      setIsHoverExpanded(true);
+      hoverTimeoutRef.current = null;
+    }, HOVER_EXPAND_DELAY);
+  }, [clearHoverTimeout]);
+
+  const cancelHoverExpand = useCallback(() => {
+    clearHoverTimeout();
+  }, [clearHoverTimeout]);
+
+  const scheduleHoverCollapse = useCallback(() => {
+    clearHoverTimeout();
+    hoverTimeoutRef.current = window.setTimeout(() => {
+      setIsHoverExpanded(false);
+      hoverTimeoutRef.current = null;
+    }, HOVER_COLLAPSE_DELAY);
+  }, [clearHoverTimeout]);
+
+  // Entering either the collapsed strip or the flyout itself keeps it open.
+  const handleNavHoverEnter = useCallback(() => {
+    clearHoverTimeout();
+    setIsHoverExpanded(true);
+  }, [clearHoverTimeout]);
+
+  const showHoverFlyout = isNavCollapsed && isHoverExpanded;
+
   return (
     <div
       className={`bitfun-workspace-body${isEntering ? ' is-entering' : ''}${isExiting ? ' is-exiting' : ''} ${className}`}
@@ -138,7 +193,13 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
       data-bf-state={isNavCollapsed ? 'collapsed' : undefined}
     >
       {isNavCollapsed && (
-        <div className="bitfun-workspace-body__collapsed-nav" data-bf-scene="workbench" data-bf-part="collapsedNav">
+        <div
+          className="bitfun-workspace-body__collapsed-nav"
+          data-bf-scene="workbench"
+          data-bf-part="collapsedNav"
+          onMouseEnter={scheduleHoverExpand}
+          onMouseLeave={cancelHoverExpand}
+        >
           <NavBar isCollapsed onExpandNav={toggleLeftPanel} onMaximize={onMaximize} />
         </div>
       )}
@@ -146,11 +207,13 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
       {/* Left: nav history bar + navigation sidebar — always rendered for slide animation */}
       <div
         ref={navAreaRef}
-        className={`bitfun-workspace-body__nav-area${isNavCollapsed ? ' is-collapsed' : ''}`}
+        className={`bitfun-workspace-body__nav-area${isNavCollapsed ? ' is-collapsed' : ''}${showHoverFlyout ? ' is-hover-expanded' : ''}`}
         style={isNavCollapsed ? undefined : { '--nav-width': `${navWidth}px` } as React.CSSProperties}
         data-bf-scene="workbench"
         data-bf-part="navArea"
         data-bf-state={isNavCollapsed ? 'collapsed' : undefined}
+        onMouseEnter={showHoverFlyout ? handleNavHoverEnter : undefined}
+        onMouseLeave={showHoverFlyout ? scheduleHoverCollapse : undefined}
       >
         <NavBar onExpandNav={toggleLeftPanel} onMaximize={onMaximize} />
         <NavPanel className="bitfun-workspace-body__nav-panel" />
