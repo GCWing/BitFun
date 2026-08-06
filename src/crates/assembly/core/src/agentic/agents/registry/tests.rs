@@ -1589,3 +1589,44 @@ fn external_primary_route_follows_the_session_execution_worktree() {
 
     assert_eq!(binding.runtime_agent_key, "external::worktree");
 }
+
+#[test]
+fn builtin_review_agents_resolve_as_local_session_primaries() {
+    let registry = AgentRegistry::new();
+
+    for agent_type in ["CodeReview", "DeepReview"] {
+        let binding = registry
+            .resolve_primary_agent_for_turn(agent_type, None, false, None)
+            .unwrap_or_else(|| {
+                panic!("{agent_type} must resolve as a session primary agent for review children")
+            });
+        assert_eq!(binding.runtime_agent_key, agent_type);
+        assert_eq!(
+            binding.route_owner,
+            bitfun_core_types::SessionAgentRouteOwner::Local
+        );
+    }
+}
+
+#[test]
+fn non_session_primary_subagents_and_unknown_ids_do_not_resolve() {
+    let registry = AgentRegistry::new();
+
+    // Registered subagents that are not session-capable stay restricted.
+    assert!(registry
+        .resolve_primary_agent_for_turn("ReviewWorker", None, false, None)
+        .is_none());
+    // Unknown ids remain unknown.
+    assert!(registry
+        .resolve_primary_agent_for_turn("does-not-exist", None, false, None)
+        .is_none());
+    // The external-owner guard still fails closed for review agents.
+    assert!(registry
+        .resolve_primary_agent_for_turn(
+            "CodeReview",
+            None,
+            false,
+            Some(bitfun_core_types::SessionAgentRouteOwner::External),
+        )
+        .is_none());
+}

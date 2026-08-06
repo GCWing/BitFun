@@ -8,6 +8,7 @@ use bitfun_core_types::{
 };
 use bitfun_product_domains::external_sources::EcosystemId;
 use bitfun_product_domains::external_subagents::ExternalSubagentMode;
+use log::{debug, warn};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock, Weak};
@@ -454,9 +455,32 @@ impl AgentRegistry {
         if expected_owner == Some(SessionAgentRouteOwner::External) {
             return None;
         }
-        self.find_agent_entry(logical_id, workspace_root)
-            .filter(|entry| entry.category == AgentCategory::Mode)
-            .map(|entry| local_primary_binding(entry.agent.id()))
+        match self.find_agent_entry(logical_id, workspace_root) {
+            Some(entry)
+                if entry.category == AgentCategory::Mode
+                    || (entry.source == AgentSource::Builtin
+                        && is_builtin_session_primary_agent(entry.agent.id())) =>
+            {
+                Some(local_primary_binding(entry.agent.id()))
+            }
+            Some(entry) => {
+                warn!(
+                    "Session primary agent resolution rejected a registered non-mode agent: logical_id={}, category={:?}, source={:?}, expected_owner={:?}",
+                    logical_id,
+                    entry.category,
+                    entry.source,
+                    expected_owner
+                );
+                None
+            }
+            None => {
+                debug!(
+                    "Session primary agent resolution found no registered agent: logical_id={}, expected_owner={:?}",
+                    logical_id, expected_owner
+                );
+                None
+            }
+        }
     }
 
     /// Resolve only the currently approved external route for an exact
@@ -574,6 +598,17 @@ fn local_binding(logical_id: &str, runtime_agent_key: &str) -> ExternalSubagentI
         model_binding_policy: SessionModelBindingPolicy::Mutable,
         lease: None,
     }
+}
+
+/// Builtin agents that are allowed to act as the main agent of a session even
+/// though they are not registered as `Mode` (review child sessions).
+///
+/// Review child sessions are created by the product surfaces with
+/// `agentType=CodeReview` (standard) or `agentType=DeepReview` (strict) and
+/// must resolve through the primary-agent path for create, turn, restore, and
+/// compaction. Other subagents (e.g. `ReviewWorker`) stay restricted.
+fn is_builtin_session_primary_agent(id: &str) -> bool {
+    matches!(id, "CodeReview" | "DeepReview")
 }
 
 fn local_primary_binding(runtime_agent_key: &str) -> ExternalPrimaryAgentTurnBinding {

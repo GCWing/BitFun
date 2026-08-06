@@ -14536,6 +14536,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn review_agent_child_sessions_create_successfully() {
+        let (coordinator, _session_manager) = test_coordinator();
+
+        for agent_type in ["CodeReview", "DeepReview"] {
+            let workspace = tempfile::tempdir().expect("review workspace");
+            let session = coordinator
+                .create_session_with_workspace(
+                    None,
+                    format!("Review child: {agent_type}"),
+                    agent_type.to_string(),
+                    SessionConfig {
+                        workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                        ..Default::default()
+                    },
+                    workspace.path().to_string_lossy().into_owned(),
+                )
+                .await
+                .unwrap_or_else(|error| {
+                    panic!("{agent_type} review child session must create: {error}")
+                });
+            assert_eq!(session.agent_type, agent_type);
+        }
+    }
+
+    #[tokio::test]
     async fn assistant_bootstrap_checks_runtime_ownership_before_files_or_attach() {
         let ownership_root = tempfile::tempdir().expect("ownership root");
         let workspace = tempfile::tempdir().expect("workspace");
