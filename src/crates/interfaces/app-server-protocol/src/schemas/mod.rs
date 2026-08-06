@@ -4,6 +4,7 @@ pub mod agent;
 pub mod app;
 pub mod error;
 pub mod event;
+pub mod external_source;
 pub mod mcp;
 pub mod method;
 pub mod model;

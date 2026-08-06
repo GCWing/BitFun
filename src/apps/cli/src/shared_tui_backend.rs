@@ -12,7 +12,7 @@ use bitfun_agent_runtime_ipc::{
     RuntimeSessionRenameRequest, RuntimeSessionRestoreRequest, RuntimeSessionState,
     RuntimeUserAnswersRequest,
 };
-use bitfun_app_server::management::MODES_CAPABILITY;
+use bitfun_app_server::management::{EXTERNAL_SOURCES_CAPABILITY, MODES_CAPABILITY};
 use bitfun_app_server::{
     AppManagementCapabilities, AppManagementError, AppManagementErrorKind, AppManagementService,
 };
@@ -26,6 +26,7 @@ use bitfun_app_server_protocol::event::{
     AgentEventNotification, EventCursor, EventStream, EventStreamState,
     EventStreamStateNotification, PermissionEventNotification, ResyncDirective,
 };
+use bitfun_app_server_protocol::external_source::*;
 use bitfun_app_server_protocol::mcp::*;
 use bitfun_app_server_protocol::model::*;
 use bitfun_app_server_protocol::session::*;
@@ -53,7 +54,16 @@ impl SharedTuiBackend {
     pub(crate) fn new(client: RuntimeIpcClient, management: Arc<AppManagementService>) -> Self {
         let (events, _) = broadcast::channel(EVENT_BUFFER);
         let connection_id = format!("shared-runtime-{}", uuid::Uuid::new_v4());
-        spawn_event_bridge(client.subscribe_events(), events.clone(), connection_id);
+        spawn_event_bridge(
+            client.subscribe_events(),
+            events.clone(),
+            connection_id.clone(),
+        );
+        spawn_external_source_event_bridge(
+            management.subscribe_external_source_updates(),
+            events.clone(),
+            connection_id,
+        );
         Self {
             client,
             management,
@@ -814,6 +824,56 @@ impl TuiBackend for SharedTuiBackend {
             .await
             .map_err(|error| map_management_error("tui.mcp", error))
     }
+
+    async fn external_source_snapshot(
+        &self,
+        request: ExternalSourceSnapshotRequest,
+    ) -> Result<ExternalSourceSnapshotResponse, TuiBackendError> {
+        self.management_service(EXTERNAL_SOURCES_CAPABILITY)?
+            .external_source_snapshot(request)
+            .await
+            .map_err(|error| map_management_error(EXTERNAL_SOURCES_CAPABILITY, error))
+    }
+
+    async fn external_source_control(
+        &self,
+        request: ExternalSourceControlRequest,
+    ) -> Result<ExternalSourceControlResponse, TuiBackendError> {
+        self.management_service(EXTERNAL_SOURCES_CAPABILITY)?
+            .external_source_control(request)
+            .await
+            .map_err(|error| map_management_error(EXTERNAL_SOURCES_CAPABILITY, error))
+    }
+
+    async fn external_source_review(
+        &self,
+        request: ExternalSourceReviewRequest,
+    ) -> Result<ExternalSourceReviewResponse, TuiBackendError> {
+        self.management_service(EXTERNAL_SOURCES_CAPABILITY)?
+            .external_source_review(request)
+            .await
+            .map_err(|error| map_management_error(EXTERNAL_SOURCES_CAPABILITY, error))
+    }
+
+    async fn set_native_command_choice(
+        &self,
+        request: SetNativeCommandChoiceRequest,
+    ) -> Result<SetNativeCommandChoiceResponse, TuiBackendError> {
+        self.management_service(EXTERNAL_SOURCES_CAPABILITY)?
+            .set_native_command_choice(request)
+            .await
+            .map_err(|error| map_management_error(EXTERNAL_SOURCES_CAPABILITY, error))
+    }
+
+    async fn expand_external_command(
+        &self,
+        request: ExpandExternalCommandRequest,
+    ) -> Result<ExpandExternalCommandResponse, TuiBackendError> {
+        self.management_service(EXTERNAL_SOURCES_CAPABILITY)?
+            .expand_external_command(request)
+            .await
+            .map_err(|error| map_management_error(EXTERNAL_SOURCES_CAPABILITY, error))
+    }
 }
 
 impl SharedTuiBackend {
@@ -1100,6 +1160,57 @@ fn spawn_event_bridge(
     });
 }
 
+fn spawn_external_source_event_bridge(
+    mut source: broadcast::Receiver<(
+        String,
+        bitfun_product_domains::external_sources::ExternalSourcePublicSnapshot,
+    )>,
+    output: broadcast::Sender<AppServerEvent>,
+    connection_id: String,
+) {
+    tokio::spawn(async move {
+        let sequence = AtomicU64::new(0);
+        loop {
+            match source.recv().await {
+                Ok((workspace_path, snapshot)) => {
+                    let _ = output.send(AppServerEvent::ExternalSource(
+                        ExternalSourceEventNotification {
+                            cursor: next_cursor(
+                                &connection_id,
+                                EventStream::ExternalSource,
+                                &sequence,
+                            ),
+                            workspace_path,
+                            snapshot,
+                        },
+                    ));
+                }
+                Err(broadcast::error::RecvError::Lagged(missed)) => {
+                    let _ =
+                        output.send(AppServerEvent::StreamState(EventStreamStateNotification {
+                            cursor: next_cursor(
+                                &connection_id,
+                                EventStream::ExternalSource,
+                                &sequence,
+                            ),
+                            stream: EventStream::ExternalSource,
+                            state: EventStreamState::Lagged,
+                            missed: Some(missed),
+                            resync: ResyncDirective {
+                                method: "externalSource/snapshot".to_string(),
+                                snapshot_available: true,
+                                reason: Some(
+                                    "Shared external source event receiver lagged".to_string(),
+                                ),
+                            },
+                        }));
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
+}
+
 fn next_cursor(connection_id: &str, stream: EventStream, sequence: &AtomicU64) -> EventCursor {
     EventCursor {
         connection_id: connection_id.to_string(),
@@ -1146,7 +1257,13 @@ mod tests {
     #[test]
     fn shared_management_capabilities_follow_the_local_management_service() {
         let capabilities = tui_capabilities(&AppManagementCapabilities::available());
-        for id in ["tui.models", "tui.skills", "tui.subagents", "tui.mcp"] {
+        for id in [
+            "tui.models",
+            "tui.skills",
+            "tui.subagents",
+            "tui.mcp",
+            "tui.externalSources",
+        ] {
             let capability = capabilities
                 .iter()
                 .find(|capability| capability.id == id)
@@ -1204,6 +1321,15 @@ mod tests {
         );
         assert!(remote_error.message.contains("Remote workspace"));
         assert!(remote_error.message.contains("does not fall back"));
+
+        let external_error = require_local_management_scope(false, EXTERNAL_SOURCES_CAPABILITY)
+            .expect_err("Remote external sources must not use the local service");
+        assert_eq!(
+            external_error.kind,
+            TuiBackendErrorKind::Unsupported {
+                capability: EXTERNAL_SOURCES_CAPABILITY.to_string()
+            }
+        );
     }
 
     fn agent_event(text: &str) -> RuntimeIpcClientEvent {

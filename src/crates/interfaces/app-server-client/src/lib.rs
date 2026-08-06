@@ -17,6 +17,7 @@ use bitfun_app_server_protocol::event::{
     AgentEventNotification, ConfigEventNotification, EventStreamStateNotification,
     PermissionEventNotification, SyncEventsRequest, SyncEventsResponse,
 };
+use bitfun_app_server_protocol::external_source::*;
 use bitfun_app_server_protocol::mcp::*;
 use bitfun_app_server_protocol::model::*;
 use bitfun_app_server_protocol::session::*;
@@ -36,6 +37,7 @@ pub enum AppServerEvent {
     Agent(AgentEventNotification),
     Permission(PermissionEventNotification),
     Config(ConfigEventNotification),
+    ExternalSource(ExternalSourceEventNotification),
     StreamState(EventStreamStateNotification),
     ConnectionClosed,
 }
@@ -116,6 +118,45 @@ impl AppServerClient {
         request: SyncEventsRequest,
     ) -> agent_client_protocol::Result<SyncEventsResponse> {
         self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn external_source_snapshot(
+        &self,
+        request: ExternalSourceSnapshotRequest,
+    ) -> agent_client_protocol::Result<ExternalSourceSnapshotResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn external_source_control(
+        &self,
+        request: ExternalSourceControlRequest,
+    ) -> Result<ExternalSourceControlResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn external_source_review(
+        &self,
+        request: ExternalSourceReviewRequest,
+    ) -> Result<ExternalSourceReviewResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn set_native_command_choice(
+        &self,
+        request: SetNativeCommandChoiceRequest,
+    ) -> Result<SetNativeCommandChoiceResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn expand_external_command(
+        &self,
+        request: ExpandExternalCommandRequest,
+    ) -> Result<ExpandExternalCommandResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
     }
 
     pub async fn list_sessions(
@@ -550,6 +591,16 @@ pub async fn connect(
                     let event_tx = event_tx_for_task.clone();
                     async move |notification: AgentEventNotification, _cx| {
                         let _ = event_tx.send(AppServerEvent::Agent(notification));
+                        Ok(())
+                    }
+                },
+                agent_client_protocol::on_receive_notification!(),
+            )
+            .on_receive_notification(
+                {
+                    let event_tx = event_tx_for_task.clone();
+                    async move |notification: ExternalSourceEventNotification, _cx| {
+                        let _ = event_tx.send(AppServerEvent::ExternalSource(notification));
                         Ok(())
                     }
                 },

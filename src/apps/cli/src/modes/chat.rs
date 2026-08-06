@@ -68,28 +68,10 @@ use crate::ui::theme::{
 };
 use crate::ui::theme_selector::ThemeItem;
 use crate::ui::{init_terminal, restore_terminal, TerminalGuard};
+use bitfun_app_server_protocol::external_source::ExternalSourceReviewAction;
 use bitfun_core::external_hooks::{
     ExternalHookCatalogSnapshotV1, ExternalHookMatcherSummary, ExternalHookNativeActivation,
     ExternalHookProjectionStatus,
-};
-use bitfun_core::external_sources::{
-    apply_external_source_control_action, choose_external_subagent_conflict,
-    expand_external_prompt_command, external_source_conflict_choices, external_source_snapshot,
-    get_external_source_control_snapshot, native_prompt_command_conflict_key,
-    sanitize_external_source_operation_error, set_external_prompt_command_conflict_choice,
-    set_external_subagent_activation, set_external_subagent_model_binding,
-    set_external_tool_conflict_choice, set_external_tool_target_decision,
-    set_native_prompt_command_conflict_choice, subscribe_external_source_updates,
-    ExternalSourceAssetKind, ExternalSourceCatalogSnapshot, ExternalSourceControlActionV1,
-    ExternalSourceControlRequestV1, ExternalSourceDiagnosticSeverity,
-    ExternalSourceHostCapabilities, ExternalSourceOperationError, ExternalSourceOperationErrorCode,
-    ExternalSubagentActivationState, ExternalSubagentCompatibilityState,
-    ExternalSubagentModelBindingMethod, ExternalSubagentModelBindingTarget,
-    ExternalSubagentModelProfileRequest, ExternalSubagentModelRequest, ExternalToolActivationState,
-    ExternalToolCapability, ExternalToolCatalogEntry, ExternalToolRuntimeKind,
-    NativePromptCommandDescriptor, PromptCommandAvailability, PromptCommandExecutionTarget,
-    PromptCommandInvocationOutcome, PromptCommandShellReviewDecision, PromptCommandShellReviewMode,
-    PromptCommandShellReviewPlan, EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
 };
 use bitfun_core::native_hooks::{
     overview as native_hook_overview, NativeHookOverview, NativeHookRuleView,
@@ -101,8 +83,23 @@ use bitfun_product_domains::external_hook_import::{
     ExternalHookImportMutationV1, ExternalHookImportPlanV1, ExternalHookImportSnapshotV1,
     EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
 };
+use bitfun_product_domains::external_source_control::{
+    ExternalSourceControlActionV1, ExternalSourceControlRequestV1,
+    EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
+};
 use bitfun_product_domains::external_sources::{
-    ExternalSourceHealth, ExternalSourceScope, SourceKey,
+    native_prompt_command_conflict_key, ExternalSourceAssetKind, ExternalSourceDiagnosticSeverity,
+    ExternalSourceHealth, ExternalSourceOperationError, ExternalSourceOperationErrorCode,
+    ExternalSourcePublicSnapshot as ExternalSourceCatalogSnapshot, ExternalSourceScope,
+    ExternalToolActivationState, ExternalToolCapability, ExternalToolCatalogEntry,
+    ExternalToolRuntimeKind, NativePromptCommandDescriptor, PromptCommandAvailability,
+    PromptCommandExecutionTarget, PromptCommandInvocationOutcome, PromptCommandShellReviewDecision,
+    PromptCommandShellReviewMode, PromptCommandShellReviewPlan, SourceKey,
+};
+use bitfun_product_domains::external_subagents::{
+    ExternalSubagentActivationState, ExternalSubagentCompatibilityState,
+    ExternalSubagentModelBindingMethod, ExternalSubagentModelBindingTarget,
+    ExternalSubagentModelProfileRequest, ExternalSubagentModelRequest,
 };
 
 /// Spinner/UI redraw interval while a turn is processing.
@@ -566,14 +563,8 @@ pub(crate) struct ChatMode {
     external_agent_notice_key: Option<String>,
     external_agent_review_snapshot: Option<ExternalSourceCatalogSnapshot>,
     external_agent_mutation_rx: Option<Receiver<ExternalAgentMutationResult>>,
-    hook_management_rx: Option<
-        Receiver<
-            std::result::Result<
-                HookManagementResult,
-                bitfun_core::external_sources::ExternalSourceOperationError,
-            >,
-        >,
-    >,
+    hook_management_rx:
+        Option<Receiver<std::result::Result<HookManagementResult, ExternalSourceOperationError>>>,
     hook_management_snapshot: Option<HookManagementSnapshot>,
     pending_hook_plan: Option<ExternalHookImportPlanV1>,
 }

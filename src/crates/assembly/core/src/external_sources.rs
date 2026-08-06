@@ -6900,6 +6900,12 @@ pub struct ExternalSourceSubscription {
 }
 
 impl ExternalSourceSubscription {
+    pub async fn recv(
+        &mut self,
+    ) -> Result<ExternalSourceCatalogSnapshot, broadcast::error::RecvError> {
+        self.receiver.recv().await
+    }
+
     pub fn try_recv(
         &mut self,
     ) -> Result<ExternalSourceCatalogSnapshot, broadcast::error::TryRecvError> {

@@ -7,6 +7,7 @@ use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
 use bitfun_app_server_protocol::event::{SyncEventsRequest, SyncEventsResponse};
 use bitfun_app_server_protocol::{MIN_PROTOCOL_VERSION, PROTOCOL_VERSION};
 
+use crate::management::EXTERNAL_SOURCES_CAPABILITY;
 use crate::role::{AppClient, AppServer};
 
 const MAX_FRAME_BYTES: u64 = 16 * 1024 * 1024;
@@ -17,6 +18,11 @@ pub(in crate::server) fn builder(
     event_state: std::sync::Arc<crate::server::ConnectionEventState>,
     management: Option<std::sync::Arc<crate::management::AppManagementService>>,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
+    let capabilities = registered_capabilities(management.as_deref());
+    let external_source_snapshot_available = capabilities.iter().any(|capability| {
+        capability.id == EXTERNAL_SOURCES_CAPABILITY
+            && matches!(capability.availability, CapabilityAvailability::Available)
+    });
     AppServer
         .builder()
         .name("app lifecycle handlers")
@@ -41,7 +47,7 @@ pub(in crate::server) fn builder(
                         name: "bitfun-app-server".to_string(),
                         version: env!("CARGO_PKG_VERSION").to_string(),
                     },
-                    registered_capabilities(management.as_deref()),
+                    capabilities.clone(),
                     TransportLimits {
                         max_frame_bytes: MAX_FRAME_BYTES,
                         event_buffer_capacity: EVENT_BUFFER_CAPACITY,
@@ -74,6 +80,7 @@ pub(in crate::server) fn builder(
                     pending_permissions,
                     agent_snapshot_available: false,
                     config_snapshot_available: false,
+                    external_source_snapshot_available,
                 })
             },
             agent_client_protocol::on_receive_request!(),
@@ -213,6 +220,7 @@ mod tests {
             "tui.skills",
             "tui.subagents",
             "tui.mcp",
+            EXTERNAL_SOURCES_CAPABILITY,
         ] {
             let capability = capabilities
                 .iter()

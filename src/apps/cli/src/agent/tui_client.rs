@@ -5,11 +5,12 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
-use crate::tui_backend::{TuiBackend, TuiBackendError};
+use crate::tui_backend::{TuiBackend, TuiBackendError, TuiBackendErrorKind};
 use anyhow::Result;
 use bitfun_app_server_client::AppServerEvent;
 use bitfun_app_server_protocol::agent::*;
 use bitfun_app_server_protocol::event::EventStreamState;
+use bitfun_app_server_protocol::external_source::*;
 use bitfun_app_server_protocol::mcp::*;
 use bitfun_app_server_protocol::model::*;
 use bitfun_app_server_protocol::session::*;
@@ -18,6 +19,11 @@ use bitfun_app_server_protocol::subagent::*;
 use bitfun_app_server_protocol::workspace::*;
 use bitfun_core_types::SessionUsageReport;
 use bitfun_events::{AgenticEvent, AgenticEventEnvelope, AgenticEventPriority};
+use bitfun_product_domains::external_source_control::ExternalSourceControlRequestV1;
+use bitfun_product_domains::external_sources::{
+    ExternalSourceOperationError, ExternalSourceOperationErrorCode, ExternalSourcePublicSnapshot,
+    NativePromptCommandDescriptor, PromptCommandShellReviewDecision,
+};
 use bitfun_product_domains::tool_permissions::{
     PermissionReply, PermissionRequest, PermissionRequestEvent,
 };
@@ -193,6 +199,8 @@ pub(crate) struct TuiAgentClient {
     current_turn_id: Arc<Mutex<Option<String>>>,
     agent_events: Arc<RwLock<Option<broadcast::Sender<AgenticEventEnvelope>>>>,
     permission_events: Arc<RwLock<Option<broadcast::Sender<PermissionRequestEvent>>>>,
+    external_source_events:
+        Arc<RwLock<Option<broadcast::Sender<(String, ExternalSourcePublicSnapshot)>>>>,
     pending_permissions: Arc<RwLock<HashMap<String, PermissionRequest>>>,
 }
 
@@ -205,15 +213,19 @@ impl TuiAgentClient {
     ) -> Self {
         let (agent_sender, _) = broadcast::channel(256);
         let (permission_sender, _) = broadcast::channel(64);
+        let (external_source_sender, _) = broadcast::channel(64);
         let agent_events = Arc::new(RwLock::new(Some(agent_sender.clone())));
         let permission_events = Arc::new(RwLock::new(Some(permission_sender.clone())));
+        let external_source_events = Arc::new(RwLock::new(Some(external_source_sender.clone())));
         let pending_permissions = Arc::new(RwLock::new(HashMap::new()));
         spawn_event_bridge(
             backend.subscribe_events(),
             agent_sender,
             permission_sender,
+            external_source_sender,
             agent_events.clone(),
             permission_events.clone(),
+            external_source_events.clone(),
             pending_permissions.clone(),
         );
         Self {
@@ -225,6 +237,7 @@ impl TuiAgentClient {
             current_turn_id: Arc::new(Mutex::new(None)),
             agent_events,
             permission_events,
+            external_source_events,
             pending_permissions,
         }
     }
@@ -432,6 +445,102 @@ impl TuiAgentClient {
             .mcp_conflict_choice(request)
             .await
             .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn external_source_snapshot(
+        &self,
+        force_refresh: bool,
+    ) -> std::result::Result<ExternalSourceSnapshotResponse, ExternalSourceOperationError> {
+        self.backend
+            .external_source_snapshot(ExternalSourceSnapshotRequest {
+                workspace_path: self.workspace_path_string(),
+                force_refresh,
+            })
+            .await
+            .map_err(external_source_backend_error)
+    }
+
+    pub(crate) fn subscribe_external_source_updates(
+        &self,
+    ) -> Result<broadcast::Receiver<(String, ExternalSourcePublicSnapshot)>> {
+        shared_receiver(
+            &self.external_source_events,
+            "App Server external source event stream is unavailable",
+        )
+    }
+
+    pub(crate) async fn external_source_control(
+        &self,
+        request: ExternalSourceControlRequestV1,
+    ) -> std::result::Result<ExternalSourceControlResponse, ExternalSourceOperationError> {
+        self.backend
+            .external_source_control(ExternalSourceControlRequest {
+                workspace_path: self.workspace_path_string(),
+                request,
+            })
+            .await
+            .map_err(external_source_backend_error)
+    }
+
+    pub(crate) async fn external_source_review(
+        &self,
+        action: ExternalSourceReviewAction,
+    ) -> std::result::Result<ExternalSourceSnapshotResponse, ExternalSourceOperationError> {
+        self.backend
+            .external_source_review(ExternalSourceReviewRequest {
+                workspace_path: self.workspace_path_string(),
+                operation_id: format!("tui-{}", uuid::Uuid::new_v4()),
+                action,
+            })
+            .await
+            .map(|response| response.0)
+            .map_err(external_source_backend_error)
+    }
+
+    pub(crate) async fn set_native_command_choice(
+        &self,
+        native_commands: Vec<NativePromptCommandDescriptor>,
+        selected_candidate_id: String,
+        expected_preference_revision: u64,
+    ) -> std::result::Result<SetNativeCommandChoiceResponse, ExternalSourceOperationError> {
+        self.backend
+            .set_native_command_choice(SetNativeCommandChoiceRequest {
+                workspace_path: self.workspace_path_string(),
+                operation_id: format!("tui-{}", uuid::Uuid::new_v4()),
+                native_commands,
+                selected_candidate_id,
+                expected_preference_revision,
+            })
+            .await
+            .map_err(external_source_backend_error)
+    }
+
+    pub(crate) async fn expand_external_command(
+        &self,
+        command_name: String,
+        arguments: String,
+        native_commands: Vec<NativePromptCommandDescriptor>,
+        candidate_id: Option<String>,
+        content_version: Option<String>,
+        native_conflict_key: Option<String>,
+        expected_preference_revision: Option<u64>,
+        shell_review_decision: Option<PromptCommandShellReviewDecision>,
+    ) -> std::result::Result<ExpandExternalCommandResponse, ExternalSourceOperationError> {
+        self.backend
+            .expand_external_command(ExpandExternalCommandRequest {
+                workspace_path: self.workspace_path_string(),
+                operation_id: format!("tui-{}", uuid::Uuid::new_v4()),
+                command_name,
+                arguments,
+                native_commands,
+                candidate_id,
+                content_version,
+                native_conflict_key,
+                expected_preference_revision,
+                shell_review_decision,
+            })
+            .await
+            .map_err(external_source_backend_error)
     }
 
     pub(crate) fn subscribe_events(&self) -> Result<broadcast::Receiver<AgenticEventEnvelope>> {
@@ -1206,6 +1315,21 @@ impl TuiAgentClient {
     }
 }
 
+fn external_source_backend_error(error: TuiBackendError) -> ExternalSourceOperationError {
+    if let Some(decoded) = ExternalSourceOperationError::decode(&error.message) {
+        return decoded;
+    }
+    let code = if error.outcome_unknown {
+        ExternalSourceOperationErrorCode::Timeout
+    } else if matches!(error.kind, TuiBackendErrorKind::Unsupported { .. }) {
+        ExternalSourceOperationErrorCode::HostCapabilityUnavailable
+    } else {
+        ExternalSourceOperationErrorCode::Internal
+    };
+    ExternalSourceOperationError::new(code, error.message, error.outcome_unknown)
+        .with_default_recovery_actions()
+}
+
 fn shared_receiver<T: Clone>(
     source: &Arc<RwLock<Option<broadcast::Sender<T>>>>,
     message: &str,
@@ -1222,8 +1346,12 @@ fn spawn_event_bridge(
     mut source: broadcast::Receiver<AppServerEvent>,
     agent_sender: broadcast::Sender<AgenticEventEnvelope>,
     permission_sender: broadcast::Sender<PermissionRequestEvent>,
+    external_source_sender: broadcast::Sender<(String, ExternalSourcePublicSnapshot)>,
     agent_owner: Arc<RwLock<Option<broadcast::Sender<AgenticEventEnvelope>>>>,
     permission_owner: Arc<RwLock<Option<broadcast::Sender<PermissionRequestEvent>>>>,
+    external_source_owner: Arc<
+        RwLock<Option<broadcast::Sender<(String, ExternalSourcePublicSnapshot)>>>,
+    >,
     pending: Arc<RwLock<HashMap<String, PermissionRequest>>>,
 ) {
     tokio::spawn(async move {
@@ -1249,6 +1377,16 @@ fn spawn_event_bridge(
                         }
                     }
                     let _ = permission_sender.send(notification.event);
+                }
+                Ok(AppServerEvent::ExternalSource(notification)) => {
+                    let _ = external_source_sender
+                        .send((notification.workspace_path, notification.snapshot));
+                }
+                Ok(AppServerEvent::StreamState(notification))
+                    if notification.stream
+                        == bitfun_app_server_protocol::event::EventStream::ExternalSource =>
+                {
+                    // The next TUI snapshot request is the authoritative recovery path.
                 }
                 Ok(AppServerEvent::StreamState(notification))
                     if matches!(
@@ -1280,6 +1418,9 @@ fn spawn_event_bridge(
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
         *permission_owner
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+        *external_source_owner
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
     });

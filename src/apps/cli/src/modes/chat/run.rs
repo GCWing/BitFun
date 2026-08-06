@@ -470,64 +470,55 @@ impl ChatMode {
             }
         }
 
-        let mut external_source_rx = None;
         if self.agent.is_shared() {
             chat_view.set_status(Some(format!(
                 "{SHARED_TUI_CHAT_STATUS} {SHARED_TUI_EMBEDDED_HANDOFF}"
             )));
-        } else {
-            let external_workspace = self.agent.workspace_path_buf();
-            let (initial_external_sources, updates, conflict_preferences) =
-                tokio::task::block_in_place(|| {
-                    rt_handle.block_on(async {
-                        let updates =
-                            subscribe_external_source_updates(Some(&external_workspace)).await;
-                        let snapshot =
-                            external_source_snapshot(Some(&external_workspace), false).await;
-                        let preferences = external_source_conflict_choices().await.map(Into::into);
-                        (snapshot, updates.ok(), preferences)
-                    })
-                });
-            external_source_rx = updates;
-            match conflict_preferences {
-                Ok(preferences) => self.replace_external_conflict_preferences(preferences),
-                Err(error) => {
-                    tracing::warn!("External source preferences are unavailable: {}", error)
-                }
-            }
-            match initial_external_sources {
-                Ok(snapshot) => {
-                    let (available, restricted) = external_command_counts(&snapshot);
-                    let pending_conflicts = snapshot
-                        .command_conflicts
-                        .iter()
-                        .filter(|conflict| conflict.selected_candidate_id.is_none())
-                        .count();
-                    let tool_notice = self.take_external_tool_notice(&snapshot);
-                    let agent_notice = self.take_external_agent_notice(&snapshot);
-                    self.update_external_source_view(&mut chat_view, &snapshot);
-                    self.external_source_snapshot = Some(snapshot.clone());
-                    if snapshot.discovery_pending {
-                        chat_view.set_status(Some(
-                            "Checking compatible content from external AI applications".to_string(),
-                        ));
-                    } else if tool_notice.is_some() || agent_notice.is_some() {
-                        chat_view.set_status(Some(
-                            [tool_notice, agent_notice]
-                                .into_iter()
-                                .flatten()
-                                .collect::<Vec<_>>()
-                                .join("; "),
-                        ));
-                    } else if available + restricted > 0 || pending_conflicts > 0 {
-                        chat_view.set_status(Some(format!(
+        }
+        let agent = self.agent.clone();
+        let (initial_external_sources, updates) = tokio::task::block_in_place(|| {
+            let updates = agent.subscribe_external_source_updates().ok();
+            let snapshot = rt_handle.block_on(agent.external_source_snapshot(false));
+            (snapshot, updates)
+        });
+        let mut external_source_rx = updates;
+        match initial_external_sources {
+            Ok(response) => {
+                self.replace_external_conflict_preferences(response.preferences.into());
+                let snapshot = response.snapshot;
+                let (available, restricted) = external_command_counts(&snapshot);
+                let pending_conflicts = snapshot
+                    .command_conflicts
+                    .iter()
+                    .filter(|conflict| conflict.selected_candidate_id.is_none())
+                    .count();
+                let tool_notice = self.take_external_tool_notice(&snapshot);
+                let agent_notice = self.take_external_agent_notice(&snapshot);
+                self.update_external_source_view(&mut chat_view, &snapshot);
+                self.external_source_snapshot = Some(snapshot.clone());
+                if snapshot.discovery_pending {
+                    chat_view.set_status(Some(
+                        "Checking compatible content from external AI applications".to_string(),
+                    ));
+                } else if tool_notice.is_some() || agent_notice.is_some() {
+                    chat_view.set_status(Some(
+                        [tool_notice, agent_notice]
+                            .into_iter()
+                            .flatten()
+                            .collect::<Vec<_>>()
+                            .join("; "),
+                    ));
+                } else if available + restricted > 0 || pending_conflicts > 0 {
+                    chat_view.set_status(Some(format!(
                             "External sources: {available} commands available, {restricted} restricted, {pending_conflicts} need a choice"
                         )));
-                    }
                 }
-                Err(error) => {
-                    tracing::warn!("External source discovery is unavailable: {}", error);
-                }
+            }
+            Err(error) => {
+                tracing::warn!(
+                    error_code = error.code.as_str(),
+                    "External source discovery is unavailable"
+                );
             }
         }
 
@@ -763,7 +754,12 @@ impl ChatMode {
                 let mut latest = None;
                 for _ in 0..4 {
                     match receiver.try_recv() {
-                        Ok(snapshot) => latest = Some(snapshot),
+                        Ok((workspace_path, snapshot))
+                            if workspace_path == self.agent.workspace_path_string() =>
+                        {
+                            latest = Some(snapshot)
+                        }
+                        Ok(_) => continue,
                         Err(TryRecvError::Lagged(_)) => continue,
                         Err(TryRecvError::Empty) => break,
                         Err(TryRecvError::Closed) => {
@@ -778,14 +774,22 @@ impl ChatMode {
                         .as_ref()
                         .is_some_and(|previous| previous.discovery_pending)
                         && !snapshot.discovery_pending;
-                    let preferences = tokio::task::block_in_place(|| {
-                        rt_handle
-                            .block_on(external_source_conflict_choices())
-                            .map(Into::into)
+                    let response = tokio::task::block_in_place(|| {
+                        rt_handle.block_on(self.agent.external_source_snapshot(false))
                     });
-                    if let Ok(preferences) = preferences {
-                        self.replace_external_conflict_preferences(preferences);
-                    }
+                    let snapshot = match response {
+                        Ok(response) => {
+                            self.replace_external_conflict_preferences(response.preferences.into());
+                            response.snapshot
+                        }
+                        Err(error) => {
+                            tracing::warn!(
+                                error_code = error.code.as_str(),
+                                "External source event snapshot recovery failed"
+                            );
+                            snapshot
+                        }
+                    };
                     let tool_notice = self.take_external_tool_notice(&snapshot);
                     let agent_notice = self.take_external_agent_notice(&snapshot);
                     self.update_external_source_view(&mut chat_view, &snapshot);

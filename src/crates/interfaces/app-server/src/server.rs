@@ -24,6 +24,7 @@ pub(super) struct ConnectionEventState {
     agent_sequence: AtomicU64,
     permission_sequence: AtomicU64,
     config_sequence: AtomicU64,
+    external_source_sequence: AtomicU64,
 }
 
 impl ConnectionEventState {
@@ -36,6 +37,7 @@ impl ConnectionEventState {
             agent_sequence: AtomicU64::new(0),
             permission_sequence: AtomicU64::new(0),
             config_sequence: AtomicU64::new(0),
+            external_source_sequence: AtomicU64::new(0),
         }
     }
 
@@ -47,6 +49,9 @@ impl ConnectionEventState {
             bitfun_app_server_protocol::event::EventStream::Agent => &self.agent_sequence,
             bitfun_app_server_protocol::event::EventStream::Permission => &self.permission_sequence,
             bitfun_app_server_protocol::event::EventStream::Config => &self.config_sequence,
+            bitfun_app_server_protocol::event::EventStream::ExternalSource => {
+                &self.external_source_sequence
+            }
         };
         bitfun_app_server_protocol::event::EventCursor {
             connection_id: self.id.clone(),
@@ -63,6 +68,9 @@ impl ConnectionEventState {
             bitfun_app_server_protocol::event::EventStream::Agent => &self.agent_sequence,
             bitfun_app_server_protocol::event::EventStream::Permission => &self.permission_sequence,
             bitfun_app_server_protocol::event::EventStream::Config => &self.config_sequence,
+            bitfun_app_server_protocol::event::EventStream::ExternalSource => {
+                &self.external_source_sequence
+            }
         };
         bitfun_app_server_protocol::event::EventCursor {
             connection_id: self.id.clone(),
@@ -121,13 +129,14 @@ impl BitfunAppServer {
             .with_connection_builder(handlers::model::builder(management.clone()))
             .with_connection_builder(handlers::skill::builder(management.clone()))
             .with_connection_builder(handlers::subagent::builder(management.clone()))
-            .with_connection_builder(handlers::mcp::builder(management))
+            .with_connection_builder(handlers::mcp::builder(management.clone()))
+            .with_connection_builder(handlers::external_source::builder(management.clone()))
             .with_connection_builder(handlers::git::builder())
             .with_connection_builder(handlers::config::builder())
             .with_connection_builder(handlers::i18n::builder())
             .with_connection_builder(fallback::builder())
             .connect_with(transport, async move |cx: ConnectionTo<AppClient>| {
-                event_forwarder::run(runtime, cx, event_state).await
+                event_forwarder::run(runtime, management, cx, event_state).await
             })
             .await
     }

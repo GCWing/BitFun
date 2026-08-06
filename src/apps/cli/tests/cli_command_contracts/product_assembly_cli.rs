@@ -277,8 +277,8 @@ fn interactive_tui_session_client_uses_only_the_app_server_boundary() {
         TUI_BACKEND.contains("pub(crate) trait TuiBackend")
             && TUI_BACKEND.contains("AppServerClient")
             && !TUI_BACKEND.contains("bitfun_agent_runtime")
-            && !TUI_BACKEND.contains("bitfun_core::")
-            && TUI_CLIENT.contains("use crate::tui_backend::{TuiBackend, TuiBackendError};"),
+            && !TUI_BACKEND.contains("use bitfun_core::")
+            && TUI_CLIENT.contains("use crate::tui_backend::{TuiBackend, TuiBackendError"),
         "TuiBackend must remain CLI-local and depend only on App Server client contracts"
     );
     for backend_operation in [
@@ -398,18 +398,13 @@ fn interactive_tui_agent_operations_stay_behind_app_server_backend() {
             && SHARED_RUNTIME.contains(".update_session_model(request)"),
         "Shared model updates must reuse the Runtime port through the private IPC adapter"
     );
-    let shared_command_path = CHAT_COMMANDS
-        .split_once("fn handle_command(")
-        .expect("handle_command")
-        .1;
     assert!(
-        shared_command_path
-            .find("if self.agent.is_shared()")
-            .unwrap_or(usize::MAX)
-            < shared_command_path
-                .find("external_source_conflict_choices")
-                .expect("external source call"),
-        "Shared slash commands must branch before initializing Embedded external-source owners"
+        TUI_CLIENT.contains(".external_source_snapshot(ExternalSourceSnapshotRequest")
+            && TUI_CLIENT.contains(".external_source_control(ExternalSourceControlRequest")
+            && TUI_CLIENT.contains(".external_source_review(ExternalSourceReviewRequest")
+            && CHAT_COMMANDS.contains("self.agent.external_source_snapshot(false)")
+            && !CHAT_COMMANDS.contains("bitfun_core::external_sources"),
+        "TUI external-source controllers must route reads and mutations through the typed backend"
     );
     assert!(
         CHAT_COMMANDS.matches("if self.agent.is_shared()").count() >= 3

@@ -42,23 +42,31 @@ mod tests {
     use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
     use crate::ui::theme::Theme;
     use bitfun_core::external_hooks::ExternalHookCatalogSnapshotV1;
-    use bitfun_core::external_sources::{
-        native_prompt_command_conflict_key, ExternalSourceAssetKind, ExternalSourceCatalogSnapshot,
-        ExternalSourceControlSnapshotV1, ExternalSourceDiagnostic,
-        ExternalSourceDiagnosticSeverity, ExternalSourceOperationError,
-        ExternalSourceOperationErrorCode, ExternalSubagentActivationState,
-        ExternalToolActivationState,
-    };
-
     use bitfun_core::native_hooks::{
         NativeHookFileView, NativeHookHandlerView, NativeHookOverview, NativeHookRuleView,
     };
     use bitfun_events::{AgenticEvent, ToolEventData};
-    use bitfun_product_domains::external_sources::ExternalSourceScope;
-    use bitfun_product_domains::external_subagents::ExternalSubagentModelBindingTarget;
+    use bitfun_product_domains::external_source_control::ExternalSourceControlSnapshotV1;
+    use bitfun_product_domains::external_sources::{
+        native_prompt_command_conflict_key, ExternalSourceAssetKind,
+        ExternalSourceCatalogSnapshot as RawExternalSourceCatalogSnapshot,
+        ExternalSourceDiagnostic, ExternalSourceDiagnosticSeverity, ExternalSourceOperationError,
+        ExternalSourceOperationErrorCode,
+        ExternalSourcePublicSnapshot as ExternalSourceCatalogSnapshot, ExternalSourceScope,
+        ExternalToolActivationState,
+    };
+    use bitfun_product_domains::external_subagents::{
+        ExternalSubagentActivationState, ExternalSubagentModelBindingTarget,
+    };
     use bitfun_runtime_ports::AgentContextReloadTarget;
     use crossterm::event::Event;
     use std::collections::{BTreeMap, BTreeSet};
+
+    fn public_external_source_snapshot(value: serde_json::Value) -> ExternalSourceCatalogSnapshot {
+        let snapshot: RawExternalSourceCatalogSnapshot =
+            serde_json::from_value(value).expect("parse raw external source test snapshot");
+        snapshot.into()
+    }
 
     #[test]
     fn explicit_same_id_agent_selection_rebinds_through_the_runtime_owner() {
@@ -271,7 +279,7 @@ mod tests {
     }
 
     fn external_tool_review_snapshot() -> ExternalSourceCatalogSnapshot {
-        serde_json::from_value(serde_json::json!({
+        public_external_source_snapshot(serde_json::json!({
             "generation": 3,
             "discoveryPending": false,
             "sources": [{
@@ -482,7 +490,6 @@ mod tests {
                 "source": { "providerId": "opencode.tools", "sourceId": "project" }
             }]
         }))
-        .unwrap()
     }
 
     #[test]
@@ -1076,7 +1083,7 @@ mod tests {
 
     #[test]
     fn unresolved_provider_conflicts_expose_explicit_cli_choices() {
-        let snapshot: ExternalSourceCatalogSnapshot = serde_json::from_value(serde_json::json!({
+        let snapshot = public_external_source_snapshot(serde_json::json!({
             "generation": 1,
             "discoveryPending": false,
             "sources": [
@@ -1140,8 +1147,7 @@ mod tests {
                     }
                 ]
             }]
-        }))
-        .unwrap();
+        }));
 
         let projections = external_command_projections(&snapshot, &BTreeMap::new());
 
@@ -2221,7 +2227,7 @@ mod tests {
         assert!(help.contains("Command Palette"));
     }
     fn external_agent_review_snapshot() -> ExternalSourceCatalogSnapshot {
-        serde_json::from_value(serde_json::json!({
+        public_external_source_snapshot(serde_json::json!({
             "generation": 9,
             "discoveryPending": false,
             "sources": [],
@@ -2297,7 +2303,6 @@ mod tests {
             }],
             "pendingSubagentApprovals": ["external_subagent:opencode:review:v1"]
         }))
-        .unwrap()
     }
 
     #[test]

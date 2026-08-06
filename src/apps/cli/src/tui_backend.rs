@@ -5,6 +5,7 @@ use bitfun_app_server_client::{AppServerClient, AppServerEvent, ClientError, Pro
 use bitfun_app_server_protocol::agent::*;
 use bitfun_app_server_protocol::app::{HealthResponse, InitializeRequest, InitializeResponse};
 use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
+use bitfun_app_server_protocol::external_source::*;
 use bitfun_app_server_protocol::mcp::*;
 use bitfun_app_server_protocol::model::*;
 use bitfun_app_server_protocol::session::*;
@@ -235,6 +236,26 @@ pub(crate) trait TuiBackend: Send + Sync {
         &self,
         request: McpConflictChoiceRequest,
     ) -> Result<McpConflictChoiceResponse, TuiBackendError>;
+    async fn external_source_snapshot(
+        &self,
+        request: ExternalSourceSnapshotRequest,
+    ) -> Result<ExternalSourceSnapshotResponse, TuiBackendError>;
+    async fn external_source_control(
+        &self,
+        request: ExternalSourceControlRequest,
+    ) -> Result<ExternalSourceControlResponse, TuiBackendError>;
+    async fn external_source_review(
+        &self,
+        request: ExternalSourceReviewRequest,
+    ) -> Result<ExternalSourceReviewResponse, TuiBackendError>;
+    async fn set_native_command_choice(
+        &self,
+        request: SetNativeCommandChoiceRequest,
+    ) -> Result<SetNativeCommandChoiceResponse, TuiBackendError>;
+    async fn expand_external_command(
+        &self,
+        request: ExpandExternalCommandRequest,
+    ) -> Result<ExpandExternalCommandResponse, TuiBackendError>;
 }
 
 pub(crate) struct AppServerTuiBackend {
@@ -580,6 +601,41 @@ impl TuiBackend for AppServerTuiBackend {
     ) -> Result<McpConflictChoiceResponse, TuiBackendError> {
         map_client(self.client.mcp_conflict_choice(request).await)
     }
+
+    async fn external_source_snapshot(
+        &self,
+        request: ExternalSourceSnapshotRequest,
+    ) -> Result<ExternalSourceSnapshotResponse, TuiBackendError> {
+        map(self.client.external_source_snapshot(request).await)
+    }
+
+    async fn external_source_control(
+        &self,
+        request: ExternalSourceControlRequest,
+    ) -> Result<ExternalSourceControlResponse, TuiBackendError> {
+        map_client(self.client.external_source_control(request).await)
+    }
+
+    async fn external_source_review(
+        &self,
+        request: ExternalSourceReviewRequest,
+    ) -> Result<ExternalSourceReviewResponse, TuiBackendError> {
+        map_client(self.client.external_source_review(request).await)
+    }
+
+    async fn set_native_command_choice(
+        &self,
+        request: SetNativeCommandChoiceRequest,
+    ) -> Result<SetNativeCommandChoiceResponse, TuiBackendError> {
+        map_client(self.client.set_native_command_choice(request).await)
+    }
+
+    async fn expand_external_command(
+        &self,
+        request: ExpandExternalCommandRequest,
+    ) -> Result<ExpandExternalCommandResponse, TuiBackendError> {
+        map_client(self.client.expand_external_command(request).await)
+    }
 }
 
 fn map<T>(result: Result<T, ProtocolError>) -> Result<T, TuiBackendError> {
@@ -598,16 +654,30 @@ fn map_client<T>(result: Result<T, ClientError>) -> Result<T, TuiBackendError> {
 
 fn map_protocol_error(error: ProtocolError) -> TuiBackendError {
     let message = error.to_string();
-    match error
-        .data
-        .and_then(|value| serde_json::from_value::<AppServerErrorData>(value).ok())
-    {
-        Some(data) => backend_error_from_data(message, data),
-        None => TuiBackendError {
-            message,
-            outcome_unknown: false,
-            kind: TuiBackendErrorKind::Backend,
-        },
+    if let Some(value) = error.data {
+        if let Ok(external) = serde_json::from_value::<ExternalSourceErrorData>(value.clone()) {
+            let kind = match external.app.capability {
+                Some(capability)
+                    if matches!(external.app.kind, AppServerErrorKind::Unsupported) =>
+                {
+                    TuiBackendErrorKind::Unsupported { capability }
+                }
+                _ => TuiBackendErrorKind::Backend,
+            };
+            return TuiBackendError {
+                message: external.error.encode(),
+                outcome_unknown: external.app.outcome_unknown,
+                kind,
+            };
+        }
+        if let Ok(data) = serde_json::from_value::<AppServerErrorData>(value) {
+            return backend_error_from_data(message, data);
+        }
+    }
+    TuiBackendError {
+        message,
+        outcome_unknown: false,
+        kind: TuiBackendErrorKind::Backend,
     }
 }
 
@@ -629,6 +699,10 @@ fn backend_error_from_data(message: String, data: AppServerErrorData) -> TuiBack
 mod tests {
     use super::{map_protocol_error, TuiBackendErrorKind, TuiEffect, TuiEffectRoute};
     use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
+    use bitfun_app_server_protocol::external_source::ExternalSourceErrorData;
+    use bitfun_product_domains::external_sources::{
+        ExternalSourceOperationError, ExternalSourceOperationErrorCode,
+    };
 
     struct LocalEffect;
 
@@ -669,5 +743,45 @@ mod tests {
             }
         );
         assert!(!mapped.outcome_unknown);
+    }
+
+    #[test]
+    fn external_source_protocol_error_preserves_domain_contract() {
+        let domain = ExternalSourceOperationError::new(
+            ExternalSourceOperationErrorCode::StaleRevision,
+            "The external source catalog changed",
+            false,
+        )
+        .with_correlation_id("external-source-ref-5")
+        .with_default_recovery_actions();
+        let error = bitfun_app_server_client::ProtocolError::new(
+            AppServerErrorKind::StaleRevision.json_rpc_code() as i32,
+            domain.detail.clone(),
+        )
+        .data(
+            serde_json::to_value(ExternalSourceErrorData {
+                app: AppServerErrorData {
+                    kind: AppServerErrorKind::StaleRevision,
+                    retryable: domain.retryable,
+                    outcome_unknown: false,
+                    capability: Some("tui.externalSources".to_string()),
+                    request_id: domain.correlation_id.clone(),
+                },
+                error: domain.clone(),
+            })
+            .expect("serialize external source error data"),
+        );
+
+        let mapped = map_protocol_error(error);
+        assert_eq!(mapped.kind, TuiBackendErrorKind::Backend);
+        assert!(!mapped.outcome_unknown);
+        let decoded = ExternalSourceOperationError::decode(&mapped.message)
+            .expect("decode mapped external source error");
+        assert_eq!(
+            decoded.code,
+            ExternalSourceOperationErrorCode::StaleRevision
+        );
+        assert_eq!(decoded.correlation_id, domain.correlation_id);
+        assert_eq!(decoded.recovery_actions, domain.recovery_actions);
     }
 }

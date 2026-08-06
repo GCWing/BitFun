@@ -36,7 +36,7 @@ fn external_command_projections(
                     .iter()
                     .find(|source| source.record.key == entry.definition.id.source)?;
                 let native_candidate_id = format!("bitfun.cli:{}", action.id);
-                let external_candidate_id = entry.definition.id.stable_key();
+                let external_candidate_id = entry.candidate_id.clone();
                 let conflict_key = native_prompt_command_conflict_key(
                     source.record.execution_domain_id.as_str(),
                     &entry.definition.name,
@@ -63,7 +63,7 @@ fn external_command_projections(
                 action_id: format!("external-command:{}", entry.definition.name),
                 command_name: entry.definition.name.clone(),
                 invocation_alias: format!("/{}", entry.definition.name),
-                candidate_id: entry.definition.id.stable_key(),
+                candidate_id: entry.candidate_id.clone(),
                 content_version: entry.definition.content_version.clone(),
                 description: format!("{} · {}", entry.definition.description, ecosystem),
                 restricted,
@@ -166,7 +166,7 @@ fn external_command_counts(snapshot: &ExternalSourceCatalogSnapshot) -> (usize, 
 fn external_integration_policy_lines(snapshot: &ExternalSourceCatalogSnapshot) -> Vec<String> {
     let policy = &snapshot.integration_policy;
     if policy.status
-        == bitfun_core::external_sources::ExternalIntegrationPolicyStatus::IncompatibleSchema
+        == bitfun_product_domains::external_integration_policy::ExternalIntegrationPolicyStatus::IncompatibleSchema
     {
         return vec![
             format!(
@@ -284,9 +284,11 @@ fn parse_external_control_action(arguments: &str) -> Result<ExternalControlUiAct
 }
 
 fn external_control_review_text(
-    control: &bitfun_core::external_sources::ExternalSourceControlSnapshotV1,
+    control: &bitfun_product_domains::external_source_control::ExternalSourceControlSnapshotV1,
 ) -> String {
-    use bitfun_core::external_sources::{ExternalCapabilityKindV1, ExternalSourceRuntimeState};
+    use bitfun_product_domains::external_source_control::{
+        ExternalCapabilityKindV1, ExternalSourceRuntimeState,
+    };
 
     let mut lines = vec![
         "External integrations".to_string(),
@@ -409,8 +411,9 @@ struct ExternalControlMutationResult {
     action: ExternalControlUiAction,
     result: std::result::Result<
         (
-            bitfun_core::external_sources::ExternalSourceSurfaceSnapshotV1,
+            bitfun_product_domains::external_source_control::ExternalSourceControlSnapshotV1,
             Option<ExternalSourceCatalogSnapshot>,
+            Option<ExternalSourceConflictPreferences>,
         ),
         ExternalSourceOperationError,
     >,
@@ -1035,7 +1038,7 @@ enum ExternalIssueSurface {
 }
 
 fn is_external_agent_diagnostic(
-    diagnostic: &bitfun_core::external_sources::ExternalSourceDiagnostic,
+    diagnostic: &bitfun_product_domains::external_sources::ExternalSourceDiagnostic,
 ) -> bool {
     matches!(diagnostic.asset_kind, ExternalSourceAssetKind::Subagent)
 }

@@ -11,6 +11,7 @@ pub const MODELS_CAPABILITY: &str = "tui.models";
 pub const SKILLS_CAPABILITY: &str = "tui.skills";
 pub const SUBAGENTS_CAPABILITY: &str = "tui.subagents";
 pub const MCP_CAPABILITY: &str = "tui.mcp";
+pub const EXTERNAL_SOURCES_CAPABILITY: &str = "tui.externalSources";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppManagementCapabilities {
@@ -19,6 +20,7 @@ pub struct AppManagementCapabilities {
     pub skills: CapabilityAvailability,
     pub subagents: CapabilityAvailability,
     pub mcp: CapabilityAvailability,
+    pub external_sources: CapabilityAvailability,
 }
 
 impl AppManagementCapabilities {
@@ -29,6 +31,7 @@ impl AppManagementCapabilities {
             skills: CapabilityAvailability::Available,
             subagents: CapabilityAvailability::Available,
             mcp: CapabilityAvailability::Available,
+            external_sources: CapabilityAvailability::Available,
         }
     }
 
@@ -40,6 +43,7 @@ impl AppManagementCapabilities {
             skills: unavailable(&reason),
             subagents: unavailable(&reason),
             mcp: unavailable(&reason),
+            external_sources: unavailable(&reason),
         }
     }
 
@@ -50,6 +54,7 @@ impl AppManagementCapabilities {
             SKILLS_CAPABILITY => Some(&self.skills),
             SUBAGENTS_CAPABILITY => Some(&self.subagents),
             MCP_CAPABILITY => Some(&self.mcp),
+            EXTERNAL_SOURCES_CAPABILITY => Some(&self.external_sources),
             _ => None,
         }
     }
@@ -90,6 +95,18 @@ impl AppManagementCapabilities {
                     "mcp/delete",
                     "mcp/externalDecision",
                     "mcp/conflictChoice",
+                ],
+            ),
+            descriptor(
+                EXTERNAL_SOURCES_CAPABILITY,
+                self.external_sources.clone(),
+                &[
+                    "externalSource/snapshot",
+                    "externalSource/control",
+                    "externalSource/review",
+                    "externalSource/setNativeCommandChoice",
+                    "externalSource/expandCommand",
+                    "externalSource/event",
                 ],
             ),
         ]
@@ -170,7 +187,7 @@ mod tests {
         let capabilities = AppManagementCapabilities::unavailable(reason);
         let descriptors = capabilities.descriptors();
 
-        assert_eq!(descriptors.len(), 5);
+        assert_eq!(descriptors.len(), 6);
         for descriptor in descriptors {
             assert!(matches!(
                 descriptor.availability,

@@ -986,16 +986,6 @@ async fn run_interactive(
     let compatibility = runtime
         .as_ref()
         .map(|runtime| runtime.compatibility().clone());
-    if !shared {
-        if let Err(error) =
-            bitfun_core::external_sources::ensure_external_source_workspace_snapshot(Some(
-                &workspace_path,
-            ))
-            .await
-        {
-            tracing::warn!("Failed to initialize external agent sources: {error}");
-        }
-    }
     // 3.5 Restore persisted account session (if any)
     if !shared {
         if let Some(user_id) = account::try_restore_session().await {

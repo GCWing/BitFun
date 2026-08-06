@@ -1,7 +1,7 @@
 impl ChatView {
     pub(crate) fn show_prompt_command_shell_review(
         &mut self,
-        plan: bitfun_core::external_sources::PromptCommandShellReviewPlan,
+        plan: bitfun_product_domains::external_sources::PromptCommandShellReviewPlan,
     ) {
         self.prompt_command_shell_review =
             Some(crate::ui::prompt_command_shell_review::PromptCommandShellReviewPrompt::new(plan));

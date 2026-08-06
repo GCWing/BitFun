@@ -1,13 +1,14 @@
 //! Concrete App Server management adapter over the existing product owners.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
 use bitfun_app_server_protocol::agent::{
     AgentModeSummary, ListAgentModesRequest, ListAgentModesResponse,
 };
+use bitfun_app_server_protocol::external_source::*;
 use bitfun_app_server_protocol::mcp::*;
 use bitfun_app_server_protocol::model::*;
 use bitfun_app_server_protocol::skill::*;
@@ -23,6 +24,11 @@ use super::{AppManagementCapabilities, AppManagementError, AppManagementResult};
 pub struct AppManagementService {
     config: Arc<bitfun_core::service::config::ConfigService>,
     mcp: Option<Arc<bitfun_core::service::mcp::MCPService>>,
+    external_source_updates: tokio::sync::broadcast::Sender<(
+        String,
+        bitfun_product_domains::external_sources::ExternalSourcePublicSnapshot,
+    )>,
+    external_source_subscriptions: Arc<Mutex<HashSet<String>>>,
 }
 
 impl AppManagementService {
@@ -30,9 +36,12 @@ impl AppManagementService {
         let config = bitfun_core::service::config::get_global_config_service()
             .await
             .context("Failed to load the App Server management configuration owner")?;
+        let (external_source_updates, _) = tokio::sync::broadcast::channel(64);
         Ok(Self {
             config,
             mcp: bitfun_core::service::mcp::get_global_mcp_service(),
+            external_source_updates,
+            external_source_subscriptions: Arc::new(Mutex::new(HashSet::new())),
         })
     }
 
@@ -55,6 +64,123 @@ impl AppManagementService {
                     })
             })
     }
+
+    pub fn subscribe_external_source_updates(
+        &self,
+    ) -> tokio::sync::broadcast::Receiver<(
+        String,
+        bitfun_product_domains::external_sources::ExternalSourcePublicSnapshot,
+    )> {
+        self.external_source_updates.subscribe()
+    }
+
+    async fn ensure_external_source_subscription(
+        &self,
+        workspace: &Path,
+    ) -> AppManagementResult<()> {
+        let workspace_path = workspace.to_string_lossy().to_string();
+        {
+            let mut subscriptions = self
+                .external_source_subscriptions
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if !subscriptions.insert(workspace_path.clone()) {
+                return Ok(());
+            }
+        }
+        let mut subscription =
+            match bitfun_core::external_sources::subscribe_external_source_updates(Some(workspace))
+                .await
+            {
+                Ok(subscription) => subscription,
+                Err(error) => {
+                    self.external_source_subscriptions
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .remove(&workspace_path);
+                    return Err(external_source_string_error(error));
+                }
+            };
+        let updates = self.external_source_updates.clone();
+        let subscriptions = self.external_source_subscriptions.clone();
+        tokio::spawn(async move {
+            loop {
+                match subscription.recv().await {
+                    Ok(snapshot) => {
+                        let _ = updates.send((
+                            workspace_path.clone(),
+                            bitfun_product_domains::external_sources::ExternalSourcePublicSnapshot::from(snapshot),
+                        ));
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                }
+            }
+            subscriptions
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .remove(&workspace_path);
+        });
+        Ok(())
+    }
+}
+
+fn external_source_error(
+    error: bitfun_product_domains::external_sources::ExternalSourceOperationError,
+) -> AppManagementError {
+    use bitfun_product_domains::external_sources::ExternalSourceOperationErrorCode as Code;
+    let encoded = error.encode();
+    match error.code {
+        Code::InvalidRequest => AppManagementError::invalid_request(encoded),
+        Code::NotFound => AppManagementError::not_found(encoded),
+        Code::HostCapabilityUnavailable | Code::Unsupported => {
+            AppManagementError::unsupported(encoded)
+        }
+        _ => AppManagementError::internal(encoded),
+    }
+}
+
+fn external_source_string_error(error: String) -> AppManagementError {
+    external_source_error(
+        bitfun_core::external_sources::sanitize_external_source_operation_error(error),
+    )
+}
+
+fn validate_external_operation(operation_id: &str) -> AppManagementResult<()> {
+    validate_operation_id(operation_id).map_err(AppManagementError::invalid_request)
+}
+
+async fn external_source_preferences() -> AppManagementResult<ExternalSourceConflictPreferences> {
+    bitfun_core::external_sources::external_source_conflict_choices()
+        .await
+        .map(
+            |(choices, lineage_current_keys, conflicted_candidate_ids)| {
+                ExternalSourceConflictPreferences {
+                    choices,
+                    lineage_current_keys,
+                    conflicted_candidate_ids,
+                }
+            },
+        )
+        .map_err(external_source_string_error)
+}
+
+async fn external_source_snapshot_response(
+    workspace: &Path,
+    force_refresh: bool,
+) -> AppManagementResult<ExternalSourceSnapshotResponse> {
+    let surface = bitfun_core::external_sources::get_external_source_control_snapshot(
+        Some(workspace),
+        force_refresh,
+        bitfun_product_domains::external_sources::ExternalSourceHostCapabilities::read_write(),
+    )
+    .await
+    .map_err(external_source_error)?;
+    Ok(ExternalSourceSnapshotResponse {
+        control: surface.control,
+        snapshot: surface.catalog,
+        preferences: external_source_preferences().await?,
+    })
 }
 
 fn core_error(error: bitfun_core::BitFunError) -> AppManagementError {
@@ -537,6 +663,183 @@ impl AppManagementService {
                 };
         }
         capabilities
+    }
+
+    pub async fn external_source_snapshot(
+        &self,
+        request: ExternalSourceSnapshotRequest,
+    ) -> AppManagementResult<ExternalSourceSnapshotResponse> {
+        let workspace = Path::new(&request.workspace_path);
+        self.ensure_external_source_subscription(workspace).await?;
+        external_source_snapshot_response(workspace, request.force_refresh).await
+    }
+
+    pub async fn external_source_control(
+        &self,
+        request: ExternalSourceControlRequest,
+    ) -> AppManagementResult<ExternalSourceControlResponse> {
+        request
+            .request
+            .validate()
+            .map_err(AppManagementError::invalid_request)?;
+        let workspace = Path::new(&request.workspace_path);
+        let surface = bitfun_core::external_sources::apply_external_source_control_action(
+            Some(workspace),
+            request.request,
+        )
+        .await
+        .map_err(external_source_error)?;
+        Ok(ExternalSourceControlResponse {
+            surface,
+            snapshot: external_source_snapshot_response(workspace, false).await?,
+        })
+    }
+
+    pub async fn external_source_review(
+        &self,
+        request: ExternalSourceReviewRequest,
+    ) -> AppManagementResult<ExternalSourceReviewResponse> {
+        validate_external_operation(&request.operation_id)?;
+        let workspace = Path::new(&request.workspace_path);
+        let result = match request.action {
+            ExternalSourceReviewAction::Refresh => {
+                bitfun_core::external_sources::external_source_snapshot(Some(workspace), true).await
+            }
+            ExternalSourceReviewAction::SetPromptCommandConflictChoice {
+                conflict_key,
+                candidate_id,
+                expected_preference_revision,
+            } => {
+                bitfun_core::external_sources::set_external_prompt_command_conflict_choice(
+                    Some(workspace),
+                    &conflict_key,
+                    &candidate_id,
+                    expected_preference_revision,
+                )
+                .await
+            }
+            ExternalSourceReviewAction::SetToolTargetDecision {
+                approval_key,
+                decision_key,
+                approved,
+                expected_preference_revision,
+            } => {
+                bitfun_core::external_sources::set_external_tool_target_decision(
+                    Some(workspace),
+                    &approval_key,
+                    &decision_key,
+                    approved,
+                    expected_preference_revision,
+                )
+                .await
+            }
+            ExternalSourceReviewAction::SetToolConflictChoice {
+                conflict_key,
+                candidate_id,
+                expected_preference_revision,
+            } => {
+                bitfun_core::external_sources::set_external_tool_conflict_choice(
+                    Some(workspace),
+                    &conflict_key,
+                    &candidate_id,
+                    expected_preference_revision,
+                )
+                .await
+            }
+            ExternalSourceReviewAction::SetSubagentActivation {
+                candidate_id,
+                approved,
+                expected_subagent_generation,
+                expected_preference_revision,
+                decision_key,
+            } => {
+                bitfun_core::external_sources::set_external_subagent_activation(
+                    Some(workspace),
+                    &candidate_id,
+                    approved,
+                    expected_subagent_generation,
+                    expected_preference_revision,
+                    &decision_key,
+                )
+                .await
+            }
+            ExternalSourceReviewAction::SetSubagentModelBinding {
+                binding_key,
+                target,
+                expected_subagent_generation,
+                expected_preference_revision,
+            } => {
+                bitfun_core::external_sources::set_external_subagent_model_binding(
+                    Some(workspace),
+                    &binding_key,
+                    target,
+                    expected_subagent_generation,
+                    expected_preference_revision,
+                )
+                .await
+            }
+            ExternalSourceReviewAction::ChooseSubagentConflict {
+                conflict_key,
+                candidate_id,
+                approve_external,
+                expected_subagent_generation,
+                expected_preference_revision,
+            } => {
+                bitfun_core::external_sources::choose_external_subagent_conflict(
+                    Some(workspace),
+                    &conflict_key,
+                    &candidate_id,
+                    approve_external,
+                    expected_subagent_generation,
+                    expected_preference_revision,
+                )
+                .await
+            }
+        };
+        result.map_err(external_source_string_error)?;
+        Ok(ExternalSourceReviewResponse(
+            external_source_snapshot_response(workspace, false).await?,
+        ))
+    }
+
+    pub async fn set_native_command_choice(
+        &self,
+        request: SetNativeCommandChoiceRequest,
+    ) -> AppManagementResult<SetNativeCommandChoiceResponse> {
+        validate_external_operation(&request.operation_id)?;
+        let conflicts = bitfun_core::external_sources::set_native_prompt_command_conflict_choice(
+            Some(Path::new(&request.workspace_path)),
+            request.native_commands,
+            &request.selected_candidate_id,
+            request.expected_preference_revision,
+        )
+        .await
+        .map_err(external_source_string_error)?;
+        Ok(SetNativeCommandChoiceResponse {
+            conflicts,
+            preferences: external_source_preferences().await?,
+        })
+    }
+
+    pub async fn expand_external_command(
+        &self,
+        request: ExpandExternalCommandRequest,
+    ) -> AppManagementResult<ExpandExternalCommandResponse> {
+        validate_external_operation(&request.operation_id)?;
+        bitfun_core::external_sources::expand_external_prompt_command(
+            Some(Path::new(&request.workspace_path)),
+            &request.command_name,
+            &request.arguments,
+            request.native_commands,
+            request.candidate_id.as_deref(),
+            request.content_version.as_deref(),
+            request.native_conflict_key.as_deref(),
+            request.expected_preference_revision,
+            request.shell_review_decision.as_ref(),
+        )
+        .await
+        .map(ExpandExternalCommandResponse)
+        .map_err(external_source_string_error)
     }
 
     pub async fn list_agent_modes(
