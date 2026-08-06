@@ -71,6 +71,8 @@
     "empty": "No saved SSH servers.",
     "noAgents": "Add an ACP agent before checking remote servers.",
     "refreshDetection": "Refresh detection",
+    "deleteConnection": "Delete",
+    "deleteConfirm": "Remove the remote server \"{{name}}\" from saved SSH connections? Its ACP agent entries will also be removed.",
     "summary": "{{available}} / {{total}} available",
     "issueSummary": "{{count}} issue(s)"
   },
@@ -112,6 +114,8 @@
     "downloadSuccess": "ACP agent CLI downloaded",
     "downloadFailed": "Failed to download ACP agent CLI",
     "predownloadSuccess": "ACP adapter downloaded",
-    "predownloadFailed": "Failed to download ACP adapter"
+    "predownloadFailed": "Failed to download ACP adapter",
+    "deleteConnectionSuccess": "Remote server connection deleted",
+    "deleteConnectionFailed": "Failed to delete remote server connection"
   }
 }

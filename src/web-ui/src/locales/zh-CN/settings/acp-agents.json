@@ -71,6 +71,8 @@
     "empty": "没有已保存的 SSH 服务器。",
     "noAgents": "请先添加 ACP Agent，再检测远程服务器。",
     "refreshDetection": "刷新检测",
+    "deleteConnection": "删除",
+    "deleteConfirm": "确定从已保存的 SSH 连接中移除远程服务器「{{name}}」吗？其 ACP Agent 条目也将一并移除。",
     "summary": "{{available}} / {{total}} 可用",
     "issueSummary": "{{count}} 个异常"
   },
@@ -112,6 +114,8 @@
     "downloadSuccess": "ACP Agent CLI 已下载",
     "downloadFailed": "下载 ACP Agent CLI 失败",
     "predownloadSuccess": "ACP 适配器已下载",
-    "predownloadFailed": "下载 ACP 适配器失败"
+    "predownloadFailed": "下载 ACP 适配器失败",
+    "deleteConnectionSuccess": "远程服务器连接已删除",
+    "deleteConnectionFailed": "删除远程服务器连接失败"
   }
 }
