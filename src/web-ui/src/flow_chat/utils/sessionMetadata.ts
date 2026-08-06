@@ -230,6 +230,7 @@ function buildSessionCustomMetadata(
     | 'titleSource'
     | 'titleI18nKey'
     | 'titleI18nParams'
+    | 'currentTokenUsage'
   >,
   existingCustomMetadata?: SessionCustomMetadata
 ): SessionCustomMetadata {
@@ -251,6 +252,14 @@ function buildSessionCustomMetadata(
     nextCustomMetadata.titleSource = 'i18n';
     nextCustomMetadata.titleKey = session.titleI18nKey;
     nextCustomMetadata.titleParams = session.titleI18nParams ?? null;
+  }
+
+  if (session.currentTokenUsage) {
+    nextCustomMetadata.lastRequestTokenUsage = {
+      inputTokens: session.currentTokenUsage.inputTokens,
+      outputTokens: session.currentTokenUsage.outputTokens,
+      totalTokens: session.currentTokenUsage.totalTokens,
+    };
   }
 
   return nextCustomMetadata;
@@ -362,6 +371,7 @@ export function buildSessionMetadata(
     | 'needsUserAttention'
     | 'deepReviewRunManifest'
     | 'reviewTargetEvidence'
+    | 'currentTokenUsage'
   >,
   existingMetadata?: SessionMetadata | null
 ): SessionMetadata {
@@ -404,6 +414,7 @@ export function buildSessionMetadata(
         titleSource: session.titleSource,
         titleI18nKey: session.titleI18nKey,
         titleI18nParams: session.titleI18nParams,
+        currentTokenUsage: session.currentTokenUsage,
       },
       existingMetadata?.customMetadata
     ),

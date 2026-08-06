@@ -41,6 +41,7 @@ export interface SessionCustomMetadata extends Record<string, unknown> {
   titleSource?: SessionTitleSource | null;
   titleKey?: string | null;
   titleParams?: Record<string, unknown> | null;
+  lastRequestTokenUsage?: { inputTokens: number; outputTokens?: number; totalTokens: number } | null;
 }
 
 export interface SessionMetadata {

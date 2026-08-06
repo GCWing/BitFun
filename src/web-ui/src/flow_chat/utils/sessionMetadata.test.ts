@@ -225,6 +225,73 @@ describe('sessionMetadata', () => {
     })).toBe(4321);
   });
 
+  it('persists lastRequestTokenUsage from session currentTokenUsage', () => {
+    const session = createSession({
+      currentTokenUsage: {
+        inputTokens: 12000,
+        outputTokens: 3400,
+        totalTokens: 15400,
+        timestamp: 9999,
+      },
+    });
+
+    const metadata = buildSessionMetadata(session);
+
+    expect(metadata.customMetadata?.lastRequestTokenUsage).toEqual({
+      inputTokens: 12000,
+      outputTokens: 3400,
+      totalTokens: 15400,
+    });
+  });
+
+  it('omits lastRequestTokenUsage when session has no currentTokenUsage', () => {
+    const session = createSession();
+
+    const metadata = buildSessionMetadata(session);
+
+    expect(metadata.customMetadata?.lastRequestTokenUsage).toBeUndefined();
+  });
+
+  it('replaces stale lastRequestTokenUsage from existing customMetadata', () => {
+    const session = createSession({
+      currentTokenUsage: {
+        inputTokens: 500,
+        totalTokens: 600,
+        timestamp: 1,
+      },
+    });
+
+    const existingMetadata: SessionMetadata = {
+      sessionId: 'session-1',
+      sessionName: 'Session Title',
+      agentType: 'agentic',
+      modelName: 'gpt-test',
+      createdAt: 1000,
+      lastActiveAt: 1000,
+      turnCount: 0,
+      messageCount: 0,
+      toolCallCount: 0,
+      status: 'active',
+      tags: [],
+      customMetadata: {
+        lastRequestTokenUsage: {
+          inputTokens: 999999,
+          totalTokens: 999999,
+        },
+      },
+      todos: [],
+      workspacePath: '/workspace',
+    };
+
+    const metadata = buildSessionMetadata(session, existingMetadata);
+
+    expect(metadata.customMetadata?.lastRequestTokenUsage).toEqual({
+      inputTokens: 500,
+      outputTokens: undefined,
+      totalTokens: 600,
+    });
+  });
+
   it('persists locale-aware default title metadata before the first message', () => {
     const session = createSession({
       title: 'flow-chat:session.newCodeWithIndex',
