@@ -28,7 +28,7 @@ pub use budget::{
 };
 pub use concurrency_policy::{DeepReviewConcurrencyPolicy, DeepReviewEffectiveConcurrencySnapshot};
 pub use constants::{
-    canonical_review_worker_agent_type, is_review_worker_agent_type,
+    canonical_review_worker_agent_type, is_review_worker_agent_type, CODE_REVIEW_AGENT_TYPE,
     CONDITIONAL_REVIEWER_AGENT_TYPES, CORE_REVIEWER_AGENT_TYPES, DEEP_REVIEW_AGENT_TYPE,
     LEGACY_REVIEW_WORKER_AGENT_TYPES, REVIEW_FIXER_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
     REVIEW_WORKER_AGENT_TYPE,

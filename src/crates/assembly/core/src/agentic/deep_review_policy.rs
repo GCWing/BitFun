@@ -41,9 +41,9 @@ pub use bitfun_agent_runtime::deep_review::{
     DeepReviewSharedContextMeasurementSnapshot, DeepReviewStrategyLevel, DeepReviewSubagentRole,
     FocusedReviewAssignment, FocusedReviewBudgetClaim, ReviewStrategyManifestProfile,
     ReviewTeamDefinition, ReviewTeamExecutionPolicyDefinition, ReviewTeamRoleDefinition,
-    CONDITIONAL_REVIEWER_AGENT_TYPES, CORE_REVIEWER_AGENT_TYPES, DEEP_REVIEW_AGENT_TYPE,
-    LEGACY_REVIEW_WORKER_AGENT_TYPES, REVIEW_FIXER_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
-    REVIEW_WORKER_AGENT_TYPE,
+    CODE_REVIEW_AGENT_TYPE, CONDITIONAL_REVIEWER_AGENT_TYPES, CORE_REVIEWER_AGENT_TYPES,
+    DEEP_REVIEW_AGENT_TYPE, LEGACY_REVIEW_WORKER_AGENT_TYPES, REVIEW_FIXER_AGENT_TYPE,
+    REVIEW_JUDGE_AGENT_TYPE, REVIEW_WORKER_AGENT_TYPE,
 };
 
 const DEFAULT_REVIEW_TEAM_CONFIG_PATH: &str = "ai.review_teams.default";

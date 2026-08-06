@@ -6,7 +6,9 @@ use crate::agentic::agents::{
     mode_config_profile_label, mode_config_profile_member_mode_ids, resolve_mode_config_profile_id,
     Agent, AgentToolPolicyOverrides,
 };
-use crate::agentic::deep_review_policy::{is_review_worker_agent_type, REVIEW_JUDGE_AGENT_TYPE};
+use crate::agentic::deep_review_policy::{
+    is_review_worker_agent_type, CODE_REVIEW_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
+};
 pub(super) use bitfun_agent_runtime::agents::SubagentOverrideState;
 pub use bitfun_agent_runtime::agents::{
     BuiltinAgentCategory as AgentCategory, SubAgentSource, SubagentListScope, SubagentQueryContext,
@@ -231,7 +233,7 @@ pub(crate) fn is_review_agent_entry(entry: &AgentEntry) -> bool {
     }
 
     is_review_worker_agent_type(agent.id())
-        || matches!(agent.id(), REVIEW_JUDGE_AGENT_TYPE | "CodeReview")
+        || matches!(agent.id(), REVIEW_JUDGE_AGENT_TYPE | CODE_REVIEW_AGENT_TYPE)
 }
 
 pub(crate) fn custom_agent_path(agent: &dyn Agent) -> Option<String> {

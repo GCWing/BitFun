@@ -1,6 +1,7 @@
 use super::types::{AgentCategory, AgentEntry, AgentInfo, AgentSource, SubAgentSource};
 use super::AgentRegistry;
 use crate::agentic::agents::{Agent, SubagentVisibilityPolicy};
+use crate::agentic::deep_review_policy::{CODE_REVIEW_AGENT_TYPE, DEEP_REVIEW_AGENT_TYPE};
 use crate::agentic::workspace::canonical_local_workspace_path;
 use bitfun_agent_runtime::prompt_cache::prompt_cache_scope_key;
 use bitfun_core_types::{
@@ -608,7 +609,7 @@ fn local_binding(logical_id: &str, runtime_agent_key: &str) -> ExternalSubagentI
 /// must resolve through the primary-agent path for create, turn, restore, and
 /// compaction. Other subagents (e.g. `ReviewWorker`) stay restricted.
 fn is_builtin_session_primary_agent(id: &str) -> bool {
-    matches!(id, "CodeReview" | "DeepReview")
+    matches!(id, CODE_REVIEW_AGENT_TYPE | DEEP_REVIEW_AGENT_TYPE)
 }
 
 fn local_primary_binding(runtime_agent_key: &str) -> ExternalPrimaryAgentTurnBinding {
