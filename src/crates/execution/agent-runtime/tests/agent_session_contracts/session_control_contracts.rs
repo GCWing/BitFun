@@ -51,7 +51,7 @@ fn rejects_current_session_mutation_when_context_matches() {
 fn validates_create_requires_workspace_and_creator_session() {
     let mut input = base_input(SessionControlAction::Create);
     input.workspace = Some(std::env::temp_dir().to_string_lossy().to_string());
-    input.agent_type = Some(SessionControlAgentType::Plan);
+    input.agent_type = Some(SessionControlAgentType::DeepResearch);
 
     let missing_creator =
         validate_session_control_input(&input, SessionControlValidationContext::default());
@@ -89,8 +89,8 @@ fn renders_tool_message_without_core_context() {
 fn builds_stable_result_messages() {
     let workspace = std::env::temp_dir().to_string_lossy().to_string();
     assert_eq!(
-        session_control_created_result_message("session_a", &workspace, "Plan"),
-        format!("Created session 'session_a' in workspace '{workspace}' using agent type 'Plan'.")
+        session_control_created_result_message("session_a", &workspace, "DeepResearch"),
+        format!("Created session 'session_a' in workspace '{workspace}' using agent type 'DeepResearch'.")
     );
     assert_eq!(
         session_control_cancel_result_message("worker_1", &workspace, Some("turn_1")),

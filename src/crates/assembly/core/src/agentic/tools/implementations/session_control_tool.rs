@@ -280,6 +280,7 @@ Arguments:
   - "agentic": Coding-focused agent for implementation, debugging, and code changes.
   - "Plan": Planning agent for clarifying requirements and producing an implementation plan before coding.
   - "Cowork": Collaborative agent for office-style work such as research, documentation, presentations, etc.
+  - "DeepResearch": Research agent for systematic investigation and evidence-driven reports.
 - "session_id": Required for cancel and delete."#
                 .to_string(),
         )
@@ -316,7 +317,7 @@ Arguments:
                 },
                 "agent_type": {
                     "type": "string",
-                    "enum": ["agentic", "Plan", "Cowork"],
+                    "enum": ["agentic", "Plan", "Cowork", "DeepResearch"],
                     "description": "Optional agent type when creating a session. Defaults to agentic."
                 }
             },
