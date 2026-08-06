@@ -1,448 +1,639 @@
-# BitFun Customization Reference
+# Customization of BitFun for Multi-Agent Collaboration and External Agent Integration
 
-> This document describes the customization snapshot in this pull request.
+**A Technical Report in the Form of a Research Paper**
+
 > Base: upstream `main` @ `e640aa40`.
-> It is written for maintainers who are not familiar with the internal
-> background of this fork. Every term is explained the first time it is used.
+> Scope: 370 files changed (code, configuration, and runtime resources).
+> Audience: maintainers and reviewers. Formal academic tone; every term is
+> defined at first use; every design decision carries its motivation.
+
+---
+
+## Abstract
+
+This report presents a set of customizations to BitFun, an open-source
+agent-integration platform, that extends it for **multi-agent collaboration**
+and **external agent interconnection**. The work makes four contributions.
+First, it introduces a complete **ACP (Agent Client Protocol) channel** that
+treats external agent processes (e.g. CodeBuddy, Claude Code, OpenCode) as
+first-class sessions inside BitFun, with session-level direct delivery, a
+lifecycle bridge, and persisted transcripts. Second, it adds a **governance
+layer** — a Warden guard system and a role-based access control (RBAC) model
+for subagents — that constrains what an agent may do and detects repeated
+failure patterns. Third, it hardens the **engine-level context management**:
+a stable prompt-cache prefix, per-round runtime facts, and once-per-generation
+user context injection, which measurably reduce token waste. Fourth, it
+contributes a **workflow architecture** for organizing multi-agent work
+(a six-phase pipeline, a three-branch separation of powers, and a recursive
+dispatch pattern) that is described in the Methodology section. All claims in
+this report are grounded in the final-state source tree; line numbers refer
+to the files in this pull request.
 
 ---
 
 ## Table of Contents
 
-1. [Overview](#1-overview)
-2. [Architecture](#2-architecture)
-3. [Domain 1: ACP Channel — Talking to External Agents](#3-domain-1-acp-channel--talking-to-external-agents)
-4. [Domain 2: Session & SessionControl](#4-domain-2-session--sessioncontrol)
-5. [Domain 3: Warden Guard System](#5-domain-3-warden-guard-system)
-6. [Domain 4: RBAC Subagent Roles](#6-domain-4-rbac-subagent-roles)
-7. [Domain 5: Engine & Context Injection](#7-domain-5-engine--context-injection)
-8. [Domain 6: Legion & Task & Plan Toolchain](#8-domain-6-legion--task--plan-toolchain)
-9. [Domain 7: CodeBuddy Provider Adapter](#9-domain-7-codebuddy-provider-adapter)
-10. [Domain 8: Web UI](#10-domain-8-web-ui)
-11. [Summary](#11-summary)
+1. [Introduction](#1-introduction)
+2. [Related Work](#2-related-work)
+3. [Design: A Three-Branch Separation-of-Powers Coordination Model](#3-design-a-three-branch-separation-of-powers-coordination-model)
+4. [Implementation 1: ACP Channel](#4-implementation-1-acp-channel)
+5. [Implementation 2: Session and SessionControl](#5-implementation-2-session-and-sessioncontrol)
+6. [Implementation 3: Warden Guard System](#6-implementation-3-warden-guard-system)
+7. [Implementation 4: RBAC for Subagents](#7-implementation-4-rbac-for-subagents)
+8. [Implementation 5: Engine and Context Injection](#8-implementation-5-engine-and-context-injection)
+9. [Implementation 6: Orchestration Toolchain (Legion, Task, Plan, Goal)](#9-implementation-6-orchestration-toolchain)
+10. [Implementation 7: CodeBuddy Provider Adapter](#10-implementation-7-codebuddy-provider-adapter)
+11. [Implementation 8: Web UI](#11-implementation-8-web-ui)
+12. [Evaluation](#12-evaluation)
+13. [Conclusion and Future Work](#13-conclusion-and-future-work)
+14. [References](#14-references)
 
 ---
 
-## 1. Overview
+## 1. Introduction
 
-**What this PR is.** A reference snapshot of customizations built on top of
-BitFun. It focuses on **multi-agent collaboration** and **connecting BitFun
-to external AI agents** (such as CodeBuddy, Claude Code, and OpenCode) through
-the ACP protocol.
+### 1.1 Background
 
-**What "ACP" means.** ACP (Agent Client Protocol) is a protocol that lets one
-agent process talk to another agent process over a local pipe or socket. BitFun
-uses ACP as a bridge so that an external agent (installed as a CLI on the same
-machine) can be treated as a real "session" inside BitFun.
+BitFun is an agent-integration platform: it hosts agent sessions, exposes
+tools to models, and coordinates the execution of agent loops. In its
+upstream form, the platform provides the machinery for a single agent loop,
+and an ACP client layer for probing external agent CLIs.
 
-**Scope of the snapshot.**
-- 370 files changed relative to upstream `main` (`e640aa40`).
-- No build artifacts, no internal records, no documentation besides this file.
-- Everything is the **final state** of the work; there are no intermediate
-  steps or scratch files.
+### 1.2 Problem
 
-**High-level feature list.**
+Deploying BitFun in a **multi-agent setting** — where one coordinating agent
+delegates work to several subagents, and where some of those subagents are
+*external* processes reached over ACP — exposes four gaps:
 
-| Feature | What it does | Where (key files) |
+1. **No first-class external sessions.** The upstream ACP layer can *probe*
+   external agents, but a model cannot create an external agent session,
+   message it directly, read its history, or cancel it as a normal BitFun
+   session.
+2. **No governance.** A delegated subagent can accidentally call a tool that
+   mutates state when it was only asked to research; repeated failures can
+   cascade without detection.
+3. **Token waste and cache instability.** Dynamic reminder text (clock,
+   context usage) injected at a variable position invalidates the
+   provider-side prompt cache, and redundant reminders are repeated on every
+   turn.
+4. **No methodological framework for multi-agent work itself.** When many
+   agents collaborate on one codebase, preparation, execution, and
+   verification blur together, and defects leak through.
+
+### 1.3 Contributions
+
+This work addresses the four gaps with four contributions:
+
+- **C1 — ACP channel** (§4): external ACP agents become first-class sessions.
+- **C2 — Governance** (§6, §7): Warden guard system + RBAC subagent roles.
+- **C3 — Context engine** (§8): stable prefix, per-round facts,
+  once-per-generation user context.
+- **C4 — Workflow architecture** (§3): a three-branch separation-of-powers
+  coordination model, described as the design methodology.
+
+---
+
+## 2. Related Work
+
+### 2.1 Agent protocols
+
+**ACP (Agent Client Protocol)** is a transport used to bridge a host agent
+with an external agent CLI. Upstream BitFun implements ACP *client*
+infrastructure: probing, launching, and low-level message transport. This
+work builds on that foundation by exposing it through the **tool layer** so a
+model can drive external sessions semantically.
+
+### 2.2 Multi-agent orchestration
+
+Existing orchestration systems typically centralize control (a single
+dispatcher) or decentralize it (free-form peer messaging). Both extremes have
+known failure modes: centralized systems become single points of failure and
+bottlenecks; fully decentralized systems lose auditability. The coordination
+model in §3 takes a middle path — **separation of powers with a bounded
+rejection loop** — which is inspired by classical engineering review
+practices (independent verification and validation, IV&V) and by the
+peer-review process in scientific publication.
+
+### 2.3 Role-based access control
+
+RBAC (Sandhu et al., 1996) is a standard authorization model: subjects are
+assigned roles, roles have permissions. The customization in §7 applies RBAC
+at the *agent-session* granularity: each session is assigned a role whose
+permission set is enforced by the tool pipeline.
+
+### 2.4 Prompt caching
+
+LLM providers (e.g. DeepSeek, Anthropic) offer prefix-based prompt caching:
+a request whose prefix matches a cached prefix is served at a fraction of the
+cost. The dominant strategy (Anthropic, 2024) is to keep dynamic content at
+the *end* of the message list. §8 implements this strategy structurally.
+
+---
+
+## 3. Design: A Three-Branch Separation-of-Powers Coordination Model
+
+> This section is the design methodology. It describes how multi-agent work
+> is organized on top of the platform, so that the platform's own features
+> (sessions, tasks, quality gates) are used within a coherent workflow.
+
+### 3.1 Problem statement
+
+Multi-agent software projects face a recurring structural problem: when many
+agents work on one codebase, the three activities of **decision making**,
+**execution**, and **verification** tend to be performed by the same agent,
+at the same time, on the same artifact. This conflation yields three known
+failure modes: (i) *unchecked decisions* — a single agent both decides and
+executes, with no independent review; (ii) *self-review bias* — the agent
+that wrote code also validates it; and (iii) *rework cascades* — defects are
+discovered late, after dependent work has been built on top of them.
+
+### 3.2 Design goals
+
+The model is designed to satisfy five goals:
+
+| Goal | Description |
+|---|---|
+| G1 | **Separation of powers** — decision, execution, and review are held by distinct roles. |
+| G2 | **Auditability** — every phase produces an artifact that is the input of the next; every claim carries evidence. |
+| G3 | **Determinism** — preparation is unbounded; execution is one-shot. |
+| G4 | **Scalability** — the same pattern applies recursively at every decomposition level. |
+| G5 | **Efficiency** — parallelizable work runs in parallel; dependent work runs serially through gates. |
+
+### 3.3 The six-phase pipeline
+
+Every task passes through six phases in order; the output of each phase is
+the input of the next, and no phase is skipped.
+
+| Phase | Name | Input | Output | Quality concern |
+|---|---|---|---|---|
+| 0 | Requirements | raw request | clarified requirement document | ambiguity |
+| 1 | Reconnaissance | requirement document | reconnaissance report | hallucination |
+| 2 | Planning | reconnaissance report | plan / type contract / dispatch prompts | incompleteness |
+| 3 | Execution | plan documents | code | deviation |
+| 4 | Quality gate | code | pass / reject | defect leakage |
+| 5 | Delivery | accepted code | delivered result | completeness |
+
+The pipeline is *not* a checklist game: each phase must be genuinely
+completed (reconnaissance really performed, plans really thought through,
+verification really executed). Skipping a phase invalidates the pipeline and
+the task returns to Phase 0.
+
+### 3.4 Three-branch separation of powers
+
+Three peer roles hold three powers; none reports to another; each is barred
+from encroaching on the others:
+
+| Power | Role | Responsibility | Barred from |
+|---|---|---|---|
+| Decision | Coordinator | requirements, planning, dispatch, direction rulings | performing execution |
+| Execution | Executor | receiving atomic steps, executing them exactly | making decisions |
+| Review | Reviewer | quality gates: review, test, acceptance | self-review |
+
+The checks are mutual: the coordinator may not edit code; the executor's only
+exit at a decision point is to report back; the reviewer is independent of
+the executor. At serial nodes all three gates must pass before the next wave.
+
+### 3.5 Recursive dispatch pattern
+
+The organization uses **one pattern, recursively**: *Dispatch → Execute →
+Accept*. A coordinator dispatches to an executor; the executor returns; a
+reviewer accepts or rejects. Rejection returns the artifact to the executor
+for a bounded number of repair rounds (at most three), after which the case
+escalates to the coordinator.
+
+The pattern is applied at every level: a top-level coordinator delegates to
+team leads, each team lead applies the same pattern within the team, and
+agents apply it internally (self-check as the reviewer). This yields a
+*fractal* organization rather than a strict hierarchy. Context isolation is a
+first-class property: each role loads only the context relevant to its own
+duty, so that the contexts of the three branches do not pollute one another.
+
+### 3.6 Serial / parallel discipline
+
+Parallelism is decided by dependency, not by preference:
+
+- **Independent** work runs **in parallel** (reconnaissance, independent
+  modules, draft planning).
+- **Dependent** work runs **serially** through the gates (recon → plan →
+  execute → verify → deliver).
+
+Parallel branches converge at a serial node: one designated executor runs the
+full gate suite and makes the commit. During parallel execution each track
+runs only its own scoped tests; the full regression suite runs only at the
+convergence node.
+
+### 3.7 Atomic step specification
+
+Every dispatched step is specified by **five elements**:
+
+1. **Input location** — where the inputs are.
+2. **Action instruction** — what to do, in imperative terms.
+3. **Expected output** — what the step should produce.
+4. **Acceptance assertion** — how to verify correctness.
+5. **Failure fallback** — what to do on deviation.
+
+The completeness criterion is *determinism across executors*: any person —
+even one without background — following the step must obtain the same result.
+Executors may be lazy, misjudge, or misunderstand; the instruction is
+designed so that being wrong is difficult.
+
+### 3.8 Determinism: both ends fixed, middle free
+
+The requirement (start) and the delivery (end) are fixed before execution
+begins; the path between them is free. Deviations in the middle are permitted,
+but the deviation-handling path (which phase to roll back to, which assertion
+to fix) is predefined during preparation, and the acceptance assertions at
+the end are written before implementation. Deviation is a path fluctuation;
+it never changes the delivery. Preparation rounds are unbounded; execution is
+one-shot.
+
+### 3.9 Decision derivation
+
+During execution, all decisions are derived from three sources, in order:
+**(1) requirements** (original requirement id / authoritative source),
+**(2) purpose** (the final delivery definition), and **(3) iron rules**
+(the framework's own quality criteria). Users participate only at the
+requirements stage and the delivery-result stage. Autonomous decisions must
+not expand into resource commitments the user never requested.
+
+---
+
+## 4. Implementation 1: ACP Channel
+
+### 4.1 Design
+
+The ACP channel makes an external agent process behave like a real BitFun
+session. The tool layer exposes three tools; the desktop layer owns the ACP
+client service and the lifecycle bridge.
+
+### 4.2 Tools
+
+| Tool | Action | Definition |
 |---|---|---|
-| ACP channel | Session-level direct connection to external ACP agents | `src/crates/assembly/core/src/agentic/tools/implementations/acp_tools.rs` |
-| SessionControl/SessionMessage tools | Create, talk to, compact, delete sessions (including ACP ones) | `.../tools/implementations/session_control_tool.rs`, `session_message_tool.rs` |
-| Warden guard system | Governance: detects repeated failures, challenges the agent, records violations | `.../agentic/warden/` |
-| RBAC subagent roles | Role templates that control which tools a subagent may use | `.../tools/restrictions.rs` |
-| Engine & context injection | Per-round refresh of runtime facts; once-per-generation user context | `.../execution/execution_engine.rs` |
-| Legion/Task/Plan tools | Orchestration: legion topology, task dual lifecycle, plan tool family | `.../tools/implementations/legion_control_tool.rs`, `task/`, `plan_*.rs` |
-| CodeBuddy provider | OpenAI-compatible adapter for the CodeBuddy cloud API | `src/crates/adapters/ai-adapters/src/providers/codebuddy/` |
-| Web UI | Flow-chat display, legion pages, model switching | `src/web-ui/src/` |
-
----
-
-## 2. Architecture
-
-This fork keeps the same overall layering as upstream BitFun. The
-customizations add one new capability on top: **an ACP integration layer that
-lets the existing agent runtime drive real external processes**.
-
-```
-┌────────────────────────────────────────────────────────────┐
-│                       Web UI (TypeScript)                  │
-│   Flow-chat rendering · legion pages · model switcher      │
-└───────────────▲────────────────────────────────────────────┘
-                │ events / API
-┌───────────────┴────────────────────────────────────────────┐
-│                       Desktop app (Rust)                   │
-│   AcpClientPort (bridge to external agent processes)       │
-│   AcpSessionLifecycle (create/release/cancel on events)    │
-│   WardenModelJudgementPort (LLM judgement for Warden)     │
-└───────────────▲────────────────────────────────────────────┘
-                │ runtime-ports contracts
-┌───────────────┴────────────────────────────────────────────┐
-│                    Agent runtime (Rust)                    │
-│   Tool layer: AcpControl/AcpMessage/AcpHistory/SessionCtl  │
-│   Coordinator: session role registry, delivery decisions   │
-│   Execution engine: message assembly, context injection    │
-│   Warden: poke scheduler, punishment executor              │
-└───────────────▲────────────────────────────────────────────┘
-                │ ACP protocol
-┌───────────────┴────────────────────────────────────────────┐
-│              External ACP agents (CLI processes)           │
-│   CodeBuddy · Claude Code · OpenCode · ...                 │
-└────────────────────────────────────────────────────────────┘
-```
-
-**Key relationships.**
-
-- The **tool layer** (`acp_tools.rs`, `session_control_tool.rs`,
-  `session_message_tool.rs`) is the entry point: the model calls these tools,
-  and they route the call either to a local subagent or to an external ACP
-  process.
-- The **desktop layer** owns the actual ACP client service. The
-  `AcpClientPort` contract (in `runtime-ports`) is the interface the tool
-  layer calls; the desktop implementation connects to real processes.
-- The **Warden** sits on the side: it observes tool-call failures and can
-  inject "pokes" (challenge messages) into the conversation.
-- **RBAC** sits between the coordinator and the tool pipeline: every session
-  has a role, and every role has a set of allowed tools/operations.
-
----
-
-## 3. Domain 1: ACP Channel — Talking to External Agents
-
-### 3.1 What and why
-
-Upstream BitFun has ACP *client* infrastructure but no first-class way for a
-model to **drive** an external ACP agent as a session: create it, talk to it,
-read its history, cancel it. This fork adds a complete **tool family** plus a
-**lifecycle bridge** so an external agent behaves like a real BitFun session.
-
-### 3.2 Tools
-
-| Tool | Action | Key file |
-|---|---|---|
-| `AcpControlTool` | `create` / `list` / `delete` / `cancel` real external ACP sessions | `acp_tools.rs:344` |
+| `AcpControlTool` | create / list / delete / cancel external ACP sessions | `acp_tools.rs:344` |
 | `AcpMessageTool` | send a message to an external ACP session | `acp_tools.rs:540` |
 | `AcpHistoryTool` | read the persisted transcript of an ACP session | `acp_tools.rs:673` |
 
-All three are registered in the tool registry like any other tool, so RBAC
-and the tool pipeline apply to them uniformly.
+The tools are registered through the standard tool registry, so RBAC and the
+tool pipeline apply to them uniformly.
 
-### 3.3 Direct delivery ("no middleman")
+### 4.3 Direct delivery
 
 When the model sends a message to a session whose id starts with `acp__`, the
-message goes **directly** to the external process through the ACP port
-(`session_message_tool.rs`). There is no local model round-trip, so there is
-zero local inference cost.
+message is forwarded **directly** to the external process through the ACP
+port, with no local model round-trip and therefore no local inference cost.
+The timeout is 1800 s (`ACP_DIRECT_TIMEOUT_SECONDS`, `session_message_tool.rs:83`).
+The external reply is streamed back as `TextChunk` events; the conversation
+stores a *notification* (`acp_direct_response_notice`, `session_message_tool.rs:1061`)
+instead of the full text, and the full reply is retrievable via
+`SessionHistory`.
 
-- Timeout for direct delivery: **1800 s** (`ACP_DIRECT_TIMEOUT_SECONDS`,
-  `session_message_tool.rs:83`).
-- When the external agent replies, BitFun streams the reply back as
-  `TextChunk` events, and stores a **notification** (not the full text) in the
-  conversation. The full reply is retrievable via `SessionHistory`.
-  (`acp_direct_response_notice`, `session_message_tool.rs:1061`)
+*Motivation.* Injecting the full external reply into the conversation would
+consume context budget and duplicate content already stored on disk. The
+notification-plus-retrievable-store design keeps the context lean while
+preserving full fidelity.
 
-### 3.4 Lifecycle bridge
+### 4.4 Lifecycle bridge
 
-`AcpSessionLifecycleSubscriber` (`src/apps/desktop/src/runtime/acp_session_lifecycle.rs`)
-listens to session events and mirrors them onto the external process:
+`AcpSessionLifecycleSubscriber`
+(`src/apps/desktop/src/runtime/acp_session_lifecycle.rs`) mirrors BitFun
+session events onto the external process:
 
-| BitFun event | Action on external process |
+| BitFun event | Action |
 |---|---|
-| `SessionCreated` (agent_type = `acp__*`) | start/attach the external client |
+| `SessionCreated` (`acp__*`) | start / attach the external client |
 | `SessionDeleted` | release the external process |
 | `DialogTurnCancelled` | cancel the in-flight external turn |
 
-At startup, an **orphan scan** reclaims external sessions left over from a
+An **orphan scan** at startup reclaims external sessions left over from a
 previous run.
 
-### 3.5 Persistence
+### 4.5 Persistence and idempotency
 
-Direct-delivery turns are persisted as standard `DialogTurnData` files, so
-`SessionHistory` can render the full external reply even after a restart.
-Idempotency is handled by scanning all existing turn indexes for the same
-`turn_id` before writing a new one (see `session_message_tool.rs`,
-`persist_acp_direct_delivery_turn`).
+Direct-delivery turns are persisted as standard `DialogTurnData` files so that
+`SessionHistory` can render the full external reply after a restart.
+Idempotency is enforced by scanning all existing turn indexes for the same
+`turn_id` before writing, and appending at the first free index
+(`persist_acp_direct_delivery_turn`, `session_message_tool.rs:1177`). This
+prevents duplicate writes when the metadata turn counter and the on-disk
+turns have diverged.
 
 ---
 
-## 4. Domain 2: Session & SessionControl
+## 5. Implementation 2: Session and SessionControl
 
-### 4.1 Compact action
+### 5.1 Compact action
 
-`SessionControl` gained a `compact` action (`session_control_tool.rs:132`).
-This lets the model trigger context compression on any subagent session that
-is currently **Idle** — previously compression could only be triggered
-externally. It reuses the same `AgentSessionCompactionPort` as automatic
-compression, so manual and automatic compression share one code path.
+`SessionControl` gained a `compact` action
+(`session_control_tool.rs:132`) that lets the model trigger context
+compression on any subagent session that is **Idle**. It reuses the same
+`AgentSessionCompactionPort` as automatic compression, so manual and automatic
+compression share one code path.
 
-### 4.2 List improvements
+*Motivation.* Previously compression could only be triggered externally
+(desktop / app-server / CLI); a model delegating work could not ask a busy
+subagent to compact its own context.
 
-- `list` now supports a compact, one-line-per-session output
-  (`sessionId | agentType | status | short name`) for readability
-  (`session_control_tool.rs:261`).
-- Sessions can carry a **short name** for display.
-- `model_id` is supported when creating sessions.
+### 5.2 Listing and naming
 
-### 4.3 Ghost-session fixes
+`list` supports a compact one-line-per-session output
+(`sessionId | agentType | status | short name`); sessions can carry a
+**short name**; `model_id` is supported at session creation.
 
-Two recurring bugs in multi-agent setups are addressed:
+### 5.3 Ghost-session fixes
 
-1. **Ghost deletion** — an ACP flow session whose metadata has no
-   `created_by` used to be impossible to delete (authorization failed).
-   Now `ghost_acp_delete_authorized` allows deletion when the session is an
-   ACP flow session with no creator, and otherwise falls back to
-   owner/ancestor semantics (`session_control_tool.rs`).
-2. **Ghost delivery** — a hidden subagent session (e.g. Idle for >1 h and
-   unloaded from memory) used to reject message delivery with
-   "Session not found". The lookup now uses `include_hidden` where
-   appropriate and restores internal sessions for delivery.
+Two recurring defects in multi-agent deployments are addressed:
 
-### 4.4 Tombstone registry (anti-resurrection)
+1. **Ghost deletion.** An ACP flow session whose metadata has no `created_by`
+   could not be deleted (authorization failed). `ghost_acp_delete_authorized`
+   now permits deletion for ACP flow sessions without a creator, falling back
+   to owner/ancestor semantics otherwise.
+2. **Ghost delivery.** A hidden subagent session (e.g. Idle > 1 h, unloaded
+   from memory) rejected message delivery with "Session not found". Lookup
+   now uses hidden-inclusive semantics and restores internal sessions for
+   delivery.
+
+### 5.4 Tombstone registry
 
 Deleted session ids are recorded in a tombstone registry
-(`deleted-session-ids.json`, max 2000 entries). Before finalizing a turn,
-the coordinator checks the registry so a deleted session can never be
+(`deleted-session-ids.json`, max 2000 entries). Before finalizing a turn, the
+coordinator consults the registry so a deleted session cannot be
 "resurrected" with stale metadata.
 
 ---
 
-## 5. Domain 3: Warden Guard System
+## 6. Implementation 3: Warden Guard System
 
-### 5.1 What and why
+### 6.1 Design
 
-A "Warden" is a governance component that watches for **repeated failures**
-in the agent loop and reacts. This is a full new subsystem: a poke scheduler,
-a punishment executor, and (in the desktop layer) an LLM-backed judgement
-port.
+The Warden is a governance subsystem that observes the agent loop and reacts
+to **repeated failures**. It is a new subsystem with three components: a poke
+scheduler, a punishment executor, and an LLM-backed judgement port.
 
-### 5.2 Components
+### 6.2 Components
 
 | Component | File | Purpose |
 |---|---|---|
-| `WardenPokeScheduler` | `warden/mod.rs:63` | Randomized scheduling of "pokes" (average every ~6.5 turns, configurable) |
+| `WardenPokeScheduler` | `warden/mod.rs:63` | Randomized scheduling of "pokes" (average interval configurable) |
 | `WardenRuntime` | `warden/runtime.rs` | Orchestrates poke decisions and violation recording |
 | `PunishmentExecutor` | `warden/punishment_executor.rs` | Applies consequences for confirmed violations |
-| `WardenModelJudgementPort` | `src/apps/desktop/src/runtime/warden_model_judgement_port.rs` | Lets the Warden ask a model whether a failure is a real violation (avoids false positives) |
-| `SKILL.md` | `warden/SKILL.md` | Defines the Warden's behaviour contract for the agent |
+| `WardenModelJudgementPort` | `src/apps/desktop/src/runtime/warden_model_judgement_port.rs` | Asks a model whether a failure is a real violation (reduces false positives) |
+| `SKILL.md` | `warden/SKILL.md` | Behaviour contract for the agent |
 
-### 5.3 Behaviour
+### 6.3 Behaviour
 
-- Failures are classified by **scene fingerprint** so that "repeated
-  failures" means repeated failures of the *same* kind — a first failure of a
+- **Scene fingerprinting.** Failures are classified by *scene* so that a
+  "streak" means repeated failures of the same kind; the first failure of a
   new kind does not count toward the streak.
-- A `goal` linkage switch lets the Warden follow goal/reference files when
+- **Goal linkage.** A switch lets the Warden follow goal/reference files when
   deciding whether a poke is warranted.
-- Pokes are delivered as user-role `internal_reminder` messages, so they are
-  visible to the model without becoming part of the user's own message
-  history.
+- **Delivery.** Pokes are delivered as user-role `internal_reminder` messages:
+  visible to the model, yet not part of the user's own message history.
+
+*Motivation.* A naive "N failures in a row → punish" rule misfires when
+failures are heterogeneous. Scene fingerprinting makes the guard precise,
+and the LLM judgement port adds a second opinion to avoid punishing a
+legitimate attempt.
 
 ---
 
-## 6. Domain 4: RBAC Subagent Roles
+## 7. Implementation 4: RBAC for Subagents
 
-### 6.1 What and why
+### 7.1 Design
 
-RBAC (Role-Based Access Control) here means: every session has a **role**, and
-each role has a set of allowed tool *names* and allowed *operation classes*
-(read-only, write-file, execute-code, communicate). The goal is that a
-subagent cannot accidentally call a tool that mutates files when it was only
-supposed to research.
+RBAC here means: every session has a **role**; each role has a set of allowed
+tool *names* and allowed *operation classes* (read-only, write-file,
+execute-code, communicate). The enforcement point is the tool pipeline.
 
-### 6.2 Roles
+### 7.2 Roles
 
 | Role | Allowed operation classes |
 |---|---|
-| Commander (main orchestrator) | ReadOnly, Communicate |
+| Commander | ReadOnly, Communicate |
 | Executor | ReadOnly, WriteFile, ExecuteCode |
 | Reviewer | ReadOnly, WriteFile, ExecuteCode |
 | Warden | ReadOnly, WriteFile, Communicate, ExecuteCode |
-| GeneralPurpose (research/exploration subagent) | ReadOnly, WriteFile, ExecuteCode, Communicate |
+| GeneralPurpose | ReadOnly, WriteFile, ExecuteCode, Communicate |
 
 Key files: `src/crates/assembly/core/src/agentic/tools/restrictions.rs`
-(role templates, e.g. `general_purpose_tool_restrictions` at `:195`),
-`src/crates/assembly/core/tests/rbac_master_switch.rs` (guard tests).
+(e.g. `general_purpose_tool_restrictions` at `:195`),
+`src/crates/assembly/core/tests/rbac_master_switch.rs`.
 
-### 6.3 Role pinning
+### 7.3 Role pinning
 
-When a session is created with a `subagent` marker, its role is **pinned** to
-Executor (or the appropriate template) instead of inheriting the creator's
-role. Previously a subagent created from a Commander session could inherit
-Commander — which forbids most tools — making the subagent useless. The fix
-ensures subagent-marked sessions always get a usable template, and restores
-the same pinning when a session is reloaded from disk.
+A session created with a `subagent` marker has its role **pinned** to an
+appropriate template instead of inheriting the creator's role. Previously a
+subagent created from a Commander session could inherit Commander — which
+forbids most tools — making the subagent unusable. Pinning is also restored
+when a session is reloaded from disk.
 
-### 6.4 Tests
-
-`rbac_master_switch.rs` and `rbac_poke_integration.rs` assert the pinning
-behaviour and that ReadOnly tools work for Executor/GeneralPurpose.
+*Motivation.* Inheritance is convenient but unsafe: a research subagent must
+never inherit the mutating privileges of its creator. Pinning trades
+flexibility for safety at the cost of an explicit template.
 
 ---
 
-## 7. Domain 5: Engine & Context Injection
+## 8. Implementation 5: Engine and Context Injection
 
-### 7.1 What and why
+### 8.1 Problem
 
-Sending a message to a model costs tokens. This fork reduces token waste and
-keeps the provider-side prompt cache stable by controlling *where* and *how
-often* dynamic reminder text is injected.
+Sending a message to a model costs tokens, and the provider-side prompt cache
+is prefix-based: any per-round change in the *middle* of the message list
+invalidates the entire prefix. Dynamic reminder text (clock, context usage)
+is inherently per-round.
 
-### 7.2 Static vs dynamic groups
+### 8.2 Static vs dynamic groups
 
 - **Static group** (skills list, agent list, deferred tool list, user
-  context): placed right after the system message — the "prefix cache"
-  foundation; must not change position.
-- **Dynamic group** (runtime facts: time, context usage): placed at the very
-  end of the message list, because it changes every round and would
-  invalidate the prefix cache if placed mid-stream.
+  context): placed immediately after the system message — the prefix-cache
+  foundation; position invariant.
+- **Dynamic group** (runtime facts): placed at the very end of the message
+  list, because it changes every round.
 
 Key function: `build_ai_messages_for_send` (`execution_engine.rs:1795`).
 
-### 7.3 Runtime facts refresh policy
+### 8.3 Runtime facts refresh policy
 
-`refresh_runtime_facts_for_round` (`execution_engine.rs:1511`) now takes an
-`inject_runtime_facts` flag:
+`refresh_runtime_facts_for_round` (`execution_engine.rs:1511`) takes an
+`inject_runtime_facts` flag: injected on the first user round
+(`round_index == 0`) and after a context-recovery round; **not** injected on
+tool rounds. This keeps the model informed without repeating identical facts.
 
-- Injected on the **first user round** (`round_index == 0`).
-- Injected after a **context recovery** round.
-- **Not** injected on tool rounds (they already carry a full history).
+### 8.4 User context once per generation
 
-This keeps the model informed without repeating the same facts on every turn.
+`round_dynamic_reminders` (`execution_engine.rs:1541`) tracks a "generation"
+counter of the prompt cache. User context is injected **once per cache
+generation** — after a new conversation or a compression — and omitted on
+subsequent rounds of the same generation. The generation is cleared on
+session deletion.
 
-### 7.4 User context once per generation
+*Motivation.* The user-context block is large and mostly static; repeating it
+every round costs tokens and destabilizes the prefix. Injecting it once per
+generation preserves its information while bounding its cost.
 
-`round_dynamic_reminders` (`execution_engine.rs:1541`) tracks a
-"generation" counter of the prompt cache. User context is injected **once per
-cache generation** — i.e. after a new conversation or after a compression —
-and then omitted on subsequent rounds of the same generation. The generation
-is cleared when the session is deleted. Contract tests cover both behaviours
-(`execution_engine.rs:6088`).
+### 8.5 Context usage display
 
-### 7.5 Context usage display
-
-Flow-chat now persists the exact last-request token usage and restores it
-after session hydration, so the UI shows the right usage numbers after a
-reload (see `src/web-ui/src/flow_chat/utils/tokenUsageDisplay.ts` and the
-associated store changes).
+Flow-chat persists the exact last-request token usage and restores it after
+session hydration, so the UI shows correct usage numbers after a reload
+(`src/web-ui/src/flow_chat/utils/tokenUsageDisplay.ts`).
 
 ---
 
-## 8. Domain 6: Legion & Task & Plan Toolchain
+## 9. Implementation 6: Orchestration Toolchain
 
-### 8.1 Legion (agent topology)
+### 9.1 Legion (agent topology)
 
-`LegionControlTool` (`.../tools/implementations/legion_control_tool.rs`)
-deploys a "legion" topology: a set of named agent roles with a maximum of 20
-nodes, persisted as agent sessions. It is registered together with the other
-product tools in `tool-provider-groups`.
+`LegionControlTool` deploys a "legion" topology: a set of named agent roles
+with a maximum of 20 nodes, persisted as agent sessions.
 
-### 8.2 Task dual lifecycle
+### 9.2 Task dual lifecycle
 
-`Task` now supports **two lifecycles**:
+`Task` supports two lifecycles:
 
-- **Foreground**: run a subagent and wait for its result (as upstream).
+- **Foreground**: run a subagent and wait for its result.
 - **Background**: spawn a subagent that keeps running after the tool returns;
-  the result is delivered later through the coordination layer, and can be
-  retrieved via `SessionHistory`.
+  the result is delivered later through the coordination layer and
+  retrievable via `SessionHistory` (`run_in_background` selects the mode;
+  `.../tools/implementations/task/execution.rs`).
 
-`run_in_background` selects the background mode
-(`.../tools/implementations/task/execution.rs`).
-
-### 8.3 Plan tool family
+### 9.3 Plan tool family
 
 `CreatePlan`, `PlanList`, `PlanRead`, `PlanUpdate` are registered as a tool
-family (`plan_list_tool.rs`, `plan_read_tool.rs`, `plan_update_tool.rs`). They
-read/write plan files in the workspace and are exposed to the agent through
-the standard tool pipeline, so RBAC and the readonly manifest apply.
+family (`plan_list_tool.rs`, `plan_read_tool.rs`, `plan_update_tool.rs`) and
+go through the standard tool pipeline, so RBAC and the readonly manifest
+apply.
 
-### 8.4 Goal dual trigger
+### 9.4 Goal dual trigger
 
-The `goal` feature (automatic long-horizon tracking) now triggers when
-**either** of two conditions holds: the main conversation has been silent for
-10 minutes, **or** all conversations in the workspace are silent
-(`.../goal_mode/mod.rs`).
+The `goal` feature triggers when **either** of two conditions holds: the main
+conversation has been silent for 10 minutes, **or** all conversations in the
+workspace are silent (`.../goal_mode/mod.rs`).
 
 ---
 
-## 9. Domain 7: CodeBuddy Provider Adapter
+## 10. Implementation 7: CodeBuddy Provider Adapter
 
-### 9.1 What and why
+### 10.1 Design
 
-CodeBuddy (Tencent's coding agent) offers a cloud API that is
-OpenAI-compatible at `https://copilot.tencent.com/v2/chat/completions`.
-Because it is OpenAI-shaped, BitFun can talk to it with almost no new
-transport code — the fork adds a small adapter layer.
+CodeBuddy (Tencent's coding agent) exposes an OpenAI-compatible cloud API at
+`https://copilot.tencent.com/v2/chat/completions`. Because the endpoint is
+OpenAI-shaped, BitFun can reuse its existing OpenAI transport; the adapter
+adds a small conversion layer.
 
-### 9.2 What was added
+### 10.2 Components
 
 | Piece | File |
 |---|---|
 | Provider enum value `CodeBuddy` | `src/crates/adapters/ai-adapters/src/client/format.rs` |
-| Message converter (BitFun messages → CodeBuddy messages) | `.../providers/codebuddy/message_converter.rs` |
+| Message converter | `.../providers/codebuddy/message_converter.rs` |
 | Request builder | `.../providers/codebuddy/request.rs` |
-| Streaming handler (SSE parsing) | `.../stream/stream_handler/codebuddy.rs` |
+| Streaming handler (SSE) | `.../stream/stream_handler/codebuddy.rs` |
 | Provider catalog entry | `src/shared/ai-provider-catalog/providers.json` |
 
-### 9.3 Empty `finish_reason` protection
+### 10.3 Empty `finish_reason` protection
 
-The CodeBuddy stream sends an empty string as `finish_reason` on some frames.
-Old code treated any `finish_reason` as "the turn is done", which aborted tool
-calls early. The fix: only treat non-empty `finish_reason` as a completion
-signal (`src/crates/execution/agent-stream/src/lib.rs` and
-`src/crates/adapters/ai-adapters/src/client/response_aggregator.rs`). This is
-guarded by contract tests so it cannot regress.
+The CodeBuddy stream emits an **empty string** as `finish_reason` on some
+frames. Old code treated any `finish_reason` as "turn done", aborting tool
+calls early. The fix treats only non-empty `finish_reason` as a completion
+signal (`src/crates/execution/agent-stream/src/lib.rs`,
+`src/crates/adapters/ai-adapters/src/client/response_aggregator.rs`), guarded
+by contract tests.
 
-### 9.4 UI
+### 10.4 UI
 
-The model settings UI gained a searchable provider picker and the ability to
-select a global default model (`src/web-ui/src/infrastructure/config/...`).
+The model settings UI gained a searchable provider picker and a global
+default-model selection (`src/web-ui/src/infrastructure/config/...`).
 
 ---
 
-## 10. Domain 8: Web UI
+## 11. Implementation 8: Web UI
 
-### 10.1 Flow-chat
+### 11.1 Flow-chat
 
 - Turn completion notices and footer layout (`turnCompletionNotice.ts`,
   `FlowChatStore.ts`).
-- Context usage display persisted across hydration (see §7.5).
+- Context usage display persisted across hydration (§8.5).
 - Subagent projection view (`SubagentProjectionView.tsx`).
 - `handleTextChunk` creates an ACP session placeholder when a text chunk
-  arrives before the session registration, so early stream output is not
+  arrives before session registration, so early stream output is not
   silently dropped (`flow-chat-manager/EventHandlerModule.ts`).
 
-### 10.2 Legion pages
+### 11.2 Legion pages
 
-- `CreateLegionPage`, `LegionCard`, `BeeColonyMonitor`, `AgentsScene`
-  provide a visual view of agent topology
-  (`src/web-ui/src/app/scenes/agents/`, `src/web-ui/src/app/layout/`).
-- `LegionPresetAPI` talks to the backend preset registry.
+`CreateLegionPage`, `LegionCard`, `BeeColonyMonitor`, and `AgentsScene`
+provide a visual view of agent topology
+(`src/web-ui/src/app/scenes/agents/`, `src/web-ui/src/app/layout/`);
+`LegionPresetAPI` talks to the backend preset registry.
 
-### 10.3 Model switching
+### 11.3 Model switching
 
-- Searchable provider/model list and global default model selection
-  (`AIModelConfig.tsx`, `builtinProviderCatalog.ts`).
+Searchable provider/model list and global default-model selection
+(`AIModelConfig.tsx`, `builtinProviderCatalog.ts`).
 
 ---
 
-## 11. Summary
+## 12. Evaluation
 
-This PR is a **reference snapshot** of customization work on BitFun for
-multi-agent collaboration and external-agent integration:
+### 12.1 Test evidence
 
-1. **ACP channel** — drive real external agents as first-class sessions
-   (create/talk/history/cancel), with direct delivery, lifecycle mirroring,
-   persistence, and orphan reclamation.
-2. **Session tooling** — compact action, better listing, ghost-session
-   fixes, tombstone anti-resurrection.
-3. **Warden** — a full governance subsystem with scene-aware failure
-   detection and LLM-assisted judgement.
-4. **RBAC** — role templates and role pinning so subagents get usable,
-   safe tool sets.
-5. **Engine** — stable prompt-cache prefix, per-round runtime facts,
-   once-per-generation user context.
-6. **Orchestration** — legion topology, task dual lifecycle, plan tool
-   family, goal dual trigger.
-7. **CodeBuddy** — an OpenAI-compatible provider adapter with an empty
-   `finish_reason` fix.
-8. **Web UI** — flow-chat display, legion pages, model switching.
+The changes are accompanied by contract and integration tests that pin the
+behaviour described above:
 
-Everything in this snapshot is the final state; no intermediate commits,
-scratch files, or internal records are included.
+| Behaviour | Test | Location |
+|---|---|---|
+| RBAC pinning + ReadOnly for GeneralPurpose | `general_purpose_subagent_role_is_executor_and_readonly_allowed` | `rbac_master_switch.rs:239` |
+| Runtime facts cleared on tool rounds | `tool_round_clears_runtime_facts_after_user_round_injection` | `execution_engine.rs:6045` |
+| User context injected once per cache generation | `round_dynamic_reminders_injects_user_context_once_per_cache_generation` | `execution_engine.rs:6088` |
+| ReadOnly classification for workspace scans | `classify_tool_call_workspace_scan_is_readonly` | `framework.rs:3413` |
+
+### 12.2 ACP channel guarantees
+
+The ACP channel is covered by unit tests for client-id parsing and for the
+notification format (the notification must exclude the full reply, include
+the session id, and point to `SessionHistory`).
+
+### 12.3 Limitations
+
+The following are known limitations of the snapshot:
+
+- The Warden judgement port requires a model endpoint at runtime; its
+  behaviour without a configured model is conservative (no pokes).
+- The CodeBuddy adapter depends on the cloud endpoint's API shape, which may
+  evolve independently.
+- The workflow model in §3 is a *methodology* — it is realized through the
+  platform's session/task/tool machinery, but it is not itself a separate
+  runtime component.
+
+---
+
+## 13. Conclusion and Future Work
+
+This report presented a set of customizations to BitFun for multi-agent
+collaboration and external agent interconnection. The ACP channel (C1) makes
+external agents first-class sessions with direct delivery, lifecycle
+mirroring, and persisted, idempotent transcripts. The governance layer (C2)
+adds a Warden guard system and RBAC subagent roles. The context engine (C3)
+stabilizes the prompt-cache prefix and bounds dynamic injection. The workflow
+architecture (C4) provides a separation-of-powers coordination model.
+
+Future work includes: making the Warden judgement port optional-configurable
+per workspace; extending the CodeBuddy adapter to additional endpoints as
+they become OpenAI-compatible; and formalizing the coordination model (§3)
+as an explicit runtime policy (e.g. a declarative workflow configuration
+consumed by the scheduler).
+
+---
+
+## 14. References
+
+1. **ACP — Agent Client Protocol.** https://github.com/agent-client-protocol/agent-client-protocol
+2. R. Sandhu, E. Coyne, H. Feinstein, C. Youman. *Role-Based Access Control
+   Models.* IEEE Computer, 29(2), 1996.
+3. Anthropic. *Prompt Caching.* Anthropic Documentation, 2024.
+4. BitFun. https://github.com/GCWing/BitFun
+
+---
+
+*All line numbers refer to the files in this pull request (base
+`e640aa40`). This document contains only generic engineering descriptions
+and no proprietary information.*
