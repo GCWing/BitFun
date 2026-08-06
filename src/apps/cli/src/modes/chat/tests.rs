@@ -41,11 +41,16 @@ mod tests {
     use crate::ui::chat::ChatView;
     use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
     use crate::ui::theme::Theme;
-    use bitfun_core::external_hooks::ExternalHookCatalogSnapshotV1;
-    use bitfun_core::native_hooks::{
-        NativeHookFileView, NativeHookHandlerView, NativeHookOverview, NativeHookRuleView,
+    use bitfun_app_server_protocol::hook::{
+        NativeHookFileSummary as NativeHookFileView,
+        NativeHookHandlerSummary as NativeHookHandlerView, NativeHookOverview,
+        NativeHookRuleSummary as NativeHookRuleView,
     };
     use bitfun_events::{AgenticEvent, ToolEventData};
+    use bitfun_product_domains::external_hook_catalog::{
+        ExternalHookCatalogEntry, ExternalHookCatalogSnapshotV1, ExternalHookHandlerKind,
+        ExternalHookMatcherSummary, ExternalHookNativeActivation, ExternalHookProjectionStatus,
+    };
     use bitfun_product_domains::external_source_control::ExternalSourceControlSnapshotV1;
     use bitfun_product_domains::external_sources::{
         native_prompt_command_conflict_key, ExternalSourceAssetKind,
@@ -887,26 +892,26 @@ mod tests {
             project_hooks_enabled: false,
             files: vec![
                 NativeHookFileView {
-                    scope: "user",
-                    path: std::path::PathBuf::from("/home/u/.config/bitfun/config/hooks.json"),
+                    scope: "user".to_string(),
+                    location: "<user-config>/config/hooks.json".to_string(),
                     exists: true,
                     loaded: true,
                 },
                 NativeHookFileView {
-                    scope: "project",
-                    path: std::path::PathBuf::from("/ws/.bitfun/config/hooks.json"),
+                    scope: "project".to_string(),
+                    location: "<workspace>/.bitfun/config/hooks.json".to_string(),
                     exists: true,
                     loaded: false,
                 },
             ],
             rules: vec![NativeHookRuleView {
-                event: "PreToolUse",
+                event: "PreToolUse".to_string(),
                 matcher: "Bash".to_string(),
                 matcher_is_valid: true,
-                scope: "user",
-                source: "/home/u/.config/bitfun/config/hooks.json".to_string(),
+                scope: "user".to_string(),
                 handlers: vec![NativeHookHandlerView {
-                    command: "jq -r '.tool_input.command' >> ~/log".to_string(),
+                    command_summary: "jq -r '.tool_input.command' >> ~/log".to_string(),
+                    command_truncated: false,
                     timeout_seconds: 600,
                     status_message: None,
                 }],
@@ -1058,21 +1063,17 @@ mod tests {
             }))
             .unwrap();
         snapshot.entries = (0..105)
-            .map(
-                |index| bitfun_core::external_hooks::ExternalHookCatalogEntry {
-                    stable_key: format!("test-{index}"),
-                    source: snapshot.sources[0].key.clone(),
-                    native_event: format!("Event{index}"),
-                    matcher: bitfun_core::external_hooks::ExternalHookMatcherSummary::Any,
-                    handler_kind: bitfun_core::external_hooks::ExternalHookHandlerKind::Command,
-                    projection_status:
-                        bitfun_core::external_hooks::ExternalHookProjectionStatus::NativeOnly,
-                    native_activation:
-                        bitfun_core::external_hooks::ExternalHookNativeActivation::Unknown,
-                    mapping: None,
-                    content_version: format!("entry-v{index}"),
-                },
-            )
+            .map(|index| ExternalHookCatalogEntry {
+                stable_key: format!("test-{index}"),
+                source: snapshot.sources[0].key.clone(),
+                native_event: format!("Event{index}"),
+                matcher: ExternalHookMatcherSummary::Any,
+                handler_kind: ExternalHookHandlerKind::Command,
+                projection_status: ExternalHookProjectionStatus::NativeOnly,
+                native_activation: ExternalHookNativeActivation::Unknown,
+                mapping: None,
+                content_version: format!("entry-v{index}"),
+            })
             .collect();
 
         let text = render_external_hook_catalog(&snapshot);

@@ -11,6 +11,7 @@ use bitfun_app_server_client::AppServerEvent;
 use bitfun_app_server_protocol::agent::*;
 use bitfun_app_server_protocol::event::EventStreamState;
 use bitfun_app_server_protocol::external_source::*;
+use bitfun_app_server_protocol::hook::*;
 use bitfun_app_server_protocol::mcp::*;
 use bitfun_app_server_protocol::model::*;
 use bitfun_app_server_protocol::session::*;
@@ -540,6 +541,88 @@ impl TuiAgentClient {
                 shell_review_decision,
             })
             .await
+            .map_err(external_source_backend_error)
+    }
+
+    pub(crate) async fn native_hook_overview(
+        &self,
+    ) -> std::result::Result<NativeHookOverview, ExternalSourceOperationError> {
+        self.backend
+            .native_hook_overview(NativeHookOverviewRequest {
+                workspace_path: self.project_workspace_path_string(),
+            })
+            .await
+            .map(|response| response.0)
+            .map_err(external_source_backend_error)
+    }
+
+    pub(crate) async fn external_hook_snapshot(
+        &self,
+        refresh_updates: bool,
+    ) -> std::result::Result<
+        bitfun_product_domains::external_hook_import::ExternalHookImportSnapshotV1,
+        ExternalSourceOperationError,
+    > {
+        self.backend
+            .external_hook_snapshot(ExternalHookSnapshotRequest {
+                workspace_path: self.project_workspace_path_string(),
+                refresh_updates,
+            })
+            .await
+            .map(|response| response.0)
+            .map_err(external_source_backend_error)
+    }
+
+    pub(crate) async fn external_hook_plan(
+        &self,
+        source: bitfun_product_domains::external_sources::SourceKey,
+    ) -> std::result::Result<
+        bitfun_product_domains::external_hook_import::ExternalHookImportPlanV1,
+        ExternalSourceOperationError,
+    > {
+        self.backend
+            .external_hook_plan(ExternalHookPlanRequest {
+                workspace_path: self.project_workspace_path_string(),
+                source,
+            })
+            .await
+            .map(|response| response.0)
+            .map_err(external_source_backend_error)
+    }
+
+    pub(crate) async fn external_hook_apply(
+        &self,
+        import_request: bitfun_product_domains::external_hook_import::ExternalHookImportApplyRequestV1,
+    ) -> std::result::Result<
+        bitfun_product_domains::external_hook_import::ExternalHookImportApplyResultV1,
+        ExternalSourceOperationError,
+    > {
+        self.backend
+            .external_hook_apply(ExternalHookApplyRequest {
+                workspace_path: self.project_workspace_path_string(),
+                operation_id: format!("tui-hook-{}", uuid::Uuid::new_v4()),
+                import_request,
+            })
+            .await
+            .map(|response| response.0)
+            .map_err(external_source_backend_error)
+    }
+
+    pub(crate) async fn external_hook_mutate(
+        &self,
+        mutation: bitfun_product_domains::external_hook_import::ExternalHookImportMutationRequestV1,
+    ) -> std::result::Result<
+        bitfun_product_domains::external_hook_import::ExternalHookImportSnapshotV1,
+        ExternalSourceOperationError,
+    > {
+        self.backend
+            .external_hook_mutate(ExternalHookMutationRequest {
+                workspace_path: self.project_workspace_path_string(),
+                operation_id: format!("tui-hook-{}", uuid::Uuid::new_v4()),
+                mutation,
+            })
+            .await
+            .map(|response| response.0)
             .map_err(external_source_backend_error)
     }
 

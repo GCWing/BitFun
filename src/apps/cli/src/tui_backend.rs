@@ -6,6 +6,7 @@ use bitfun_app_server_protocol::agent::*;
 use bitfun_app_server_protocol::app::{HealthResponse, InitializeRequest, InitializeResponse};
 use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
 use bitfun_app_server_protocol::external_source::*;
+use bitfun_app_server_protocol::hook::*;
 use bitfun_app_server_protocol::mcp::*;
 use bitfun_app_server_protocol::model::*;
 use bitfun_app_server_protocol::session::*;
@@ -256,6 +257,26 @@ pub(crate) trait TuiBackend: Send + Sync {
         &self,
         request: ExpandExternalCommandRequest,
     ) -> Result<ExpandExternalCommandResponse, TuiBackendError>;
+    async fn native_hook_overview(
+        &self,
+        request: NativeHookOverviewRequest,
+    ) -> Result<NativeHookOverviewResponse, TuiBackendError>;
+    async fn external_hook_snapshot(
+        &self,
+        request: ExternalHookSnapshotRequest,
+    ) -> Result<ExternalHookSnapshotResponse, TuiBackendError>;
+    async fn external_hook_plan(
+        &self,
+        request: ExternalHookPlanRequest,
+    ) -> Result<ExternalHookPlanResponse, TuiBackendError>;
+    async fn external_hook_apply(
+        &self,
+        request: ExternalHookApplyRequest,
+    ) -> Result<ExternalHookApplyResponse, TuiBackendError>;
+    async fn external_hook_mutate(
+        &self,
+        request: ExternalHookMutationRequest,
+    ) -> Result<ExternalHookMutationResponse, TuiBackendError>;
 }
 
 pub(crate) struct AppServerTuiBackend {
@@ -635,6 +656,41 @@ impl TuiBackend for AppServerTuiBackend {
         request: ExpandExternalCommandRequest,
     ) -> Result<ExpandExternalCommandResponse, TuiBackendError> {
         map_client(self.client.expand_external_command(request).await)
+    }
+
+    async fn native_hook_overview(
+        &self,
+        request: NativeHookOverviewRequest,
+    ) -> Result<NativeHookOverviewResponse, TuiBackendError> {
+        map(self.client.native_hook_overview(request).await)
+    }
+
+    async fn external_hook_snapshot(
+        &self,
+        request: ExternalHookSnapshotRequest,
+    ) -> Result<ExternalHookSnapshotResponse, TuiBackendError> {
+        map(self.client.external_hook_snapshot(request).await)
+    }
+
+    async fn external_hook_plan(
+        &self,
+        request: ExternalHookPlanRequest,
+    ) -> Result<ExternalHookPlanResponse, TuiBackendError> {
+        map(self.client.external_hook_plan(request).await)
+    }
+
+    async fn external_hook_apply(
+        &self,
+        request: ExternalHookApplyRequest,
+    ) -> Result<ExternalHookApplyResponse, TuiBackendError> {
+        map_client(self.client.external_hook_apply(request).await)
+    }
+
+    async fn external_hook_mutate(
+        &self,
+        request: ExternalHookMutationRequest,
+    ) -> Result<ExternalHookMutationResponse, TuiBackendError> {
+        map_client(self.client.external_hook_mutate(request).await)
     }
 }
 

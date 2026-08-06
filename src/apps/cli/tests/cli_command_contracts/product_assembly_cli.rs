@@ -420,6 +420,51 @@ fn interactive_tui_agent_operations_stay_behind_app_server_backend() {
 }
 
 #[test]
+fn interactive_tui_hook_management_stays_behind_the_typed_backend() {
+    const CHAT_HOOKS: &str = include_str!("../../src/modes/chat/external_hooks.rs");
+    const CHAT_NATIVE_HOOKS: &str = include_str!("../../src/modes/chat/native_hooks.rs");
+    const TUI_CLIENT: &str = include_str!("../../src/agent/tui_client.rs");
+    const SHARED_TUI_BACKEND: &str = include_str!("../../src/shared_tui_backend.rs");
+
+    for operation in [
+        "external_hook_snapshot",
+        "external_hook_plan",
+        "external_hook_apply",
+        "external_hook_mutate",
+        "native_hook_overview",
+    ] {
+        assert!(
+            TUI_CLIENT.contains(operation) && CHAT_HOOKS.contains(&format!(".{operation}(")),
+            "TUI Hook operation {operation} must route through TuiAgentClient"
+        );
+    }
+    for direct_owner in [
+        "bitfun_core::external_hooks",
+        "bitfun_core::native_hooks",
+        "bitfun_core::external_hook_import",
+        "crate::hook_import::mutate",
+    ] {
+        assert!(
+            !CHAT_HOOKS.contains(direct_owner) && !CHAT_NATIVE_HOOKS.contains(direct_owner),
+            "TUI Hook controllers must not reference {direct_owner}"
+        );
+    }
+    assert!(
+        CHAT_HOOKS.contains("expected_revision")
+            && SHARED_TUI_BACKEND.contains("NATIVE_HOOKS_CAPABILITY")
+            && SHARED_TUI_BACKEND.contains("EXTERNAL_HOOKS_CAPABILITY")
+            && SHARED_TUI_BACKEND.contains("does not fall back"),
+        "Hook mutations must preserve stale-revision fencing and remote fail-closed routing"
+    );
+    assert!(
+        !CHAT_HOOKS.contains("post_call_hooks")
+            && !CHAT_NATIVE_HOOKS.contains("post_call_hooks")
+            && !TUI_CLIENT.contains("post_call_hooks"),
+        "compiled-in post-call Hooks must not enter the TUI management API"
+    );
+}
+
+#[test]
 fn runtime_ownership_policy_is_assembled_once_in_core() {
     const SHARED_RUNTIME: &str = include_str!("../../src/shared_runtime.rs");
     const CLI_RUNTIME: &str = include_str!("../../src/runtime/mod.rs");

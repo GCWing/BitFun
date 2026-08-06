@@ -131,6 +131,7 @@ impl BitfunAppServer {
             .with_connection_builder(handlers::subagent::builder(management.clone()))
             .with_connection_builder(handlers::mcp::builder(management.clone()))
             .with_connection_builder(handlers::external_source::builder(management.clone()))
+            .with_connection_builder(handlers::hook::builder(management.clone()))
             .with_connection_builder(handlers::git::builder())
             .with_connection_builder(handlers::config::builder())
             .with_connection_builder(handlers::i18n::builder())

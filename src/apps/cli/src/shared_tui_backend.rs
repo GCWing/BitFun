@@ -12,7 +12,10 @@ use bitfun_agent_runtime_ipc::{
     RuntimeSessionRenameRequest, RuntimeSessionRestoreRequest, RuntimeSessionState,
     RuntimeUserAnswersRequest,
 };
-use bitfun_app_server::management::{EXTERNAL_SOURCES_CAPABILITY, MODES_CAPABILITY};
+use bitfun_app_server::management::{
+    EXTERNAL_HOOKS_CAPABILITY, EXTERNAL_SOURCES_CAPABILITY, MODES_CAPABILITY,
+    NATIVE_HOOKS_CAPABILITY,
+};
 use bitfun_app_server::{
     AppManagementCapabilities, AppManagementError, AppManagementErrorKind, AppManagementService,
 };
@@ -27,6 +30,7 @@ use bitfun_app_server_protocol::event::{
     EventStreamStateNotification, PermissionEventNotification, ResyncDirective,
 };
 use bitfun_app_server_protocol::external_source::*;
+use bitfun_app_server_protocol::hook::*;
 use bitfun_app_server_protocol::mcp::*;
 use bitfun_app_server_protocol::model::*;
 use bitfun_app_server_protocol::session::*;
@@ -874,6 +878,56 @@ impl TuiBackend for SharedTuiBackend {
             .await
             .map_err(|error| map_management_error(EXTERNAL_SOURCES_CAPABILITY, error))
     }
+
+    async fn native_hook_overview(
+        &self,
+        request: NativeHookOverviewRequest,
+    ) -> Result<NativeHookOverviewResponse, TuiBackendError> {
+        self.management_service(NATIVE_HOOKS_CAPABILITY)?
+            .native_hook_overview(request)
+            .await
+            .map_err(|error| map_management_error(NATIVE_HOOKS_CAPABILITY, error))
+    }
+
+    async fn external_hook_snapshot(
+        &self,
+        request: ExternalHookSnapshotRequest,
+    ) -> Result<ExternalHookSnapshotResponse, TuiBackendError> {
+        self.management_service(EXTERNAL_HOOKS_CAPABILITY)?
+            .external_hook_snapshot(request)
+            .await
+            .map_err(|error| map_management_error(EXTERNAL_HOOKS_CAPABILITY, error))
+    }
+
+    async fn external_hook_plan(
+        &self,
+        request: ExternalHookPlanRequest,
+    ) -> Result<ExternalHookPlanResponse, TuiBackendError> {
+        self.management_service(EXTERNAL_HOOKS_CAPABILITY)?
+            .external_hook_plan(request)
+            .await
+            .map_err(|error| map_management_error(EXTERNAL_HOOKS_CAPABILITY, error))
+    }
+
+    async fn external_hook_apply(
+        &self,
+        request: ExternalHookApplyRequest,
+    ) -> Result<ExternalHookApplyResponse, TuiBackendError> {
+        self.management_service(EXTERNAL_HOOKS_CAPABILITY)?
+            .external_hook_apply(request)
+            .await
+            .map_err(|error| map_management_error(EXTERNAL_HOOKS_CAPABILITY, error))
+    }
+
+    async fn external_hook_mutate(
+        &self,
+        request: ExternalHookMutationRequest,
+    ) -> Result<ExternalHookMutationResponse, TuiBackendError> {
+        self.management_service(EXTERNAL_HOOKS_CAPABILITY)?
+            .external_hook_mutate(request)
+            .await
+            .map_err(|error| map_management_error(EXTERNAL_HOOKS_CAPABILITY, error))
+    }
 }
 
 impl SharedTuiBackend {
@@ -1263,6 +1317,8 @@ mod tests {
             "tui.subagents",
             "tui.mcp",
             "tui.externalSources",
+            "tui.nativeHooks",
+            "tui.externalHooks",
         ] {
             let capability = capabilities
                 .iter()
@@ -1330,6 +1386,18 @@ mod tests {
                 capability: EXTERNAL_SOURCES_CAPABILITY.to_string()
             }
         );
+
+        for capability in [NATIVE_HOOKS_CAPABILITY, EXTERNAL_HOOKS_CAPABILITY] {
+            let hook_error = require_local_management_scope(false, capability)
+                .expect_err("Remote Hook management must not use the local service");
+            assert_eq!(
+                hook_error.kind,
+                TuiBackendErrorKind::Unsupported {
+                    capability: capability.to_string()
+                }
+            );
+            assert!(hook_error.message.contains("does not fall back"));
+        }
     }
 
     fn agent_event(text: &str) -> RuntimeIpcClientEvent {

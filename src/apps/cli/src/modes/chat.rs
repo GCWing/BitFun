@@ -69,19 +69,19 @@ use crate::ui::theme::{
 use crate::ui::theme_selector::ThemeItem;
 use crate::ui::{init_terminal, restore_terminal, TerminalGuard};
 use bitfun_app_server_protocol::external_source::ExternalSourceReviewAction;
-use bitfun_core::external_hooks::{
-    ExternalHookCatalogSnapshotV1, ExternalHookMatcherSummary, ExternalHookNativeActivation,
-    ExternalHookProjectionStatus,
-};
-use bitfun_core::native_hooks::{
-    overview as native_hook_overview, NativeHookOverview, NativeHookRuleView,
+use bitfun_app_server_protocol::hook::{
+    NativeHookOverview, NativeHookRuleSummary as NativeHookRuleView,
 };
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::session_usage::render_usage_report_markdown;
+use bitfun_product_domains::external_hook_catalog::{
+    ExternalHookCatalogSnapshotV1, ExternalHookMatcherSummary, ExternalHookNativeActivation,
+    ExternalHookProjectionStatus,
+};
 use bitfun_product_domains::external_hook_import::{
     ExternalHookImportApplyOutcomeV1, ExternalHookImportApplyRequestV1,
-    ExternalHookImportMutationV1, ExternalHookImportPlanV1, ExternalHookImportSnapshotV1,
-    EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
+    ExternalHookImportMutationRequestV1, ExternalHookImportMutationV1, ExternalHookImportPlanV1,
+    ExternalHookImportSnapshotV1, EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
 };
 use bitfun_product_domains::external_source_control::{
     ExternalSourceControlActionV1, ExternalSourceControlRequestV1,

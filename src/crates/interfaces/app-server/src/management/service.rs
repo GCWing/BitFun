@@ -9,6 +9,7 @@ use bitfun_app_server_protocol::agent::{
     AgentModeSummary, ListAgentModesRequest, ListAgentModesResponse,
 };
 use bitfun_app_server_protocol::external_source::*;
+use bitfun_app_server_protocol::hook::*;
 use bitfun_app_server_protocol::mcp::*;
 use bitfun_app_server_protocol::model::*;
 use bitfun_app_server_protocol::skill::*;
@@ -148,6 +149,139 @@ fn external_source_string_error(error: String) -> AppManagementError {
 
 fn validate_external_operation(operation_id: &str) -> AppManagementResult<()> {
     validate_operation_id(operation_id).map_err(AppManagementError::invalid_request)
+}
+
+const MAX_NATIVE_HOOK_COMMAND_CHARS: usize = 200;
+const MAX_NATIVE_HOOK_STATUS_CHARS: usize = 200;
+
+fn bounded_native_hook_text(value: &str, max_chars: usize) -> (String, bool) {
+    let value = value.trim();
+    let truncated = value.chars().count() > max_chars;
+    let mut summary = value
+        .chars()
+        .take(max_chars)
+        .map(|character| {
+            if character.is_control() {
+                ' '
+            } else {
+                character
+            }
+        })
+        .collect::<String>();
+    if truncated {
+        summary.push_str("...");
+    }
+    (summary, truncated)
+}
+
+fn managed_hook_location(path: &Path) -> String {
+    let import_id = path
+        .parent()
+        .and_then(Path::parent)
+        .and_then(Path::file_name)
+        .map(|value| value.to_string_lossy())
+        .map(|value| {
+            value
+                .chars()
+                .map(|character| {
+                    if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
+                        character
+                    } else {
+                        '_'
+                    }
+                })
+                .collect::<String>()
+        })
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "import".to_string());
+    format!("<managed-hooks>/{import_id}/hooks.json")
+}
+
+fn native_hook_location(path: &Path, workspace: &Path, user_hooks_file: Option<&Path>) -> String {
+    if user_hooks_file.is_some_and(|user| user == path) {
+        return "<user-config>/config/hooks.json".to_string();
+    }
+    if let Ok(relative) = path.strip_prefix(workspace) {
+        let relative = relative.to_string_lossy().replace('\\', "/");
+        return if relative.is_empty() {
+            "<workspace>".to_string()
+        } else {
+            format!("<workspace>/{relative}")
+        };
+    }
+    managed_hook_location(path)
+}
+
+fn project_native_hook_overview(
+    overview: bitfun_core::native_hooks::NativeHookOverview,
+    workspace: &Path,
+) -> NativeHookOverview {
+    let user_hooks_file = bitfun_core::infrastructure::try_get_path_manager_arc()
+        .ok()
+        .map(|manager| manager.user_hooks_file());
+    let path_labels = overview
+        .files
+        .iter()
+        .map(|file| {
+            (
+                file.path.clone(),
+                native_hook_location(&file.path, workspace, user_hooks_file.as_deref()),
+            )
+        })
+        .collect::<Vec<_>>();
+    let sanitize_issue = |issue: String| {
+        path_labels.iter().fold(issue, |sanitized, (path, label)| {
+            let native = path.to_string_lossy();
+            let sanitized = sanitized.replace(native.as_ref(), label);
+            sanitized.replace(&native.replace('\\', "/"), label)
+        })
+    };
+
+    NativeHookOverview {
+        enabled: overview.enabled,
+        project_hooks_enabled: overview.project_hooks_enabled,
+        files: overview
+            .files
+            .into_iter()
+            .zip(path_labels.iter())
+            .map(|(file, (_, location))| NativeHookFileSummary {
+                scope: file.scope.to_string(),
+                location: location.clone(),
+                exists: file.exists,
+                loaded: file.loaded,
+            })
+            .collect(),
+        rules: overview
+            .rules
+            .into_iter()
+            .map(|rule| NativeHookRuleSummary {
+                event: rule.event.to_string(),
+                matcher: rule.matcher,
+                matcher_is_valid: rule.matcher_is_valid,
+                scope: rule.scope.to_string(),
+                handlers: rule
+                    .handlers
+                    .into_iter()
+                    .map(|handler| {
+                        let (command_summary, command_truncated) = bounded_native_hook_text(
+                            &handler.command,
+                            MAX_NATIVE_HOOK_COMMAND_CHARS,
+                        );
+                        NativeHookHandlerSummary {
+                            command_summary,
+                            command_truncated,
+                            timeout_seconds: handler.timeout_seconds,
+                            status_message: handler.status_message.map(|message| {
+                                bounded_native_hook_text(&message, MAX_NATIVE_HOOK_STATUS_CHARS).0
+                            }),
+                        }
+                    })
+                    .collect(),
+            })
+            .collect(),
+        total_handlers: overview.total_handlers,
+        issues: overview.issues.into_iter().map(sanitize_issue).collect(),
+    }
 }
 
 async fn external_source_preferences() -> AppManagementResult<ExternalSourceConflictPreferences> {
@@ -663,6 +797,71 @@ impl AppManagementService {
                 };
         }
         capabilities
+    }
+
+    pub async fn native_hook_overview(
+        &self,
+        request: NativeHookOverviewRequest,
+    ) -> AppManagementResult<NativeHookOverviewResponse> {
+        let workspace = Path::new(&request.workspace_path);
+        let overview = bitfun_core::native_hooks::overview(Some(workspace)).await;
+        Ok(NativeHookOverviewResponse(project_native_hook_overview(
+            overview, workspace,
+        )))
+    }
+
+    pub async fn external_hook_snapshot(
+        &self,
+        request: ExternalHookSnapshotRequest,
+    ) -> AppManagementResult<ExternalHookSnapshotResponse> {
+        bitfun_core::external_hook_import::external_hook_import_snapshot(
+            Some(Path::new(&request.workspace_path)),
+            request.refresh_updates,
+        )
+        .await
+        .map(ExternalHookSnapshotResponse)
+        .map_err(external_source_error)
+    }
+
+    pub async fn external_hook_plan(
+        &self,
+        request: ExternalHookPlanRequest,
+    ) -> AppManagementResult<ExternalHookPlanResponse> {
+        bitfun_core::external_hook_import::plan_external_hook_import(
+            Some(Path::new(&request.workspace_path)),
+            request.source,
+        )
+        .await
+        .map(ExternalHookPlanResponse)
+        .map_err(external_source_error)
+    }
+
+    pub async fn external_hook_apply(
+        &self,
+        request: ExternalHookApplyRequest,
+    ) -> AppManagementResult<ExternalHookApplyResponse> {
+        validate_external_operation(&request.operation_id)?;
+        bitfun_core::external_hook_import::apply_external_hook_import(
+            Some(Path::new(&request.workspace_path)),
+            request.import_request,
+        )
+        .await
+        .map(ExternalHookApplyResponse)
+        .map_err(external_source_error)
+    }
+
+    pub async fn external_hook_mutate(
+        &self,
+        request: ExternalHookMutationRequest,
+    ) -> AppManagementResult<ExternalHookMutationResponse> {
+        validate_external_operation(&request.operation_id)?;
+        bitfun_core::external_hook_import::mutate_external_hook_import(
+            Some(Path::new(&request.workspace_path)),
+            request.mutation,
+        )
+        .await
+        .map(ExternalHookMutationResponse)
+        .map_err(external_source_error)
     }
 
     pub async fn external_source_snapshot(
@@ -1343,6 +1542,52 @@ mod tests {
     use super::*;
     use crate::management::AppManagementErrorKind;
 
+    fn native_overview_with_sensitive_paths() -> bitfun_core::native_hooks::NativeHookOverview {
+        bitfun_core::native_hooks::NativeHookOverview {
+            enabled: true,
+            project_hooks_enabled: true,
+            files: vec![
+                bitfun_core::native_hooks::NativeHookFileView {
+                    scope: "user",
+                    path: PathBuf::from("C:/Users/private/AppData/Roaming/BitFun/config/hooks.json"),
+                    exists: true,
+                    loaded: true,
+                },
+                bitfun_core::native_hooks::NativeHookFileView {
+                    scope: "project",
+                    path: PathBuf::from("D:/secret/project/.bitfun/config/hooks.json"),
+                    exists: true,
+                    loaded: true,
+                },
+                bitfun_core::native_hooks::NativeHookFileView {
+                    scope: "user",
+                    path: PathBuf::from(
+                        "C:/Users/private/AppData/Roaming/BitFun/runtime/hook-imports/bundles/import-one/version/hooks.json",
+                    ),
+                    exists: true,
+                    loaded: true,
+                },
+            ],
+            rules: vec![bitfun_core::native_hooks::NativeHookRuleView {
+                event: "PreToolUse",
+                matcher: "Bash".to_string(),
+                matcher_is_valid: true,
+                scope: "project",
+                source: "D:/secret/project/.bitfun/config/hooks.json".to_string(),
+                handlers: vec![bitfun_core::native_hooks::NativeHookHandlerView {
+                    command: format!("secret-token {}", "x".repeat(240)),
+                    timeout_seconds: 5,
+                    status_message: Some("Checking".to_string()),
+                }],
+            }],
+            total_handlers: 1,
+            issues: vec![
+                "Failed to read hook configuration: path=D:/secret/project/.bitfun/config/hooks.json"
+                    .to_string(),
+            ],
+        }
+    }
+
     fn mutation() -> ModelMutation {
         ModelMutation {
             id: "model-1".to_string(),
@@ -1393,6 +1638,34 @@ mod tests {
         assert_eq!(replaced.api_key, "new-key");
         assert!(replaced.custom_headers.is_none());
         assert_eq!(replaced.custom_request_body.as_deref(), Some("new-body"));
+    }
+
+    #[test]
+    fn native_hook_projection_replaces_paths_and_bounds_command_summaries() {
+        let overview = project_native_hook_overview(
+            native_overview_with_sensitive_paths(),
+            Path::new("D:/secret/project"),
+        );
+
+        assert_eq!(
+            overview.files[1].location,
+            "<workspace>/.bitfun/config/hooks.json"
+        );
+        assert!(overview.files[2].location.starts_with("<managed-hooks>/"));
+        assert!(overview.rules[0].handlers[0].command_truncated);
+        assert_eq!(
+            overview.rules[0].handlers[0]
+                .command_summary
+                .chars()
+                .count(),
+            MAX_NATIVE_HOOK_COMMAND_CHARS + 3
+        );
+        let debug = format!("{:?}", NativeHookOverviewResponse(overview.clone()));
+        for secret in ["D:/secret/project", "C:/Users/private", "secret-token"] {
+            assert!(!debug.contains(secret), "native Hook Debug leaked {secret}");
+        }
+        assert!(overview.issues[0].contains("<workspace>/.bitfun/config/hooks.json"));
+        assert!(!overview.issues[0].contains("D:/secret/project"));
     }
 
     #[test]

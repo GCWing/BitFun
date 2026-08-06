@@ -12,6 +12,8 @@ pub const SKILLS_CAPABILITY: &str = "tui.skills";
 pub const SUBAGENTS_CAPABILITY: &str = "tui.subagents";
 pub const MCP_CAPABILITY: &str = "tui.mcp";
 pub const EXTERNAL_SOURCES_CAPABILITY: &str = "tui.externalSources";
+pub const NATIVE_HOOKS_CAPABILITY: &str = "tui.nativeHooks";
+pub const EXTERNAL_HOOKS_CAPABILITY: &str = "tui.externalHooks";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppManagementCapabilities {
@@ -21,6 +23,8 @@ pub struct AppManagementCapabilities {
     pub subagents: CapabilityAvailability,
     pub mcp: CapabilityAvailability,
     pub external_sources: CapabilityAvailability,
+    pub native_hooks: CapabilityAvailability,
+    pub external_hooks: CapabilityAvailability,
 }
 
 impl AppManagementCapabilities {
@@ -32,6 +36,8 @@ impl AppManagementCapabilities {
             subagents: CapabilityAvailability::Available,
             mcp: CapabilityAvailability::Available,
             external_sources: CapabilityAvailability::Available,
+            native_hooks: CapabilityAvailability::Available,
+            external_hooks: CapabilityAvailability::Available,
         }
     }
 
@@ -44,6 +50,8 @@ impl AppManagementCapabilities {
             subagents: unavailable(&reason),
             mcp: unavailable(&reason),
             external_sources: unavailable(&reason),
+            native_hooks: unavailable(&reason),
+            external_hooks: unavailable(&reason),
         }
     }
 
@@ -55,6 +63,8 @@ impl AppManagementCapabilities {
             SUBAGENTS_CAPABILITY => Some(&self.subagents),
             MCP_CAPABILITY => Some(&self.mcp),
             EXTERNAL_SOURCES_CAPABILITY => Some(&self.external_sources),
+            NATIVE_HOOKS_CAPABILITY => Some(&self.native_hooks),
+            EXTERNAL_HOOKS_CAPABILITY => Some(&self.external_hooks),
             _ => None,
         }
     }
@@ -107,6 +117,21 @@ impl AppManagementCapabilities {
                     "externalSource/setNativeCommandChoice",
                     "externalSource/expandCommand",
                     "externalSource/event",
+                ],
+            ),
+            descriptor(
+                NATIVE_HOOKS_CAPABILITY,
+                self.native_hooks.clone(),
+                &["nativeHook/overview"],
+            ),
+            descriptor(
+                EXTERNAL_HOOKS_CAPABILITY,
+                self.external_hooks.clone(),
+                &[
+                    "externalHook/snapshot",
+                    "externalHook/plan",
+                    "externalHook/apply",
+                    "externalHook/mutate",
                 ],
             ),
         ]
@@ -187,12 +212,43 @@ mod tests {
         let capabilities = AppManagementCapabilities::unavailable(reason);
         let descriptors = capabilities.descriptors();
 
-        assert_eq!(descriptors.len(), 6);
+        assert_eq!(descriptors.len(), 8);
         for descriptor in descriptors {
             assert!(matches!(
                 descriptor.availability,
                 CapabilityAvailability::Unavailable { ref reason } if reason == "owner unavailable"
             ));
         }
+    }
+
+    #[test]
+    fn hook_capabilities_are_separate_and_exclude_compiled_in_hooks() {
+        let capabilities = AppManagementCapabilities::available();
+        let native = capabilities
+            .descriptors()
+            .into_iter()
+            .find(|descriptor| descriptor.id == NATIVE_HOOKS_CAPABILITY)
+            .expect("native Hook capability");
+        assert_eq!(native.methods, ["nativeHook/overview"]);
+
+        let external = capabilities
+            .descriptors()
+            .into_iter()
+            .find(|descriptor| descriptor.id == EXTERNAL_HOOKS_CAPABILITY)
+            .expect("external Hook capability");
+        assert_eq!(
+            external.methods,
+            [
+                "externalHook/snapshot",
+                "externalHook/plan",
+                "externalHook/apply",
+                "externalHook/mutate",
+            ]
+        );
+        assert!(native
+            .methods
+            .iter()
+            .chain(external.methods.iter())
+            .all(|method| !method.to_ascii_lowercase().contains("postcall")));
     }
 }

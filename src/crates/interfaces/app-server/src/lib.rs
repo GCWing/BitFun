@@ -72,7 +72,8 @@ pub use agent_client_protocol as protocol;
 pub use client::{connect, AppServerClient, FrontendEvent};
 pub use management::{
     AppManagementCapabilities, AppManagementError, AppManagementErrorKind, AppManagementResult,
-    AppManagementService,
+    AppManagementService, EXTERNAL_HOOKS_CAPABILITY, EXTERNAL_SOURCES_CAPABILITY,
+    NATIVE_HOOKS_CAPABILITY,
 };
 pub use role::{AppClient, AppServer};
 pub use server::BitfunAppServer;

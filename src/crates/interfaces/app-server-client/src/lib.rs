@@ -18,6 +18,7 @@ use bitfun_app_server_protocol::event::{
     PermissionEventNotification, SyncEventsRequest, SyncEventsResponse,
 };
 use bitfun_app_server_protocol::external_source::*;
+use bitfun_app_server_protocol::hook::*;
 use bitfun_app_server_protocol::mcp::*;
 use bitfun_app_server_protocol::model::*;
 use bitfun_app_server_protocol::session::*;
@@ -155,6 +156,43 @@ impl AppServerClient {
         &self,
         request: ExpandExternalCommandRequest,
     ) -> Result<ExpandExternalCommandResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn native_hook_overview(
+        &self,
+        request: NativeHookOverviewRequest,
+    ) -> agent_client_protocol::Result<NativeHookOverviewResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn external_hook_snapshot(
+        &self,
+        request: ExternalHookSnapshotRequest,
+    ) -> agent_client_protocol::Result<ExternalHookSnapshotResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn external_hook_plan(
+        &self,
+        request: ExternalHookPlanRequest,
+    ) -> agent_client_protocol::Result<ExternalHookPlanResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn external_hook_apply(
+        &self,
+        request: ExternalHookApplyRequest,
+    ) -> Result<ExternalHookApplyResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn external_hook_mutate(
+        &self,
+        request: ExternalHookMutationRequest,
+    ) -> Result<ExternalHookMutationResponse, ClientError> {
         self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
             .await
     }

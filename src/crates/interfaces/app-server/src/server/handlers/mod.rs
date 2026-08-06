@@ -6,6 +6,7 @@ mod capability;
 pub(in crate::server) mod config;
 pub(in crate::server) mod external_source;
 pub(in crate::server) mod git;
+pub(in crate::server) mod hook;
 pub(in crate::server) mod i18n;
 pub(in crate::server) mod mcp;
 pub(in crate::server) mod model;

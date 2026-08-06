@@ -332,7 +332,9 @@ fn matcher_label(matcher: &ExternalHookMatcherSummary) -> String {
     }
 }
 
-fn projection_label(entry: &bitfun_core::external_hooks::ExternalHookCatalogEntry) -> &'static str {
+fn projection_label(
+    entry: &bitfun_product_domains::external_hook_catalog::ExternalHookCatalogEntry,
+) -> &'static str {
     match entry.projection_status {
         ExternalHookProjectionStatus::Mapped => match entry
             .mapping
@@ -381,8 +383,10 @@ fn source_health_label(health: ExternalSourceHealth) -> &'static str {
     }
 }
 
-fn hook_handler_label(kind: bitfun_core::external_hooks::ExternalHookHandlerKind) -> &'static str {
-    use bitfun_core::external_hooks::ExternalHookHandlerKind;
+fn hook_handler_label(
+    kind: bitfun_product_domains::external_hook_catalog::ExternalHookHandlerKind,
+) -> &'static str {
+    use bitfun_product_domains::external_hook_catalog::ExternalHookHandlerKind;
     match kind {
         ExternalHookHandlerKind::Function => "function",
         ExternalHookHandlerKind::Command => "command",
@@ -455,21 +459,16 @@ impl ChatMode {
                 return;
             }
         };
-        let workspace_root = self.workspace_path_for_sync(chat_state);
         match action {
             HookManagementAction::Show { refresh } => {
                 if let Some(snapshot) = &self.hook_management_snapshot {
                     chat_state.add_system_message(render_hook_management(snapshot));
                 }
+                let agent = Arc::clone(&self.agent);
                 self.spawn_hook_management(
                     async move {
-                        let imports =
-                            bitfun_core::external_hook_import::external_hook_import_snapshot(
-                                Some(workspace_root.as_path()),
-                                refresh,
-                            )
-                            .await?;
-                        let native = native_hook_overview(Some(workspace_root.as_path())).await;
+                        let imports = agent.external_hook_snapshot(refresh).await?;
+                        let native = agent.native_hook_overview().await?;
                         Ok(HookManagementResult::Snapshot(HookManagementSnapshot {
                             native,
                             imports,
@@ -506,14 +505,7 @@ impl ChatMode {
                     ));
                     return;
                 };
-                self.start_hook_plan_or_apply(
-                    source,
-                    confirm,
-                    workspace_root,
-                    chat_view,
-                    chat_state,
-                    rt_handle,
-                );
+                self.start_hook_plan_or_apply(source, confirm, chat_view, chat_state, rt_handle);
             }
             HookManagementAction::Update {
                 import_number,
@@ -525,21 +517,13 @@ impl ChatMode {
                 else {
                     return;
                 };
-                self.start_hook_plan_or_apply(
-                    source,
-                    confirm,
-                    workspace_root,
-                    chat_view,
-                    chat_state,
-                    rt_handle,
-                );
+                self.start_hook_plan_or_apply(source, confirm, chat_view, chat_state, rt_handle);
             }
             HookManagementAction::Enable { import_number } => {
                 self.start_hook_mutation(
                     import_number,
                     true,
                     false,
-                    workspace_root,
                     chat_view,
                     chat_state,
                     rt_handle,
@@ -550,7 +534,6 @@ impl ChatMode {
                     import_number,
                     false,
                     false,
-                    workspace_root,
                     chat_view,
                     chat_state,
                     rt_handle,
@@ -561,20 +544,13 @@ impl ChatMode {
                     import_number,
                     false,
                     true,
-                    workspace_root,
                     chat_view,
                     chat_state,
                     rt_handle,
                 );
             }
             HookManagementAction::Reset { scope } => {
-                self.start_hook_store_reset(
-                    scope,
-                    workspace_root,
-                    chat_view,
-                    chat_state,
-                    rt_handle,
-                );
+                self.start_hook_store_reset(scope, chat_view, chat_state, rt_handle);
             }
         }
     }
@@ -583,20 +559,18 @@ impl ChatMode {
         &mut self,
         source: SourceKey,
         confirm: bool,
-        workspace_root: std::path::PathBuf,
         chat_view: &mut ChatView,
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
         if !confirm {
+            let agent = Arc::clone(&self.agent);
             self.spawn_hook_management(
                 async move {
-                    bitfun_core::external_hook_import::plan_external_hook_import(
-                        Some(workspace_root.as_path()),
-                        source,
-                    )
-                    .await
-                    .map(HookManagementResult::Plan)
+                    agent
+                        .external_hook_plan(source)
+                        .await
+                        .map(HookManagementResult::Plan)
                 },
                 "Preparing Hook import review...",
                 chat_view,
@@ -616,17 +590,16 @@ impl ChatMode {
             );
             return;
         };
+        let agent = Arc::clone(&self.agent);
         self.spawn_hook_management(
             async move {
-                let result = bitfun_core::external_hook_import::apply_external_hook_import(
-                    Some(workspace_root.as_path()),
-                    ExternalHookImportApplyRequestV1 {
+                let result = agent
+                    .external_hook_apply(ExternalHookImportApplyRequestV1 {
                         schema_version: EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
                         source: source.clone(),
                         plan_fingerprint: plan.plan_fingerprint,
-                    },
-                )
-                .await?;
+                    })
+                    .await?;
                 let (snapshot, applied) = match result.outcome {
                     ExternalHookImportApplyOutcomeV1::Stale { refreshed_plan } => {
                         return Ok(HookManagementResult::Plan(refreshed_plan));
@@ -637,7 +610,7 @@ impl ChatMode {
                 let status =
                     crate::hook_import::completed_import_status(&snapshot, &source, applied)
                         .to_string();
-                let native = native_hook_overview(Some(workspace_root.as_path())).await;
+                let native = agent.native_hook_overview().await?;
                 Ok(HookManagementResult::Changed {
                     snapshot: HookManagementSnapshot {
                         native,
@@ -676,7 +649,6 @@ impl ChatMode {
         import_number: usize,
         enabled: bool,
         remove: bool,
-        workspace_root: std::path::PathBuf,
         chat_view: &mut ChatView,
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
@@ -695,11 +667,22 @@ impl ChatMode {
                 enabled,
             }
         };
+        let expected_revision = self
+            .hook_management_snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.imports.revision.clone())
+            .expect("import_at requires a loaded Hook snapshot");
+        let agent = Arc::clone(&self.agent);
         self.spawn_hook_management(
             async move {
-                let imports =
-                    crate::hook_import::mutate(Some(workspace_root.as_path()), action).await?;
-                let native = native_hook_overview(Some(workspace_root.as_path())).await;
+                let imports = agent
+                    .external_hook_mutate(ExternalHookImportMutationRequestV1 {
+                        schema_version: EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
+                        expected_revision,
+                        action,
+                    })
+                    .await?;
+                let native = agent.native_hook_overview().await?;
                 let status = if remove {
                     format!(
                         "Removed BitFun's managed copy of {import_id}; the source was unchanged."
@@ -723,7 +706,6 @@ impl ChatMode {
     fn start_hook_store_reset(
         &mut self,
         scope: ExternalSourceScope,
-        workspace_root: std::path::PathBuf,
         chat_view: &mut ChatView,
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
@@ -753,14 +735,18 @@ impl ChatMode {
             ));
             return;
         }
+        let expected_revision = snapshot.imports.revision.clone();
+        let agent = Arc::clone(&self.agent);
         self.spawn_hook_management(
             async move {
-                let imports = crate::hook_import::mutate(
-                    Some(workspace_root.as_path()),
-                    ExternalHookImportMutationV1::ResetCorruptStore { scope },
-                )
-                .await?;
-                let native = native_hook_overview(Some(workspace_root.as_path())).await;
+                let imports = agent
+                    .external_hook_mutate(ExternalHookImportMutationRequestV1 {
+                        schema_version: EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
+                        expected_revision,
+                        action: ExternalHookImportMutationV1::ResetCorruptStore { scope },
+                    })
+                    .await?;
+                let native = agent.native_hook_overview().await?;
                 Ok(HookManagementResult::Changed {
                     snapshot: HookManagementSnapshot { native, imports },
                     status: format!(
@@ -782,10 +768,7 @@ impl ChatMode {
         rt_handle: &tokio::runtime::Handle,
     ) where
         F: std::future::Future<
-                Output = std::result::Result<
-                    HookManagementResult,
-                    bitfun_core::external_sources::ExternalSourceOperationError,
-                >,
+                Output = std::result::Result<HookManagementResult, ExternalSourceOperationError>,
             > + Send
             + 'static,
     {
@@ -845,10 +828,7 @@ impl ChatMode {
                 self.hook_management_snapshot = Some(snapshot);
                 self.pending_hook_plan = None;
             }
-            Err(error)
-                if error.code
-                    == bitfun_core::external_sources::ExternalSourceOperationErrorCode::StaleRevision =>
-            {
+            Err(error) if error.code == ExternalSourceOperationErrorCode::StaleRevision => {
                 chat_state.add_system_message(
                     "Hook import state changed; the action was not applied. Run /hooks to refresh, review the new state, and try again."
                         .to_string(),
