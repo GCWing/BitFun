@@ -414,6 +414,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       return;
     }
     const tick = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       void checkMarkdownDisk();
     };
     const pollOffsetMs = getPollOffsetMs(filePath);

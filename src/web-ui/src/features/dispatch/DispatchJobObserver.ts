@@ -998,6 +998,7 @@ export function installDispatchJobObserver(context: FlowChatContext): () => void
 
   async function run(requestedJobId?: string): Promise<void> {
     if (!ownsLease() || isPeerDeviceModeActive()) return;
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
     if (inFlight) {
       queuedJobId = requestedJobId;
       return;
@@ -1095,8 +1096,19 @@ export function installDispatchJobObserver(context: FlowChatContext): () => void
     void run();
   }, DISPATCH_JOB_POLL_INTERVAL_MS);
   handleVisibilityChanged = () => {
-    if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+    if (typeof document === 'undefined') return;
+    if (document.visibilityState === 'visible') {
+      if (interval === null) {
+        interval = setInterval(() => {
+          void run();
+        }, DISPATCH_JOB_POLL_INTERVAL_MS);
+      }
       schedule();
+    } else {
+      if (interval !== null) {
+        clearInterval(interval);
+        interval = null;
+      }
     }
   };
   if (typeof document !== 'undefined') {
