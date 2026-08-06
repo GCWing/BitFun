@@ -128,6 +128,19 @@ const MainNav: React.FC<MainNavProps> = ({
     });
   }, []);
 
+  // Auto-expand workspace section when a new workspace is added
+  const prevWorkspaceCountRef = useRef(normalWorkspacesList.length);
+  useEffect(() => {
+    if (normalWorkspacesList.length > prevWorkspaceCountRef.current) {
+      setExpandedSections(prev => {
+        const next = new Set(prev);
+        next.add('workspace');
+        return next;
+      });
+    }
+    prevWorkspaceCountRef.current = normalWorkspacesList.length;
+  }, [normalWorkspacesList.length]);
+
   const closeWorkspaceMenu = useCallback(() => {
     setWorkspaceMenuClosing(true);
     window.setTimeout(() => {

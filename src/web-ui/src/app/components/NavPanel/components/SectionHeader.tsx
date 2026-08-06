@@ -60,8 +60,17 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({
       }
     >
       <span className="bitfun-nav-panel__section-label">{label}</span>
-      {onSceneOpen ? (
-        <span className="bitfun-nav-panel__section-indicator" aria-hidden="true">
+      {onSceneOpen || collapsible ? (
+        <span
+          className={[
+            'bitfun-nav-panel__section-indicator',
+            collapsible && !isOpen && 'bitfun-nav-panel__section-indicator--collapsed',
+            collapsible && isOpen && 'bitfun-nav-panel__section-indicator--expanded',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          aria-hidden="true"
+        >
           <ChevronRight size={14} />
         </span>
       ) : null}
