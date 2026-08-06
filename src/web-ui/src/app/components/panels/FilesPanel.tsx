@@ -1369,6 +1369,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
           const siblingNames = getChildNames(fileTree, inputDialog.parentPath);
           const errorKey = validateFileName(value, {
             isRemote: isRemoteCurrentWorkspace,
+            isDirectory: inputDialog.type === 'newFolder',
             siblings: siblingNames,
           });
           return errorKey ? t(errorKey, { name: value.trim() }) : null;

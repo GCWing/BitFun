@@ -22,6 +22,8 @@ export const MAX_NAME_LENGTH = 255;
 export interface ValidateFileNameContext {
   /** 当前是否为远程工作区（远程放宽非法字符集合，且不检查 Windows 保留名）。 */
   isRemote: boolean;
+  /** 被校验对象是否为文件夹，用于选择准确的错误文案。 */
+  isDirectory?: boolean;
   /** 同级已存在的名称（大小写不敏感比较），用于检测重名冲突。需已排除被校验对象自身原名。 */
   siblings?: string[];
   /** 单路径段名称最大长度，默认 {@link MAX_NAME_LENGTH}。 */
@@ -47,7 +49,9 @@ export function validateFileName(raw: string, ctx: ValidateFileNameContext): str
   // 2. 非法字符
   const validPattern = ctx.isRemote ? INVALID_CHARS_REMOTE : INVALID_CHARS_LOCAL;
   if (!validPattern.test(trimmed)) {
-    return 'validation.invalidFilename';
+    return ctx.isDirectory
+      ? 'validation.invalidFolderName'
+      : 'validation.invalidFilename';
   }
 
   // 3. Windows 保留名（仅本地）
