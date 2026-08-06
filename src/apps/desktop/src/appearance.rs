@@ -187,6 +187,7 @@ struct StartupBootstrapConfig {
 
 const MAX_BOOTSTRAP_KEYBINDINGS_JSON_BYTES: usize = 64 * 1024;
 const MAX_BOOTSTRAP_WORKSPACE_STATE_JSON_BYTES: usize = 64 * 1024;
+const MAX_BOOTSTRAP_STARTUP_COMMAND_JSON_BYTES: usize = 4 * 1024;
 
 impl Default for AppearanceConfig {
     fn default() -> Self {
@@ -363,6 +364,7 @@ impl AppearanceConfig {
         startup_trace_id: &str,
         bootstrap_config: &StartupBootstrapConfig,
         workspace_startup_state: Option<&serde_json::Value>,
+        startup_command: Option<&serde_json::Value>,
     ) -> String {
         let appearance_mode = if self.is_light { "light" } else { "dark" };
         let startup_locale = &bootstrap_config.locale;
@@ -396,6 +398,11 @@ impl AppearanceConfig {
             .filter(|json| json.len() <= MAX_BOOTSTRAP_WORKSPACE_STATE_JSON_BYTES)
             .map(|json| format!("window.__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__ = {json};"))
             .unwrap_or_default();
+        let bootstrap_startup_command_assignment = startup_command
+            .and_then(|cmd| serde_json::to_string(cmd).ok())
+            .filter(|json| json.len() <= MAX_BOOTSTRAP_STARTUP_COMMAND_JSON_BYTES)
+            .map(|json| format!("window.__BITFUN_STARTUP_COMMAND__ = {json};"))
+            .unwrap_or_default();
 
         format!(
             r#"
@@ -410,6 +417,7 @@ impl AppearanceConfig {
                 window.__BITFUN_BOOTSTRAP_APPEARANCE_SELECTION__ = {bootstrap_appearance_selection_json};
                 {bootstrap_keybindings_assignment}
                 {bootstrap_workspace_startup_state_assignment}
+                {bootstrap_startup_command_assignment}
                 function applyAppearance() {{
                     var root = document.documentElement;
                     if (!root) return false;
@@ -462,6 +470,7 @@ impl AppearanceConfig {
             bootstrap_keybindings_assignment = bootstrap_keybindings_assignment,
             bootstrap_workspace_startup_state_assignment =
                 bootstrap_workspace_startup_state_assignment,
+            bootstrap_startup_command_assignment = bootstrap_startup_command_assignment,
         )
     }
 
@@ -497,7 +506,7 @@ mod startup_appearance_tests {
             keybindings: None,
         };
 
-        let script = appearance.generate_init_script("trace-id", &bootstrap, None);
+        let script = appearance.generate_init_script("trace-id", &bootstrap, None, None);
 
         assert!(script.contains("__BITFUN_BOOTSTRAP_APPEARANCE_ID__"));
         assert!(script.contains("__BITFUN_BOOTSTRAP_APPEARANCE_SELECTION__"));
@@ -537,6 +546,7 @@ pub fn create_main_window(
     startup_trace_id: &str,
     startup_trace: &DesktopStartupTrace,
     workspace_startup_state: Option<serde_json::Value>,
+    startup_command: Option<serde_json::Value>,
 ) {
     let total_started_at = Instant::now();
     let bootstrap_config = AppearanceConfig::load_startup_bootstrap_config();
@@ -546,6 +556,7 @@ pub fn create_main_window(
         startup_trace_id,
         &bootstrap_config,
         workspace_startup_state.as_ref(),
+        startup_command.as_ref(),
     );
     startup_trace.record_step(
         "native_step_end",

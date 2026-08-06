@@ -29,6 +29,7 @@ import {
   getNextDefaultSessionTitleCount,
   normalizeDefaultSessionTitleMode,
 } from '../utils/sessionTitle';
+import { globalStateAPI } from '@/shared/types/global-state';
 
 const log = createLogger('useFlowChat');
 
@@ -65,18 +66,40 @@ export const useFlowChat = () => {
 
   // Create a session using Agentic API v2.
   const createSession = useCallback(async (config?: Partial<SessionConfig>): Promise<string> => {
-    
+
+    // Apply CLI startup overrides (--agent/--model) on the first session only.
+    // consumeBootstrapStartupCommand is one-shot: it clears the global after
+    // reading, so subsequent calls return undefined.
+    const startupCommand = globalStateAPI.getStartupCommand();
+    const effectiveAgentType = (config?.agentType || startupCommand?.agent || 'agentic').trim() || 'agentic';
+    const effectiveModelName = config?.modelName || startupCommand?.model;
+
     try {
       if (!workspacePath) {
         throw new Error('Workspace path is required to create a session');
       }
-      
+
       const isRemote = workspace?.workspaceKind === WorkspaceKind.Remote;
       const remoteConnectionId = isRemote ? workspace?.connectionId : undefined;
       const remoteSshHost = isRemote ? workspace?.sshHost : undefined;
 
-      const agentTypeForSession = (config?.agentType || 'agentic').trim() || 'agentic';
-      const maxContextTokens = await getModelMaxTokens(config?.modelName, agentTypeForSession);
+      // If --session is specified, try to restore that session instead of creating new.
+      if (startupCommand?.session) {
+        try {
+          const sessions = await agentAPI.listSessions(workspacePath, remoteConnectionId, remoteSshHost);
+          if (sessions.some(s => s.sessionId === startupCommand.session)) {
+            await flowChatManager.switchChatSession(startupCommand.session);
+            log.info('Restored startup session', { sessionId: startupCommand.session });
+            return startupCommand.session;
+          }
+          log.warn('Startup session not found, creating new session', { requestedSession: startupCommand.session });
+        } catch (error) {
+          log.warn('Failed to restore startup session, creating new', { requestedSession: startupCommand.session, error });
+        }
+      }
+
+      const agentTypeForSession = effectiveAgentType;
+      const maxContextTokens = await getModelMaxTokens(effectiveModelName, agentTypeForSession);
       const sessionTitleMode =
         workspace?.workspaceKind === WorkspaceKind.Assistant
           ? 'claw'
@@ -106,7 +129,7 @@ export const useFlowChat = () => {
         remoteConnectionId,
         remoteSshHost,
         config: {
-          modelName: config?.modelName || 'default',
+          modelName: effectiveModelName || 'default',
           enableTools: true,
           safeMode: true,
           autoCompact: true,
@@ -156,8 +179,8 @@ export const useFlowChat = () => {
       
         try {
           await aiApi.createAISession({
-            agent_type: config?.agentType || 'agentic',
-            model_name: config?.modelName || 'default',
+            agent_type: effectiveAgentType,
+            model_name: effectiveModelName || 'default',
             description: `FlowChat session ${sessionId}`
           });
         } catch (snapshotError) {
@@ -165,12 +188,12 @@ export const useFlowChat = () => {
         }
       
       const sessionConfig: SessionConfig = {
-        modelName: config?.modelName || 'default',
+        modelName: effectiveModelName || 'default',
         ...config,
         workspaceId: workspace?.id ?? config?.workspaceId,
       };
 
-      const fallbackAgentType = (config?.agentType || 'agentic').trim() || 'agentic';
+      const fallbackAgentType = effectiveAgentType;
       const fallbackTitleMode =
         workspace?.workspaceKind === WorkspaceKind.Assistant
           ? 'claw'

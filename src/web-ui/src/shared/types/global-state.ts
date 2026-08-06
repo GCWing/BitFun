@@ -20,6 +20,16 @@ declare global {
   var __BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__:
     | APIWorkspaceStartupStateSnapshot
     | undefined;
+  // Native startup may inject this once when the app is launched with
+  // --agent/--model/--session CLI flags.
+  var __BITFUN_STARTUP_COMMAND__: StartupCommand | undefined;
+}
+
+/// CLI startup overrides parsed from `--agent`, `--model`, `--session`.
+export interface StartupCommand {
+  agent?: string;
+  model?: string;
+  session?: string;
 }
 
 
@@ -225,6 +235,11 @@ export interface WorkspaceStartupState {
 export interface GlobalStateAPI {
   
   initializeWorkspaceStartupState(): Promise<WorkspaceStartupState>;
+
+  /// Returns CLI startup overrides (`--agent`, `--model`, `--session`) if the
+  /// app was launched with them, then clears the bootstrap global. Only
+  /// meaningful on the first call; subsequent calls return undefined.
+  getStartupCommand(): StartupCommand | undefined;
   
   
   getAppState(): Promise<ApplicationState>;
@@ -481,10 +496,39 @@ function consumeBootstrapWorkspaceStartupStateSnapshot():
   return snapshot;
 }
 
+function consumeBootstrapStartupCommand(): StartupCommand | undefined {
+  if (
+    !Object.prototype.hasOwnProperty.call(globalThis, '__BITFUN_STARTUP_COMMAND__')
+  ) {
+    return undefined;
+  }
+
+  const cmd = globalThis.__BITFUN_STARTUP_COMMAND__;
+  delete globalThis.__BITFUN_STARTUP_COMMAND__;
+
+  if (
+    cmd !== undefined &&
+    cmd !== null &&
+    typeof cmd === 'object' &&
+    (typeof cmd.agent === 'string' || cmd.agent === undefined) &&
+    (typeof cmd.model === 'string' || cmd.model === undefined) &&
+    (typeof cmd.session === 'string' || cmd.session === undefined)
+  ) {
+    return cmd as StartupCommand;
+  }
+
+  logger.warn('Ignored invalid bootstrap startup command');
+  return undefined;
+}
+
  
 export function createGlobalStateAPI(): GlobalStateAPI {
   return {
     
+    getStartupCommand(): StartupCommand | undefined {
+      return consumeBootstrapStartupCommand();
+    },
+
     async initializeWorkspaceStartupState(): Promise<WorkspaceStartupState> {
       const bootstrapSnapshot = consumeBootstrapWorkspaceStartupStateSnapshot();
       if (bootstrapSnapshot) {
