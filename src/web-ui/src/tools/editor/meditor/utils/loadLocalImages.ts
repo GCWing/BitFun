@@ -3,8 +3,8 @@
  * After Markdown render, resolves images marked with `data-local-image`.
  */
 
-import { getMimeType } from './rehype-local-images';
 import { createLogger } from '@/shared/utils/logger';
+import { createBrowserImageDataUrl } from '@/shared/utils/imageDataUrl';
 import { i18nService } from '@/infrastructure/i18n';
 
 const log = createLogger('loadLocalImages');
@@ -36,8 +36,7 @@ async function getLocalImageDataUrl(localPath: string): Promise<string> {
   const request = (async () => {
     const { workspaceAPI } = await import('@/infrastructure/api');
     const base64Content = await workspaceAPI.readFileContent(localPath);
-    const mimeType = getMimeType(localPath);
-    const dataUrl = `data:${mimeType};base64,${base64Content}`;
+    const dataUrl = await createBrowserImageDataUrl(localPath, base64Content);
 
     localImageDataUrlCache.set(localPath, dataUrl);
     localImageRequestCache.delete(localPath);

@@ -4,6 +4,7 @@
  */
 import { visit } from 'unist-util-visit';
 import { createLogger } from '@/shared/utils/logger';
+import { getImageMimeType } from '@/shared/utils/imageDataUrl';
 
 type Root = any;
 type Element = any;
@@ -90,21 +91,7 @@ export function resolveImagePath(src: string, basePath?: string): string {
 /**
  * Get image MIME type.
  */
-export function getMimeType(path: string): string {
-  const ext = path.toLowerCase().split('.').pop();
-  const mimeTypes: Record<string, string> = {
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'png': 'image/png',
-    'gif': 'image/gif',
-    'bmp': 'image/bmp',
-    'webp': 'image/webp',
-    'svg': 'image/svg+xml',
-    'ico': 'image/x-icon',
-    'avif': 'image/avif'
-  };
-  return mimeTypes[ext || ''] || 'image/jpeg';
-}
+export const getMimeType = getImageMimeType;
 
 /**
  * Rehype plugin: mark local image paths.
