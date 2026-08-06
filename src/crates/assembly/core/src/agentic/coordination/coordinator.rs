@@ -14539,7 +14539,7 @@ mod tests {
     async fn review_agent_child_sessions_create_successfully() {
         let (coordinator, _session_manager) = test_coordinator();
 
-        for agent_type in ["CodeReview", "DeepReview"] {
+        for agent_type in ["CodeReview", "DeepReview", "ReviewFixer"] {
             let workspace = tempfile::tempdir().expect("review workspace");
             let session = coordinator
                 .create_session_with_workspace(
