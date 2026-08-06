@@ -77,8 +77,8 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
 }) => {
   const { t } = useTranslation('components');
   const visibleTabs = useMemo(() => group.tabs.filter(t => !t.isHidden), [group.tabs]);
-  const isKeepAliveTerminalTab = useCallback((tab: EditorGroupState['tabs'][number]) =>
-    tab.content.type === 'terminal',
+  const isKeepAliveTab = useCallback((tab: EditorGroupState['tabs'][number]) =>
+    tab.content.type === 'terminal' || tab.content.type === 'image-viewer',
   []);
   
   // Cache recently visited tabs (max 5) for instant switching
@@ -89,7 +89,7 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
     // Remove closed tabs
     const validTabIds = new Set(
       group.tabs
-        .filter(t => !t.isHidden || isKeepAliveTerminalTab(t))
+        .filter(t => !t.isHidden || isKeepAliveTab(t))
         .map(t => t.id)
     );
     cachedTabsRef.current = new Set(
@@ -111,17 +111,17 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
         cachedTabsRef.current = new Set([group.activeTabId, ...sortedTabs]);
       }
     }
-  }, [group.activeTabId, group.tabs, isKeepAliveTerminalTab]);
+  }, [group.activeTabId, group.tabs, isKeepAliveTab]);
   
-  // Tabs to render (active + cached). Hidden terminal tabs stay mounted so
-  // reopening a terminal reuses the xterm buffer instead of replaying history.
+  // Tabs to render (active + cached). Terminal and image tabs stay mounted so
+  // reopening them reuses the existing runtime state and decoded image.
   const tabsToRender = useMemo(() => {
-    const result = group.tabs.filter(t => 
-      (!t.isHidden && (t.id === group.activeTabId || cachedTabsRef.current.has(t.id))) ||
-      (t.isHidden && isKeepAliveTerminalTab(t))
+    const result = group.tabs.filter(t =>
+      isKeepAliveTab(t) ||
+      (!t.isHidden && (t.id === group.activeTabId || cachedTabsRef.current.has(t.id)))
     );
     return result;
-  }, [group.tabs, group.activeTabId, isKeepAliveTerminalTab]);
+  }, [group.tabs, group.activeTabId, isKeepAliveTab]);
 
   const handleContentChange = useCallback((content: PanelContent | null) => {
     if (content && group.activeTabId) {

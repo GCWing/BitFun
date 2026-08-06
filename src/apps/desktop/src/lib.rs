@@ -1126,6 +1126,7 @@ pub async fn _run() {
             import_agent_companion_pet_package,
             delete_agent_companion_pet_package,
             read_file_content,
+            read_file_binary,
             read_file_content_prefix,
             write_file_content,
             reset_workspace_persona_files,

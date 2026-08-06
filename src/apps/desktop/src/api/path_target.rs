@@ -271,6 +271,20 @@ pub async fn read_text_file_prefix(
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
+pub async fn read_binary_file(app_state: &AppState, raw_path: &str) -> Result<Vec<u8>, String> {
+    let target = resolve_desktop_path_target(app_state, raw_path, None).await?;
+    let DesktopPathTarget::Local { resolved_path, .. } = target else {
+        return Err("Binary file transfer is not supported for remote workspaces".to_string());
+    };
+
+    let path = resolved_path.clone();
+    tokio::task::spawn_blocking(move || {
+        std::fs::read(&path).map_err(|e| format!("Failed to read '{}': {}", path.display(), e))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 pub async fn read_text_file(
     app_state: &AppState,
     raw_path: &str,

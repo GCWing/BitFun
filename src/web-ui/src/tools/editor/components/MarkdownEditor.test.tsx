@@ -1,7 +1,10 @@
 import React, { forwardRef, useImperativeHandle } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import MarkdownEditor from './MarkdownEditor';
+import MarkdownEditor, {
+  MARKDOWN_RICH_EDITOR_MAX_BYTES,
+  shouldUseLargeMarkdownSourceMode,
+} from './MarkdownEditor';
 
 function Icon({ name }: { name: string }) {
   return <svg data-icon={name} />;
@@ -104,5 +107,11 @@ describe('MarkdownEditor', () => {
     );
 
     expect(html).toContain('data-mode="preview"');
+  });
+
+  it('uses source mode only above the rich markdown size limit', () => {
+    expect(shouldUseLargeMarkdownSourceMode(MARKDOWN_RICH_EDITOR_MAX_BYTES)).toBe(false);
+    expect(shouldUseLargeMarkdownSourceMode(MARKDOWN_RICH_EDITOR_MAX_BYTES + 1)).toBe(true);
+    expect(shouldUseLargeMarkdownSourceMode(undefined)).toBe(false);
   });
 });

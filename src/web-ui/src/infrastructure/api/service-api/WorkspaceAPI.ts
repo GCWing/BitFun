@@ -434,6 +434,16 @@ export class WorkspaceAPI {
     }
   }
 
+  async readFileBinary(filePath: string): Promise<Uint8Array> {
+    try {
+      return await api.invoke<Uint8Array>('read_file_binary', {
+        request: { filePath }
+      });
+    } catch (error) {
+      throw createTauriCommandError('read_file_binary', error, { filePath });
+    }
+  }
+
   async readFileContent(
     filePath: string,
     encoding?: string,
