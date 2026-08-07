@@ -6,6 +6,8 @@
 
 use std::path::Path;
 
+use bitfun_core::agentic::coordination::ConversationCoordinator;
+use bitfun_core::agentic::core::SessionConfig;
 use bitfun_core::service::cron::{
     get_global_cron_service, CreateCronJobRequest, CronJob, CronJobPayload, CronJobRunStatus,
     CronJobTarget, CronSchedule, CronWorkspaceRef, UpdateCronJobRequest,
@@ -275,7 +277,15 @@ pub struct IssueFixAutonomousIssueRequest {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IssueFixStartAutonomousRequest {
+    /// Existing session to host the heartbeat. Empty when `hidden_host` asks
+    /// the backend to create (or reuse) a hidden session instead.
+    #[serde(default)]
     pub session_id: String,
+    /// MiniApp mode: host the heartbeat in a hidden session owned by the
+    /// backend, invisible in the sidebar. The repair loop keeps running when
+    /// the MiniApp is closed because scheduling stays host-owned.
+    #[serde(default)]
+    pub hidden_host: bool,
     pub repo: String,
     pub repository_path: String,
     pub issues: Vec<IssueFixAutonomousIssueRequest>,
@@ -294,13 +304,10 @@ pub struct IssueFixStartAutonomousResponse {
 #[tauri::command]
 pub async fn issue_fix_start_autonomous(
     _state: State<'_, AppState>,
+    coordinator: State<'_, std::sync::Arc<ConversationCoordinator>>,
     request: IssueFixStartAutonomousRequest,
 ) -> Result<IssueFixStartAutonomousResponse, String> {
     let repository_path = required_repository_path(&request.repository_path)?;
-    let session_id = request.session_id.trim();
-    if session_id.is_empty() {
-        return Err("session_id is required for continuous issue fixing".to_string());
-    }
     let cron =
         get_global_cron_service().ok_or_else(|| "Cron service is not initialized".to_string())?;
     let loopx =
@@ -333,6 +340,25 @@ pub async fn issue_fix_start_autonomous(
             format!("Failed to start continuous Issue-Fix: {error}")
         })?;
 
+    // Resolve the heartbeat host session. MiniApp mode asks the backend for a
+    // hidden session (invisible in the sidebar, reused across starts via the
+    // existing job's binding); panel mode passes an explicit visible session.
+    let session_id = if request.hidden_host {
+        resolve_hidden_heartbeat_session(
+            &coordinator,
+            &plan.control.goal_id,
+            repository_path,
+            cron.list_jobs().await,
+        )
+        .await?
+    } else {
+        let session_id = request.session_id.trim();
+        if session_id.is_empty() {
+            return Err("session_id is required for continuous issue fixing".to_string());
+        }
+        session_id.to_string()
+    };
+
     let job_name = job_name(&plan.control.goal_id);
     let workspace = CronWorkspaceRef {
         workspace_id: None,
@@ -343,7 +369,7 @@ pub async fn issue_fix_start_autonomous(
         remote_ssh_host: None,
     };
     let target = CronJobTarget::Session {
-        session_id: session_id.to_string(),
+        session_id: session_id.clone(),
         workspace,
     };
     let schedule = CronSchedule::Every {
@@ -476,6 +502,57 @@ fn required_repository_path(raw: &str) -> Result<&Path, String> {
 
 fn job_name(goal_id: &str) -> String {
     format!("{JOB_NAME_PREFIX}{goal_id}")
+}
+
+/// Session name for the hidden heartbeat host (MiniApp mode). Not user-facing
+/// in the sidebar; shows up only in diagnostics.
+const HIDDEN_HOST_SESSION_NAME: &str = "LoopX Issue-Fix heartbeat";
+const HIDDEN_HOST_AGENT_KIND: &str = "agentic";
+
+/// Find or create the hidden session hosting this goal's heartbeat.
+///
+/// Reuse order: the existing job's bound session (when it still exists) wins,
+/// so restarts keep the conversation context; otherwise a fresh hidden
+/// session is created. Hidden sessions never appear in the sidebar, which is
+/// what lets the MiniApp own the whole Issue-Fix experience while scheduling
+/// stays host-side.
+async fn resolve_hidden_heartbeat_session(
+    coordinator: &ConversationCoordinator,
+    goal_id: &str,
+    repository_path: &Path,
+    jobs: Vec<CronJob>,
+) -> Result<String, String> {
+    let existing = matching_jobs(&job_name(goal_id), repository_path, jobs)
+        .into_iter()
+        .filter_map(|job| job.session_id().map(str::to_string))
+        .find(|session_id| {
+            coordinator
+                .get_session_manager()
+                .get_session(session_id)
+                .is_some()
+        });
+    if let Some(session_id) = existing {
+        return Ok(session_id);
+    }
+    let config = SessionConfig {
+        enable_tools: true,
+        safe_mode: true,
+        auto_compact: true,
+        enable_context_compression: true,
+        ..Default::default()
+    };
+    let session = coordinator
+        .create_hidden_subagent_session_with_workspace(
+            None,
+            HIDDEN_HOST_SESSION_NAME.to_string(),
+            HIDDEN_HOST_AGENT_KIND.to_string(),
+            config,
+            repository_path.display().to_string(),
+            Some("issue-fix".to_string()),
+        )
+        .await
+        .map_err(|error| format!("Failed to create the hidden heartbeat session: {error}"))?;
+    Ok(session.session_id)
 }
 
 /// Project the current goal's host loop, tolerating duplicates.

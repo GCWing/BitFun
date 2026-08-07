@@ -150,6 +150,16 @@ pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
         esm_dependencies_json: "[]",
     },
     BuiltinMiniAppBundle {
+        id: "builtin-loopx-issue-fix",
+        version: 1,
+        meta_json: include_str!("builtin/assets/loopx-issue-fix/meta.json"),
+        html: include_str!("builtin/assets/loopx-issue-fix/index.html"),
+        css: include_str!("builtin/assets/loopx-issue-fix/style.css"),
+        ui_js: include_str!("builtin/assets/loopx-issue-fix/ui.js"),
+        worker_js: include_str!("builtin/assets/loopx-issue-fix/worker.js"),
+        esm_dependencies_json: "[]",
+    },
+    BuiltinMiniAppBundle {
         id: "builtin-ppt-live",
         version: 258,
         meta_json: include_str!("builtin/assets/ppt-live/meta.json"),

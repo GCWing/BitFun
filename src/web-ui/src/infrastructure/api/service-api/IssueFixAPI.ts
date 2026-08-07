@@ -81,7 +81,14 @@ export interface IssueFixAnswerUserQuestionRequest {
 }
 
 export interface IssueFixStartAutonomousRequest {
-  sessionId: string;
+  /** Visible host session (panel mode). Omit with hiddenHost: true. */
+  sessionId?: string;
+  /**
+   * MiniApp mode: the backend hosts the heartbeat in a hidden session that
+   * never appears in the sidebar; scheduling stays host-owned so the loop
+   * survives the MiniApp being closed.
+   */
+  hiddenHost?: boolean;
   repo: string;
   repositoryPath: string;
   issues: Array<{

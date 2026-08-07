@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Issue 自动修复</title>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14.7 6.3a4.2 4.2 0 0 0-5.7 5.7L3.3 17.7a2 2 0 1 0 2.8 2.8l5.7-5.7a4.2 4.2 0 0 0 5.7-5.7l-2.8 2.8-2.1-2.1z"></path>
+          </svg>
+        </div>
+        <div class="brand-copy">
+          <h1>Issue 自动修复</h1>
+          <p class="brand-meta">
+            <span id="repo-label">--</span>
+            <span class="dot" aria-hidden="true"></span>
+            <span id="kernel-label">LoopX</span>
+          </p>
+        </div>
+      </div>
+      <div class="toolbar">
+        <span class="toolbar-status"><span id="loop-dot" class="status-dot"></span><span id="loop-status">--</span></span>
+        <button id="stop-button" class="secondary-button compact-button" type="button" hidden>停止</button>
+        <button id="start-button" class="primary-button compact-button" type="button" disabled>启动持续修复</button>
+        <button id="refresh-button" class="icon-button" type="button" title="刷新" aria-label="刷新">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="notice" class="notice" hidden>
+      <span id="notice-text"></span>
+      <button id="notice-dismiss" type="button" class="text-button">知道了</button>
+    </div>
+
+    <section id="gate-card" class="gate-card" hidden>
+      <div class="gate-header">
+        <span class="gate-badge">需要你的决定</span>
+        <span id="gate-prompt" class="gate-prompt"></span>
+      </div>
+      <div class="gate-options">
+        <label class="gate-option"><input type="radio" name="gate-decision" value="approve" /><span>同意</span><em>授予此次请求的精确权限并继续</em></label>
+        <label class="gate-option"><input type="radio" name="gate-decision" value="reject" /><span>不同意</span><em>拒绝此次请求，不执行受保护动作</em></label>
+        <label class="gate-option"><input type="radio" name="gate-decision" value="cancel" /><span>取消请求</span><em>不授予权限，结束本次确认</em></label>
+      </div>
+      <div class="gate-footer">
+        <input id="gate-reason" type="text" maxlength="240" placeholder="补充一句简短原因（可选）" />
+        <button id="gate-submit" type="button" class="primary-button compact-button" disabled>提交决定</button>
+      </div>
+    </section>
+
+    <section id="pending-card" class="pending-card" hidden>
+      <div class="pane-header"><h2>待你处理</h2><span id="pending-count" class="count-badge">0</span></div>
+      <ul id="pending-list" class="pending-list"></ul>
+    </section>
+
+    <main class="console-grid">
+      <section class="queue-pane">
+        <div class="pane-header">
+          <h2>Open Issues</h2>
+          <label class="select-all"><input id="select-all" type="checkbox" /><span id="selected-count">已选 0</span></label>
+        </div>
+        <div id="issues-empty" class="empty-note" hidden></div>
+        <ul id="issue-list" class="issue-list"></ul>
+      </section>
+      <section class="activity-pane">
+        <div class="pane-header">
+          <h2>运行记录</h2>
+          <span id="activity-meta" class="section-subtitle">--</span>
+        </div>
+        <pre id="activity-log" class="activity-log">尚无记录。启动持续修复后，每次心跳的产出会显示在这里。</pre>
+      </section>
+    </main>
+  </div>
+  <script src="ui.js"></script>
+</body>
+</html>
