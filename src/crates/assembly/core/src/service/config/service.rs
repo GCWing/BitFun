@@ -6,8 +6,6 @@ use super::manager::{ConfigManager, ConfigManagerSettings, ConfigStatistics};
 use super::types::*;
 use crate::util::errors::*;
 use log::{info, warn};
-use std::collections::HashSet;
-
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -63,8 +61,15 @@ impl ConfigService {
             manager: Arc::new(RwLock::new(manager)),
         };
 
-        if let Err(e) = service.reconcile_models("startup").await {
-            warn!("Model reconcile at startup failed: {}", e);
+        let recovered_with_defaults = service
+            .load_diagnostics()
+            .await
+            .iter()
+            .any(|diagnostic| diagnostic.code == "CONFIG_DEFAULT_RECOVERY");
+        if !recovered_with_defaults {
+            if let Err(e) = service.reconcile_models("startup").await {
+                warn!("Model reconcile at startup failed: {}", e);
+            }
         }
 
         Ok(service)
@@ -182,7 +187,15 @@ impl ConfigService {
     /// Validates configuration.
     pub async fn validate_config(&self) -> BitFunResult<ConfigValidationResult> {
         let manager = self.manager.read().await;
-        manager.validate_config().await
+        let mut result = manager.validate_config().await?;
+        result
+            .diagnostics
+            .extend(manager.load_diagnostics().iter().cloned());
+        Ok(result)
+    }
+
+    pub async fn load_diagnostics(&self) -> Vec<ConfigDiagnostic> {
+        self.manager.read().await.load_diagnostics().to_vec()
     }
 
     /// Exports configuration.
@@ -377,6 +390,114 @@ impl ConfigService {
         self.set_config("ai.models", &config.ai.models).await
     }
 
+    /// Atomically upserts a pure speech-recognition model, selects it as the
+    /// speech default, and switches voice input to the cloud provider.
+    pub async fn save_cloud_speech_config(
+        &self,
+        request: SaveCloudSpeechConfigRequest,
+    ) -> BitFunResult<SaveCloudSpeechConfigResult> {
+        let name = request.name.trim();
+        let base_url = request.base_url.trim().trim_end_matches('/');
+        let model_name = request.model_name.trim();
+        let api_key = request.api_key.trim();
+        if name.is_empty() || base_url.is_empty() || model_name.is_empty() || api_key.is_empty() {
+            return Err(BitFunError::validation(
+                "Cloud speech name, base URL, model name, and API key are required".to_string(),
+            ));
+        }
+        if !base_url.starts_with("http://") && !base_url.starts_with("https://") {
+            return Err(BitFunError::validation(
+                "Cloud speech base URL must use http or https".to_string(),
+            ));
+        }
+
+        let request_url = request
+            .request_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| {
+                if base_url.ends_with("/audio/transcriptions") {
+                    base_url.to_string()
+                } else {
+                    format!("{base_url}/audio/transcriptions")
+                }
+            });
+        if !request_url.starts_with("http://") && !request_url.starts_with("https://") {
+            return Err(BitFunError::validation(
+                "Cloud speech request URL must use http or https".to_string(),
+            ));
+        }
+
+        let mut manager = self.manager.write().await;
+        let mut config = manager.get_config().clone();
+        let model_id = request
+            .config_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("speech_cloud_{}", uuid::Uuid::new_v4().simple()));
+        let existing_index = config
+            .ai
+            .models
+            .iter()
+            .position(|model| model.id == model_id);
+        let created = existing_index.is_none();
+        let existing_metadata = existing_index
+            .and_then(|index| config.ai.models[index].metadata.clone())
+            .and_then(|value| value.as_object().cloned())
+            .unwrap_or_default();
+        let mut metadata = existing_metadata;
+        metadata.insert(
+            "speech_provider_preset".to_string(),
+            serde_json::Value::String(request.preset.trim().to_string()),
+        );
+        let model = AIModelConfig {
+            id: model_id.clone(),
+            name: name.to_string(),
+            provider: "openai".to_string(),
+            model_name: model_name.to_string(),
+            base_url: base_url.to_string(),
+            request_url: Some(request_url),
+            api_key: api_key.to_string(),
+            context_window: None,
+            max_tokens: None,
+            temperature: None,
+            top_p: None,
+            enabled: true,
+            category: ModelCategory::SpeechRecognition,
+            capabilities: vec![ModelCapability::SpeechRecognition],
+            recommended_for: vec!["voice_input".to_string()],
+            metadata: Some(serde_json::Value::Object(metadata)),
+            auth: AuthConfig::ApiKey,
+            ..AIModelConfig::default()
+        };
+        match existing_index {
+            Some(index) => config.ai.models[index] = model,
+            None => config.ai.models.push(model),
+        }
+        config.ai.default_models.speech_recognition = Some(model_id.clone());
+        config.app.ai_experience.voice_input.provider = "cloud".to_string();
+        config.app.ai_experience.voice_input.model_id = model_id.clone();
+
+        // The caller may be updating an existing model id. Reconcile all
+        // capability-specific slots before the single persistence operation so
+        // replacing a text model with a speech-only model cannot leave primary,
+        // fast, or agent references pointing at a non-text runtime target.
+        super::normalization::reconcile_model_references(&mut config);
+        manager.set("", &config).await?;
+        drop(manager);
+
+        super::global::GlobalConfigManager::broadcast_update(
+            super::global::ConfigUpdateEvent::ModelConfigurationUpdated,
+        )
+        .await;
+
+        Ok(SaveCloudSpeechConfigResult { model_id, created })
+    }
+
     /// Bring `ai.default_models`, `ai.agent_model_defaults`, and
     /// `ai.func_agent_models` back into a consistent state with `ai.models`.
     ///
@@ -396,229 +517,17 @@ impl ConfigService {
     /// `caller` is logged for diagnostics (e.g. `set_config`, `update_ai_model`).
     pub async fn reconcile_models(&self, caller: &str) -> BitFunResult<ReconcileModelsReport> {
         let mut config: GlobalConfig = self.get_config(None).await?;
+        let reconciliation = super::normalization::reconcile_model_references(&mut config);
 
-        let enabled_ids: HashSet<String> = config
-            .ai
-            .models
-            .iter()
-            .filter(|m| m.enabled)
-            .map(|m| m.id.clone())
-            .collect();
-        let is_active = |reference: &str| -> bool {
-            // Special selectors are always considered active; their actual
-            // resolution happens at runtime against the (already reconciled)
-            // default slots.
-            matches!(reference, "auto" | "primary" | "fast") || enabled_ids.contains(reference)
-        };
-
-        let classify_invalid = |reference: &str, invalidated: &mut HashSet<String>| -> bool {
-            if is_active(reference) {
-                return false;
-            }
-            invalidated.insert(reference.to_string());
-            true
-        };
-
-        let mut invalidated: HashSet<String> = HashSet::new();
-        let mut func_agent_models_changed = false;
-        let mut agent_model_defaults_changed = false;
-        let mut default_models_changed = false;
-
-        // 1. func_agent_models
-        let func_keys_to_remove: Vec<String> = config
-            .ai
-            .func_agent_models
-            .iter()
-            .filter_map(|(agent, model_ref)| {
-                if classify_invalid(model_ref, &mut invalidated) {
-                    Some(agent.clone())
-                } else {
-                    None
-                }
-            })
-            .collect();
-        for agent in func_keys_to_remove {
-            warn!(
-                "Reconcile ({caller}): clearing ai.func_agent_models[{agent}] because target model is missing or disabled"
-            );
-            config.ai.func_agent_models.remove(&agent);
-            func_agent_models_changed = true;
-        }
-
-        // 2. future mode and delegated-subagent defaults
-        if classify_invalid(
-            config.ai.agent_model_defaults.mode.as_str(),
-            &mut invalidated,
-        ) {
-            warn!(
-                "Reconcile ({caller}): resetting ai.agent_model_defaults.mode because target model is missing or disabled"
-            );
-            config.ai.agent_model_defaults.mode = "auto".to_string();
-            agent_model_defaults_changed = true;
-        }
-
-        if config
-            .ai
-            .agent_model_defaults
-            .subagents
-            .default_selection
-            .fixed_model_id()
-            .is_some_and(|model_id| classify_invalid(model_id, &mut invalidated))
-        {
-            warn!(
-                "Reconcile ({caller}): resetting ai.agent_model_defaults.subagents.default because target model is missing or disabled"
-            );
-            config.ai.agent_model_defaults.subagents.default_selection =
-                SubagentModelSelection::fixed("fast");
-            agent_model_defaults_changed = true;
-        }
-
-        let builtin_keys_to_remove: Vec<String> = config
-            .ai
-            .agent_model_defaults
-            .subagents
-            .builtin
-            .iter()
-            .filter_map(|(subagent_id, selection)| {
-                selection
-                    .fixed_model_id()
-                    .filter(|model_id| classify_invalid(model_id, &mut invalidated))
-                    .map(|_| subagent_id.clone())
-            })
-            .collect();
-        for subagent_id in builtin_keys_to_remove {
-            warn!(
-                "Reconcile ({caller}): clearing ai.agent_model_defaults.subagents.builtin[{subagent_id}] because target model is missing or disabled"
-            );
-            config
-                .ai
-                .agent_model_defaults
-                .subagents
-                .builtin
-                .remove(&subagent_id);
-            agent_model_defaults_changed = true;
-        }
-
-        if config
-            .ai
-            .agent_model_defaults
-            .subagents
-            .fork
-            .fixed_model_id()
-            .is_some_and(|model_id| classify_invalid(model_id, &mut invalidated))
-        {
-            warn!(
-                "Reconcile ({caller}): resetting ai.agent_model_defaults.subagents.fork because target model is missing or disabled"
-            );
-            config.ai.agent_model_defaults.subagents.fork = SubagentModelSelection::Inherit;
-            agent_model_defaults_changed = true;
-        }
-
-        // 3. default model slots
-        let fallback_id = config.ai.first_enabled_model_id();
-        let image_understanding_fallback_id = config
-            .ai
-            .models
-            .iter()
-            .find(|model| model.enabled && model.supports_image_understanding())
-            .map(|model| model.id.clone());
-        let mut repoint_default_slot = |slot: &mut Option<String>, slot_name: &str| {
-            let needs_fix = match slot.as_deref() {
-                Some("") => true,
-                Some(value) => !is_active(value),
-                None => false,
-            };
-            if !needs_fix {
-                return;
-            }
-
-            if let Some(current) = slot.as_deref() {
-                classify_invalid(current, &mut invalidated);
-            }
-
-            match fallback_id.as_ref() {
-                Some(new_id) => {
-                    info!(
-                        "Reconcile ({caller}): default_models.{slot_name} repointed: {:?} -> {}",
-                        slot, new_id
-                    );
-                    *slot = Some(new_id.clone());
-                }
-                None => {
-                    info!(
-                        "Reconcile ({caller}): default_models.{slot_name} cleared (no enabled model available); previous={:?}",
-                        slot
-                    );
-                    *slot = None;
-                }
-            }
-            default_models_changed = true;
-        };
-
-        repoint_default_slot(&mut config.ai.default_models.primary, "primary");
-        repoint_default_slot(&mut config.ai.default_models.fast, "fast");
-
-        let image_understanding_needs_fix =
-            match config.ai.default_models.image_understanding.as_deref() {
-                Some("") => true,
-                Some(value) => !config.ai.models.iter().any(|model| {
-                    model.enabled && model.supports_image_understanding() && model.id == value
-                }),
-                None => false,
-            };
-        if image_understanding_needs_fix {
-            if let Some(current) = config.ai.default_models.image_understanding.as_deref() {
-                classify_invalid(current, &mut invalidated);
-            }
-
-            match image_understanding_fallback_id.as_ref() {
-                Some(new_id) => {
-                    info!(
-                        "Reconcile ({caller}): default_models.image_understanding repointed: {:?} -> {}",
-                        config.ai.default_models.image_understanding, new_id
-                    );
-                    config.ai.default_models.image_understanding = Some(new_id.clone());
-                }
-                None => {
-                    info!(
-                        "Reconcile ({caller}): default_models.image_understanding cleared (no enabled capable model available); previous={:?}",
-                        config.ai.default_models.image_understanding
-                    );
-                    config.ai.default_models.image_understanding = None;
-                }
-            }
-            default_models_changed = true;
-        }
-
-        // Ensure `invalidated` doesn't contain a still-existing-and-enabled ID.
-        invalidated.retain(|id| !enabled_ids.contains(id));
-
-        // Persist any changes. We deliberately use the inner manager (and not
-        // `self.set_config`) to avoid triggering a recursive reconcile pass.
-        if func_agent_models_changed {
-            let mut manager = self.manager.write().await;
-            manager
-                .set("ai.func_agent_models", &config.ai.func_agent_models)
-                .await?;
-        }
-        if agent_model_defaults_changed {
-            let mut manager = self.manager.write().await;
-            manager
-                .set("ai.agent_model_defaults", &config.ai.agent_model_defaults)
-                .await?;
-        }
-        if default_models_changed {
-            let mut manager = self.manager.write().await;
-            manager
-                .set("ai.default_models", &config.ai.default_models)
-                .await?;
+        if !reconciliation.is_noop() {
+            self.manager.write().await.set("", &config).await?;
         }
 
         let report = ReconcileModelsReport {
-            invalidated_model_ids: invalidated.into_iter().collect(),
-            default_models_changed,
-            func_agent_models_changed,
-            agent_model_defaults_changed,
+            invalidated_model_ids: reconciliation.invalidated_model_ids,
+            default_models_changed: reconciliation.default_models_changed,
+            func_agent_models_changed: reconciliation.func_agent_models_changed,
+            agent_model_defaults_changed: reconciliation.agent_model_defaults_changed,
         };
 
         if report.is_noop() {
@@ -753,6 +662,217 @@ mod tests {
             .unwrap();
         assert!(current["mcpServers"].get("first").is_some());
         assert!(current["mcpServers"].get("stale").is_none());
+    }
+
+    #[tokio::test]
+    async fn startup_repairs_speech_sentinels_and_creates_a_backup() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let user_root = dir.path().join("speech-startup-repair");
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(user_root));
+        path_manager
+            .initialize_user_directories()
+            .await
+            .expect("user directories");
+        let mut config = GlobalConfig::default();
+        config.ai.models.push(AIModelConfig {
+            id: "speech".to_string(),
+            name: "Qwen ASR".to_string(),
+            provider: "openai".to_string(),
+            model_name: "qwen-asr".to_string(),
+            base_url: "https://example.com/v1".to_string(),
+            api_key: "secret".to_string(),
+            enabled: true,
+            category: ModelCategory::SpeechRecognition,
+            capabilities: vec![ModelCapability::SpeechRecognition],
+            context_window: Some(0),
+            max_tokens: Some(0),
+            ..Default::default()
+        });
+        config.ai.default_models.speech_recognition = Some("speech".to_string());
+        tokio::fs::write(
+            path_manager.app_config_file(),
+            serde_json::to_vec_pretty(&config).expect("serialize config"),
+        )
+        .await
+        .expect("seed config");
+
+        let service = ConfigService::with_settings(ConfigManagerSettings {
+            path_manager: Some(path_manager.clone()),
+            auto_save: true,
+            backup_count: 5,
+        })
+        .await
+        .expect("config service should recover");
+
+        let repaired: GlobalConfig = service.get_config(None).await.expect("repaired config");
+        let speech = repaired
+            .ai
+            .models
+            .iter()
+            .find(|model| model.id == "speech")
+            .expect("speech model");
+        assert_eq!(speech.context_window, None);
+        assert_eq!(speech.max_tokens, None);
+        assert_eq!(
+            repaired.ai.default_models.speech_recognition.as_deref(),
+            Some("speech")
+        );
+        assert!(service
+            .load_diagnostics()
+            .await
+            .iter()
+            .any(|diagnostic| diagnostic.code == "MODEL_FIELD_NOT_APPLICABLE"));
+        let backups = std::fs::read_dir(path_manager.user_config_dir().join("backups"))
+            .expect("backup directory")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("backup entries");
+        assert_eq!(backups.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn malformed_json_uses_in_memory_defaults_and_preserves_the_original() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let user_root = dir.path().join("invalid-json-recovery");
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(user_root));
+        path_manager
+            .initialize_user_directories()
+            .await
+            .expect("user directories");
+        let broken = "{\"ai\": {\"models\": [";
+        tokio::fs::write(path_manager.app_config_file(), broken)
+            .await
+            .expect("seed broken config");
+
+        let service = ConfigService::with_settings(ConfigManagerSettings {
+            path_manager: Some(path_manager.clone()),
+            auto_save: true,
+            backup_count: 5,
+        })
+        .await
+        .expect("startup should use defaults");
+
+        assert_eq!(
+            tokio::fs::read_to_string(path_manager.app_config_file())
+                .await
+                .expect("original config"),
+            broken
+        );
+        let diagnostic = service
+            .load_diagnostics()
+            .await
+            .into_iter()
+            .find(|diagnostic| diagnostic.code == "CONFIG_DEFAULT_RECOVERY")
+            .expect("recovery diagnostic");
+        assert!(!diagnostic.message.contains("api_key"));
+        let backup = std::fs::read_dir(path_manager.user_config_dir().join("backups"))
+            .expect("backup directory")
+            .next()
+            .expect("backup entry")
+            .expect("backup path")
+            .path();
+        assert_eq!(
+            tokio::fs::read_to_string(backup)
+                .await
+                .expect("backup content"),
+            broken
+        );
+    }
+
+    #[tokio::test]
+    async fn cloud_speech_save_updates_all_owned_fields_in_one_persisted_config() {
+        let test_name = "atomic-cloud-speech";
+        let (service, dir) = test_service(test_name).await;
+        let result = service
+            .save_cloud_speech_config(SaveCloudSpeechConfigRequest {
+                config_id: Some("speech-cloud".to_string()),
+                preset: "qwen".to_string(),
+                name: "Qwen ASR".to_string(),
+                base_url: "https://example.com/v1/".to_string(),
+                request_url: None,
+                model_name: "qwen-asr".to_string(),
+                api_key: "secret".to_string(),
+            })
+            .await
+            .expect("speech config should save");
+        assert!(result.created);
+
+        let path_manager = PathManager::with_user_root_for_tests(dir.path().join(test_name));
+        let persisted: GlobalConfig = serde_json::from_slice(
+            &tokio::fs::read(path_manager.app_config_file())
+                .await
+                .expect("persisted config"),
+        )
+        .expect("valid persisted config");
+        let model = persisted
+            .ai
+            .models
+            .iter()
+            .find(|model| model.id == "speech-cloud")
+            .expect("speech model");
+        assert_eq!(model.context_window, None);
+        assert_eq!(model.max_tokens, None);
+        assert_eq!(
+            model.request_url.as_deref(),
+            Some("https://example.com/v1/audio/transcriptions")
+        );
+        assert_eq!(
+            persisted.ai.default_models.speech_recognition.as_deref(),
+            Some("speech-cloud")
+        );
+        assert_eq!(persisted.app.ai_experience.voice_input.provider, "cloud");
+        assert_eq!(
+            persisted.app.ai_experience.voice_input.model_id,
+            "speech-cloud"
+        );
+    }
+
+    #[tokio::test]
+    async fn cloud_speech_save_reconciles_text_references_when_reusing_a_model_id() {
+        let (service, _dir) = test_service("cloud-speech-reused-id").await;
+        service
+            .set_config(
+                "ai.models",
+                vec![model("reused-model", true, ModelCategory::GeneralChat)],
+            )
+            .await
+            .expect("text model should save");
+
+        let before: GlobalConfig = service.get_config(None).await.expect("config before save");
+        assert_eq!(
+            before.ai.default_models.primary.as_deref(),
+            Some("reused-model")
+        );
+        assert_eq!(
+            before.ai.default_models.fast.as_deref(),
+            Some("reused-model")
+        );
+
+        let result = service
+            .save_cloud_speech_config(SaveCloudSpeechConfigRequest {
+                config_id: Some("reused-model".to_string()),
+                preset: "custom".to_string(),
+                name: "Speech replacement".to_string(),
+                base_url: "https://example.com/v1".to_string(),
+                request_url: None,
+                model_name: "speech-model".to_string(),
+                api_key: "secret".to_string(),
+            })
+            .await
+            .expect("speech replacement should save");
+        assert!(!result.created);
+
+        let after: GlobalConfig = service.get_config(None).await.expect("config after save");
+        assert_eq!(after.ai.default_models.primary, None);
+        assert_eq!(after.ai.default_models.fast, None);
+        assert_eq!(
+            after.ai.default_models.speech_recognition.as_deref(),
+            Some("reused-model")
+        );
+        assert!(after
+            .ai
+            .func_agent_models
+            .values()
+            .all(|model_id| { !matches!(model_id.as_str(), "reused-model") }));
     }
 
     #[tokio::test]

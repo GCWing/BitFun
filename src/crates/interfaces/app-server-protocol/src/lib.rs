@@ -5,6 +5,7 @@
 //! these wire DTOs to owner types at the interface boundary.
 
 pub mod app;
+pub mod config;
 pub mod error;
 pub mod event;
 pub mod method;

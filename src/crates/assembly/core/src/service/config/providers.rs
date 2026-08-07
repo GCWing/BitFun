@@ -34,6 +34,83 @@ fn serialize_default_config(section: &str, value: impl serde::Serialize) -> serd
 /// AI configuration provider.
 pub struct AIConfigProvider;
 
+fn ai_validation_error_location(message: &str) -> (String, String) {
+    let model_field = if message.contains("Model name is required") {
+        Some(("name", "MODEL_NAME_INVALID"))
+    } else if message.contains("Model provider is required") {
+        Some(("provider", "MODEL_PROVIDER_INVALID"))
+    } else if message.contains("context_window") {
+        Some(("context_window", "MODEL_CONTEXT_WINDOW_INVALID"))
+    } else if message.contains("max_tokens") {
+        Some(("max_tokens", "MODEL_MAX_TOKENS_INVALID"))
+    } else if message.contains("reasoning config") {
+        Some(("reasoning", "MODEL_REASONING_INVALID"))
+    } else if message.contains("reasoning default preset") {
+        Some((
+            "reasoning.default_preset",
+            "MODEL_REASONING_DEFAULT_INVALID",
+        ))
+    } else if message.contains("reasoning target") {
+        Some(("reasoning", "MODEL_REASONING_TARGET_INVALID"))
+    } else if message.contains("reasoning preset") {
+        Some(("reasoning.presets", "MODEL_REASONING_PRESET_INVALID"))
+    } else {
+        None
+    };
+
+    if let Some((field, code)) = model_field {
+        if let Some(index) = message
+            .rsplit_once(" at index ")
+            .and_then(|(_, suffix)| suffix.split(':').next())
+            .and_then(|value| value.parse::<usize>().ok())
+        {
+            return (format!("ai.models[{index}].{field}"), code.to_string());
+        }
+    }
+
+    if message.contains("stream_idle_timeout_secs") {
+        return (
+            "ai.stream_idle_timeout_secs".to_string(),
+            "AI_STREAM_IDLE_TIMEOUT_INVALID".to_string(),
+        );
+    }
+    if message.contains("stream_ttft_timeout_secs") {
+        return (
+            "ai.stream_ttft_timeout_secs".to_string(),
+            "AI_STREAM_TTFT_TIMEOUT_INVALID".to_string(),
+        );
+    }
+    if message.starts_with("Function Agent '") {
+        if let Some((_, suffix)) = message.split_once("Function Agent '") {
+            if let Some((agent, _)) = suffix.split_once('\'') {
+                return (
+                    format!("ai.func_agent_models.{agent}"),
+                    "FUNC_AGENT_MODEL_INVALID".to_string(),
+                );
+            }
+        }
+    }
+
+    ("ai".to_string(), "VALIDATION_ERROR".to_string())
+}
+
+fn ai_validation_warning_location(config: &GlobalConfig, message: &str) -> String {
+    let Some(model_name) = message
+        .strip_prefix("Model '")
+        .and_then(|value| value.split_once("' has empty API key"))
+        .map(|(name, _)| name)
+    else {
+        return "ai".to_string();
+    };
+    config
+        .ai
+        .models
+        .iter()
+        .position(|model| model.name == model_name)
+        .map(|index| format!("ai.models[{index}].api_key"))
+        .unwrap_or_else(|| "ai".to_string())
+}
+
 #[async_trait]
 impl ConfigProvider for AIConfigProvider {
     fn name(&self) -> &str {
@@ -76,6 +153,9 @@ impl ConfigProvider for AIConfigProvider {
             }
 
             for (index, model) in ai_config.models.iter().enumerate() {
+                if !model.enabled {
+                    continue;
+                }
                 if model.name.trim().is_empty() {
                     return Err(BitFunError::validation(format!(
                         "Model name is required at index {}",
@@ -91,28 +171,30 @@ impl ConfigProvider for AIConfigProvider {
                 if model.api_key.trim().is_empty() {
                     warnings.push(format!("Model '{}' has empty API key", model.name));
                 }
-                if let Some(context_window) = model.context_window {
-                    if context_window < MIN_MODEL_CONTEXT_WINDOW_TOKENS {
-                        return Err(BitFunError::validation(format!(
-                            "Model '{}' context_window must be at least {}",
-                            model.name, MIN_MODEL_CONTEXT_WINDOW_TOKENS
-                        )));
+                if model.supports_text_generation() {
+                    if let Some(context_window) = model.context_window {
+                        if context_window < MIN_MODEL_CONTEXT_WINDOW_TOKENS {
+                            return Err(BitFunError::validation(format!(
+                                "Model '{}' context_window must be at least {} at index {}",
+                                model.name, MIN_MODEL_CONTEXT_WINDOW_TOKENS, index
+                            )));
+                        }
                     }
-                }
-                if let Some(max_tokens) = model.max_tokens {
-                    if max_tokens == 0 {
-                        return Err(BitFunError::validation(format!(
-                            "Model '{}' max_tokens must be greater than 0",
-                            model.name
-                        )));
+                    if let Some(max_tokens) = model.max_tokens {
+                        if max_tokens == 0 {
+                            return Err(BitFunError::validation(format!(
+                                "Model '{}' max_tokens must be greater than 0 at index {}",
+                                model.name, index
+                            )));
+                        }
                     }
-                }
-                if let Some(temperature) = model.temperature {
-                    if !temperature.is_nan() && !(0.0..=2.0).contains(&temperature) {
-                        warnings.push(format!(
-                            "Model '{}' temperature should be between 0 and 2",
-                            model.name
-                        ));
+                    if let Some(temperature) = model.temperature {
+                        if !temperature.is_nan() && !(0.0..=2.0).contains(&temperature) {
+                            warnings.push(format!(
+                                "Model '{}' temperature should be between 0 and 2",
+                                model.name
+                            ));
+                        }
                     }
                 }
 
@@ -198,7 +280,10 @@ impl ConfigProvider for AIConfigProvider {
             }
 
             for (func_agent_name, model_id) in &ai_config.func_agent_models {
-                if !ai_config.models.iter().any(|m| m.id == *model_id)
+                if !ai_config
+                    .models
+                    .iter()
+                    .any(|m| m.enabled && m.id == *model_id)
                     && model_id != "primary"
                     && model_id != "fast"
                 {
@@ -625,24 +710,53 @@ impl ConfigProviderRegistry {
                 Ok(provider_warnings) => {
                     warnings.extend(provider_warnings.into_iter().map(|msg| {
                         ConfigValidationWarning {
-                            path: provider_name.to_string(),
+                            path: if provider_name == "ai" {
+                                ai_validation_warning_location(config, &msg)
+                            } else {
+                                provider_name.to_string()
+                            },
                             message: msg,
                             code: "VALIDATION_WARNING".to_string(),
                             severity: "warning".to_string(),
                         }
                     }))
                 }
-                Err(e) => errors.push(ConfigValidationError {
-                    path: provider_name.to_string(),
-                    message: e.to_string(),
-                    code: "VALIDATION_ERROR".to_string(),
-                    severity: "error".to_string(),
-                }),
+                Err(e) => {
+                    let message = e.to_string();
+                    let (path, code) = if provider_name == "ai" {
+                        ai_validation_error_location(&message)
+                    } else {
+                        (provider_name.to_string(), "VALIDATION_ERROR".to_string())
+                    };
+                    errors.push(ConfigValidationError {
+                        path,
+                        message,
+                        code,
+                        severity: "error".to_string(),
+                    });
+                }
             }
         }
 
         Ok(ConfigValidationResult {
             valid: errors.is_empty(),
+            diagnostics: errors
+                .iter()
+                .map(|error| ConfigDiagnostic {
+                    path: error.path.clone(),
+                    message: error.message.clone(),
+                    code: error.code.clone(),
+                    severity: ConfigDiagnosticSeverity::Error,
+                    recoverability: ConfigDiagnosticRecoverability::None,
+                })
+                .chain(warnings.iter().map(|warning| ConfigDiagnostic {
+                    path: warning.path.clone(),
+                    message: warning.message.clone(),
+                    code: warning.code.clone(),
+                    severity: ConfigDiagnosticSeverity::Warning,
+                    recoverability: ConfigDiagnosticRecoverability::None,
+                }))
+                .collect(),
             errors,
             warnings,
         })
@@ -726,6 +840,7 @@ mod tests {
             name: "Test model".to_string(),
             provider: "openai".to_string(),
             context_window: Some(MIN_MODEL_CONTEXT_WINDOW_TOKENS - 1),
+            enabled: true,
             ..AIModelConfig::default()
         });
         let value = serde_json::to_value(config).expect("AI config should serialize");
@@ -738,6 +853,75 @@ mod tests {
         assert!(error
             .to_string()
             .contains("context_window must be at least 32000"));
+    }
+
+    #[tokio::test]
+    async fn accepts_generation_sentinels_on_pure_speech_models() {
+        let mut config = AIConfig::default();
+        config.models.push(AIModelConfig {
+            name: "Qwen ASR".to_string(),
+            provider: "openai".to_string(),
+            enabled: true,
+            category: ModelCategory::SpeechRecognition,
+            capabilities: vec![ModelCapability::SpeechRecognition],
+            context_window: Some(0),
+            max_tokens: Some(0),
+            ..AIModelConfig::default()
+        });
+
+        AIConfigProvider
+            .validate_config(&serde_json::to_value(config).unwrap())
+            .await
+            .expect("pure speech models do not use generation token fields");
+    }
+
+    #[tokio::test]
+    async fn mixed_text_and_speech_models_still_require_a_valid_context_window() {
+        let mut config = AIConfig::default();
+        config.models.push(AIModelConfig {
+            name: "Mixed model".to_string(),
+            provider: "openai".to_string(),
+            enabled: true,
+            capabilities: vec![
+                ModelCapability::TextChat,
+                ModelCapability::SpeechRecognition,
+            ],
+            context_window: Some(0),
+            ..AIModelConfig::default()
+        });
+
+        let error = AIConfigProvider
+            .validate_config(&serde_json::to_value(config).unwrap())
+            .await
+            .expect_err("text-capable models must retain generation validation");
+        assert!(error
+            .to_string()
+            .contains("context_window must be at least"));
+    }
+
+    #[tokio::test]
+    async fn registry_reports_precise_model_validation_paths_and_codes() {
+        let mut config = AIConfig::default();
+        config.models.push(AIModelConfig {
+            id: "broken".to_string(),
+            name: "Broken model".to_string(),
+            provider: "openai".to_string(),
+            enabled: true,
+            context_window: Some(0),
+            ..AIModelConfig::default()
+        });
+
+        let result = ConfigProviderRegistry::new()
+            .validate_config(&GlobalConfig {
+                ai: config,
+                ..GlobalConfig::default()
+            })
+            .await
+            .expect("validation result");
+
+        assert_eq!(result.errors[0].path, "ai.models[0].context_window");
+        assert_eq!(result.errors[0].code, "MODEL_CONTEXT_WINDOW_INVALID");
+        assert_eq!(result.diagnostics[0].path, "ai.models[0].context_window");
     }
 
     #[tokio::test]
@@ -851,7 +1035,7 @@ mod tests {
             .expect("registry validation result");
 
         assert!(!validation.valid);
-        assert_eq!(validation.errors[0].path, "ai");
+        assert_eq!(validation.errors[0].path, "ai.models[0].reasoning");
         assert!(validation.errors[0]
             .message
             .contains("budget_tokens value must be greater than 0"));

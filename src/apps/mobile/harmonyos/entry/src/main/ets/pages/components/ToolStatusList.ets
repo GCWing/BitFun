@@ -1,6 +1,7 @@
 import { ConversationUiQuestionAnswer, ConversationUiToolStatus } from './ConversationUiModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { ACCENT, CARD, INK, LINE, MUTED, RED } from './Theme';
+import { ToolFileReference, ToolFileReferenceResolver } from '../../services/ToolFileReferenceResolver';
+import { ACCENT, CARD, FILE_LINK, GREEN, INK, LINE, MUTED, PRIMARY_ACTION_TEXT, RED, SOFT } from './Theme';
 
 interface QuestionPreview {
   header?: string;
@@ -58,6 +59,8 @@ export struct ToolStatusList {
   @Event onCancelTool: (toolId: string) => void = (_toolId: string) => {};
   @Event onAnswerQuestion: (toolId: string, answers: ConversationUiQuestionAnswer) => void =
     (_toolId: string, _answers: ConversationUiQuestionAnswer) => {};
+  @Event onOpenFilePreview: (path: string, label: string) => void =
+    (_path: string, _label: string) => {};
   @Local questionAnswerToolId: string = '';
   @Local questionAnswerText: string = '';
   @Local toolInputEditToolId: string = '';
@@ -107,21 +110,23 @@ export struct ToolStatusList {
         this.ToolStatusIcon(tool)
         Text(this.toolLineLabel(tool))
           .fontSize(13)
-          .fontColor(this.hasToolError(tool) ? RED : MUTED)
+          .fontColor(this.hasToolError(tool) ? RED :
+            (this.toolFilePath(tool).length > 0 ? FILE_LINK : MUTED))
           .layoutWeight(1)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .onClick(() => {
+            if (this.toolFilePath(tool).length > 0) {
+              this.openToolFile(tool);
+            } else {
+              this.toggleToolExpanded(tool, index);
+            }
+          })
         this.TrailingChevron(tool, index)
       }
       .width('100%')
       .height(28)
       .alignItems(VerticalAlign.Center)
-      .onClick(() => {
-        if (this.canExpandTool(tool)) {
-          const key = this.toolKey(tool, index);
-          this.expandedToolKey = this.expandedToolKey === key ? '' : key;
-        }
-      })
 
       if (this.canExpandTool(tool) && this.expandedToolKey === this.toolKey(tool, index)) {
         if (this.toolInputPreview(tool).length > 0) {
@@ -139,7 +144,7 @@ export struct ToolStatusList {
         Row({ space: 8 }) {
           Text(RemoteI18n.t('chat.approve'))
             .fontSize(12)
-            .fontColor(CARD)
+            .fontColor(PRIMARY_ACTION_TEXT)
             .textAlign(TextAlign.Center)
             .height(32)
             .layoutWeight(1)
@@ -154,7 +159,7 @@ export struct ToolStatusList {
             .textAlign(TextAlign.Center)
             .height(32)
             .layoutWeight(1)
-            .backgroundColor('#F0EFEB')
+            .backgroundColor(SOFT)
             .borderRadius(16)
             .border({ width: 1, color: LINE })
             .onClick(() => {
@@ -176,7 +181,7 @@ export struct ToolStatusList {
             .textAlign(TextAlign.Center)
             .height(32)
             .padding({ left: 14, right: 14 })
-            .backgroundColor('#F0EFEB')
+            .backgroundColor(SOFT)
             .borderRadius(16)
             .border({ width: 1, color: LINE })
             .onClick(() => {
@@ -214,7 +219,14 @@ export struct ToolStatusList {
   @Builder
   TrailingChevron(tool: ConversationUiToolStatus, index: number) {
     if (this.canExpandTool(tool)) {
-      this.ChevronIcon(this.expandedToolKey === this.toolKey(tool, index) ? 'down' : 'right')
+      Stack({ alignContent: Alignment.Center }) {
+        this.ChevronIcon(this.expandedToolKey === this.toolKey(tool, index) ? 'down' : 'right')
+      }
+      .width(32)
+      .height(28)
+      .onClick(() => {
+        this.toggleToolExpanded(tool, index);
+      })
     } else {
       Text('')
         .width(14)
@@ -387,17 +399,17 @@ export struct ToolStatusList {
         .width(3.5)
         .height(3.5)
         .borderRadius(2)
-        .backgroundColor('#2F80ED')
+        .backgroundColor(ACCENT)
       Text('')
         .width(3.5)
         .height(3.5)
         .borderRadius(2)
-        .backgroundColor('#2F80ED')
+        .backgroundColor(ACCENT)
       Text('')
         .width(3.5)
         .height(3.5)
         .borderRadius(2)
-        .backgroundColor('#2F80ED')
+        .backgroundColor(ACCENT)
     }
     .width(16)
     .height(16)
@@ -494,7 +506,7 @@ export struct ToolStatusList {
         .fontSize(12)
         .fontColor(INK)
         .lineHeight(17)
-        .backgroundColor('#FBFAF7')
+        .backgroundColor(SOFT)
         .borderRadius(14)
         .padding(10)
         .border({ width: 1, color: this.toolInputErrorForTool(tool.id || '').length > 0 ? RED : LINE })
@@ -539,11 +551,11 @@ export struct ToolStatusList {
       Row({ space: 8 }) {
         Text(RemoteI18n.t('chat.submitAnswer'))
           .fontSize(12)
-          .fontColor(this.canSubmitQuestion(tool.id || '') ? CARD : MUTED)
+          .fontColor(this.canSubmitQuestion(tool.id || '') ? PRIMARY_ACTION_TEXT : MUTED)
           .textAlign(TextAlign.Center)
           .height(32)
           .layoutWeight(1)
-          .backgroundColor(this.canSubmitQuestion(tool.id || '') ? ACCENT : '#EDEBE6')
+          .backgroundColor(this.canSubmitQuestion(tool.id || '') ? ACCENT : SOFT)
           .borderRadius(16)
           .onClick(() => {
             if (this.canSubmitQuestion(tool.id || '')) {
@@ -592,9 +604,9 @@ export struct ToolStatusList {
       this.isRunningTool(tool);
   }
 
-  private toolRowBg(tool: ConversationUiToolStatus, index: number): string {
+  private toolRowBg(tool: ConversationUiToolStatus, index: number): ResourceColor {
     if (this.isEmphasizedToolRow(tool, index)) {
-      return '#FBFAF7';
+      return SOFT;
     }
     return '#00000000';
   }
@@ -1110,108 +1122,53 @@ export struct ToolStatusList {
     return this.operationLabel(tool);
   }
 
+  private toolFileReference(tool: ConversationUiToolStatus): ToolFileReference | undefined {
+    return ToolFileReferenceResolver.resolve(tool.name || '', tool.tool_input, tool.input_preview || '');
+  }
+
+  private toolFilePath(tool: ConversationUiToolStatus): string {
+    return this.toolFileReference(tool)?.path || '';
+  }
+
+  private openToolFile(tool: ConversationUiToolStatus): void {
+    const reference = this.toolFileReference(tool);
+    if (reference) {
+      this.onOpenFilePreview(reference.path, reference.label);
+    }
+  }
+
+  private toggleToolExpanded(tool: ConversationUiToolStatus, index: number): void {
+    if (!this.canExpandTool(tool)) {
+      return;
+    }
+    const key = this.toolKey(tool, index);
+    this.expandedToolKey = this.expandedToolKey === key ? '' : key;
+  }
+
   private canExpandTool(tool: ConversationUiToolStatus): boolean {
     return this.hasToolError(tool) || this.isPendingConfirmation(tool) || this.isQuestionTool(tool) ||
       this.isRunningTool(tool) || this.isCompletedTool(tool) || this.isCancelledTool(tool);
   }
 
-  private toolTypeColor(tool: ConversationUiToolStatus): string {
-    if (this.isQuestionLikeTool(tool)) {
-      return '#A15C00';
-    }
-    if (this.isTodoTool(tool)) {
-      return '#21A85A';
-    }
-    if (this.isTaskTool(tool)) {
-      return '#2D7DDF';
-    }
-    if (this.isGitTool(tool)) {
-      return '#6C5CE7';
-    }
+  private toolTypeColor(tool: ConversationUiToolStatus): ResourceColor {
     if (this.isDeleteTool(tool)) {
       return RED;
     }
-    if (this.isDiffTool(tool)) {
-      return '#7E62D9';
-    }
-    if (this.isPatchTool(tool)) {
-      return '#C2542D';
-    }
-    if (this.isFileCreateTool(tool)) {
-      return '#21A85A';
-    }
-    if (this.isFileMutationTool(tool)) {
-      return '#C2542D';
-    }
-    if (this.isFileReadTool(tool)) {
-      return '#7E62D9';
-    }
-    if (this.isSearchTool(tool)) {
-      return '#D28A16';
-    }
-    if (this.isWebTool(tool)) {
-      return '#2D7DDF';
-    }
-    if (this.isCommandTool(tool)) {
-      return '#1E7A70';
+    if (this.isTodoTool(tool) || this.isFileCreateTool(tool)) {
+      return GREEN;
     }
     return MUTED;
   }
 
-  private toolTypeBg(tool: ConversationUiToolStatus): string {
-    if (this.isQuestionLikeTool(tool)) {
-      return '#FFF4DE';
-    }
-    if (this.isTodoTool(tool)) {
-      return '#EAF7EF';
-    }
-    if (this.isTaskTool(tool)) {
-      return '#EAF3FF';
-    }
-    if (this.isGitTool(tool)) {
-      return '#F0EDFF';
-    }
-    if (this.isDeleteTool(tool)) {
-      return '#FFECEA';
-    }
-    if (this.isDiffTool(tool)) {
-      return '#F0EDFF';
-    }
-    if (this.isPatchTool(tool)) {
-      return '#FFF0EA';
-    }
-    if (this.isFileCreateTool(tool)) {
-      return '#EAF7EF';
-    }
-    if (this.isFileMutationTool(tool)) {
-      return '#FFF0EA';
-    }
-    if (this.isFileReadTool(tool)) {
-      return '#F0EDFF';
-    }
-    if (this.isSearchTool(tool)) {
-      return '#FFF4DE';
-    }
-    if (this.isWebTool(tool)) {
-      return '#EAF3FF';
-    }
-    if (this.isCommandTool(tool)) {
-      return '#E8F6F4';
-    }
-    return '#F5F4F0';
+  private toolTypeBg(_tool: ConversationUiToolStatus): ResourceColor {
+    return SOFT;
   }
 
-  private toolTypeBorderColor(tool: ConversationUiToolStatus): string {
+  private toolTypeBorderColor(tool: ConversationUiToolStatus): ResourceColor {
     if (this.hasToolError(tool)) {
-      return '#F0B3AA';
+      return RED;
     }
-    if (this.isPendingConfirmation(tool) || this.isQuestionTool(tool)) {
-      return '#E5C98E';
-    }
-    if (this.isRunningTool(tool)) {
-      return '#9FC5F8';
-    }
-    return '#00000000';
+    return LINE;
   }
 
   private toolStatusIcon(tool: ConversationUiToolStatus): string {
@@ -1231,19 +1188,9 @@ export struct ToolStatusList {
     return '•';
   }
 
-  private toolStatusColor(tool: ConversationUiToolStatus): string {
+  private toolStatusColor(tool: ConversationUiToolStatus): ResourceColor {
     if (this.hasToolError(tool)) {
       return RED;
-    }
-    const normalized = (tool.status || '').toLowerCase();
-    if (normalized === 'running' || normalized === 'active') {
-      return '#A15C00';
-    }
-    if (normalized === 'pending_confirmation' || normalized === 'needs_confirmation') {
-      return '#A15C00';
-    }
-    if (normalized === 'cancelled' || normalized === 'canceled' || normalized === 'rejected') {
-      return MUTED;
     }
     return MUTED;
   }
@@ -1256,24 +1203,12 @@ export struct ToolStatusList {
       this.isCancelledTool(tool);
   }
 
-  private summaryTypeColor(entry: ToolRenderEntry): string {
-    if (entry.searchCount > 0 && entry.readCount === 0) {
-      return '#D28A16';
-    }
-    if (entry.readCount > 0 && entry.searchCount === 0) {
-      return '#7E62D9';
-    }
+  private summaryTypeColor(_entry: ToolRenderEntry): ResourceColor {
     return MUTED;
   }
 
-  private summaryTypeBg(entry: ToolRenderEntry): string {
-    if (entry.searchCount > 0 && entry.readCount === 0) {
-      return '#FFF4DE';
-    }
-    if (entry.readCount > 0 && entry.searchCount === 0) {
-      return '#F0EDFF';
-    }
-    return '#F5F4F0';
+  private summaryTypeBg(_entry: ToolRenderEntry): ResourceColor {
+    return SOFT;
   }
 
   private toolPreview(preview: string): string {

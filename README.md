@@ -36,7 +36,7 @@ Writes code, produces documents, and drives the desktop — with Mini Apps, a Ru
 | **Agentic Mini Apps** | A task gets its own interface — chart, board, form, panel — with a conversation bound to that interface's live state |
 | **Self-hosted multi-device control** | Login, cross-device session sync, and controlling one device from another run through a relay you deploy. Zero-knowledge; no vendor cloud in the path |
 | **Coding** | Plan, edit, test, and commit inside real Git repositories. Agentic, Plan, Debug, Deep Review, long-horizon tasks |
-| **Office work** | Research, writing, PPT, DOCX, XLSX, PDF, meeting notes, reports |
+| **Office work** | Research, writing, presentations, meeting notes, reports |
 | **Desktop execution** | Browser, terminal, desktop applications, the filesystem, and remote workspaces |
 | **Four tiers of customization** | Custom Agents → MCP / Skills / Hooks → Mini Apps → source-level changes |
 | **Performance** | 98.67% average KV cache hit rate; flashgrep searches Chromium-scale trees ~36x faster |
@@ -91,7 +91,7 @@ Two kinds of complex work: shipping code in real repositories, and turning sourc
 | Scenario | Delivery goal | Typical capabilities |
 | --- | --- | --- |
 | **Coding** | Move from a real repository to a mergeable result. | Agentic, Plan, Debug, testing, Git, Deep Review, long-horizon tasks, and benchmarks. |
-| **Office Work** | Move from source material to deliverable documents. | Research, PPT, DOCX, XLSX, PDF, summarization, writing, meeting notes, and reports. |
+| **Office Work** | Move from source material to useful written and visual deliverables. | Research, presentations, summarization, writing, meeting notes, and reports. |
 
 **Shared capabilities**
 

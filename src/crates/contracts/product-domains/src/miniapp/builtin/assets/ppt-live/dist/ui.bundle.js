@@ -7031,10 +7031,6 @@ var STRINGS = {
     propertiesFont: "Font",
     propertiesColorMode: "Slide colors",
     propertiesStylePreset: "Style preset",
-    propertiesModel: "Model",
-    modelOptionAuto: "Auto (host default)",
-    modelOptionPrimary: "Primary",
-    modelOptionFast: "Fast",
     colorModeLight: "Light",
     colorModeDark: "Dark",
     fontSansSerif: "Sans-serif",
@@ -7443,10 +7439,6 @@ var STRINGS = {
     propertiesFont: "\u5B57\u4F53",
     propertiesColorMode: "\u5E7B\u706F\u7247\u914D\u8272",
     propertiesStylePreset: "\u98CE\u683C\u9884\u8BBE",
-    propertiesModel: "\u6A21\u578B",
-    modelOptionAuto: "\u81EA\u52A8\uFF08\u8DDF\u968F\u4E3B\u673A\u9ED8\u8BA4\uFF09",
-    modelOptionPrimary: "\u4E3B\u6A21\u578B",
-    modelOptionFast: "\u5FEB\u901F\u6A21\u578B",
     colorModeLight: "\u6D45\u8272",
     colorModeDark: "\u6DF1\u8272",
     fontSansSerif: "\u975E\u886C\u7EBF",
@@ -7743,12 +7735,7 @@ function getAllStylePresets(locale) {
 // src/state.js
 var STORAGE_KEY = "pptLiveStudioStateV6";
 var HISTORY_KEY = "pptLiveDeckHistoryV1";
-var SCHEMA_VERSION = 6;
-var DEFAULT_PREFERRED_MODEL = "primary";
-function normalizePreferredModel(value) {
-  const raw = String(value || "").trim();
-  return raw || DEFAULT_PREFERRED_MODEL;
-}
+var SCHEMA_VERSION = 7;
 var ELEMENT_TYPES = ["text", "list", "shape", "metric", "chart", "media"];
 var THEME_PRESETS = {
   executive: {
@@ -7906,7 +7893,6 @@ function createInitialState() {
       runId: "",
       skillKey: ""
     },
-    preferredModel: DEFAULT_PREFERRED_MODEL,
     style: defaultStyle(),
     outline: [],
     sources: { items: [], facts: [], warnings: [], summary: "", fetchedAt: 0 },
@@ -7947,7 +7933,7 @@ function ensureState(value) {
     runId: String(state2.agentSession?.runId || ""),
     skillKey: String(state2.agentSession?.skillKey || "")
   };
-  state2.preferredModel = normalizePreferredModel(state2.preferredModel);
+  delete state2.preferredModel;
   state2.style = { ...defaultStyle(), ...state2.style || {} };
   delete state2.style.brandPrimary;
   delete state2.style.brandAccent;
@@ -37466,8 +37452,7 @@ function installAgentBackend(app) {
       return app.agent.ensureSession({
         sessionName: "PPT Live",
         sessionId: options.sessionId,
-        appDataWorkspace: options.appDataWorkspace,
-        model: options.model || void 0
+        appDataWorkspace: options.appDataWorkspace
       });
     },
     async call(action, input, options = {}) {
@@ -37480,8 +37465,7 @@ function installAgentBackend(app) {
         sessionName: "PPT Live",
         displayText: options.displayText || input.instruction,
         sessionId: options.sessionId,
-        appDataWorkspace: options.appDataWorkspace,
-        model: options.model || void 0
+        appDataWorkspace: options.appDataWorkspace
       });
       if (!result?.sessionId || !result?.turnId) {
         throw new Error("PPT Live agent backend did not return sessionId/turnId");
@@ -38745,8 +38729,7 @@ async function ensureDeckAgentSession() {
   const project = currentDeckProject() || newDeckProject();
   const requestSession = async (sessionId2) => host.backend.ensureSession({
     sessionId: sessionId2 || void 0,
-    appDataWorkspace: project.workspaceSubdir,
-    model: normalizePreferredModel(state.preferredModel)
+    appDataWorkspace: project.workspaceSubdir
   });
   let result;
   const persistedSessionId = String(state.agentSession?.id || "");
@@ -38982,15 +38965,11 @@ async function executeBackendTurn(requestInput, hooks = {}, options = {}) {
   const progressTracker = createGenerationProgressTracker();
   const activity = { lastEventAt: Date.now() };
   try {
-    const preferredModel = normalizePreferredModel(
-      options.model || state.preferredModel || DEFAULT_PREFERRED_MODEL
-    );
     const result = await host.backend.call("ppt.generate", requestInput, {
       entityId: "deck",
       idempotencyKey: `ppt-live-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       sessionId: options.sessionId || void 0,
       appDataWorkspace: options.appDataWorkspace || void 0,
-      model: preferredModel,
       displayText: options.displayText || requestInput.instruction
     });
     sessionId = result?.sessionId || null;
@@ -39477,7 +39456,6 @@ async function runCoworkDeckGeneration(operation, instruction, options = {}) {
           runId: retrySession?.project?.runId || "",
           skillKey: PPT_DESIGN_SKILL_KEY
         };
-        state.preferredModel = normalizePreferredModel(state.preferredModel);
         addGenerationEvent({ title: translate("generationParsingDeck"), detail: "", kind: "parsing" });
         setGenerationStep("verify", "running", translate("generationVerifyingDeck"));
         await progressivePublishChain.catch(() => {
@@ -40827,24 +40805,6 @@ function bindPropertyPanels() {
       refreshFlatSelect(stylePresetSelect);
     });
   }
-  const modelSelect = $("modelSelect");
-  if (modelSelect) {
-    enhanceFlatSelect(modelSelect);
-    modelSelect.addEventListener("change", () => {
-      const selected = normalizePreferredModel(modelSelect.value);
-      if (selected === state.preferredModel) return;
-      state.preferredModel = selected;
-      refreshFlatSelect(modelSelect);
-      void (async () => {
-        await ensureDeckAgentSession();
-        await persist(true);
-      })().catch((error2) => {
-        runtime().log?.warn?.("PPT Live failed to prepare the updated model session", {
-          error: String(error2)
-        });
-      });
-    });
-  }
 }
 var exportPreviewIndex = 0;
 function getSelectedExportFormat() {
@@ -41124,58 +41084,10 @@ function renderStylePresetOptions() {
   if (stylePresetSelect.selectedIndex < 0) stylePresetSelect.value = DEFAULT_STYLE_PRESET;
   refreshFlatSelect(stylePresetSelect);
 }
-function appendModelOption(select, value, label) {
-  const option = document.createElement("option");
-  option.value = value;
-  option.textContent = label;
-  select.append(option);
-}
-function modelOptionLabel(model) {
-  const modelName = String(model?.modelName || model?.model_name || "").trim();
-  if (modelName) return modelName;
-  const configName = String(model?.name || "").trim();
-  if (configName) return configName;
-  return String(model?.id || "").trim();
-}
-function renderModelOptions(models = []) {
-  const modelSelect = $("modelSelect");
-  if (!modelSelect) return;
-  const selected = normalizePreferredModel(state.preferredModel);
-  modelSelect.textContent = "";
-  appendModelOption(modelSelect, "auto", translate("modelOptionAuto"));
-  appendModelOption(modelSelect, "primary", translate("modelOptionPrimary"));
-  appendModelOption(modelSelect, "fast", translate("modelOptionFast"));
-  for (const model of Array.isArray(models) ? models : []) {
-    const id = String(model?.id || "").trim();
-    if (!id || id === "auto" || id === "primary" || id === "fast") continue;
-    appendModelOption(modelSelect, id, modelOptionLabel(model));
-  }
-  if (![...modelSelect.options].some((option) => option.value === selected)) {
-    appendModelOption(modelSelect, selected, selected);
-  }
-  modelSelect.value = selected;
-  if (modelSelect.selectedIndex < 0) modelSelect.value = DEFAULT_PREFERRED_MODEL;
-  state.preferredModel = normalizePreferredModel(modelSelect.value);
-  refreshFlatSelect(modelSelect);
-}
-async function loadModelOptions() {
-  renderModelOptions([]);
-  const getModels = runtime()?.ai?.getModels;
-  if (typeof getModels !== "function") return;
-  try {
-    const models = await getModels();
-    renderModelOptions(models);
-  } catch (error2) {
-    runtime().log?.warn?.("PPT Live failed to list AI models", { error: String(error2) });
-    renderModelOptions([]);
-  }
-}
 function syncLocale() {
   state.generation = normalizeGeneration(state.generation);
   applyI18n();
   renderStylePresetOptions();
-  renderModelOptions([]);
-  void loadModelOptions();
   syncComposerClaim();
   rerender();
 }
@@ -41207,7 +41119,6 @@ async function init() {
     syncLocale();
     await ensureDeckAgentSession();
     syncStylePanelFromState(state);
-    await loadModelOptions();
     await persist(true);
   } catch (error2) {
     runtime().log?.error?.("PPT Live init failed", { error: String(error2) });

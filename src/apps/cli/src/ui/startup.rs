@@ -325,6 +325,16 @@ impl StartupPage {
         &self.agent_type
     }
 
+    /// Set a model ID override (from `--model` flag) for display and session
+    /// composition. The ID is validated when applied to the session; an invalid
+    /// ID logs a warning and falls back to the default model.
+    pub(crate) fn set_model_override(&mut self, model_id: Option<String>) {
+        if model_id.is_some() {
+            self.selected_model_id = model_id;
+        }
+        self.load_current_model_name();
+    }
+
     /// Return the model explicitly selected for the new Session, if any.
     pub(crate) fn selected_model_id(&self) -> Option<&str> {
         self.selected_model_id.as_deref()

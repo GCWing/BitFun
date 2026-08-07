@@ -47,8 +47,14 @@ export class GeneralChatRepository {
       return cached.slice();
     }
     const stored = await this.localStore.loadMessages(sessionId);
-    this.messagesBySession.set(sessionId, stored);
-    return stored.slice();
+    const normalized = stored.map((message: ChatMessage) => GeneralChatRepository.persistableMessage(message));
+    this.messagesBySession.set(sessionId, normalized);
+    if (normalized.some((message: ChatMessage, index: number) => {
+      return message.detail !== stored[index].detail;
+    })) {
+      await this.localStore.replaceMessages(sessionId, normalized);
+    }
+    return normalized.slice();
   }
 
   async sendMessage(
@@ -118,9 +124,10 @@ export class GeneralChatRepository {
   }
 
   async recordAssistantMessage(sessionId: string, message: ChatMessage): Promise<void> {
+    const persistedMessage = GeneralChatRepository.persistableMessage(message);
     const messages = (await this.messages(sessionId))
-      .filter((item: ChatMessage) => item.id !== message.id)
-      .concat([message]);
+      .filter((item: ChatMessage) => item.id !== persistedMessage.id)
+      .concat([persistedMessage]);
     this.messagesBySession.set(sessionId, messages);
     await this.localStore.replaceMessages(sessionId, messages);
     await this.bumpSession(sessionId, messages.length);
@@ -322,6 +329,27 @@ export class GeneralChatRepository {
       renderVersion: message.renderVersion,
       turnId: message.turnId,
       detail: message.detail,
+      timestamp: message.timestamp,
+      thinking: message.thinking,
+      tools: message.tools,
+      items: message.items,
+      images: message.images
+    };
+  }
+
+  private static persistableMessage(message: ChatMessage): ChatMessage {
+    if (message.role !== 'assistant' || (message.status || '').toLowerCase() !== 'failed' ||
+      (message.detail || '').length === 0) {
+      return message;
+    }
+    return {
+      id: message.id,
+      role: message.role,
+      text: message.text,
+      status: message.status,
+      renderVersion: message.renderVersion,
+      turnId: message.turnId,
+      detail: '',
       timestamp: message.timestamp,
       thinking: message.thinking,
       tools: message.tools,

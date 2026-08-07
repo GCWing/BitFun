@@ -544,6 +544,8 @@ pub(crate) struct ChatMode {
     restore_session_id: Option<String>,
     /// If set, send this prompt automatically when the session starts
     initial_prompt: Option<crate::ui::composer::ComposerDraft>,
+    /// If set, override the session model after create/restore
+    model_id: Option<String>,
     /// Pending MCP operation — set in key handler, executed after one render frame
     pending_mcp_op: Option<PendingMcpOp>,
     /// Running MCP tasks (non-blocking, polled in main loop)
@@ -640,6 +642,7 @@ impl ChatMode {
             auto_approve_ask_override: None,
             restore_session_id: None,
             initial_prompt: None,
+            model_id: None,
             pending_mcp_op: None,
             pending_mcp_tasks: Vec::new(),
             pending_plugin_op: None,
@@ -691,6 +694,12 @@ impl ChatMode {
         prompt: crate::ui::composer::ComposerDraft,
     ) -> Self {
         self.initial_prompt = Some(prompt);
+        self
+    }
+
+    /// Set a model ID to override the session model after create/restore
+    pub(crate) fn with_model(mut self, model_id: String) -> Self {
+        self.model_id = Some(model_id);
         self
     }
 

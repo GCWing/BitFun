@@ -99,6 +99,8 @@ export class ConversationViewState {
     state.hasMoreMessages = general.hasMoreMessages;
     state.timelineItems = general.timelineItems;
     state.timelineRevision = general.timelineRevision;
+    state.modelCatalog = toConversationUiModelCatalog(general.modelCatalog);
+    state.selectedModelId = general.selectedModelId;
     state.isSessionPinned = general.activeSession.sessionId.length > 0 &&
       general.pinnedSessionId() === general.activeSession.sessionId;
     state.selectedImages = general.selectedImages.map((image) => toConversationUiSelectedImage(image));

@@ -108,6 +108,22 @@ struct Cli {
     /// Automation, desktop, and remote modes remain unchanged.
     #[arg(long, verbatim_doc_comment)]
     shared: bool,
+
+    /// Continue the most recent session (skip startup page)
+    #[arg(long = "continue", conflicts_with = "session")]
+    continue_last: bool,
+
+    /// Open a specific session by ID (or "last" for the most recent)
+    #[arg(long, conflicts_with = "continue_last")]
+    session: Option<String>,
+
+    /// Specify the model ID for this session
+    #[arg(long)]
+    model: Option<String>,
+
+    /// Specify the agent type for this session
+    #[arg(long)]
+    agent: Option<String>,
 }
 
 fn shared_tui_requested(shared: bool, command: &Option<Commands>) -> Result<bool> {
@@ -878,6 +894,9 @@ async fn run_interactive(
     default_agent: String,
     _workspace_str: String,
     shared: bool,
+    agent_override: Option<String>,
+    model_id: Option<String>,
+    session_override: Option<String>,
 ) -> Result<()> {
     use ui::startup::{StartupPage, StartupResult};
 
@@ -988,14 +1007,48 @@ async fn run_interactive(
         account_sync::start_settings_sync_loop();
     }
 
+    // Resolve agent override: validate against the agent registry AFTER core services init
+    let effective_agent = if let Some(ref override_val) = agent_override {
+        match resolve_agent_override(override_val).await {
+            Ok(valid_id) => valid_id,
+            Err(warning) => {
+                eprintln!("{warning}");
+                default_agent.clone()
+            }
+        }
+    } else {
+        default_agent.clone()
+    };
+
+    // If --continue or --session was given, skip the startup page and go directly
+    // to chat with the resolved session.
+    if let Some(ref session_spec) = session_override {
+        let restore_session_id = resolve_startup_session_override(&agent, session_spec).await?;
+
+        let mut chat_mode = ChatMode::new(config, effective_agent, workspace, agent, compatibility)
+            .with_restore_session(restore_session_id);
+        if let Some(mid) = model_id {
+            chat_mode = chat_mode.with_model(mid);
+        }
+        let chat_result = chat_mode.run(Some(terminal));
+
+        if !shared {
+            shutdown_mcp_servers().await;
+        }
+        let _exit_reason = chat_result?;
+        println!("Goodbye!");
+        return Ok(());
+    }
+
     // 4. Show startup page (with full command support)
     let mut startup_page = StartupPage::new(
         config,
         Arc::clone(&agent),
         compatibility.clone(),
-        default_agent,
+        effective_agent,
         workspace.clone(),
     );
+    startup_page.set_model_override(model_id.clone());
     let startup_result = startup_page.run(&mut terminal)?;
 
     if let StartupResult::Exit = startup_result {
@@ -1032,6 +1085,9 @@ async fn run_interactive(
     if let Some(prompt) = initial_prompt {
         chat_mode = chat_mode.with_initial_prompt(prompt);
     }
+    if let Some(mid) = model_id {
+        chat_mode = chat_mode.with_model(mid);
+    }
     let chat_result = chat_mode.run(Some(terminal));
 
     // 6. Cleanup, including fatal event-stream exits.
@@ -1042,6 +1098,40 @@ async fn run_interactive(
     println!("Goodbye!");
 
     Ok(())
+}
+
+/// Resolve a `--session` / `--continue` override to a concrete session ID.
+/// "last" (or empty for --continue) resolves to the most recent session.
+async fn resolve_startup_session_override(
+    agent: &Arc<TuiAgentClient>,
+    session_spec: &str,
+) -> Result<String> {
+    if session_spec == "last" || session_spec.is_empty() {
+        let sessions = agent.list_sessions().await?;
+        return sessions
+            .first()
+            .map(|s| s.session_id.clone())
+            .ok_or_else(|| anyhow!("No history sessions for current project"));
+    }
+    bitfun_agent_runtime::session_control::validate_session_id(session_spec)
+        .map_err(anyhow::Error::msg)?;
+    Ok(session_spec.to_string())
+}
+
+/// Validate an agent override against the agent registry.
+/// Returns the valid agent ID, or an error with a warning message.
+async fn resolve_agent_override(agent_override: &str) -> std::result::Result<String, String> {
+    let registry = bitfun_core::agentic::get_agent_registry();
+    let modes = registry.get_modes_info().await;
+    if modes.iter().any(|m| m.id == agent_override) {
+        Ok(agent_override.to_string())
+    } else {
+        let available: Vec<&str> = modes.iter().map(|m| m.id.as_str()).collect();
+        Err(format!(
+            "Warning: Agent '{agent_override}' not found. Available: {}. Using default.",
+            available.join(", ")
+        ))
+    }
 }
 
 // ======================== Main ========================
@@ -1150,7 +1240,16 @@ async fn run_cli() -> Result<()> {
     match cli.command {
         Some(Commands::Chat { agent, .. }) => {
             // Interactive mode with startup page, scoped to the current directory.
-            run_interactive(config, agent, ".".to_string(), use_shared_runtime).await?;
+            run_interactive(
+                config,
+                agent,
+                ".".to_string(),
+                use_shared_runtime,
+                cli.agent.clone(),
+                cli.model.clone(),
+                None,
+            )
+            .await?;
         }
 
         Some(Commands::SharedRuntime {
@@ -1411,7 +1510,24 @@ async fn run_cli() -> Result<()> {
             let workspace_str = ".".to_string();
 
             let default_agent = config.behavior.default_agent.clone();
-            run_interactive(config, default_agent, workspace_str, use_shared_runtime).await?;
+
+            // Resolve --continue / --session into a session override spec.
+            let session_override = if cli.continue_last {
+                Some("last".to_string())
+            } else {
+                cli.session.clone()
+            };
+
+            run_interactive(
+                config,
+                default_agent,
+                workspace_str,
+                use_shared_runtime,
+                cli.agent.clone(),
+                cli.model.clone(),
+                session_override,
+            )
+            .await?;
         }
     }
 

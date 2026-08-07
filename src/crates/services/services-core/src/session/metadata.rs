@@ -71,6 +71,7 @@ pub fn build_session_metadata(facts: SessionMetadataBuildFacts<'_>) -> SessionMe
             .or_else(|| existing.and_then(|value| value.snapshot_session_id.clone())),
         tags: existing.map(|value| value.tags.clone()).unwrap_or_default(),
         custom_metadata: existing.and_then(|value| value.custom_metadata.clone()),
+        current_context_usage: existing.and_then(|value| value.current_context_usage.clone()),
         relationship: build_session_relationship(facts.session_kind, existing),
         todos: existing.and_then(|value| value.todos.clone()),
         review_action_state: existing.and_then(|value| value.review_action_state.clone()),
@@ -227,6 +228,13 @@ pub fn refresh_session_metadata_from_turns(
     metadata.message_count = turns.iter().map(estimate_turn_message_count).sum();
     metadata.tool_call_count = turns.iter().map(DialogTurnData::count_tool_calls).sum();
     metadata.last_finished_at = turns.iter().filter_map(dialog_turn_finished_at).max();
+    if metadata
+        .current_context_usage
+        .as_ref()
+        .is_some_and(|usage| !turns.iter().any(|turn| turn.turn_id == usage.turn_id))
+    {
+        metadata.current_context_usage = None;
+    }
     metadata.last_active_at = last_active_at;
     fill_workspace_path_if_missing(metadata, workspace_path);
 }

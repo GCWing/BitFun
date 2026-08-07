@@ -3,8 +3,9 @@
 use bitfun_services_core::session::{
     build_session_index_snapshot, refresh_session_metadata_from_turns, remove_session_index_entry,
     try_refresh_session_metadata_for_saved_turn, upsert_session_index_entry, DialogTurnData,
-    DialogTurnKind, ModelRoundData, SessionKind, SessionMetadata, StoredSessionIndexFile,
-    TextItemData, ToolCallData, ToolItemData, TurnStatus, UserMessageData,
+    DialogTurnKind, ModelRoundData, SessionContextUsage, SessionContextUsageSource, SessionKind,
+    SessionMetadata, StoredSessionIndexFile, TextItemData, ToolCallData, ToolItemData, TurnStatus,
+    UserMessageData,
 };
 
 fn metadata(session_id: &str) -> SessionMetadata {
@@ -170,6 +171,73 @@ fn full_refresh_recomputes_metadata_counters_from_turns() {
         metadata.workspace_path.as_deref(),
         Some("D:/workspace/project")
     );
+}
+
+#[test]
+fn session_context_usage_round_trips_as_top_level_metadata() {
+    let mut metadata = metadata("session-1");
+    metadata.current_context_usage = Some(SessionContextUsage {
+        turn_id: "turn-3".to_string(),
+        input_tokens: 42_000,
+        output_tokens: Some(1_500),
+        total_tokens: 43_500,
+        timestamp: 123,
+        source: SessionContextUsageSource::ModelRequest,
+    });
+
+    let value = serde_json::to_value(&metadata).expect("serialize metadata");
+    assert_eq!(value["currentContextUsage"]["turnId"], "turn-3");
+    assert_eq!(value["currentContextUsage"]["source"], "model_request");
+
+    let restored: SessionMetadata = serde_json::from_value(value).expect("deserialize metadata");
+    assert_eq!(
+        restored.current_context_usage,
+        metadata.current_context_usage
+    );
+}
+
+#[test]
+fn full_refresh_drops_context_usage_for_a_removed_turn() {
+    let mut metadata = metadata("session-1");
+    metadata.current_context_usage = Some(SessionContextUsage {
+        turn_id: "turn-1".to_string(),
+        input_tokens: 42_000,
+        output_tokens: Some(1_500),
+        total_tokens: 43_500,
+        timestamp: 123,
+        source: SessionContextUsageSource::ModelRequest,
+    });
+
+    refresh_session_metadata_from_turns(
+        &mut metadata,
+        "D:/workspace/project",
+        &[turn("session-1", 0, 1, 0)],
+        42,
+    );
+
+    assert!(metadata.current_context_usage.is_none());
+}
+
+#[test]
+fn full_refresh_keeps_context_usage_for_a_surviving_turn() {
+    let mut metadata = metadata("session-1");
+    metadata.current_context_usage = Some(SessionContextUsage {
+        turn_id: "turn-0".to_string(),
+        input_tokens: 42_000,
+        output_tokens: Some(1_500),
+        total_tokens: 43_500,
+        timestamp: 123,
+        source: SessionContextUsageSource::ModelRequest,
+    });
+
+    refresh_session_metadata_from_turns(
+        &mut metadata,
+        "D:/workspace/project",
+        &[turn("session-1", 0, 1, 0)],
+        42,
+    );
+
+    assert!(metadata.current_context_usage.is_some());
 }
 
 #[test]

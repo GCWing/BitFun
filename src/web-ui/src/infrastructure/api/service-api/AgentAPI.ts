@@ -5,6 +5,7 @@ import { createTauriCommandError } from '../errors/TauriCommandError';
 import type {
   DialogTurnData,
   ModelRoundAttemptDiagnostic,
+  SessionContextUsage,
   SessionRelationship,
   SessionTurnCatalog,
 } from '@/shared/types/session-history';
@@ -241,6 +242,7 @@ export interface SessionViewRestoreTiming {
 export interface RestoreSessionViewResponse {
   session: SessionInfo;
   turns: DialogTurnData[];
+  currentContextUsage?: SessionContextUsage | null;
   turnCatalog?: SessionTurnCatalog;
   contextRestoreState: 'ready' | 'pending';
   isPartial?: boolean;

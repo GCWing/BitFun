@@ -1,5 +1,7 @@
 pub mod backend;
 pub mod delete_path;
+#[cfg(feature = "document-read")]
+pub mod document;
 pub mod edit_file;
 pub mod list_dir;
 pub mod read_file;

@@ -1,18 +1,16 @@
 import { ConversationUiImage, ConversationUiMessage, ConversationUiMessageItem, ConversationUiQuestionAnswer, ConversationUiToolStatus } from './ConversationUiModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { ACCENT, CARD, INK, LINE, MUTED, RED, SOFT } from './Theme';
+import { ACCENT, CARD, INK, LINE, MUTED, PRIMARY_ACTION_TEXT, RED, SOFT } from './Theme';
 import { FileReferenceCard } from './FileReferenceCard';
 import { MarkdownContent } from './MarkdownContent';
-import { MarkdownParser, ParsedMarkdownBlock, ParsedMarkdownInline, ParsedMarkdownListItem } from '../../services/MarkdownParser';
 import { StreamingMarkdownContent } from './StreamingMarkdownContent';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolStatusList } from './ToolStatusList';
-
-interface FileReference {
-  id: string;
-  path: string;
-  label: string;
-}
+import { FileTargetResolver } from '../../services/FileTargetResolver';
+import {
+  MessageFileReference,
+  MessageFileReferenceProjectionCache
+} from '../../services/MessageFileReferenceProjector';
 
 interface SubagentTaskInput {
   description?: string;
@@ -48,10 +46,13 @@ export struct ChatMessageBubble {
   };
   @Param isStreaming: boolean = false;
   @Param isFinalizing: boolean = false;
+  @Param showRetryAction: boolean = false;
   @Param isBusy: boolean = false;
   @Param downloadingFilePath: string = '';
   @Param downloadedFilePath: string = '';
   @Param fileDownloadStatus: string = '';
+  @Param activeFilePreviewPath: string = '';
+  @Param activeFilePreviewLoading: boolean = false;
   @Event onApproveTool: (toolId: string, updatedInput?: Object) => void =
     (_toolId: string, _updatedInput?: Object) => {};
   @Event onRejectTool: (toolId: string) => void = (_toolId: string) => {};
@@ -60,10 +61,13 @@ export struct ChatMessageBubble {
     (_toolId: string, _answers: ConversationUiQuestionAnswer) => {};
   @Event onCopyMessage: (text: string) => void = (_text: string) => {};
   @Event onRetryMessage: (text: string) => void = (_text: string) => {};
+  @Event onOpenFilePreview: (path: string, label: string) => void = (_path: string, _label: string) => {};
   @Event onDownloadFile: (path: string) => void = (_path: string) => {};
   @Local expandedActivityPath: string = '';
   @Local typingPhase: number = 0;
   private typingTimerId: number = 0;
+  private readonly fileReferenceCache: MessageFileReferenceProjectionCache =
+    new MessageFileReferenceProjectionCache();
 
   aboutToAppear(): void {
     if (!this.shouldShowTypingDots(this.item) && !this.hasRunningSubagentTask(this.item)) {
@@ -93,27 +97,32 @@ export struct ChatMessageBubble {
   UserBubble() {
     Row() {
       Blank()
-      Column({ space: 8 }) {
-        if (this.visibleMessageText(this.item).length > 0) {
-          Text(this.visibleMessageText(this.item))
-            .fontSize(14)
-            .lineHeight(20)
-            .fontColor(INK)
-            .padding({ left: 16, right: 16, top: 10, bottom: 10 })
-            .backgroundColor(SOFT)
-            .borderRadius(21)
+      Column({ space: 6 }) {
+        if (this.visibleMessageText(this.item).length > 0 || (this.item.images && this.item.images.length > 0)) {
+          Column({ space: 8 }) {
+            if (this.item.images && this.item.images.length > 0) {
+              this.UserMessageImages(this.item.images)
+            }
+            if (this.visibleMessageText(this.item).length > 0) {
+              Text(this.visibleMessageText(this.item))
+                .fontSize(14)
+                .lineHeight(20)
+                .fontColor(INK)
+            }
+          }
+          .padding({ left: 10, right: 10, top: 10, bottom: 10 })
+          .backgroundColor(SOFT)
+          .borderRadius(18)
+          .alignItems(HorizontalAlign.Start)
         }
-        if (this.item.images && this.item.images.length > 0) {
-          this.MessageImages(this.item.images)
-        }
-        if (this.item.status === 'failed') {
+        if (this.item.status === 'failed' && this.showRetryAction) {
           Row({ space: 8 }) {
             Text(RemoteI18n.t('chat.sendFailed'))
               .fontSize(12)
               .fontColor(RED)
             Text(RemoteI18n.t('common.retry'))
               .fontSize(12)
-              .fontColor(CARD)
+              .fontColor(PRIMARY_ACTION_TEXT)
               .height(28)
               .padding({ left: 10, right: 10 })
               .backgroundColor(ACCENT)
@@ -124,7 +133,7 @@ export struct ChatMessageBubble {
           }
         }
       }
-      .width('70%')
+      .constraintSize({ maxWidth: '70%' })
       .alignItems(HorizontalAlign.End)
     }
     .width('100%')
@@ -143,14 +152,15 @@ export struct ChatMessageBubble {
         if (this.item.images && this.item.images.length > 0) {
           this.MessageImages(this.item.images)
         }
-        if (this.item.status === 'failed' && (this.item.detail || '').trim().length > 0) {
+        if (this.item.status === 'failed' && this.showRetryAction &&
+          (this.item.detail || '').trim().length > 0) {
           Row({ space: 8 }) {
             Text(RemoteI18n.t('generalChat.replyInterrupted'))
               .fontSize(12)
               .fontColor(RED)
             Text(RemoteI18n.t('common.retry'))
               .fontSize(12)
-              .fontColor(CARD)
+              .fontColor(PRIMARY_ACTION_TEXT)
               .height(28)
               .padding({ left: 10, right: 10 })
               .backgroundColor(ACCENT)
@@ -215,12 +225,12 @@ export struct ChatMessageBubble {
       Text('')
         .width(6)
         .height(6)
-        .backgroundColor(CARD)
+        .backgroundColor(PRIMARY_ACTION_TEXT)
         .borderRadius(3)
       Text('')
         .width(6)
         .height(6)
-        .backgroundColor(CARD)
+        .backgroundColor(PRIMARY_ACTION_TEXT)
         .borderRadius(3)
     }
     .width(32)
@@ -261,13 +271,15 @@ export struct ChatMessageBubble {
         })
       }
     } else if (group.items.length > 0) {
-      this.StructuredItem(
-        group.items[0],
-        group.path,
-        group.itemStatuses[0] || '',
-        group.itemStreaming[0] || false,
-        group.itemChildActiveScopes[0] || false
-      )
+      if (!omitActiveThinking || !this.isThinkingEntry(group.items[0])) {
+        this.StructuredItem(
+          group.items[0],
+          group.path,
+          group.itemStatuses[0] || '',
+          group.itemStreaming[0] || false,
+          group.itemChildActiveScopes[0] || false
+        )
+      }
     }
   }
 
@@ -356,7 +368,7 @@ export struct ChatMessageBubble {
     }
     .width('100%')
     .padding({ left: 10, right: 10, top: 8, bottom: 8 })
-    .backgroundColor('#F7F7F4')
+    .backgroundColor(SOFT)
     .borderRadius(12)
     .border({ width: 1, color: LINE })
   }
@@ -403,6 +415,9 @@ export struct ChatMessageBubble {
       },
       onAnswerQuestion: (toolId: string, answers: ConversationUiQuestionAnswer) => {
         this.onAnswerQuestion(toolId, answers);
+      },
+      onOpenFilePreview: (path: string, label: string) => {
+        this.onOpenFilePreview(path, label);
       }
     })
   }
@@ -457,6 +472,22 @@ export struct ChatMessageBubble {
   }
 
   @Builder
+  UserMessageImages(images: ConversationUiImage[]) {
+    Flex({ direction: FlexDirection.Row, wrap: FlexWrap.Wrap }) {
+      ForEach(images, (image: ConversationUiImage, index: number) => {
+        Image(image.data_url)
+          .width(112)
+          .height(112)
+          .objectFit(ImageFit.Cover)
+          .borderRadius(12)
+          .border({ width: 1, color: LINE })
+          .margin({ right: index % 2 === 0 && images.length > 1 ? 8 : 0, bottom: index < images.length - 2 ? 8 : 0 })
+      }, (image: ConversationUiImage, index: number) => `${image.name}-${index}`)
+    }
+    .width(images.length > 1 ? 232 : 112)
+  }
+
+  @Builder
   MessageText(text: string, active: boolean = false, streamKey: string = '') {
     if (active) {
       StreamingMarkdownContent({
@@ -465,6 +496,9 @@ export struct ChatMessageBubble {
         streamKey,
         onCopyText: (body: string) => {
           this.onCopyMessage(body);
+        },
+        onOpenLink: (reference: string, label: string) => {
+          this.onOpenFilePreview(reference, label);
         }
       })
     } else {
@@ -472,6 +506,9 @@ export struct ChatMessageBubble {
         text,
         onCopyText: (body: string) => {
           this.onCopyMessage(body);
+        },
+        onOpenLink: (reference: string, label: string) => {
+          this.onOpenFilePreview(reference, label);
         }
       })
     }
@@ -480,18 +517,25 @@ export struct ChatMessageBubble {
   @Builder
   FileCards(text: string) {
     Column({ space: 8 }) {
-      ForEach(this.fileReferences(text), (file: FileReference) => {
+      ForEach(this.fileReferences(text), (file: MessageFileReference) => {
         FileReferenceCard({
           path: file.path,
           label: file.label,
           status: this.fileStatus(file.path),
+          previewLabel: RemoteI18n.t('common.open'),
           buttonLabel: this.fileButtonLabel(file.path),
           disabled: this.downloadingFilePath === file.path,
+          selected: FileTargetResolver.matchesRemotePath(file.path, this.activeFilePreviewPath),
+          previewLoading: this.activeFilePreviewLoading &&
+            FileTargetResolver.matchesRemotePath(file.path, this.activeFilePreviewPath),
+          onPreview: (path: string, label: string) => {
+            this.onOpenFilePreview(path, label);
+          },
           onDownload: (path: string) => {
             this.onDownloadFile(path);
           }
         })
-      }, (file: FileReference) => file.id)
+      }, (file: MessageFileReference) => file.id)
     }
     .width('100%')
   }
@@ -532,7 +576,6 @@ export struct ChatMessageBubble {
 
   private shouldPinThinkingToBottom(item: ConversationUiMessage): boolean {
     return this.isStreamingAssistant() &&
-      !this.hasVisibleAssistantOutput(item) &&
       this.currentThinkingText(item).length > 0;
   }
 
@@ -1174,165 +1217,8 @@ export struct ChatMessageBubble {
       normalized === 'ask_user_question';
   }
 
-  private fileReferences(text: string): FileReference[] {
-    const matches: FileReference[] = [];
-    const seen = new Set<string>();
-    MarkdownParser.parse(text).forEach((block: ParsedMarkdownBlock) => {
-      this.collectInlineFileReferences(block.inlines, matches, seen);
-      block.items.forEach((item: ParsedMarkdownListItem) => {
-        this.collectInlineFileReferences(item.inlines, matches, seen);
-      });
-    });
-    return matches.slice(0, 4);
-  }
-
-  private collectInlineFileReferences(
-    inlines: ParsedMarkdownInline[],
-    matches: FileReference[],
-    seen: Set<string>
-  ): void {
-    inlines.forEach((inline: ParsedMarkdownInline) => {
-      if (inline.type === 'link') {
-        const linkTarget = this.downloadableLinkTarget(inline.url);
-        if (linkTarget.length > 0) {
-          this.addFileReference(linkTarget, matches, seen);
-        }
-        return;
-      }
-      if (inline.type !== 'code') {
-        this.collectRawComputerLinks(inline.text, matches, seen);
-      }
-    });
-  }
-
-  private collectRawComputerLinks(text: string, matches: FileReference[], seen: Set<string>): void {
-    const found = text.match(/computer:\/\/[^\s)\]}>"']+/g) || [];
-    found.forEach((raw: string) => {
-      this.addFileReference(this.cleanFileLink(raw), matches, seen);
-    });
-  }
-
-  private addFileReference(path: string, matches: FileReference[], seen: Set<string>): void {
-    const clean = this.cleanFileLink(path);
-    if (clean.length === 0 || seen.has(clean)) {
-      return;
-    }
-    seen.add(clean);
-    matches.push({
-      id: `file-${matches.length}-${clean}`,
-      path: clean,
-      label: this.fileLabel(clean)
-    });
-  }
-
-  private downloadableLinkTarget(href: string): string {
-    const value = this.cleanFileLink(href);
-    if (value.indexOf('computer://') === 0) {
-      return value;
-    }
-    return this.localDownloadablePath(value);
-  }
-
-  private localDownloadablePath(href: string): string {
-    if (href.length === 0 || href === '/') {
-      return '';
-    }
-    if (href.indexOf('://') >= 0 && href.indexOf('file://') !== 0) {
-      return '';
-    }
-    if (href.indexOf('#') === 0 || href.indexOf('//') === 0) {
-      return '';
-    }
-
-    const filePath = this.normalizeFileLikeHref(href);
-    if (filePath.length === 0) {
-      return '';
-    }
-
-    if (filePath.indexOf('/') === 0) {
-      const segments = filePath.split('/').filter((segment: string) => segment.length > 0);
-      if (segments.length < 2) {
-        return '';
-      }
-    }
-
-    const fileName = this.fileLabel(filePath);
-    const dotIndex = fileName.lastIndexOf('.');
-    if (dotIndex <= 0) {
-      return '';
-    }
-
-    const extension = fileName.slice(dotIndex + 1).toLowerCase();
-    if (extension.length === 0) {
-      return '';
-    }
-
-    if (filePath.indexOf('/') === 0 || this.isWindowsAbsolutePath(filePath)) {
-      return this.isCodeFileExtension(extension) ? '' : filePath;
-    }
-    return this.isDownloadableFileExtension(extension) ? filePath : '';
-  }
-
-  private normalizeFileLikeHref(rawHref: string): string {
-    let filePath = rawHref.trim();
-    if (filePath.indexOf('file://') === 0) {
-      filePath = filePath.slice('file://'.length);
-    } else if (filePath.indexOf('file:') === 0) {
-      filePath = filePath.slice('file:'.length);
-    }
-
-    const workspacePlaceholder = '{{workspaceFolder}}';
-    if (filePath.indexOf(workspacePlaceholder) === 0) {
-      filePath = filePath.slice(workspacePlaceholder.length);
-      if (filePath.indexOf('/') === 0) {
-        filePath = filePath.slice(1);
-      }
-    }
-
-    if (filePath.length >= 4 && filePath.charAt(0) === '/' && filePath.charAt(2) === ':' &&
-      (filePath.charAt(3) === '/' || filePath.charAt(3) === '\\')) {
-      filePath = filePath.slice(1);
-    }
-
-    try {
-      return decodeURIComponent(filePath);
-    } catch (_err) {
-      return filePath;
-    }
-  }
-
-  private cleanFileLink(value: string): string {
-    let clean = value.trim();
-    while (clean.length > 0) {
-      const last = clean.charAt(clean.length - 1);
-      if (last === ',' || last === '.' || last === ';' || last === ':' || last === ')' ||
-        last === ']' || last === '}' || last === '>' || last === '，' || last === '。' ||
-        last === '；' || last === '：') {
-        clean = clean.slice(0, clean.length - 1);
-      } else {
-        break;
-      }
-    }
-    return clean;
-  }
-
-  private isWindowsAbsolutePath(path: string): boolean {
-    return path.length >= 3 && path.charAt(1) === ':' &&
-      (path.charAt(2) === '/' || path.charAt(2) === '\\');
-  }
-
-  private isCodeFileExtension(extension: string): boolean {
-    return '|js|jsx|ts|tsx|mjs|cjs|mts|cts|py|pyw|pyi|rs|go|java|kt|kts|scala|groovy|c|cpp|cc|cxx|h|hpp|hxx|hh|cs|rb|php|swift|vue|svelte|css|scss|less|sass|json|jsonc|yaml|yml|toml|xml|md|mdx|rst|txt|sh|bash|zsh|fish|ps1|bat|cmd|sql|graphql|gql|proto|lock|env|ini|cfg|conf|cj|ets|editorconfig|gitignore|log|'.indexOf(`|${extension}|`) >= 0;
-  }
-
-  private isDownloadableFileExtension(extension: string): boolean {
-    return '|pdf|doc|docx|xls|xlsx|ppt|pptx|odt|ods|odp|rtf|pages|numbers|key|png|jpg|jpeg|gif|bmp|svg|webp|ico|tiff|tif|zip|tar|gz|bz2|7z|rar|dmg|iso|xz|mp3|wav|ogg|flac|aac|m4a|wma|mp4|avi|mkv|mov|webm|wmv|flv|csv|tsv|sqlite|db|parquet|epub|mobi|apk|ipa|exe|msi|deb|rpm|ttf|otf|woff|woff2|'.indexOf(`|${extension}|`) >= 0;
-  }
-
-  private fileLabel(path: string): string {
-    const normalized = path.replace(/^computer:\/\//, '').replace(/^file:\/\//, '').replace(/\\/g, '/');
-    const parts = normalized.split('/');
-    return parts[parts.length - 1] || normalized || 'file';
+  private fileReferences(text: string): MessageFileReference[] {
+    return this.fileReferenceCache.referencesFor(text);
   }
 
   private fileStatus(path: string): string {

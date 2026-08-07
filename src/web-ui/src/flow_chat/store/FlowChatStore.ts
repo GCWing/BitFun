@@ -39,6 +39,7 @@ import { i18nService } from '@/infrastructure/i18n/core/I18nService';
 import type {
   DialogTurnData,
   LocalCommandMetadata,
+  SessionContextUsage,
   SessionKind,
   SessionTurnCatalog,
 } from '@/shared/types/session-history';
@@ -56,6 +57,8 @@ import {
 } from '../utils/sessionMetadata';
 import { sessionProjectWorkspacePath } from '../utils/sessionWorkspace';
 import type { SessionTitleDescriptor } from '../utils/sessionTitle';
+import { deriveContextUsageFromTurns } from '../utils/tokenUsageDisplay';
+import { isAcpAgentType } from '../utils/acpSession';
 import {
   deriveSessionTitleState,
   deriveSessionTitleStateFromMetadata,
@@ -104,6 +107,114 @@ function firstNonEmptyString(...values: unknown[]): string | undefined {
     }
   }
   return undefined;
+}
+
+function persistedCurrentContextUsageValue(
+  metadata: { currentContextUsage?: SessionContextUsage },
+): unknown {
+  return metadata.currentContextUsage;
+}
+
+function deriveRestoredCurrentTokenUsage(value: unknown): TokenUsage | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const inputTokens = record.inputTokens;
+  if (typeof inputTokens !== 'number' || !Number.isFinite(inputTokens) || inputTokens <= 0) {
+    return undefined;
+  }
+  const totalTokens = record.totalTokens;
+  const turnId = typeof record.turnId === 'string' && record.turnId.trim()
+    ? record.turnId.trim()
+    : undefined;
+  const source = record.source === 'model_request' || record.source === 'context_compression'
+    ? record.source
+    : undefined;
+  const outputTokens = record.outputTokens;
+  const timestamp = record.timestamp;
+  if (
+    !turnId
+    || !source
+    || typeof totalTokens !== 'number'
+    || !Number.isFinite(totalTokens)
+    || totalTokens < 0
+    || (
+      outputTokens !== undefined
+      && (
+        typeof outputTokens !== 'number'
+        || !Number.isFinite(outputTokens)
+        || outputTokens < 0
+      )
+    )
+    || typeof timestamp !== 'number'
+    || !Number.isFinite(timestamp)
+  ) {
+    return undefined;
+  }
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens,
+    timestamp,
+    turnId,
+    source,
+  };
+}
+
+function reconcileHydratedCurrentTokenUsage(
+  currentTokenUsage: TokenUsage | undefined,
+  dialogTurns: DialogTurn[],
+  restoredAgentType: string | undefined,
+  sourceVisibilityTurns: DialogTurn[] = dialogTurns,
+): TokenUsage | undefined {
+  if (isAcpAgentType(restoredAgentType)) {
+    return undefined;
+  }
+
+  const sourceTurnId = currentTokenUsage?.turnId;
+  const retainedUsage = sourceTurnId
+    && !sourceVisibilityTurns.some(turn => turn.id === sourceTurnId)
+    ? undefined
+    : currentTokenUsage;
+
+  return retainedUsage ?? deriveContextUsageFromTurns(dialogTurns);
+}
+
+function reconcileRestoreViewCurrentTokenUsage(
+  currentTokenUsage: TokenUsage | undefined,
+  authoritativeUsage: SessionContextUsage | null | undefined,
+  dialogTurns: DialogTurn[],
+  restoredAgentType: string | undefined,
+  sourceVisibilityTurns: DialogTurn[] = dialogTurns,
+): TokenUsage | undefined {
+  if (isAcpAgentType(restoredAgentType)) {
+    return undefined;
+  }
+  const candidateUsage = authoritativeUsage === undefined
+    ? currentTokenUsage
+    : authoritativeUsage === null
+      ? undefined
+      : deriveRestoredCurrentTokenUsage(authoritativeUsage);
+  return reconcileHydratedCurrentTokenUsage(
+    candidateUsage,
+    dialogTurns,
+    restoredAgentType,
+    sourceVisibilityTurns,
+  );
+}
+
+function currentTokenUsageAfterSourceRemoval(
+  session: Pick<Session, 'currentTokenUsage' | 'isPartial'>,
+  dialogTurns: DialogTurn[],
+  sourceRemoved: boolean,
+): TokenUsage | undefined {
+  if (!sourceRemoved) {
+    return session.currentTokenUsage;
+  }
+  return session.isPartial === true
+    ? undefined
+    : deriveContextUsageFromTurns(dialogTurns);
 }
 
 function persistedSessionRemoteScope(
@@ -4942,10 +5053,16 @@ export class FlowChatStore {
         && !isProvisionalUsageReportTurn(deletedTurn);
       shiftLaterOrdinals = countedOptimisticTurn;
       const nextCanonicalTurnCount = canonicalSessionTurns({ dialogTurns: updatedDialogTurns }).length;
+      const currentTokenUsage = currentTokenUsageAfterSourceRemoval(
+        session,
+        updatedDialogTurns,
+        session.currentTokenUsage?.turnId === dialogTurnId,
+      );
 
       const updatedSession = {
         ...session,
         dialogTurns: updatedDialogTurns,
+        currentTokenUsage,
         loadedTurnCount: nextCanonicalTurnCount,
         totalTurnCount: countedOptimisticTurn
           ? Math.max(nextCanonicalTurnCount, projectedSessionTurnCount(session) - 1)
@@ -5056,6 +5173,12 @@ export class FlowChatStore {
 
       const clampedIndex = Math.max(0, Math.min(turnIndex, session.dialogTurns.length));
       const updatedDialogTurns = session.dialogTurns.slice(0, clampedIndex);
+      const removedCurrentUsageSource = Boolean(
+        session.currentTokenUsage?.turnId
+        && session.dialogTurns.slice(clampedIndex).some(
+          turn => turn.id === session.currentTokenUsage?.turnId,
+        ),
+      );
       const hasCompleteHistory = session.isPartial !== true;
       const historyView = this.sessionHistoryViews.get(sessionId);
       const currentCatalog = session.turnCatalog?.sessionId === sessionId
@@ -5073,6 +5196,11 @@ export class FlowChatStore {
       const updatedSession = {
         ...session,
         dialogTurns: updatedDialogTurns,
+        currentTokenUsage: currentTokenUsageAfterSourceRemoval(
+          session,
+          updatedDialogTurns,
+          removedCurrentUsageSource,
+        ),
         ...(hasCompleteHistory ? {
           loadedTurnCount: updatedDialogTurns.length,
           totalTurnCount: updatedDialogTurns.length,
@@ -5583,18 +5711,23 @@ export class FlowChatStore {
 
   public updateTokenUsage(
     sessionId: string, 
-    tokenUsage: { inputTokens: number; outputTokens?: number; totalTokens: number },
+    tokenUsage: Pick<
+      TokenUsage,
+      'inputTokens' | 'outputTokens' | 'totalTokens' | 'turnId' | 'source'
+    >,
     dialogTurnId?: string
   ): void {
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
       if (!session) return prev;
 
-      const nextTokenUsage = {
+      const nextTokenUsage: TokenUsage = {
         inputTokens: tokenUsage.inputTokens,
         outputTokens: tokenUsage.outputTokens,
         totalTokens: tokenUsage.totalTokens,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        ...(tokenUsage.turnId ? { turnId: tokenUsage.turnId } : {}),
+        ...(tokenUsage.source ? { source: tokenUsage.source } : {}),
       };
       let dialogTurns = session.dialogTurns;
       if (dialogTurnId) {
@@ -6243,6 +6376,7 @@ export class FlowChatStore {
           remoteConnectionId,
           remoteSshHost,
         );
+        const persistedCurrentContextUsage = persistedCurrentContextUsageValue(metadata);
 
         this.setState(prev => {
           if (surfaceGeneration !== this.surfaceGeneration) {
@@ -6254,6 +6388,9 @@ export class FlowChatStore {
 
           const rawAgentType = metadata.agentType || 'agentic';
           const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'agentic';
+          const restoredCurrentTokenUsage = isAcpAgentType(validatedAgentType)
+            ? undefined
+            : deriveRestoredCurrentTokenUsage(persistedCurrentContextUsage);
 
           if (rawAgentType !== validatedAgentType) {
             log.warn('Invalid agentType, falling back to agentic', { sessionId: metadata.sessionId, rawAgentType, validatedAgentType });
@@ -6284,6 +6421,7 @@ export class FlowChatStore {
             historyState: 'metadata-only',
             todos: (metadata as any).todos || [],
             maxContextTokens,
+            currentTokenUsage: restoredCurrentTokenUsage,
             mode: validatedAgentType,
             lastUserDialogMode: metadata.lastUserDialogAgentType,
             lastSubmittedMode: metadata.lastSubmittedAgentType,
@@ -6621,6 +6759,7 @@ export class FlowChatStore {
             remoteConnectionId,
             remoteSshHost,
           );
+          const persistedCurrentContextUsage = persistedCurrentContextUsageValue(metadata);
 
           this.setState(prev => {
             if (prev.sessions.has(metadata.sessionId)) {
@@ -6629,6 +6768,9 @@ export class FlowChatStore {
 
             const rawAgentType = metadata.agentType || 'agentic';
             const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'agentic';
+            const restoredCurrentTokenUsage = isAcpAgentType(validatedAgentType)
+              ? undefined
+              : deriveRestoredCurrentTokenUsage(persistedCurrentContextUsage);
 
             if (rawAgentType !== validatedAgentType) {
               log.warn('Invalid agentType, falling back to agentic', { sessionId: metadata.sessionId, rawAgentType, validatedAgentType });
@@ -6659,6 +6801,7 @@ export class FlowChatStore {
               historyState: 'metadata-only',
               todos: (metadata as any).todos || [],
               maxContextTokens,
+              currentTokenUsage: restoredCurrentTokenUsage,
               mode: validatedAgentType,
               lastUserDialogMode: metadata.lastUserDialogAgentType,
               lastSubmittedMode: metadata.lastSubmittedAgentType,
@@ -6838,14 +6981,28 @@ export class FlowChatStore {
         }
       }
 
+      mergedTurns.sort(compareDialogTurnOrder);
       const turnCatalog = restored.turnCatalog?.sessionId === sessionId
         ? selectPreferredTurnCatalog(session.turnCatalog, restored.turnCatalog)
         : session.turnCatalog;
-      if (!turnsChanged && turnCatalog === session.turnCatalog) {
+      const restoredAgentType =
+        restored.session.agentType || session.mode || session.config.agentType;
+      const currentTokenUsage = reconcileRestoreViewCurrentTokenUsage(
+        session.currentTokenUsage,
+        restored.currentContextUsage,
+        mergedTurns,
+        restoredAgentType,
+        snapshotTurns,
+      );
+      if (
+        !turnsChanged
+        && turnCatalog === session.turnCatalog
+        && restoredAgentType === session.mode
+        && currentTokenUsage === session.currentTokenUsage
+      ) {
         return prev;
       }
 
-      mergedTurns.sort(compareDialogTurnOrder);
       const newSessions = new Map(prev.sessions);
       newSessions.set(sessionId, {
         ...session,
@@ -6873,11 +7030,12 @@ export class FlowChatStore {
             ? { reasoningPreset: restored.session.reasoningPreset?.trim() || undefined }
             : {}),
         },
-        mode: restored.session.agentType || session.mode,
+        mode: restoredAgentType,
         lastUserDialogMode:
           restored.session.lastUserDialogAgentType || session.lastUserDialogMode,
         lastSubmittedMode:
           restored.session.lastSubmittedAgentType ?? session.lastSubmittedMode,
+        currentTokenUsage,
       });
       applied = true;
 
@@ -7008,6 +7166,7 @@ export class FlowChatStore {
       let restoredTotalTurnCount: number | undefined;
       let restoredTurnCatalog: SessionTurnCatalog | undefined;
       let restoredTiming: SessionViewRestoreTiming | undefined;
+      let restoredCurrentContextUsage: SessionContextUsage | null | undefined;
 
       // Finish or resume relay history import before Core restores its model
       // context. Ordinary local sessions return after one metadata read, while
@@ -7148,6 +7307,7 @@ export class FlowChatStore {
                 ? restored.turnCatalog
                 : undefined;
               restoredTiming = restored.timings;
+              restoredCurrentContextUsage = restored.currentContextUsage;
             } catch (error) {
               if (!isUnsupportedTauriCommandError(error, 'restore_session_view')) {
                 throw error;
@@ -7306,6 +7466,9 @@ export class FlowChatStore {
         const session = prev.sessions.get(sessionId);
         if (!session) return prev;
 
+        const restoredAgentType =
+          restoredSessionInfo?.agentType || session.mode || session.config.agentType;
+
         const updatedSession = {
           ...session,
           dialogTurns,
@@ -7326,10 +7489,16 @@ export class FlowChatStore {
               ? { reasoningPreset: restoredSessionInfo.reasoningPreset?.trim() || undefined }
               : {}),
           },
-          mode: restoredSessionInfo?.agentType || session.mode,
+          mode: restoredAgentType,
           lastUserDialogMode: restoredLastUserDialogMode,
           lastSubmittedMode:
             restoredSessionInfo?.lastSubmittedAgentType ?? session.lastSubmittedMode,
+          currentTokenUsage: reconcileRestoreViewCurrentTokenUsage(
+            session.currentTokenUsage,
+            restoredCurrentContextUsage,
+            dialogTurns,
+            restoredAgentType,
+          ),
         };
         
         const newSessions = new Map(prev.sessions);

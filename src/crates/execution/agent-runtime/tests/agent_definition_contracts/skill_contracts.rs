@@ -280,7 +280,10 @@ fn project_skill(dir_name: &str) -> SkillInfo {
 
 #[test]
 fn builtin_skill_catalog_and_mode_policy_are_runtime_owned() {
-    assert_eq!(builtin_skill_group_key("docx"), Some("office"));
+    assert_eq!(builtin_skill_group_key("ppt-design"), Some("office"));
+    for removed in ["docx", "pdf", "pptx", "xlsx"] {
+        assert_eq!(builtin_skill_group_key(removed), None);
+    }
     assert_eq!(builtin_skill_group_key("create-bitfun-skin"), Some("meta"));
     assert_eq!(builtin_skill_group_key("find-skills"), Some("meta"));
     assert_eq!(builtin_skill_group_key("miniapp-dev"), Some("miniapp"));
@@ -435,15 +438,18 @@ fn user_config_skill_root_resolution_matches_platform_contract() {
 
 #[test]
 fn skill_resolution_applies_builtin_and_user_override_rules() {
-    let pdf = builtin_skill("pdf");
+    let presentation = builtin_skill("ppt-design");
     let custom = custom_user_skill("my-custom-skill");
     let disabled_project = HashSet::new();
 
-    assert!(!resolve_skill_default_enabled_for_mode(&pdf, "agentic"));
+    assert!(!resolve_skill_default_enabled_for_mode(
+        &presentation,
+        "agentic"
+    ));
     assert!(resolve_skill_default_enabled_for_mode(&custom, "agentic"));
 
     let default_state = resolve_skill_state_for_mode(
-        &pdf,
+        &presentation,
         "agentic",
         &UserModeSkillOverrides::default(),
         &disabled_project,
@@ -455,9 +461,9 @@ fn skill_resolution_applies_builtin_and_user_override_rules() {
     );
 
     let mut overrides = UserModeSkillOverrides::default();
-    overrides.enabled_skills.push(pdf.key.clone());
+    overrides.enabled_skills.push(presentation.key.clone());
     let enabled_state =
-        resolve_skill_state_for_mode(&pdf, "agentic", &overrides, &disabled_project);
+        resolve_skill_state_for_mode(&presentation, "agentic", &overrides, &disabled_project);
     assert!(enabled_state.effective_enabled);
     assert_eq!(
         enabled_state.reason,
@@ -687,14 +693,14 @@ fn implicit_skill_filter_keeps_explicit_only_skill_out_of_model_catalog() {
 #[test]
 fn skill_candidate_key_group_and_resolution_are_runtime_owned() {
     let markdown = r#"---
-name: pdf
-description: Work with PDF files.
+name: ppt-design
+description: Design presentation slides.
 ---
 
-Use the pdf workflow.
+Use the presentation workflow.
 "#;
     let data = SkillData::from_markdown(
-        "/tmp/bitfun-system/pdf".to_string(),
+        "/tmp/bitfun-system/ppt-design".to_string(),
         markdown,
         SkillLocation::User,
         false,
@@ -703,27 +709,30 @@ Use the pdf workflow.
     let candidate =
         SkillCandidate::from_data(data, "bitfun-system", "bitfun", "BitFun", "user", 10, true);
 
-    assert_eq!(candidate.info.key, "user::bitfun-system::pdf");
+    assert_eq!(candidate.info.key, "user::bitfun-system::ppt-design");
     assert_eq!(candidate.info.source_slot, "bitfun-system");
     assert_eq!(candidate.info.group_key.as_deref(), Some("office"));
 
-    let project_pdf = SkillCandidate {
-        info: project_skill("pdf"),
+    let project_presentation = SkillCandidate {
+        info: project_skill("ppt-design"),
         priority: 0,
     };
-    let visible = resolve_visible_skills(vec![candidate.clone(), project_pdf.clone()]);
+    let visible = resolve_visible_skills(vec![candidate.clone(), project_presentation.clone()]);
     assert_eq!(visible.len(), 1);
-    assert_eq!(visible[0].key, "project::bitfun::pdf");
+    assert_eq!(visible[0].key, "project::bitfun::ppt-design");
 
-    let annotated = sort_skills(annotate_shadowed_skills(vec![candidate, project_pdf]));
-    let user_pdf = annotated
+    let annotated = sort_skills(annotate_shadowed_skills(vec![
+        candidate,
+        project_presentation,
+    ]));
+    let user_presentation = annotated
         .iter()
-        .find(|skill| skill.key == "user::bitfun-system::pdf")
+        .find(|skill| skill.key == "user::bitfun-system::ppt-design")
         .expect("user built-in skill should be present");
-    assert!(user_pdf.is_shadowed);
+    assert!(user_presentation.is_shadowed);
     assert_eq!(
-        user_pdf.shadowed_by_key.as_deref(),
-        Some("project::bitfun::pdf")
+        user_presentation.shadowed_by_key.as_deref(),
+        Some("project::bitfun::ppt-design")
     );
 }
 

@@ -25,6 +25,11 @@ const BUILTIN_SKILLS_MANIFEST_FILE_NAME: &str = ".manifest.json";
 const BUILTIN_SKILLS_INSTALL_LOCK_FILE_NAME: &str = ".system.install.lock";
 const BUILTIN_SKILLS_STAGING_PREFIX: &str = ".system.tmp";
 const LEGACY_BUILTIN_SKILL_DIR_NAMES: &[&str] = &[
+    // Redistribution-restricted upstream skills removed in 2026-08.
+    "docx",
+    "pdf",
+    "pptx",
+    "xlsx",
     // Historical bundled "Superpowers" skills removed in 2026-04.
     "brainstorming",
     "dispatching-parallel-agents",
@@ -367,7 +372,7 @@ async fn desired_file_content(
 
 #[cfg(test)]
 mod tests {
-    use super::{collect_files, BUILTIN_SKILLS_DIR};
+    use super::{BUILTIN_SKILLS_DIR, LEGACY_BUILTIN_SKILL_DIR_NAMES};
 
     fn embedded_skill_text(path: &str) -> &'static str {
         BUILTIN_SKILLS_DIR
@@ -549,82 +554,24 @@ mod tests {
             "create-bitfun-skin/examples/cinematic-animated-wallpaper/SKILL.md",
         );
         assert!(example.contains("cinematic animated-wallpaper"));
+
+        let metadata = embedded_skill_text("create-bitfun-skin/agents/openai.yaml");
+        assert!(metadata.contains("display_name: \"BitFun Appearance Manual\""));
+
+        let workflow = embedded_skill_text("create-bitfun-skin/references/authoring-workflow.md");
+        assert!(workflow.contains("Bump it whenever the manifest"));
     }
 
     #[test]
-    fn office_helpers_use_validated_archive_extraction() {
-        for skill in ["docx", "pptx", "xlsx"] {
-            let helper_path = format!("{skill}/scripts/office/helpers/__init__.py");
-            let helper = embedded_skill_text(&helper_path);
+    fn redistribution_restricted_skills_are_not_embedded() {
+        for skill in ["docx", "pdf", "pptx", "xlsx"] {
             assert!(
-                helper.contains("def safe_extract("),
-                "{helper_path} lacks safe_extract"
+                BUILTIN_SKILLS_DIR.get_dir(skill).is_none(),
+                "redistribution-restricted skill {skill} must not be embedded"
             );
             assert!(
-                helper.contains("stat.S_ISLNK"),
-                "{helper_path} lacks symlink rejection"
-            );
-            assert!(
-                helper.contains("MAX_ARCHIVE_TOTAL_SIZE")
-                    && helper.contains("MAX_ARCHIVE_COMPRESSION_RATIO")
-                    && helper.contains("duplicate archive entry"),
-                "{helper_path} lacks bounded, collision-safe extraction"
-            );
-
-            let dir = BUILTIN_SKILLS_DIR
-                .get_dir(skill)
-                .unwrap_or_else(|| panic!("Missing embedded Office skill {skill}"));
-            let mut files = Vec::new();
-            collect_files(dir, &mut files);
-            for file in files {
-                let text = file.contents_utf8().unwrap_or("");
-                assert!(
-                    !text.contains(".extractall("),
-                    "{} still uses unrestricted ZipFile.extractall",
-                    file.path().display()
-                );
-            }
-
-            assert!(dir
-                .get_file(format!("{skill}/scripts/office/pack.py"))
-                .is_none());
-            assert!(dir
-                .get_file(format!("{skill}/scripts/office/unpack.py"))
-                .is_none());
-
-            if matches!(skill, "docx" | "pptx") {
-                let skill_text = embedded_skill_text(&format!("{skill}/SKILL.md"));
-                assert!(
-                    skill_text.contains("safe_extract") && skill_text.contains("rezip"),
-                    "{skill}/SKILL.md must use the cross-platform safe archive helpers"
-                );
-                assert!(
-                    !skill_text.contains("unzip -q") && !skill_text.contains("zip -Xr"),
-                    "{skill}/SKILL.md still recommends unsafe or non-portable archive commands"
-                );
-            }
-        }
-
-        let comment = embedded_skill_text("docx/scripts/comment.py");
-        assert!(comment.contains("author: str = \"BitFun\""));
-        assert!(comment.contains("initials: str = \"B\""));
-        assert!(comment.contains("default=\"BitFun\""));
-        assert!(comment.contains("default=\"B\""));
-
-        let docx_skill = embedded_skill_text("docx/SKILL.md");
-        assert!(docx_skill.contains(
-            "Use \"BitFun\" as the author for tracked changes and comments unless the user explicitly requests a different name."
-        ));
-
-        let xlsx_skill = embedded_skill_text("xlsx/SKILL.md");
-        assert!(xlsx_skill.contains("years as text (`\"2026\"`, never `2,026`)"));
-
-        let docx_helper = embedded_skill_text("docx/scripts/office/helpers/__init__.py");
-        for skill in ["pptx", "xlsx"] {
-            assert_eq!(
-                docx_helper,
-                embedded_skill_text(&format!("{skill}/scripts/office/helpers/__init__.py")),
-                "Office safe extraction helpers drifted between bundled skills"
+                LEGACY_BUILTIN_SKILL_DIR_NAMES.contains(&skill),
+                "removed skill {skill} must be cleaned from legacy user skill roots"
             );
         }
     }

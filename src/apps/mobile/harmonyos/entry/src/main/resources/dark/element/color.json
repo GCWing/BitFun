@@ -3,6 +3,118 @@
     {
       "name": "start_window_background",
       "value": "#000000"
+    },
+    {
+      "name": "page_bg",
+      "value": "#151514"
+    },
+    {
+      "name": "ink",
+      "value": "#F4F3EF"
+    },
+    {
+      "name": "muted",
+      "value": "#AAA8A0"
+    },
+    {
+      "name": "subtle",
+      "value": "#77756E"
+    },
+    {
+      "name": "line",
+      "value": "#363531"
+    },
+    {
+      "name": "card",
+      "value": "#252522"
+    },
+    {
+      "name": "accent",
+      "value": "#5B5954"
+    },
+    {
+      "name": "file_link",
+      "value": "#60A5FA"
+    },
+    {
+      "name": "primary_action",
+      "value": "#454540"
+    },
+    {
+      "name": "primary_action_text",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "connect_hero_bg",
+      "value": "#2B2B29"
+    },
+    {
+      "name": "connect_hero_accent",
+      "value": "#4A4944"
+    },
+    {
+      "name": "connect_hero_secondary",
+      "value": "#3C3B38"
+    },
+    {
+      "name": "connect_hero_surface",
+      "value": "#252522"
+    },
+    {
+      "name": "soft",
+      "value": "#2D2C28"
+    },
+    {
+      "name": "floating_panel_bg",
+      "value": "#1E1E1C"
+    },
+    {
+      "name": "green",
+      "value": "#3BD47B"
+    },
+    {
+      "name": "red",
+      "value": "#FF6B6B"
+    },
+    {
+      "name": "code_line_number",
+      "value": "#77756E"
+    },
+    {
+      "name": "code_keyword",
+      "value": "#D99AC4"
+    },
+    {
+      "name": "code_string",
+      "value": "#9BCB9D"
+    },
+    {
+      "name": "code_number",
+      "value": "#E3B36D"
+    },
+    {
+      "name": "code_comment",
+      "value": "#96958D"
+    },
+    {
+      "name": "code_function",
+      "value": "#8CBCE0"
+    },
+    {
+      "name": "code_type",
+      "value": "#D5B27F"
+    },
+    {
+      "name": "code_constant",
+      "value": "#E79A9A"
+    },
+    {
+      "name": "code_property",
+      "value": "#9CC8D0"
+    },
+    {
+      "name": "code_target_bg",
+      "value": "#5A4E24"
     }
   ]
 }

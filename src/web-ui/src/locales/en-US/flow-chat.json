@@ -2477,9 +2477,9 @@
         "prompt": "Help me write an email reply.\n\nOriginal email (paste here):\nMy goal (confirm / decline / push forward / clarify):\nTone (formal / friendly / firm but polite):\nKey points to include:\n\nOutput:\n1) Subject line suggestions\n2) Body (2 versions: more formal / more concise)\n3) Questions for the recipient to confirm (if any)"
       },
       "make_docx": {
-        "title": "Draft a DOCX",
-        "description": "Write a structured document and export as DOCX.",
-        "prompt": "Help me write a document and export it as a .docx file.\n\nDocument type (PRD / proposal / meeting summary / report / SOP):\nAudience:\nTone (formal / friendly / concise):\nMust-include points:\nLength target:\n\nDeliverable:\n1) Suggested outline\n2) Full content\n3) Export as a .docx file (save it under artifacts/)"
+        "title": "Draft a document",
+        "description": "Turn source material into a structured, reusable document.",
+        "prompt": "Help me write a structured document.\n\nDocument type (PRD / proposal / meeting summary / report / SOP):\nAudience:\nTone (formal / friendly / concise):\nMust-include points:\nLength target:\n\nDeliverable:\n1) Suggested outline\n2) Full content\n3) Save the Markdown document under artifacts/"
       },
       "make_spreadsheet": {
         "title": "Design a spreadsheet",

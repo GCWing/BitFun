@@ -180,6 +180,12 @@ jobs:
             const pkg = JSON.parse(fs.readFileSync('package.json', 'utf-8'));
             pkg.version = process.env.NIGHTLY_VERSION.split('+')[0];
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+            for (const file of ['BitFun-Installer/package.json', 'BitFun-Installer/package-lock.json']) {
+              const data = JSON.parse(fs.readFileSync(file, 'utf-8'));
+              data.version = pkg.version;
+              if (data.packages?.['']) data.packages[''].version = pkg.version;
+              fs.writeFileSync(file, JSON.stringify(data, null, 2) + '\n');
+            }
           "
 
           # Patch Cargo workspace version (semver: nightly suffix uses hyphen)
@@ -187,6 +193,8 @@ jobs:
           CARGO_VERSION="$(echo "$NIGHTLY_VERSION" | sed 's/+.*//')"
           sed -i.bak "s/^version = \".*\" # x-release-please-version/version = \"${CARGO_VERSION}\" # x-release-please-version/" Cargo.toml
           rm -f Cargo.toml.bak
+          sed -i.bak "0,/^version = \".*\"/s//version = \"${CARGO_VERSION}\"/" BitFun-Installer/src-tauri/Cargo.toml
+          rm -f BitFun-Installer/src-tauri/Cargo.toml.bak
 
           echo "package.json version: $(jq -r '.version' package.json)"
           echo "Cargo.toml version:   $(grep 'x-release-please-version' Cargo.toml)"
@@ -418,6 +426,15 @@ jobs:
             --repo "GCWing/BitFun" \
             --out linux-release-assets/linux-binaries.json
 
+      - name: Prepare versioned Windows installer
+        env:
+          NIGHTLY_VERSION: ${{ needs.check-changes.outputs.nightly_version }}
+        run: |
+          node scripts/prepare-windows-installer-asset.mjs \
+            --assets-dir release-assets \
+            --version "${NIGHTLY_VERSION%%+*}" \
+            --out-dir release-manual-assets
+
       # The Tauri bundler signs the five updater artifacts during `tauri build`,
       # but the installers people download by hand from the release page — dmg,
       # deb, rpm, the Windows installer and the direct AppImages — shipped with
@@ -432,11 +449,12 @@ jobs:
           BITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
         run: |
           set -euo pipefail
-          mapfile -t assets < <(
+          mapfile -t assets < <({
             find release-assets -type f \
               \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \
-                 -o -name '*.dmg' -o -name '*bitfun-installer.exe' \) | sort
-          )
+                 -o -name '*.dmg' \)
+            find release-manual-assets -type f -name '*.exe'
+          } | sort)
           if [[ "${#assets[@]}" -eq 0 ]]; then
             echo "No installer packages found to sign."
             exit 0
@@ -466,8 +484,9 @@ jobs:
             release-assets/**/*.deb
             release-assets/**/*.dmg
             release-assets/**/*.rpm
-            release-assets/**/*bitfun-installer.exe
             release-assets/**/*.sig
+            release-manual-assets/*.exe
+            release-manual-assets/*.exe.sig
             release-assets/minisign.pub
             release-assets/**/bitfun-cli-*-apple-darwin.tar.gz
             release-assets/**/bitfun-cli-*-apple-darwin.tar.gz.sha256

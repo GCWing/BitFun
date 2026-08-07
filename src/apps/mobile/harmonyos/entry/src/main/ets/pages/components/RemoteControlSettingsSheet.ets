@@ -1,12 +1,9 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, GREEN, INK, LINE, MUTED } from './Theme';
+import { CARD, GREEN, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, RED, SOFT } from './Theme';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { RemotePermissionMode } from '../../model/RemoteModels';
 import { DefaultAccountAvatar } from './DefaultAccountAvatar';
 import { BitFunAccountLoginPage } from './BitFunAccountLoginPage';
-
-const REMOTE_SETTINGS_BG: string = '#F4F4F7';
-const REMOTE_SETTINGS_BLUE: string = '#0A84FF';
 
 @Component
 export struct RemoteControlSettingsSheet {
@@ -74,8 +71,8 @@ export struct RemoteControlSettingsSheet {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(REMOTE_SETTINGS_BG)
-    .borderRadius(this.openAccountOnAppear ? 0 : { topLeft: 34, topRight: 34 })
+    .backgroundColor(PAGE_BG)
+    .borderRadius({ topLeft: 34, topRight: 34 })
   }
 
   @Builder
@@ -117,10 +114,11 @@ export struct RemoteControlSettingsSheet {
         .fontWeight(FontWeight.Medium)
         .fontColor(INK)
         .layoutWeight(1)
-      Image($r('app.media.settings_chevron_right'))
-        .width(10)
-        .height(14)
-        .objectFit(ImageFit.Contain)
+      SymbolGlyph($r('sys.symbol.chevron_right'))
+        .fontSize(14)
+        .fontColor([MUTED])
+        .width(18)
+        .height(18)
         .opacity(0.52)
     }
     .width('100%')
@@ -144,7 +142,7 @@ export struct RemoteControlSettingsSheet {
       Text(RemoteI18n.t('remote.settings.currentControl'))
         .fontSize(18)
         .fontWeight(FontWeight.Bold)
-        .fontColor('#929298')
+        .fontColor(MUTED)
     }
     .width('100%')
     .height(42)
@@ -156,15 +154,16 @@ export struct RemoteControlSettingsSheet {
   private CurrentControlCard() {
     Column() {
       Row({ space: 14 }) {
-        Image($r('app.media.remote_ref_device'))
+        SymbolGlyph($r('sys.symbol.desktop'))
+          .fontSize(23)
+          .fontColor([MUTED])
           .width(28)
-          .height(24)
-          .objectFit(ImageFit.Contain)
+          .height(26)
           .opacity(0.58)
         Column({ space: 2 }) {
           Text(RemoteI18n.t('remote.settings.desktopProduct'))
             .fontSize(14)
-            .fontColor('#929298')
+            .fontColor(MUTED)
           Text(this.connectionTitle())
             .fontSize(18)
             .fontWeight(FontWeight.Medium)
@@ -173,7 +172,7 @@ export struct RemoteControlSettingsSheet {
             .textOverflow({ overflow: TextOverflow.Ellipsis })
           Text(this.connectionDetail())
             .fontSize(14)
-            .fontColor('#929298')
+            .fontColor(MUTED)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
@@ -192,20 +191,21 @@ export struct RemoteControlSettingsSheet {
         .margin({ left: 18, right: 18 })
 
       Row({ space: 10 }) {
-        Image($r('app.media.remote_actions_link'))
+        SymbolGlyph($r('sys.symbol.link'))
+          .fontSize(18)
+          .fontColor([MUTED])
           .width(20)
           .height(20)
-          .objectFit(ImageFit.Contain)
           .opacity(0.58)
         Text(RemoteI18n.t('remote.settings.connectionSource'))
           .fontSize(14)
-          .fontColor('#929298')
+          .fontColor(MUTED)
         Blank()
         Text(this.connectionSourceLabel())
           .fontSize(13)
-          .fontColor(REMOTE_SETTINGS_BLUE)
+          .fontColor(INK)
           .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-          .backgroundColor('#EDF5FF')
+          .backgroundColor(SOFT)
           .borderRadius(12)
       }
       .width('100%')
@@ -223,17 +223,17 @@ export struct RemoteControlSettingsSheet {
     if (this.isConnectedOrConnecting()) {
       Text(RemoteI18n.t('remote.settings.disconnect'))
         .fontSize(14)
-        .fontColor(REMOTE_SETTINGS_BLUE)
+        .fontColor(INK)
         .padding({ left: 10, right: 10, top: 7, bottom: 7 })
-        .backgroundColor('#EDF5FF')
+        .backgroundColor(SOFT)
         .borderRadius(14)
         .onClick(() => this.onDisconnect())
     } else if (this.hasConnectionProjection()) {
       Text(RemoteI18n.t('remote.settings.reconnect'))
         .fontSize(14)
-        .fontColor(REMOTE_SETTINGS_BLUE)
+        .fontColor(INK)
         .padding({ left: 10, right: 10, top: 7, bottom: 7 })
-        .backgroundColor('#EDF5FF')
+        .backgroundColor(SOFT)
         .borderRadius(14)
         .onClick(() => this.onReconnect())
     }
@@ -245,15 +245,16 @@ export struct RemoteControlSettingsSheet {
       Text(RemoteI18n.t('remote.settings.otherConnectionMethods'))
         .fontSize(18)
         .fontWeight(FontWeight.Bold)
-        .fontColor('#929298')
+        .fontColor(MUTED)
         .width('100%')
         .height(42)
         .padding({ left: 18, right: 16 })
       Row({ space: 12 }) {
-        Image($r('app.media.remote_actions_link'))
+        SymbolGlyph($r('sys.symbol.link'))
+          .fontSize(21)
+          .fontColor([MUTED])
           .width(24)
           .height(24)
-          .objectFit(ImageFit.Contain)
           .opacity(0.62)
         Column({ space: 2 }) {
           Text(RemoteI18n.t('remote.settings.qrConnect'))
@@ -262,15 +263,16 @@ export struct RemoteControlSettingsSheet {
             .fontColor(INK)
           Text(RemoteI18n.t('remote.settings.qrConnectBody'))
             .fontSize(13)
-            .fontColor('#929298')
+            .fontColor(MUTED)
             .maxLines(2)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
         .layoutWeight(1)
-        Image($r('app.media.settings_chevron_right'))
-          .width(10)
-          .height(14)
-          .objectFit(ImageFit.Contain)
+        SymbolGlyph($r('sys.symbol.chevron_right'))
+          .fontSize(14)
+          .fontColor([MUTED])
+          .width(18)
+          .height(18)
           .opacity(0.52)
       }
       .width('100%')
@@ -290,12 +292,12 @@ export struct RemoteControlSettingsSheet {
       Text(RemoteI18n.t('remote.permissions.title'))
         .fontSize(18)
         .fontWeight(FontWeight.Bold)
-        .fontColor('#929298')
+        .fontColor(MUTED)
       Blank()
       if (this.canManagePermissions()) {
         Text(RemoteI18n.t('common.refresh'))
           .fontSize(14)
-          .fontColor(this.permissionModeBusy ? MUTED : REMOTE_SETTINGS_BLUE)
+          .fontColor(this.permissionModeBusy ? MUTED : INK)
           .onClick(() => this.refreshPermissionMode())
       }
     }
@@ -337,7 +339,7 @@ export struct RemoteControlSettingsSheet {
         .width('100%')
         .height(28)
         .fontSize(12)
-        .fontColor(this.permissionModeError.length > 0 ? '#D04A3A' : MUTED)
+        .fontColor(this.permissionModeError.length > 0 ? RED : MUTED)
         .padding({ left: 18, right: 18, top: 4 })
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -356,10 +358,11 @@ export struct RemoteControlSettingsSheet {
     Row({ space: 12 }) {
       Stack({ alignContent: Alignment.Center }) {
         if (this.permissionModeLoaded && this.permissionMode === mode) {
-          Image($r('app.media.remote_actions_check'))
+          SymbolGlyph($r('sys.symbol.checkmark_circle_fill'))
+            .fontSize(19)
+            .fontColor([INK])
             .width(20)
             .height(20)
-            .objectFit(ImageFit.Contain)
         }
       }
       .width(22)
@@ -394,7 +397,7 @@ export struct RemoteControlSettingsSheet {
         .width('100%')
         .fontSize(15)
         .fontWeight(FontWeight.Bold)
-        .fontColor('#B9382D')
+        .fontColor(RED)
       Text(RemoteI18n.t('remote.permissions.fullAccessWarningBody'))
         .width('100%')
         .fontSize(13)
@@ -406,15 +409,15 @@ export struct RemoteControlSettingsSheet {
           .height(42)
           .fontSize(14)
           .fontColor(INK)
-          .backgroundColor('#F0EFEC')
+          .backgroundColor(SOFT)
           .borderRadius(21)
           .onClick(() => { this.confirmFullAccess = false; })
         Button(RemoteI18n.t('remote.permissions.confirmFullAccess'))
           .layoutWeight(1)
           .height(42)
           .fontSize(14)
-          .fontColor(CARD)
-          .backgroundColor('#C63E3E')
+          .fontColor(PRIMARY_ACTION_TEXT)
+          .backgroundColor(RED)
           .borderRadius(21)
           .onClick(() => this.applyPermissionMode('full_access'))
       }
@@ -422,8 +425,8 @@ export struct RemoteControlSettingsSheet {
     }
     .width('100%')
     .padding({ left: 16, right: 16, top: 14, bottom: 16 })
-    .backgroundColor('#FFF3F1')
-    .border({ width: 1, color: '#F0B3AA' })
+    .backgroundColor(CARD)
+    .border({ width: 1, color: RED })
     .borderRadius(18)
     .margin({ left: 12, right: 12, bottom: 14 })
   }
@@ -447,10 +450,11 @@ export struct RemoteControlSettingsSheet {
       Column({ space: 0 }) {
         Row() {
           Button() {
-            Image($r('app.media.remote_ref_back'))
+            SymbolGlyph($r('sys.symbol.chevron_left'))
+              .fontSize(23)
+              .fontColor([INK])
               .width(26)
               .height(26)
-              .objectFit(ImageFit.Contain)
           }
             .width(44)
             .height(44)
@@ -503,7 +507,7 @@ export struct RemoteControlSettingsSheet {
         Text(RemoteI18n.t('remote.settings.profileDetails'))
           .fontSize(18)
           .fontWeight(FontWeight.Bold)
-          .fontColor('#929298')
+          .fontColor(MUTED)
           .width('100%')
           .margin({ left: 18, bottom: 8 })
 
@@ -550,15 +554,17 @@ export struct RemoteControlSettingsSheet {
         .fontColor(MUTED)
         .width('100%')
 
-      Button(RemoteI18n.t('remote.settings.accountSync'))
+      Text(RemoteI18n.t('remote.settings.accountSync'))
         .height(42)
         .width('100%')
         .fontSize(15)
-        .fontColor(REMOTE_SETTINGS_BLUE)
-        .backgroundColor('#E8F2FF')
+        .fontColor(PRIMARY_ACTION_TEXT)
+        .backgroundColor(PRIMARY_ACTION)
+        .textAlign(TextAlign.Center)
         .borderRadius(21)
-        .enabled(!this.cloudSyncBusy)
+        .opacity(this.cloudSyncBusy ? 0.52 : 1)
         .onClick(async () => {
+          if (this.cloudSyncBusy) return;
           this.cloudSyncBusy = true;
           this.cloudSyncStatus = '';
           try {
@@ -584,15 +590,16 @@ export struct RemoteControlSettingsSheet {
   @Builder
   private LogoutAction() {
     Row({ space: 14 }) {
-      Image($r('app.media.settings_logout_arrow'))
+      SymbolGlyph($r('sys.symbol.arrow_right_and_square'))
+        .fontSize(22)
+        .fontColor([RED])
         .width(24)
         .height(24)
-        .objectFit(ImageFit.Contain)
       Text(this.logoutBusy ? RemoteI18n.t('remote.settings.accountLoggingOut') :
         RemoteI18n.t('remote.settings.accountLogout'))
         .fontSize(17)
         .fontWeight(FontWeight.Medium)
-        .fontColor('#E11D17')
+        .fontColor(RED)
     }
     .width('100%')
     .height(62)
@@ -624,7 +631,7 @@ export struct RemoteControlSettingsSheet {
         Blank()
         Text(this.accountDevicesBusy ? RemoteI18n.t('remote.settings.deviceLoading') :
           RemoteI18n.t('remote.settings.deviceRefresh'))
-          .fontSize(13).fontColor(this.accountDevicesBusy ? MUTED : REMOTE_SETTINGS_BLUE)
+          .fontSize(13).fontColor(this.accountDevicesBusy ? MUTED : INK)
           .onClick(async () => {
             await this.refreshAccountDevices();
           })
@@ -652,8 +659,8 @@ export struct RemoteControlSettingsSheet {
   @Builder
   private AccountDeviceRow(device: CloudAccountDevice) {
     Row({ space: 12 }) {
-      Image($r('app.media.remote_ref_device'))
-        .width(24).height(22).objectFit(ImageFit.Contain).opacity(0.58)
+      SymbolGlyph($r('sys.symbol.desktop'))
+        .fontSize(20).fontColor([MUTED]).width(24).height(22).opacity(0.72)
       Column({ space: 2 }) {
         Text(device.deviceName || device.deviceId)
           .fontSize(15).fontWeight(FontWeight.Medium).fontColor(INK)
@@ -719,10 +726,11 @@ export struct RemoteControlSettingsSheet {
   @Builder
   private CloseButton() {
     Button() {
-      Image($r('app.media.settings_close_x'))
-        .width(28)
-        .height(28)
-        .objectFit(ImageFit.Contain)
+      SymbolGlyph($r('sys.symbol.xmark'))
+        .fontSize(21)
+        .fontColor([INK])
+        .width(24)
+        .height(24)
     }
     .width(50)
     .height(50)

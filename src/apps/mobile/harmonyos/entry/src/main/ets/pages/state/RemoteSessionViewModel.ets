@@ -109,7 +109,12 @@ export class RemoteSessionViewModel {
     await this.refreshSessions();
   }
 
-  async createSession(agentType: string, instruction: string = ''): Promise<void> {
+  async createSession(
+    agentType: string,
+    instruction: string = '',
+    onRouteChat: (sessionId: string) => void = this.hooks.onRouteChat,
+    modelId: string = ''
+  ): Promise<void> {
     await this.sessions.create(
       agentType,
       this.hooks.isBusy(),
@@ -119,13 +124,14 @@ export class RemoteSessionViewModel {
         this.pageState.setHasMoreMessages(false);
         this.hooks.onKnownStateReset();
         this.hooks.onResetTimeline(session.sessionId);
-        this.hooks.onRouteChat(session.sessionId);
+        onRouteChat(session.sessionId);
         await this.hooks.onLoadModelCatalog(session.sessionId);
         await this.refreshSessions();
         await this.hooks.onLoadActiveMessages();
         this.hooks.onStartPolling();
       },
-      instruction
+      instruction,
+      modelId
     );
   }
 
@@ -133,19 +139,25 @@ export class RemoteSessionViewModel {
     path: string,
     currentPath: string,
     instruction: string = '',
-    agentType: string = 'code'
+    agentType: string = 'code',
+    onRouteChat: (sessionId: string) => void = this.hooks.onRouteChat,
+    modelId: string = ''
   ): Promise<void> {
     if (path.length > 0 && path !== currentPath) {
       await this.hooks.onSelectWorkspace(path);
-      await this.createSession(agentType, instruction);
+      await this.createSession(agentType, instruction, onRouteChat, modelId);
       return;
     }
     if (path.length === 0 || path === currentPath) {
-      await this.createSession(agentType, instruction);
+      await this.createSession(agentType, instruction, onRouteChat, modelId);
     }
   }
 
-  async openSession(item: RemoteSession, currentWorkspacePath: string): Promise<void> {
+  async openSession(
+    item: RemoteSession,
+    currentWorkspacePath: string,
+    onRouteChat: (sessionId: string) => void = this.hooks.onRouteChat
+  ): Promise<void> {
     await this.sessions.open(
       item,
       item.workspacePath || currentWorkspacePath,
@@ -158,7 +170,7 @@ export class RemoteSessionViewModel {
         this.pageState.setHasMoreMessages(false);
         this.files.clear();
         this.pageState.clearComposer();
-        this.hooks.onRouteChat(item.id);
+        onRouteChat(item.id);
         await this.hooks.onLoadModelCatalog(item.id);
         await this.hooks.onLoadActiveMessages();
         if (this.pageState.activeSession.sessionId === session.sessionId) {

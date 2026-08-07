@@ -49,10 +49,6 @@ pub(super) const BUILTIN_SKILL_SPECS: &[BuiltinSkillSpec] = &[
         group: BuiltinSkillGroup::Meta,
     },
     BuiltinSkillSpec {
-        dir_name: "docx",
-        group: BuiltinSkillGroup::Office,
-    },
-    BuiltinSkillSpec {
         dir_name: "find-skills",
         group: BuiltinSkillGroup::Meta,
     },
@@ -121,15 +117,7 @@ pub(super) const BUILTIN_SKILL_SPECS: &[BuiltinSkillSpec] = &[
         group: BuiltinSkillGroup::Gstack,
     },
     BuiltinSkillSpec {
-        dir_name: "pdf",
-        group: BuiltinSkillGroup::Office,
-    },
-    BuiltinSkillSpec {
         dir_name: "ppt-design",
-        group: BuiltinSkillGroup::Office,
-    },
-    BuiltinSkillSpec {
-        dir_name: "pptx",
         group: BuiltinSkillGroup::Office,
     },
     BuiltinSkillSpec {
@@ -139,10 +127,6 @@ pub(super) const BUILTIN_SKILL_SPECS: &[BuiltinSkillSpec] = &[
     BuiltinSkillSpec {
         dir_name: "writing-skills",
         group: BuiltinSkillGroup::Meta,
-    },
-    BuiltinSkillSpec {
-        dir_name: "xlsx",
-        group: BuiltinSkillGroup::Office,
     },
 ];
 

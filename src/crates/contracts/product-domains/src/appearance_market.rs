@@ -196,6 +196,9 @@ pub struct AppearanceMarketSubmissionDraftRequest {
 #[serde(rename_all = "camelCase")]
 pub struct AppearanceAdminSubmissionDetail {
     pub submission: AppearanceMarketSubmission,
+    /// GitHub account that owns the submission, so reviewers can see who sent it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub submitter: Option<AppearanceMarketUserSummary>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub manifest: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]

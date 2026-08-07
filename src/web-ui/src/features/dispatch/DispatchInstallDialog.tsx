@@ -235,7 +235,15 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
         cursor = poll.cursor;
         if (poll.status === 'succeeded') break;
         if (poll.status === 'failed') {
-          throw new Error('Target CLI installation failed');
+          // Carry the installer's own tail into the error: without it the only
+          // record of the failure is a generic message, and the remote state
+          // that would explain it is cleaned up before anyone can look.
+          const detail = poll.output.trim();
+          throw new Error(
+            detail
+              ? `Target CLI installation failed: ${detail}`
+              : 'Target CLI installation failed with no installer output',
+          );
         }
         await new Promise(resolve => globalThis.setTimeout(resolve, 750));
       }

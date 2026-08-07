@@ -163,6 +163,7 @@ export const __test_only__ = {
   handleDialogTurnFailed,
   handleSubagentSessionLinked,
   handleModelRoundStart,
+  handleTokenUsageUpdate,
   handleCompressionCompleted,
 };
 
@@ -2126,6 +2127,13 @@ function handleTokenUsageUpdate(context: FlowChatContext, event: any): void {
     log.debug('Session not found (token usage update)', { sessionId });
     return;
   }
+  if (
+    typeof turnId !== 'string'
+    || !session.dialogTurns.some(turn => turn.id === turnId)
+  ) {
+    log.debug('Dropped token usage update for non-visible turn', { sessionId, turnId });
+    return;
+  }
   if (typeof inputTokens !== 'number' || typeof totalTokens !== 'number') {
     log.debug('Dropped invalid token usage update', { event });
     return;
@@ -2134,7 +2142,9 @@ function handleTokenUsageUpdate(context: FlowChatContext, event: any): void {
   store.updateTokenUsage(sessionId, {
     inputTokens,
     outputTokens: typeof outputTokens === 'number' ? outputTokens : undefined,
-    totalTokens
+    totalTokens,
+    turnId,
+    source: 'model_request',
   }, turnId);
 
   if (maxContextTokens !== undefined && maxContextTokens !== null) {
@@ -2252,6 +2262,14 @@ function handleCompressionCompleted(context: FlowChatContext, event: any): void 
   });
   
   const store = FlowChatStore.getInstance();
+  const session = store.getState().sessions.get(sessionId);
+  if (
+    typeof turnId !== 'string'
+    || !session?.dialogTurns.some(turn => turn.id === turnId)
+  ) {
+    log.debug('Dropped compression completion for non-visible turn', { sessionId, turnId });
+    return;
+  }
   
   store.updateModelRoundItem(sessionId, turnId, compressionId, {
     toolResult: {
@@ -2282,6 +2300,8 @@ function handleCompressionCompleted(context: FlowChatContext, event: any): void 
       inputTokens: tokensAfter,
       totalTokens: tokensAfter,
       outputTokens: undefined,
+      turnId,
+      source: 'context_compression',
     });
   }
   

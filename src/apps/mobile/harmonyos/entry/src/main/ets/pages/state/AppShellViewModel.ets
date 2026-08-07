@@ -34,9 +34,10 @@ export class AppShellViewModel {
     }
     if (spec.hasSessionParam()) {
       this.navigationStack.pushPath({ name: spec.name, param: spec.routeParam() }, animated);
-      return;
+    } else {
+      this.navigationStack.pushPath({ name: spec.name }, animated);
     }
-    this.navigationStack.pushPath({ name: spec.name }, animated);
+    this.syncActiveRoute();
   }
 
   replaceRoute(route: AppRoute, sessionId: string = ''): void {
@@ -44,13 +45,18 @@ export class AppShellViewModel {
     if (route !== AppRoute.ChatHome) {
       this.pushRoute(route, sessionId);
     }
+    this.syncActiveRoute();
   }
 
   replaceRouteWithoutAnimation(route: AppRoute, sessionId: string = ''): void {
+    if (this.currentRoute() === route && sessionId.length === 0) {
+      return;
+    }
     this.navigationStack.clear(false);
     if (route !== AppRoute.ChatHome) {
       this.pushRoute(route, sessionId, false);
     }
+    this.syncActiveRoute();
   }
 
   replaceCurrentRoute(route: AppRoute, sessionId: string = ''): void {
@@ -63,17 +69,27 @@ export class AppShellViewModel {
         name: route,
         param: AppRouteContract.routeParam(sessionId)
       }, false);
-      return;
+    } else {
+      this.navigationStack.replacePath({ name: route }, false);
     }
-    this.navigationStack.replacePath({ name: route }, false);
+    this.syncActiveRoute();
   }
 
   popRoute(fallback: AppRoute): void {
     if (this.navigationStack.getAllPathName().length > 0) {
       this.navigationStack.pop();
+      this.syncActiveRoute();
       return;
     }
     this.replaceRoute(fallback);
+  }
+
+  /**
+   * Republish the stack top as traced state. Every navigation goes through this
+   * view model, so this is the one place the mirror can be kept honest.
+   */
+  private syncActiveRoute(): void {
+    this.state.activeRoute = this.currentRoute();
   }
 
   backAction(route: AppRoute): AppNavigationBackAction {

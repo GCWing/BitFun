@@ -658,6 +658,15 @@ export interface ConfigValidationResult {
   valid: boolean;
   errors: ConfigValidationError[];
   warnings: ConfigValidationWarning[];
+  diagnostics?: ConfigDiagnostic[];
+}
+
+export interface ConfigDiagnostic {
+  path: string;
+  message: string;
+  code: string;
+  severity: 'error' | 'warning';
+  recoverability: 'none' | 'auto_fix' | 'model_disabled' | 'defaults_used';
 }
 
 export interface ConfigValidationError {
@@ -730,6 +739,8 @@ export interface ConfigPanelProps {
 export interface RuntimeLoggingInfo {
   effectiveLevel: BackendLogLevel;
   sessionLogDir: string;
+  earlyStartupLogPath: string;
+  nativeStartupTracePath: string;
   appLogPath: string;
   aiLogPath: string;
   flashgrepLogPath: string;

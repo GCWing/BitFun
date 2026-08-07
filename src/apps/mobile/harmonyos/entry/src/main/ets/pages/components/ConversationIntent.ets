@@ -1,4 +1,5 @@
 import { ConversationUiQuestionAnswer } from './ConversationUiModels';
+import { FilePreviewRequest } from '../state/FilePreviewTarget';
 
 export enum ConversationIntentType {
   OpenSidebar = 'open_sidebar',
@@ -20,6 +21,7 @@ export enum ConversationIntentType {
   SelectModel = 'select_model',
   PickImages = 'pick_images',
   RemoveImage = 'remove_image',
+  OpenFilePreview = 'open_file_preview',
   DownloadFile = 'download_file',
   Send = 'send',
   VoiceInput = 'voice_input',
@@ -32,19 +34,22 @@ export class ConversationIntent {
   readonly toolId: string;
   readonly updatedInput?: Object;
   readonly answers?: ConversationUiQuestionAnswer;
+  readonly filePreviewRequest?: FilePreviewRequest;
 
   constructor(
     type: ConversationIntentType,
     value: string = '',
     toolId: string = '',
     updatedInput?: Object,
-    answers?: ConversationUiQuestionAnswer
+    answers?: ConversationUiQuestionAnswer,
+    filePreviewRequest?: FilePreviewRequest
   ) {
     this.type = type;
     this.value = value;
     this.toolId = toolId;
     this.updatedInput = updatedInput;
     this.answers = answers;
+    this.filePreviewRequest = filePreviewRequest;
   }
 }
 
@@ -67,5 +72,16 @@ export class ConversationIntents {
 
   static answerQuestion(toolId: string, answers: ConversationUiQuestionAnswer): ConversationIntent {
     return new ConversationIntent(ConversationIntentType.AnswerQuestion, '', toolId, undefined, answers);
+  }
+
+  static openFilePreview(reference: string, label: string): ConversationIntent {
+    return new ConversationIntent(
+      ConversationIntentType.OpenFilePreview,
+      '',
+      '',
+      undefined,
+      undefined,
+      new FilePreviewRequest(reference, label)
+    );
   }
 }

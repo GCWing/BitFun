@@ -1,11 +1,11 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { INK, LINE, MUTED, PAGE_BG } from './Theme';
+import { INK, LINE, MUTED, PAGE_BG, SOFT } from './Theme';
 
 @Component
 export struct ChatStatusBar {
   @Prop title: string = '';
   @Prop detail: string = '';
-  @Prop color: string = MUTED;
+  @Prop color: ResourceColor = MUTED;
   @Prop canStop: boolean = false;
   onStop: () => void = () => {};
 
@@ -37,7 +37,7 @@ export struct ChatStatusBar {
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
           .textAlign(TextAlign.Center)
-          .backgroundColor('#F0EFEC')
+          .backgroundColor(SOFT)
           .borderRadius(17)
           .onClick(() => {
             this.onStop();

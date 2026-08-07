@@ -95,6 +95,50 @@ pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
+            async move |request: SaveCloudSpeechConfigMessage, responder, _cx| {
+                let result = async {
+                    let service = bitfun_core::service::config::get_global_config_service().await?;
+                    service
+                        .save_cloud_speech_config(
+                            bitfun_core::service::config::SaveCloudSpeechConfigRequest {
+                                config_id: request.request.config_id,
+                                preset: request.request.preset,
+                                name: request.request.name,
+                                base_url: request.request.base_url,
+                                request_url: request.request.request_url,
+                                model_name: request.request.model_name,
+                                api_key: request.request.api_key,
+                            },
+                        )
+                        .await
+                }
+                .await
+                .map(|result| {
+                    SaveCloudSpeechConfigResponse(SaveCloudSpeechConfigResult {
+                        model_id: result.model_id,
+                        created: result.created,
+                    })
+                })
+                .map_err(bitfun_error);
+                responder.respond_with_result(result)
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            async move |_: ValidateConfigMessage, responder, _cx| {
+                let result = async {
+                    let service = bitfun_core::service::config::get_global_config_service().await?;
+                    let validation = service.validate_config().await?;
+                    serde_json::to_value(validation).map_err(bitfun_core::BitFunError::from)
+                }
+                .await
+                .map(ValidateConfigResponse)
+                .map_err(bitfun_error);
+                responder.respond_with_result(result)
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
             async move |request: SetAgentProfileConfigMessage, responder, _cx| {
                 let result = async {
                     bitfun_core::service::config::mode_config_canonicalizer::persist_agent_profile_from_value(

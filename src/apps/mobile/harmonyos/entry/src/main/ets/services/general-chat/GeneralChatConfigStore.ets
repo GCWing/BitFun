@@ -1,5 +1,6 @@
 import { preferences } from '@kit.ArkData';
 import { huks } from '@kit.UniversalKeystoreKit';
+import { RemoteModelCatalog, RemoteModelConfig } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { Encoding } from '../Encoding';
 import { GeneralChatTokenProvider } from './GeneralChatHttpTransport';
@@ -10,6 +11,8 @@ const MODEL_NAME_KEY = 'model_name';
 const API_KEY_CIPHER_KEY = 'api_key_cipher';
 const API_KEY_IV_KEY = 'api_key_iv';
 const HUKS_ALIAS = 'bitfun_general_chat_api_key';
+const SELECTED_MODEL_ID_KEY = 'selected_model_id';
+export const GENERAL_CHAT_LOCAL_MODEL_ID = 'local-general-chat';
 
 export interface GeneralChatConfigSnapshot {
   apiUrl: string;
@@ -22,6 +25,22 @@ export interface GeneralChatConfigUpdate {
   modelName: string;
   apiKey: string;
   clearApiKey: boolean;
+}
+
+export interface GeneralChatRuntimeModelConfig {
+  modelId: string;
+  name: string;
+  provider: string;
+  apiUrl: string;
+  modelName: string;
+  apiKey: string;
+}
+
+export class GeneralChatModelSelectionPolicy {
+  static shouldActivateSavedLocalModel(catalog: RemoteModelCatalog): boolean {
+    const selectedModelId = catalog.session_model_id || catalog.default_models.primary || '';
+    return !catalog.models.some((model: RemoteModelConfig): boolean => model.id === selectedModelId);
+  }
 }
 
 export class GeneralChatConfigValidator {
@@ -53,9 +72,13 @@ export class GeneralChatConfigValidator {
 
 export class GeneralChatConfigStore implements GeneralChatTokenProvider {
   private store?: preferences.Preferences;
+  private accountModels: GeneralChatRuntimeModelConfig[] = [];
+  private preferredModelId: string = GENERAL_CHAT_LOCAL_MODEL_ID;
+  private catalogRevision: number = 1;
 
   async init(context: Context): Promise<GeneralChatConfigSnapshot> {
     this.store = await preferences.getPreferences(context, STORE_NAME);
+    this.preferredModelId = await this.getString(SELECTED_MODEL_ID_KEY) || GENERAL_CHAT_LOCAL_MODEL_ID;
     return this.snapshot();
   }
 
@@ -110,6 +133,92 @@ export class GeneralChatConfigStore implements GeneralChatTokenProvider {
       return '';
     }
     return this.decryptApiKey(cipherText, iv);
+  }
+
+  replaceAccountModels(models: GeneralChatRuntimeModelConfig[]): void {
+    this.accountModels = models.map((model: GeneralChatRuntimeModelConfig): GeneralChatRuntimeModelConfig => ({
+      modelId: model.modelId,
+      name: model.name,
+      provider: model.provider,
+      apiUrl: model.apiUrl,
+      modelName: model.modelName,
+      apiKey: model.apiKey
+    }));
+    this.catalogRevision += 1;
+  }
+
+  async modelCatalog(): Promise<RemoteModelCatalog> {
+    const local = await this.snapshot();
+    const models: RemoteModelConfig[] = [];
+    if (GeneralChatConfigStore.isComplete(local)) {
+      models.push({
+        id: GENERAL_CHAT_LOCAL_MODEL_ID,
+        name: local.modelName,
+        provider: 'local',
+        base_url: local.apiUrl,
+        model_name: local.modelName,
+        enabled: true,
+        capabilities: ['text_chat']
+      });
+    }
+    this.accountModels.forEach((model: GeneralChatRuntimeModelConfig) => {
+      models.push({
+        id: model.modelId,
+        name: model.name || model.modelName,
+        provider: model.provider || 'account',
+        base_url: model.apiUrl,
+        model_name: model.modelName,
+        enabled: true,
+        capabilities: ['text_chat']
+      });
+    });
+    const selectedModelId = this.effectiveSelectedModelId(models);
+    return {
+      version: this.catalogRevision,
+      models,
+      default_models: { primary: selectedModelId || undefined },
+      session_model_id: selectedModelId || undefined
+    };
+  }
+
+  async selectModel(modelId: string): Promise<boolean> {
+    const catalog = await this.modelCatalog();
+    if (!catalog.models.some((model: RemoteModelConfig): boolean => model.id === modelId)) {
+      return false;
+    }
+    this.preferredModelId = modelId;
+    const store = this.requireStore();
+    await store.put(SELECTED_MODEL_ID_KEY, modelId);
+    await store.flush();
+    this.catalogRevision += 1;
+    return true;
+  }
+
+  async selectLocalModel(): Promise<void> {
+    this.preferredModelId = GENERAL_CHAT_LOCAL_MODEL_ID;
+    const store = this.requireStore();
+    await store.put(SELECTED_MODEL_ID_KEY, GENERAL_CHAT_LOCAL_MODEL_ID);
+    await store.flush();
+    this.catalogRevision += 1;
+  }
+
+  async activeSnapshot(): Promise<GeneralChatConfigSnapshot> {
+    const selectedModelId = this.effectiveSelectedModelId((await this.modelCatalog()).models);
+    const accountModel = this.accountModels.find((model: GeneralChatRuntimeModelConfig): boolean => {
+      return model.modelId === selectedModelId;
+    });
+    if (accountModel) {
+      return { apiUrl: accountModel.apiUrl, modelName: accountModel.modelName, hasApiKey: true };
+    }
+    return this.snapshot();
+  }
+
+  async activeAccessToken(): Promise<string> {
+    const selectedModelId = this.effectiveSelectedModelId((await this.modelCatalog()).models);
+    const accountModel = this.accountModels.find((model: GeneralChatRuntimeModelConfig): boolean => {
+      return model.modelId === selectedModelId;
+    });
+    return accountModel ? accountModel.apiKey : this.accessToken();
   }
 
   private async encryptApiKey(apiKey: string): Promise<EncryptedApiKey> {
@@ -197,6 +306,18 @@ export class GeneralChatConfigStore implements GeneralChatTokenProvider {
       throw new Error('General chat configuration store is not initialized.');
     }
     return this.store;
+  }
+
+  private effectiveSelectedModelId(models: RemoteModelConfig[]): string {
+    if (models.some((model: RemoteModelConfig): boolean => model.id === this.preferredModelId)) {
+      return this.preferredModelId;
+    }
+    const local = models.find((model: RemoteModelConfig): boolean => model.id === GENERAL_CHAT_LOCAL_MODEL_ID);
+    return local ? local.id : (models.length > 0 ? models[0].id : '');
+  }
+
+  private static isComplete(snapshot: GeneralChatConfigSnapshot): boolean {
+    return snapshot.apiUrl.trim().length > 0 && snapshot.modelName.trim().length > 0 && snapshot.hasApiKey;
   }
 
   private static normalizeBaseUrl(value: string): string {

@@ -83,5 +83,13 @@ export default function architectureUnitTest() {
       expect(shell.currentRoute()).assertEqual(AppRoute.RemoteHome);
       expect(shell.navigationStack.getAllPathName().length).assertEqual(1);
     });
+
+    it('keeps same-route state updates from rebuilding navigation', 0, () => {
+      const shell = new AppShellViewModel();
+      shell.pushRoute(AppRoute.RemoteHome);
+      shell.replaceRouteWithoutAnimation(AppRoute.RemoteHome);
+      expect(shell.currentRoute()).assertEqual(AppRoute.RemoteHome);
+      expect(shell.navigationStack.getAllPathName().length).assertEqual(1);
+    });
   });
 }

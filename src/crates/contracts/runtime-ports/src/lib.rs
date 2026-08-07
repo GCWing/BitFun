@@ -305,6 +305,19 @@ pub enum WorkspacePathKind {
 #[async_trait::async_trait]
 pub trait WorkspaceFileSystem: Send + Sync {
     async fn read_file(&self, path: &str) -> anyhow::Result<Vec<u8>>;
+    /// Read binary content up to `max_bytes`.
+    ///
+    /// `Ok(None)` means the file exceeded the bound; missing paths, non-files, and transport
+    /// failures remain errors. Production providers should enforce the bound before or while
+    /// transferring the file.
+    async fn read_file_bounded(
+        &self,
+        path: &str,
+        max_bytes: usize,
+    ) -> anyhow::Result<Option<Vec<u8>>> {
+        let bytes = self.read_file(path).await?;
+        Ok((bytes.len() <= max_bytes).then_some(bytes))
+    }
     async fn read_file_text(&self, path: &str) -> anyhow::Result<String>;
     /// Read UTF-8 text up to `max_bytes`. Production filesystem providers
     /// should enforce the bound before or while transferring the file.

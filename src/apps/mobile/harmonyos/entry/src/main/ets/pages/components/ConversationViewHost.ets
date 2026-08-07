@@ -6,12 +6,19 @@ import {
   ConversationIntentType
 } from './ConversationIntent';
 import { ConversationUiQuestionAnswer } from './ConversationUiModels';
+import { ComposerPresentation } from './ComposerBar';
 
 @ComponentV2
 export struct ConversationViewHost {
   @Param viewState: ConversationViewState = new ConversationViewState();
+  @Param activeFilePreviewPath: string = '';
+  @Param activeFilePreviewLoading: boolean = false;
   @Param showSidebarButton: boolean = true;
   @Param showBackButton: boolean = true;
+  @Param showSidebarRestoreButton: boolean = false;
+  @Param composerPresentation: ComposerPresentation = ComposerPresentation.Compact;
+  @Param contentHorizontalOffset: number = 0;
+  @Param onRestoreSidebar: () => void = () => {};
   @Param onIntent: (intent: ConversationIntent) => void = (_intent: ConversationIntent) => {};
 
   build() {
@@ -38,15 +45,20 @@ export struct ConversationViewHost {
       downloadingFilePath: this.viewState.downloadingFilePath,
       downloadedFilePath: this.viewState.downloadedFilePath,
       fileDownloadStatus: this.viewState.fileDownloadStatus,
+      activeFilePreviewPath: this.activeFilePreviewPath,
+      activeFilePreviewLoading: this.activeFilePreviewLoading,
       selectedImages: this.viewState.selectedImages,
       isVoiceListening: this.viewState.isVoiceListening,
       chatInput: this.viewState.chatInput,
       isSessionPinned: this.viewState.isSessionPinned,
       showSidebarButton: this.showSidebarButton,
       showBackButton: this.showBackButton,
+      showSidebarRestoreButton: this.showSidebarRestoreButton,
+      composerPresentation: this.composerPresentation,
+      contentHorizontalOffset: this.contentHorizontalOffset,
       onOpenSidebar: () => this.dispatch(ConversationIntents.simple(ConversationIntentType.OpenSidebar)),
+      onRestoreSidebar: this.onRestoreSidebar,
       onBack: () => this.dispatch(ConversationIntents.simple(ConversationIntentType.Back)),
-      onNewSession: () => this.dispatch(ConversationIntents.simple(ConversationIntentType.NewSession)),
       onTogglePinSession: () => this.dispatch(ConversationIntents.simple(ConversationIntentType.TogglePin)),
       onArchiveSession: () => this.dispatch(ConversationIntents.simple(ConversationIntentType.Archive)),
       onDeleteSession: () => this.dispatch(ConversationIntents.simple(ConversationIntentType.Delete)),
@@ -61,6 +73,8 @@ export struct ConversationViewHost {
       onRenameSession: (title: string) => this.dispatch(ConversationIntents.value(ConversationIntentType.RenameSession, title)),
       onCopyMessage: (text: string) => this.dispatch(ConversationIntents.value(ConversationIntentType.CopyMessage, text)),
       onRetryMessage: (text: string) => this.dispatch(ConversationIntents.value(ConversationIntentType.RetryMessage, text)),
+      onOpenFilePreview: (path: string, label: string) =>
+        this.dispatch(ConversationIntents.openFilePreview(path, label)),
       onSelectModel: (id: string) => this.dispatch(ConversationIntents.value(ConversationIntentType.SelectModel, id)),
       onPickImages: () => this.dispatch(ConversationIntents.simple(ConversationIntentType.PickImages)),
       onRemoveImage: (id: string) => this.dispatch(ConversationIntents.value(ConversationIntentType.RemoveImage, id)),

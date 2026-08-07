@@ -10,7 +10,7 @@ import { Tooltip, Modal, Button, Alert } from '@/component-library';
 import { Copy, Check, Download, CheckCircle2 } from 'lucide-react';
 import {
   getAboutInfo,
-  formatVersion,
+  formatDisplayedVersion,
   formatBuildDate
 } from '@/shared/utils/version';
 import { createLogger } from '@/shared/utils/logger';
@@ -42,6 +42,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
   const [manualCheckErrorMessage, setManualCheckErrorMessage] = useState<string | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualData, setManualData] = useState<CheckForUpdatesResponse | null>(null);
+  const [nativeVersion, setNativeVersion] = useState<string | null>(null);
   const updateStatus = useUpdateInstallStore(state => state.status);
   const updateProgress = useUpdateInstallStore(state => state.progress);
   const updateError = useUpdateInstallStore(state => state.error);
@@ -49,6 +50,13 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
 
   const aboutInfo = getAboutInfo();
   const { version, license } = aboutInfo;
+  const nativeRuntime = isTauriRuntime();
+  const displayedVersion = formatDisplayedVersion(
+    version,
+    nativeVersion,
+    nativeRuntime,
+    import.meta.env.DEV
+  );
   const updateProgressPercent =
     updateProgress.total != null && updateProgress.total > 0
       ? Math.min(100, Math.round((updateProgress.downloaded / updateProgress.total) * 100))
@@ -60,6 +68,21 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
       setManualCheckErrorMessage(null);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !nativeRuntime) return;
+    let active = true;
+    void systemAPI.getAppVersion()
+      .then(currentVersion => {
+        if (active) setNativeVersion(currentVersion);
+      })
+      .catch(error => {
+        log.warn('get_app_version failed; using generated version metadata', error);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isOpen, nativeRuntime]);
 
   const handleCheckForUpdates = useCallback(async () => {
     if (!isTauriRuntime()) {
@@ -134,7 +157,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
         <div className="bitfun-about-dialog__hero" data-bf-component="about-dialog" data-bf-part="hero">
           <h1 className="bitfun-about-dialog__title" data-bf-component="about-dialog" data-bf-part="title">{version.name}</h1>
           <div className="bitfun-about-dialog__version-badge" data-bf-component="about-dialog" data-bf-part="version">
-            {t('about.version', { version: formatVersion(version.version, version.isDev) })}
+            {t('about.version', { version: displayedVersion })}
           </div>
           <div className="bitfun-about-dialog__divider" data-bf-component="about-dialog" data-bf-part="decoration" />
           <div className="bitfun-about-dialog__dots" data-bf-component="about-dialog" data-bf-part="decoration">
@@ -146,7 +169,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
 
         {/* Scrollable area */}
         <div className="bitfun-about-dialog__scrollable" data-bf-component="about-dialog" data-bf-part="content">
-          {isTauriRuntime() ? (
+          {nativeRuntime ? (
             <div
               className="bitfun-about-dialog__update-card"
               data-bf-component="about-dialog"

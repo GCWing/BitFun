@@ -1639,6 +1639,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("save_canvas_state", RemoteWorkspacePolicy::LegacyUnaudited),
     (
+        "save_cloud_speech_config",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "save_git_repo_history",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),

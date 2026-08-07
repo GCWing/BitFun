@@ -590,18 +590,24 @@ mod tests {
     fn normalize_skill_override_lists_removes_duplicates_and_conflicts() {
         let (disabled, enabled) = normalize_skill_override_lists(
             vec![
-                "user::bitfun-system::pdf".to_string(),
-                "user::bitfun-system::pdf".to_string(),
+                "user::bitfun-system::ppt-design".to_string(),
+                "user::bitfun-system::ppt-design".to_string(),
             ],
             vec![
-                "user::bitfun-system::pdf".to_string(),
-                "user::bitfun-system::docx".to_string(),
-                "user::bitfun-system::docx".to_string(),
+                "user::bitfun-system::ppt-design".to_string(),
+                "user::bitfun-system::agent-browser".to_string(),
+                "user::bitfun-system::agent-browser".to_string(),
             ],
         );
 
-        assert_eq!(disabled, vec!["user::bitfun-system::pdf".to_string()]);
-        assert_eq!(enabled, vec!["user::bitfun-system::docx".to_string()]);
+        assert_eq!(
+            disabled,
+            vec!["user::bitfun-system::ppt-design".to_string()]
+        );
+        assert_eq!(
+            enabled,
+            vec!["user::bitfun-system::agent-browser".to_string()]
+        );
     }
 
     #[test]
@@ -612,7 +618,7 @@ mod tests {
             added_tools: Vec::new(),
             removed_tools: Vec::new(),
             disabled_user_skills: Vec::new(),
-            enabled_user_skills: vec!["user::bitfun-system::pdf".to_string()],
+            enabled_user_skills: vec!["user::bitfun-system::ppt-design".to_string()],
             subagent_overrides: Default::default(),
             tool_permission_rules: Vec::new(),
             default_tools: &[],
@@ -623,7 +629,7 @@ mod tests {
         assert_eq!(stored.profile_id, "coding_shared");
         assert_eq!(
             stored.enabled_user_skills,
-            vec!["user::bitfun-system::pdf".to_string()]
+            vec!["user::bitfun-system::ppt-design".to_string()]
         );
         assert!(stored.disabled_user_skills.is_empty());
     }

@@ -390,71 +390,73 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
           </div>
         </header>
         {renderError()}
-        {renderManualSubmit()}
-        {loading ? <p className="appearance-market__loading">{t('package.market.submissions.loading')}</p>
-          : submissions.length === 0 ? (
-            <div className="appearance-market__empty">
-              <Inbox size={28} aria-hidden="true" />
-              <p>{t('package.market.submissions.empty')}</p>
-            </div>
-          ) : (
-            <div
-              className="appearance-market__submission-list"
-              data-bf-component="appearance-config"
-              data-bf-part="marketSubmissionList"
-            >
-              {submissions.map(submission => (
-                <article
-                  key={submission.submissionId}
-                  className="appearance-market__submission"
-                  data-bf-component="appearance-config"
-                  data-bf-part="marketSubmission"
-                >
-                  <div className="appearance-market__submission-preview">
-                    {submission.previewUrl
-                      ? (
-                        <img
-                          src={marketImageUrl(submission.previewUrl, 'compact-v1')}
-                          alt=""
-                          loading="lazy"
-                          decoding="async"
-                          onError={(event) => retryOriginalMarketImage(event.currentTarget, submission.previewUrl!)}
-                        />
-                      )
-                      : <Image size={22} aria-hidden="true" />}
-                  </div>
-                  <div className="appearance-market__submission-body">
-                    <div className="appearance-market__submission-title">
-                      <strong>{submission.name || submission.slug}</strong>
-                      <span className={`appearance-market__submission-status appearance-market__submission-status--${submissionDisplayStatus(submission)}`}>
-                        {t(`package.market.submissions.status.${submissionDisplayStatus(submission)}`)}
-                      </span>
+        <div className="appearance-market__workflow-body">
+          {renderManualSubmit()}
+          {loading ? <p className="appearance-market__loading">{t('package.market.submissions.loading')}</p>
+            : submissions.length === 0 ? (
+              <div className="appearance-market__empty">
+                <Inbox size={28} aria-hidden="true" />
+                <p>{t('package.market.submissions.empty')}</p>
+              </div>
+            ) : (
+              <div
+                className="appearance-market__submission-list"
+                data-bf-component="appearance-config"
+                data-bf-part="marketSubmissionList"
+              >
+                {submissions.map(submission => (
+                  <article
+                    key={submission.submissionId}
+                    className="appearance-market__submission"
+                    data-bf-component="appearance-config"
+                    data-bf-part="marketSubmission"
+                  >
+                    <div className="appearance-market__submission-preview">
+                      {submission.previewUrl
+                        ? (
+                          <img
+                            src={marketImageUrl(submission.previewUrl, 'compact-v1')}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            onError={(event) => retryOriginalMarketImage(event.currentTarget, submission.previewUrl!)}
+                          />
+                        )
+                        : <Image size={22} aria-hidden="true" />}
                     </div>
-                    <p>{submission.description || submission.slug}</p>
-                    <small>
-                      {submission.packageVersion ? `v${submission.packageVersion} · ` : ''}
-                      {t('package.market.submissions.updated', { date: formattedDate(submission.updatedAt) })}
-                    </small>
-                    {submission.rejectionReason && (
-                      <p className="appearance-market__submission-rejection">
-                        {t('package.market.submissions.rejection', { reason: submission.rejectionReason })}
-                      </p>
+                    <div className="appearance-market__submission-body">
+                      <div className="appearance-market__submission-title">
+                        <strong>{submission.name || submission.slug}</strong>
+                        <span className={`appearance-market__submission-status appearance-market__submission-status--${submissionDisplayStatus(submission)}`}>
+                          {t(`package.market.submissions.status.${submissionDisplayStatus(submission)}`)}
+                        </span>
+                      </div>
+                      <p>{submission.description || submission.slug}</p>
+                      <small>
+                        {submission.packageVersion ? `v${submission.packageVersion} · ` : ''}
+                        {t('package.market.submissions.updated', { date: formattedDate(submission.updatedAt) })}
+                      </small>
+                      {submission.rejectionReason && (
+                        <p className="appearance-market__submission-rejection">
+                          {t('package.market.submissions.rejection', { reason: submission.rejectionReason })}
+                        </p>
+                      )}
+                    </div>
+                    {canWithdraw(submission) && (
+                      <Button
+                        variant="ghost"
+                        size="small"
+                        isLoading={actingId === submission.submissionId}
+                        onClick={() => void withdraw(submission)}
+                      >
+                        {t('package.market.submissions.withdraw')}
+                      </Button>
                     )}
-                  </div>
-                  {canWithdraw(submission) && (
-                    <Button
-                      variant="ghost"
-                      size="small"
-                      isLoading={actingId === submission.submissionId}
-                      onClick={() => void withdraw(submission)}
-                    >
-                      {t('package.market.submissions.withdraw')}
-                    </Button>
-                  )}
-                </article>
-              ))}
-            </div>
-          )}
+                  </article>
+                ))}
+              </div>
+            )}
+        </div>
       </section>
     );
   }

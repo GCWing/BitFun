@@ -11,11 +11,10 @@ mod tests {
 
     #[test]
     fn builtin_skill_groups_match_expected_sets() {
-        assert_eq!(builtin_skill_group_key("docx"), Some("office"));
-        assert_eq!(builtin_skill_group_key("pdf"), Some("office"));
         assert_eq!(builtin_skill_group_key("ppt-design"), Some("office"));
-        assert_eq!(builtin_skill_group_key("pptx"), Some("office"));
-        assert_eq!(builtin_skill_group_key("xlsx"), Some("office"));
+        for removed in ["docx", "pdf", "pptx", "xlsx"] {
+            assert_eq!(builtin_skill_group_key(removed), None);
+        }
         assert_eq!(builtin_skill_group_key("create-bitfun-skin"), Some("meta"));
         assert_eq!(builtin_skill_group_key("find-skills"), Some("meta"));
         assert_eq!(builtin_skill_group_key("miniapp-dev"), Some("miniapp"));

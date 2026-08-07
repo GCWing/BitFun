@@ -74,6 +74,13 @@ impl TryFrom<AIModelConfig> for AIConfig {
     type Error = String;
 
     fn try_from(other: AIModelConfig) -> Result<Self, Self::Error> {
+        if !other.supports_text_generation() {
+            return Err(format!(
+                "Model '{}' does not support text_chat and cannot be used for text generation",
+                other.name
+            ));
+        }
+
         let custom_request_body = if let Some(body_str) = &other.custom_request_body {
             match serde_json::from_str::<serde_json::Value>(body_str) {
                 Ok(value) => Some(value),
@@ -156,7 +163,7 @@ impl TryFrom<AIModelConfig> for AIConfig {
 #[cfg(test)]
 mod tests {
     use super::{resolve_request_url, AIConfig};
-    use crate::service::config::types::{AIModelConfig, ModelCategory};
+    use crate::service::config::types::{AIModelConfig, ModelCapability, ModelCategory};
 
     #[test]
     fn resolves_openai_request_url() {
@@ -312,5 +319,18 @@ mod tests {
         let error = AIConfig::try_from(model).expect_err("conversion should reject small context");
 
         assert!(error.contains("at least 32000"));
+    }
+
+    #[test]
+    fn rejects_pure_speech_models_at_the_text_generation_boundary() {
+        let mut model = base_model_config();
+        model.category = ModelCategory::SpeechRecognition;
+        model.capabilities = vec![ModelCapability::SpeechRecognition];
+        model.context_window = None;
+        model.max_tokens = None;
+
+        let error = AIConfig::try_from(model).expect_err("speech model is not a chat model");
+
+        assert!(error.contains("does not support text_chat"));
     }
 }

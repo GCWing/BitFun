@@ -5,9 +5,11 @@ edition.workspace = true
 
 [features]
 default = []
+document-read = ["dep:anydoc", "dep:sha2"]
 web-readable = ["dep:htmd", "dep:legible", "dep:readability-js", "dep:regex"]
 
 [dependencies]
+anydoc = { workspace = true, optional = true }
 bitfun-agent-tools = { path = "../tool-contracts" }
 bitfun-events = { path = "../../contracts/events" }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
@@ -23,6 +25,7 @@ log = { workspace = true }
 regex = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["rt", "sync", "time"] }
 tokio-util = { workspace = true }
 vte = { workspace = true, features = ["ansi"] }

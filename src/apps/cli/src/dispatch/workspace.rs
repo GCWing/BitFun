@@ -20,6 +20,7 @@ use anyhow::{bail, Context, Result};
 use base64::Engine as _;
 use bitfun_services_core::dispatch_workspace::sha256_file;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use super::protocol::{
     DispatchWorkspaceBundleBeginRequest, DispatchWorkspaceBundleBeginResponse,
@@ -41,7 +42,7 @@ const BUNDLE_RECORD_FILE: &str = "bundle.json";
 const SYNC_OPERATION_FILE: &str = "sync-operation.json";
 const INCOMING_BUNDLE_FILE: &str = "incoming.bundle";
 const RESULT_BUNDLE_FILE: &str = "result.bundle";
-/// Short job-id suffix that keeps two dispatches of one project apart, matching
+/// Short per-job suffix that keeps two dispatches of one project apart, matching
 /// the local managed-worktree convention.
 const WORKTREE_SUFFIX_CHARS: usize = 8;
 /// Upper bound on the readable half of a worktree directory name.
@@ -1219,8 +1220,16 @@ fn existing_worktree(
         quarantine_partial_directory(worktree_path, "worktree")?;
         return Ok(None);
     }
+    // Everything below reports the directory it is judging. A dispatch worktree
+    // is only ever reached through a name derived from the job, so an occupant
+    // that fails these checks is either another job's checkout or a hand-edited
+    // one — and naming which is which is the whole difference between a
+    // recoverable report and a dead end.
     if !commit_exists(worktree_path, base_commit)? {
-        bail!("dispatch worktree exists without the requested base commit");
+        bail!(
+            "dispatch worktree {} exists without the requested base commit {base_commit}",
+            worktree_path.display()
+        );
     }
     let current_branch = git(
         worktree_path,
@@ -1231,7 +1240,8 @@ fn existing_worktree(
     .to_string();
     if current_branch != branch {
         bail!(
-            "dispatch worktree is on branch '{current_branch}' instead of its managed branch '{branch}'"
+            "dispatch worktree {} is on branch '{current_branch}' instead of its managed branch '{branch}'",
+            worktree_path.display()
         );
     }
     let head = git(worktree_path, &["rev-parse", "HEAD"])?;
@@ -1239,7 +1249,10 @@ fn existing_worktree(
         worktree_path,
         &["merge-base", "--is-ancestor", base_commit, head.trim()],
     )? {
-        bail!("existing dispatch worktree does not descend from its requested base commit");
+        bail!(
+            "dispatch worktree {} does not descend from its requested base commit {base_commit}",
+            worktree_path.display()
+        );
     }
     Ok(Some(canonical_utf8(worktree_path)?))
 }
@@ -1370,6 +1383,13 @@ fn create_worktree(
 /// advisory input from the controller, so it is sanitized here and falls back to
 /// the remote URL's basename and finally to a constant — the path must never be
 /// shaped by an untrusted string.
+///
+/// The suffix digests the job id rather than slicing it. Job ids are minted as
+/// `dispatch-<uuid>`, so the leading alphanumerics every id shares — `dispatch`
+/// — were all that survived the slice, and every job of one project resolved to
+/// the same directory. The second session to start then met the first session's
+/// checkout and provisioning refused it. A digest depends on the whole id, so no
+/// shared prefix, suffix, or length can collapse two jobs onto one directory.
 fn worktree_directory_name(
     project_label: Option<&str>,
     remote_url: Option<&str>,
@@ -1378,16 +1398,23 @@ fn worktree_directory_name(
     let label = sanitize_label(project_label.unwrap_or_default())
         .or_else(|| sanitize_label(&remote_basename(remote_url.unwrap_or_default())))
         .unwrap_or_else(|| "workspace".to_string());
-    let suffix = job_id
-        .chars()
-        .filter(|character| character.is_ascii_alphanumeric())
-        .take(WORKTREE_SUFFIX_CHARS)
-        .collect::<String>();
-    if suffix.is_empty() {
-        label
-    } else {
-        format!("{label}-{suffix}")
+    match job_directory_suffix(job_id) {
+        Some(suffix) => format!("{label}-{suffix}"),
+        None => label,
     }
+}
+
+fn job_directory_suffix(job_id: &str) -> Option<String> {
+    if job_id.is_empty() {
+        return None;
+    }
+    let digest = Sha256::digest(job_id.as_bytes());
+    Some(
+        format!("{digest:x}")
+            .chars()
+            .take(WORKTREE_SUFFIX_CHARS)
+            .collect(),
+    )
 }
 
 fn sanitize_label(value: &str) -> Option<String> {
@@ -2302,26 +2329,186 @@ mod tests {
         provision_in_store(store, request).expect("second provision");
     }
 
+    /// Two sessions started from one workspace, with the job ids the controller
+    /// actually mints. Before the directory suffix digested the id, the second
+    /// one landed on the first one's checkout and provisioning refused it.
     #[test]
-    fn worktree_directories_are_named_after_the_project_not_the_job() {
+    fn a_second_session_on_one_workspace_provisions_alongside_the_first() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
+        let source = temp.path().join("source");
+        let base_commit = init_source_repository(&source);
+        let first = "dispatch-3d82ff46-bbf9-44c3-9c0f-2a1b0c4d5e6f";
+        let second = "dispatch-ac8fe8a3-85c7-4091-9ba4-856db2d55c2b";
+
+        // The controller branches its baseline before bundling, so the managed
+        // branch is what the target fetches out of the bundle.
+        let bundle = temp.path().join("base.bundle");
+        git(&source, &["branch", &format!("bitfun/dispatch/{first}")]).expect("managed branch");
+        git(
+            &source,
+            &[
+                "bundle",
+                "create",
+                path_arg(&bundle).expect("path"),
+                &format!("bitfun/dispatch/{first}"),
+            ],
+        )
+        .expect("bundle");
+
+        let request_for = |job_id: &str| DispatchWorkspaceProvisionRequest {
+            protocol_version: DISPATCH_PROTOCOL_VERSION,
+            job_id: job_id.to_string(),
+            repo_key: "abcdef0123456789".to_string(),
+            remote_url: None,
+            project_label: Some("BitFun".to_string()),
+            base_commit: base_commit.clone(),
+            branch: format!("bitfun/dispatch/{job_id}"),
+        };
+
+        // The first session has to carry the objects over: nothing is cached yet.
+        assert!(
+            provision_in_store(&store, request_for(first))
+                .expect("first provision")
+                .needs_bundle
+        );
+        bundle_begin_in_store(
+            &store,
+            DispatchWorkspaceBundleBeginRequest {
+                protocol_version: DISPATCH_PROTOCOL_VERSION,
+                job_id: first.to_string(),
+                sha256: sha256_file(&bundle).expect("digest"),
+                size: fs::symlink_metadata(&bundle).expect("metadata").len(),
+            },
+        )
+        .expect("bundle begin");
+        fs::copy(
+            &bundle,
+            store
+                .workspace_upload_dir(first)
+                .expect("job dir")
+                .join(INCOMING_BUNDLE_FILE),
+        )
+        .expect("stage bundle");
+        bundle_commit_in_store(
+            &store,
+            DispatchWorkspaceBundleCommitRequest {
+                job_id: first.to_string(),
+            },
+        )
+        .expect("bundle commit");
+        let first_response = provision_in_store(&store, request_for(first)).expect("first publish");
+        assert!(first_response.provisioned);
+
+        // The second session shares the repository cache, so it needs no bundle
+        // — but it must still get a checkout of its own.
+        let second_response =
+            provision_in_store(&store, request_for(second)).expect("second session provision");
+        assert!(second_response.provisioned, "second session was refused");
+        assert!(!second_response.needs_bundle);
+
+        let first_path = first_response.workspace_path.expect("first workspace");
+        let second_path = second_response.workspace_path.expect("second workspace");
+        assert_ne!(
+            first_path, second_path,
+            "both sessions shared one worktree directory"
+        );
+        for path in [&first_path, &second_path] {
+            assert_eq!(
+                fs::read(Path::new(path).join("file.txt")).expect("checked out file"),
+                b"base"
+            );
+        }
+        // Each checkout is parked on its own managed branch.
+        for (path, job_id) in [(&first_path, first), (&second_path, second)] {
+            let branch = git(
+                Path::new(path),
+                &["symbolic-ref", "--quiet", "--short", "HEAD"],
+            )
+            .expect("branch");
+            assert_eq!(branch.trim(), format!("bitfun/dispatch/{job_id}"));
+        }
+
+        // And re-provisioning either one is still idempotent.
+        let repeat = provision_in_store(&store, request_for(first)).expect("first reprovision");
+        assert_eq!(repeat.workspace_path.as_deref(), Some(first_path.as_str()));
+    }
+
+    #[test]
+    fn worktree_directories_lead_with_the_project_label() {
+        let label = |name: &str| {
+            name.rsplit_once('-')
+                .map(|(head, _)| head.to_string())
+                .expect("suffixed name")
+        };
         assert_eq!(
-            worktree_directory_name(Some("BitFun"), None, "dispatch-3d82ff46-bbf9-44c3"),
-            "BitFun-dispatch"
+            label(&worktree_directory_name(
+                Some("BitFun"),
+                None,
+                "dispatch-3d82ff46-bbf9-44c3"
+            )),
+            "BitFun"
         );
         // No label: the remote's own basename is the next most recognizable name.
         assert_eq!(
-            worktree_directory_name(None, Some("git@example.com:acme/app.git"), "abcdef123456"),
-            "app-abcdef12"
+            label(&worktree_directory_name(
+                None,
+                Some("git@example.com:acme/app.git"),
+                "abcdef123456"
+            )),
+            "app"
         );
         assert_eq!(
-            worktree_directory_name(None, Some("https://example.com/acme/app/"), "abcdef123456"),
-            "app-abcdef12"
+            label(&worktree_directory_name(
+                None,
+                Some("https://example.com/acme/app/"),
+                "abcdef123456"
+            )),
+            "app"
         );
         // Neither available: a constant, never an empty or job-shaped path.
         assert_eq!(
-            worktree_directory_name(None, None, "abcdef123456"),
-            "workspace-abcdef12"
+            label(&worktree_directory_name(None, None, "abcdef123456")),
+            "workspace"
         );
+        // An id with no characters to digest still yields a usable directory.
+        assert_eq!(worktree_directory_name(Some("BitFun"), None, ""), "BitFun");
+    }
+
+    /// Every job id is minted as `dispatch-<uuid>`, so a suffix sliced off the
+    /// front of the id is the same for all of them. That collapsed every session
+    /// of a project onto one directory and made the second one fail to provision.
+    #[test]
+    fn every_job_of_one_project_gets_its_own_worktree_directory() {
+        let name = |job_id: &str| worktree_directory_name(Some("BitFun"), None, job_id);
+        let first = name("dispatch-3d82ff46-bbf9-44c3-9c0f-2a1b0c4d5e6f");
+        let second = name("dispatch-ac8fe8a3-85c7-4091-9ba4-856db2d55c2b");
+
+        assert_ne!(first, second);
+        assert!(first.starts_with("BitFun-"), "{first} lost its label");
+        assert!(second.starts_with("BitFun-"), "{second} lost its label");
+        // Stable across calls: a retry must land on the directory it already has.
+        assert_eq!(first, name("dispatch-3d82ff46-bbf9-44c3-9c0f-2a1b0c4d5e6f"));
+        // Ids that differ only past the slice window still separate.
+        assert_ne!(name("dispatch-aaaaaaaa-1"), name("dispatch-aaaaaaaa-2"));
+    }
+
+    #[test]
+    fn worktree_directory_names_stay_safe_path_components() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
+        let name = worktree_directory_name(
+            Some("BitFun"),
+            None,
+            "dispatch-3d82ff46-bbf9-44c3-9c0f-2a1b0c4d5e6f",
+        );
+
+        // `worktree_dir` is the real gate; the digest must clear it unchanged.
+        let path = store
+            .worktree_dir("abcdef0123456789", &name)
+            .expect("worktree path");
+        assert!(path.starts_with(store.worktrees_root()));
+        assert!(path.ends_with(&name));
     }
 
     #[test]

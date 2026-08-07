@@ -43,6 +43,18 @@ export interface SessionCustomMetadata extends Record<string, unknown> {
   titleParams?: Record<string, unknown> | null;
 }
 
+export type SessionContextUsageSource = 'model_request' | 'context_compression';
+
+/** Exact session-level context usage persisted by the Agent Session runtime. */
+export interface SessionContextUsage {
+  turnId: string;
+  inputTokens: number;
+  outputTokens?: number;
+  totalTokens: number;
+  timestamp: number;
+  source: SessionContextUsageSource;
+}
+
 export interface SessionMetadata {
   sessionId: string;
   sessionName: string;
@@ -75,6 +87,7 @@ export interface SessionMetadata {
   snapshotSessionId?: string;
   tags: string[];
   customMetadata?: SessionCustomMetadata;
+  currentContextUsage?: SessionContextUsage;
   relationship?: SessionRelationship;
   todos?: any[];
   workspacePath?: string;

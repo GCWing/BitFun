@@ -177,6 +177,13 @@ export default function lifecycleUnitTest() {
       expect(state.showSettings).assertTrue();
       expect(state.showConnectSheet).assertTrue();
 
+      state.openSettings('account');
+      expect(state.showSettings).assertTrue();
+      expect(state.settingsMode).assertEqual('account');
+      state.leaveSettings();
+      expect(state.showSettings).assertTrue();
+      expect(state.settingsMode).assertEqual('general');
+
       state.closeGlobalSurfaces();
       expect(state.showSidebar).assertFalse();
       expect(state.showSettings).assertFalse();

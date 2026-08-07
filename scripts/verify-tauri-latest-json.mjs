@@ -5,6 +5,7 @@ const args = parseArgs(process.argv.slice(2));
 const manifestPath = requireArg(args, 'manifest');
 const version = args.version;
 const requiredPlatforms = parseListArg(args['required-platforms'] || '');
+const requiredManualPlatforms = parseListArg(args['required-manual-platforms'] || '');
 const checkUrls = ['1', 'true', 'yes'].includes(String(args['check-urls'] || '').toLowerCase());
 
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
@@ -33,9 +34,32 @@ for (const [platform, entry] of Object.entries(manifest.platforms)) {
   }
 }
 
+const manualInstallers = manifest.manual_installers || {};
+const missingManual = requiredManualPlatforms.filter((platform) => !manualInstallers[platform]);
+if (missingManual.length > 0) {
+  fail(`Missing required manual installers: ${missingManual.join(', ')}`);
+}
+for (const [platform, entry] of Object.entries(manualInstallers)) {
+  if (!entry || typeof entry !== 'object') fail(`Invalid manual installer entry for ${platform}`);
+  if (!entry.url || typeof entry.url !== 'string') fail(`Missing manual installer URL for ${platform}`);
+  if (!entry.signature_url || typeof entry.signature_url !== 'string') {
+    fail(`Missing manual installer signature URL for ${platform}`);
+  }
+  if (entry.signature_url !== `${entry.url}.sig`) {
+    fail(`Manual installer signature URL for ${platform} must equal url + .sig`);
+  }
+  if (manifest.platforms[platform]?.url === entry.url) {
+    fail(`Manual installer URL for ${platform} must not replace the updater URL`);
+  }
+}
+
 if (checkUrls) {
   for (const [platform, entry] of Object.entries(manifest.platforms)) {
     await assertUrlAvailable(platform, entry.url);
+  }
+  for (const [platform, entry] of Object.entries(manualInstallers)) {
+    await assertUrlAvailable(`manual installer ${platform}`, entry.url);
+    await assertUrlAvailable(`manual installer signature ${platform}`, entry.signature_url);
   }
 }
 

@@ -19,6 +19,7 @@ const RENDER_TIMEOUT_MS: u64 = 30_000;
 const RENDER_SETTLE_MS: u64 = 900;
 /// Reused hidden host — one window, navigate per slide (avoids create/close flash per page).
 const EXPORT_HOST_LABEL: &str = "miniapp-slide-export-host";
+const UTF8_BOM: &[u8] = b"\xEF\xBB\xBF";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -41,6 +42,13 @@ fn wrap_slide_html(html: &str, width: u32, height: u32) -> String {
     )
 }
 
+fn utf8_html_bytes(html: &str) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(UTF8_BOM.len() + html.len());
+    bytes.extend_from_slice(UTF8_BOM);
+    bytes.extend_from_slice(html.as_bytes());
+    bytes
+}
+
 /// Write slide HTML to app cache and return a `file://` URL for the export webview.
 fn file_url_for_export_html<R: tauri::Runtime>(
     app: &AppHandle<R>,
@@ -54,7 +62,10 @@ fn file_url_for_export_html<R: tauri::Runtime>(
     std::fs::create_dir_all(&export_dir)
         .map_err(|error| format!("Failed to create export cache dir: {error}"))?;
     let file_path = export_dir.join(format!("slide-{}.html", Uuid::new_v4()));
-    std::fs::write(&file_path, html)
+    // Sanitized slide documents may intentionally omit author-provided meta
+    // tags. The BOM makes the file encoding unambiguous before a hidden
+    // WebView renders it to PDF or PNG.
+    std::fs::write(&file_path, utf8_html_bytes(html))
         .map_err(|error| format!("Failed to write export HTML: {error}"))?;
     let url = tauri::Url::from_file_path(&file_path)
         .map_err(|_| "Failed to build file URL for export webview".to_string())?;
@@ -162,5 +173,33 @@ pub async fn miniapp_render_slide_page(
             .await
         }
         other => Err(format!("Unsupported slide render format: {other}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{utf8_html_bytes, wrap_slide_html, UTF8_BOM};
+
+    #[test]
+    fn export_html_bytes_are_utf8_even_when_full_document_has_no_charset_meta() {
+        let document = wrap_slide_html(
+            "<!doctype html><html><head><title>架构说明</title></head><body>中文 · café</body></html>",
+            1280,
+            720,
+        );
+        assert!(!document.to_ascii_lowercase().contains("charset="));
+
+        let bytes = utf8_html_bytes(&document);
+        assert!(bytes.starts_with(UTF8_BOM));
+        assert_eq!(
+            std::str::from_utf8(&bytes[UTF8_BOM.len()..]).expect("HTML should remain valid UTF-8"),
+            document
+        );
+    }
+
+    #[test]
+    fn fragment_wrapper_keeps_its_explicit_utf8_charset() {
+        let document = wrap_slide_html("<main>中文</main>", 1280, 720);
+        assert!(document.contains("<meta charset=\"UTF-8\">"));
     }
 }

@@ -6,6 +6,7 @@
 import type {
   DialogTurnKind,
   SessionKind,
+  SessionContextUsageSource,
   SessionTitleSource,
   SessionTurnCatalog,
 } from '@/shared/types/session-history';
@@ -199,6 +200,10 @@ export interface TokenUsage {
   outputTokens?: number;
   totalTokens: number;
   timestamp: number;
+  /** Persisted source turn used to invalidate usage after history rewrites. */
+  turnId?: string;
+  /** Runtime provenance for restored session-level context usage. */
+  source?: SessionContextUsageSource;
 }
 
 export interface AcpContextUsage {

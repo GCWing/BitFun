@@ -398,6 +398,18 @@ pub fn build_branched_session_metadata(facts: BranchSessionMetadataFacts<'_>) ->
         facts.boundary,
         facts.branch_lineage,
     );
+    if metadata
+        .current_context_usage
+        .as_ref()
+        .is_some_and(|usage| {
+            !facts
+                .branched_turns
+                .iter()
+                .any(|turn| turn.turn_id == usage.turn_id)
+        })
+    {
+        metadata.current_context_usage = None;
+    }
     metadata.relationship = None;
     metadata.todos = None;
     metadata.review_action_state = None;
@@ -480,8 +492,9 @@ fn normalize_nonempty(value: &str) -> Option<String> {
 mod tests {
     use super::*;
     use crate::session::{
-        ModelRoundData, SessionMetadata, SessionRelationship, SessionRelationshipKind,
-        TextItemData, ToolCallData, ToolItemData, UserMessageData,
+        ModelRoundData, SessionContextUsage, SessionContextUsageSource, SessionMetadata,
+        SessionRelationship, SessionRelationshipKind, TextItemData, ToolCallData, ToolItemData,
+        UserMessageData,
     };
     use serde_json::json;
 
@@ -768,6 +781,14 @@ mod tests {
             "parentDialogTurnId": "legacy-turn",
             "preserved": "value"
         }));
+        source.current_context_usage = Some(SessionContextUsage {
+            turn_id: "turn-3".to_string(),
+            input_tokens: 50_000,
+            output_tokens: Some(500),
+            total_tokens: 50_500,
+            timestamp: 40,
+            source: SessionContextUsageSource::ModelRequest,
+        });
         source.relationship = Some(SessionRelationship {
             kind: Some(SessionRelationshipKind::Subagent),
             parent_session_id: Some("parent".to_string()),
@@ -818,6 +839,7 @@ mod tests {
         assert!(branched.deep_review_run_manifest.is_none());
         assert!(branched.unread_completion.is_none());
         assert!(branched.needs_user_attention.is_none());
+        assert!(branched.current_context_usage.is_none());
 
         let custom_metadata = branched
             .custom_metadata
@@ -833,6 +855,40 @@ mod tests {
                 "baseTitle": "Source"
             })
         );
+    }
+
+    #[test]
+    fn build_branched_session_metadata_keeps_usage_for_a_copied_turn() {
+        let mut source = metadata("source");
+        source.current_context_usage = Some(SessionContextUsage {
+            turn_id: "turn-2".to_string(),
+            input_tokens: 2_000,
+            output_tokens: Some(200),
+            total_tokens: 2_200,
+            timestamp: 40,
+            source: SessionContextUsageSource::ModelRequest,
+        });
+        let turns = vec![turn("target", "turn-1", 0), turn("target", "turn-2", 1)];
+        let branch_lineage = BranchSessionLineage {
+            base_session_name: "Source".to_string(),
+            ordinal: 1,
+        };
+
+        let branched = build_branched_session_metadata(BranchSessionMetadataFacts {
+            source_metadata: &source,
+            target_session_id: "target".to_string(),
+            target_session_name: "Target".to_string(),
+            target_agent_type: "agentic".to_string(),
+            source_session_id: "source",
+            source_turn_id: "turn-2",
+            source_turn_index: 1,
+            boundary: SessionBranchBoundary::ThroughTurn,
+            branched_turns: &turns,
+            branch_lineage: &branch_lineage,
+            now_ms: 42,
+        });
+
+        assert_eq!(branched.current_context_usage, source.current_context_usage);
     }
 
     #[test]

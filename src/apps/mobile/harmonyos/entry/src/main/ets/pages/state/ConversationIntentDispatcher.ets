@@ -2,6 +2,7 @@ import { RemoteQuestionAnswerPayload, RemoteSession } from '../../model/RemoteMo
 import { AppRoute, AppRouteContract } from '../navigation/AppRouteContract';
 import { ConversationIntent, ConversationIntentType } from '../components/ConversationIntent';
 import { toRemoteQuestionAnswer } from '../components/ConversationUiModels';
+import { FilePreviewRequest } from './FilePreviewTarget';
 
 export class ConversationIntentDispatcherHooks {
   readonly openSidebar: () => void;
@@ -29,6 +30,7 @@ export class ConversationIntentDispatcherHooks {
   readonly selectModel: (modelId: string) => Promise<void>;
   readonly pickImages: () => Promise<void>;
   readonly removeImage: (id: string) => void;
+  readonly openFilePreview: (route: AppRoute, request: FilePreviewRequest) => void;
   readonly downloadFile: (path: string) => void;
   readonly send: () => Promise<void>;
   readonly voiceInput: () => Promise<void>;
@@ -45,7 +47,8 @@ export class ConversationIntentDispatcherHooks {
     reject: (id: string) => Promise<void>, cancel: (id: string) => Promise<void>,
     answer: (id: string, answers: RemoteQuestionAnswerPayload) => Promise<void>, rename: (title: string) => Promise<void>,
     copy: (text: string) => Promise<void>, retry: (text: string) => Promise<void>, selectModel: (id: string) => Promise<void>,
-    pickImages: () => Promise<void>, removeImage: (id: string) => void, downloadFile: (path: string) => void,
+    pickImages: () => Promise<void>, removeImage: (id: string) => void,
+    openFilePreview: (route: AppRoute, request: FilePreviewRequest) => void, downloadFile: (path: string) => void,
     send: () => Promise<void>, voiceInput: () => Promise<void>, inputChanged: (route: AppRoute, value: string) => void
   ) {
     this.openSidebar = openSidebar; this.back = back; this.newRemoteSession = newRemoteSession;
@@ -56,7 +59,8 @@ export class ConversationIntentDispatcherHooks {
     this.loadOlder = loadOlder; this.approve = approve; this.reject = reject; this.cancel = cancel;
     this.answer = answer; this.rename = rename; this.copy = copy; this.retry = retry;
     this.selectModel = selectModel; this.pickImages = pickImages; this.removeImage = removeImage;
-    this.downloadFile = downloadFile; this.send = send; this.voiceInput = voiceInput; this.inputChanged = inputChanged;
+    this.openFilePreview = openFilePreview; this.downloadFile = downloadFile; this.send = send;
+    this.voiceInput = voiceInput; this.inputChanged = inputChanged;
   }
 }
 
@@ -101,6 +105,8 @@ export class ConversationIntentDispatcher {
       case ConversationIntentType.SelectModel: void this.hooks.selectModel(intent.value); return;
       case ConversationIntentType.PickImages: void this.hooks.pickImages(); return;
       case ConversationIntentType.RemoveImage: this.hooks.removeImage(intent.value); return;
+      case ConversationIntentType.OpenFilePreview:
+        if (intent.filePreviewRequest) this.hooks.openFilePreview(route, intent.filePreviewRequest); return;
       case ConversationIntentType.DownloadFile: this.hooks.downloadFile(intent.value); return;
       case ConversationIntentType.Send: void this.hooks.send(); return;
       case ConversationIntentType.VoiceInput: void this.hooks.voiceInput(); return;

@@ -1521,8 +1521,11 @@ async fn admin_submission_detail(
     submission_id: &str,
 ) -> SkinMarketResult<AppearanceAdminSubmissionDetail> {
     let row = sqlx::query(
-        "SELECT manifest_json, package_sha256, preview_sha256, draft_json, package_meta_json
-         FROM submissions WHERE id = ?",
+        "SELECT s.manifest_json, s.package_sha256, s.preview_sha256, s.draft_json,
+                s.package_meta_json, u.github_id, u.login, u.avatar_url
+         FROM submissions s
+         LEFT JOIN users u ON u.id = s.owner_user_id
+         WHERE s.id = ?",
     )
     .bind(submission_id)
     .fetch_optional(state.database.pool())
@@ -1559,8 +1562,22 @@ async fn admin_submission_detail(
         }
         _ => None,
     };
+    let submitter = row
+        .try_get::<Option<i64>, _>("github_id")
+        .map_err(SkinMarketError::internal)?
+        .map(|github_id| {
+            Ok::<_, SkinMarketError>(AppearanceMarketUserSummary {
+                github_id,
+                login: row.try_get("login").map_err(SkinMarketError::internal)?,
+                avatar_url: row
+                    .try_get("avatar_url")
+                    .map_err(SkinMarketError::internal)?,
+            })
+        })
+        .transpose()?;
     Ok(AppearanceAdminSubmissionDetail {
         submission: submission_by_id(state, submission_id, None).await?,
+        submitter,
         manifest: manifest_json
             .map(|value| parse_json(value, "appearance manifest"))
             .transpose()?,

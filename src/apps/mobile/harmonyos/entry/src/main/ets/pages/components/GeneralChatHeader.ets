@@ -1,65 +1,124 @@
-import { CARD, INK, PAGE_BG } from './Theme';
+import { RemoteI18n } from '../../i18n/RemoteI18n';
+import { CARD, INK, LINE, PAGE_BG } from './Theme';
+import { CompactMenuButton } from './CompactMenuButton';
+import { SidebarToggleButton } from './SidebarToggleButton';
 
-@Component
+@ComponentV2
 export struct GeneralChatHeader {
-  onOpenSidebar: () => void = () => {};
-  @Prop showActions: boolean = false;
-  @Prop showSidebarButton: boolean = true;
-  onNewSession: () => void = () => {};
-  onOpenActions: () => void = () => {};
+  @Param title: string = '';
+  @Param showActions: boolean = false;
+  @Param showSidebarButton: boolean = true;
+  @Param showBackButton: boolean = false;
+  @Param showSidebarRestoreButton: boolean = false;
+  @Param showActionsMenu: boolean = false;
+  @BuilderParam actionsMenu: () => void = this.EmptyBuilder;
+  @Event onOpenSidebar: () => void = () => {};
+  @Event onRestoreSidebar: () => void = () => {};
+  @Event onBack: () => void = () => {};
+  @Event onOpenActions: () => void = () => {};
+  @Event onActionsMenuStateChange: (visible: boolean) => void = (_visible: boolean) => {};
 
   build() {
-    Row() {
-      if (this.showSidebarButton) {
-        Stack({ alignContent: Alignment.Center }) {
-          Image($r('app.media.gpt_home_menu_glyph'))
-            .width(26)
-            .height(26)
-            .objectFit(ImageFit.Contain)
-        }
-        .width(48)
-        .height(48)
-        .backgroundColor(CARD)
-        .borderRadius(24)
-        .shadow({ radius: 16, color: '#10000000', offsetY: 7 })
-        .onClick(() => {
-          this.onOpenSidebar();
-        })
-      }
-      Text('BitFun')
+    Row({ space: 8 }) {
+      this.LeadingControl()
+
+      Text(this.title || 'BitFun')
         .fontSize(17)
         .fontWeight(FontWeight.Medium)
         .fontColor(INK)
-        .height(48)
-        .padding({ left: this.showSidebarButton ? 18 : 0, right: 18 })
-        .margin({ left: this.showSidebarButton ? 12 : 0 })
-      Blank()
-      if (this.showActions) {
-        Row() {
-          Stack({ alignContent: Alignment.Center }) {
-            Image($r('app.media.remote_ref_edit'))
-              .width(24).height(24).objectFit(ImageFit.Contain)
-          }
-          .width(44).height(48)
-          .onClick(() => this.onNewSession())
-          Stack({ alignContent: Alignment.Center }) {
-            Image($r('app.media.remote_ref_more'))
-              .width(25).height(8).objectFit(ImageFit.Contain)
-          }
-          .width(44).height(48)
-          .onClick(() => this.onOpenActions())
-        }
-        .width(90).height(48)
-        .padding({ left: 1, right: 1 })
-        .backgroundColor('#FFFFFF')
-        .borderRadius(24)
-        .shadow({ radius: 16, color: '#10000000', offsetY: 7 })
-      }
+        .layoutWeight(1)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .textAlign(TextAlign.Center)
+
+      this.TrailingControl()
     }
     .width('100%')
-    .height(52)
+    .height(64)
     .alignItems(VerticalAlign.Center)
-    .padding({ left: 24, right: 24 })
+    .padding({ left: 16, right: 16, top: 8, bottom: 8 })
     .backgroundColor(PAGE_BG)
+  }
+
+  @Builder
+  private LeadingControl() {
+    if (this.showSidebarRestoreButton) {
+      SidebarToggleButton({
+        restore: true,
+        controlSize: 48,
+        onToggle: this.onRestoreSidebar
+      })
+    } else if (this.showBackButton) {
+      Stack({ alignContent: Alignment.Center }) {
+        Image($r('app.media.remote_ref_back'))
+          .width(15)
+          .height(23)
+          .objectFit(ImageFit.Contain)
+          .renderMode(ImageRenderMode.Template)
+          .foregroundColor(INK)
+      }
+      .width(44)
+      .height(44)
+      .backgroundColor(CARD)
+      .border({ width: 1, color: LINE })
+      .borderRadius(22)
+      .shadow({ radius: 10, color: LINE, offsetY: 3 })
+      .accessibilityText(RemoteI18n.t('common.back'))
+      .onClick(() => {
+        this.onBack();
+      })
+    } else if (this.showSidebarButton) {
+      CompactMenuButton({
+        onOpen: () => {
+          this.onOpenSidebar();
+        }
+      })
+    } else {
+      Blank().width(44).height(44)
+    }
+  }
+
+  @Builder
+  private TrailingControl() {
+    if (this.showActions) {
+      Stack({ alignContent: Alignment.Center }) {
+        Image($r('app.media.remote_ref_more'))
+          .width(23)
+          .height(7)
+          .objectFit(ImageFit.Contain)
+          .renderMode(ImageRenderMode.Template)
+          .foregroundColor(INK)
+      }
+      .width(44)
+      .height(44)
+      .backgroundColor(CARD)
+      .border({ width: 1, color: LINE })
+      .borderRadius(22)
+      .shadow({ radius: 10, color: LINE, offsetY: 3 })
+      .accessibilityText(RemoteI18n.t('sidebar.more'))
+      .bindPopup(this.showActionsMenu, {
+        builder: () => {
+          this.actionsMenu();
+        },
+        placement: Placement.BottomRight,
+        popupColor: '#00000000',
+        enableArrow: false,
+        autoCancel: true,
+        mask: false,
+        targetSpace: 8,
+        onStateChange: (event) => {
+          this.onActionsMenuStateChange(event.isVisible);
+        }
+      })
+      .onClick(() => {
+        this.onOpenActions();
+      })
+    } else {
+      Blank().width(44).height(44)
+    }
+  }
+
+  @Builder
+  private EmptyBuilder() {
   }
 }

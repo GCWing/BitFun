@@ -182,6 +182,15 @@ pub struct SessionMetadata {
     #[serde(skip_serializing_if = "Option::is_none", alias = "custom_metadata")]
     pub custom_metadata: Option<serde_json::Value>,
 
+    /// Latest authoritative context-usage value for restoring context display
+    /// state across hosts and process restarts.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "current_context_usage"
+    )]
+    pub current_context_usage: Option<SessionContextUsage>,
+
     /// Structured child-session relationship metadata.
     #[serde(
         default,
@@ -549,6 +558,44 @@ pub struct DialogTurnTokenUsageData {
 
     /// Frontend event timestamp in milliseconds since epoch.
     pub timestamp: u64,
+}
+
+/// Source of a persisted session context-usage value.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionContextUsageSource {
+    ModelRequest,
+    ContextCompression,
+}
+
+/// Exact context-usage value owned by the Agent Session runtime.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionContextUsage {
+    /// Dialog turn that produced this value.
+    #[serde(alias = "turn_id")]
+    pub turn_id: String,
+
+    /// Input/prompt tokens for a model request, or the compacted context size.
+    #[serde(alias = "input_tokens")]
+    pub input_tokens: u64,
+
+    /// Output/completion tokens when this value came from a model request.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "output_tokens"
+    )]
+    pub output_tokens: Option<u64>,
+
+    /// Provider total for a model request, or the compacted context size.
+    #[serde(alias = "total_tokens")]
+    pub total_tokens: u64,
+
+    /// Runtime event timestamp in milliseconds since epoch.
+    pub timestamp: u64,
+
+    pub source: SessionContextUsageSource,
 }
 
 /// Persisted dialog turn kind.
@@ -996,6 +1043,7 @@ impl SessionMetadata {
             snapshot_session_id: None,
             tags: Vec::new(),
             custom_metadata: None,
+            current_context_usage: None,
             relationship: None,
             todos: None,
             review_action_state: None,

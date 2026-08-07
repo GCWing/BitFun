@@ -30,8 +30,6 @@ import {
   densityToIndex,
   indexToDensity,
   uid,
-  DEFAULT_PREFERRED_MODEL,
-  normalizePreferredModel,
 } from './src/state.js';
 import { getAllStylePresets, getStylePreset, DEFAULT_STYLE_PRESET, resolveStylePalette } from './src/style-presets.js';
 import { enhanceFlatSelect, refreshFlatSelect } from './src/flat-select.js';
@@ -835,7 +833,6 @@ async function ensureDeckAgentSession() {
   const requestSession = async (sessionId) => host.backend.ensureSession({
     sessionId: sessionId || undefined,
     appDataWorkspace: project.workspaceSubdir,
-    model: normalizePreferredModel(state.preferredModel),
   });
 
   let result;
@@ -1149,15 +1146,11 @@ async function executeBackendTurn(requestInput, hooks = {}, options = {}) {
   const activity = { lastEventAt: Date.now() };
 
   try {
-    const preferredModel = normalizePreferredModel(
-      options.model || state.preferredModel || DEFAULT_PREFERRED_MODEL,
-    );
     const result = await host.backend.call('ppt.generate', requestInput, {
       entityId: 'deck',
       idempotencyKey: `ppt-live-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       sessionId: options.sessionId || undefined,
       appDataWorkspace: options.appDataWorkspace || undefined,
-      model: preferredModel,
       displayText: options.displayText || requestInput.instruction,
     });
     sessionId = result?.sessionId || null;
@@ -1731,8 +1724,6 @@ async function runCoworkDeckGeneration(operation, instruction, options = {}) {
           runId: retrySession?.project?.runId || '',
           skillKey: PPT_DESIGN_SKILL_KEY,
         };
-        state.preferredModel = normalizePreferredModel(state.preferredModel);
-
         // The agent delivered through files; read them back.
         addGenerationEvent({ title: t('generationParsingDeck'), detail: '', kind: 'parsing' });
         setGenerationStep('verify', 'running', t('generationVerifyingDeck'));
@@ -3437,27 +3428,6 @@ function bindPropertyPanels() {
     });
   }
 
-  /* Cowork model selector */
-  const modelSelect = $('modelSelect');
-  if (modelSelect) {
-    enhanceFlatSelect(modelSelect);
-    modelSelect.addEventListener('change', () => {
-      const selected = normalizePreferredModel(modelSelect.value);
-      if (selected === state.preferredModel) return;
-      state.preferredModel = selected;
-      refreshFlatSelect(modelSelect);
-      void (async () => {
-        // Keep the topic's conversation intact; ensureSession updates the
-        // persisted session's model in place.
-        await ensureDeckAgentSession();
-        await persist(true);
-      })().catch((error) => {
-        runtime().log?.warn?.('PPT Live failed to prepare the updated model session', {
-          error: String(error),
-        });
-      });
-    });
-  }
 }
 
 /* ============================================
@@ -3760,67 +3730,10 @@ function renderStylePresetOptions() {
   refreshFlatSelect(stylePresetSelect);
 }
 
-function appendModelOption(select, value, label) {
-  const option = document.createElement('option');
-  option.value = value;
-  option.textContent = label;
-  select.append(option);
-}
-
-/** Match host chat ModelSelector: concrete options use model_name. */
-function modelOptionLabel(model) {
-  const modelName = String(model?.modelName || model?.model_name || '').trim();
-  if (modelName) return modelName;
-  const configName = String(model?.name || '').trim();
-  if (configName) return configName;
-  return String(model?.id || '').trim();
-}
-
-function renderModelOptions(models = []) {
-  const modelSelect = $('modelSelect');
-  if (!modelSelect) return;
-  const selected = normalizePreferredModel(state.preferredModel);
-  modelSelect.textContent = '';
-
-  // Same special entries as chat ModelSelector: auto / primary / fast, then concrete models.
-  appendModelOption(modelSelect, 'auto', t('modelOptionAuto'));
-  appendModelOption(modelSelect, 'primary', t('modelOptionPrimary'));
-  appendModelOption(modelSelect, 'fast', t('modelOptionFast'));
-
-  for (const model of Array.isArray(models) ? models : []) {
-    const id = String(model?.id || '').trim();
-    if (!id || id === 'auto' || id === 'primary' || id === 'fast') continue;
-    appendModelOption(modelSelect, id, modelOptionLabel(model));
-  }
-
-  if (![...modelSelect.options].some((option) => option.value === selected)) {
-    appendModelOption(modelSelect, selected, selected);
-  }
-  modelSelect.value = selected;
-  if (modelSelect.selectedIndex < 0) modelSelect.value = DEFAULT_PREFERRED_MODEL;
-  state.preferredModel = normalizePreferredModel(modelSelect.value);
-  refreshFlatSelect(modelSelect);
-}
-
-async function loadModelOptions() {
-  renderModelOptions([]);
-  const getModels = runtime()?.ai?.getModels;
-  if (typeof getModels !== 'function') return;
-  try {
-    const models = await getModels();
-    renderModelOptions(models);
-  } catch (error) {
-    runtime().log?.warn?.('PPT Live failed to list AI models', { error: String(error) });
-    renderModelOptions([]);
-  }
-}
-
 function syncLocale() {
   state.generation = normalizeGeneration(state.generation);
   applyI18n();
   renderStylePresetOptions();
-  renderModelOptions([]);
-  void loadModelOptions();
   syncComposerClaim();
   rerender();
 }
@@ -3859,7 +3772,6 @@ async function init() {
     syncLocale();
     await ensureDeckAgentSession();
     syncStylePanelFromState(state);
-    await loadModelOptions();
     await persist(true);
   } catch (error) {
     runtime().log?.error?.('PPT Live init failed', { error: String(error) });

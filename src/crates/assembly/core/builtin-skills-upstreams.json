@@ -3,18 +3,6 @@
   "synced_on": "2026-07-22",
   "sources": [
     {
-      "skills": ["docx", "pptx", "xlsx"],
-      "repository": "https://github.com/anthropics/skills",
-      "revision": "fa0fa64bdc967915dc8399e803be67759e1e62b8",
-      "local_patches": [
-        "normalize upstream trailing whitespace",
-        "route documented archive editing through safe_extract and rezip",
-        "bound archive extraction and reject normalized-path collisions",
-        "use BitFun as the default Word comment author",
-        "retain the BitFun 2026 year-format example"
-      ]
-    },
-    {
       "skills": ["agent-browser"],
       "repository": "https://github.com/vercel-labs/agent-browser",
       "revision": "81c336c1c20b80ac648e0416a7b6e0c0ae7878bb",

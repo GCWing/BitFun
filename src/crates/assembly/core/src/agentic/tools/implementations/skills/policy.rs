@@ -11,10 +11,6 @@ mod tests {
     #[test]
     fn builtin_defaults_follow_mode_policies() {
         assert_eq!(
-            resolve_builtin_default_enabled("pdf", "agentic"),
-            Some(false)
-        );
-        assert_eq!(
             resolve_builtin_default_enabled("ppt-design", "agentic"),
             Some(false)
         );
@@ -26,7 +22,6 @@ mod tests {
             resolve_builtin_default_enabled("agent-browser", "agentic"),
             Some(false)
         );
-        assert_eq!(resolve_builtin_default_enabled("pdf", "Cowork"), Some(true));
         assert_eq!(
             resolve_builtin_default_enabled("agent-browser", "Cowork"),
             Some(false)
@@ -35,7 +30,10 @@ mod tests {
             resolve_builtin_default_enabled("gstack-review", "Team"),
             Some(true)
         );
-        assert_eq!(resolve_builtin_default_enabled("pdf", "Team"), Some(false));
+        assert_eq!(
+            resolve_builtin_default_enabled("ppt-design", "Team"),
+            Some(false)
+        );
         assert_eq!(
             resolve_builtin_default_enabled("miniapp-dev", "Team"),
             Some(false)
@@ -45,23 +43,29 @@ mod tests {
             Some(true)
         );
         assert_eq!(
-            resolve_builtin_default_enabled("pdf", "DeepResearch"),
+            resolve_builtin_default_enabled("ppt-design", "DeepResearch"),
             Some(false)
         );
         assert_eq!(
             resolve_builtin_default_enabled("agent-browser", "Claw"),
             Some(false)
         );
-        assert_eq!(resolve_builtin_default_enabled("pdf", "Claw"), Some(false));
+        assert_eq!(
+            resolve_builtin_default_enabled("ppt-design", "Claw"),
+            Some(false)
+        );
         assert_eq!(
             resolve_builtin_default_enabled("agent-browser", "coding_shared"),
             Some(false)
         );
         assert_eq!(
-            resolve_builtin_default_enabled("pdf", "coding_shared"),
+            resolve_builtin_default_enabled("ppt-design", "coding_shared"),
             Some(false)
         );
-        assert_eq!(resolve_builtin_default_enabled("pdf", "Other"), Some(false));
+        assert_eq!(
+            resolve_builtin_default_enabled("ppt-design", "Other"),
+            Some(false)
+        );
     }
 
     #[test]

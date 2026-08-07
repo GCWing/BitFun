@@ -178,7 +178,7 @@ test('prompt pins the stable skill key and workspace-relative delivery contract'
   assert.match(prompt, /禁止.*Read references\/style-presets/);
 });
 
-test('backend adapter ensures a topic session and forwards preferred model into agent.run options', async () => {
+test('backend adapter reuses the topic session without overriding the host-selected model', async () => {
   const { installBitFunBackendAdapter } = await import('../src/bitfun-backend-adapter.js');
   const ensureCalls = [];
   const calls = [];
@@ -219,13 +219,34 @@ test('backend adapter ensures a topic session and forwards preferred model into 
     sessionName: 'PPT Live',
     sessionId: 's1',
     appDataWorkspace: 'decks/demo',
-    model: 'fast',
   }]);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].model, 'fast');
+  assert.equal(Object.hasOwn(calls[0], 'model'), false);
   assert.equal(calls[0].sessionId, 's1');
   assert.equal(calls[0].appDataWorkspace, 'decks/demo');
   assert.equal(calls[0].displayText, '随便做几页测试页');
+});
+
+test('legacy model state is discarded and PPT Live no longer renders its own selector', async () => {
+  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  const previousWindow = globalThis.window;
+  const previousDocument = globalThis.document;
+  globalThis.window = { app: { locale: 'en-US' } };
+  globalThis.document = { documentElement: { lang: 'en-US' } };
+
+  let restored;
+  try {
+    const { ensureState } = await import('../src/state.js');
+    restored = ensureState({ preferredModel: 'fast' });
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+  }
+
+  assert.equal(Object.hasOwn(restored, 'preferredModel'), false);
+  assert.doesNotMatch(html, /modelSelect|propertiesModel/);
 });
 
 test('PPT topic lifecycle eagerly creates or rebinds its dedicated session', async () => {

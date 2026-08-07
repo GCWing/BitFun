@@ -20,10 +20,12 @@ import { GeneralChatCommandClient, GeneralChatCommandController } from '../main/
 import {
   GeneralChatConfigSnapshot,
   GeneralChatConfigStore,
-  GeneralChatConfigValidator
+  GeneralChatConfigValidator,
+  GeneralChatModelSelectionPolicy
 } from '../main/ets/services/general-chat/GeneralChatConfigStore';
 import { GeneralChatDraftController, GeneralChatDraftScheduler } from '../main/ets/services/general-chat/GeneralChatDraftController';
 import { GeneralChatDraftLifecycleController } from '../main/ets/services/general-chat/GeneralChatDraftLifecycleController';
+import { GeneralChatCloudConfigPolicy } from '../main/ets/services/general-chat/GeneralChatCloudConfigPolicy';
 import { GeneralChatEventMapper } from '../main/ets/services/general-chat/GeneralChatEventMapper';
 import { GeneralChatExportFormatter } from '../main/ets/services/general-chat/GeneralChatExportFormatter';
 import {
@@ -532,6 +534,21 @@ export default function transportAndGeneralChatUnitTest() {
       expect(messages.length).assertEqual(1);
       expect(messages[0].status).assertEqual('sent');
     });
+
+    it('does not persist assistant retry detail after an interrupted turn', 0, async () => {
+      const localStore = new FakeGeneralChatLocalStore();
+      const repository = new GeneralChatRepository(new MockGeneralChatAdapter(), localStore);
+      const session = await repository.createSession('中断恢复');
+      const interrupted = chatMessage('assistant-failed-1', 'assistant', 'Partial reply', 'failed');
+      interrupted.detail = 'Retry prompt';
+
+      await repository.recordAssistantMessage(session.id, interrupted);
+
+      const messages = await repository.messages(session.id);
+      expect(messages[0].status).assertEqual('failed');
+      expect(messages[0].detail || '').assertEqual('');
+      expect((await localStore.loadMessages(session.id))[0].detail || '').assertEqual('');
+    });
   });
 
   describe('GeneralChatExportFormatter', () => {
@@ -728,6 +745,73 @@ export default function transportAndGeneralChatUnitTest() {
       }, false);
       expect(urlError).assertEqual('API URL 必须以 http:// 或 https:// 开头。');
       expect(keyError).assertEqual('请输入 API Key。');
+    });
+  });
+
+  describe('GeneralChatModelSelectionPolicy', () => {
+    it('keeps an existing cloud selection when a local model is saved', 0, () => {
+      const shouldActivateLocal = GeneralChatModelSelectionPolicy.shouldActivateSavedLocalModel({
+        version: 4,
+        models: [{
+          id: 'cloud:account-model',
+          name: 'Account model',
+          provider: 'openai',
+          base_url: 'https://chat.example.com/v1',
+          model_name: 'account-model',
+          enabled: true,
+          capabilities: []
+        }],
+        default_models: { primary: 'cloud:account-model' },
+        session_model_id: 'cloud:account-model'
+      });
+
+      expect(shouldActivateLocal).assertFalse();
+    });
+
+    it('activates the first saved local model when no model was previously available', 0, () => {
+      const shouldActivateLocal = GeneralChatModelSelectionPolicy.shouldActivateSavedLocalModel({
+        version: 1,
+        models: [],
+        default_models: {}
+      });
+
+      expect(shouldActivateLocal).assertTrue();
+    });
+  });
+
+  describe('GeneralChatCloudConfigPolicy', () => {
+    it('orders the primary model first while retaining other compatible account models', 0, () => {
+      const payload = '{"config":{"ai":{"default_models":{"primary":"primary-model"},"models":[' +
+        '{"id":"fallback-model","provider":"openai","model_name":"fallback","base_url":"https://fallback.example.com/v1","api_key":"fallback-key","enabled":true,"category":"general_chat"},' +
+        '{"id":"primary-model","provider":"openai","model_name":"primary","base_url":"https://primary.example.com/v1/","api_key":"primary-key","enabled":true,"category":"code_specialized"}' +
+        ']}}}';
+
+      const models = GeneralChatCloudConfigPolicy.models(payload);
+
+      expect(models.length).assertEqual(2);
+      expect(models[0].modelId).assertEqual('cloud:primary-model');
+      expect(models[0].apiUrl).assertEqual('https://primary.example.com/v1');
+      expect(models[0].modelName).assertEqual('primary');
+      expect(models[0].apiKey).assertEqual('primary-key');
+      expect(models[1].modelId).assertEqual('cloud:fallback-model');
+    });
+
+    it('skips subscription models and adapts an Anthropic general-chat endpoint', 0, () => {
+      const payload = '{"ai":{"default_models":{"primary":"subscription-model"},"models":[' +
+        '{"id":"subscription-model","provider":"openai","model_name":"codex","base_url":"https://subscription.example.com","api_key":"unused","enabled":true,"category":"general_chat","auth":{"type":"subscription"}},' +
+        '{"id":"anthropic-model","provider":"anthropic","model_name":"claude","base_url":"https://api.anthropic.com/","api_key":"anthropic-key","enabled":true,"category":"general_chat"}' +
+        ']}}';
+
+      const selected = GeneralChatCloudConfigPolicy.selectModel(payload);
+
+      expect(selected?.modelId).assertEqual('cloud:anthropic-model');
+      expect(selected?.apiUrl).assertEqual('https://api.anthropic.com/v1/messages');
+    });
+
+    it('returns no model for malformed or unusable cloud settings', 0, () => {
+      const unusable = '{"ai":{"models":[{"id":"disabled","enabled":false,"base_url":"https://api.example.com","model_name":"model","api_key":"key"}]}}';
+      expect(GeneralChatCloudConfigPolicy.models('{not-json').length).assertEqual(0);
+      expect(GeneralChatCloudConfigPolicy.models(unusable).length).assertEqual(0);
     });
   });
 

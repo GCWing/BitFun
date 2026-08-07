@@ -1,4 +1,4 @@
-import { AssistantEntry, AssistantListResponse, ChatMessageItemResponse, ChatMessageResponse, CommandStatusResponse, CreateSessionOptions, CreateSessionResponse, FileInfo, FileInfoResponse, InitialSyncResult, ModelCatalogResponse, PermissionModeResponse, PollSessionResponse, PollSessionResult, ReadFileChunkResponse, ReadFileResult, RecentWorkspaceEntry, RecentWorkspaceListResponse, RemoteCommand, RemoteDescriptor, RemoteImageContext, RemoteModelCatalog, RemotePermissionMode, RemoteQuestionAnswerPayload, RemoteSession, SendMessageResponse, SessionListResponse, SessionListResult, SessionMessagesResponse, SessionMessagesResult, SessionSummary, SetAssistantResponse, SetSessionModelResponse, SetWorkspaceResponse, WorkspaceInfo, WorkspaceInfoResponse } from '../model/RemoteModels';
+import { AssistantEntry, AssistantListResponse, ChatMessageItemResponse, ChatMessageResponse, CommandStatusResponse, CreateSessionOptions, CreateSessionResponse, FileInfo, FileInfoResponse, InitialSyncResult, ModelCatalogResponse, PermissionModeResponse, PollSessionResponse, PollSessionResult, ReadFileChunkResponse, ReadFileChunkResult, ReadFileResult, RecentWorkspaceEntry, RecentWorkspaceListResponse, RemoteCommand, RemoteDescriptor, RemoteImageContext, RemoteModelCatalog, RemotePermissionMode, RemoteQuestionAnswerPayload, RemoteSession, SendMessageResponse, SessionListResponse, SessionListResult, SessionMessagesResponse, SessionMessagesResult, SessionSummary, SetAssistantResponse, SetSessionModelResponse, SetWorkspaceResponse, WorkspaceInfo, WorkspaceInfoResponse } from '../model/RemoteModels';
 import { Encoding } from './Encoding';
 import { PairIdentity, RelayHttpClient } from './RelayHttpClient';
 import { CloudAccountClient, CloudAccountSession } from './CloudAccountClient';
@@ -182,6 +182,10 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     const command = RemoteCommandFactory.createSession(options, workspacePath);
     const response = await this.send<CreateSessionResponse>(command);
     const sessionId = response.session_id || response.id || '';
+    const modelId = options.modelId?.trim() || '';
+    if (modelId.length > 0) {
+      await this.setSessionModel(sessionId, modelId);
+    }
     const normalizedAgentType = options.agentType.toLowerCase();
     const fallbackTitle = normalizedAgentType === 'claw' || normalizedAgentType === 'assistant' || normalizedAgentType === 'chat' ?
       'Assistant Session' : normalizedAgentType === 'cowork' ? 'Cowork Session' : 'Code Session';
@@ -317,6 +321,25 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     };
   }
 
+  async readFileChunk(
+    path: string,
+    offset: number,
+    limit: number,
+    sessionId?: string
+  ): Promise<ReadFileChunkResult> {
+    const response = await this.send<ReadFileChunkResponse>(
+      RemoteCommandFactory.readFileChunk(path, offset, limit, sessionId)
+    );
+    return {
+      name: response.name || RemoteResponseMapper.basename(path),
+      contentBase64: response.chunk_base64 || '',
+      offset: response.offset || offset,
+      chunkSize: response.chunk_size || 0,
+      totalSize: response.total_size || 0,
+      mimeType: response.mime_type || 'application/octet-stream'
+    };
+  }
+
   async readFile(path: string, sessionId?: string, onProgress?: (downloaded: number, total: number) => void): Promise<ReadFileResult> {
     const chunkSize = 3 * 1024 * 1024;
     let offset = 0;
@@ -325,14 +348,12 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     let totalSize = 0;
     const chunks: string[] = [];
     while (true) {
-      const command = RemoteCommandFactory.readFileChunk(path, offset, chunkSize, sessionId);
-      const response = await this.send<ReadFileChunkResponse>(command);
-      const chunk = response.chunk_base64 || '';
-      const readSize = response.chunk_size || 0;
-      chunks.push(chunk);
+      const response = await this.readFileChunk(path, offset, chunkSize, sessionId);
+      const readSize = response.chunkSize;
+      chunks.push(response.contentBase64);
       fileName = response.name || fileName;
-      mimeType = response.mime_type || mimeType;
-      totalSize = response.total_size || totalSize;
+      mimeType = response.mimeType || mimeType;
+      totalSize = response.totalSize || totalSize;
       offset += readSize;
       if (onProgress) {
         onProgress(offset, totalSize);

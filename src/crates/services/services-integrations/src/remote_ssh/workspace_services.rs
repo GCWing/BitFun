@@ -11,8 +11,39 @@ use bitfun_runtime_ports::{
 };
 use std::sync::Arc;
 
-use super::{RemoteFileService, SSHCommandOptions, SSHCommandResult, SSHConnectionManager};
+use super::{
+    RemoteFileEntry, RemoteFileService, SSHCommandOptions, SSHCommandResult, SSHConnectionManager,
+};
 use crate::remote_ssh::shell;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BoundedReadPreflight {
+    Transfer,
+    TooLarge,
+}
+
+fn bounded_read_preflight(
+    path: &str,
+    entry: Option<&RemoteFileEntry>,
+    max_bytes: usize,
+) -> anyhow::Result<BoundedReadPreflight> {
+    let Some(entry) = entry else {
+        // Let the actual transfer report a precise missing-file or transport error.
+        return Ok(BoundedReadPreflight::Transfer);
+    };
+    if entry.is_symlink {
+        // SFTP stat follows the final symlink while container metadata does not. The transfer
+        // follows it in both backends, and the progress callback still enforces the byte limit.
+        return Ok(BoundedReadPreflight::Transfer);
+    }
+    if !entry.is_file {
+        anyhow::bail!("Remote path is not a file: {path}");
+    }
+    if entry.size.is_some_and(|size| size > max_bytes as u64) {
+        return Ok(BoundedReadPreflight::TooLarge);
+    }
+    Ok(BoundedReadPreflight::Transfer)
+}
 
 /// SSH-backed filesystem implementation of [`WorkspaceFileSystem`].
 pub struct RemoteWorkspaceFs {
@@ -27,12 +58,48 @@ impl RemoteWorkspaceFs {
             file_service,
         }
     }
+
+    async fn transfer_file_bounded(
+        &self,
+        path: &str,
+        max_bytes: usize,
+    ) -> anyhow::Result<Option<Vec<u8>>> {
+        let mut exceeded = false;
+        let bytes = match self
+            .file_service
+            .read_file_with_progress(&self.connection_id, path, &mut |bytes_read, total_size| {
+                let over_limit = bytes_read > max_bytes as u64 || total_size > max_bytes as u64;
+                exceeded |= over_limit;
+                !over_limit
+            })
+            .await
+        {
+            Ok(bytes) => bytes,
+            Err(_) if exceeded => return Ok(None),
+            Err(error) => return Err(error),
+        };
+        Ok((bytes.len() <= max_bytes).then_some(bytes))
+    }
 }
 
 #[async_trait]
 impl WorkspaceFileSystem for RemoteWorkspaceFs {
     async fn read_file(&self, path: &str) -> anyhow::Result<Vec<u8>> {
         self.file_service.read_file(&self.connection_id, path).await
+    }
+
+    async fn read_file_bounded(
+        &self,
+        path: &str,
+        max_bytes: usize,
+    ) -> anyhow::Result<Option<Vec<u8>>> {
+        let entry = self.file_service.stat(&self.connection_id, path).await?;
+        if bounded_read_preflight(path, entry.as_ref(), max_bytes)?
+            == BoundedReadPreflight::TooLarge
+        {
+            return Ok(None);
+        }
+        self.transfer_file_bounded(path, max_bytes).await
     }
 
     async fn read_file_text(&self, path: &str) -> anyhow::Result<String> {
@@ -55,24 +122,10 @@ impl WorkspaceFileSystem for RemoteWorkspaceFs {
         if !entry.is_file || entry.size.is_some_and(|size| size > max_bytes as u64) {
             return Ok(None);
         }
-        let mut exceeded = false;
-        let bytes = match self
-            .file_service
-            .read_file_with_progress(&self.connection_id, path, &mut |bytes_read, total_size| {
-                let over_limit = bytes_read > max_bytes as u64 || total_size > max_bytes as u64;
-                exceeded |= over_limit;
-                !over_limit
-            })
-            .await
-        {
-            Ok(bytes) => bytes,
-            Err(_) if exceeded => return Ok(None),
-            Err(error) => return Err(error),
-        };
-        if bytes.len() > max_bytes {
-            return Ok(None);
-        }
-        Ok(Some(String::from_utf8_lossy(&bytes).to_string()))
+        Ok(self
+            .transfer_file_bounded(path, max_bytes)
+            .await?
+            .map(|bytes| String::from_utf8_lossy(&bytes).to_string()))
     }
 
     async fn write_file(&self, path: &str, contents: &[u8]) -> anyhow::Result<()> {
@@ -153,6 +206,43 @@ impl WorkspaceFileSystem for RemoteWorkspaceFs {
                 is_symlink: entry.is_symlink,
             })
             .collect())
+    }
+}
+
+#[cfg(test)]
+mod bounded_read_tests {
+    use super::*;
+
+    fn entry(is_file: bool, is_symlink: bool, size: Option<u64>) -> RemoteFileEntry {
+        RemoteFileEntry {
+            name: "document.docx".to_string(),
+            path: "/workspace/document.docx".to_string(),
+            is_dir: !is_file && !is_symlink,
+            is_file,
+            is_symlink,
+            size,
+            modified: None,
+            permissions: None,
+        }
+    }
+
+    #[test]
+    fn bounded_binary_preflight_preserves_errors_and_follows_document_symlinks() {
+        assert_eq!(
+            bounded_read_preflight("missing.docx", None, 64).unwrap(),
+            BoundedReadPreflight::Transfer
+        );
+        assert_eq!(
+            bounded_read_preflight("linked.docx", Some(&entry(false, true, Some(4))), 64).unwrap(),
+            BoundedReadPreflight::Transfer
+        );
+        assert_eq!(
+            bounded_read_preflight("large.docx", Some(&entry(true, false, Some(65))), 64).unwrap(),
+            BoundedReadPreflight::TooLarge
+        );
+        assert!(
+            bounded_read_preflight("folder.docx", Some(&entry(false, false, None)), 64).is_err()
+        );
     }
 }
 

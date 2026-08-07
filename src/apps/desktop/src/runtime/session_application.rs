@@ -25,8 +25,9 @@ use bitfun_core::service::remote_ssh::workspace_state::{
 };
 use bitfun_core::service::remote_ssh::SSHConnectionManager;
 use bitfun_core::service::session::{
-    DialogTurnData, DialogTurnKind, SessionMetadata, SessionStatus, SessionTranscriptExport,
-    SessionTranscriptExportOptions, SessionTurnCatalog, SessionTurnWindowResponse,
+    DialogTurnData, DialogTurnKind, SessionContextUsage, SessionMetadata, SessionStatus,
+    SessionTranscriptExport, SessionTranscriptExportOptions, SessionTurnCatalog,
+    SessionTurnWindowResponse,
 };
 use bitfun_core::service::session_usage::SessionUsageReport;
 use bitfun_core::service::token_usage::TokenUsageService;
@@ -124,6 +125,7 @@ fn local_command_turn_record_request(
 pub(crate) struct DesktopSessionViewRestore {
     pub session: Session,
     pub turns: Vec<DialogTurnData>,
+    pub current_context_usage: Option<SessionContextUsage>,
     pub total_turn_count: usize,
     pub turn_catalog: SessionTurnCatalog,
     pub timings: SessionViewRestoreTiming,
@@ -822,10 +824,17 @@ impl DesktopSessionApplication {
             .loaded_session_snapshot(session_id)
             .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))?;
         overlay_live_session_state(&mut session, live_session);
+        let current_context_usage = self
+            .compatibility
+            .load_persisted_session_metadata(&storage_path, session_id)
+            .await
+            .map_err(desktop_core_session_error)?
+            .and_then(|metadata| metadata.current_context_usage);
         timings.resolve_storage_path_duration_ms = resolve_storage_path_duration_ms;
         Ok(DesktopSessionViewRestore {
             session,
             turns,
+            current_context_usage,
             total_turn_count,
             turn_catalog,
             timings,
@@ -935,7 +944,9 @@ mod tests {
         AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentSubmissionPort,
         AgentSubmissionRequest, AgentSubmissionResult, PortError, PortErrorKind, PortResult,
     };
-    use bitfun_core::service::session::{SessionKind, SessionMemoryMode};
+    use bitfun_core::service::session::{
+        SessionContextUsage, SessionContextUsageSource, SessionKind, SessionMemoryMode,
+    };
     use serde_json::json;
     use std::sync::Mutex;
 
@@ -1359,6 +1370,14 @@ mod tests {
             "titleSource": "i18n",
             "titleKey": "old"
         }));
+        current.current_context_usage = Some(SessionContextUsage {
+            turn_id: "turn-7".to_string(),
+            input_tokens: 42_000,
+            output_tokens: Some(1_500),
+            total_tokens: 43_500,
+            timestamp: 123,
+            source: SessionContextUsageSource::ModelRequest,
+        });
 
         let mut incoming = current.clone();
         incoming.session_name = "Renamed".to_string();
@@ -1368,6 +1387,14 @@ mod tests {
         incoming.status = SessionStatus::Active;
         incoming.turn_count = 1;
         incoming.review_action_state = Some(json!({ "phase": "fixing" }));
+        incoming.current_context_usage = Some(SessionContextUsage {
+            turn_id: "stale-turn".to_string(),
+            input_tokens: 1,
+            output_tokens: None,
+            total_tokens: 1,
+            timestamp: 1,
+            source: SessionContextUsageSource::ContextCompression,
+        });
         incoming.custom_metadata = Some(json!({
             "titleSource": "i18n",
             "titleKey": "new",
@@ -1395,6 +1422,17 @@ mod tests {
         assert_eq!(current.status, SessionStatus::Archived);
         assert_eq!(current.turn_count, 7);
         assert_eq!(current.review_action_state, incoming.review_action_state);
+        assert_eq!(
+            current.current_context_usage,
+            Some(SessionContextUsage {
+                turn_id: "turn-7".to_string(),
+                input_tokens: 42_000,
+                output_tokens: Some(1_500),
+                total_tokens: 43_500,
+                timestamp: 123,
+                source: SessionContextUsageSource::ModelRequest,
+            })
+        );
         let custom = current.custom_metadata.unwrap();
         assert_eq!(custom["threadGoal"]["objective"], "preserve");
         assert_eq!(custom["titleKey"], "new");

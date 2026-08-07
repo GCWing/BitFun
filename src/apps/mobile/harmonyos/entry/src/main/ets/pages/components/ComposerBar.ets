@@ -2,24 +2,53 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ChatComposerPolicy } from '../../services/ChatComposerPolicy';
 import { ChatComposerCapabilities, REMOTE_CHAT_COMPOSER_CAPABILITIES } from './ChatComposerCapabilities';
 import { ChatSurface } from './ChatSurface';
-import { ConversationUiSelectedImage } from './ConversationUiModels';
-import { CARD, GREEN, INK, MUTED } from './Theme';
+import {
+  ConversationUiModel,
+  ConversationUiModelCatalog,
+  ConversationUiSelectedImage
+} from './ConversationUiModels';
+import { ConversationModelPresentationPolicy } from '../state/ConversationModelPresentationPolicy';
+import { CARD, FLOATING_PANEL_BG, GREEN, INK, LINE, MUTED, RED, SOFT } from './Theme';
+
+export enum ComposerPresentation {
+  Compact = 'compact',
+  Floating = 'floating',
+  Create = 'create'
+}
+
+const COMPOSER_ACTION_SIZE: number = 40;
+const COMPOSER_INPUT_HEIGHT: number = 42;
+const COMPOSER_EXPANDED_INPUT_HEIGHT: number = 74;
 
 @ComponentV2
 export struct ComposerBar {
+  @Param presentation: ComposerPresentation = ComposerPresentation.Compact;
   @Param capabilities: ChatComposerCapabilities = REMOTE_CHAT_COMPOSER_CAPABILITIES;
+  @Param inputId: string = 'conversation-composer-input';
   @Param chatInput: string = '';
   @Local inputText: string = '';
+  @Local inputFocused: boolean = false;
   @Param showQuickActions: boolean = false;
   @Param selectedImages: ConversationUiSelectedImage[] = [];
   @Param isBusy: boolean = false;
+  @Param canStop: boolean = false;
   @Param connectionState: string = 'connected';
   @Param isVoiceListening: boolean = false;
+  @Param modelCatalog: ConversationUiModelCatalog = {
+    version: 0,
+    models: [],
+    default_models: {}
+  };
+  @Param selectedModelId: string = '';
+  @Local showModelSelectorSheet: boolean = false;
+  @Local showModelSelectorPopover: boolean = false;
   @Event onToggleQuickActions: () => void = () => {};
   @Event onPickImages: () => void = () => {};
   @Event onRemoveImage: (imageId: string) => void = (_imageId: string) => {};
   @Event onSend: () => void = () => {};
+  @Event onStop: () => void = () => {};
   @Event onVoiceInput: () => void = () => {};
+  @Event onSelectModel: (modelId: string) => void = (_modelId: string) => {};
   @Event onChatInputChange: (value: string) => void = (_value: string) => {};
 
   aboutToAppear(): void {
@@ -33,42 +62,252 @@ export struct ComposerBar {
     }
   }
 
+  @Monitor('presentation')
+  onPresentationChanged(): void {
+    this.closeModelSelector();
+  }
+
   build() {
     Column({ space: 8 }) {
       if (this.selectedImages.length > 0) {
         this.SelectedImageStrip()
       }
-      Row({ space: 5 }) {
-        if (this.shouldShowAddButton()) {
-          Stack({ alignContent: Alignment.Center }) {
-            this.PlusGlyph()
-          }
-            .width(36)
-            .height(44)
-            .onClick(() => {
-              if (this.isVoiceListening) {
-                return;
-              }
-              if (this.capabilities.supportsAttachments) {
-                this.onToggleQuickActions();
-                return;
-              }
-              this.onPickImages();
-            })
-        }
-        this.InputField()
-        this.PrimaryActionButton()
-      }
-      .width('100%')
-      .height(52)
-      .padding({ left: 8, right: 3 })
-      .backgroundColor(CARD)
-      .borderRadius(26)
-      .shadow({ radius: 24, color: '#18000000', offsetY: 7 })
+      this.AdaptiveComposer()
     }
     .width('100%')
-    .padding({ left: 16, right: 16, top: 8, bottom: 14 })
+    .constraintSize({ maxWidth: this.presentation === ComposerPresentation.Floating ? 760 : 10000 })
+    .alignSelf(ItemAlign.Center)
+    .padding({
+      left: this.presentation === ComposerPresentation.Floating ? 24 : 16,
+      right: this.presentation === ComposerPresentation.Floating ? 24 : 16,
+      top: 8,
+      bottom: this.presentation === ComposerPresentation.Floating ? 18 : 14
+    })
     .backgroundColor('#00000000')
+    .bindSheet($$this.showModelSelectorSheet, this.ModelSelector(true), this.modelSelectorSheetOptions())
+  }
+
+  @Builder
+  AdaptiveComposer() {
+    Column({ space: 2 }) {
+      Row({ space: this.isComposerExpanded() ? 0 : 5 }) {
+        if (this.shouldShowAddButton()) {
+          Row() {
+            this.AddButton()
+          }
+          .width(this.isComposerExpanded() ? 0 : COMPOSER_ACTION_SIZE)
+          .height(COMPOSER_ACTION_SIZE)
+          .opacity(this.isComposerExpanded() ? 0 : 1)
+          .visibility(this.isComposerExpanded() ? Visibility.None : Visibility.Visible)
+          .clip(true)
+        }
+        this.InputField()
+        Row() {
+          this.PrimaryActionButton()
+        }
+        .width(this.isComposerExpanded() ? 0 : COMPOSER_ACTION_SIZE)
+        .height(COMPOSER_ACTION_SIZE)
+        .opacity(this.isComposerExpanded() ? 0 : 1)
+        .visibility(this.isComposerExpanded() ? Visibility.None : Visibility.Visible)
+        .clip(true)
+      }
+      .width('100%')
+      .height(this.isComposerExpanded() ? 76 : 52)
+
+      if (this.isComposerExpanded()) {
+        Row({ space: 6 }) {
+          if (this.shouldShowAddButton()) {
+            this.AddButton()
+          }
+          if (this.shouldShowModelControl()) {
+            this.ModelControl()
+          }
+          Blank()
+          this.PrimaryActionButton()
+        }
+        .width('100%')
+        .height(44)
+        .padding({ left: 2, right: 0 })
+        .alignItems(VerticalAlign.Center)
+        .transition(TransitionEffect.translate({ x: 0, y: 8 })
+          .combine(TransitionEffect.opacity(0))
+          .animation({ duration: 180, curve: Curve.EaseOut }))
+      }
+    }
+    .width('100%')
+    .height(this.isComposerExpanded() ? 126 : 52)
+    .padding({
+      left: 8,
+      right: 8,
+      top: this.isComposerExpanded() ? 4 : 0,
+      bottom: this.isComposerExpanded() ? 2 : 0
+    })
+    .backgroundColor(CARD)
+    .borderRadius(this.isComposerExpanded() ? 18 :
+      (this.presentation === ComposerPresentation.Floating ? 18 : 26))
+    .shadow({
+      radius: this.presentation === ComposerPresentation.Floating ? 18 : 10,
+      color: this.presentation === ComposerPresentation.Floating ? '#18000000' : '#0D000000',
+      offsetY: this.presentation === ComposerPresentation.Floating ? 6 : 2
+    })
+    .animation({ duration: 220, curve: Curve.EaseOut })
+  }
+
+  @Builder
+  ModelControl() {
+    Row({ space: 3 }) {
+      Text(this.displaySelectedModel())
+        .fontSize(13)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(INK)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .constraintSize({ maxWidth: 192 })
+      Stack({ alignContent: Alignment.Center }) {
+        SymbolGlyph(this.isModelSelectorExpanded() ?
+          $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
+          .fontSize(13)
+          .fontColor([INK])
+          .opacity(0.68)
+      }
+      .width(16)
+      .height(34)
+    }
+    .height(34)
+    .constraintSize({ maxWidth: 220 })
+    .padding({ left: 4, right: 4 })
+    .backgroundColor('#00000000')
+    .accessibilityText(`${RemoteI18n.t('chat.selectModel')} · ${this.displaySelectedModel()}`)
+    .bindPopup(this.showModelSelectorPopover, {
+      builder: () => {
+        this.ModelSelector(false)
+      },
+      placement: Placement.Top,
+      popupColor: '#00000000',
+      enableArrow: false,
+      autoCancel: true,
+      mask: false,
+      targetSpace: 8,
+      onStateChange: (event) => {
+        if (!event.isVisible) {
+          this.showModelSelectorPopover = false;
+        }
+      }
+    })
+    .onClick(() => {
+      if (this.presentation === ComposerPresentation.Floating) {
+        this.showModelSelectorPopover = !this.showModelSelectorPopover;
+      } else {
+        this.showModelSelectorSheet = true;
+      }
+    })
+  }
+
+  @Builder
+  ModelSelector(asSheet: boolean) {
+    Column({ space: 10 }) {
+      if (asSheet) {
+        Row() {
+          Text(RemoteI18n.t('chat.selectModel'))
+            .fontSize(13)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(MUTED)
+          Blank()
+          Stack({ alignContent: Alignment.Center }) {
+            SymbolGlyph($r('sys.symbol.xmark'))
+              .fontSize(15)
+              .fontColor([MUTED])
+              .width(18)
+              .height(18)
+          }
+          .width(32)
+          .height(32)
+          .accessibilityText(RemoteI18n.t('common.close'))
+          .onClick(() => {
+            this.closeModelSelector();
+          })
+        }
+        .width('100%')
+      }
+
+      List({ space: 6 }) {
+        ForEach(this.selectorModels(), (model: ConversationUiModel) => {
+          ListItem() {
+            this.ModelRow(model)
+          }
+        }, (model: ConversationUiModel) => model.id)
+      }
+      .width('100%')
+      .height(this.modelListHeight())
+      .scrollBar(BarState.Auto)
+      .edgeEffect(EdgeEffect.Spring)
+      .divider(null)
+    }
+    .width(asSheet ? '100%' : 330)
+    .padding({ left: 10, right: 10, top: 10, bottom: 10 })
+    .backgroundColor(asSheet ? CARD : FLOATING_PANEL_BG)
+    .borderRadius(asSheet ? { topLeft: 20, topRight: 20 } : 14)
+    .border({ width: asSheet ? 0 : 1, color: asSheet ? '#00000000' : LINE })
+    .shadow({ radius: asSheet ? 0 : 18, color: asSheet ? '#00000000' : '#18000000', offsetY: 7 })
+  }
+
+  @Builder
+  ModelRow(model: ConversationUiModel) {
+    Row({ space: 10 }) {
+      Stack({ alignContent: Alignment.Center }) {
+        if (this.isSelectedModel(model)) {
+          SymbolGlyph($r('sys.symbol.checkmark_circle'))
+            .fontSize(16)
+            .fontColor([INK])
+        }
+      }
+      .width(20)
+      .height(20)
+
+      Column({ space: 2 }) {
+        Text(ConversationModelPresentationPolicy.primaryLabel(model, RemoteI18n.t('chat.model')))
+          .fontSize(13)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(INK)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text(ConversationModelPresentationPolicy.secondaryLabel(model, RemoteI18n.t('chat.model')))
+          .fontSize(11)
+          .fontColor(MUTED)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+    }
+    .width('100%')
+    .height(48)
+    .padding({ left: 10, right: 10 })
+    .backgroundColor(this.isSelectedModel(model) ? SOFT : '#00000000')
+    .borderRadius(9)
+    .onClick(() => {
+      this.closeModelSelector();
+      this.onSelectModel(model.id);
+    })
+  }
+
+  @Builder
+  AddButton() {
+    Stack({ alignContent: Alignment.Center }) {
+      this.PlusGlyph()
+    }
+    .width(COMPOSER_ACTION_SIZE)
+    .height(COMPOSER_ACTION_SIZE)
+    .onClick(() => {
+      if (this.isVoiceListening) {
+        return;
+      }
+      if (this.capabilities.supportsAttachments) {
+        this.onToggleQuickActions();
+        return;
+      }
+      this.onPickImages();
+    })
   }
 
   @Builder
@@ -77,16 +316,29 @@ export struct ComposerBar {
       if (this.isVoiceListening) {
         this.ListeningWave()
       }
-      TextInput({ placeholder: this.inputPlaceholder(), text: this.inputText })
+      TextArea({ placeholder: this.inputPlaceholder(), text: this.inputText })
+        .id(this.inputId)
         .layoutWeight(1)
-        .height(42)
+        .height(this.isComposerExpanded() ? COMPOSER_EXPANDED_INPUT_HEIGHT : COMPOSER_INPUT_HEIGHT)
         .fontSize(16)
         .fontColor(INK)
         .placeholderColor(this.isVoiceListening ? GREEN : MUTED)
         .backgroundColor('#00000000')
         .borderRadius(20)
-        .padding({ left: this.isVoiceListening ? 0 : 4, right: 4 })
+        .padding({
+          left: this.isVoiceListening ? 0 : 4,
+          right: 4,
+          top: this.isComposerExpanded() ? 10 : 9,
+          bottom: this.isComposerExpanded() ? 8 : 9
+        })
+        .maxLines(this.isComposerExpanded() ? 4 : 1)
         .defaultFocus(false)
+        .onFocus(() => {
+          this.inputFocused = true;
+        })
+        .onBlur(() => {
+          this.inputFocused = false;
+        })
         .onChange((value: string, previewText?: PreviewText) => {
           // The first callback value excludes IME pre-edit text. Keep that text
           // inside the native field until the IME commits it.
@@ -98,31 +350,38 @@ export struct ComposerBar {
         })
     }
     .layoutWeight(1)
-    .height(42)
+    .height(this.isComposerExpanded() ? COMPOSER_EXPANDED_INPUT_HEIGHT : COMPOSER_INPUT_HEIGHT)
+    .alignItems(VerticalAlign.Center)
     .padding({ left: this.isVoiceListening ? 12 : 0, right: 0 })
-    .backgroundColor(this.isVoiceListening ? '#F0FAF4' : '#00000000')
+    .backgroundColor(this.isVoiceListening ? SOFT : '#00000000')
     .borderRadius(20)
-    .border({ width: this.isVoiceListening ? 1 : 0, color: this.isVoiceListening ? '#BDE8CC' : '#00000000' })
+    .border({ width: this.isVoiceListening ? 1 : 0, color: this.isVoiceListening ? GREEN : '#00000000' })
   }
 
   @Builder
   PrimaryActionButton() {
     Button() {
       Stack({ alignContent: Alignment.Center }) {
-        if (this.isVoiceListening) {
+        if (this.isVoiceListening || this.canStop) {
           Text('')
             .width(13)
             .height(13)
             .backgroundColor(CARD)
             .borderRadius(3)
         } else if (this.hasComposedContent()) {
-          Image($r('app.media.gpt_composer_send'))
-            .width(39)
-            .height(39)
-            .objectFit(ImageFit.Contain)
+          SymbolGlyph($r('sys.symbol.arrow_up'))
+            .fontSize(23)
+            .fontWeight(FontWeight.Medium)
+            .fontColor([INK])
             .opacity(this.canSend() ? 1 : 0.38)
-        } else {
+        } else if (this.capabilities.showVoiceInput) {
           this.MicrophoneGlyph()
+        } else {
+          SymbolGlyph($r('sys.symbol.arrow_up'))
+            .fontSize(23)
+            .fontWeight(FontWeight.Medium)
+            .fontColor([INK])
+            .opacity(0.38)
         }
       }
       .width(40)
@@ -139,6 +398,10 @@ export struct ComposerBar {
         this.onVoiceInput();
         return;
       }
+      if (this.canStop) {
+        this.onStop();
+        return;
+      }
       if (this.canSend()) {
         this.onSend();
         return;
@@ -151,19 +414,17 @@ export struct ComposerBar {
 
   @Builder
   PlusGlyph() {
-    Image($r('app.media.gpt_composer_plus'))
-      .width(23)
-      .height(23)
-      .objectFit(ImageFit.Contain)
+    SymbolGlyph($r('sys.symbol.plus'))
+      .fontSize(22)
+      .fontColor([INK])
       .opacity(this.isVoiceListening ? 0.36 : 1)
   }
 
   @Builder
   MicrophoneGlyph() {
-    Image($r('app.media.gpt_composer_mic'))
-      .width(22)
-      .height(27)
-      .objectFit(ImageFit.Contain)
+    SymbolGlyph($r('sys.symbol.mic'))
+      .fontSize(22)
+      .fontColor([INK])
       .opacity(this.canUseVoice() ? 1 : 0.4)
   }
 
@@ -248,7 +509,8 @@ export struct ComposerBar {
   }
 
   private canUseVoice(): boolean {
-    return ChatComposerPolicy.canUseVoice(this.inputText, this.selectedImages.length, this.isBusy);
+    return this.capabilities.showVoiceInput &&
+      ChatComposerPolicy.canUseVoice(this.inputText, this.selectedImages.length, this.isBusy);
   }
 
   private hasComposedContent(): boolean {
@@ -256,7 +518,70 @@ export struct ComposerBar {
   }
 
   private shouldShowAddButton(): boolean {
-    return this.capabilities.supportsAttachments || this.capabilities.surface === ChatSurface.General;
+    return this.capabilities.showAddButton &&
+      (this.capabilities.supportsAttachments || this.capabilities.surface === ChatSurface.General);
+  }
+
+  private isComposerExpanded(): boolean {
+    return this.inputFocused || this.showQuickActions || this.showModelSelectorSheet ||
+      this.showModelSelectorPopover || this.inputText.indexOf('\n') >= 0;
+  }
+
+  private isModelSelectorExpanded(): boolean {
+    return this.showModelSelectorSheet || this.showModelSelectorPopover;
+  }
+
+  private shouldShowModelControl(): boolean {
+    return (this.capabilities.surface === ChatSurface.Remote || this.capabilities.surface === ChatSurface.General) &&
+      this.enabledModels().length > 0;
+  }
+
+  private enabledModels(): ConversationUiModel[] {
+    return ConversationModelPresentationPolicy.enabledModels(this.modelCatalog);
+  }
+
+  private selectedModel(): ConversationUiModel | undefined {
+    return ConversationModelPresentationPolicy.selectedModel(this.modelCatalog, this.selectedModelId);
+  }
+
+  private isSelectedModel(model: ConversationUiModel): boolean {
+    const selected = this.selectedModel();
+    return !!selected && selected.id === model.id;
+  }
+
+  private displaySelectedModel(): string {
+    const selected = this.selectedModel();
+    return selected ? ConversationModelPresentationPolicy.primaryLabel(selected, RemoteI18n.t('chat.model')) :
+      RemoteI18n.t('chat.model');
+  }
+
+  private modelListHeight(): number {
+    const visibleRows = Math.min(this.enabledModels().length, 7);
+    return visibleRows * 48 + Math.max(0, visibleRows - 1) * 6;
+  }
+
+  private selectorModels(): ConversationUiModel[] {
+    const models = this.enabledModels();
+    const selected = this.selectedModel();
+    if (!selected) {
+      return models;
+    }
+    return [selected, ...models.filter((model: ConversationUiModel) => model.id !== selected.id)];
+  }
+
+  private closeModelSelector(): void {
+    this.showModelSelectorSheet = false;
+    this.showModelSelectorPopover = false;
+  }
+
+  private modelSelectorSheetOptions(): SheetOptions {
+    return {
+      height: Math.min(480, 86 + this.modelListHeight()),
+      backgroundColor: '#00000000',
+      maskColor: '#44000000',
+      showClose: false,
+      dragBar: true
+    };
   }
 
   private inputPlaceholder(): string {
@@ -265,7 +590,10 @@ export struct ComposerBar {
       RemoteI18n.t('chat.inputPlaceholder');
   }
 
-  private actionBackgroundColor(): string {
+  private actionBackgroundColor(): ResourceColor {
+    if (this.canStop) {
+      return RED;
+    }
     if (this.isVoiceListening) {
       return GREEN;
     }

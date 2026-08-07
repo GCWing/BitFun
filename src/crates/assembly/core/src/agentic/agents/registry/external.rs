@@ -1,7 +1,9 @@
 use super::types::{AgentCategory, AgentEntry, AgentInfo, AgentSource, SubAgentSource};
 use super::AgentRegistry;
 use crate::agentic::agents::{Agent, SubagentVisibilityPolicy};
-use crate::agentic::deep_review_policy::{CODE_REVIEW_AGENT_TYPE, DEEP_REVIEW_AGENT_TYPE};
+use crate::agentic::deep_review_policy::{
+    CODE_REVIEW_AGENT_TYPE, DEEP_REVIEW_AGENT_TYPE, REVIEW_FIXER_AGENT_TYPE,
+};
 use crate::agentic::workspace::canonical_local_workspace_path;
 use bitfun_agent_runtime::prompt_cache::prompt_cache_scope_key;
 use bitfun_core_types::{
@@ -614,11 +616,16 @@ fn local_binding(logical_id: &str, runtime_agent_key: &str) -> ExternalSubagentI
 /// though they are not registered as `Mode` (review child sessions).
 ///
 /// Review child sessions are created by the product surfaces with
-/// `agentType=CodeReview` (standard) or `agentType=DeepReview` (strict) and
-/// must resolve through the primary-agent path for create, turn, restore, and
-/// compaction. Other subagents (e.g. `ReviewWorker`) stay restricted.
+/// `agentType=CodeReview` (standard) or `agentType=DeepReview` (strict), and
+/// the remediation phase of either session runs with `agentType=ReviewFixer`.
+/// All three must resolve through the primary-agent path for create, turn,
+/// restore, and compaction. Other subagents (e.g. `ReviewWorker`,
+/// `ReviewJudge`) stay restricted.
 fn is_builtin_session_primary_agent(id: &str) -> bool {
-    matches!(id, CODE_REVIEW_AGENT_TYPE | DEEP_REVIEW_AGENT_TYPE)
+    matches!(
+        id,
+        CODE_REVIEW_AGENT_TYPE | DEEP_REVIEW_AGENT_TYPE | REVIEW_FIXER_AGENT_TYPE
+    )
 }
 
 /// Whether a locally-resolved agent entry may act as a session primary agent.

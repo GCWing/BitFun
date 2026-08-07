@@ -7,6 +7,10 @@ use agent_client_protocol::{ConnectTo, ConnectionTo, JsonRpcResponse, SentReques
 use bitfun_app_server_protocol::app::{
     HealthRequest, HealthResponse, InitializeRequest, InitializeResponse,
 };
+use bitfun_app_server_protocol::config::{
+    SaveCloudSpeechConfigMessage, SaveCloudSpeechConfigRequest, SaveCloudSpeechConfigResponse,
+    SaveCloudSpeechConfigResult, ValidateConfigMessage, ValidateConfigResponse,
+};
 use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
 use bitfun_app_server_protocol::event::{
     AgentEventNotification, ConfigEventNotification, EventStreamStateNotification,
@@ -66,6 +70,26 @@ impl AppServerClient {
 
     pub async fn health(&self) -> agent_client_protocol::Result<HealthResponse> {
         self.rpc(|cx| Ok(cx.send_request(HealthRequest {}))).await
+    }
+
+    pub async fn save_cloud_speech_config(
+        &self,
+        request: SaveCloudSpeechConfigRequest,
+    ) -> Result<SaveCloudSpeechConfigResult, ClientError> {
+        let SaveCloudSpeechConfigResponse(result) = self
+            .request_with_timeout(
+                |cx| Ok(cx.send_request(SaveCloudSpeechConfigMessage { request })),
+                SIDE_EFFECT_TIMEOUT,
+            )
+            .await?;
+        Ok(result)
+    }
+
+    pub async fn validate_config(&self) -> agent_client_protocol::Result<serde_json::Value> {
+        let ValidateConfigResponse(result) = self
+            .rpc(|cx| Ok(cx.send_request(ValidateConfigMessage {})))
+            .await?;
+        Ok(result)
     }
 
     pub async fn tui_model_catalog(

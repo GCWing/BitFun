@@ -20,13 +20,15 @@ import {
   GeneralChatConfigSnapshot,
   GeneralChatConfigStore,
   GeneralChatConfigUpdate,
-  GeneralChatConfigValidator
+  GeneralChatConfigValidator,
+  GeneralChatModelSelectionPolicy
 } from '../../services/general-chat/GeneralChatConfigStore';
 import { GeneralChatBootstrapController } from '../../services/general-chat/GeneralChatBootstrapController';
 import { GeneralChatCommandController } from '../../services/general-chat/GeneralChatCommandController';
 import { GeneralChatController } from '../../services/general-chat/GeneralChatController';
 import { GeneralChatDraftController } from '../../services/general-chat/GeneralChatDraftController';
 import { GeneralChatDraftLifecycleController } from '../../services/general-chat/GeneralChatDraftLifecycleController';
+import { GeneralChatCloudConfigPolicy } from '../../services/general-chat/GeneralChatCloudConfigPolicy';
 import { GeneralChatStreamLifecycleController } from '../../services/general-chat/GeneralChatStreamLifecycleController';
 import {
   GeneralChatServiceState,
@@ -49,6 +51,8 @@ import {
   RemoteChatPollingSnapshot
 } from '../../services/RemoteChatPollingLifecycleController';
 import { RemoteFileDownloadController } from '../../services/RemoteFileDownloadController';
+import { FileReferenceKind, FileTargetResolver } from '../../services/FileTargetResolver';
+import { RemoteFilePreviewController } from '../../services/RemoteFilePreviewController';
 import { RemoteLogger } from '../../services/RemoteLogger';
 import { RemoteModelController } from '../../services/RemoteModelController';
 import { RemotePairingPolicy } from '../../services/RemotePairingPolicy';
@@ -72,6 +76,7 @@ import {
   AppRootPresentation,
   AppRootPresentationActions,
   ConnectPresentationActions,
+  FilePreviewPresentationActions,
   RemoteCreatePresentationActions,
   RemoteHomePresentationActions,
   SettingsPresentationActions,
@@ -100,6 +105,8 @@ import { GeneralChatPageState } from './GeneralChatPageState';
 import { RemotePageState } from './RemotePageState';
 import { RemoteCreateSessionState } from './RemoteCreateSessionState';
 import { ConversationViewModel } from './ConversationViewModel';
+import { FilePreviewState } from './FilePreviewState';
+import { FilePreviewRequest, FilePreviewTargetContext } from './FilePreviewTarget';
 import {
   RemoteWorkspaceViewModel,
   RemoteWorkspaceViewModelHooks
@@ -141,6 +148,9 @@ export class AppRootRuntime {
     new RemoteWorkspaceCoordinator(this.workspaceRepository);
   readonly remoteResumeGate: AsyncLifecycleGate = new AsyncLifecycleGate();
   readonly remoteConnectionGate: AsyncLifecycleGate = new AsyncLifecycleGate();
+  readonly filePreviewState: FilePreviewState = new FilePreviewState();
+  private controlTargetEpoch: number = 1;
+  private remoteCreateWorkspaceLoadVersion: number = 0;
   readonly identityStore: MobileIdentityStore = new MobileIdentityStore();
   readonly cloudAccountClient: CloudAccountClient = new CloudAccountClient();
   readonly cloudAccountSessionStore: CloudAccountSessionStore = new CloudAccountSessionStore();
@@ -256,7 +266,7 @@ export class AppRootRuntime {
           await this.reconnectActiveRemote();
         },
         async (session: SessionSummary): Promise<void> => {
-          this.remotePageState.setActiveSession(session);
+          this.applyRemoteActiveSession(session);
           await this.loadActiveMessages();
         }
       )
@@ -333,7 +343,7 @@ export class AppRootRuntime {
           this.remotePageState.setSessions(this.mergeSessions(sessions, extras), hasMore);
         },
         onActiveSession: (session: SessionSummary) => {
-          this.remotePageState.setActiveSession(session);
+          this.applyRemoteActiveSession(session);
         },
         onStatusText: (statusText: string) => {
           this.setRemoteStatusText(statusText);
@@ -399,7 +409,7 @@ export class AppRootRuntime {
           this.syncChatTimelineFromStore();
         },
         onActiveSession: (session: SessionSummary) => {
-          this.remotePageState.setActiveSession(session);
+          this.applyRemoteActiveSession(session);
         },
         onSessionTitleChanged: (sessionId: string, title: string) => {
           this.remoteSessionController.updateSessionTitle(sessionId, title);
@@ -431,6 +441,13 @@ export class AppRootRuntime {
         this.setRemoteBusy(isBusy);
       }
     );
+  readonly remoteFilePreviewController: RemoteFilePreviewController =
+    new RemoteFilePreviewController(
+      this.sessionManager,
+      this.filePreviewState,
+      (): boolean => RemoteUiState.canUseRemote(this.connectionState),
+      (): number => this.controlTargetEpoch
+    );
   readonly remoteToolActionController: RemoteToolActionController =
     new RemoteToolActionController(
       this.sessionManager,
@@ -450,7 +467,7 @@ export class AppRootRuntime {
       {
         canPoll: (sessionId: string) => {
           return this.activeSession.sessionId === sessionId &&
-            this.isRoute(AppRoute.RemoteChat) &&
+            this.isRemoteConversationContext(sessionId) &&
             this.ensureRemoteAvailable();
         },
         onSnapshot: (snapshot: RemoteChatPollingSnapshot) => {
@@ -496,7 +513,7 @@ export class AppRootRuntime {
         (): boolean => this.isBusy,
         (busy: boolean): void => this.setRemoteBusy(busy),
         (sessionId: string): void => this.routeCreatedRemoteSession(sessionId),
-        (): void => this.replaceRoute(AppRoute.RemoteHome),
+        (): void => this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.RemoteHome),
         (): void => this.stopPolling(),
         (): void => this.startPolling(),
         (sessionId: string): void => this.resetChatTimeline(sessionId),
@@ -511,7 +528,7 @@ export class AppRootRuntime {
             sessionId,
             this.ensureRemoteAvailable(),
             (activeSessionId: string): boolean => {
-              return this.activeSession.sessionId === activeSessionId && this.isRoute(AppRoute.RemoteChat);
+              return this.isRemoteConversationContext(activeSessionId);
             }
           );
         },
@@ -520,7 +537,7 @@ export class AppRootRuntime {
           await this.remoteChatCommandController.loadMessages(
             sessionId,
             (activeSessionId: string): boolean => {
-              return this.activeSession.sessionId === activeSessionId && this.isRoute(AppRoute.RemoteChat);
+              return this.isRemoteConversationContext(activeSessionId);
             }
           );
         },
@@ -576,7 +593,7 @@ export class AppRootRuntime {
       async (): Promise<void> => {
         await this.loadRecentWorkspacesInBackground();
       },
-      (route: AppRoute): void => this.replaceRoute(route),
+      (route: AppRoute): void => this.appShellViewModel.replaceRouteWithoutAnimation(route),
       (): void => this.appShellState.setConnectSheetVisible(false),
       (): void => this.appShellState.setConnectSheetVisible(true)
     );
@@ -614,6 +631,7 @@ export class AppRootRuntime {
       async (id: string): Promise<void> => { await this.selectModel(id); },
       async (): Promise<void> => { await this.pickImages(); },
       (id: string): void => this.removeSelectedImage(id),
+      (route: AppRoute, request: FilePreviewRequest): void => this.openFilePreview(route, request),
       (path: string): void => this.downloadVisibleFile(path),
       async (): Promise<void> => { await this.sendVisibleChatMessage(); },
       async (): Promise<void> => { await this.toggleVoiceInput(); },
@@ -624,6 +642,8 @@ export class AppRootRuntime {
     (route: AppRoute, intent: ConversationIntent): void => this.handleConversationIntent(route, intent),
     (): void => this.closeAppSidebar(),
     (source: ConversationSource): void => { this.switchWideConversationSource(source); },
+    (source: ConversationSource): void => { this.switchCompactConversationSource(source); },
+    (): void => this.enterCompactLayout(),
     new RemoteHomePresentationActions(
       (): void => this.openAppSidebar(), (): void => this.enterCodeEntry(), (): void => this.openAddConnection(),
       (): void => this.openRemoteControlSettings(), (): void => { this.refreshSessions(); },
@@ -634,9 +654,13 @@ export class AppRootRuntime {
       (query: string): void => this.remotePageState.setQuery(query), (): void => { this.refreshSessions(); },
       (): void => { this.loadMoreSessions(); }, (): void => { this.reconnect(); },
       (): void => { this.disconnect(false); }, (): void => { this.disconnect(true); },
-      (agentType: string): void => { this.createSession(agentType); }, (): void => { this.openRemoteCreateSession(); },
+      (agentType: string): void => { this.createSession(agentType); },
+      (agentType: string): void => { this.createSession(agentType, true); },
+      (): void => { this.openRemoteCreateSession(); },
       (path: string, agentType: string): void => { this.createSessionInWorkspace(path, agentType); },
+      (path: string, agentType: string): void => { this.createSessionInWorkspace(path, agentType, true); },
       (session: RemoteSession): void => this.openHomeSession(session),
+      (session: RemoteSession): void => this.openHomeSessionInPlace(session),
       (session: RemoteSession): void => { this.deleteHomeSession(session); }
     ),
     new RemoteCreatePresentationActions(
@@ -646,6 +670,8 @@ export class AppRootRuntime {
       (device: CloudAccountDevice): void => { this.selectRemoteCreateDevice(device); },
       (path: string): void => this.selectRemoteCreateWorkspace(path),
       (value: string): void => this.remoteCreateState.setDraft(value),
+      async (): Promise<void> => { await this.toggleVoiceInput(); },
+      (modelId: string): void => this.selectRemoteCreateModel(modelId),
       (): void => { this.submitRemoteCreateSession(); }
     ),
     new SidebarPresentationActions(
@@ -663,12 +689,11 @@ export class AppRootRuntime {
       (session: RemoteSession): void => { this.deleteHomeSession(session); }
     ),
     new SettingsPresentationActions(
-      (): void => this.appShellState.setSettingsVisible(false),
+      (): void => this.appShellState.leaveSettings(),
       (): void => this.openAddConnectionFromSettings(), (): void => { this.disconnect(false); },
       (): void => { this.reconnect(); },
       (): void => {
-        this.appShellState.setSettingsVisible(false);
-        setTimeout(() => this.appShellState.openSettings('account'), 180);
+        this.appShellState.openSettings('account');
       },
       (relayUrl: string, username: string, password: string): Promise<string> =>
         this.loginCloudAccount(relayUrl, username, password),
@@ -688,7 +713,7 @@ export class AppRootRuntime {
         // Keep connection progress on the same RemoteHome surface as the
         // connected state instead of showing a separate loading sheet.
         this.appShellState.setConnectSheetVisible(false);
-        this.replaceRoute(AppRoute.RemoteHome);
+        this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.RemoteHome);
         this.connect(false, password || '');
       },
       (): void => { this.appShellState.setConnectSheetVisible(false); this.disconnect(true); },
@@ -699,6 +724,12 @@ export class AppRootRuntime {
       (): void => { this.pasteRemoteUrl(); }, (): void => { this.scanRemoteUrl(); },
       (): Promise<CloudAccountDevice[]> => this.listCloudAccountDevices(),
       (device: CloudAccountDevice): Promise<void> => this.selectCloudAccountDevice(device)
+    ),
+    new FilePreviewPresentationActions(
+      (): void => this.closeFilePreview(),
+      (): void => this.refreshFilePreview(),
+      (path: string): void => this.downloadVisibleFile(path),
+      (reference: string, label: string): void => this.openFilePreviewLink(reference, label)
     ),
     (): string => this.generalChatHomeStatusText()
   );
@@ -732,6 +763,7 @@ export class AppRootRuntime {
     await this.generalChatBootstrapController.restore(this.host.context());
     await this.cloudAccountSessionStore.init(this.host.context());
     await this.restoreCloudAccountSession();
+    await this.refreshGeneralChatModelCatalog();
     await this.restoreIdentity();
   }
 
@@ -756,6 +788,7 @@ export class AppRootRuntime {
     this.stopGeneralChatStream(true, 'failed');
     this.generalChatDraftLifecycleController.cancel();
     this.remoteFileDownloadController.cancel();
+    this.remoteFilePreviewController.close();
     this.voiceInputLifecycleController.cancel(`${this.currentRoute()}`, () => {
       this.setAllVoiceListening(false);
     });
@@ -770,6 +803,9 @@ export class AppRootRuntime {
   }
 
   visibleChatInput(): string {
+    if (this.currentRoute() === AppRoute.RemoteCreate) {
+      return this.remoteCreateState.draft;
+    }
     return AppRootRouteState.chatInput(this.currentRoute(), this.generalChatPageState, this.remotePageState);
   }
 
@@ -778,10 +814,17 @@ export class AppRootRuntime {
   }
 
   visibleVoiceListening(): boolean {
+    if (this.currentRoute() === AppRoute.RemoteCreate) {
+      return this.remoteCreateState.isVoiceListening;
+    }
     return AppRootRouteState.voiceListening(this.currentRoute(), this.generalChatPageState, this.remotePageState);
   }
 
   setChatInputForRoute(route: AppRoute, value: string): void {
+    if (route === AppRoute.RemoteCreate) {
+      this.remoteCreateState.setDraft(value);
+      return;
+    }
     AppRootRouteState.setChatInput(route, value, this.generalChatPageState, this.remotePageState);
   }
 
@@ -802,6 +845,10 @@ export class AppRootRuntime {
   }
 
   setVoiceListeningForRoute(route: AppRoute, isVoiceListening: boolean): void {
+    if (route === AppRoute.RemoteCreate) {
+      this.remoteCreateState.isVoiceListening = isVoiceListening;
+      return;
+    }
     AppRootRouteState.setVoiceListening(
       route,
       isVoiceListening,
@@ -816,6 +863,15 @@ export class AppRootRuntime {
   }
 
   voiceInputSnapshot(route: AppRoute = this.currentRoute()): VoiceInputRouteSnapshot {
+    if (route === AppRoute.RemoteCreate) {
+      return {
+        routeId: `${route}`,
+        isListening: this.remoteCreateState.isVoiceListening,
+        isBusy: this.remoteCreateState.isSubmitting,
+        inputText: this.remoteCreateState.draft,
+        selectedImageCount: 0
+      };
+    }
     return AppRootRouteState.snapshot(
       route,
       this.visibleChatBusy(),
@@ -845,6 +901,7 @@ export class AppRootRuntime {
   }
 
   private routeCreatedRemoteSession(sessionId: string): void {
+    this.closeFilePreview();
     if (this.isRoute(AppRoute.RemoteCreate)) {
       this.appShellViewModel.replaceCurrentRoute(AppRoute.RemoteChat, sessionId);
       return;
@@ -852,7 +909,26 @@ export class AppRootRuntime {
     this.pushRoute(AppRoute.RemoteChat, sessionId);
   }
 
+  private routeRemoteSessionInPlace(_sessionId: string): void {
+    this.closeFilePreview();
+    if (this.isRoute(AppRoute.RemoteHome) || this.isRoute(AppRoute.RemoteChat)) {
+      return;
+    }
+    this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.RemoteHome);
+  }
+
+  private isRemoteConversationContext(sessionId: string): boolean {
+    if (sessionId.length === 0 || this.activeSession.sessionId !== sessionId) {
+      return false;
+    }
+    return this.isRoute(AppRoute.RemoteChat) || this.isRoute(AppRoute.RemoteHome);
+  }
+
   handleNavigationBack(route: AppRoute): boolean {
+    if (this.filePreviewState.visible) {
+      this.closeFilePreview();
+      return true;
+    }
     const action = this.appShellViewModel.backAction(route);
     if (action === AppNavigationBackAction.CloseSidebar) {
       this.closeAppSidebar();
@@ -867,6 +943,14 @@ export class AppRootRuntime {
       return true;
     }
     return false;
+  }
+
+  handleRootBack(): boolean {
+    if (!this.filePreviewState.visible) {
+      return false;
+    }
+    this.closeFilePreview();
+    return true;
   }
 
 
@@ -898,8 +982,13 @@ export class AppRootRuntime {
           return probeError;
         }
       }
+      const catalogBeforeSave = await this.generalChatConfigStore.modelCatalog();
       const snapshot = await this.generalChatConfigStore.save(update);
+      if (GeneralChatModelSelectionPolicy.shouldActivateSavedLocalModel(catalogBeforeSave)) {
+        await this.generalChatConfigStore.selectLocalModel();
+      }
       this.applyGeneralChatConfig(snapshot);
+      await this.refreshGeneralChatModelCatalog();
       return '';
     } catch (err) {
       return ConnectionErrorPolicy.errorText(err);
@@ -970,6 +1059,16 @@ export class AppRootRuntime {
     );
   }
 
+  private async refreshGeneralChatModelCatalog(): Promise<void> {
+    const catalog = await this.generalChatConfigStore.modelCatalog();
+    const selectedModelId = catalog.session_model_id || catalog.default_models.primary || '';
+    this.generalChatPageState.setModelCatalog(catalog, selectedModelId);
+    const active = await this.generalChatConfigStore.activeSnapshot();
+    this.generalChatPageState.setServiceState(
+      GeneralChatServiceStatus.fromConfiguration(active.apiUrl, active.modelName, active.hasApiKey)
+    );
+  }
+
   async restoreIdentity(): Promise<void> {
     if (this.remotePageState.controlTargetType === 'account_device') {
       return;
@@ -1016,6 +1115,7 @@ export class AppRootRuntime {
   }
 
   async disconnect(clearPairing: boolean): Promise<void> {
+    this.invalidateFilePreviewTarget();
     await this.remoteConnectionViewModel.disconnect(clearPairing);
   }
 
@@ -1099,10 +1199,12 @@ export class AppRootRuntime {
   }
 
   async selectWorkspace(path: string): Promise<void> {
+    this.closeFilePreview();
     await this.remoteWorkspaceViewModel.selectWorkspace(path);
   }
 
   async selectAssistant(path: string): Promise<void> {
+    this.closeFilePreview();
     await this.remoteWorkspaceViewModel.selectAssistant(path);
   }
 
@@ -1155,7 +1257,7 @@ export class AppRootRuntime {
     }
     if (RemoteUiState.canUseRemote(this.connectionState)) {
       this.appShellState.setConnectSheetVisible(false);
-      this.pushRoute(AppRoute.RemoteHome);
+      this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.RemoteHome);
       return;
     }
     this.appShellState.setConnectSheetVisible(true);
@@ -1180,11 +1282,51 @@ export class AppRootRuntime {
       RemoteUiState.canUseRemote(this.connectionState),
       activeRemoteSessionId
     );
-    const targetSessionId = target.hasSessionParam() ? target.routeParam().sessionId : '';
-    this.appShellViewModel.replaceRouteWithoutAnimation(target.name, targetSessionId);
-    if (target.name === AppRoute.RemoteChat) {
+    const hasActiveRemoteConversation = target.name === AppRoute.RemoteChat;
+    this.appShellViewModel.replaceRouteWithoutAnimation(
+      hasActiveRemoteConversation ? AppRoute.RemoteHome : target.name
+    );
+    if (hasActiveRemoteConversation) {
       this.startPolling();
       await this.loadActiveMessages();
+    }
+  }
+
+  /**
+   * Compact counterpart of switchWideConversationSource. Switching source is a
+   * change of context, not a command to start something: it resumes the session
+   * the user was last in, and otherwise rests on the Remote landing surface
+   * rather than opening the create composer for them.
+   */
+  async switchCompactConversationSource(source: ConversationSource): Promise<void> {
+    this.closeAppSidebar();
+    if (AppRouteContract.conversationSource(this.currentRoute()) === source) {
+      return;
+    }
+    if (this.visibleVoiceListening()) {
+      await this.stopVoiceInput(false);
+    }
+    if (source === ConversationSource.General) {
+      this.stopPolling();
+      this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.ChatHome);
+      return;
+    }
+    this.persistVisibleGeneralChatDraft();
+    const activeRemoteSessionId = RemoteUiState.canUseRemote(this.connectionState) ?
+      (this.remotePageState.activeSession.sessionId || '') : '';
+    if (activeRemoteSessionId.length === 0) {
+      this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.RemoteHome);
+      return;
+    }
+    this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.RemoteChat, activeRemoteSessionId);
+    this.startPolling();
+    await this.loadActiveMessages();
+  }
+
+  private enterCompactLayout(): void {
+    const sessionId = this.remotePageState.activeSession.sessionId || '';
+    if (this.isRoute(AppRoute.RemoteHome) && sessionId.length > 0) {
+      this.appShellViewModel.pushRoute(AppRoute.RemoteChat, sessionId, false);
     }
   }
 
@@ -1213,6 +1355,7 @@ export class AppRootRuntime {
       relayUrl: relayUrl.trim(), username: username.trim(), token: session.token, userId: session.userId,
       masterKey: Encoding.bytesToBase64(session.masterKey)
     });
+    await this.loadGeneralChatAccountModels(session, relayUrl);
     RemoteLogger.info('cloud account credentials persisted, refreshing account devices');
     RemoteLogger.info(`cloud account login success user=${session.userId}`);
     return session.userId;
@@ -1228,9 +1371,30 @@ export class AppRootRuntime {
         masterKey: Encoding.base64ToBytes(persisted.masterKey)
       };
       this.applyCloudAccountSession(session, persisted.relayUrl, persisted.username || session.userId);
+      await this.loadGeneralChatAccountModels(session, persisted.relayUrl);
     } catch (err) {
       RemoteLogger.warn(`cloud account restore failed: ${err instanceof Error ? err.message : 'unknown error'}`);
       await this.cloudAccountSessionStore.clear();
+    }
+  }
+
+  private async loadGeneralChatAccountModels(session: CloudAccountSession, relayUrl: string): Promise<void> {
+    this.generalChatConfigStore.replaceAccountModels([]);
+    try {
+      const blob = await this.cloudAccountClient.fetchSettings(relayUrl, session);
+      if (!blob) {
+        this.generalChatConfigStore.replaceAccountModels([]);
+        await this.refreshGeneralChatModelCatalog();
+        RemoteLogger.info('cloud model catalog is empty');
+        return;
+      }
+      const models = GeneralChatCloudConfigPolicy.models(blob.plaintext);
+      this.generalChatConfigStore.replaceAccountModels(models);
+      await this.refreshGeneralChatModelCatalog();
+      RemoteLogger.info(`cloud model catalog loaded count=${models.length} version=${blob.version}`);
+    } catch (err) {
+      await this.refreshGeneralChatModelCatalog();
+      RemoteLogger.warn(`cloud model catalog load failed: ${err instanceof Error ? err.message : 'unknown error'}`);
     }
   }
 
@@ -1248,6 +1412,7 @@ export class AppRootRuntime {
       }
       throw new Error(err instanceof Error ? err.message : RemoteI18n.t('remote.settings.accountSyncFailed'));
     }
+    await this.loadGeneralChatAccountModels(this.cloudAccountSession, this.cloudAccountRelayUrl);
     RemoteLogger.info(`cloud account backup sync completed count=${bundles.length}`);
     return String(bundles.length);
   }
@@ -1260,6 +1425,7 @@ export class AppRootRuntime {
   }
 
   async logoutCloudAccount(): Promise<void> {
+    this.invalidateFilePreviewTarget();
     if (this.remotePageState.controlTargetType === 'account_device') {
       this.remoteActivityViewModel.invalidate();
       this.stopPolling();
@@ -1273,6 +1439,8 @@ export class AppRootRuntime {
     }
     this.cloudAccountSession = undefined;
     this.cloudAccountRelayUrl = '';
+    this.generalChatConfigStore.replaceAccountModels([]);
+    await this.refreshGeneralChatModelCatalog();
     await this.cloudAccountSessionStore.clear();
     this.remotePageState.setAccountUserId('');
     this.remotePageState.setAccountUsername('');
@@ -1341,6 +1509,7 @@ export class AppRootRuntime {
   }
 
   private async expireCloudAccountSession(): Promise<void> {
+    this.invalidateFilePreviewTarget();
     this.cloudAccountSession = undefined;
     this.cloudAccountRelayUrl = '';
     await this.cloudAccountSessionStore.clear();
@@ -1383,10 +1552,11 @@ export class AppRootRuntime {
       this.connectionState === ConnectionState.Connected) {
       this.appShellState.setConnectSheetVisible(false);
       if (navigateHome) {
-        this.replaceRoute(AppRoute.RemoteHome);
+        this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.RemoteHome);
       }
       return;
     }
+    this.invalidateFilePreviewTarget();
     this.remoteActivityViewModel.invalidate();
     this.remoteConnectionCoordinator.invalidate();
     this.stopPolling();
@@ -1428,7 +1598,7 @@ export class AppRootRuntime {
       this.appShellState.setSettingsVisible(false);
       this.appShellState.setConnectSheetVisible(false);
       if (navigateHome) {
-        this.replaceRoute(AppRoute.RemoteHome);
+        this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.RemoteHome);
       }
       await this.cloudAccountSessionStore.save({
         relayUrl: this.cloudAccountRelayUrl,
@@ -1463,11 +1633,21 @@ export class AppRootRuntime {
   }
 
   openHomeSession(session: RemoteSession): void {
+    this.closeFilePreview();
     if (session.agentType === 'chat') {
       this.openGeneralSession(session);
       return;
     }
     this.openSession(session);
+  }
+
+  openHomeSessionInPlace(session: RemoteSession): void {
+    this.closeFilePreview();
+    if (session.agentType === 'chat') {
+      this.openGeneralSession(session);
+      return;
+    }
+    this.openSession(session, true);
   }
 
   async deleteHomeSession(session: RemoteSession): Promise<void> {
@@ -1528,8 +1708,8 @@ export class AppRootRuntime {
       async (sessionId: string): Promise<string> => {
         return this.generalChatDraftLifecycleController.restore(sessionId);
       },
-      (sessionId: string) => {
-        this.replaceRoute(AppRoute.ChatHome, sessionId);
+      (_sessionId: string) => {
+        this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.ChatHome);
       }
     );
   }
@@ -1548,8 +1728,8 @@ export class AppRootRuntime {
       async (): Promise<void> => {
         await this.generalChatDraftLifecycleController.clearHomeNow();
       },
-      (sessionId: string) => {
-        this.replaceRoute(AppRoute.ChatHome, sessionId);
+      (_sessionId: string) => {
+        this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.ChatHome);
       }
     );
     if (!created) {
@@ -1579,6 +1759,7 @@ export class AppRootRuntime {
   }
 
   closeActiveChat(): void {
+    this.closeFilePreview();
     this.stopVoiceInput(false);
     if (this.isRoute(AppRoute.GeneralChat)) {
       this.persistVisibleGeneralChatDraft();
@@ -1626,8 +1807,63 @@ export class AppRootRuntime {
     this.downloadFile(path);
   }
 
-  async createSession(agentType: string): Promise<void> {
-    await this.remoteSessionViewModel.createSession(agentType);
+  openFilePreview(route: AppRoute, request: FilePreviewRequest): void {
+    const context = new FilePreviewTargetContext(
+      this.remotePageState.activeSession.sessionId,
+      this.remotePageState.activeSession.workspacePath || this.remotePageState.workspacePath,
+      this.controlTargetEpoch
+    );
+    const resolution = FileTargetResolver.resolve(request.reference, request.label, context);
+    if (resolution.kind === FileReferenceKind.HttpUrl) {
+      void this.openExternalLink(route, request.reference);
+      return;
+    }
+    if (route !== AppRoute.RemoteChat) {
+      this.generalChatPageState.setStatus(RemoteI18n.t('generalChat.filePreviewUnavailable'));
+      return;
+    }
+    if (resolution.kind !== FileReferenceKind.RemoteWorkspaceFile || !resolution.target) {
+      return;
+    }
+    void this.remoteFilePreviewController.open(resolution.target);
+  }
+
+  private async openExternalLink(route: AppRoute, reference: string): Promise<void> {
+    const opened = this.host.openExternalLink ? await this.host.openExternalLink(reference) : false;
+    if (!opened) {
+      if (AppRouteContract.isGeneralComposerRoute(route)) {
+        this.generalChatPageState.setStatus(RemoteI18n.t('errors.operationFailed'));
+      } else {
+        this.setRemoteStatusText(RemoteI18n.t('errors.operationFailed'));
+      }
+    }
+  }
+
+  closeFilePreview(): void {
+    this.remoteFilePreviewController.close();
+  }
+
+  refreshFilePreview(): void {
+    void this.remoteFilePreviewController.refresh();
+  }
+
+  openFilePreviewLink(reference: string, label: string): void {
+    this.openFilePreview(AppRoute.RemoteChat, new FilePreviewRequest(reference, label));
+  }
+
+  invalidateFilePreviewTarget(): void {
+    this.controlTargetEpoch += 1;
+    this.remoteFilePreviewController.close();
+  }
+
+  async createSession(agentType: string, inPlace: boolean = false): Promise<void> {
+    this.closeFilePreview();
+    await this.remoteSessionViewModel.createSession(
+      agentType,
+      '',
+      inPlace ? (sessionId: string): void => this.routeRemoteSessionInPlace(sessionId) :
+        (sessionId: string): void => this.routeCreatedRemoteSession(sessionId)
+    );
   }
 
   openRemoteCreateSession(): void {
@@ -1636,7 +1872,7 @@ export class AppRootRuntime {
     }
     const deviceId = this.remotePageState.controlTargetDeviceId || this.remotePageState.desktopId;
     const deviceName = this.remotePageState.controlTargetDeviceName || this.remotePageState.desktopName;
-    this.remoteCreateState.prepare(deviceId, deviceName);
+    this.remoteCreateState.prepare(deviceId, deviceName, this.remotePageState.selectedModelId);
     if (deviceId.length > 0) {
       this.remoteCreateState.setDevices([{
         deviceId,
@@ -1647,9 +1883,12 @@ export class AppRootRuntime {
     this.remoteCreateState.setWorkspaces(this.remotePageState.recentWorkspaces);
     this.pushRoute(AppRoute.RemoteCreate);
     this.loadRemoteCreateChoices();
+    this.loadRemoteCreateModelCatalog();
   }
 
   closeRemoteCreateSession(): void {
+    this.remoteCreateWorkspaceLoadVersion += 1;
+    this.stopVoiceInput(false);
     this.remoteCreateState.closeMenu();
     this.popRoute(AppRoute.RemoteHome);
   }
@@ -1659,6 +1898,23 @@ export class AppRootRuntime {
       this.loadRemoteCreateDevices(),
       this.loadRemoteCreateWorkspaces()
     ]);
+  }
+
+  async loadRemoteCreateModelCatalog(): Promise<void> {
+    if (this.remotePageState.modelCatalog.models.length > 0) {
+      return;
+    }
+    try {
+      const catalog = await this.sessionManager.getModelCatalog();
+      const selectedModelId = RemoteUiState.selectedModelIdForCatalog(
+        catalog,
+        this.remotePageState.selectedModelId
+      );
+      this.remotePageState.setModelCatalog(catalog, selectedModelId);
+      this.remoteCreateState.setSelectedModelId(selectedModelId);
+    } catch (_err) {
+      // Model selection remains hidden when the remote does not expose a catalog.
+    }
   }
 
   async loadRemoteCreateDevices(): Promise<void> {
@@ -1694,11 +1950,21 @@ export class AppRootRuntime {
   }
 
   async loadRemoteCreateWorkspaces(): Promise<void> {
+    const loadVersion = ++this.remoteCreateWorkspaceLoadVersion;
+    const deviceId = this.remoteCreateState.selectedDeviceId;
     this.remoteCreateState.isLoadingWorkspaces = this.remoteCreateState.workspaces.length === 0;
     try {
       const workspaces = await this.workspaceCoordinator.recentWorkspaces();
+      if (loadVersion !== this.remoteCreateWorkspaceLoadVersion ||
+        deviceId !== this.remoteCreateState.selectedDeviceId) {
+        return;
+      }
       this.remoteCreateState.setWorkspaces(workspaces);
     } catch (err) {
+      if (loadVersion !== this.remoteCreateWorkspaceLoadVersion ||
+        deviceId !== this.remoteCreateState.selectedDeviceId) {
+        return;
+      }
       this.remoteCreateState.setWorkspaces([]);
       this.remoteCreateState.errorText = RemoteI18n.t('remote.create.workspaceLoadFailed');
     }
@@ -1743,20 +2009,41 @@ export class AppRootRuntime {
     this.remoteCreateState.selectWorkspace(workspace);
   }
 
+  selectRemoteCreateModel(modelId: string): void {
+    this.remoteCreateState.setSelectedModelId(modelId);
+  }
+
   async submitRemoteCreateSession(): Promise<void> {
     const instruction = this.remoteCreateState.draft.trim();
     if (instruction.length === 0 || this.remoteCreateState.isSubmitting || !this.ensureRemoteAvailable()) {
       return;
     }
+    const context = this.remoteCreateState.submissionContext();
+    const activeDeviceId = this.remotePageState.controlTargetDeviceId || this.remotePageState.desktopId;
+    if (context.deviceId.length === 0 || context.deviceId !== activeDeviceId) {
+      this.remoteCreateState.errorText = RemoteI18n.t('remote.create.deviceMismatch');
+      return;
+    }
     this.remoteCreateState.isSubmitting = true;
     this.remoteCreateState.errorText = '';
     this.remoteCreateState.closeMenu();
-    const workspacePath = this.remoteCreateState.selectedWorkspacePath;
     try {
-      if (workspacePath.length > 0) {
-        await this.remoteSessionViewModel.createSessionInWorkspace(workspacePath, this.workspacePath, instruction);
+      if (context.workspacePath.length > 0) {
+        await this.remoteSessionViewModel.createSessionInWorkspace(
+          context.workspacePath,
+          this.workspacePath,
+          instruction,
+          context.agentType,
+          undefined,
+          this.remoteCreateState.selectedModelId
+        );
       } else {
-        await this.remoteSessionViewModel.createSession('Claw', instruction);
+        await this.remoteSessionViewModel.createSession(
+          context.agentType,
+          instruction,
+          undefined,
+          this.remoteCreateState.selectedModelId
+        );
       }
       if (this.isRoute(AppRoute.RemoteCreate)) {
         this.remoteCreateState.errorText = this.statusText || RemoteI18n.t('remote.create.submitFailed');
@@ -1769,8 +2056,20 @@ export class AppRootRuntime {
     }
   }
 
-  async createSessionInWorkspace(path: string, agentType: string = 'code'): Promise<void> {
-    await this.remoteSessionViewModel.createSessionInWorkspace(path, this.workspacePath, '', agentType);
+  async createSessionInWorkspace(
+    path: string,
+    agentType: string = 'code',
+    inPlace: boolean = false
+  ): Promise<void> {
+    this.closeFilePreview();
+    await this.remoteSessionViewModel.createSessionInWorkspace(
+      path,
+      this.workspacePath,
+      '',
+      agentType,
+      inPlace ? (sessionId: string): void => this.routeRemoteSessionInPlace(sessionId) :
+        (sessionId: string): void => this.routeCreatedRemoteSession(sessionId)
+    );
   }
 
   applyDiscoveredWorkspaceSessions(all: RemoteSession[]): void {
@@ -1794,8 +2093,23 @@ export class AppRootRuntime {
     return merged;
   }
 
-  async openSession(item: RemoteSession): Promise<void> {
-    await this.remoteSessionViewModel.openSession(item, this.workspacePath);
+  async openSession(item: RemoteSession, inPlace: boolean = false): Promise<void> {
+    this.closeFilePreview();
+    await this.remoteSessionViewModel.openSession(
+      item,
+      this.workspacePath,
+      inPlace ? (sessionId: string): void => this.routeRemoteSessionInPlace(sessionId) :
+        (sessionId: string): void => this.routeCreatedRemoteSession(sessionId)
+    );
+  }
+
+  applyRemoteActiveSession(session: SessionSummary): void {
+    const current = this.remotePageState.activeSession;
+    if (this.filePreviewState.visible &&
+      (current.sessionId !== session.sessionId || current.workspacePath !== session.workspacePath)) {
+      this.closeFilePreview();
+    }
+    this.remotePageState.setActiveSession(session);
   }
 
   async deleteSession(item: RemoteSession): Promise<void> {
@@ -1804,17 +2118,23 @@ export class AppRootRuntime {
 
   async loadActiveMessages(): Promise<void> {
     await this.remoteSessionViewModel.loadActiveMessages((activeSessionId: string): boolean => {
-      return this.activeSession.sessionId === activeSessionId && this.isRoute(AppRoute.RemoteChat);
+      return this.isRemoteConversationContext(activeSessionId);
     });
   }
 
   async loadModelCatalog(sessionId: string): Promise<void> {
     await this.remoteSessionViewModel.loadModelCatalog(sessionId, (activeSessionId: string): boolean => {
-      return this.activeSession.sessionId === activeSessionId && this.isRoute(AppRoute.RemoteChat);
+      return this.isRemoteConversationContext(activeSessionId);
     });
   }
 
   async selectModel(modelId: string): Promise<void> {
+    if (this.isGeneralChatVisible()) {
+      if (await this.generalChatConfigStore.selectModel(modelId)) {
+        await this.refreshGeneralChatModelCatalog();
+      }
+      return;
+    }
     await this.remoteSessionViewModel.selectModel(modelId);
   }
 
@@ -1946,7 +2266,7 @@ export class AppRootRuntime {
     this.generalChatPageState.clearComposer();
     this.generalChatPageState.clearActiveSession();
     this.resetGeneralChatTimeline('');
-    this.replaceRoute(AppRoute.ChatHome);
+    this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.ChatHome);
   }
 
   onVisibleChatInputChange(route: AppRoute, value: string): void {
@@ -2164,7 +2484,7 @@ export class AppRootRuntime {
   }
 
   applyChatSessionSnapshot(snapshot: RemoteChatPollingSnapshot): void {
-    if (snapshot.sessionId !== this.activeSession.sessionId || !this.isRoute(AppRoute.RemoteChat)) {
+    if (!this.isRemoteConversationContext(snapshot.sessionId)) {
       return;
     }
     this.chatTimelineStore.applySnapshot(snapshot);

@@ -17,8 +17,8 @@ use crate::startup_trace::DesktopStartupTrace;
 use bitfun_agent_runtime::deep_review::sanitize_focused_review_public_metadata;
 use bitfun_agent_runtime::sdk::{
     AgentDialogSteerRequest, AgentDialogTurnExecution, AgentDialogTurnRequest,
-    AgentInputAttachment, AgentSessionCreateResult, AgentSessionModelSelection,
-    AgentSessionModeUpdateRequest, AgentSessionModelSelectionUpdateRequest,
+    AgentInputAttachment, AgentSessionCreateResult, AgentSessionModeUpdateRequest,
+    AgentSessionModelSelection, AgentSessionModelSelectionUpdateRequest,
     AgentSessionModelUpdateRequest, AgentSubmissionSource, AgentTurnCancellationRequest,
     DialogSteerOutcome, PermissionAuditRecord, PermissionGrant, PermissionGrantKey,
     PermissionReply, PermissionRequest,
@@ -54,7 +54,7 @@ use bitfun_core::service::config::project_permission_store::{
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use bitfun_core::service::remote_ssh::workspace_state::resolve_workspace_session_identity;
 use bitfun_core::service::session::{
-    DialogTurnData, SessionMemoryMode, SessionMetadata, SessionRelationship,
+    DialogTurnData, SessionContextUsage, SessionMemoryMode, SessionMetadata, SessionRelationship,
     SessionRelationshipKind, SessionTurnCatalog, SessionTurnWindowResponse,
 };
 use bitfun_core::service::workspace::WorkspaceKind;
@@ -502,6 +502,7 @@ pub struct RestoreSessionWithTurnsResponse {
 pub struct RestoreSessionViewResponse {
     pub session: SessionResponse,
     pub turns: Vec<DialogTurnData>,
+    pub current_context_usage: Option<SessionContextUsage>,
     pub turn_catalog: SessionTurnCatalog,
     pub context_restore_state: String,
     pub is_partial: bool,
@@ -3072,6 +3073,7 @@ pub async fn restore_session_view(
             .map_err(|error| format!("Failed to restore session view: {error}"))?;
         let session = restored.session;
         let mut turns = restored.turns;
+        let current_context_usage = restored.current_context_usage;
         let total_turn_count = restored.total_turn_count;
         let turn_catalog = restored.turn_catalog;
         let timings = restored.timings;
@@ -3124,6 +3126,7 @@ pub async fn restore_session_view(
         Ok(RestoreSessionViewResponse {
             session: session_to_response_with_turn_count(session, total_turn_count),
             turns,
+            current_context_usage,
             turn_catalog,
             context_restore_state: "pending".to_string(),
             is_partial,

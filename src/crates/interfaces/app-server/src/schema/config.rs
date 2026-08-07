@@ -1,6 +1,11 @@
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
 use serde::{Deserialize, Serialize};
 
+pub use bitfun_app_server_protocol::config::{
+    SaveCloudSpeechConfigMessage, SaveCloudSpeechConfigRequest, SaveCloudSpeechConfigResponse,
+    SaveCloudSpeechConfigResult, ValidateConfigMessage, ValidateConfigResponse,
+};
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[request(method = "config/getAgentProfileConfigs", response = GetAgentProfileConfigsResponse)]

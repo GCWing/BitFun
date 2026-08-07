@@ -82,6 +82,17 @@ interface SyncSessionUpload {
   version: number;
 }
 
+interface SyncSettingsEntry {
+  encrypted_data: string;
+  nonce: string;
+  version: number;
+}
+
+export interface CloudSettingsBlob {
+  plaintext: string;
+  version: number;
+}
+
 /** Default BitFun cloud relay used by the desktop account flow. */
 export const DEFAULT_CLOUD_RELAY_URL: string = 'https://remote.openbitfun.com/relay';
 
@@ -137,6 +148,25 @@ export class CloudAccountClient {
       });
     }
     return bundles;
+  }
+
+  async fetchSettings(relayUrl: string, session: CloudAccountSession): Promise<CloudSettingsBlob | undefined> {
+    let entry: SyncSettingsEntry;
+    try {
+      entry = await this.request<SyncSettingsEntry>(relayUrl, '/api/sync/settings', 'GET', undefined, session.token);
+    } catch (err) {
+      if (err instanceof CloudAccountRequestError && err.statusCode === 404) {
+        return undefined;
+      }
+      throw err instanceof Error ? err : new Error('Cloud settings request failed.');
+    }
+    if (!entry || !entry.encrypted_data || !entry.nonce) {
+      return undefined;
+    }
+    return {
+      plaintext: await this.decryptSyncPayload(session.masterKey, entry.encrypted_data, entry.nonce),
+      version: entry.version
+    };
   }
 
   async listDevices(relayUrl: string, session: CloudAccountSession): Promise<CloudAccountDevice[]> {

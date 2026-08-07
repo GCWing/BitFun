@@ -109,6 +109,7 @@ import {
   RemoteImageContext,
   RemoteQuestionAnswerPayload,
   RemoteModelCatalog,
+  ReadFileChunkResult,
   ReadFileResult,
   RemoteSession,
   SelectedImageAttachment,
@@ -655,14 +656,29 @@ export class FakeRemoteFileDownloadClient implements RemoteFileDownloadClient {
   infoRequests: string[] = [];
   readRequests: string[] = [];
   shouldFailRead: boolean = false;
+  fileInfo: FileInfo = {
+    name: 'README.md',
+    size: 4096,
+    mimeType: 'text/plain'
+  };
+  chunkResult: ReadFileChunkResult = {
+    name: 'README.md',
+    contentBase64: 'cmVhZG1l',
+    offset: 0,
+    chunkSize: 6,
+    totalSize: 6,
+    mimeType: 'text/plain'
+  };
+  fileReadResult: ReadFileResult = {
+    name: 'README.md',
+    contentBase64: 'cmVhZG1l',
+    mimeType: 'text/plain',
+    size: 4096
+  };
 
   async getFileInfo(path: string, sessionId?: string): Promise<FileInfo> {
     this.infoRequests.push(`${path}|${sessionId || ''}`);
-    return {
-      name: 'README.md',
-      size: 4096,
-      mimeType: 'text/plain'
-    };
+    return this.fileInfo;
   }
 
   async readFile(
@@ -677,11 +693,26 @@ export class FakeRemoteFileDownloadClient implements RemoteFileDownloadClient {
     if (this.shouldFailRead) {
       throw new Error('Expected download failure.');
     }
+    return this.fileReadResult;
+  }
+
+  async readFileChunk(
+    path: string,
+    offset: number,
+    limit: number,
+    sessionId?: string
+  ): Promise<ReadFileChunkResult> {
+    this.readRequests.push(`${path}|${sessionId || ''}|${offset}|${limit}`);
+    if (this.shouldFailRead) {
+      throw new Error('Expected download failure.');
+    }
     return {
-      name: 'README.md',
-      contentBase64: 'cmVhZG1l',
-      mimeType: 'text/plain',
-      size: 4096
+      name: this.chunkResult.name,
+      contentBase64: this.chunkResult.contentBase64,
+      offset,
+      chunkSize: this.chunkResult.chunkSize,
+      totalSize: this.chunkResult.totalSize,
+      mimeType: this.chunkResult.mimeType
     };
   }
 }

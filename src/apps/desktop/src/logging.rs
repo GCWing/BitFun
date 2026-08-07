@@ -4,12 +4,12 @@ use bitfun_core::infrastructure::get_path_manager_arc;
 use chrono::Local;
 use serde::Serialize;
 use serde_json::Value;
-use std::fs::{self, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{
     atomic::{AtomicU8, Ordering},
-    Mutex, OnceLock,
+    Mutex, OnceLock, RwLock,
 };
 use std::thread;
 use tauri::{plugin::TauriPlugin, Runtime};
@@ -23,10 +23,172 @@ const FLOW_CHAT_LOG_MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
 const FLOW_CHAT_LOG_MAX_BATCH_ENTRIES: usize = 256;
 const FLOW_CHAT_LOG_MAX_BATCH_BYTES: usize = 1024 * 1024;
 const FLOW_CHAT_LOG_MAX_ENTRY_BYTES: usize = 32 * 1024;
+pub const EARLY_STARTUP_LOG_FILE_NAME: &str = "early-startup.log";
+pub const NATIVE_STARTUP_TRACE_FILE_NAME: &str = "native-startup-trace.jsonl";
 static SESSION_LOG_DIR: OnceLock<PathBuf> = OnceLock::new();
+static GLOBAL_LOG_ROUTER: OnceLock<&'static SwitchingLogger> = OnceLock::new();
 // Default to Debug in early development for easier diagnostics
 static CURRENT_LOG_LEVEL: AtomicU8 = AtomicU8::new(level_filter_to_u8(log::LevelFilter::Debug));
 static FLOW_CHAT_DIAGNOSTICS_WRITE_LOCK: Mutex<()> = Mutex::new(());
+
+struct EarlyFileLogger {
+    path: PathBuf,
+    file: Mutex<Option<File>>,
+}
+
+impl EarlyFileLogger {
+    fn new(path: PathBuf) -> Self {
+        let file = (|| {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            OpenOptions::new().create(true).append(true).open(&path)
+        })();
+        let file = match file {
+            Ok(file) => Some(file),
+            Err(error) => {
+                eprintln!(
+                    "Warning: Failed to open early startup log {}, falling back to stderr: {}",
+                    path.display(),
+                    error
+                );
+                None
+            }
+        };
+        Self {
+            path,
+            file: Mutex::new(file),
+        }
+    }
+
+    fn write_record(&self, record: &log::Record<'_>) {
+        let line = format_early_log_record(record);
+        let Ok(mut file_guard) = self.file.lock() else {
+            eprintln!("Warning: Early startup log writer lock is poisoned");
+            return;
+        };
+        let Some(file) = file_guard.as_mut() else {
+            eprintln!("{}", line.trim_end());
+            return;
+        };
+        if let Err(error) = file.write_all(line.as_bytes()).and_then(|_| file.flush()) {
+            eprintln!(
+                "Warning: Failed to write early startup log {}: {}",
+                self.path.display(),
+                error
+            );
+            *file_guard = None;
+            eprintln!("{}", line.trim_end());
+        }
+    }
+
+    fn write_handoff_boundary(&self) {
+        let Ok(mut file_guard) = self.file.lock() else {
+            eprintln!("Warning: Early startup log writer lock is poisoned during handoff");
+            return;
+        };
+        let Some(file) = file_guard.as_mut() else {
+            return;
+        };
+        let line = format!(
+            "[{}][tid:{}][INFO][bitfun_desktop::logging] Early startup logging handoff completed: runtime_backend=tauri_plugin_log\n",
+            Local::now().format("%Y-%m-%dT%H:%M:%S%.3f"),
+            get_thread_id()
+        );
+        if let Err(error) = file.write_all(line.as_bytes()).and_then(|_| file.flush()) {
+            eprintln!(
+                "Warning: Failed to finalize early startup log {}: {}",
+                self.path.display(),
+                error
+            );
+        }
+    }
+}
+
+enum LogBackend {
+    Early(EarlyFileLogger),
+    Runtime(Box<dyn log::Log>),
+}
+
+struct SwitchingLogger {
+    backend: RwLock<LogBackend>,
+}
+
+impl SwitchingLogger {
+    fn new(early_logger: EarlyFileLogger) -> Self {
+        Self {
+            backend: RwLock::new(LogBackend::Early(early_logger)),
+        }
+    }
+
+    fn install_runtime_backend(
+        &self,
+        runtime_logger: Box<dyn log::Log>,
+    ) -> Result<PathBuf, String> {
+        let mut backend = self
+            .backend
+            .write()
+            .map_err(|_| "Global log router lock is poisoned".to_string())?;
+        let early_log_path = match &*backend {
+            LogBackend::Early(early_logger) => {
+                early_logger.write_handoff_boundary();
+                early_logger.path.clone()
+            }
+            LogBackend::Runtime(_) => {
+                return Err("Runtime logging backend is already installed".to_string())
+            }
+        };
+        *backend = LogBackend::Runtime(runtime_logger);
+        Ok(early_log_path)
+    }
+}
+
+impl log::Log for SwitchingLogger {
+    fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
+        self.backend
+            .read()
+            .map(|backend| match &*backend {
+                LogBackend::Early(_) => true,
+                LogBackend::Runtime(logger) => logger.enabled(metadata),
+            })
+            .unwrap_or(false)
+    }
+
+    fn log(&self, record: &log::Record<'_>) {
+        if let Ok(backend) = self.backend.read() {
+            match &*backend {
+                LogBackend::Early(logger) => logger.write_record(record),
+                LogBackend::Runtime(logger) => logger.log(record),
+            }
+        }
+    }
+
+    fn flush(&self) {
+        if let Ok(backend) = self.backend.read() {
+            match &*backend {
+                LogBackend::Early(logger) => {
+                    if let Ok(mut file_guard) = logger.file.lock() {
+                        if let Some(file) = file_guard.as_mut() {
+                            let _ = file.flush();
+                        }
+                    }
+                }
+                LogBackend::Runtime(logger) => logger.flush(),
+            }
+        }
+    }
+}
+
+fn format_early_log_record(record: &log::Record<'_>) -> String {
+    format!(
+        "[{}][tid:{}][{}][{}] {}\n",
+        Local::now().format("%Y-%m-%dT%H:%M:%S%.3f"),
+        get_thread_id(),
+        record.level(),
+        record.target(),
+        record.args()
+    )
+}
 
 fn get_thread_id() -> u64 {
     let thread_id = thread::current().id();
@@ -78,6 +240,31 @@ impl LogConfig {
             session_log_dir,
         }
     }
+}
+
+pub fn early_startup_log_path(session_log_dir: &Path) -> PathBuf {
+    session_log_dir.join(EARLY_STARTUP_LOG_FILE_NAME)
+}
+
+pub fn native_startup_trace_path(session_log_dir: &Path) -> PathBuf {
+    session_log_dir.join(NATIVE_STARTUP_TRACE_FILE_NAME)
+}
+
+pub fn install_early_file_logging(session_log_dir: &Path) -> Result<(), String> {
+    let early_log_path = early_startup_log_path(session_log_dir);
+    let early_logger = EarlyFileLogger::new(early_log_path.clone());
+    let router = Box::leak(Box::new(SwitchingLogger::new(early_logger)));
+    log::set_logger(router)
+        .map_err(|_| "Failed to install global early startup logger".to_string())?;
+    GLOBAL_LOG_ROUTER
+        .set(router)
+        .map_err(|_| "Global early startup logger is already registered".to_string())?;
+    log::set_max_level(log::LevelFilter::Trace);
+    log::info!(
+        "Early startup logging initialized: path={}",
+        early_log_path.display()
+    );
+    Ok(())
 }
 
 const fn level_filter_to_u8(level: log::LevelFilter) -> u8 {
@@ -172,6 +359,8 @@ pub fn flow_chat_log_path() -> PathBuf {
 pub struct RuntimeLoggingInfo {
     pub effective_level: String,
     pub session_log_dir: String,
+    pub early_startup_log_path: String,
+    pub native_startup_trace_path: String,
     pub app_log_path: String,
     pub ai_log_path: String,
     pub flashgrep_log_path: String,
@@ -187,6 +376,12 @@ pub fn get_runtime_logging_info() -> RuntimeLoggingInfo {
     RuntimeLoggingInfo {
         effective_level: level_to_str(current_runtime_log_level()).to_string(),
         session_log_dir: session_dir.to_string_lossy().to_string(),
+        early_startup_log_path: early_startup_log_path(&session_dir)
+            .to_string_lossy()
+            .to_string(),
+        native_startup_trace_path: native_startup_trace_path(&session_dir)
+            .to_string_lossy()
+            .to_string(),
         app_log_path: session_dir.join("app.log").to_string_lossy().to_string(),
         ai_log_path: session_dir.join("ai.log").to_string_lossy().to_string(),
         flashgrep_log_path: session_dir
@@ -418,7 +613,7 @@ pub fn build_log_targets(config: &LogConfig) -> Vec<Target> {
     targets
 }
 
-pub fn build_log_plugin<R: Runtime>(log_targets: Vec<Target>) -> TauriPlugin<R> {
+fn configured_log_builder(log_targets: Vec<Target>) -> tauri_plugin_log::Builder {
     tauri_plugin_log::Builder::new()
         .level(log::LevelFilter::Trace)
         .level_for("ignore", log::LevelFilter::Off)
@@ -456,6 +651,34 @@ pub fn build_log_plugin<R: Runtime>(log_targets: Vec<Target>) -> TauriPlugin<R> 
         .max_file_size(10 * 1024 * 1024)
         .timezone_strategy(TimezoneStrategy::UseLocal)
         .clear_format()
+}
+
+pub fn build_log_command_plugin<R: Runtime>() -> TauriPlugin<R> {
+    tauri_plugin_log::Builder::new().skip_logger().build()
+}
+
+pub fn build_log_plugin<R: Runtime>(log_targets: Vec<Target>) -> TauriPlugin<R> {
+    configured_log_builder(log_targets).build()
+}
+
+pub fn build_log_handoff_plugin<R: Runtime>(log_targets: Vec<Target>) -> TauriPlugin<R> {
+    tauri::plugin::Builder::new("logging-handoff")
+        .setup(move |app_handle, _api| {
+            let (_unused_plugin, max_level, runtime_logger) =
+                configured_log_builder(log_targets).split(app_handle)?;
+            let router = GLOBAL_LOG_ROUTER.get().copied().ok_or_else(|| {
+                std::io::Error::other("Global early startup logger is not installed")
+            })?;
+            let early_log_path = router
+                .install_runtime_backend(runtime_logger)
+                .map_err(std::io::Error::other)?;
+            log::set_max_level(max_level);
+            log::info!(
+                "Runtime logging backend ready: early_startup_log_path={}",
+                early_log_path.display()
+            );
+            Ok(())
+        })
         .build()
 }
 
@@ -551,6 +774,24 @@ pub fn spawn_log_cleanup_task() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn early_file_logger_persists_and_flushes_each_record() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let path = temp_dir.path().join(EARLY_STARTUP_LOG_FILE_NAME);
+        let logger = EarlyFileLogger::new(path.clone());
+        let record = log::Record::builder()
+            .level(log::Level::Error)
+            .target("bitfun_desktop::startup")
+            .args(format_args!("Startup failed: code={}", 7))
+            .build();
+
+        logger.write_record(&record);
+
+        let content = fs::read_to_string(path).expect("read early log");
+        assert!(content.contains("[ERROR][bitfun_desktop::startup]"));
+        assert!(content.contains("Startup failed: code=7"));
+    }
 
     #[test]
     fn serializes_flow_chat_diagnostics_as_bounded_json_lines() {

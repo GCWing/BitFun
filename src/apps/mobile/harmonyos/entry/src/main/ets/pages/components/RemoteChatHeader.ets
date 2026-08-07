@@ -1,6 +1,7 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { ConversationUiModel, ConversationUiModelCatalog, ConversationUiSession } from './ConversationUiModels';
-import { ACCENT, CARD, GREEN, INK, LINE, MUTED, PAGE_BG } from './Theme';
+import { ConversationUiSession } from './ConversationUiModels';
+import { ACCENT, CARD, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION_TEXT, SOFT } from './Theme';
+import { SidebarToggleButton } from './SidebarToggleButton';
 
 @ComponentV2
 export struct RemoteChatHeader {
@@ -12,21 +13,16 @@ export struct RemoteChatHeader {
   };
   @Param workspaceBranch: string = '';
   @Param desktopName: string = '';
-  @Param canStop: boolean = false;
-  @Param modelCatalog: ConversationUiModelCatalog = {
-    version: 0,
-    models: [],
-    default_models: {}
-  };
-  @Param selectedModelId: string = '';
   @Param showBackButton: boolean = true;
+  @Param showSidebarRestoreButton: boolean = false;
+  @Param showActionsMenu: boolean = false;
+  @BuilderParam actionsMenu: () => void = this.EmptyBuilder;
   @Event onBack: () => void = () => {};
-  @Event onNewSession: () => void = () => {};
-  @Event onStop: () => void = () => {};
+  @Event onRestoreSidebar: () => void = () => {};
+  @Event onOpenActions: () => void = () => {};
+  @Event onActionsMenuStateChange: (visible: boolean) => void = (_visible: boolean) => {};
   @Event onRenameSession: (title: string) => void = (_title: string) => {};
-  @Event onSelectModel: (modelId: string) => void = (_modelId: string) => {};
   @Local showTitleEditor: boolean = false;
-  @Local showModelSelector: boolean = false;
   @Local renameTitle: string = '';
 
   build() {
@@ -35,9 +31,6 @@ export struct RemoteChatHeader {
       if (this.showTitleEditor) {
         this.TitleEditor()
       }
-      if (this.showModelSelector) {
-        this.ModelSelector()
-      }
     }
     .width('100%')
     .backgroundColor(PAGE_BG)
@@ -45,29 +38,14 @@ export struct RemoteChatHeader {
 
   @Builder
   HeaderRow() {
-    Row({ space: 12 }) {
-      if (this.showBackButton) {
-        Stack({ alignContent: Alignment.Center }) {
-          Image($r('app.media.remote_ref_back'))
-            .width(16)
-            .height(25)
-            .objectFit(ImageFit.Contain)
-        }
-        .width(48)
-        .height(48)
-        .backgroundColor(CARD)
-        .borderRadius(24)
-        .shadow({ radius: 16, color: '#10000000', offsetY: 7 })
-        .onClick(() => {
-          this.onBack();
-        })
-      }
+    Row({ space: 8 }) {
+      this.LeadingControl()
       Column({ space: 3 }) {
         Text(this.activeSession.title || RemoteI18n.t('chat.remoteSession'))
           .fontSize(18)
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
-          .textAlign(TextAlign.Start)
+          .textAlign(TextAlign.Center)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .onClick(() => {
@@ -78,50 +56,90 @@ export struct RemoteChatHeader {
           Text(this.headerContextTitle())
             .fontSize(14)
             .fontColor(MUTED)
-            .textAlign(TextAlign.Start)
+            .textAlign(TextAlign.Center)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
         .width('100%')
-        .justifyContent(FlexAlign.Start)
+        .justifyContent(FlexAlign.Center)
       }
       .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
-      Row() {
-        Stack({ alignContent: Alignment.Center }) {
-          Image($r('app.media.remote_ref_edit'))
-            .width(24)
-            .height(24)
-            .objectFit(ImageFit.Contain)
-        }
-          .width(44)
-          .height(48)
-          .onClick(() => {
-            this.onNewSession();
-          })
-        Stack({ alignContent: Alignment.Center }) {
-          Image($r('app.media.remote_ref_more'))
-            .width(25)
-            .height(8)
-            .objectFit(ImageFit.Contain)
-        }
-          .width(44)
-          .height(48)
-          .onClick(() => {
-            this.showModelSelector = !this.showModelSelector;
-          })
-      }
-      .width(90)
-      .height(48)
-      .padding({ left: 1, right: 1 })
-      .backgroundColor(CARD)
-      .borderRadius(24)
-      .shadow({ radius: 16, color: '#10000000', offsetY: 7 })
+      .alignItems(HorizontalAlign.Center)
+      this.ActionsControl()
     }
     .width('100%')
     .alignItems(VerticalAlign.Center)
     .padding({ left: 18, right: 18, top: 14, bottom: 16 })
     .backgroundColor(PAGE_BG)
+  }
+
+  @Builder
+  private LeadingControl() {
+    if (this.showSidebarRestoreButton) {
+      SidebarToggleButton({
+        restore: true,
+        controlSize: 48,
+        onToggle: this.onRestoreSidebar
+      })
+    } else if (this.showBackButton) {
+      Stack({ alignContent: Alignment.Center }) {
+        Image($r('app.media.remote_ref_back'))
+          .width(15)
+          .height(23)
+          .objectFit(ImageFit.Contain)
+          .renderMode(ImageRenderMode.Template)
+          .foregroundColor(INK)
+      }
+      .width(44)
+      .height(44)
+      .backgroundColor(CARD)
+      .border({ width: 1, color: LINE })
+      .borderRadius(22)
+      .shadow({ radius: 10, color: LINE, offsetY: 3 })
+      .accessibilityText(RemoteI18n.t('common.back'))
+      .onClick(() => {
+        this.onBack();
+      })
+    } else {
+      Blank().width(44).height(44)
+    }
+  }
+
+  @Builder
+  private ActionsControl() {
+    Stack({ alignContent: Alignment.Center }) {
+        Image($r('app.media.remote_ref_more'))
+        .width(23)
+        .height(7)
+        .objectFit(ImageFit.Contain)
+        .renderMode(ImageRenderMode.Template)
+        .foregroundColor(INK)
+    }
+    .width(44)
+    .height(44)
+    .backgroundColor(CARD)
+    .borderRadius(22)
+    .border({ width: 1, color: LINE })
+    .shadow({ radius: 10, color: LINE, offsetY: 3 })
+    .accessibilityText(RemoteI18n.t('sidebar.more'))
+    .bindPopup(this.showActionsMenu, {
+      builder: () => {
+        this.actionsMenu();
+      },
+      placement: Placement.BottomRight,
+      popupColor: '#00000000',
+      enableArrow: false,
+      autoCancel: true,
+      mask: false,
+      targetSpace: 8,
+      onStateChange: (event) => {
+        this.onActionsMenuStateChange(event.isVisible);
+      }
+    })
+    .onClick(() => {
+      this.showTitleEditor = false;
+      this.onOpenActions();
+    })
   }
 
   @Builder
@@ -143,9 +161,9 @@ export struct RemoteChatHeader {
         .width(52)
         .height(42)
         .fontSize(13)
-        .fontColor(CARD)
+        .fontColor(PRIMARY_ACTION_TEXT)
         .textAlign(TextAlign.Center)
-        .backgroundColor(this.renameTitle.trim().length > 0 ? ACCENT : '#EDEBE6')
+        .backgroundColor(this.renameTitle.trim().length > 0 ? ACCENT : SOFT)
         .borderRadius(14)
         .onClick(() => {
           if (this.renameTitle.trim().length > 0) {
@@ -159,7 +177,7 @@ export struct RemoteChatHeader {
         .fontSize(13)
         .fontColor(INK)
         .textAlign(TextAlign.Center)
-        .backgroundColor('#F0EFEB')
+        .backgroundColor(SOFT)
         .borderRadius(14)
         .onClick(() => {
           this.showTitleEditor = false;
@@ -170,96 +188,6 @@ export struct RemoteChatHeader {
     .backgroundColor(PAGE_BG)
   }
 
-  @Builder
-  ModelSelector() {
-    Column({ space: 8 }) {
-      Row() {
-        Text(`${RemoteI18n.t('chat.selectModel')} · ${this.displaySelectedModel()}`)
-          .fontSize(13)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(INK)
-        Blank()
-        Text(RemoteI18n.t('common.close'))
-          .fontSize(12)
-          .fontColor(MUTED)
-          .onClick(() => {
-            this.showModelSelector = false;
-          })
-      }
-      .width('100%')
-      if (this.canStop) {
-        Row() {
-          Text(RemoteI18n.t('chat.stop'))
-            .fontSize(14)
-            .fontColor(INK)
-          Blank()
-          Text('■')
-            .fontSize(12)
-            .fontColor(INK)
-        }
-        .width('100%')
-        .height(42)
-        .padding({ left: 12, right: 12 })
-        .backgroundColor('#F0EFEB')
-        .borderRadius(12)
-        .onClick(() => {
-          this.showModelSelector = false;
-          this.onStop();
-        })
-      }
-      List({ space: 8 }) {
-        ForEach(this.enabledModels(), (model: ConversationUiModel) => {
-          ListItem() {
-            this.ModelRow(model)
-          }
-        }, (model: ConversationUiModel) => model.id)
-      }
-      .width('100%')
-      .height(this.modelListHeight())
-      .scrollBar(BarState.Auto)
-      .edgeEffect(EdgeEffect.Spring)
-      .divider(null)
-    }
-    .width('100%')
-    .padding({ left: 18, right: 18, top: 10, bottom: 12 })
-    .backgroundColor(PAGE_BG)
-  }
-
-  @Builder
-  ModelRow(model: ConversationUiModel) {
-    Row({ space: 10 }) {
-      Text(this.selectedModelId === model.id ? '●' : '○')
-        .fontSize(12)
-        .fontColor(this.selectedModelId === model.id ? GREEN : MUTED)
-        .width(18)
-        .textAlign(TextAlign.Center)
-      Column({ space: 2 }) {
-        Text(this.primaryModelLabel(model))
-          .fontSize(13)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(INK)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(this.secondaryModelLabel(model))
-          .fontSize(11)
-          .fontColor(MUTED)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
-    }
-    .width('100%')
-    .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-    .backgroundColor(this.selectedModelId === model.id ? '#F0EFEB' : CARD)
-    .borderRadius(14)
-    .border({ width: 1, color: this.selectedModelId === model.id ? '#D8D4CA' : LINE })
-    .onClick(() => {
-      this.showModelSelector = false;
-      this.onSelectModel(model.id);
-    })
-  }
-
   private headerContextTitle(): string {
     if (this.desktopName.length > 0) {
       return this.desktopName;
@@ -268,86 +196,8 @@ export struct RemoteChatHeader {
     return this.workspaceBranch.length > 0 ? `${brand} · ${this.workspaceBranch}` : brand;
   }
 
-  private enabledModels(): ConversationUiModel[] {
-    return this.modelCatalog.models.filter((model: ConversationUiModel) => model.enabled);
+  @Builder
+  private EmptyBuilder() {
   }
 
-  private modelListHeight(): number {
-    const rowHeight = 58;
-    const rowGap = 8;
-    const visibleRows = Math.min(this.enabledModels().length, 5);
-    if (visibleRows <= 0) {
-      return 0;
-    }
-    return visibleRows * rowHeight + Math.max(0, visibleRows - 1) * rowGap;
-  }
-
-  private displaySelectedModel(): string {
-    const selected = this.selectedModel();
-    if (selected) {
-      return this.primaryModelLabel(selected);
-    }
-    return RemoteI18n.t('chat.model');
-  }
-
-  private selectedModel(): ConversationUiModel | undefined {
-    const modelId = this.selectedModelId || this.modelCatalog.session_model_id || this.modelCatalog.default_models.primary || '';
-    if (modelId.length === 0) {
-      return undefined;
-    }
-    return this.modelCatalog.models.find((model: ConversationUiModel) => model.id === modelId);
-  }
-
-  private primaryModelLabel(model: ConversationUiModel): string {
-    const modelName = this.cleanModelLabel(model.model_name || '');
-    if (this.isSpecificModelLabel(modelName)) {
-      return modelName;
-    }
-    const name = this.cleanModelLabel(model.name || '');
-    if (this.isSpecificModelLabel(name)) {
-      return name;
-    }
-    const id = this.cleanModelLabel(model.id || '');
-    if (id.length > 0) {
-      return id;
-    }
-    return RemoteI18n.t('chat.model');
-  }
-
-  private secondaryModelLabel(model: ConversationUiModel): string {
-    const provider = this.cleanModelLabel(model.provider || '');
-    const name = this.cleanModelLabel(model.name || '');
-    const primary = this.primaryModelLabel(model);
-    if (provider.length > 0 && name.length > 0 && name !== primary && name !== provider) {
-      return `${provider} · ${name}`;
-    }
-    if (provider.length > 0 && provider !== primary) {
-      return provider;
-    }
-    if (name.length > 0 && name !== primary) {
-      return name;
-    }
-    return model.id || primary;
-  }
-
-  private cleanModelLabel(value: string): string {
-    const trimmed = (value || '').trim();
-    if (trimmed.length === 0) {
-      return '';
-    }
-    const withoutScheme = trimmed.replace(/^openbitfun[:/_-]+/i, '').replace(/^anthropic[:/_-]+/i, '');
-    const parts = withoutScheme.split(/[/:]/).filter((part: string) => part.length > 0);
-    return parts.length > 0 ? parts[parts.length - 1] : withoutScheme;
-  }
-
-  private isSpecificModelLabel(label: string): boolean {
-    const normalized = label.toLowerCase();
-    return label.length > 0 &&
-      normalized !== 'openbitfun' &&
-      normalized !== 'anthropic' &&
-      normalized !== 'openai' &&
-      normalized !== 'google' &&
-      normalized !== 'azure' &&
-      normalized !== 'bitfun';
-  }
 }

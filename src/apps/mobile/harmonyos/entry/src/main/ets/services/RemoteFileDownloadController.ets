@@ -4,12 +4,11 @@ import { FileInfo, ReadFileResult } from '../model/RemoteModels';
 import { RemoteI18n } from '../i18n/RemoteI18n';
 import { ConnectionErrorPolicy } from './ConnectionErrorPolicy';
 import { Encoding } from './Encoding';
+import { RemoteWorkspaceFileClient } from './RemoteWorkspaceFileClient';
 import { RemoteUiState } from './RemoteUiState';
+import { RemoteLogger } from './RemoteLogger';
 
-export interface RemoteFileDownloadClient {
-  getFileInfo(path: string, sessionId?: string): Promise<FileInfo>;
-  readFile(path: string, sessionId?: string, onProgress?: (downloaded: number, total: number) => void): Promise<ReadFileResult>;
-}
+export interface RemoteFileDownloadClient extends RemoteWorkspaceFileClient {}
 
 export interface RemoteFileDownloadScheduler {
   setTimeout(callback: () => void, delayMs: number): number;
@@ -91,9 +90,11 @@ export class RemoteFileDownloadController {
     }
     this.cancelClearTimer();
     try {
+      RemoteLogger.info(`file_download start session=${sessionId.length > 0 ? 'set' : 'none'}`);
       this.onBusy(true);
       this.setDownloadStatus(path, '', RemoteI18n.t('status.fileInfo'));
       const info = await this.client.getFileInfo(remotePath, sessionId);
+      RemoteLogger.info(`file_download metadata name=${info.name} size=${info.size} mime=${info.mimeType}`);
       this.setDownloadStatus(path, '', RemoteI18n.f('status.prepareDownload', RemoteUiState.formatBytes(info.size)));
       const result: ReadFileResult = await this.client.readFile(remotePath, sessionId, (downloaded: number, total: number) => {
         this.setDownloadStatus(
@@ -102,7 +103,9 @@ export class RemoteFileDownloadController {
           `${RemoteUiState.formatBytes(downloaded)} / ${RemoteUiState.formatBytes(total)}`
         );
       });
+      RemoteLogger.info(`file_download data_ready name=${result.name} size=${result.size}`);
       await this.fileSaver.save(result);
+      RemoteLogger.info(`file_download saved name=${result.name} size=${result.size}`);
       this.setDownloadStatus(
         path,
         path,
@@ -110,7 +113,9 @@ export class RemoteFileDownloadController {
       );
       this.onStatusText(this.fileDownloadStatus);
     } catch (err) {
-      this.setDownloadStatus(this.downloadingFilePath, this.downloadedFilePath, ConnectionErrorPolicy.errorText(err));
+      const errorText = ConnectionErrorPolicy.errorText(err);
+      RemoteLogger.error(`file_download failed message=${errorText}`);
+      this.setDownloadStatus(this.downloadingFilePath, this.downloadedFilePath, errorText);
       this.onStatusText(this.fileDownloadStatus);
     } finally {
       this.onBusy(false);

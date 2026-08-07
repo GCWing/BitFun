@@ -1,6 +1,6 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { DEFAULT_CLOUD_RELAY_URL } from '../../services/CloudAccountClient';
-import { CARD, INK, MUTED } from './Theme';
+import { CARD, INK, MUTED, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, RED, SUBTLE } from './Theme';
 
 @Component
 export struct BitFunAccountLoginPage {
@@ -36,7 +36,7 @@ export struct BitFunAccountLoginPage {
             .height(58)
             .fontSize(17)
             .fontColor(INK)
-            .placeholderColor('#B8B8BC')
+            .placeholderColor(SUBTLE)
             .backgroundColor(CARD)
             .borderRadius(18)
             .padding({ left: 20, right: 20 })
@@ -46,7 +46,7 @@ export struct BitFunAccountLoginPage {
             .height(58)
             .fontSize(17)
             .fontColor(INK)
-            .placeholderColor('#B8B8BC')
+            .placeholderColor(SUBTLE)
             .backgroundColor(CARD)
             .borderRadius(18)
             .padding({ left: 20, right: 20 })
@@ -64,7 +64,7 @@ export struct BitFunAccountLoginPage {
             .height(52)
             .fontSize(14)
             .fontColor(INK)
-            .placeholderColor('#B8B8BC')
+            .placeholderColor(SUBTLE)
             .backgroundColor(CARD)
             .borderRadius(16)
             .padding({ left: 18, right: 18 })
@@ -74,7 +74,7 @@ export struct BitFunAccountLoginPage {
             Text(this.errorText)
               .fontSize(13)
               .lineHeight(19)
-              .fontColor('#D04A3A')
+              .fontColor(RED)
               .width('100%')
               .margin({ top: 12 })
           }
@@ -85,8 +85,8 @@ export struct BitFunAccountLoginPage {
             .width('100%')
             .fontSize(17)
             .fontWeight(FontWeight.Bold)
-            .fontColor(CARD)
-            .backgroundColor(INK)
+            .fontColor(PRIMARY_ACTION_TEXT)
+            .backgroundColor(PRIMARY_ACTION)
             .borderRadius(18)
             .margin({ top: this.errorText.length > 0 ? 22 : 30 })
             .opacity(this.canSubmit() ? 1 : 0.28)
@@ -104,10 +104,11 @@ export struct BitFunAccountLoginPage {
       .scrollBar(BarState.Off)
 
       Button() {
-        Image($r('app.media.remote_ref_back'))
+        SymbolGlyph($r('sys.symbol.chevron_left'))
+          .fontSize(23)
+          .fontColor([INK])
           .width(26)
           .height(26)
-          .objectFit(ImageFit.Contain)
       }
       .width(44)
       .height(44)

@@ -14,19 +14,25 @@ export class ConversationLayoutGeometry {
   readonly isExtraWide: boolean;
   readonly detailContentOffset: number;
   readonly detailContentWidth: number;
+  readonly collapsedDetailContentOffset: number;
+  readonly collapsedDetailContentWidth: number;
 
   constructor(
     masterPaneWidth: number,
     masterDetailGap: number,
     isExtraWide: boolean,
     detailContentOffset: number,
-    detailContentWidth: number
+    detailContentWidth: number,
+    collapsedDetailContentOffset: number,
+    collapsedDetailContentWidth: number
   ) {
     this.masterPaneWidth = masterPaneWidth;
     this.masterDetailGap = masterDetailGap;
     this.isExtraWide = isExtraWide;
     this.detailContentOffset = detailContentOffset;
     this.detailContentWidth = detailContentWidth;
+    this.collapsedDetailContentOffset = collapsedDetailContentOffset;
+    this.collapsedDetailContentWidth = collapsedDetailContentWidth;
   }
 }
 
@@ -41,28 +47,38 @@ class ConversationLayoutSegment {
 }
 
 export class ConversationLayoutPolicy {
+  static readonly TABLET_DEVICE_TYPE: string = 'tablet';
   static readonly WIDE_LAYOUT_MIN_WIDTH: number = 720;
   static readonly FALLBACK_MASTER_PANE_WIDTH: number = 344;
   static readonly MIN_MASTER_PANE_WIDTH: number = 280;
   static readonly MIN_DETAIL_PANE_WIDTH: number = 360;
   static readonly EXTRA_WIDE_MIN_WIDTH: number = 1080;
 
-  static useMasterDetail(viewportWidth: number, mediaQueryMatched: boolean, isFolded: boolean): boolean {
+  static useMasterDetail(
+    viewportWidth: number,
+    mediaQueryMatched: boolean,
+    isFolded: boolean,
+    deviceType: string,
+    creases: ConversationLayoutCrease[]
+  ): boolean {
     if (isFolded) {
       return false;
     }
-    return mediaQueryMatched || viewportWidth >= ConversationLayoutPolicy.WIDE_LAYOUT_MIN_WIDTH;
+    if (!ConversationLayoutPolicy.hasWideViewport(viewportWidth, mediaQueryMatched)) {
+      return false;
+    }
+    const visibleCreases = ConversationLayoutPolicy.visibleCreases(viewportWidth, creases);
+    if (visibleCreases.length > 0) {
+      return visibleCreases.length >= 2;
+    }
+    return ConversationLayoutPolicy.isTabletDevice(deviceType);
   }
 
   static resolveWideGeometry(
     viewportWidth: number,
     creases: ConversationLayoutCrease[]
   ): ConversationLayoutGeometry {
-    const visibleCreases = creases
-      .filter((crease: ConversationLayoutCrease): boolean => {
-        return crease.left > 0 && crease.width >= 0 && crease.left + crease.width < viewportWidth;
-      })
-      .sort((left: ConversationLayoutCrease, right: ConversationLayoutCrease): number => left.left - right.left);
+    const visibleCreases = ConversationLayoutPolicy.visibleCreases(viewportWidth, creases);
     const firstCrease = visibleCreases.find((crease: ConversationLayoutCrease): boolean => {
       return crease.left >= ConversationLayoutPolicy.MIN_MASTER_PANE_WIDTH &&
         crease.left + crease.width <= viewportWidth - ConversationLayoutPolicy.MIN_DETAIL_PANE_WIDTH;
@@ -73,12 +89,17 @@ export class ConversationLayoutPolicy {
     const detailStart = masterPaneWidth + masterDetailGap;
     const detailSegments = ConversationLayoutPolicy.detailSegments(viewportWidth, detailStart, visibleCreases);
     const contentSegment = ConversationLayoutPolicy.widestSegment(detailSegments);
+    const collapsedContentSegment = ConversationLayoutPolicy.widestSegment(
+      ConversationLayoutPolicy.detailSegments(viewportWidth, 0, visibleCreases)
+    );
     return new ConversationLayoutGeometry(
       masterPaneWidth,
       masterDetailGap,
       visibleCreases.length > 1 || viewportWidth >= ConversationLayoutPolicy.EXTRA_WIDE_MIN_WIDTH,
       contentSegment ? contentSegment.left - detailStart : 0,
-      contentSegment ? contentSegment.width : 0
+      contentSegment ? contentSegment.width : 0,
+      collapsedContentSegment ? collapsedContentSegment.left : 0,
+      collapsedContentSegment ? collapsedContentSegment.width : 0
     );
   }
 
@@ -112,5 +133,24 @@ export class ConversationLayoutPolicy {
       }
       return widest;
     }, undefined);
+  }
+
+  private static hasWideViewport(viewportWidth: number, mediaQueryMatched: boolean): boolean {
+    return mediaQueryMatched || viewportWidth >= ConversationLayoutPolicy.WIDE_LAYOUT_MIN_WIDTH;
+  }
+
+  private static isTabletDevice(deviceType: string): boolean {
+    return deviceType.toLowerCase() === ConversationLayoutPolicy.TABLET_DEVICE_TYPE;
+  }
+
+  private static visibleCreases(
+    viewportWidth: number,
+    creases: ConversationLayoutCrease[]
+  ): ConversationLayoutCrease[] {
+    return creases
+      .filter((crease: ConversationLayoutCrease): boolean => {
+        return crease.left > 0 && crease.width >= 0 && crease.left + crease.width < viewportWidth;
+      })
+      .sort((left: ConversationLayoutCrease, right: ConversationLayoutCrease): number => left.left - right.left);
   }
 }

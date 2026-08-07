@@ -159,6 +159,8 @@ fn registered_capabilities() -> Vec<CapabilityDescriptor> {
                 "config/getConfig",
                 "config/getConfigs",
                 "config/setConfig",
+                "config/saveCloudSpeechConfig",
+                "config/validateConfig",
                 "config/setAgentProfileConfig",
                 "config/resetAgentProfileConfig",
             ],

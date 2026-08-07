@@ -1,7 +1,7 @@
 //! Map installer `ModelConfig` to shared AI adapter config.
 
 use crate::installer::types::ModelConfig;
-use bitfun_ai_adapters::types::{resolve_request_url, AIConfig, ReasoningMode};
+use bitfun_ai_adapters::types::{resolve_request_url, AIConfig};
 use log::warn;
 
 /// Build `AIConfig` for the shared AI client.
@@ -47,13 +47,10 @@ pub(super) fn ai_config_from_installer_model(m: &ModelConfig) -> Result<AIConfig
         max_tokens: None,
         temperature: None,
         top_p: None,
-        reasoning_mode: ReasoningMode::Default,
         inline_think_in_text: false,
         custom_headers: m.custom_headers.clone(),
         custom_headers_mode: m.custom_headers_mode.clone(),
         skip_ssl_verify: m.skip_ssl_verify.unwrap_or(false),
-        reasoning_effort: None,
-        thinking_budget_tokens: None,
         custom_request_body,
         custom_request_body_mode: None,
     })

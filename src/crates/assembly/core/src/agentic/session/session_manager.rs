@@ -38,9 +38,9 @@ use crate::service::config::{
 };
 use crate::service::remote_ssh::workspace_state::LOCAL_WORKSPACE_SSH_HOST;
 use crate::service::session::{
-    DialogTurnData, DialogTurnKind, ModelRoundData, SessionMemoryMode, SessionMetadata,
-    SessionRelationship, SessionStatus, TextItemData, ThinkingItemData, ToolCallData, ToolItemData,
-    ToolResultData, TranscriptLineRange, TurnStatus, UserMessageData,
+    DialogTurnData, DialogTurnKind, ModelRoundData, SessionContextUsage, SessionMemoryMode,
+    SessionMetadata, SessionRelationship, SessionStatus, TextItemData, ThinkingItemData,
+    ToolCallData, ToolItemData, ToolResultData, TranscriptLineRange, TurnStatus, UserMessageData,
 };
 use crate::service::snapshot::{
     ensure_snapshot_manager_for_workspace, get_or_create_snapshot_manager,
@@ -6252,6 +6252,30 @@ impl SessionManager {
         .await
     }
 
+    pub(crate) async fn persist_current_context_usage(
+        &self,
+        session_id: &str,
+        usage: SessionContextUsage,
+    ) -> BitFunResult<()> {
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
+        let should_persist_usage = self.sessions.get(session_id).is_some_and(|session| {
+            !session.agent_type.starts_with("acp:")
+                && session
+                    .dialog_turn_ids
+                    .iter()
+                    .any(|turn_id| turn_id == &usage.turn_id)
+                && self.should_persist_session(&session)
+        });
+        if !should_persist_usage || !self.config.enable_persistence {
+            return Ok(());
+        }
+
+        self.update_persisted_session_metadata(session_id, |metadata| {
+            metadata.current_context_usage = Some(usage);
+        })
+        .await
+    }
+
     pub async fn merge_session_relationship(
         &self,
         session_id: &str,
@@ -8007,9 +8031,10 @@ mod tests {
         AIConfig as ServiceAIConfig, AIModelConfig as ServiceAIModelConfig,
     };
     use crate::service::session::{
-        DialogTurnData, DialogTurnKind, ModelRoundData, SessionKind, SessionMetadata,
-        SessionRelationship, SessionRelationshipKind, ToolCallData, ToolItemData, ToolResultData,
-        TurnStatus, UserMessageData,
+        DialogTurnData, DialogTurnKind, ModelRoundData, SessionContextUsage,
+        SessionContextUsageSource, SessionKind, SessionMetadata, SessionRelationship,
+        SessionRelationshipKind, ToolCallData, ToolItemData, ToolResultData, TurnStatus,
+        UserMessageData,
     };
     use crate::util::errors::BitFunError;
     use bitfun_core_types::{
@@ -8226,6 +8251,163 @@ mod tests {
                 prompt_cache_policy: PromptCachePolicy::default(),
             },
         )
+    }
+
+    #[tokio::test]
+    async fn current_context_usage_is_persisted_by_the_session_owner() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Usage persistence".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let usage = SessionContextUsage {
+            turn_id: "turn-1".to_string(),
+            input_tokens: 42_000,
+            output_tokens: Some(1_500),
+            total_tokens: 43_500,
+            timestamp: 123,
+            source: SessionContextUsageSource::ModelRequest,
+        };
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("session should be active")
+            .dialog_turn_ids
+            .push(usage.turn_id.clone());
+
+        manager
+            .persist_current_context_usage(&session.session_id, usage.clone())
+            .await
+            .expect("usage should persist");
+
+        let metadata = persistence_manager
+            .load_session_metadata(workspace.path(), &session.session_id)
+            .await
+            .expect("metadata should load")
+            .expect("metadata should exist");
+        assert_eq!(metadata.current_context_usage, Some(usage));
+    }
+
+    #[tokio::test]
+    async fn acp_context_usage_is_not_persisted_as_native_prompt_usage() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "ACP usage".to_string(),
+                "acp:codex".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        manager
+            .persist_current_context_usage(
+                &session.session_id,
+                SessionContextUsage {
+                    turn_id: "turn-1".to_string(),
+                    input_tokens: 42_000,
+                    output_tokens: Some(1_500),
+                    total_tokens: 43_500,
+                    timestamp: 123,
+                    source: SessionContextUsageSource::ModelRequest,
+                },
+            )
+            .await
+            .expect("ACP usage should be ignored");
+
+        let metadata = persistence_manager
+            .load_session_metadata(workspace.path(), &session.session_id)
+            .await
+            .expect("metadata should load")
+            .expect("metadata should exist");
+        assert!(metadata.current_context_usage.is_none());
+    }
+
+    #[tokio::test]
+    async fn delayed_context_usage_does_not_restore_a_removed_turn() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = Arc::new(test_manager(persistence_manager.clone()));
+        let session = manager
+            .create_session(
+                "Delayed usage".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("session should be active")
+            .dialog_turn_ids
+            .push("turn-1".to_string());
+
+        let mutation_guard = manager
+            .acquire_session_mutation(&session.session_id)
+            .await
+            .expect("mutation guard");
+        let delayed_manager = manager.clone();
+        let delayed_session_id = session.session_id.clone();
+        let delayed_write = tokio::spawn(async move {
+            delayed_manager
+                .persist_current_context_usage(
+                    &delayed_session_id,
+                    SessionContextUsage {
+                        turn_id: "turn-1".to_string(),
+                        input_tokens: 42_000,
+                        output_tokens: Some(1_500),
+                        total_tokens: 43_500,
+                        timestamp: 123,
+                        source: SessionContextUsageSource::ModelRequest,
+                    },
+                )
+                .await
+        });
+        tokio::task::yield_now().await;
+        assert!(!delayed_write.is_finished());
+
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("session should remain active")
+            .dialog_turn_ids
+            .clear();
+        drop(mutation_guard);
+        delayed_write
+            .await
+            .expect("delayed write should join")
+            .expect("delayed write should be ignored");
+
+        let metadata = persistence_manager
+            .load_session_metadata(workspace.path(), &session.session_id)
+            .await
+            .expect("metadata should load")
+            .expect("metadata should exist");
+        assert!(metadata.current_context_usage.is_none());
     }
 
     #[tokio::test]

@@ -25,6 +25,10 @@ struct AppRoot {
     this.runtime.aboutToDisappear();
   }
 
+  onBackPress(): boolean {
+    return this.runtime.handleRootBack();
+  }
+
   build() {
     Stack() {
       AppRootPresentation({
@@ -33,8 +37,8 @@ struct AppRoot {
         remotePageState: this.runtime.remotePageState,
         remoteCreateState: this.runtime.remoteCreateState,
         generalPageState: this.runtime.generalChatPageState,
+        filePreviewState: this.runtime.filePreviewState,
         deviceId: this.runtime.remoteConnectionViewModel.getDeviceId(),
-        currentRoute: this.runtime.currentRoute(),
         actions: this.runtime.presentationActions
       })
     }

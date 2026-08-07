@@ -22,6 +22,24 @@ impl WorkspaceFileSystem for LocalWorkspaceFs {
         Ok(tokio::fs::read(path).await?)
     }
 
+    async fn read_file_bounded(
+        &self,
+        path: &str,
+        max_bytes: usize,
+    ) -> anyhow::Result<Option<Vec<u8>>> {
+        let metadata = tokio::fs::metadata(path).await?;
+        if metadata.len() > max_bytes as u64 {
+            return Ok(None);
+        }
+        let mut bytes = Vec::with_capacity(metadata.len() as usize);
+        tokio::fs::File::open(path)
+            .await?
+            .take(max_bytes.saturating_add(1) as u64)
+            .read_to_end(&mut bytes)
+            .await?;
+        Ok((bytes.len() <= max_bytes).then_some(bytes))
+    }
+
     async fn read_file_text(&self, path: &str) -> anyhow::Result<String> {
         Ok(tokio::fs::read_to_string(path).await?)
     }
@@ -31,20 +49,11 @@ impl WorkspaceFileSystem for LocalWorkspaceFs {
         path: &str,
         max_bytes: usize,
     ) -> anyhow::Result<Option<String>> {
-        let metadata = tokio::fs::metadata(path).await?;
-        if metadata.len() > max_bytes as u64 {
-            return Ok(None);
-        }
-        let mut bytes = Vec::with_capacity(metadata.len() as usize);
-        tokio::fs::File::open(path)
+        self.read_file_bounded(path, max_bytes)
             .await?
-            .take(max_bytes as u64 + 1)
-            .read_to_end(&mut bytes)
-            .await?;
-        if bytes.len() > max_bytes {
-            return Ok(None);
-        }
-        Ok(Some(String::from_utf8(bytes)?))
+            .map(String::from_utf8)
+            .transpose()
+            .map_err(Into::into)
     }
 
     async fn write_file(&self, path: &str, contents: &[u8]) -> anyhow::Result<()> {
@@ -270,6 +279,11 @@ mod tests {
         assert!(fs.exists(&path).await.unwrap());
         assert!(fs.is_file(&path).await.unwrap());
         assert_eq!(fs.read_file_text(&path).await.unwrap(), "hello");
+        assert!(fs.read_file_bounded(&path, 4).await.unwrap().is_none());
+        assert_eq!(
+            fs.read_file_bounded(&path, 5).await.unwrap(),
+            Some(b"hello".to_vec())
+        );
     }
 
     #[tokio::test]

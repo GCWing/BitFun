@@ -60,14 +60,20 @@ mod tests {
 
     #[test]
     fn builtin_default_state_follows_policy() {
-        let pdf = builtin_skill("pdf");
+        let presentation = builtin_skill("ppt-design");
         let browser = builtin_skill("agent-browser");
 
-        assert!(!resolve_skill_default_enabled_for_mode(&pdf, "agentic"));
+        assert!(!resolve_skill_default_enabled_for_mode(
+            &presentation,
+            "agentic"
+        ));
         // agent-browser is opt-in everywhere: ControlHub's browser domain is
         // the default browser-automation path.
         assert!(!resolve_skill_default_enabled_for_mode(&browser, "agentic"));
-        assert!(resolve_skill_default_enabled_for_mode(&pdf, "Cowork"));
+        assert!(resolve_skill_default_enabled_for_mode(
+            &presentation,
+            "Cowork"
+        ));
         assert!(!resolve_skill_default_enabled_for_mode(&browser, "Cowork"));
     }
 
@@ -88,21 +94,21 @@ mod tests {
 
     #[test]
     fn overrides_apply_on_top_of_defaults() {
-        let pdf = builtin_skill("pdf");
+        let presentation = builtin_skill("ppt-design");
         let mut overrides = UserModeSkillOverrides::default();
         let disabled_project = HashSet::new();
 
         let disabled_state =
-            resolve_skill_state_for_mode(&pdf, "agentic", &overrides, &disabled_project);
+            resolve_skill_state_for_mode(&presentation, "agentic", &overrides, &disabled_project);
         assert!(!disabled_state.effective_enabled);
         assert_eq!(
             disabled_state.reason,
             ModeSkillStateReason::BuiltinPolicyDisabled
         );
 
-        overrides.enabled_skills.push(pdf.key.clone());
+        overrides.enabled_skills.push(presentation.key.clone());
         let enabled_state =
-            resolve_skill_state_for_mode(&pdf, "agentic", &overrides, &disabled_project);
+            resolve_skill_state_for_mode(&presentation, "agentic", &overrides, &disabled_project);
         assert!(enabled_state.effective_enabled);
         assert_eq!(
             enabled_state.reason,

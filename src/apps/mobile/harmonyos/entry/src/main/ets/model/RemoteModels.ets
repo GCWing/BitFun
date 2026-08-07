@@ -83,6 +83,7 @@ export interface CreateSessionOptions {
   agentType: string;
   title: string;
   instruction: string;
+  modelId?: string;
 }
 
 export type RemotePermissionMode = 'ask' | 'auto' | 'full_access';
@@ -452,4 +453,13 @@ export interface ReadFileResult {
   contentBase64: string;
   mimeType: string;
   size: number;
+}
+
+export interface ReadFileChunkResult {
+  name: string;
+  contentBase64: string;
+  offset: number;
+  chunkSize: number;
+  totalSize: number;
+  mimeType: string;
 }

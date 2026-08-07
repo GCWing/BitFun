@@ -19,6 +19,9 @@ export struct ChatTimeline {
   @Param downloadingFilePath: string = '';
   @Param downloadedFilePath: string = '';
   @Param fileDownloadStatus: string = '';
+  @Param activeFilePreviewPath: string = '';
+  @Param activeFilePreviewLoading: boolean = false;
+  @Param maxContentWidth: number = 0;
   @Event onLoadOlder: () => void = () => {};
   @Event onApproveTool: (toolId: string, updatedInput?: Object) => void =
     (_toolId: string, _updatedInput?: Object) => {};
@@ -28,6 +31,7 @@ export struct ChatTimeline {
     (_toolId: string, _answers: ConversationUiQuestionAnswer) => {};
   @Event onCopyMessage: (text: string) => void = (_text: string) => {};
   @Event onRetryMessage: (text: string) => void = (_text: string) => {};
+  @Event onOpenFilePreview: (path: string, label: string) => void = (_path: string, _label: string) => {};
   @Event onDownloadFile: (path: string) => void = (_path: string) => {};
 
   build() {
@@ -53,15 +57,14 @@ export struct ChatTimeline {
       .width('100%')
       .height('100%')
       .padding({ left: 20, right: 20, top: 0, bottom: 12 })
-      .stackFromEnd(true)
+      .stackFromEnd(false)
       .scrollBar(BarState.Off)
 
       if (this.surface === ChatSurface.Remote && this.timelineItems.length > 2) {
         Stack({ alignContent: Alignment.Center }) {
-          Image($r('app.media.remote_ref_down'))
-            .width(18)
-            .height(18)
-            .objectFit(ImageFit.Contain)
+          SymbolGlyph($r('sys.symbol.chevron_down'))
+            .fontSize(18)
+            .fontColor([INK])
         }
         .width(42)
         .height(42)
@@ -76,6 +79,8 @@ export struct ChatTimeline {
     }
     .layoutWeight(1)
     .width('100%')
+    .constraintSize({ maxWidth: this.maxContentWidth > 0 ? this.maxContentWidth : 10000 })
+    .alignSelf(ItemAlign.Center)
   }
 
   @Builder
@@ -140,10 +145,13 @@ export struct ChatTimeline {
       item: toConversationUiMessage(item.message!),
       isStreaming: item.isStreaming,
       isFinalizing: item.isFinalizing,
+      showRetryAction: item.showRetryAction === true,
       isBusy: this.isBusy,
       downloadingFilePath: this.downloadingFilePath,
       downloadedFilePath: this.downloadedFilePath,
       fileDownloadStatus: this.fileDownloadStatus,
+      activeFilePreviewPath: this.activeFilePreviewPath,
+      activeFilePreviewLoading: this.activeFilePreviewLoading,
       onApproveTool: (toolId: string, updatedInput?: Object) => {
         this.onApproveTool(toolId, updatedInput);
       },
@@ -161,6 +169,9 @@ export struct ChatTimeline {
       },
       onRetryMessage: (text: string) => {
         this.onRetryMessage(text);
+      },
+      onOpenFilePreview: (path: string, label: string) => {
+        this.onOpenFilePreview(path, label);
       },
       onDownloadFile: (path: string) => {
         this.onDownloadFile(path);

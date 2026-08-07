@@ -2,15 +2,11 @@ import { abilityAccessCtrl, Context, Permissions } from '@kit.AbilityKit';
 import { customScan, scanBarcode, scanCore } from '@kit.ScanKit';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
-import { ACCENT, CARD, GREEN, INK, LINE, MUTED, RED, SOFT, SUBTLE } from './Theme';
-
-const CONNECT_HERO: string = '#E6EDFF';
-const CONNECT_HERO_BLUE: string = '#9DB4FF';
-const CONNECT_HERO_LILAC: string = '#C9C5FF';
-const CONNECT_HERO_MIST: string = '#F8FAFF';
+import { ACCENT, CARD, CONNECT_HERO_ACCENT, CONNECT_HERO_BG, CONNECT_HERO_SECONDARY,
+  CONNECT_HERO_SURFACE, GREEN, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, RED, SOFT,
+  SUBTLE } from './Theme';
 const CONNECT_SCAN_YELLOW: string = '#FFD021';
 const CONNECT_OVERLAY: string = '#99000000';
-const CONNECT_DISABLED: string = '#D8D6D1';
 const CAMERA_PERMISSION: Permissions = 'ohos.permission.CAMERA';
 
 @Component
@@ -146,7 +142,7 @@ export struct ConnectView {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#FAFAF9')
+    .backgroundColor(PAGE_BG)
   }
 
   @Builder
@@ -241,20 +237,22 @@ export struct ConnectView {
           .margin({ left: 16, right: 16 })
 
         Row({ space: 12 }) {
-          Image($r('app.media.remote_actions_link'))
+          SymbolGlyph($r('sys.symbol.link'))
+            .fontSize(20)
+            .fontColor([MUTED])
             .width(22)
             .height(22)
-            .objectFit(ImageFit.Contain)
             .opacity(0.66)
           Text(RemoteI18n.t('connect.scanPairCodeAction'))
             .fontSize(16)
             .fontWeight(FontWeight.Medium)
             .fontColor(INK)
             .layoutWeight(1)
-          Image($r('app.media.settings_chevron_right'))
-            .width(8)
-            .height(12)
-            .objectFit(ImageFit.Contain)
+          SymbolGlyph($r('sys.symbol.chevron_right'))
+            .fontSize(13)
+            .fontColor([MUTED])
+            .width(16)
+            .height(16)
             .opacity(0.44)
         }
         .width('100%')
@@ -277,18 +275,18 @@ export struct ConnectView {
       Text('')
         .width(26)
         .height(22)
-        .backgroundColor('#ECECE9')
+        .backgroundColor(SOFT)
         .borderRadius(5)
       Column({ space: 7 }) {
         Text('')
           .width('58%')
           .height(12)
-          .backgroundColor('#ECECE9')
+          .backgroundColor(SOFT)
           .borderRadius(4)
         Text('')
           .width(52)
           .height(9)
-          .backgroundColor('#F0F0ED')
+          .backgroundColor(SOFT)
           .borderRadius(4)
       }
       .layoutWeight(1)
@@ -303,8 +301,8 @@ export struct ConnectView {
   @Builder
   AccountConnectDeviceRow(device: CloudAccountDevice) {
     Row({ space: 12 }) {
-      Image($r('app.media.remote_ref_device'))
-        .width(26).height(24).objectFit(ImageFit.Contain).opacity(device.online ? 0.68 : 0.38)
+      SymbolGlyph($r('sys.symbol.desktop'))
+        .fontSize(22).fontColor([MUTED]).width(26).height(24).opacity(device.online ? 0.68 : 0.38)
       Column({ space: 3 }) {
         Text(device.deviceName || device.deviceId)
           .fontSize(15).fontWeight(FontWeight.Medium).fontColor(INK)
@@ -315,8 +313,8 @@ export struct ConnectView {
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
       if (device.online) {
-        Image($r('app.media.settings_chevron_right'))
-          .width(8).height(12).objectFit(ImageFit.Contain).opacity(0.44)
+        SymbolGlyph($r('sys.symbol.chevron_right'))
+          .fontSize(13).fontColor([MUTED]).width(16).height(16).opacity(0.44)
       }
     }
     .width('100%')
@@ -391,7 +389,7 @@ export struct ConnectView {
           .fontColor(INK)
           .backgroundColor(CARD)
           .borderRadius(28)
-          .border({ width: 1.5, color: CONNECT_DISABLED })
+          .border({ width: 1.5, color: LINE })
           .margin({ bottom: 10 })
           .onClick(() => {
             this.stopInlineScan();
@@ -451,7 +449,7 @@ export struct ConnectView {
         .fontColor(INK)
         .backgroundColor(CARD)
         .borderRadius(35)
-        .border({ width: 1.5, color: CONNECT_DISABLED })
+        .border({ width: 1.5, color: LINE })
         .onClick(() => {
           this.stopInlineScan();
           this.showManualPairing = true;
@@ -470,26 +468,26 @@ export struct ConnectView {
       Text('')
         .width('100%')
         .height(282)
-        .backgroundColor(CONNECT_HERO)
+        .backgroundColor(CONNECT_HERO_BG)
         .borderRadius(36)
       Text('')
         .width(260)
         .height(142)
-        .backgroundColor(CONNECT_HERO_MIST)
+        .backgroundColor(CONNECT_HERO_SURFACE)
         .opacity(0.7)
         .borderRadius(72)
         .position({ x: 112, y: 26 })
       Text('')
         .width(188)
         .height(134)
-        .backgroundColor(CONNECT_HERO_BLUE)
+        .backgroundColor(CONNECT_HERO_ACCENT)
         .opacity(0.42)
         .borderRadius(68)
         .position({ x: -42, y: 198 })
       Text('')
         .width(188)
         .height(126)
-        .backgroundColor(CONNECT_HERO_LILAC)
+        .backgroundColor(CONNECT_HERO_SECONDARY)
         .opacity(0.54)
         .borderRadius(64)
         .position({ x: 258, y: 0 })
@@ -521,10 +519,9 @@ export struct ConnectView {
 
   @Builder
   BackGlyph() {
-    Image($r('app.media.remote_ref_back'))
-      .width(12)
-      .height(20)
-      .objectFit(ImageFit.Contain)
+    SymbolGlyph($r('sys.symbol.chevron_left'))
+      .fontSize(21)
+      .fontColor([INK])
   }
 
   @Builder
@@ -581,8 +578,8 @@ export struct ConnectView {
       .height(58)
       .fontSize(21)
       .fontWeight(FontWeight.Bold)
-      .fontColor(CARD)
-      .backgroundColor(ACCENT)
+      .fontColor(PRIMARY_ACTION_TEXT)
+      .backgroundColor(PRIMARY_ACTION)
       .borderRadius(29)
       .margin({ bottom: 14 })
       .onClick(() => {
@@ -605,7 +602,7 @@ export struct ConnectView {
       }
       .height(30)
       .padding({ left: 12, right: 12 })
-      .backgroundColor(this.isConnectError() ? '#FFF1F1' : SOFT)
+      .backgroundColor(SOFT)
       .borderRadius(15)
       .onClick(() => {
         this.handleStatusClick();
@@ -651,7 +648,7 @@ export struct ConnectView {
           .height(62)
           .fontSize(20)
           .fontColor(INK)
-          .backgroundColor('#ECEBE8')
+          .backgroundColor(SOFT)
           .borderRadius(31)
           .padding({ left: 20, right: 20 })
           .defaultFocus(true)
@@ -663,7 +660,7 @@ export struct ConnectView {
             .height(56)
             .fontSize(18)
             .fontColor(INK)
-            .backgroundColor('#ECEBE8')
+            .backgroundColor(SOFT)
             .borderRadius(28)
             .padding({ left: 20, right: 20 })
             .onChange((value: string) => {
@@ -673,7 +670,7 @@ export struct ConnectView {
             .height(56)
             .fontSize(18)
             .fontColor(INK)
-            .backgroundColor('#ECEBE8')
+            .backgroundColor(SOFT)
             .borderRadius(28)
             .padding({ left: 20, right: 20 })
             .type(InputType.Password)
@@ -693,7 +690,7 @@ export struct ConnectView {
             .fontSize(19)
             .fontWeight(FontWeight.Bold)
             .fontColor(INK)
-            .backgroundColor('#ECEBE8')
+            .backgroundColor(SOFT)
             .borderRadius(29)
             .onClick(() => {
               this.stopInlineScan();
@@ -705,8 +702,8 @@ export struct ConnectView {
             .height(58)
             .fontSize(19)
             .fontWeight(FontWeight.Bold)
-            .fontColor(this.canConnect() ? CARD : SUBTLE)
-            .backgroundColor(this.canConnect() ? ACCENT : '#ECEBE8')
+            .fontColor(this.canConnect() ? PRIMARY_ACTION_TEXT : SUBTLE)
+            .backgroundColor(this.canConnect() ? PRIMARY_ACTION : SOFT)
             .borderRadius(29)
             .enabled(this.canConnect())
             .onClick(() => {
@@ -720,9 +717,9 @@ export struct ConnectView {
       }
       .width('82%')
       .padding({ left: 28, right: 28, top: 30, bottom: 28 })
-      .backgroundColor('#F6F6F3')
+      .backgroundColor(CARD)
       .borderRadius(34)
-      .border({ width: 1, color: '#FFFFFF' })
+      .border({ width: 1, color: LINE })
     }
     .width('100%')
     .height('100%')
@@ -870,8 +867,8 @@ export struct ConnectView {
         .height(50)
         .fontSize(16)
         .fontWeight(FontWeight.Medium)
-        .fontColor(this.canConnect() ? CARD : SUBTLE)
-        .backgroundColor(this.canConnect() ? ACCENT : '#EDEBE6')
+        .fontColor(this.canConnect() ? PRIMARY_ACTION_TEXT : SUBTLE)
+        .backgroundColor(this.canConnect() ? PRIMARY_ACTION : SOFT)
         .borderRadius(14)
         .enabled(this.canConnect())
         .onClick(() => {
@@ -992,7 +989,7 @@ export struct ConnectView {
       })
   }
 
-  private statusDotColor(): string {
+  private statusDotColor(): ResourceColor {
     if (this.isConnected) {
       return GREEN;
     }

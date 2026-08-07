@@ -13,7 +13,7 @@ export struct ConversationSourceSwitcher {
       this.SourceOption(ConversationSource.Remote, RemoteI18n.t('sidebar.code'))
     }
     .width('100%')
-    .height(42)
+    .height(40)
     .padding(3)
     .backgroundColor(SOFT)
     .borderRadius(8)
@@ -24,9 +24,9 @@ export struct ConversationSourceSwitcher {
   private SourceOption(source: ConversationSource, label: string) {
     Text(label)
       .layoutWeight(1)
-      .height(34)
-      .fontSize(14)
-      .fontWeight(this.activeSource === source ? FontWeight.Bold : FontWeight.Medium)
+      .height(32)
+      .fontSize(13)
+      .fontWeight(FontWeight.Medium)
       .fontColor(this.activeSource === source ? INK : MUTED)
       .textAlign(TextAlign.Center)
       .backgroundColor(this.activeSource === source ? CARD : '#00000000')

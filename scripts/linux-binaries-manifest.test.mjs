@@ -181,7 +181,51 @@ test('openbitfun sync mirrors the website installer from the exact updater relea
       source "$SYNC_SCRIPT"
       VERSION_DIR="$TEST_VERSION_DIR"
       RELEASE_ASSET_BASE_URL="https://github.com/GCWing/BitFun/releases/download/v1.2.3"
-      WINDOWS_INSTALLER_FILENAME="bitfun-installer.exe"
+      LATEST_JSON="$TEST_LATEST_JSON"
+      download_asset() {
+        printf '%s\\t%s\\n' "$1" "$2" >> "$DOWNLOAD_CALLS"
+      }
+      mirror_windows_installer
+    `],
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        DOWNLOAD_CALLS: calls,
+        SYNC_SCRIPT: path.join(repoRoot, 'scripts/openbitfun-release-sync.sh'),
+        TEST_VERSION_DIR: versionDir,
+        TEST_LATEST_JSON: JSON.stringify({
+          manual_installers: {
+            'windows-x86_64': {
+              url: 'https://github.com/GCWing/BitFun/releases/download/v1.2.3/BitFun_1.2.3_windows-x86_64-installer.exe',
+              signature_url: 'https://github.com/GCWing/BitFun/releases/download/v1.2.3/BitFun_1.2.3_windows-x86_64-installer.exe.sig',
+            },
+          },
+        }),
+      },
+    }
+  );
+  assert.equal(result.status, 0, result.stderr);
+
+  const downloads = fs.readFileSync(calls, 'utf8').trim().split('\n');
+  assert.deepEqual(downloads, [
+    `https://github.com/GCWing/BitFun/releases/download/v1.2.3/BitFun_1.2.3_windows-x86_64-installer.exe\t${versionDir}/BitFun_1.2.3_windows-x86_64-installer.exe`,
+    `https://github.com/GCWing/BitFun/releases/download/v1.2.3/BitFun_1.2.3_windows-x86_64-installer.exe.sig\t${versionDir}/BitFun_1.2.3_windows-x86_64-installer.exe.sig`,
+  ]);
+});
+
+test('openbitfun sync retains the legacy fixed installer fallback', () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'bitfun-legacy-installer-mirror-'));
+  const versionDir = path.join(temp, 'release', '1.2.2');
+  const calls = path.join(temp, 'download-calls.tsv');
+  fs.mkdirSync(versionDir, { recursive: true });
+
+  const result = spawnSync(
+    'bash',
+    ['-c', `
+      source "$SYNC_SCRIPT"
+      VERSION_DIR="$TEST_VERSION_DIR"
+      RELEASE_ASSET_BASE_URL="https://github.com/GCWing/BitFun/releases/download/v1.2.2"
       download_asset() {
         printf '%s\\t%s\\n' "$1" "$2" >> "$DOWNLOAD_CALLS"
       }
@@ -198,11 +242,9 @@ test('openbitfun sync mirrors the website installer from the exact updater relea
     }
   );
   assert.equal(result.status, 0, result.stderr);
-
-  const downloads = fs.readFileSync(calls, 'utf8').trim().split('\n');
-  assert.deepEqual(downloads, [
-    `https://github.com/GCWing/BitFun/releases/download/v1.2.3/bitfun-installer.exe\t${versionDir}/bitfun-installer.exe`,
-    `https://github.com/GCWing/BitFun/releases/download/v1.2.3/bitfun-installer.exe.sig\t${versionDir}/bitfun-installer.exe.sig`,
+  assert.deepEqual(fs.readFileSync(calls, 'utf8').trim().split('\n'), [
+    `https://github.com/GCWing/BitFun/releases/download/v1.2.2/bitfun-installer.exe\t${versionDir}/bitfun-installer.exe`,
+    `https://github.com/GCWing/BitFun/releases/download/v1.2.2/bitfun-installer.exe.sig\t${versionDir}/bitfun-installer.exe.sig`,
   ]);
 });
 
@@ -278,6 +320,12 @@ test('website download manifest uses installer while updater manifest keeps setu
         url: 'https://openbitfun.test/release/1.2.3/BitFun_1.2.3_darwin-aarch64.app.tar.gz',
       },
     },
+    manual_installers: {
+      'windows-x86_64': {
+        url: 'https://openbitfun.test/release/1.2.3/BitFun_1.2.3_windows-x86_64-installer.exe',
+        signature_url: 'https://openbitfun.test/release/1.2.3/BitFun_1.2.3_windows-x86_64-installer.exe.sig',
+      },
+    },
   };
   fs.writeFileSync(updaterPath, `${JSON.stringify(updater, null, 2)}\n`);
 
@@ -314,11 +362,11 @@ test('website download manifest uses installer while updater manifest keeps setu
   assert.equal(website.version, '1.2.3');
   assert.equal(
     website.platforms['windows-x86_64'].url,
-    'https://openbitfun.test/release/1.2.3/bitfun-installer.exe'
+    'https://openbitfun.test/release/1.2.3/BitFun_1.2.3_windows-x86_64-installer.exe'
   );
   assert.equal(
     website.platforms['windows-x86_64'].signatureUrl,
-    'https://openbitfun.test/release/1.2.3/bitfun-installer.exe.sig'
+    'https://openbitfun.test/release/1.2.3/BitFun_1.2.3_windows-x86_64-installer.exe.sig'
   );
   assert.equal(
     website.platforms['darwin-aarch64'].url,

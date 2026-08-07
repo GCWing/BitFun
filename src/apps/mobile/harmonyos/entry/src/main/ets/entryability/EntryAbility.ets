@@ -1,4 +1,4 @@
-import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
+import { AbilityConstant, Configuration, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 
@@ -6,6 +6,8 @@ const DOMAIN = 0x0000;
 const TAG = 'BitFunRemote';
 
 export default class EntryAbility extends UIAbility {
+  private mainWindow?: window.Window;
+
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     try {
       this.context.getApplicationContext().setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
@@ -24,13 +26,9 @@ export default class EntryAbility extends UIAbility {
     hilog.info(DOMAIN, TAG, '%{public}s', 'Ability onWindowStageCreate');
     try {
       const mainWindow = windowStage.getMainWindowSync();
+      this.mainWindow = mainWindow;
       mainWindow.setWindowLayoutFullScreen(false);
-      mainWindow.setWindowSystemBarProperties({
-        statusBarColor: '#FAFAF8',
-        navigationBarColor: '#FAFAF8',
-        statusBarContentColor: '#171717',
-        navigationBarContentColor: '#171717'
-      });
+      this.updateSystemBars(this.context.config?.colorMode);
     } catch (err) {
       hilog.error(DOMAIN, TAG, 'Failed to configure window bars. Cause: %{public}s', JSON.stringify(err));
     }
@@ -54,8 +52,25 @@ export default class EntryAbility extends UIAbility {
     hilog.info(DOMAIN, TAG, '%{public}s', 'Ability onForeground');
   }
 
+  onConfigurationUpdate(newConfig: Configuration): void {
+    this.updateSystemBars(newConfig.colorMode);
+  }
+
   onBackground(): void {
     // Ability has back to background
     hilog.info(DOMAIN, TAG, '%{public}s', 'Ability onBackground');
+  }
+
+  private updateSystemBars(colorMode?: ConfigurationConstant.ColorMode): void {
+    if (!this.mainWindow) {
+      return;
+    }
+    const dark = colorMode === ConfigurationConstant.ColorMode.COLOR_MODE_DARK;
+    this.mainWindow.setWindowSystemBarProperties({
+      statusBarColor: dark ? '#151514' : '#FDFDFB',
+      navigationBarColor: dark ? '#151514' : '#FDFDFB',
+      statusBarContentColor: dark ? '#F4F3EF' : '#171717',
+      navigationBarContentColor: dark ? '#F4F3EF' : '#171717'
+    });
   }
 }

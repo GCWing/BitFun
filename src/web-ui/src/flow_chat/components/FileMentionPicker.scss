@@ -33,6 +33,10 @@
 
   &--overlay {
     position: fixed;
+    // The non-portalled picker is positioned with `bottom`; clear that
+    // constraint when the overlay is placed by the viewport anchor hook.
+    bottom: auto;
+    left: auto;
     z-index: $z-popover;
     width: min(400px, calc(100vw - 16px));
     min-width: min(260px, calc(100vw - 16px));

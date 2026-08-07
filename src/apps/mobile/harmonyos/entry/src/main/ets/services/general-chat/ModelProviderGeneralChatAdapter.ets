@@ -212,8 +212,8 @@ export class ModelProviderGeneralChatAdapter implements GeneralChatPort {
   }
 
   async generateTitle(firstMessage: string, assistantMessage: string): Promise<string> {
-    const config = await this.configStore.snapshot();
-    const apiKey = (await this.configStore.accessToken()).trim();
+    const config = await this.configStore.activeSnapshot();
+    const apiKey = (await this.configStore.activeAccessToken()).trim();
     if (config.apiUrl.length === 0 || config.modelName.length === 0 || apiKey.length === 0) {
       return '';
     }
@@ -264,8 +264,8 @@ export class ModelProviderGeneralChatAdapter implements GeneralChatPort {
     if (images.length > 0) {
       throw new Error(RemoteI18n.t('generalChat.imageNotSupported'));
     }
-    const config = await this.configStore.snapshot();
-    const apiKey = (await this.configStore.accessToken()).trim();
+    const config = await this.configStore.activeSnapshot();
+    const apiKey = (await this.configStore.activeAccessToken()).trim();
     if (config.apiUrl.length === 0 || config.modelName.length === 0 || apiKey.length === 0) {
       throw new Error(RemoteI18n.t('generalChat.modelNotConfigured'));
     }

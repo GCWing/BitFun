@@ -1,3 +1,6 @@
+use std::fs::{File, OpenOptions};
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -35,6 +38,12 @@ pub struct DesktopStartupTrace {
     trace_id: String,
     started_at: Instant,
     events: Arc<Mutex<Vec<DesktopStartupTraceEvent>>>,
+    persistence: Arc<Mutex<Option<StartupTracePersistence>>>,
+}
+
+struct StartupTracePersistence {
+    path: PathBuf,
+    file: File,
 }
 
 impl DesktopStartupTrace {
@@ -43,7 +52,42 @@ impl DesktopStartupTrace {
             trace_id,
             started_at,
             events: Arc::new(Mutex::new(Vec::new())),
+            persistence: Arc::new(Mutex::new(None)),
         }
+    }
+
+    pub fn new_persisted(
+        trace_id: String,
+        started_at: Instant,
+        path: impl AsRef<Path>,
+    ) -> Result<Self, String> {
+        let path = path.as_ref().to_path_buf();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|error| {
+                format!(
+                    "Failed to create native startup trace directory {}: {}",
+                    parent.display(),
+                    error
+                )
+            })?;
+        }
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .map_err(|error| {
+                format!(
+                    "Failed to open native startup trace {}: {}",
+                    path.display(),
+                    error
+                )
+            })?;
+        Ok(Self {
+            trace_id,
+            started_at,
+            events: Arc::new(Mutex::new(Vec::new())),
+            persistence: Arc::new(Mutex::new(Some(StartupTracePersistence { path, file }))),
+        })
     }
 
     pub fn trace_id(&self) -> &str {
@@ -113,6 +157,13 @@ impl DesktopStartupTrace {
         }
     }
 
+    pub fn record_logging_ready_and_stop_persistence(&self) {
+        self.record_phase("logging_ready", "native_logging");
+        if let Ok(mut persistence) = self.persistence.lock() {
+            *persistence = None;
+        }
+    }
+
     fn record_event(
         &self,
         phase: String,
@@ -137,7 +188,47 @@ impl DesktopStartupTrace {
         };
 
         if let Ok(mut events) = self.events.lock() {
-            events.push(event);
+            events.push(event.clone());
+        }
+        self.persist_event(&event);
+    }
+
+    fn persist_event(&self, event: &DesktopStartupTraceEvent) {
+        let serialized = match serde_json::to_vec(event) {
+            Ok(serialized) => serialized,
+            Err(error) => {
+                log::warn!("Failed to serialize native startup trace event: {}", error);
+                return;
+            }
+        };
+        let failure = {
+            let Ok(mut persistence_guard) = self.persistence.lock() else {
+                log::warn!("Native startup trace writer lock is poisoned");
+                return;
+            };
+            let Some(persistence) = persistence_guard.as_mut() else {
+                return;
+            };
+            let result = persistence
+                .file
+                .write_all(&serialized)
+                .and_then(|_| persistence.file.write_all(b"\n"))
+                .and_then(|_| persistence.file.flush());
+            match result {
+                Ok(()) => None,
+                Err(error) => {
+                    let path = persistence.path.clone();
+                    *persistence_guard = None;
+                    Some((path, error))
+                }
+            }
+        };
+        if let Some((path, error)) = failure {
+            log::warn!(
+                "Failed to persist native startup trace, disabling writer: path={}, error={}",
+                path.display(),
+                error
+            );
         }
     }
 }
@@ -171,5 +262,26 @@ mod tests {
         assert_eq!(event.command.as_deref(), Some("get_config"));
         assert_eq!(event.target.as_deref(), Some("app.auto_update"));
         assert!(event.duration_ms.unwrap_or_default() >= 7);
+    }
+
+    #[test]
+    fn persists_each_startup_event_as_flushed_json_line() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let path = temp_dir.path().join("native-startup-trace.jsonl");
+        let trace = DesktopStartupTrace::new_persisted(
+            "trace-persisted".to_string(),
+            Instant::now(),
+            &path,
+        )
+        .expect("create persisted trace");
+
+        trace.record_step("native_step_end", "native_pre_tauri", "load_config", 12);
+
+        let content = std::fs::read_to_string(path).expect("read persisted trace");
+        let event: serde_json::Value =
+            serde_json::from_str(content.trim()).expect("parse JSON line");
+        assert_eq!(event["traceId"], "trace-persisted");
+        assert_eq!(event["step"], "load_config");
+        assert_eq!(event["durationMs"], 12);
     }
 }

@@ -253,6 +253,24 @@ export default function conversationStateUnitTest() {
       expect(items[1].type).assertEqual('assistant_live_turn');
       expect(items[1].isFinalizing).assertEqual(true);
     });
+
+    it('offers retry only for the latest unresolved failed message', 0, () => {
+      const interrupted = chatMessage('assistant-failed-1', 'assistant', 'Partial reply', 'failed');
+      interrupted.detail = 'Retry prompt';
+      const unresolved = ChatTimelineProjector.project([
+        chatMessage('user-1', 'user', 'Retry prompt'),
+        interrupted
+      ], [], chatMessage('', 'assistant', ''), false);
+      const continued = ChatTimelineProjector.project([
+        chatMessage('user-1', 'user', 'Retry prompt'),
+        interrupted,
+        chatMessage('user-2', 'user', 'Continue')
+      ], [], chatMessage('', 'assistant', ''), false);
+
+      expect(unresolved[1].showRetryAction).assertTrue();
+      expect(continued[1].showRetryAction).assertFalse();
+      expect(continued[2].showRetryAction).assertFalse();
+    });
   });
 
   describe('ChatTimelineStore', () => {

@@ -351,51 +351,30 @@ const VoiceInputConfig: React.FC = () => {
 
     setBusyAction('saveCloudModel');
     try {
-      const allModels = await configManager.getConfig<AIModelConfig[]>('ai.models') || [];
       const modelId = cloudDraft.configId || selectedCloudModel?.id || `speech_cloud_${Date.now()}`;
-      const nextModel: AIModelConfig = {
-        id: modelId,
+      const result = await configManager.saveCloudSpeechConfig({
+        configId: modelId,
+        preset: cloudDraft.preset,
         name,
-        provider: 'openai',
-        api_key: apiKey,
-        base_url: baseUrl,
-        request_url: resolveTranscriptionRequestUrl(baseUrl),
-        model_name: modelName,
-        context_window: 0,
-        max_tokens: 0,
-        enabled: true,
-        category: 'speech_recognition',
-        capabilities: ['speech_recognition'],
-        recommended_for: ['voice_input'],
-        metadata: {
-          ...(selectedCloudModel?.metadata || {}),
-          speech_provider_preset: cloudDraft.preset,
-        },
-        auth: { type: 'api_key' },
-      };
-      const replaced = allModels.some(model => model.id === modelId);
-      const nextModels = replaced
-        ? allModels.map(model => model.id === modelId ? nextModel : model)
-        : [...allModels, nextModel];
-      const currentDefaultModels = await configManager.getConfig<DefaultModelsConfig>('ai.default_models') || {};
-
-      await configManager.setConfig('ai.models', nextModels);
-      await configManager.setConfig('ai.default_models', {
-        ...currentDefaultModels,
-        speech_recognition: modelId,
+        baseUrl,
+        requestUrl: resolveTranscriptionRequestUrl(baseUrl),
+        modelName,
+        apiKey,
       });
-      await updateVoiceInput({
-        provider: 'cloud',
-        model_id: modelId,
-      }, { silent: true });
-      setCloudDraft(createCloudSpeechDraftFromModel(nextModel));
-      setCloudModels(nextModels.filter(model => {
+      const [nextModels, nextDefaultModels] = await Promise.all([
+        configManager.getConfig<AIModelConfig[]>('ai.models'),
+        configManager.getConfig<DefaultModelsConfig>('ai.default_models'),
+      ]);
+      const savedModel = (nextModels || []).find(model => model.id === result.modelId);
+      setCloudDraft(createCloudSpeechDraftFromModel(savedModel));
+      setCloudModels((nextModels || []).filter(model => {
         const capabilities = Array.isArray(model.capabilities) ? model.capabilities : [];
         return !!model.enabled && (
           model.category === 'speech_recognition' ||
           capabilities.includes('speech_recognition')
         );
       }));
+      setDefaultModels(nextDefaultModels || {});
       notificationService.success(t('cloudConfig.messages.saveSuccess'));
     } catch (error) {
       log.error('Failed to save cloud speech model', { error });
@@ -403,7 +382,7 @@ const VoiceInputConfig: React.FC = () => {
     } finally {
       setBusyAction(null);
     }
-  }, [cloudDraft, selectedCloudModel, t, updateVoiceInput]);
+  }, [cloudDraft, selectedCloudModel, t]);
 
   const handleDownload = useCallback((model: SpeechModelStatus) => {
     if (model.state === 'downloading') return;

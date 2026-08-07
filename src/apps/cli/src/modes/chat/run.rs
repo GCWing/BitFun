@@ -454,6 +454,22 @@ impl ChatMode {
         self.workspace = chat_state.workspace.clone();
         self.refresh_workspace_git_status(&mut chat_state, &rt_handle);
 
+        // Apply model override (--model flag): update the session model.
+        // The backend validates the ID; an invalid ID logs a warning and
+        // falls back to the default model.
+        if let Some(ref model_override) = self.model_id {
+            let trimmed = model_override.trim();
+            let sid = chat_state.core_session_id.clone();
+            let mid = trimmed.to_string();
+            let agent = self.agent.clone();
+            if let Err(e) = tokio::task::block_in_place(|| {
+                rt_handle.block_on(async { agent.update_session_model(&sid, &mid).await })
+            }) {
+                tracing::warn!("Failed to apply model override '{mid}': {e}");
+                eprintln!("Warning: Model '{mid}' not found. Using default model.");
+            }
+        }
+
         let mut external_source_rx = None;
         if self.agent.is_shared() {
             chat_view.set_status(Some(format!(

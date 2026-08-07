@@ -1077,7 +1077,8 @@ async fn handle_relay_auth_error(
     }
     let mut current_context = account_context.write().await;
     if current_context
-        .as_ref().is_none_or(|context| context.session.token != expected_token)
+        .as_ref()
+        .is_none_or(|context| context.session.token != expected_token)
     {
         tracing::debug!("Ignoring auth error cleanup for a replaced account");
         return;

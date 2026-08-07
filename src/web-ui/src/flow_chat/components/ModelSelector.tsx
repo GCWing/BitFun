@@ -47,6 +47,10 @@ import {
   getRecentReasoningPreset,
   setRecentReasoningPreset,
 } from '../utils/reasoningPresets';
+import {
+  shouldIncludeInternalModelSession,
+  shouldSyncSessionModelSelection,
+} from '../utils/modelSelectionTarget';
 import './ModelSelector.scss';
 
 const log = createLogger('ModelSelector');
@@ -708,7 +712,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         const maxContextTokens = await getModelMaxTokens(modelId, currentMode);
         store.updateSessionMaxContextTokens(sessionId, maxContextTokens);
         const session = store.getState().sessions.get(sessionId);
-        if (session && !session.isTransient) {
+        if (shouldSyncSessionModelSelection(session)) {
           await agentAPI.updateSessionModel({
             sessionId,
             modelName: modelId,
@@ -716,7 +720,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             workspacePath: sessionProjectWorkspacePath(session),
             remoteConnectionId: session.remoteConnectionId,
             remoteSshHost: session.remoteSshHost,
-            includeInternal: session.sessionKind === 'subagent',
+            includeInternal: shouldIncludeInternalModelSession(session),
           });
         }
       };
@@ -799,7 +803,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     setReasoningLoading(true);
     store.updateSessionReasoningPreset(sessionId, normalizedPreset);
     try {
-      if (!session.isTransient) {
+      if (shouldSyncSessionModelSelection(session)) {
         await agentAPI.updateSessionModel({
           sessionId,
           modelName: currentNativeModelId,
@@ -807,7 +811,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           workspacePath: sessionProjectWorkspacePath(session),
           remoteConnectionId: session.remoteConnectionId,
           remoteSshHost: session.remoteSshHost,
-          includeInternal: session.sessionKind === 'subagent',
+          includeInternal: shouldIncludeInternalModelSession(session),
         });
       }
       if (!targetIsSubagent) {

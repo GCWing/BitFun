@@ -13,6 +13,7 @@ export interface ChatTimelineItem {
   message?: ChatMessage;
   isStreaming: boolean;
   isFinalizing: boolean;
+  showRetryAction?: boolean;
 }
 
 /** Shared render invalidation for both remote polling and general-chat streaming. */
@@ -66,7 +67,8 @@ export class ChatTimelineProjector {
         type: ChatTimelineProjector.messageItemType(message),
         message,
         isStreaming: false,
-        isFinalizing: false
+        isFinalizing: false,
+        showRetryAction: false
       };
       return item;
     });
@@ -77,7 +79,8 @@ export class ChatTimelineProjector {
         type: 'optimistic_user_message',
         message,
         isStreaming: false,
-        isFinalizing: false
+        isFinalizing: false,
+        showRetryAction: false
       };
       items.push(item);
     });
@@ -89,7 +92,8 @@ export class ChatTimelineProjector {
         type: 'assistant_live_turn',
         message: activeTurn,
         isStreaming: (activeTurn.status || '').toLowerCase() === 'active',
-        isFinalizing: (activeTurn.status || '').toLowerCase() === 'completed'
+        isFinalizing: (activeTurn.status || '').toLowerCase() === 'completed',
+        showRetryAction: false
       };
       items.push(item);
     }
@@ -99,12 +103,25 @@ export class ChatTimelineProjector {
         id: 'empty-state',
         type: 'empty_state',
         isStreaming: false,
-        isFinalizing: false
+        isFinalizing: false,
+        showRetryAction: false
       };
       items.push(item);
     }
 
+    ChatTimelineProjector.markLatestFailedMessageRetryable(items);
     return items;
+  }
+
+  private static markLatestFailedMessageRetryable(items: ChatTimelineItem[]): void {
+    for (let index = items.length - 1; index >= 0; index--) {
+      const message = items[index].message;
+      if (!message) {
+        continue;
+      }
+      items[index].showRetryAction = (message.status || '').toLowerCase() === 'failed';
+      return;
+    }
   }
 
   static pendingMessagesNotPersisted(pendingMessages: ChatMessage[], messages: ChatMessage[]): ChatMessage[] {

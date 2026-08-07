@@ -6,11 +6,11 @@ import { i18nService } from '@/infrastructure/i18n';
  
 const DEFAULT_VERSION_INFO: VersionInfo = {
   name: 'BitFun',
-  version: '0.2.15',
-  buildDate: new Date().toISOString(),
-  buildTimestamp: Date.now(),
+  version: '0.0.0',
+  buildDate: new Date(0).toISOString(),
+  buildTimestamp: 0,
   isDev: import.meta.env.DEV,
-  buildEnv: import.meta.env.MODE as 'development' | 'production' | 'preview'
+  buildEnv: import.meta.env.MODE as VersionInfo['buildEnv']
 };
 
 
@@ -41,6 +41,17 @@ export function formatVersion(version: string, isDev: boolean): string {
     return `${version}-dev`;
   }
   return version;
+}
+
+export function formatDisplayedVersion(
+  versionInfo: VersionInfo,
+  nativeVersion: string | null,
+  nativeRuntime: boolean,
+  frontendDev: boolean
+): string {
+  const version = nativeVersion ?? versionInfo.version;
+  const isDev = nativeRuntime ? frontendDev : versionInfo.isDev;
+  return formatVersion(version, isDev);
 }
 
  

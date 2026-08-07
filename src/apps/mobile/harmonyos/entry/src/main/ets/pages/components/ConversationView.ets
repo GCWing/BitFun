@@ -1,3 +1,4 @@
+import { KeyboardAvoidMode } from '@kit.ArkUI';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ChatTimelineItem } from '../../services/ChatTimelineProjector';
 import { ConnectionStatusPresenter } from '../../services/ConnectionStatusPresenter';
@@ -12,10 +13,10 @@ import {
   ConversationUiSelectedImage,
   ConversationUiSession
 } from './ConversationUiModels';
-import { ComposerBar } from './ComposerBar';
+import { ComposerBar, ComposerPresentation } from './ComposerBar';
 import { GeneralChatHeader } from './GeneralChatHeader';
 import { RemoteChatHeader } from './RemoteChatHeader';
-import { CARD, GREEN, INK, LINE, MUTED, PAGE_BG, RED } from './Theme';
+import { CARD, FLOATING_PANEL_BG, GREEN, INK, LINE, MUTED, PAGE_BG, RED, SOFT } from './Theme';
 
 @ComponentV2
 export struct ConversationView {
@@ -50,14 +51,19 @@ export struct ConversationView {
   @Param downloadingFilePath: string = '';
   @Param downloadedFilePath: string = '';
   @Param fileDownloadStatus: string = '';
+  @Param activeFilePreviewPath: string = '';
+  @Param activeFilePreviewLoading: boolean = false;
   @Param selectedImages: ConversationUiSelectedImage[] = [];
   @Param isVoiceListening: boolean = false;
   @Param chatInput: string = '';
   @Param showSidebarButton: boolean = true;
   @Param showBackButton: boolean = true;
+  @Param showSidebarRestoreButton: boolean = false;
+  @Param composerPresentation: ComposerPresentation = ComposerPresentation.Compact;
+  @Param contentHorizontalOffset: number = 0;
   @Event onOpenSidebar: () => void = () => {};
+  @Event onRestoreSidebar: () => void = () => {};
   @Event onBack: () => void = () => {};
-  @Event onNewSession: () => void = () => {};
   @Param isSessionPinned: boolean = false;
   @Event onTogglePinSession: () => void = () => {};
   @Event onArchiveSession: () => void = () => {};
@@ -74,6 +80,7 @@ export struct ConversationView {
   @Event onRenameSession: (title: string) => void = (_title: string) => {};
   @Event onCopyMessage: (text: string) => void = (_text: string) => {};
   @Event onRetryMessage: (text: string) => void = (_text: string) => {};
+  @Event onOpenFilePreview: (path: string, label: string) => void = (_path: string, _label: string) => {};
   @Event onSelectModel: (modelId: string) => void = (_modelId: string) => {};
   @Event onPickImages: () => void = () => {};
   @Event onRemoveImage: (imageId: string) => void = (_imageId: string) => {};
@@ -84,37 +91,51 @@ export struct ConversationView {
   @Event onToggleQuickActions: () => void = () => {};
   @Local showQuickActions: boolean = false;
   @Local showHeaderActions: boolean = false;
+  private previousKeyboardAvoidMode: KeyboardAvoidMode = KeyboardAvoidMode.OFFSET;
+
+  aboutToAppear(): void {
+    this.previousKeyboardAvoidMode = this.getUIContext().getKeyboardAvoidMode();
+    this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
+  }
+
+  aboutToDisappear(): void {
+    this.getUIContext().setKeyboardAvoidMode(this.previousKeyboardAvoidMode);
+  }
 
   build() {
     Stack() {
       Column() {
         this.Header()
-        if (this.shouldShowStatusBar()) {
-          this.ExecutionStatusBar()
-        }
-        if (this.shouldShowSuggestions()) {
-          Blank().layoutWeight(1)
-          if (!this.isVoiceListening) {
-            this.PromptArea()
+        Column() {
+          if (this.shouldShowStatusBar()) {
+            this.ExecutionStatusBar()
           }
-        } else {
-          this.MessageList()
+          if (this.shouldShowSuggestions()) {
+            Blank().layoutWeight(1)
+            if (!this.isVoiceListening) {
+              this.PromptArea()
+            }
+          } else if (this.shouldCenterInlineStatus()) {
+            this.CenteredInlineStatus()
+          } else {
+            this.MessageList()
+          }
+          if (this.inlineStatusText.length > 0 && !this.shouldCenterInlineStatus()) {
+            Text(this.inlineStatusText)
+              .fontSize(12).lineHeight(18).fontColor(MUTED).width('100%')
+              .padding({ left: 20, right: 20, bottom: 8 })
+          }
+          this.Composer()
         }
-        if (this.inlineStatusText.length > 0) {
-          Text(this.inlineStatusText)
-            .fontSize(12).lineHeight(18).fontColor(MUTED).width('100%')
-            .padding({ left: 20, right: 20, bottom: 8 })
-        }
-        this.Composer()
+        .layoutWeight(1)
+        .width('100%')
+        .translate({ x: this.contentHorizontalOffset, y: 0 })
+        .animation({ duration: 220, curve: Curve.EaseInOut })
       }
       .width('100%').height('100%').backgroundColor(PAGE_BG)
       if (this.showQuickActions && this.composerCapabilities.supportsAttachments) {
         this.MenuBackdrop(() => { this.showQuickActions = false; })
         this.QuickActionsMenu()
-      }
-      if (this.showHeaderActions) {
-        this.MenuBackdrop(() => { this.showHeaderActions = false; })
-        this.HeaderActionsMenu()
       }
     }
     .width('100%')
@@ -126,19 +147,30 @@ export struct ConversationView {
   Header() {
     if (this.surface === ChatSurface.General) {
       GeneralChatHeader({
+        title: this.activeSession.title,
         showActions: ConversationViewContract.hasRealTimelineItem(this.timelineItems),
         showSidebarButton: this.showSidebarButton,
+        showBackButton: this.showBackButton,
+        showSidebarRestoreButton: this.showSidebarRestoreButton,
+        showActionsMenu: this.showHeaderActions,
+        actionsMenu: () => {
+          this.HeaderActionsPopover();
+        },
         onOpenSidebar: () => {
           this.onOpenSidebar();
         },
-        onNewSession: () => {
-          this.showQuickActions = false;
-          this.showHeaderActions = false;
-          this.onNewSession();
+        onRestoreSidebar: () => {
+          this.onRestoreSidebar();
+        },
+        onBack: () => {
+          this.onBack();
         },
         onOpenActions: () => {
           this.showQuickActions = false;
           this.showHeaderActions = !this.showHeaderActions;
+        },
+        onActionsMenuStateChange: (visible: boolean) => {
+          this.showHeaderActions = visible;
         }
       })
     } else {
@@ -146,24 +178,27 @@ export struct ConversationView {
         activeSession: this.activeSession,
         workspaceBranch: this.workspaceBranch,
         desktopName: this.desktopName,
-        canStop: this.canStop,
-        modelCatalog: this.modelCatalog,
-        selectedModelId: this.selectedModelId,
         showBackButton: this.showBackButton,
+        showSidebarRestoreButton: this.showSidebarRestoreButton,
+        showActionsMenu: this.showHeaderActions,
+        actionsMenu: () => {
+          this.HeaderActionsPopover();
+        },
         onBack: () => {
           this.onBack();
         },
-        onNewSession: () => {
-          this.onNewSession();
+        onRestoreSidebar: () => {
+          this.onRestoreSidebar();
         },
-        onStop: () => {
-          this.onStop();
+        onOpenActions: () => {
+          this.showQuickActions = false;
+          this.showHeaderActions = !this.showHeaderActions;
+        },
+        onActionsMenuStateChange: (visible: boolean) => {
+          this.showHeaderActions = visible;
         },
         onRenameSession: (title: string) => {
           this.onRenameSession(title);
-        },
-        onSelectModel: (modelId: string) => {
-          this.onSelectModel(modelId);
         }
       })
     }
@@ -195,6 +230,9 @@ export struct ConversationView {
       downloadingFilePath: this.downloadingFilePath,
       downloadedFilePath: this.downloadedFilePath,
       fileDownloadStatus: this.fileDownloadStatus,
+      activeFilePreviewPath: this.activeFilePreviewPath,
+      activeFilePreviewLoading: this.activeFilePreviewLoading,
+      maxContentWidth: this.composerPresentation === ComposerPresentation.Floating ? 800 : 0,
       onLoadOlder: () => {
         this.onLoadOlder();
       },
@@ -216,10 +254,29 @@ export struct ConversationView {
       onRetryMessage: (text: string) => {
         this.onRetryMessage(text);
       },
+      onOpenFilePreview: (path: string, label: string) => {
+        this.onOpenFilePreview(path, label);
+      },
       onDownloadFile: (path: string) => {
         this.onDownloadFile(path);
       }
     })
+  }
+
+  @Builder
+  CenteredInlineStatus() {
+    Stack({ alignContent: Alignment.Center }) {
+      Text(this.inlineStatusText)
+        .fontSize(14)
+        .lineHeight(20)
+        .fontColor(MUTED)
+        .textAlign(TextAlign.Center)
+        .maxLines(2)
+    }
+    .layoutWeight(1)
+    .width('100%')
+    .height('100%')
+    .padding({ left: 32, right: 32, bottom: 48 })
   }
 
   @Builder
@@ -259,6 +316,7 @@ export struct ConversationView {
   @Builder
   Composer() {
     ComposerBar({
+      presentation: this.composerPresentation,
       capabilities: this.composerCapabilities,
       chatInput: this.chatInput,
       showQuickActions: this.showQuickActions,
@@ -267,8 +325,11 @@ export struct ConversationView {
       },
       selectedImages: this.selectedImages,
       isBusy: this.isBusy,
+      canStop: this.canStop,
       connectionState: this.connectionState,
       isVoiceListening: this.isVoiceListening,
+      modelCatalog: this.modelCatalog,
+      selectedModelId: this.selectedModelId,
       onPickImages: () => {
         this.onPickImages();
       },
@@ -278,8 +339,14 @@ export struct ConversationView {
       onSend: () => {
         this.onSend();
       },
+      onStop: () => {
+        this.onStop();
+      },
       onVoiceInput: () => {
         this.onVoiceInput();
+      },
+      onSelectModel: (modelId: string) => {
+        this.onSelectModel(modelId);
       },
       onChatInputChange: (value: string) => {
         this.onChatInputChange(value);
@@ -318,81 +385,100 @@ export struct ConversationView {
     }
     .width('100%')
     .padding({ left: 18, right: 18, top: 12, bottom: 10 })
-    .backgroundColor(CARD)
-    .border({ width: { top: 1 }, color: LINE })
   }
 
   @Builder
   MenuBackdrop(onClose: () => void) {
     Text('')
       .width('100%').height('100%')
-      .backgroundColor('#18000000')
+      .backgroundColor(this.composerPresentation === ComposerPresentation.Floating ? '#00000000' : '#18000000')
       .zIndex(5)
       .onClick(onClose)
   }
 
   @Builder
   QuickActionsMenu() {
-    Column({ space: 4 }) {
-      this.MenuItem('gpt_home_image_glyph', '相机', () => this.onPickImages())
-      this.MenuItem('gpt_home_image_glyph', '照片', () => this.onPickImages())
-      this.MenuItem('remote_actions_link', '文件', () => {})
-      this.MenuItem('remote_actions_chat', '插件', () => {})
-      this.MenuItem('remote_actions_settings', '智能', () => {})
+    if (this.composerPresentation === ComposerPresentation.Floating) {
+      this.QuickActionsPopover()
+    } else {
+      this.QuickActionsBottomSheet()
     }
-    .width(300).padding({ left: 18, right: 18, top: 14, bottom: 14 })
-    .backgroundColor('#FDFDFD')
-    .borderRadius(24)
-    .shadow({ radius: 24, color: '#26000000', offsetY: 8 })
-    .position({ left: 28, bottom: 72 })
+  }
+
+  @Builder
+  QuickActionsPopover() {
+    Column() {
+      this.AttachmentPanel()
+    }
+    .width(360)
+    .backgroundColor(CARD)
+    .border({ width: 1, color: LINE })
+    .borderRadius(18)
+    .shadow({ radius: 20, color: '#1A000000', offsetY: 8 })
+    .position({ left: 80 + this.contentHorizontalOffset, bottom: 86 })
     .zIndex(6)
-    .transition(TransitionEffect.translate({ x: 0, y: 18 })
+    .transition(TransitionEffect.translate({ x: 0, y: 14 })
       .combine(TransitionEffect.opacity(0))
       .animation({ duration: 220, curve: Curve.EaseOut }))
   }
 
   @Builder
-  HeaderActionsMenu() {
+  QuickActionsBottomSheet() {
     Column() {
-      Text('会话')
-        .fontSize(13).fontWeight(FontWeight.Medium).fontColor('#8E8E93')
-        .width('100%').height(28).padding({ left: 8 })
-          this.RemoteStyleMenuItem('remote_actions_check',
-            this.isSessionPinned ? '取消置顶' : '置顶', () => this.onTogglePinSession(), this.isSessionPinned)
-      this.RemoteStyleMenuItem('remote_actions_cloud', '已上传的文件', () => this.onShowUploadedFiles())
+      Text('')
+        .width(36)
+        .height(4)
+        .backgroundColor(LINE)
+        .borderRadius(2)
+        .margin({ top: 10 })
+      this.AttachmentPanel()
+    }
+    .width('100%')
+    .backgroundColor(CARD)
+    .border({ width: { top: 1 }, color: LINE })
+    .borderRadius({ topLeft: 18, topRight: 18 })
+    .position({ left: 0, bottom: 0 })
+    .zIndex(6)
+    .alignItems(HorizontalAlign.Center)
+    .transition(TransitionEffect.translate({ x: 0, y: 24 })
+      .combine(TransitionEffect.opacity(0))
+      .animation({ duration: 220, curve: Curve.EaseOut }))
+  }
+
+  @Builder
+  HeaderActionsPopover() {
+    Column() {
+      this.HeaderActionsContent()
+    }
+    .width(292)
+    .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+    .backgroundColor(FLOATING_PANEL_BG)
+    .border({ width: 1, color: LINE })
+    .borderRadius(16)
+    .shadow({ radius: 18, color: LINE, offsetY: 7 })
+    .transition(TransitionEffect.translate({ x: 8, y: -8 })
+      .combine(TransitionEffect.opacity(0))
+      .animation({ duration: 180, curve: Curve.EaseOut }))
+  }
+
+  @Builder
+  HeaderActionsContent() {
+    Text('会话')
+      .fontSize(13).fontWeight(FontWeight.Medium).fontColor(MUTED)
+      .width('100%').height(28).padding({ left: 8 })
+    if (this.surface === ChatSurface.General) {
+      this.RemoteStyleMenuItem('remote_actions_check',
+        this.isSessionPinned ? '取消置顶' : '置顶', () => this.onTogglePinSession(), this.isSessionPinned)
+    }
+    this.RemoteStyleMenuItem('remote_actions_cloud', '已上传的文件', () => this.onShowUploadedFiles())
+    if (this.surface === ChatSurface.General) {
       Divider().strokeWidth(1).color(LINE).margin({ top: 8, bottom: 8 })
       this.RemoteStyleMenuItem('remote_actions_folder', '归档', () => this.onArchiveSession())
       this.RemoteStyleMenuItem('remote_actions_settings', '删除', () => this.onDeleteSession())
+    } else if (this.canStop) {
+      Divider().strokeWidth(1).color(LINE).margin({ top: 8, bottom: 8 })
+      this.RemoteStyleMenuItem('remote_actions_settings', RemoteI18n.t('chat.stop'), () => this.onStop())
     }
-    .width(330)
-    .padding({ left: 16, right: 16, top: 14, bottom: 14 })
-    .backgroundColor(CARD)
-    .border({ width: 1, color: '#0D000000' })
-    .borderRadius(20)
-    .shadow({ radius: 20, color: '#1A000000', offsetY: 8 })
-    .position({ right: 18, top: 14 })
-    .zIndex(6)
-    .transition(TransitionEffect.translate({ x: 18, y: -12 })
-      .combine(TransitionEffect.opacity(0))
-      .animation({ duration: 220, curve: Curve.EaseOut }))
-  }
-
-  @Builder
-  MenuItem(icon: string, label: string, action: () => void) {
-    Row({ space: 18 }) {
-      Stack({ alignContent: Alignment.Center }) {
-        Image($r('app.media.' + icon))
-          .width(25).height(25).objectFit(ImageFit.Contain)
-      }
-      .width(40).height(40).backgroundColor('#F2F2F2').borderRadius(20)
-      Text(label).fontSize(17).fontColor(INK).layoutWeight(1)
-    }
-    .width('100%').height(56)
-    .onClick(() => {
-      action();
-      this.showQuickActions = false;
-      this.showHeaderActions = false;
-    })
   }
 
   @Builder
@@ -406,7 +492,7 @@ export struct ConversationView {
     .width('100%').height(48)
     .padding({ left: 8, right: 8 })
     .borderRadius(10)
-    .backgroundColor(selected ? '#F3F3F3' : '#00000000')
+    .backgroundColor(selected ? SOFT : '#00000000')
     .onClick(() => {
       action()
       this.showHeaderActions = false
@@ -416,15 +502,15 @@ export struct ConversationView {
   @Builder
   MenuIcon(icon: string) {
     if (icon === 'remote_actions_link') {
-      Image($r('app.media.remote_actions_link')).width(23).height(23).objectFit(ImageFit.Contain)
+      SymbolGlyph($r('sys.symbol.link')).fontSize(20).fontColor([MUTED]).width(23).height(23)
     } else if (icon === 'remote_actions_check') {
-      Image($r('app.media.remote_actions_check')).width(23).height(23).objectFit(ImageFit.Contain)
+      SymbolGlyph($r('sys.symbol.checkmark_circle')).fontSize(20).fontColor([MUTED]).width(23).height(23)
     } else if (icon === 'remote_actions_folder') {
-      Image($r('app.media.remote_actions_folder')).width(23).height(23).objectFit(ImageFit.Contain)
+      SymbolGlyph($r('sys.symbol.folder')).fontSize(20).fontColor([MUTED]).width(23).height(23)
     } else if (icon === 'remote_actions_cloud') {
-      Image($r('app.media.remote_actions_cloud')).width(23).height(23).objectFit(ImageFit.Contain)
+      SymbolGlyph($r('sys.symbol.cloud')).fontSize(20).fontColor([MUTED]).width(23).height(23)
     } else {
-      Image($r('app.media.remote_actions_settings')).width(23).height(23).objectFit(ImageFit.Contain)
+      SymbolGlyph($r('sys.symbol.gearshape')).fontSize(20).fontColor([MUTED]).width(23).height(23)
     }
   }
 
@@ -437,7 +523,7 @@ export struct ConversationView {
         .fontSize(21)
         .fontColor(INK)
         .textAlign(TextAlign.Center)
-        .backgroundColor('#F2F1EE')
+        .backgroundColor(SOFT)
         .borderRadius(16)
       Column({ space: 3 }) {
         Text(RemoteI18n.t('chat.pickImage'))
@@ -459,7 +545,7 @@ export struct ConversationView {
     .width('100%')
     .height(48)
     .padding({ left: 12, right: 12 })
-    .backgroundColor('#FAFAF8')
+    .backgroundColor(CARD)
     .borderRadius(14)
     .border({ width: 1, color: LINE })
     .onClick(() => {
@@ -503,15 +589,13 @@ export struct ConversationView {
           .fontWeight(FontWeight.Medium)
           .fontColor(MUTED)
       } else if (kind === 'globe') {
-        Image($r('app.media.gpt_home_globe_glyph'))
-          .width(24)
-          .height(24)
-          .objectFit(ImageFit.Contain)
+        SymbolGlyph($r('sys.symbol.website'))
+          .fontSize(21)
+          .fontColor([MUTED])
       } else if (kind === 'image') {
-        Image($r('app.media.gpt_home_image_glyph'))
-          .width(24)
-          .height(24)
-          .objectFit(ImageFit.Contain)
+        SymbolGlyph($r('sys.symbol.picture'))
+          .fontSize(21)
+          .fontColor([MUTED])
       } else {
         this.FileGlyph()
       }
@@ -544,7 +628,14 @@ export struct ConversationView {
       this.showSuggestionsWhenEmpty,
       this.isBusy,
       this.timelineItems
-    );
+    ) && (this.supportsSearch || this.supportsImages || this.supportsFiles);
+  }
+
+  private shouldCenterInlineStatus(): boolean {
+    return this.inlineStatusText.length > 0 &&
+      !this.isBusy &&
+      !this.shouldShowSuggestions() &&
+      !ConversationViewContract.hasRealTimelineItem(this.timelineItems);
   }
 
   private visibleTimelineItems(): ChatTimelineItem[] {
@@ -558,7 +649,7 @@ export struct ConversationView {
     return ConnectionStatusPresenter.detail(this.connectionState, this.statusText, '', '');
   }
 
-  private statusColor(): string {
+  private statusColor(): ResourceColor {
     if (this.canStop && this.connectionState === 'connected') {
       return GREEN;
     }
@@ -587,7 +678,7 @@ export struct ConversationView {
     return this.surface === ChatSurface.Remote && this.connectionState !== 'connected';
   }
 
-  private connectionColor(): string {
+  private connectionColor(): ResourceColor {
     const tone = ConnectionStatusPresenter.tone(this.connectionState);
     if (tone === 'ok') {
       return GREEN;

@@ -1,8 +1,11 @@
+import { common } from '@kit.AbilityKit';
+
 export interface AppRootHostPort {
   attach(context: Context, uiContext: UIContext): void;
   context(): Context;
   animate(duration: number, callback: () => void): void;
   showToast(message: string, duration: number): boolean;
+  openExternalLink?(link: string): Promise<boolean>;
 }
 
 export class ArkUiAppRootHostAdapter implements AppRootHostPort {
@@ -29,6 +32,19 @@ export class ArkUiAppRootHostAdapter implements AppRootHostPort {
   showToast(message: string, duration: number): boolean {
     try {
       this.uiContext.getPromptAction().showToast({ message, duration });
+      return true;
+    } catch (_err) {
+      return false;
+    }
+  }
+
+  async openExternalLink(link: string): Promise<boolean> {
+    const value = link.trim();
+    if (!/^https?:\/\//i.test(value)) {
+      return false;
+    }
+    try {
+      await (this.hostContext as common.UIAbilityContext).openLink(value);
       return true;
     } catch (_err) {
       return false;

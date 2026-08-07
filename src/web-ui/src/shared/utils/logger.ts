@@ -49,6 +49,21 @@ export function areSensitiveDiagnosticsEnabled(): boolean {
   return includeSensitiveDiagnostics;
 }
 
+/**
+ * Render an Error without losing its message.
+ *
+ * `stack` alone is not enough: WebKit — which is what Tauri embeds on macOS —
+ * builds a stack out of frames only, so `error.stack` for `new Error('boom')` is
+ * just `@app.js:1:2`. Logging that leaves a failure with a location and no
+ * reason, which is exactly the case a warning exists to explain.
+ */
+function formatError(error: Error): string {
+  const summary = `${error.name}: ${error.message}`;
+  const stack = error.stack;
+  if (!stack) return summary;
+  return stack.includes(error.message) ? stack : `${summary}\n${stack}`;
+}
+
 function formatConsoleArg(value: unknown): string {
   if (value === undefined) return 'undefined';
   if (value === null) return 'null';
@@ -57,7 +72,7 @@ function formatConsoleArg(value: unknown): string {
     return String(value);
   }
   if (typeof value === 'symbol') return value.toString();
-  if (value instanceof Error) return value.stack || `${value.name}: ${value.message}`;
+  if (value instanceof Error) return formatError(value);
   if (typeof value === 'object') {
     try {
       return JSON.stringify(value);
@@ -229,7 +244,7 @@ export async function initLogger(): Promise<void> {
 function formatData(data: unknown): string {
   if (data === undefined || data === null) return '';
   if (data instanceof Error) {
-    return data.stack || data.message;
+    return formatError(data);
   }
   if (typeof data === 'object') {
     try {
@@ -240,7 +255,7 @@ function formatData(data: unknown): string {
       for (const key of Object.keys(data as Record<string, unknown>)) {
         const value = (data as Record<string, unknown>)[key];
         if (value instanceof Error) {
-          errors.push(value.stack || `${value.name}: ${value.message}`);
+          errors.push(formatError(value));
         } else {
           regularData[key] = value;
         }

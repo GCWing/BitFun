@@ -34,9 +34,8 @@ How to use skills:
 - Pass user-provided invocation text relevant to the skill through `arguments`; never copy an `argument-hint` into arguments
 - The skill's prompt will expand and provide detailed instructions on how to complete the task
 - Examples:
-  - `command: "pdf"` - invoke the pdf skill
+  - `command: "writing-skills"` - invoke the writing-skills skill
   - `command: "review", arguments: "src/main.rs carefully"` - invoke a skill with arguments
-  - `command: "xlsx"` - invoke the xlsx skill
   - `command: "user::bitfun-system::ppt-design"` - invoke a specific built-in skill by stable key
 
 Important:
@@ -137,7 +136,7 @@ impl Tool for SkillTool {
             "properties": {
                 "command": {
                     "type": "string",
-                    "description": "The skill name or stable key. E.g., \"pdf\" or \"user::bitfun-system::ppt-design\""
+                    "description": "The skill name or stable key. E.g., \"writing-skills\" or \"user::bitfun-system::ppt-design\""
                 },
                 "arguments": {
                     "type": "string",

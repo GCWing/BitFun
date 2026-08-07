@@ -15,7 +15,7 @@ import type { DialogTurn, FlowToolItem, FlowUserSteeringItem, ModelRound, Sessio
 import type { FlowChatContext } from './types';
 import { markOptimisticDispatchTurnMetadata } from '@/features/dispatch/optimisticDispatchTurn';
 
-const { handleCompressionCompleted } = __test_only__;
+const { handleCompressionCompleted, handleTokenUsageUpdate } = __test_only__;
 
 vi.mock('../../../shared/notification-system/services/NotificationService', () => ({
   notificationService: {
@@ -1166,6 +1166,8 @@ describe('handleCompressionCompleted', () => {
       outputTokens: undefined,
       totalTokens: 15_000,
       timestamp: expect.any(Number),
+      turnId: 'turn-1',
+      source: 'context_compression',
     });
   });
 
@@ -1196,6 +1198,80 @@ describe('handleCompressionCompleted', () => {
       compressionId: 'compression-1',
       applied: true,
       tokensAfter: undefined,
+    });
+
+    const session = FlowChatStore.getInstance().getState().sessions.get('session-1');
+    expect(session?.currentTokenUsage).toBeUndefined();
+  });
+
+  it('ignores a delayed successful compression after its source turn was removed', () => {
+    putFinishingSessionInStore();
+    FlowChatStore.getInstance().deleteDialogTurn('session-1', 'turn-1');
+
+    handleCompressionCompleted(createFlowChatContext(), {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      compressionId: 'compression-1',
+      applied: true,
+      tokensBefore: 90_000,
+      tokensAfter: 15_000,
+    });
+
+    const session = FlowChatStore.getInstance().getState().sessions.get('session-1');
+    expect(session?.currentTokenUsage).toBeUndefined();
+  });
+});
+
+describe('handleTokenUsageUpdate', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  afterEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  it('tracks the source turn on current usage without adding provenance to accumulated turn usage', () => {
+    putFinishingSessionInStore();
+
+    handleTokenUsageUpdate(createFlowChatContext(), {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      inputTokens: 1_200,
+      outputTokens: 320,
+      totalTokens: 1_520,
+    });
+
+    const session = FlowChatStore.getInstance().getState().sessions.get('session-1');
+    expect(session?.currentTokenUsage).toMatchObject({
+      inputTokens: 1_200,
+      outputTokens: 320,
+      totalTokens: 1_520,
+      turnId: 'turn-1',
+      source: 'model_request',
+    });
+    expect(session?.dialogTurns[0].tokenUsage).toMatchObject({
+      inputTokens: 1_200,
+      outputTokens: 320,
+      totalTokens: 1_520,
+    });
+    expect(session?.dialogTurns[0].tokenUsage).not.toHaveProperty('turnId');
+    expect(session?.dialogTurns[0].tokenUsage).not.toHaveProperty('source');
+  });
+
+  it('ignores a delayed model usage update after its source turn was removed', () => {
+    putFinishingSessionInStore();
+    FlowChatStore.getInstance().deleteDialogTurn('session-1', 'turn-1');
+
+    handleTokenUsageUpdate(createFlowChatContext(), {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      inputTokens: 1_200,
+      outputTokens: 320,
+      totalTokens: 1_520,
     });
 
     const session = FlowChatStore.getInstance().getState().sessions.get('session-1');

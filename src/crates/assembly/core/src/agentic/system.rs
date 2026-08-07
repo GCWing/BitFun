@@ -74,12 +74,6 @@ pub async fn init_agentic_system_for_profile_with_runtime_ownership(
     let path_manager = try_get_path_manager_arc()?;
     let persistence_manager = Arc::new(persistence::PersistenceManager::new(path_manager.clone())?);
     let token_usage_service = Arc::new(TokenUsageService::new(path_manager.clone()).await?);
-    let token_usage_subscriber = Arc::new(TokenUsageSubscriber::new(token_usage_service.clone()));
-    event_router.subscribe_internal("token_usage".to_string(), token_usage_subscriber);
-    event_router.subscribe_internal(
-        "thread_goal_tokens".to_string(),
-        Arc::new(ThreadGoalTokenSubscriber),
-    );
 
     let context_store = Arc::new(session::SessionContextStore::new());
     let context_compressor = Arc::new(session::ContextCompressor::new(Default::default()));
@@ -89,6 +83,21 @@ pub async fn init_agentic_system_for_profile_with_runtime_ownership(
         persistence_manager,
         Default::default(),
     ));
+
+    event_router.subscribe_internal(
+        "token_usage".to_string(),
+        Arc::new(TokenUsageSubscriber::new(token_usage_service.clone())),
+    );
+    event_router.subscribe_internal(
+        "session_context_usage".to_string(),
+        Arc::new(session::SessionContextUsageSubscriber::new(
+            session_manager.clone(),
+        )),
+    );
+    event_router.subscribe_internal(
+        "thread_goal_tokens".to_string(),
+        Arc::new(ThreadGoalTokenSubscriber),
+    );
 
     let tool_registry = tools::registry::get_global_tool_registry();
     let tool_state_manager = Arc::new(tools::pipeline::ToolStateManager::new(event_queue.clone()));
