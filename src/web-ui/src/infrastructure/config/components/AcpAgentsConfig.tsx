@@ -13,6 +13,7 @@ import {
   Search,
   Server,
   Terminal,
+  Trash2,
 } from 'lucide-react';
 import { Button, Input, Select, Textarea } from '@/component-library';
 import {
@@ -379,6 +380,7 @@ const AcpAgentsConfig: React.FC = () => {
   const [registryFilter, setRegistryFilter] = useState<RegistryFilter>('all');
   const [installingClientIds, setInstallingClientIds] = useState<Set<string>>(() => new Set());
   const [installingRemoteClientIds, setInstallingRemoteClientIds] = useState<Set<string>>(() => new Set());
+  const [deletingRemoteIds, setDeletingRemoteIds] = useState<Set<string>>(() => new Set());
   const requirementProbeRequestIdRef = useRef(0);
   const savingConfigRef = useRef(false);
   const loadedRemoteProbeIdsRef = useRef<Set<string>>(new Set());
@@ -532,6 +534,35 @@ const AcpAgentsConfig: React.FC = () => {
       });
     }
   }, [notifyError, t]);
+
+  const deleteRemoteConnection = useCallback(async (connectionId: string, connectionName: string) => {
+    const confirmed = await window.confirm(t('remote.deleteConfirm', { name: connectionName }));
+    if (!confirmed) return;
+
+    setDeletingRemoteIds(prev => new Set(prev).add(connectionId));
+    try {
+      await sshApi.deleteConnection(connectionId);
+      setSavedConnections(prev => prev.filter(conn => conn.id !== connectionId));
+      loadedRemoteProbeIdsRef.current.delete(connectionId);
+      setRemoteRequirementProbes(prev => {
+        const next = { ...prev };
+        delete next[connectionId];
+        return next;
+      });
+      notifySuccess(t('notifications.deleteConnectionSuccess'));
+    } catch (error) {
+      log.error('Failed to delete remote SSH connection', error);
+      notifyError(error instanceof Error ? error.message : String(error), {
+        title: t('notifications.deleteConnectionFailed'),
+      });
+    } finally {
+      setDeletingRemoteIds(prev => {
+        const next = new Set(prev);
+        next.delete(connectionId);
+        return next;
+      });
+    }
+  }, [notifyError, notifySuccess, t]);
 
   const loadConfig = useCallback(async (
     options: { showLoading?: boolean; refreshRequirements?: boolean } = {}
@@ -1397,6 +1428,7 @@ const AcpAgentsConfig: React.FC = () => {
                     connection.id
                   );
                   const probingRemote = probingRemoteRequirements.has(connection.id);
+                  const deletingRemote = deletingRemoteIds.has(connection.id);
                   const remoteRows = remoteAgentIds.map(clientId => {
                     const preset = PRESET_BY_ID.get(clientId);
                     const clientConfig = config.acpClients[clientId];
@@ -1501,6 +1533,17 @@ const AcpAgentsConfig: React.FC = () => {
                           >
                             <RefreshCw size={14} />
                             {t('remote.refreshDetection')}
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="small"
+                            onClick={() => {
+                              void deleteRemoteConnection(connection.id, connection.name || connection.id);
+                            }}
+                            isLoading={deletingRemote}
+                          >
+                            <Trash2 size={14} />
+                            {t('remote.deleteConnection')}
                           </Button>
                         </div>
                       </div>
