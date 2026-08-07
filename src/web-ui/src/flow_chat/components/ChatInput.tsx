@@ -5425,15 +5425,32 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                     {labelText}
                                   </span>
                                   {item.kind === 'mode' && item.id === modeState.current && <span className="bitfun-chat-input__slash-command-current" data-bf-component="chat-input" data-bf-part="commandCurrent">{t('chatInput.current')}</span>}
+                                  {item.kind === 'externalCommand' && item.status !== 'available' ? (
+                                    <span
+                                      className={`bitfun-chat-input__slash-command-status bitfun-chat-input__slash-command-status--${item.status === 'restricted' ? 'restricted' : 'choose'}`}
+                                      data-bf-component="chat-input"
+                                      data-bf-part="commandStatus"
+                                      data-bf-state={item.status}
+                                    >
+                                      {t(item.status === 'restricted'
+                                        ? 'chatInput.commandStatus.restricted'
+                                        : 'chatInput.commandStatus.chooseSource')}
+                                    </span>
+                                  ) : null}
                                 </div>
                               </React.Fragment>
                             );
                           })
-                        ) : !externalPromptCommandsIssue ? (
+                        ) : (
                           <div className="bitfun-chat-input__slash-command-empty" data-bf-component="chat-input" data-bf-part="commandEmpty">
-                            {t('chatInput.noMatchingCommand')}
+                            {/* A catalog issue must not leave the list blank: say why nothing is listed. */}
+                            {externalPromptCommandsIssue === 'host_unavailable'
+                              ? t('chatInput.externalCommandsHostUnavailable')
+                              : externalPromptCommandsIssue === 'load_failed'
+                                ? t('chatInput.externalCommandsLoadFailed')
+                                : t('chatInput.noMatchingCommand')}
                           </div>
-                        ) : null}
+                        )}
                       </div>
                     </div>
                   );

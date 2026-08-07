@@ -1245,6 +1245,8 @@ pub async fn run() {
             reveal_external_source_location,
             get_external_source_control_snapshot,
             apply_external_source_control_action_command,
+            get_external_ecosystem_awareness_command,
+            acknowledge_external_ecosystems_command,
             update_external_integration_policy_command,
             set_external_source_enabled_command,
             set_external_source_conflict_choice_command,

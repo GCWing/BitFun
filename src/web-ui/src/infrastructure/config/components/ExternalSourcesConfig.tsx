@@ -57,15 +57,17 @@ import {
   type ExternalSourcePresentationGroup,
 } from '../externalSourcePresentation';
 import { externalSourceRequestScopeKey } from './externalSourceRequestScope';
+import {
+  ExternalAppDetail,
+  ExternalAppsOverview,
+  ExternalCommandConflicts,
+  ExternalSourceSection,
+  buildExternalApplicationsView,
+  type ExternalApplicationView,
+} from './external-sources';
 import './ExternalSourcesConfig.scss';
 
 const DISCOVERY_POLL_DELAYS_MS = [750, 1_500, 3_000, 5_000] as const;
-const SOURCE_COUNT_LABELS = [
-  ['commands', 'sources.commandCount'],
-  ['tools', 'sources.toolCount'],
-  ['agents', 'sources.agentCount'],
-  ['mcps', 'sources.mcpCount'],
-] as const;
 
 const AGENT_DIAGNOSTIC_SETTING_KEYS: Record<string, string> = {
   opencode_unknown_agent_field: 'unknownField',
@@ -388,6 +390,9 @@ const ExternalSourcesConfig: React.FC = () => {
     preferenceRevision: number;
   } | null>(null);
   const [agentChangeNotice, setAgentChangeNotice] = useState<AgentChangeNotice | null>(null);
+  const [connectingApplication, setConnectingApplication] = useState<ExternalApplicationView | null>(null);
+  const [selectedApplicationId, setSelectedApplicationId] = useState<string | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const snapshotRef = useRef<ExternalSourceCatalogSnapshot | null>(null);
   const agentChangeNoticeRef = useRef<AgentChangeNotice | null>(null);
   const requestSequence = useRef(0);
@@ -625,6 +630,13 @@ const ExternalSourcesConfig: React.FC = () => {
     () => snapshot ? catalogDiagnosticsWithoutSourceDuplicates(snapshot, sourceGroups) : [],
     [snapshot, sourceGroups],
   );
+  const applicationsView = useMemo(
+    () => buildExternalApplicationsView(snapshot, sourceGroups, catalogDiagnostics.length, policyScope),
+    [catalogDiagnostics.length, policyScope, snapshot, sourceGroups],
+  );
+  const selectedApplication = applicationsView.applications.find(
+    (application) => application.ecosystemId === selectedApplicationId,
+  ) ?? null;
 
   const commandConflicts = useMemo(
     () => unresolvedFirst(snapshot?.commandConflicts ?? []),
@@ -1079,6 +1091,18 @@ const ExternalSourcesConfig: React.FC = () => {
     );
   }, [policyScope, runMutation, snapshot, t, workspacePath]);
 
+  const connectApplication = useCallback(async () => {
+    const application = connectingApplication;
+    if (!application || !snapshot) return;
+    setConnectingApplication(null);
+    const accepted = await updatePolicy({
+      operation: 'set_ecosystem_mode',
+      ecosystemId: application.ecosystemId,
+      mode: 'recommended',
+    });
+    if (accepted) setOperationStatus(t('applications.connectionComplete'));
+  }, [connectingApplication, snapshot, t, updatePolicy]);
+
   const updateCapabilityAccess = useCallback((
     ecosystemId: string,
     capabilityId: string,
@@ -1424,6 +1448,33 @@ const ExternalSourcesConfig: React.FC = () => {
                 ) : null}
               </ConfigPageSection>
             ) : null}
+            {snapshot && selectedApplication ? (
+              <ExternalAppDetail
+                application={selectedApplication}
+                t={t}
+                onBack={() => setSelectedApplicationId(null)}
+                onOpenAdvanced={() => {
+                  setAdvancedOpen(true);
+                  window.requestAnimationFrame(scrollToFirstAttentionItem);
+                }}
+              />
+            ) : snapshot ? (
+              <ExternalAppsOverview
+                applications={applicationsView.applications}
+                t={t}
+                onConnect={(application) => setConnectingApplication(application)}
+                onManage={(application) => setSelectedApplicationId(application.ecosystemId)}
+              />
+            ) : null}
+            <details
+              className="bitfun-external-sources-config__advanced"
+              open={advancedOpen}
+              onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
+            >
+              <summary className="bitfun-external-sources-config__advanced-summary">
+                <span>{t('applications.advanced.title')}</span>
+                <span>{t('applications.advanced.description')}</span>
+              </summary>
             {snapshot && policy ? (
               <ConfigPageSection
                 className="bitfun-external-sources-config__policy-card"
@@ -2865,90 +2916,11 @@ const ExternalSourcesConfig: React.FC = () => {
               </ConfigPageSection>
             ) : null}
 
-            {nonOpencodeGroups.length > 0 ? (
-              <ConfigPageSection title={t('sources.title')}>
-                {nonOpencodeGroups.map((group) => {
-                  return (
-                    <React.Fragment key={group.key}>
-                      <ConfigPageRow
-                        className="bitfun-external-sources-config__source-group"
-                        label={group.displayName}
-                        description={(
-                          <div className="bitfun-external-sources-config__source-description" data-bf-component="external-sources-config" data-bf-part="sourceGroup">
-                            <span className="bitfun-external-sources-config__source-origin" data-bf-component="external-sources-config" data-bf-part="sourceDescription">
-                              <span
-                                className="bitfun-external-sources-config__source-location"
-                                title={group.location}
-                                translate="no"
-                              >
-                                {group.location}
-                              </span>
-                              <span aria-hidden="true">·</span>
-                              <span className="bitfun-external-sources-config__source-scopes">
-                                {group.scopes.map((scope, index) => (
-                                  <React.Fragment key={scope}>
-                                    {index > 0 ? <span aria-hidden="true"> + </span> : null}
-                                    <span>
-                                      {sourceScopeLabel(scope, t)}
-                                    </span>
-                                  </React.Fragment>
-                                ))}
-                              </span>
-                            </span>
-                            {SOURCE_COUNT_LABELS.some(
-                              ([capability]) => group.counts[capability] > 0,
-                            ) ? (
-                              <span className="bitfun-external-sources-config__source-counts">
-                                {SOURCE_COUNT_LABELS.map(([capability, label]) => {
-                                  const count = group.counts[capability];
-                                  return count > 0 ? (
-                                    <span
-                                      key={capability}
-                                      className="bitfun-external-sources-config__source-count"
-                                    >
-                                      {t(label, { count })}
-                                    </span>
-                                  ) : null;
-                                })}
-                              </span>
-                            ) : null}
-                          </div>
-                        )}
-                        align="center"
-                      >
-                        {renderSourceMembers(group)}
-                      </ConfigPageRow>
-                      {group.diagnostics.length > 0 ? (
-                        <details
-                          className="bitfun-external-sources-config__notice"
-                          data-bf-component="external-sources-config"
-                          data-bf-part="notice"
-                          data-external-attention="true"
-                        >
-                          <summary>
-                            {t('diagnostics.sourceSummary', {
-                              name: group.displayName,
-                              count: group.diagnostics.length,
-                            })}
-                          </summary>
-                          <ul className="bitfun-external-sources-config__diagnostics" data-bf-component="external-sources-config" data-bf-part="diagnostics">
-                            {group.diagnostics.map((diagnostic) => (
-                              <li key={externalSourceDiagnosticKey(diagnostic)}>
-                                <span>{t(`diagnostics.category.${sourceDiagnosticCategory(diagnostic.code)}`)}</span>
-                                <details>
-                                  <summary>{t('common.technicalDetails')}</summary>
-                                  <code>{diagnostic.code}</code>
-                                </details>
-                              </li>
-                            ))}
-                          </ul>
-                        </details>
-                      ) : null}
-                    </React.Fragment>
-                  );
-                })}
-              </ConfigPageSection>
-            ) : null}
+            <ExternalSourceSection
+              groups={nonOpencodeGroups}
+              t={t}
+              renderSourceMembers={renderSourceMembers}
+            />
 
             {(snapshot?.tools?.length ?? 0) > 0 ? (
               <ConfigPageSection title={t('tools.title')}>
@@ -3113,90 +3085,16 @@ const ExternalSourcesConfig: React.FC = () => {
               </ConfigPageSection>
             ) : null}
 
-            {commandConflicts.length > 0 ? (
-              <ConfigPageSection
-                title={t('conflicts.title')}
-              >
-                {commandConflicts.map((conflict) => {
-                  const selectedChoiceUnavailable = conflict.candidates.some((candidate) => (
-                    candidate.candidateId === conflict.selectedCandidateId
-                    && candidate.availability.state !== 'available'
-                  ));
-                  return (
-                    <div
-                      className="bitfun-external-sources-config__conflict"
-                      data-bf-component="external-sources-config"
-                      data-bf-part="conflict"
-                      key={conflict.conflictKey}
-                      data-external-attention={!conflict.selectedCandidateId ? 'true' : undefined}
-                    >
-                    <div className="bitfun-external-sources-config__conflict-title" data-bf-component="external-sources-config" data-bf-part="conflictTitle">
-                      {t('conflicts.commandName', { name: conflict.commandName })}
-                    </div>
-                    <div className="bitfun-external-sources-config__conflict-options" data-bf-component="external-sources-config" data-bf-part="conflictOptions">
-                      {conflict.candidates.map((candidate) => {
-                        const selected = conflict.selectedCandidateId === candidate.candidateId;
-                        const available = candidate.availability.state === 'available';
-                        return (
-                          <div
-                            className="bitfun-external-sources-config__candidate"
-                            data-bf-component="external-sources-config"
-                            data-bf-part="candidate"
-                            key={candidate.candidateId}
-                          >
-                            <Button
-                              variant={selected ? 'primary' : 'secondary'}
-                              size="small"
-                              disabled={!policyCompatible || busyKey === conflict.conflictKey || !available
-                                || !hostCapabilities.canManageSources}
-                              aria-pressed={selected}
-                              onClick={() => void chooseConflict(
-                                conflict.conflictKey,
-                                candidate.candidateId,
-                              )}
-                            >
-                              {candidate.sourceDisplayName}
-                              <span className="bitfun-external-sources-config__ecosystem">
-                                {candidate.ecosystemId}
-                              </span>
-                            </Button>
-                            <span className="bitfun-external-sources-config__candidate-state" data-bf-component="external-sources-config" data-bf-part="candidateState">
-                              {t(selected
-                                ? selectedChoiceUnavailable
-                                  ? 'common.selectedUnavailable'
-                                  : 'common.selected'
-                                : !available
-                                  ? 'conflicts.restricted'
-                                  : conflict.selectedCandidateId
-                                    ? 'common.notSelected'
-                                    : 'common.availableChoice')}
-                            </span>
-                            <div className="bitfun-external-sources-config__candidate-detail" data-bf-component="external-sources-config" data-bf-part="candidateDetail">
-                              {candidate.commandDescription}
-                              {' · '}
-                              {sourceScopeLabel(candidate.sourceScope, t)}
-                              {' · '}
-                              <span title={candidate.sourceLocation}>
-                                {abbreviatedLocation(candidate.sourceLocation)}
-                              </span>
-                              {!available ? ` · ${t('conflicts.restricted')}` : ''}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="bitfun-external-sources-config__conflict-hint" data-bf-component="external-sources-config" data-bf-part="conflictHint">
-                      {conflict.selectedCandidateId
-                        ? t(selectedChoiceUnavailable
-                          ? 'conflicts.currentSelectionUnavailable'
-                          : 'conflicts.currentSelection')
-                        : t('conflicts.pending')}
-                    </div>
-                    </div>
-                  );
-                })}
-              </ConfigPageSection>
-            ) : null}
+            <ExternalCommandConflicts
+              conflicts={commandConflicts}
+              t={t}
+              busyKey={busyKey}
+              hostCapabilities={hostCapabilities}
+              policyCompatible={policyCompatible}
+              onChooseConflict={(conflictKey, candidateId) => {
+                void chooseConflict(conflictKey, candidateId);
+              }}
+            />
 
             {toolConflicts.length > 0 ? (
               <ConfigPageSection
@@ -3281,9 +3179,24 @@ const ExternalSourcesConfig: React.FC = () => {
                 })}
               </ConfigPageSection>
             ) : null}
+            </details>
           </>
         )}
       </ConfigPageContent>
+      <ConfirmDialog
+        isOpen={connectingApplication !== null}
+        onClose={() => setConnectingApplication(null)}
+        onConfirm={() => void connectApplication()}
+        title={connectingApplication ? t('applications.connectTitle', { name: connectingApplication.displayName }) : ''}
+        message={connectingApplication ? t('applications.connectMessage', {
+          commands: connectingApplication.counts.commands,
+          tools: connectingApplication.counts.tools,
+          agents: connectingApplication.counts.agents,
+          mcps: connectingApplication.counts.mcps,
+        }) : ''}
+        type="info"
+        confirmText={t('applications.actions.connect')}
+      />
       <ConfirmDialog
         isOpen={resetPolicyConfirmation !== null}
         onClose={() => setResetPolicyConfirmation(null)}

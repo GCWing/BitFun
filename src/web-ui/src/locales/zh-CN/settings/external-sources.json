@@ -4,6 +4,66 @@
   "legacyHostNotice": "当前执行 Host 使用旧版外部来源协议；升级 Host 后才能使用安全模式。",
   "loading": "正在检查外部来源…",
   "checkingNonBlocking": "正在检查更新…",
+  "applications": {
+    "title": "已发现的应用",
+    "description": "连接后 BitFun 会持续读取来源配置，并在内容可用前检查变更。",
+    "status": {
+      "needs_attention": "需要处理",
+      "connected": "已连接",
+      "connected_custom": "已连接 · 自定义",
+      "discovered": "发现可用配置",
+      "checking": "正在检查",
+      "no_configuration": "未发现配置"
+    },
+    "summary": {
+      "attention": "{{count}} 项等待确认",
+      "attention_other": "{{count}} 项等待确认",
+      "checking": "正在查找配置",
+      "noContent": "暂时没有可用内容"
+    },
+    "counts": {
+      "commands_one": "{{count}} 个命令",
+      "commands_other": "{{count}} 个命令",
+      "tools_one": "{{count}} 个工具",
+      "tools_other": "{{count}} 个工具",
+      "agents_one": "{{count}} 个 Agent",
+      "agents_other": "{{count}} 个 Agent",
+      "mcps_one": "{{count}} 个 MCP 服务器",
+      "mcps_other": "{{count}} 个 MCP 服务器"
+    },
+    "actions": {
+      "connect": "连接",
+      "manage": "管理",
+      "review": "检查"
+    },
+    "connectTitle": "连接 {{name}}",
+    "connectMessage": "{{commands}} 个命令将自动可用；{{tools}} 个工具、{{agents}} 个 Agent 和 {{mcps}} 个 MCP 服务器在运行前仍需要确认。",
+    "connectionComplete": "应用已连接。仍需确认的能力会保留在检查列表中。",
+    "advanced": {
+      "title": "高级设置",
+      "description": "配置来源、能力访问、诊断与冲突"
+    },
+    "detail": {
+      "back": "返回应用列表",
+      "reviewTitle_one": "{{count}} 项等待确认",
+      "reviewTitle_other": "{{count}} 项等待确认",
+      "reviewDescription": "可执行能力在确认前不会运行。",
+      "sourceSummary_one": "{{count}} 个配置来源",
+      "sourceSummary_other": "{{count}} 个配置来源",
+      "usingTitle": "可用内容",
+      "usingDescription": "低风险内容可以自动可用；可执行内容仍受控。",
+      "foundCount_one": "发现 {{count}} 项",
+      "foundCount_other": "发现 {{count}} 项",
+      "autoAvailable": "自动可用",
+      "managed": "管理",
+      "capabilities": {
+        "commands": "命令",
+        "tools": "工具",
+        "agents": "Agent",
+        "mcps": "MCP 服务器"
+      }
+    }
+  },
   "hooks": {
     "title": "Hooks",
     "description": "查看 OpenCode、Claude Code 和 Codex 的 Hook 配置。BitFun 只读取配置文件，不运行任何代码。",

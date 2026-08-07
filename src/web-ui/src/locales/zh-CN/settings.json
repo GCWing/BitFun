@@ -5,6 +5,7 @@
     "searchNoResults": "没有匹配的配置",
     "searchClear": "清除搜索",
     "beta": "Beta",
+    "unseenItems": "尚未查看",
     "searchAliases": {
       "archivedSessions": [
         "归档",

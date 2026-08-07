@@ -2,6 +2,28 @@
   container-name: external-sources;
   container-type: inline-size;
 
+  &__advanced {
+    margin-top: var(--bf-appearance-token-size-gap-5);
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+  }
+
+  &__advanced-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--bf-appearance-token-size-gap-3);
+    padding: 14px 2px;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: 13px;
+    font-weight: 600;
+
+    span:last-child {
+      color: var(--bf-appearance-token-color-text-secondary);
+      font-size: 12px;
+      font-weight: 400;
+    }
+  }
+
   details > summary {
     cursor: pointer;
     user-select: none;
@@ -51,6 +73,92 @@
     padding-right: var(--bf-appearance-token-size-gap-4);
     padding-left: var(--bf-appearance-token-size-gap-4);
   }
+
+  &__app-detail {
+    display: grid;
+    gap: var(--bf-appearance-token-size-gap-4);
+  }
+
+  &__app-detail-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--bf-appearance-token-size-gap-4);
+
+    h2 { margin: 0; color: var(--bf-appearance-token-color-text-primary); font-size: 20px; }
+    p { margin: 5px 0 0; color: var(--bf-appearance-token-color-text-secondary); font-size: 12px; }
+    small { display: block; margin-top: 4px; color: var(--bf-appearance-token-color-text-muted); font-size: 11px; }
+  }
+
+  &__app-attention {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--bf-appearance-token-size-gap-3);
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-warning) 45%, transparent);
+    border-radius: var(--bf-appearance-token-size-radius-sm);
+    color: var(--bf-appearance-token-color-warning);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 7%, transparent);
+    text-align: left;
+    cursor: pointer;
+
+    small { display: block; margin-top: 4px; color: var(--bf-appearance-token-color-text-secondary); }
+  }
+
+  &__app-capabilities { overflow: hidden; border: 1px solid var(--bf-appearance-token-border-subtle); border-radius: var(--bf-appearance-token-size-radius-md); }
+  &__app-capability {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 13px 14px;
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: 12px;
+
+    &:last-child { border-bottom: 0; }
+    strong, small { display: block; }
+    strong { color: var(--bf-appearance-token-color-text-primary); font-size: 13px; }
+    small { margin-top: 3px; }
+  }
+
+
+    display: grid;
+    overflow: hidden;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: var(--bf-appearance-token-size-radius-md);
+  }
+
+  &__app-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--bf-appearance-token-size-gap-4);
+    padding: 14px var(--bf-appearance-token-size-gap-4);
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+
+    &:last-child { border-bottom: 0; }
+  }
+
+  &__app-copy { min-width: 0; }
+  &__app-heading {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--bf-appearance-token-size-gap-2);
+  }
+  &__app-name { color: var(--bf-appearance-token-color-text-primary); font-weight: 600; }
+  &__app-status, &__app-summary {
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: 12px;
+  }
+  &__app-status {
+    &.is-connected, &.is-connected_custom { color: var(--bf-appearance-token-color-success); }
+    &.is-needs_attention { color: var(--bf-appearance-token-color-warning); }
+  }
+  &__app-summary { margin-top: 4px; overflow-wrap: anywhere; }
 
   &__ecosystem-heading,
   &__policy-actions,
@@ -103,7 +211,7 @@
     display: inline-flex;
     align-items: center;
     width: fit-content;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 500;
   }
 
@@ -209,7 +317,7 @@
     align-items: center;
     gap: 4px;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 500;
 
     &.is-ready {
@@ -398,7 +506,7 @@
     }
 
     .bitfun-switch__description {
-      font-size: 10px;
+      font-size: 12px;
       line-height: 13px;
     }
   }
@@ -434,7 +542,7 @@
     border-radius: var(--bf-appearance-token-size-radius-sm);
     background: var(--bf-appearance-token-color-bg-tertiary);
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: 11px;
+    font-size: 12px;
     font-variant-numeric: tabular-nums;
     line-height: 16px;
     white-space: nowrap;
@@ -442,7 +550,7 @@
 
   &__state {
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: 11px;
+    font-size: 12px;
 
     &.is-using_last_valid_version,
     &.is-restricted,
@@ -453,19 +561,22 @@
     }
   }
 
-  &__conflict {
-    padding: 12px 0;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  &__conflict,
+  &__tool-card,
+  &__opencode-card {
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: var(--bf-appearance-token-size-radius-sm);
+    background: var(--bf-appearance-token-color-bg-tertiary);
+  }
 
-    &:last-child {
-      border-bottom: 0;
-    }
+  &__conflict {
+    padding: 12px 14px;
+
+    & + & { margin-top: var(--bf-appearance-token-size-gap-3); }
   }
 
   &__tool-card {
-    padding: 10px 14px;
-    border-left: 2px solid var(--bf-appearance-token-border-medium);
-    background: transparent;
+    padding: 12px 14px;
     overflow-wrap: anywhere;
 
     & + & {
@@ -499,8 +610,6 @@
 
   &__opencode-card {
     padding: 12px 14px;
-    border: 1px solid var(--bf-appearance-token-border-medium);
-    border-radius: 6px;
     margin-bottom: 12px;
   }
 
@@ -570,7 +679,7 @@
   &__tool-warning {
     margin-top: 8px;
     color: var(--bf-appearance-token-color-warning);
-    font-size: 11px;
+    font-size: 12px;
   }
 
   &__review-summary {
@@ -604,7 +713,7 @@
 
   &__diagnostic-code {
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 11px;
+    font-size: 12px;
     overflow-wrap: anywhere;
   }
 
@@ -637,12 +746,12 @@
 
   &__candidate-detail {
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: 11px;
+    font-size: 12px;
   }
 
   &__candidate-state {
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: 11px;
+    font-size: 12px;
   }
 
   &__ecosystem {

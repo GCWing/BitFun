@@ -139,6 +139,10 @@ const MAX_PROMPT_COMMAND_SHELL_OUTPUT_CHARS: usize = 256 * 1024;
 const PROMPT_COMMAND_SHELL_TIMEOUT_MS: u64 = 30_000;
 const PROMPT_COMMAND_SHELL_KILL_YIELD_MS: u64 = 5_000;
 const MAX_APPROVED_PROMPT_COMMAND_SHELL_PLANS: usize = 512;
+/// Awareness records are tiny and bounded by the number of registered
+/// ecosystems, but the cap keeps a corrupted or hostile file from growing
+/// without limit.
+const MAX_ACKNOWLEDGED_ECOSYSTEMS: usize = 256;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ResolvedPromptCommandShell {
@@ -922,6 +926,17 @@ struct ExternalSourcesConfig {
     mcp_server_decisions: BTreeMap<String, ExternalMcpDecision>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     mcp_conflict_choices: BTreeMap<String, String>,
+    /// Ecosystems the user has already been told about, as
+    /// `execution_domain_id` + unit separator + `ecosystem_id`.
+    ///
+    /// This records awareness, not a policy decision: it only suppresses the
+    /// "a new external application was found" hint. It deliberately carries no
+    /// content version, because discovering more commands inside an ecosystem
+    /// the user already knows about is not new information. Awareness is also
+    /// user-wide rather than per workspace, so opening another project does not
+    /// re-announce the same application.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    acknowledged_ecosystems: BTreeSet<String>,
     /// Preserves fields written by a newer preferences schema.
     #[serde(flatten, default, skip_serializing_if = "BTreeMap::is_empty")]
     extensions: BTreeMap<String, serde_json::Value>,
@@ -971,6 +986,7 @@ impl std::fmt::Debug for ExternalSourcesConfig {
             .field("subagent_model_bindings", &self.subagent_model_bindings)
             .field("mcp_server_decisions", &self.mcp_server_decisions)
             .field("mcp_conflict_choices", &self.mcp_conflict_choices)
+            .field("acknowledged_ecosystems", &self.acknowledged_ecosystems)
             .field("extensions", &self.extensions)
             .finish()
     }
@@ -4577,6 +4593,88 @@ fn epoch_seconds() -> u64 {
 
 async fn read_external_sources_config() -> Result<ExternalSourcesConfig, String> {
     ExternalSourcePreferenceStore::global()?.read().await
+}
+
+fn acknowledged_ecosystem_key(execution_domain_id: &str, ecosystem_id: &str) -> String {
+    format!("{execution_domain_id}\u{1f}{ecosystem_id}")
+}
+
+/// Ecosystems that have configuration on this host but have never been
+/// announced to the user.
+///
+/// Both the desktop settings navigation and the TUI read this same result, so
+/// neither surface derives "is there something new" on its own and they cannot
+/// drift apart. An ecosystem only qualifies once discovery actually found a
+/// source for it: a registered adapter with nothing to offer is not news.
+pub async fn unacknowledged_external_ecosystems(
+    workspace_root: Option<&Path>,
+) -> Result<Vec<String>, String> {
+    let service = read_only_service_for(workspace_root).await?;
+    let execution_domain_id = service.execution_domain_id.clone();
+    let discovered = service
+        .snapshot()
+        .sources
+        .iter()
+        .map(|source| source.record.ecosystem_id.to_string())
+        .collect::<BTreeSet<_>>();
+    if discovered.is_empty() {
+        return Ok(Vec::new());
+    }
+    let config = read_external_sources_config().await?;
+    Ok(discovered
+        .into_iter()
+        .filter(|ecosystem_id| {
+            !config
+                .acknowledged_ecosystems
+                .contains(&acknowledged_ecosystem_key(
+                    execution_domain_id.as_str(),
+                    ecosystem_id,
+                ))
+        })
+        .collect())
+}
+
+/// Records that the user has seen the given ecosystems.
+///
+/// Awareness is not part of the preference-revision contract. The set only
+/// grows, insertion is idempotent, and no policy or approval decision reads it,
+/// so concurrent writers cannot lose each other's decisions here. Taking an
+/// expected revision would therefore add fencing failures without protecting
+/// anything, and bumping the revision would invalidate unrelated in-flight
+/// mutations every time a user opens the settings page.
+///
+/// The execution domain is resolved from the workspace's own service so hosts
+/// never pass an identity that disagrees with the one discovery recorded.
+pub async fn acknowledge_external_ecosystems(
+    workspace_root: Option<&Path>,
+    ecosystem_ids: Vec<String>,
+) -> Result<(), String> {
+    if ecosystem_ids.is_empty() {
+        return Ok(());
+    }
+    let execution_domain_id = read_only_service_for(workspace_root)
+        .await?
+        .execution_domain_id
+        .clone();
+    let keys = ecosystem_ids
+        .iter()
+        .map(|ecosystem_id| acknowledged_ecosystem_key(execution_domain_id.as_str(), ecosystem_id))
+        .collect::<Vec<_>>();
+    ExternalSourcePreferenceStore::global()?
+        .update(move |config| {
+            for key in &keys {
+                if config.acknowledged_ecosystems.contains(key) {
+                    continue;
+                }
+                if config.acknowledged_ecosystems.len() >= MAX_ACKNOWLEDGED_ECOSYSTEMS {
+                    break;
+                }
+                config.acknowledged_ecosystems.insert(key.clone());
+            }
+            true
+        })
+        .await
+        .map(|_| ())
 }
 
 async fn persist_prompt_command_shell_plan_approval(
@@ -8720,6 +8818,67 @@ mod tests {
         assert_eq!(
             persisted.conflicted_candidate_ids,
             BTreeSet::from(["candidate-a".to_string(), "candidate-b".to_string()])
+        );
+    }
+
+    #[tokio::test]
+    async fn acknowledging_an_ecosystem_survives_a_reload_and_stays_idempotent() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let store = ExternalSourcePreferenceStore::new(path.clone());
+        let key = acknowledged_ecosystem_key(LEGACY_LOCAL_EXECUTION_DOMAIN_ID, "opencode");
+
+        store
+            .update(|config| {
+                config.acknowledged_ecosystems.insert(key.clone());
+            })
+            .await
+            .unwrap();
+        store
+            .update(|config| {
+                config.acknowledged_ecosystems.insert(key.clone());
+            })
+            .await
+            .unwrap();
+
+        // A fresh store proves the record came back from disk, not from memory.
+        let reloaded = ExternalSourcePreferenceStore::new(path)
+            .read()
+            .await
+            .unwrap();
+        assert_eq!(reloaded.acknowledged_ecosystems, BTreeSet::from([key]));
+        // Awareness is not a policy decision, so it must not consume a revision.
+        assert_eq!(reloaded.preference_revision, 0);
+    }
+
+    #[tokio::test]
+    async fn acknowledgement_is_scoped_to_its_execution_domain() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = ExternalSourcePreferenceStore::new(temp.path().join("external-sources.json"));
+        let local = acknowledged_ecosystem_key(LEGACY_LOCAL_EXECUTION_DOMAIN_ID, "opencode");
+        let remote = acknowledged_ecosystem_key("remote-host", "opencode");
+
+        store
+            .update(|config| {
+                config.acknowledged_ecosystems.insert(local.clone());
+            })
+            .await
+            .unwrap();
+
+        let persisted = store.read().await.unwrap();
+        assert!(persisted.acknowledged_ecosystems.contains(&local));
+        assert!(!persisted.acknowledged_ecosystems.contains(&remote));
+    }
+
+    #[test]
+    fn acknowledgement_keys_never_collide_across_domains_or_ecosystems() {
+        assert_ne!(
+            acknowledged_ecosystem_key("local-user", "opencode"),
+            acknowledged_ecosystem_key("local-user", "codex")
+        );
+        assert_ne!(
+            acknowledged_ecosystem_key("local-user", "opencode"),
+            acknowledged_ecosystem_key("remote-host", "opencode")
         );
     }
 
