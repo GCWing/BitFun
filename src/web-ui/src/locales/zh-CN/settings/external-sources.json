@@ -37,7 +37,11 @@
       "review": "检查"
     },
     "connectTitle": "连接 {{name}}",
-    "connectMessage": "{{commands}} 个命令将自动可用；{{tools}} 个工具、{{agents}} 个 Agent 和 {{mcps}} 个 MCP 服务器在运行前仍需要确认。",
+    "connectSummary": "{{automaticCount}} 项低风险内容将自动可用；{{managedCount}} 项可执行内容仍受管理。作用范围：{{scope}}。",
+    "connectScope": {
+      "workspace": "仅当前工作区",
+      "user": "当前执行域中的所有工作区"
+    },
     "connectionComplete": "应用已连接。仍需确认的能力会保留在检查列表中。",
     "advanced": {
       "title": "高级设置",

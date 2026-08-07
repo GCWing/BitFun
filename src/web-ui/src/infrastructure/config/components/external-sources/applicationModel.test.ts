@@ -4,7 +4,7 @@ import type {
   ExternalSourceRecord,
 } from '@/infrastructure/api/service-api/ExternalSourcesAPI';
 import { buildExternalSourcePresentationGroups } from '../../externalSourcePresentation';
-import { buildExternalApplicationsView } from './applicationModel';
+import { buildExternalApplicationsView, buildExternalConnectionMessage } from './applicationModel';
 
 const OPENCODE_CAPABILITIES = [
   { capabilityId: 'command', recommendedAccess: 'auto' as const, safetyCeiling: 'auto' as const },
@@ -92,11 +92,10 @@ function snapshot(
   };
 }
 
-function view(input: ExternalSourceCatalogSnapshot, catalogAttention = 0) {
+function view(input: ExternalSourceCatalogSnapshot) {
   return buildExternalApplicationsView(
     input,
     buildExternalSourcePresentationGroups(input),
-    catalogAttention,
     'workspace',
   );
 }
@@ -178,13 +177,10 @@ describe('external application model', () => {
   });
 
   it('keeps catalog diagnostics and policy incompatibility out of per-application counts', () => {
-    const result = view(
-      snapshot({
-        sources: [source('opencode-user', 'opencode')],
-        integrationPolicy: policy({ status: 'incompatible_schema' }),
-      }),
-      2,
-    );
+    const result = view(snapshot({
+      sources: [source('opencode-user', 'opencode')],
+      integrationPolicy: policy({ status: 'incompatible_schema' }),
+    }));
 
     expect(result.applications.every((application) => application.attentionCount === 0))
       .toBe(true);
@@ -278,5 +274,18 @@ describe('external application model', () => {
       .toMatchObject({ recommendedAccess: 'auto', count: 1 });
     expect(plan.find((entry) => entry.capabilityId === 'tool'))
       .toMatchObject({ recommendedAccess: 'ask_before_use', count: 0 });
+  });
+
+  it('builds connection copy from the capability plan instead of fixed capability names', () => {
+    const result = view(snapshot({
+      sources: [source('claude-user', 'claude-code')],
+      integrationPolicy: withMode('claude-code', 'discover_only'),
+    }));
+
+    expect(buildExternalConnectionMessage(result.applications[1].connectPlan, (key, params) =>
+      `${key}:${JSON.stringify(params)}`,
+    )).toBe(
+      'applications.connectSummary:{"automaticCount":0,"managedCount":0,"scope":"applications.connectScope.workspace:undefined"}',
+    );
   });
 });

@@ -63,6 +63,7 @@ import {
   ExternalCommandConflicts,
   ExternalSourceSection,
   buildExternalApplicationsView,
+  buildExternalConnectionMessage,
   type ExternalApplicationView,
 } from './external-sources';
 import './ExternalSourcesConfig.scss';
@@ -631,8 +632,8 @@ const ExternalSourcesConfig: React.FC = () => {
     [snapshot, sourceGroups],
   );
   const applicationsView = useMemo(
-    () => buildExternalApplicationsView(snapshot, sourceGroups, catalogDiagnostics.length, policyScope),
-    [catalogDiagnostics.length, policyScope, snapshot, sourceGroups],
+    () => buildExternalApplicationsView(snapshot, sourceGroups, policyScope),
+    [policyScope, snapshot, sourceGroups],
   );
   const selectedApplication = applicationsView.applications.find(
     (application) => application.ecosystemId === selectedApplicationId,
@@ -3188,12 +3189,9 @@ const ExternalSourcesConfig: React.FC = () => {
         onClose={() => setConnectingApplication(null)}
         onConfirm={() => void connectApplication()}
         title={connectingApplication ? t('applications.connectTitle', { name: connectingApplication.displayName }) : ''}
-        message={connectingApplication ? t('applications.connectMessage', {
-          commands: connectingApplication.counts.commands,
-          tools: connectingApplication.counts.tools,
-          agents: connectingApplication.counts.agents,
-          mcps: connectingApplication.counts.mcps,
-        }) : ''}
+        message={connectingApplication
+          ? buildExternalConnectionMessage(connectingApplication.connectPlan, t, policyScope)
+          : ''}
         type="info"
         confirmText={t('applications.actions.connect')}
       />

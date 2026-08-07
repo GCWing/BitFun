@@ -37,7 +37,11 @@
       "review": "Review"
     },
     "connectTitle": "Connect {{name}}",
-    "connectMessage": "{{commands}} commands will be available automatically. {{tools}} tools, {{agents}} agents, and {{mcps}} MCP servers will still require confirmation before they can run.",
+    "connectSummary": "{{automaticCount}} low-risk items will be available automatically; {{managedCount}} executable items remain managed. Scope: {{scope}}.",
+    "connectScope": {
+      "workspace": "this workspace",
+      "user": "all workspaces in this execution domain"
+    },
     "connectionComplete": "The application is connected. Review any capabilities that still need confirmation.",
     "advanced": {
       "title": "Advanced settings",

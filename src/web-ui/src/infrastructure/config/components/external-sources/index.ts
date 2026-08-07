@@ -14,7 +14,7 @@ export { ExternalAppsOverview } from './ExternalAppsOverview';
 export type { ExternalAppsOverviewProps } from './ExternalAppsOverview';
 export { ExternalAppDetail } from './ExternalAppDetail';
 export type { ExternalAppDetailProps } from './ExternalAppDetail';
-export { buildExternalApplicationsView } from './applicationModel';
+export { buildExternalApplicationsView, buildExternalConnectionMessage } from './applicationModel';
 export type {
   ExternalApplicationView,
   ExternalApplicationsView,

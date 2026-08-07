@@ -3,6 +3,7 @@ import type {
   ExternalIntegrationMode,
   ExternalSourceCatalogSnapshot,
 } from '@/infrastructure/api/service-api/ExternalSourcesAPI';
+import type { TFunction } from 'i18next';
 import type {
   ExternalSourceCapabilityCounts,
   ExternalSourcePresentationGroup,
@@ -62,6 +63,24 @@ const CAPABILITY_COUNT_FIELD: Record<string, keyof ExternalSourceCapabilityCount
   mcp: 'mcps',
 };
 
+export function buildExternalConnectionMessage(
+  plan: ExternalApplicationCapabilityPlan[],
+  t: TFunction,
+  scope: 'user' | 'workspace' = 'workspace',
+): string {
+  const automaticCount = plan
+    .filter((entry) => entry.recommendedAccess === 'auto')
+    .reduce((total, entry) => total + entry.count, 0);
+  const managedCount = plan
+    .filter((entry) => entry.recommendedAccess !== 'auto')
+    .reduce((total, entry) => total + entry.count, 0);
+  return t('applications.connectSummary', {
+    automaticCount,
+    managedCount,
+    scope: t(`applications.connectScope.${scope}`),
+  });
+}
+
 function sourcePairKey(providerId: string, sourceId: string): string {
   return `${providerId}\u0000${sourceId}`;
 }
@@ -96,9 +115,6 @@ function addAttention(counts: Map<string, number>, ecosystemId: string | undefin
  */
 function attentionByEcosystem(
   snapshot: ExternalSourceCatalogSnapshot,
-  _groups: ExternalSourcePresentationGroup[],
-  _catalogAttentionCount: number,
-  _policyIncompatible: boolean,
 ): { byEcosystem: Map<string, number>; unattributed: number } {
   const byEcosystem = new Map<string, number>();
   const bySource = ecosystemBySourcePair(snapshot);
@@ -223,7 +239,6 @@ function actionFor(status: ExternalApplicationStatus): ExternalApplicationAction
 export function buildExternalApplicationsView(
   snapshot: ExternalSourceCatalogSnapshot | null,
   groups: ExternalSourcePresentationGroup[],
-  catalogAttentionCount: number,
   policyScope: 'user' | 'workspace',
 ): ExternalApplicationsView {
   if (!snapshot) {
@@ -231,14 +246,8 @@ export function buildExternalApplicationsView(
   }
 
   const policy = snapshot.integrationPolicy;
-  const policyIncompatible = policy.status !== 'compatible';
   const effective = policyScope === 'workspace' ? policy.effective : policy.globalEffective;
-  const { byEcosystem, unattributed } = attentionByEcosystem(
-    snapshot,
-    groups,
-    catalogAttentionCount,
-    policyIncompatible,
-  );
+  const { byEcosystem, unattributed } = attentionByEcosystem(snapshot);
 
   const applications = policy.registeredEcosystems.map((descriptor) => {
     const ecosystemId = descriptor.ecosystemId;

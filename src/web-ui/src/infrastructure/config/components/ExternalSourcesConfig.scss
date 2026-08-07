@@ -123,8 +123,7 @@
     strong { color: var(--bf-appearance-token-color-text-primary); font-size: 13px; }
     small { margin-top: 3px; }
   }
-
-
+  &__app-list {
     display: grid;
     overflow: hidden;
     border: 1px solid var(--bf-appearance-token-border-subtle);
