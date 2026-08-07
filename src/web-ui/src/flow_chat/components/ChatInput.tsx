@@ -26,6 +26,10 @@ import {
 import { SessionExecutionEvent } from '../state-machine/types';
 import { ModelSelector } from './ModelSelector';
 import { FlowChatStore } from '../store/FlowChatStore';
+import {
+  offerToStopScheduledJobs,
+  snapshotRunningScheduledJobs,
+} from '../services/scheduledJobStopOffer';
 import { useAcpPlan } from '../hooks/useAcpPlan';
 import { filterSlashCommands, useAcpSlashCommands } from '../hooks/useAcpSlashCommands';
 import { acpSessionRef, acpSlashCommandText } from '../utils/acpSession';
@@ -3914,8 +3918,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [addToHistory, clearPendingLargePastes, confirmPromptCacheGuardIfNeeded, contexts, dispatchInput, effectiveTargetSessionId, externalPromptCommands, externalPromptCommandsIssue, externalPromptCommandsLoading, externalPromptCommandsPending, getSlashPickerItems, refreshExternalPromptCommands, replacePendingLargePastes, selectedExternalPromptCandidateId, selectedNonExternalSlashCandidateId, selectedNonExternalSlashCommand, sendMessage, sessionBoundWorkspacePath, setQueuedInput, t]);
 
   const handleCancelCurrentTask = useCallback(async () => {
-    if (effectiveTargetSessionId) {
-      await FlowChatManager.getInstance().cancelSessionTask(effectiveTargetSessionId);
+    const sessionId = effectiveTargetSessionId
+      ?? FlowChatStore.getInstance().getState().activeSessionId;
+    if (sessionId) {
+      // Snapshot BEFORE cancelling: the cron subscriber clears the job's
+      // activeTurnId once the cancel lands, losing the association.
+      const runningJobs = await snapshotRunningScheduledJobs(sessionId);
+      await FlowChatManager.getInstance().cancelSessionTask(sessionId);
+      // Cancelling one turn of a scheduled job (e.g. the Issue-Fix heartbeat)
+      // is rarely what the user means — the next beat re-injects the same
+      // prompt. Offer to stop the schedule; LoopX progress is unaffected.
+      offerToStopScheduledJobs(runningJobs);
       return;
     }
     await FlowChatManager.getInstance().cancelCurrentTask();
