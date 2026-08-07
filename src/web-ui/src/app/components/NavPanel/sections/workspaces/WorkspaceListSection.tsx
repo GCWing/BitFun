@@ -114,17 +114,17 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
 
     dragSafetyTimeoutRef.current = setTimeout(() => {
       cleanupDrag();
-    }, 3000);
+    }, 1500);
   }, [variant, cleanupDrag]);
 
   const handleDrag = useCallback(() => {
     // Refresh the stuck-state safety timeout on each drag event so a long drag
-    // doesn't trip the 3s fallback. (Native ghost is used; no custom preview.)
+    // doesn't trip the fallback. (Native ghost is used; no custom preview.)
     if (dragSafetyTimeoutRef.current !== null) {
       clearTimeout(dragSafetyTimeoutRef.current);
       dragSafetyTimeoutRef.current = setTimeout(() => {
         cleanupDrag();
-      }, 3000);
+      }, 1500);
     }
   }, [cleanupDrag]);
 
@@ -146,6 +146,13 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
     event.stopPropagation();
     event.dataTransfer.dropEffect = 'move';
 
+    if (dragSafetyTimeoutRef.current !== null) {
+      clearTimeout(dragSafetyTimeoutRef.current);
+      dragSafetyTimeoutRef.current = setTimeout(() => {
+        cleanupDrag();
+      }, 1500);
+    }
+
     // Measure only the workspace card, not the wrapper that includes the drop-line.
     const itemEl = event.currentTarget.querySelector<HTMLElement>(
       '.bitfun-nav-panel__workspace-item'
@@ -166,7 +173,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
       dropTargetRef.current = next;
       return next;
     });
-  }, []); // Intentionally empty: reads from refs, not closed-over state
+  }, [cleanupDrag]); // cleanupDrag is stable; reads refs for the rest
 
   const handleDragLeave = useCallback((workspaceId: string) => (event: React.DragEvent<HTMLDivElement>) => {
     if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
