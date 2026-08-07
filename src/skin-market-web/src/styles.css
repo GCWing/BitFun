@@ -1790,6 +1790,34 @@ img {
   white-space: nowrap;
 }
 
+.review-submitter {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+
+.review-submitter:hover span {
+  text-decoration: underline;
+}
+
+.review-submitter img {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.review-submitter span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .review-section,
 .hash-list,
 .manifest-panel,
