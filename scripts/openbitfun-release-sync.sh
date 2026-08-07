@@ -46,7 +46,12 @@ GITHUB_LATEST_JSON_URL="https://github.com/GCWing/BitFun/releases/latest/downloa
 GITHUB_LINUX_BINARIES_URL="https://github.com/GCWing/BitFun/releases/latest/download/linux-binaries.json"
 GITHUB_RELAY_IMAGE_URL="https://github.com/GCWing/BitFun/releases/latest/download/relay-image.json"
 OPENBITFUN_BASE_URL="https://openbitfun.com/release"
-WEBSITE_RELEASE_DIR="/root/repos/BitFun-Website/dist/release"
+# The mirror deliberately lives outside the website checkout. It used to be
+# BitFun-Website/dist/release, but `npm run build` empties dist/, so every
+# website deploy silently deleted the mirrored installers and manifests —
+# breaking downloads and the updater fallback until someone noticed. nginx
+# serves this directory through a `location ^~ /release/` alias instead.
+WEBSITE_RELEASE_DIR="${WEBSITE_RELEASE_DIR:-/srv/bitfun-release}"
 LOCK_FILE="/root/repos/BitFun-AutoUpdate/sync.lock"
 WINDOWS_INSTALLER_FILENAME="bitfun-installer.exe"
 WEBSITE_DOWNLOADS_MANIFEST="downloads.json"
