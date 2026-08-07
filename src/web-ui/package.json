@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "dev:force": "vite --force",
-    "gen:types": "cargo test --package bitfun-app-server --features ts --no-default-features export -- --nocapture && node scripts/gen-api-barrel.mjs",
+    "gen:types": "cargo test --package bitfun-app-server-protocol --features ts export -- --nocapture && cargo test --package bitfun-app-server --features ts --no-default-features export -- --nocapture && node scripts/gen-api-barrel.mjs",
     "build": "vite build",
     "build:desktop": "vite build --mode desktop",
     "build:web": "vite build --mode web",
