@@ -192,6 +192,7 @@
     align-items: center;
     gap: var(--bf-appearance-token-flowchat-inline-gap);
     width: 100%;
+    min-width: 0;
     min-height: 20px;
   }
 

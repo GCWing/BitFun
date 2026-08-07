@@ -42,6 +42,8 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   contain: layout paint style;
+  // Long tokens wrap inside the card instead of widening the FlowChat item.
+  overflow-wrap: anywhere;
 
   .flow-text-block--subagent-compact {
     margin-bottom: 0.15rem;
