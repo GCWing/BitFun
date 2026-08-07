@@ -506,7 +506,8 @@
     "editDialogBulletHistory": "Delete this turn and all following dialog records",
     "editDialogBulletRerun": "Start a new turn with the edited message",
     "editSuccess": "Message edited and rerun",
-    "editFailed": "Failed to edit message"
+    "editFailed": "Failed to edit message",
+    "scheduledHeartbeat": "Scheduled heartbeat · {{time}}"
   },
   "contextMenu": {
     "copySelection": "Copy Selection",
@@ -842,7 +843,11 @@
     "loadingMcpPrompts": "Loading MCP prompts...",
     "externalCommandsLoading": "Loading compatible commands...",
     "externalCommandsHostUnavailable": "External commands are not available on this host.",
-    "externalCommandsLoadFailed": "External commands could not be loaded. Reopen the command picker to retry."
+    "externalCommandsLoadFailed": "External commands could not be loaded. Reopen the command picker to retry.",
+    "issueFix": {
+      "tooltip": "Fix repository issues continuously",
+      "open": "Open Issue-Fix"
+    }
   },
   "planner": {
     "title": "Task Planning",
@@ -1269,7 +1274,8 @@
     "backgroundCommandStopping": "Stopping command",
     "backgroundCommandStopAll": "Stop all",
     "backgroundCommandStopFailed": "Failed to stop background command.",
-    "pullRequests": "Pull requests"
+    "pullRequests": "Pull requests",
+    "fixIssues": "Fix issues"
   },
   "backgroundCommandInput": {
     "title": "Send command input",
@@ -2555,5 +2561,12 @@
     "placeholder": "Send a request to {{app}}…",
     "send": "Send",
     "hint": "Messages are handled by {{app}}"
+  },
+  "scheduledStop": {
+    "title": "Scheduled task is still active",
+    "message": "You stopped a turn that was started by a scheduled task. The schedule stays active and will run again on its next tick.",
+    "stop": "Stop the schedule",
+    "stopped": "Schedule stopped. Progress is kept; press Start in the Issue-Fix panel to resume.",
+    "stopFailed": "Failed to stop the scheduled task"
   }
 }

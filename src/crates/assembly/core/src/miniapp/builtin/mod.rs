@@ -23,7 +23,7 @@ use chrono::Utc;
 use std::path::Path;
 use std::sync::Arc;
 
-const RETIRED_BUILTIN_APP_IDS: &[&str] = &["builtin-pr-review"];
+const RETIRED_BUILTIN_APP_IDS: &[&str] = &["builtin-pr-review", "builtin-loopx-console"];
 
 /// Seed all built-in MiniApps into the user data directory. Idempotent: skips apps
 /// whose on-disk marker hash matches the bundled content. User's `storage.json`
@@ -460,16 +460,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn builtin_seed_retires_the_removed_pr_review_bundle_only_when_marked_builtin() {
+    async fn builtin_seed_retires_removed_bundles_only_when_marked_builtin() {
         let manager = test_manager();
-        let app_dir = manager.path_manager().miniapp_dir("builtin-pr-review");
-        tokio::fs::create_dir_all(&app_dir).await.unwrap();
-        write_outdated_builtin_marker(&app_dir).await;
+        for app_id in RETIRED_BUILTIN_APP_IDS {
+            let app_dir = manager.path_manager().miniapp_dir(app_id);
+            tokio::fs::create_dir_all(&app_dir).await.unwrap();
+            write_outdated_builtin_marker(&app_dir).await;
 
-        seed_builtin_miniapps(&manager).await.unwrap();
+            seed_builtin_miniapps(&manager).await.unwrap();
 
-        assert!(!app_dir.exists());
+            assert!(!app_dir.exists());
+        }
 
+        let app_dir = manager.path_manager().miniapp_dir("builtin-loopx-console");
         tokio::fs::create_dir_all(&app_dir).await.unwrap();
         tokio::fs::write(app_dir.join("meta.json"), "{}")
             .await

@@ -262,7 +262,10 @@
       "deleteAllArchivedFailed": "Failed to delete all archived sessions",
       "archiveAllFailed": "Failed to archive sessions",
       "bulkArchiveFailed": "Failed to archive selected sessions",
-      "bulkDeleteFailed": "Failed to delete selected sessions"
+      "bulkDeleteFailed": "Failed to delete selected sessions",
+      "deleteScheduledConfirmTitle": "This session powers scheduled work",
+      "deleteScheduledConfirmMessage": "A scheduled job (such as the continuous Issue-Fix heartbeat) runs in this session. Deleting it stops that job. Progress is kept outside the session, and pressing Start again resumes from where it left off.",
+      "scheduledHost": "Hosts the continuous Issue-Fix heartbeat"
     },
     "scheduledJobs": {
       "title": "Scheduled Jobs",
@@ -1133,7 +1136,8 @@
     "fileBrowser": "File Browser",
     "editor": "Editor",
     "markdown": "Markdown",
-    "settingsWithSection": "Settings - {{section}}"
+    "settingsWithSection": "Settings - {{section}}",
+    "fixIssues": "Fix Issues"
   },
   "welcome": {
     "greetingMorning": "Good morning, creator",

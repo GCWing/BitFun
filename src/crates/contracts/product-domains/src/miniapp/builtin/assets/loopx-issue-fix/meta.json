@@ -1,0 +1,30 @@
+{
+  "id": "builtin-loopx-issue-fix",
+  "name": "Issue 自动修复",
+  "description": "勾选仓库的 Open Issues，由 LoopX 状态内核驱动持续修复：隔离 worktree 打补丁、验证、发 PR 并跟踪到合并，全程在本应用内完成。",
+  "icon": "Wrench",
+  "category": "developer",
+  "tags": [
+    "LoopX",
+    "GitHub Issues",
+    "自动修复",
+    "Agent",
+    "内置"
+  ],
+  "version": 1,
+  "created_at": 0,
+  "updated_at": 0,
+  "permissions": {
+    "agent": {
+      "enabled": true,
+      "rate_limit_per_minute": 6
+    },
+    "cron": {
+      "enabled": true
+    },
+    "node": {
+      "enabled": false
+    }
+  },
+  "ai_context": null
+}

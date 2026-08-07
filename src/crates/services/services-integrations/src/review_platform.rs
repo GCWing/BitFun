@@ -42,6 +42,9 @@ const DEFAULT_ISSUE_PAGE: u32 = 1;
 const DEFAULT_ISSUE_PAGE_SIZE: u32 = 100;
 const MAX_ISSUE_PAGE_SIZE: u32 = 100;
 const MAX_ISSUE_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
+/// A list page carries no bodies, so it needs far less headroom than one issue's
+/// full evidence — but titles and label sets across 100 rows still add up.
+const MAX_ISSUE_LIST_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 const MAX_ISSUE_COMMENTS_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_ISSUE_BODY_CHARS: usize = 128_000;
 const MAX_ISSUE_COMMENT_BODY_CHARS: usize = 32_000;
@@ -320,6 +323,78 @@ pub struct ReviewPlatformIssueEvidence {
     pub limitations: Vec<String>,
     pub has_more_comments: bool,
     pub next_cursor: Option<String>,
+}
+
+/// Inputs for [`ReviewPlatformService::list_issues`].
+#[derive(Debug, Clone, Copy)]
+pub struct ReviewPlatformListIssuesRequest<'a> {
+    pub platform: ReviewPlatformKind,
+    pub host: &'a str,
+    pub project_path: &'a str,
+    pub state: ReviewPlatformIssueState,
+    pub page: Option<u32>,
+    pub per_page: Option<u32>,
+    /// Local checkout used to resolve provider auth, when one is available.
+    pub repository_path: Option<&'a str>,
+}
+
+/// Which issues to enumerate. The two providers spell these differently.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewPlatformIssueState {
+    #[default]
+    Open,
+    Closed,
+    All,
+}
+
+impl ReviewPlatformIssueState {
+    fn github_value(self) -> &'static str {
+        match self {
+            Self::Open => "open",
+            Self::Closed => "closed",
+            Self::All => "all",
+        }
+    }
+
+    /// `None` means "send no state filter", which is how GitLab expresses "all".
+    fn gitlab_value(self) -> Option<&'static str> {
+        match self {
+            Self::Open => Some("opened"),
+            Self::Closed => Some("closed"),
+            Self::All => None,
+        }
+    }
+}
+
+/// One row of an issue list.
+///
+/// Deliberately lighter than [`ReviewPlatformIssueEvidence`]: enumerating a
+/// repository's open issues must not pull every body and comment thread. Callers
+/// that need the full evidence for one issue fetch it separately.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewPlatformIssueSummary {
+    pub issue_id: String,
+    pub number: i64,
+    pub title: String,
+    pub state: String,
+    pub author: Option<String>,
+    pub labels: Vec<String>,
+    pub comments_count: i64,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+    pub web_url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewPlatformIssuePage {
+    pub platform: ReviewPlatformKind,
+    pub host: String,
+    pub project_path: String,
+    pub items: Vec<ReviewPlatformIssueSummary>,
+    pub pagination: ReviewPlatformPagination,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1096,6 +1171,35 @@ impl ReviewPlatformService {
             )
             .await?;
         acquire_issue_evidence(&context, &identity, IssuePagination::new(page, per_page)).await
+    }
+
+    /// Enumerate a repository's issues, newest activity first.
+    ///
+    /// Pull requests are excluded even on GitHub, whose issues endpoint returns
+    /// them inline. Takes a request struct rather than positional parameters
+    /// because the sibling `issue` method is already at clippy's argument limit.
+    pub async fn list_issues(
+        &self,
+        request: ReviewPlatformListIssuesRequest<'_>,
+    ) -> Result<ReviewPlatformIssuePage, ReviewPlatformError> {
+        let auth_tokens = self.load_stored_tokens().await?;
+        let host = normalize_provider_host(request.host)?;
+        let project_path = normalize_project_path(request.platform, request.project_path)?;
+        let context = self
+            .provider_context_for_identity_request(
+                request.platform,
+                &host,
+                &project_path,
+                request.repository_path,
+                &auth_tokens,
+            )
+            .await?;
+        acquire_issue_page(
+            &context,
+            request.state,
+            IssuePagination::new(request.page, request.per_page),
+        )
+        .await
     }
 
     pub async fn pull_request_review_target_by_identity(
@@ -3957,6 +4061,126 @@ async fn acquire_issue_evidence(
     }
 }
 
+/// Enumerate a repository's issues.
+///
+/// GitHub reaches the API through the `gh` CLI while GitLab uses HTTP, mirroring
+/// [`acquire_issue_evidence`]. Both paths return summary rows only; a caller that
+/// needs one issue's body and comments fetches it separately.
+async fn acquire_issue_page(
+    context: &ProviderContext,
+    state: ReviewPlatformIssueState,
+    pagination: IssuePagination,
+) -> Result<ReviewPlatformIssuePage, ReviewPlatformError> {
+    let page = pagination.page.to_string();
+    let per_page = pagination.per_page.to_string();
+    let host = context.remote.host.clone();
+    let project_path = context.remote.project_path.clone();
+
+    match context.remote.platform {
+        ReviewPlatformKind::Github => {
+            // GitHub's `/repos/{o}/{r}/issues` endpoint interleaves pull
+            // requests with issues, so filtering PRs after the fetch starves a
+            // page down to a handful of issues once the repository carries many
+            // open PRs (the Issue-Fix panel then shows a truncated queue). The
+            // search endpoint filters to real issues server-side and reports an
+            // exact total, which keeps page counts honest.
+            let url = format!("{}/search/issues", context.api_base_url);
+            let mut search_query = format!(
+                "repo:{}/{} is:issue",
+                context.remote.owner, context.remote.repository_name
+            );
+            // Search has no "all" literal — omitting the qualifier means all.
+            if state != ReviewPlatformIssueState::All {
+                search_query.push_str(&format!(" state:{}", state.github_value()));
+            }
+            let response = github_api_get_json(
+                context,
+                &url,
+                &[
+                    ("q".to_string(), search_query),
+                    // Match the list endpoint's newest-first default; search
+                    // would otherwise order by relevance.
+                    ("sort".to_string(), "created".to_string()),
+                    ("order".to_string(), "desc".to_string()),
+                    ("page".to_string(), page),
+                    ("per_page".to_string(), per_page),
+                ],
+                MAX_ISSUE_LIST_RESPONSE_BYTES,
+            )
+            .await
+            .map_err(|error| review_evidence_error(error, "issue_list_response"))?;
+
+            let total = response.get("total_count").and_then(Value::as_u64);
+            let raw = array_items(response.get("items").unwrap_or(&Value::Null));
+            // `is:issue` already excludes PRs; the summary mapper's own PR
+            // guard stays as a harmless second line of defense.
+            let items = raw
+                .iter()
+                .filter_map(|issue| github_issue_summary_from_value(&host, &project_path, issue))
+                .collect::<Vec<_>>();
+            let has_next = match total {
+                Some(total) => u64::from(pagination.page) * u64::from(pagination.per_page) < total,
+                None => raw.len() == pagination.per_page as usize,
+            };
+
+            Ok(ReviewPlatformIssuePage {
+                platform: ReviewPlatformKind::Github,
+                host,
+                project_path,
+                items,
+                pagination: ReviewPlatformPagination {
+                    page: pagination.page,
+                    per_page: pagination.per_page,
+                    total,
+                    has_next,
+                },
+            })
+        }
+        ReviewPlatformKind::Gitlab => {
+            let project = urlencoding::encode(&project_path);
+            let url = format!("{}/projects/{}/issues", context.api_base_url, project);
+            let client = http_client()?;
+            let mut request = gitlab_request(client, &url, context.token.as_deref()).query(&[
+                ("page", page.as_str()),
+                ("per_page", per_page.as_str()),
+                ("order_by", "updated_at"),
+                ("sort", "desc"),
+            ]);
+            // GitLab has no "all" literal — you omit the filter entirely. Sending
+            // `state=` would be a malformed value rather than an absent one.
+            if let Some(state) = state.gitlab_value() {
+                request = request.query(&[("state", state)]);
+            }
+            let response =
+                send_review_json_response_bounded(request, MAX_ISSUE_LIST_RESPONSE_BYTES)
+                    .await
+                    .map_err(|error| review_evidence_http_error(error, "issue_list_response"))?;
+
+            let items = array_items(&response.value)
+                .iter()
+                .filter_map(|issue| gitlab_issue_summary_from_value(&host, &project_path, issue))
+                .collect::<Vec<_>>();
+
+            Ok(ReviewPlatformIssuePage {
+                platform: ReviewPlatformKind::Gitlab,
+                host,
+                project_path,
+                items,
+                pagination: ReviewPlatformPagination {
+                    page: pagination.page,
+                    per_page: pagination.per_page,
+                    total: None,
+                    // GitLab is authoritative about the next page via a header.
+                    has_next: gitlab_next_page(&response.headers, pagination.page).is_some(),
+                },
+            })
+        }
+        platform => Err(ReviewPlatformError::UnsupportedPlatform(
+            platform_label(platform).to_string(),
+        )),
+    }
+}
+
 fn review_evidence_http_error(error: ReviewHttpError, resource: &str) -> ReviewPlatformError {
     match error {
         ReviewHttpError::ResponseTooLarge { limit_bytes } => {
@@ -6191,6 +6415,84 @@ fn map_gitlab_issue(
         provider_has_more,
         provider_next_cursor,
     )
+}
+
+/// Map one GitHub issue list entry to a summary row.
+///
+/// Returns `None` for pull requests: GitHub's issues endpoint returns them
+/// alongside real issues, distinguished only by a `pull_request` member. Skipping
+/// them here mirrors [`reject_pull_request_issue_target`] for the single-issue
+/// path.
+fn github_issue_summary_from_value(
+    host: &str,
+    project_path: &str,
+    issue: &Value,
+) -> Option<ReviewPlatformIssueSummary> {
+    if issue.get("pull_request").is_some() {
+        return None;
+    }
+    let number = value_i64(issue, "number");
+    if number <= 0 {
+        return None;
+    }
+    let labels = array_items(issue.get("labels").unwrap_or(&Value::Null))
+        .iter()
+        .filter_map(|label| {
+            label
+                .as_str()
+                .map(str::to_string)
+                .or_else(|| optional_string(label, "name"))
+        })
+        .collect::<Vec<_>>();
+    Some(ReviewPlatformIssueSummary {
+        issue_id: number.to_string(),
+        number,
+        title: value_string(issue, "title"),
+        state: value_string(issue, "state"),
+        author: nested_optional_string(issue, &["user", "login"]),
+        labels,
+        comments_count: value_i64(issue, "comments"),
+        created_at: optional_string(issue, "created_at"),
+        updated_at: optional_string(issue, "updated_at"),
+        web_url: first_non_empty(&[
+            value_string(issue, "html_url"),
+            format!("https://{host}/{project_path}/issues/{number}"),
+        ]),
+    })
+}
+
+/// Map one GitLab issue list entry to a summary row.
+///
+/// GitLab identifies issues by project-scoped `iid`, not the global `id`.
+fn gitlab_issue_summary_from_value(
+    host: &str,
+    project_path: &str,
+    issue: &Value,
+) -> Option<ReviewPlatformIssueSummary> {
+    let number = value_i64(issue, "iid");
+    if number <= 0 {
+        return None;
+    }
+    let labels = array_items(issue.get("labels").unwrap_or(&Value::Null))
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    Some(ReviewPlatformIssueSummary {
+        issue_id: number.to_string(),
+        number,
+        title: value_string(issue, "title"),
+        state: value_string(issue, "state"),
+        author: nested_optional_string(issue, &["author", "username"]),
+        labels,
+        comments_count: value_i64(issue, "user_notes_count"),
+        created_at: optional_string(issue, "created_at"),
+        updated_at: optional_string(issue, "updated_at"),
+        web_url: first_non_empty(&[
+            value_string(issue, "web_url"),
+            format!("https://{host}/{project_path}/-/issues/{number}"),
+        ]),
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -9767,5 +10069,239 @@ mod tests {
             provider_for(identity.context.remote.platform),
             provider_for(existing_remote_context.remote.platform),
         ));
+    }
+
+    #[test]
+    fn github_issue_summary_skips_pull_requests() {
+        // GitHub's issues endpoint returns PRs inline, marked only by this member.
+        // Enumerating issues must not surface them.
+        let pull_request = serde_json::json!({
+            "number": 7,
+            "title": "a pull request",
+            "state": "open",
+            "pull_request": {"url": "https://api.github.com/repos/example/repo/pulls/7"},
+        });
+        assert!(
+            github_issue_summary_from_value("github.com", "example/repo", &pull_request).is_none()
+        );
+    }
+
+    #[test]
+    fn github_issue_summary_maps_labels_from_objects_and_strings() {
+        let issue = serde_json::json!({
+            "number": 1849,
+            "title": "workspace icons are inconsistent",
+            "state": "open",
+            "comments": 2,
+            "html_url": "https://github.com/example/repo/issues/1849",
+            "user": {"login": "reporter"},
+            "created_at": "2026-07-29T07:35:37Z",
+            "updated_at": "2026-07-30T06:16:48Z",
+            // GitHub sends label objects; some mirrors send bare strings.
+            "labels": [{"name": "bug"}, "needs-triage"],
+        });
+
+        let summary = github_issue_summary_from_value("github.com", "example/repo", &issue)
+            .expect("a real issue maps");
+
+        assert_eq!(summary.issue_id, "1849");
+        assert_eq!(summary.number, 1849);
+        assert_eq!(summary.state, "open");
+        assert_eq!(summary.author.as_deref(), Some("reporter"));
+        assert_eq!(summary.labels, vec!["bug", "needs-triage"]);
+        assert_eq!(summary.comments_count, 2);
+        assert_eq!(
+            summary.web_url,
+            "https://github.com/example/repo/issues/1849"
+        );
+    }
+
+    #[test]
+    fn github_issue_summary_falls_back_to_a_derived_url() {
+        let issue = serde_json::json!({"number": 5, "title": "no html_url", "state": "open"});
+        let summary = github_issue_summary_from_value("github.example.com", "team/repo", &issue)
+            .expect("a real issue maps");
+        assert_eq!(
+            summary.web_url,
+            "https://github.example.com/team/repo/issues/5"
+        );
+    }
+
+    #[test]
+    fn github_issue_summary_rejects_a_missing_number() {
+        let issue = serde_json::json!({"title": "no number", "state": "open"});
+        assert!(github_issue_summary_from_value("github.com", "example/repo", &issue).is_none());
+    }
+
+    #[test]
+    fn gitlab_issue_summary_prefers_the_project_scoped_iid() {
+        // `id` is global and `iid` is project-scoped; only `iid` addresses the
+        // issue through the project API.
+        let issue = serde_json::json!({
+            "id": 99001,
+            "iid": 12,
+            "title": "a gitlab issue",
+            "state": "opened",
+            "user_notes_count": 3,
+            "web_url": "https://gitlab.com/example/repo/-/issues/12",
+            "author": {"username": "reporter"},
+            "labels": ["bug", "frontend"],
+        });
+
+        let summary = gitlab_issue_summary_from_value("gitlab.com", "example/repo", &issue)
+            .expect("a real issue maps");
+
+        assert_eq!(summary.issue_id, "12");
+        assert_eq!(summary.number, 12);
+        assert_eq!(summary.comments_count, 3);
+        assert_eq!(summary.labels, vec!["bug", "frontend"]);
+    }
+
+    #[test]
+    fn gitlab_issue_summary_rejects_a_missing_iid() {
+        // A global `id` alone is not addressable, so it must not pass.
+        let issue = serde_json::json!({"id": 99001, "title": "no iid", "state": "opened"});
+        assert!(gitlab_issue_summary_from_value("gitlab.com", "example/repo", &issue).is_none());
+    }
+
+    #[test]
+    fn issue_state_maps_to_each_provider_vocabulary() {
+        assert_eq!(ReviewPlatformIssueState::Open.github_value(), "open");
+        assert_eq!(
+            ReviewPlatformIssueState::Open.gitlab_value(),
+            Some("opened")
+        );
+        assert_eq!(ReviewPlatformIssueState::Closed.github_value(), "closed");
+        assert_eq!(
+            ReviewPlatformIssueState::Closed.gitlab_value(),
+            Some("closed")
+        );
+        assert_eq!(ReviewPlatformIssueState::All.github_value(), "all");
+        // GitLab has no "all" literal: the filter is omitted instead.
+        assert_eq!(ReviewPlatformIssueState::All.gitlab_value(), None);
+        assert_eq!(
+            ReviewPlatformIssueState::default(),
+            ReviewPlatformIssueState::Open
+        );
+    }
+
+    #[tokio::test]
+    async fn gitlab_issue_page_filters_pull_requests_and_reads_the_next_page_header() {
+        let body = serde_json::json!([
+            {
+                "iid": 12,
+                "title": "first",
+                "state": "opened",
+                "user_notes_count": 1,
+                "web_url": "https://gitlab.com/example/repo/-/issues/12",
+                "author": {"username": "one"},
+                "labels": ["bug"],
+            },
+            // No iid: not addressable, so it must be dropped rather than mapped.
+            {"id": 99002, "title": "malformed", "state": "opened"},
+        ])
+        .to_string();
+        let api_base_url = spawn_single_review_response(
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nx-next-page: 2\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+            .into_bytes(),
+        );
+        let context = gitlab_trace_context(api_base_url);
+
+        let page = acquire_issue_page(
+            &context,
+            ReviewPlatformIssueState::Open,
+            IssuePagination::new(Some(1), Some(50)),
+        )
+        .await
+        .expect("issue page should load");
+
+        assert_eq!(page.platform, ReviewPlatformKind::Gitlab);
+        assert_eq!(page.items.len(), 1);
+        assert_eq!(page.items[0].number, 12);
+        assert_eq!(page.pagination.per_page, 50);
+        // GitLab is authoritative about continuation via the header.
+        assert!(page.pagination.has_next);
+    }
+
+    #[tokio::test]
+    async fn gitlab_issue_page_reports_no_next_page_without_the_header() {
+        let body = "[]";
+        let api_base_url = spawn_single_review_response(
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+            .into_bytes(),
+        );
+        let context = gitlab_trace_context(api_base_url);
+
+        let page = acquire_issue_page(
+            &context,
+            ReviewPlatformIssueState::All,
+            IssuePagination::new(None, None),
+        )
+        .await
+        .expect("issue page should load");
+
+        assert!(page.items.is_empty());
+        assert!(!page.pagination.has_next);
+    }
+
+    #[tokio::test]
+    async fn issue_page_rejects_unsupported_platforms() {
+        let mut context = gitlab_trace_context("http://127.0.0.1:1".to_string());
+        context.remote.platform = ReviewPlatformKind::Gitcode;
+
+        let result = acquire_issue_page(
+            &context,
+            ReviewPlatformIssueState::Open,
+            IssuePagination::new(None, None),
+        )
+        .await;
+
+        assert!(matches!(
+            result,
+            Err(ReviewPlatformError::UnsupportedPlatform(_))
+        ));
+    }
+
+    /// Exercises the real GitHub path, which goes through the `gh` CLI rather than
+    /// HTTP — the mocked tests above cannot cover it. Ignored by default because it
+    /// needs network access and an authenticated `gh`.
+    #[tokio::test]
+    #[ignore = "requires network access and an authenticated gh CLI"]
+    async fn github_issue_page_enumerates_a_public_repository() {
+        let tokens = ReviewPlatformAuthTokens::default();
+        let context = provider_context_for_identity(
+            ReviewPlatformKind::Github,
+            "github.com",
+            "GCWing/BitFun",
+            &tokens,
+        )
+        .expect("public GitHub context should be valid");
+
+        let page = acquire_issue_page(
+            &context,
+            ReviewPlatformIssueState::Open,
+            IssuePagination::new(Some(1), Some(5)),
+        )
+        .await
+        .expect("issue page should load from GitHub");
+
+        assert_eq!(page.platform, ReviewPlatformKind::Github);
+        assert_eq!(page.project_path, "GCWing/BitFun");
+        assert!(!page.items.is_empty(), "the repository has open issues");
+        for item in &page.items {
+            assert!(item.number > 0, "issue numbers are positive: {item:?}");
+            assert!(!item.title.is_empty(), "issues have titles: {item:?}");
+            assert_eq!(item.state, "open", "state filter applied: {item:?}");
+            assert!(
+                item.web_url.contains("/issues/"),
+                "pull requests must be filtered out: {item:?}"
+            );
+        }
     }
 }

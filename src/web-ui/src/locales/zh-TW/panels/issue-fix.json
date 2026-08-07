@@ -1,0 +1,97 @@
+{
+  "noRepository": "開啟一個帶 GitHub 遠程倉庫的工作區，即可持續修復其 Issue。",
+  "loading": "正在載入 issue…",
+  "noIssues": "沒有開放的 issue。",
+  "noSelection": "選擇一個 issue 查看詳情。",
+  "issuesLabel": "Issue 清單",
+  "detailLabel": "Issue 詳情",
+  "refresh": "重新載入 issue",
+  "selectedCount": "已選 {{selected}} / {{total}}",
+  "autonomous": {
+    "actionRequired": "LoopX 正在等待你的處理。",
+    "hostLoopActive": "持續修復已運行，由 {{agent}} 串行推進。",
+    "hostLoopFailure": "排程心跳執行失敗：{{error}}",
+    "kernelSummary": "{{goal}} · {{state}} · {{queued}} 項排隊",
+    "loadingKernel": "正在讀取 LoopX 狀態…",
+    "missingWorkspace": "目前面板缺少本機工作區路徑。",
+    "openSession": "開啟會話",
+    "sessionTitle": "LoopX 持續 Issue 修復",
+    "start": "啟動持續修復",
+    "starting": "正在啟動…",
+    "stop": "停止",
+    "stopping": "正在停止…",
+    "userQuestion": {
+      "title": "需要你的決定",
+      "header": "LoopX Gate",
+      "options": {
+        "approve": {
+          "label": "同意",
+          "description": "授予此次請求的精確權限並繼續"
+        },
+        "reject": {
+          "label": "不同意",
+          "description": "拒絕此次請求，不執行受保護動作"
+        },
+        "cancel": {
+          "label": "取消請求",
+          "description": "不授予權限，結束本次確認"
+        }
+      },
+      "reasonLabel": "原因（可選）",
+      "reasonPlaceholder": "補充一句簡短原因",
+      "submit": "提交決定",
+      "submitting": "正在提交…",
+      "waiting": "等待你的回答"
+    },
+    "userTodos": {
+      "title": "待你處理（{{count}}）",
+      "openHistory": "查看歷史"
+    },
+    "notify": {
+      "gateTitle": "持續修復需要你決策",
+      "actionTitle": "持續修復待你處理",
+      "actionBatch": "新增 {{count}} 項待處理",
+      "open": "開啟面板",
+      "openLink": "在 GitHub 上開啟"
+    },
+    "actionLine": {
+      "mergePr": "修復已就緒，請審查並合併 PR #{{pr}}",
+      "mergePrForIssue": "Issue #{{issue}} 已修復，請審查並合併 PR #{{pr}}",
+      "closeIssue": "已解決，請批准關閉 Issue #{{issue}}",
+      "closeIssueByPr": "Issue #{{issue}} 已由 PR #{{pr}} 修復，請批准關閉",
+      "postComment": "已為 Issue #{{issue}} 草擬回覆，請批准發布"
+    },
+    "notConnected": "尚未連接——勾選 Issue 後點擊啟動即可開始"
+  },
+  "status": {
+    "queued": "排隊中",
+    "fixing": "正在修",
+    "resolvedWithoutPullRequest": "已處理",
+    "awaitingDecision": "等你確認"
+  },
+  "detail": {
+    "author": "作者",
+    "body": "Issue 內容",
+    "comments": "評論數",
+    "commentsTitle": "評論 {{count}}",
+    "created": "建立",
+    "emptyBody": "這個 issue 沒有正文。",
+    "emptyComment": "這則評論沒有內容。",
+    "loadingEvidence": "正在載入詳情…",
+    "noComments": "暫無評論。",
+    "openOnProvider": "查看原 Issue",
+    "state": "狀態",
+    "unknownAuthor": "未知作者",
+    "updated": "更新"
+  },
+  "probingRemote": "正在偵測倉庫託管平台…",
+  "unsupportedPlatform": {
+    "title": "暫僅支援 GitHub 倉庫",
+    "body": "目前工作區的遠程倉庫在 {{host}}。持續修復 Issue 目前透過 GitHub 讀取 Issue 並追蹤 PR 狀態；其他平台的支援規劃中。"
+  },
+  "readiness": {
+    "loopxMissing": "LoopX 引擎不可用，無法執行持續修復。重新安裝 BitFun 可恢復內建引擎；開發者亦可 `pip install -e <loopx>` 並設定 LOOPX_BIN。",
+    "ghMissing": "未安裝 GitHub CLI（gh）。修復 Agent 透過 gh 讀取 Issue 並發布 PR，請自 https://cli.github.com 安裝後重啟 BitFun。",
+    "ghUnauthenticated": "GitHub CLI 尚未登入。請在終端執行 `gh auth login`，然後重新整理本面板。"
+  }
+}

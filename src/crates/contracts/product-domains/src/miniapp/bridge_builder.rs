@@ -5,7 +5,7 @@ use serde_json;
 
 /// Build the Runtime Adapter script (JS) to inject into the iframe.
 /// Exposes window.app with call(), fs.*, shell.*, net.*, os.*, storage.*, dialog.*,
-/// ai.*, agent.*, deck.*, chat.*, clipboard.*, lifecycle, events.
+/// ai.*, agent.*, issueFix.*, cron.*, deck.*, chat.*, clipboard.*, lifecycle, events.
 pub fn build_bridge_script(
     app_id: &str,
     app_data_dir: &str,
@@ -129,6 +129,31 @@ pub fn build_bridge_script(
       cancelStaleRuns: () => _rpc('agent.cancelStaleRuns', {{}}),
       onEvent:        (fn) => app.on('agent:event', fn),
       offEvent:       (fn) => app.off('agent:event', fn),
+    }},
+
+    // Continuous Issue-Fix namespace — typed control surface over the host's
+    // native issue_fix_* commands (LoopX CLI bridge, sidecar, bootstrap,
+    // heartbeat). Requires BOTH permissions.agent.enabled and
+    // permissions.cron.enabled; enforced host-side. Scheduling and kernel
+    // state stay host-owned: the repair loop keeps running when the MiniApp
+    // is closed. `start` always hosts the heartbeat in a hidden session.
+    issueFix: {{
+      probe:  () => _rpc('issueFix.probe', {{}}),
+      listIssues: (opts) => _rpc('issueFix.listIssues', opts || {{}}),
+      status: (opts) => _rpc('issueFix.status', opts || {{}}),
+      poll:   (opts) => _rpc('issueFix.poll', opts || {{}}),
+      start:  (opts) => _rpc('issueFix.start', opts || {{}}),
+      stop:   (opts) => _rpc('issueFix.stop', opts || {{}}),
+      answer: (opts) => _rpc('issueFix.answer', opts || {{}}),
+    }},
+
+    // Cron namespace — inspect/manage host scheduled jobs this MiniApp relies
+    // on (e.g. the Issue-Fix heartbeat). Requires manifest
+    // permissions.cron.enabled = true; enforced host-side. The host reuses the
+    // existing cron Tauri commands; this bridge only routes the call.
+    cron: {{
+      listJobs:  (opts) => _rpc('cron.listJobs', opts || {{}}),
+      updateJob: (jobId, changes) => _rpc('cron.updateJob', {{ jobId, changes }}),
     }},
 
     // Deck namespace — renders one slide HTML page in a hidden host WebView

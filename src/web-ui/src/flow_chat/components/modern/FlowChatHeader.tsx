@@ -320,6 +320,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     createReviewPlatformTab(currentWorkspace?.rootPath);
   }, [currentWorkspace?.rootPath]);
 
+
   const handleCommandSectionMenuToggle = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();

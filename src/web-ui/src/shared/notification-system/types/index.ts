@@ -156,13 +156,19 @@ export interface PersistentOptions {
 
 
 export interface SilentOptions {
-   
+
   title: string;
-   
+
   message: string;
-   
+
   type?: NotificationType;
-   
+
+  /** When set, the center renders this instead of plain `message`. */
+  messageNode?: ReactNode;
+
+  /** Rendered as buttons in the center, same as toast actions. */
+  actions?: NotificationAction[];
+
   metadata?: Record<string, any>;
 }
 

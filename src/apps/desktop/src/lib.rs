@@ -70,6 +70,7 @@ use api::external_sources_api::*;
 use api::git_agent_api::*;
 use api::git_api::*;
 use api::i18n_api::*;
+use api::issue_fix_api::*;
 use api::lsp_api::*;
 use api::lsp_workspace_api::*;
 use api::mcp_api::*;
@@ -363,6 +364,123 @@ pub(crate) fn set_main_window_transient_geometry(
 
 fn has_standard_main_window_size(width: f64, height: f64) -> bool {
     width >= MAIN_WINDOW_MIN_WIDTH && height >= MAIN_WINDOW_MIN_HEIGHT
+}
+
+/// Re-clamp the undecorated main window to the monitor work area.
+///
+/// Two ways the borderless window ends up hiding its bottom edge (nav footer,
+/// notification bell, composer strip) behind the taskbar:
+///
+/// - Maximized to the FULL monitor instead of the work area: tao clamps this
+///   in `WM_NCCALCSIZE`, but the clamp misses when a drag-region double-click
+///   maximize races a DPI change or the maximize comes from an external
+///   `ShowWindow(SW_MAXIMIZE)`.
+/// - Restored to oversized saved geometry: once the bug above happened, the
+///   window-state plugin persisted the taskbar-covering size, so every later
+///   restore reproduces it without being maximized at all.
+///
+/// Watching Resized events covers both: whenever the window is taller than
+/// the monitor work area, push it back inside.
+#[cfg(target_os = "windows")]
+fn clamp_maximized_undecorated_window(window: &tauri::Window) {
+    use windows::Win32::Foundation::{HWND, RECT};
+    use windows::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetClientRect, GetWindowRect, SetWindowPos, HWND_TOP, SWP_FRAMECHANGED, SWP_NOACTIVATE,
+        SWP_NOZORDER,
+    };
+
+    let Ok(hwnd) = window.hwnd() else {
+        return;
+    };
+    let hwnd = HWND(hwnd.0);
+
+    unsafe {
+        let mut monitor_info = MONITORINFO {
+            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+            ..Default::default()
+        };
+        let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        if !GetMonitorInfoW(monitor, &mut monitor_info).as_bool() {
+            return;
+        }
+        let work = monitor_info.rcWork;
+        let work_height = work.bottom - work.top;
+        let work_width = work.right - work.left;
+
+        if window.is_maximized().unwrap_or(false) {
+            let mut client = RECT::default();
+            if GetClientRect(hwnd, &mut client).is_err() {
+                return;
+            }
+            // In the healthy path tao has already clamped the client rect to
+            // the work area (± the 1px auto-hide margin). Anything taller is
+            // overlapping the taskbar; push it back to the work area.
+            if client.bottom - client.top <= work_height + 2
+                && client.right - client.left <= work_width + 2
+            {
+                return;
+            }
+            log::info!(
+                "Re-clamping maximized undecorated window to the work area: client={}x{}, work={}x{}",
+                client.right - client.left,
+                client.bottom - client.top,
+                work_width,
+                work_height
+            );
+            if let Err(error) = SetWindowPos(
+                hwnd,
+                Some(HWND_TOP),
+                work.left,
+                work.top,
+                work_width,
+                work_height,
+                SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+            ) {
+                log::warn!("Failed to re-clamp the maximized window: {error}");
+            }
+            return;
+        }
+
+        // Restored window taller/wider than the work area: shrink it to fit
+        // and keep it inside. A window that big cannot be fully visible
+        // anyway, so resizing it cannot fight legitimate user placement.
+        let mut frame = RECT::default();
+        if GetWindowRect(hwnd, &mut frame).is_err() {
+            return;
+        }
+        let frame_height = frame.bottom - frame.top;
+        let frame_width = frame.right - frame.left;
+        if frame_height <= work_height && frame_width <= work_width {
+            return;
+        }
+        let new_height = frame_height.min(work_height);
+        let new_width = frame_width.min(work_width);
+        let new_top = frame.top.clamp(work.top, work.bottom - new_height);
+        let new_left = frame.left.clamp(work.left, work.right - new_width);
+        log::info!(
+            "Shrinking oversized restored window into the work area: frame={}x{} at ({}, {}), work={}x{}",
+            frame_width,
+            frame_height,
+            frame.left,
+            frame.top,
+            work_width,
+            work_height
+        );
+        if let Err(error) = SetWindowPos(
+            hwnd,
+            Some(HWND_TOP),
+            new_left,
+            new_top,
+            new_width,
+            new_height,
+            SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+        ) {
+            log::warn!("Failed to shrink the oversized restored window: {error}");
+        }
+    }
 }
 
 pub(crate) fn restore_main_window_state(window: &tauri::WebviewWindow) {
@@ -873,6 +991,48 @@ pub async fn run() {
                 );
             }
 
+            // Resolve the bundled LoopX sidecar for continuous Issue-Fix,
+            // mirroring the flashgrep resolution above. LOOPX_BIN set by the
+            // user (e.g. a development editable install) always wins; the
+            // sidecar fills the gap for packaged builds; PATH stays the last
+            // resort inside LoopxIssueFix::probe.
+            {
+                let step_started = Instant::now();
+                let sidecar_path = bitfun_services_integrations::loopx_issue_fix::loopx_sidecar_binary_names()
+                    .iter()
+                    .find_map(|binary_name| {
+                        let primary = format!("loopx/{}", binary_name);
+                        if let Ok(path) = app
+                            .path()
+                            .resolve(&primary, tauri::path::BaseDirectory::Resource)
+                        {
+                            if path.exists() {
+                                return Some(path);
+                            }
+                        }
+                        let resource_dir = app.path().resource_dir().ok()?;
+                        [
+                            resource_dir.join("loopx").join(binary_name),
+                            resource_dir.join("resources").join("loopx").join(binary_name),
+                        ]
+                        .into_iter()
+                        .find(|candidate| candidate.exists())
+                    });
+                if let Some(path) = sidecar_path {
+                    bitfun_services_integrations::loopx_issue_fix::configure_loopx_bin_env(&path);
+                    log::info!("LoopX sidecar resolved: path={}", path.display());
+                } else {
+                    log::info!(
+                        "No bundled LoopX sidecar found; Issue-Fix will use LOOPX_BIN or PATH"
+                    );
+                }
+                startup_trace.record_elapsed_step(
+                    "native_setup",
+                    "resolve_loopx_sidecar",
+                    step_started,
+                );
+            }
+
             // Register bundled mobile-web resource path for remote connect.
             // tauri.conf.json maps "../../mobile-web/dist" -> "mobile-web/dist",
             // so the primary candidate is "mobile-web/dist". Additional fallbacks
@@ -1175,6 +1335,13 @@ pub async fn run() {
                         }
                     }
                 }
+
+                #[cfg(target_os = "windows")]
+                if window.label() == "main"
+                    && matches!(event, tauri::WindowEvent::Resized(_))
+                {
+                    clamp_maximized_undecorated_window(window);
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -1394,6 +1561,13 @@ pub async fn run() {
             review_platform_get_pull_request_detail,
             review_platform_get_pull_request_review_target,
             review_platform_get_issue,
+            review_platform_list_issues,
+            issue_fix_probe,
+            issue_fix_autonomous_status,
+            issue_fix_autonomous_poll,
+            issue_fix_answer_user_question,
+            issue_fix_start_autonomous,
+            issue_fix_stop_autonomous,
             review_platform_get_pull_request_review_target_by_identity,
             review_platform_get_pull_request_detail_page,
             review_platform_get_pull_request_ci_log,

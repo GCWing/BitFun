@@ -196,6 +196,11 @@
       color: var(--bf-appearance-token-color-text-secondary);
     }
 
+    // Session bound to an enabled scheduled job (Issue-Fix heartbeat host).
+    &.is-scheduled-host {
+      color: var(--bf-appearance-token-color-text-secondary);
+    }
+
     &.is-running {
       color: var(--bf-appearance-token-color-text-secondary);
       transition: opacity $motion-fast $easing-standard;

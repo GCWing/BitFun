@@ -506,7 +506,8 @@
     "editDialogBulletHistory": "刪除該輪及之後的對話記錄",
     "editDialogBulletRerun": "使用編輯後的消息啟動新一輪對話",
     "editSuccess": "已編輯消息並重新執行",
-    "editFailed": "編輯消息失敗"
+    "editFailed": "編輯消息失敗",
+    "scheduledHeartbeat": "排程心跳 · {{time}}"
   },
   "contextMenu": {
     "copySelection": "複製選中內容",
@@ -842,7 +843,11 @@
     "loadingMcpPrompts": "正在載入 MCP 提示詞...",
     "externalCommandsLoading": "正在載入相容命令...",
     "externalCommandsHostUnavailable": "目前主機不支援外部命令。",
-    "externalCommandsLoadFailed": "外部命令載入失敗，請重新開啟命令選擇器重試。"
+    "externalCommandsLoadFailed": "外部命令載入失敗，請重新開啟命令選擇器重試。",
+    "issueFix": {
+      "tooltip": "持續修復倉庫 Issue",
+      "open": "開啟修復 Issue"
+    }
   },
   "planner": {
     "title": "任務規劃",
@@ -1269,7 +1274,8 @@
     "backgroundCommandStopping": "正在終止命令",
     "backgroundCommandStopAll": "全部終止",
     "backgroundCommandStopFailed": "終止背景命令失敗。",
-    "pullRequests": "拉取請求"
+    "pullRequests": "拉取請求",
+    "fixIssues": "修復 Issue"
   },
   "backgroundCommandInput": {
     "title": "輸入命令內容",
@@ -2555,5 +2561,12 @@
     "placeholder": "把需求傳給 {{app}}…",
     "send": "傳送",
     "hint": "訊息將由 {{app}} 處理"
+  },
+  "scheduledStop": {
+    "title": "排程任務仍在執行",
+    "message": "你停止的是一次由排程任務觸發的輪次，排程任務本身仍在執行，下個週期會再次執行。",
+    "stop": "停止排程任務",
+    "stopped": "排程任務已停止。進度已保留，在修復 Issue 面板點擊啟動即可恢復。",
+    "stopFailed": "停止排程任務失敗"
   }
 }

@@ -12,6 +12,7 @@ import {
   writeFileSync,
 } from 'fs';
 import { ensureFlashgrepBinary } from './prepare-flashgrep-resource.mjs';
+import { findLoopxBinary } from './prepare-loopx-resource.mjs';
 import { extractProductConfigArg } from './product-customization/cli.mjs';
 import { productBuildEnvironment } from './product-customization/projections.mjs';
 import { resolveProductDefinition } from './product-customization/resolver.mjs';
@@ -44,6 +45,15 @@ async function main() {
   const flashgrepBinary = ensureFlashgrepBinary();
   process.env.FLASHGREP_DAEMON_BIN = flashgrepBinary;
 
+  // Optional LoopX sidecar for continuous Issue-Fix: bundle it when present,
+  // otherwise the feature falls back to LOOPX_BIN / PATH at runtime.
+  const loopxBinary = findLoopxBinary();
+  console.log(
+    loopxBinary
+      ? `[loopx-sidecar] bundling ${loopxBinary}`
+      : '[loopx-sidecar] absent; packaged Issue-Fix will rely on LOOPX_BIN or PATH'
+  );
+
   const desktopDir = join(ROOT, 'src', 'apps', 'desktop');
   // Tauri CLI reads CI and rejects numeric "1" (common in CI providers).
   process.env.CI = 'true';
@@ -51,6 +61,7 @@ async function main() {
   const tauriConfig = prepareTauriConfig(join(desktopDir, 'tauri.conf.json'), {
     desktopDir,
     flashgrepBinary,
+    loopxBinary,
     resolution,
   });
   const tauriBin = join(ROOT, 'node_modules', '.bin', 'tauri');
@@ -168,7 +179,7 @@ function optionValue(args, option) {
 
 export function prepareTauriConfig(
   baseConfigPath,
-  { desktopDir, flashgrepBinary, resolution }
+  { desktopDir, flashgrepBinary, loopxBinary, resolution }
 ) {
   const config = JSON.parse(readFileSync(baseConfigPath, 'utf8'));
   if (resolution) {
@@ -180,6 +191,7 @@ export function prepareTauriConfig(
     config.identifier = resolution.assembly.bundleId;
   }
   injectTargetFlashgrepResource(config, desktopDir, flashgrepBinary);
+  injectLoopxSidecarResource(config, desktopDir, loopxBinary);
 
   const enabled = ['1', 'true', 'yes'].includes(
     String(process.env.BITFUN_ENABLE_UPDATER_ARTIFACTS || '').toLowerCase()
@@ -245,6 +257,19 @@ function injectTargetFlashgrepResource(config, desktopDir, flashgrepBinary) {
     const source = toTauriPath(relative(desktopDir, binaryPath));
     resources[source] = `flashgrep/${basename(binaryPath)}`;
   }
+  config.bundle = {
+    ...(config.bundle || {}),
+    resources,
+  };
+}
+
+function injectLoopxSidecarResource(config, desktopDir, loopxBinary) {
+  if (!loopxBinary) {
+    return;
+  }
+  const resources = { ...(config.bundle?.resources || {}) };
+  const source = toTauriPath(relative(desktopDir, loopxBinary));
+  resources[source] = `loopx/${basename(loopxBinary)}`;
   config.bundle = {
     ...(config.bundle || {}),
     resources,

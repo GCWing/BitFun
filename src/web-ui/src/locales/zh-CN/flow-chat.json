@@ -506,7 +506,8 @@
     "editDialogBulletHistory": "删除该轮及之后的对话记录",
     "editDialogBulletRerun": "使用编辑后的消息启动新一轮对话",
     "editSuccess": "已编辑消息并重新运行",
-    "editFailed": "编辑消息失败"
+    "editFailed": "编辑消息失败",
+    "scheduledHeartbeat": "定时心跳 · {{time}}"
   },
   "contextMenu": {
     "copySelection": "复制选中内容",
@@ -842,7 +843,11 @@
     "loadingMcpPrompts": "正在加载 MCP 提示词...",
     "externalCommandsLoading": "正在加载兼容命令...",
     "externalCommandsHostUnavailable": "当前主机不支持外部命令。",
-    "externalCommandsLoadFailed": "外部命令加载失败，请重新打开命令选择器重试。"
+    "externalCommandsLoadFailed": "外部命令加载失败，请重新打开命令选择器重试。",
+    "issueFix": {
+      "tooltip": "持续修复仓库 Issue",
+      "open": "打开修复 Issue"
+    }
   },
   "planner": {
     "title": "任务规划",
@@ -1269,7 +1274,8 @@
     "backgroundCommandStopping": "正在终止命令",
     "backgroundCommandStopAll": "全部终止",
     "backgroundCommandStopFailed": "终止后台命令失败。",
-    "pullRequests": "拉取请求"
+    "pullRequests": "拉取请求",
+    "fixIssues": "修复 Issue"
   },
   "backgroundCommandInput": {
     "title": "输入命令内容",
@@ -2555,5 +2561,12 @@
     "placeholder": "把需求发给 {{app}}…",
     "send": "发送",
     "hint": "消息将由 {{app}} 处理"
+  },
+  "scheduledStop": {
+    "title": "定时任务仍在运行",
+    "message": "你停止的是一次由定时任务触发的轮次，计划任务本身仍在运行，下个周期会再次执行。",
+    "stop": "停止定时任务",
+    "stopped": "定时任务已停止。进度已保留，在修复 Issue 面板点击启动即可恢复。",
+    "stopFailed": "停止定时任务失败"
   }
 }

@@ -262,7 +262,10 @@
       "deleteAllArchivedFailed": "刪除全部已歸檔會話失敗",
       "archiveAllFailed": "歸檔會話失敗",
       "bulkArchiveFailed": "批量歸檔會話失敗",
-      "bulkDeleteFailed": "批量刪除會話失敗"
+      "bulkDeleteFailed": "批量刪除會話失敗",
+      "deleteScheduledConfirmTitle": "該工作階段承載著排程任務",
+      "deleteScheduledConfirmMessage": "一個排程任務（如持續修復 Issue 的心跳）正於此會話中執行，刪除會話將停止該任務。修復進度保存於會話之外，重新點擊啟動即可從斷點繼續。",
+      "scheduledHost": "承載持續修復 Issue 的心跳"
     },
     "scheduledJobs": {
       "title": "定時任務",
@@ -1133,7 +1136,8 @@
     "fileBrowser": "檔案瀏覽器",
     "editor": "編輯器",
     "markdown": "Markdown",
-    "settingsWithSection": "設置 - {{section}}"
+    "settingsWithSection": "設置 - {{section}}",
+    "fixIssues": "修復 Issue"
   },
   "welcome": {
     "greetingMorning": "早安，創造者",

@@ -7,7 +7,7 @@
 
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Trash2, Check, X, Bot, Code2, ClipboardList, Panda, MoreHorizontal, Loader2, Archive, Clock3, Copy, CircleHelp, FileDown, ChevronLeft } from 'lucide-react';
+import { Pencil, Trash2, Check, X, Bot, Code2, ClipboardList, Panda, MoreHorizontal, Loader2, Archive, Clock3, Copy, CircleHelp, FileDown, ChevronLeft, Wrench } from 'lucide-react';
 import { IconButton, Input, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
@@ -17,6 +17,7 @@ import { hasPendingAskUserQuestion, resolveTrackedTurn } from '../../../../../fl
 import { useSceneStore } from '../../../../stores/sceneStore';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
+import { cronAPI } from '@/infrastructure/api/service-api/CronAPI';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import {
@@ -233,6 +234,10 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const [isExportScopeMenu, setIsExportScopeMenu] = useState(false);
   const [exportingSessionId, setExportingSessionId] = useState<string | null>(null);
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(new Set());
+  // Sessions bound to an enabled scheduled job (e.g. the continuous Issue-Fix
+  // heartbeat) get a distinct icon so users can tell load-bearing sessions
+  // from ordinary chats before renaming or deleting them.
+  const [scheduledSessionIds, setScheduledSessionIds] = useState<Set<string>>(new Set());
   const [scheduledJobsSessionId, setScheduledJobsSessionId] = useState<string | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const sessionMenuPopoverRef = useRef<HTMLDivElement>(null);
@@ -270,6 +275,39 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     });
     return () => unsubscribe();
   }, [flowChatState.sessions]);
+
+  // Track which sessions carry an enabled scheduled job. Polled lazily (on
+  // mount and every 60s) because job changes are rare — start/stop of the
+  // Issue-Fix loop — and the render side is a pure Set lookup.
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const jobs = await cronAPI.listJobs({ targetKind: 'session' });
+        if (cancelled) return;
+        const bound = new Set<string>();
+        for (const job of jobs) {
+          if (!job.enabled) continue;
+          const sessionId = job.target.kind === 'session' ? job.target.sessionId : null;
+          if (sessionId) bound.add(sessionId);
+        }
+        setScheduledSessionIds((current) => {
+          if (current.size === bound.size && [...bound].every((id) => current.has(id))) {
+            return current;
+          }
+          return bound;
+        });
+      } catch {
+        // Cron service not ready yet (startup) — keep the previous set.
+      }
+    };
+    void refresh();
+    const interval = window.setInterval(() => void refresh(), 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, []);
 
   useEffect(() => {
     const selector = (s: FlowChatState): string => {
@@ -1005,13 +1043,29 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const handleDelete = useCallback(
     async (e: React.MouseEvent, sessionId: string) => {
       e.stopPropagation();
+      // Deleting a session that hosts scheduled jobs (e.g. the continuous
+      // Issue-Fix heartbeat) also stops those jobs — silently, from the
+      // user's point of view. Surface that consequence before acting; work
+      // state lives outside the session, so restarting later resumes it.
+      try {
+        const jobs = await cronAPI.listJobs({ sessionId });
+        if (jobs.some((job) => job.enabled)) {
+          const confirmed = await confirmWarning(
+            t('nav.sessions.deleteScheduledConfirmTitle'),
+            t('nav.sessions.deleteScheduledConfirmMessage')
+          );
+          if (!confirmed) return;
+        }
+      } catch (err) {
+        log.warn('Failed to check scheduled jobs before session delete', err);
+      }
       try {
         await flowChatManager.deleteChatSession(sessionId);
       } catch (err) {
         log.error('Failed to delete session', err);
       }
     },
-    []
+    [t]
   );
 
   const handleArchive = useCallback(
@@ -1259,14 +1313,21 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                 }),
               })
             : null;
+          const isScheduledHost = scheduledSessionIds.has(session.sessionId);
           const showRichTooltip =
             showAssistantInTooltip ||
             isChildSession ||
             showBackgroundSubagentActivity ||
-            isDispatched;
+            isDispatched ||
+            isScheduledHost;
           const tooltipContent = showRichTooltip ? (
             <div className="bitfun-nav-panel__inline-item-tooltip">
               <div className="bitfun-nav-panel__inline-item-tooltip-title">{sessionTitle}</div>
+              {isScheduledHost ? (
+                <div className="bitfun-nav-panel__inline-item-tooltip-meta">
+                  {t('nav.sessions.scheduledHost')}
+                </div>
+              ) : null}
               {showAssistantInTooltip ? (
                 <div className="bitfun-nav-panel__inline-item-tooltip-meta">
                   {t('nav.sessions.assistantOwner', { name: trimmedAssistant })}
@@ -1311,13 +1372,15 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             sessionTitle
           );
           const SessionIcon =
-            sessionModeKey === 'cowork'
-              ? ClipboardList
-              : sessionModeKey === 'claw'
-                ? showAssistantInTooltip
-                  ? Panda
-                  : Bot
-                : Code2;
+            isScheduledHost
+              ? Wrench
+              : sessionModeKey === 'cowork'
+                ? ClipboardList
+                : sessionModeKey === 'claw'
+                  ? showAssistantInTooltip
+                    ? Panda
+                    : Bot
+                  : Code2;
           const isRowActive = isSessionNavRowActive({
             rowSessionId: session.sessionId,
             activeTabId,
@@ -1383,11 +1446,13 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       size={14}
                       className={[
                         'bitfun-nav-panel__inline-item-icon',
-                        sessionModeKey === 'cowork'
-                          ? 'is-cowork'
-                          : sessionModeKey === 'claw'
-                            ? 'is-claw'
-                            : 'is-code',
+                        isScheduledHost
+                          ? 'is-scheduled-host'
+                          : sessionModeKey === 'cowork'
+                            ? 'is-cowork'
+                            : sessionModeKey === 'claw'
+                              ? 'is-claw'
+                              : 'is-code',
                       ].join(' ')}
                     />
                   )}

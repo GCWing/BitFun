@@ -330,6 +330,25 @@ export const NotificationCenter: React.FC = () => {
               </pre>
             </div>
           )}
+          {notification.actions && notification.actions.length > 0 && (
+            <div
+              className="notification-center__item-message-actions"
+              onClick={(event) => event.stopPropagation()}
+            >
+              {notification.actions.map((action, index) => (
+                <button
+                  key={index}
+                  className={`notification-center__item-action notification-center__item-action--${action.variant || 'secondary'}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    action.onClick();
+                  }}
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         {!notification.read && <div className="notification-center__item-badge" />}
         <div className="notification-center__item-actions">

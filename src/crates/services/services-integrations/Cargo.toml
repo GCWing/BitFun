@@ -135,6 +135,17 @@ git = [
     "tokio/time",
 ]
 file-watch = ["notify", "tokio/rt", "tokio/sync"]
+# Automatic repository issue fixing driven by the external `loopx` CLI.
+# Included in `product-full`.
+loopx-issue-fix = [
+    "async-trait",
+    "bitfun-runtime-ports",
+    "review-platform",
+    "thiserror",
+    "tokio/macros",
+    "tokio/process",
+    "which",
+]
 function-agents = [
     "bitfun-product-domains/function-agents",
     "dep:bitfun-product-domains",
@@ -387,6 +398,7 @@ product-full = [
     "function-agents",
     "git",
     "hook-import",
+    "loopx-issue-fix",
     "miniapp-runtime",
     "mcp",
     "plugin-source",
@@ -427,6 +439,10 @@ required-features = ["function-agents"]
 [[test]]
 name = "git_contracts"
 required-features = ["git"]
+
+[[test]]
+name = "loopx_issue_fix_contracts"
+required-features = ["loopx-issue-fix"]
 
 [[test]]
 name = "mcp_contracts"

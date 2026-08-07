@@ -9,6 +9,9 @@
  */
 import { useLayoutEffect, useRef, useEffect, useState, RefObject } from 'react';
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
+import { cronAPI, type ListCronJobsRequest, type UpdateCronJobRequest } from '@/infrastructure/api/service-api/CronAPI';
+import { issueFixAPI, type IssueFixUserDecision } from '@/infrastructure/api/service-api/IssueFixAPI';
+import { reviewPlatformAPI } from '@/infrastructure/api/service-api/ReviewPlatformAPI';
 import { open as dialogOpen, save as dialogSave, message as dialogMessage } from '@tauri-apps/plugin-dialog';
 import type { MiniApp } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
@@ -78,6 +81,7 @@ export function useMiniAppBridge(
   const nodeDisabledRef = useRef(app.permissions?.node?.enabled === false);
   const systemNotificationsAllowedRef = useRef(app.permissions?.notifications?.system === true);
   const agentEnabledRef = useRef(app.permissions?.agent?.enabled === true);
+  const cronEnabledRef = useRef(app.permissions?.cron?.enabled === true);
   const aiEnabledRef = useRef(app.permissions?.ai?.enabled === true);
   const strictRuntimeRef = useRef(strictRuntime);
   const hostPermissionsRef = useRef(app.permissions?.host);
@@ -85,6 +89,7 @@ export function useMiniAppBridge(
     nodeDisabledRef.current = app.permissions?.node?.enabled === false;
     systemNotificationsAllowedRef.current = app.permissions?.notifications?.system === true;
     agentEnabledRef.current = app.permissions?.agent?.enabled === true;
+    cronEnabledRef.current = app.permissions?.cron?.enabled === true;
     aiEnabledRef.current = app.permissions?.ai?.enabled === true;
     strictRuntimeRef.current = strictRuntime;
     hostPermissionsRef.current = app.permissions?.host;
@@ -93,6 +98,7 @@ export function useMiniAppBridge(
     app.permissions?.node?.enabled,
     app.permissions?.notifications?.system,
     app.permissions?.agent?.enabled,
+    app.permissions?.cron?.enabled,
     app.permissions?.ai?.enabled,
     app.permissions?.host,
     strictRuntime,
@@ -446,6 +452,132 @@ export function useMiniAppBridge(
             return;
           }
           replyError(`Unknown agent method: ${method}`);
+          return;
+        }
+
+        // ── Continuous Issue-Fix commands ────────────────────────────────────
+        // Gated on agent + cron permissions: these route to the native
+        // issue_fix_* Tauri commands, which own the LoopX CLI bridge, sidecar
+        // resolution, bootstrap, and host-loop lifecycle. The MiniApp is the
+        // control surface; scheduling and kernel state stay host-owned so the
+        // repair loop keeps running when the MiniApp is closed.
+        if (method.startsWith('issueFix.')) {
+          if (!agentEnabledRef.current || !cronEnabledRef.current) {
+            replyError(
+              `MiniApp '${appId}' needs both agent and cron permissions for issueFix methods.`,
+            );
+            return;
+          }
+          if (method === 'issueFix.probe') {
+            reply(await issueFixAPI.probe());
+            return;
+          }
+          const repositoryPath =
+            typeof params.repositoryPath === 'string' && params.repositoryPath
+              ? params.repositoryPath
+              : workspacePathRef.current || '';
+          if (!repositoryPath) {
+            replyError('issueFix methods need a workspace with a local repository path.');
+            return;
+          }
+          if (method === 'issueFix.status') {
+            reply(await issueFixAPI.getAutonomousStatus(repositoryPath));
+            return;
+          }
+          if (method === 'issueFix.listIssues') {
+            // GitHub-only, mirroring the native panel's product scope.
+            const snapshot = await reviewPlatformAPI.getWorkspaceSnapshot(
+              repositoryPath,
+              null,
+              1,
+              1,
+            );
+            const remote =
+              snapshot.remotes.find((candidate) => candidate.id === snapshot.selectedRemoteId) ??
+              snapshot.remotes[0];
+            if (!remote) {
+              reply({ supported: false, host: null, projectPath: null, issues: [] });
+              return;
+            }
+            if (remote.platform !== 'github') {
+              reply({ supported: false, host: remote.host, projectPath: remote.projectPath, issues: [] });
+              return;
+            }
+            const page = await reviewPlatformAPI.listIssues({
+              platform: remote.platform,
+              host: remote.host,
+              projectPath: remote.projectPath,
+              state: 'open',
+              perPage: 50,
+              repositoryPath,
+            });
+            reply({
+              supported: true,
+              host: remote.host,
+              projectPath: remote.projectPath,
+              issues: page.items,
+            });
+            return;
+          }
+          if (method === 'issueFix.poll') {
+            reply(await issueFixAPI.pollAutonomous(repositoryPath));
+            return;
+          }
+          if (method === 'issueFix.start') {
+            reply(
+              await issueFixAPI.startAutonomous({
+                // MiniApp starts always use a backend-owned hidden session:
+                // the sidebar stays clean and the loop outlives the iframe.
+                hiddenHost: true,
+                repo: String(params.repo ?? ''),
+                repositoryPath,
+                issues: Array.isArray(params.issues)
+                  ? (params.issues as Array<{ issueRef: string; issueUrl: string }>)
+                  : [],
+              }),
+            );
+            return;
+          }
+          if (method === 'issueFix.stop') {
+            reply(await issueFixAPI.stopAutonomous(repositoryPath));
+            return;
+          }
+          if (method === 'issueFix.answer') {
+            reply(
+              await issueFixAPI.answerUserQuestion({
+                repositoryPath,
+                todoId: String(params.todoId ?? ''),
+                decision: params.decision as IssueFixUserDecision,
+                reason: typeof params.reason === 'string' ? params.reason : null,
+              }),
+            );
+            return;
+          }
+          replyError(`Unknown issueFix method: ${method}`);
+          return;
+        }
+
+        // ── Scheduled-jobs (cron) commands ───────────────────────────────────
+        // Gated on cron permission: an agentic MiniApp may inspect or manage
+        // the scheduled jobs it relies on (e.g. the Issue-Fix heartbeat) via
+        // the existing cron Tauri commands. The bridge only routes the call;
+        // the host owns scheduling, state, and authority.
+        if (method.startsWith('cron.')) {
+          if (!cronEnabledRef.current) {
+            replyError(`MiniApp '${appId}' does not have cron permission (permissions.cron.enabled).`);
+            return;
+          }
+          if (method === 'cron.listJobs') {
+            reply(await cronAPI.listJobs((params as ListCronJobsRequest) ?? {}));
+            return;
+          }
+          if (method === 'cron.updateJob') {
+            const jobId = String(params.jobId ?? '');
+            const changes = (params.changes ?? {}) as UpdateCronJobRequest;
+            reply(await cronAPI.updateJob(jobId, changes));
+            return;
+          }
+          replyError(`Unknown cron method: ${method}`);
           return;
         }
 

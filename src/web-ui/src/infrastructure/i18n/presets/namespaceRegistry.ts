@@ -13,6 +13,7 @@ export const ALL_NAMESPACES = [
   'notifications',
   'panels/files',
   'panels/git',
+  'panels/issue-fix',
   'panels/terminal',
   'scenes/agents',
   'scenes/capabilities',

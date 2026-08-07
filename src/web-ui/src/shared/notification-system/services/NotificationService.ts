@@ -215,9 +215,11 @@ class NotificationService {
       variant: 'silent',
       title: options.title,
       message: options.message,
+      messageNode: options.messageNode,
       timestamp: Date.now(),
       duration: 0,
       closable: true,
+      actions: options.actions,
       metadata: options.metadata,
       read: false,
       status: 'active'
