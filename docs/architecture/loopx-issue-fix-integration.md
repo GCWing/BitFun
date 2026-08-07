@@ -127,7 +127,105 @@ LoopX 归档出列表，面板对应行退回未选中外观。该行为随关�
 - 新 gate / 待审项经通知中心投递（toast + 历史 + 未读角标）；
   一拍产出超过 3 条时合并为摘要卡。
 
-## 8. 已知偏离与上游事项
+## 8. 构建与前置条件手册
+
+### 8.1 LoopX 从哪里来（三层，任一满足即可）
+
+运行时解析顺序（`LoopxIssueFix::probe` + 桌面启动注入）：
+
+1. **`LOOPX_BIN` 环境变量**（开发者通道）：指向任意 loopx 可执行文件。
+   开发建议 editable 安装，改动即时生效：
+
+   ```bash
+   git clone https://github.com/huangruiteng/loopx ../loopx
+   pip install -e ../loopx        # 需要 Python >= 3.11
+   # loopx 进入 PATH；或显式 set LOOPX_BIN=<python Scripts>/loopx
+   ```
+
+2. **捆绑 sidecar**（用户通道）：打包产物内的 `resources/loopx/loopx-<triple>`，
+   桌面启动时自动将 `LOOPX_BIN` 指向它（用户已设置则不覆盖）。构建方法见 §8.2。
+3. **PATH**：最后兜底，`which loopx`。
+
+LoopX 运行时**零第三方依赖**（pyproject `dependencies = []`，纯标准库），
+这是 sidecar 单文件打包可行的前提。
+
+### 8.2 构建 sidecar
+
+```bash
+pip install pyinstaller          # 一次性
+node scripts/prepare-loopx-resource.mjs --build
+# 源码目录默认 ../loopx，可用 --loopx-dir <path> 或 LOOPX_SRC_DIR 覆盖
+# 产物: resources/loopx/loopx-<platform-triple>[.exe]，约 14MB
+```
+
+- 产物冒烟：`resources/loopx/<binary> --version`，再跑一次
+  `--format json todo list --goal-id <任意> --agent-id <任意>`（应返回 ok:false
+  的结构化 JSON 而非崩溃）。
+- `pnpm run desktop:build` 检测到产物即捆绑；**没有产物构建照常成功**
+  （sidecar 是可选资源），运行时回落到 PATH。
+- 每个平台需在对应平台构建（PyInstaller 不交叉编译）；当前仅 Windows x64
+  验证过，macOS/Linux 待 CI 矩阵。
+- 升级 LoopX 版本 = 在 loopx checkout 切到目标版本 → 重跑 `--build` →
+  重新打包 BitFun。sidecar 版本即该 BitFun 版本的契约版本。
+
+### 8.3 前置条件缺失时的行为与处理
+
+`issue_fix_probe` 一次性体检三项，面板对缺失项显示对应引导；下表同时给出
+开发者侧的处理动作：
+
+| 缺失项 | 面板行为 | 处理措施 |
+| --- | --- | --- |
+| loopx 不可用 | 警告横幅"LoopX 引擎不可用" | 用户：重装 BitFun（恢复 sidecar）。开发者：`pip install -e ../loopx` 或设 `LOOPX_BIN`；检查 `resources/loopx/` 是否有产物 |
+| gh 未安装 | 警告横幅 + 安装指引 | 从 <https://cli.github.com> 安装后重启 BitFun（PATH 变更需重启进程才可见） |
+| gh 未登录 | 警告横幅 + 登录指引 | 终端运行 `gh auth login`（github.com，浏览器授权即可）后刷新面板。agent 的全部 GitHub 读写走 gh 的凭据，BitFun 不存 GitHub token |
+| 仓库无 `.loopx` | 头部显示"尚未连接"（非错误） | 无需处理；首次 Start 自动 `bootstrap` + `register-agent bitfun-cron` |
+| 仓库非 GitHub 托管 | 整面板"暂仅支持 GitHub"说明 | 当前产品范围限制，见 §6 |
+
+注意事项：
+
+- gh 授权是**用户身份**，永不捆绑、永不代管；发 PR/评论的署名即该身份。
+- Windows 中文局部下 LoopX 子进程需 `PYTHONUTF8=1`——bridge 已自动注入，
+  手动在终端调试 loopx 时需自己 `set PYTHONUTF8=1`。
+- 心跳 agent 会执行 `gh` 与 git 网络操作；企业代理环境下 gh 的代理配置
+  （`gh config`/环境变量）需用户自行就绪，probe 不检测网络可达性。
+
+## 9. 接入更多 LoopX capability 的指南
+
+LoopX 还提供 `semantic-preference`、`reward-memory`、`periodic-report`、
+`content-ops`、`value-connectors`、`explore`、`auto-research` 等 capability
+（`loopx capability list` 枚举；`capability show <id>` 给出该 capability 的
+CLI、协议、冒烟与边界说明）。issue-fix 的接入分层就是为复用设计的，
+新 capability 按下表决定复用哪些层：
+
+| 层 | 现有资产 | 新 capability 需要做什么 |
+| --- | --- | --- |
+| 进程桥 | `LoopxIssueFix::probe` / `json_in`（含 UTF-8、超时上限、in-band 错误解析） | **原样复用**。桥是 capability 无关的，改名/上移模块即可 |
+| sidecar 分发 | §8.2 构建链 + 三层解析 | **零改动**——同一个 loopx 二进制承载全部 capability |
+| 身份与 bootstrap | `read_identity` / `ensure_bootstrapped` | 同仓库同 goal 直接复用；新 capability 若需独立 goal 再评估 |
+| 控制面投影 | `todo list` 轮询 + `quota should-run` 按需 | 复用模式：**轮询只用零写入命令**（先验证新命令的写语义，方法见下） |
+| 心跳 | cron job + preamble + `heartbeat-prompt --compact` | 同 goal 共享同一心跳——Kernel 按 todo 调度，capability 之间天然复用一个循环；无需第二个 cron job |
+| 类型化写命令 | intake `todo add` / gate `todo complete` | 每个 capability 定义自己的 intake 形态（action_kind 词汇归 host 定义，如 `issue_fix_intake` 的先例）与 gate 应答面 |
+| UI | 面板 + 通知中心投递 | 新面板复用交互不变式（§7）：只读投影、ticket 保护、授权只走类型化命令 |
+
+接入新 capability 的检查清单：
+
+1. **读 capability 契约**：`loopx capability show <id>`、其 `docs/capabilities/<id>/`
+   与 workflow contract，确认它期望 host 供给什么（issue-fix 的教训：LoopX
+   不自带发现/执行能力，host 供给一切证据与执行）。
+2. **验证每个要调用命令的写语义**：干净测试仓库跑一遍，比对
+   runtime 目录（`~/.codex/loopx/goals/<goal>/`）前后差异。issue-fix 的教训：
+   `quota should-run` 看似只读实则每次追加 rollout event。
+3. **确定 intake 形态**：用户在 UI 选择什么 → 物化成什么 todo
+   （task_class / action_kind / task_repository / capability 要求）。
+4. **确定 gate 面**：该 capability 会产生哪类 user_gate / user_action，
+   投影是否需要新的关联字段（issue-fix 的教训：gate 必须要求
+   `--unblocks-todo-id`，且投影要有无关联兜底）。
+5. **preamble 增量**：只加该 capability 的 host 语境，且必须通过
+   "对别人机器上的任意仓库是否成立"检验；仓库特定内容进 active state。
+6. **端到端新用户验证**：干净仓库 + 仅 sidecar（无 editable 安装）走通
+   全流程后才算接入完成（issue-fix 的教训：pre-bootstrap 状态曾直接报错）。
+
+## 10. 已知偏离与上游事项
 
 | 事项 | 状态 |
 | --- | --- |
