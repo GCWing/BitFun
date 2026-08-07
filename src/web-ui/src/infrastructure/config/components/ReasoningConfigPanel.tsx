@@ -3,6 +3,7 @@ import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/component-library';
 import type { ReasoningCatalogProjection, ReasoningConfig } from '../types';
+import type { ProviderCatalog } from '@/infrastructure/api/service-api/AIApi';
 import {
   cloneReasoningConfig,
   validateReasoningConfig,
@@ -13,6 +14,7 @@ import './ReasoningConfigPanel.scss';
 interface ReasoningConfigPanelProps {
   value: ReasoningConfig;
   generatedProjection?: ReasoningCatalogProjection | null;
+  providerCatalog?: ProviderCatalog | null;
   onCancel: () => void;
   onApply: (value: ReasoningConfig) => void;
 }
@@ -20,6 +22,7 @@ interface ReasoningConfigPanelProps {
 export const ReasoningConfigPanel: React.FC<ReasoningConfigPanelProps> = ({
   value,
   generatedProjection,
+  providerCatalog,
   onCancel,
   onApply,
 }) => {
@@ -53,6 +56,7 @@ export const ReasoningConfigPanel: React.FC<ReasoningConfigPanelProps> = ({
         <ReasoningPresetEditor
           value={draft}
           generatedProjection={activeGeneratedProjection}
+          providerCatalog={providerCatalog}
           onChange={setDraft}
           onValidationChange={setEditorInvalid}
         />
