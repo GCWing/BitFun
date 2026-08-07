@@ -43,6 +43,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
   const dragSafetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const windowDragEndHandlerRef = useRef<(() => void) | null>(null);
   const windowMouseDownHandlerRef = useRef<(() => void) | null>(null);
+  const documentMouseMoveHandlerRef = useRef<(() => void) | null>(null);
 
   const workspaces = variant === 'assistants'
     ? assistantWorkspacesList
@@ -63,6 +64,10 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
     if (windowMouseDownHandlerRef.current !== null) {
       window.removeEventListener('mousedown', windowMouseDownHandlerRef.current);
       windowMouseDownHandlerRef.current = null;
+    }
+    if (documentMouseMoveHandlerRef.current !== null) {
+      document.removeEventListener('mousemove', documentMouseMoveHandlerRef.current);
+      documentMouseMoveHandlerRef.current = null;
     }
   }, []);
 
@@ -89,6 +94,9 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
       if (windowMouseDownHandlerRef.current !== null) {
         window.removeEventListener('mousedown', windowMouseDownHandlerRef.current);
       }
+      if (documentMouseMoveHandlerRef.current !== null) {
+        document.removeEventListener('mousemove', documentMouseMoveHandlerRef.current);
+      }
     };
   }, []);
 
@@ -111,6 +119,14 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
     const windowMouseDownHandler = () => { cleanupDrag(); };
     windowMouseDownHandlerRef.current = windowMouseDownHandler;
     window.addEventListener('mousedown', windowMouseDownHandler, { once: true });
+
+    // mousemove is suppressed during an active HTML5 drag (per spec) and resumes
+    // when the drag ends — even if dragend is swallowed. So it's a safe instant
+    // cleanup signal that never interrupts a normal drag (no matter how long the
+    // user pauses mid-drag).
+    const documentMouseMoveHandler = () => { cleanupDrag(); };
+    documentMouseMoveHandlerRef.current = documentMouseMoveHandler;
+    document.addEventListener('mousemove', documentMouseMoveHandler, { once: true });
 
     dragSafetyTimeoutRef.current = setTimeout(() => {
       cleanupDrag();
