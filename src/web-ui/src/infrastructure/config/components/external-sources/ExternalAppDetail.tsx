@@ -30,7 +30,11 @@ export const ExternalAppDetail: React.FC<ExternalAppDetailProps> = ({
   onBack,
   onOpenAdvanced,
 }) => (
-  <div className="bitfun-external-sources-config__app-detail">
+  <div
+    className="bitfun-external-sources-config__app-detail"
+    data-bf-component="external-sources-config"
+    data-bf-part="appDetail"
+  >
     <Button variant="ghost" size="small" onClick={onBack}>
       {t('applications.detail.back')}
     </Button>
@@ -53,6 +57,8 @@ export const ExternalAppDetail: React.FC<ExternalAppDetailProps> = ({
       <button
         type="button"
         className="bitfun-external-sources-config__app-attention"
+        data-bf-component="external-sources-config"
+        data-bf-part="appAttention"
         onClick={onOpenAdvanced}
       >
         <span>
@@ -71,7 +77,12 @@ export const ExternalAppDetail: React.FC<ExternalAppDetailProps> = ({
         {CAPABILITIES.map(([field, label]) => {
           const count = application.counts[field];
           return (
-            <div key={field} className="bitfun-external-sources-config__app-capability">
+            <div
+              key={field}
+              className="bitfun-external-sources-config__app-capability"
+              data-bf-component="external-sources-config"
+              data-bf-part="appCapability"
+            >
               <span>
                 <strong>{t(`applications.detail.capabilities.${label}`)}</strong>
                 <small>{t('applications.detail.foundCount', { count })}</small>
