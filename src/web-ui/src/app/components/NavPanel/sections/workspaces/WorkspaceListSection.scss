@@ -17,6 +17,29 @@
       .bitfun-nav-panel__workspace-item {
         cursor: default;
       }
+
+      .bitfun-nav-panel__inline-item-actions {
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+      }
+
+      .bitfun-nav-panel__workspace-item-branch {
+        max-width: 0 !important;
+        margin-left: 0 !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        opacity: 0 !important;
+        overflow: hidden !important;
+        pointer-events: none !important;
+      }
+
+      .bitfun-nav-panel__workspace-item-menu,
+      .bitfun-nav-panel__assistant-item-menu {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+      }
     }
   }
 
