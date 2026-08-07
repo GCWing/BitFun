@@ -129,6 +129,19 @@ const STICKY_PIN_GROWTH_SETTLE_MS = 300;
 const RETAINED_COLLAPSE_QUIET_SETTLE_MS = 120;
 const RETAINED_COLLAPSE_QUIET_SETTLE_FRAMES = 2;
 const RETAINED_COLLAPSE_RELEASE_QUIET_MS = COLLAPSE_INTENT_TTL_MS;
+// Upper bound for finalize retries when the collapse drain target (a sticky
+// pin user message) is not renderable. Without this cap the intent stays
+// active forever, suspending auto-follow and stranding its provisional
+// reservation, so every later collapse coalesces onto the same stuck intent.
+const COLLAPSE_INTENT_FINALIZE_MAX_RETRIES = 20;
+// Idle audit cadence for the bottom-reservation safety net. Kept above the
+// collapse TTL so a legitimately protected transition finishes first.
+const IDLE_RESERVATION_AUDIT_INTERVAL_MS = 1500;
+// Tolerance for "user is at the physical bottom" detection used by the bottom
+// convergence paths. Slightly looser than the scroll baseline epsilon so a
+// footer-sized scrollHeight rounding or a pending browser clamp still counts
+// as "at the bottom" and gets converged instead of staying stuck.
+const BOTTOM_CONVERGE_EPSILON_PX = 2;
 const HISTORY_PRESENTATION_COMMIT_SCROLL_QUIET_MS = 320;
 const IDLE_HISTORY_WINDOW_BOUNDARY_STATE: Record<
   SessionHistoryWindowDirection,
@@ -1274,6 +1287,112 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     updateBottomReservationState,
   ]);
 
+  // Bottom convergence (root-cause fix for stuck tail whitespace). When the
+  // scroller sits at the physical bottom, synthetic tail space (collapse + pin)
+  // has no legitimate viewer: the user is looking at the bottom, so the correct
+  // view is the content bottom, not "content + synthetic blank". Every settle
+  // variant that computes the geometric minimum for the *current* scrollTop
+  // dead-locks here because the reservation itself holds scrollTop at the
+  // physical bottom — required = scrollTop + clientHeight - contentHeight
+  // recomputes exactly the current reservation. Convergence clears the
+  // reservations and lets scrollTop fall to the new content bottom in one
+  // synchronous pass (equivalent to the browser clamp that would have happened
+  // without compensation, delayed until layout has settled).
+  //
+  // Defined before the collapse-intent/settle consumers (settleRetainedCollapse
+  // Range, finalize, measureHeightChange, handleScroll, the idle audit) so
+  // their useCallback dependency arrays can reference it without TDZ errors.
+  const isAtPhysicalBottom = useCallback((scroller: HTMLElement | null): boolean => {
+    if (!scroller || !canProcessViewportGeometry(scroller)) {
+      return false;
+    }
+    const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    return Math.abs(maxScrollTop - scroller.scrollTop) <= BOTTOM_CONVERGE_EPSILON_PX;
+  }, [canProcessViewportGeometry]);
+
+  const convergeBottomReservationsToContentBottom = useCallback((reason: string): boolean => {
+    const scroller = scrollerElementRef.current;
+    if (!scroller || !isAtPhysicalBottom(scroller)) {
+      return false;
+    }
+    const coordinatorMode = viewportCoordinatorRef.current.getMode();
+    if (
+      coordinatorMode === 'preserving-element' ||
+      coordinatorMode === 'pinned-item'
+    ) {
+      // A semantic anchor or pinned turn owns the viewport; clearing synthetic
+      // tail space would move content under the user's reading position.
+      return false;
+    }
+    if (pendingCollapseIntentRef.current.active) {
+      return false;
+    }
+
+    const currentState = bottomReservationStateRef.current;
+    const hasCollapse = (
+      currentState.collapse.px > COMPENSATION_EPSILON_PX ||
+      currentState.collapse.floorPx > COMPENSATION_EPSILON_PX
+    );
+    const hasPin = (
+      currentState.pin.px > COMPENSATION_EPSILON_PX ||
+      currentState.pin.floorPx > COMPENSATION_EPSILON_PX
+    );
+    if (!hasCollapse && !hasPin) {
+      // Nothing to converge, but a stuck retained anchor / owner may still be
+      // blocking the idle audit — release them so later paths can run.
+      if (retainedCollapseAnchorRef.current !== null) {
+        retainedCollapseAnchorRef.current = null;
+        clearRetainedCollapseSettlement();
+      }
+      clearCollapseReservationOwner();
+      return false;
+    }
+
+    // Clear both reservations in one synchronous footer update. Pending turn
+    // pin / sticky-pin-growth request state is left alone: those requests have
+    // their own expiry paths and settle cleanly against an empty reservation.
+    const nextState = createInitialBottomReservationState();
+    pendingCollapseIntentRef.current = createInactiveCollapseIntentState();
+    retainedCollapseAnchorRef.current = null;
+    clearRetainedCollapseSettlement();
+    clearCollapseReservationOwner();
+    updateBottomReservationState(nextState);
+    applyFooterCompensationNow(nextState);
+
+    // Fall to the new content bottom. The browser would clamp here anyway;
+    // writing it explicitly keeps the scroll/height baselines consistent.
+    const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    scroller.scrollTop = maxScrollTop;
+    previousScrollTopRef.current = scroller.scrollTop;
+    previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller, nextState);
+    recordScrollerGeometry(scroller);
+
+    if (flowChatDiagnostics.isEnabled()) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'C',
+        location: 'VirtualMessageList.convergeBottomReservationsToContentBottom',
+        message: 'Bottom reservations converged to the content bottom',
+        data: () => ({
+          reason,
+          coordinatorMode,
+          reservationBefore: currentState,
+          scrollTopAfter: scroller.scrollTop,
+          scrollHeightAfter: scroller.scrollHeight,
+          clientHeight: scroller.clientHeight,
+        }),
+      });
+    }
+    return true;
+  }, [
+    applyFooterCompensationNow,
+    clearCollapseReservationOwner,
+    clearRetainedCollapseSettlement,
+    isAtPhysicalBottom,
+    recordScrollerGeometry,
+    snapshotMeasuredContentHeight,
+    updateBottomReservationState,
+  ]);
+
   const preserveCollapseAnchorScrollTop = useCallback((
     scroller: HTMLElement,
     targetScrollTop: number,
@@ -1346,6 +1465,15 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     const retainedAnchor = retainedCollapseAnchorRef.current;
     const scroller = scrollerElementRef.current;
     if (!retainedAnchor || !scroller || pendingCollapseIntentRef.current.active) {
+      return;
+    }
+
+    // Quiet window expired: if the user sits at the physical bottom, the
+    // geometric minimum for the current scrollTop equals the current
+    // reservation (dead-lock). Converge to the content bottom instead; this is
+    // the delayed browser clamp that compensation originally delayed, and it
+    // releases the retained anchor immediately.
+    if (convergeBottomReservationsToContentBottom(`retained-settle:${reason}`)) {
       return;
     }
 
@@ -1428,6 +1556,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   }, [
     applyFooterCompensationNow,
     clearCollapseReservationOwner,
+    convergeBottomReservationsToContentBottom,
     preserveCollapseAnchorScrollTop,
     updateBottomReservationState,
   ]);
@@ -1817,29 +1946,16 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         if (intent.active || retainedCollapseAnchorRef.current) return;
         const collapsePx = getReservationTotalPx(bottomReservationStateRef.current.collapse);
         if (collapsePx <= COMPENSATION_EPSILON_PX) return;
-        const distanceFromBottom = Math.max(
-          0,
-          scrollerNow.scrollHeight - scrollerNow.clientHeight - scrollerNow.scrollTop,
-        );
-        if (distanceFromBottom <= COMPENSATION_EPSILON_PX) {
-          // User is at the bottom — safe to drain all collapse compensation.
-          const drained: BottomReservationState = {
-            ...bottomReservationStateRef.current,
-            collapse: {
-              ...bottomReservationStateRef.current.collapse,
-              px: 0,
-              floorPx: 0,
-            },
-          };
-          updateBottomReservationState(drained);
-          applyFooterCompensationNow(drained);
-        }
+        // User at the physical bottom: converge everything (collapse + pin)
+        // to the content bottom in one pass instead of only zeroing collapse.
+        convergeBottomReservationsToContentBottom('input-stack-shrink-drain');
       });
     }
   }, [
     applyFooterCompensationNow,
     acquireCollapseReservationOwner,
     canProcessViewportGeometry,
+    convergeBottomReservationsToContentBottom,
     inputStackFooterPx,
     updateBottomReservationState,
   ]);
@@ -1980,10 +2096,42 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         Boolean(pinReservation.targetTurnId) &&
         viewportCoordinatorRef.current.ownsElementAnchor()
       );
-      const nextReservationState = consumeBottomCompensation(heightDelta, {
-        consumeStickyPinFloor: false,
-        preserveCollapseReservation: collapseProtectionActive,
-      });
+      const nextReservationState = (() => {
+        if (!collapseProtectionActive) {
+          return consumeBottomCompensation(heightDelta, {
+            consumeStickyPinFloor: false,
+          });
+        }
+        // While a collapse intent is alive, growth must not remove the range
+        // the ongoing animation still needs, but the provisional estimate can
+        // exceed the measured shrink so far. Only that inflation is safe to
+        // consume; otherwise growth during the intent window sediments into
+        // the footer and shows up as bottom whitespace (especially when the
+        // intent finalization is delayed by an unrenderable drain target).
+        const measuredProtectionPx = Math.max(
+          previousReservationState.collapse.floorPx,
+          Math.max(
+            0,
+            collapseIntent0.baseTotalCompensationPx +
+              Math.max(
+                0,
+                collapseIntent0.cumulativeShrinkPx -
+                  collapseIntent0.distanceFromBottomBeforeCollapse,
+              ) -
+              getReservationTotalPx(previousReservationState.pin),
+          ),
+        );
+        const consumablePx = Math.max(
+          0,
+          previousReservationState.collapse.px - measuredProtectionPx,
+        );
+        if (consumablePx <= COMPENSATION_EPSILON_PX) {
+          return previousReservationState;
+        }
+        return consumeBottomCompensation(Math.min(heightDelta, consumablePx), {
+          consumeStickyPinFloor: false,
+        });
+      })();
       const immediatelyConsumedPx = Math.max(
         0,
         getTotalBottomCompensationPx(previousReservationState) -
@@ -3300,10 +3448,47 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     }
 
     const scroller = scrollerElementRef.current;
+    // After a bounded number of deferred finalizations the drain target is
+    // effectively unavailable; settle to the geometric minimum instead of
+    // keeping the intent (and auto-follow suspension) alive indefinitely.
+    const forceSettle = intent.finalizeRetries >= COLLAPSE_INTENT_FINALIZE_MAX_RETRIES;
     const nextState = (() => {
+      // Bottom convergence: at the physical bottom, settling to the geometric
+      // minimum for the current scrollTop recomputes the current reservation
+      // (dead-lock). The correct settled view for a bottom user is the content
+      // bottom, so converge instead. `reconcile-sticky-pin` is excluded: it
+      // owns a pinned turn. (`retain-following-tail` already returned above;
+      // it waits for the quiet settle pass while Virtuoso measurements may
+      // still be moving.)
+      if (
+        settlementStrategy !== 'reconcile-sticky-pin' &&
+        scroller &&
+        isAtPhysicalBottom(scroller)
+      ) {
+        if (coordinatorMode === 'preserving-element') {
+          // The user is looking at the bottom; no anchor range needs to keep
+          // this viewport position after convergence.
+          viewportCoordinatorRef.current.release(`collapse-finalize:${reason}:bottom-converged`);
+        }
+        if (convergeBottomReservationsToContentBottom(`collapse-finalize:${reason}`)) {
+          return bottomReservationStateRef.current;
+        }
+      }
       switch (settlementStrategy) {
         case 'reconcile-sticky-pin':
         case 'drain':
+          if (forceSettle) {
+            return scroller
+              ? settleCollapseReservationForViewport(
+                bottomReservationStateRef.current,
+                {
+                  scrollTop: scroller.scrollTop,
+                  scrollHeight: scroller.scrollHeight,
+                  clientHeight: scroller.clientHeight,
+                },
+              )
+              : protectCurrentCollapseReservation(bottomReservationStateRef.current);
+          }
           return drainCollapseReservationPreservingPinnedItem(reason);
         case 'settle-preserved-element':
         case 'settle-protected-viewport':
@@ -3337,6 +3522,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
           data: () => ({
             reason,
             finalizeRetries: retriedIntent.finalizeRetries,
+            forceSettleNext: retriedIntent.finalizeRetries >= COLLAPSE_INTENT_FINALIZE_MAX_RETRIES,
             coordinatorMode: viewportCoordinatorRef.current.getMode(),
             pinMode: pinReservation.mode,
             pinTargetTurnId: pinReservation.targetTurnId,
@@ -3396,6 +3582,15 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       viewportCoordinatorRef.current.settleElementPreservation(
         `collapse-finalized:${reason}`,
       );
+      if (
+        getReservationTotalPx(bottomReservationStateRef.current.collapse) <=
+        COMPENSATION_EPSILON_PX
+      ) {
+        // No synthetic range remains for this anchor to preserve. Release it
+        // instead of lingering in retained mode until the next user scroll, so
+        // a later collapse captures a fresh anchor.
+        viewportCoordinatorRef.current.release('collapse-finalized-empty');
+      }
     }
 
     reconcilePendingStickyPinGrowthSettlement(
@@ -3416,8 +3611,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     applyFooterCompensationNow,
     clearCollapseIntentScheduling,
     clearCollapseReservationOwner,
+    convergeBottomReservationsToContentBottom,
     drainCollapseReservationPreservingPinnedItem,
     getRenderedUserMessageElement,
+    isAtPhysicalBottom,
     reconcilePendingStickyPinGrowthSettlement,
     recordScrollerGeometry,
     retainCollapseRangeForQuietSettlement,
@@ -4553,21 +4750,30 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         currentTotalCompensation > COMPENSATION_EPSILON_PX &&
         !intent.active
       ) {
-        const nextScrollTop = scrollerElement.scrollTop;
-        const scrollDelta = nextScrollTop - previousScrollTopRef.current;
-        if (scrollDelta > COMPENSATION_EPSILON_PX) {
-          const nextCompensationState = consumeBottomCompensation(scrollDelta);
-          applyFooterCompensationNow(nextCompensationState);
-          if (retainedCollapseAnchorRef.current) {
-            retainedCollapseAnchorRef.current.anchorScrollTop = Math.max(
-              retainedCollapseAnchorRef.current.anchorScrollTop,
-              scrollerElement.scrollTop,
+        // Bottom convergence: when the user is already at the physical bottom,
+        // per-scroll consumption never triggers (scrollDelta is 0 because the
+        // synthetic footer caps scrollTop), so the only way to shrink the
+        // whitespace was repeated up/down scrubbing. Any scroll event while at
+        // the physical bottom is bottom intent — converge in one pass.
+        if (convergeBottomReservationsToContentBottom('scroll-at-bottom')) {
+          // Converged; reservations are zero and baselines were re-synced.
+        } else {
+          const nextScrollTop = scrollerElement.scrollTop;
+          const scrollDelta = nextScrollTop - previousScrollTopRef.current;
+          if (scrollDelta > COMPENSATION_EPSILON_PX) {
+            const nextCompensationState = consumeBottomCompensation(scrollDelta);
+            applyFooterCompensationNow(nextCompensationState);
+            if (retainedCollapseAnchorRef.current) {
+              retainedCollapseAnchorRef.current.anchorScrollTop = Math.max(
+                retainedCollapseAnchorRef.current.anchorScrollTop,
+                scrollerElement.scrollTop,
+              );
+            }
+            previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(
+              scrollerElement,
+              nextCompensationState,
             );
           }
-          previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(
-            scrollerElement,
-            nextCompensationState,
-          );
         }
       }
 
@@ -4798,8 +5004,15 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         filePath?: string | null;
         reason?: string | null;
       }>).detail;
-      acquireCollapseReservationOwner('tool-collapse');
       const previousIntent = pendingCollapseIntentRef.current;
+      // Accumulation guard: if the previous intent already settled but left a
+      // stale reservation behind (the bottom dead-lock), converging first stops
+      // the new provisional estimate from stacking on top of it. Only safe when
+      // no active intent/anchor is mid-flight.
+      if (!previousIntent.active) {
+        convergeBottomReservationsToContentBottom('collapse-intent-arrived-at-bottom');
+      }
+      acquireCollapseReservationOwner('tool-collapse');
       clearRetainedCollapseSettlement();
       if (flowChatDiagnostics.isEnabled()) {
         flowChatDiagnostics.trace({
@@ -5007,6 +5220,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     consumeBottomCompensation,
     clearRetainedCollapseSettlement,
     clearTurnPinRequest,
+    convergeBottomReservationsToContentBottom,
     finalizeCollapseIntent,
     getRenderedUserMessageElement,
     getTotalBottomCompensationPx,
@@ -5591,6 +5805,136 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     viewportCoordinatorRef.current.release(reason);
     clearPinReservationForUserNavigation(reason, { preserveCurrentRange: true });
   };
+
+  // Idle reservation audit (safety net): when no streaming, collapse intent,
+  // retained anchor, or viewport owner is active and the user has been idle,
+  // settle the collapse reservation to its geometric minimum and drop stale
+  // sticky pins. Any owner that failed to release through the normal paths
+  // (e.g. a finalize retry loop that outlived its intent) cannot accumulate
+  // synthetic tail whitespace beyond one audit interval.
+  useEffect(() => {
+    const auditIdleReservations = () => {
+      const scroller = scrollerElementRef.current;
+      if (!canProcessViewportGeometry(scroller)) {
+        return;
+      }
+      if (isStreamingOutputRef.current) {
+        return;
+      }
+      if (pendingCollapseIntentRef.current.active || retainedCollapseAnchorRef.current !== null) {
+        return;
+      }
+      const coordinatorMode = viewportCoordinatorRef.current.getMode();
+      if (coordinatorMode === 'pinned-item' || coordinatorMode === 'following-tail') {
+        return;
+      }
+      if (
+        performance.now() - lastUserScrollIntentAtMsRef.current <
+        RETAINED_COLLAPSE_RELEASE_QUIET_MS
+      ) {
+        return;
+      }
+      if (
+        scrollbarPointerInteractionActiveRef.current ||
+        touchScrollIntentStartYRef.current !== null
+      ) {
+        return;
+      }
+
+      const currentState = bottomReservationStateRef.current;
+      const hasCollapse = (
+        currentState.collapse.px > COMPENSATION_EPSILON_PX ||
+        currentState.collapse.floorPx > COMPENSATION_EPSILON_PX
+      );
+      const hasPin = (
+        currentState.pin.px > COMPENSATION_EPSILON_PX ||
+        currentState.pin.floorPx > COMPENSATION_EPSILON_PX
+      );
+      if (!hasCollapse && !hasPin) {
+        // A bottom user needs no element-anchor correction (tail follow and
+        // physical-bottom sync own the viewport), so releasing the preserved
+        // anchor is safe. A mid-list reader may still rely on the retained
+        // anchor for reading-position corrections, so keep it while the user
+        // is away from the physical bottom.
+        if (coordinatorMode === 'preserving-element' && isAtPhysicalBottom(scroller)) {
+          viewportCoordinatorRef.current.release('idle-audit-empty');
+        }
+        return;
+      }
+
+      // Bottom convergence: at the physical bottom the geometric minimum for
+      // the current scrollTop equals the current reservation, so the plain
+      // settle below would keep the whitespace forever. Converge instead.
+      if (convergeBottomReservationsToContentBottom('idle-audit-bottom')) {
+        return;
+      }
+
+      let nextState = hasCollapse
+        ? settleCollapseReservationForViewport(currentState, {
+          scrollTop: scroller.scrollTop,
+          scrollHeight: scroller.scrollHeight,
+          clientHeight: scroller.clientHeight,
+        })
+        : currentState;
+      const pin = nextState.pin;
+      if (pin.mode === 'sticky-latest' && pin.targetTurnId && pin.targetTurnId !== latestTurnId) {
+        clearPinReservationForUserNavigation('idle-audit-stale-pin', {
+          preserveCurrentRange: false,
+        });
+        nextState = bottomReservationStateRef.current;
+      }
+      if (areBottomReservationStatesEqual(currentState, nextState)) {
+        return;
+      }
+      updateBottomReservationState(nextState);
+      applyFooterCompensationNow(nextState);
+      if (nextState.collapse.px <= COMPENSATION_EPSILON_PX) {
+        clearCollapseReservationOwner();
+        // Same rule as the empty-reservation branch: only a bottom user's
+        // preserved anchor may be released by the idle audit.
+        if (
+          viewportCoordinatorRef.current.getMode() === 'preserving-element' &&
+          isAtPhysicalBottom(scroller)
+        ) {
+          viewportCoordinatorRef.current.release('idle-audit-empty');
+        }
+      }
+      previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller, nextState);
+      recordScrollerGeometry(scroller);
+      if (flowChatDiagnostics.isEnabled()) {
+        flowChatDiagnostics.trace({
+          hypothesis: 'C',
+          location: 'VirtualMessageList.idleReservationAudit',
+          message: 'Idle reservation audit settled synthetic tail space',
+          data: () => ({
+            reservationBefore: currentState,
+            reservationAfter: bottomReservationStateRef.current,
+            coordinatorMode,
+            scrollTop: scroller.scrollTop,
+            scrollHeight: scroller.scrollHeight,
+            clientHeight: scroller.clientHeight,
+          }),
+        });
+      }
+    };
+
+    const auditTimer = window.setInterval(
+      auditIdleReservations,
+      IDLE_RESERVATION_AUDIT_INTERVAL_MS,
+    );
+    return () => window.clearInterval(auditTimer);
+  }, [
+    applyFooterCompensationNow,
+    canProcessViewportGeometry,
+    clearCollapseReservationOwner,
+    clearPinReservationForUserNavigation,
+    convergeBottomReservationsToContentBottom,
+    isAtPhysicalBottom,
+    latestTurnId,
+    recordScrollerGeometry,
+    snapshotMeasuredContentHeight,
+    updateBottomReservationState,
+  ]);
 
   const isStreamingOutput = React.useMemo(() => {
     if (viewportMode === 'history-reading') {

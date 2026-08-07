@@ -114,6 +114,15 @@ measurement convergence has no such owner. An idle measurement with no owner
 must only rebase the measured height and must never create Footer space from a
 negative `scrollHeight` delta alone.
 
+Owners are bounded by an idle reservation audit: while no streaming, collapse
+intent, retained anchor, or viewport owner is active and the user has been idle
+past `RETAINED_COLLAPSE_RELEASE_QUIET_MS`, `VirtualMessageList` settles the
+collapse reservation to its geometric minimum for the current scroll position
+and drops sticky pins whose target is no longer the latest turn. This is a
+safety net, not a release mechanism: a legitimate owner that still needs its
+range keeps it, but a stuck owner can no longer accumulate synthetic tail
+whitespace across audit intervals.
+
 Reservation state is ref-owned first and mirrored into React state. A Virtuoso
 Footer remount must synchronously read the ref-owned value; otherwise one stale
 React commit can remove exactly the reserved scroll range for a frame.
@@ -328,6 +337,29 @@ shrinks. `VirtualMessageList` uses that event to:
 
 This pre-compensation is what avoids the flash.
 
+Finalization is bounded. When the settlement strategy is `reconcile-sticky-pin`
+or `drain` and the drain target (the sticky pin user message) is not
+renderable, `drainCollapseReservationPreservingPinnedItem` returns `null` and
+finalization retries every 50 ms. Retries are capped at
+`COLLAPSE_INTENT_FINALIZE_MAX_RETRIES`; past the cap the intent force-settles
+to the geometric minimum instead of staying active. An intent that stays
+active indefinitely would suspend auto-follow via `shouldSuspendAutoFollow`
+and let every later collapse coalesce onto the same stuck provisional
+reservation, which shows up as bottom whitespace that grows with each
+subagent card event.
+
+While an intent is alive, `measureHeightChange` growth is consumed only down
+to the measured protection level (`baseTotalCompensationPx` plus the measured
+shrink so far minus the pin reservation), never below the collapse floor. The
+part of the provisional estimate above the measured shrink is inflation and
+must drain on growth; keeping it intact sediments subagent wrapping/growth
+into footer whitespace whenever finalization is delayed.
+
+After a `preserving-element` settlement, the coordinator anchor is released
+immediately when the collapse reservation reaches zero; a retained anchor
+with no synthetic range to preserve must not linger until the next user
+scroll.
+
 Runtime status is transient session UI state, not a `FlowItem`. The always-mounted
 `RuntimeStatusSlot` occupies the first 24px of the existing Footer spacer and
 switches only `visibility`; showing, hiding, and clearing it never change list
@@ -358,6 +390,41 @@ successor-driven collapse.
 This is deliberately separate from the VirtualMessageList collapse-intent TTL
 and settlement timers: the former controls when a card may compact, while the
 latter protects the viewport while its height changes.
+
+### Bottom convergence (dead-lock escape for stuck tail whitespace)
+
+Every settle variant above computes the geometric minimum for the *current*
+`scrollTop` via `getRequiredTotalPxForScrollTop`. At the physical bottom this
+recomputes exactly the current reservation: the synthetic footer holds
+`scrollTop` high, and the required range equals that same synthetic space. The
+result is a dead-lock where collapse compensation can only drain through
+measured content growth or deliberate downward scrolling. This is why the old
+behavior needed repeated up/down scrub cycles to shrink the whitespace, and
+why the idle audit could not help either (it settled to the same value).
+
+`VirtualMessageList.convergeBottomReservationsToContentBottom` breaks the
+dead-lock with a bottom-convergence pass:
+
+- Detection: `|(scrollHeight - clientHeight) - scrollTop| <=
+  BOTTOM_CONVERGE_EPSILON_PX` (2px) while the coordinator does not own
+  `preserving-element` / `pinned-item` and no collapse intent is active.
+  A mid-list reader never matches, so anchor-preserving settles stay intact.
+- Action: collapse and pin reservations are cleared in one synchronous Footer
+  update, then `scrollTop` falls to the new content bottom. The browser would
+  clamp here anyway; writing it explicitly keeps the scroll/height baselines
+  consistent. Pending turn-pin / sticky-pin-growth request state is left
+  alone; those requests expire or settle against the empty reservation on
+  their own paths.
+- Callers: retained quiet settlement (`settleRetainedCollapseRange`),
+  collapse-intent finalization for the non-pinned strategies,
+  the idle reservation audit, `handleScroll` (any scroll event at the
+  physical bottom is bottom intent — one pass replaces per-scrub
+  consumption), the collapse-intent accumulation guard (a new provisional
+  estimate must not stack on a settled bottom reservation), and the
+  input-stack-shrink drain.
+
+A bottom user converges once and sees the content bottom; a mid-list reader
+keeps the geometric minimum for the captured `scrollTop`.
 
 ## Runtime Flow
 
@@ -707,6 +774,11 @@ If a future collapsible component shows the same "header drops" or "flash on col
 - Pre-collapse intent must capture the anchor before the component shrinks.
 - Compensation must not be consumed too early during active layout transitions.
 - Session changes and empty-list resets must clear compensation and anchor state.
+- A user at the physical bottom must never retain synthetic tail space: every
+  settlement path (retained quiet settle, intent finalize, idle audit, scroll
+  handler, accumulation guards) must converge reservations to the content
+  bottom instead of settling to the geometric minimum for a `scrollTop` that
+  the reservation itself holds high.
 
 ## Common Ways To Break This
 
@@ -757,6 +829,31 @@ The diagnostic schema groups events by hypothesis:
 - `C`: content measurement, Footer compensation, and physical range changes
 - `D`: Virtuoso scroll compensation and tail-follow ownership
 - `E`: streaming tool-card collapse intent and anchor preservation
+
+Additional probes help attribute a stuck or growing bottom blank to its owner:
+
+- `VirtualMessageList.reservationLedger` (hypothesis `C`, sampled every 500 ms
+  while enabled): full `collapse`/`pin` reservation state, owner kind, intent
+  activity and remaining TTL, finalize retry count, retained anchor,
+  coordinator mode, follow/streaming flags, scroller geometry, distance from
+  bottom, and the rendered footer height.
+- `VirtualMessageList.finalizeCollapseIntent` (hypothesis `E`): every deferred
+  finalization with the retry count and whether the sticky pin target is
+  rendered; the settlement-completed event closes the intent lifecycle.
+- `VirtualMessageList.shouldSuspendAutoFollow` (hypothesis `D`): fires once
+  when auto-follow stays suspended longer than 2 s.
+- `VirtualMessageList.subagentHeightObserver` (hypothesis `C`): task/subagent
+  card height changes correlated with the reservation and intent state.
+- `FlowChatViewportCoordinator.restoreElementAnchor` (hypothesis `C`): anchor
+  bottom-range additions per source since the last semantic release.
+- `VirtualMessageList.convergeBottomReservationsToContentBottom`
+  (hypothesis `C`): every bottom-convergence pass with the reason, coordinator
+  mode, reservation before, and the post-convergence scroll geometry. A
+  healthy session should converge after each card collapse settles; repeated
+  convergences without an intervening reservation source indicate a producer
+  that keeps re-adding synthetic space.
+- The Footer DOM node exposes `data-reservation-px` (the current synthetic
+  tail space) for at-a-glance DevTools inspection without log parsing.
 
 Do not add message content, tool arguments, file contents, or other sensitive
 payloads to this channel. Keep all data producers lazy and guard hot-path probes
