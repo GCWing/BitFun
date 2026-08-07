@@ -429,6 +429,22 @@ pub fn apply_edit_to_content(
     let uses_crlf = content.contains("\r\n");
     let normalized_content = normalize_string(content);
 
+    // Fast path: try the exact old_string before generating fallback
+    // candidates. This avoids expensive whitespace-normalization and
+    // find_actual_string character-by-character scanning when the exact
+    // match succeeds — the common case.
+    match apply_match_and_replace(
+        &normalized_content,
+        uses_crlf,
+        old_string,
+        new_string,
+        replace_all,
+    ) {
+        Ok(result) => return Ok(result),
+        Err(error) if error == "old_string not found in file." => last_error = error,
+        Err(error) => return Err(error),
+    }
+
     for (candidate_old, candidate_new) in edit_string_candidates(content, old_string, new_string) {
         match apply_match_and_replace(
             &normalized_content,
