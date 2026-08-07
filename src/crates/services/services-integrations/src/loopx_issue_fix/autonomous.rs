@@ -66,10 +66,15 @@ branch), and never leave large build outputs behind on completed or abandoned wo
 - Repository-specific policy — toolchains, validation commands, path boundaries — \
 belongs in the goal's active state and registry, not in this prompt. Read it from \
 there, and write durable local rules back to the active state as you learn them.
-- Raise human decisions ONLY as typed LoopX user todos: `loopx todo add --role user \
---task-class user_gate --unblocks-todo-id <the todo this gate blocks> ...`, always \
-linking the gate to the blocked todo. BitFun's Issue-Fix panel projects open gates \
-to the user and records each decision through the LoopX todo lifecycle; a plain \
+- Raise human decisions ONLY as typed LoopX user todos, and pick the task class by \
+WHO performs the action. `--task-class user_gate` is exclusively a request for the \
+user to AUTHORIZE an action YOU would then perform (posting a comment, closing an \
+issue, force-pushing); always pass `--unblocks-todo-id <the todo this gate blocks>`. \
+Work the user completes themselves on the provider side — merging a PR, reviewing, \
+replying — is `--task-class user_action`, NEVER a gate: you do not need permission \
+for an action you will not perform, and the provider-side monitor observes the \
+outcome and closes it out. BitFun renders gates as blocking decision cards and \
+actions as ambient reminders; misclassifying floods the decision surface. A plain \
 chat reply never grants authority.
 - User-lane todo text is projected verbatim into BitFun's panel, so keep it to ONE \
 compact line (<=160 chars) in the shape \"<action> <PR/issue ref> — <which issue it \
@@ -676,16 +681,22 @@ fn project_issue_todo(todo: &Value) -> Option<AutonomousIssueTodo> {
     })
 }
 
-/// Project the first open Issue-Fix user gate straight from the todo list.
+/// Project the open Issue-Fix user gate that deserves the blocking decision
+/// card, straight from the todo list.
 ///
 /// `quota should-run` also previews gates, but its `gate_open_items` lane is
 /// compacted to two entries; enumerating the todo list is the only complete
 /// source, and it keeps gate projection available to the quota-free poll path.
 ///
-/// Issue-linked gates (unblocking a managed intake todo) win, but an open gate
-/// must never be invisible — the Kernel blocks on it either way — so unlinked
-/// or goal-wide gates are surfaced as a fallback. Only `user_gate` todos ever
-/// project; other user todos (reading queues, `user_action`) stay out.
+/// Not every open `user_gate` earns the card. Agents sometimes misclassify
+/// provider-side work ("please merge PR #N") as gates; rendering those as
+/// urgent decisions floods the surface while the loop is not even blocked.
+/// The card is reserved for gates that actually stall agent work:
+/// `blocks_agent` set, a goal-wide `global_gate`, or an authorization request
+/// (recognizable by asking the user to approve something the agent will do).
+/// Everything else still reaches the user through the pending-todos lane.
+/// Among card-worthy gates, issue-linked ones win; unlinked ones are the
+/// fallback so a blocking gate can never be invisible.
 fn project_user_question(
     todos: &[Value],
     issues: &[AutonomousIssueTodo],
@@ -696,6 +707,7 @@ fn project_user_question(
             todo.get("role").and_then(Value::as_str) == Some("user")
                 && todo.get("status").and_then(Value::as_str) == Some("open")
                 && todo.get("task_class").and_then(Value::as_str) == Some("user_gate")
+                && gate_blocks_agent_work(todo)
         })
         .collect::<Vec<_>>();
     let linked = open_gates.iter().find(|todo| {
@@ -708,6 +720,37 @@ fn project_user_question(
         todo_id: todo.get("todo_id")?.as_str()?.to_string(),
         prompt: todo.get("text")?.as_str()?.to_string(),
     })
+}
+
+/// Does this open gate actually stall agent work (vs. remind the user of
+/// provider-side work like merging a PR)?
+///
+/// Structural signals first: `blocks_agent` / `global_gate` are explicit
+/// Kernel-level blocks. For plain linked gates, distinguish "authorize the
+/// agent to act" from "please do this yourself" by the request verb: an
+/// authorization asks to approve/allow/permit something. The heuristic is
+/// deliberately conservative — misclassified merge reminders say "Merge PR
+/// #N", which carries no authorization verb, while genuine gates written per
+/// the contract say "Authorize ..." / "Allow ...".
+fn gate_blocks_agent_work(todo: &Value) -> bool {
+    if todo
+        .get("blocks_agent")
+        .and_then(Value::as_str)
+        .is_some_and(|value| !value.trim().is_empty())
+    {
+        return true;
+    }
+    if todo.get("global_gate").and_then(Value::as_bool) == Some(true) {
+        return true;
+    }
+    let text = todo
+        .get("text")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    ["authorize", "authorise", "allow ", "permit ", "approve "]
+        .iter()
+        .any(|verb| text.contains(verb))
 }
 
 /// Project every open user-lane todo (gates and actions) for the panel's
@@ -940,14 +983,14 @@ mod tests {
             "status": "open",
             "task_class": "user_gate",
             "unblocks_todo_id": "todo_1849",
-            "text": "Open the validated pull request for #1849?"
+            "text": "Authorize opening the validated pull request for #1849?"
         })];
 
         let question = project_user_question(&todos, &issues).expect("gate projects");
         assert_eq!(question.todo_id, "gate_1849");
         assert_eq!(
             question.prompt,
-            "Open the validated pull request for #1849?"
+            "Authorize opening the validated pull request for #1849?"
         );
     }
 
@@ -966,7 +1009,7 @@ mod tests {
                 "role": "user",
                 "status": "open",
                 "task_class": "user_gate",
-                "text": "Goal-wide gate without a link"
+                "text": "Authorize goal-wide production access"
             }),
             serde_json::json!({
                 "todo_id": "gate_1849",
@@ -974,7 +1017,7 @@ mod tests {
                 "status": "open",
                 "task_class": "user_gate",
                 "unblocks_todo_id": "todo_1849",
-                "text": "Open the validated pull request for #1849?"
+                "text": "Authorize opening the validated pull request for #1849?"
             }),
         ];
 
@@ -1016,6 +1059,43 @@ mod tests {
     }
 
     #[test]
+    fn provider_side_reminders_do_not_earn_the_decision_card() {
+        // Agents sometimes misfile "please merge PR #N" as user_gate. Merging
+        // is the USER's provider-side action — the monitor closes it out — so
+        // it must not render as a blocking decision. Structural blocks
+        // (blocks_agent) still do, whatever the text says.
+        let issues = vec![AutonomousIssueTodo {
+            issue_ref: "2124".to_string(),
+            issue_url: "https://github.com/owner/repo/issues/2124".to_string(),
+            todo_id: "todo_2124".to_string(),
+            status: "open".to_string(),
+            selected: true,
+        }];
+        let merge_reminder = vec![serde_json::json!({
+            "todo_id": "gate_merge",
+            "role": "user",
+            "status": "open",
+            "task_class": "user_gate",
+            "unblocks_todo_id": "todo_2124",
+            "text": "Merge PR #2126 - fixes #2124 ReviewFixer session mode . CI green, validated"
+        })];
+        assert!(project_user_question(&merge_reminder, &issues).is_none());
+
+        let structurally_blocking = vec![serde_json::json!({
+            "todo_id": "gate_blocking",
+            "role": "user",
+            "status": "open",
+            "task_class": "user_gate",
+            "unblocks_todo_id": "todo_2124",
+            "blocks_agent": "bitfun-cron",
+            "text": "Merge PR #2137 - fixes #1038 ACP session hydrate deadlock"
+        })];
+        let question =
+            project_user_question(&structurally_blocking, &issues).expect("blocking gate projects");
+        assert_eq!(question.todo_id, "gate_blocking");
+    }
+
+    #[test]
     fn gate_projection_does_not_depend_on_quota_preview_truncation() {
         // LoopX compacts `gate_open_items` to two entries; the projection must
         // find a gate that never appears in that preview.
@@ -1033,7 +1113,7 @@ mod tests {
                 "status": "open",
                 "task_class": "user_gate",
                 "unblocks_todo_id": "todo_unmanaged",
-                "text": "Gate for a todo this panel does not manage"
+                "text": "Authorize a step for a todo this panel does not manage"
             }),
             serde_json::json!({
                 "todo_id": "gate_3",
@@ -1041,7 +1121,7 @@ mod tests {
                 "status": "open",
                 "task_class": "user_gate",
                 "unblocks_todo_id": "todo_3",
-                "text": "Publish the validated patch for #3?"
+                "text": "Approve publishing the validated patch for #3?"
             }),
         ];
 
