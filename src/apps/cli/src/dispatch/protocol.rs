@@ -219,6 +219,13 @@ pub(crate) struct DispatchWorkspaceProvisionResponse {
     /// difference instead of the whole history.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) have_tips: Vec<String>,
+    /// Why the target could not pull `base_commit` from the project's remote,
+    /// when it tried and failed. Absent when the remote served the commit, and
+    /// when there is no remote to try. Bundle delivery costs the whole history
+    /// on a cold cache, so the reason it was chosen belongs in the record rather
+    /// than only in the target's log.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) fetch_error: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
