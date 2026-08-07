@@ -1,14 +1,9 @@
 @use '../../../component-library/styles/tokens' as *;
 
 .bitfun-mcp-tools {
-  .bitfun-collection-empty {
-    justify-content: flex-start;
-    padding: $size-gap-2 0;
-    font-size: var(--font-size-xs);
-  }
   // ─── JSON editor (MCP) ─────────────────────────────────────────────────────
   &__json-editor {
-    padding: $size-gap-3 0;
+    padding: $size-gap-3;
     border-bottom: 1px solid var(--border-subtle);
     display: flex;
     flex-direction: column;
@@ -40,7 +35,7 @@
 
   &__json-actions {
     display: flex;
-    justify-content: center;
+    justify-content: flex-end;
     gap: $size-gap-2;
   }
 

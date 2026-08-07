@@ -542,14 +542,18 @@
   }
 
   &__mcp-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--size-gap-2);
+    padding: var(--size-gap-6) var(--size-gap-4);
     color: var(--color-text-secondary);
-    font-size: 13px;
-    display: grid;
-    gap: 8px;
-    padding: 12px 0;
+    font-size: var(--font-size-sm);
+    text-align: center;
 
     code {
-      font-size: 12px;
+      font-size: var(--font-size-xs);
       color: var(--color-text-muted);
     }
   }
