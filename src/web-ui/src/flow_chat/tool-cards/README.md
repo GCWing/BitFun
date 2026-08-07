@@ -56,44 +56,9 @@ Preferred pattern:
 
 ## Known Height Changes
 
-If a tool card performs a user-triggered or predictable collapse that can reduce
-its height near the bottom of the conversation, dispatch
-`flowchat:tool-card-collapse-intent` before the collapse happens so
-`VirtualMessageList` can pre-compensate.
-
-This applies to both:
-
-- manual expand/collapse actions
-- automatic status-driven collapses such as collapsing when a tool completes
-
-After a height-changing expand/collapse actually happens, also dispatch
-`tool-card-toggle` so `VirtualMessageList` can schedule follow-up measurement
-and reconcile the final layout.
-
-Tool cards should treat the list's bottom-spacing logic as an internal
-implementation detail. Do not couple card behavior to specific reservation or
-compensation fields inside `VirtualMessageList`; the stable contract for cards is
-still the event pair above plus `useToolCardHeightContract`.
-
-Preferred pattern:
-
-```tsx
-const cardHeight = cardRootRef.current?.getBoundingClientRect().height ?? null;
-
-if (willCollapse) {
-  window.dispatchEvent(new CustomEvent('flowchat:tool-card-collapse-intent', {
-    detail: {
-      toolId,
-      toolName,
-      cardHeight,
-      reason: 'manual', // or 'auto'
-    }
-  }));
-}
-
-setIsExpanded(nextExpanded);
-window.dispatchEvent(new CustomEvent('tool-card-toggle'));
-```
+Tool-card height changes use normal layout reflow. FlowChat does not reserve
+tail space or preserve a card header before a collapse. After a real
+expanded-state change, dispatch `tool-card-toggle` so Virtuoso can remeasure.
 
 Preferred implementation:
 
@@ -106,18 +71,11 @@ const { cardRootRef, applyExpandedState } = useToolCardHeightContract({
   toolName,
 });
 
-applyExpandedState(isExpanded, nextExpanded, setIsExpanded, {
-  reason: 'manual', // or 'auto'
-  detail: {
-    filePath,
-  },
-});
+applyExpandedState(isExpanded, nextExpanded, setIsExpanded);
 ```
 
-Attach `cardRootRef` to the visible outer box that actually collapses. Do not
-use an inner scroll container's `scrollHeight`: bounded cards can contain much
-more hidden scroll content than the layout height removed by a collapse, which
-would over-reserve FlowChat footer space.
+Attach `cardRootRef` to the visible outer box. Do not calculate or write the
+outer FlowChat viewport position from a card.
 
 Current examples:
 

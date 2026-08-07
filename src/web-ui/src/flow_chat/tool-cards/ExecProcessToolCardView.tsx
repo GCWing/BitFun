@@ -11,7 +11,7 @@ import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActio
 import { CopyableTextPreview } from '../components/CopyableTextPreview';
 import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
 import { DotMatrixLoader } from '../../component-library';
-import { useToolCardHeightContract, type ToolCardCollapseReason } from './useToolCardHeightContract';
+import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { useToolCardCompletionGracePeriod } from './useToolCardCompletionGracePeriod';
 import { formatSessionViewPreviewText } from '../utils/sessionViewPreview';
 import './ExecProcessToolCard.scss';
@@ -209,23 +209,17 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
       !userToggledRef.current,
   });
 
-  const applyExecExpandedState = useCallback((
-    nextExpanded: boolean,
-    options?: { reason?: ToolCardCollapseReason },
-  ) => {
+  const applyExecExpandedState = useCallback((nextExpanded: boolean) => {
     if (nextExpanded === isExpanded) {
       return;
     }
 
-    applyExpandedState(isExpanded, nextExpanded, setIsExpandedState, {
-      reason: options?.reason ?? 'manual',
-      onExpand,
-    });
+    applyExpandedState(isExpanded, nextExpanded, setIsExpandedState, { onExpand });
   }, [applyExpandedState, isExpanded, onExpand]);
 
   const toggleExpanded = useCallback(() => {
     userToggledRef.current = true;
-    applyExecExpandedState(!isExpanded, { reason: 'manual' });
+    applyExecExpandedState(!isExpanded);
   }, [applyExecExpandedState, isExpanded]);
 
   useLayoutEffect(() => {
@@ -236,7 +230,7 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
     const keepTailPreview = isCollapsedStatus(status) && beginCompletionPreview();
     const nextExpanded = getAutoExpandedStateForStatus(status, isLastItem, keepTailPreview);
     if (nextExpanded !== null) {
-      applyExecExpandedState(nextExpanded, { reason: 'auto' });
+      applyExecExpandedState(nextExpanded);
     }
   }, [
     applyExecExpandedState,

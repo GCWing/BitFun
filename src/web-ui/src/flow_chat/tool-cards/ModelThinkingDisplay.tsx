@@ -55,9 +55,7 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
   useLayoutEffect(() => {
     if (userToggledRef.current) return;
     if (isExpanded !== shouldDefaultExpanded) {
-      applyExpandedState(isExpanded, shouldDefaultExpanded, setIsExpanded, {
-        reason: 'auto',
-      });
+      applyExpandedState(isExpanded, shouldDefaultExpanded, setIsExpanded);
     }
   }, [applyExpandedState, isExpanded, shouldDefaultExpanded]);
 

@@ -112,9 +112,7 @@
   }
   
   .message-list-footer {
-    /* Inline height from VirtualMessageList (measured drop-zone + bottom inset + tail clearance). */
-    height: 120px;
-    min-height: 72px;
+    /* Current input-stack inset is supplied inline by VirtualMessageList. */
     overflow-anchor: none;
   }
 

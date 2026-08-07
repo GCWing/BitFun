@@ -1,11 +1,10 @@
 /**
  * FlowChat navigation side effects.
  *
- * Handles cross-session focus requests and turn pinning events for the modern
- * virtualized list.
+ * Handles cross-session focus requests for the modern virtualized list.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { createLogger } from '@/shared/utils/logger';
 import { flowChatStore } from '../../store/FlowChatStore';
@@ -13,9 +12,7 @@ import { useModernFlowChatStore, type VirtualItem } from '../../store/modernFlow
 import { flowChatManager } from '../../services/FlowChatManager';
 import {
   FLOWCHAT_FOCUS_ITEM_EVENT,
-  FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
   type FlowChatFocusItemRequest,
-  type FlowChatPinTurnToTopRequest,
 } from '../../events/flowchatNavigation';
 import type { VirtualMessageListRef } from './VirtualMessageList';
 import { resolveFlowChatFocusTarget, type ResolvedFocusTarget } from './flowChatFocusTarget';
@@ -27,7 +24,6 @@ interface UseFlowChatNavigationOptions {
   virtualItems: VirtualItem[];
   virtualListRef: RefObject<VirtualMessageListRef | null>;
   onExpandExploreGroup?: (groupId: string) => void;
-  onBeforeTurnPinRequest?: (request: FlowChatPinTurnToTopRequest) => void;
   onNavigateToFocusTurn?: (request: FlowChatFocusItemRequest) => Promise<boolean> | boolean;
 }
 
@@ -56,8 +52,8 @@ function navigateToResolvedTarget(
   const list = virtualListRef.current;
   if (!list) return;
 
-  if (target.preferPinnedTurnNavigation && target.resolvedTurnId) {
-    list.pinTurnToTop(target.resolvedTurnId, { behavior: 'auto' });
+  if (target.preferTurnNavigation && target.resolvedTurnId) {
+    list.navigateToTurn(target.resolvedTurnId, { behavior: 'auto' });
     return;
   }
 
@@ -76,10 +72,8 @@ export function useFlowChatNavigation({
   virtualItems,
   virtualListRef,
   onExpandExploreGroup,
-  onBeforeTurnPinRequest,
   onNavigateToFocusTurn,
 }: UseFlowChatNavigationOptions): void {
-  const [pendingTurnPinRequest, setPendingTurnPinRequest] = useState<FlowChatPinTurnToTopRequest | null>(null);
   const virtualItemsRef = useRef(virtualItems);
   const onExpandExploreGroupRef = useRef(onExpandExploreGroup);
   const onNavigateToFocusTurnRef = useRef(onNavigateToFocusTurn);
@@ -89,35 +83,6 @@ export function useFlowChatNavigation({
     onExpandExploreGroupRef.current = onExpandExploreGroup;
     onNavigateToFocusTurnRef.current = onNavigateToFocusTurn;
   }, [onExpandExploreGroup, onNavigateToFocusTurn, virtualItems]);
-
-  useEffect(() => {
-    const unsubscribe = globalEventBus.on<FlowChatPinTurnToTopRequest>(FLOWCHAT_PIN_TURN_TO_TOP_EVENT, (request) => {
-      if (!request || request.sessionId !== activeSessionId) {
-        return;
-      }
-
-      onBeforeTurnPinRequest?.(request);
-      setPendingTurnPinRequest(request);
-    });
-
-    return unsubscribe;
-  }, [activeSessionId, onBeforeTurnPinRequest]);
-
-  useEffect(() => {
-    if (!pendingTurnPinRequest) return;
-    if (pendingTurnPinRequest.sessionId !== activeSessionId) {
-      setPendingTurnPinRequest(null);
-      return;
-    }
-
-    const accepted = virtualListRef.current?.pinTurnToTop(pendingTurnPinRequest.turnId, {
-      behavior: pendingTurnPinRequest.behavior ?? 'auto',
-      pinMode: pendingTurnPinRequest.pinMode,
-    }) ?? false;
-    if (accepted) {
-      setPendingTurnPinRequest(null);
-    }
-  }, [activeSessionId, pendingTurnPinRequest, virtualItems, virtualListRef]);
 
   useEffect(() => {
     const unsubscribe = globalEventBus.on<FlowChatFocusItemRequest>(FLOWCHAT_FOCUS_ITEM_EVENT, async (request) => {
@@ -208,7 +173,7 @@ export function useFlowChatNavigation({
           if (
             attempts % 12 === 0
             && !delegatedTurnNavigationAttempted
-            && !currentTarget.preferPinnedTurnNavigation
+            && !currentTarget.preferTurnNavigation
           ) {
             navigateToResolvedTarget(virtualListRef, currentTarget);
           }

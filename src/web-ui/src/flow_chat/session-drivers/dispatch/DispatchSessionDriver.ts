@@ -10,7 +10,6 @@
  */
 
 import { createLogger } from '@/shared/utils/logger';
-import { globalEventBus } from '@/infrastructure/event-bus';
 import { i18nService } from '@/infrastructure/i18n';
 import type {
   PermissionReplyKind,
@@ -32,10 +31,6 @@ import type {
   TurnTracker,
   UsageReportUiParams,
 } from '../types';
-import {
-  FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
-  type FlowChatPinTurnToTopRequest,
-} from '../../events/flowchatNavigation';
 import {
   isDispatchJobTerminal,
   isNonLocalDispatchTarget,
@@ -115,20 +110,6 @@ function dispatchAttachments(
     }
   }
   return attachments;
-}
-
-function pinTurnToTop(sessionId: string, turnId: string): void {
-  globalEventBus.emit(
-    FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
-    {
-      sessionId,
-      turnId,
-      behavior: 'auto',
-      source: 'send-message',
-      pinMode: 'sticky-latest',
-    } satisfies FlowChatPinTurnToTopRequest,
-    'DispatchSessionDriver',
-  );
 }
 
 async function appendToDispatchJob(
@@ -230,7 +211,6 @@ async function continueDispatchJob(
     status: 'pending',
     startTime: Date.now(),
   });
-  pinTurnToTop(sessionId, optimisticTurnId);
 
   try {
     const response = await dispatchApi.continueJob(
@@ -745,7 +725,6 @@ export const dispatchSessionDriver: SessionDriver = {
     };
     context.flowChatStore.addDialogTurn(sessionId, optimisticTurn);
     tracker.createdLocalTurnId = optimisticTurnId;
-    pinTurnToTop(sessionId, optimisticTurnId);
 
     const includeUncommitted = readySession.config.dispatchIncludeUncommitted ?? false;
     const baseRef = readySession.config.dispatchBaseRef?.trim() || 'HEAD';

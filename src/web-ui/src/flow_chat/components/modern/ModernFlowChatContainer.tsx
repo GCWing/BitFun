@@ -10,7 +10,7 @@ import { FlowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { useSessionModeStore } from '@/app/stores/sessionModeStore';
 import {
   VirtualMessageList,
-  type FlowChatTurnPinRequestStatus,
+  type FlowChatTurnNavigationStatus,
   type HistoryWindowBoundaryIntentResult,
   type HistoryWindowBoundaryIntentOptions,
   type VirtualMessageListRef,
@@ -51,10 +51,7 @@ import type {
   SessionHistoryPresentation,
 } from '../../types/flow-chat';
 import type { SessionHistoryWindowDirection } from '../../store/FlowChatStore';
-import type {
-  FlowChatFocusItemRequest,
-  FlowChatPinTurnToTopRequest,
-} from '../../events/flowchatNavigation';
+import type { FlowChatFocusItemRequest } from '../../events/flowchatNavigation';
 import {
   useBackgroundCommandActivityStore,
   visibleBackgroundCommandActivitiesForSession,
@@ -77,7 +74,6 @@ import { resolveThreadGoalHeaderTitle } from '../../utils/threadGoalDisplay';
 import { hasActiveSessionLineageDescendants } from '../../utils/sessionLineage';
 import {
   findDialogTurn,
-  shouldUseStickyLatestPin,
   shouldUseLatestTurnFollowOutput,
 } from '../../utils/flowChatTurnScrollPolicy';
 import { isRemoteTraceContext, startupTrace } from '@/shared/utils/startupTrace';
@@ -433,12 +429,12 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const [stoppingBackgroundCommandIds, setStoppingBackgroundCommandIds] = useState<Set<string>>(() => new Set());
   const [backgroundCommandInputTarget, setBackgroundCommandInputTarget] = useState<FlowChatHeaderCommandSummary | null>(null);
   const [isSendingBackgroundCommandInput, setIsSendingBackgroundCommandInput] = useState(false);
-  const autoPinnedTurnKeyRef = useRef<string | null>(null);
+  const autoTailTurnKeyRef = useRef<string | null>(null);
   const releasedHistoryCompletionKeyRef = useRef<string | null>(null);
   const visibleTurnInfoRef = useRef<VisibleTurnInfo | null>(visibleTurnInfo);
   const turnSummariesRef = useRef<FlowChatTurnSummary[]>([]);
   const turnRailTurnIdsRef = useRef<Set<string>>(new Set());
-  const requestTurnNavigationPinRef = useRef<((turnId: string) => FlowChatTurnPinRequestStatus) | null>(null);
+  const requestTurnNavigationRef = useRef<((turnId: string) => FlowChatTurnNavigationStatus) | null>(null);
   const searchFullHistorySessionIdRef = useRef<string | null>(null);
   const virtualListRef = useRef<VirtualMessageListRef>(null);
   const chatScopeRef = useRef<HTMLDivElement>(null);
@@ -533,18 +529,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     setHistoryBoundaryState(IDLE_HISTORY_BOUNDARY_STATE);
     setQueuedTurnNavigation(null);
   }, [activeSession?.sessionId, continuousHistoryProjectionEligible, updateViewportIntent]);
-
-  const handleBeforeTurnPinRequest = useCallback((request: FlowChatPinTurnToTopRequest) => {
-    const currentViewportIntent = viewportIntentRef.current;
-    if (
-      request.source === 'send-message'
-      && currentViewportIntent?.sessionId === request.sessionId
-      && currentViewportIntent.kind === 'turn'
-      && currentViewportIntent.source === 'history-range'
-    ) {
-      switchToLiveTailForSession(request.sessionId);
-    }
-  }, [switchToLiveTailForSession]);
 
   useEffect(() => {
     historyPresentationRef.current = historyPresentation;
@@ -1027,7 +1011,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     [activeSession?.dialogTurns, latestTurnId],
   );
   const latestTurnUsesFollowOutput = shouldUseLatestTurnFollowOutput(latestTurn);
-  const latestTurnUsesStickyPin = shouldUseStickyLatestPin(latestTurn);
 
   const navigationVisibleTurnInfo = useMemo<VisibleTurnInfo | null>(() => {
     if (!visibleTurnInfo) {
@@ -1084,19 +1067,17 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     return effectiveVisibleTurnInfo?.userMessage ?? '';
   }, [effectiveVisibleTurnInfo?.turnId, effectiveVisibleTurnInfo?.userMessage, renderedTurns, resolveLocalCommandHeaderTitle]);
 
-  const requestTurnNavigationPin = useCallback((turnId: string): FlowChatTurnPinRequestStatus => {
+  const requestTurnNavigation = useCallback((turnId: string): FlowChatTurnNavigationStatus => {
     if (!isViewportActive) {
       return 'rejected';
     }
-    return virtualListRef.current?.pinTurnToTopWithStatus(turnId, {
+    return virtualListRef.current?.navigateToTurnWithStatus(turnId, {
       behavior: 'auto',
-      pinMode: 'transient',
-      alignmentPolicy: 'best-effort',
     }) ?? 'rejected';
   }, [isViewportActive]);
   useEffect(() => {
-    requestTurnNavigationPinRef.current = requestTurnNavigationPin;
-  }, [requestTurnNavigationPin]);
+    requestTurnNavigationRef.current = requestTurnNavigation;
+  }, [requestTurnNavigation]);
   const handleVirtualListUserScrollIntent = useCallback(() => {
     setQueuedTurnNavigation(null);
   }, []);
@@ -1140,8 +1121,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         return;
       }
 
-      const pinStatus = requestTurnNavigationPinRef.current?.(queuedTurnId) ?? 'rejected';
-      if (pinStatus === 'settled' || pinStatus === 'pending') {
+      const navigationStatus = requestTurnNavigationRef.current?.(queuedTurnId) ?? 'rejected';
+      if (navigationStatus === 'settled' || navigationStatus === 'pending') {
         setQueuedTurnNavigation(null);
         return;
       }
@@ -1170,7 +1151,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   ]);
 
   useLayoutEffect(() => {
-    autoPinnedTurnKeyRef.current = null;
+    autoTailTurnKeyRef.current = null;
     releasedHistoryCompletionKeyRef.current = null;
     searchFullHistorySessionIdRef.current = null;
   }, [activeSession?.sessionId]);
@@ -1187,163 +1168,47 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       ? `${sessionId}:${latestTurnId}:${turnSummaries.length}`
       : null;
     if (
-      !isViewportActive
-      ||
-      !sessionId
-      || isReadingTurnViewport
-      || !latestTurnId
-      || autoPinnedTurnKeyRef.current === latestTurnKey
+      !isViewportActive ||
+      !sessionId ||
+      isReadingTurnViewport ||
+      !latestTurnId ||
+      !latestTurnKey ||
+      autoTailTurnKeyRef.current === latestTurnKey
     ) {
       return;
     }
 
-    const resolvedLatestTurnId = latestTurnId;
-    const resolvedLatestTurnKey = latestTurnKey;
-    const pinMode = latestTurnUsesStickyPin
-      ? 'sticky-latest'
-      : null;
     if (latestTurnUsesFollowOutput) {
-      autoPinnedTurnKeyRef.current = resolvedLatestTurnKey;
-      startupTrace.markPhase('historical_session_latest_anchor_skipped', {
-        sessionId,
-        latestTurnId,
-        reason: 'streaming_follow_output',
-        mode: pinMode ?? 'follow-output',
-        turnCount: turnSummaries.length,
-      });
+      autoTailTurnKeyRef.current = latestTurnKey;
       return;
-    }
-    const previousAnchoredLatestTurnKeyPrefix = `${sessionId}:${latestTurnId}:`;
-    const hasPreviouslyAnchoredSameLatestTurn =
-      autoPinnedTurnKeyRef.current?.startsWith(previousAnchoredLatestTurnKeyPrefix) === true;
-    const latestTurnRenderedInViewport = virtualListRef.current?.isTurnRenderedInViewport(latestTurnId) === true;
-    const sameLatestTurnCountChanged =
-      hasPreviouslyAnchoredSameLatestTurn &&
-      autoPinnedTurnKeyRef.current !== resolvedLatestTurnKey;
-    const shouldSkipLocalFullHistoryReanchor =
-      sameLatestTurnCountChanged &&
-      !isRemoteTraceContext(activeSession.remoteConnectionId, activeSession.remoteSshHost);
-    const shouldForceLatestAnchorAfterTurnCountChange =
-      sameLatestTurnCountChanged &&
-      !shouldSkipLocalFullHistoryReanchor;
-    if (shouldSkipLocalFullHistoryReanchor) {
-      autoPinnedTurnKeyRef.current = resolvedLatestTurnKey;
-      startupTrace.markPhase('historical_session_latest_anchor_skipped', {
-        sessionId,
-        latestTurnId,
-        reason: 'local_full_history_projection',
-        mode: pinMode ?? 'bottom',
-        turnCount: turnSummaries.length,
-      });
-      return;
-    }
-    if (
-      !shouldForceLatestAnchorAfterTurnCountChange &&
-      hasPreviouslyAnchoredSameLatestTurn &&
-      visibleTurnInfo?.turnId === latestTurnId &&
-      latestTurnRenderedInViewport
-    ) {
-      autoPinnedTurnKeyRef.current = resolvedLatestTurnKey;
-      startupTrace.markPhase('historical_session_latest_anchor_skipped', {
-        sessionId,
-        latestTurnId,
-        reason: 'latest_turn_already_visible',
-        mode: pinMode ?? 'bottom',
-      });
-      return;
-    }
-    if (
-      hasPreviouslyAnchoredSameLatestTurn &&
-      visibleTurnInfo?.turnId === latestTurnId &&
-      !latestTurnRenderedInViewport
-    ) {
-      startupTrace.markPhase('historical_session_latest_anchor_stale_visible_info', {
-        sessionId,
-        latestTurnId,
-        mode: pinMode ?? 'bottom',
-      });
     }
 
-    let frameId: number | null = null;
     let cancelled = false;
+    let frameId: number | null = null;
     let attempts = 0;
-
-    const attemptLatestViewportAnchor = () => {
-      if (cancelled) {
-        return;
-      }
-
+    const scrollLatestTurnToNaturalEnd = () => {
+      if (cancelled) return;
       attempts += 1;
-      let accepted = false;
-      const list = virtualListRef.current;
-
-      if (pinMode) {
-        accepted = list?.pinTurnToTop(resolvedLatestTurnId, {
-          behavior: 'auto',
-          pinMode,
-        }) ?? false;
-      } else if (list) {
-        accepted = list.scrollToTurnEndAndClearPin(resolvedLatestTurnId);
-      }
-
-      startupTrace.markPhase('historical_session_latest_anchor_attempt', {
-        sessionId,
-        latestTurnId: resolvedLatestTurnId,
-        accepted,
-        attempt: attempts,
-        mode: pinMode ?? 'bottom',
-      });
-
-      if (accepted) {
-        autoPinnedTurnKeyRef.current = resolvedLatestTurnKey;
+      if (virtualListRef.current?.scrollToTurnEnd(latestTurnId)) {
+        autoTailTurnKeyRef.current = latestTurnKey;
         return;
       }
-
-      if (attempts >= LATEST_TURN_AUTO_PIN_MAX_ATTEMPTS) {
-        startupTrace.markPhase('historical_session_latest_anchor_failed', {
-          sessionId,
-          latestTurnId: resolvedLatestTurnId,
-          attempts,
-          mode: pinMode ?? 'bottom',
-        });
-        return;
+      if (attempts < LATEST_TURN_AUTO_PIN_MAX_ATTEMPTS) {
+        frameId = requestAnimationFrame(scrollLatestTurnToNaturalEnd);
       }
-
-      frameId = requestAnimationFrame(attemptLatestViewportAnchor);
     };
-
-    const shouldAttemptLatestAnchorImmediately =
-      shouldForceLatestAnchorAfterTurnCountChange ||
-      activeSession?.isHistorical === true ||
-      activeSession?.contextRestoreState === 'pending' ||
-      hasPendingHistoryCompletion;
-
-    if (shouldAttemptLatestAnchorImmediately) {
-      attemptLatestViewportAnchor();
-    } else {
-      frameId = requestAnimationFrame(attemptLatestViewportAnchor);
-    }
-
+    frameId = requestAnimationFrame(scrollLatestTurnToNaturalEnd);
     return () => {
       cancelled = true;
-      if (frameId !== null) {
-        cancelAnimationFrame(frameId);
-      }
+      if (frameId !== null) cancelAnimationFrame(frameId);
     };
   }, [
     activeSession?.sessionId,
-    activeSession?.isHistorical,
-    activeSession?.contextRestoreState,
-    activeSession?.remoteConnectionId,
-    activeSession?.remoteSshHost,
-    hasPendingHistoryCompletion,
-    isViewportActive,
     isReadingTurnViewport,
+    isViewportActive,
     latestTurnId,
     latestTurnUsesFollowOutput,
-    latestTurnUsesStickyPin,
     turnSummaries.length,
-    visibleTurnInfo?.turnId,
   ]);
 
   useEffect(() => {
@@ -1573,8 +1438,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         turnId: renderedTargetId,
         source: isRenderingHistoryProjection ? 'history-range' : 'canonical-tail',
       });
-      const pinStatus = requestTurnNavigationPin(renderedTargetId);
-      if (pinStatus === 'settled' || pinStatus === 'pending') {
+      const navigationStatus = requestTurnNavigation(renderedTargetId);
+      if (navigationStatus === 'settled' || navigationStatus === 'pending') {
         setQueuedTurnNavigation(null);
         return true;
       }
@@ -1606,12 +1471,10 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         recentHistoryPresentation.range,
       );
       if (reactivatedPresentation) {
-        const preparedPin = virtualListRef.current?.prepareTurnPinToTop(recentHistoryTurn.id, {
+        const preparedNavigation = virtualListRef.current?.prepareTurnNavigation(recentHistoryTurn.id, {
           behavior: 'auto',
-          pinMode: 'transient',
-          alignmentPolicy: 'best-effort',
         }) ?? 'rejected';
-        if (preparedPin !== 'rejected') {
+        if (preparedNavigation !== 'rejected') {
           applyHistoryPresentation(sessionId, reactivatedPresentation, {
             viewportTarget: {
               ordinal: targetItem.ordinal,
@@ -1647,12 +1510,10 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         return false;
       }
 
-      const preparedPin = virtualListRef.current?.prepareTurnPinToTop(targetTurnId, {
+      const preparedNavigation = virtualListRef.current?.prepareTurnNavigation(targetTurnId, {
         behavior: 'auto',
-        pinMode: 'transient',
-        alignmentPolicy: 'best-effort',
       }) ?? 'rejected';
-      if (preparedPin === 'rejected') {
+      if (preparedNavigation === 'rejected') {
         return false;
       }
       const presentation = flowChatStore.activateSessionHistoryWindow(
@@ -1702,7 +1563,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     applyHistoryPresentation,
     isRenderingHistoryProjection,
     renderedTurnSummaries,
-    requestTurnNavigationPin,
+    requestTurnNavigation,
     restoreTailPresentation,
     turnRailItems,
     updateViewportIntent,
@@ -1774,7 +1635,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     virtualItems,
     virtualListRef,
     onExpandExploreGroup: handleExpandGroup,
-    onBeforeTurnPinRequest: handleBeforeTurnPinRequest,
     onNavigateToFocusTurn: handleNavigateToFocusTurn,
   });
 

@@ -12,7 +12,6 @@ import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { ACPClientAPI } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { worktreeAPI } from '@/infrastructure/api/service-api/WorktreeAPI';
-import { globalEventBus } from '@/infrastructure/event-bus';
 import { createLogger } from '@/shared/utils/logger';
 import { stateMachineManager } from '../../state-machine';
 import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
@@ -27,10 +26,6 @@ import type {
   TurnTracker,
   UsageReportUiParams,
 } from '../types';
-import {
-  FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
-  type FlowChatPinTurnToTopRequest,
-} from '../../events/flowchatNavigation';
 import {
   getModelMaxTokens,
   resolveReasoningPresetForSessionCreation,
@@ -323,15 +318,6 @@ export const localSessionDriver: SessionDriver = {
 
     context.flowChatStore.addDialogTurn(sessionId, dialogTurn);
     tracker.createdLocalTurnId = dialogTurnId;
-    const pinRequest: FlowChatPinTurnToTopRequest = {
-      sessionId,
-      turnId: dialogTurnId,
-      behavior: 'auto',
-      source: 'send-message',
-      pinMode: 'sticky-latest',
-    };
-    globalEventBus.emit(FLOWCHAT_PIN_TURN_TO_TOP_EVENT, pinRequest, 'MessageModule');
-
     const isRestoringHistoricalSession =
       readySession.isHistorical || context.pendingHistoryLoads.has(sessionId);
     if (isRestoringHistoricalSession) {

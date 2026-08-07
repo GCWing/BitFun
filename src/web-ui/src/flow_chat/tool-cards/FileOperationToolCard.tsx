@@ -2,15 +2,9 @@
  * File operation tool card - refactored based on BaseToolCard
  * Supports Write/Edit/Delete file operations
  *
- * Height-stability contract:
- * - Any state-driven height change must go through
- *   `useToolCardHeightContract.applyExpandedState(...)`.
- * - Any status/render-path change that removes expanded content without
- *   toggling local expand state must dispatch
- *   `flowchat:tool-card-collapse-intent` before the shrink happens.
- * - If preview/result variants stop sharing roughly the same visual height in
- *   the future, treat that as another shrink path and protect it explicitly
- *   instead of relying on `VirtualMessageList` fallback compensation.
+ * Card height changes reflow naturally. Expanded-state changes use
+ * `useToolCardHeightContract.applyExpandedState(...)` only to notify Virtuoso
+ * that it should remeasure the card after the transition.
  */
 
 import React, { useEffect, useCallback, useMemo, useState, useRef, useLayoutEffect, useSyncExternalStore } from 'react';
@@ -142,7 +136,6 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   const {
     cardRootRef,
     applyExpandedState: applyHeightContractExpandedState,
-    dispatchCollapseIntent,
     dispatchToolCardToggle,
   } = useToolCardHeightContract({
     toolId,
@@ -399,19 +392,14 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       isContentExpanded,
       nextExpanded,
       setIsContentExpanded,
-      { reason },
     );
   }, [applyHeightContractExpandedState, isContentExpanded]);
 
-  const applyErrorExpandedState = useCallback((
-    nextExpanded: boolean,
-    reason: 'manual' | 'auto',
-  ) => {
+  const applyErrorExpandedState = useCallback((nextExpanded: boolean) => {
     applyHeightContractExpandedState(
       isErrorExpanded,
       nextExpanded,
       setIsErrorExpanded,
-      { reason },
     );
   }, [applyHeightContractExpandedState, isErrorExpanded]);
 
@@ -588,13 +576,9 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       return;
     }
 
-    dispatchCollapseIntent('auto', {
-      filePath: currentFilePath || null,
-    });
     dispatchToolCardToggle();
   }, [
     currentFilePath,
-    dispatchCollapseIntent,
     dispatchToolCardToggle,
     isContentExpanded,
     status,
@@ -706,7 +690,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     }
     
     if (isFailed) {
-      applyErrorExpandedState(!isErrorExpanded, 'manual');
+      applyErrorExpandedState(!isErrorExpanded);
       return;
     }
 

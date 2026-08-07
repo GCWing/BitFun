@@ -3,11 +3,8 @@
  */
 
 export const FLOWCHAT_FOCUS_ITEM_EVENT = 'flowchat:focus-item';
-export const FLOWCHAT_PIN_TURN_TO_TOP_EVENT = 'flowchat:pin-turn-to-top';
 
 export type FlowChatFocusItemSource = 'btw-back' | 'usage-report' | 'background-activity';
-export type FlowChatPinTurnToTopSource = 'send-message' | 'usage-report';
-export type FlowChatPinTurnToTopMode = 'transient' | 'sticky-latest';
 
 export interface FlowChatFocusItemRequest {
   sessionId: string;
@@ -17,14 +14,6 @@ export interface FlowChatFocusItemRequest {
   turnIndex?: number;
   itemId?: string;
   source?: FlowChatFocusItemSource;
-}
-
-export interface FlowChatPinTurnToTopRequest {
-  sessionId: string;
-  turnId: string;
-  behavior?: ScrollBehavior;
-  source?: FlowChatPinTurnToTopSource;
-  pinMode?: FlowChatPinTurnToTopMode;
 }
 
 /**
