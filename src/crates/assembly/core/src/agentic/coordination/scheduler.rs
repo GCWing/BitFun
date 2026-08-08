@@ -451,7 +451,7 @@ pub struct DialogScheduler {
     /// Serialized behind a mutex because turns finalize concurrently.
     warden_runtime: Arc<tokio::sync::Mutex<WardenRuntime>>,
     /// Best-effort archive root for forwarded agent-session replies. Defaults
-    /// to `~/.bitfun/taiji/agent-replies` on first use; tests inject a tempdir
+    /// to `~/.bitfun/agent-replies` on first use; tests inject a tempdir
     /// so outcome-handler tests never touch the real user home.
     agent_reply_archive_root: std::sync::Mutex<Option<PathBuf>>,
 }
@@ -2747,7 +2747,7 @@ impl DialogScheduler {
             .to_string()
     }
 
-    /// Default archive root: `~/.bitfun/taiji/agent-replies`, resolved through
+    /// Default archive root: `~/.bitfun/agent-replies`, resolved through
     /// the shared `PathManager` so `BITFUN_HOME`/`BITFUN_E2E_HOME` overrides
     /// apply. Falls back to a temp location rather than panicking when the
     /// path manager cannot be constructed.
@@ -2756,13 +2756,11 @@ impl DialogScheduler {
             .map(|path_manager| {
                 path_manager
                     .bitfun_home_dir()
-                    .join("taiji")
                     .join("agent-replies")
             })
             .unwrap_or_else(|_| {
                 std::env::temp_dir()
                     .join("bitfun")
-                    .join("taiji")
                     .join("agent-replies")
             })
     }
@@ -2870,7 +2868,7 @@ impl DialogScheduler {
     }
 
     /// Resolve the agent-reply archive root, defaulting to
-    /// `~/.bitfun/taiji/agent-replies` on first use. Poison recovery keeps the
+    /// `~/.bitfun/agent-replies` on first use. Poison recovery keeps the
     /// best-effort archive path panic-free.
     fn agent_reply_archive_root(&self) -> PathBuf {
         let configured = {

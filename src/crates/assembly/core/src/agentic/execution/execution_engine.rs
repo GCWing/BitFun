@@ -6636,7 +6636,7 @@ mod tests {
                 // 会话在下一轮又会立刻触发压缩，依然会在窗口处耗尽。
                 let scaffold_system_tokens = ExecutionEngine::system_tokens_for_pressure(
                     std::slice::from_ref(&Message::system(
-                        "You are BitFun, the LVPA taiji quant trading agent. Execute the user's task within the workshop workflow."
+                        "You are BitFun, a general-purpose coding agent. Execute the user's task within the workshop workflow."
                             .to_string(),
                     )),
                 );

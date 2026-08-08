@@ -134,6 +134,7 @@ mod tests {
             snapshot_session_id: None,
             tags: Vec::new(),
             custom_metadata: None,
+            current_context_usage: None,
             relationship: None,
             todos: None,
             review_action_state: None,

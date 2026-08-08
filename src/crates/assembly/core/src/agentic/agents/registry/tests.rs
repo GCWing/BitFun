@@ -1521,7 +1521,7 @@ fn local_subagent_type_resolves_as_primary_agent_for_turn() {
     let registry = AgentRegistry::new();
     registry.register_agent(
         Arc::new(TestAgent {
-            id: "lvpa-handoff".to_string(),
+            id: "local-handoff".to_string(),
         }),
         AgentCategory::SubAgent,
         AgentSource::User,
@@ -1531,13 +1531,13 @@ fn local_subagent_type_resolves_as_primary_agent_for_turn() {
 
     let binding = registry
         .resolve_primary_agent_for_turn(
-            "lvpa-handoff",
+            "local-handoff",
             None,
             false,
             Some(bitfun_core_types::SessionAgentRouteOwner::Local),
         )
         .expect("a session owned by a registered subagent type must resolve for continued dialog turns");
-    assert_eq!(binding.runtime_agent_key, "lvpa-handoff");
+    assert_eq!(binding.runtime_agent_key, "local-handoff");
     assert_eq!(
         binding.route_owner,
         bitfun_core_types::SessionAgentRouteOwner::Local
@@ -1546,7 +1546,7 @@ fn local_subagent_type_resolves_as_primary_agent_for_turn() {
     // The fail-closed guard for persisted external owners is unaffected.
     assert!(registry
         .resolve_primary_agent_for_turn(
-            "lvpa-handoff",
+            "local-handoff",
             None,
             false,
             Some(bitfun_core_types::SessionAgentRouteOwner::External),
@@ -1775,26 +1775,12 @@ fn non_session_primary_subagents_and_unknown_ids_do_not_resolve() {
         .is_err());
 }
 
-#[test]
-fn non_builtin_same_name_review_agent_does_not_resolve_as_session_primary() {
-    let registry = AgentRegistry::new();
-
-    // Custom-agent loading currently filters ids that conflict with builtin
-    // entries, but the session-primary allowlist is source-gated regardless:
-    // a non-Builtin entry occupying the builtin "ReviewFixer" id must fail
-    // closed instead of inheriting the builtin primary path.
-    registry.write_agents().insert(
-        "ReviewFixer".to_string(),
-        test_source_custom_entry("ReviewFixer", "shadow", CustomSubagentKind::User),
-    );
-
-    assert!(
-        registry
-            .resolve_primary_agent_for_turn("ReviewFixer", None, false, None)
-            .is_none(),
-        "a non-Builtin entry named ReviewFixer must not resolve as a session primary agent"
-    );
-}
+// removed: `non_builtin_same_name_review_agent_does_not_resolve_as_session_primary`
+// — upstream restrict semantics conflicts with the local full-open
+// customization (shadow review agents resolve by design). Coverage for the
+// local behaviour lives in `builtin_review_agents_resolve_as_local_session_primaries`
+// (builtin resolution) and `non_session_primary_subagents_and_unknown_ids_do_not_resolve`
+// (full-open fall-through), both below.
 
 #[test]
 fn local_route_resolves_review_agents_as_session_primaries() {

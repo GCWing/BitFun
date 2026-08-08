@@ -2,8 +2,8 @@
 
 **A Technical Report in the Form of a Research Paper**
 
-> Base: upstream `main` @ `e640aa40`.
-> Scope: 370 files changed (code, configuration, and runtime resources).
+> Base: upstream `main` @ `98fc825bd`.
+> Scope: 371 files changed (code, configuration, and runtime resources).
 > Audience: maintainers and reviewers. Formal academic tone; every term is
 > defined at first use; every design decision carries its motivation.
 
@@ -540,26 +540,29 @@ workspace are silent (`.../goal_mode/mod.rs`).
 ### 10.1 Design
 
 CodeBuddy (Tencent's coding agent) exposes an OpenAI-compatible cloud API at
-`https://copilot.tencent.com/v2/chat/completions`. Because the endpoint is
+`https://copilot.tencent.com/v2/chat/completions`. A **single CodeBuddy
+subscription covers all modalities** — chat, image generation, and agent
+execution — through one cloud endpoint. Because the endpoint is
 OpenAI-shaped, BitFun reuses its existing OpenAI transport **zero-code**:
 users configure a normal `openai` provider model with the CodeBuddy cloud
-base URL + `ck_` API key (`docs/功能文档/16-codebuddy接入.md` is the single
-authority source). There is no dedicated CodeBuddy provider adapter.
+base URL and a `ck_`-prefixed API key (example format: `ck_...`). There is no
+dedicated CodeBuddy provider adapter, and the integration needs no local
+gateway: the desktop/CLI talks to the CodeBuddy cloud **directly**.
 
-History: an earlier design ("方案 A") implemented a dedicated CodeBuddy
+History: an earlier design ("Plan A") implemented a dedicated CodeBuddy
 provider (`ApiFormat::CodeBuddy` + `providers/codebuddy/` + `/runs` local
 gateway streaming). It was removed in 2026-08-06 because the `codebuddy
 --serve` gateway is agent-execution semantics (non-streaming / 8s waits /
 timeouts), and an independent bridge (`codebuddy-gateway :8090`) dropped
 `tools`/`tool_choice` during message assembly, breaking tool calls. All
-remnants of 方案 A (provider catalog entry, UI format option, type unions)
+remnants of Plan A (provider catalog entry, UI format option, type unions)
 were deleted; nothing in the codebase consumes `api_format: "codebuddy"`.
 
 ### 10.2 Runtime shape
 
 | Piece | Where |
 |---|---|
-| Cloud connection | `openai` provider, `https://copilot.tencent.com/v2`, `X-API-Key: ck_...` |
+| Cloud connection | `openai` provider, `https://copilot.tencent.com/v2`, `X-API-Key: ck_...` (example key format) |
 | Empty `finish_reason` guard | `src/crates/execution/agent-stream/src/lib.rs` + `src/crates/adapters/ai-adapters/src/client/response_aggregator.rs` |
 | ACP channel (`acp:codebuddy`) | existing ACP client manager (VideoGen/ImageGen via CodeBuddy agent tools) |
 
@@ -570,7 +573,10 @@ frame. Old code treated any `finish_reason` as "turn done", aborting tool
 calls early (raw_len=0). The fix treats only non-empty `finish_reason` as a
 completion signal (`src/crates/execution/agent-stream/src/lib.rs`,
 `src/crates/adapters/ai-adapters/src/client/response_aggregator.rs`), guarded
-by contract tests.
+by contract tests. This directly resolves the CodeBuddy **tool-call pain
+point**: previously a model's tool call was aborted before the tool arguments
+were delivered; now tool calls complete and their results stream back
+normally.
 
 ### 10.4 UI
 
@@ -635,7 +641,7 @@ The following are known limitations of the snapshot:
   behaviour without a configured model is conservative (no pokes).
 - The CodeBuddy cloud endpoint's API shape may evolve independently; the
   empty-`finish_reason` guard and `tool_choice: "auto"` string form are the
-  two known contract quirks (see §10.3 and `docs/功能文档/16-codebuddy接入.md`).
+  two known contract quirks (see §10.3).
 - The workflow model in §3 is a *methodology* — it is realized through the
   platform's session/task/tool machinery, but it is not itself a separate
   runtime component.
@@ -658,6 +664,26 @@ per workspace; tracking the CodeBuddy cloud endpoint's contract evolution
 formalizing the coordination model (§3) as an explicit runtime policy (e.g. a
 declarative workflow configuration consumed by the scheduler).
 
+### 13.1 Planned Enhancements (taiji edition)
+
+The following directions are developed in the maintainer's downstream
+edition ("taiji") and are planned for upstream contribution. They are listed
+as a roadmap only; they are not part of this pull request's diff and carry no
+line references here.
+
+- **Session rename list sync.** Renaming a session broadcasts an event and
+  persists a transient title, so a hidden subagent's rename survives reloads
+  and reaches listening UIs.
+- **Adaptive collapsible message width.** Flow-chat content uses a max-width
+  token so a collapsed message box expands gracefully instead of overflowing.
+- **RBAC ↔ frontend agent-config linkage.** The user's enabled-tool selection
+  in the frontend is unioned with the backend agent configuration, so
+  `user_enabled_tools` and the agent's declared toolbox agree.
+- **Claw full toolbox.** The Claw mode exposes the complete tool set through
+  the standard pipeline rather than a restricted subset.
+- **Read-receipt idle protection.** A file-level read-receipt counter with a
+  spin warning prevents an idle loop from re-serving the same range.
+
 ---
 
 ## 14. References
@@ -671,5 +697,5 @@ declarative workflow configuration consumed by the scheduler).
 ---
 
 *All line numbers refer to the files in this pull request (base
-`e640aa40`). This document contains only generic engineering descriptions
+`98fc825bd`). This document contains only generic engineering descriptions
 and no proprietary information.*

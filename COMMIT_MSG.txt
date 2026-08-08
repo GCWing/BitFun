@@ -1,7 +1,7 @@
 feat: customization reference snapshot
 
 Multi-agent collaboration and external ACP agent integration
-enhancements on top of upstream main (e640aa40).
+enhancements on top of upstream main (98fc825bd).
 
 Highlights:
 - ACP tool family: session-level direct connection with external
@@ -20,8 +20,10 @@ Highlights:
   once-per-generation injection, context-usage display persistence
 - Legion/task/plan toolchain: legion control, task dual lifecycle
   with ACP support, plan tool family, goal dual-trigger
-- CodeBuddy provider: local gateway adapter (ApiFormat::CodeBuddy,
-  Runs two-step streaming), empty finish_reason protection
+- CodeBuddy integration: single subscription covers all modalities;
+  direct cloud connection reuses the OpenAI transport zero-code
+  (no dedicated adapter), empty finish_reason protection fixes the
+  tool-call pain point
 - Web UI: flow-chat session/turn display, legion pages, model
   switching UI
 - Notify-style injection: minimal metadata for background task

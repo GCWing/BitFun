@@ -166,6 +166,7 @@ mod tests {
             snapshot_session_id: None,
             tags: vec![],
             custom_metadata: None,
+            current_context_usage: None,
             relationship: parent_id.map(|pid| {
                 bitfun_services_core::session::types::SessionRelationship {
                     kind: Some(SessionRelationshipKind::Subagent),
