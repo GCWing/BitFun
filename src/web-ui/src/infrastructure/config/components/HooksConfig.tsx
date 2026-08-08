@@ -469,7 +469,11 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
               {importSnapshot.imports.length === 0
                 && availableSources.length === 0
                 && corruptDiagnostics.length === 0 ? (
-                  <ConfigPageRow label={t('imports.empty')} align="center">
+                  <ConfigPageRow
+                    className="bitfun-hooks-config__empty"
+                    label={<span data-hooks-empty="true">{t('imports.empty')}</span>}
+                    multiline
+                  >
                     {null}
                   </ConfigPageRow>
                 ) : null}

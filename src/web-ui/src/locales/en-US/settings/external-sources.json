@@ -6,7 +6,6 @@
   "checkingNonBlocking": "Checking for updates…",
   "applications": {
     "title": "Discovered applications",
-    "description": "BitFun continuously reads connected application settings and checks changes before they become available.",
     "status": {
       "configuration_available": "Configuration available",
       "temporarily_unavailable": "Temporarily unavailable",
@@ -18,8 +17,6 @@
       "no_configuration": "No configuration found"
     },
     "summary": {
-      "enabledCount": "{{count}} item enabled",
-      "enabledCount_other": "{{count}} items enabled",
       "blockedCount": "{{count}} item blocked",
       "blockedCount_other": "{{count}} items blocked",
       "conflictCount": "{{count}} conflict",
@@ -28,8 +25,6 @@
         "degraded": "Partially available",
         "unavailable": "Unavailable"
       },
-      "attention": "{{count}} item needs review",
-      "attention_other": "{{count}} items need review",
       "checking": "Looking for configuration",
       "noContent": "Nothing available yet"
     },
@@ -56,7 +51,35 @@
       "selectionLimit": "Selection limit reached",
       "loading": "Loading review items…",
       "loadMore": "Load more",
-      "apply": "Apply selected",
+      "useRecommended": "Use recommended",
+      "doNotEnable": "Don't enable",
+      "adjustItems": "Adjust individual items",
+      "enableThisItem": "Enable this item",
+      "doNotEnableAny": "Don't enable any",
+      "enableRecommended": "Enable recommended items",
+      "enableSelected": "Enable selected ({{count}})",
+      "keepDisabled": "Keep disabled",
+      "customize": "Choose individually",
+      "unknownApplication": "External application",
+      "category": {
+        "command": "Command",
+        "tool": "Tool",
+        "subagent": "Agent",
+        "mcp": "MCP server",
+        "conflict": "Conflict"
+      },
+      "recommendation": {
+        "enable": "BitFun recommends enabling this item.",
+        "keepDisabled": "BitFun recommends keeping this item disabled. Choose Enable this item only if you need it.",
+        "blocked": "The current safety policy does not allow this item, so it will remain disabled.",
+        "multiple": "{{count}} items need confirmation. BitFun recommends enabling {{recommended}} of them; the rest stay disabled. Open individual choices to review or change them."
+      },
+      "riskReason": {
+        "processOrResourceAccess": "Enabling it lets BitFun run this tool and give it access to local resources.",
+        "processOrNetworkAccess": "Enabling it may start a local process or connect to an external service.",
+        "delegatedToolAccess": "Enabling it lets this Agent use the tools configured for it.",
+        "ambiguousRuntimeRoute": "More than one source has this name. Choose a source in Advanced settings first."
+      },
       "risk": {
         "low": "Low risk",
         "moderate": "Moderate risk",
@@ -81,8 +104,7 @@
         "failed": "Could not apply"
       },
       "title_one": "{{count}} item needs review",
-      "title_other": "{{count}} items need review",
-      "description": "BitFun handles the safe defaults automatically. Open to confirm the items that need a decision."
+      "title_other": "{{count}} items need review"
     },
     "capabilities": {
       "command": "Commands",
@@ -97,8 +119,7 @@
       "disabled": "Disabled"
     },
     "advanced": {
-      "title": "Advanced settings",
-      "description": "Sources, capability access, diagnostics, and conflicts"
+      "title": "Advanced settings"
     },
     "detail": {
       "back": "Back to applications",
@@ -123,7 +144,6 @@
   },
   "hooksManagement": {
     "title": "Hooks",
-    "description": "Manage BitFun Hooks and review imports from compatible AI applications.",
     "loading": "Loading Hook management…"
   },
   "hooks": {
@@ -137,7 +157,6 @@
     "showMoreSourcesForProvider": "Show {{count}} more sources for {{provider}}",
     "showMoreEntriesForProvider": "Show {{count}} more Hooks for {{provider}}",
     "showMoreDiagnosticsForProvider": "Show {{count}} more diagnostics for {{provider}}",
-    "technicalDetails": "Technical details",
     "loading": "Checking Hook configuration…",
     "pending": "Hook discovery is still running. The catalog will update automatically.",
     "empty": "No Hook configuration was found.",
@@ -212,7 +231,6 @@
     "hideDetails": "Hide details",
     "close": "Close",
     "unknown": "Unknown",
-    "technicalDetails": "Technical details",
     "selected": "Currently used",
     "selectedUnavailable": "Selected, currently unavailable",
     "notSelected": "Not used",
@@ -244,8 +262,7 @@
   "safeMode": {
     "title": "External Safe Mode",
     "description": "Block new external tool, agent, and MCP calls while keeping discovered commands and diagnostics visible. Calls already in progress are not cancelled.",
-    "activeDescription": "New executable external calls are blocked. Calls already in progress may finish; commands and diagnostics remain available for recovery.",
-    "activeNotice": "Safe Mode applies only to this Host process and execution domain. Restarting or switching the execution Host turns it off.",
+    "activeNotice": "New external calls are blocked for this Host process. Calls already in progress may finish; restarting or switching the Host turns Safe Mode off.",
     "toggleLabel": "Use External Safe Mode",
     "entered": "External Safe Mode is active.",
     "exited": "External Safe Mode is off and eligible integrations were reconciled."
@@ -331,11 +348,8 @@
     "refreshRequired": "The catalog changed before this action completed. Refresh, review the current state, and try again.",
     "policyIncompatible": "External settings were written by a newer BitFun version. Back up and reset them before making changes.",
     "unavailableRetry": "Temporarily unavailable. Try again later.",
-    "internal": "The action failed. Refresh to retry.",
-    "referenceId": "Reference: {{id}}",
-    "errorCode": "Error code: {{code}}",
-    "stage": "Stage: {{stage}}",
-    "causationId": "Related operation: {{id}}"
+    "internal": "The action failed and no settings were changed. Try again below. If it keeps failing, contact support with the reference number.",
+    "referenceId": "Support reference (include when contacting support): {{id}}"
   },
   "diagnostics": {
     "summary": "{{count}} items need attention. Review the details to see what is affected.",
@@ -351,7 +365,7 @@
       "unreadableSource": "BitFun could not read part of a source. Check file access, then refresh.",
       "notSupported": "This type of external content is not supported yet, so BitFun did not load or run it.",
       "checkFailed": "BitFun could not check one source. Other sources remain available; refresh to retry.",
-      "sourceIssue": "BitFun found an issue in one source. The affected content was not enabled; review the technical details."
+      "sourceIssue": "BitFun found an issue in one source. The affected content was not enabled. Check the source configuration, then refresh."
     }
   },
   "sources": {

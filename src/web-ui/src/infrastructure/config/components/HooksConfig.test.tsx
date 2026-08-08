@@ -190,6 +190,19 @@ describe('HooksConfig imported Hook management', () => {
     expect(container.textContent).toContain('activation.title');
   });
 
+  it('explains the empty imported Hooks state instead of leaving an empty row', async () => {
+    getSnapshotMock.mockResolvedValue({
+      ...snapshot,
+      catalog: { ...catalog, sources: [] },
+    });
+
+    await act(async () => root.render(<HooksConfig embedded />));
+    await flush();
+
+    const empty = container.querySelector('[data-hooks-empty="true"]');
+    expect(empty?.textContent).toContain('imports.empty');
+  });
+
   it('loads settings and sources together, then exposes exact commands before apply', async () => {
     await act(async () => root.render(<HooksConfig />));
     await flush();

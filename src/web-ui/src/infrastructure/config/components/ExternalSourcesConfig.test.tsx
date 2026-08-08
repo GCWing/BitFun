@@ -494,7 +494,34 @@ describe('ExternalSourcesConfig', () => {
     });
 
     expect(container.textContent).toContain('applications.status.configuration_available');
-    expect(container.textContent).toContain('applications.summary.enabledCount');
+    expect(container.textContent).not.toContain('applications.summary.enabledCount');
+    expect(container.textContent).not.toContain('hooksManagement.description');
+    expect(container.textContent).not.toContain('applications.advanced.description');
+    const hooksSummary = container.querySelector<HTMLElement>(
+      '.bitfun-external-sources-config__hooks-summary',
+    );
+    expect(hooksSummary?.getAttribute('aria-expanded')).toBe('false');
+    expect(
+      hooksSummary?.querySelector('.bitfun-external-sources-config__disclosure-icon'),
+    ).not.toBeNull();
+    const advanced = container.querySelector<HTMLDetailsElement>(
+      '.bitfun-external-sources-config__advanced',
+    );
+    const advancedSummary = advanced?.querySelector<HTMLElement>('summary');
+    expect(advanced?.open).toBe(false);
+    expect(advancedSummary?.getAttribute('aria-expanded')).toBe('false');
+    expect(
+      advancedSummary?.querySelector('.bitfun-external-sources-config__disclosure-icon'),
+    ).not.toBeNull();
+    expect(advanced?.textContent).toContain('safeMode.title');
+    await act(async () => {
+      advancedSummary?.click();
+      advanced?.dispatchEvent(new Event('toggle'));
+      await Promise.resolve();
+    });
+    expect(advanced?.open).toBe(true);
+    expect(advancedSummary?.getAttribute('aria-expanded')).toBe('true');
+    expect(container.textContent).toContain('safeMode.title');
     const applicationToggle = container.querySelector<HTMLInputElement>(
       '[data-bf-part="applicationToggle"] input[type="checkbox"]',
     );
@@ -517,6 +544,239 @@ describe('ExternalSourcesConfig', () => {
       }),
     );
     expect(updateIntegrationPolicyMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps the refreshed V2 review current while loading the V1 compatibility catalog', async () => {
+    let generation = 7;
+    const reviewSnapshot = () => ({
+      ...applicationSnapshotV2,
+      refreshGeneration: generation,
+      applications: [{
+        ...applicationSnapshotV2.applications[0],
+        effectiveStatus: 'needs_attention' as const,
+        primaryAction: 'review' as const,
+        pendingReviewCount: 1,
+      }],
+      reviewSummary: {
+        reviewId: `review-${generation}`,
+        totalCount: 1,
+        categoryCounts: [{ kind: 'tool' as const, count: 1 }],
+        maxSelectionCount: 1,
+        riskSummary: { reasonCodes: [] },
+        recommendationSummary: { recommendedCount: 1, optionalCount: 0, blockedCount: 0 },
+        safetyCeiling: 'automatic' as const,
+      },
+    });
+    getApplicationSurfaceMock.mockImplementation(async (
+      _workspacePath: string,
+      forceRefresh: boolean,
+    ) => {
+      if (forceRefresh) generation += 1;
+      return { protocol: 'v2', snapshot: reviewSnapshot() };
+    });
+    getSnapshotMock.mockImplementation(async (
+      _workspacePath: string,
+      forceRefresh: boolean,
+    ) => {
+      if (forceRefresh) generation += 1;
+      return { ...snapshot, generation };
+    });
+    getApplicationReviewPageMock.mockImplementation(async (
+      _workspacePath: string,
+      request: { reviewId: string },
+    ) => {
+      if (request.reviewId !== `review-${generation}`) {
+        throw new Error('stale review');
+      }
+      return {
+        schemaVersion: 2,
+        executionDomainId: 'host-a',
+        workspaceScopeId: 'workspace:0123456789abcdef',
+        targetScope: 'workspace_override',
+        reviewId: request.reviewId,
+        preferenceRevision: 11,
+        expectedGenerations: [{ owner: 'tool', generation }],
+        totalCount: 1,
+        items: [{
+          itemRef: { kind: 'tool', stableId: 'tool-current' },
+          displayName: 'Current Tool',
+          displaySummary: 'Current review item',
+          riskLevel: 'low',
+          riskReasonCodes: [],
+          recommended: true,
+          safetyCeiling: 'automatic',
+        }],
+      };
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="actions.refresh"]')?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-bf-part="attentionSummary"]')?.click();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('Current Tool');
+    expect(getSnapshotMock).toHaveBeenLastCalledWith('D:/workspace/project', false);
+  });
+
+  it('opens the authoritative first review page when discovery settles after the snapshot', async () => {
+    const currentSnapshot = {
+      ...applicationSnapshotV2,
+      applications: [{
+        ...applicationSnapshotV2.applications[0],
+        effectiveStatus: 'needs_attention' as const,
+        primaryAction: 'review' as const,
+        pendingReviewCount: 2,
+      }],
+      reviewSummary: {
+        reviewId: 'review-current',
+        totalCount: 2,
+        categoryCounts: [{ kind: 'tool' as const, count: 2 }],
+        maxSelectionCount: 2,
+        riskSummary: { reasonCodes: [] },
+        recommendationSummary: { recommendedCount: 0, optionalCount: 2, blockedCount: 0 },
+        safetyCeiling: 'automatic' as const,
+      },
+    };
+    getApplicationSurfaceMock.mockResolvedValueOnce({
+      protocol: 'v2',
+      snapshot: {
+        ...applicationSnapshotV2,
+        applications: [{
+          ...applicationSnapshotV2.applications[0],
+          effectiveStatus: 'needs_attention',
+          primaryAction: 'review',
+          pendingReviewCount: 1,
+        }],
+        reviewSummary: {
+          reviewId: 'review-stale',
+          totalCount: 1,
+          categoryCounts: [{ kind: 'conflict', count: 1 }],
+          maxSelectionCount: 0,
+          riskSummary: { reasonCodes: [] },
+          recommendationSummary: { recommendedCount: 0, optionalCount: 0, blockedCount: 1 },
+          safetyCeiling: 'blocked',
+        },
+      },
+    }).mockResolvedValue({ protocol: 'v2', snapshot: currentSnapshot });
+    getApplicationReviewPageMock.mockResolvedValueOnce({
+      schemaVersion: 2,
+      executionDomainId: 'host-a',
+      workspaceScopeId: 'workspace:0123456789abcdef',
+      targetScope: 'workspace_override',
+      reviewId: 'review-current',
+      preferenceRevision: 11,
+      expectedGenerations: [{ owner: 'tool', generation: 8 }],
+      nextCursor: 'page-2',
+      totalCount: 2,
+      items: [{
+        itemRef: { kind: 'tool', stableId: 'tool-current' },
+        displayName: 'Current Tool',
+        displaySummary: 'Current review item',
+        riskLevel: 'low',
+        riskReasonCodes: [],
+        recommended: false,
+        safetyCeiling: 'automatic',
+      }],
+    }).mockResolvedValueOnce({
+      schemaVersion: 2,
+      executionDomainId: 'host-a',
+      workspaceScopeId: 'workspace:0123456789abcdef',
+      targetScope: 'workspace_override',
+      reviewId: 'review-current',
+      preferenceRevision: 11,
+      expectedGenerations: [{ owner: 'tool', generation: 8 }],
+      cursor: 'page-2',
+      totalCount: 2,
+      items: [{
+        itemRef: { kind: 'tool', stableId: 'tool-next' },
+        displayName: 'Next Tool',
+        displaySummary: 'Next review item',
+        riskLevel: 'moderate',
+        riskReasonCodes: [],
+        recommended: false,
+        safetyCeiling: 'review_required',
+      }],
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-bf-part="attentionSummary"]')?.click();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('Current Tool');
+    expect(container.querySelector<HTMLInputElement>('input[type="checkbox"]')?.disabled).toBe(false);
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-bf-part="loadMoreReview"]')?.click();
+      await Promise.resolve();
+    });
+    expect(container.textContent).toContain('Next Tool');
+    expect(getApplicationReviewPageMock).toHaveBeenLastCalledWith(
+      'D:/workspace/project',
+      expect.objectContaining({
+        reviewId: 'review-current',
+        expectedGenerations: [{ owner: 'tool', generation: 8 }],
+        cursor: 'page-2',
+      }),
+    );
+  });
+
+  it('returns to the application list when the first review page cannot be loaded', async () => {
+    getApplicationSurfaceMock.mockResolvedValue({
+      protocol: 'v2',
+      snapshot: {
+        ...applicationSnapshotV2,
+        applications: [{
+          ...applicationSnapshotV2.applications[0],
+          effectiveStatus: 'needs_attention',
+          primaryAction: 'review',
+          pendingReviewCount: 1,
+        }],
+        reviewSummary: {
+          reviewId: 'review-a',
+          totalCount: 1,
+          categoryCounts: [{ kind: 'tool', count: 1 }],
+          maxSelectionCount: 1,
+          riskSummary: { reasonCodes: [] },
+          recommendationSummary: { recommendedCount: 1, optionalCount: 0, blockedCount: 0 },
+          safetyCeiling: 'automatic',
+        },
+      },
+    });
+    getApplicationReviewPageMock.mockRejectedValue(Object.assign(new Error('stale review'), {
+      code: 'stale_revision',
+      recoveryActions: [{ type: 'refresh' }],
+    }));
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-bf-part="attentionSummary"]')?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-bf-part="application"]')).not.toBeNull();
+    expect(container.querySelector('.bitfun-external-sources-config__review')).toBeNull();
+    expect(container.textContent).toContain('operationErrors.refreshRequired');
+    expect(container.textContent).toContain('recoveryActions.refresh');
   });
 
   it('does not regress a V2 Host generation on a later refresh response', async () => {
@@ -656,7 +916,7 @@ describe('ExternalSourcesConfig', () => {
     expect(setSafeModeMock).not.toHaveBeenCalled();
   });
 
-  it('reviews V2 items inline with a recommended baseline and bounded overrides', async () => {
+  it('reviews V2 items with a recommended baseline and bounded advanced overrides', async () => {
     const reviewSnapshot = {
       ...applicationSnapshotV2,
       applications: [{
@@ -765,6 +1025,11 @@ describe('ExternalSourcesConfig', () => {
         pageSize: 64,
       }),
     );
+    await act(async () => {
+      container.querySelector<HTMLDetailsElement>(
+        '.bitfun-external-sources-config__review-adjustments',
+      )?.querySelector<HTMLElement>('summary')?.click();
+    });
     const selections = container.querySelectorAll<HTMLInputElement>(
       '[data-bf-part="reviewItem"] input[type="checkbox"]',
     );
@@ -789,7 +1054,9 @@ describe('ExternalSourcesConfig', () => {
     );
     await act(async () => pagedSelections[1].click());
 
-    const submit = container.querySelector<HTMLButtonElement>('[data-bf-part="submitReview"]');
+    const submit = container.querySelector<HTMLButtonElement>(
+      '[data-bf-part="submitReview"][data-review-baseline="recommended"]',
+    );
     await act(async () => {
       submit?.click();
       await Promise.resolve();
@@ -814,6 +1081,84 @@ describe('ExternalSourcesConfig', () => {
     expect(container.textContent).toContain('applications.review.outcome.partial');
     expect(container.textContent).toContain('applications.review.itemOutcome.rejected');
     expect(container.textContent).toContain('"selected":2,"maximum":2');
+  });
+
+  it('lets the user decline every pending item without editing individual choices', async () => {
+    const reviewSnapshot = {
+      ...applicationSnapshotV2,
+      applications: [{
+        ...applicationSnapshotV2.applications[0],
+        effectiveStatus: 'needs_attention' as const,
+        primaryAction: 'review' as const,
+        pendingReviewCount: 1,
+      }],
+      reviewSummary: {
+        reviewId: 'review-decline',
+        totalCount: 1,
+        categoryCounts: [{ kind: 'tool' as const, count: 1 }],
+        maxSelectionCount: 1,
+        riskSummary: { reasonCodes: [] },
+        recommendationSummary: {
+          recommendedCount: 1,
+          optionalCount: 0,
+          blockedCount: 0,
+        },
+        safetyCeiling: 'automatic' as const,
+      },
+    };
+    getApplicationSurfaceMock.mockResolvedValue({ protocol: 'v2', snapshot: reviewSnapshot });
+    getApplicationReviewPageMock.mockResolvedValue({
+      schemaVersion: 2,
+      executionDomainId: 'host-a',
+      workspaceScopeId: 'workspace:0123456789abcdef',
+      targetScope: 'workspace_override',
+      reviewId: 'review-decline',
+      preferenceRevision: 11,
+      expectedGenerations: [{ owner: 'tool', generation: 7 }],
+      totalCount: 1,
+      items: [{
+        itemRef: { kind: 'tool', stableId: 'tool-a' },
+        displayName: 'Tool A',
+        displaySummary: 'Run a local process',
+        riskLevel: 'moderate',
+        riskReasonCodes: ['process_execution'],
+        recommended: true,
+        safetyCeiling: 'review_required',
+      }],
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-bf-part="attentionSummary"]')?.click();
+      await Promise.resolve();
+    });
+
+    const decline = container.querySelector<HTMLButtonElement>(
+      '[data-bf-part="submitReview"][data-review-baseline="none"]',
+    );
+    expect(decline?.textContent).toBe('applications.review.doNotEnable');
+    await act(async () => {
+      decline?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(applyApplicationActionMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      expect.objectContaining({
+        action: {
+          type: 'submit_application_review',
+          reviewId: 'review-decline',
+          expectedGenerations: [{ owner: 'tool', generation: 7 }],
+          selectionBaseline: 'none',
+          selectionOverrides: [],
+        },
+      }),
+    );
   });
 
   it('lets the user retry a review submission after a transport failure', async () => {
@@ -1224,8 +1569,12 @@ describe('ExternalSourcesConfig', () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain('safeMode.title');
     expect(container.textContent).toContain('sources.commandCount:{"count":1}');
+    await act(async () => {
+      container.querySelector<HTMLDetailsElement>(
+        '.bitfun-external-sources-config__advanced',
+      )?.querySelector<HTMLElement>('summary')?.click();
+    });
     const toggle = container.querySelector(
       'input[aria-label="safeMode.toggleLabel"]',
     ) as HTMLInputElement;
@@ -1268,6 +1617,11 @@ describe('ExternalSourcesConfig', () => {
       await Promise.resolve();
     });
 
+    await act(async () => {
+      container.querySelector<HTMLDetailsElement>(
+        '.bitfun-external-sources-config__advanced',
+      )?.querySelector<HTMLElement>('summary')?.click();
+    });
     const toggle = container.querySelector(
       'input[aria-label="safeMode.toggleLabel"]',
     ) as HTMLInputElement;
@@ -1308,6 +1662,11 @@ describe('ExternalSourcesConfig', () => {
 
     expect(container.textContent).toContain('legacyHostNotice');
     expect(container.textContent).toContain('recoveryActions.reconnect_host');
+    await act(async () => {
+      container.querySelector<HTMLDetailsElement>(
+        '.bitfun-external-sources-config__advanced',
+      )?.querySelector<HTMLElement>('summary')?.click();
+    });
     const toggle = container.querySelector(
       'input[aria-label="safeMode.toggleLabel"]',
     ) as HTMLInputElement;
@@ -2918,7 +3277,8 @@ describe('ExternalSourcesConfig', () => {
     });
 
     expect(container.textContent).toContain('policy.attentionSummary:{"count":1}');
-    expect(container.textContent?.match(/opencode\.configuration\.invalid/g)).toHaveLength(1);
+    expect(container.textContent?.match(/diagnostics\.category\.invalidSettings/g)).toHaveLength(1);
+    expect(container.textContent).not.toContain('opencode.configuration.invalid');
   });
 
   it('keeps grouped OpenCode diagnostics and lifecycle states visible', async () => {
@@ -2951,11 +3311,12 @@ describe('ExternalSourcesConfig', () => {
     });
 
     expect(container.textContent).toContain('lifecycle.degraded');
-    expect(container.textContent).toContain('opencode.configuration.invalid');
+    expect(container.textContent).toContain('diagnostics.category.invalidSettings');
+    expect(container.textContent).not.toContain('opencode.configuration.invalid');
     expect(container.querySelector(
       '.bitfun-external-sources-config__opencode-card [data-external-attention="true"]',
     )).not.toBeNull();
-    expect(container.textContent?.match(/opencode\.configuration\.invalid/g)).toHaveLength(1);
+    expect(container.textContent?.match(/diagnostics\.category\.invalidSettings/g)).toHaveLength(1);
     const sourceToggle = container.querySelector(
       '.bitfun-external-sources-config__opencode-card input[aria-label^="sources.toggleLabel"]',
     ) as HTMLInputElement;
@@ -3336,7 +3697,9 @@ describe('ExternalSourcesConfig', () => {
     expect(firstDiagnostic.open).toBe(true);
     expect(document.activeElement).toBe(firstDiagnostic.querySelector('summary'));
     expect(scrollIntoView).toHaveBeenCalled();
-    expect(container.textContent).toContain('opencode.command.source_warning');
+    expect(container.textContent).toContain('diagnostics.category.sourceIssue');
+    expect(container.textContent).not.toContain('opencode.command.source_warning');
+    expect(container.textContent).not.toContain('common.technicalDetails');
   });
 
   it('shows a stable reference without exposing an internal mutation message', async () => {
@@ -3364,8 +3727,10 @@ describe('ExternalSourcesConfig', () => {
 
     expect(container.textContent).toContain('operationErrors.internal');
     expect(container.textContent).toContain('external-source-ref-7');
-    expect(container.textContent).toContain('operationErrors.stage:{"stage":"activate_runtime"}');
-    expect(container.textContent).toContain('operationErrors.causationId:{"id":"refresh-generation-6"}');
+    expect(container.textContent).not.toContain('common.technicalDetails');
+    expect(container.textContent).not.toContain('operationErrors.errorCode');
+    expect(container.textContent).not.toContain('activate_runtime');
+    expect(container.textContent).not.toContain('refresh-generation-6');
     expect(container.textContent).toContain('recoveryActions.retry');
     expect(container.textContent).toContain('recoveryActions.reconnect_host');
     expect(container.textContent).not.toContain('database connection string');

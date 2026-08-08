@@ -438,7 +438,7 @@ impl ChatMode {
                 Ok(text) => {
                     chat_view.show_info_popup(text);
                     chat_view.set_status(Some(
-                        "Review selection updated locally; run /extensions review apply to save."
+                        "Review selection updated; run /extensions review apply to use it."
                             .to_string(),
                     ));
                 }
@@ -446,14 +446,6 @@ impl ChatMode {
             }
             return;
         }
-        if matches!(action, ExternalApplicationUiAction::DeferReview) {
-            self.external_application_ui.review = None;
-            chat_view.set_status(Some(
-                "Review closed with no changes applied; it remains pending.".to_string(),
-            ));
-            return;
-        }
-
         let pending = match &action {
             ExternalApplicationUiAction::Show => ExternalApplicationPendingRequest::Snapshot {
                 force_refresh: false,
@@ -551,11 +543,17 @@ impl ChatMode {
                     }
                 }
             }
-            ExternalApplicationUiAction::ApplyReview => {
-                match self
-                    .external_application_ui
-                    .review_apply_request(&format!("tui-{}", uuid::Uuid::new_v4()))
-                {
+            ExternalApplicationUiAction::SubmitReview {
+                baseline,
+                immediate_selection,
+            } => {
+                match self.external_application_ui.review_submit_request(
+                    &format!("tui-{}", uuid::Uuid::new_v4()),
+                    *baseline,
+                    immediate_selection
+                        .as_ref()
+                        .map(|(item_ref, selected)| (item_ref, *selected)),
+                ) {
                     Ok(request) => ExternalApplicationPendingRequest::Mutation(request),
                     Err(error) => {
                         chat_view.set_status(Some(error));
@@ -563,8 +561,7 @@ impl ChatMode {
                     }
                 }
             }
-            ExternalApplicationUiAction::SetReviewItem { .. }
-            | ExternalApplicationUiAction::DeferReview => unreachable!(),
+            ExternalApplicationUiAction::SetReviewItem { .. } => unreachable!(),
         };
 
         let agent = self.agent.clone();
@@ -629,9 +626,10 @@ impl ChatMode {
             ExternalApplicationUiAction::DeferApplication { .. } => {
                 "Deferring external application decision"
             }
-            ExternalApplicationUiAction::ApplyReview => "Applying external application review",
-            ExternalApplicationUiAction::SetReviewItem { .. }
-            | ExternalApplicationUiAction::DeferReview => unreachable!(),
+            ExternalApplicationUiAction::SubmitReview { .. } => {
+                "Applying external application review"
+            }
+            ExternalApplicationUiAction::SetReviewItem { .. } => unreachable!(),
         };
         chat_view.set_status(Some(format!(
             "{status}; you can continue typing or cancel other UI work"
@@ -832,7 +830,7 @@ impl ChatMode {
                         ExternalApplicationUiAction::DeferApplication { .. } => {
                             "External application decision deferred"
                         }
-                        ExternalApplicationUiAction::ApplyReview => {
+                        ExternalApplicationUiAction::SubmitReview { .. } => {
                             "External application review applied"
                         }
                         _ => "External application change applied",

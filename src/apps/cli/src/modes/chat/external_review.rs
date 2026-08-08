@@ -6,7 +6,8 @@ use bitfun_product_domains::external_source_control::{
     ExternalApplicationPrimaryActionV2, ExternalApplicationRecoveryActionV2,
     ExternalApplicationReviewItemRefV2, ExternalApplicationReviewPageRequestV2,
     ExternalApplicationReviewPageV2, ExternalApplicationReviewSelectionBaselineV2,
-    ExternalApplicationReviewSelectionOverrideV2, ExternalApplicationSnapshotV2,
+    ExternalApplicationReviewSelectionOverrideV2, ExternalApplicationRiskLevelV2,
+    ExternalApplicationSafetyCeilingV2, ExternalApplicationSnapshotV2,
     ExternalApplicationTargetScopeV2, ExternalSourceDesiredState, ExternalSourceEffectiveStatus,
     ExternalSourceRecoveryActionV1, ExternalSourceSupportState,
     EXTERNAL_APPLICATION_REVIEW_PAGE_MAX_ITEMS, EXTERNAL_APPLICATION_SCHEMA_V2,
@@ -326,8 +327,10 @@ enum ExternalApplicationUiAction {
         item_ref: ExternalApplicationReviewItemRefV2,
         selected: bool,
     },
-    ApplyReview,
-    DeferReview,
+    SubmitReview {
+        baseline: ExternalApplicationReviewSelectionBaselineV2,
+        immediate_selection: Option<(ExternalApplicationReviewItemRefV2, bool)>,
+    },
 }
 
 struct ExternalApplicationReviewUiState {
@@ -540,11 +543,12 @@ impl ExternalApplicationUiState {
             "The external application review is stale; refresh /extensions.".to_string()
         })?;
         let (expected_scope, expected_workspace_scope_id) = Self::target_scope(snapshot);
+        let opening = matches!(&navigation, ExternalReviewNavigation::Open);
         if page.execution_domain_id != snapshot.execution_domain_id
             || page.workspace_scope_id != expected_workspace_scope_id
             || page.target_scope != expected_scope
-            || page.review_id != summary.review_id
             || page.preference_revision != snapshot.preference_revision
+            || (!opening && page.review_id != summary.review_id)
         {
             return Err(
                 "The external application review is stale; refresh /extensions.".to_string(),
@@ -632,30 +636,58 @@ impl ExternalApplicationUiState {
         Ok(())
     }
 
-    fn review_apply_request(
+    fn review_submit_request(
         &self,
         operation_id: &str,
+        selection_baseline: ExternalApplicationReviewSelectionBaselineV2,
+        immediate_selection: Option<(&ExternalApplicationReviewItemRefV2, bool)>,
     ) -> Result<ExternalApplicationControlRequestV2, String> {
         let review = self
             .review
             .as_ref()
             .ok_or_else(|| "Open /extensions review before applying it.".to_string())?;
+        let mut selection_overrides = if matches!(
+            selection_baseline,
+            ExternalApplicationReviewSelectionBaselineV2::Recommended
+        ) {
+            review
+                .selection_overrides
+                .iter()
+                .map(
+                    |(item_ref, selected)| ExternalApplicationReviewSelectionOverrideV2 {
+                        item_ref: item_ref.clone(),
+                        selected: *selected,
+                    },
+                )
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+        if let Some((item_ref, selected)) = immediate_selection {
+            let baseline_selected = match selection_baseline {
+                ExternalApplicationReviewSelectionBaselineV2::Recommended => review
+                    .page
+                    .items
+                    .iter()
+                    .find_map(|item| (item.item_ref == *item_ref).then_some(item.recommended))
+                    .unwrap_or(false),
+                ExternalApplicationReviewSelectionBaselineV2::None => false,
+            };
+            selection_overrides.retain(|selection| selection.item_ref != *item_ref);
+            if selected != baseline_selected {
+                selection_overrides.push(ExternalApplicationReviewSelectionOverrideV2 {
+                    item_ref: item_ref.clone(),
+                    selected,
+                });
+            }
+        }
         self.control_request(
             operation_id,
             ExternalApplicationControlActionV2::SubmitApplicationReview {
                 review_id: review.page.review_id.clone(),
                 expected_generations: review.page.expected_generations.clone(),
-                selection_baseline: ExternalApplicationReviewSelectionBaselineV2::Recommended,
-                selection_overrides: review
-                    .selection_overrides
-                    .iter()
-                    .map(
-                        |(item_ref, selected)| ExternalApplicationReviewSelectionOverrideV2 {
-                            item_ref: item_ref.clone(),
-                            selected: *selected,
-                        },
-                    )
-                    .collect(),
+                selection_overrides,
+                selection_baseline,
             },
         )
     }
@@ -770,15 +802,40 @@ fn parse_external_application_action(
                 selected: review_command.eq_ignore_ascii_case("include"),
             });
         }
+        if review_command.eq_ignore_ascii_case("allow") && parts.next().is_none() {
+            state.can_mutate()?;
+            let review = state
+                .review
+                .as_ref()
+                .ok_or_else(|| "Open /extensions review before applying it.".to_string())?;
+            if review.page.total_count != 1 || review.page.items.len() != 1 {
+                return Err("Use /extensions review include <number>, then /extensions review apply for multiple items.".to_string());
+            }
+            let item = &review.page.items[0];
+            if item.safety_ceiling == ExternalApplicationSafetyCeilingV2::Blocked {
+                return Err("This item cannot be enabled; use /extensions review deny.".to_string());
+            }
+            return Ok(ExternalApplicationUiAction::SubmitReview {
+                baseline: ExternalApplicationReviewSelectionBaselineV2::Recommended,
+                immediate_selection: Some((item.item_ref.clone(), true)),
+            });
+        }
         if review_command.eq_ignore_ascii_case("apply") && parts.next().is_none() {
             state.can_mutate()?;
-            return Ok(ExternalApplicationUiAction::ApplyReview);
+            return Ok(ExternalApplicationUiAction::SubmitReview {
+                baseline: ExternalApplicationReviewSelectionBaselineV2::Recommended,
+                immediate_selection: None,
+            });
         }
-        if review_command.eq_ignore_ascii_case("defer") && parts.next().is_none() {
-            return Ok(ExternalApplicationUiAction::DeferReview);
+        if review_command.eq_ignore_ascii_case("deny") && parts.next().is_none() {
+            state.can_mutate()?;
+            return Ok(ExternalApplicationUiAction::SubmitReview {
+                baseline: ExternalApplicationReviewSelectionBaselineV2::None,
+                immediate_selection: None,
+            });
         }
     }
-    Err("usage: /extensions [status | refresh | connect <number> | disconnect <number> | defer <number> | review [next | previous | include <number> | exclude <number> | apply | defer]]".to_string())
+    Err("usage: /extensions [status | refresh | connect <number> | disconnect <number> | defer <number> | review [next | previous | include <number> | exclude <number> | allow | apply | deny]]".to_string())
 }
 
 fn external_application_status_label(status: ExternalApplicationEffectiveStatusV2) -> &'static str {
@@ -816,14 +873,10 @@ fn external_application_recovery_label(
 }
 
 fn external_application_overview_text(snapshot: &ExternalApplicationSnapshotV2) -> String {
-    let mut lines = vec![
-        "External applications".to_string(),
-        String::new(),
-        format!(
-            "Safe Mode: {}",
-            if snapshot.safe_mode { "on" } else { "off" }
-        ),
-    ];
+    let mut lines = vec!["External applications".to_string(), String::new()];
+    if snapshot.safe_mode {
+        lines.push("Safe Mode: on".to_string());
+    }
     let scope_can_mutate = snapshot.host_capabilities.can_mutate
         && if snapshot.workspace_scope_id.is_some() {
             snapshot.host_capabilities.can_manage_workspace_override
@@ -837,20 +890,22 @@ fn external_application_overview_text(snapshot: &ExternalApplicationSnapshotV2) 
             application.display_name,
             external_application_status_label(application.effective_status)
         ));
-        lines.push(format!(
-            "   {} enabled, {} pending review, {} blocked, {} conflicts",
-            application.enabled_count,
-            application.pending_review_count,
-            application.blocked_count,
-            application.conflict_count
-        ));
-        lines.push(format!(
-            "   Health: {}",
-            external_application_health_label(application.health)
-        ));
+        let mut facts = Vec::new();
+        if application.health != ExternalApplicationHealthV2::Healthy {
+            facts.push(format!(
+                "Health: {}",
+                external_application_health_label(application.health)
+            ));
+        }
+        if application.blocked_count > 0 {
+            facts.push(format!("{} blocked", application.blocked_count));
+        }
+        if application.conflict_count > 0 {
+            facts.push(format!("{} conflicts", application.conflict_count));
+        }
         if !application.recovery_actions.is_empty() {
-            lines.push(format!(
-                "   Recovery: {}",
+            facts.push(format!(
+                "Recovery: {}",
                 application
                     .recovery_actions
                     .iter()
@@ -859,14 +914,15 @@ fn external_application_overview_text(snapshot: &ExternalApplicationSnapshotV2) 
                     .join(", ")
             ));
         }
+        if !facts.is_empty() {
+            lines.push(format!("   {}", facts.join("; ")));
+        }
         if scope_can_mutate {
             match application.primary_action {
                 ExternalApplicationPrimaryActionV2::Connect => {
                     lines.push(format!("   Next: /extensions connect {number}"))
                 }
-                ExternalApplicationPrimaryActionV2::Review => {
-                    lines.push("   Next: /extensions review".to_string())
-                }
+                ExternalApplicationPrimaryActionV2::Review => {}
                 ExternalApplicationPrimaryActionV2::Retry => {
                     lines.push("   Next: /extensions refresh".to_string())
                 }
@@ -877,20 +933,21 @@ fn external_application_overview_text(snapshot: &ExternalApplicationSnapshotV2) 
             if application.effective_status == ExternalApplicationEffectiveStatusV2::Connected {
                 lines.push(format!("   Disconnect: /extensions disconnect {number}"));
             }
-            if application.effective_status == ExternalApplicationEffectiveStatusV2::NeedsAttention
-            {
-                lines.push(format!("   Later: /extensions defer {number}"));
-            }
         }
     }
     if snapshot.review_summary.is_some() && snapshot.host_capabilities.can_read_review {
         lines.push(String::new());
         lines.push("Review: /extensions review".to_string());
     }
-    if snapshot.host_capabilities.can_refresh {
-        lines.push("Refresh: /extensions refresh".to_string());
-    }
     lines.join("\n")
+}
+
+fn external_application_risk_label(risk: ExternalApplicationRiskLevelV2) -> &'static str {
+    match risk {
+        ExternalApplicationRiskLevelV2::Low => "low",
+        ExternalApplicationRiskLevelV2::Moderate => "moderate",
+        ExternalApplicationRiskLevelV2::High => "high",
+    }
 }
 
 fn external_application_review_text(state: &ExternalApplicationUiState) -> Result<String, String> {
@@ -903,22 +960,29 @@ fn external_application_review_text(state: &ExternalApplicationUiState) -> Resul
         String::new(),
         format!("{} items total", review.page.total_count),
     ];
+    let can_mutate = state.can_mutate().is_ok();
+    if can_mutate {
+        let direct = review.page.total_count == 1
+            && review.page.items.len() == 1
+            && review.page.items[0].safety_ceiling != ExternalApplicationSafetyCeilingV2::Blocked;
+        if direct {
+            lines.push("Enable: /extensions review allow".to_string());
+            lines.push("Keep disabled: /extensions review deny".to_string());
+        } else {
+            lines.push("Apply selections: /extensions review apply".to_string());
+            lines.push("Keep all disabled: /extensions review deny".to_string());
+        }
+    }
+    lines.push(String::new());
+    lines.push("Adjust individual items:".to_string());
     for (index, item) in review.page.items.iter().enumerate() {
         let selected = state.review_item_selected(index)?;
         lines.push(format!(
-            "{}. [{}] {} - {}",
+            "{}. [{}] {} [{}]",
             index + 1,
             if selected { "x" } else { " " },
             item.display_name,
-            item.display_summary
-        ));
-        lines.push(format!(
-            "   Baseline: {}",
-            if item.recommended {
-                "recommended"
-            } else {
-                "optional"
-            }
+            external_application_risk_label(item.risk_level)
         ));
     }
     if !review.previous_cursors.is_empty() {
@@ -927,13 +991,9 @@ fn external_application_review_text(state: &ExternalApplicationUiState) -> Resul
     if review.page.next_cursor.is_some() {
         lines.push("Next: /extensions review next".to_string());
     }
-    let can_mutate = state.can_mutate().is_ok();
     if can_mutate {
-        lines.push("Include: /extensions review include <number>".to_string());
-        lines.push("Exclude: /extensions review exclude <number>".to_string());
-        lines.push("Apply: /extensions review apply".to_string());
+        lines.push("Adjust: /extensions review <include|exclude> <number>".to_string());
     }
-    lines.push("Later (no changes): /extensions review defer".to_string());
     Ok(lines.join("\n"))
 }
 
@@ -2582,6 +2642,12 @@ mod external_application_v2_tests {
         assert!(writable.contains("/extensions connect 2"));
         assert!(writable.contains("/extensions review"));
         assert!(writable.contains("Safe Mode: on"));
+        assert!(!writable.contains("Health: healthy"), "{writable}");
+        assert!(!writable.contains(" enabled,"), "{writable}");
+        assert!(
+            !writable.contains("Refresh: /extensions refresh"),
+            "{writable}"
+        );
 
         let read_only = external_application_overview_text(&snapshot(
             ExternalApplicationHostCapabilitiesV2::read_only(),
@@ -2590,7 +2656,8 @@ mod external_application_v2_tests {
             "/extensions connect",
             "/extensions disconnect",
             "/extensions defer",
-            "/extensions review apply",
+            "/extensions review allow",
+            "/extensions review deny",
         ] {
             assert!(!read_only.contains(forbidden), "{forbidden}\n{read_only}");
         }
@@ -2740,7 +2807,13 @@ mod external_application_v2_tests {
         state.set_review_item_selected(0, false).unwrap();
         state.set_review_item_selected(1, true).unwrap();
 
-        let request = state.review_apply_request("operation-1").unwrap();
+        let request = state
+            .review_submit_request(
+                "operation-1",
+                ExternalApplicationReviewSelectionBaselineV2::Recommended,
+                None,
+            )
+            .unwrap();
         let bitfun_product_domains::external_source_control::ExternalApplicationControlActionV2::SubmitApplicationReview {
             selection_baseline,
             selection_overrides,
@@ -2755,6 +2828,111 @@ mod external_application_v2_tests {
         assert_eq!(selection_overrides.len(), 2);
         assert!(!selection_overrides[0].selected);
         assert!(selection_overrides[1].selected);
+
+        let deny_request = state
+            .review_submit_request(
+                "operation-deny",
+                ExternalApplicationReviewSelectionBaselineV2::None,
+                None,
+            )
+            .unwrap();
+        let ExternalApplicationControlActionV2::SubmitApplicationReview {
+            selection_baseline,
+            selection_overrides,
+            ..
+        } = deny_request.action
+        else {
+            panic!("expected review action");
+        };
+        assert_eq!(
+            selection_baseline,
+            ExternalApplicationReviewSelectionBaselineV2::None
+        );
+        assert!(selection_overrides.is_empty());
+    }
+
+    #[test]
+    fn review_commands_keep_single_decisions_direct_and_batch_application_explicit() {
+        let mut state = ExternalApplicationUiState::default();
+        state
+            .replace_snapshot(snapshot(ExternalApplicationHostCapabilitiesV2::read_write()))
+            .unwrap();
+        state
+            .replace_review_page(page(None, None), ExternalReviewNavigation::Open)
+            .unwrap();
+
+        assert!(parse_external_application_action("review allow", &state).is_err());
+        assert_eq!(
+            parse_external_application_action("review apply", &state).unwrap(),
+            ExternalApplicationUiAction::SubmitReview {
+                baseline: ExternalApplicationReviewSelectionBaselineV2::Recommended,
+                immediate_selection: None,
+            }
+        );
+        assert_eq!(
+            parse_external_application_action("review deny", &state).unwrap(),
+            ExternalApplicationUiAction::SubmitReview {
+                baseline: ExternalApplicationReviewSelectionBaselineV2::None,
+                immediate_selection: None,
+            }
+        );
+
+        let text = external_application_review_text(&state).unwrap();
+        assert!(text.contains("Apply selections: /extensions review apply"));
+        assert!(text.contains("Keep all disabled: /extensions review deny"));
+        assert!(!text.contains("Runs an external tool"));
+        assert!(!text.contains("Baseline:"));
+        assert!(!text.contains("review defer"));
+
+        let mut direct = page(None, None);
+        direct.total_count = 1;
+        direct.items = vec![item("tool-optional", false)];
+        state
+            .replace_review_page(direct, ExternalReviewNavigation::Open)
+            .unwrap();
+        let direct_action = parse_external_application_action("review allow", &state).unwrap();
+        assert_eq!(
+            direct_action,
+            ExternalApplicationUiAction::SubmitReview {
+                baseline: ExternalApplicationReviewSelectionBaselineV2::Recommended,
+                immediate_selection: Some((
+                    ExternalApplicationReviewItemRefV2 {
+                        kind: ExternalApplicationReviewItemKindV2::Tool,
+                        stable_id: "tool-optional".to_string(),
+                    },
+                    true,
+                )),
+            }
+        );
+        let ExternalApplicationUiAction::SubmitReview {
+            baseline,
+            immediate_selection,
+        } = direct_action
+        else {
+            panic!("expected direct review submission");
+        };
+        let request = state
+            .review_submit_request(
+                "operation-direct",
+                baseline,
+                immediate_selection
+                    .as_ref()
+                    .map(|(item_ref, selected)| (item_ref, *selected)),
+            )
+            .unwrap();
+        let ExternalApplicationControlActionV2::SubmitApplicationReview {
+            selection_overrides,
+            ..
+        } = request.action
+        else {
+            panic!("expected review action");
+        };
+        assert_eq!(selection_overrides.len(), 1);
+        assert_eq!(selection_overrides[0].item_ref.stable_id, "tool-optional");
+        assert!(selection_overrides[0].selected);
+        let direct_text = external_application_review_text(&state).unwrap();
+        assert!(direct_text.contains("Enable: /extensions review allow"));
+        assert!(direct_text.contains("Keep disabled: /extensions review deny"));
     }
 
     #[test]
@@ -2801,7 +2979,26 @@ mod external_application_v2_tests {
     }
 
     #[test]
-    fn review_commands_resolve_current_page_numbers_and_offer_a_non_mutating_defer() {
+    fn opening_review_accepts_the_hosts_current_read_only_plan() {
+        let mut state = ExternalApplicationUiState::default();
+        state
+            .replace_snapshot(snapshot(ExternalApplicationHostCapabilitiesV2::read_write()))
+            .unwrap();
+        let mut current = page(None, None);
+        current.review_id = "review-current".to_string();
+        current.expected_generations[0].generation += 1;
+
+        state
+            .replace_review_page(current, ExternalReviewNavigation::Open)
+            .unwrap();
+        assert_eq!(
+            state.review.as_ref().unwrap().page.review_id,
+            "review-current"
+        );
+    }
+
+    #[test]
+    fn review_commands_resolve_current_page_numbers_and_batch_decisions() {
         let mut state = ExternalApplicationUiState::default();
         state
             .replace_snapshot(snapshot(ExternalApplicationHostCapabilitiesV2::read_write()))
@@ -2832,11 +3029,17 @@ mod external_application_v2_tests {
         );
         assert_eq!(
             parse_external_application_action("review apply", &state).unwrap(),
-            ExternalApplicationUiAction::ApplyReview
+            ExternalApplicationUiAction::SubmitReview {
+                baseline: ExternalApplicationReviewSelectionBaselineV2::Recommended,
+                immediate_selection: None,
+            }
         );
         assert_eq!(
-            parse_external_application_action("review defer", &state).unwrap(),
-            ExternalApplicationUiAction::DeferReview
+            parse_external_application_action("review deny", &state).unwrap(),
+            ExternalApplicationUiAction::SubmitReview {
+                baseline: ExternalApplicationReviewSelectionBaselineV2::None,
+                immediate_selection: None,
+            }
         );
     }
 }

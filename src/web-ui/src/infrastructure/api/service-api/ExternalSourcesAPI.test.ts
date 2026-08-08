@@ -261,6 +261,42 @@ describe('ExternalSourcesAPI', () => {
     });
   });
 
+  it('accepts an authoritative review rebind only when opening the first page', async () => {
+    invokeMock.mockResolvedValueOnce({
+      schemaVersion: 2,
+      executionDomainId: 'host-a',
+      workspaceScopeId: 'workspace:0123456789abcdef',
+      targetScope: 'workspace_override',
+      reviewId: 'review-current',
+      preferenceRevision: 11,
+      expectedGenerations: [{ owner: 'tool', generation: 8 }],
+      totalCount: 1,
+      items: [{
+        itemRef: { kind: 'tool', stableId: 'tool-current' },
+        displayName: 'Current Tool',
+        displaySummary: 'Current item',
+        riskLevel: 'low',
+        riskReasonCodes: [],
+        recommended: true,
+        safetyCeiling: 'automatic',
+      }],
+    });
+
+    await expect(externalSourcesAPI.getApplicationReviewPage('D:/workspace/project', {
+      schemaVersion: 2,
+      executionDomainId: 'host-a',
+      workspaceScopeId: 'workspace:0123456789abcdef',
+      targetScope: 'workspace_override',
+      reviewId: 'review-stale',
+      preferenceRevision: 11,
+      expectedGenerations: [],
+      pageSize: 64,
+    })).resolves.toMatchObject({
+      reviewId: 'review-current',
+      expectedGenerations: [{ owner: 'tool', generation: 8 }],
+    });
+  });
+
   it('fails closed when a V2 review page contains an unknown risk level', async () => {
     invokeMock.mockResolvedValueOnce({
       schemaVersion: 2,

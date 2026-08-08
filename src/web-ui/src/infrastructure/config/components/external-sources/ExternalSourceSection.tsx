@@ -95,10 +95,6 @@ export const ExternalSourceSection: React.FC<ExternalSourceSectionProps> = ({
                   {group.diagnostics.map((diagnostic) => (
                     <li key={externalSourceDiagnosticKey(diagnostic)}>
                       <span>{t(`diagnostics.category.${sourceDiagnosticCategory(diagnostic.code)}`)}</span>
-                      <details>
-                        <summary>{t('common.technicalDetails')}</summary>
-                        <code>{diagnostic.code}</code>
-                      </details>
                     </li>
                   ))}
                 </ul>

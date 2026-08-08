@@ -1949,12 +1949,14 @@ export const externalSourcesAPI = {
         },
       ),
     );
+    const openingRequest = request.cursor === undefined
+      && request.expectedGenerations.length === 0;
     if (page.executionDomainId !== request.executionDomainId
       || page.workspaceScopeId !== request.workspaceScopeId
       || page.targetScope !== request.targetScope
-      || page.reviewId !== request.reviewId
       || page.preferenceRevision !== request.preferenceRevision
-      || page.cursor !== request.cursor) {
+      || page.cursor !== request.cursor
+      || (!openingRequest && page.reviewId !== request.reviewId)) {
       throw new ExternalSourceApiError(
         'invalid_response',
         'External application V2 review page did not match its request',

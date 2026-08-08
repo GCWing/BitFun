@@ -3316,6 +3316,21 @@ impl WorkspaceExternalSourceService {
         } else {
             ExternalApplicationTargetScopeV2::UserDefault
         };
+        let source_ecosystems = catalog
+            .sources
+            .iter()
+            .map(|source| {
+                (
+                    source.record.key.clone(),
+                    source.record.ecosystem_id.clone(),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        let subagents_by_candidate_id = catalog
+            .subagents
+            .iter()
+            .map(|subagent| (subagent.candidate_id.as_str(), subagent))
+            .collect::<BTreeMap<_, _>>();
         let applications = default_external_integration_registry()
             .into_iter()
             .map(|registration| {
@@ -3326,15 +3341,18 @@ impl WorkspaceExternalSourceService {
                     workspace_scope_id.as_deref(),
                     registration,
                     host_capabilities,
+                    &source_ecosystems,
+                    &subagents_by_candidate_id,
                 )
             })
             .collect::<Vec<_>>();
-        let review_plan = external_application_review_plan(
+        let review_summary = external_application_review_summary(
             &catalog,
             self.execution_domain_id.as_str(),
             workspace_scope_id.as_deref(),
             target_scope,
             preferences.preference_revision,
+            &subagents_by_candidate_id,
         );
         let snapshot = ExternalApplicationSnapshotV2 {
             schema_version: EXTERNAL_APPLICATION_SCHEMA_V2,
@@ -3346,7 +3364,7 @@ impl WorkspaceExternalSourceService {
             safe_mode: self.safe_mode_enabled(),
             host_capabilities,
             applications,
-            review_summary: review_plan.summary(),
+            review_summary,
         };
         snapshot
             .validate()
@@ -3385,9 +3403,10 @@ impl WorkspaceExternalSourceService {
             preferences.preference_revision,
         );
         let opening_request = request.cursor.is_none() && request.expected_generations.is_empty();
-        if request.review_id != plan.review_id
-            || request.preference_revision != preferences.preference_revision
-            || (!opening_request && request.expected_generations != plan.expected_generations)
+        if request.preference_revision != preferences.preference_revision
+            || (!opening_request
+                && (request.review_id != plan.review_id
+                    || request.expected_generations != plan.expected_generations))
         {
             return Err(stale_operation_error(
                 "External application review changed; refresh before continuing",
@@ -4791,31 +4810,42 @@ struct ExternalApplicationReviewPlan {
     review_id: String,
     expected_generations: Vec<ExternalApplicationOwnerGenerationV2>,
     items: Vec<ExternalApplicationReviewItemV2>,
+    summary_items: Vec<ExternalApplicationReviewSummaryItem>,
+}
+
+struct ExternalApplicationReviewSummaryItem {
+    item_ref: ExternalApplicationReviewItemRefV2,
+    recommended: bool,
+    safety_ceiling: ExternalApplicationSafetyCeilingV2,
 }
 
 impl ExternalApplicationReviewPlan {
     fn summary(&self) -> Option<ExternalApplicationReviewSummaryV2> {
-        if self.items.is_empty() {
+        if self.summary_items.is_empty() {
             return None;
         }
         let mut counts = BTreeMap::new();
-        for item in &self.items {
+        for item in &self.summary_items {
             *counts.entry(item.item_ref.kind).or_insert(0usize) += 1;
         }
-        let recommended_count = self.items.iter().filter(|item| item.recommended).count();
+        let recommended_count = self
+            .summary_items
+            .iter()
+            .filter(|item| item.recommended)
+            .count();
         let blocked_count = self
-            .items
+            .summary_items
             .iter()
             .filter(|item| item.safety_ceiling == ExternalApplicationSafetyCeilingV2::Blocked)
             .count();
         Some(ExternalApplicationReviewSummaryV2 {
             review_id: self.review_id.clone(),
-            total_count: self.items.len(),
+            total_count: self.summary_items.len(),
             category_counts: counts
                 .into_iter()
                 .map(|(kind, count)| ExternalApplicationReviewCategoryCountV2 { kind, count })
                 .collect(),
-            max_selection_count: self.items.len().saturating_sub(blocked_count),
+            max_selection_count: self.summary_items.len().saturating_sub(blocked_count),
             risk_summary: ExternalApplicationRiskSummaryV2 {
                 highest_level: Some(ExternalApplicationRiskLevelV2::High),
                 reason_codes: vec!["executable_content_requires_review".to_string()],
@@ -4823,13 +4853,13 @@ impl ExternalApplicationReviewPlan {
             recommendation_summary: ExternalApplicationReviewRecommendationSummaryV2 {
                 recommended_count,
                 optional_count: self
-                    .items
+                    .summary_items
                     .len()
                     .saturating_sub(recommended_count)
                     .saturating_sub(blocked_count),
                 blocked_count,
             },
-            safety_ceiling: if blocked_count == self.items.len() {
+            safety_ceiling: if blocked_count == self.summary_items.len() {
                 ExternalApplicationSafetyCeilingV2::Blocked
             } else {
                 ExternalApplicationSafetyCeilingV2::ReviewRequired
@@ -4862,130 +4892,269 @@ fn external_application_review_plan(
     target_scope: ExternalApplicationTargetScopeV2,
     preference_revision: u64,
 ) -> ExternalApplicationReviewPlan {
+    let subagents_by_candidate_id = catalog
+        .subagents
+        .iter()
+        .map(|subagent| (subagent.candidate_id.as_str(), subagent))
+        .collect::<BTreeMap<_, _>>();
+    external_application_review_plan_internal(
+        catalog,
+        execution_domain_id,
+        workspace_scope_id,
+        target_scope,
+        preference_revision,
+        &subagents_by_candidate_id,
+        true,
+    )
+}
+
+fn external_application_review_summary(
+    catalog: &ExternalSourceCatalogSnapshot,
+    execution_domain_id: &str,
+    workspace_scope_id: Option<&str>,
+    target_scope: ExternalApplicationTargetScopeV2,
+    preference_revision: u64,
+    subagents_by_candidate_id: &BTreeMap<&str, &ExternalSubagentSummary>,
+) -> Option<ExternalApplicationReviewSummaryV2> {
+    external_application_review_plan_internal(
+        catalog,
+        execution_domain_id,
+        workspace_scope_id,
+        target_scope,
+        preference_revision,
+        subagents_by_candidate_id,
+        false,
+    )
+    .summary()
+}
+
+fn push_external_application_review_item<F>(
+    items: &mut Vec<ExternalApplicationReviewItemV2>,
+    summary_items: &mut Vec<ExternalApplicationReviewSummaryItem>,
+    include_item_details: bool,
+    item_ref: ExternalApplicationReviewItemRefV2,
+    recommended: bool,
+    safety_ceiling: ExternalApplicationSafetyCeilingV2,
+    build_item: F,
+) where
+    F: FnOnce(ExternalApplicationReviewItemRefV2) -> ExternalApplicationReviewItemV2,
+{
+    summary_items.push(ExternalApplicationReviewSummaryItem {
+        item_ref: item_ref.clone(),
+        recommended,
+        safety_ceiling,
+    });
+    if include_item_details {
+        items.push(build_item(item_ref));
+    }
+}
+
+fn push_external_application_conflict_review_item<F>(
+    items: &mut Vec<ExternalApplicationReviewItemV2>,
+    summary_items: &mut Vec<ExternalApplicationReviewSummaryItem>,
+    include_item_details: bool,
+    conflict_key: String,
+    build_display: F,
+) where
+    F: FnOnce() -> (String, String),
+{
+    let item_ref = ExternalApplicationReviewItemRefV2 {
+        kind: ExternalApplicationReviewItemKindV2::Conflict,
+        stable_id: conflict_key,
+    };
+    push_external_application_review_item(
+        items,
+        summary_items,
+        include_item_details,
+        item_ref,
+        false,
+        ExternalApplicationSafetyCeilingV2::Blocked,
+        |item_ref| {
+            let (display_name, display_summary) = build_display();
+            ExternalApplicationReviewItemV2 {
+                item_ref,
+                display_name,
+                display_summary,
+                risk_level: ExternalApplicationRiskLevelV2::High,
+                risk_reason_codes: vec!["ambiguous_runtime_route".to_string()],
+                recommended: false,
+                safety_ceiling: ExternalApplicationSafetyCeilingV2::Blocked,
+            }
+        },
+    );
+}
+
+fn external_application_review_plan_internal(
+    catalog: &ExternalSourceCatalogSnapshot,
+    execution_domain_id: &str,
+    workspace_scope_id: Option<&str>,
+    target_scope: ExternalApplicationTargetScopeV2,
+    preference_revision: u64,
+    subagents_by_candidate_id: &BTreeMap<&str, &ExternalSubagentSummary>,
+    include_item_details: bool,
+) -> ExternalApplicationReviewPlan {
     let mut items = Vec::new();
+    let mut summary_items = Vec::new();
     for request in &catalog.tool_approval_requests {
-        items.push(ExternalApplicationReviewItemV2 {
-            item_ref: ExternalApplicationReviewItemRefV2 {
-                kind: ExternalApplicationReviewItemKindV2::Tool,
-                stable_id: request.approval_key.clone(),
+        let item_ref = ExternalApplicationReviewItemRefV2 {
+            kind: ExternalApplicationReviewItemKindV2::Tool,
+            stable_id: request.approval_key.clone(),
+        };
+        push_external_application_review_item(
+            &mut items,
+            &mut summary_items,
+            include_item_details,
+            item_ref,
+            false,
+            ExternalApplicationSafetyCeilingV2::ReviewRequired,
+            |item_ref| ExternalApplicationReviewItemV2 {
+                item_ref,
+                display_name: request.source_display_name.clone(),
+                display_summary: format!(
+                    "{} external tool{} require approval",
+                    request.tool_names.len(),
+                    if request.tool_names.len() == 1 {
+                        ""
+                    } else {
+                        "s"
+                    }
+                ),
+                risk_level: ExternalApplicationRiskLevelV2::High,
+                risk_reason_codes: vec!["process_or_resource_access".to_string()],
+                recommended: false,
+                safety_ceiling: ExternalApplicationSafetyCeilingV2::ReviewRequired,
             },
-            display_name: request.source_display_name.clone(),
-            display_summary: format!(
-                "{} external tool{} require approval",
-                request.tool_names.len(),
-                if request.tool_names.len() == 1 {
-                    ""
-                } else {
-                    "s"
-                }
-            ),
-            risk_level: ExternalApplicationRiskLevelV2::High,
-            risk_reason_codes: vec!["process_or_resource_access".to_string()],
-            recommended: false,
-            safety_ceiling: ExternalApplicationSafetyCeilingV2::ReviewRequired,
-        });
+        );
     }
     for request in &catalog.mcp_approval_requests {
-        items.push(ExternalApplicationReviewItemV2 {
-            item_ref: ExternalApplicationReviewItemRefV2 {
-                kind: ExternalApplicationReviewItemKindV2::Mcp,
-                stable_id: request.decision_key.clone(),
+        let item_ref = ExternalApplicationReviewItemRefV2 {
+            kind: ExternalApplicationReviewItemKindV2::Mcp,
+            stable_id: request.decision_key.clone(),
+        };
+        push_external_application_review_item(
+            &mut items,
+            &mut summary_items,
+            include_item_details,
+            item_ref,
+            false,
+            ExternalApplicationSafetyCeilingV2::ReviewRequired,
+            |item_ref| ExternalApplicationReviewItemV2 {
+                item_ref,
+                display_name: request.definition.name.clone(),
+                display_summary: "External MCP server requires approval".to_string(),
+                risk_level: ExternalApplicationRiskLevelV2::High,
+                risk_reason_codes: vec!["process_or_network_access".to_string()],
+                recommended: false,
+                safety_ceiling: ExternalApplicationSafetyCeilingV2::ReviewRequired,
             },
-            display_name: request.definition.name.clone(),
-            display_summary: "External MCP server requires approval".to_string(),
-            risk_level: ExternalApplicationRiskLevelV2::High,
-            risk_reason_codes: vec!["process_or_network_access".to_string()],
-            recommended: false,
-            safety_ceiling: ExternalApplicationSafetyCeilingV2::ReviewRequired,
-        });
+        );
     }
-    for approval_key in &catalog.pending_subagent_approvals {
-        let summary = catalog
-            .subagents
-            .iter()
-            .find(|summary| summary.decision_key == *approval_key);
-        items.push(ExternalApplicationReviewItemV2 {
-            item_ref: ExternalApplicationReviewItemRefV2 {
-                kind: ExternalApplicationReviewItemKindV2::Subagent,
-                stable_id: approval_key.clone(),
+    for candidate_id in &catalog.pending_subagent_approvals {
+        let Some(summary) = subagents_by_candidate_id
+            .get(candidate_id.as_str())
+            .copied()
+        else {
+            continue;
+        };
+        let item_ref = ExternalApplicationReviewItemRefV2 {
+            kind: ExternalApplicationReviewItemKindV2::Subagent,
+            stable_id: summary.decision_key.clone(),
+        };
+        push_external_application_review_item(
+            &mut items,
+            &mut summary_items,
+            include_item_details,
+            item_ref,
+            false,
+            ExternalApplicationSafetyCeilingV2::ReviewRequired,
+            |item_ref| ExternalApplicationReviewItemV2 {
+                item_ref,
+                display_name: summary.display_name.clone(),
+                display_summary: "External subagent and its requested tools require approval"
+                    .to_string(),
+                risk_level: ExternalApplicationRiskLevelV2::High,
+                risk_reason_codes: vec!["delegated_tool_access".to_string()],
+                recommended: false,
+                safety_ceiling: ExternalApplicationSafetyCeilingV2::ReviewRequired,
             },
-            display_name: summary
-                .map(|summary| summary.display_name.clone())
-                .unwrap_or_else(|| "External subagent".to_string()),
-            display_summary: "External subagent and its requested tools require approval"
-                .to_string(),
-            risk_level: ExternalApplicationRiskLevelV2::High,
-            risk_reason_codes: vec!["delegated_tool_access".to_string()],
-            recommended: false,
-            safety_ceiling: ExternalApplicationSafetyCeilingV2::ReviewRequired,
-        });
+        );
     }
-    for (conflict_key, display_name, display_summary) in catalog
+    for conflict in catalog
         .command_conflicts
         .iter()
         .filter(|conflict| conflict.selected_candidate_id.is_none())
-        .map(|conflict| {
-            (
-                conflict.conflict_key.clone(),
-                format!("Resolve command conflict: {}", conflict.command_name),
-                "Choose one compatible command source".to_string(),
-            )
-        })
-        .chain(
-            catalog
-                .tool_conflicts
-                .iter()
-                .filter(|conflict| conflict.selected_candidate_id.is_none())
-                .map(|conflict| {
-                    (
-                        conflict.conflict_key.clone(),
-                        format!("Resolve tool conflict: {}", conflict.tool_name),
-                        "Choose one compatible tool source".to_string(),
-                    )
-                }),
-        )
-        .chain(
-            catalog
-                .mcp_conflicts
-                .iter()
-                .filter(|conflict| conflict.selected_candidate_id.is_none())
-                .map(|conflict| {
-                    (
-                        conflict.conflict_key.clone(),
-                        format!("Resolve MCP conflict: {}", conflict.server_name),
-                        "Choose one compatible MCP server".to_string(),
-                    )
-                }),
-        )
-        .chain(
-            catalog
-                .subagent_conflicts
-                .iter()
-                .filter(|conflict| conflict.selected_candidate_id.is_none())
-                .map(|conflict| {
-                    (
-                        conflict.conflict_key.clone(),
-                        format!("Resolve subagent conflict: {}", conflict.logical_id),
-                        "Choose one compatible subagent source".to_string(),
-                    )
-                }),
-        )
     {
-        items.push(ExternalApplicationReviewItemV2 {
-            item_ref: ExternalApplicationReviewItemRefV2 {
-                kind: ExternalApplicationReviewItemKindV2::Conflict,
-                stable_id: conflict_key,
+        push_external_application_conflict_review_item(
+            &mut items,
+            &mut summary_items,
+            include_item_details,
+            conflict.conflict_key.clone(),
+            || {
+                (
+                    format!("Resolve command conflict: {}", conflict.command_name),
+                    "Choose one compatible command source".to_string(),
+                )
             },
-            display_name,
-            display_summary,
-            risk_level: ExternalApplicationRiskLevelV2::High,
-            risk_reason_codes: vec!["ambiguous_runtime_route".to_string()],
-            recommended: false,
-            safety_ceiling: ExternalApplicationSafetyCeilingV2::Blocked,
-        });
+        );
+    }
+    for conflict in catalog
+        .tool_conflicts
+        .iter()
+        .filter(|conflict| conflict.selected_candidate_id.is_none())
+    {
+        push_external_application_conflict_review_item(
+            &mut items,
+            &mut summary_items,
+            include_item_details,
+            conflict.conflict_key.clone(),
+            || {
+                (
+                    format!("Resolve tool conflict: {}", conflict.tool_name),
+                    "Choose one compatible tool source".to_string(),
+                )
+            },
+        );
+    }
+    for conflict in catalog
+        .mcp_conflicts
+        .iter()
+        .filter(|conflict| conflict.selected_candidate_id.is_none())
+    {
+        push_external_application_conflict_review_item(
+            &mut items,
+            &mut summary_items,
+            include_item_details,
+            conflict.conflict_key.clone(),
+            || {
+                (
+                    format!("Resolve MCP conflict: {}", conflict.server_name),
+                    "Choose one compatible MCP server".to_string(),
+                )
+            },
+        );
+    }
+    for conflict in catalog
+        .subagent_conflicts
+        .iter()
+        .filter(|conflict| conflict.selected_candidate_id.is_none())
+    {
+        push_external_application_conflict_review_item(
+            &mut items,
+            &mut summary_items,
+            include_item_details,
+            conflict.conflict_key.clone(),
+            || {
+                (
+                    format!("Resolve subagent conflict: {}", conflict.logical_id),
+                    "Choose one compatible subagent source".to_string(),
+                )
+            },
+        );
     }
     items.sort_by(|left, right| left.item_ref.cmp(&right.item_ref));
     items.dedup_by(|left, right| left.item_ref == right.item_ref);
+    summary_items.sort_by(|left, right| left.item_ref.cmp(&right.item_ref));
+    summary_items.dedup_by(|left, right| left.item_ref == right.item_ref);
     let expected_generations = vec![
         ExternalApplicationOwnerGenerationV2 {
             owner: ExternalApplicationReviewItemKindV2::Command,
@@ -5018,7 +5187,7 @@ fn external_application_review_plan(
         hasher.update([generation.owner as u8]);
         hasher.update(generation.generation.to_le_bytes());
     }
-    for item in &items {
+    for item in &summary_items {
         hasher.update([item.item_ref.kind as u8]);
         hasher.update(item.item_ref.stable_id.as_bytes());
         hasher.update([0]);
@@ -5028,6 +5197,7 @@ fn external_application_review_plan(
         review_id,
         expected_generations,
         items,
+        summary_items,
     }
 }
 
@@ -5077,6 +5247,8 @@ fn project_external_application_v2(
     workspace_scope_id: Option<&str>,
     registration: ExternalEcosystemRegistration,
     host_capabilities: ExternalApplicationHostCapabilitiesV2,
+    source_ecosystems: &BTreeMap<SourceKey, EcosystemId>,
+    subagents_by_candidate_id: &BTreeMap<&str, &ExternalSubagentSummary>,
 ) -> ExternalApplicationSummaryV2 {
     let ecosystem_id = &registration.descriptor.ecosystem_id;
     let sources = catalog
@@ -5155,7 +5327,12 @@ fn project_external_application_v2(
     } else {
         ExternalApplicationConnectionStateV2::Disconnected
     };
-    let counts = external_application_counts(catalog, ecosystem_id);
+    let counts = external_application_counts(
+        catalog,
+        ecosystem_id,
+        source_ecosystems,
+        subagents_by_candidate_id,
+    );
     let needs_attention = desired_connection == ExternalApplicationDesiredConnectionV2::NeedsReview
         || (connection == ExternalApplicationConnectionStateV2::Connected
             && (counts.pending_review > 0 || counts.conflicts > 0));
@@ -5262,11 +5439,13 @@ fn public_user_decision(
 fn external_application_counts(
     catalog: &ExternalSourceCatalogSnapshot,
     ecosystem_id: &EcosystemId,
+    source_ecosystems: &BTreeMap<SourceKey, EcosystemId>,
+    subagents_by_candidate_id: &BTreeMap<&str, &ExternalSubagentSummary>,
 ) -> ExternalApplicationAggregateCounts {
     let source_belongs = |source_key: &SourceKey| {
-        catalog.sources.iter().any(|source| {
-            source.record.key == *source_key && source.record.ecosystem_id == *ecosystem_id
-        })
+        source_ecosystems
+            .get(source_key)
+            .is_some_and(|source_ecosystem| source_ecosystem == ecosystem_id)
     };
     let mut counts = ExternalApplicationAggregateCounts::default();
     for command in &catalog.commands {
@@ -5367,10 +5546,8 @@ fn external_application_counts(
         .filter(|conflict| {
             conflict.selected_candidate_id.is_none()
                 && conflict.candidates.iter().any(|candidate| {
-                    catalog
-                        .subagents
-                        .iter()
-                        .find(|subagent| subagent.candidate_id == candidate.candidate_id)
+                    subagents_by_candidate_id
+                        .get(candidate.candidate_id.as_str())
                         .is_some_and(|subagent| subagent.source_keys.iter().any(&source_belongs))
                 })
         })
@@ -10835,6 +11012,7 @@ mod tests {
             .review_summary
             .expect("unresolved conflict requires review");
         assert_eq!(review.total_count, 1);
+        let initial_review_id = review.review_id.clone();
         let request = ExternalApplicationReviewPageRequestV2 {
             schema_version: EXTERNAL_APPLICATION_SCHEMA_V2,
             execution_domain_id: service.execution_domain_id.clone(),
@@ -10846,6 +11024,7 @@ mod tests {
             cursor: None,
             page_size: EXTERNAL_APPLICATION_REVIEW_PAGE_MAX_ITEMS,
         };
+        lock_snapshot(&service.snapshot).generation += 1;
         let mut unbound_follow_up = request.clone();
         unbound_follow_up.cursor = Some(format!("{}:0", unbound_follow_up.review_id));
         assert!(service
@@ -10855,6 +11034,7 @@ mod tests {
         let page = service
             .application_review_page_v2(&preferences, request)
             .unwrap();
+        assert_ne!(page.review_id, initial_review_id);
         assert_eq!(page.items.len(), 1);
         assert_eq!(
             page.items[0].item_ref.kind,
@@ -10862,6 +11042,72 @@ mod tests {
         );
         assert!(!page.items[0].display_summary.contains(".opencode"));
         assert_eq!(page.expected_generations.len(), 5);
+    }
+
+    #[test]
+    fn application_review_plan_binds_pending_subagent_candidate_to_its_decision() {
+        let service = test_service(Vec::new());
+        let candidate_id = "opencode.subagents:project:reviewer";
+        let decision_key = "subagent-approval:reviewer";
+        let catalog = {
+            let mut catalog = lock_snapshot(&service.snapshot);
+            catalog.subagent_generation = 4;
+            catalog.subagents = vec![ExternalSubagentSummary {
+                candidate_id: candidate_id.to_string(),
+                logical_id: "reviewer".to_string(),
+                display_name: "Code reviewer".to_string(),
+                description: "Reviews the current change".to_string(),
+                provider_label: "OpenCode".to_string(),
+                scope: ExternalSourceScope::Project,
+                source_keys: Vec::new(),
+                source_location_labels: Vec::new(),
+                source_count: 1,
+                mode: Default::default(),
+                requested_model: Default::default(),
+                requested_model_profile: None,
+                model_binding_method: Default::default(),
+                model_binding_key: None,
+                effective_model_label: None,
+                effective_tool_labels: vec!["read".to_string()],
+                unavailable_tool_labels: Vec::new(),
+                supports_follow_up: false,
+                compatibility_state: ExternalSubagentCompatibilityState::Ready,
+                diagnostics: Vec::new(),
+                activation_state: ExternalSubagentActivationState::ApprovalRequired,
+                decision_key: decision_key.to_string(),
+            }];
+            catalog.pending_subagent_approvals = vec![candidate_id.to_string()];
+            catalog.clone()
+        };
+
+        let plan = external_application_review_plan(
+            &catalog,
+            LEGACY_LOCAL_EXECUTION_DOMAIN_ID,
+            None,
+            ExternalApplicationTargetScopeV2::UserDefault,
+            0,
+        );
+
+        assert_eq!(plan.items.len(), 1);
+        assert_eq!(plan.items[0].display_name, "Code reviewer");
+        assert_eq!(plan.items[0].item_ref.stable_id, decision_key);
+
+        let subagents_by_candidate_id = catalog
+            .subagents
+            .iter()
+            .map(|subagent| (subagent.candidate_id.as_str(), subagent))
+            .collect::<BTreeMap<_, _>>();
+        let summary_only = external_application_review_plan_internal(
+            &catalog,
+            LEGACY_LOCAL_EXECUTION_DOMAIN_ID,
+            None,
+            ExternalApplicationTargetScopeV2::UserDefault,
+            0,
+            &subagents_by_candidate_id,
+            false,
+        );
+        assert!(summary_only.items.is_empty());
+        assert_eq!(summary_only.summary(), plan.summary());
     }
 
     #[tokio::test]

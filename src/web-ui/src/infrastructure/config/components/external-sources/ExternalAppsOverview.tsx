@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Switch } from '@/component-library';
-import { ChevronDown, ChevronRight, Settings2 } from 'lucide-react';
-import { ConfigPageSection } from '../common';
+import { Switch, Tooltip } from '@/component-library';
+import { ArrowLeft, ChevronDown, ChevronRight, CircleAlert, Settings2 } from 'lucide-react';
+import { ConfigPageRow, ConfigPageSection } from '../common';
 import type {
   ExternalApplicationCapabilityPlan,
   ExternalApplicationView,
@@ -19,8 +19,10 @@ export interface ExternalApplicationReviewView {
   items: ExternalApplicationReviewItemV2[];
   selected: Record<string, boolean>;
   selectedCount: number;
+  recommendedCount: number;
   totalCount: number;
   maxSelectionCount: number;
+  applicationNames: string[];
   nextCursor?: string;
   itemResults: ExternalApplicationReviewItemResultV2[];
   completed: boolean;
@@ -28,7 +30,10 @@ export interface ExternalApplicationReviewView {
   onClose: () => void;
   onToggleItem: (item: ExternalApplicationReviewItemV2, selected: boolean) => void;
   onLoadMore: () => void;
-  onSubmit: () => void;
+  onSubmit: (
+    baseline: 'recommended' | 'none',
+    immediateSelection?: { item: ExternalApplicationReviewItemV2; selected: boolean },
+  ) => void;
 }
 
 export interface ExternalAppsOverviewProps {
@@ -60,6 +65,21 @@ const CAPABILITY_LABEL: Record<string, string> = {
   mcp: 'applications.capabilities.mcps',
 };
 
+const REVIEW_CATEGORY_LABEL: Record<ExternalApplicationReviewItemRefV2['kind'], string> = {
+  command: 'applications.review.category.command',
+  tool: 'applications.review.category.tool',
+  subagent: 'applications.review.category.subagent',
+  mcp: 'applications.review.category.mcp',
+  conflict: 'applications.review.category.conflict',
+};
+
+const REVIEW_REASON_LABEL: Record<string, string> = {
+  process_or_resource_access: 'applications.review.riskReason.processOrResourceAccess',
+  process_or_network_access: 'applications.review.riskReason.processOrNetworkAccess',
+  delegated_tool_access: 'applications.review.riskReason.delegatedToolAccess',
+  ambiguous_runtime_route: 'applications.review.riskReason.ambiguousRuntimeRoute',
+};
+
 function capabilityAccessLabel(
   capability: ExternalApplicationCapabilityPlan,
   t: TFunction,
@@ -67,11 +87,11 @@ function capabilityAccessLabel(
   return t(`applications.capabilityAccess.${capability.effectiveAccess}`);
 }
 
-function v2ApplicationSummary(
+function v2ApplicationFacts(
   application: ExternalApplicationView,
   t: TFunction,
 ): string {
-  const facts = [t('applications.summary.enabledCount', { count: application.enabledCount })];
+  const facts: string[] = [];
   if (application.health && application.health !== 'healthy') {
     facts.push(t(`applications.summary.health.${application.health}`));
   }
@@ -106,14 +126,63 @@ export const ExternalAppsOverview: React.FC<ExternalAppsOverviewProps> = ({
   review,
 }) => {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const openingReview = review?.open && review.loading && review.items.length === 0;
+  const singleReviewItem = review?.totalCount === 1 && review.items.length === 1
+    ? review.items[0]
+    : undefined;
+  const reviewApplicationLabel = review?.applicationNames.length
+    ? review.applicationNames.join(', ')
+    : t('applications.review.unknownApplication');
+  const hasSelectableReviewItem = review?.items.some(
+    (item) => item.safetyCeiling !== 'blocked',
+  ) ?? false;
+  const canCustomizeReview = Boolean(review
+    && hasSelectableReviewItem
+    && review.totalCount > 1);
+  const reviewSubmitDisabled = Boolean(!review
+    || busy
+    || !review.canSubmit
+    || review.loading
+    || review.completed
+    || review.items.length === 0);
+  const singleReviewReason = singleReviewItem?.riskReasonCodes
+    .map((code) => REVIEW_REASON_LABEL[code])
+    .find(Boolean);
+
+  const reviewDescription = review && singleReviewItem ? (
+    <>
+      <span>
+        {t(REVIEW_CATEGORY_LABEL[singleReviewItem.itemRef.kind])}
+        {' · '}
+        {singleReviewItem.displayName}
+        {' · '}
+        {singleReviewItem.safetyCeiling === 'blocked'
+          ? t('applications.review.safety.blocked')
+          : t(`applications.review.risk.${singleReviewItem.riskLevel}`)}
+      </span>
+      <br />
+      <span>
+        {singleReviewReason ? `${t(singleReviewReason)} ` : ''}
+        {singleReviewItem.safetyCeiling === 'blocked'
+          ? t('applications.review.recommendation.blocked')
+          : singleReviewItem.recommended
+          ? t('applications.review.recommendation.enable')
+          : t('applications.review.recommendation.keepDisabled')}
+      </span>
+    </>
+  ) : review ? (
+    t('applications.review.recommendation.multiple', {
+      count: review.totalCount,
+      recommended: review.recommendedCount,
+    })
+  ) : null;
 
   return (
     <ConfigPageSection
       className="bitfun-external-sources-config__apps"
       title={t('applications.title')}
-      description={t('applications.description')}
     >
-      {totalAttentionCount > 0 ? (
+      {totalAttentionCount > 0 && !review?.open ? (
         <button
           type="button"
           className="bitfun-external-sources-config__attention-summary"
@@ -122,99 +191,180 @@ export const ExternalAppsOverview: React.FC<ExternalAppsOverviewProps> = ({
           data-bf-count={totalAttentionCount}
           onClick={onOpenReview ?? onOpenAdvanced}
         >
-          <span>
-            <strong>{t('applications.review.title', { count: totalAttentionCount })}</strong>
-            <small>{t('applications.review.description')}</small>
-          </span>
-          <span className="bitfun-external-sources-config__attention-count">
-            {totalAttentionCount}
-          </span>
+          <strong>{t('applications.review.title', { count: totalAttentionCount })}</strong>
         </button>
       ) : null}
 
       {review?.open ? (
         <div className="bitfun-external-sources-config__review">
           <div className="bitfun-external-sources-config__review-toolbar">
-            <button type="button" onClick={review.onClose}>
-              {t('applications.review.back')}
-            </button>
-            <span aria-live="polite">
-              {t('applications.review.selectionCount', {
-                selected: review.selectedCount,
-                maximum: review.maxSelectionCount,
-              })}
-            </span>
-          </div>
-          <div className="bitfun-external-sources-config__app-list">
-            {review.items.map((item) => {
-              const key = reviewItemKey(item);
-              const selected = review.selected[key] ?? item.recommended;
-              const result = review.itemResults.find(
-                (candidate) => reviewItemRefKey(candidate.itemRef) === key,
-              );
-              return (
-                <label
-                  key={key}
-                  className="bitfun-external-sources-config__app-row"
-                  data-bf-component="external-sources-config"
-                  data-bf-part="reviewItem"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selected}
-                    disabled={busy
-                      || review.completed
-                      || item.safetyCeiling === 'blocked'
-                      || (!selected && review.selectedCount >= review.maxSelectionCount)}
-                    onChange={(event) => review.onToggleItem(item, event.currentTarget.checked)}
-                  />
-                  <span className="bitfun-external-sources-config__app-copy">
-                    <strong>{item.displayName}</strong>
-                    <small>{item.displaySummary}</small>
-                    {result ? (
-                      <small>
-                        {t(`applications.review.itemOutcome.${result.outcome}`)}
-                      </small>
-                    ) : null}
-                  </span>
-                  <span className={`bitfun-external-sources-config__app-status is-${item.riskLevel}`}>
-                    {item.safetyCeiling === 'blocked'
-                      ? t('applications.review.safety.blocked')
-                      : t(`applications.review.risk.${item.riskLevel}`)}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-          {review.loading ? (
-            <div role="status">{t('applications.review.loading')}</div>
-          ) : null}
-          <div className="bitfun-external-sources-config__review-actions">
-            {review.nextCursor ? (
-              <button
-                type="button"
-                data-bf-component="external-sources-config"
-                data-bf-part="loadMoreReview"
-                disabled={busy || review.loading || review.completed}
-                onClick={review.onLoadMore}
-              >
-                {t('applications.review.loadMore')}
-              </button>
-            ) : null}
             <button
               type="button"
-              data-bf-component="external-sources-config"
-              data-bf-part="submitReview"
-              disabled={busy
-                || !review.canSubmit
-                || review.loading
-                || review.completed
-                || review.items.length === 0}
-              onClick={review.onSubmit}
+              className="btn btn-ghost btn-sm"
+              onClick={review.onClose}
             >
-              {t('applications.review.apply')}
+              <ArrowLeft size={14} aria-hidden="true" />
+              {t('applications.review.back')}
             </button>
           </div>
+          {openingReview ? (
+            <ConfigPageRow
+              className="bitfun-external-sources-config__review-loading"
+              label={<span role="status">{t('applications.review.loading')}</span>}
+              multiline
+            >
+              {null}
+            </ConfigPageRow>
+          ) : null}
+          {!openingReview ? (
+            <>
+              <ConfigPageRow
+                className="bitfun-external-sources-config__review-decision"
+                label={reviewApplicationLabel}
+                description={reviewDescription}
+                align="center"
+              >
+                <div className="bitfun-external-sources-config__review-actions">
+                  {singleReviewItem ? (
+                    <>
+                      <button
+                        type="button"
+                        className={singleReviewItem.safetyCeiling === 'blocked'
+                          ? 'btn btn-primary btn-sm'
+                          : 'btn btn-secondary btn-sm'}
+                        data-bf-component="external-sources-config"
+                        data-bf-part="submitReview"
+                        data-review-baseline="none"
+                        disabled={reviewSubmitDisabled}
+                        onClick={() => review.onSubmit('none')}
+                      >
+                        {t(singleReviewItem.recommended
+                          && singleReviewItem.safetyCeiling !== 'blocked'
+                          ? 'applications.review.doNotEnable'
+                          : 'applications.review.keepDisabled')}
+                      </button>
+                      {singleReviewItem.safetyCeiling !== 'blocked' ? (
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          data-bf-component="external-sources-config"
+                          data-bf-part="submitReview"
+                          data-review-baseline="recommended"
+                          disabled={reviewSubmitDisabled}
+                          onClick={() => review.onSubmit('recommended', {
+                            item: singleReviewItem,
+                            selected: true,
+                          })}
+                        >
+                          {t('applications.review.enableThisItem')}
+                        </button>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      {review.selectedCount > 0 ? (
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          data-bf-component="external-sources-config"
+                          data-bf-part="submitReview"
+                          data-review-baseline="none"
+                          disabled={reviewSubmitDisabled}
+                          onClick={() => review.onSubmit('none')}
+                        >
+                          {t('applications.review.doNotEnableAny')}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        data-bf-component="external-sources-config"
+                        data-bf-part="submitReview"
+                        data-review-baseline={review.selectedCount > 0 ? 'recommended' : 'none'}
+                        disabled={reviewSubmitDisabled}
+                        onClick={() => review.onSubmit(
+                          review.selectedCount > 0 ? 'recommended' : 'none',
+                        )}
+                      >
+                        {t(review.selectedCount === 0
+                          ? 'applications.review.keepDisabled'
+                          : Object.keys(review.selected).length > 0
+                          ? 'applications.review.enableSelected'
+                          : 'applications.review.enableRecommended', {
+                          count: review.selectedCount,
+                        })}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </ConfigPageRow>
+              {canCustomizeReview ? (
+                <details className="bitfun-external-sources-config__review-adjustments">
+                  <summary>{t('applications.review.customize')}</summary>
+                <div aria-live="polite">
+                  {t('applications.review.selectionCount', {
+                    selected: review.selectedCount,
+                    maximum: review.maxSelectionCount,
+                  })}
+                </div>
+                <div className="bitfun-external-sources-config__app-list">
+                  {review.items.map((item) => {
+                    const key = reviewItemKey(item);
+                    const selected = review.selected[key] ?? item.recommended;
+                    const result = review.itemResults.find(
+                      (candidate) => reviewItemRefKey(candidate.itemRef) === key,
+                    );
+                    return (
+                      <label
+                        key={key}
+                        className="bitfun-external-sources-config__app-row"
+                        data-bf-component="external-sources-config"
+                        data-bf-part="reviewItem"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          disabled={busy
+                            || review.completed
+                            || item.safetyCeiling === 'blocked'
+                            || (!selected && review.selectedCount >= review.maxSelectionCount)}
+                          onChange={(event) => review.onToggleItem(item, event.currentTarget.checked)}
+                        />
+                        <span className="bitfun-external-sources-config__app-copy">
+                          <strong>{item.displayName}</strong>
+                          {result ? (
+                            <small>
+                              {t(`applications.review.itemOutcome.${result.outcome}`)}
+                            </small>
+                          ) : null}
+                        </span>
+                        <span className={`bitfun-external-sources-config__app-status is-${item.riskLevel}`}>
+                          {item.safetyCeiling === 'blocked'
+                            ? t('applications.review.safety.blocked')
+                            : t(`applications.review.risk.${item.riskLevel}`)}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {review.nextCursor ? (
+                  <div className="bitfun-external-sources-config__review-actions">
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      data-bf-component="external-sources-config"
+                      data-bf-part="loadMoreReview"
+                      disabled={busy || review.loading || review.completed}
+                      onClick={review.onLoadMore}
+                    >
+                      {t('applications.review.loadMore')}
+                    </button>
+                  </div>
+                ) : null}
+                </details>
+              ) : null}
+            </>
+          ) : null}
         </div>
       ) : (
         <div className="bitfun-external-sources-config__app-list">
@@ -223,6 +373,9 @@ export const ExternalAppsOverview: React.FC<ExternalAppsOverviewProps> = ({
             const hasCapabilityDetails = application.enabledCount === undefined;
             const capabilityRows = application.connectPlan
               .filter((entry) => entry.count > 0);
+            const applicationFacts = application.enabledCount !== undefined
+              ? v2ApplicationFacts(application, t)
+              : '';
             return (
               <div key={application.ecosystemId}>
                 <div
@@ -256,34 +409,23 @@ export const ExternalAppsOverview: React.FC<ExternalAppsOverviewProps> = ({
                       <span className="bitfun-external-sources-config__app-name">
                         {application.displayName}
                       </span>
-                      {application.attentionCount > 0 ? (
-                        <span
-                          className="bitfun-external-sources-config__app-attention-dot"
-                          data-bf-component="external-sources-config"
-                          data-bf-part="appAttention"
-                          title={t('applications.summary.attention', { count: application.attentionCount })}
-                        >
-                          {application.attentionCount}
-                        </span>
-                      ) : null}
                       <span className={`bitfun-external-sources-config__app-status is-${application.status}`}>
                         {t(`applications.status.${application.status}`)}
                       </span>
-                    </div>
-                    <div className="bitfun-external-sources-config__app-summary">
-                      {application.enabledCount !== undefined
-                        ? v2ApplicationSummary(application, t)
-                        : application.activeCapabilities.length > 0
-                        ? application.activeCapabilities.map((capability) => (
+                      {applicationFacts ? (
+                        <Tooltip content={applicationFacts} placement="top">
                           <span
-                            key={capability.capabilityId}
-                            className="bitfun-external-sources-config__app-capability-chip"
+                            className="bitfun-external-sources-config__app-facts"
+                            data-bf-component="external-sources-config"
+                            data-bf-part="applicationFacts"
+                            role="img"
+                            tabIndex={0}
+                            aria-label={applicationFacts}
                           >
-                            {t(CAPABILITY_LABEL[capability.capabilityId] ?? capability.capabilityId)}
-                            <span>{capability.count}</span>
+                            <CircleAlert size={14} aria-hidden="true" />
                           </span>
-                        ))
-                        : t('applications.summary.noContent')}
+                        </Tooltip>
+                      ) : null}
                     </div>
                   </div>
                   <div

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronRight,
   CircleDashed,
   FolderKanban,
   Globe2,
@@ -298,11 +299,8 @@ function executionLocationLabel(t: TFunction, executionDomainId?: string): strin
 type ExternalSourcesError = {
   kind: 'load' | 'mutation';
   code?: string;
-  detail: string;
   retryable: boolean;
   correlationId?: string;
-  causationId?: string;
-  stage?: string;
   recoveryActions: ExternalSourceRecoveryAction[];
 };
 
@@ -314,37 +312,28 @@ type AgentChangeNotice = {
 
 function externalOperationErrorFacts(error: unknown): Pick<
 ExternalSourcesError,
-'code' | 'detail' | 'retryable' | 'correlationId' | 'causationId' | 'stage' | 'recoveryActions'
+'code' | 'retryable' | 'correlationId' | 'recoveryActions'
 > {
   if (error && typeof error === 'object') {
     const candidate = error as {
       code?: unknown;
-      message?: unknown;
       retryable?: unknown;
       correlationId?: unknown;
-      causationId?: unknown;
-      stage?: unknown;
       recoveryActions?: unknown;
     };
     const code = typeof candidate.code === 'string' ? candidate.code : undefined;
     return {
       code,
-      detail: code && code !== 'internal' && typeof candidate.message === 'string'
-        ? candidate.message
-        : 'External source operation failed',
       retryable: candidate.retryable === true,
       correlationId: typeof candidate.correlationId === 'string'
         ? candidate.correlationId
         : undefined,
-      causationId: typeof candidate.causationId === 'string' ? candidate.causationId : undefined,
-      stage: typeof candidate.stage === 'string' ? candidate.stage : undefined,
       recoveryActions: Array.isArray(candidate.recoveryActions)
         ? candidate.recoveryActions as ExternalSourceRecoveryAction[]
         : [],
     };
   }
   return {
-    detail: 'External source operation failed',
     retryable: false,
     recoveryActions: [],
   };
@@ -631,7 +620,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
         return { status: 'ignored' };
       }
       setError(null);
-      void externalSourcesAPI.getSnapshot(workspacePath, forceRefresh)
+      void externalSourcesAPI.getSnapshot(workspacePath, false)
         .then((legacySnapshot) => {
           acceptReadSnapshot(legacySnapshot, scope, sequence);
         })
@@ -760,23 +749,27 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
     if (!current || !summary || !current.hostCapabilities.canReadReview) return;
     const scope = requestScope;
     const append = cursor !== undefined;
+    const reviewId = append ? applicationReviewState?.reviewId : summary.reviewId;
+    if (!reviewId) return;
+    const preferenceRevision = append
+      ? applicationReviewState?.preferenceRevision ?? current.preferenceRevision
+      : current.preferenceRevision;
     const expectedGenerations = append
-      && applicationReviewState?.reviewId === summary.reviewId
-      ? applicationReviewState.expectedGenerations
+      ? applicationReviewState?.expectedGenerations ?? []
       : [];
     setApplicationReviewState((previous) => ({
-      reviewId: summary.reviewId,
-      preferenceRevision: current.preferenceRevision,
+      reviewId,
+      preferenceRevision,
       loading: true,
-      items: append && previous?.reviewId === summary.reviewId ? previous.items : [],
+      items: append && previous?.reviewId === reviewId ? previous.items : [],
       expectedGenerations,
       nextCursor: append ? previous?.nextCursor : undefined,
       totalCount: summary.totalCount,
       recommendedCount: summary.recommendationSummary.recommendedCount,
       maxSelectionCount: summary.maxSelectionCount,
-      overrides: append && previous?.reviewId === summary.reviewId ? previous.overrides : {},
-      itemResults: append && previous?.reviewId === summary.reviewId ? previous.itemResults : [],
-      submitted: append && previous?.reviewId === summary.reviewId ? previous.submitted : false,
+      overrides: append && previous?.reviewId === reviewId ? previous.overrides : {},
+      itemResults: append && previous?.reviewId === reviewId ? previous.itemResults : [],
+      submitted: append && previous?.reviewId === reviewId ? previous.submitted : false,
     }));
     try {
       const page = await externalSourcesAPI.getApplicationReviewPage(workspacePath, {
@@ -784,39 +777,70 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
         executionDomainId: current.executionDomainId,
         ...(current.workspaceScopeId ? { workspaceScopeId: current.workspaceScopeId } : {}),
         targetScope: current.workspaceScopeId ? 'workspace_override' : 'user_default',
-        reviewId: summary.reviewId,
-        preferenceRevision: current.preferenceRevision,
+        reviewId,
+        preferenceRevision,
         expectedGenerations,
         ...(cursor ? { cursor } : {}),
         pageSize: 64,
       });
+      let authoritativeSummary = summary;
+      let reboundSnapshot: ExternalApplicationSnapshotV2 | null = null;
+      if (!append && page.reviewId !== summary.reviewId) {
+        const surface = await externalSourcesAPI.getApplicationSurface(workspacePath, false);
+        if (surface.protocol !== 'v2') {
+          throw new Error('The current Host no longer supports application review.');
+        }
+        const reboundSummary = surface.snapshot.reviewSummary;
+        if (!reboundSummary
+          || surface.snapshot.executionDomainId !== page.executionDomainId
+          || surface.snapshot.workspaceScopeId !== page.workspaceScopeId
+          || surface.snapshot.preferenceRevision !== page.preferenceRevision
+          || reboundSummary.reviewId !== page.reviewId) {
+          throw new Error('The application review changed while it was opening.');
+        }
+        authoritativeSummary = reboundSummary;
+        reboundSnapshot = surface.snapshot;
+      }
       if (requestScopeRef.current !== scope) return;
       const latest = applicationSnapshotRef.current;
       if (!latest
-        || latest.preferenceRevision !== current.preferenceRevision
+        || latest.preferenceRevision !== preferenceRevision
         || latest.reviewSummary?.reviewId !== summary.reviewId
         || Array.from(pendingMutations.current.values()).includes(scope)) return;
+      if (reboundSnapshot
+        && !acceptApplicationSnapshot(reboundSnapshot, scope, acceptedSequence.current)) return;
       setApplicationReviewState((previous) => {
-        if (!previous || previous.reviewId !== page.reviewId) return previous;
+        if (!previous || (append && previous.reviewId !== page.reviewId)) return previous;
         const items = new Map(
           (append ? previous.items : []).map((item) => [applicationReviewItemKey(item), item]),
         );
         page.items.forEach((item) => items.set(applicationReviewItemKey(item), item));
         return {
           ...previous,
+          reviewId: page.reviewId,
+          preferenceRevision: page.preferenceRevision,
           loading: false,
           items: Array.from(items.values()),
           expectedGenerations: page.expectedGenerations,
           nextCursor: page.nextCursor,
           totalCount: page.totalCount,
+          recommendedCount: append
+            ? previous.recommendedCount
+            : authoritativeSummary.recommendationSummary.recommendedCount,
+          maxSelectionCount: append
+            ? previous.maxSelectionCount
+            : authoritativeSummary.maxSelectionCount,
         };
       });
     } catch (reviewError) {
       if (requestScopeRef.current !== scope) return;
-      setApplicationReviewState((previous) => previous ? { ...previous, loading: false } : previous);
+      setApplicationReviewState((previous) => (
+        append && previous ? { ...previous, loading: false } : null
+      ));
       setError({ kind: 'load', ...externalOperationErrorFacts(reviewError) });
     }
-  }, [applicationReviewState?.expectedGenerations, applicationReviewState?.reviewId,
+  }, [acceptApplicationSnapshot, applicationReviewState?.expectedGenerations,
+    applicationReviewState?.preferenceRevision, applicationReviewState?.reviewId,
     applicationSnapshot, requestScope, workspacePath]);
 
   useEffect(() => {
@@ -907,16 +931,28 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
     return result;
   }, [applicationSnapshot, canMutateApplicationScope, loadSnapshot, requestScope, t, workspacePath]);
 
-  const submitApplicationReview = useCallback(async () => {
+  const submitApplicationReview = useCallback(async (
+    selectionBaseline: 'recommended' | 'none',
+    immediateSelection?: { item: ExternalApplicationReviewItemV2; selected: boolean },
+  ) => {
     const current = applicationReviewState;
     if (!current) return;
     const itemByKey = new Map(
       current.items.map((item) => [applicationReviewItemKey(item), item]),
     );
-    const selectionOverrides = Object.entries(current.overrides).flatMap(([key, selected]) => {
-      const item = itemByKey.get(key);
-      return item ? [{ itemRef: item.itemRef, selected }] : [];
-    });
+    const effectiveOverrides = new Map(Object.entries(current.overrides));
+    if (immediateSelection) {
+      effectiveOverrides.set(
+        applicationReviewItemKey(immediateSelection.item),
+        immediateSelection.selected,
+      );
+    }
+    const selectionOverrides = selectionBaseline === 'recommended'
+      ? Array.from(effectiveOverrides.entries()).flatMap(([key, selected]) => {
+          const item = itemByKey.get(key);
+          return item ? [{ itemRef: item.itemRef, selected }] : [];
+        })
+      : [];
     setApplicationReviewState((previous) => previous
       ? { ...previous, submitted: true }
       : previous);
@@ -924,7 +960,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
       type: 'submit_application_review',
       reviewId: current.reviewId,
       expectedGenerations: current.expectedGenerations,
-      selectionBaseline: 'recommended',
+      selectionBaseline,
       selectionOverrides,
     }, 'application-review');
     if (result) {
@@ -1652,9 +1688,14 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
         className="bitfun-external-sources-config__hooks-summary"
         data-bf-component="external-sources-config"
         data-bf-part="hooksSummary"
+        aria-expanded={hooksOpen}
       >
         <span>{t('hooksManagement.title')}</span>
-        <span>{t('hooksManagement.description')}</span>
+        <ChevronRight
+          className="bitfun-external-sources-config__disclosure-icon"
+          size={16}
+          aria-hidden="true"
+        />
       </summary>
       {hooksOpen ? (
         <React.Suspense
@@ -1665,6 +1706,34 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
       ) : null}
     </details>
   );
+  const safeModeSection = safeModeEnabled !== undefined ? (
+    <ConfigPageSection
+      title={t('safeMode.title')}
+      description={safeModeEnabled ? undefined : t('safeMode.description')}
+      extra={(
+        <Switch
+          size="small"
+          checked={safeModeEnabled}
+          disabled={busyKey !== null || !canSetSafeMode}
+          loading={busyKey === 'external-safe-mode'}
+          aria-label={t('safeMode.toggleLabel')}
+          onChange={(event) => void setSafeMode(event.currentTarget.checked)}
+        />
+      )}
+    >
+      {safeModeEnabled ? (
+        <div
+          className="bitfun-external-sources-config__notice"
+          data-bf-component="external-sources-config"
+          data-bf-part="notice"
+          role="status"
+          data-external-attention="true"
+        >
+          {t('safeMode.activeNotice')}
+        </div>
+      ) : null}
+    </ConfigPageSection>
+  ) : null;
 
   return (
     <ConfigPageLayout className="bitfun-external-sources-config" data-bf-component="external-sources-config" data-bf-part="root">
@@ -1808,18 +1877,6 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                       ) : null}
                   </div>
                 ) : null}
-                <details>
-                  <summary>{t('common.technicalDetails')}</summary>
-                  {error.code ? (
-                    <div>{t('operationErrors.errorCode', { code: error.code })}</div>
-                  ) : null}
-                  {error.stage ? (
-                    <div>{t('operationErrors.stage', { stage: error.stage })}</div>
-                  ) : null}
-                  {error.causationId ? (
-                    <div>{t('operationErrors.causationId', { id: error.causationId })}</div>
-                  ) : null}
-                </details>
               </div>
             ) : null}
             {(snapshot && hostReadOnly) || applicationHostReadOnly ? (
@@ -1845,36 +1902,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                 {operationStatus}
               </div>
             ) : null}
-            {safeModeEnabled !== undefined ? (
-              <ConfigPageSection
-                title={t('safeMode.title')}
-                description={safeModeEnabled
-                  ? t('safeMode.activeDescription')
-                  : t('safeMode.description')}
-                extra={(
-                  <Switch
-                    size="small"
-                    checked={safeModeEnabled}
-                    disabled={busyKey !== null || !canSetSafeMode}
-                    loading={busyKey === 'external-safe-mode'}
-                    aria-label={t('safeMode.toggleLabel')}
-                    onChange={(event) => void setSafeMode(event.currentTarget.checked)}
-                  />
-                )}
-              >
-                {safeModeEnabled ? (
-                  <div
-                    className="bitfun-external-sources-config__notice"
-                    data-bf-component="external-sources-config"
-                    data-bf-part="notice"
-                    role="status"
-                    data-external-attention="true"
-                  >
-                    {t('safeMode.activeNotice')}
-                  </div>
-                ) : null}
-              </ConfigPageSection>
-            ) : null}
+            {safeModeEnabled ? safeModeSection : null}
             {snapshot || applicationSnapshot ? (
               <ExternalAppsOverview
                 applications={applicationsView.applications}
@@ -1896,8 +1924,12 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                   items: applicationReviewState.items,
                   selected: applicationReviewState.overrides,
                   selectedCount: selectedApplicationReviewCount,
+                  recommendedCount: applicationReviewState.recommendedCount,
                   totalCount: applicationReviewState.totalCount,
                   maxSelectionCount: applicationReviewState.maxSelectionCount,
+                  applicationNames: applicationSnapshot.applications
+                    .filter((application) => application.pendingReviewCount > 0)
+                    .map((application) => application.displayName),
                   nextCursor: applicationReviewState.nextCursor,
                   itemResults: applicationReviewState.itemResults,
                   completed: applicationReviewState.submitted,
@@ -1909,21 +1941,32 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                       void loadApplicationReviewPage(applicationReviewState.nextCursor);
                     }
                   },
-                  onSubmit: () => void submitApplicationReview(),
+                  onSubmit: (baseline, immediateSelection) => void submitApplicationReview(
+                    baseline,
+                    immediateSelection,
+                  ),
                 } : undefined}
               />
             ) : null}
             {hookManagement}
-            {snapshot ? (
+            {snapshot || applicationSnapshot ? (
               <details
                 className="bitfun-external-sources-config__advanced"
                 open={advancedOpen}
                 onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
               >
-                <summary className="bitfun-external-sources-config__advanced-summary">
+                <summary
+                  className="bitfun-external-sources-config__advanced-summary"
+                  aria-expanded={advancedOpen}
+                >
                   <span>{t('applications.advanced.title')}</span>
-                  <span>{t('applications.advanced.description')}</span>
+                  <ChevronRight
+                    className="bitfun-external-sources-config__disclosure-icon"
+                    size={16}
+                    aria-hidden="true"
+                  />
                 </summary>
+            {safeModeEnabled === false ? safeModeSection : null}
             {snapshot && policy ? (
               <ConfigPageSection
                 className="bitfun-external-sources-config__policy-card"
@@ -2147,13 +2190,9 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                                       </summary>
                                       <ul className="bitfun-external-sources-config__diagnostics" data-bf-component="external-sources-config" data-bf-part="diagnostics">
                                         {group.diagnostics.map((diagnostic) => (
-                                          <li key={externalSourceDiagnosticKey(diagnostic)}>
-                                            <span>{t(`diagnostics.category.${sourceDiagnosticCategory(diagnostic.code)}`)}</span>
-                                            <details>
-                                              <summary>{t('common.technicalDetails')}</summary>
-                                              <code>{diagnostic.code}</code>
-                                            </details>
-                                          </li>
+                                            <li key={externalSourceDiagnosticKey(diagnostic)}>
+                                              <span>{t(`diagnostics.category.${sourceDiagnosticCategory(diagnostic.code)}`)}</span>
+                                            </li>
                                         ))}
                                       </ul>
                                     </details>
@@ -2436,10 +2475,6 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                   {catalogDiagnostics.map((diagnostic) => (
                     <li key={externalSourceDiagnosticKey(diagnostic)}>
                       <span>{t(`diagnostics.category.${sourceDiagnosticCategory(diagnostic.code)}`)}</span>
-                      <details>
-                        <summary>{t('common.technicalDetails')}</summary>
-                        <code>{diagnostic.code}</code>
-                      </details>
                     </li>
                   ))}
                 </ul>

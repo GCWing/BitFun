@@ -37,7 +37,7 @@
     "loading": "Loading imported hooks...",
     "loadFailed": "Imported hooks could not be loaded.",
     "refreshFailed": "Imported hooks could not be refreshed.",
-    "empty": "No compatible Claude Code or Codex command hooks were found.",
+    "empty": "No imported Hooks yet. Add one in hooks.json, or refresh to check Claude Code and Codex.",
     "review": "Review",
     "update": "Review update",
     "remove": "Remove",

@@ -35,7 +35,7 @@ export const externalSourcesConfigAppearanceDescriptor: AppearanceSurfaceDescrip
     { id: 'ecosystemState' },
     { id: 'attentionSummary' },
     { id: 'application' },
-    { id: 'appAttention' },
+    { id: 'applicationFacts' },
     { id: 'applicationToggle' },
     { id: 'appCapabilities' },
     { id: 'appCapability' },

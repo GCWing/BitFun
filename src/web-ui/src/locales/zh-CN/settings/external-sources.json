@@ -6,7 +6,6 @@
   "checkingNonBlocking": "正在检查更新…",
   "applications": {
     "title": "已发现的应用",
-    "description": "连接后 BitFun 会持续读取来源配置，并在内容可用前检查变更。",
     "status": {
       "configuration_available": "有可用配置",
       "temporarily_unavailable": "暂时不可用",
@@ -18,7 +17,6 @@
       "no_configuration": "未发现配置"
     },
     "summary": {
-      "enabledCount": "已启用 {{count}} 项",
       "blockedCount": "{{count}} 项受阻",
       "blockedCount_other": "{{count}} 项受阻",
       "conflictCount": "{{count}} 个冲突",
@@ -27,9 +25,6 @@
         "degraded": "部分可用",
         "unavailable": "不可用"
       },
-      "enabledCount_other": "已启用 {{count}} 项",
-      "attention": "{{count}} 项等待确认",
-      "attention_other": "{{count}} 项等待确认",
       "checking": "正在查找配置",
       "noContent": "暂时没有可用内容"
     },
@@ -56,7 +51,35 @@
       "selectionLimit": "已达到选择上限",
       "loading": "正在加载审核项…",
       "loadMore": "加载更多",
-      "apply": "应用所选项",
+      "useRecommended": "使用推荐设置",
+      "doNotEnable": "暂不启用",
+      "adjustItems": "调整单项",
+      "enableThisItem": "启用此项",
+      "doNotEnableAny": "全部不启用",
+      "enableRecommended": "启用建议项",
+      "enableSelected": "启用已选项（{{count}}）",
+      "keepDisabled": "保持停用",
+      "customize": "逐项选择",
+      "unknownApplication": "外部应用",
+      "category": {
+        "command": "命令",
+        "tool": "工具",
+        "subagent": "Agent",
+        "mcp": "MCP 服务器",
+        "conflict": "冲突"
+      },
+      "recommendation": {
+        "enable": "BitFun 建议启用此项。",
+        "keepDisabled": "BitFun 建议保持此项停用；确实需要时再选择“启用此项”。",
+        "blocked": "当前安全策略不允许启用此项，它将保持停用。",
+        "multiple": "有 {{count}} 项需要确认。BitFun 建议启用其中 {{recommended}} 项，其余保持停用；可展开“逐项选择”查看或修改。"
+      },
+      "riskReason": {
+        "processOrResourceAccess": "启用后，BitFun 可以运行此工具并让它访问本机资源。",
+        "processOrNetworkAccess": "启用后，可能会启动本机进程或连接外部服务。",
+        "delegatedToolAccess": "启用后，此 Agent 可以调用为它配置的工具。",
+        "ambiguousRuntimeRoute": "存在多个同名来源，请先在高级设置中选择一个来源。"
+      },
       "risk": {
         "low": "低风险",
         "moderate": "中等风险",
@@ -81,8 +104,7 @@
         "failed": "未能应用"
       },
       "title_one": "{{count}} 项需要确认",
-      "title_other": "{{count}} 项需要确认",
-      "description": "BitFun 会自动处理安全默认项。打开后确认需要你决定的内容。"
+      "title_other": "{{count}} 项需要确认"
     },
     "capabilities": {
       "command": "命令",
@@ -97,8 +119,7 @@
       "disabled": "已停用"
     },
     "advanced": {
-      "title": "高级设置",
-      "description": "配置来源、能力访问、诊断与冲突"
+      "title": "高级设置"
     },
     "detail": {
       "back": "返回应用列表",
@@ -123,7 +144,6 @@
   },
   "hooksManagement": {
     "title": "Hooks",
-    "description": "管理 BitFun Hook，并检查可从兼容 AI 应用导入的 Hook。",
     "loading": "正在加载 Hook 管理…"
   },
   "hooks": {
@@ -137,7 +157,6 @@
     "showMoreSourcesForProvider": "再显示 {{provider}} 的 {{count}} 个来源",
     "showMoreEntriesForProvider": "再显示 {{provider}} 的 {{count}} 个 Hook",
     "showMoreDiagnosticsForProvider": "再显示 {{provider}} 的 {{count}} 条诊断",
-    "technicalDetails": "技术详情",
     "loading": "正在检查 Hook 配置…",
     "pending": "Hook 发现仍在进行，目录会自动更新。",
     "empty": "未发现 Hook 配置。",
@@ -212,7 +231,6 @@
     "hideDetails": "收起详情",
     "close": "关闭",
     "unknown": "未知",
-    "technicalDetails": "技术详情",
     "selected": "当前使用",
     "selectedUnavailable": "已选择，当前不可用",
     "notSelected": "未使用",
@@ -244,8 +262,7 @@
   "safeMode": {
     "title": "外部来源安全模式",
     "description": "阻止新的外部工具、Agent 和 MCP 调用，同时保留已发现的命令与诊断信息；已在执行的调用不会被取消。",
-    "activeDescription": "新的外部可执行调用已被阻止；已在执行的调用仍可能完成，命令和诊断信息继续可用于恢复。",
-    "activeNotice": "安全模式仅对当前 Host 进程和执行域有效；重启或切换执行 Host 后会自动关闭。",
+    "activeNotice": "当前 Host 进程已阻止新的外部调用；已在执行的调用仍可能完成，重启或切换 Host 后安全模式会自动关闭。",
     "toggleLabel": "使用外部来源安全模式",
     "entered": "外部来源安全模式已启用。",
     "exited": "外部来源安全模式已关闭，符合条件的集成已重新协调。"
@@ -331,11 +348,8 @@
     "refreshRequired": "操作完成前目录已变化。请刷新并确认当前状态后重试。",
     "policyIncompatible": "外部设置由较新的 BitFun 版本写入。请先备份并重置，再进行更改。",
     "unavailableRetry": "暂时不可用，请稍后重试。",
-    "internal": "操作失败，请刷新重试。",
-    "referenceId": "参考编号：{{id}}",
-    "errorCode": "错误编号：{{code}}",
-    "stage": "处理阶段：{{stage}}",
-    "causationId": "关联操作：{{id}}"
+    "internal": "操作失败，当前设置未更改。请使用下方操作重试；若仍失败，请联系支持并提供参考编号。",
+    "referenceId": "支持参考编号（联系支持时请提供）：{{id}}"
   },
   "diagnostics": {
     "summary": "有 {{count}} 项内容需要注意，请查看详情了解影响范围。",
@@ -351,7 +365,7 @@
       "unreadableSource": "BitFun 无法读取来源中的部分内容。请检查文件访问权限后刷新。",
       "notSupported": "BitFun 暂不支持此类外部内容，因此没有加载或运行它。",
       "checkFailed": "BitFun 未能检查一个来源，其他来源仍可使用。请刷新重试。",
-      "sourceIssue": "BitFun 在一个来源中发现问题，受影响的内容未启用。请查看技术详情。"
+      "sourceIssue": "BitFun 在一个来源中发现问题，受影响的内容未启用。请检查来源配置后刷新。"
     }
   },
   "sources": {
