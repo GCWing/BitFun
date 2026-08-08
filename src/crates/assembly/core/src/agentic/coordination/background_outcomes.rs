@@ -219,10 +219,18 @@ impl BackgroundSubagentOutcomeStore {
     ) -> BitFunResult<BackgroundSubagentWaitResult> {
         self.reconcile_stale_running_tasks(parent_session_id)
             .await?;
-        let selected = self
+        let candidates = self
             .coordination_store
             .wait_candidates(parent_session_id, requested_bg_task_ids)
             .await?;
+        // `wait_candidates` now returns delivered records too (explicitly
+        // distinguishable via delivered_at_ms) instead of dropping them
+        // silently (COORD-09). A delivered task carries nothing new to wait
+        // on, so it is excluded from the wait set here.
+        let selected = candidates
+            .into_iter()
+            .filter(|record| record.delivered_at_ms.is_none())
+            .collect::<Vec<_>>();
         if selected.is_empty() {
             return Ok(wait_result(
                 BackgroundSubagentWaitStatus::NoMatchingTasks,
@@ -479,6 +487,10 @@ impl BackgroundSubagentOutcomeStore {
             .await
     }
 
+    /// Single-parent resolution kept for compatibility and tests; production
+    /// callers use [`Self::resolve_agent_id_in_scope`] for subtree/global
+    /// management.
+    #[allow(dead_code)]
     pub(crate) async fn resolve_agent_id(
         &self,
         parent_session_id: &str,
@@ -486,6 +498,55 @@ impl BackgroundSubagentOutcomeStore {
     ) -> BitFunResult<String> {
         self.coordination_store
             .resolve_agent_id(parent_session_id, agent_id)
+            .await
+    }
+
+    /// Global-management variant: prefer the caller's subtree, then fall back
+    /// to a whole-database match (see `CoordinationStore::resolve_agent_id_in_scope`).
+    /// `allow_global_fallback=false` turns a scope miss into "not found", which
+    /// mutating Task operations rely on to stay within their session subtree.
+    pub(crate) async fn resolve_agent_id_in_scope(
+        &self,
+        scope_session_ids: &[String],
+        agent_id: &str,
+        allow_global_fallback: bool,
+    ) -> BitFunResult<String> {
+        self.coordination_store
+            .resolve_agent_id_in_scope(scope_session_ids, agent_id, allow_global_fallback)
+            .await
+    }
+
+    /// Single-parent list kept for compatibility; production callers use
+    /// [`Self::list_records_for_parents`] for subtree/global management.
+    #[allow(dead_code)]
+    pub(crate) async fn list_records(
+        &self,
+        parent_session_id: &str,
+    ) -> BitFunResult<Vec<BackgroundTaskRecord>> {
+        self.coordination_store.list_tasks(parent_session_id).await
+    }
+
+    /// Lists background records spawned by any session in `parent_session_ids`
+    /// (the caller's subtree), enabling cross-conversation Task management.
+    pub(crate) async fn list_records_for_parents(
+        &self,
+        parent_session_ids: &[String],
+    ) -> BitFunResult<Vec<BackgroundTaskRecord>> {
+        self.coordination_store
+            .list_tasks_for_parents(parent_session_ids)
+            .await
+    }
+
+    /// Collects descendant session ids under `root_session_id` from the
+    /// persisted coordination database. Used to rebuild `agent_id` subtree
+    /// scopes after a restart, when the in-memory session tree may be
+    /// incomplete (COORD-06).
+    pub(crate) async fn descendant_session_ids(
+        &self,
+        root_session_id: &str,
+    ) -> BitFunResult<Vec<String>> {
+        self.coordination_store
+            .descendant_session_ids(root_session_id)
             .await
     }
 

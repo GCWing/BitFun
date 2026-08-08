@@ -111,6 +111,7 @@ impl DeviceManager {
     /// for the same `(user_id, device_id)` (reconnect). Returns the list of
     /// *other* online device ids in the account so the caller can push a
     /// presence update.
+    #[allow(clippy::too_many_arguments)] // device registration carries all connection facts
     pub fn register(
         &self,
         user_id: &str,
@@ -177,6 +178,7 @@ impl DeviceManager {
     /// Stage a connection while an async post-registration token check runs.
     /// It cannot receive routed messages or presence and cannot evict an
     /// already-authorized connection for the same physical device.
+    #[allow(clippy::too_many_arguments)] // pending registration carries all connection facts
     pub fn register_pending(
         &self,
         user_id: &str,

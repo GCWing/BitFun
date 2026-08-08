@@ -12,6 +12,7 @@ pub struct SubagentTaskCompletionResultInput<'a> {
     pub reason: Option<&'a str>,
     pub ledger_event_id: Option<&'a str>,
     pub partial_timeout_suffix: &'a str,
+    pub session_id: Option<&'a str>,
 }
 
 pub fn subagent_task_completion_result(
@@ -22,7 +23,7 @@ pub fn subagent_task_completion_result(
     } else {
         "completed"
     };
-    let assistant_message = if input.is_partial_timeout {
+    let mut assistant_message = if input.is_partial_timeout {
         format!(
             "{} timed out with partial result:\n<partial_result status=\"partial_timeout\">\n{}\n</partial_result>{}",
             input.delegate_target_label, input.result_text, input.partial_timeout_suffix
@@ -33,11 +34,21 @@ pub fn subagent_task_completion_result(
             input.delegate_target_label, input.result_text
         )
     };
+    if let Some(session_id) = input.session_id {
+        assistant_message.push_str(&format!(
+            "\n<subagent session_id=\"{}\">Use this session_id to continue the same subagent.</subagent>",
+            session_id
+        ));
+    }
     let mut data = json!({
         "duration": input.duration_ms,
         "context_mode": input.context_mode,
         "status": status
     });
+
+    if let Some(session_id) = input.session_id {
+        data["session_id"] = json!(session_id);
+    }
 
     if input.is_partial_timeout {
         data["partial_output"] = json!(input.result_text);

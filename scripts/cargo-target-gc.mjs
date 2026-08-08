@@ -314,12 +314,20 @@ function sleepMs(ms) {
 export function isCompilerBusy({ exec = execFileSync, platform = process.platform } = {}) {
   try {
     if (platform === 'win32') {
-      const out = exec(
-        'cmd.exe',
-        ['/d', '/s', '/c', 'tasklist /FI "IMAGENAME eq cargo.exe" & tasklist /FI "IMAGENAME eq rustc.exe"'],
+      // Pass each /FI filter as a single argument. Routing the whole command
+      // through cmd.exe /c re-splits the quoted filter, so tasklist receives
+      // `eq` as a standalone option and fails with `无效参数/选项 - 'eq'`.
+      const cargo = exec(
+        'tasklist',
+        ['/FI', 'IMAGENAME eq cargo.exe', '/NH'],
         { encoding: 'utf8' }
       );
-      return /\bcargo\.exe\b/i.test(out) || /\brustc\.exe\b/i.test(out);
+      const rustc = exec(
+        'tasklist',
+        ['/FI', 'IMAGENAME eq rustc.exe', '/NH'],
+        { encoding: 'utf8' }
+      );
+      return /\bcargo\.exe\b/i.test(cargo) || /\brustc\.exe\b/i.test(rustc);
     }
     const cargo = exec('pgrep', ['-x', 'cargo'], { encoding: 'utf8' }).trim();
     if (cargo) {

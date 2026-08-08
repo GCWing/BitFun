@@ -7,7 +7,7 @@ import { FlowToolCard } from '../FlowToolCard';
 import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
 import { SmoothHeightCollapse } from '../modern/SmoothHeightCollapse';
 import { FLOWCHAT_COLLAPSE_DURATION_MS } from '../modern/flowChatCollapseMotion';
-import { FlowChatStore } from '../../store/FlowChatStore';
+import { FlowChatStore, isSessionConfirmedDeleted } from '../../store/FlowChatStore';
 import { getSubagentProjectionState } from '../../utils/subagentProjection';
 import { ensureBtwSessionAvailable } from '../../services/btwSessionPane';
 import { RuntimeStatusSlot } from '../modern/RuntimeStatusSlot';
@@ -142,6 +142,7 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
   compactText = true,
   liveItemsMode = 'last-round',
 }) => {
+  const { t } = useTranslation('flow-chat');
   const containerRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
   const lastScrollTopRef = useRef(0);
@@ -208,7 +209,8 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
         previous?.turn === next.turn &&
         previous?.round === next.round &&
         previous?.items === next.items &&
-        previous?.isRunning === next.isRunning
+        previous?.isRunning === next.isRunning &&
+        previous?.executionStatus === next.executionStatus
       ) {
         return;
       }
@@ -232,6 +234,16 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
       ? state.bySessionId.get(resolvedSubagentSessionId)
       : undefined
   ));
+  const linkedSession = resolvedSubagentSessionId
+    ? FlowChatStore.getInstance().getState().sessions.get(resolvedSubagentSessionId)
+    : undefined;
+  const linkedSessionMissing = Boolean(
+    resolvedSubagentSessionId &&
+    !linkedSession &&
+    projectionState?.executionStatus !== 'running' &&
+    !runtimeStatus &&
+    !liveItems.some(item => 'isStreaming' in item && item.isStreaming === true)
+  );
 
   useEffect(() => {
     if (!resolvedSubagentSessionId || itemsProp !== undefined) {
@@ -243,12 +255,15 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
     const session = state.sessions.get(resolvedSubagentSessionId);
     const ownerSessionId = parentSessionId ?? sessionId;
 
+    if (!session) {
+      // A child session fully missing from the store is treated as deleted;
+      // do not resurrect an empty shell that would open as a blank panel.
+      return;
+    }
+
     const shouldEnsureSession =
-      !session ||
-      (
-        session.isHistorical &&
-        (session.historyState === 'metadata-only' || session.historyState === 'failed')
-      );
+      session.isHistorical &&
+      (session.historyState === 'metadata-only' || session.historyState === 'failed');
 
     if (!shouldEnsureSession) {
       return;
@@ -327,7 +342,12 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
 
   const shouldRenderProjection =
     Boolean(resolvedSubagentSessionId) &&
-    (items.length > 0 || projectionState?.isRunning === true || Boolean(runtimeStatus));
+    // A confirmed-deleted subagent session must never render a projection
+    // shell (e.g. after the task-delete tool removed it via the event path).
+    !isSessionConfirmedDeleted(resolvedSubagentSessionId) &&
+    (items.length > 0
+      || projectionState?.executionStatus != null
+      || Boolean(runtimeStatus));
 
   if (!shouldRenderProjection) {
     return null;
@@ -359,6 +379,21 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
               item.id === lastVisibleItemId,
             ))}
             <RuntimeStatusSlot sessionId={resolvedSubagentSessionId} />
+            {projectionState?.executionStatus && projectionState.executionStatus !== 'running' && (
+              <div
+                className={`subagent-projection-status subagent-projection-status--${projectionState.executionStatus}`}
+              >
+                {t(`subagent.status.${projectionState.executionStatus}`)}
+              </div>
+            )}
+            {linkedSessionMissing && (
+              <div
+                className="subagent-projection-status subagent-projection-status--deleted"
+                role="status"
+              >
+                {t('subagent.deletedSession')}
+              </div>
+            )}
           </div>
         </div>
       </SmoothHeightCollapse>

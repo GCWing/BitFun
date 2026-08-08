@@ -247,7 +247,7 @@ fn append_configured_path(
         },
         |path| {
             should_descend_instruction_glob(path)
-                && directory_matchers.as_ref().map_or(true, |matchers| {
+                && directory_matchers.as_ref().is_none_or(|matchers| {
                     path.strip_prefix(&prune_root).ok().is_some_and(|relative| {
                         let depth = relative.components().count();
                         matchers

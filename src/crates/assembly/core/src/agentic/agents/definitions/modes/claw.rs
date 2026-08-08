@@ -48,6 +48,7 @@ impl ClawMode {
                 "PublishAppearance".to_string(),
                 "PageDeploy".to_string(),
                 "PagePublish".to_string(),
+                "WorkspaceScan".to_string(),
             ],
         }
     }

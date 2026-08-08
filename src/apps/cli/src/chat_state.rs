@@ -150,6 +150,7 @@ pub(crate) struct ToolDisplayState {
 
 /// A single content block in a message (text, thinking, or tool call)
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)] // tool display state is inherently the largest content block
 pub(crate) enum FlowItem {
     /// Text content block
     Text { content: String, is_streaming: bool },

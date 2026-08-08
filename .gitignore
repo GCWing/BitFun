@@ -23,7 +23,11 @@ dist-ssr
 # Build outputs - Rust/Tauri
 target/
 **/target/
+.target/
 /.targets/
+# Local evidence working dir (tracked .md files stay; ignore transient outputs)
+target2/*
+!target2/*.md
 # The deployable Rust services use the workspace lockfile for reproducible
 # container builds.
 !Cargo.lock
@@ -91,5 +95,7 @@ external/
 /.bitfun/search/flashgrep-index/
 .agents/
 /.flashgrep-index-engine/
+/src/apps/desktop/.bitfun/search/flashgrep-index/
+/target/debug/.bitfun/search/flashgrep-index/
 
 .design/

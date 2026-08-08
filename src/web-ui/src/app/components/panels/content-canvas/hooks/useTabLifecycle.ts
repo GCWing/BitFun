@@ -15,8 +15,9 @@ import {
   useProjectCanvasStore,
   useGitCanvasStore,
   useBottomTerminalCanvasStore,
+  GROUP_STATE_KEY,
 } from '../stores';
-import type { EditorGroupId, PanelContent, CreateTabEventDetail } from '../types';
+import type { EditorGroupId, EditorGroupState, PanelContent, CreateTabEventDetail } from '../types';
 import { TAB_EVENTS } from '../types';
 import { useI18n } from '@/infrastructure/i18n';
 import { drainPendingTabs } from '@/shared/services/pendingTabQueue';
@@ -144,16 +145,11 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
    * Dirty check before closing a tab.
    */
   const handleCloseWithDirtyCheck = useCallback(async (tabId: string, groupId: EditorGroupId): Promise<boolean> => {
-    const {
-      primaryGroup: latestPrimaryGroup,
-      secondaryGroup: latestSecondaryGroup,
-      tertiaryGroup: latestTertiaryGroup,
-    } = canvasStoreApi.getState();
-    const group = groupId === 'primary'
-      ? latestPrimaryGroup
-      : groupId === 'secondary'
-        ? latestSecondaryGroup
-        : latestTertiaryGroup;
+    // Generic mapping through GROUP_STATE_KEY (single source of truth shared
+    // with canvasStore): resolves primary/secondary/tertiary through the same
+    // mapping so tabs in any group can be closed.
+    const state = canvasStoreApi.getState();
+    const group = state[GROUP_STATE_KEY[groupId]] as EditorGroupState;
     const tab = group.tabs.find(t => t.id === tabId);
 
     if (!tab) {
@@ -181,16 +177,10 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
    * Dirty check before closing all tabs.
    */
   const handleCloseAllWithDirtyCheck = useCallback(async (groupId: EditorGroupId): Promise<boolean> => {
-    const {
-      primaryGroup: latestPrimaryGroup,
-      secondaryGroup: latestSecondaryGroup,
-      tertiaryGroup: latestTertiaryGroup,
-    } = canvasStoreApi.getState();
-    const group = groupId === 'primary'
-      ? latestPrimaryGroup
-      : groupId === 'secondary'
-        ? latestSecondaryGroup
-        : latestTertiaryGroup;
+    // Same generic mapping as handleCloseWithDirtyCheck: covers all groups so
+    // "close all" works in every group.
+    const state = canvasStoreApi.getState();
+    const group = state[GROUP_STATE_KEY[groupId]] as EditorGroupState;
     const closableTabs = group.tabs.filter(t => t.state !== 'pinned');
     const dirtyTabs = closableTabs.filter(t => t.isDirty);
 

@@ -56,6 +56,21 @@ fn acp_external_agent_definition_for_config(
     })
 }
 
+/// Rejects tool execution for ACP clients configured as read-only.
+///
+/// A read-only ACP client may still be probed, but execution must never
+/// reach the external agent: the tool call is refused at the entry point
+/// so no external process is invoked on its behalf.
+fn reject_readonly_client(read_only: bool, client_id: &str) -> BitFunResult<()> {
+    if read_only {
+        return Err(BitFunError::tool(format!(
+            "ACP client '{}' is read-only; execution was rejected",
+            client_id
+        )));
+    }
+    Ok(())
+}
+
 #[async_trait]
 impl Tool for AcpAgentTool {
     fn name(&self) -> &str {
@@ -115,6 +130,7 @@ impl Tool for AcpAgentTool {
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
+        reject_readonly_client(self.definition.read_only, &self.client_id)?;
         let bitfun_session_id = context.session_id.clone().ok_or_else(|| {
             BitFunError::tool("ACP tool requires an active BitFun session".to_string())
         })?;
@@ -183,6 +199,8 @@ mod tests {
             enabled: true,
             readonly: true,
             permission_mode: AcpClientPermissionMode::Ask,
+            category: None,
+            description: None,
         };
 
         let definition = acp_external_agent_definition_for_config("codex", &config);
@@ -191,5 +209,20 @@ mod tests {
         assert_eq!(definition.display_name, "Codex");
         assert_eq!(definition.user_facing_name, "Codex (ACP)");
         assert!(definition.read_only);
+    }
+
+    #[test]
+    fn readonly_client_execution_is_rejected_before_external_agent() {
+        let error = reject_readonly_client(true, "codex").unwrap_err();
+
+        let message = error.to_string();
+        assert!(message.contains("codex"));
+        assert!(message.contains("read-only"));
+        assert!(message.contains("rejected"));
+    }
+
+    #[test]
+    fn writable_client_execution_is_allowed() {
+        assert!(reject_readonly_client(false, "codex").is_ok());
     }
 }

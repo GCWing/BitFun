@@ -8,9 +8,11 @@ import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 const apiMocks = vi.hoisted(() => ({
   listSessions: vi.fn(),
   listSessionsPage: vi.fn(),
+  listDeletedSessionIds: vi.fn(),
   loadSessionTurns: vi.fn(),
   saveSessionTurn: vi.fn(),
   deleteSession: vi.fn(),
+  deleteSessionTree: vi.fn(),
   restoreSession: vi.fn(),
   restoreSessionView: vi.fn(),
   restoreSessionWithTurns: vi.fn(),
@@ -45,12 +47,14 @@ const stateMachineManagerMock = vi.hoisted(() => ({
   getOrCreate: vi.fn(),
   reset: vi.fn(),
   transition: vi.fn(async () => true),
+  subscribeGlobal: vi.fn(),
 }));
 
 vi.mock('@/infrastructure/api', () => ({
   sessionAPI: {
     listSessions: apiMocks.listSessions,
     listSessionsPage: apiMocks.listSessionsPage,
+    listDeletedSessionIds: apiMocks.listDeletedSessionIds,
     loadSessionTurns: apiMocks.loadSessionTurns,
     saveSessionTurn: apiMocks.saveSessionTurn,
   },
@@ -60,6 +64,7 @@ vi.mock('@/infrastructure/api/service-api/SessionAPI', () => ({
   sessionAPI: {
     listSessions: apiMocks.listSessions,
     listSessionsPage: apiMocks.listSessionsPage,
+    listDeletedSessionIds: apiMocks.listDeletedSessionIds,
     loadSessionTurns: apiMocks.loadSessionTurns,
     saveSessionTurn: apiMocks.saveSessionTurn,
   },
@@ -69,6 +74,7 @@ vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
   agentAPI: {
     cancelSession: apiMocks.cancelSession,
     deleteSession: apiMocks.deleteSession,
+    deleteSessionTree: apiMocks.deleteSessionTree,
     restoreSession: apiMocks.restoreSession,
     get restoreSessionView() {
       return apiMocks.restoreSessionView;
@@ -156,7 +162,7 @@ const createSession = (overrides: Partial<Session> = {}): Session => ({
   error: null,
   isHistorical: false,
   todos: [],
-  maxContextTokens: 128128,
+  maxContextTokens: 1048576,
   mode: 'agentic',
   workspacePath: 'D:/workspace/BitFun',
   isTransient: false,
@@ -552,8 +558,8 @@ describe('FlowChatStore session removal active selection', () => {
   });
 
   it('reuses pending delete intent when a concurrent local remove wins the race', async () => {
-    const deleteDeferred = createDeferred<void>();
-    apiMocks.deleteSession.mockImplementation(() => deleteDeferred.promise);
+    const deleteDeferred = createDeferred<string[]>();
+    apiMocks.deleteSessionTree.mockImplementation(() => deleteDeferred.promise);
     const keepSession = createSession({
       sessionId: 'session-keep',
       title: 'Keep me',
@@ -582,11 +588,68 @@ describe('FlowChatStore session removal active selection', () => {
     expect(removedSessionIds).toEqual(['session-remove']);
     expect(flowChatStore.getState().activeSessionId).toBeNull();
 
-    deleteDeferred.resolve();
+    deleteDeferred.resolve(['session-remove']);
     await deleting;
 
     expect(flowChatStore.getState().activeSessionId).toBeNull();
     expect(Array.from(flowChatStore.getState().sessions.keys())).toEqual(['session-keep']);
+  });
+
+  it('invalidates metadata request caches after a confirmed delete', async () => {
+    const session = createSession({
+      sessionId: 'session-remove',
+      title: 'Remove me',
+      workspacePath: 'D:/workspace/BitFun',
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+    }));
+
+    apiMocks.deleteSessionTree.mockResolvedValueOnce(['session-remove']);
+    apiMocks.listDeletedSessionIds.mockResolvedValue([]);
+    apiMocks.listSessionsPage.mockResolvedValue({
+      sessions: [
+        {
+          sessionId: 'session-keep',
+          title: 'Saved session',
+          agentType: 'agentic',
+          modelName: 'auto',
+          createdAt: 10,
+          lastActiveAt: 20,
+          workspaceHostname: 'localhost',
+        },
+      ],
+      totalTopLevelCount: 1,
+      loadedTopLevelCount: 1,
+      nextCursor: undefined,
+      hasMore: false,
+    });
+
+    await flowChatStore.loadSessionMetadataPage(
+      'D:/workspace/BitFun',
+      5,
+      undefined,
+      undefined,
+      undefined,
+      'delete_invalidation_test'
+    );
+    expect(apiMocks.listSessionsPage).toHaveBeenCalledTimes(1);
+
+    await flowChatStore.deleteSession(session.sessionId, { nextActiveSessionId: null });
+    expect(flowChatStore.getState().sessions.get(session.sessionId)).toBeUndefined();
+
+    // The same key as before must hit the backend again: the dedupe caches
+    // were invalidated by the confirmed delete, so the pre-deletion list
+    // cannot be served from cache ("deleted session still visible").
+    await flowChatStore.loadSessionMetadataPage(
+      'D:/workspace/BitFun',
+      5,
+      undefined,
+      undefined,
+      undefined,
+      'delete_invalidation_test'
+    );
+    expect(apiMocks.listSessionsPage).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -2413,6 +2476,44 @@ describe('FlowChatStore historical session hydration state', () => {
     });
   });
 
+  it('filters tombstone-deleted sessions out of the paged metadata path', async () => {
+    apiMocks.listDeletedSessionIds.mockResolvedValueOnce(['tombstone-filtered-1']);
+    apiMocks.listSessionsPage.mockResolvedValueOnce({
+      sessions: [
+        {
+          sessionId: 'tombstone-filtered-1',
+          title: 'Deleted session',
+          agentType: 'agentic',
+          modelName: 'auto',
+          createdAt: 10,
+          lastActiveAt: 20,
+          workspaceHostname: 'localhost',
+        },
+      ],
+      totalTopLevelCount: 1,
+      loadedTopLevelCount: 1,
+      nextCursor: undefined,
+      hasMore: false,
+    });
+
+    const page = await flowChatStore.loadSessionMetadataPage(
+      'D:/workspace/BitFun',
+      5,
+      undefined,
+      undefined,
+      undefined,
+      'nav_initial'
+    );
+
+    expect(apiMocks.listDeletedSessionIds).toHaveBeenCalledWith(
+      'D:/workspace/BitFun',
+      undefined,
+      undefined,
+    );
+    expect(page.sessions).toHaveLength(1);
+    expect(flowChatStore.getState().sessions.get('tombstone-filtered-1')).toBeUndefined();
+  });
+
   it('loads a paged metadata slice without requesting the full session list', async () => {
     apiMocks.listSessionsPage.mockResolvedValueOnce({
       sessions: [
@@ -2448,7 +2549,7 @@ describe('FlowChatStore historical session hydration state', () => {
       cursor: undefined,
       remoteConnectionId: undefined,
       remoteSshHost: undefined,
-    });
+    }, false);
     expect(page).toMatchObject({
       totalTopLevelCount: 12,
       nextCursor: '5',
@@ -6094,5 +6195,71 @@ describe('FlowChatStore historical session hydration state', () => {
     await flowChatStore.initializeFromDisk('D:/workspace/BitFun');
 
     expect(flowChatStore.getState().sessions.get('history-1')?.currentTokenUsage).toBeUndefined();
+  });
+});
+
+describe('FlowChatStore thread goal clear-then-set', () => {
+  afterEach(() => {
+    resetStore();
+  });
+
+  const sessionId = 'goal-session-1';
+  const activeGoal = (updatedAt: number) => ({
+    goalId: 'goal-1',
+    objective: 'Ship R7',
+    status: 'active',
+    tokensUsed: 0,
+    tokenBudget: null,
+    timeUsedSeconds: 0,
+    updatedAt,
+  });
+
+  function seedSession(threadGoalUpdatedAt?: number): void {
+    flowChatStore.setState(() => ({
+      sessions: new Map([[
+        sessionId,
+        createSession({
+          sessionId,
+          workspacePath: 'D:/workspace/BitFun',
+          ...(threadGoalUpdatedAt === undefined
+            ? {}
+            : { threadGoalUpdatedAt, goalModeActive: false, threadGoal: undefined }),
+        }),
+      ]]),
+      activeSessionId: sessionId,
+    }));
+  }
+
+  it('accepts a freshly set goal after /goal clear (seconds clock)', () => {
+    seedSession();
+    const setAt = Math.floor(Date.now() / 1000);
+
+    flowChatStore.setThreadGoal(sessionId, activeGoal(setAt));
+    expect(flowChatStore.getState().sessions.get(sessionId)?.threadGoal).toMatchObject({
+      objective: 'Ship R7',
+      status: 'active',
+    });
+
+    flowChatStore.setThreadGoal(sessionId, null);
+    expect(flowChatStore.getState().sessions.get(sessionId)?.threadGoal).toBeUndefined();
+
+    // Backend seconds epoch (~1.7e9) must be treated as newer than the clear
+    // clock (which was written with seconds as well after the R7 fix).
+    flowChatStore.setThreadGoal(sessionId, activeGoal(setAt + 1));
+    expect(flowChatStore.getState().sessions.get(sessionId)?.threadGoal).toMatchObject({
+      objective: 'Ship R7',
+      status: 'active',
+    });
+  });
+
+  it('normalizes a legacy millisecond clock so a new goal is not treated as stale', () => {
+    // Before the fix, clear wrote a millisecond Date.now() (~1.7e12) into threadGoalUpdatedAt.
+    seedSession(1_750_000_000_000);
+
+    flowChatStore.setThreadGoal(sessionId, activeGoal(1_750_000_001));
+    expect(flowChatStore.getState().sessions.get(sessionId)?.threadGoal).toMatchObject({
+      objective: 'Ship R7',
+      status: 'active',
+    });
   });
 });

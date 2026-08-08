@@ -1,8 +1,9 @@
 use crate::{
-    validate_deferred_tool_usage, validate_tool_allowed_by_list, DeferredToolUsageError,
-    LoadedDeferredToolSpec, ToolExecutionAccessError, ToolRestrictionError,
-    ToolRuntimeRestrictions,
+    classify_tool_call, validate_deferred_tool_usage, validate_tool_allowed_by_list,
+    DeferredToolUsageError, LoadedDeferredToolSpec, ToolExecutionAccessError,
+    ToolRestrictionError, ToolRuntimeRestrictions,
 };
+use serde_json::Value;
 use std::fmt;
 
 #[derive(Debug, Clone, Copy)]
@@ -10,6 +11,7 @@ pub struct ToolExecutionAdmissionRequest<'a> {
     pub tool_name: &'a str,
     pub allowed_tools: &'a [String],
     pub runtime_tool_restrictions: &'a ToolRuntimeRestrictions,
+    pub tool_arguments: &'a Value,
     pub invocation_is_deferred: bool,
     pub deferred_tools: &'a [String],
     pub loaded_deferred_tool_specs: &'a [LoadedDeferredToolSpec],
@@ -44,6 +46,13 @@ pub fn validate_tool_execution_admission(
     request
         .runtime_tool_restrictions
         .ensure_tool_allowed(request.tool_name)
+        .map_err(ToolExecutionAdmissionRejection::RuntimeRestriction)?;
+    request
+        .runtime_tool_restrictions
+        .ensure_operation_allowed(
+            classify_tool_call(request.tool_name, request.tool_arguments),
+            request.tool_name,
+        )
         .map_err(ToolExecutionAdmissionRejection::RuntimeRestriction)?;
     validate_deferred_tool_usage(
         request.tool_name,

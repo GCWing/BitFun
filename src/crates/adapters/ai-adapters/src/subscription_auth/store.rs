@@ -325,6 +325,7 @@ fn store_path_override() -> &'static RwLock<Option<PathBuf>> {
 
 /// Test-only secret material, keyed by the overridden metadata path. Tests
 /// must never read from or write to a developer's real system credential vault.
+#[allow(clippy::type_complexity)] // test-only static registry; aliasing adds indirection
 fn test_secrets() -> &'static Mutex<HashMap<PathBuf, HashMap<String, Vec<u8>>>> {
     static SECRETS: OnceLock<Mutex<HashMap<PathBuf, HashMap<String, Vec<u8>>>>> = OnceLock::new();
     SECRETS.get_or_init(|| Mutex::new(HashMap::new()))

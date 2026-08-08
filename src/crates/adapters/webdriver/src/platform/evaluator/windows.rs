@@ -96,6 +96,8 @@ fn ensure_message_handler<R: Runtime>(webview: &Webview<R>) -> Result<(), WebDri
 
     let registration_result = std::sync::Arc::new(std::sync::Mutex::new(Ok::<(), String>(())));
     let registration_result_slot = registration_result.clone();
+    // SAFETY: the callback runs on the WebView2 UI thread; COM must be
+    // initialized for this apartment before calling CoreWebView2 APIs.
     let result = webview.with_webview(move |platform_webview| unsafe {
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
 
@@ -147,11 +149,15 @@ impl ICoreWebView2WebMessageReceivedEventHandler_Impl for WebMessageReceivedHand
         };
 
         let mut msg_ptr = windows::core::PWSTR::null();
+        // SAFETY: `args` is a valid COM interface reference; `msg_ptr` is an
+        // out-pointer WebView2 initializes before reporting success.
         if unsafe { args.WebMessageAsJson(&raw mut msg_ptr) }.is_err() {
             log::warn!("Failed to read WebView2 WebMessage JSON");
             return Ok(());
         }
 
+        // SAFETY: after a successful WebMessageAsJson call, `msg_ptr` points to
+        // a null-terminated UTF-16 string owned by WebView2.
         let msg_text = unsafe { msg_ptr.to_string().unwrap_or_default() };
         let payload = parse_message_payload(&msg_text);
 
@@ -175,6 +181,8 @@ unsafe fn register_message_handler(webview: &ICoreWebView2) -> Result<(), WebDri
     // SAFETY: `EventRegistrationToken` is an FFI value initialized by WebView2,
     // and both COM interface references remain valid for the duration of the call.
     let mut token = unsafe { std::mem::zeroed() };
+    // SAFETY: `handler` is a valid COM interface reference and `token` is a
+    // valid out-pointer for the registration token.
     unsafe { webview.add_WebMessageReceived(&handler, &raw mut token) }.map_err(|error| {
         WebDriverErrorResponse::unknown_error(format!(
             "Failed to register WebView2 message handler: {error:?}"

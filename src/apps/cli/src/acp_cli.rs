@@ -1,6 +1,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use bitfun_acp::client::{
     AcpClientConfig, AcpClientInfo, AcpClientPermissionMode, AcpClientRequirementProbe,
+    TryConnectResult,
 };
 use bitfun_acp::AcpClientService;
 use clap::ValueEnum;
@@ -27,6 +28,7 @@ pub(crate) enum ExternalAcpClient {
 pub(crate) enum CliAcpPermissionMode {
     Ask,
     AllowOnce,
+    AllowAlways,
     RejectOnce,
 }
 
@@ -67,6 +69,8 @@ impl ExternalAcpClient {
             enabled: true,
             readonly: false,
             permission_mode: AcpClientPermissionMode::Ask,
+            category: None,
+            description: None,
         }
     }
 }
@@ -76,6 +80,7 @@ impl CliAcpPermissionMode {
         match self {
             Self::Ask => AcpClientPermissionMode::Ask,
             Self::AllowOnce => AcpClientPermissionMode::AllowOnce,
+            Self::AllowAlways => AcpClientPermissionMode::AllowAlways,
             Self::RejectOnce => AcpClientPermissionMode::RejectOnce,
         }
     }
@@ -284,6 +289,9 @@ pub(crate) async fn doctor_external_clients() -> Result<bool> {
             has_runnable = true;
         }
         print_requirement_probe(&probe);
+        if probe.runnable {
+            print_client_connect_check(&service, &probe).await?;
+        }
     }
 
     println!();
@@ -349,7 +357,7 @@ pub(crate) async fn run_external_client(
 ) -> Result<()> {
     if matches!(permission, CliAcpPermissionMode::Ask) {
         bail!(
-            "`--permission ask` is not available for non-interactive `acp run`; use allow-once or reject-once."
+            "`--permission ask` is not available for non-interactive `acp run`; use allow-always, allow-once or reject-once."
         );
     }
 
@@ -547,6 +555,41 @@ fn print_requirement_probe(probe: &AcpClientRequirementProbe) {
     for note in &probe.notes {
         println!("  note: {}", note);
     }
+}
+
+/// Runs the ACP handshake for a runnable client and surfaces login guidance
+/// when the client requires authentication.
+async fn print_client_connect_check(
+    service: &Arc<AcpClientService>,
+    probe: &AcpClientRequirementProbe,
+) -> Result<()> {
+    match service.try_connect_client(&probe.id).await {
+        Ok(TryConnectResult::Success) => {
+            println!("  connect: ok");
+        }
+        Ok(TryConnectResult::FailAuth { error, login_hint }) => {
+            println!("  connect: auth required ({})", error);
+            match login_hint {
+                Some(hint) => println!("  hint: {}", hint),
+                None => println!(
+                    "  hint: no login command is known for this client; authenticate the CLI manually"
+                ),
+            }
+        }
+        Ok(TryConnectResult::FailCli { error }) => {
+            println!("  connect: CLI not found ({})", error);
+        }
+        Ok(TryConnectResult::FailAcp { error }) => {
+            println!("  connect: handshake failed ({})", error);
+        }
+        Err(error) if error.to_string().contains("not found") => {
+            // Client is not configured; requirement probe already covers it.
+        }
+        Err(error) => {
+            println!("  connect: check failed ({})", error);
+        }
+    }
+    Ok(())
 }
 
 fn print_requirement_item(label: &str, item: &bitfun_acp::client::AcpRequirementProbeItem) {

@@ -274,6 +274,9 @@ import { worktreesConfigAppearanceDescriptor } from '@/infrastructure/config/com
 import { turnCompletionNoticeAppearanceDescriptor } from '@/flow_chat/components/modern/TurnCompletionNoticeItem.appearance';
 import { turnFailureNoticeAppearanceDescriptor } from '@/flow_chat/components/modern/TurnFailureNoticeItem.appearance';
 import { virtualItemAppearanceDescriptor } from '@/flow_chat/components/modern/VirtualItemRenderer.appearance';
+import { beeColonyMonitorAppearanceDescriptor } from '@/app/layout/BeeColonyMonitor.appearance';
+import { createLegionPageAppearanceDescriptor } from '@/app/scenes/agents/components/CreateLegionPage.appearance';
+import { legionCardAppearanceDescriptor } from '@/app/scenes/agents/components/LegionCard.appearance';
 import { AppearanceRegistry } from './AppearanceRegistry';
 
 export function createDefaultAppearanceRegistry(): AppearanceRegistry {
@@ -324,6 +327,9 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(sessionFilesBadgeAppearanceDescriptor)
     .registerComponent(codeReviewToolCardAppearanceDescriptor)
     .registerComponent(createAgentPageAppearanceDescriptor)
+    .registerComponent(createLegionPageAppearanceDescriptor)
+    .registerComponent(legionCardAppearanceDescriptor)
+    .registerComponent(beeColonyMonitorAppearanceDescriptor)
     .registerComponent(keyboardShortcutsAppearanceDescriptor)
     .registerComponent(taskToolDisplayAppearanceDescriptor)
     .registerComponent(basicsConfigAppearanceDescriptor)

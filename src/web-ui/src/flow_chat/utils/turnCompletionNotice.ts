@@ -19,7 +19,12 @@ interface NormalizedTurnCompletionNoticeState {
   hasFinalResponse?: boolean;
 }
 
-const NORMAL_FINISH_REASONS = new Set(['complete']);
+// 'complete' is BitFun's normal wrap-up code; 'stop' is a model-native normal
+// termination code, defending against other event sources. 'eos' / 'tool_calls'
+// are also model-native normal termination codes: streaming EOF or the model
+// finally switching to tool calls is not an abnormal termination meaning "no
+// usable result".
+const NORMAL_FINISH_REASONS = new Set(['complete', 'stop', 'eos', 'tool_calls']);
 
 const TURN_COMPLETION_NOTICE_CONFIG: Record<string, TurnCompletionNoticeConfig> = {
   repeated_tool_failures: {

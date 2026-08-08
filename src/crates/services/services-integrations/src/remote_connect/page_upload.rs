@@ -210,6 +210,7 @@ pub async fn save_page_version_from_inline_files(
 /// Save (and optionally deploy) a page from either a local directory or inline files.
 ///
 /// Exactly one of `directory` / `files` must be provided.
+#[allow(clippy::too_many_arguments)] // CLI/HTTP entry point carrying publish options
 pub async fn publish_page_content_on_relay(
     relay_url: &str,
     token: &str,

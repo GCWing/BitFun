@@ -420,6 +420,7 @@ pub struct DeepReviewTaskCompletionResultInput<'a> {
     pub reason: Option<&'a str>,
     pub ledger_event_id: Option<&'a str>,
     pub retry_hint: &'a str,
+    pub session_id: Option<&'a str>,
 }
 
 pub fn deep_review_task_completion_result(
@@ -435,6 +436,7 @@ pub fn deep_review_task_completion_result(
             reason: input.reason,
             ledger_event_id: input.ledger_event_id,
             partial_timeout_suffix: input.retry_hint,
+            session_id: input.session_id,
         },
     )
 }
@@ -2112,6 +2114,7 @@ mod tests {
                 reason: None,
                 ledger_event_id: None,
                 retry_hint: "",
+                session_id: None,
             });
 
         assert_eq!(data["duration"], json!(42));
@@ -2136,6 +2139,7 @@ mod tests {
                 reason: Some("timeout"),
                 ledger_event_id: Some("event-1"),
                 retry_hint: "\n\n<retry_guidance>retry</retry_guidance>",
+                session_id: None,
             });
 
         assert_eq!(data["status"], "partial_timeout");

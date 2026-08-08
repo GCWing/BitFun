@@ -42,6 +42,16 @@ interface CanvasStoreState {
   maxClosedTabsHistory: number;
 }
 
+/** State-field key for each editor group. Legacy 3 keep their names for
+ *  backward compatibility with external consumers. Exported so lifecycle /
+ *  shortcut code reads groups through the same single mapping (single source
+ *  of truth for the 3 group keys). */
+export const GROUP_STATE_KEY: Record<EditorGroupId, keyof CanvasStoreState> = {
+  primary: 'primaryGroup',
+  secondary: 'secondaryGroup',
+  tertiary: 'tertiaryGroup',
+};
+
 interface CanvasStoreActions {
   // ==================== Tab Operations ====================
   
@@ -168,9 +178,7 @@ const initialState: CanvasStoreState = {
 };
 
 const getGroup = (draft: CanvasStoreState, groupId: EditorGroupId): EditorGroupState => {
-  if (groupId === 'primary') return draft.primaryGroup;
-  if (groupId === 'secondary') return draft.secondaryGroup;
-  return draft.tertiaryGroup;
+  return draft[GROUP_STATE_KEY[groupId]] as EditorGroupState;
 };
 
 const getVisibleTabs = (group: EditorGroupState) => group.tabs.filter(t => !t.isHidden);

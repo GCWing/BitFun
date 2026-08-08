@@ -226,6 +226,7 @@ impl Drop for ManagedResponseStream {
     }
 }
 
+#[allow(clippy::too_many_arguments)] // request pipeline entry; grouping would churn all callers
 pub(crate) async fn execute_sse_request<BuildRequest, BuildHandler, HandlerFuture>(
     label: &str,
     url: &str,

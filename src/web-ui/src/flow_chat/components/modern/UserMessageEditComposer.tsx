@@ -24,7 +24,6 @@ interface UserMessageEditComposerProps {
   onCancel: () => void;
   presentation?: ComposerPresentation | null;
   workspacePath?: string;
-  workspaceId?: string;
   excludeSessionId?: string;
 }
 
@@ -43,7 +42,6 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
   onCancel,
   presentation,
   workspacePath,
-  workspaceId,
   excludeSessionId,
 }) => {
   const editorRef = useRef<RichTextInputElement>(null);
@@ -132,7 +130,6 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
           isOpen={mentionState.isActive}
           searchQuery={mentionState.query}
           workspacePath={workspacePath}
-          workspaceId={workspaceId}
           excludeSessionId={excludeSessionId}
           anchorRef={mentionAnchorRef}
           onSelect={handleSelectContext}
@@ -182,7 +179,6 @@ export const UserMessageEditComposer: React.FC<UserMessageEditComposerProps> = (
   onCancel,
   presentation,
   workspacePath,
-  workspaceId,
   excludeSessionId,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -228,7 +224,6 @@ export const UserMessageEditComposer: React.FC<UserMessageEditComposerProps> = (
         onCancel={onCancel}
         presentation={presentation}
         workspacePath={workspacePath}
-        workspaceId={workspaceId}
         excludeSessionId={excludeSessionId}
       />
     );

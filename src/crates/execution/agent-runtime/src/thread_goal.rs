@@ -314,6 +314,7 @@ fn migrate_legacy_goal_mode(
         created_at,
         updated_at: created_at,
         auto_continuation_count: 0,
+        reference_files: Vec::new(),
     })
 }
 
@@ -373,9 +374,37 @@ pub struct SetThreadGoalRequest {
     pub objective: Option<String>,
     pub status: Option<ThreadGoalStatus>,
     pub token_budget: Option<Option<i64>>,
+    /// Workspace-relative reference files the goal tracks. `Some` replaces
+    /// the goal's list when the objective is also updated; `None` leaves the
+    /// existing list untouched.
+    pub reference_files: Option<Vec<String>>,
     pub replace_existing: bool,
     pub now_epoch_seconds: i64,
     pub new_goal_id: String,
+}
+
+/// Explicit status transitions must respect the resume contract: only
+/// resumable statuses (`Paused`/`Blocked`/`UsageLimited`) may move back to
+/// `Active`, and a `Blocked -> Active` resume resets the auto-continuation
+/// counter so the resumed goal gets a fresh continuation budget instead of
+/// immediately re-blocking on the stale count.
+fn apply_goal_status_transition(
+    existing: &mut ThreadGoal,
+    status: ThreadGoalStatus,
+) -> Result<(), ThreadGoalRuntimeError> {
+    if status == ThreadGoalStatus::Active && existing.status != ThreadGoalStatus::Active {
+        if !thread_goal_status_is_resumable(existing.status) {
+            return Err(ThreadGoalRuntimeError::Validation(format!(
+                "cannot resume goal from status {}",
+                existing.status.as_str()
+            )));
+        }
+        if existing.status == ThreadGoalStatus::Blocked {
+            existing.auto_continuation_count = 0;
+        }
+    }
+    existing.status = status;
+    Ok(())
 }
 
 pub fn build_set_thread_goal_result(
@@ -415,6 +444,9 @@ pub fn build_set_thread_goal_result(
             if let Some(token_budget) = request.token_budget {
                 existing.token_budget = token_budget;
             }
+            if let Some(reference_files) = request.reference_files {
+                existing.reference_files = reference_files;
+            }
             existing.updated_at = request.now_epoch_seconds;
             existing
         } else {
@@ -429,6 +461,7 @@ pub fn build_set_thread_goal_result(
                 created_at: request.now_epoch_seconds,
                 updated_at: request.now_epoch_seconds,
                 auto_continuation_count: 0,
+                reference_files: request.reference_files.unwrap_or_default(),
             }
         }
     } else {
@@ -439,7 +472,7 @@ pub fn build_set_thread_goal_result(
             )));
         };
         if let Some(status) = request.status {
-            existing.status = status;
+            apply_goal_status_transition(&mut existing, status)?;
         }
         if let Some(token_budget) = request.token_budget {
             existing.token_budget = token_budget;

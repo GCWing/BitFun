@@ -184,6 +184,40 @@ impl AgentRegistry {
         result
     }
 
+    /// Return ids of all agents visible for session creation (modes + subagents).
+    ///
+    /// Modes cover builtin modes, user custom modes and ACP bridge agents
+    /// (`acp__<client_id>`); subagents cover builtin/user subagents plus the
+    /// project subagents of the given workspace (when provided).
+    pub async fn get_agent_ids_for_session_creation(
+        &self,
+        workspace_root: Option<&Path>,
+    ) -> Vec<String> {
+        self.ensure_user_custom_agents_loaded().await;
+        let mut ids: Vec<String> = {
+            let map = self.read_agents();
+            map.values()
+                .filter(|e| matches!(e.category, AgentCategory::Mode | AgentCategory::SubAgent))
+                .map(|e| e.agent.id().to_string())
+                .collect()
+        };
+        if let Some(workspace_root) = workspace_root {
+            if let Some(entries) = self.read_project_subagents().get(workspace_root) {
+                ids.extend(
+                    entries
+                        .values()
+                        .filter(|e| {
+                            matches!(e.category, AgentCategory::Mode | AgentCategory::SubAgent)
+                        })
+                        .map(|e| e.agent.id().to_string()),
+                );
+            }
+        }
+        ids.sort();
+        ids.dedup();
+        ids
+    }
+
     /// check if a subagent is readonly (used for TaskTool.is_concurrency_safe etc.)
     pub fn get_subagent_is_readonly(&self, id: &str) -> Option<bool> {
         if let Some(entry) = self.read_agents().get(id) {

@@ -15,7 +15,9 @@ async-trait = { workspace = true, optional = true }
 bitfun-core-types = { path = "../../contracts/core-types", optional = true }
 bitfun-events = { path = "../../contracts/events", optional = true }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true }
-tokio = { workspace = true, features = ["rt", "time"] }
+dashmap = { workspace = true }
+futures = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util", "process", "rt", "sync", "time"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true, optional = true }

@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next';
 import {
   Bot,
   Cpu,
+  GitBranch,
   RotateCcw,
   Pencil,
   Plus,
@@ -25,6 +26,7 @@ import {
 import AgentCard from './components/AgentCard';
 import CoreAgentCard, { type CoreAgentMeta } from './components/CoreAgentCard';
 import CreateAgentPage from './components/CreateAgentPage';
+import CreateLegionPage from './components/CreateLegionPage';
 import {
   AgentCapabilityTooltip,
   type AgentCapabilityTooltipField,
@@ -183,6 +185,7 @@ const AgentsHomeView: React.FC = () => {
     setAgentFilterLevel,
     setAgentFilterType,
     openCreateAgent,
+    openCreateLegion,
     openEditAgent,
   } = useAgentsStore();
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
@@ -757,6 +760,15 @@ const AgentsHomeView: React.FC = () => {
               </div>
               <button
                 type="button"
+                className="gallery-action-btn"
+                onClick={openCreateLegion}
+                data-testid="agents-create-legion-btn"
+              >
+                <GitBranch size={15} />
+                <span>{t('page.newLegion')}</span>
+              </button>
+              <button
+                type="button"
                 className="gallery-action-btn gallery-action-btn--primary"
                 onClick={openCreateAgent}
                 data-testid="agents-create-agent-btn"
@@ -1323,6 +1335,14 @@ const AgentsScene: React.FC = () => {
     return (
       <div className="bitfun-agents-scene bitfun-agents-scene--page" data-bf-scene="agents" data-bf-part="root">
         <CreateAgentPage />
+      </div>
+    );
+  }
+
+  if (page === 'createLegion') {
+    return (
+      <div className="bitfun-agents-scene bitfun-agents-scene--page">
+        <CreateLegionPage onBack={openHome} />
       </div>
     );
   }

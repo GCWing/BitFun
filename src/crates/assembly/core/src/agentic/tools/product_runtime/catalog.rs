@@ -3,6 +3,7 @@
 use crate::agentic::agents::{get_agent_registry, AgentToolPolicyOverrides};
 use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult};
 use crate::agentic::tools::registry::{get_global_tool_registry, ToolRef};
+use crate::agentic::tools::restrictions::get_session_restrictions;
 use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::ToolDefinition;
@@ -148,9 +149,17 @@ impl ProductToolCatalogProvider {
         exposure_overrides: &AgentToolPolicyOverrides,
         context: &ToolUseContext,
     ) -> (Vec<String>, AgentToolPolicyOverrides) {
+        // Session-level restrictions fully override context-level ones, matching
+        // the execution gate (enforce_tool_runtime_restrictions), so roles and
+        // subagent deny lists stay visible to the model through the catalog.
+        let restrictions = context
+            .session_id
+            .as_deref()
+            .and_then(get_session_restrictions)
+            .unwrap_or_else(|| context.runtime_tool_restrictions.clone());
         let allowed_tools = allowed_tools
             .iter()
-            .filter(|tool_name| context.runtime_tool_restrictions.is_tool_allowed(tool_name))
+            .filter(|tool_name| restrictions.is_tool_allowed(tool_name))
             .cloned()
             .collect::<Vec<_>>();
         if Self::deferred_tool_loading_enabled(context) {
@@ -366,8 +375,11 @@ mod tests {
         DynamicMcpToolInfo, DynamicToolInfo, Tool, ToolExposure, ToolResult,
     };
     use crate::agentic::tools::registry::create_tool_registry;
+    use crate::agentic::tools::restrictions::subagent_tool_restrictions;
     use crate::agentic::tools::tool_context_runtime::ToolUseContext;
-    use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::tools::{
+        update_restrictions, ToolRuntimeRestrictions, ToolRuntimeRestrictionsPatch,
+    };
     #[cfg(feature = "external-sources")]
     use crate::agentic::WorkspaceBinding;
     use bitfun_agent_tools::{
@@ -1149,5 +1161,47 @@ mod tests {
             .tool_definitions
             .iter()
             .any(|tool| tool.name == GET_TOOL_SPEC_TOOL_NAME));
+    }
+
+    #[test]
+    fn session_deny_list_filters_catalog_manifest_inputs() {
+        // R-13 A2: the subagent tool deny list must shape the catalog the model
+        // sees, so forbidden tools never surface as an option for delegated
+        // runs, matching the execution gate (enforce_tool_runtime_restrictions).
+        let session_id = "test-catalog-subagent-deny";
+        let deny = subagent_tool_restrictions();
+        let patch = ToolRuntimeRestrictionsPatch {
+            denied_tool_names: Some(deny.denied_tool_names.clone()),
+            ..Default::default()
+        };
+        update_restrictions(session_id, None, patch).expect("session restrictions should be set");
+
+        let mut context = tool_context(Some("agentic"));
+        context.session_id = Some(session_id.to_string());
+        let allowed_tools = vec![
+            "Read".to_string(),
+            "AskUserQuestion".to_string(),
+            "ControlHub".to_string(),
+            "GenerativeUI".to_string(),
+            "ReviewPlatform".to_string(),
+            "InitMiniApp".to_string(),
+            "FinalizeMiniApp".to_string(),
+            "PublishMiniApp".to_string(),
+            "PageDeploy".to_string(),
+            "PagePublish".to_string(),
+            "AgentWait".to_string(),
+        ];
+
+        let (filtered, _) = ProductToolCatalogProvider::resolve_manifest_inputs(
+            &allowed_tools,
+            &AgentToolPolicyOverrides::default(),
+            &context,
+        );
+
+        assert_eq!(
+            filtered,
+            vec!["Read".to_string(), "AskUserQuestion".to_string()],
+            "denied subagent tools must be filtered from the catalog; kept tools preserved"
+        );
     }
 }

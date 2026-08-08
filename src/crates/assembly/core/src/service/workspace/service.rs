@@ -480,7 +480,7 @@ impl WorkspaceService {
 
         // Prefer the most recently accessed match when the path alone is ambiguous
         // (e.g. the same POSIX root opened on two SSH hosts).
-        matches.sort_by(|left, right| right.last_accessed.cmp(&left.last_accessed));
+        matches.sort_by_key(|m| std::cmp::Reverse(m.last_accessed));
         matches.first().map(|workspace| (*workspace).clone())
     }
 

@@ -103,7 +103,7 @@ fn has_unclosed_windows_quote(value: &str) -> bool {
             backslashes += 1;
             continue;
         }
-        if character == '"' && backslashes % 2 == 0 {
+        if character == '"' && backslashes.is_multiple_of(2) {
             quoted = !quoted;
         }
         backslashes = 0;

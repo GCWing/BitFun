@@ -60,9 +60,9 @@ impl AgentRegistry {
     /// Create a new agent registry with built-in agents
     pub fn new() -> Self {
         Self {
-            agents: std::sync::RwLock::new(Self::build_builtin_agents()),
-            project_subagents: std::sync::RwLock::new(HashMap::new()),
-            user_custom_agents_loaded: std::sync::RwLock::new(false),
+            agents: tokio::sync::RwLock::new(Self::build_builtin_agents()),
+            project_subagents: tokio::sync::RwLock::new(HashMap::new()),
+            user_custom_agents_loaded: tokio::sync::RwLock::new(false),
             external_subagents: std::sync::Arc::new(
                 super::external::ExternalSubagentRegistryState::new(),
             ),
@@ -94,6 +94,44 @@ impl AgentRegistry {
                 agent,
                 visibility_policy,
                 custom_config,
+            },
+        );
+    }
+
+    /// Dynamically unregister an agent (called when an ACP client is removed)
+    pub fn unregister_agent(&self, agent_id: &str) {
+        self.write_agents().remove(agent_id);
+    }
+
+    /// Unregister all agents whose id starts with `prefix`, mirroring
+    /// `unregister_tools_by_prefix` for the agent registry. Returns the
+    /// number of removed agents.
+    pub fn unregister_agents_by_prefix(&self, prefix: &str) -> usize {
+        let mut map = self.write_agents();
+        let before = map.len();
+        map.retain(|id, _| !id.starts_with(prefix));
+        before - map.len()
+    }
+
+    /// Update a registered agent (called when ACP client configuration changes)
+    pub fn update_agent(
+        &self,
+        agent_id: &str,
+        agent: Arc<dyn Agent>,
+        category: AgentCategory,
+        source: AgentSource,
+        subagent_source: Option<SubAgentSource>,
+    ) {
+        let visibility_policy = SubagentVisibilityPolicy::public();
+        self.write_agents().insert(
+            agent_id.to_string(),
+            AgentEntry {
+                category,
+                source,
+                subagent_source,
+                agent,
+                visibility_policy,
+                custom_config: None,
             },
         );
     }

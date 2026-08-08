@@ -42,6 +42,7 @@ describe('SessionAPI paged metadata reads', () => {
       request: {
         workspace_path: '/repo',
         limit: 5,
+        include_hidden: false,
         cursor: '0',
         remote_connection_id: 'remote-1',
         remote_ssh_host: 'host',

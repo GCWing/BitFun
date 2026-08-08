@@ -21,7 +21,6 @@ tokio-util = { workspace = true }
 ts-rs = { workspace = true, optional = true }
 
 [features]
-default = []
 permission = ["dep:bitfun-product-domains"]
 # Derive `ts_rs::TS` on the wire types so downstream crates (app-server) can
 # export TypeScript bindings. The `permission` feature gates the product

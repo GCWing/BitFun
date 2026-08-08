@@ -400,11 +400,10 @@ pub(crate) async fn run_auto_sync(
                 Ok((session_id, hash, Ok(Ok(version)))) => {
                     uploaded.push((session_id.clone(), hash, version));
                     let done = uploaded.len();
-                    let percent = if upload_total == 0 {
-                        95u8
-                    } else {
-                        20 + ((75 * done) / upload_total) as u8
-                    };
+                    let percent = (75 * done)
+                        .checked_div(upload_total)
+                        .map(|part| 20 + part as u8)
+                        .unwrap_or(95u8);
                     emit_progress(
                         "exporting_sessions",
                         percent.min(95),
@@ -473,6 +472,26 @@ fn ensure_session_backup_complete(
     ))
 }
 
+pub(crate) fn sync_phase_label(progress: &SyncProgress) -> String {
+    match progress.phase.as_str() {
+        "uploading_settings" => "Uploading settings…".into(),
+        "downloading_settings" => "Downloading settings…".into(),
+        "applying_settings" => "Applying cloud settings…".into(),
+        "settings_done" => "Settings sync done".into(),
+        "listing_sessions" => "Listing local sessions…".into(),
+        "exporting_sessions" => {
+            if let (Some(c), Some(t)) = (progress.current, progress.total) {
+                format!("Uploading sessions ({c}/{t})…")
+            } else {
+                "Uploading sessions…".into()
+            }
+        }
+        "done" => format!("Sync complete (exported {})", progress.sessions_exported),
+        "starting" => "Starting sync…".into(),
+        "" => "Sync".into(),
+        other => other.to_string(),
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::ensure_session_backup_complete;

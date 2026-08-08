@@ -39,6 +39,10 @@
 // follow-up step. Until then, suppress dead-code lints without weakening real
 // warnings elsewhere.
 #![allow(dead_code)]
+// All unsafe blocks are single Win32 API calls through the windows crate or
+// thin extern "system" FFI wrappers; handles/pointers are validated before use,
+// so per-block SAFETY comments would repeat the same invariant.
+#![allow(clippy::undocumented_unsafe_blocks)]
 
 use std::ffi::c_void;
 use std::sync::{Mutex, MutexGuard, TryLockError};

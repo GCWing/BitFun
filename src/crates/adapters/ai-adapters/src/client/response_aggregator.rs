@@ -87,26 +87,32 @@ pub(crate) async fn aggregate_stream_response(
                 }
 
                 if let Some(finish_reason_) = chunk_finish_reason {
-                    for finalized in pending_tool_calls.finalize_all(ToolCallBoundary::FinishReason)
-                    {
-                        if finalized.is_error {
-                            warn!(
-                                "[send_message] Dropping invalid tool call at boundary=finish_reason: tool_id={}, tool_name={}, raw_len={}",
-                                finalized.tool_id,
-                                finalized.tool_name,
-                                finalized.raw_arguments.len()
-                            );
-                        } else {
-                            tool_calls.push(ToolCall {
-                                id: finalized.tool_id,
-                                name: finalized.tool_name,
-                                arguments: finalized.arguments,
-                                raw_arguments: (!finalized.raw_arguments.is_empty())
-                                    .then_some(finalized.raw_arguments),
-                            });
+                    // Ignore empty finish_reason placeholders that some
+                    // providers (e.g. CodeBuddy cloud) attach to every chunk;
+                    // only a non-empty value is a real completion signal.
+                    if !finish_reason_.is_empty() {
+                        for finalized in
+                            pending_tool_calls.finalize_all(ToolCallBoundary::FinishReason)
+                        {
+                            if finalized.is_error {
+                                warn!(
+                                    "[send_message] Dropping invalid tool call at boundary=finish_reason: tool_id={}, tool_name={}, raw_len={}",
+                                    finalized.tool_id,
+                                    finalized.tool_name,
+                                    finalized.raw_arguments.len()
+                                );
+                            } else {
+                                tool_calls.push(ToolCall {
+                                    id: finalized.tool_id,
+                                    name: finalized.tool_name,
+                                    arguments: finalized.arguments,
+                                    raw_arguments: (!finalized.raw_arguments.is_empty())
+                                        .then_some(finalized.raw_arguments),
+                                });
+                            }
                         }
+                        finish_reason = Some(finish_reason_);
                     }
-                    finish_reason = Some(finish_reason_);
                 }
 
                 if let Some(chunk_usage) = chunk_usage {

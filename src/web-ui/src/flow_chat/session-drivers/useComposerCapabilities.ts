@@ -13,6 +13,7 @@
 import { useRuntimeStatusStore } from '../store/runtimeStatusStore';
 import type { Session } from '../types/flow-chat';
 import { resolveSessionDriverId, type SessionDriverId } from './resolve';
+import { isAcpFlowSession } from '../utils/acpSession';
 
 export const DISPATCH_TRANSFER_ROUND_PREFIX = 'dispatch-transfer:';
 
@@ -87,7 +88,9 @@ export function useComposerCapabilities(input: ComposerCapabilityInput): Compose
     localSlashCommands: !dispatchTransport,
     ops: dispatchTransport ? DISPATCH_SLASH_OPS : LOCAL_SLASH_OPS,
     usageReport: true,
-    threadGoal: !displayAsChild && !dispatchTransport,
+    // UI-12: ACP sessions rely on agent-protocol-native goal orchestration;
+    // showing the local threadGoal entry would be misleading.
+    threadGoal: !displayAsChild && !dispatchTransport && !isAcpFlowSession(session),
     transferInFlight,
     submissionOptionsLocked,
     sessionScopedApproval: dispatchTransport,

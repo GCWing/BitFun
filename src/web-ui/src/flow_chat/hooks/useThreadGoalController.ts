@@ -14,9 +14,11 @@ import {
 import { parseGoalCommand } from '../services/goalCommandParser';
 import {
   fetchSessionThreadGoal,
+  fetchGoalChain,
   runGoalCommandSafely,
   runThreadGoalUiAction,
   saveThreadGoalObjective,
+  type GoalChainEntry,
   type ThreadGoalSnapshot,
 } from '../services/goalService';
 
@@ -24,6 +26,7 @@ const HISTORICAL_THREAD_GOAL_REFRESH_DELAY_MS = 350;
 
 export interface ThreadGoalController {
   goal: ThreadGoalSnapshot | null;
+  goalChain: GoalChainEntry[];
   menuOpen: boolean;
   editOpen: boolean;
   editMode: 'create' | 'update';
@@ -43,6 +46,7 @@ export interface ThreadGoalController {
   saveEdit: (objective: string) => Promise<void>;
   confirmResume: () => Promise<void>;
   dismissResume: () => void;
+  loadGoalChain: () => Promise<void>;
 }
 
 function readStoreGoal(sessionId: string | undefined): ThreadGoalSnapshot | null {
@@ -122,6 +126,21 @@ export function useThreadGoalController(
 
   const goal = storeGoal;
 
+  const [goalChain, setGoalChain] = useState<GoalChainEntry[]>([]);
+
+  const loadGoalChain = useCallback(async () => {
+    if (!session || isBtwSession) {
+      setGoalChain([]);
+      return;
+    }
+    try {
+      const chain = await fetchGoalChain(session);
+      setGoalChain(chain);
+    } catch {
+      // best-effort: keep whatever chain we had before
+    }
+  }, [session, isBtwSession]);
+
   const titles = useMemo(
     () => ({
       usageMessage: t('chatInput.goalUsage'),
@@ -159,6 +178,16 @@ export function useThreadGoalController(
     }
     void refreshGoal();
   }, [session?.isHistorical, sessionId, isBtwSession, refreshGoal]);
+
+  useEffect(() => {
+    void loadGoalChain();
+  }, [loadGoalChain]);
+
+  // Reload goal chain when the store goal changes (e.g. after /goal set or edit).
+  useEffect(() => {
+    if (!sessionId || isBtwSession) return;
+    void loadGoalChain();
+  }, [sessionId, isBtwSession, goal?.goalId, goal?.status, goal?.updatedAt, loadGoalChain]);
 
   const goalId = goal?.goalId;
   const goalStatus = goal?.status;
@@ -310,6 +339,7 @@ export function useThreadGoalController(
   return useMemo(
     () => ({
       goal,
+      goalChain,
       menuOpen,
       editOpen,
       editMode,
@@ -328,6 +358,7 @@ export function useThreadGoalController(
       saveEdit,
       confirmResume,
       dismissResume,
+      loadGoalChain,
     }),
     [
       availableActions,
@@ -340,6 +371,8 @@ export function useThreadGoalController(
       editMode,
       editOpen,
       goal,
+      goalChain,
+      loadGoalChain,
       menuOpen,
       openEdit,
       openGoalEntry,

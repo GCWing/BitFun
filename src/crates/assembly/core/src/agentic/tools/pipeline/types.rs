@@ -54,6 +54,11 @@ pub struct SubagentParentInfo {
     pub tool_call_id: String,
     pub session_id: String,
     pub dialog_turn_id: String,
+    pub depth: Option<u32>,
+    /// Delegated role key (R-14 B4). None when the parent session has no
+    /// registered RBAC role; the child then inherits the default role at
+    /// session creation.
+    pub role: Option<String>,
 }
 
 impl SubagentParentInfo {
@@ -76,6 +81,8 @@ impl From<SubagentParentInfo> for EventSubagentParentInfo {
             tool_call_id: info.tool_call_id,
             session_id: info.session_id,
             dialog_turn_id: info.dialog_turn_id,
+            depth: info.depth,
+            role: info.role,
         }
     }
 }

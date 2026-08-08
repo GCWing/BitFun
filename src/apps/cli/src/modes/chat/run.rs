@@ -970,18 +970,16 @@ impl ChatMode {
                         new_model_id,
                         reason,
                         ..
-                    } => {
-                        if apply_session_model_migration(
-                            &mut chat_state,
-                            session_id,
-                            previous_model_id,
-                            new_model_id,
-                            reason,
-                        ) {
-                            self.load_current_model_name(&mut chat_state, &rt_handle);
-                            chat_view.invalidate_lines_cache();
-                            needs_redraw = true;
-                        }
+                    } if apply_session_model_migration(
+                        &mut chat_state,
+                        session_id,
+                        previous_model_id,
+                        new_model_id,
+                        reason,
+                    ) => {
+                        self.load_current_model_name(&mut chat_state, &rt_handle);
+                        chat_view.invalidate_lines_cache();
+                        needs_redraw = true;
                     }
                     AgenticEvent::SessionReasoningPresetAutoCleared {
                         session_id,

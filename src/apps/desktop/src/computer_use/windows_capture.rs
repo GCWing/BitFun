@@ -36,6 +36,9 @@
 //! applied (scaling would shift and oversize the captured region).
 
 #![allow(dead_code)]
+// All unsafe blocks are single Win32/GDI/DWM API calls through the windows
+// crate; handles and rect pointers are stack-allocated and validated.
+#![allow(clippy::undocumented_unsafe_blocks)]
 
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use image::{DynamicImage, ImageBuffer, ImageFormat, Rgba};

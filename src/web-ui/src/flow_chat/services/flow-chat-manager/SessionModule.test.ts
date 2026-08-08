@@ -460,7 +460,7 @@ describe('createChatSession', () => {
       }),
       undefined,
       expect.any(String),
-      128128,
+      1048576,
       'agentic',
       '/source/repo',
       undefined,
