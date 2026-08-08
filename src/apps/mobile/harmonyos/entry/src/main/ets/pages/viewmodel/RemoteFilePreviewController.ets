@@ -1,15 +1,15 @@
-import { FileInfo, ReadFileChunkResult, ReadFileResult } from '../model/RemoteModels';
+import { FileInfo, ReadFileChunkResult, ReadFileResult } from '../../model/RemoteModels';
 import {
   FilePreviewPhase,
   FilePreviewRendererKind,
   FilePreviewState
-} from '../pages/state/FilePreviewState';
-import { FilePreviewTarget } from '../pages/state/FilePreviewTarget';
-import { RemoteI18n } from '../i18n/RemoteI18n';
-import { Encoding } from './Encoding';
-import { FilePreviewErrorPolicy } from './FilePreviewErrorPolicy';
-import { FilePreviewPolicy } from './FilePreviewPolicy';
-import { RemoteWorkspaceFileClient } from './RemoteWorkspaceFileClient';
+} from '../state/FilePreviewState';
+import { FilePreviewTarget } from '../../model/FilePreviewTarget';
+import { RemoteI18n } from '../../i18n/RemoteI18n';
+import { Encoding } from '../../services/Encoding';
+import { FilePreviewErrorPolicy } from '../../services/FilePreviewErrorPolicy';
+import { FilePreviewPolicy } from '../../services/FilePreviewPolicy';
+import { RemoteWorkspaceFileClient } from '../../services/RemoteWorkspaceFileClient';
 
 export class RemoteFilePreviewController {
   private readonly client: RemoteWorkspaceFileClient;

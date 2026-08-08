@@ -1,8 +1,8 @@
-import { SelectedImageAttachment } from '../model/RemoteModels';
-import { AppRoute, AppRouteContract } from '../pages/navigation/AppRouteContract';
-import { GeneralChatPageState } from '../pages/state/GeneralChatPageState';
-import { RemotePageState } from '../pages/state/RemotePageState';
-import { VoiceInputRouteSnapshot } from './VoiceInputLifecycleController';
+import { SelectedImageAttachment } from '../../model/RemoteModels';
+import { VoiceInputRouteSnapshot } from '../../services/VoiceInputLifecycleController';
+import { GeneralChatPageState } from '../state/GeneralChatPageState';
+import { RemotePageState } from '../state/RemotePageState';
+import { AppRoute, AppRouteContract } from './AppRouteContract';
 
 /** Keeps route-dependent composer state mapping out of the root component. */
 export class AppRootRouteState {
@@ -11,16 +11,19 @@ export class AppRootRouteState {
   }
 
   static chatInput(route: AppRoute, general: GeneralChatPageState, remote: RemotePageState): string {
-    return AppRootRouteState.isGeneralComposerRoute(route) ? general.chatInput : remote.chatInput;
+    return AppRootRouteState.isGeneralComposerRoute(route) ?
+      general.conversation.chatInput : remote.conversation.chatInput;
   }
 
   static selectedImages(route: AppRoute, general: GeneralChatPageState,
     remote: RemotePageState): SelectedImageAttachment[] {
-    return AppRootRouteState.isGeneralComposerRoute(route) ? general.selectedImages : remote.selectedImages;
+    return AppRootRouteState.isGeneralComposerRoute(route) ?
+      general.conversation.selectedImages : remote.conversation.selectedImages;
   }
 
   static voiceListening(route: AppRoute, general: GeneralChatPageState, remote: RemotePageState): boolean {
-    return AppRootRouteState.isGeneralComposerRoute(route) ? general.isVoiceListening : remote.isVoiceListening;
+    return AppRootRouteState.isGeneralComposerRoute(route) ?
+      general.conversation.isVoiceListening : remote.conversation.isVoiceListening;
   }
 
   static setChatInput(route: AppRoute, value: string, general: GeneralChatPageState, remote: RemotePageState): void {

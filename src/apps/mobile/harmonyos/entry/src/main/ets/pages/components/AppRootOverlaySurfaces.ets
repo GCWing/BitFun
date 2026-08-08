@@ -1,0 +1,185 @@
+import {
+  AppRootPresentationActions,
+  emptyAppRootPresentationActions
+} from '../actions/AppRootPresentationActions';
+import { AppRouteContract, ConversationSource } from '../navigation/AppRouteContract';
+import { AppShellState } from '../state/AppShellState';
+import { GeneralChatPageState } from '../state/GeneralChatPageState';
+import { RemotePageState } from '../state/RemotePageState';
+import { AppSidebar } from './AppSidebar';
+import { ConnectView } from './ConnectView';
+import { RemoteControlSettingsSheet } from './RemoteControlSettingsSheet';
+import {
+  RemoteSurfaceHost,
+  RemoteSurfaceMode,
+  RemoteSurfaceState
+} from './remote/RemoteSurfaceHost';
+import { SettingsSheet } from './SettingsSheet';
+
+@ComponentV2
+export struct AppSidebarSurface {
+  @Param shellState: AppShellState = new AppShellState();
+  @Param remotePageState: RemotePageState = new RemotePageState();
+  @Param generalPageState: GeneralChatPageState = new GeneralChatPageState();
+  @Param remoteSurfaceState: RemoteSurfaceState = new RemoteSurfaceState();
+  @Param actions: AppRootPresentationActions = emptyAppRootPresentationActions();
+  @Event onOpenRemoteViewSettings: () => void = () => {};
+
+  build() {
+    AppSidebar({
+      sessions: this.source() === ConversationSource.Remote ? [] : this.generalPageState.recentSessions(),
+      pinnedSessionId: this.generalPageState.pinnedSessionId(),
+      selectedSessionId: this.source() === ConversationSource.Remote ? '' :
+        (AppRouteContract.isGeneralComposerRoute(this.shellState.activeRoute) ?
+          this.generalPageState.conversation.activeSession.sessionId : ''),
+      connectionState: this.remotePageState.connectionState,
+      accountUserId: this.remotePageState.accountUserId,
+      activeSection: this.source() === ConversationSource.Remote ? 'remote' : 'chat',
+      showConversationSourceSwitcher: true,
+      showViewSettingsButton: this.source() === ConversationSource.Remote,
+      showCustomContent: this.source() === ConversationSource.Remote,
+      conversationSource: this.source(),
+      contentSlot: () => {
+        this.RemoteContent()
+      },
+      onClose: this.actions.onSidebar.close,
+      onNewChat: () => this.newChat(),
+      onEnterCode: this.actions.onSidebar.enterCode,
+      onConversationSource: this.actions.onCompactConversationSource,
+      onOpenViewSettings: this.onOpenRemoteViewSettings,
+      onSearchQueryChange: (query: string) => {
+        if (this.source() === ConversationSource.Remote) this.actions.onRemoteHome.queryChanged(query);
+      },
+      onOpenSettings: () => this.openSettings(),
+      onOpenAccount: this.actions.onSidebar.openAccount,
+      onOpenSession: this.actions.onSidebar.openSession,
+      onArchiveSession: this.actions.onSidebar.archive,
+      onExportSession: this.actions.onSidebar.exportSession,
+      onDeleteSession: this.actions.onSidebar.deleteSession
+    })
+  }
+
+  @Builder
+  private RemoteContent() {
+    RemoteSurfaceHost({
+      mode: RemoteSurfaceMode.Master,
+      remotePageState: this.remotePageState,
+      presentationState: this.remoteSurfaceState,
+      actions: this.actions,
+      showSelectedSession: true,
+      compact: true
+    })
+  }
+
+  private source(): ConversationSource {
+    return AppRouteContract.conversationSource(this.shellState.activeRoute);
+  }
+
+  private newChat(): void {
+    if (this.source() === ConversationSource.Remote) {
+      this.actions.onSidebar.close();
+      this.actions.onRemoteHome.createAssistant();
+    } else {
+      this.actions.onSidebar.newChat();
+    }
+  }
+
+  private openSettings(): void {
+    if (this.source() === ConversationSource.Remote) {
+      this.actions.onSidebar.close();
+      this.actions.onRemoteHome.openSettings();
+    } else {
+      this.actions.onSidebar.settings();
+    }
+  }
+}
+
+@ComponentV2
+export struct AppSettingsSurface {
+  @Param shellState: AppShellState = new AppShellState();
+  @Param remotePageState: RemotePageState = new RemotePageState();
+  @Param generalPageState: GeneralChatPageState = new GeneralChatPageState();
+  @Param deviceId: string = '';
+  @Param actions: AppRootPresentationActions = emptyAppRootPresentationActions();
+
+  build() {
+    if (this.shellState.settingsMode === 'remote' || this.shellState.settingsMode === 'account') {
+      RemoteControlSettingsSheet({
+        desktopName: this.remotePageState.desktopName,
+        desktopId: this.remotePageState.desktopId,
+        userId: this.remotePageState.userId,
+        accountUsername: this.remotePageState.accountUsername,
+        accountUserId: this.remotePageState.accountUserId,
+        deviceId: this.deviceId,
+        controlTargetType: this.remotePageState.controlTargetType,
+        controlTargetDeviceId: this.remotePageState.controlTargetDeviceId,
+        connectionState: this.remotePageState.connectionState,
+        statusText: this.remotePageState.conversation.statusText,
+        isBusy: this.remotePageState.conversation.isBusy,
+        onClose: this.actions.onSettings.close,
+        onOpenAccount: this.actions.onSettings.openAccount,
+        onAddConnection: this.actions.onSettings.addConnection,
+        cloudLogin: this.actions.onSettings.cloudLogin,
+        cloudSync: this.actions.onSettings.cloudSync,
+        cloudLogout: this.actions.onSettings.cloudLogout,
+        cloudListDevices: this.actions.onSettings.cloudListDevices,
+        getPermissionMode: this.actions.onSettings.getPermissionMode,
+        setPermissionMode: this.actions.onSettings.setPermissionMode,
+        openAccountOnAppear: this.shellState.settingsMode === 'account',
+        onDisconnect: this.actions.onSettings.disconnect,
+        onReconnect: this.actions.onSettings.reconnect
+      })
+    } else {
+      SettingsSheet({
+        generalChatApiUrl: this.generalPageState.apiUrl,
+        generalChatModelName: this.generalPageState.modelName,
+        hasGeneralChatApiKey: this.generalPageState.hasApiKey,
+        generalChatModelCatalog: this.generalPageState.conversation.modelCatalog,
+        selectedGeneralChatModelId: this.generalPageState.conversation.selectedModelId,
+        accountUsername: this.remotePageState.accountUsername,
+        authenticatedUserId: this.remotePageState.accountUserId,
+        deviceId: this.deviceId,
+        onOpenAccount: this.actions.onSettings.openAccount,
+        onTestGeneralChatConfig: this.actions.onSettings.testGeneral,
+        onSaveGeneralChatConfig: this.actions.onSettings.saveGeneral,
+        onClose: this.actions.onSettings.close
+      })
+    }
+  }
+}
+
+@ComponentV2
+export struct AppConnectSurface {
+  @Param remotePageState: RemotePageState = new RemotePageState();
+  @Param deviceId: string = '';
+  @Param actions: AppRootPresentationActions = emptyAppRootPresentationActions();
+
+  build() {
+    ConnectView({
+      remoteUrl: this.remotePageState.remoteUrl,
+      userId: this.remotePageState.userId,
+      statusText: this.remotePageState.conversation.statusText,
+      connectionState: this.remotePageState.connectionState,
+      connectionFailureKind: this.remotePageState.connectionFailureKind,
+      isBusy: this.remotePageState.conversation.isBusy,
+      isConnected: this.remotePageState.connectionState === 'connected',
+      desktopName: this.remotePageState.desktopName,
+      deviceId: this.deviceId,
+      accountUserId: this.remotePageState.accountUserId,
+      controlTargetDeviceId: this.remotePageState.controlTargetDeviceId,
+      requiresAccountAuth: this.remotePageState.requiresAccountAuth,
+      accountUsername: this.remotePageState.accountUsername,
+      startWithScanner: true,
+      onBack: this.actions.onConnect.back,
+      onConnect: this.actions.onConnect.connect,
+      onRemoteUrlChange: this.actions.onConnect.urlChanged,
+      onUserIdChange: this.actions.onConnect.userChanged,
+      onRemoteUrlDetected: this.actions.onConnect.detected,
+      onRemoteUrlInputVisibleChange: this.actions.onConnect.inputVisible,
+      cloudListDevices: this.actions.onConnect.cloudListDevices,
+      cloudSelectDevice: this.actions.onConnect.cloudSelectDevice
+    })
+    .width('100%')
+    .height('100%')
+  }
+}

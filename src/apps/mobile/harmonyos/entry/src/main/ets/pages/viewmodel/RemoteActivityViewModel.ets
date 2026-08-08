@@ -5,7 +5,7 @@ import { AsyncLifecycleGate } from '../../services/AsyncLifecycleGate';
 import { RemoteActivityLifecycleController } from '../../services/RemoteActivityLifecycleController';
 import { RemoteConnectionCoordinator } from '../../services/RemoteConnectionCoordinator';
 
-export class RemoteActivityViewModelHooks {
+export interface RemoteActivityViewModelHooks {
   readonly isConnected: () => boolean;
   readonly isBusy: () => boolean;
   readonly hasRemoteBinding: () => boolean;
@@ -20,38 +20,6 @@ export class RemoteActivityViewModelHooks {
   readonly onPoll: () => Promise<void>;
   readonly onReconnect: () => Promise<void>;
   readonly onRestoreSession: (session: SessionSummary) => Promise<void>;
-
-  constructor(
-    isConnected: () => boolean,
-    isBusy: () => boolean,
-    hasRemoteBinding: () => boolean,
-    isRemoteChat: () => boolean,
-    activeSession: () => SessionSummary,
-    onConnectionState: (state: string) => void,
-    onStatus: (status: string) => void,
-    onConnectionError: (err: Object) => Promise<boolean>,
-    onStopHeartbeat: () => void,
-    onStartPolling: () => void,
-    onStopPolling: () => void,
-    onPoll: () => Promise<void>,
-    onReconnect: () => Promise<void>,
-    onRestoreSession: (session: SessionSummary) => Promise<void>
-  ) {
-    this.isConnected = isConnected;
-    this.isBusy = isBusy;
-    this.hasRemoteBinding = hasRemoteBinding;
-    this.isRemoteChat = isRemoteChat;
-    this.activeSession = activeSession;
-    this.onConnectionState = onConnectionState;
-    this.onStatus = onStatus;
-    this.onConnectionError = onConnectionError;
-    this.onStopHeartbeat = onStopHeartbeat;
-    this.onStartPolling = onStartPolling;
-    this.onStopPolling = onStopPolling;
-    this.onPoll = onPoll;
-    this.onReconnect = onReconnect;
-    this.onRestoreSession = onRestoreSession;
-  }
 }
 
 /** Owns foreground recovery, heartbeat health checks, and idempotent resume cancellation. */

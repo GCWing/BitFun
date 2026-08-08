@@ -1,10 +1,10 @@
 import { RemoteQuestionAnswerPayload, RemoteSession } from '../../model/RemoteModels';
 import { AppRoute, AppRouteContract } from '../navigation/AppRouteContract';
-import { ConversationIntent, ConversationIntentType } from '../components/ConversationIntent';
+import { ConversationIntent, ConversationIntentType } from './ConversationIntent';
 import { toRemoteQuestionAnswer } from '../components/ConversationUiModels';
-import { FilePreviewRequest } from './FilePreviewTarget';
+import { FilePreviewRequest } from '../../model/FilePreviewTarget';
 
-export class ConversationIntentDispatcherHooks {
+export interface ConversationIntentDispatcherHooks {
   readonly openSidebar: () => void;
   readonly back: () => void;
   readonly newRemoteSession: () => void;
@@ -35,33 +35,6 @@ export class ConversationIntentDispatcherHooks {
   readonly send: () => Promise<void>;
   readonly voiceInput: () => Promise<void>;
   readonly inputChanged: (route: AppRoute, value: string) => void;
-
-  constructor(
-    openSidebar: () => void, back: () => void, newRemoteSession: () => void, newGeneralSession: () => void,
-    activeGeneralSession: () => RemoteSession, activeGeneralSessionId: () => string,
-    isGeneralBusy: () => boolean, isPinned: (id: string) => boolean,
-    pin: (session: RemoteSession, pinned: boolean, busy: boolean) => Promise<void>,
-    archive: (session: RemoteSession) => Promise<void>, deleteSession: (session: RemoteSession) => Promise<void>,
-    showToast: (text: string) => void, uploadedFileCount: () => number,
-    stop: () => Promise<void>, loadOlder: () => Promise<void>, approve: (id: string, input?: Object) => Promise<void>,
-    reject: (id: string) => Promise<void>, cancel: (id: string) => Promise<void>,
-    answer: (id: string, answers: RemoteQuestionAnswerPayload) => Promise<void>, rename: (title: string) => Promise<void>,
-    copy: (text: string) => Promise<void>, retry: (text: string) => Promise<void>, selectModel: (id: string) => Promise<void>,
-    pickImages: () => Promise<void>, removeImage: (id: string) => void,
-    openFilePreview: (route: AppRoute, request: FilePreviewRequest) => void, downloadFile: (path: string) => void,
-    send: () => Promise<void>, voiceInput: () => Promise<void>, inputChanged: (route: AppRoute, value: string) => void
-  ) {
-    this.openSidebar = openSidebar; this.back = back; this.newRemoteSession = newRemoteSession;
-    this.newGeneralSession = newGeneralSession; this.activeGeneralSession = activeGeneralSession;
-    this.activeGeneralSessionId = activeGeneralSessionId; this.isGeneralBusy = isGeneralBusy;
-    this.isPinned = isPinned; this.pin = pin; this.archive = archive; this.delete = deleteSession;
-    this.showToast = showToast; this.uploadedFileCount = uploadedFileCount; this.stop = stop;
-    this.loadOlder = loadOlder; this.approve = approve; this.reject = reject; this.cancel = cancel;
-    this.answer = answer; this.rename = rename; this.copy = copy; this.retry = retry;
-    this.selectModel = selectModel; this.pickImages = pickImages; this.removeImage = removeImage;
-    this.openFilePreview = openFilePreview; this.downloadFile = downloadFile; this.send = send;
-    this.voiceInput = voiceInput; this.inputChanged = inputChanged;
-  }
 }
 
 export class ConversationIntentDispatcher {

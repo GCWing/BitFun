@@ -16,7 +16,7 @@ import { RemoteSessionController } from '../../services/RemoteSessionController'
 import { RemoteUiState } from '../../services/RemoteUiState';
 import { QrScanService } from '../../services/QrScanService';
 import { RemoteConnectionCoordinator, RemoteConnectionRequest } from '../../services/RemoteConnectionCoordinator';
-import { RemotePageState } from './RemotePageState';
+import { RemotePageState } from '../state/RemotePageState';
 import { AppRoute } from '../navigation/AppRouteContract';
 import { RemoteLogger } from '../../services/RemoteLogger';
 
@@ -30,7 +30,7 @@ export enum RemoteConnectionState {
   Disconnected = 'disconnected'
 }
 
-export class RemoteConnectionViewModel {
+export class RemoteConnectionController {
   private readonly pageState: RemotePageState;
   private readonly identity: MobileIdentityStore;
   private readonly pairing: RemotePairingPolicy;

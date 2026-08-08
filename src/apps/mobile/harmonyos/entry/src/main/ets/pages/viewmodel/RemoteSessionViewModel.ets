@@ -4,9 +4,9 @@ import { RemoteChatCommandController } from '../../services/RemoteChatCommandCon
 import { RemoteModelController } from '../../services/RemoteModelController';
 import { RemoteSessionController } from '../../services/RemoteSessionController';
 import { RemoteFileDownloadController } from '../../services/RemoteFileDownloadController';
-import { RemotePageState } from './RemotePageState';
+import { RemotePageState } from '../state/RemotePageState';
 
-export class RemoteSessionViewModelHooks {
+export interface RemoteSessionViewModelHooks {
   readonly remoteAvailable: () => boolean;
   readonly isConnected: () => boolean;
   readonly isBusy: () => boolean;
@@ -22,40 +22,6 @@ export class RemoteSessionViewModelHooks {
   readonly onLoadActiveMessages: () => Promise<void>;
   readonly onRefreshSessions: () => Promise<void>;
   readonly onSelectWorkspace: (path: string) => Promise<void>;
-
-  constructor(
-    remoteAvailable: () => boolean,
-    isConnected: () => boolean,
-    isBusy: () => boolean,
-    onBusy: (busy: boolean) => void,
-    onRouteChat: (sessionId: string) => void,
-    onRouteHome: () => void,
-    onStopPolling: () => void,
-    onStartPolling: () => void,
-    onResetTimeline: (sessionId: string) => void,
-    onClearRemoteFiles: () => void,
-    onKnownStateReset: () => void,
-    onLoadModelCatalog: (sessionId: string) => Promise<void>,
-    onLoadActiveMessages: () => Promise<void>,
-    onRefreshSessions: () => Promise<void>,
-    onSelectWorkspace: (path: string) => Promise<void>
-  ) {
-    this.remoteAvailable = remoteAvailable;
-    this.isConnected = isConnected;
-    this.isBusy = isBusy;
-    this.onBusy = onBusy;
-    this.onRouteChat = onRouteChat;
-    this.onRouteHome = onRouteHome;
-    this.onStopPolling = onStopPolling;
-    this.onStartPolling = onStartPolling;
-    this.onResetTimeline = onResetTimeline;
-    this.onClearRemoteFiles = onClearRemoteFiles;
-    this.onKnownStateReset = onKnownStateReset;
-    this.onLoadModelCatalog = onLoadModelCatalog;
-    this.onLoadActiveMessages = onLoadActiveMessages;
-    this.onRefreshSessions = onRefreshSessions;
-    this.onSelectWorkspace = onSelectWorkspace;
-  }
 }
 
 /** Owns remote session commands and their page lifecycle effects. */
@@ -158,26 +124,38 @@ export class RemoteSessionViewModel {
     currentWorkspacePath: string,
     onRouteChat: (sessionId: string) => void = this.hooks.onRouteChat
   ): Promise<void> {
-    await this.sessions.open(
-      item,
-      item.workspacePath || currentWorkspacePath,
-      this.hooks.isBusy(),
-      this.hooks.remoteAvailable(),
-      async (session: SessionSummary): Promise<void> => {
-        this.hooks.onStopPolling();
-        this.hooks.onResetTimeline(item.id);
-        this.hooks.onKnownStateReset();
-        this.pageState.setHasMoreMessages(false);
-        this.files.clear();
-        this.pageState.clearComposer();
-        onRouteChat(item.id);
-        await this.hooks.onLoadModelCatalog(item.id);
-        await this.hooks.onLoadActiveMessages();
-        if (this.pageState.activeSession.sessionId === session.sessionId) {
-          this.hooks.onStartPolling();
+    const isBusy = this.hooks.isBusy();
+    const remoteAvailable = this.hooks.remoteAvailable();
+    if (isBusy || item.id.length === 0 || !remoteAvailable) {
+      return;
+    }
+    this.pageState.setPendingSessionId(item.id);
+    this.pageState.setConversationLoading(true);
+    onRouteChat(item.id);
+    try {
+      await this.sessions.open(
+        item,
+        item.workspacePath || currentWorkspacePath,
+        false,
+        true,
+        async (session: SessionSummary): Promise<void> => {
+          this.hooks.onStopPolling();
+          this.hooks.onResetTimeline(item.id);
+          this.hooks.onKnownStateReset();
+          this.pageState.setHasMoreMessages(false);
+          this.files.clear();
+          this.pageState.clearComposer();
+          await this.hooks.onLoadModelCatalog(item.id);
+          await this.hooks.onLoadActiveMessages();
+          if (this.pageState.activeSession.sessionId === session.sessionId) {
+            this.hooks.onStartPolling();
+          }
         }
-      }
-    );
+      );
+    } finally {
+      this.pageState.setConversationLoading(false);
+      this.pageState.setPendingSessionId('');
+    }
   }
 
   async deleteSession(item: RemoteSession, currentWorkspacePath: string): Promise<void> {

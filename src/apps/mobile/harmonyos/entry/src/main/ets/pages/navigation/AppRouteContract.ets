@@ -85,6 +85,10 @@ export class AppRouteContract {
     return new ChatRouteParam(sessionId);
   }
 
+  static remoteSessionDestination(sessionId: string): AppNavigationPathSpec {
+    return new AppNavigationPathSpec(AppRoute.RemoteChat, sessionId);
+  }
+
   static pathSpec(currentRoute: AppRoute, route: AppRoute, sessionId: string = ''): AppNavigationPathSpec | undefined {
     if (currentRoute === route) {
       return undefined;

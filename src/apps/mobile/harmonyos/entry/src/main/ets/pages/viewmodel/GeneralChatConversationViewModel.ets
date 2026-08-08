@@ -8,7 +8,7 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ConnectionErrorPolicy } from '../../services/ConnectionErrorPolicy';
 import { Encoding } from '../../services/Encoding';
 import { ConversationViewModel } from './ConversationViewModel';
-import { GeneralChatPageState } from './GeneralChatPageState';
+import { GeneralChatPageState } from '../state/GeneralChatPageState';
 import { GeneralChatCommandController } from '../../services/general-chat/GeneralChatCommandController';
 import { GeneralChatDraftLifecycleController } from '../../services/general-chat/GeneralChatDraftLifecycleController';
 import { GeneralChatStreamLifecycleController } from '../../services/general-chat/GeneralChatStreamLifecycleController';
@@ -22,26 +22,12 @@ import {
 } from '../../services/general-chat/GeneralChatPort';
 import { RemoteLogger } from '../../services/RemoteLogger';
 
-export class GeneralChatConversationViewModelHooks {
+export interface GeneralChatConversationViewModelHooks {
   readonly isVisible: (sessionId: string) => boolean;
   readonly currentActiveTurnId: () => string;
   readonly latestUserMessageText: () => string;
   readonly syncTimeline: () => void;
   readonly refreshSessions: () => void;
-
-  constructor(
-    isVisible: (sessionId: string) => boolean,
-    currentActiveTurnId: () => string,
-    latestUserMessageText: () => string,
-    syncTimeline: () => void,
-    refreshSessions: () => void
-  ) {
-    this.isVisible = isVisible;
-    this.currentActiveTurnId = currentActiveTurnId;
-    this.latestUserMessageText = latestUserMessageText;
-    this.syncTimeline = syncTimeline;
-    this.refreshSessions = refreshSessions;
-  }
 }
 
 /** Owns General Chat stream state and publishes all updates through ConversationViewModel. */

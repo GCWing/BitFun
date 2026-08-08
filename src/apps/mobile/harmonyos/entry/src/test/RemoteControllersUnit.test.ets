@@ -76,7 +76,7 @@ import {
   MessageFileReferenceProjectionCache,
   MessageFileReferenceProjector
 } from '../main/ets/services/MessageFileReferenceProjector';
-import { RemoteFilePreviewController } from '../main/ets/services/RemoteFilePreviewController';
+import { RemoteFilePreviewController } from '../main/ets/pages/viewmodel/RemoteFilePreviewController';
 import { RemoteHeartbeatController, RemoteHeartbeatScheduler } from '../main/ets/services/RemoteHeartbeatController';
 import {
   RemoteModelClient,
@@ -107,18 +107,18 @@ import {
   FilePreviewRendererKind,
   FilePreviewState
 } from '../main/ets/pages/state/FilePreviewState';
-import { FilePreviewTarget, FilePreviewTargetContext } from '../main/ets/pages/state/FilePreviewTarget';
+import { FilePreviewTarget, FilePreviewTargetContext } from '../main/ets/model/FilePreviewTarget';
 import {
   FilePreviewPlacement,
   FilePreviewPlacementPolicy
-} from '../main/ets/pages/state/FilePreviewPlacementPolicy';
+} from '../main/ets/pages/policy/FilePreviewPlacementPolicy';
 import {
   ConversationLayoutCrease,
   ConversationLayoutPolicy
-} from '../main/ets/pages/state/ConversationLayoutPolicy';
-import { SessionActionPolicy, SessionActionScope } from '../main/ets/pages/state/SessionActionPolicy';
-import { ConversationSessionFilterPolicy } from '../main/ets/pages/state/ConversationSessionFilterPolicy';
-import { ConversationModelPresentationPolicy } from '../main/ets/pages/state/ConversationModelPresentationPolicy';
+} from '../main/ets/pages/policy/ConversationLayoutPolicy';
+import { SessionActionPolicy, SessionActionScope } from '../main/ets/pages/policy/SessionActionPolicy';
+import { ConversationSessionFilterPolicy } from '../main/ets/pages/policy/ConversationSessionFilterPolicy';
+import { ConversationModelPresentationPolicy } from '../main/ets/pages/policy/ConversationModelPresentationPolicy';
 import {
   GENERAL_CHAT_COMPOSER_CAPABILITIES,
   REMOTE_CHAT_COMPOSER_CAPABILITIES
@@ -788,7 +788,7 @@ export default function remoteControllersUnitTest() {
       expect(state.selectedWorkspaceName).assertEqual('BitFun');
     });
 
-    it('freezes the selected creation target and keeps workspace chats as Claw sessions', 0, () => {
+    it('freezes the selected creation target and pairs a workspace with the code agent', 0, () => {
       const state = new RemoteCreateSessionState();
       state.prepare('desktop-b', 'Desktop B');
       state.setWorkspaces([{
@@ -802,6 +802,17 @@ export default function remoteControllersUnitTest() {
 
       expect(context.deviceId).assertEqual('desktop-b');
       expect(context.workspacePath).assertEqual('/workspace/BitFun');
+      expect(context.agentType).assertEqual('code');
+    });
+
+    it('keeps the chat option on the assistant agent so the desktop binds its assistant workspace', 0, () => {
+      const state = new RemoteCreateSessionState();
+      state.prepare('desktop-b', 'Desktop B');
+      state.selectWorkspace(undefined);
+
+      const context = state.submissionContext();
+
+      expect(context.workspacePath).assertEqual('');
       expect(context.agentType).assertEqual('Claw');
     });
   });
@@ -1676,6 +1687,14 @@ export default function remoteControllersUnitTest() {
       expect(connectedRemoteHome.hasSessionParam()).assertFalse();
       expect(remoteChat.name).assertEqual(AppRoute.RemoteChat);
       expect(remoteChat.routeParam().sessionId).assertEqual('remote-1');
+    });
+
+    it('routes an in-place remote session selection to an explicit chat destination', 0, () => {
+      const target = AppRouteContract.remoteSessionDestination('remote-session-1');
+
+      expect(target.name).assertEqual(AppRoute.RemoteChat);
+      expect(target.hasSessionParam()).assertTrue();
+      expect(target.routeParam().sessionId).assertEqual('remote-session-1');
     });
   });
 

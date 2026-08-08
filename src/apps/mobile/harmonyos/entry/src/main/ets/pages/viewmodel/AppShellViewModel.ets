@@ -4,7 +4,7 @@ import {
   AppRoute,
   AppRouteContract
 } from '../navigation/AppRouteContract';
-import { AppShellState } from './AppShellState';
+import { AppShellState } from '../state/AppShellState';
 
 /** Owns application navigation and global overlay state. */
 export class AppShellViewModel {

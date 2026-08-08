@@ -1,4 +1,4 @@
-import { FilePreviewTargetContext } from '../pages/state/FilePreviewTarget';
+import { FilePreviewTargetContext } from '../model/FilePreviewTarget';
 import { FileReferenceKind, FileTargetResolver } from './FileTargetResolver';
 import {
   MarkdownParser,

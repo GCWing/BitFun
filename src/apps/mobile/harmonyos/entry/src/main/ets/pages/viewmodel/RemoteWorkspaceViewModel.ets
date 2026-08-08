@@ -2,9 +2,9 @@ import { RecentWorkspaceEntry, RemoteSession, WorkspaceInfo } from '../../model/
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { RemoteLogger } from '../../services/RemoteLogger';
 import { RemoteWorkspaceCoordinator } from '../../services/RemoteWorkspaceCoordinator';
-import { RemotePageState } from './RemotePageState';
+import { RemotePageState } from '../state/RemotePageState';
 
-export class RemoteWorkspaceViewModelHooks {
+export interface RemoteWorkspaceViewModelHooks {
   readonly isRemoteAvailable: () => boolean;
   readonly isBusy: () => boolean;
   readonly onBusy: (isBusy: boolean) => void;
@@ -13,26 +13,6 @@ export class RemoteWorkspaceViewModelHooks {
   readonly onSessionsDiscovered: (sessions: RemoteSession[]) => void;
   readonly onRefreshSessions: () => Promise<void>;
   readonly onConnectionFailure: (error: Object) => void;
-
-  constructor(
-    isRemoteAvailable: () => boolean,
-    isBusy: () => boolean,
-    onBusy: (isBusy: boolean) => void,
-    onStatus: (statusText: string) => void,
-    onWorkspaceSelected: (workspace: WorkspaceInfo) => void,
-    onSessionsDiscovered: (sessions: RemoteSession[]) => void,
-    onRefreshSessions: () => Promise<void>,
-    onConnectionFailure: (error: Object) => void
-  ) {
-    this.isRemoteAvailable = isRemoteAvailable;
-    this.isBusy = isBusy;
-    this.onBusy = onBusy;
-    this.onStatus = onStatus;
-    this.onWorkspaceSelected = onWorkspaceSelected;
-    this.onSessionsDiscovered = onSessionsDiscovered;
-    this.onRefreshSessions = onRefreshSessions;
-    this.onConnectionFailure = onConnectionFailure;
-  }
 }
 
 /** Owns the workspace/assistant picker workflows and their presentation state. */

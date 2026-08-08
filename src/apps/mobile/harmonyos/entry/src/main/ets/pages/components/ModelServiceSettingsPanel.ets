@@ -4,24 +4,24 @@ import { RemoteModelCatalog, RemoteModelConfig } from '../../model/RemoteModels'
 import { GENERAL_CHAT_LOCAL_MODEL_ID } from '../../services/general-chat/GeneralChatConfigStore';
 import { ACCENT, CARD, GREEN, INK, LINE, MUTED, PRIMARY_ACTION_TEXT, RED, SOFT, SUBTLE } from './Theme';
 
-@Component
+@ComponentV2
 export struct ModelServiceSettingsPanel {
   private readonly contentScroller: Scroller = new Scroller();
   private focusScrollTimerId: number = 0;
   private blurResetTimerId: number = 0;
   private previousKeyboardAvoidMode: KeyboardAvoidMode = KeyboardAvoidMode.OFFSET;
-  @Prop apiUrl: string = '';
-  @Prop modelName: string = '';
-  @Prop hasApiKey: boolean = false;
-  @Prop modelCatalog: RemoteModelCatalog = {
+  @Param apiUrl: string = '';
+  @Param modelName: string = '';
+  @Param hasApiKey: boolean = false;
+  @Param modelCatalog: RemoteModelCatalog = {
     version: 0,
     models: [],
     default_models: {}
   };
-  @Prop selectedModelId: string = '';
-  onClose: () => void = () => {};
-  onSaved: (apiUrl: string, modelName: string, hasApiKey: boolean) => void = () => {};
-  onTest: (
+  @Param selectedModelId: string = '';
+  @Event onClose: () => void = () => {};
+  @Event onSaved: (apiUrl: string, modelName: string, hasApiKey: boolean) => void = () => {};
+  @Event onTest: (
     apiUrl: string,
     apiKey: string,
     modelName: string,
@@ -32,7 +32,7 @@ export struct ModelServiceSettingsPanel {
     _modelName: string,
     _clearApiKey: boolean
   ) => '';
-  onSave: (
+  @Event onSave: (
     apiUrl: string,
     apiKey: string,
     modelName: string,
@@ -43,16 +43,16 @@ export struct ModelServiceSettingsPanel {
     _modelName: string,
     _clearApiKey: boolean
   ) => '';
-  @State draftApiUrl: string = '';
-  @State draftApiKey: string = '';
-  @State draftModelName: string = '';
-  @State clearApiKey: boolean = false;
-  @State isSaving: boolean = false;
-  @State isTesting: boolean = false;
-  @State feedbackText: string = '';
-  @State feedbackIsError: boolean = false;
-  @State focusedFieldKind: string = '';
-  @State showLocalEditor: boolean = false;
+  @Local draftApiUrl: string = '';
+  @Local draftApiKey: string = '';
+  @Local draftModelName: string = '';
+  @Local clearApiKey: boolean = false;
+  @Local isSaving: boolean = false;
+  @Local isTesting: boolean = false;
+  @Local feedbackText: string = '';
+  @Local feedbackIsError: boolean = false;
+  @Local focusedFieldKind: string = '';
+  @Local showLocalEditor: boolean = false;
 
   aboutToAppear(): void {
     this.previousKeyboardAvoidMode = this.getUIContext().getKeyboardAvoidMode();

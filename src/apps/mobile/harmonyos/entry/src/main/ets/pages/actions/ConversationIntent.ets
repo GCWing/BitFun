@@ -1,5 +1,5 @@
-import { ConversationUiQuestionAnswer } from './ConversationUiModels';
-import { FilePreviewRequest } from '../state/FilePreviewTarget';
+import { ConversationUiQuestionAnswer } from '../components/ConversationUiModels';
+import { FilePreviewRequest } from '../../model/FilePreviewTarget';
 
 export enum ConversationIntentType {
   OpenSidebar = 'open_sidebar',

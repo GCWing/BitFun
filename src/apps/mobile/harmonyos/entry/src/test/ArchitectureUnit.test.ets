@@ -7,8 +7,9 @@ import { RemotePageState } from '../main/ets/pages/state/RemotePageState';
 import { GeneralChatPageState } from '../main/ets/pages/state/GeneralChatPageState';
 import { AppRoute } from '../main/ets/pages/navigation/AppRouteContract';
 import { ChatMessage } from '../main/ets/model/RemoteModels';
-import { AppShellViewModel } from '../main/ets/pages/state/AppShellViewModel';
+import { AppShellViewModel } from '../main/ets/pages/viewmodel/AppShellViewModel';
 import { AppNavigationBackAction } from '../main/ets/pages/navigation/AppRouteContract';
+import { WideLayoutGeometry } from '../main/ets/pages/layout/WideLayoutGeometry';
 
 export default function architectureUnitTest() {
   describe('MobileArchitecture', () => {
@@ -90,6 +91,16 @@ export default function architectureUnitTest() {
       shell.replaceRouteWithoutAnimation(AppRoute.RemoteHome);
       expect(shell.currentRoute()).assertEqual(AppRoute.RemoteHome);
       expect(shell.navigationStack.getAllPathName().length).assertEqual(1);
+    });
+
+    it('keeps wide layout geometry pure and deterministic', 0, () => {
+      expect(WideLayoutGeometry.detailOffset(false, 24, 8)).assertEqual(24);
+      expect(WideLayoutGeometry.detailOffset(true, 24, 8)).assertEqual(8);
+      expect(WideLayoutGeometry.detailWidth(true, 900, 1200)).assertEqual(1200);
+      expect(WideLayoutGeometry.collapsedVisualBias(true, 0, 1100, 920, 72)).assertEqual(72);
+      expect(WideLayoutGeometry.collapsedVisualBias(false, 0, 1100, 920, 72)).assertEqual(0);
+      expect(WideLayoutGeometry.areaLength('1080')).assertEqual(1080);
+      expect(WideLayoutGeometry.areaLength('invalid')).assertEqual(0);
     });
   });
 }

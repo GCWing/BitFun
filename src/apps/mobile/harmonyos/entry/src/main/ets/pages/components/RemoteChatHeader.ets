@@ -1,6 +1,7 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ConversationUiSession } from './ConversationUiModels';
 import { ACCENT, CARD, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION_TEXT, SOFT } from './Theme';
+import { CompactMenuButton } from './CompactMenuButton';
 import { SidebarToggleButton } from './SidebarToggleButton';
 
 @ComponentV2
@@ -14,10 +15,12 @@ export struct RemoteChatHeader {
   @Param workspaceBranch: string = '';
   @Param desktopName: string = '';
   @Param showBackButton: boolean = true;
+  @Param showSidebarButton: boolean = false;
   @Param showSidebarRestoreButton: boolean = false;
   @Param showActionsMenu: boolean = false;
   @BuilderParam actionsMenu: () => void = this.EmptyBuilder;
   @Event onBack: () => void = () => {};
+  @Event onOpenSidebar: () => void = () => {};
   @Event onRestoreSidebar: () => void = () => {};
   @Event onOpenActions: () => void = () => {};
   @Event onActionsMenuStateChange: (visible: boolean) => void = (_visible: boolean) => {};
@@ -99,6 +102,13 @@ export struct RemoteChatHeader {
       .accessibilityText(RemoteI18n.t('common.back'))
       .onClick(() => {
         this.onBack();
+      })
+    } else if (this.showSidebarButton) {
+      CompactMenuButton({
+        controlSize: 44,
+        onOpen: () => {
+          this.onOpenSidebar();
+        }
       })
     } else {
       Blank().width(44).height(44)
