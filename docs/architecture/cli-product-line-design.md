@@ -185,7 +185,7 @@ CLI 通过 `DeliveryProfile::Cli` 消费经过校验的产品 Runtime parts。�
 
 CLI 只消费 typed summary 与 typed action：
 
-> **目标状态，尚未交付：** 当前 `/extensions` 只支持来源状态、刷新、Safe Mode 和来源开关；没有应用级连接动作、`/extensions review` 或任务相关 `action-required`。以下入口必须完成执行计划 P1-P6 及端到端验证后，才能更新为当前能力。
+> **实现状态：部分交付。** 交互式 TUI 已通过 Host 返回的 V2 快照提供应用级状态、连接、断开、暂不使用和分页批量确认；Embedded 连接旧 Host 时回退既有 V1 只读状态，未接线的 Shared Runtime 明确不支持且绝不回退到控制进程本地执行。任务相关 `action-required` 与非交互 CLI 结果仍未交付。
 
 - `/extensions` 是应用级摘要、首次连接和状态恢复入口；`/extensions review` 提供与 GUI 等价的单页批量确认。
 - `/tools`、`/agent`、`/mcp` 和 `/hooks` 保留能力专项或高级管理职责，不复制应用级连接流程。

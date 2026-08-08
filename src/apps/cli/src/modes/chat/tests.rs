@@ -11,7 +11,8 @@ mod tests {
         command_route, consume_selected_native_command_once, context_compression_tool_event,
         extension_command_help_request, external_agent_attention, external_agent_diagnostic_lines,
         external_agent_pending_notice_key, external_agent_result_is_stale,
-        external_agent_review_text, external_command_projections, external_control_review_text,
+        external_agent_review_text, external_command_projections,
+        external_control_read_only_review_text, external_control_review_text,
         external_hook_help_text, external_integration_policy_lines,
         external_operation_error_status, external_tool_mutation_result_label,
         external_tool_pending_notice_key, external_tool_result_is_stale, external_tool_review_text,
@@ -233,6 +234,13 @@ mod tests {
         assert!(text.contains("source disable <source-key>"));
         assert!(text.contains("Tools: 2 items, 1 review, 0 conflicts, inactive"));
         assert!(text.contains("/extensions safe-mode off"));
+
+        let read_only = external_control_read_only_review_text(&control);
+        assert!(read_only.contains("Read-only compatibility status"));
+        assert!(read_only.contains("/extensions refresh"));
+        assert!(!read_only.contains("/extensions safe-mode"));
+        assert!(!read_only.contains("source enable <source-key>"));
+        assert!(!read_only.contains("source disable <source-key>"));
     }
 
     #[test]

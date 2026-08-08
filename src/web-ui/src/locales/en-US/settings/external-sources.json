@@ -8,6 +8,8 @@
     "title": "Discovered applications",
     "description": "BitFun continuously reads connected application settings and checks changes before they become available.",
     "status": {
+      "configuration_available": "Configuration available",
+      "temporarily_unavailable": "Temporarily unavailable",
       "needs_attention": "Needs attention",
       "connected": "Connected",
       "connected_custom": "Connected · Custom",
@@ -16,6 +18,16 @@
       "no_configuration": "No configuration found"
     },
     "summary": {
+      "enabledCount": "{{count}} item enabled",
+      "enabledCount_other": "{{count}} items enabled",
+      "blockedCount": "{{count}} item blocked",
+      "blockedCount_other": "{{count}} items blocked",
+      "conflictCount": "{{count}} conflict",
+      "conflictCount_other": "{{count}} conflicts",
+      "health": {
+        "degraded": "Partially available",
+        "unavailable": "Unavailable"
+      },
       "attention": "{{count}} item needs review",
       "attention_other": "{{count}} items need review",
       "checking": "Looking for configuration",
@@ -39,6 +51,35 @@
     "expand": "Show or hide {{name}} capabilities",
     "toggleLabel": "Enable or disable {{name}}",
     "review": {
+      "back": "Back to applications",
+      "selectionCount": "{{selected}} of {{maximum}} selected",
+      "selectionLimit": "Selection limit reached",
+      "loading": "Loading review items…",
+      "loadMore": "Load more",
+      "apply": "Apply selected",
+      "risk": {
+        "low": "Low risk",
+        "moderate": "Moderate risk",
+        "high": "High risk"
+      },
+      "safety": {
+        "blocked": "Blocked by safety policy"
+      },
+      "outcome": {
+        "applied": "Changes applied",
+        "partial": "Some changes could not be applied. Review the item results below.",
+        "rejected": "The changes were rejected",
+        "blocked": "The changes were blocked by safety policy",
+        "stale": "The configuration changed. The latest state has been loaded.",
+        "failed": "The changes could not be applied"
+      },
+      "itemOutcome": {
+        "applied": "Applied",
+        "rejected": "Not applied",
+        "blocked": "Blocked",
+        "stale": "Changed since review",
+        "failed": "Could not apply"
+      },
       "title_one": "{{count}} item needs review",
       "title_other": "{{count}} items need review",
       "description": "BitFun handles the safe defaults automatically. Open to confirm the items that need a decision."
@@ -196,7 +237,9 @@
     "resolve_conflict": "Resolve conflict",
     "install_runtime": "Install or repair the required runtime, then refresh.",
     "reconnect_host": "Reconnect or upgrade the execution Host, then retry.",
-    "exit_safe_mode": "Exit Safe Mode"
+    "exit_safe_mode": "Exit Safe Mode",
+    "upgrade_host": "Upgrade Host",
+    "view_reason": "View reason"
   },
   "safeMode": {
     "title": "External Safe Mode",

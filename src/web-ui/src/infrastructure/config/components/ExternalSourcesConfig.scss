@@ -141,6 +141,47 @@
     border-radius: var(--bf-appearance-token-size-radius-md);
   }
 
+  &__review {
+    display: grid;
+    gap: var(--bf-appearance-token-size-gap-3);
+  }
+
+  &__review-toolbar,
+  &__review-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--bf-appearance-token-size-gap-3);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: 12px;
+
+    button {
+      min-height: 30px;
+      padding: 5px 10px;
+      border: 1px solid var(--bf-appearance-token-border-subtle);
+      border-radius: var(--bf-appearance-token-size-radius-sm);
+      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-appearance-token-color-bg-secondary);
+      font: inherit;
+      cursor: pointer;
+
+      &:disabled { cursor: not-allowed; opacity: 0.55; }
+      &:focus-visible {
+        outline: 2px solid var(--bf-appearance-token-color-accent-500);
+        outline-offset: 2px;
+      }
+    }
+  }
+
+  &__review-actions { justify-content: flex-end; }
+
+  &__review .bitfun-external-sources-config__app-row {
+    cursor: pointer;
+
+    > input { flex-shrink: 0; }
+    > .bitfun-external-sources-config__app-copy { flex: 1; }
+  }
+
   &__attention-summary {
     display: flex;
     align-items: center;

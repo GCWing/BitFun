@@ -1025,6 +1025,55 @@ impl AppManagementService {
         external_source_snapshot_response(workspace, request.force_refresh).await
     }
 
+    pub async fn external_application_snapshot_v2(
+        &self,
+        request: ExternalApplicationSnapshotRequestV2,
+    ) -> AppManagementResult<ExternalApplicationSnapshotResponseV2> {
+        bitfun_core::external_sources::get_external_application_snapshot_v2(
+            request.workspace_path.as_deref().map(Path::new),
+            request.force_refresh,
+            bitfun_product_domains::external_source_control::ExternalApplicationHostCapabilitiesV2::read_write(),
+        )
+        .await
+        .map(ExternalApplicationSnapshotResponseV2)
+        .map_err(external_source_string_error)
+    }
+
+    pub async fn external_application_review_page_v2(
+        &self,
+        request: ExternalApplicationReviewPageRequest,
+    ) -> AppManagementResult<ExternalApplicationReviewPageResponseV2> {
+        request
+            .request
+            .validate()
+            .map_err(AppManagementError::invalid_request)?;
+        bitfun_core::external_sources::get_external_application_review_page_v2(
+            request.workspace_path.as_deref().map(Path::new),
+            request.request,
+        )
+        .await
+        .map(ExternalApplicationReviewPageResponseV2)
+        .map_err(external_source_string_error)
+    }
+
+    pub async fn apply_external_application_action_v2(
+        &self,
+        request: ExternalApplicationActionRequest,
+    ) -> AppManagementResult<ExternalApplicationActionResponseV2> {
+        request
+            .request
+            .validate()
+            .map_err(AppManagementError::invalid_request)?;
+        let operation_id = request.request.operation_id.clone();
+        bitfun_core::external_sources::apply_external_application_action_v2(
+            request.workspace_path.as_deref().map(Path::new),
+            request.request,
+        )
+        .await
+        .map(ExternalApplicationActionResponseV2)
+        .map_err(|error| external_source_string_error_with_id(error, &operation_id))
+    }
+
     pub async fn external_source_control(
         &self,
         request: ExternalSourceControlRequest,

@@ -49,6 +49,16 @@ impl std::fmt::Display for TuiBackendError {
 
 impl std::error::Error for TuiBackendError {}
 
+fn external_application_v2_unsupported() -> TuiBackendError {
+    TuiBackendError {
+        message: "External application V2 is unavailable on this TUI backend".to_string(),
+        outcome_unknown: false,
+        kind: TuiBackendErrorKind::Unsupported {
+            capability: "tui.externalApplicationsV2".to_string(),
+        },
+    }
+}
+
 #[async_trait]
 #[allow(dead_code)]
 pub(crate) trait TuiBackend: Send + Sync {
@@ -287,6 +297,24 @@ pub(crate) trait TuiBackend: Send + Sync {
         &self,
         request: ExternalSourceSnapshotRequest,
     ) -> Result<ExternalSourceSnapshotResponse, TuiBackendError>;
+    async fn external_application_snapshot_v2(
+        &self,
+        _request: ExternalApplicationSnapshotRequestV2,
+    ) -> Result<ExternalApplicationSnapshotResponseV2, TuiBackendError> {
+        Err(external_application_v2_unsupported())
+    }
+    async fn external_application_review_page_v2(
+        &self,
+        _request: ExternalApplicationReviewPageRequest,
+    ) -> Result<ExternalApplicationReviewPageResponseV2, TuiBackendError> {
+        Err(external_application_v2_unsupported())
+    }
+    async fn apply_external_application_action_v2(
+        &self,
+        _request: ExternalApplicationActionRequest,
+    ) -> Result<ExternalApplicationActionResponseV2, TuiBackendError> {
+        Err(external_application_v2_unsupported())
+    }
     async fn external_source_control(
         &self,
         request: ExternalSourceControlRequest,
@@ -753,6 +781,34 @@ impl TuiBackend for AppServerTuiBackend {
         map(self.client.external_source_snapshot(request).await)
     }
 
+    async fn external_application_snapshot_v2(
+        &self,
+        request: ExternalApplicationSnapshotRequestV2,
+    ) -> Result<ExternalApplicationSnapshotResponseV2, TuiBackendError> {
+        map(self.client.external_application_snapshot_v2(request).await)
+    }
+
+    async fn external_application_review_page_v2(
+        &self,
+        request: ExternalApplicationReviewPageRequest,
+    ) -> Result<ExternalApplicationReviewPageResponseV2, TuiBackendError> {
+        map(self
+            .client
+            .external_application_review_page_v2(request)
+            .await)
+    }
+
+    async fn apply_external_application_action_v2(
+        &self,
+        request: ExternalApplicationActionRequest,
+    ) -> Result<ExternalApplicationActionResponseV2, TuiBackendError> {
+        map_client(
+            self.client
+                .apply_external_application_action_v2(request)
+                .await,
+        )
+    }
+
     async fn external_source_control(
         &self,
         request: ExternalSourceControlRequest,
@@ -833,6 +889,15 @@ fn map_client<T>(result: Result<T, ClientError>) -> Result<T, TuiBackendError> {
 
 fn map_protocol_error(error: ProtocolError) -> TuiBackendError {
     let message = error.to_string();
+    if i32::from(error.code) == -32601 {
+        return TuiBackendError {
+            message,
+            outcome_unknown: false,
+            kind: TuiBackendErrorKind::Unsupported {
+                capability: "appServer.method".to_string(),
+            },
+        };
+    }
     if let Some(value) = error.data {
         if let Ok(external) = serde_json::from_value::<ExternalSourceErrorData>(value.clone()) {
             let kind = match external.app.capability {
@@ -893,7 +958,10 @@ fn backend_error_from_data(message: String, data: AppServerErrorData) -> TuiBack
 
 #[cfg(test)]
 mod tests {
-    use super::{map_protocol_error, TuiBackendErrorKind, TuiEffect, TuiEffectRoute};
+    use super::{
+        external_application_v2_unsupported, map_protocol_error, TuiBackendErrorKind, TuiEffect,
+        TuiEffectRoute,
+    };
     use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
     use bitfun_app_server_protocol::external_source::ExternalSourceErrorData;
     use bitfun_product_domains::external_sources::{
@@ -912,6 +980,29 @@ mod tests {
     fn effect_routes_are_explicit() {
         assert_eq!(LocalEffect.route(), TuiEffectRoute::Local);
         assert_ne!(TuiEffectRoute::AppServer, TuiEffectRoute::HostCapability);
+    }
+
+    #[test]
+    fn unavailable_v2_backend_is_explicitly_read_only() {
+        let error = external_application_v2_unsupported();
+        assert_eq!(
+            error.kind,
+            TuiBackendErrorKind::Unsupported {
+                capability: "tui.externalApplicationsV2".to_string()
+            }
+        );
+        assert!(!error.outcome_unknown);
+    }
+
+    #[test]
+    fn method_not_found_is_treated_as_an_unsupported_host_method() {
+        let mapped =
+            map_protocol_error(bitfun_app_server_client::ProtocolError::method_not_found());
+        assert!(matches!(
+            mapped.kind,
+            TuiBackendErrorKind::Unsupported { .. }
+        ));
+        assert!(!mapped.outcome_unknown);
     }
 
     #[test]

@@ -6,9 +6,27 @@ use bitfun_product_domains::external_integration_policy::{
     ExternalIntegrationPolicyStatus,
 };
 use bitfun_product_domains::external_source_control::{
-    ExternalSourceControlActionV1, ExternalSourceControlRequestV1, ExternalSourceControlSnapshotV1,
-    ExternalSourceDesiredState, ExternalSourceDiscoveryState, ExternalSourceOperationStage,
-    ExternalSourceRecoveryActionV1, ExternalSourceReviewState, EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
+    derive_external_application_status_v2, ExternalApplicationConnectionStateV2,
+    ExternalApplicationControlActionV2, ExternalApplicationControlRequestV2,
+    ExternalApplicationControlResultV2, ExternalApplicationDefaultConnectionPolicyV2,
+    ExternalApplicationDesiredConnectionV2, ExternalApplicationDiscoveryStateV2,
+    ExternalApplicationEffectiveStatusV2, ExternalApplicationHealthV2,
+    ExternalApplicationHostCapabilitiesV2, ExternalApplicationOperationOutcomeV2,
+    ExternalApplicationOwnerGenerationV2, ExternalApplicationPrimaryActionV2,
+    ExternalApplicationRecoveryActionV2, ExternalApplicationReviewCategoryCountV2,
+    ExternalApplicationReviewItemKindV2, ExternalApplicationReviewItemRefV2,
+    ExternalApplicationReviewItemResultV2, ExternalApplicationReviewItemV2,
+    ExternalApplicationReviewPageRequestV2, ExternalApplicationReviewPageV2,
+    ExternalApplicationReviewRecommendationSummaryV2, ExternalApplicationReviewSelectionBaselineV2,
+    ExternalApplicationReviewSelectionOverrideV2, ExternalApplicationReviewSummaryV2,
+    ExternalApplicationRiskLevelV2, ExternalApplicationRiskSummaryV2,
+    ExternalApplicationSafetyCeilingV2, ExternalApplicationSnapshotV2,
+    ExternalApplicationSummaryV2, ExternalApplicationTargetScopeV2,
+    ExternalApplicationUserDecisionV2, ExternalSourceControlActionV1,
+    ExternalSourceControlRequestV1, ExternalSourceControlSnapshotV1, ExternalSourceDesiredState,
+    ExternalSourceDiscoveryState, ExternalSourceOperationStage, ExternalSourceRecoveryActionV1,
+    ExternalSourceReviewState, EXTERNAL_APPLICATION_REVIEW_PAGE_MAX_ITEMS,
+    EXTERNAL_APPLICATION_SCHEMA_V2, EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
 };
 use bitfun_product_domains::external_sources::{
     external_mcp_approval_key, external_mcp_conflict_key, external_tool_approval_key,
@@ -2070,5 +2088,383 @@ fn decoded_operation_errors_bound_untrusted_extension_fields() {
             ExternalSourceRecoveryActionV1::Refresh,
             ExternalSourceRecoveryActionV1::Retry,
         ]
+    );
+}
+
+fn application_risk_summary() -> ExternalApplicationRiskSummaryV2 {
+    ExternalApplicationRiskSummaryV2 {
+        highest_level: Some(ExternalApplicationRiskLevelV2::High),
+        reason_codes: vec!["process_execution".to_string()],
+    }
+}
+
+fn application_review_summary() -> ExternalApplicationReviewSummaryV2 {
+    ExternalApplicationReviewSummaryV2 {
+        review_id: "review-opencode-7".to_string(),
+        total_count: 3,
+        category_counts: vec![ExternalApplicationReviewCategoryCountV2 {
+            kind: ExternalApplicationReviewItemKindV2::Tool,
+            count: 3,
+        }],
+        max_selection_count: 3,
+        risk_summary: application_risk_summary(),
+        recommendation_summary: ExternalApplicationReviewRecommendationSummaryV2 {
+            recommended_count: 2,
+            optional_count: 1,
+            blocked_count: 0,
+        },
+        safety_ceiling: ExternalApplicationSafetyCeilingV2::ReviewRequired,
+    }
+}
+
+fn application_snapshot_v2() -> ExternalApplicationSnapshotV2 {
+    ExternalApplicationSnapshotV2 {
+        schema_version: EXTERNAL_APPLICATION_SCHEMA_V2,
+        execution_domain_id: ExecutionDomainId::new("host-a").unwrap(),
+        workspace_scope_id: Some("workspace:0123456789abcdef".to_string()),
+        effective_connection_scope: ExternalApplicationTargetScopeV2::WorkspaceOverride,
+        refresh_generation: 7,
+        preference_revision: 11,
+        safe_mode: false,
+        host_capabilities: ExternalApplicationHostCapabilitiesV2::read_write(),
+        applications: vec![ExternalApplicationSummaryV2 {
+            application_id: "opencode".to_string(),
+            ecosystem_id: "opencode".to_string(),
+            display_name: "OpenCode".to_string(),
+            discovery: ExternalApplicationDiscoveryStateV2::Discovered,
+            connection: ExternalApplicationConnectionStateV2::Connected,
+            desired_connection: ExternalApplicationDesiredConnectionV2::Connected,
+            health: ExternalApplicationHealthV2::Healthy,
+            effective_status: ExternalApplicationEffectiveStatusV2::NeedsAttention,
+            primary_action: ExternalApplicationPrimaryActionV2::Review,
+            default_connection_policy: ExternalApplicationDefaultConnectionPolicyV2::Connect,
+            default_connection_reason: "supported_by_product".to_string(),
+            enabled_count: 2,
+            pending_review_count: 3,
+            blocked_count: 0,
+            conflict_count: 0,
+            risk_summary: application_risk_summary(),
+            notice_key: Some("opencode:review:7".to_string()),
+            user_decision: ExternalApplicationUserDecisionV2::Connected,
+            recovery_actions: vec![ExternalApplicationRecoveryActionV2::Review],
+        }],
+        review_summary: Some(application_review_summary()),
+    }
+}
+
+#[test]
+fn external_application_snapshot_v2_keeps_review_items_out_of_the_home_snapshot() {
+    let snapshot = application_snapshot_v2();
+    snapshot.validate().unwrap();
+
+    let encoded = serde_json::to_value(&snapshot).unwrap();
+    assert_eq!(encoded["schemaVersion"], EXTERNAL_APPLICATION_SCHEMA_V2);
+    assert_eq!(encoded["workspaceScopeId"], "workspace:0123456789abcdef");
+    assert_eq!(encoded["effectiveConnectionScope"], "workspace_override");
+    assert_eq!(
+        encoded["applications"][0]["effectiveStatus"],
+        "needs_attention"
+    );
+    assert_eq!(encoded["applications"][0]["primaryAction"], "review");
+    assert_eq!(encoded["reviewSummary"]["totalCount"], 3);
+    assert!(encoded["reviewSummary"].get("items").is_none());
+    assert!(encoded["applications"][0].get("reviewSummary").is_none());
+    assert!(serde_json::from_value::<ExternalApplicationSnapshotV2>(serde_json::json!({
+        "schemaVersion": 2,
+        "executionDomainId": "host-a",
+        "workspaceScopeId": "workspace:0123456789abcdef",
+        "effectiveConnectionScope": "workspace_override",
+        "refreshGeneration": 7,
+        "preferenceRevision": 11,
+        "safeMode": false,
+        "hostCapabilities": serde_json::to_value(ExternalApplicationHostCapabilitiesV2::read_write()).unwrap(),
+        "applications": [],
+        "reviewSummary": null,
+        "unexpected": true
+    }))
+    .is_err());
+}
+
+#[test]
+fn external_application_v2_unknown_enums_fail_closed() {
+    let mut encoded = serde_json::to_value(application_snapshot_v2()).unwrap();
+    encoded["applications"][0]["effectiveStatus"] = serde_json::json!("future_status");
+
+    assert!(serde_json::from_value::<ExternalApplicationSnapshotV2>(encoded).is_err());
+}
+
+#[test]
+fn external_application_status_v2_uses_one_shared_priority_and_primary_action() {
+    use ExternalApplicationConnectionStateV2::{Connected, Disconnected};
+    use ExternalApplicationDiscoveryStateV2::{Discovered, NotDiscovered};
+    use ExternalApplicationEffectiveStatusV2::{
+        ConfigurationAvailable, Connected as ConnectedStatus, NeedsAttention, NoConfiguration,
+        TemporarilyUnavailable,
+    };
+    use ExternalApplicationPrimaryActionV2::{Connect, None, Retry, Review, View, ViewReason};
+
+    let cases = [
+        (
+            true,
+            true,
+            true,
+            Connected,
+            Discovered,
+            (NeedsAttention, Review),
+        ),
+        (
+            false,
+            true,
+            true,
+            Connected,
+            Discovered,
+            (TemporarilyUnavailable, Retry),
+        ),
+        (
+            false,
+            true,
+            false,
+            Connected,
+            Discovered,
+            (TemporarilyUnavailable, ViewReason),
+        ),
+        (
+            false,
+            false,
+            false,
+            Connected,
+            Discovered,
+            (ConnectedStatus, View),
+        ),
+        (
+            false,
+            false,
+            false,
+            Disconnected,
+            Discovered,
+            (ConfigurationAvailable, Connect),
+        ),
+        (
+            false,
+            false,
+            false,
+            Disconnected,
+            NotDiscovered,
+            (NoConfiguration, None),
+        ),
+    ];
+
+    for (needs_attention, temporarily_unavailable, can_retry, connection, discovery, expected) in
+        cases
+    {
+        assert_eq!(
+            derive_external_application_status_v2(
+                needs_attention,
+                temporarily_unavailable,
+                can_retry,
+                connection,
+                discovery,
+            ),
+            expected
+        );
+    }
+}
+
+#[test]
+fn external_application_v2_host_capabilities_stay_at_current_host_boundaries() {
+    assert_eq!(
+        serde_json::to_value(ExternalApplicationHostCapabilitiesV2::read_write()).unwrap(),
+        serde_json::json!({
+            "canReadSnapshot": true,
+            "canReadReview": true,
+            "canMutate": true,
+            "canManageUserDefault": true,
+            "canManageWorkspaceOverride": true,
+            "canRefresh": true,
+            "canSetSafeMode": true
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(ExternalApplicationHostCapabilitiesV2::read_only()).unwrap(),
+        serde_json::json!({
+            "canReadSnapshot": true,
+            "canReadReview": true,
+            "canMutate": false,
+            "canManageUserDefault": false,
+            "canManageWorkspaceOverride": false,
+            "canRefresh": true,
+            "canSetSafeMode": false
+        })
+    );
+}
+
+#[test]
+fn external_application_review_pages_are_bounded_and_carry_only_stable_refs() {
+    let item = ExternalApplicationReviewItemV2 {
+        item_ref: ExternalApplicationReviewItemRefV2 {
+            kind: ExternalApplicationReviewItemKindV2::Tool,
+            stable_id: "opencode.tool:project:review".to_string(),
+        },
+        display_name: "Review tool".to_string(),
+        display_summary: "Runs the external review tool".to_string(),
+        risk_level: ExternalApplicationRiskLevelV2::High,
+        risk_reason_codes: vec!["process_execution".to_string()],
+        recommended: false,
+        safety_ceiling: ExternalApplicationSafetyCeilingV2::ReviewRequired,
+    };
+    let page = ExternalApplicationReviewPageV2 {
+        schema_version: EXTERNAL_APPLICATION_SCHEMA_V2,
+        execution_domain_id: ExecutionDomainId::new("host-a").unwrap(),
+        workspace_scope_id: Some("workspace:0123456789abcdef".to_string()),
+        target_scope: ExternalApplicationTargetScopeV2::WorkspaceOverride,
+        review_id: "review-opencode-7".to_string(),
+        preference_revision: 11,
+        expected_generations: vec![ExternalApplicationOwnerGenerationV2 {
+            owner: ExternalApplicationReviewItemKindV2::Tool,
+            generation: 7,
+        }],
+        cursor: None,
+        next_cursor: Some("page:2".to_string()),
+        total_count: 129,
+        items: vec![item.clone(); EXTERNAL_APPLICATION_REVIEW_PAGE_MAX_ITEMS],
+    };
+    page.validate().unwrap();
+
+    let mut oversized = page.clone();
+    oversized.items.push(item);
+    assert_eq!(
+        oversized.validate(),
+        Err("external application review page exceeds 128 items")
+    );
+
+    let encoded = serde_json::to_value(page).unwrap();
+    assert!(encoded["items"][0].get("command").is_none());
+    assert!(encoded["items"][0].get("prompt").is_none());
+    assert!(encoded["items"][0].get("payload").is_none());
+    assert_eq!(
+        encoded["items"][0]["itemRef"]["stableId"],
+        "opencode.tool:project:review"
+    );
+}
+
+#[test]
+fn external_application_review_page_requests_enforce_scope_and_page_size() {
+    let request = ExternalApplicationReviewPageRequestV2 {
+        schema_version: EXTERNAL_APPLICATION_SCHEMA_V2,
+        execution_domain_id: ExecutionDomainId::new("host-a").unwrap(),
+        workspace_scope_id: Some("workspace:0123456789abcdef".to_string()),
+        target_scope: ExternalApplicationTargetScopeV2::WorkspaceOverride,
+        review_id: "review-opencode-7".to_string(),
+        preference_revision: 11,
+        expected_generations: vec![ExternalApplicationOwnerGenerationV2 {
+            owner: ExternalApplicationReviewItemKindV2::Tool,
+            generation: 7,
+        }],
+        cursor: None,
+        page_size: EXTERNAL_APPLICATION_REVIEW_PAGE_MAX_ITEMS,
+    };
+    request.validate().unwrap();
+
+    let mut oversized = request.clone();
+    oversized.page_size += 1;
+    assert_eq!(
+        oversized.validate(),
+        Err("external application review page size must be between 1 and 128")
+    );
+
+    let mut leaked_workspace = request;
+    leaked_workspace.target_scope = ExternalApplicationTargetScopeV2::UserDefault;
+    assert_eq!(
+        leaked_workspace.validate(),
+        Err("user-default scope must not include a workspace scope id")
+    );
+}
+
+#[test]
+fn external_application_control_v2_uses_a_typed_scope_and_closed_review_action() {
+    let request = ExternalApplicationControlRequestV2 {
+        schema_version: EXTERNAL_APPLICATION_SCHEMA_V2,
+        execution_domain_id: ExecutionDomainId::new("host-a").unwrap(),
+        workspace_scope_id: Some("workspace:0123456789abcdef".to_string()),
+        target_scope: ExternalApplicationTargetScopeV2::WorkspaceOverride,
+        operation_id: "review-operation-1".to_string(),
+        expected_preference_revision: 11,
+        action: ExternalApplicationControlActionV2::SubmitApplicationReview {
+            review_id: "review-opencode-7".to_string(),
+            expected_generations: vec![ExternalApplicationOwnerGenerationV2 {
+                owner: ExternalApplicationReviewItemKindV2::Tool,
+                generation: 7,
+            }],
+            selection_baseline: ExternalApplicationReviewSelectionBaselineV2::Recommended,
+            selection_overrides: vec![ExternalApplicationReviewSelectionOverrideV2 {
+                item_ref: ExternalApplicationReviewItemRefV2 {
+                    kind: ExternalApplicationReviewItemKindV2::Tool,
+                    stable_id: "opencode.tool:project:review".to_string(),
+                },
+                selected: true,
+            }],
+        },
+    };
+    request.validate().unwrap();
+
+    let encoded = serde_json::to_value(&request).unwrap();
+    assert_eq!(encoded["action"]["type"], "submit_application_review");
+    assert_eq!(encoded["action"]["selectionBaseline"], "recommended");
+    assert!(encoded["action"].get("payload").is_none());
+    assert_eq!(
+        serde_json::from_value::<ExternalApplicationControlRequestV2>(encoded).unwrap(),
+        request
+    );
+}
+
+#[test]
+fn external_application_control_results_keep_item_failures_typed() {
+    let result = ExternalApplicationControlResultV2 {
+        schema_version: EXTERNAL_APPLICATION_SCHEMA_V2,
+        operation_id: "review-operation-1".to_string(),
+        preference_revision: 12,
+        outcome: ExternalApplicationOperationOutcomeV2::Applied,
+        item_results: vec![ExternalApplicationReviewItemResultV2 {
+            item_ref: ExternalApplicationReviewItemRefV2 {
+                kind: ExternalApplicationReviewItemKindV2::Tool,
+                stable_id: "opencode.tool:project:review".to_string(),
+            },
+            outcome: ExternalApplicationOperationOutcomeV2::Blocked,
+            reason_code: Some("safe_mode".to_string()),
+            recovery_actions: vec![ExternalApplicationRecoveryActionV2::ExitSafeMode],
+        }],
+    };
+    result.validate().unwrap();
+
+    let encoded = serde_json::to_value(&result).unwrap();
+    assert_eq!(encoded["outcome"], "applied");
+    assert_eq!(encoded["itemResults"][0]["outcome"], "blocked");
+    assert_eq!(
+        encoded["itemResults"][0]["recoveryActions"][0]["type"],
+        "exit_safe_mode"
+    );
+
+    let mut unknown = encoded;
+    unknown["itemResults"][0]["outcome"] = serde_json::json!("future_success");
+    assert!(serde_json::from_value::<ExternalApplicationControlResultV2>(unknown).is_err());
+}
+
+#[test]
+fn v1_control_wire_golden_remains_unchanged_beside_v2() {
+    let request = ExternalSourceControlRequestV1 {
+        schema_version: EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
+        operation_id: "legacy-operation".to_string(),
+        expected_preference_revision: Some(9),
+        action: ExternalSourceControlActionV1::SetSafeMode { enabled: true },
+    };
+
+    assert_eq!(
+        serde_json::to_value(request).unwrap(),
+        serde_json::json!({
+            "schemaVersion": 1,
+            "operationId": "legacy-operation",
+            "expectedPreferenceRevision": 9,
+            "action": { "type": "set_safe_mode", "enabled": true }
+        })
     );
 }

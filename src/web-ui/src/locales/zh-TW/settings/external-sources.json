@@ -8,6 +8,8 @@
     "title": "已發現的應用",
     "description": "連線後 BitFun 會持續讀取來源設定，並在內容可用前檢查變更。",
     "status": {
+      "configuration_available": "有可用設定",
+      "temporarily_unavailable": "暫時無法使用",
       "needs_attention": "需要處理",
       "connected": "已連線",
       "connected_custom": "已連線 · 自訂",
@@ -16,6 +18,16 @@
       "no_configuration": "未發現設定"
     },
     "summary": {
+      "enabledCount": "已啟用 {{count}} 項",
+      "blockedCount": "{{count}} 項受阻",
+      "blockedCount_other": "{{count}} 項受阻",
+      "conflictCount": "{{count}} 個衝突",
+      "conflictCount_other": "{{count}} 個衝突",
+      "health": {
+        "degraded": "部分可用",
+        "unavailable": "無法使用"
+      },
+      "enabledCount_other": "已啟用 {{count}} 項",
       "attention": "{{count}} 項等待確認",
       "attention_other": "{{count}} 項等待確認",
       "checking": "正在尋找設定",
@@ -39,6 +51,35 @@
     "expand": "顯示或隱藏 {{name}} 的能力",
     "toggleLabel": "啟用或停用 {{name}}",
     "review": {
+      "back": "返回應用列表",
+      "selectionCount": "已選擇 {{selected}} / {{maximum}} 項",
+      "selectionLimit": "已達到選擇上限",
+      "loading": "正在載入審核項目…",
+      "loadMore": "載入更多",
+      "apply": "套用所選項目",
+      "risk": {
+        "low": "低風險",
+        "moderate": "中等風險",
+        "high": "高風險"
+      },
+      "safety": {
+        "blocked": "已被安全策略阻止"
+      },
+      "outcome": {
+        "applied": "變更已套用",
+        "partial": "部分變更未能套用，請查看下方結果。",
+        "rejected": "變更遭到拒絕",
+        "blocked": "變更遭安全策略阻止",
+        "stale": "設定已變更，已載入最新狀態。",
+        "failed": "變更未能套用"
+      },
+      "itemOutcome": {
+        "applied": "已套用",
+        "rejected": "未套用",
+        "blocked": "已阻止",
+        "stale": "審核後已變更",
+        "failed": "未能套用"
+      },
       "title_one": "{{count}} 項需要確認",
       "title_other": "{{count}} 項需要確認",
       "description": "BitFun 會自動處理安全預設項。開啟後確認需要你決定的內容。"
@@ -196,7 +237,9 @@
     "resolve_conflict": "解決衝突",
     "install_runtime": "安裝或修復所需執行階段，然後重新整理。",
     "reconnect_host": "重新連線或升級執行 Host，然後重試。",
-    "exit_safe_mode": "退出安全模式"
+    "exit_safe_mode": "退出安全模式",
+    "upgrade_host": "升級 Host",
+    "view_reason": "檢視原因"
   },
   "safeMode": {
     "title": "外部來源安全模式",

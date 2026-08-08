@@ -74,4 +74,98 @@ describe('ExternalAppsOverview', () => {
       'applications.capabilities.mcpsapplications.detail.foundCountapplications.capabilityAccess.discover_only',
     ]);
   });
+
+  it('renders the V2 Host status and aggregate instead of inventing capability types', async () => {
+    await act(async () => {
+      root.render(
+        <ExternalAppsOverview
+          applications={[{
+            ...application,
+            mode: undefined,
+            status: 'temporarily_unavailable',
+            primaryAction: 'retry',
+            enabledCount: 2,
+            activeCapabilities: [],
+          }]}
+          t={((key: string) => key) as never}
+          totalAttentionCount={0}
+          busy={false}
+          canMutate
+          policiesEnabled
+          onToggle={vi.fn()}
+          onOpenAdvanced={vi.fn()}
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain('applications.status.temporarily_unavailable');
+    expect(container.textContent).toContain('applications.summary.enabledCount');
+    expect(container.textContent).not.toContain('applications.summary.noContent');
+    expect(container.querySelector('button[aria-label^="applications.expand"]')).toBeNull();
+  });
+
+  it('does not let a disconnected V2 row bypass its Host primary action', async () => {
+    await act(async () => {
+      root.render(
+        <ExternalAppsOverview
+          applications={[{
+            ...application,
+            applicationId: 'opencode',
+            mode: undefined,
+            status: 'needs_attention',
+            primaryAction: 'review',
+            enabled: false,
+            enabledCount: 0,
+            activeCapabilities: [],
+          }]}
+          t={((key: string) => key) as never}
+          totalAttentionCount={1}
+          busy={false}
+          canMutate
+          policiesEnabled
+          onToggle={vi.fn()}
+          onOpenAdvanced={vi.fn()}
+        />,
+      );
+    });
+
+    expect(container.querySelector<HTMLInputElement>(
+      '[data-bf-part="applicationToggle"] input[type="checkbox"]',
+    )?.disabled).toBe(true);
+  });
+
+  it('keeps connected as the Host status while surfacing degraded secondary facts', async () => {
+    await act(async () => {
+      root.render(
+        <ExternalAppsOverview
+          applications={[{
+            ...application,
+            applicationId: 'opencode',
+            mode: undefined,
+            status: 'connected',
+            primaryAction: 'view',
+            enabledCount: 2,
+            health: 'degraded',
+            blockedCount: 2,
+            conflictCount: 1,
+            recoveryActions: [{ type: 'refresh' }],
+            activeCapabilities: [],
+          }]}
+          t={((key: string) => key) as never}
+          totalAttentionCount={0}
+          busy={false}
+          canMutate
+          policiesEnabled
+          onToggle={vi.fn()}
+          onOpenAdvanced={vi.fn()}
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain('applications.status.connected');
+    expect(container.textContent).toContain('applications.summary.health.degraded');
+    expect(container.textContent).toContain('applications.summary.blockedCount');
+    expect(container.textContent).toContain('applications.summary.conflictCount');
+    expect(container.textContent).toContain('recoveryActions.refresh');
+  });
 });

@@ -1,7 +1,15 @@
 // Pure projections and review text derived from the external-source catalog.
 use bitfun_product_domains::external_source_control::{
-    ExternalSourceDesiredState, ExternalSourceEffectiveStatus, ExternalSourceRecoveryActionV1,
-    ExternalSourceSupportState,
+    ExternalApplicationControlActionV2, ExternalApplicationControlRequestV2,
+    ExternalApplicationControlResultV2, ExternalApplicationEffectiveStatusV2,
+    ExternalApplicationHealthV2, ExternalApplicationOperationOutcomeV2,
+    ExternalApplicationPrimaryActionV2, ExternalApplicationRecoveryActionV2,
+    ExternalApplicationReviewItemRefV2, ExternalApplicationReviewPageRequestV2,
+    ExternalApplicationReviewPageV2, ExternalApplicationReviewSelectionBaselineV2,
+    ExternalApplicationReviewSelectionOverrideV2, ExternalApplicationSnapshotV2,
+    ExternalApplicationTargetScopeV2, ExternalSourceDesiredState, ExternalSourceEffectiveStatus,
+    ExternalSourceRecoveryActionV1, ExternalSourceSupportState,
+    EXTERNAL_APPLICATION_REVIEW_PAGE_MAX_ITEMS, EXTERNAL_APPLICATION_SCHEMA_V2,
 };
 
 fn external_command_projections(
@@ -283,8 +291,667 @@ fn parse_external_control_action(arguments: &str) -> Result<ExternalControlUiAct
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExternalReviewDirection {
+    Next,
+    Previous,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ExternalReviewNavigation {
+    Open,
+    Move {
+        expected_cursor: Option<String>,
+        previous_cursors: Vec<Option<String>>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ExternalApplicationUiAction {
+    Show,
+    Refresh,
+    ConnectApplication {
+        application_id: String,
+    },
+    DisconnectApplication {
+        application_id: String,
+    },
+    DeferApplication {
+        application_id: String,
+    },
+    OpenReview,
+    ReviewNext,
+    ReviewPrevious,
+    SetReviewItem {
+        item_ref: ExternalApplicationReviewItemRefV2,
+        selected: bool,
+    },
+    ApplyReview,
+    DeferReview,
+}
+
+struct ExternalApplicationReviewUiState {
+    page: ExternalApplicationReviewPageV2,
+    previous_cursors: Vec<Option<String>>,
+    selection_overrides: Vec<(ExternalApplicationReviewItemRefV2, bool)>,
+}
+
+enum ExternalApplicationAsyncResult {
+    Snapshot(ExternalApplicationSnapshotV2),
+    LegacySnapshot(bitfun_app_server_protocol::external_source::ExternalSourceSnapshotResponse),
+    ReviewPage {
+        page: ExternalApplicationReviewPageV2,
+        navigation: ExternalReviewNavigation,
+    },
+    Mutation {
+        result: ExternalApplicationControlResultV2,
+        snapshot: ExternalApplicationSnapshotV2,
+    },
+}
+
+fn should_fallback_to_legacy_external_status(
+    shared: bool,
+    error: &ExternalSourceOperationError,
+) -> bool {
+    !shared
+        && matches!(
+            error.code,
+            ExternalSourceOperationErrorCode::HostCapabilityUnavailable
+                | ExternalSourceOperationErrorCode::Unsupported
+        )
+}
+
+enum ExternalApplicationPendingRequest {
+    Snapshot {
+        force_refresh: bool,
+    },
+    ReviewPage {
+        request: ExternalApplicationReviewPageRequestV2,
+        navigation: ExternalReviewNavigation,
+    },
+    Mutation(ExternalApplicationControlRequestV2),
+}
+
+struct ExternalApplicationMutationResult {
+    action: ExternalApplicationUiAction,
+    result: std::result::Result<ExternalApplicationAsyncResult, ExternalSourceOperationError>,
+}
+
+#[derive(Default)]
+struct ExternalApplicationUiState {
+    snapshot: Option<ExternalApplicationSnapshotV2>,
+    review: Option<ExternalApplicationReviewUiState>,
+    pending_rx: Option<Receiver<ExternalApplicationMutationResult>>,
+}
+
+impl ExternalApplicationUiState {
+    fn replace_snapshot(&mut self, snapshot: ExternalApplicationSnapshotV2) -> Result<(), String> {
+        snapshot.validate().map_err(str::to_string)?;
+        let keep_review = self.review.as_ref().is_some_and(|review| {
+            snapshot.review_summary.as_ref().is_some_and(|summary| {
+                summary.review_id == review.page.review_id
+                    && snapshot.preference_revision == review.page.preference_revision
+                    && snapshot.execution_domain_id == review.page.execution_domain_id
+                    && snapshot.workspace_scope_id == review.page.workspace_scope_id
+            })
+        });
+        if !keep_review {
+            self.review = None;
+        }
+        self.snapshot = Some(snapshot);
+        Ok(())
+    }
+
+    fn snapshot(&self) -> Result<&ExternalApplicationSnapshotV2, String> {
+        self.snapshot.as_ref().ok_or_else(|| {
+            "External application V2 status is unavailable; run /extensions status".to_string()
+        })
+    }
+
+    fn can_mutate(&self) -> Result<(), String> {
+        let snapshot = self.snapshot()?;
+        let scope_allowed = if snapshot.workspace_scope_id.is_some() {
+            snapshot.host_capabilities.can_manage_workspace_override
+        } else {
+            snapshot.host_capabilities.can_manage_user_default
+        };
+        if snapshot.host_capabilities.can_mutate && scope_allowed {
+            Ok(())
+        } else {
+            Err("This host is read-only for external application changes.".to_string())
+        }
+    }
+
+    fn target_scope(
+        snapshot: &ExternalApplicationSnapshotV2,
+    ) -> (ExternalApplicationTargetScopeV2, Option<String>) {
+        match snapshot.workspace_scope_id.clone() {
+            Some(workspace_scope_id) => (
+                ExternalApplicationTargetScopeV2::WorkspaceOverride,
+                Some(workspace_scope_id),
+            ),
+            None => (ExternalApplicationTargetScopeV2::UserDefault, None),
+        }
+    }
+
+    fn control_request(
+        &self,
+        operation_id: &str,
+        action: ExternalApplicationControlActionV2,
+    ) -> Result<ExternalApplicationControlRequestV2, String> {
+        self.can_mutate()?;
+        let snapshot = self.snapshot()?;
+        let (target_scope, workspace_scope_id) = Self::target_scope(snapshot);
+        let request = ExternalApplicationControlRequestV2 {
+            schema_version: EXTERNAL_APPLICATION_SCHEMA_V2,
+            execution_domain_id: snapshot.execution_domain_id.clone(),
+            workspace_scope_id,
+            target_scope,
+            operation_id: operation_id.to_string(),
+            expected_preference_revision: snapshot.preference_revision,
+            action,
+        };
+        request.validate().map_err(str::to_string)?;
+        Ok(request)
+    }
+
+    fn open_review_page_request(&self) -> Result<ExternalApplicationReviewPageRequestV2, String> {
+        let snapshot = self.snapshot()?;
+        if !snapshot.host_capabilities.can_read_review {
+            return Err("This host cannot read the external application review.".to_string());
+        }
+        let summary = snapshot
+            .review_summary
+            .as_ref()
+            .ok_or_else(|| "No external application review is pending.".to_string())?;
+        let (target_scope, workspace_scope_id) = Self::target_scope(snapshot);
+        Ok(ExternalApplicationReviewPageRequestV2 {
+            schema_version: EXTERNAL_APPLICATION_SCHEMA_V2,
+            execution_domain_id: snapshot.execution_domain_id.clone(),
+            workspace_scope_id,
+            target_scope,
+            review_id: summary.review_id.clone(),
+            preference_revision: snapshot.preference_revision,
+            expected_generations: Vec::new(),
+            cursor: None,
+            page_size: EXTERNAL_APPLICATION_REVIEW_PAGE_MAX_ITEMS,
+        })
+    }
+
+    fn review_page_request(
+        &self,
+        direction: ExternalReviewDirection,
+    ) -> Result<
+        (
+            ExternalApplicationReviewPageRequestV2,
+            ExternalReviewNavigation,
+        ),
+        String,
+    > {
+        let review = self
+            .review
+            .as_ref()
+            .ok_or_else(|| "Open /extensions review before changing review pages.".to_string())?;
+        let (cursor, previous_cursors) = match direction {
+            ExternalReviewDirection::Next => {
+                let cursor = review.page.next_cursor.clone().ok_or_else(|| {
+                    "The external application review has no next page.".to_string()
+                })?;
+                let mut history = review.previous_cursors.clone();
+                history.push(review.page.cursor.clone());
+                (Some(cursor), history)
+            }
+            ExternalReviewDirection::Previous => {
+                let mut history = review.previous_cursors.clone();
+                let cursor = history.pop().ok_or_else(|| {
+                    "The external application review has no previous page.".to_string()
+                })?;
+                (cursor, history)
+            }
+        };
+        let request = ExternalApplicationReviewPageRequestV2 {
+            schema_version: review.page.schema_version,
+            execution_domain_id: review.page.execution_domain_id.clone(),
+            workspace_scope_id: review.page.workspace_scope_id.clone(),
+            target_scope: review.page.target_scope,
+            review_id: review.page.review_id.clone(),
+            preference_revision: review.page.preference_revision,
+            expected_generations: review.page.expected_generations.clone(),
+            cursor: cursor.clone(),
+            page_size: EXTERNAL_APPLICATION_REVIEW_PAGE_MAX_ITEMS,
+        };
+        Ok((
+            request,
+            ExternalReviewNavigation::Move {
+                expected_cursor: cursor,
+                previous_cursors,
+            },
+        ))
+    }
+
+    fn replace_review_page(
+        &mut self,
+        page: ExternalApplicationReviewPageV2,
+        navigation: ExternalReviewNavigation,
+    ) -> Result<(), String> {
+        page.validate().map_err(str::to_string)?;
+        let snapshot = self.snapshot()?;
+        let summary = snapshot.review_summary.as_ref().ok_or_else(|| {
+            "The external application review is stale; refresh /extensions.".to_string()
+        })?;
+        let (expected_scope, expected_workspace_scope_id) = Self::target_scope(snapshot);
+        if page.execution_domain_id != snapshot.execution_domain_id
+            || page.workspace_scope_id != expected_workspace_scope_id
+            || page.target_scope != expected_scope
+            || page.review_id != summary.review_id
+            || page.preference_revision != snapshot.preference_revision
+        {
+            return Err(
+                "The external application review is stale; refresh /extensions.".to_string(),
+            );
+        }
+        if matches!(&navigation, ExternalReviewNavigation::Move { .. })
+            && self
+                .review
+                .as_ref()
+                .is_none_or(|review| review.page.expected_generations != page.expected_generations)
+        {
+            return Err(
+                "The external application review generation is stale; reopen /extensions review."
+                    .to_string(),
+            );
+        }
+        let (expected_cursor, previous_cursors, keep_overrides) = match navigation {
+            ExternalReviewNavigation::Open => (None, Vec::new(), false),
+            ExternalReviewNavigation::Move {
+                expected_cursor,
+                previous_cursors,
+            } => (expected_cursor, previous_cursors, true),
+        };
+        if page.cursor != expected_cursor {
+            return Err(
+                "The external application review page is stale; reopen /extensions review."
+                    .to_string(),
+            );
+        }
+        let selection_overrides = if keep_overrides {
+            self.review
+                .take()
+                .map(|review| review.selection_overrides)
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        self.review = Some(ExternalApplicationReviewUiState {
+            page,
+            previous_cursors,
+            selection_overrides,
+        });
+        Ok(())
+    }
+
+    fn review_item_selected(&self, index: usize) -> Result<bool, String> {
+        let review = self
+            .review
+            .as_ref()
+            .ok_or_else(|| "Open /extensions review before selecting items.".to_string())?;
+        let item = review.page.items.get(index).ok_or_else(|| {
+            "That review item is not on the current page; reopen /extensions review.".to_string()
+        })?;
+        Ok(review
+            .selection_overrides
+            .iter()
+            .find_map(|(item_ref, selected)| (item_ref == &item.item_ref).then_some(*selected))
+            .unwrap_or(item.recommended))
+    }
+
+    fn set_review_item_selected(&mut self, index: usize, selected: bool) -> Result<(), String> {
+        self.can_mutate()?;
+        let review = self
+            .review
+            .as_mut()
+            .ok_or_else(|| "Open /extensions review before selecting items.".to_string())?;
+        let item = review.page.items.get(index).ok_or_else(|| {
+            "That review item is not on the current page; reopen /extensions review.".to_string()
+        })?;
+        if selected == item.recommended {
+            review
+                .selection_overrides
+                .retain(|(item_ref, _)| item_ref != &item.item_ref);
+        } else if let Some((_, current)) = review
+            .selection_overrides
+            .iter_mut()
+            .find(|(item_ref, _)| item_ref == &item.item_ref)
+        {
+            *current = selected;
+        } else {
+            review
+                .selection_overrides
+                .push((item.item_ref.clone(), selected));
+        }
+        Ok(())
+    }
+
+    fn review_apply_request(
+        &self,
+        operation_id: &str,
+    ) -> Result<ExternalApplicationControlRequestV2, String> {
+        let review = self
+            .review
+            .as_ref()
+            .ok_or_else(|| "Open /extensions review before applying it.".to_string())?;
+        self.control_request(
+            operation_id,
+            ExternalApplicationControlActionV2::SubmitApplicationReview {
+                review_id: review.page.review_id.clone(),
+                expected_generations: review.page.expected_generations.clone(),
+                selection_baseline: ExternalApplicationReviewSelectionBaselineV2::Recommended,
+                selection_overrides: review
+                    .selection_overrides
+                    .iter()
+                    .map(
+                        |(item_ref, selected)| ExternalApplicationReviewSelectionOverrideV2 {
+                            item_ref: item_ref.clone(),
+                            selected: *selected,
+                        },
+                    )
+                    .collect(),
+            },
+        )
+    }
+}
+
+fn external_application_for_number(
+    state: &ExternalApplicationUiState,
+    value: Option<&str>,
+) -> Result<bitfun_product_domains::external_source_control::ExternalApplicationSummaryV2, String> {
+    let index = parse_positive_index(value, "application number")?;
+    state
+        .snapshot()?
+        .applications
+        .get(index)
+        .cloned()
+        .ok_or_else(|| {
+            "That application is not in the displayed V2 snapshot; run /extensions status."
+                .to_string()
+        })
+}
+
+fn external_review_item_for_number(
+    state: &ExternalApplicationUiState,
+    value: Option<&str>,
+) -> Result<ExternalApplicationReviewItemRefV2, String> {
+    let index = parse_positive_index(value, "review item number")?;
+    state
+        .review
+        .as_ref()
+        .and_then(|review| review.page.items.get(index))
+        .map(|item| item.item_ref.clone())
+        .ok_or_else(|| {
+            "That item is not in the displayed review page; reopen /extensions review.".to_string()
+        })
+}
+
+fn parse_external_application_action(
+    arguments: &str,
+    state: &ExternalApplicationUiState,
+) -> Result<ExternalApplicationUiAction, String> {
+    let mut parts = arguments.split_whitespace();
+    let Some(command) = parts.next() else {
+        return Ok(ExternalApplicationUiAction::Show);
+    };
+    if command.eq_ignore_ascii_case("status") {
+        if parts.next().is_none() {
+            return Ok(ExternalApplicationUiAction::Show);
+        }
+    } else if command.eq_ignore_ascii_case("refresh") {
+        if parts.next().is_none() {
+            return Ok(ExternalApplicationUiAction::Refresh);
+        }
+    } else if command.eq_ignore_ascii_case("connect")
+        || command.eq_ignore_ascii_case("disconnect")
+        || command.eq_ignore_ascii_case("defer")
+    {
+        state.can_mutate()?;
+        let application = external_application_for_number(state, parts.next())?;
+        if parts.next().is_some() {
+            return Err(format!("usage: /extensions {command} <application-number>"));
+        }
+        let allowed = if command.eq_ignore_ascii_case("connect") {
+            application.primary_action == ExternalApplicationPrimaryActionV2::Connect
+        } else if command.eq_ignore_ascii_case("disconnect") {
+            application.effective_status == ExternalApplicationEffectiveStatusV2::Connected
+        } else {
+            application.effective_status == ExternalApplicationEffectiveStatusV2::NeedsAttention
+        };
+        if !allowed {
+            return Err(format!(
+                "Application {} no longer offers that next action; run /extensions status.",
+                application.application_id
+            ));
+        }
+        return if command.eq_ignore_ascii_case("connect") {
+            Ok(ExternalApplicationUiAction::ConnectApplication {
+                application_id: application.application_id.clone(),
+            })
+        } else if command.eq_ignore_ascii_case("disconnect") {
+            Ok(ExternalApplicationUiAction::DisconnectApplication {
+                application_id: application.application_id.clone(),
+            })
+        } else {
+            Ok(ExternalApplicationUiAction::DeferApplication {
+                application_id: application.application_id.clone(),
+            })
+        };
+    } else if command.eq_ignore_ascii_case("review") {
+        let Some(review_command) = parts.next() else {
+            return Ok(ExternalApplicationUiAction::OpenReview);
+        };
+        if review_command.eq_ignore_ascii_case("next") && parts.next().is_none() {
+            state.review_page_request(ExternalReviewDirection::Next)?;
+            return Ok(ExternalApplicationUiAction::ReviewNext);
+        }
+        if review_command.eq_ignore_ascii_case("previous") && parts.next().is_none() {
+            state.review_page_request(ExternalReviewDirection::Previous)?;
+            return Ok(ExternalApplicationUiAction::ReviewPrevious);
+        }
+        if review_command.eq_ignore_ascii_case("include")
+            || review_command.eq_ignore_ascii_case("exclude")
+        {
+            state.can_mutate()?;
+            let item_ref = external_review_item_for_number(state, parts.next())?;
+            if parts.next().is_some() {
+                return Err(format!(
+                    "usage: /extensions review {review_command} <item-number>"
+                ));
+            }
+            return Ok(ExternalApplicationUiAction::SetReviewItem {
+                item_ref,
+                selected: review_command.eq_ignore_ascii_case("include"),
+            });
+        }
+        if review_command.eq_ignore_ascii_case("apply") && parts.next().is_none() {
+            state.can_mutate()?;
+            return Ok(ExternalApplicationUiAction::ApplyReview);
+        }
+        if review_command.eq_ignore_ascii_case("defer") && parts.next().is_none() {
+            return Ok(ExternalApplicationUiAction::DeferReview);
+        }
+    }
+    Err("usage: /extensions [status | refresh | connect <number> | disconnect <number> | defer <number> | review [next | previous | include <number> | exclude <number> | apply | defer]]".to_string())
+}
+
+fn external_application_status_label(status: ExternalApplicationEffectiveStatusV2) -> &'static str {
+    match status {
+        ExternalApplicationEffectiveStatusV2::Connected => "Connected",
+        ExternalApplicationEffectiveStatusV2::ConfigurationAvailable => "Configuration available",
+        ExternalApplicationEffectiveStatusV2::NoConfiguration => "No configuration",
+        ExternalApplicationEffectiveStatusV2::NeedsAttention => "Needs attention",
+        ExternalApplicationEffectiveStatusV2::TemporarilyUnavailable => "Temporarily unavailable",
+    }
+}
+
+fn external_application_health_label(health: ExternalApplicationHealthV2) -> &'static str {
+    match health {
+        ExternalApplicationHealthV2::Healthy => "healthy",
+        ExternalApplicationHealthV2::Degraded => "degraded",
+        ExternalApplicationHealthV2::Unavailable => "unavailable",
+    }
+}
+
+fn external_application_recovery_label(
+    action: &ExternalApplicationRecoveryActionV2,
+) -> &'static str {
+    match action {
+        ExternalApplicationRecoveryActionV2::Refresh => "refresh",
+        ExternalApplicationRecoveryActionV2::Retry => "retry",
+        ExternalApplicationRecoveryActionV2::ReconnectHost => "reconnect host",
+        ExternalApplicationRecoveryActionV2::Review => "review",
+        ExternalApplicationRecoveryActionV2::UpgradeHost => "upgrade host",
+        ExternalApplicationRecoveryActionV2::ViewReason => "view reason",
+        ExternalApplicationRecoveryActionV2::ExitSafeMode => "exit safe mode",
+        ExternalApplicationRecoveryActionV2::ResolveConflict => "resolve conflict",
+        ExternalApplicationRecoveryActionV2::InstallRuntime => "install runtime",
+    }
+}
+
+fn external_application_overview_text(snapshot: &ExternalApplicationSnapshotV2) -> String {
+    let mut lines = vec![
+        "External applications".to_string(),
+        String::new(),
+        format!(
+            "Safe Mode: {}",
+            if snapshot.safe_mode { "on" } else { "off" }
+        ),
+    ];
+    let scope_can_mutate = snapshot.host_capabilities.can_mutate
+        && if snapshot.workspace_scope_id.is_some() {
+            snapshot.host_capabilities.can_manage_workspace_override
+        } else {
+            snapshot.host_capabilities.can_manage_user_default
+        };
+    for (index, application) in snapshot.applications.iter().enumerate() {
+        let number = index + 1;
+        lines.push(format!(
+            "{number}. {} - {}",
+            application.display_name,
+            external_application_status_label(application.effective_status)
+        ));
+        lines.push(format!(
+            "   {} enabled, {} pending review, {} blocked, {} conflicts",
+            application.enabled_count,
+            application.pending_review_count,
+            application.blocked_count,
+            application.conflict_count
+        ));
+        lines.push(format!(
+            "   Health: {}",
+            external_application_health_label(application.health)
+        ));
+        if !application.recovery_actions.is_empty() {
+            lines.push(format!(
+                "   Recovery: {}",
+                application
+                    .recovery_actions
+                    .iter()
+                    .map(external_application_recovery_label)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        if scope_can_mutate {
+            match application.primary_action {
+                ExternalApplicationPrimaryActionV2::Connect => {
+                    lines.push(format!("   Next: /extensions connect {number}"))
+                }
+                ExternalApplicationPrimaryActionV2::Review => {
+                    lines.push("   Next: /extensions review".to_string())
+                }
+                ExternalApplicationPrimaryActionV2::Retry => {
+                    lines.push("   Next: /extensions refresh".to_string())
+                }
+                ExternalApplicationPrimaryActionV2::None
+                | ExternalApplicationPrimaryActionV2::View
+                | ExternalApplicationPrimaryActionV2::ViewReason => {}
+            }
+            if application.effective_status == ExternalApplicationEffectiveStatusV2::Connected {
+                lines.push(format!("   Disconnect: /extensions disconnect {number}"));
+            }
+            if application.effective_status == ExternalApplicationEffectiveStatusV2::NeedsAttention
+            {
+                lines.push(format!("   Later: /extensions defer {number}"));
+            }
+        }
+    }
+    if snapshot.review_summary.is_some() && snapshot.host_capabilities.can_read_review {
+        lines.push(String::new());
+        lines.push("Review: /extensions review".to_string());
+    }
+    if snapshot.host_capabilities.can_refresh {
+        lines.push("Refresh: /extensions refresh".to_string());
+    }
+    lines.join("\n")
+}
+
+fn external_application_review_text(state: &ExternalApplicationUiState) -> Result<String, String> {
+    let review = state
+        .review
+        .as_ref()
+        .ok_or_else(|| "Open /extensions review before displaying it.".to_string())?;
+    let mut lines = vec![
+        "External application review".to_string(),
+        String::new(),
+        format!("{} items total", review.page.total_count),
+    ];
+    for (index, item) in review.page.items.iter().enumerate() {
+        let selected = state.review_item_selected(index)?;
+        lines.push(format!(
+            "{}. [{}] {} - {}",
+            index + 1,
+            if selected { "x" } else { " " },
+            item.display_name,
+            item.display_summary
+        ));
+        lines.push(format!(
+            "   Baseline: {}",
+            if item.recommended {
+                "recommended"
+            } else {
+                "optional"
+            }
+        ));
+    }
+    if !review.previous_cursors.is_empty() {
+        lines.push("Previous: /extensions review previous".to_string());
+    }
+    if review.page.next_cursor.is_some() {
+        lines.push("Next: /extensions review next".to_string());
+    }
+    let can_mutate = state.can_mutate().is_ok();
+    if can_mutate {
+        lines.push("Include: /extensions review include <number>".to_string());
+        lines.push("Exclude: /extensions review exclude <number>".to_string());
+        lines.push("Apply: /extensions review apply".to_string());
+    }
+    lines.push("Later (no changes): /extensions review defer".to_string());
+    Ok(lines.join("\n"))
+}
+
 fn external_control_review_text(
     control: &bitfun_product_domains::external_source_control::ExternalSourceControlSnapshotV1,
+) -> String {
+    external_control_review_text_impl(control, true)
+}
+
+fn external_control_read_only_review_text(
+    control: &bitfun_product_domains::external_source_control::ExternalSourceControlSnapshotV1,
+) -> String {
+    external_control_review_text_impl(control, false)
+}
+
+fn external_control_review_text_impl(
+    control: &bitfun_product_domains::external_source_control::ExternalSourceControlSnapshotV1,
+    include_mutations: bool,
 ) -> String {
     use bitfun_product_domains::external_source_control::{
         ExternalCapabilityKindV1, ExternalSourceRuntimeState,
@@ -385,7 +1052,7 @@ fn external_control_review_text(
             ));
         }
     }
-    if !control.recovery_actions.is_empty() {
+    if include_mutations && !control.recovery_actions.is_empty() {
         lines.push(String::new());
         lines.push("Recovery".to_string());
         for action in control.recovery_actions.iter().take(MAX_STATUS_DETAILS) {
@@ -397,13 +1064,20 @@ fn external_control_review_text(
     }
     lines.push(String::new());
     lines.push("Refresh: /extensions refresh".to_string());
-    lines.push(if control.safe_mode {
-        "Exit Safe Mode: /extensions safe-mode off".to_string()
+    if include_mutations {
+        lines.push(if control.safe_mode {
+            "Exit Safe Mode: /extensions safe-mode off".to_string()
+        } else {
+            "Enter Safe Mode: /extensions safe-mode on".to_string()
+        });
+        lines.push("Enable source: /extensions source enable <source-key>".to_string());
+        lines.push("Disable source: /extensions source disable <source-key>".to_string());
     } else {
-        "Enter Safe Mode: /extensions safe-mode on".to_string()
-    });
-    lines.push("Enable source: /extensions source enable <source-key>".to_string());
-    lines.push("Disable source: /extensions source disable <source-key>".to_string());
+        lines.push(
+            "Read-only compatibility status: upgrade or reconnect the Host to manage applications."
+                .to_string(),
+        );
+    }
     lines.join("\n")
 }
 
@@ -1733,6 +2407,438 @@ fn external_agent_pending_notice_key(
     snapshot: &ExternalSourceCatalogSnapshot,
 ) -> Option<String> {
     external_agent_attention(previous, snapshot).key
+}
+
+#[cfg(test)]
+mod external_application_v2_tests {
+    use super::*;
+    use bitfun_product_domains::external_source_control::{
+        ExternalApplicationConnectionStateV2, ExternalApplicationDefaultConnectionPolicyV2,
+        ExternalApplicationDesiredConnectionV2, ExternalApplicationDiscoveryStateV2,
+        ExternalApplicationEffectiveStatusV2, ExternalApplicationHealthV2,
+        ExternalApplicationHostCapabilitiesV2, ExternalApplicationOwnerGenerationV2,
+        ExternalApplicationPrimaryActionV2, ExternalApplicationReviewCategoryCountV2,
+        ExternalApplicationReviewItemKindV2, ExternalApplicationReviewItemRefV2,
+        ExternalApplicationReviewItemV2, ExternalApplicationReviewPageV2,
+        ExternalApplicationReviewRecommendationSummaryV2, ExternalApplicationReviewSummaryV2,
+        ExternalApplicationRiskLevelV2, ExternalApplicationRiskSummaryV2,
+        ExternalApplicationSafetyCeilingV2, ExternalApplicationSnapshotV2,
+        ExternalApplicationSummaryV2, ExternalApplicationTargetScopeV2,
+        ExternalApplicationUserDecisionV2, EXTERNAL_APPLICATION_SCHEMA_V2,
+    };
+    use bitfun_product_domains::external_sources::ExecutionDomainId;
+
+    fn risk() -> ExternalApplicationRiskSummaryV2 {
+        ExternalApplicationRiskSummaryV2 {
+            highest_level: Some(ExternalApplicationRiskLevelV2::High),
+            reason_codes: vec!["process_execution".to_string()],
+        }
+    }
+
+    fn application(
+        id: &str,
+        status: ExternalApplicationEffectiveStatusV2,
+        action: ExternalApplicationPrimaryActionV2,
+    ) -> ExternalApplicationSummaryV2 {
+        ExternalApplicationSummaryV2 {
+            application_id: id.to_string(),
+            ecosystem_id: id.to_string(),
+            display_name: id.to_string(),
+            discovery: if status == ExternalApplicationEffectiveStatusV2::NoConfiguration {
+                ExternalApplicationDiscoveryStateV2::NotDiscovered
+            } else {
+                ExternalApplicationDiscoveryStateV2::Discovered
+            },
+            connection: if status == ExternalApplicationEffectiveStatusV2::Connected {
+                ExternalApplicationConnectionStateV2::Connected
+            } else {
+                ExternalApplicationConnectionStateV2::Disconnected
+            },
+            desired_connection: ExternalApplicationDesiredConnectionV2::Unspecified,
+            health: ExternalApplicationHealthV2::Healthy,
+            effective_status: status,
+            primary_action: action,
+            default_connection_policy: ExternalApplicationDefaultConnectionPolicyV2::DiscoverOnly,
+            default_connection_reason: "product_policy".to_string(),
+            enabled_count: 1,
+            pending_review_count: usize::from(
+                status == ExternalApplicationEffectiveStatusV2::NeedsAttention,
+            ),
+            blocked_count: 0,
+            conflict_count: 0,
+            risk_summary: risk(),
+            notice_key: None,
+            user_decision: ExternalApplicationUserDecisionV2::None,
+            recovery_actions: Vec::new(),
+        }
+    }
+
+    fn snapshot(
+        capabilities: ExternalApplicationHostCapabilitiesV2,
+    ) -> ExternalApplicationSnapshotV2 {
+        ExternalApplicationSnapshotV2 {
+            schema_version: EXTERNAL_APPLICATION_SCHEMA_V2,
+            execution_domain_id: ExecutionDomainId::new("host-a").unwrap(),
+            workspace_scope_id: Some("workspace:0123456789abcdef".to_string()),
+            effective_connection_scope: ExternalApplicationTargetScopeV2::WorkspaceOverride,
+            refresh_generation: 7,
+            preference_revision: 11,
+            safe_mode: true,
+            host_capabilities: capabilities,
+            applications: vec![
+                application(
+                    "connected",
+                    ExternalApplicationEffectiveStatusV2::Connected,
+                    ExternalApplicationPrimaryActionV2::View,
+                ),
+                application(
+                    "available",
+                    ExternalApplicationEffectiveStatusV2::ConfigurationAvailable,
+                    ExternalApplicationPrimaryActionV2::Connect,
+                ),
+                application(
+                    "missing",
+                    ExternalApplicationEffectiveStatusV2::NoConfiguration,
+                    ExternalApplicationPrimaryActionV2::None,
+                ),
+                application(
+                    "attention",
+                    ExternalApplicationEffectiveStatusV2::NeedsAttention,
+                    ExternalApplicationPrimaryActionV2::Review,
+                ),
+                application(
+                    "unavailable",
+                    ExternalApplicationEffectiveStatusV2::TemporarilyUnavailable,
+                    ExternalApplicationPrimaryActionV2::Retry,
+                ),
+            ],
+            review_summary: Some(ExternalApplicationReviewSummaryV2 {
+                review_id: "review-7".to_string(),
+                total_count: 2,
+                category_counts: vec![ExternalApplicationReviewCategoryCountV2 {
+                    kind: ExternalApplicationReviewItemKindV2::Tool,
+                    count: 2,
+                }],
+                max_selection_count: 2,
+                risk_summary: risk(),
+                recommendation_summary: ExternalApplicationReviewRecommendationSummaryV2 {
+                    recommended_count: 1,
+                    optional_count: 1,
+                    blocked_count: 0,
+                },
+                safety_ceiling: ExternalApplicationSafetyCeilingV2::ReviewRequired,
+            }),
+        }
+    }
+
+    fn item(stable_id: &str, recommended: bool) -> ExternalApplicationReviewItemV2 {
+        ExternalApplicationReviewItemV2 {
+            item_ref: ExternalApplicationReviewItemRefV2 {
+                kind: ExternalApplicationReviewItemKindV2::Tool,
+                stable_id: stable_id.to_string(),
+            },
+            display_name: stable_id.to_string(),
+            display_summary: "Runs an external tool".to_string(),
+            risk_level: ExternalApplicationRiskLevelV2::High,
+            risk_reason_codes: vec!["process_execution".to_string()],
+            recommended,
+            safety_ceiling: ExternalApplicationSafetyCeilingV2::ReviewRequired,
+        }
+    }
+
+    fn page(cursor: Option<&str>, next_cursor: Option<&str>) -> ExternalApplicationReviewPageV2 {
+        ExternalApplicationReviewPageV2 {
+            schema_version: EXTERNAL_APPLICATION_SCHEMA_V2,
+            execution_domain_id: ExecutionDomainId::new("host-a").unwrap(),
+            workspace_scope_id: Some("workspace:0123456789abcdef".to_string()),
+            target_scope: ExternalApplicationTargetScopeV2::WorkspaceOverride,
+            review_id: "review-7".to_string(),
+            preference_revision: 11,
+            expected_generations: vec![ExternalApplicationOwnerGenerationV2 {
+                owner: ExternalApplicationReviewItemKindV2::Tool,
+                generation: 7,
+            }],
+            cursor: cursor.map(str::to_string),
+            next_cursor: next_cursor.map(str::to_string),
+            total_count: 2,
+            items: vec![item("tool-recommended", true), item("tool-optional", false)],
+        }
+    }
+
+    #[test]
+    fn overview_uses_five_shared_states_and_hides_mutations_for_read_only_hosts() {
+        let writable = external_application_overview_text(&snapshot(
+            ExternalApplicationHostCapabilitiesV2::read_write(),
+        ));
+        for expected in [
+            "Connected",
+            "Configuration available",
+            "No configuration",
+            "Needs attention",
+            "Temporarily unavailable",
+        ] {
+            assert!(writable.contains(expected), "{expected}\n{writable}");
+        }
+        assert!(writable.contains("/extensions connect 2"));
+        assert!(writable.contains("/extensions review"));
+        assert!(writable.contains("Safe Mode: on"));
+
+        let read_only = external_application_overview_text(&snapshot(
+            ExternalApplicationHostCapabilitiesV2::read_only(),
+        ));
+        for forbidden in [
+            "/extensions connect",
+            "/extensions disconnect",
+            "/extensions defer",
+            "/extensions review apply",
+        ] {
+            assert!(!read_only.contains(forbidden), "{forbidden}\n{read_only}");
+        }
+    }
+
+    #[test]
+    fn legacy_status_fallback_is_embedded_read_only_only() {
+        for code in [
+            ExternalSourceOperationErrorCode::HostCapabilityUnavailable,
+            ExternalSourceOperationErrorCode::Unsupported,
+        ] {
+            let error = ExternalSourceOperationError::new(code, "V2 unavailable", false);
+            assert!(should_fallback_to_legacy_external_status(false, &error));
+            assert!(!should_fallback_to_legacy_external_status(true, &error));
+        }
+        let unrelated = ExternalSourceOperationError::new(
+            ExternalSourceOperationErrorCode::Internal,
+            "Host failed",
+            false,
+        );
+        assert!(!should_fallback_to_legacy_external_status(
+            false, &unrelated
+        ));
+    }
+
+    #[test]
+    fn overview_preserves_host_health_and_recovery_without_recomputing_status() {
+        let mut host = snapshot(ExternalApplicationHostCapabilitiesV2::read_write());
+        host.applications[0].health = ExternalApplicationHealthV2::Degraded;
+        host.applications[0].recovery_actions = vec![
+            bitfun_product_domains::external_source_control::ExternalApplicationRecoveryActionV2::ReconnectHost,
+            bitfun_product_domains::external_source_control::ExternalApplicationRecoveryActionV2::ViewReason,
+        ];
+
+        let text = external_application_overview_text(&host);
+        assert!(text.contains("connected - Connected"));
+        assert!(text.contains("Health: degraded"));
+        assert!(text.contains("Recovery: reconnect host, view reason"));
+    }
+
+    #[test]
+    fn numbered_application_actions_require_the_rendered_v2_snapshot() {
+        let unavailable = ExternalApplicationUiState::default();
+        assert!(parse_external_application_action("connect 1", &unavailable)
+            .unwrap_err()
+            .contains("V2"));
+
+        let mut state = ExternalApplicationUiState::default();
+        state
+            .replace_snapshot(snapshot(ExternalApplicationHostCapabilitiesV2::read_write()))
+            .unwrap();
+        assert_eq!(
+            parse_external_application_action("connect 2", &state).unwrap(),
+            ExternalApplicationUiAction::ConnectApplication {
+                application_id: "available".to_string()
+            }
+        );
+        assert_eq!(
+            parse_external_application_action("disconnect 1", &state).unwrap(),
+            ExternalApplicationUiAction::DisconnectApplication {
+                application_id: "connected".to_string()
+            }
+        );
+        assert_eq!(
+            parse_external_application_action("defer 4", &state).unwrap(),
+            ExternalApplicationUiAction::DeferApplication {
+                application_id: "attention".to_string()
+            }
+        );
+        assert!(parse_external_application_action("connect 1", &state)
+            .unwrap_err()
+            .contains("next action"));
+        assert!(parse_external_application_action("disconnect 2", &state)
+            .unwrap_err()
+            .contains("next action"));
+        assert!(parse_external_application_action("defer 2", &state)
+            .unwrap_err()
+            .contains("next action"));
+
+        let read_only = {
+            let mut state = ExternalApplicationUiState::default();
+            state
+                .replace_snapshot(snapshot(ExternalApplicationHostCapabilitiesV2::read_only()))
+                .unwrap();
+            state
+        };
+        assert!(parse_external_application_action("connect 2", &read_only)
+            .unwrap_err()
+            .contains("read-only"));
+    }
+
+    #[test]
+    fn workspace_context_targets_an_override_even_when_the_effective_value_is_inherited() {
+        let mut inherited = snapshot(ExternalApplicationHostCapabilitiesV2::read_write());
+        inherited.effective_connection_scope = ExternalApplicationTargetScopeV2::UserDefault;
+        let mut state = ExternalApplicationUiState::default();
+        state.replace_snapshot(inherited).unwrap();
+
+        let request = state
+            .control_request(
+                "operation-workspace",
+                ExternalApplicationControlActionV2::ConnectApplication {
+                    application_id: "available".to_string(),
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            request.target_scope,
+            ExternalApplicationTargetScopeV2::WorkspaceOverride
+        );
+        assert_eq!(
+            request.workspace_scope_id.as_deref(),
+            Some("workspace:0123456789abcdef")
+        );
+
+        let mut user_default = snapshot(ExternalApplicationHostCapabilitiesV2::read_write());
+        user_default.workspace_scope_id = None;
+        user_default.effective_connection_scope = ExternalApplicationTargetScopeV2::UserDefault;
+        state.replace_snapshot(user_default).unwrap();
+        let request = state
+            .control_request(
+                "operation-user",
+                ExternalApplicationControlActionV2::ConnectApplication {
+                    application_id: "available".to_string(),
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            request.target_scope,
+            ExternalApplicationTargetScopeV2::UserDefault
+        );
+        assert_eq!(request.workspace_scope_id, None);
+    }
+
+    #[test]
+    fn review_selection_stores_only_overrides_to_the_recommended_baseline() {
+        let mut state = ExternalApplicationUiState::default();
+        state
+            .replace_snapshot(snapshot(ExternalApplicationHostCapabilitiesV2::read_write()))
+            .unwrap();
+        state
+            .replace_review_page(page(None, Some("page-2")), ExternalReviewNavigation::Open)
+            .unwrap();
+
+        assert!(state.review_item_selected(0).unwrap());
+        assert!(!state.review_item_selected(1).unwrap());
+        state.set_review_item_selected(0, false).unwrap();
+        state.set_review_item_selected(1, true).unwrap();
+
+        let request = state.review_apply_request("operation-1").unwrap();
+        let bitfun_product_domains::external_source_control::ExternalApplicationControlActionV2::SubmitApplicationReview {
+            selection_baseline,
+            selection_overrides,
+            ..
+        } = request.action else {
+            panic!("expected review action");
+        };
+        assert_eq!(
+            selection_baseline,
+            bitfun_product_domains::external_source_control::ExternalApplicationReviewSelectionBaselineV2::Recommended
+        );
+        assert_eq!(selection_overrides.len(), 2);
+        assert!(!selection_overrides[0].selected);
+        assert!(selection_overrides[1].selected);
+    }
+
+    #[test]
+    fn review_navigation_binds_cursors_and_rejects_stale_pages() {
+        let mut state = ExternalApplicationUiState::default();
+        state
+            .replace_snapshot(snapshot(ExternalApplicationHostCapabilitiesV2::read_write()))
+            .unwrap();
+        state
+            .replace_review_page(page(None, Some("page-2")), ExternalReviewNavigation::Open)
+            .unwrap();
+
+        let (next, navigation) = state
+            .review_page_request(ExternalReviewDirection::Next)
+            .unwrap();
+        assert_eq!(next.cursor.as_deref(), Some("page-2"));
+        state
+            .replace_review_page(page(Some("page-2"), None), navigation)
+            .unwrap();
+        let (previous, navigation) = state
+            .review_page_request(ExternalReviewDirection::Previous)
+            .unwrap();
+        assert_eq!(previous.cursor, None);
+        state
+            .replace_review_page(page(None, Some("page-2")), navigation)
+            .unwrap();
+
+        let mut stale = page(None, None);
+        stale.preference_revision += 1;
+        assert!(state
+            .replace_review_page(stale, ExternalReviewNavigation::Open)
+            .unwrap_err()
+            .contains("stale"));
+
+        let (next, navigation) = state
+            .review_page_request(ExternalReviewDirection::Next)
+            .unwrap();
+        let mut stale_generation = page(next.cursor.as_deref(), None);
+        stale_generation.expected_generations[0].generation += 1;
+        assert!(state
+            .replace_review_page(stale_generation, navigation)
+            .unwrap_err()
+            .contains("stale"));
+    }
+
+    #[test]
+    fn review_commands_resolve_current_page_numbers_and_offer_a_non_mutating_defer() {
+        let mut state = ExternalApplicationUiState::default();
+        state
+            .replace_snapshot(snapshot(ExternalApplicationHostCapabilitiesV2::read_write()))
+            .unwrap();
+        state
+            .replace_review_page(page(None, None), ExternalReviewNavigation::Open)
+            .unwrap();
+
+        assert_eq!(
+            parse_external_application_action("review include 2", &state).unwrap(),
+            ExternalApplicationUiAction::SetReviewItem {
+                item_ref: ExternalApplicationReviewItemRefV2 {
+                    kind: ExternalApplicationReviewItemKindV2::Tool,
+                    stable_id: "tool-optional".to_string(),
+                },
+                selected: true,
+            }
+        );
+        assert_eq!(
+            parse_external_application_action("review exclude 1", &state).unwrap(),
+            ExternalApplicationUiAction::SetReviewItem {
+                item_ref: ExternalApplicationReviewItemRefV2 {
+                    kind: ExternalApplicationReviewItemKindV2::Tool,
+                    stable_id: "tool-recommended".to_string(),
+                },
+                selected: false,
+            }
+        );
+        assert_eq!(
+            parse_external_application_action("review apply", &state).unwrap(),
+            ExternalApplicationUiAction::ApplyReview
+        );
+        assert_eq!(
+            parse_external_application_action("review defer", &state).unwrap(),
+            ExternalApplicationUiAction::DeferReview
+        );
+    }
 }
 
 fn parse_external_agent_review_action(

@@ -2,7 +2,7 @@
 
 > 本计划把[外部 AI 工作内容总体架构](../architecture/extensions/external-ai-work-sources-design.md)和[外部 AI 应用连接与管理详细设计](../architecture/extensions/external-ai-app-connection-experience-design.md)拆成可独立评审、验证和回退的实施阶段。本文不扩大任何生态的能力兼容范围；OpenCode 具体能力路线仍以[OpenCode 扩展兼容计划](opencode-extension-compatibility-plan.md)为准。
 
-> **实现状态：全部为目标工作。** 当前生产只提供严格 V1 来源/能力控制协议；应用级连接、V2 协议、批量确认、跨宿主应用快照和任务相关 `action-required` 尚未交付。只有完成对应阶段的生产接线和退出条件，架构现状文档才能更新。
+> **实现状态：分阶段交付。** 当前分支已完成共享 V2 应用契约、产品默认、旧偏好迁移、分页批量确认、Desktop/Peer/App Server 薄适配，以及 Desktop Settings 和交互式 TUI 的纵向切片。Web 在旧 Host 上保持严格 V1 只读回退；交互式 TUI 只在 Embedded 旧 Host 上回退 V1，未接线的 Shared Runtime 明确不支持且不会改在控制进程本地执行。通用 Server 尚未绑定可信 workspace owner，任务相关 `action-required`、非交互 CLI 结果、组合 Hook 摘要和完整跨宿主回归仍按本计划后续阶段推进，不能据此宣称支持。
 
 ## 1. 目标与执行原则
 
@@ -19,7 +19,7 @@
 
 - 每个阶段形成可独立评审的纵向结果，不能用仅有 DTO、固定假数据或未接线组件宣称完成；
 - 先以测试冻结共享契约和策略，再接宿主，再替换信息架构；
-- 当前 `ExternalSourceControlSnapshotV1`、V1 动作/恢复闭合枚举、V1 宿主能力和能力专属 DTO 保持字段与行为不变；应用级读写使用独立版本化 V2 接口，无副作用 V2 快照直接用于能力探测；
+- 当前 `ExternalSourceControlSnapshotV1`、V1 动作/恢复闭合枚举、V1 宿主能力和能力专属 DTO 保持字段与行为不变；应用级读写使用独立版本化 V2 接口，V2 快照不提交用户决定或运行能力写动作并直接用于能力探测；首次 owner 激活仍可执行可重入迁移和既有后台发现；
 - 所有 V2 写操作携带 `execution_domain_id`、`target_scope`、`operation_id` 和与该作用域绑定的 `expected_preference_revision`；`workspace_override` 必须携带宿主快照返回的 `workspace_scope_id`，`user_default` 必须省略。`operation_id` 只做请求/响应关联，不承诺幂等重放；偏好版本是唯一写并发保护；
 - 宿主能力、Safe Mode、组织/产品安全上限和 Remote/只读限制只能收紧结果；
 - React、TUI、Desktop 适配层和 Server 适配层不按生态 ID 重算默认连接、推荐集合或应用级状态；
@@ -258,6 +258,8 @@ cargo check --workspace
 6. owner 可以逐项拒绝业务请求；响应必须返回每项 `applied / rejected / blocked / stale / failed` 等闭合结果及恢复动作，未知结果不得视为成功。
 7. 只持久化实际成功且仍与 decision key/behavior version 匹配的决定；返回与最终 preference revision 同代的新快照。
 
+这里的零应用保证止于分派前预检。分派开始后若某个 owner 的事实并发变化，响应可以同时包含已应用项与类型化 stale/failed 项；本阶段不增加跨 owner 事务或回滚管理器，也不宣称批量业务执行原子化。
+
 ### 测试优先顺序
 
 - stale revision、generation 或 Host capability 导致整批零应用；
@@ -325,7 +327,7 @@ cargo check --workspace
    - `interfaces/app-server-client` 与 TypeScript translation 保持 V1 wire shape，Server Host 绑定其真实 workspace，不读取浏览器或控制端路径；
    - Server 不注册 write handler；未知/写方法在反序列化 mutation payload 前以 method-not-found/host-capability-unavailable 拒绝；
    - 用真实 `/ws` transport 做 Server bootstrap → `BitfunAppServer::serve` → handler → owner → client 的端到端 round-trip。该切片通过前，Server 不进入 V2 共享 fixture，也不得标记为只读 external-source Host。
-3. P4a 后新增无副作用 `get_external_application_snapshot_v2`，直接作为版本探测：成功响应必须是严格 V2 数据结构，并携带宿主读写能力；旧宿主的传输层 method-not-found 等价于“仅 V1”。不增加独立版本信息接口，也不引入“声明支持但接口不可用”的第二种状态。
+3. P4a 后新增不提交用户决定或运行能力写动作的 `get_external_application_snapshot_v2`，直接作为版本探测：成功响应必须是严格 V2 数据结构，并携带宿主读写能力；首次 owner 激活可执行可重入迁移和既有后台发现，确认分页不得冷启动 owner。旧宿主的传输层 method-not-found 等价于“仅 V1”。不增加独立版本信息接口，也不引入“声明支持但接口不可用”的第二种状态。
 4. 客户端只有在 V2 snapshot 校验成功后，才调用 `get_external_application_review_page_v2` 或 `apply_external_application_action_v2`。V2 snapshot/action 不与 V1 对象混合序列化；read-only Server 只登记 snapshot/review read endpoint，不登记 mutation endpoint。
 5. Desktop Tauri command 只映射结构化 request/response，不派生状态、默认策略或推荐集合。
 6. 每个新增 Desktop command 在 remote workspace policy 中声明明确策略；Remote 未支持时返回 V2 类型化 unsupported，不回退本机。

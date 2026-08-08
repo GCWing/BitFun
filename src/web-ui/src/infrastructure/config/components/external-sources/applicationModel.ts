@@ -1,4 +1,7 @@
 import type {
+  ExternalApplicationHealthV2,
+  ExternalApplicationRecoveryActionV2,
+  ExternalApplicationSnapshotV2,
   ExternalIntegrationAccess,
   ExternalIntegrationMode,
   ExternalSourceCatalogSnapshot,
@@ -20,11 +23,20 @@ export type ExternalApplicationStatus =
   | 'needs_attention'
   | 'connected'
   | 'connected_custom'
+  | 'configuration_available'
+  | 'temporarily_unavailable'
   | 'discovered'
   | 'checking'
   | 'no_configuration';
 
-export type ExternalApplicationAction = 'connect' | 'manage' | 'review' | 'none';
+export type ExternalApplicationAction =
+  | 'connect'
+  | 'manage'
+  | 'review'
+  | 'view'
+  | 'retry'
+  | 'view_reason'
+  | 'none';
 
 export interface ExternalApplicationCapabilityPlan {
   capabilityId: string;
@@ -41,12 +53,20 @@ export interface ExternalApplicationActiveCapability {
 }
 
 export interface ExternalApplicationView {
+  applicationId?: string;
   ecosystemId: string;
   displayName: string;
-  mode: ExternalIntegrationMode;
+  mode?: ExternalIntegrationMode;
   status: ExternalApplicationStatus;
   primaryAction: ExternalApplicationAction;
   enabled: boolean;
+  /** Host-authoritative aggregate for V2; V1 continues to expose capability counts. */
+  enabledCount?: number;
+  /** Host-authoritative V2 secondary facts; omitted for the inferred V1 projection. */
+  health?: ExternalApplicationHealthV2;
+  blockedCount?: number;
+  conflictCount?: number;
+  recoveryActions?: ExternalApplicationRecoveryActionV2[];
   counts: ExternalSourceCapabilityCounts;
   activeCapabilities: ExternalApplicationActiveCapability[];
   sourceCount: number;
@@ -62,6 +82,34 @@ export interface ExternalApplicationsView {
   /** Attention items with no ecosystem identity (catalog diagnostics, policy). */
   unattributedAttentionCount: number;
   totalAttentionCount: number;
+}
+
+export function buildExternalApplicationsViewV2(
+  snapshot: ExternalApplicationSnapshotV2,
+): ExternalApplicationsView {
+  return {
+    applications: snapshot.applications.map((application) => ({
+      applicationId: application.applicationId,
+      ecosystemId: application.ecosystemId,
+      displayName: application.displayName,
+      status: application.effectiveStatus,
+      primaryAction: application.primaryAction,
+      enabled: application.connection === 'connected',
+      enabledCount: application.enabledCount,
+      health: application.health,
+      blockedCount: application.blockedCount,
+      conflictCount: application.conflictCount,
+      recoveryActions: application.recoveryActions,
+      counts: { commands: 0, tools: 0, agents: 0, mcps: 0 },
+      activeCapabilities: [],
+      sourceCount: 0,
+      locations: [],
+      attentionCount: application.pendingReviewCount,
+      connectPlan: [],
+    })),
+    unattributedAttentionCount: 0,
+    totalAttentionCount: snapshot.reviewSummary?.totalCount ?? 0,
+  };
 }
 
 const CAPABILITY_COUNT_FIELD: Record<string, keyof ExternalSourceCapabilityCounts> = {

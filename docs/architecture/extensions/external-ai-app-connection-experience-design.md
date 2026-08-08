@@ -4,7 +4,7 @@
 
 本文只描述交互、应用级读模型、动作语义和宿主投影，不重定义生态解析、能力归属、执行权限或插件运行时。
 
-> **实现状态：部分交付。** 当前生产协议仍以严格校验的 `ExternalSourceControlSnapshotV1` 为主，Desktop 已交付应用级首页和详情投影；共享应用连接、批量确认和任务相关 `action-required` 仍须完成对应执行计划并取得端到端证据。Hook 管理沿用独立 owner 和现有安全审核契约，其产品入口与展示规则见第 5.5、7.1 和 8.3 节。
+> **实现状态：部分交付。** 当前分支保留严格 V1 兼容路径，并已交付独立 V2 应用快照、作用域化连接偏好与迁移、分页批量确认、Desktop/Peer 投影，以及 Desktop Settings 和交互式 TUI 消费。App Server 只在真实注入 management owner 的宿主中暴露这些方法；Shared Runtime 与通用 Server 不伪装支持。任务相关 `action-required`、非交互 CLI 结果和 `HookManagementSnapshot` 仍是后续工作。Hook 管理继续沿用独立 owner 和现有安全审核契约，其产品入口与展示规则见第 5.5、7.1 和 8.3 节。
 
 ## 1. 问题与设计目标
 
@@ -209,6 +209,7 @@ Tool、Subagent、MCP、Hook 和无法自动决定的真实冲突进入同一个
 
 - stale revision、无效 generation 或宿主能力整体不兼容时，整个请求不应用；
 - owner 允许逐项业务拒绝时，响应返回逐项结果；宿主只把成功项标为已启用；
+- “整个请求不应用”只保证分派前的 identity、revision 和 generation 预检；开始分派后若 owner 状态并发变化，可以同时返回已应用项和类型化 stale/failed 项，不承诺跨 owner 回滚；
 - 未知结果不能假定成功；
 - 失败项保留可行动原因与恢复动作。
 
@@ -408,7 +409,7 @@ AgenticEvent::ExternalDependencyActionRequired
 
 现有 `ExternalSourceControlSnapshotV1`、`ExternalSourceControlActionV1`、`ExternalSourceRecoveryActionV1` 和 V1 `hostCapabilities` 保持字段与闭合枚举不变。应用级快照、连接动作、批量确认、`upgrade-host` 语义以及新增能力位不得追加到 V1 对象。
 
-`get_external_application_snapshot_v2` 本身无副作用，直接承担版本探测，不再增加单独的版本信息接口：
+`get_external_application_snapshot_v2` 不提交用户决定或运行能力写动作，直接承担版本探测，不再增加单独的版本信息接口。首次激活对应 owner 时允许执行可重入偏好迁移并启动既有后台发现；当前 V2 偏好读取不得重复写回。确认分页只读取已激活 owner 的不可变结果，不能冷启动服务或发现：
 
 - 新宿主返回严格的 V2 快照和 `host_capabilities`；客户端校验成功后，才可读取分页确认项或发送 V2 写操作；
 - 旧宿主对 V2 快照返回传输层 method-not-found 时，客户端回退显示 V1 来源/能力管理并禁用 V2 写操作；
@@ -420,7 +421,7 @@ AgenticEvent::ExternalDependencyActionRequired
 
 ### 8.2 性能与演进约束
 
-- 应用快照和确认分页必须从当前不可变发现结果派生；读取不能重新扫描文件、启动外部进程或持有偏好写锁。
+- 应用快照和确认分页必须从当前不可变发现结果派生；首次快照可触发既有 owner 的迁移和后台发现，确认分页不得重新扫描文件、冷启动 owner、启动外部进程或持有偏好写锁。
 - 首页只返回摘要，确认页每页最多 128 项。完整候选总量继续服从各归属模块已有上限，不建立第二套无界缓存。
 - 共享缓存只允许按执行域、工作区作用域、发现代次和偏好版本精确失效；React、TUI、Peer 与 Server 不得各自维护产品状态机。
 - 归属模块的加载与卸载在锁外执行；迁移关口只阻塞外部来源读写，不阻塞项目打开或无关 Agent 任务。

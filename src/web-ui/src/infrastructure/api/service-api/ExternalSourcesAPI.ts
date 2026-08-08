@@ -196,6 +196,225 @@ export interface ExternalSourceCatalogSnapshot {
   control?: ExternalSourceControlSnapshot;
 }
 
+export type ExternalApplicationTargetScopeV2 = 'user_default' | 'workspace_override';
+export type ExternalApplicationDesiredConnectionV2 =
+  | 'unspecified'
+  | 'connected'
+  | 'disconnected'
+  | 'deferred'
+  | 'needs_review';
+export type ExternalApplicationUserDecisionV2 =
+  | 'none'
+  | 'connected'
+  | 'disconnected'
+  | 'deferred'
+  | 'needs_review';
+export type ExternalApplicationDiscoveryStateV2 = 'not_discovered' | 'discovered';
+export type ExternalApplicationConnectionStateV2 = 'disconnected' | 'connected';
+export type ExternalApplicationHealthV2 = 'healthy' | 'degraded' | 'unavailable';
+export type ExternalApplicationEffectiveStatusV2 =
+  | 'connected'
+  | 'configuration_available'
+  | 'no_configuration'
+  | 'needs_attention'
+  | 'temporarily_unavailable';
+export type ExternalApplicationPrimaryActionV2 =
+  | 'none'
+  | 'view'
+  | 'connect'
+  | 'review'
+  | 'retry'
+  | 'view_reason';
+export type ExternalApplicationDefaultConnectionPolicyV2 =
+  | 'connect'
+  | 'discover_only'
+  | 'unsupported';
+export type ExternalApplicationRiskLevelV2 = 'low' | 'moderate' | 'high';
+export type ExternalApplicationSafetyCeilingV2 = 'blocked' | 'review_required' | 'automatic';
+export type ExternalApplicationRecoveryActionV2 = {
+  type:
+    | 'refresh'
+    | 'retry'
+    | 'reconnect_host'
+    | 'review'
+    | 'upgrade_host'
+    | 'view_reason'
+    | 'exit_safe_mode'
+    | 'resolve_conflict'
+    | 'install_runtime';
+};
+
+export interface ExternalApplicationHostCapabilitiesV2 {
+  canReadSnapshot: boolean;
+  canReadReview: boolean;
+  canMutate: boolean;
+  canManageUserDefault: boolean;
+  canManageWorkspaceOverride: boolean;
+  canRefresh: boolean;
+  canSetSafeMode: boolean;
+}
+
+export interface ExternalApplicationRiskSummaryV2 {
+  highestLevel?: ExternalApplicationRiskLevelV2;
+  reasonCodes: string[];
+}
+
+export type ExternalApplicationReviewItemKindV2 =
+  | 'command'
+  | 'tool'
+  | 'subagent'
+  | 'mcp'
+  | 'conflict';
+
+export interface ExternalApplicationReviewSummaryV2 {
+  reviewId: string;
+  totalCount: number;
+  categoryCounts: Array<{ kind: ExternalApplicationReviewItemKindV2; count: number }>;
+  maxSelectionCount: number;
+  riskSummary: ExternalApplicationRiskSummaryV2;
+  recommendationSummary: {
+    recommendedCount: number;
+    optionalCount: number;
+    blockedCount: number;
+  };
+  safetyCeiling: ExternalApplicationSafetyCeilingV2;
+}
+
+export interface ExternalApplicationReviewItemRefV2 {
+  kind: ExternalApplicationReviewItemKindV2;
+  stableId: string;
+}
+
+export interface ExternalApplicationOwnerGenerationV2 {
+  owner: ExternalApplicationReviewItemKindV2;
+  generation: number;
+}
+
+export interface ExternalApplicationReviewItemV2 {
+  itemRef: ExternalApplicationReviewItemRefV2;
+  displayName: string;
+  displaySummary: string;
+  riskLevel: ExternalApplicationRiskLevelV2;
+  riskReasonCodes: string[];
+  recommended: boolean;
+  safetyCeiling: ExternalApplicationSafetyCeilingV2;
+}
+
+export interface ExternalApplicationReviewPageRequestV2 {
+  schemaVersion: 2;
+  executionDomainId: string;
+  workspaceScopeId?: string;
+  targetScope: ExternalApplicationTargetScopeV2;
+  reviewId: string;
+  preferenceRevision: number;
+  expectedGenerations: ExternalApplicationOwnerGenerationV2[];
+  cursor?: string;
+  pageSize: number;
+}
+
+export interface ExternalApplicationReviewPageV2 {
+  schemaVersion: 2;
+  executionDomainId: string;
+  workspaceScopeId?: string;
+  targetScope: ExternalApplicationTargetScopeV2;
+  reviewId: string;
+  preferenceRevision: number;
+  expectedGenerations: ExternalApplicationOwnerGenerationV2[];
+  cursor?: string;
+  nextCursor?: string;
+  totalCount: number;
+  items: ExternalApplicationReviewItemV2[];
+}
+
+export type ExternalApplicationReviewSelectionBaselineV2 = 'recommended' | 'none';
+
+export interface ExternalApplicationReviewSelectionOverrideV2 {
+  itemRef: ExternalApplicationReviewItemRefV2;
+  selected: boolean;
+}
+
+export type ExternalApplicationControlActionV2 =
+  | { type: 'connect_application'; applicationId: string }
+  | { type: 'disconnect_application'; applicationId: string }
+  | { type: 'set_application_deferred'; applicationId: string }
+  | {
+      type: 'submit_application_review';
+      reviewId: string;
+      expectedGenerations: ExternalApplicationOwnerGenerationV2[];
+      selectionBaseline: ExternalApplicationReviewSelectionBaselineV2;
+      selectionOverrides: ExternalApplicationReviewSelectionOverrideV2[];
+    }
+  | { type: 'refresh' }
+  | { type: 'set_source_enabled'; sourceKey: string; enabled: boolean }
+  | { type: 'set_safe_mode'; enabled: boolean };
+
+export interface ExternalApplicationControlRequestV2 {
+  schemaVersion: 2;
+  executionDomainId: string;
+  workspaceScopeId?: string;
+  targetScope: ExternalApplicationTargetScopeV2;
+  operationId: string;
+  expectedPreferenceRevision: number;
+  action: ExternalApplicationControlActionV2;
+}
+
+export type ExternalApplicationOperationOutcomeV2 =
+  | 'applied'
+  | 'rejected'
+  | 'blocked'
+  | 'stale'
+  | 'failed';
+
+export interface ExternalApplicationReviewItemResultV2 {
+  itemRef: ExternalApplicationReviewItemRefV2;
+  outcome: ExternalApplicationOperationOutcomeV2;
+  reasonCode?: string;
+  recoveryActions: ExternalApplicationRecoveryActionV2[];
+}
+
+export interface ExternalApplicationControlResultV2 {
+  schemaVersion: 2;
+  operationId: string;
+  preferenceRevision: number;
+  outcome: ExternalApplicationOperationOutcomeV2;
+  itemResults: ExternalApplicationReviewItemResultV2[];
+}
+
+export interface ExternalApplicationSummaryV2 {
+  applicationId: string;
+  ecosystemId: string;
+  displayName: string;
+  discovery: ExternalApplicationDiscoveryStateV2;
+  connection: ExternalApplicationConnectionStateV2;
+  desiredConnection: ExternalApplicationDesiredConnectionV2;
+  health: ExternalApplicationHealthV2;
+  effectiveStatus: ExternalApplicationEffectiveStatusV2;
+  primaryAction: ExternalApplicationPrimaryActionV2;
+  defaultConnectionPolicy: ExternalApplicationDefaultConnectionPolicyV2;
+  defaultConnectionReason: string;
+  enabledCount: number;
+  pendingReviewCount: number;
+  blockedCount: number;
+  conflictCount: number;
+  riskSummary: ExternalApplicationRiskSummaryV2;
+  noticeKey?: string;
+  userDecision: ExternalApplicationUserDecisionV2;
+  recoveryActions: ExternalApplicationRecoveryActionV2[];
+}
+
+export interface ExternalApplicationSnapshotV2 {
+  schemaVersion: 2;
+  executionDomainId: string;
+  workspaceScopeId?: string;
+  effectiveConnectionScope: ExternalApplicationTargetScopeV2;
+  refreshGeneration: number;
+  preferenceRevision: number;
+  safeMode: boolean;
+  hostCapabilities: ExternalApplicationHostCapabilitiesV2;
+  applications: ExternalApplicationSummaryV2[];
+  reviewSummary?: ExternalApplicationReviewSummaryV2;
+}
+
 export interface PromptCommandShellReviewPlan {
   schemaVersion: number;
   planFingerprint: string;
@@ -762,6 +981,399 @@ function isNonNegativeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
+const APPLICATION_TARGET_SCOPES = new Set<ExternalApplicationTargetScopeV2>([
+  'user_default', 'workspace_override',
+]);
+const APPLICATION_DESIRED_CONNECTIONS = new Set<ExternalApplicationDesiredConnectionV2>([
+  'unspecified', 'connected', 'disconnected', 'deferred', 'needs_review',
+]);
+const APPLICATION_USER_DECISIONS = new Set<ExternalApplicationUserDecisionV2>([
+  'none', 'connected', 'disconnected', 'deferred', 'needs_review',
+]);
+const APPLICATION_DISCOVERY_STATES = new Set<ExternalApplicationDiscoveryStateV2>([
+  'not_discovered', 'discovered',
+]);
+const APPLICATION_CONNECTION_STATES = new Set<ExternalApplicationConnectionStateV2>([
+  'disconnected', 'connected',
+]);
+const APPLICATION_HEALTH_STATES = new Set<ExternalApplicationHealthV2>([
+  'healthy', 'degraded', 'unavailable',
+]);
+const APPLICATION_EFFECTIVE_STATUSES = new Set<ExternalApplicationEffectiveStatusV2>([
+  'connected',
+  'configuration_available',
+  'no_configuration',
+  'needs_attention',
+  'temporarily_unavailable',
+]);
+const APPLICATION_PRIMARY_ACTIONS = new Set<ExternalApplicationPrimaryActionV2>([
+  'none', 'view', 'connect', 'review', 'retry', 'view_reason',
+]);
+const APPLICATION_DEFAULT_POLICIES = new Set<ExternalApplicationDefaultConnectionPolicyV2>([
+  'connect', 'discover_only', 'unsupported',
+]);
+const APPLICATION_RISK_LEVELS = new Set<ExternalApplicationRiskLevelV2>([
+  'low', 'moderate', 'high',
+]);
+const APPLICATION_SAFETY_CEILINGS = new Set<ExternalApplicationSafetyCeilingV2>([
+  'blocked', 'review_required', 'automatic',
+]);
+const APPLICATION_REVIEW_KINDS = new Set<ExternalApplicationReviewItemKindV2>([
+  'command', 'tool', 'subagent', 'mcp', 'conflict',
+]);
+const APPLICATION_RECOVERY_ACTIONS = new Set<ExternalApplicationRecoveryActionV2['type']>([
+  'refresh',
+  'retry',
+  'reconnect_host',
+  'review',
+  'upgrade_host',
+  'view_reason',
+  'exit_safe_mode',
+  'resolve_conflict',
+  'install_runtime',
+]);
+const APPLICATION_OPERATION_OUTCOMES = new Set<ExternalApplicationOperationOutcomeV2>([
+  'applied', 'rejected', 'blocked', 'stale', 'failed',
+]);
+
+function isExactRecord(
+  value: unknown,
+  allowedKeys: readonly string[],
+  requiredKeys: readonly string[] = allowedKeys,
+): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return Object.keys(record).every((key) => allowedKeys.includes(key))
+    && requiredKeys.every((key) => Object.prototype.hasOwnProperty.call(record, key));
+}
+
+function isApplicationRiskSummary(value: unknown): value is ExternalApplicationRiskSummaryV2 {
+  if (!isExactRecord(value, ['highestLevel', 'reasonCodes'], [])) return false;
+  return (value.highestLevel === undefined
+      || value.highestLevel === null
+      || isOneOf(value.highestLevel, APPLICATION_RISK_LEVELS))
+    && (value.reasonCodes === undefined
+      || (Array.isArray(value.reasonCodes)
+        && value.reasonCodes.every((reason) => typeof reason === 'string')));
+}
+
+function isApplicationRecoveryAction(
+  value: unknown,
+): value is ExternalApplicationRecoveryActionV2 {
+  return isExactRecord(value, ['type']) && isOneOf(value.type, APPLICATION_RECOVERY_ACTIONS);
+}
+
+function isApplicationReviewItemRef(
+  value: unknown,
+): value is ExternalApplicationReviewItemRefV2 {
+  return isExactRecord(value, ['kind', 'stableId'])
+    && isOneOf(value.kind, APPLICATION_REVIEW_KINDS)
+    && typeof value.stableId === 'string';
+}
+
+function isApplicationOwnerGeneration(
+  value: unknown,
+): value is ExternalApplicationOwnerGenerationV2 {
+  return isExactRecord(value, ['owner', 'generation'])
+    && isOneOf(value.owner, APPLICATION_REVIEW_KINDS)
+    && isNonNegativeInteger(value.generation);
+}
+
+function isApplicationReviewItem(value: unknown): value is ExternalApplicationReviewItemV2 {
+  return isExactRecord(value, [
+    'itemRef',
+    'displayName',
+    'displaySummary',
+    'riskLevel',
+    'riskReasonCodes',
+    'recommended',
+    'safetyCeiling',
+  ])
+    && isApplicationReviewItemRef(value.itemRef)
+    && typeof value.displayName === 'string'
+    && typeof value.displaySummary === 'string'
+    && isOneOf(value.riskLevel, APPLICATION_RISK_LEVELS)
+    && Array.isArray(value.riskReasonCodes)
+    && value.riskReasonCodes.every((reason) => typeof reason === 'string')
+    && typeof value.recommended === 'boolean'
+    && isOneOf(value.safetyCeiling, APPLICATION_SAFETY_CEILINGS);
+}
+
+function isApplicationHostCapabilities(
+  value: unknown,
+): value is ExternalApplicationHostCapabilitiesV2 {
+  const keys = [
+    'canReadSnapshot',
+    'canReadReview',
+    'canMutate',
+    'canManageUserDefault',
+    'canManageWorkspaceOverride',
+    'canRefresh',
+    'canSetSafeMode',
+  ] as const;
+  return isExactRecord(value, keys) && keys.every((key) => typeof value[key] === 'boolean');
+}
+
+function isApplicationSummary(value: unknown): value is ExternalApplicationSummaryV2 {
+  const keys = [
+    'applicationId',
+    'ecosystemId',
+    'displayName',
+    'discovery',
+    'connection',
+    'desiredConnection',
+    'health',
+    'effectiveStatus',
+    'primaryAction',
+    'defaultConnectionPolicy',
+    'defaultConnectionReason',
+    'enabledCount',
+    'pendingReviewCount',
+    'blockedCount',
+    'conflictCount',
+    'riskSummary',
+    'noticeKey',
+    'userDecision',
+    'recoveryActions',
+  ] as const;
+  if (!isExactRecord(value, keys, keys.filter((key) => key !== 'noticeKey'))) return false;
+  return typeof value.applicationId === 'string'
+    && typeof value.ecosystemId === 'string'
+    && typeof value.displayName === 'string'
+    && isOneOf(value.discovery, APPLICATION_DISCOVERY_STATES)
+    && isOneOf(value.connection, APPLICATION_CONNECTION_STATES)
+    && isOneOf(value.desiredConnection, APPLICATION_DESIRED_CONNECTIONS)
+    && isOneOf(value.health, APPLICATION_HEALTH_STATES)
+    && isOneOf(value.effectiveStatus, APPLICATION_EFFECTIVE_STATUSES)
+    && isOneOf(value.primaryAction, APPLICATION_PRIMARY_ACTIONS)
+    && isOneOf(value.defaultConnectionPolicy, APPLICATION_DEFAULT_POLICIES)
+    && typeof value.defaultConnectionReason === 'string'
+    && isNonNegativeInteger(value.enabledCount)
+    && isNonNegativeInteger(value.pendingReviewCount)
+    && isNonNegativeInteger(value.blockedCount)
+    && isNonNegativeInteger(value.conflictCount)
+    && isApplicationRiskSummary(value.riskSummary)
+    && (value.noticeKey === undefined || value.noticeKey === null || typeof value.noticeKey === 'string')
+    && isOneOf(value.userDecision, APPLICATION_USER_DECISIONS)
+    && Array.isArray(value.recoveryActions)
+    && value.recoveryActions.every(isApplicationRecoveryAction);
+}
+
+function isApplicationReviewSummary(
+  value: unknown,
+): value is ExternalApplicationReviewSummaryV2 {
+  const keys = [
+    'reviewId',
+    'totalCount',
+    'categoryCounts',
+    'maxSelectionCount',
+    'riskSummary',
+    'recommendationSummary',
+    'safetyCeiling',
+  ] as const;
+  if (!isExactRecord(value, keys)
+    || typeof value.reviewId !== 'string'
+    || !isNonNegativeInteger(value.totalCount)
+    || !isNonNegativeInteger(value.maxSelectionCount)
+    || value.maxSelectionCount > value.totalCount
+    || !isApplicationRiskSummary(value.riskSummary)
+    || !isOneOf(value.safetyCeiling, APPLICATION_SAFETY_CEILINGS)
+    || !Array.isArray(value.categoryCounts)
+    || !value.categoryCounts.every((entry) => (
+      isExactRecord(entry, ['kind', 'count'])
+      && isOneOf(entry.kind, APPLICATION_REVIEW_KINDS)
+      && isNonNegativeInteger(entry.count)
+    ))
+    || !isExactRecord(
+      value.recommendationSummary,
+      ['recommendedCount', 'optionalCount', 'blockedCount'],
+    )) return false;
+  return isNonNegativeInteger(value.recommendationSummary.recommendedCount)
+    && isNonNegativeInteger(value.recommendationSummary.optionalCount)
+    && isNonNegativeInteger(value.recommendationSummary.blockedCount);
+}
+
+export function normalizeExternalApplicationSnapshotV2(
+  value: unknown,
+): ExternalApplicationSnapshotV2 {
+  const keys = [
+    'schemaVersion',
+    'executionDomainId',
+    'workspaceScopeId',
+    'effectiveConnectionScope',
+    'refreshGeneration',
+    'preferenceRevision',
+    'safeMode',
+    'hostCapabilities',
+    'applications',
+    'reviewSummary',
+  ] as const;
+  const required = keys.filter(
+    (key) => key !== 'workspaceScopeId' && key !== 'reviewSummary',
+  );
+  if (!isExactRecord(value, keys, required)
+    || value.schemaVersion !== 2
+    || typeof value.executionDomainId !== 'string'
+    || (value.workspaceScopeId !== undefined
+      && value.workspaceScopeId !== null
+      && typeof value.workspaceScopeId !== 'string')
+    || !isOneOf(value.effectiveConnectionScope, APPLICATION_TARGET_SCOPES)
+    || !isNonNegativeInteger(value.refreshGeneration)
+    || !isNonNegativeInteger(value.preferenceRevision)
+    || typeof value.safeMode !== 'boolean'
+    || !isApplicationHostCapabilities(value.hostCapabilities)
+    || !Array.isArray(value.applications)
+    || !value.applications.every(isApplicationSummary)
+    || (value.reviewSummary !== undefined
+      && value.reviewSummary !== null
+      && !isApplicationReviewSummary(value.reviewSummary))) {
+    throw new ExternalSourceApiError(
+      'invalid_response',
+      'External application V2 snapshot schema was invalid',
+      false,
+    );
+  }
+  return {
+    ...value,
+    workspaceScopeId: typeof value.workspaceScopeId === 'string'
+      ? value.workspaceScopeId
+      : undefined,
+    applications: value.applications.map((application) => ({
+      ...application,
+      noticeKey: typeof application.noticeKey === 'string' ? application.noticeKey : undefined,
+      riskSummary: {
+        ...(application.riskSummary.highestLevel
+          ? { highestLevel: application.riskSummary.highestLevel }
+          : {}),
+        reasonCodes: [...(application.riskSummary.reasonCodes ?? [])],
+      },
+      recoveryActions: [...application.recoveryActions],
+    })),
+    reviewSummary: value.reviewSummary && isApplicationReviewSummary(value.reviewSummary)
+      ? {
+          ...value.reviewSummary,
+          categoryCounts: [...value.reviewSummary.categoryCounts],
+          riskSummary: {
+            ...(value.reviewSummary.riskSummary.highestLevel
+              ? { highestLevel: value.reviewSummary.riskSummary.highestLevel }
+              : {}),
+            reasonCodes: [...(value.reviewSummary.riskSummary.reasonCodes ?? [])],
+          },
+          recommendationSummary: { ...value.reviewSummary.recommendationSummary },
+        }
+      : undefined,
+  } as ExternalApplicationSnapshotV2;
+}
+
+export function normalizeExternalApplicationReviewPageV2(
+  value: unknown,
+): ExternalApplicationReviewPageV2 {
+  const keys = [
+    'schemaVersion',
+    'executionDomainId',
+    'workspaceScopeId',
+    'targetScope',
+    'reviewId',
+    'preferenceRevision',
+    'expectedGenerations',
+    'cursor',
+    'nextCursor',
+    'totalCount',
+    'items',
+  ] as const;
+  const required = keys.filter(
+    (key) => key !== 'workspaceScopeId' && key !== 'cursor' && key !== 'nextCursor',
+  );
+  if (!isExactRecord(value, keys, required)
+    || value.schemaVersion !== 2
+    || typeof value.executionDomainId !== 'string'
+    || (value.workspaceScopeId !== undefined
+      && value.workspaceScopeId !== null
+      && typeof value.workspaceScopeId !== 'string')
+    || !isOneOf(value.targetScope, APPLICATION_TARGET_SCOPES)
+    || (value.targetScope === 'workspace_override' && typeof value.workspaceScopeId !== 'string')
+    || (value.targetScope === 'user_default' && value.workspaceScopeId != null)
+    || typeof value.reviewId !== 'string'
+    || !isNonNegativeInteger(value.preferenceRevision)
+    || !Array.isArray(value.expectedGenerations)
+    || !value.expectedGenerations.every(isApplicationOwnerGeneration)
+    || (value.cursor !== undefined && value.cursor !== null && typeof value.cursor !== 'string')
+    || (value.nextCursor !== undefined
+      && value.nextCursor !== null
+      && typeof value.nextCursor !== 'string')
+    || !isNonNegativeInteger(value.totalCount)
+    || !Array.isArray(value.items)
+    || value.items.length > 128
+    || value.items.length > value.totalCount
+    || !value.items.every(isApplicationReviewItem)) {
+    throw new ExternalSourceApiError(
+      'invalid_response',
+      'External application V2 review page schema was invalid',
+      false,
+    );
+  }
+  return {
+    ...value,
+    workspaceScopeId: typeof value.workspaceScopeId === 'string'
+      ? value.workspaceScopeId
+      : undefined,
+    cursor: typeof value.cursor === 'string' ? value.cursor : undefined,
+    nextCursor: typeof value.nextCursor === 'string' ? value.nextCursor : undefined,
+    expectedGenerations: value.expectedGenerations.map((entry) => ({ ...entry })),
+    items: value.items.map((item) => ({
+      ...item,
+      itemRef: { ...item.itemRef },
+      riskReasonCodes: [...item.riskReasonCodes],
+    })),
+  } as ExternalApplicationReviewPageV2;
+}
+
+export function normalizeExternalApplicationControlResultV2(
+  value: unknown,
+): ExternalApplicationControlResultV2 {
+  if (!isExactRecord(value, [
+    'schemaVersion',
+    'operationId',
+    'preferenceRevision',
+    'outcome',
+    'itemResults',
+  ])
+    || value.schemaVersion !== 2
+    || typeof value.operationId !== 'string'
+    || !isNonNegativeInteger(value.preferenceRevision)
+    || !isOneOf(value.outcome, APPLICATION_OPERATION_OUTCOMES)
+    || !Array.isArray(value.itemResults)
+    || !value.itemResults.every((result) => (
+      isExactRecord(
+        result,
+        ['itemRef', 'outcome', 'reasonCode', 'recoveryActions'],
+        ['itemRef', 'outcome', 'recoveryActions'],
+      )
+      && isApplicationReviewItemRef(result.itemRef)
+      && isOneOf(result.outcome, APPLICATION_OPERATION_OUTCOMES)
+      && (result.reasonCode === undefined
+        || result.reasonCode === null
+        || typeof result.reasonCode === 'string')
+      && Array.isArray(result.recoveryActions)
+      && result.recoveryActions.every(isApplicationRecoveryAction)
+    ))) {
+    throw new ExternalSourceApiError(
+      'invalid_response',
+      'External application V2 action result schema was invalid',
+      false,
+    );
+  }
+  return {
+    ...value,
+    itemResults: value.itemResults.map((result) => ({
+      ...result,
+      itemRef: { ...result.itemRef },
+      reasonCode: typeof result.reasonCode === 'string' ? result.reasonCode : undefined,
+      recoveryActions: [...result.recoveryActions],
+    })),
+  } as ExternalApplicationControlResultV2;
+}
+
 function isHostCapabilities(
   value: unknown,
 ): value is ExternalSourceCatalogSnapshot['hostCapabilities'] {
@@ -1322,6 +1934,83 @@ function emitExternalAgentCatalogUpdated(workspacePath?: string) {
 }
 
 export const externalSourcesAPI = {
+  async getApplicationReviewPage(
+    workspacePath: string | undefined,
+    request: ExternalApplicationReviewPageRequestV2,
+  ) {
+    const page = normalizeExternalApplicationReviewPageV2(
+      await invokeExternalSourceCommand<unknown>(
+        'get_external_application_review_page_v2',
+        {
+          request: {
+            workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+            request,
+          },
+        },
+      ),
+    );
+    if (page.executionDomainId !== request.executionDomainId
+      || page.workspaceScopeId !== request.workspaceScopeId
+      || page.targetScope !== request.targetScope
+      || page.reviewId !== request.reviewId
+      || page.preferenceRevision !== request.preferenceRevision
+      || page.cursor !== request.cursor) {
+      throw new ExternalSourceApiError(
+        'invalid_response',
+        'External application V2 review page did not match its request',
+        false,
+      );
+    }
+    return page;
+  },
+
+  async applyApplicationAction(
+    workspacePath: string | undefined,
+    request: ExternalApplicationControlRequestV2,
+  ) {
+    const result = normalizeExternalApplicationControlResultV2(
+      await invokeExternalSourceCommand<unknown>(
+        'apply_external_application_action_v2',
+        {
+          request: {
+            workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+            request,
+          },
+        },
+      ),
+    );
+    if (result.operationId !== request.operationId) {
+      throw new ExternalSourceApiError(
+        'invalid_response',
+        'External application V2 action result did not match its operation',
+        false,
+      );
+    }
+    return result;
+  },
+
+  async getApplicationSurface(workspacePath?: string, forceRefresh = false) {
+    const request = {
+      workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+      forceRefresh,
+    };
+    try {
+      const snapshot = normalizeExternalApplicationSnapshotV2(
+        await invokeExternalSourceCommand<unknown>(
+          'get_external_application_snapshot_v2',
+          { request },
+        ),
+      );
+      return { protocol: 'v2' as const, snapshot };
+    } catch (error) {
+      if (!(error instanceof ExternalSourceApiError) || error.code !== 'incompatible_version') {
+        throw error;
+      }
+      const snapshot = (await invokeCompatibleSurfaceSnapshot({ request })).catalog;
+      return { protocol: 'v1' as const, snapshot };
+    }
+  },
+
   planMcpImport(workspacePath?: string) {
     return invokeExternalSourceCommand<ExternalMcpImportPlanV1>(
       'plan_external_mcp_import_command',

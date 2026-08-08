@@ -1527,6 +1527,12 @@ export function runManifestParserSelfTest({
     'ExternalSourceControlRequestV1',
     'ExternalSourceOperationStage',
     'ExternalSourceRecoveryActionV1',
+    'EXTERNAL_APPLICATION_SCHEMA_V2',
+    'ExternalApplicationSnapshotV2',
+    'ExternalApplicationReviewPageV2',
+    'ExternalApplicationControlActionV2',
+    'ExternalApplicationControlRequestV2',
+    'ExternalApplicationControlResultV2',
   ]) {
     if (!externalSourceControlPublicApiRule?.allowedSymbolEntries.some(
       (entry) => entry.symbol === requiredSymbol
@@ -1577,6 +1583,9 @@ export function runManifestParserSelfTest({
     'ExternalSourceControlRequestV1',
     'get_external_source_control_snapshot',
     'apply_external_source_control_action',
+    'get_external_application_snapshot_v2',
+    'get_external_application_review_page_v2',
+    'apply_external_application_action_v2',
   ]) {
     if (!externalSourceCorePublicApiRule?.allowedSymbolEntries.some(
       (entry) => entry.symbol === requiredSymbol

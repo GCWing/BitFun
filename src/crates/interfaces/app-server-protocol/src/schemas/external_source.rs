@@ -7,8 +7,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use agent_client_protocol::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use bitfun_product_domains::external_source_control::{
-    ExternalSourceControlRequestV1, ExternalSourceControlSnapshotV1,
-    ExternalSourceSurfaceSnapshotV1,
+    ExternalApplicationControlRequestV2, ExternalApplicationControlResultV2,
+    ExternalApplicationReviewPageRequestV2 as DomainExternalApplicationReviewPageRequestV2,
+    ExternalApplicationReviewPageV2, ExternalApplicationSnapshotV2, ExternalSourceControlRequestV1,
+    ExternalSourceControlSnapshotV1, ExternalSourceSurfaceSnapshotV1,
 };
 use bitfun_product_domains::external_sources::{
     ExternalSourceOperationError, ExternalSourcePublicSnapshot,
@@ -41,6 +43,51 @@ pub struct ExternalSourceSnapshotResponse {
     pub snapshot: ExternalSourcePublicSnapshot,
     pub preferences: ExternalSourceConflictPreferences,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(
+    method = "externalSource/applicationSnapshotV2",
+    response = ExternalApplicationSnapshotResponseV2
+)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalApplicationSnapshotRequestV2 {
+    pub workspace_path: Option<String>,
+    pub force_refresh: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[serde(transparent)]
+pub struct ExternalApplicationSnapshotResponseV2(pub ExternalApplicationSnapshotV2);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(
+    method = "externalSource/applicationReviewPageV2",
+    response = ExternalApplicationReviewPageResponseV2
+)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalApplicationReviewPageRequest {
+    pub workspace_path: Option<String>,
+    pub request: DomainExternalApplicationReviewPageRequestV2,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[serde(transparent)]
+pub struct ExternalApplicationReviewPageResponseV2(pub ExternalApplicationReviewPageV2);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(
+    method = "externalSource/applicationActionV2",
+    response = ExternalApplicationActionResponseV2
+)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalApplicationActionRequest {
+    pub workspace_path: Option<String>,
+    pub request: ExternalApplicationControlRequestV2,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[serde(transparent)]
+pub struct ExternalApplicationActionResponseV2(pub ExternalApplicationControlResultV2);
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcNotification)]
 #[notification(method = "externalSource/event")]
@@ -237,5 +284,114 @@ mod tests {
         let debug = format!("{request:?}");
         assert!(!debug.contains("C:/secret/project"));
         assert!(!debug.contains("--token secret"));
+    }
+
+    #[test]
+    fn application_v2_wire_requests_keep_workspace_binding_outside_domain_payloads() {
+        let snapshot: ExternalApplicationSnapshotRequestV2 =
+            serde_json::from_value(serde_json::json!({
+                "workspacePath": null,
+                "forceRefresh": true
+            }))
+            .unwrap();
+        assert_eq!(snapshot.workspace_path, None);
+        assert!(snapshot.force_refresh);
+
+        let page: ExternalApplicationReviewPageRequest =
+            serde_json::from_value(serde_json::json!({
+                "workspacePath": "C:/work/project",
+                "request": {
+                    "schemaVersion": 2,
+                    "executionDomainId": "host-a",
+                    "workspaceScopeId": "workspace-a",
+                    "targetScope": "workspace_override",
+                    "reviewId": "review-a",
+                    "preferenceRevision": 4,
+                    "expectedGenerations": [],
+                    "pageSize": 64
+                }
+            }))
+            .unwrap();
+        assert_eq!(page.workspace_path.as_deref(), Some("C:/work/project"));
+        assert_eq!(page.request.page_size, 64);
+
+        let action: ExternalApplicationActionRequest = serde_json::from_value(serde_json::json!({
+            "workspacePath": "C:/work/project",
+            "request": {
+                "schemaVersion": 2,
+                "executionDomainId": "host-a",
+                "workspaceScopeId": "workspace-a",
+                "targetScope": "workspace_override",
+                "operationId": "operation-a",
+                "expectedPreferenceRevision": 4,
+                "action": {
+                    "type": "connect_application",
+                    "applicationId": "opencode"
+                }
+            }
+        }))
+        .unwrap();
+        assert_eq!(action.workspace_path.as_deref(), Some("C:/work/project"));
+        assert_eq!(action.request.operation_id, "operation-a");
+    }
+
+    #[test]
+    fn application_v2_snapshot_response_serializes_as_the_domain_object() {
+        let domain_json = serde_json::json!({
+            "schemaVersion": 2,
+            "executionDomainId": "host-a",
+            "effectiveConnectionScope": "user_default",
+            "refreshGeneration": 7,
+            "preferenceRevision": 4,
+            "safeMode": false,
+            "hostCapabilities": {
+                "canReadSnapshot": true,
+                "canReadReview": true,
+                "canMutate": true,
+                "canManageUserDefault": true,
+                "canManageWorkspaceOverride": true,
+                "canRefresh": true,
+                "canSetSafeMode": true
+            },
+            "applications": []
+        });
+        let domain: ExternalApplicationSnapshotV2 =
+            serde_json::from_value(domain_json.clone()).unwrap();
+
+        assert_eq!(
+            serde_json::to_value(ExternalApplicationSnapshotResponseV2(domain)).unwrap(),
+            domain_json
+        );
+
+        let page_json = serde_json::json!({
+            "schemaVersion": 2,
+            "executionDomainId": "host-a",
+            "targetScope": "user_default",
+            "reviewId": "review-a",
+            "preferenceRevision": 4,
+            "expectedGenerations": [],
+            "totalCount": 0,
+            "items": []
+        });
+        let page: ExternalApplicationReviewPageV2 =
+            serde_json::from_value(page_json.clone()).unwrap();
+        assert_eq!(
+            serde_json::to_value(ExternalApplicationReviewPageResponseV2(page)).unwrap(),
+            page_json
+        );
+
+        let action_json = serde_json::json!({
+            "schemaVersion": 2,
+            "operationId": "operation-a",
+            "preferenceRevision": 5,
+            "outcome": "applied",
+            "itemResults": []
+        });
+        let action: ExternalApplicationControlResultV2 =
+            serde_json::from_value(action_json.clone()).unwrap();
+        assert_eq!(
+            serde_json::to_value(ExternalApplicationActionResponseV2(action)).unwrap(),
+            action_json
+        );
     }
 }
