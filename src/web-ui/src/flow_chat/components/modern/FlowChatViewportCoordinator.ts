@@ -80,6 +80,10 @@ export class FlowChatViewportCoordinator {
   private pendingElementAnchorRestore: PendingElementAnchorRestore | null = null;
   private rangeHost: FlowChatViewportRangeHost | null = null;
   private nextElementAnchorLease = 0;
+  // Diagnostics: accumulated bottom-range additions per source since the last
+  // semantic ownership release, so flowchat.log can attribute reservation
+  // growth to the anchor-restore path that requested it.
+  private rangeAdditionBySource = new Map<string, number>();
 
   setRangeHost(host: FlowChatViewportRangeHost | null): void {
     this.rangeHost = host;
@@ -322,8 +326,13 @@ export class FlowChatViewportCoordinator {
       this.rangeHost &&
       (this.mode === 'pinned-item' || this.mode === 'preserving-element')
     ) {
+      const additionalPx = remainingCorrection + ELEMENT_ANCHOR_RANGE_GUARD_PX;
+      this.rangeAdditionBySource.set(
+        source,
+        (this.rangeAdditionBySource.get(source) ?? 0) + additionalPx,
+      );
       const rangeExtended = this.rangeHost.ensureBottomRange({
-        additionalPx: remainingCorrection + ELEMENT_ANCHOR_RANGE_GUARD_PX,
+        additionalPx,
         mode: this.mode,
         source,
       });
@@ -342,11 +351,13 @@ export class FlowChatViewportCoordinator {
           data: () => ({
             mode: this.mode,
             source,
+            additionalPx,
             rangeExtended,
             remainingCorrection,
             scrollTop: scroller.scrollTop,
             scrollHeight: scroller.scrollHeight,
             clientHeight: scroller.clientHeight,
+            rangeAdditionBySource: Object.fromEntries(this.rangeAdditionBySource),
           }),
         });
       }
@@ -406,9 +417,16 @@ export class FlowChatViewportCoordinator {
         hypothesis: 'B',
         location: 'FlowChatViewportCoordinator.release',
         message: 'Viewport coordinator released semantic ownership',
-        data: () => ({ previousMode, previousPreservationPhase, hadElementAnchor, reason }),
+        data: () => ({
+          previousMode,
+          previousPreservationPhase,
+          hadElementAnchor,
+          reason,
+          rangeAdditionBySource: Object.fromEntries(this.rangeAdditionBySource),
+        }),
       });
     }
+    this.rangeAdditionBySource.clear();
   }
 
   private validateElementAnchor(source: string): void {

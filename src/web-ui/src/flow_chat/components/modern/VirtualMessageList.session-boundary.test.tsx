@@ -80,6 +80,7 @@ vi.mock('@/infrastructure/diagnostics/flowChatDiagnostics', () => ({
   flowChatDiagnostics: {
     isEnabled: () => flowDiagnosticsMocks.enabled,
     trace: flowDiagnosticsMocks.trace,
+    subscribe: vi.fn(() => () => {}),
   },
 }));
 
@@ -2028,10 +2029,16 @@ describe('VirtualMessageList session boundary', () => {
       for (let frame = 0; frame < 4; frame += 1) {
         flushAnimationFrame();
       }
-      const wasSettledAnchorReleased = () => flowDiagnosticsMocks.trace.mock.calls.some(([event]) => (
-        event.location === 'VirtualMessageList.releaseSettledCollapseAnchor'
+      // The scrollTop now sits exactly at the (new) physical bottom, so the
+      // retained settlement converges the synthetic range to the content
+      // bottom instead of keeping it until the quiet-release timer. This is
+      // the dead-lock escape: at the physical bottom the geometric minimum
+      // equals the current reservation, so keeping the range would leave
+      // permanent tail whitespace.
+      const wasBottomConverged = () => flowDiagnosticsMocks.trace.mock.calls.some(([event]) => (
+        event.location === 'VirtualMessageList.convergeBottomReservationsToContentBottom'
       ));
-      for (let attempt = 0; attempt < 3 && !wasSettledAnchorReleased(); attempt += 1) {
+      for (let attempt = 0; attempt < 3 && !wasBottomConverged(); attempt += 1) {
         act(() => {
           vi.runOnlyPendingTimers();
         });
@@ -2039,7 +2046,11 @@ describe('VirtualMessageList session boundary', () => {
           flushAnimationFrame();
         }
       }
-      expect(wasSettledAnchorReleased()).toBe(true);
+      expect(wasBottomConverged()).toBe(true);
+      // The synthetic range is gone: the footer returns to the same geometric
+      // minimum as the earlier settle (no extra whitespace for the bottom user).
+      expect(Number.parseFloat(footer.style.height)).toBeCloseTo(settledFooterHeight, 1);
+      expect(scroller.scrollTop).toBeLessThan(1_100);
     } finally {
       vi.useRealTimers();
     }
@@ -3879,5 +3890,904 @@ describe('VirtualMessageList session boundary', () => {
     expect(flowStoreMocks.revealPreviousSessionHistoryWindow).not.toHaveBeenCalled();
     expect(flowStoreMocks.releaseSessionHistoryCompletionAfterInitialPaint).not.toHaveBeenCalled();
     expect(container.querySelector('[data-history-boundary-status="not-ready"]')?.textContent).toBe('Older history is not ready yet.');
+  });
+
+  it('bounds collapse-intent finalize retries when the sticky pin target is not renderable', () => {
+    flowDiagnosticsMocks.enabled = true;
+    const session = createSessionWithTurns('session-a', ['turn-a', 'turn-b'], {
+      dialogTurns: [
+        {
+          id: 'turn-a',
+          sessionId: 'session-a',
+          userMessage: { id: 'user-turn-a', content: 'turn-a', timestamp: 1 },
+          modelRounds: [],
+          status: 'completed',
+          startTime: 1,
+        },
+        {
+          id: 'turn-b',
+          sessionId: 'session-a',
+          userMessage: { id: 'user-turn-b', content: 'turn-b', timestamp: 2 },
+          modelRounds: [{
+            id: 'round-turn-b',
+            status: 'streaming',
+            isStreaming: true,
+            items: [],
+            startTime: 2,
+          } as typeof session.dialogTurns[number]['modelRounds'][number]],
+          status: 'processing',
+          startTime: 2,
+        },
+      ],
+    });
+    stateMocks.activeSession = session;
+    stateMocks.virtualItems = [
+      createItem('turn-a'),
+      createModelItem('turn-a'),
+      createItem('turn-b'),
+      createModelItem('turn-b'),
+    ];
+    const listRef = React.createRef<VirtualMessageListRef>();
+
+    act(() => {
+      root.render(<VirtualMessageList ref={listRef} />);
+    });
+
+    const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+    expect(scroller).not.toBeNull();
+    if (!scroller) {
+      return;
+    }
+    setScrollerGeometry(scroller, {
+      scrollHeight: 5_000,
+      clientHeight: 1_000,
+      scrollTop: 4_000,
+    });
+    vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(createRect({
+      top: 0,
+      bottom: 1_000,
+      height: 1_000,
+    }));
+
+    const pinnedUserMessage = container.querySelector<HTMLElement>(
+      '[data-item-type="user-message"][data-turn-id="turn-b"]',
+    );
+    expect(pinnedUserMessage).not.toBeNull();
+    if (!pinnedUserMessage) {
+      return;
+    }
+    vi.spyOn(pinnedUserMessage, 'getBoundingClientRect').mockReturnValue(createRect({
+      top: 57,
+      bottom: 87,
+      height: 30,
+    }));
+
+    // Establish a sticky-latest pin on the latest turn while its target renders,
+    // and dispatch the subagent card collapse in the same act batch: the active
+    // intent blocks the pinned-item -> tail handoff until finalization, which
+    // is the state in which a real subagent card collapse lands mid-stream.
+    // Fake timers must be active before the dispatch so the collapse TTL and
+    // the 50ms finalize retry loop run under test control.
+    vi.useFakeTimers();
+    try {
+      let pinStatus: ReturnType<VirtualMessageListRef['pinTurnToTopWithStatus']> = 'rejected';
+      act(() => {
+        pinStatus = listRef.current?.pinTurnToTopWithStatus('turn-b', {
+          pinMode: 'sticky-latest',
+          behavior: 'auto',
+        }) ?? 'rejected';
+        const modelRoundAnchor = container.querySelector<HTMLElement>(
+          '[data-item-type="model-round"][data-turn-id="turn-b"]',
+        );
+        window.dispatchEvent(new CustomEvent('flowchat:tool-card-collapse-intent', {
+          detail: {
+            toolId: 'task-a',
+            toolName: 'Task',
+            cardHeight: 500,
+            anchorElement: modelRoundAnchor,
+            reason: 'auto',
+          },
+        }));
+      });
+      expect(pinStatus).toBe('settled');
+
+      // The reservation re-render inside the act recreated the wrappers. Evict
+      // the pinned target now; no further React re-render will restore it while
+      // the finalize retry loop runs (it only writes refs).
+      act(() => {
+        container.querySelector<HTMLElement>(
+          '[data-item-type="user-message"][data-turn-id="turn-b"]',
+        )?.remove();
+      });
+
+      // Advance past the collapse TTL and let the 50ms finalize retry loop run.
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+      for (let frame = 0; frame < 4; frame += 1) {
+        flushAnimationFrame();
+      }
+      act(() => {
+        vi.advanceTimersByTime(2_000);
+      });
+      for (let frame = 0; frame < 4; frame += 1) {
+        flushAnimationFrame();
+      }
+
+      const deferredTraces = flowDiagnosticsMocks.trace.mock.calls.filter(([event]) => (
+        event.location === 'VirtualMessageList.finalizeCollapseIntent' &&
+        event.message === 'Collapse intent finalization deferred (drain target not renderable)'
+      ));
+      // The dangerous path was exercised: the drain target was not renderable.
+      expect(deferredTraces.length).toBeGreaterThan(0);
+
+      // Bounded retries: the intent must finalize instead of staying active
+      // forever (which would suspend auto-follow and strand the reservation).
+      const completedTraces = flowDiagnosticsMocks.trace.mock.calls.filter(([event]) => (
+        event.location === 'VirtualMessageList.finalizeCollapseIntent' &&
+        event.message === 'Collapse intent reservation settlement completed'
+      ));
+      expect(completedTraces.length).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('drains an idle input-stack-shrink reservation that no owner protects', () => {
+    flowDiagnosticsMocks.enabled = true;
+    vi.useFakeTimers();
+    try {
+      stateMocks.activeSession = createSession('session-a', 'turn-a');
+      stateMocks.virtualItems = [createItem('turn-a')];
+      inputStateMocks.isActive = true;
+      inputStateMocks.inputHeight = 200;
+
+      act(() => {
+        root.render(<VirtualMessageList />);
+      });
+
+      const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+      const footer = container.querySelector<HTMLElement>('.message-list-footer');
+      expect(scroller).not.toBeNull();
+      expect(footer).not.toBeNull();
+      if (!scroller || !footer) {
+        return;
+      }
+      setScrollerGeometry(scroller, {
+        scrollHeight: 5_000,
+        clientHeight: 1_000,
+        scrollTop: 0,
+      });
+
+      // Collapse the input stack: the shrink is preserved as a bottom
+      // reservation (owner: input-stack-shrink) because the user is not at
+      // the physical bottom - exactly the leftover that would otherwise
+      // persist as permanent tail whitespace.
+      const footerHeightBeforeShrink = Number.parseFloat(footer.style.height);
+      inputStateMocks.inputHeight = 0;
+      act(() => {
+        root.render(<VirtualMessageList />);
+      });
+      flushAnimationFrame();
+      expect(Number.parseFloat(footer.style.height)).toBeCloseTo(footerHeightBeforeShrink, 1);
+
+      // With the user idle at the top, no streaming, no collapse intent and
+      // no retained anchor, the audit settles the reservation to its
+      // geometric minimum (zero here) instead of leaving it behind.
+      act(() => {
+        vi.advanceTimersByTime(1_500);
+      });
+      flushAnimationFrame();
+
+      expect(Number.parseFloat(footer.style.height)).toBeLessThan(footerHeightBeforeShrink - 1);
+      expect(flowDiagnosticsMocks.trace).toHaveBeenCalledWith(expect.objectContaining({
+        location: 'VirtualMessageList.idleReservationAudit',
+        message: 'Idle reservation audit settled synthetic tail space',
+      }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('converges a collapse reservation to the content bottom when finalizing at the physical bottom', () => {
+    flowDiagnosticsMocks.enabled = true;
+    vi.useFakeTimers();
+    try {
+      stateMocks.activeSession = createSession('session-a', 'turn-a');
+      stateMocks.virtualItems = [createItem('turn-a')];
+      inputStateMocks.isActive = true;
+      inputStateMocks.inputHeight = 200;
+
+      act(() => {
+        root.render(<VirtualMessageList />);
+      });
+
+      const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+      const footer = container.querySelector<HTMLElement>('.message-list-footer');
+      expect(scroller).not.toBeNull();
+      expect(footer).not.toBeNull();
+      if (!scroller || !footer) {
+        return;
+      }
+      setScrollerGeometry(scroller, {
+        scrollHeight: 5_000,
+        clientHeight: 1_000,
+        scrollTop: 4_000, // physical bottom
+      });
+      const baseFooterHeight = Number.parseFloat(footer.style.height);
+
+      // A subagent card collapses while the user sits at the physical bottom:
+      // provisional compensation equals the card height.
+      act(() => {
+        window.dispatchEvent(new CustomEvent('flowchat:tool-card-collapse-intent', {
+          detail: {
+            toolId: 'task-a',
+            toolName: 'Task',
+            cardHeight: 500,
+            anchorElement: null,
+            reason: 'auto',
+          },
+        }));
+      });
+      expect(Number.parseFloat(footer.style.height)).toBeCloseTo(baseFooterHeight + 500, 1);
+
+      // Finalize after the collapse TTL. At the physical bottom the geometric
+      // minimum for the current scrollTop equals the current reservation, so
+      // the settle would keep the whitespace; bottom convergence clears it.
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+      for (let frame = 0; frame < 4; frame += 1) {
+        flushAnimationFrame();
+      }
+
+      expect(Number.parseFloat(footer.style.height)).toBeCloseTo(baseFooterHeight, 1);
+      expect(scroller.scrollTop).toBe(4_000);
+      expect(flowDiagnosticsMocks.trace).toHaveBeenCalledWith(expect.objectContaining({
+        location: 'VirtualMessageList.convergeBottomReservationsToContentBottom',
+        message: 'Bottom reservations converged to the content bottom',
+      }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('converges bottom reservations when a scroll event arrives at the physical bottom', () => {
+    flowDiagnosticsMocks.enabled = true;
+    vi.useFakeTimers();
+    try {
+      stateMocks.activeSession = createSession('session-a', 'turn-a');
+      stateMocks.virtualItems = [createItem('turn-a')];
+      inputStateMocks.isActive = true;
+      inputStateMocks.inputHeight = 200;
+      activeSessionStateMocks.isProcessing = true; // streaming: no rAF drain
+
+      act(() => {
+        root.render(<VirtualMessageList />);
+      });
+
+      const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+      const footer = container.querySelector<HTMLElement>('.message-list-footer');
+      expect(scroller).not.toBeNull();
+      expect(footer).not.toBeNull();
+      if (!scroller || !footer) {
+        return;
+      }
+      setScrollerGeometry(scroller, {
+        scrollHeight: 5_000,
+        clientHeight: 1_000,
+        scrollTop: 4_000, // physical bottom
+      });
+      const baseFooterHeight = Number.parseFloat(footer.style.height);
+
+      // Input stack shrinks while streaming: the shrink is preserved as a
+      // reservation (no rAF drain while streaming) and scrollTop is capped by
+      // the synthetic footer - the exact dead-lock state the user reported.
+      inputStateMocks.inputHeight = 0;
+      act(() => {
+        root.render(<VirtualMessageList />);
+      });
+      flushAnimationFrame();
+      expect(Number.parseFloat(footer.style.height)).toBeCloseTo(baseFooterHeight, 1);
+
+      // Any scroll event while at the physical bottom is bottom intent:
+      // converge in one pass instead of per-scrub consumption.
+      act(() => {
+        scroller.dispatchEvent(new Event('scroll'));
+      });
+
+      expect(Number.parseFloat(footer.style.height)).toBeLessThan(baseFooterHeight - 1);
+      expect(flowDiagnosticsMocks.trace).toHaveBeenCalledWith(expect.objectContaining({
+        location: 'VirtualMessageList.convergeBottomReservationsToContentBottom',
+        message: 'Bottom reservations converged to the content bottom',
+      }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not stack a second collapse provisional estimate on a settled bottom reservation', () => {
+    flowDiagnosticsMocks.enabled = true;
+    vi.useFakeTimers();
+    try {
+      stateMocks.activeSession = createSession('session-a', 'turn-a');
+      stateMocks.virtualItems = [createItem('turn-a')];
+      inputStateMocks.isActive = true;
+      inputStateMocks.inputHeight = 200;
+
+      act(() => {
+        root.render(<VirtualMessageList />);
+      });
+
+      const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+      const footer = container.querySelector<HTMLElement>('.message-list-footer');
+      expect(scroller).not.toBeNull();
+      expect(footer).not.toBeNull();
+      if (!scroller || !footer) {
+        return;
+      }
+      setScrollerGeometry(scroller, {
+        scrollHeight: 5_000,
+        clientHeight: 1_000,
+        scrollTop: 4_000,
+      });
+      const baseFooterHeight = Number.parseFloat(footer.style.height);
+
+      const dispatchCollapseIntent = (cardHeight: number) => {
+        act(() => {
+          window.dispatchEvent(new CustomEvent('flowchat:tool-card-collapse-intent', {
+            detail: {
+              toolId: 'task-a',
+              toolName: 'Task',
+              cardHeight,
+              anchorElement: null,
+              reason: 'auto',
+            },
+          }));
+        });
+      };
+
+      // First collapse: provisional 500, then finalize converges it away.
+      dispatchCollapseIntent(500);
+      expect(Number.parseFloat(footer.style.height)).toBeCloseTo(baseFooterHeight + 500, 1);
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+      for (let frame = 0; frame < 4; frame += 1) {
+        flushAnimationFrame();
+      }
+      expect(Number.parseFloat(footer.style.height)).toBeCloseTo(baseFooterHeight, 1);
+
+      // Second collapse: the guard converges the stale reservation before
+      // estimating, so the new provisional is just 300, not 300 + 500.
+      dispatchCollapseIntent(300);
+      expect(Number.parseFloat(footer.style.height)).toBeCloseTo(baseFooterHeight + 300, 1);
+
+      // Let the second intent finalize so no timers outlive the test.
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('converges a bottom-stuck reservation during the idle audit', () => {
+    flowDiagnosticsMocks.enabled = true;
+    vi.useFakeTimers();
+    try {
+      stateMocks.activeSession = createSession('session-a', 'turn-a');
+      stateMocks.virtualItems = [createItem('turn-a')];
+      inputStateMocks.isActive = true;
+      inputStateMocks.inputHeight = 200;
+
+      act(() => {
+        root.render(<VirtualMessageList />);
+      });
+
+      const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+      const footer = container.querySelector<HTMLElement>('.message-list-footer');
+      expect(scroller).not.toBeNull();
+      expect(footer).not.toBeNull();
+      if (!scroller || !footer) {
+        return;
+      }
+      setScrollerGeometry(scroller, {
+        scrollHeight: 5_000,
+        clientHeight: 1_000,
+        scrollTop: 0, // reading the top: the shrink reservation stays
+      });
+      const baseFooterHeight = Number.parseFloat(footer.style.height);
+
+      // Input stack shrinks with the user away from the bottom: the rAF drain
+      // does not fire (not at the physical bottom), so the reservation stays.
+      inputStateMocks.inputHeight = 0;
+      act(() => {
+        root.render(<VirtualMessageList />);
+      });
+      flushAnimationFrame();
+      expect(Number.parseFloat(footer.style.height)).toBeCloseTo(baseFooterHeight, 1);
+
+      // User moves to the physical bottom; the idle audit must converge the
+      // reservation instead of settling to the (equal) geometric minimum.
+      scroller.scrollTop = 4_000;
+      act(() => {
+        vi.advanceTimersByTime(1_500);
+      });
+      flushAnimationFrame();
+
+      expect(Number.parseFloat(footer.style.height)).toBeLessThan(baseFooterHeight - 1);
+      expect(flowDiagnosticsMocks.trace).toHaveBeenCalledWith(expect.objectContaining({
+        location: 'VirtualMessageList.convergeBottomReservationsToContentBottom',
+        message: 'Bottom reservations converged to the content bottom',
+      }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('consumes only the provisional inflation while a collapse intent is alive', () => {
+    flowDiagnosticsMocks.enabled = true;
+    vi.useFakeTimers();
+    try {
+      stateMocks.activeSession = createSession('session-a', 'turn-a');
+      stateMocks.virtualItems = [createItem('turn-a')];
+      inputStateMocks.isActive = true;
+      inputStateMocks.inputHeight = 200;
+
+      act(() => {
+        root.render(<VirtualMessageList />);
+      });
+
+      const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+      const footer = container.querySelector<HTMLElement>('.message-list-footer');
+      expect(scroller).not.toBeNull();
+      expect(footer).not.toBeNull();
+      if (!scroller || !footer) {
+        return;
+      }
+      let naturalContentHeight = 5_000;
+      Object.defineProperties(scroller, {
+        clientHeight: { configurable: true, value: 1_000 },
+        scrollHeight: {
+          configurable: true,
+          get: () => naturalContentHeight + (Number.parseFloat(footer.style.height) || 0),
+        },
+        scrollTop: { configurable: true, writable: true, value: 0 },
+      });
+      // Sit at the physical bottom before the collapse.
+      scroller.scrollTop = scroller.scrollHeight - scroller.clientHeight;
+      const baseFooterHeight = Number.parseFloat(footer.style.height);
+
+      act(() => {
+        window.dispatchEvent(new CustomEvent('flowchat:tool-card-collapse-intent', {
+          detail: {
+            toolId: 'task-a',
+            toolName: 'Task',
+            cardHeight: 500,
+            anchorElement: null,
+            reason: 'auto',
+          },
+        }));
+      });
+      // Provisional compensation equals the full card height at the bottom.
+      expect(Number.parseFloat(footer.style.height)).toBeCloseTo(baseFooterHeight + 500, 1);
+      expect(footer.dataset.reservationPx).toBe('500');
+
+      // Establish the measurement baseline. The intent render re-mounts the
+      // scroller ref in this test harness, which resets the measured-height
+      // baseline; a real Virtuoso does not do that. Note: under fake timers
+      // requestAnimationFrame is also faked, so measurements advance with
+      // advanceTimersByTime instead of the rAF stub queue.
+      const triggerMeasure = () => {
+        act(() => {
+          window.dispatchEvent(new Event('tool-card-toggle'));
+        });
+        act(() => {
+          vi.advanceTimersByTime(50);
+        });
+      };
+      triggerMeasure();
+
+      // Measured shrink enters cumulativeShrinkPx while the intent is alive:
+      // the protection line rises to 200 and the reservation stays at 500.
+      naturalContentHeight -= 200;
+      triggerMeasure();
+      expect(Number.parseFloat(footer.style.height)).toBeCloseTo(baseFooterHeight + 500, 1);
+
+      // Content growth of 100 may only consume the inflation above the 200px
+      // measured protection (collapse 500 -> 400), never the protection line.
+      naturalContentHeight += 100;
+      triggerMeasure();
+      expect(Number.parseFloat(footer.style.height)).toBeCloseTo(baseFooterHeight + 400, 1);
+      expect(footer.dataset.reservationPx).toBe('400');
+
+      // Finalize the intent so no timers outlive the test.
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not converge reservations for a mid-list reader', () => {
+    flowDiagnosticsMocks.enabled = true;
+    stateMocks.activeSession = createSession('session-a', 'turn-a');
+    stateMocks.virtualItems = [createItem('turn-a')];
+    inputStateMocks.isActive = true;
+    inputStateMocks.inputHeight = 200;
+
+    act(() => {
+      root.render(<VirtualMessageList />);
+    });
+
+    const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+    const footer = container.querySelector<HTMLElement>('.message-list-footer');
+    expect(scroller).not.toBeNull();
+    expect(footer).not.toBeNull();
+    if (!scroller || !footer) {
+      return;
+    }
+    setScrollerGeometry(scroller, {
+      scrollHeight: 5_000,
+      clientHeight: 1_000,
+      scrollTop: 3_000, // mid-list: far from the physical bottom
+    });
+    // Sync the scroll baseline (a real browser would have produced scroll
+    // events while reaching this position); without this the next scroll
+    // event sees a large synthetic delta and consumes the reservation.
+    act(() => {
+      scroller.dispatchEvent(new Event('scroll'));
+    });
+    const baseFooterHeight = Number.parseFloat(footer.style.height);
+
+    // Input stack shrinks while the user reads mid-list: the rAF drain does
+    // not fire and the reservation stays as protected tail space.
+    inputStateMocks.inputHeight = 0;
+    act(() => {
+      root.render(<VirtualMessageList />);
+    });
+    flushAnimationFrame();
+    expect(Number.parseFloat(footer.style.height)).toBeCloseTo(baseFooterHeight, 1);
+
+    // A scroll event at a mid-list position must not converge the reservation
+    // (the reader's reading position still needs the anchor range).
+    act(() => {
+      scroller.dispatchEvent(new Event('scroll'));
+    });
+    expect(Number.parseFloat(footer.style.height)).toBeCloseTo(baseFooterHeight, 1);
+    expect(flowDiagnosticsMocks.trace).not.toHaveBeenCalledWith(expect.objectContaining({
+      location: 'VirtualMessageList.convergeBottomReservationsToContentBottom',
+      message: 'Bottom reservations converged to the content bottom',
+    }));
+  });
+
+  it('does not converge reservations while a pinned turn owns the viewport', () => {
+    flowDiagnosticsMocks.enabled = true;
+    vi.useFakeTimers();
+    try {
+      const session = createSessionWithTurns('session-a', ['turn-a', 'turn-b'], {
+        dialogTurns: [
+          {
+            id: 'turn-a',
+            sessionId: 'session-a',
+            userMessage: { id: 'user-turn-a', content: 'turn-a', timestamp: 1 },
+            modelRounds: [],
+            status: 'completed',
+            startTime: 1,
+          },
+          {
+            id: 'turn-b',
+            sessionId: 'session-a',
+            userMessage: { id: 'user-turn-b', content: 'turn-b', timestamp: 2 },
+            modelRounds: [{
+              id: 'round-turn-b',
+              status: 'streaming',
+              isStreaming: true,
+              items: [],
+              startTime: 2,
+            } as typeof session.dialogTurns[number]['modelRounds'][number]],
+            status: 'processing',
+            startTime: 2,
+          },
+        ],
+      });
+      stateMocks.activeSession = session;
+      stateMocks.virtualItems = [
+        createItem('turn-a'),
+        createModelItem('turn-a'),
+        createItem('turn-b'),
+        createModelItem('turn-b'),
+      ];
+      const listRef = React.createRef<VirtualMessageListRef>();
+
+      act(() => {
+        root.render(<VirtualMessageList ref={listRef} />);
+      });
+
+      const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+      const footer = container.querySelector<HTMLElement>('.message-list-footer');
+      expect(scroller).not.toBeNull();
+      expect(footer).not.toBeNull();
+      if (!scroller || !footer) {
+        return;
+      }
+      setScrollerGeometry(scroller, {
+        scrollHeight: 5_000,
+        clientHeight: 1_000,
+        scrollTop: 4_000,
+      });
+      vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(createRect({
+        top: 0,
+        bottom: 1_000,
+        height: 1_000,
+      }));
+      const pinnedUserMessage = container.querySelector<HTMLElement>(
+        '[data-item-type="user-message"][data-turn-id="turn-b"]',
+      );
+      expect(pinnedUserMessage).not.toBeNull();
+      if (!pinnedUserMessage) {
+        return;
+      }
+      vi.spyOn(pinnedUserMessage, 'getBoundingClientRect').mockReturnValue(createRect({
+        top: 57,
+        bottom: 87,
+        height: 30,
+      }));
+
+      act(() => {
+        listRef.current?.pinTurnToTopWithStatus('turn-b', {
+          pinMode: 'sticky-latest',
+          behavior: 'auto',
+        });
+      });
+      const baseFooterHeight = Number.parseFloat(footer.style.height);
+
+      // A collapse lands while the pinned turn owns the viewport; the
+      // provisional range is real reservation, not convergible space.
+      act(() => {
+        window.dispatchEvent(new CustomEvent('flowchat:tool-card-collapse-intent', {
+          detail: {
+            toolId: 'task-a',
+            toolName: 'Task',
+            cardHeight: 500,
+            anchorElement: null,
+            reason: 'auto',
+          },
+        }));
+      });
+      const footerAfterIntent = Number.parseFloat(footer.style.height);
+      expect(footerAfterIntent).toBeGreaterThan(baseFooterHeight);
+
+      // Scroll at the physical bottom: convergence must be rejected while the
+      // coordinator owns the pinned item, leaving the reservation intact.
+      act(() => {
+        scroller.dispatchEvent(new Event('scroll'));
+      });
+      expect(Number.parseFloat(footer.style.height)).toBeCloseTo(footerAfterIntent, 1);
+      expect(flowDiagnosticsMocks.trace).not.toHaveBeenCalledWith(expect.objectContaining({
+        location: 'VirtualMessageList.convergeBottomReservationsToContentBottom',
+        message: 'Bottom reservations converged to the content bottom',
+      }));
+
+      // Finalize the intent (reconcile into the pin reservation) so no timers
+      // outlive the test.
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+      for (let frame = 0; frame < 4; frame += 1) {
+        flushAnimationFrame();
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not converge reservations while an element anchor preserves the viewport', () => {
+    flowDiagnosticsMocks.enabled = true;
+    vi.useFakeTimers();
+    try {
+      stateMocks.activeSession = createSession('session-a', 'turn-a');
+      stateMocks.virtualItems = [createItem('turn-a')];
+      inputStateMocks.isActive = true;
+      inputStateMocks.inputHeight = 200;
+
+      act(() => {
+        root.render(<VirtualMessageList />);
+      });
+
+      const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+      const footer = container.querySelector<HTMLElement>('.message-list-footer');
+      const anchor = container.querySelector<HTMLElement>(
+        '[data-item-type="user-message"][data-turn-id="turn-a"]',
+      );
+      expect(scroller).not.toBeNull();
+      expect(footer).not.toBeNull();
+      expect(anchor).not.toBeNull();
+      if (!scroller || !footer || !anchor) {
+        return;
+      }
+      setScrollerGeometry(scroller, {
+        scrollHeight: 5_000,
+        clientHeight: 1_000,
+        scrollTop: 4_200, // near the bottom but not at it: a reading position
+      });
+      const baseFooterHeight = Number.parseFloat(footer.style.height);
+
+      act(() => {
+        window.dispatchEvent(new CustomEvent('flowchat:tool-card-collapse-intent', {
+          detail: {
+            toolId: 'task-a',
+            toolName: 'Task',
+            cardHeight: 500,
+            anchorElement: anchor,
+            reason: 'auto',
+          },
+        }));
+      });
+      expect(Number.parseFloat(footer.style.height)).toBeCloseTo(baseFooterHeight + 500, 1);
+
+      // Finalize: the coordinator stays in preserving-element (retained) with
+      // a non-zero reservation because the reader is not at the physical
+      // bottom, so the settle keeps the geometric minimum.
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+      for (let frame = 0; frame < 4; frame += 1) {
+        flushAnimationFrame();
+      }
+      const footerAfterSettle = Number.parseFloat(footer.style.height);
+      expect(footerAfterSettle).toBeGreaterThan(baseFooterHeight);
+
+      // The idle audit must not converge the reservation while the element
+      // anchor still preserves the reading position.
+      act(() => {
+        vi.advanceTimersByTime(1_500);
+      });
+      flushAnimationFrame();
+      expect(Number.parseFloat(footer.style.height)).toBeCloseTo(footerAfterSettle, 1);
+      expect(flowDiagnosticsMocks.trace).not.toHaveBeenCalledWith(expect.objectContaining({
+        location: 'VirtualMessageList.convergeBottomReservationsToContentBottom',
+        message: 'Bottom reservations converged to the content bottom',
+      }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('force-settles a non-bottom collapse to the geometric minimum after bounded retries', () => {
+    flowDiagnosticsMocks.enabled = true;
+    vi.useFakeTimers();
+    try {
+      const session = createSessionWithTurns('session-a', ['turn-a', 'turn-b'], {
+        dialogTurns: [
+          {
+            id: 'turn-a',
+            sessionId: 'session-a',
+            userMessage: { id: 'user-turn-a', content: 'turn-a', timestamp: 1 },
+            modelRounds: [],
+            status: 'completed',
+            startTime: 1,
+          },
+          {
+            id: 'turn-b',
+            sessionId: 'session-a',
+            userMessage: { id: 'user-turn-b', content: 'turn-b', timestamp: 2 },
+            modelRounds: [{
+              id: 'round-turn-b',
+              status: 'streaming',
+              isStreaming: true,
+              items: [],
+              startTime: 2,
+            } as typeof session.dialogTurns[number]['modelRounds'][number]],
+            status: 'processing',
+            startTime: 2,
+          },
+        ],
+      });
+      stateMocks.activeSession = session;
+      stateMocks.virtualItems = [
+        createItem('turn-a'),
+        createModelItem('turn-a'),
+        createItem('turn-b'),
+        createModelItem('turn-b'),
+      ];
+      const listRef = React.createRef<VirtualMessageListRef>();
+
+      act(() => {
+        root.render(<VirtualMessageList ref={listRef} />);
+      });
+
+      const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+      const footer = container.querySelector<HTMLElement>('.message-list-footer');
+      expect(scroller).not.toBeNull();
+      expect(footer).not.toBeNull();
+      if (!scroller || !footer) {
+        return;
+      }
+      // Mid-list: 200px above the physical bottom, so the geometric minimum
+      // after settle is 100px, not zero.
+      setScrollerGeometry(scroller, {
+        scrollHeight: 5_000,
+        clientHeight: 1_000,
+        scrollTop: 3_800,
+      });
+      vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(createRect({
+        top: 0,
+        bottom: 1_000,
+        height: 1_000,
+      }));
+      const pinnedUserMessage = container.querySelector<HTMLElement>(
+        '[data-item-type="user-message"][data-turn-id="turn-b"]',
+      );
+      expect(pinnedUserMessage).not.toBeNull();
+      if (!pinnedUserMessage) {
+        return;
+      }
+      vi.spyOn(pinnedUserMessage, 'getBoundingClientRect').mockReturnValue(createRect({
+        top: 57,
+        bottom: 87,
+        height: 30,
+      }));
+
+      act(() => {
+        listRef.current?.pinTurnToTopWithStatus('turn-b', {
+          pinMode: 'sticky-latest',
+          behavior: 'auto',
+        });
+        const modelRoundAnchor = container.querySelector<HTMLElement>(
+          '[data-item-type="model-round"][data-turn-id="turn-b"]',
+        );
+        window.dispatchEvent(new CustomEvent('flowchat:tool-card-collapse-intent', {
+          detail: {
+            toolId: 'task-a',
+            toolName: 'Task',
+            cardHeight: 500,
+            anchorElement: modelRoundAnchor,
+            reason: 'auto',
+          },
+        }));
+      });
+      const baseFooterHeight = Number.parseFloat(footer.style.height);
+      // Provisional: 500 - 200 (distance from bottom) = 300.
+      expect(baseFooterHeight).toBeGreaterThan(0);
+
+      // Evict the pinned target so every finalize retry defers.
+      act(() => {
+        container.querySelector<HTMLElement>(
+          '[data-item-type="user-message"][data-turn-id="turn-b"]',
+        )?.remove();
+      });
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+      for (let frame = 0; frame < 4; frame += 1) {
+        flushAnimationFrame();
+      }
+      act(() => {
+        vi.advanceTimersByTime(2_000);
+      });
+      for (let frame = 0; frame < 4; frame += 1) {
+        flushAnimationFrame();
+      }
+
+      // Bounded retries exhausted: the intent force-settles to the geometric
+      // minimum for the current mid-list scrollTop (300 -> 100), instead of
+      // staying active or keeping the full provisional.
+      const completedTraces = flowDiagnosticsMocks.trace.mock.calls.filter(([event]) => (
+        event.location === 'VirtualMessageList.finalizeCollapseIntent' &&
+        event.message === 'Collapse intent reservation settlement completed'
+      ));
+      expect(completedTraces.length).toBe(1);
+      const settledFooterHeight = Number.parseFloat(footer.style.height);
+      expect(settledFooterHeight).toBeLessThan(baseFooterHeight);
+      expect(settledFooterHeight).toBeGreaterThan(0);
+      // data-reservation-px mirrors the settled geometric minimum (100px
+      // scroll range plus the 1px anchor guard).
+      expect(footer.dataset.reservationPx).toBe('101');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

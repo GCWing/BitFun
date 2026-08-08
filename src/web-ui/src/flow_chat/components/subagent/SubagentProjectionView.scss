@@ -9,6 +9,10 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   box-sizing: border-box;
+  /* Long unbreakable tokens (file paths, model ids, URLs) must wrap inside
+     the card instead of inflating the min-content width of the virtual item,
+     which shifts the surrounding FlowChat layout. */
+  overflow-wrap: anywhere;
 }
 
 .subagent-projection-container--expanded {
@@ -28,6 +32,13 @@
 
 .subagent-projection-content {
   min-width: 0;
+  overflow-wrap: anywhere;
+
+  .markdown-renderer,
+  .text-content,
+  .flow-text-block {
+    overflow-wrap: anywhere;
+  }
 
   .flow-thinking-item .thinking-content {
     padding-left: 0;
