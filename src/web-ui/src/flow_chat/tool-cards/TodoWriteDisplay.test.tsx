@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FlowToolItem, ToolCardConfig } from '../types/flow-chat';
 import { createTodoRenderItems } from './todoRenderItems';
 import { TodoWriteDisplay } from './TodoWriteDisplay';
+import { FLOWCHAT_COLLAPSE_DURATION_MS } from '../components/modern/flowChatCollapseMotion';
 
 vi.mock('react-i18next', async (importOriginal) => ({
   ...await importOriginal<typeof import('react-i18next')>(),
@@ -93,10 +94,12 @@ describe('TodoWriteDisplay automatic collapse', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
   it('lets completed todo content collapse through normal layout state', () => {
+    vi.useFakeTimers();
     act(() => {
       root.render(<TodoWriteDisplay toolItem={createTodoWriteItem('pending')} config={config} />);
     });
@@ -106,6 +109,11 @@ describe('TodoWriteDisplay automatic collapse', () => {
       root.render(<TodoWriteDisplay toolItem={createTodoWriteItem('in_progress')} config={config} />);
     });
 
+    expect(container.querySelector('.todo-expanded-body')).not.toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(FLOWCHAT_COLLAPSE_DURATION_MS);
+    });
     expect(container.querySelector('.todo-expanded-body')).toBeNull();
   });
 });

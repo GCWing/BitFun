@@ -413,10 +413,6 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
   );
 
   const renderExpandedContent = () => {
-    if (!isExpanded) {
-      return null;
-    }
-
     if (status === 'completed') {
       return (
         <div data-bf-component="exec-process-tool-card" data-bf-part="result" className="terminal-result-container">
@@ -514,7 +510,10 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
         onClick={handleCardClick}
         className={`terminal-tool-card exec-process-tool-card${!isExpanded ? ' terminal-tool-card--compact-truncated' : ''}`}
         header={renderHeader()}
-        expandedContent={isExpanded ? renderExpandedContent() : null}
+        // Keep the previous result mounted while SmoothHeightCollapse animates
+        // from its measured height to zero. Removing it in the same render as
+        // isExpanded=false makes the collapse jump instead of animate.
+        expandedContent={renderExpandedContent()}
         errorContent={renderErrorContent()}
         isFailed={status === 'error'}
         requiresConfirmation={status === 'pending_confirmation'}
