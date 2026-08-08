@@ -11,8 +11,8 @@ import { useHasDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLay
 import { dismissibleLayerManager } from '@/infrastructure/services/DismissibleLayerManager';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { activeEditTargetService } from '@/tools/editor/services/ActiveEditTargetService';
-import { useCanvasStore } from '../stores';
-import type { EditorGroupId } from '../types';
+import { useCanvasStore, GROUP_STATE_KEY } from '../stores';
+import type { EditorGroupId, EditorGroupState } from '../types';
 
 interface UseKeyboardShortcutsOptions {
   enabled?: boolean;
@@ -26,6 +26,7 @@ export const useKeyboardShortcuts = (options: UseKeyboardShortcutsOptions = {}) 
   const {
     primaryGroup,
     secondaryGroup,
+    tertiaryGroup,
     activeGroupId,
     layout,
     closeTab,
@@ -37,9 +38,21 @@ export const useKeyboardShortcuts = (options: UseKeyboardShortcutsOptions = {}) 
     toggleMissionControl,
   } = useCanvasStore();
 
+  // Keyed by GROUP_STATE_KEY so getActiveGroup can resolve any editor group
+  // through the same mapping canvasStore uses (primary/secondary/tertiary).
+  const groups: Record<string, EditorGroupState> = {
+    primaryGroup,
+    secondaryGroup,
+    tertiaryGroup,
+  };
+
+  // Resolve the active group through the shared GROUP_STATE_KEY mapping so
+  // Ctrl+W (tab.close) works in every group, including tertiary (the old
+  // ternary only decoded primary/secondary, silently no-op'ing tertiary
+  // closes).
   const getActiveGroup = useCallback(() => {
-    return activeGroupId === 'primary' ? primaryGroup : secondaryGroup;
-  }, [activeGroupId, primaryGroup, secondaryGroup]);
+    return groups[GROUP_STATE_KEY[activeGroupId]];
+  }, [activeGroupId, primaryGroup, secondaryGroup, tertiaryGroup]);
 
   const getVisibleTabs = useCallback(() => {
     return getActiveGroup().tabs.filter((t) => !t.isHidden);
