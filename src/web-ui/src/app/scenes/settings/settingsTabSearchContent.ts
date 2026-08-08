@@ -12,6 +12,17 @@ export interface SettingsTabSearchPhrase {
   key: string;
 }
 
+const HOOKS_SEARCH_CONTENT = [
+  { ns: 'settings/hooks', key: 'title' },
+  { ns: 'settings/hooks', key: 'subtitle' },
+  { ns: 'settings/hooks', key: 'activation.title' },
+  { ns: 'settings/hooks', key: 'activation.description' },
+  { ns: 'settings/hooks', key: 'locations.title' },
+  { ns: 'settings/hooks', key: 'locations.description' },
+  { ns: 'settings/hooks', key: 'compatibility.title' },
+  { ns: 'settings/hooks', key: 'compatibility.description' },
+] as const satisfies readonly SettingsTabSearchPhrase[];
+
 /** Phrases resolved at runtime with i18n.getFixedT(lang, ns)(key). */
 export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTabSearchPhrase[]> = {
   basics: [
@@ -149,18 +160,10 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/external-sources', key: 'sources.description' },
     { ns: 'settings/external-sources', key: 'conflicts.title' },
     { ns: 'settings/external-sources', key: 'conflicts.description' },
+    ...HOOKS_SEARCH_CONTENT,
   ],
 
-  hooks: [
-    { ns: 'settings/hooks', key: 'title' },
-    { ns: 'settings/hooks', key: 'subtitle' },
-    { ns: 'settings/hooks', key: 'activation.title' },
-    { ns: 'settings/hooks', key: 'activation.description' },
-    { ns: 'settings/hooks', key: 'locations.title' },
-    { ns: 'settings/hooks', key: 'locations.description' },
-    { ns: 'settings/hooks', key: 'compatibility.title' },
-    { ns: 'settings/hooks', key: 'compatibility.description' },
-  ],
+  hooks: HOOKS_SEARCH_CONTENT,
 
   'acp-agents': [
     { ns: 'settings/acp-agents', key: 'title' },

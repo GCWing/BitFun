@@ -80,6 +80,8 @@ function resolveSettingsContent(tab: ConfigTab): React.ComponentType | null {
 const SettingsScene: React.FC = () => {
   useExternalAppAwareness();
   const activeTab = useSettingsStore(s => s.activeTab);
+  const contentFocus = useSettingsStore(s => s.contentFocus);
+  const contentFocusRequestId = useSettingsStore(s => s.contentFocusRequestId);
   const setActiveTab = useSettingsStore(s => s.setActiveTab);
 
   const resolvedTab: ConfigTab =
@@ -139,7 +141,14 @@ const SettingsScene: React.FC = () => {
           data-bf-tab={resolvedTab}
         >
           <Suspense fallback={<SettingsSceneLoading />}>
-            <Content />
+            {resolvedTab === 'external-sources' || resolvedTab === 'hooks' ? (
+              <ExternalSourcesConfig
+                initialFocus={contentFocus === 'hooks' ? 'hooks' : undefined}
+                focusRequestId={contentFocus === 'hooks' ? contentFocusRequestId : undefined}
+              />
+            ) : (
+              <Content />
+            )}
           </Suspense>
         </div>
       )}

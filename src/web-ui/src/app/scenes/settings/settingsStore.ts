@@ -6,11 +6,14 @@
  */
 
 import { create } from 'zustand';
-import type { ConfigTab } from './settingsConfig';
+import type { ConfigTab, SettingsContentFocus } from './settingsConfig';
 import { DEFAULT_SETTINGS_TAB, SETTINGS_CATEGORIES } from './settingsConfig';
 
 interface SettingsState {
   activeTab: ConfigTab;
+  contentFocus: SettingsContentFocus | null;
+  contentFocusRequestId: number;
+  openTab: (tab: ConfigTab, focus?: SettingsContentFocus | null) => void;
   setActiveTab: (tab: ConfigTab) => void;
   /** Debounced from SettingsNav search input; used for filtering index. */
   searchQuery: string;
@@ -28,10 +31,19 @@ interface SettingsState {
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   activeTab: DEFAULT_SETTINGS_TAB,
+  contentFocus: null,
+  contentFocusRequestId: 0,
   searchQuery: '',
   unseenTabs: [],
 
-  setActiveTab: (tab) => set({ activeTab: tab }),
+  openTab: (tab, focus = null) => set((state) => ({
+    activeTab: tab,
+    contentFocus: focus,
+    contentFocusRequestId: focus
+      ? state.contentFocusRequestId + 1
+      : state.contentFocusRequestId,
+  })),
+  setActiveTab: (tab) => set({ activeTab: tab, contentFocus: null }),
   setSearchQuery: (query) => set({ searchQuery: query }),
   markTabUnseen: (tab, unseen) => set((state) => {
     const has = state.unseenTabs.includes(tab);

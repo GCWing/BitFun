@@ -2,12 +2,14 @@
   container-name: external-sources;
   container-type: inline-size;
 
-  &__advanced {
+  &__advanced,
+  &__hooks {
     margin-top: var(--bf-appearance-token-size-gap-5);
     border-top: 1px solid var(--bf-appearance-token-border-subtle);
   }
 
-  &__advanced-summary {
+  &__advanced-summary,
+  &__hooks-summary {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -21,6 +23,15 @@
       color: var(--bf-appearance-token-color-text-secondary);
       font-size: 12px;
       font-weight: 400;
+    }
+  }
+
+  &__hooks .bitfun-hooks-config--embedded {
+    padding-top: var(--bf-appearance-token-size-gap-4);
+
+    .bitfun-config-page-content__inner {
+      width: 100%;
+      margin-inline: 0;
     }
   }
 

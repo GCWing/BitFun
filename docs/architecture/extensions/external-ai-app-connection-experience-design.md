@@ -235,6 +235,19 @@ Hook 数据仍由 `native_hooks`、`external_hooks` catalog 和 `external_hook_i
 
 加载遵循渐进披露：默认页只读取轻量摘要；用户展开应用、能力节点，或已有 Hook 相关真实待办时才读取对应详情。不能为了默认页精确计数而预加载命令和依赖；摘要不足时使用图标状态而不是触发无界扫描。
 
+### 5.6 当前 V1 修复切片
+
+在组合 `HookManagementSnapshot` 尚未交付时，Desktop 仍必须保证既有 Hook 管理能力可达，但不能为此恢复第二个 Settings 一级入口或复制一套 Hook 数据 owner。当前 V1 修复切片采用以下过渡边界：
+
+1. `External AI Apps` 保持唯一一级入口；页面内提供一个按需展开的 Hook 专属区域，复用现有 `app.hooks` 配置、`external_hooks` catalog 和 `external_hook_import` 操作。区域未展开时不读取 Hook 详情；旧 `hooks` 深链进入本页并自动展开、聚焦该区域。
+2. Hook 区域只做现有 owner 的组合呈现，不创建新的后端协议、不复制可执行载荷，也不把现有 Hook 操作改接到 external-source policy。后续组合快照交付时替换读模型，不改变现有写操作的 owner。
+3. 应用总开关从 `custom` 关闭时只把当前 mode 设为 `disabled`，不清除当前作用域的 capability overrides；重新打开时，存在保留 override 的应用恢复为 `custom`，否则进入 `recommended`。显式重置会清除 override，因此仍返回推荐模式。
+4. 应用树的能力状态展示生效权限，而不是连接计划中的推荐权限。`auto`、`ask_before_use`、`discover_only` 和 `disabled` 必须有不同且准确的用户文案；推荐值只用于产生默认决定，不能冒充当前状态。
+5. 首次加载且没有可展示快照时，页面显示可访问的错误提示和带文字的重试操作，并暂不展示依赖快照的应用树与高级设置。已有 last-valid 快照时继续展示该快照，同时标记降级状态，不能因刷新失败把现有内容替换为空白页。
+6. 新增或调整的 appearance part 必须在同一 DOM 节点声明所属 component，并与 appearance 注册表一一对应；不能通过放宽审计或保留不存在的 part 让检查通过。
+
+该切片必须用生产路径组件测试覆盖旧深链到 Hook 区域、Hook owner API 可达、`custom -> disabled -> custom` 权威快照往返、四种生效权限文案、无快照错误恢复和 last-valid 降级显示，并通过 appearance contract audit。它不实现完整 Hook 摘要计数、跨宿主通知决定或新的共享连接协议。
+
 ## 6. 提示、去重和恢复
 
 ### 6.1 首次发现

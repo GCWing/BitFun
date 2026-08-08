@@ -1,6 +1,6 @@
 {
   "title": "External AI applications",
-  "subtitle": "Use commands, tools, agents, and MCP from other AI applications, and inspect their Hooks.",
+  "subtitle": "Use commands, tools, agents, and MCP from other AI applications, and manage compatible Hooks.",
   "legacyHostNotice": "This execution Host uses the legacy external-source protocol. Safe Mode requires a Host upgrade.",
   "loading": "Checking external sources…",
   "checkingNonBlocking": "Checking for updates…",
@@ -51,7 +51,9 @@
     },
     "capabilityAccess": {
       "auto": "Available automatically",
-      "managed": "Managed"
+      "ask_before_use": "Ask before use",
+      "discover_only": "Discovered only",
+      "disabled": "Disabled"
     },
     "advanced": {
       "title": "Advanced settings",
@@ -77,6 +79,11 @@
         "mcps": "MCP servers"
       }
     }
+  },
+  "hooksManagement": {
+    "title": "Hooks",
+    "description": "Manage BitFun Hooks and review imports from compatible AI applications.",
+    "loading": "Loading Hook management…"
   },
   "hooks": {
     "title": "Hooks",
@@ -204,7 +211,7 @@
     "hostTitle": "Unavailable here",
     "hostDescription": "View or manage external settings in Desktop.",
     "remoteDescription": "External settings are unavailable for this remote project. Switch to a local project.",
-    "remoteConnectionDescription": "Remote connection unavailable. Retry or disconnect."
+    "remoteConnectionDescription": "Remote connection unavailable. Retry the connection."
   },
   "policy": {
     "title": "Integration settings",

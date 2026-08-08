@@ -1,6 +1,6 @@
 {
   "title": "外部 AI 應用",
-  "subtitle": "使用其他 AI 應用的命令、工具、Agent 與 MCP，並檢查其 Hook。",
+  "subtitle": "使用其他 AI 應用的命令、工具、Agent 與 MCP，並管理相容的 Hook。",
   "legacyHostNotice": "目前執行 Host 使用舊版外部來源協定；升級 Host 後才能使用安全模式。",
   "loading": "正在檢查外部來源…",
   "checkingNonBlocking": "正在檢查更新…",
@@ -51,7 +51,9 @@
     },
     "capabilityAccess": {
       "auto": "自動可用",
-      "managed": "受管理"
+      "ask_before_use": "使用前詢問",
+      "discover_only": "僅探索",
+      "disabled": "已停用"
     },
     "advanced": {
       "title": "進階設定",
@@ -77,6 +79,11 @@
         "mcps": "MCP 伺服器"
       }
     }
+  },
+  "hooksManagement": {
+    "title": "Hooks",
+    "description": "管理 BitFun Hook，並檢查可從相容 AI 應用匯入的 Hook。",
+    "loading": "正在載入 Hook 管理…"
   },
   "hooks": {
     "title": "Hooks",
@@ -204,7 +211,7 @@
     "hostTitle": "此處暫時無法使用",
     "hostDescription": "請在桌面端檢視或管理外部設定。",
     "remoteDescription": "此遠端專案暫不支援外部設定，請切回本機專案。",
-    "remoteConnectionDescription": "遠端連線無法使用，請重試或中斷連線。"
+    "remoteConnectionDescription": "遠端連線無法使用，請重試連線。"
   },
   "policy": {
     "title": "接入設定",

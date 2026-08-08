@@ -30,6 +30,8 @@ export interface ExternalApplicationCapabilityPlan {
   capabilityId: string;
   /** Access this capability reaches once the ecosystem switches to recommended. */
   recommendedAccess: ExternalIntegrationAccess;
+  /** Access currently enforced by the authoritative effective policy. */
+  effectiveAccess: ExternalIntegrationAccess;
   count: number;
 }
 
@@ -279,6 +281,7 @@ export function buildExternalApplicationsView(
       connectPlan: descriptor.capabilities.map((capability) => ({
         capabilityId: capability.capabilityId,
         recommendedAccess: capability.recommendedAccess,
+        effectiveAccess: ecosystemPolicy?.capabilities?.[capability.capabilityId] ?? 'disabled',
         count: CAPABILITY_COUNT_FIELD[capability.capabilityId]
           ? counts[CAPABILITY_COUNT_FIELD[capability.capabilityId]]
           : 0,

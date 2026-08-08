@@ -66,6 +66,8 @@ import {
 } from './external-sources';
 import './ExternalSourcesConfig.scss';
 
+const LazyHooksConfig = React.lazy(() => import('./HooksConfig'));
+
 const DISCOVERY_POLL_DELAYS_MS = [750, 1_500, 3_000, 5_000] as const;
 
 const AGENT_DIAGNOSTIC_SETTING_KEYS: Record<string, string> = {
@@ -363,7 +365,15 @@ function activeAgentAvailabilityChanges(
     });
 }
 
-const ExternalSourcesConfig: React.FC = () => {
+export interface ExternalSourcesConfigProps {
+  initialFocus?: 'hooks';
+  focusRequestId?: number;
+}
+
+const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
+  initialFocus,
+  focusRequestId = 0,
+}) => {
   const { t } = useTranslation('settings/external-sources');
   const { workspace, workspacePath } = useCurrentWorkspace();
   const peerDevice = usePeerDeviceModeOptional();
@@ -390,6 +400,9 @@ const ExternalSourcesConfig: React.FC = () => {
   } | null>(null);
   const [agentChangeNotice, setAgentChangeNotice] = useState<AgentChangeNotice | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [hooksOpen, setHooksOpen] = useState(initialFocus === 'hooks');
+  const hooksSummaryRef = useRef<HTMLElement>(null);
+  const handledHookFocusRequestRef = useRef<number | null>(null);
   const snapshotRef = useRef<ExternalSourceCatalogSnapshot | null>(null);
   const agentChangeNoticeRef = useRef<AgentChangeNotice | null>(null);
   const requestSequence = useRef(0);
@@ -422,6 +435,23 @@ const ExternalSourcesConfig: React.FC = () => {
       agentChangeNoticeRef.current = null;
     }
   }, [requestScope]);
+
+  useEffect(() => {
+    if (initialFocus === 'hooks'
+      && handledHookFocusRequestRef.current !== focusRequestId) {
+      setHooksOpen(true);
+    }
+  }, [focusRequestId, initialFocus]);
+
+  useEffect(() => {
+    if (initialFocus !== 'hooks'
+      || !hooksOpen
+      || handledHookFocusRequestRef.current === focusRequestId
+      || !hooksSummaryRef.current) return;
+    handledHookFocusRequestRef.current = focusRequestId;
+    hooksSummaryRef.current.scrollIntoView({ block: 'start' });
+    hooksSummaryRef.current.focus();
+  }, [error, focusRequestId, hooksOpen, initialFocus, loading, snapshot]);
 
   const applySnapshot = useCallback((
     next: ExternalSourceCatalogSnapshot,
@@ -1090,17 +1120,21 @@ const ExternalSourcesConfig: React.FC = () => {
     enabled: boolean,
   ) => {
     if (!snapshot) return;
-    // Re-enabling a custom-tuned application restores its custom mode instead of
-    // silently flattening per-capability decisions back to the recommended set.
-    const mode = enabled
-      ? (application.mode === 'custom' ? 'custom' : 'recommended')
+    const storedPolicy = ecosystemPolicies.find(
+      (ecosystem) => ecosystem.ecosystemId === application.ecosystemId,
+    );
+    const hasCustomOverrides = Object.keys(
+      storedPolicy?.capabilityOverrides ?? {},
+    ).length > 0;
+    const mode: ExternalIntegrationMode = enabled
+      ? (hasCustomOverrides ? 'custom' : 'recommended')
       : 'disabled';
     await updatePolicy({
       operation: 'set_ecosystem_mode',
       ecosystemId: application.ecosystemId,
       mode,
     });
-  }, [snapshot, updatePolicy]);
+  }, [ecosystemPolicies, snapshot, updatePolicy]);
 
   const updateCapabilityAccess = useCallback((
     ecosystemId: string,
@@ -1283,6 +1317,44 @@ const ExternalSourcesConfig: React.FC = () => {
   }
 
   const hostUnavailable = !snapshot && error?.code === 'host_unavailable';
+  const hostUnavailableDescriptionKey = peerDeviceId
+    ? 'unavailable.remoteConnectionDescription'
+    : remoteWorkspace
+      ? 'unavailable.remoteDescription'
+      : 'unavailable.hostDescription';
+  const hostUnavailableCanRetry = Boolean(
+    peerDeviceId
+      || error?.retryable
+      || error?.recoveryActions.some((action) => (
+        action.type === 'refresh' || action.type === 'retry'
+      )),
+  );
+  const hookManagement = (
+    <details
+      className="bitfun-external-sources-config__hooks"
+      data-bf-component="external-sources-config"
+      data-bf-part="hooksSection"
+      open={hooksOpen}
+      onToggle={(event) => setHooksOpen(event.currentTarget.open)}
+    >
+      <summary
+        ref={hooksSummaryRef}
+        className="bitfun-external-sources-config__hooks-summary"
+        data-bf-component="external-sources-config"
+        data-bf-part="hooksSummary"
+      >
+        <span>{t('hooksManagement.title')}</span>
+        <span>{t('hooksManagement.description')}</span>
+      </summary>
+      {hooksOpen ? (
+        <React.Suspense
+          fallback={<ConfigPageLoading text={t('hooksManagement.loading')} />}
+        >
+          <LazyHooksConfig embedded />
+        </React.Suspense>
+      ) : null}
+    </details>
+  );
 
   return (
     <ConfigPageLayout className="bitfun-external-sources-config" data-bf-component="external-sources-config" data-bf-part="root">
@@ -1298,7 +1370,10 @@ const ExternalSourcesConfig: React.FC = () => {
               variant="ghost"
               size="small"
               aria-label={refreshing ? t('actions.refreshing') : t('actions.refresh')}
-              disabled={refreshing || (!hostCapabilities.canRefresh && !error)}
+              disabled={refreshing
+                || (hostUnavailable
+                  ? !hostUnavailableCanRetry
+                  : (!hostCapabilities.canRefresh && !error))}
               onClick={() => {
                 void loadSnapshot(true, true);
               }}
@@ -1310,16 +1385,30 @@ const ExternalSourcesConfig: React.FC = () => {
       />
       <ConfigPageContent id="external-integration-attention-region">
         {hostUnavailable ? (
-          <ConfigPageSection
-            title={t('unavailable.hostTitle')}
-            description={t(peerDeviceId
-              ? 'unavailable.remoteConnectionDescription'
-              : remoteWorkspace
-                ? 'unavailable.remoteDescription'
-                : 'unavailable.hostDescription')}
-          >
-            {null}
-          </ConfigPageSection>
+          <>
+            <ConfigPageSection title={t('unavailable.hostTitle')}>
+              <div
+                className="bitfun-external-sources-config__notice"
+                data-bf-component="external-sources-config"
+                data-bf-part="notice"
+                role="alert"
+              >
+                <div>{t(hostUnavailableDescriptionKey)}</div>
+                {hostUnavailableCanRetry ? (
+                  <div className="bitfun-external-sources-config__recovery-actions">
+                    <Button
+                      size="small"
+                      variant="secondary"
+                      onClick={() => void loadSnapshot(true, true)}
+                    >
+                      {t('recoveryActions.retry')}
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </ConfigPageSection>
+            {hookManagement}
+          </>
         ) : (
           <>
             {error ? (
@@ -1327,13 +1416,13 @@ const ExternalSourcesConfig: React.FC = () => {
                 className="bitfun-external-sources-config__notice"
                 data-bf-component="external-sources-config"
                 data-bf-part="notice"
-                role={error.kind === 'mutation' ? 'alert' : 'status'}
+                role={error.kind === 'mutation' || !snapshot ? 'alert' : 'status'}
               >
                 <div>{t(externalErrorMessageKey(error, Boolean(snapshot)))}</div>
                 {error.correlationId ? (
                   <div>{t('operationErrors.referenceId', { id: error.correlationId })}</div>
                 ) : null}
-                {error.recoveryActions.length > 0 ? (
+                {error.recoveryActions.length > 0 || (!snapshot && error.kind === 'load') ? (
                   <div className="bitfun-external-sources-config__recovery-actions">
                     {error.recoveryActions.map((action) => {
                       if (action.type === 'refresh') {
@@ -1394,6 +1483,19 @@ const ExternalSourcesConfig: React.FC = () => {
                         <span key={action.type}>{t(`recoveryActions.${action.type}`)}</span>
                       );
                     })}
+                    {!snapshot
+                      && error.kind === 'load'
+                      && !error.recoveryActions.some((action) => (
+                        action.type === 'refresh' || action.type === 'retry'
+                      )) ? (
+                        <Button
+                          size="small"
+                          variant="secondary"
+                          onClick={() => void loadSnapshot(true, true)}
+                        >
+                          {t('recoveryActions.retry')}
+                        </Button>
+                      ) : null}
                   </div>
                 ) : null}
                 <details>
@@ -1464,15 +1566,17 @@ const ExternalSourcesConfig: React.FC = () => {
                 onOpenAdvanced={openAdvanced}
               />
             ) : null}
-            <details
-              className="bitfun-external-sources-config__advanced"
-              open={advancedOpen}
-              onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
-            >
-              <summary className="bitfun-external-sources-config__advanced-summary">
-                <span>{t('applications.advanced.title')}</span>
-                <span>{t('applications.advanced.description')}</span>
-              </summary>
+            {hookManagement}
+            {snapshot ? (
+              <details
+                className="bitfun-external-sources-config__advanced"
+                open={advancedOpen}
+                onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
+              >
+                <summary className="bitfun-external-sources-config__advanced-summary">
+                  <span>{t('applications.advanced.title')}</span>
+                  <span>{t('applications.advanced.description')}</span>
+                </summary>
             {snapshot && policy ? (
               <ConfigPageSection
                 className="bitfun-external-sources-config__policy-card"
@@ -3177,7 +3281,8 @@ const ExternalSourcesConfig: React.FC = () => {
                 })}
               </ConfigPageSection>
             ) : null}
-            </details>
+              </details>
+            ) : null}
           </>
         )}
       </ConfigPageContent>

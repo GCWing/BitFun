@@ -180,6 +180,16 @@ describe('HooksConfig imported Hook management', () => {
     container.remove();
   });
 
+  it('reuses Hook owners without rendering a second page shell when embedded', async () => {
+    await act(async () => root.render(<HooksConfig embedded />));
+    await flush();
+
+    expect(getConfigMock).toHaveBeenCalledWith('app.hooks');
+    expect(getSnapshotMock).toHaveBeenCalledWith('D:/workspace/project', false);
+    expect(container.querySelector('h1')).toBeNull();
+    expect(container.textContent).toContain('activation.title');
+  });
+
   it('loads settings and sources together, then exposes exact commands before apply', async () => {
     await act(async () => root.render(<HooksConfig />));
     await flush();

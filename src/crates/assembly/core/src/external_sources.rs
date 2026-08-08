@@ -8384,7 +8384,17 @@ mod tests {
         let snapshot =
             lock_coordinator(&service.control_plane).apply_discovery_results(batch.immediate);
         for deferred in batch.deferred {
-            service.schedule_deferred_command_discovery(deferred);
+            let control_plane = Arc::clone(&service.control_plane);
+            tokio::spawn(async move {
+                let Some((completed, _observer)) = control_plane.complete_command(deferred).await
+                else {
+                    return;
+                };
+                let Some(result) = control_plane.finalize_command(completed).await else {
+                    return;
+                };
+                lock_coordinator(&control_plane).apply_discovery_result(result);
+            });
         }
         snapshot
     }
@@ -9664,19 +9674,16 @@ mod tests {
             slow_provider,
             delayed_provider(
                 "healthy",
-                std::time::Duration::ZERO,
+                std::time::Duration::from_millis(50),
                 Arc::clone(&healthy_calls),
             ),
         ]);
 
         tokio::time::timeout(std::time::Duration::from_secs(2), async {
             loop {
-                let snapshot = refresh_test_commands(&service).await;
+                let _ = refresh_test_commands(&service).await;
                 if slow_calls.load(Ordering::SeqCst) == 1
-                    && snapshot
-                        .commands
-                        .iter()
-                        .any(|command| command.definition.name == "healthy")
+                    && healthy_calls.load(Ordering::SeqCst) >= 1
                 {
                     break;
                 }
@@ -9685,6 +9692,22 @@ mod tests {
         })
         .await
         .expect("slow and healthy providers must both start");
+
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            loop {
+                let snapshot = lock_coordinator(&service.control_plane).snapshot();
+                if snapshot
+                    .commands
+                    .iter()
+                    .any(|command| command.definition.name == "healthy")
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("the healthy provider result must be published");
 
         let healthy_calls_before_refresh = healthy_calls.load(Ordering::SeqCst);
         let snapshot = tokio::time::timeout(std::time::Duration::from_secs(2), async {

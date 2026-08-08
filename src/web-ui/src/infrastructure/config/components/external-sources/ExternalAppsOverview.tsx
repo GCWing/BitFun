@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import { Switch } from '@/component-library';
 import { ChevronDown, ChevronRight, Settings2 } from 'lucide-react';
 import { ConfigPageSection } from '../common';
-import type { ExternalApplicationView } from './applicationModel';
+import type {
+  ExternalApplicationCapabilityPlan,
+  ExternalApplicationView,
+} from './applicationModel';
 import type { TFunction } from 'i18next';
 
 export interface ExternalAppsOverviewProps {
@@ -25,14 +28,10 @@ const CAPABILITY_LABEL: Record<string, string> = {
 };
 
 function capabilityAccessLabel(
-  application: ExternalApplicationView,
-  capabilityId: string,
+  capability: ExternalApplicationCapabilityPlan,
   t: TFunction,
 ): string {
-  const plan = application.connectPlan.find((entry) => entry.capabilityId === capabilityId);
-  return plan?.recommendedAccess === 'auto'
-    ? t('applications.capabilityAccess.auto')
-    : t('applications.capabilityAccess.managed');
+  return t(`applications.capabilityAccess.${capability.effectiveAccess}`);
 }
 
 /**
@@ -117,6 +116,7 @@ export const ExternalAppsOverview: React.FC<ExternalAppsOverviewProps> = ({
                     {application.attentionCount > 0 ? (
                       <span
                         className="bitfun-external-sources-config__app-attention-dot"
+                        data-bf-component="external-sources-config"
                         data-bf-part="appAttention"
                         title={t('applications.summary.attention', { count: application.attentionCount })}
                       >
@@ -143,6 +143,7 @@ export const ExternalAppsOverview: React.FC<ExternalAppsOverviewProps> = ({
                 </div>
                 <div
                   className="bitfun-external-sources-config__app-toggle"
+                  data-bf-component="external-sources-config"
                   data-bf-part="applicationToggle"
                 >
                   <Switch
@@ -168,6 +169,7 @@ export const ExternalAppsOverview: React.FC<ExternalAppsOverviewProps> = ({
                       <div
                         key={capability.capabilityId}
                         className="bitfun-external-sources-config__app-capability"
+                        data-bf-component="external-sources-config"
                         data-bf-part="appCapability"
                       >
                         <span>
@@ -179,7 +181,7 @@ export const ExternalAppsOverview: React.FC<ExternalAppsOverviewProps> = ({
                           </small>
                         </span>
                         <span className="bitfun-external-sources-config__app-capability-access">
-                          {capabilityAccessLabel(application, capability.capabilityId, t)}
+                          {capabilityAccessLabel(capability, t)}
                         </span>
                       </div>
                     ))

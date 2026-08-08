@@ -152,6 +152,56 @@ describe('external application model', () => {
     ]);
   });
 
+  it('keeps recommended access separate from the authoritative effective access', () => {
+    const disabledCommandPolicy = policy({
+      effective: {
+        enabled: true,
+        ecosystems: {
+          opencode: {
+            ecosystemId: 'opencode',
+            mode: 'custom',
+            capabilities: { command: 'disabled' },
+          },
+        },
+      },
+      globalEffective: {
+        enabled: true,
+        ecosystems: {
+          opencode: {
+            ecosystemId: 'opencode',
+            mode: 'custom',
+            capabilities: { command: 'disabled' },
+          },
+        },
+      },
+    });
+    const result = view(snapshot({
+      sources: [source('opencode-user', 'opencode')],
+      integrationPolicy: disabledCommandPolicy,
+      commands: [{
+        candidateId: 'command-1',
+        definition: {
+          id: {
+            source: { providerId: 'opencode.commands', sourceId: 'user-configuration' },
+            localId: 'review',
+          },
+          name: 'review',
+          description: 'Review',
+          availability: { state: 'available' },
+          contentVersion: 'v1',
+        },
+      }],
+    }));
+
+    expect(result.applications[0].connectPlan.find(
+      (entry) => entry.capabilityId === 'command',
+    )).toMatchObject({
+      recommendedAccess: 'auto',
+      effectiveAccess: 'disabled',
+      count: 1,
+    });
+  });
+
   it('keeps custom ecosystems on manage so a two-state toggle cannot flatten them', () => {
     const result = view(snapshot({
       sources: [source('opencode-user', 'opencode')],
