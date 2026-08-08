@@ -8,6 +8,7 @@ use bitfun_ai_adapters::models_dev::{
     project_reasoning_catalog_with_limit_and_auto_binding, ModelsDevCatalog,
 };
 use bitfun_core_types::{
+    ModelsDevCatalogSource, ModelsDevCatalogStatus, ModelsDevRefreshResult, ModelsDevRefreshStatus,
     ReasoningCatalogBinding, ReasoningCatalogProjection, ReasoningPresetDescriptor,
 };
 #[cfg(feature = "agent-runtime")]
@@ -59,6 +60,87 @@ fn models_dev_catalog_service() -> &'static ModelsDevCatalogService {
             .join("catalog.json");
         ModelsDevCatalogService::new(cache_file)
     })
+}
+
+#[cfg(feature = "agent-runtime")]
+fn models_dev_catalog_source(source: ModelsDevSnapshotSource) -> ModelsDevCatalogSource {
+    match source {
+        ModelsDevSnapshotSource::Cache => ModelsDevCatalogSource::Cache,
+        ModelsDevSnapshotSource::Bundled => ModelsDevCatalogSource::Bundle,
+        ModelsDevSnapshotSource::Empty => ModelsDevCatalogSource::Empty,
+    }
+}
+
+#[cfg(feature = "agent-runtime")]
+async fn models_dev_catalog_status() -> ModelsDevCatalogStatus {
+    let service = models_dev_catalog_service();
+    let snapshot = load_models_dev_reasoning_catalog_without_refresh().await;
+    let metadata = service.cache_metadata().await;
+    let projection = snapshot.catalog.as_deref().map(|catalog| {
+        catalog.reasoning_binding_catalog(
+            snapshot.sha256.clone(),
+            models_dev_catalog_source(snapshot.source),
+        )
+    });
+    ModelsDevCatalogStatus {
+        active_source: models_dev_catalog_source(snapshot.source),
+        revision: snapshot.sha256,
+        cache_path: metadata.path.to_string_lossy().into_owned(),
+        cache_exists: metadata.exists,
+        cache_updated_at_ms: metadata.updated_at_ms,
+        provider_count: projection.as_ref().map_or(0, |value| value.providers.len()),
+        reasoning_model_count: projection.as_ref().map_or(0, |value| {
+            value
+                .providers
+                .iter()
+                .map(|provider| provider.models.len())
+                .sum()
+        }),
+        refresh_in_progress: service.refresh_in_progress(),
+    }
+}
+
+#[cfg(feature = "agent-runtime")]
+pub(crate) async fn get_models_dev_catalog_status() -> ModelsDevCatalogStatus {
+    models_dev_catalog_status().await
+}
+
+#[cfg(feature = "agent-runtime")]
+pub(crate) async fn refresh_models_dev_catalog_now() -> Result<ModelsDevRefreshResult, String> {
+    let service = models_dev_catalog_service();
+    let outcome = service.refresh_now().await;
+    match outcome {
+        ModelsDevRefreshOutcome::Updated(snapshot) => {
+            if let Some(updated) = parse_models_dev_snapshot(&snapshot) {
+                if replace_parsed_catalog_cache(updated) {
+                    emit_models_dev_catalog_updated(&snapshot).await;
+                }
+            }
+            Ok(ModelsDevRefreshResult {
+                outcome: ModelsDevRefreshStatus::Updated,
+                status: models_dev_catalog_status().await,
+            })
+        }
+        ModelsDevRefreshOutcome::Unchanged { .. } => {
+            let snapshot = service.load_cached_or_bundled().await;
+            if let Some(updated) = parse_models_dev_snapshot(&snapshot) {
+                replace_parsed_catalog_cache(updated);
+            }
+            Ok(ModelsDevRefreshResult {
+                outcome: ModelsDevRefreshStatus::Unchanged,
+                status: models_dev_catalog_status().await,
+            })
+        }
+        ModelsDevRefreshOutcome::NotNeeded => Ok(ModelsDevRefreshResult {
+            outcome: ModelsDevRefreshStatus::Unchanged,
+            status: models_dev_catalog_status().await,
+        }),
+        ModelsDevRefreshOutcome::Throttled => Ok(ModelsDevRefreshResult {
+            outcome: ModelsDevRefreshStatus::Throttled,
+            status: models_dev_catalog_status().await,
+        }),
+        ModelsDevRefreshOutcome::Failed => Err("Failed to refresh models.dev catalog".to_string()),
+    }
 }
 
 #[cfg(feature = "agent-runtime")]
@@ -156,10 +238,9 @@ fn replace_cached_catalog(
     cache: &mut Option<CachedReasoningCatalogSnapshot>,
     updated: ModelsDevReasoningCatalogSnapshot,
 ) -> bool {
-    if cache
-        .as_ref()
-        .is_some_and(|cached| cached.snapshot.version == updated.version)
-    {
+    if cache.as_ref().is_some_and(|cached| {
+        cached.snapshot.version == updated.version && cached.snapshot.source == updated.source
+    }) {
         return false;
     }
     *cache = Some(CachedReasoningCatalogSnapshot {
@@ -675,5 +756,32 @@ mod tests {
 
         assert!(super::replace_cached_catalog(&mut cache, updated));
         assert_eq!(cache.as_ref().map(|value| value.snapshot.version), Some(2));
+    }
+
+    #[cfg(feature = "agent-runtime")]
+    #[test]
+    fn cache_source_change_replaces_equal_bundled_snapshot() {
+        let catalog = std::sync::Arc::new(catalog());
+        let mut cache = Some(super::CachedReasoningCatalogSnapshot {
+            loaded_at: std::time::Instant::now(),
+            snapshot: super::ModelsDevReasoningCatalogSnapshot {
+                catalog: Some(catalog.clone()),
+                version: 1,
+                sha256: "same".to_string(),
+                source: bitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Bundled,
+            },
+        });
+        let updated = super::ModelsDevReasoningCatalogSnapshot {
+            catalog: Some(catalog),
+            version: 1,
+            sha256: "same".to_string(),
+            source: bitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Cache,
+        };
+
+        assert!(super::replace_cached_catalog(&mut cache, updated));
+        assert_eq!(
+            cache.as_ref().map(|value| value.snapshot.source),
+            Some(bitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Cache)
+        );
     }
 }

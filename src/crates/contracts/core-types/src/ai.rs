@@ -334,6 +334,65 @@ pub struct ProviderCatalog {
     pub providers: Vec<ProviderCatalogProvider>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelsDevCatalogSource {
+    Cache,
+    Bundle,
+    #[default]
+    Empty,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ModelsDevReasoningModel {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ModelsDevReasoningProvider {
+    pub id: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub models: Vec<ModelsDevReasoningModel>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct ModelsDevReasoningCatalog {
+    pub revision: String,
+    pub source: ModelsDevCatalogSource,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub providers: Vec<ModelsDevReasoningProvider>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ModelsDevCatalogStatus {
+    pub active_source: ModelsDevCatalogSource,
+    pub revision: String,
+    pub cache_path: String,
+    pub cache_exists: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_updated_at_ms: Option<i64>,
+    pub provider_count: usize,
+    pub reasoning_model_count: usize,
+    pub refresh_in_progress: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelsDevRefreshStatus {
+    Updated,
+    Unchanged,
+    Throttled,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ModelsDevRefreshResult {
+    pub outcome: ModelsDevRefreshStatus,
+    pub status: ModelsDevCatalogStatus,
+}
+
 #[cfg(test)]
 mod reasoning_tests {
     use serde_json::json;

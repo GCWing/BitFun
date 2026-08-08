@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Info, Brain } from 'lucide-react';
+import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Info, Brain, FolderOpen } from 'lucide-react';
 import { Button, Switch, Select, IconButton, NumberInput, Card, Modal, Input, Search, Textarea, Tooltip, type SelectOption } from '@/component-library';
 import {
   AIModelConfig as AIModelConfigType, 
@@ -41,6 +41,7 @@ import {
 import './AIModelConfig.scss';
 
 const log = createLogger('AIModelConfig');
+const MODELS_DEV_DOWNLOAD_URL = 'https://models.dev/api.json';
 
 /** Rows the preset picker shows before the user searches or expands the list. */
 const COLLAPSED_PROVIDER_COUNT = 6;
@@ -376,6 +377,10 @@ const AIModelConfig: React.FC = () => {
   const { t: tComponents } = useTranslation('components');
   const [aiModels, setAiModels] = useState<AIModelConfigType[]>([]);
   const [modelCatalog, setModelCatalog] = useState<Awaited<ReturnType<typeof aiApi.getModelCatalog>> | null>(null);
+  const [modelsDevStatus, setModelsDevStatus] = useState<Awaited<ReturnType<typeof aiApi.getModelsDevCatalogStatus>> | null>(null);
+  const [modelsDevStatusAvailable, setModelsDevStatusAvailable] = useState(true);
+  const [isRefreshingModelsDev, setIsRefreshingModelsDev] = useState(false);
+  const [showModelsDevDetails, setShowModelsDevDetails] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingConfig, setEditingConfig] = useState<Partial<AIModelConfigType> | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -504,6 +509,38 @@ const AIModelConfig: React.FC = () => {
     }
   }, []);
 
+  const loadModelsDevStatus = useCallback(async () => {
+    try {
+      setModelsDevStatus(await aiApi.getModelsDevCatalogStatus());
+      setModelsDevStatusAvailable(true);
+    } catch (error) {
+      setModelsDevStatusAvailable(false);
+      log.warn('Failed to load models.dev catalog status', { error });
+    }
+  }, []);
+
+  const handleRefreshModelsDev = useCallback(async () => {
+    setIsRefreshingModelsDev(true);
+    try {
+      const result = await aiApi.refreshModelsDevCatalogNow();
+      setModelsDevStatus(result.status);
+      await loadModelCatalog();
+      notification.success(
+        result.outcome === 'updated'
+          ? t('modelsDevCatalog.refreshSuccess')
+          : result.outcome === 'throttled'
+            ? t('modelsDevCatalog.refreshThrottled')
+            : t('modelsDevCatalog.alreadyCurrent'),
+      );
+    } catch (error) {
+      log.warn('Failed to refresh models.dev catalog', { error });
+      notification.error(t('modelsDevCatalog.refreshFailed'));
+      await loadModelsDevStatus();
+    } finally {
+      setIsRefreshingModelsDev(false);
+    }
+  }, [loadModelCatalog, loadModelsDevStatus, notification, t]);
+
   const loadConfig = useCallback(async () => {
     try {
       const [models, proxy, streamIdleTimeoutSecs, streamTtftTimeoutSecs, allowJsonRepair] = await Promise.all([
@@ -515,6 +552,7 @@ const AIModelConfig: React.FC = () => {
       ]);
       setAiModels(models);
       await loadModelCatalog();
+      await loadModelsDevStatus();
       if (proxy) {
         setProxyConfig(proxy);
       }
@@ -528,15 +566,16 @@ const AIModelConfig: React.FC = () => {
     } catch (error) {
       log.error('Failed to load AI config', error);
     }
-  }, [loadModelCatalog]);
+  }, [loadModelCatalog, loadModelsDevStatus]);
 
   useEffect(() => {
     const unsubscribeCatalog = aiApi.onModelCatalogUpdated(() => {
       void loadModelCatalog();
+      void loadModelsDevStatus();
     });
     loadConfig();
     return unsubscribeCatalog;
-  }, [loadConfig, loadModelCatalog]);
+  }, [loadConfig, loadModelCatalog, loadModelsDevStatus]);
 
   const refreshSubscriptionAccounts = useCallback(async () => {
     setIsLoadingSubscriptions(true);
@@ -3059,6 +3098,15 @@ const AIModelConfig: React.FC = () => {
     )
     ? resolveDraftCatalogEntry(reasoningPanelDraft)?.reasoning
     : undefined;
+  const modelsDevSourceLabel = modelsDevStatus
+    ? t(`modelsDevCatalog.source.${modelsDevStatus.active_source}`)
+    : t('modelsDevCatalog.loading');
+  const modelsDevUpdatedAt = modelsDevStatus?.cache_updated_at_ms
+    ? i18nService.formatDate(new Date(modelsDevStatus.cache_updated_at_ms), {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+    : t('modelsDevCatalog.noCache');
 
   
   return (
@@ -3397,6 +3445,40 @@ const AIModelConfig: React.FC = () => {
           )}
         </ConfigPageSection>
 
+        {modelsDevStatusAvailable && <ConfigPageSection
+          title={t('modelsDevCatalog.title')}
+          description={t('modelsDevCatalog.description')}
+          mouseGlowSurface={false}
+          extra={(
+            <div className="bitfun-ai-model-config__catalog-actions">
+              <IconButton
+                variant="ghost"
+                size="small"
+                tooltip={t('modelsDevCatalog.viewDetails')}
+                onClick={() => setShowModelsDevDetails(true)}
+              >
+                <Eye size={14} aria-hidden="true" />
+              </IconButton>
+              <IconButton
+                variant="ghost"
+                size="small"
+                tooltip={t(isRefreshingModelsDev
+                  ? 'modelsDevCatalog.refreshing'
+                  : 'modelsDevCatalog.refreshNow')}
+                onClick={() => void handleRefreshModelsDev()}
+                disabled={isRefreshingModelsDev}
+              >
+                <RefreshCw
+                  size={14}
+                  className={isRefreshingModelsDev ? 'bitfun-ai-model-config__spin' : ''}
+                />
+              </IconButton>
+            </div>
+          )}
+        >
+          <span />
+        </ConfigPageSection>}
+
         <ConfigPageSection
           title={t('streamIdleTimeout.title')}
           description={t('streamIdleTimeout.effectiveNextRound')}
@@ -3510,6 +3592,85 @@ const AIModelConfig: React.FC = () => {
       </ConfigPageContent>
 
       <Modal
+        isOpen={showModelsDevDetails}
+        onClose={() => setShowModelsDevDetails(false)}
+        title={t('modelsDevCatalog.detailsTitle')}
+        size="small"
+      >
+        <div className="bitfun-ai-model-config__catalog-details">
+          <ConfigPageRow label={t('modelsDevCatalog.activeSource')} align="center">
+            <span className="bitfun-ai-model-config__catalog-status-value">{modelsDevSourceLabel}</span>
+          </ConfigPageRow>
+          <ConfigPageRow label={t('modelsDevCatalog.catalogSize')} align="center">
+            <span className="bitfun-ai-model-config__catalog-status-value">
+              {modelsDevStatus
+                ? t('modelsDevCatalog.catalogSizeValue', {
+                    providers: i18nService.formatNumber(modelsDevStatus.provider_count),
+                    models: i18nService.formatNumber(modelsDevStatus.reasoning_model_count),
+                  })
+                : t('modelsDevCatalog.loading')}
+            </span>
+          </ConfigPageRow>
+          <ConfigPageRow label={t('modelsDevCatalog.cacheUpdatedAt')} align="center">
+            <span className="bitfun-ai-model-config__catalog-status-value">{modelsDevUpdatedAt}</span>
+          </ConfigPageRow>
+          <ConfigPageRow label={t('modelsDevCatalog.cachePath')} align="center" wide>
+            <div className="bitfun-ai-model-config__catalog-path">
+              <code title={modelsDevStatus?.cache_path}>{modelsDevStatus?.cache_path || '—'}</code>
+              <IconButton
+                variant="ghost"
+                size="small"
+                tooltip={t('modelsDevCatalog.reveal')}
+                onClick={() => {
+                  void aiApi.revealModelsDevCacheDirectory().catch((error) => {
+                    log.warn('Failed to reveal models.dev cache', { error });
+                    notification.error(t('modelsDevCatalog.revealFailed'));
+                  });
+                }}
+              >
+                <FolderOpen size={14} aria-hidden="true" />
+              </IconButton>
+            </div>
+          </ConfigPageRow>
+          <ConfigPageRow label={t('modelsDevCatalog.revision')} align="center">
+            <code className="bitfun-ai-model-config__catalog-revision" title={modelsDevStatus?.revision}>
+              {modelsDevStatus?.revision ? `${modelsDevStatus.revision.slice(0, 12)}…` : '—'}
+            </code>
+          </ConfigPageRow>
+          <div className="bitfun-ai-model-config__catalog-offline-help" role="note">
+            <Info size={15} aria-hidden="true" />
+            <div>
+              <strong>{t('modelsDevCatalog.offlineTitle')}</strong>
+              <p>{t('modelsDevCatalog.offlineDescription')}</p>
+              <div className="bitfun-ai-model-config__catalog-offline-actions">
+                <Button
+                  variant="ghost"
+                  size="small"
+                  onClick={() => void systemAPI.openExternal(MODELS_DEV_DOWNLOAD_URL)}
+                >
+                  <ExternalLink size={14} aria-hidden="true" />
+                  {t('modelsDevCatalog.downloadOriginal')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="small"
+                  onClick={() => {
+                    void aiApi.revealModelsDevCacheDirectory().catch((error) => {
+                      log.warn('Failed to reveal models.dev cache directory', { error });
+                      notification.error(t('modelsDevCatalog.revealFailed'));
+                    });
+                  }}
+                >
+                  <FolderOpen size={14} aria-hidden="true" />
+                  {t('modelsDevCatalog.openCacheDirectory')}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
         isOpen={!!subscriptionLogoutRequest}
         onClose={() => setSubscriptionLogoutRequest(null)}
         title={t('subscriptionAuth.logoutConfirmTitle')}
@@ -3575,7 +3736,7 @@ const AIModelConfig: React.FC = () => {
             key={reasoningPanelDraft.key}
             value={reasoningPanelDraft.reasoning}
             generatedProjection={reasoningPanelProjection}
-            providerCatalog={modelCatalog?.provider_catalog}
+            modelsDevReasoningCatalog={modelCatalog?.models_dev_reasoning_catalog}
             onCancel={() => setReasoningPanelDraftKey(null)}
             onApply={(reasoning) => {
               updateModelDraft(reasoningPanelDraft.modelName, {

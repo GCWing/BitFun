@@ -27,7 +27,7 @@ import type {
   ReasoningPreset,
   ReasoningPresetAction,
 } from '../types';
-import type { ProviderCatalog } from '@/infrastructure/api/service-api/AIApi';
+import type { ModelsDevReasoningCatalog } from '@/infrastructure/api/service-api/AIApi';
 import {
   availableReasoningActionTypes,
   cloneReasoningConfig,
@@ -41,7 +41,7 @@ interface ReasoningPresetEditorProps {
   value: ReasoningConfig;
   onChange: (value: ReasoningConfig) => void;
   generatedProjection?: ReasoningCatalogProjection | null;
-  providerCatalog?: ProviderCatalog | null;
+  modelsDevReasoningCatalog?: ModelsDevReasoningCatalog | null;
   disabled?: boolean;
   onValidationChange?: (invalid: boolean) => void;
 }
@@ -73,7 +73,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
   value,
   onChange,
   generatedProjection,
-  providerCatalog,
+  modelsDevReasoningCatalog,
   disabled = false,
   onValidationChange,
 }) => {
@@ -131,34 +131,27 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
   );
 
   const modelsDevProviderOptions = useMemo<SelectOption[]>(() => {
-    const seen = new Map<string, string>();
-    for (const provider of providerCatalog?.providers ?? []) {
-      for (const cp of provider.catalog_providers ?? []) {
-        if (!seen.has(cp.id)) seen.set(cp.id, cp.name || cp.id);
-      }
-    }
-    const options = Array.from(seen, ([id, name]) => ({ label: name, value: id }));
-    options.sort((a, b) => a.label.localeCompare(b.label));
-    return options;
-  }, [providerCatalog]);
+    const options = (modelsDevReasoningCatalog?.providers ?? []).map(provider => ({
+      label: provider.name || provider.id,
+      value: provider.id,
+    }));
+    return [
+      { label: t('reasoningPresets.catalogUnbound'), value: '' },
+      ...options,
+    ];
+  }, [modelsDevReasoningCatalog, t]);
 
   const modelsDevProviderId = catalog.source === 'models_dev' ? catalog.provider : '';
 
   const modelsDevModelOptions = useMemo<SelectOption[]>(() => {
     if (!modelsDevProviderId) return [];
-    const seen = new Set<string>();
-    const options: SelectOption[] = [];
-    for (const provider of providerCatalog?.providers ?? []) {
-      for (const model of provider.models) {
-        if (model.capabilities?.reasoning && model.catalog_provider_ids?.includes(modelsDevProviderId) && !seen.has(model.id)) {
-          seen.add(model.id);
-          options.push({ label: model.display_name || model.id, value: model.id });
-        }
-      }
-    }
-    options.sort((a, b) => a.label.localeCompare(b.label));
-    return options;
-  }, [providerCatalog, modelsDevProviderId]);
+    const provider = modelsDevReasoningCatalog?.providers
+      .find(candidate => candidate.id === modelsDevProviderId);
+    return (provider?.models ?? []).map(model => ({
+      label: model.display_name || model.id,
+      value: model.id,
+    }));
+  }, [modelsDevReasoningCatalog, modelsDevProviderId]);
 
   const update = (next: ReasoningConfig) => onChange(cloneReasoningConfig(next));
   const updatePreset = (index: number, changes: Partial<ReasoningPreset>) => {
@@ -328,12 +321,18 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                 value={catalog.provider}
                 options={modelsDevProviderOptions}
                 disabled={disabled}
+                searchable
+                clearable
                 allowCustomValue
-                customValueHint={t('reasoningPresets.effortCustomValueHint')}
+                customValueHint={t('reasoningPresets.catalogProviderCustomValueHint')}
                 searchPlaceholder={t('reasoningPresets.catalogProvider')}
                 onChange={(next) => update({
                   ...value,
-                  catalog: { ...catalog, provider: String(next || '') },
+                  catalog: {
+                    ...catalog,
+                    provider: String(next || ''),
+                    model: '',
+                  },
                 })}
               />
             </div>
@@ -345,8 +344,10 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                 value={catalog.model}
                 options={modelsDevModelOptions}
                 disabled={disabled}
+                searchable
+                clearable
                 allowCustomValue
-                customValueHint={t('reasoningPresets.effortCustomValueHint')}
+                customValueHint={t('reasoningPresets.catalogModelCustomValueHint')}
                 searchPlaceholder={t('reasoningPresets.catalogModel')}
                 onChange={(next) => update({
                   ...value,

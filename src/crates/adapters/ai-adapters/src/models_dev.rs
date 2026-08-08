@@ -1,9 +1,11 @@
 //! models.dev parsing, provider/model matching, and reasoning preset projection.
 
 use bitfun_core_types::{
-    ProviderCatalogModelCapabilities, ProviderCatalogModelLimits, ProviderCatalogModelPricing,
-    ReasoningCapabilityStatus, ReasoningCatalogBinding, ReasoningCatalogProjection,
-    ReasoningConfig, ReasoningPresetAction, ReasoningPresetDescriptor, ReasoningPresetSource,
+    ModelsDevCatalogSource, ModelsDevReasoningCatalog, ModelsDevReasoningModel,
+    ModelsDevReasoningProvider, ProviderCatalogModelCapabilities, ProviderCatalogModelLimits,
+    ProviderCatalogModelPricing, ReasoningCapabilityStatus, ReasoningCatalogBinding,
+    ReasoningCatalogProjection, ReasoningConfig, ReasoningPresetAction, ReasoningPresetDescriptor,
+    ReasoningPresetSource,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -358,6 +360,58 @@ impl ModelsDevCatalog {
     pub fn canonical_model_id(&self, provider_id: &str, model_id: &str) -> Option<String> {
         self.model(provider_id, model_id)
             .map(|model| model.id.clone())
+    }
+
+    pub fn reasoning_binding_catalog(
+        &self,
+        revision: String,
+        source: ModelsDevCatalogSource,
+    ) -> ModelsDevReasoningCatalog {
+        let mut providers = self
+            .providers
+            .iter()
+            .filter_map(|(provider_id, provider)| {
+                let mut models_by_id = BTreeMap::new();
+                for model in provider.models.values().filter(|model| model.reasoning) {
+                    models_by_id.entry(model.id.clone()).or_insert_with(|| {
+                        ModelsDevReasoningModel {
+                            id: model.id.clone(),
+                            display_name: model.name.clone(),
+                        }
+                    });
+                }
+                let mut models = models_by_id.into_values().collect::<Vec<_>>();
+                models.sort_by(|a, b| {
+                    a.display_name
+                        .as_deref()
+                        .unwrap_or(&a.id)
+                        .to_ascii_lowercase()
+                        .cmp(
+                            &b.display_name
+                                .as_deref()
+                                .unwrap_or(&b.id)
+                                .to_ascii_lowercase(),
+                        )
+                        .then_with(|| a.id.cmp(&b.id))
+                });
+                (!models.is_empty()).then(|| ModelsDevReasoningProvider {
+                    id: provider_id.clone(),
+                    name: provider.name.clone(),
+                    models,
+                })
+            })
+            .collect::<Vec<_>>();
+        providers.sort_by(|a, b| {
+            a.name
+                .to_ascii_lowercase()
+                .cmp(&b.name.to_ascii_lowercase())
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        ModelsDevReasoningCatalog {
+            revision,
+            source,
+            providers,
+        }
     }
 }
 
@@ -1126,8 +1180,8 @@ mod tests {
         project_reasoning_catalog_with_limit_and_auto_binding, ModelsDevCatalog,
     };
     use bitfun_core_types::{
-        ReasoningCapabilityStatus, ReasoningCatalogBinding, ReasoningConfig, ReasoningPreset,
-        ReasoningPresetAction, ReasoningPresetSource,
+        ModelsDevCatalogSource, ReasoningCapabilityStatus, ReasoningCatalogBinding,
+        ReasoningConfig, ReasoningPreset, ReasoningPresetAction, ReasoningPresetSource,
     };
 
     fn catalog() -> ModelsDevCatalog {
@@ -1158,6 +1212,48 @@ mod tests {
             }"#,
         )
         .expect("catalog should parse")
+    }
+
+    #[test]
+    fn reasoning_binding_catalog_projects_all_reasoning_providers_deterministically() {
+        let catalog = ModelsDevCatalog::parse_str(
+            r#"{
+                "zeta": {"name":"Zeta", "models": {
+                    "plain": {"id":"plain", "name":"Plain", "reasoning":false},
+                    "reason-b": {"id":"reason-b", "name":"Beta", "reasoning":true},
+                    "reason-a": {"id":"reason-a", "name":"Alpha", "reasoning":true}
+                }},
+                "alpha": {"name":"Alpha Provider", "models": {
+                    "reason": {"id":"reason", "reasoning":true}
+                }},
+                "empty": {"name":"Empty", "models": {
+                    "plain": {"id":"plain", "reasoning":false}
+                }}
+            }"#,
+        )
+        .expect("catalog");
+
+        let projection = catalog
+            .reasoning_binding_catalog("revision-1".to_string(), ModelsDevCatalogSource::Cache);
+
+        assert_eq!(projection.revision, "revision-1");
+        assert_eq!(projection.source, ModelsDevCatalogSource::Cache);
+        assert_eq!(
+            projection
+                .providers
+                .iter()
+                .map(|provider| provider.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["alpha", "zeta"]
+        );
+        assert_eq!(
+            projection.providers[1]
+                .models
+                .iter()
+                .map(|model| (model.id.as_str(), model.display_name.as_deref()))
+                .collect::<Vec<_>>(),
+            vec![("reason-a", Some("Alpha")), ("reason-b", Some("Beta"))]
+        );
     }
 
     #[test]

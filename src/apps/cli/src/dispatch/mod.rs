@@ -593,6 +593,7 @@ async fn inspect_model_readiness() -> Result<ModelReadiness> {
                 models: Vec::new(),
                 provider_catalog: Default::default(),
                 default_models: Default::default(),
+                models_dev_reasoning_catalog: None,
                 reasoning_preset_selection_supported: true,
                 session_model_id: None,
                 session_reasoning_preset: None,

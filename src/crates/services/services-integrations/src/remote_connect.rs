@@ -23,7 +23,7 @@ mod relay_http;
 pub mod session_store;
 pub mod sync_state;
 
-use bitfun_core_types::{ProviderCatalog, ReasoningCatalogProjection};
+use bitfun_core_types::{ModelsDevReasoningCatalog, ProviderCatalog, ReasoningCatalogProjection};
 use bitfun_events::AgenticEvent;
 use bitfun_runtime_ports::{
     AgentInputAttachment, AgentSessionCreateRequest, AgentSubmissionRequest, AgentSubmissionSource,
@@ -1611,6 +1611,8 @@ pub struct RemoteModelCatalog {
     pub models: Vec<RemoteModelConfig>,
     #[serde(default)]
     pub provider_catalog: ProviderCatalog,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub models_dev_reasoning_catalog: Option<ModelsDevReasoningCatalog>,
     pub default_models: RemoteDefaultModelsConfig,
     #[serde(default)]
     pub reasoning_preset_selection_supported: bool,
@@ -1666,6 +1668,7 @@ pub struct RemoteModelCatalogFacts {
     pub source_version: Option<u64>,
     pub models: Vec<RemoteModelFacts>,
     pub provider_catalog: ProviderCatalog,
+    pub models_dev_reasoning_catalog: Option<ModelsDevReasoningCatalog>,
     pub default_models: RemoteDefaultModelsConfig,
     pub session_model_id: Option<String>,
     pub session_reasoning_preset: Option<String>,
@@ -1707,6 +1710,7 @@ pub fn build_remote_model_catalog(facts: RemoteModelCatalogFacts) -> RemoteModel
             })
             .collect(),
         provider_catalog: facts.provider_catalog,
+        models_dev_reasoning_catalog: facts.models_dev_reasoning_catalog,
         default_models: facts.default_models,
         reasoning_preset_selection_supported: true,
         session_model_id: facts.session_model_id,
@@ -3659,6 +3663,7 @@ mod tests {
                 version: 1,
                 models: Vec::new(),
                 provider_catalog: Default::default(),
+                models_dev_reasoning_catalog: None,
                 default_models: RemoteDefaultModelsConfig::default(),
                 reasoning_preset_selection_supported: true,
                 session_model_id: None,

@@ -78,6 +78,17 @@ pub async fn get_ai_model_catalog() -> Result<AIModelCatalog, String> {
     service_agent_runtime::CoreServiceAgentRuntime::load_remote_model_catalog(None).await
 }
 
+#[cfg(feature = "agent-runtime")]
+pub async fn get_models_dev_catalog_status() -> bitfun_core_types::ModelsDevCatalogStatus {
+    infrastructure::ai::reasoning_catalog::get_models_dev_catalog_status().await
+}
+
+#[cfg(feature = "agent-runtime")]
+pub async fn refresh_models_dev_catalog_now(
+) -> Result<bitfun_core_types::ModelsDevRefreshResult, String> {
+    infrastructure::ai::reasoning_catalog::refresh_models_dev_catalog_now().await
+}
+
 // Export main types
 pub use bitfun_runtime_ports as runtime_ports;
 pub use util::errors::*;

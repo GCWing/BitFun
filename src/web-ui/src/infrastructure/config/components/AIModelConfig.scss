@@ -11,6 +11,81 @@
   color: var(--bf-appearance-token-color-text-primary);
   font-family: $font-family-sans;
 
+  &__catalog-status-value {
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-sm);
+  }
+
+  &__catalog-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-1;
+  }
+
+  &__catalog-details {
+    display: grid;
+    gap: var(--bf-appearance-token-size-gap-2);
+    padding: var(--bf-appearance-token-size-gap-3);
+  }
+
+  &__catalog-path {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: $size-gap-2;
+    min-width: 0;
+
+    code {
+      max-width: min(560px, 100%);
+      overflow: hidden;
+      color: var(--bf-appearance-token-color-text-secondary);
+      font-size: var(--bf-appearance-token-font-size-xs);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &__catalog-revision {
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+  }
+
+  &__catalog-offline-help {
+    display: flex;
+    align-items: flex-start;
+    gap: $size-gap-2;
+    margin-top: var(--bf-appearance-token-size-gap-3);
+    padding: var(--bf-appearance-token-size-gap-3);
+    border: 1px solid var(--bf-appearance-token-color-accent-200);
+    border-radius: var(--bf-appearance-token-size-radius-base);
+    background: var(--bf-appearance-token-color-overlay-white-04);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-sm);
+
+    > svg {
+      flex-shrink: 0;
+      margin-top: 2px;
+      color: var(--bf-appearance-token-color-info);
+    }
+
+    strong {
+      color: var(--bf-appearance-token-color-text-primary);
+      font-weight: 600;
+    }
+
+    p {
+      margin: $size-gap-1 0 0;
+      line-height: 1.5;
+    }
+  }
+
+  &__catalog-offline-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $size-gap-2;
+    margin-top: $size-gap-2;
+  }
+
   
   &__header {
     flex-shrink: 0;

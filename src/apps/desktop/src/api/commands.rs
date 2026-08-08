@@ -5157,6 +5157,29 @@ pub async fn get_ai_model_catalog() -> Result<bitfun_core::AIModelCatalog, Strin
     bitfun_core::get_ai_model_catalog().await
 }
 
+#[tauri::command]
+pub async fn get_models_dev_catalog_status() -> bitfun_core_types::ModelsDevCatalogStatus {
+    bitfun_core::get_models_dev_catalog_status().await
+}
+
+#[tauri::command]
+pub async fn refresh_models_dev_catalog_now(
+) -> Result<bitfun_core_types::ModelsDevRefreshResult, String> {
+    bitfun_core::refresh_models_dev_catalog_now().await
+}
+
+#[tauri::command]
+pub async fn reveal_models_dev_cache_directory() -> Result<(), String> {
+    let status = bitfun_core::get_models_dev_catalog_status().await;
+    let cache_path = std::path::PathBuf::from(&status.cache_path);
+    let directory = cache_path
+        .parent()
+        .ok_or_else(|| "Models.dev cache directory is unavailable".to_string())?;
+    std::fs::create_dir_all(directory)
+        .map_err(|error| format!("Failed to create models.dev cache directory: {error}"))?;
+    reveal_local_path_in_explorer(directory, &directory.to_string_lossy())
+}
+
 #[derive(Debug, Deserialize)]
 pub struct IdeControlResultRequest {
     pub request_id: String,

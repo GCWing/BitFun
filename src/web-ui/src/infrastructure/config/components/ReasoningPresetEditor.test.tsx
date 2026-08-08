@@ -3,7 +3,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ProviderCatalog } from '@/infrastructure/api/service-api/AIApi';
+import type { ModelsDevReasoningCatalog } from '@/infrastructure/api/service-api/AIApi';
 import type { ReasoningConfig } from '../types';
 import ReasoningPresetEditor from './ReasoningPresetEditor';
 
@@ -18,6 +18,8 @@ interface SelectSpyProps {
   onChange?: (value: string | number | (string | number)[]) => void;
   disabled?: boolean;
   allowCustomValue?: boolean;
+  searchable?: boolean;
+  clearable?: boolean;
 }
 
 const selectProps: Record<string, SelectSpyProps> = {};
@@ -58,53 +60,27 @@ vi.mock('@/component-library', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-const providerCatalog: ProviderCatalog = {
+const modelsDevReasoningCatalog: ModelsDevReasoningCatalog = {
   revision: 'test',
-  source: 'bundle',
+  source: 'cache',
   providers: [
     {
-      id: 'openbitfun',
-      display_order: 0,
-      name: 'OpenBitFun',
-      description: '',
-      requires_api_key: true,
-      catalog_provider_ids: ['deepseek', 'zhipuai'],
-      catalog_providers: [
-        { id: 'deepseek', name: 'DeepSeek' },
-        { id: 'zhipuai', name: 'Zhipu AI' },
-      ],
-      endpoints: [],
+      id: 'deepseek',
+      name: 'DeepSeek',
       models: [
         {
           id: 'deepseek-v4-flash',
           display_name: 'DeepSeek V4 Flash',
-          recommended: true,
-          source: 'merged',
-          catalog_provider_ids: ['deepseek'],
-          capabilities: { chat: true, tool_call: true, reasoning: true, attachment: false, structured_output: true },
         },
         {
           id: 'deepseek-v4-pro',
-          recommended: true,
-          source: 'merged',
-          catalog_provider_ids: ['deepseek'],
-          capabilities: { chat: true, tool_call: true, reasoning: true, attachment: false, structured_output: true },
-        },
-        {
-          id: 'glm-5.2',
-          recommended: true,
-          source: 'merged',
-          catalog_provider_ids: ['zhipuai'],
-          capabilities: { chat: true, tool_call: true, reasoning: true, attachment: false, structured_output: true },
-        },
-        {
-          id: 'deepseek-v2',
-          recommended: false,
-          source: 'merged',
-          catalog_provider_ids: ['deepseek'],
-          capabilities: { chat: true, tool_call: true, reasoning: false, attachment: false, structured_output: false },
         },
       ],
+    },
+    {
+      id: 'github-copilot',
+      name: 'GitHub Copilot',
+      models: [{ id: 'gpt-5.1-codex', display_name: 'GPT-5.1 Codex' }],
     },
   ],
 };
@@ -118,7 +94,7 @@ function renderEditor(value?: ReasoningConfig) {
       <ReasoningPresetEditor
         value={value ?? { catalog: { source: 'models_dev', provider: '', model: '' }, presets: [] }}
         onChange={vi.fn()}
-        providerCatalog={providerCatalog}
+        modelsDevReasoningCatalog={modelsDevReasoningCatalog}
       />,
     );
   });
@@ -147,14 +123,17 @@ describe('ReasoningPresetEditor models-dev binding', () => {
         <ReasoningPresetEditor
           value={{ catalog: { source: 'models_dev', provider: '', model: '' }, presets: [] }}
           onChange={vi.fn()}
-          providerCatalog={providerCatalog}
+          modelsDevReasoningCatalog={modelsDevReasoningCatalog}
         />,
       );
     });
     const provider = selectProps['reasoningPresets.catalogProvider'];
     expect(provider).toBeTruthy();
-    expect(provider?.options?.map(o => o.value)).toEqual(['deepseek', 'zhipuai']);
+    expect(provider?.options?.map(o => o.value)).toEqual(['', 'deepseek', 'github-copilot']);
     expect(provider?.value).toBe('');
+    expect(provider?.searchable).toBe(true);
+    expect(provider?.clearable).toBe(true);
+    expect(provider?.allowCustomValue).toBe(true);
   });
 
   it('lists only reasoning-capable models of the selected provider', () => {
@@ -163,12 +142,15 @@ describe('ReasoningPresetEditor models-dev binding', () => {
         <ReasoningPresetEditor
           value={{ catalog: { source: 'models_dev', provider: 'deepseek', model: '' }, presets: [] }}
           onChange={vi.fn()}
-          providerCatalog={providerCatalog}
+          modelsDevReasoningCatalog={modelsDevReasoningCatalog}
         />,
       );
     });
     const model = selectProps['reasoningPresets.catalogModel'];
     expect(model?.options?.map(o => o.value)).toEqual(['deepseek-v4-flash', 'deepseek-v4-pro']);
+    expect(model?.searchable).toBe(true);
+    expect(model?.clearable).toBe(true);
+    expect(model?.allowCustomValue).toBe(true);
   });
 
   it('returns empty model options for an unknown provider', () => {
@@ -177,7 +159,7 @@ describe('ReasoningPresetEditor models-dev binding', () => {
         <ReasoningPresetEditor
           value={{ catalog: { source: 'models_dev', provider: 'unknown', model: '' }, presets: [] }}
           onChange={vi.fn()}
-          providerCatalog={providerCatalog}
+          modelsDevReasoningCatalog={modelsDevReasoningCatalog}
         />,
       );
     });
@@ -185,33 +167,54 @@ describe('ReasoningPresetEditor models-dev binding', () => {
     expect(model?.options ?? []).toHaveLength(0);
   });
 
-  it('filters models by the selected provider (zhipuai only shows glm-5.2)', () => {
+  it('lists a provider outside the BitFun built-in overlay', () => {
     act(() => {
       root.render(
         <ReasoningPresetEditor
-          value={{ catalog: { source: 'models_dev', provider: 'zhipuai', model: '' }, presets: [] }}
+          value={{ catalog: { source: 'models_dev', provider: 'github-copilot', model: '' }, presets: [] }}
           onChange={vi.fn()}
-          providerCatalog={providerCatalog}
+          modelsDevReasoningCatalog={modelsDevReasoningCatalog}
         />,
       );
     });
     const model = selectProps['reasoningPresets.catalogModel'];
-    expect(model?.options?.map(o => o.value)).toEqual(['glm-5.2']);
+    expect(model?.options?.map(o => o.value)).toEqual(['gpt-5.1-codex']);
   });
 
   it('reflects the currently bound provider and model values', () => {
     act(() => {
       root.render(
         <ReasoningPresetEditor
-          value={{ catalog: { source: 'models_dev', provider: 'zhipuai', model: 'glm-5.2' }, presets: [] }}
+          value={{ catalog: { source: 'models_dev', provider: 'github-copilot', model: 'gpt-5.1-codex' }, presets: [] }}
           onChange={vi.fn()}
-          providerCatalog={providerCatalog}
+          modelsDevReasoningCatalog={modelsDevReasoningCatalog}
         />,
       );
     });
     const provider = selectProps['reasoningPresets.catalogProvider'];
     const model = selectProps['reasoningPresets.catalogModel'];
-    expect(provider?.value).toBe('zhipuai');
-    expect(model?.value).toBe('glm-5.2');
+    expect(provider?.value).toBe('github-copilot');
+    expect(model?.value).toBe('gpt-5.1-codex');
+  });
+
+  it('clears the model when the provider changes', () => {
+    const onChange = vi.fn();
+    act(() => {
+      root.render(
+        <ReasoningPresetEditor
+          value={{ catalog: { source: 'models_dev', provider: 'deepseek', model: 'deepseek-v4-pro' }, presets: [] }}
+          onChange={onChange}
+          modelsDevReasoningCatalog={modelsDevReasoningCatalog}
+        />,
+      );
+    });
+
+    act(() => {
+      selectProps['reasoningPresets.catalogProvider']?.onChange?.('github-copilot');
+    });
+
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      catalog: { source: 'models_dev', provider: 'github-copilot', model: '' },
+    }));
   });
 });

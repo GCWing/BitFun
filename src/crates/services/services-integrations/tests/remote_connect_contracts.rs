@@ -1,8 +1,9 @@
 #![cfg(feature = "remote-connect")]
 
 use bitfun_core_types::{
-    ReasoningCapabilityStatus, ReasoningCatalogProjection, ReasoningPresetAction,
-    ReasoningPresetDescriptor, ReasoningPresetSource,
+    ModelsDevCatalogSource, ModelsDevReasoningCatalog, ModelsDevReasoningModel,
+    ModelsDevReasoningProvider, ReasoningCapabilityStatus, ReasoningCatalogProjection,
+    ReasoningPresetAction, ReasoningPresetDescriptor, ReasoningPresetSource,
 };
 use bitfun_events::{AgenticEvent, ToolEventData};
 use bitfun_runtime_ports::{
@@ -2172,6 +2173,7 @@ fn sample_remote_model_catalog(version: u64) -> RemoteModelCatalog {
             reasoning: None,
         }],
         provider_catalog: Default::default(),
+        models_dev_reasoning_catalog: None,
         default_models: RemoteDefaultModelsConfig {
             primary: Some("model-1".to_string()),
             ..RemoteDefaultModelsConfig::default()
@@ -2217,6 +2219,18 @@ fn remote_connect_model_catalog_builder_preserves_config_shape() {
             }),
         }],
         provider_catalog: Default::default(),
+        models_dev_reasoning_catalog: Some(ModelsDevReasoningCatalog {
+            revision: "models-dev-revision".to_string(),
+            source: ModelsDevCatalogSource::Cache,
+            providers: vec![ModelsDevReasoningProvider {
+                id: "github-copilot".to_string(),
+                name: "GitHub Copilot".to_string(),
+                models: vec![ModelsDevReasoningModel {
+                    id: "gpt-5.1-codex".to_string(),
+                    display_name: Some("GPT-5.1 Codex".to_string()),
+                }],
+            }],
+        }),
         default_models: RemoteDefaultModelsConfig {
             primary: Some("model-1".to_string()),
             fast: Some("fast-model".to_string()),
@@ -2231,6 +2245,15 @@ fn remote_connect_model_catalog_builder_preserves_config_shape() {
     assert_eq!(catalog.session_model_id.as_deref(), Some("session-model"));
     assert_eq!(catalog.session_reasoning_preset.as_deref(), Some("high"));
     assert_eq!(catalog.default_models.fast.as_deref(), Some("fast-model"));
+    assert_eq!(
+        catalog
+            .models_dev_reasoning_catalog
+            .as_ref()
+            .expect("models.dev reasoning catalog")
+            .providers[0]
+            .id,
+        "github-copilot"
+    );
     let model = catalog.models.first().expect("model config");
     assert_eq!(model.id, "model-1");
     assert_eq!(model.context_window, Some(128_000));
@@ -2255,6 +2278,7 @@ fn remote_model_catalog_version_fits_javascript_number_precision() {
         source_version: Some(u64::MAX),
         models: Vec::new(),
         provider_catalog: Default::default(),
+        models_dev_reasoning_catalog: None,
         default_models: RemoteDefaultModelsConfig::default(),
         session_model_id: None,
         session_reasoning_preset: None,
@@ -2270,6 +2294,7 @@ fn remote_model_catalog_version_tracks_session_selection() {
         source_version: Some(7),
         models: Vec::new(),
         provider_catalog: Default::default(),
+        models_dev_reasoning_catalog: None,
         default_models: RemoteDefaultModelsConfig::default(),
         session_model_id: Some("model-1".to_string()),
         session_reasoning_preset: None,
@@ -2295,6 +2320,7 @@ fn remote_model_catalog_version_tracks_provider_catalog_revision() {
         source_version: Some(7),
         models: Vec::new(),
         provider_catalog: Default::default(),
+        models_dev_reasoning_catalog: None,
         default_models: RemoteDefaultModelsConfig::default(),
         session_model_id: None,
         session_reasoning_preset: None,

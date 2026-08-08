@@ -526,6 +526,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
+        "get_models_dev_catalog_status",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
         "get_all_modified_files",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
@@ -1379,6 +1383,14 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     (
         "refresh_model_client",
         RemoteWorkspacePolicy::LegacyUnaudited,
+    ),
+    (
+        "refresh_models_dev_catalog_now",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "reveal_models_dev_cache_directory",
+        RemoteWorkspacePolicy::LocalOnly,
     ),
     (
         "refresh_subscription_account",

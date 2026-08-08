@@ -941,6 +941,22 @@ impl CoreServiceAgentRuntime {
             .map_err(|e| format!("Failed to load global config: {e}"))?;
         let ai_config: AIConfig = global_config.ai;
         let models_dev = load_models_dev_reasoning_catalog().await;
+        let models_dev_reasoning_catalog = models_dev.catalog.as_deref().map(|catalog| {
+            catalog.reasoning_binding_catalog(
+                models_dev.sha256.clone(),
+                match models_dev.source {
+                    bitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Cache => {
+                        bitfun_core_types::ModelsDevCatalogSource::Cache
+                    }
+                    bitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Bundled => {
+                        bitfun_core_types::ModelsDevCatalogSource::Bundle
+                    }
+                    bitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Empty => {
+                        bitfun_core_types::ModelsDevCatalogSource::Empty
+                    }
+                },
+            )
+        });
         let provider_catalog = resolve_builtin_provider_catalog(
             models_dev.catalog.as_deref(),
             models_dev.sha256.clone(),
@@ -991,6 +1007,7 @@ impl CoreServiceAgentRuntime {
             source_version: Some(models_dev.version),
             models,
             provider_catalog,
+            models_dev_reasoning_catalog,
             default_models: RemoteDefaultModelsConfig {
                 primary: ai_config.default_models.primary,
                 fast: ai_config.default_models.fast,
