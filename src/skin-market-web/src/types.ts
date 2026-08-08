@@ -97,6 +97,7 @@ export interface AppearanceSubmission {
 
 export interface AppearanceAdminSubmissionDetail {
   submission: AppearanceSubmission;
+  submitter?: AppearanceMarketUser;
   manifest?: unknown;
   packageSha256?: string;
   previewSha256?: string;

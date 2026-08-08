@@ -18,7 +18,14 @@ import {
   KeyRound,
   Trash2,
 } from 'lucide-react';
-import { Button, Textarea, IconButton, Modal, ToolProcessingDots } from '@/component-library';
+import {
+  Button,
+  Textarea,
+  IconButton,
+  Modal,
+  ToolProcessingDots,
+  confirmDanger,
+} from '@/component-library';
 import {
   ConfigPageHeader,
   ConfigPageLayout,
@@ -869,7 +876,14 @@ const McpToolsConfig: React.FC = () => {
   const handleDeleteServer = async (server: MCPServerInfo) => {
     const capabilityEpoch = currentCapabilityEpoch();
     if (capabilityEpoch === null) return;
-    const confirmed = await window.confirm(tMcp('messages.deleteConfirm'));
+    const confirmed = await confirmDanger(
+      tMcp('actions.delete'),
+      tMcp('messages.deleteConfirm'),
+      {
+        confirmText: tMcp('actions.delete'),
+        cancelText: tMcp('actions.cancel'),
+      },
+    );
     if (!confirmed || !capabilityIsCurrent(capabilityEpoch)) return;
 
     try {

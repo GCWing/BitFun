@@ -201,6 +201,14 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "apply_external_source_control_action_command",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
+    (
+        "get_external_ecosystem_awareness_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "acknowledge_external_ecosystems_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
     ("apply_patch", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "archive_all_sessions",
@@ -1645,6 +1653,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     ("save_canvas_state", RemoteWorkspacePolicy::LegacyUnaudited),
+    (
+        "save_cloud_speech_config",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
     (
         "save_git_repo_history",
         RemoteWorkspacePolicy::LegacyUnaudited,

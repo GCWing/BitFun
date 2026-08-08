@@ -1739,7 +1739,7 @@ fn external_primary_route_follows_the_session_execution_worktree() {
 fn builtin_review_agents_resolve_as_local_session_primaries() {
     let registry = AgentRegistry::new();
 
-    for agent_type in ["CodeReview", "DeepReview"] {
+    for agent_type in ["CodeReview", "DeepReview", "ReviewFixer"] {
         let binding = registry
             .resolve_primary_agent_for_turn(agent_type, None, false, None)
             .expect("{agent_type} must resolve as a session primary agent for review children");
@@ -1776,6 +1776,27 @@ fn non_session_primary_subagents_and_unknown_ids_do_not_resolve() {
 }
 
 #[test]
+fn non_builtin_same_name_review_agent_does_not_resolve_as_session_primary() {
+    let registry = AgentRegistry::new();
+
+    // Custom-agent loading currently filters ids that conflict with builtin
+    // entries, but the session-primary allowlist is source-gated regardless:
+    // a non-Builtin entry occupying the builtin "ReviewFixer" id must fail
+    // closed instead of inheriting the builtin primary path.
+    registry.write_agents().insert(
+        "ReviewFixer".to_string(),
+        test_source_custom_entry("ReviewFixer", "shadow", CustomSubagentKind::User),
+    );
+
+    assert!(
+        registry
+            .resolve_primary_agent_for_turn("ReviewFixer", None, false, None)
+            .is_none(),
+        "a non-Builtin entry named ReviewFixer must not resolve as a session primary agent"
+    );
+}
+
+#[test]
 fn local_route_resolves_review_agents_as_session_primaries() {
     let registry = AgentRegistry::new();
     let workspace = PathBuf::from("D:/workspace/review-local-route");
@@ -1785,13 +1806,15 @@ fn local_route_resolves_review_agents_as_session_primaries() {
         [
             ("CodeReview".to_string(), ExternalSubagentRoute::Local),
             ("DeepReview".to_string(), ExternalSubagentRoute::Local),
+            ("ReviewFixer".to_string(), ExternalSubagentRoute::Local),
             ("ReviewWorker".to_string(), ExternalSubagentRoute::Local),
+            ("ReviewJudge".to_string(), ExternalSubagentRoute::Local),
         ]
         .into_iter()
         .collect(),
     );
 
-    for agent_type in ["CodeReview", "DeepReview"] {
+    for agent_type in ["CodeReview", "DeepReview", "ReviewFixer"] {
         let binding = registry
             .resolve_primary_agent_for_turn(agent_type, Some(&workspace), true, None)
             .expect("{agent_type} must resolve through an explicit Local route");

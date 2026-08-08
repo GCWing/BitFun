@@ -171,6 +171,8 @@ export const AGENT_COMMAND_SCHEMA = {
     response: null as unknown as ResetAgentProfileConfigResponse,
   },
   set_config: { method: 'config/setConfig' },
+  save_cloud_speech_config: { method: 'config/saveCloudSpeechConfig' },
+  validate_config: { method: 'config/validateConfig' },
   i18n_get_current_language: { method: 'i18n/getCurrentLanguage' },
   i18n_set_language: { method: 'i18n/setLanguage' },
   i18n_get_config: { method: 'i18n/getConfig' },

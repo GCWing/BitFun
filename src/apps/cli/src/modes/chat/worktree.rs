@@ -1,7 +1,3 @@
-use bitfun_core::service::git::GitService;
-use bitfun_core::service::worktree::{WorktreeService, WorktreeSessionBindingRequest};
-use bitfun_runtime_ports::AgentSessionWorkspaceBinding;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WorktreeCommand {
     Toggle,
@@ -26,27 +22,27 @@ impl ChatMode {
         rt_handle: &tokio::runtime::Handle,
     ) {
         let Some(workspace_path) = chat_state.workspace.clone() else {
+            chat_state.set_worktree_control_available(false);
             chat_state.set_git_repository_status(false, None);
             return;
         };
 
         let repository = tokio::task::block_in_place(|| {
-            rt_handle.block_on(async {
-                let repository = GitService::resolve_worktree_repository(&workspace_path).await?;
-                GitService::get_repository_basic(repository.query_path).await
-            })
+            rt_handle.block_on(
+                self.agent
+                    .worktree_repository_status(workspace_path.clone()),
+            )
         });
         match repository {
             Ok(repository) => {
-                chat_state.set_git_repository_status(true, Some(repository.current_branch));
+                chat_state.set_worktree_control_available(repository.is_repository);
+                chat_state
+                    .set_git_repository_status(repository.is_repository, repository.current_branch);
             }
             Err(error) => {
+                chat_state.set_worktree_control_available(false);
                 chat_state.set_git_repository_status(false, None);
-                tracing::debug!(
-                    "Git repository status is unavailable for workspace {}: {}",
-                    workspace_path,
-                    error
-                );
+                tracing::debug!("Worktree repository status is unavailable: {}", error);
             }
         }
     }
@@ -88,33 +84,21 @@ impl ChatMode {
         }));
         let project_workspace_path = chat_state.project_workspace_path().map(str::to_string);
         let result = tokio::task::block_in_place(|| {
-            rt_handle.block_on(WorktreeService::bind_session(
-                WorktreeSessionBindingRequest {
-                    request_id: uuid::Uuid::new_v4().to_string(),
-                    session_id: chat_state.core_session_id.clone(),
+            if enabled {
+                rt_handle.block_on(self.agent.worktree_bind_session(
+                    chat_state.core_session_id.clone(),
                     project_workspace_path,
-                    enabled,
-                },
-            ))
+                ))
+            } else {
+                rt_handle.block_on(self.agent.worktree_release_session(
+                    chat_state.core_session_id.clone(),
+                    project_workspace_path,
+                ))
+            }
         })
-        .map_err(|error| {
-            format!(
-                "Worktree isolation could not be prepared ({}): {}",
-                error.code.as_str(),
-                error.message
-            )
-        })?;
+        .map_err(|error| format!("Worktree isolation could not be prepared: {error}"))?;
 
-        let previous_binding = chat_state.workspace_binding.as_ref();
-        let binding = AgentSessionWorkspaceBinding {
-            workspace_id: result.workspace_id,
-            workspace_path: result.workspace_path,
-            project_workspace_path: Some(result.project_workspace_path),
-            execution_target: Some(result.execution_target),
-            remote_connection_id: previous_binding
-                .and_then(|binding| binding.remote_connection_id.clone()),
-            remote_ssh_host: previous_binding.and_then(|binding| binding.remote_ssh_host.clone()),
-        };
+        let binding = result.workspace_binding;
         self.agent.set_workspace_binding(&binding);
         chat_state.apply_workspace_binding(binding);
         chat_state.set_worktree_isolation_requested(None);
@@ -161,10 +145,8 @@ impl ChatMode {
             chat_view.set_status(Some(action.unavailable_message(state)));
             return Ok(None);
         }
-        if self.agent.is_shared() {
-            let message = format!(
-                "Worktree isolation is unavailable in Shared TUI preview. {SHARED_TUI_EMBEDDED_HANDOFF}."
-            );
+        if !chat_state.worktree_control_available() {
+            let message = "Worktree isolation is unavailable for the current workspace".to_string();
             chat_view.set_status(Some(message.clone()));
             chat_state.add_system_message(message);
             return Ok(None);

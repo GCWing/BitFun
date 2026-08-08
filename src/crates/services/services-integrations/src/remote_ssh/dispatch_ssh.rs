@@ -846,19 +846,25 @@ async fn stage_and_launch_installer(
     )
     .await?;
 
-    // The short-lived PTY driver only starts a nohup body and exits. Draining
-    // the channel in the background prevents a server-side channel leak while
-    // keeping the installer independent of the caller process.
+    // The short-lived driver only starts a nohup body and exits, and it must run
+    // without a PTY. sshd tears a PTY down as soon as the driver exits — about a
+    // millisecond after the hand-off — and that teardown races the body it just
+    // spawned. A body still inside bash's startup has not reached its own exit
+    // trap yet, so losing that race kills it silently: no log, no exit file, and
+    // a `.pid` the next poll then reaps as stale. The controller sees an empty
+    // state and reports the install as failed even though nothing went wrong.
+    // A plain exec channel has no controlling terminal, so the hand-off cannot be
+    // interrupted; the installer needs no TTY semantics either, since it never
+    // uses sudo. Draining the channel in the background prevents a server-side
+    // channel leak while keeping the installer independent of the caller process.
     let channel = match manager
-        .open_pty_exec_channel(
+        .open_exec_channel(
             connection_id,
             &format!(
                 "bash {} {}",
                 shell_quote_posix(script_path),
                 shell_quote_posix(install_token)
             ),
-            100,
-            30,
         )
         .await
     {

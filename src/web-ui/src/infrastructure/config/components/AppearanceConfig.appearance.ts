@@ -13,7 +13,8 @@ export const appearanceConfigAppearanceDescriptor: AppearanceSurfaceDescriptor =
     { id: 'packageDiagnosticsGroup' }, { id: 'packageDiagnosticIssue' },
     { id: 'packageDiagnosticAllowedParts' },
     { id: 'packageMissingSelection' },
-    { id: 'marketDialog' }, { id: 'marketToolbar' }, { id: 'marketGrid' },
+    { id: 'marketDialog' }, { id: 'marketToolbar' }, { id: 'marketBrowse' },
+    { id: 'marketResults' }, { id: 'marketGrid' },
     { id: 'marketCard' }, { id: 'marketPreview' }, { id: 'marketCardBody' },
     { id: 'marketStatus' }, { id: 'marketEmpty' }, { id: 'marketError' },
     { id: 'marketDetail' }, { id: 'marketDetailPreview' }, { id: 'marketDetailBody' },
@@ -31,5 +32,6 @@ export const appearanceConfigAppearanceDescriptor: AppearanceSurfaceDescriptor =
     { id: 'hover', selector: { kind: 'self', suffix: ':hover' } },
     { id: 'selected', selector: { kind: 'self', suffix: '[data-bf-state~="selected"]' } },
     { id: 'disabled', selector: { kind: 'self', suffix: '[data-bf-state~="disabled"]' } },
+    { id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } },
   ],
 };

@@ -1,4 +1,4 @@
-//! Connection initialization, capability, and health wire contracts.
+//! Connection initialization, capability, and health wire schemas.
 
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
 use serde::{Deserialize, Serialize};
@@ -95,8 +95,8 @@ pub enum HealthStatus {
 
 #[cfg(test)]
 mod tests {
+    use super::super::method::INITIALIZE;
     use super::{ClientInfo, InitializeRequest};
-    use crate::method::INITIALIZE;
 
     #[test]
     fn initialize_method_is_stable() {

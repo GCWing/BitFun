@@ -47,6 +47,9 @@ const SUPPORTED_CAPABILITIES = new Set([
   'background-media.v1',
 ]);
 
+/** Placeholder cards keep the grid at its loaded height so the dialog never resizes mid-load. */
+const SKELETON_CARD_COUNT = 6;
+
 interface AppearanceMarketDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -114,6 +117,8 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
   const [nextCursor, setNextCursor] = useState<string | undefined>();
   const [detail, setDetail] = useState<AppearanceMarketListingDetail | null>(null);
   const [loading, setLoading] = useState(false);
+  const [appending, setAppending] = useState(false);
+  const [loadedOnce, setLoadedOnce] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -130,6 +135,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
   const loadPage = useCallback(async (cursor?: string, append = false) => {
     const sequence = ++browseSequence.current;
     setLoading(true);
+    setAppending(append);
     setError(null);
     try {
       const page = await appearanceMarketAPI.browse({ ...browseRequest, cursor });
@@ -141,7 +147,11 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
       setError(errorMessage(loadError));
       if (!append) setItems([]);
     } finally {
-      if (sequence === browseSequence.current) setLoading(false);
+      if (sequence === browseSequence.current) {
+        setLoading(false);
+        setAppending(false);
+        setLoadedOnce(true);
+      }
     }
   }, [browseRequest]);
 
@@ -428,6 +438,12 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
     );
   };
 
+  // Placeholder cards stand in until the first page lands; a refresh keeps the
+  // current cards mounted and merely dims them. Both keep the dialog one size.
+  const showSkeletons = !loadedOnce || (loading && !appending && items.length === 0);
+  const refreshing = loading && !appending && items.length > 0;
+  const showEmpty = loadedOnce && !loading && items.length === 0 && !error;
+
   return (
     <Modal
       isOpen={isOpen}
@@ -436,7 +452,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
       titleExtra={<MarketAccountControls />}
       size="xlarge"
       contentInset
-      contentClassName="appearance-market__modal"
+      contentClassName="modal__content--fill-flex appearance-market__modal"
       testId="appearance-market-dialog"
     >
       <div
@@ -480,7 +496,11 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
           )}
         </nav>
         {view !== 'browse' ? <AppearanceMarketWorkflows workflow={view} /> : detail ? renderDetail() : (
-          <>
+          <div
+            className="appearance-market__browse"
+            data-bf-component="appearance-config"
+            data-bf-part="marketBrowse"
+          >
             <div
               className="appearance-market__toolbar"
               data-bf-component="appearance-config"
@@ -533,91 +553,126 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
             )}
 
             <div
-              className="appearance-market__grid"
+              className={`appearance-market__results${refreshing ? ' appearance-market__results--dimmed' : ''}`}
               data-bf-component="appearance-config"
-              data-bf-part="marketGrid"
+              data-bf-part="marketResults"
+              data-bf-state={loading ? 'loading' : undefined}
+              aria-busy={loading || undefined}
             >
-              {items.map(item => {
-                const local = installedEntry(appearances, item);
-                const updateAvailable = Boolean(
-                  local?.marketOrigin?.listingId === item.listingId
-                  && item.latestRelease > local.marketOrigin.releaseNumber,
-                );
-                return (
-                  <button
-                    key={item.listingId}
-                    type="button"
-                    className="appearance-market__card"
-                    onClick={() => void openDetail(item)}
-                    disabled={detailLoading}
-                    data-bf-component="appearance-config"
-                    data-bf-part="marketCard"
-                    data-bf-state={detailLoading ? 'disabled' : undefined}
-                  >
+              {showSkeletons ? (
+                <div className="appearance-market__grid" aria-hidden="true">
+                  {Array.from({ length: SKELETON_CARD_COUNT }, (_, index) => (
                     <div
-                      className="appearance-market__preview"
-                      data-bf-component="appearance-config"
-                      data-bf-part="marketPreview"
+                      key={`market-skeleton-${index}`}
+                      className="appearance-market__card appearance-market__card--skeleton"
                     >
-                      {item.previewUrl
-                        ? (
-                          <img
-                            src={marketImageUrl(item.previewUrl, 'compact-v1')}
-                            alt=""
-                            loading="lazy"
-                            decoding="async"
-                            onError={(event) => retryOriginalMarketImage(event.currentTarget, item.previewUrl)}
-                          />
-                        )
-                        : <Image size={25} aria-hidden="true" />}
-                      <span>{t(`package.market.mode.${item.mode}`)}</span>
+                      <div className="appearance-market__preview" />
+                      <div className="appearance-market__card-body">
+                        <span className="appearance-market__skeleton-line appearance-market__skeleton-line--title" />
+                        <span className="appearance-market__skeleton-line appearance-market__skeleton-line--meta" />
+                        <span className="appearance-market__skeleton-line" />
+                        <span className="appearance-market__skeleton-line appearance-market__skeleton-line--short" />
+                      </div>
                     </div>
-                    <div
-                      className="appearance-market__card-body"
-                      data-bf-component="appearance-config"
-                      data-bf-part="marketCardBody"
-                    >
-                      <strong>{item.name}</strong>
-                      <span>{item.author || item.owner.login} · v{item.packageVersion}</span>
-                      <p>{item.description}</p>
-                    </div>
-                    {local && (
-                      <span
-                        className="appearance-market__status"
+                  ))}
+                </div>
+              ) : (
+                <div
+                  className="appearance-market__grid"
+                  data-bf-component="appearance-config"
+                  data-bf-part="marketGrid"
+                >
+                  {items.map(item => {
+                    const local = installedEntry(appearances, item);
+                    const updateAvailable = Boolean(
+                      local?.marketOrigin?.listingId === item.listingId
+                      && item.latestRelease > local.marketOrigin.releaseNumber,
+                    );
+                    return (
+                      <button
+                        key={item.listingId}
+                        type="button"
+                        className="appearance-market__card"
+                        onClick={() => void openDetail(item)}
+                        disabled={detailLoading}
                         data-bf-component="appearance-config"
-                        data-bf-part="marketStatus"
+                        data-bf-part="marketCard"
+                        data-bf-state={detailLoading ? 'disabled' : undefined}
                       >
-                        {updateAvailable
-                          ? t('package.market.updateAvailable')
-                          : local.localOverride
-                            ? t('package.market.modified')
-                            : t('package.market.installed')}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+                        <div
+                          className="appearance-market__preview"
+                          data-bf-component="appearance-config"
+                          data-bf-part="marketPreview"
+                        >
+                          {item.previewUrl
+                            ? (
+                              <img
+                                src={marketImageUrl(item.previewUrl, 'compact-v1')}
+                                alt=""
+                                loading="lazy"
+                                decoding="async"
+                                onError={(event) => retryOriginalMarketImage(event.currentTarget, item.previewUrl)}
+                              />
+                            )
+                            : <Image size={25} aria-hidden="true" />}
+                          <span>{t(`package.market.mode.${item.mode}`)}</span>
+                        </div>
+                        <div
+                          className="appearance-market__card-body"
+                          data-bf-component="appearance-config"
+                          data-bf-part="marketCardBody"
+                        >
+                          <strong>{item.name}</strong>
+                          <span>{item.author || item.owner.login} · v{item.packageVersion}</span>
+                          <p>{item.description}</p>
+                        </div>
+                        {local && (
+                          <span
+                            className="appearance-market__status"
+                            data-bf-component="appearance-config"
+                            data-bf-part="marketStatus"
+                          >
+                            {updateAvailable
+                              ? t('package.market.updateAvailable')
+                              : local.localOverride
+                                ? t('package.market.modified')
+                                : t('package.market.installed')}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {showEmpty && (
+                <div
+                  className="appearance-market__empty"
+                  data-bf-component="appearance-config"
+                  data-bf-part="marketEmpty"
+                >
+                  <Store size={28} aria-hidden="true" />
+                  <p>{t('package.market.empty')}</p>
+                </div>
+              )}
+
+              {nextCursor && !showSkeletons && (
+                <div className="appearance-market__load-more">
+                  <Button
+                    variant="secondary"
+                    size="small"
+                    isLoading={appending}
+                    disabled={loading}
+                    onClick={() => void loadPage(nextCursor, true)}
+                  >
+                    {t('package.market.loadMore')}
+                  </Button>
+                </div>
+              )}
             </div>
 
-            {!loading && items.length === 0 && !error && (
-              <div
-                className="appearance-market__empty"
-                data-bf-component="appearance-config"
-                data-bf-part="marketEmpty"
-              >
-                <Store size={28} aria-hidden="true" />
-                <p>{t('package.market.empty')}</p>
-              </div>
-            )}
-            {loading && <p className="appearance-market__loading">{t('package.market.loading')}</p>}
-            {nextCursor && !loading && (
-              <div className="appearance-market__load-more">
-                <Button variant="secondary" size="small" onClick={() => void loadPage(nextCursor, true)}>
-                  {t('package.market.loadMore')}
-                </Button>
-              </div>
-            )}
-          </>
+            {loading && <span className="sr-only" role="status">{t('package.market.loading')}</span>}
+          </div>
         )}
       </div>
     </Modal>

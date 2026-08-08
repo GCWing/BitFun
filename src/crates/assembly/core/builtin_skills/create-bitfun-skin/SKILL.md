@@ -39,7 +39,7 @@ A component owns only the Parts returned for that component. Nested visual owner
 
 Surface-level states may use an `ancestorPart` selector rooted at `root`. Define the state rule using the registered state id; do not reproduce host selectors in the package.
 
-Important independent owners include `toolbar-mode`, `floating-mini-chat`, `session-menu`, `composer-voice-input`, `miniapp-bubble-welcome`, `session-title-config`, `assistant-card`, `workspace-item`, `external-mcp-overview`, `miniapp-customize-panel`, `user-message-edit-composer`, `voice-input-diagnostics`, `flow-chat-turn-rail`, and `copyable-text-preview`. Query each owner before styling it.
+Important independent owners include `toolbar-mode`, `floating-mini-chat`, `session-menu`, `composer-voice-input`, `miniapp-bubble-welcome`, `session-title-config`, `assistant-card`, `workspace-item`, `external-mcp-overview`, `miniapp-customize-panel`, `user-message-edit-composer`, `voice-input-diagnostics`, `flow-chat-turn-rail`, `copyable-text-preview`, `reasoning-preset-selector`, `reasoning-config-panel`, `reasoning-preset-editor`, `market-account-controls`, and `miniapp-market-view`. Query each owner before styling it. This list is a navigation aid, not an exhaustive contract; the registry is authoritative.
 
 The following Parts are not registered and must not be used:
 
@@ -67,7 +67,7 @@ Currently bundled:
 
 | Example | Load when | Do not inherit blindly |
 | --- | --- | --- |
-| [cinematic-animated-wallpaper](examples/cinematic-animated-wallpaper/SKILL.md) | Animated character artwork, source-derived glass materials, image-led cards, or illustrated dialogs | Its asset roles, crop defaults, palette, and 43-component/7-scene surface selection |
+| [cinematic-animated-wallpaper](examples/cinematic-animated-wallpaper/SKILL.md) | Animated character artwork, source-derived glass materials, image-led cards, or illustrated dialogs | Its asset roles, crop defaults, palette, and selected surface plan |
 
 Read [style-example-contract.md](references/style-example-contract.md) before adding or restructuring an example. An example is a design recipe validated against the registry, not a second contract snapshot.
 

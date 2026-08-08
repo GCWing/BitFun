@@ -1,4 +1,4 @@
-//! Stable App Server error semantics.
+//! Stable App Server error schemas and semantics.
 
 use serde::{Deserialize, Serialize};
 

@@ -1,4 +1,4 @@
-//! Authoritative, sequenced App Server event contracts.
+//! Authoritative, sequenced App Server event schemas.
 
 use agent_client_protocol::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use bitfun_events::AgenticEventEnvelope;
@@ -11,6 +11,7 @@ pub enum EventStream {
     Agent,
     Permission,
     Config,
+    ExternalSource,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -88,6 +89,8 @@ pub struct SyncEventsResponse {
     pub pending_permissions: Vec<PermissionRequest>,
     pub agent_snapshot_available: bool,
     pub config_snapshot_available: bool,
+    #[serde(default)]
+    pub external_source_snapshot_available: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

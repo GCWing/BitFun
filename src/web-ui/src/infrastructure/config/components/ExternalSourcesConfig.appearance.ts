@@ -33,5 +33,9 @@ export const externalSourcesConfigAppearanceDescriptor: AppearanceSurfaceDescrip
     { id: 'ecosystemHeading' },
     { id: 'ecosystemName' },
     { id: 'ecosystemState' },
+    { id: 'application' },
+    { id: 'appDetail' },
+    { id: 'appAttention' },
+    { id: 'appCapability' },
   ],
 };

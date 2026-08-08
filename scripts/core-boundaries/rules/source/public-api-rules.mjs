@@ -1077,6 +1077,23 @@ export const externalSourceCorePublicApiEntries = [
     true,
   ),
   ...[
+    'unacknowledged_external_ecosystems',
+    'acknowledge_external_ecosystems',
+  ].map((symbol) => ({
+    symbol,
+    owner: 'bitfun-core external source composition facade',
+    consumer: 'Desktop settings navigation and CLI/TUI external application entry points',
+    verification:
+      'core acknowledgement persistence and execution-domain scoping tests, plus Desktop and TUI first-discovery hint tests',
+    p0: 'first-discovery hint for external applications shared by GUI and TUI',
+    contractSlice: contractSlices.externalSourceCommandContract,
+    wireImpact: true,
+    rationale:
+      'both surfaces must derive "an external application the user has not seen" from one owner, otherwise GUI and TUI drift; awareness stays outside the preference-revision contract because it grants nothing and only suppresses a hint',
+    exit:
+      'remove once the versioned application-level read model owns notice state, together with its cross-surface deduplication tests',
+  })),
+  ...[
     'ExternalToolActivationState',
     'ExternalToolApprovalRequest',
     'ExternalToolCapability',

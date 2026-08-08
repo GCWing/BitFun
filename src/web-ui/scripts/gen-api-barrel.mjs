@@ -23,7 +23,11 @@ const files = (await readdir(dir, { withFileTypes: true }))
   .map((e) => basename(e.name, extname(e.name)))
   .sort();
 
-const requiredTypes = ['ConfigUpdate'];
+const requiredTypes = [
+  'ConfigUpdate',
+  'SaveCloudSpeechConfigRequest',
+  'SaveCloudSpeechConfigResult',
+];
 const missingTypes = requiredTypes.filter((typeName) => !files.includes(typeName));
 if (missingTypes.length > 0) {
   throw new Error(

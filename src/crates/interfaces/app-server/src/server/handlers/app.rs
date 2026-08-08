@@ -7,6 +7,7 @@ use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
 use bitfun_app_server_protocol::event::{SyncEventsRequest, SyncEventsResponse};
 use bitfun_app_server_protocol::{MIN_PROTOCOL_VERSION, PROTOCOL_VERSION};
 
+use crate::management::EXTERNAL_SOURCES_CAPABILITY;
 use crate::role::{AppClient, AppServer};
 
 const MAX_FRAME_BYTES: u64 = 16 * 1024 * 1024;
@@ -15,7 +16,13 @@ const EVENT_BUFFER_CAPACITY: u32 = 1024;
 pub(in crate::server) fn builder(
     runtime: std::sync::Arc<crate::agent::BitfunAppRuntime>,
     event_state: std::sync::Arc<crate::server::ConnectionEventState>,
+    management: Option<std::sync::Arc<crate::management::AppManagementService>>,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
+    let capabilities = registered_capabilities(management.as_deref());
+    let external_source_snapshot_available = capabilities.iter().any(|capability| {
+        capability.id == EXTERNAL_SOURCES_CAPABILITY
+            && matches!(capability.availability, CapabilityAvailability::Available)
+    });
     AppServer
         .builder()
         .name("app lifecycle handlers")
@@ -40,7 +47,7 @@ pub(in crate::server) fn builder(
                         name: "bitfun-app-server".to_string(),
                         version: env!("CARGO_PKG_VERSION").to_string(),
                     },
-                    registered_capabilities(),
+                    capabilities.clone(),
                     TransportLimits {
                         max_frame_bytes: MAX_FRAME_BYTES,
                         event_buffer_capacity: EVENT_BUFFER_CAPACITY,
@@ -73,14 +80,17 @@ pub(in crate::server) fn builder(
                     pending_permissions,
                     agent_snapshot_available: false,
                     config_snapshot_available: false,
+                    external_source_snapshot_available,
                 })
             },
             agent_client_protocol::on_receive_request!(),
         )
 }
 
-fn registered_capabilities() -> Vec<CapabilityDescriptor> {
-    [
+fn registered_capabilities(
+    management: Option<&crate::management::AppManagementService>,
+) -> Vec<CapabilityDescriptor> {
+    let mut capabilities = [
         (
             "agent",
             vec![
@@ -159,6 +169,8 @@ fn registered_capabilities() -> Vec<CapabilityDescriptor> {
                 "config/getConfig",
                 "config/getConfigs",
                 "config/setConfig",
+                "config/saveCloudSpeechConfig",
+                "config/validateConfig",
                 "config/setAgentProfileConfig",
                 "config/resetAgentProfileConfig",
             ],
@@ -181,5 +193,46 @@ fn registered_capabilities() -> Vec<CapabilityDescriptor> {
         availability: CapabilityAvailability::Available,
         methods: methods.into_iter().map(str::to_string).collect(),
     })
-    .collect()
+    .collect::<Vec<_>>();
+    capabilities.extend(
+        management
+            .map(|service| service.capabilities())
+            .unwrap_or_else(|| {
+                crate::management::AppManagementCapabilities::unavailable(
+                    "The Host did not provide management owners",
+                )
+            })
+            .descriptors(),
+    );
+    capabilities
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_host_management_service_declares_capabilities_unavailable() {
+        let capabilities = registered_capabilities(None);
+        for id in [
+            "tui.modes",
+            "tui.models",
+            "tui.skills",
+            "tui.subagents",
+            "tui.mcp",
+            EXTERNAL_SOURCES_CAPABILITY,
+            crate::management::ACCOUNT_CAPABILITY,
+            crate::management::SETTINGS_SYNC_CAPABILITY,
+            crate::management::WORKTREES_CAPABILITY,
+        ] {
+            let capability = capabilities
+                .iter()
+                .find(|capability| capability.id == id)
+                .expect("management capability should be declared");
+            assert!(matches!(
+                capability.availability,
+                CapabilityAvailability::Unavailable { .. }
+            ));
+        }
+    }
 }

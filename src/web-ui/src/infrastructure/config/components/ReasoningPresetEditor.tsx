@@ -27,6 +27,7 @@ import type {
   ReasoningPreset,
   ReasoningPresetAction,
 } from '../types';
+import type { ProviderCatalog } from '@/infrastructure/api/service-api/AIApi';
 import {
   availableReasoningActionTypes,
   cloneReasoningConfig,
@@ -40,6 +41,7 @@ interface ReasoningPresetEditorProps {
   value: ReasoningConfig;
   onChange: (value: ReasoningConfig) => void;
   generatedProjection?: ReasoningCatalogProjection | null;
+  providerCatalog?: ProviderCatalog | null;
   disabled?: boolean;
   onValidationChange?: (invalid: boolean) => void;
 }
@@ -71,6 +73,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
   value,
   onChange,
   generatedProjection,
+  providerCatalog,
   disabled = false,
   onValidationChange,
 }) => {
@@ -126,6 +129,36 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
     () => resolveDefaultReasoningEffortValue(generatedProjection),
     [generatedProjection],
   );
+
+  const modelsDevProviderOptions = useMemo<SelectOption[]>(() => {
+    const seen = new Map<string, string>();
+    for (const provider of providerCatalog?.providers ?? []) {
+      for (const cp of provider.catalog_providers ?? []) {
+        if (!seen.has(cp.id)) seen.set(cp.id, cp.name || cp.id);
+      }
+    }
+    const options = Array.from(seen, ([id, name]) => ({ label: name, value: id }));
+    options.sort((a, b) => a.label.localeCompare(b.label));
+    return options;
+  }, [providerCatalog]);
+
+  const modelsDevProviderId = catalog.source === 'models_dev' ? catalog.provider : '';
+
+  const modelsDevModelOptions = useMemo<SelectOption[]>(() => {
+    if (!modelsDevProviderId) return [];
+    const seen = new Set<string>();
+    const options: SelectOption[] = [];
+    for (const provider of providerCatalog?.providers ?? []) {
+      for (const model of provider.models) {
+        if (model.capabilities?.reasoning && model.catalog_provider_ids?.includes(modelsDevProviderId) && !seen.has(model.id)) {
+          seen.add(model.id);
+          options.push({ label: model.display_name || model.id, value: model.id });
+        }
+      }
+    }
+    options.sort((a, b) => a.label.localeCompare(b.label));
+    return options;
+  }, [providerCatalog, modelsDevProviderId]);
 
   const update = (next: ReasoningConfig) => onChange(cloneReasoningConfig(next));
   const updatePreset = (index: number, changes: Partial<ReasoningPreset>) => {
@@ -289,27 +322,35 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
           >
             <div className="bitfun-reasoning-preset-editor__binding-field">
               <span>{t('reasoningPresets.catalogProvider')}</span>
-              <Input
+              <Select
                 size="small"
                 aria-label={t('reasoningPresets.catalogProvider')}
                 value={catalog.provider}
+                options={modelsDevProviderOptions}
                 disabled={disabled}
-                onChange={(event) => update({
+                allowCustomValue
+                customValueHint={t('reasoningPresets.effortCustomValueHint')}
+                searchPlaceholder={t('reasoningPresets.catalogProvider')}
+                onChange={(next) => update({
                   ...value,
-                  catalog: { ...catalog, provider: event.target.value },
+                  catalog: { ...catalog, provider: String(next || '') },
                 })}
               />
             </div>
             <div className="bitfun-reasoning-preset-editor__binding-field">
               <span>{t('reasoningPresets.catalogModel')}</span>
-              <Input
+              <Select
                 size="small"
                 aria-label={t('reasoningPresets.catalogModel')}
                 value={catalog.model}
+                options={modelsDevModelOptions}
                 disabled={disabled}
-                onChange={(event) => update({
+                allowCustomValue
+                customValueHint={t('reasoningPresets.effortCustomValueHint')}
+                searchPlaceholder={t('reasoningPresets.catalogModel')}
+                onChange={(next) => update({
                   ...value,
-                  catalog: { ...catalog, model: event.target.value },
+                  catalog: { ...catalog, model: String(next || '') },
                 })}
               />
             </div>

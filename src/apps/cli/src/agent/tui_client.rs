@@ -5,14 +5,28 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
-use crate::tui_backend::{TuiBackend, TuiBackendError};
+use crate::tui_backend::{TuiBackend, TuiBackendError, TuiBackendErrorKind};
 use anyhow::Result;
-use async_trait::async_trait;
 use bitfun_app_server_client::AppServerEvent;
+use bitfun_app_server_protocol::account::*;
+use bitfun_app_server_protocol::agent::*;
 use bitfun_app_server_protocol::event::EventStreamState;
-use bitfun_app_server_protocol::tui::*;
+use bitfun_app_server_protocol::external_source::*;
+use bitfun_app_server_protocol::hook::*;
+use bitfun_app_server_protocol::mcp::*;
+use bitfun_app_server_protocol::model::*;
+use bitfun_app_server_protocol::session::*;
+use bitfun_app_server_protocol::skill::*;
+use bitfun_app_server_protocol::subagent::*;
+use bitfun_app_server_protocol::workspace::*;
+use bitfun_app_server_protocol::worktree::*;
 use bitfun_core_types::SessionUsageReport;
 use bitfun_events::{AgenticEvent, AgenticEventEnvelope, AgenticEventPriority};
+use bitfun_product_domains::external_source_control::ExternalSourceControlRequestV1;
+use bitfun_product_domains::external_sources::{
+    ExternalSourceOperationError, ExternalSourceOperationErrorCode, ExternalSourcePublicSnapshot,
+    NativePromptCommandDescriptor, PromptCommandShellReviewDecision,
+};
 use bitfun_product_domains::tool_permissions::{
     PermissionReply, PermissionRequest, PermissionRequestEvent,
 };
@@ -41,15 +55,6 @@ pub(crate) struct TuiAgentMode {
     pub(crate) description: String,
     pub(crate) model_id: Option<String>,
     pub(crate) is_external: bool,
-}
-
-#[async_trait]
-pub(crate) trait TuiHostCapabilities: Send + Sync {
-    async fn available_agent_modes(
-        &self,
-        session_id: Option<String>,
-        workspace: PathBuf,
-    ) -> Result<Vec<TuiAgentMode>>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -190,7 +195,6 @@ impl TuiWorkspacePaths {
 
 pub(crate) struct TuiAgentClient {
     backend: Arc<dyn TuiBackend>,
-    host: Arc<dyn TuiHostCapabilities>,
     shared: bool,
     approval_policy: Arc<RwLock<CliApprovalPolicy>>,
     workspace_paths: Arc<RwLock<TuiWorkspacePaths>>,
@@ -198,33 +202,37 @@ pub(crate) struct TuiAgentClient {
     current_turn_id: Arc<Mutex<Option<String>>>,
     agent_events: Arc<RwLock<Option<broadcast::Sender<AgenticEventEnvelope>>>>,
     permission_events: Arc<RwLock<Option<broadcast::Sender<PermissionRequestEvent>>>>,
+    external_source_events:
+        Arc<RwLock<Option<broadcast::Sender<(String, ExternalSourcePublicSnapshot)>>>>,
     pending_permissions: Arc<RwLock<HashMap<String, PermissionRequest>>>,
 }
 
 impl TuiAgentClient {
     pub(crate) fn new(
         backend: Arc<dyn TuiBackend>,
-        host: Arc<dyn TuiHostCapabilities>,
         workspace_path: Option<PathBuf>,
         shared: bool,
         approval_policy: CliApprovalPolicy,
     ) -> Self {
         let (agent_sender, _) = broadcast::channel(256);
         let (permission_sender, _) = broadcast::channel(64);
+        let (external_source_sender, _) = broadcast::channel(64);
         let agent_events = Arc::new(RwLock::new(Some(agent_sender.clone())));
         let permission_events = Arc::new(RwLock::new(Some(permission_sender.clone())));
+        let external_source_events = Arc::new(RwLock::new(Some(external_source_sender.clone())));
         let pending_permissions = Arc::new(RwLock::new(HashMap::new()));
         spawn_event_bridge(
             backend.subscribe_events(),
             agent_sender,
             permission_sender,
+            external_source_sender,
             agent_events.clone(),
             permission_events.clone(),
+            external_source_events.clone(),
             pending_permissions.clone(),
         );
         Self {
             backend,
-            host,
             shared,
             approval_policy: Arc::new(RwLock::new(approval_policy)),
             workspace_paths: Arc::new(RwLock::new(TuiWorkspacePaths::new(workspace_path))),
@@ -232,6 +240,7 @@ impl TuiAgentClient {
             current_turn_id: Arc::new(Mutex::new(None)),
             agent_events,
             permission_events,
+            external_source_events,
             pending_permissions,
         }
     }
@@ -245,12 +254,475 @@ impl TuiAgentClient {
     }
 
     pub(crate) async fn available_agent_modes(&self) -> Result<Vec<TuiAgentMode>> {
-        self.host
-            .available_agent_modes(
-                self.session_id.lock().await.clone(),
-                self.workspace_path_buf(),
-            )
+        let response = self
+            .backend
+            .list_agent_modes(ListAgentModesRequest {
+                workspace_path: Some(self.workspace_path_buf().to_string_lossy().to_string()),
+                include_external: true,
+            })
             .await
+            .map_err(|error| anyhow::anyhow!(error))?;
+        Ok(response
+            .modes
+            .into_iter()
+            .map(|mode| TuiAgentMode {
+                id: mode.id,
+                description: mode.description,
+                model_id: mode.model_id,
+                is_external: mode.is_external,
+            })
+            .collect())
+    }
+
+    pub(crate) async fn list_models(&self) -> Result<ListModelsResponse> {
+        self.backend
+            .list_models()
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn get_model(&self, model_id: String) -> Result<GetModelResponse> {
+        self.backend
+            .get_model(GetModelRequest { model_id })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn add_model(&self, request: AddModelRequest) -> Result<AddModelResponse> {
+        self.backend
+            .add_model(request)
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn update_model(
+        &self,
+        request: UpdateModelRequest,
+    ) -> Result<UpdateModelResponse> {
+        self.backend
+            .update_model(request)
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn delete_model(&self, model_id: String) -> Result<DeleteModelResponse> {
+        self.backend
+            .delete_model(DeleteModelRequest { model_id })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn set_model_default(
+        &self,
+        request: SetModelDefaultRequest,
+    ) -> Result<SetModelDefaultResponse> {
+        self.backend
+            .set_model_default(request)
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn list_skills(
+        &self,
+        mode_id: String,
+        manageable: bool,
+    ) -> Result<ListSkillsResponse> {
+        self.backend
+            .list_skills(ListSkillsRequest {
+                workspace_path: self.workspace_path_buf().to_string_lossy().to_string(),
+                mode_id,
+                manageable,
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn set_skill_enabled(
+        &self,
+        mode_id: String,
+        skill_key: String,
+        enabled: bool,
+        default_enabled: bool,
+        level: String,
+    ) -> Result<SetSkillEnabledResponse> {
+        self.backend
+            .set_skill_enabled(SetSkillEnabledRequest {
+                workspace_path: self.workspace_path_buf().to_string_lossy().to_string(),
+                mode_id,
+                skill_key,
+                enabled,
+                default_enabled,
+                level,
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn list_subagents(
+        &self,
+        parent_mode_id: String,
+        management: bool,
+    ) -> Result<ListSubagentsResponse> {
+        self.backend
+            .list_subagents(ListSubagentsRequest {
+                workspace_path: self.workspace_path_buf().to_string_lossy().to_string(),
+                parent_mode_id,
+                management,
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn set_subagent_enabled(
+        &self,
+        parent_mode_id: String,
+        subagent_id: String,
+        enabled: bool,
+    ) -> Result<SetSubagentEnabledResponse> {
+        self.backend
+            .set_subagent_enabled(SetSubagentEnabledRequest {
+                workspace_path: self.workspace_path_buf().to_string_lossy().to_string(),
+                parent_mode_id,
+                subagent_id,
+                enabled,
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn list_mcp_servers(&self) -> Result<ListMcpServersResponse> {
+        self.backend
+            .list_mcp_servers(ListMcpServersRequest {
+                workspace_path: self.workspace_path_buf().to_string_lossy().to_string(),
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn toggle_mcp_server(
+        &self,
+        server_id: String,
+    ) -> Result<ToggleMcpServerResponse> {
+        self.backend
+            .toggle_mcp_server(ToggleMcpServerRequest { server_id })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn add_mcp_server(
+        &self,
+        name: String,
+        config: McpServerMutation,
+    ) -> Result<AddMcpServerResponse> {
+        self.backend
+            .add_mcp_server(AddMcpServerRequest { name, config })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn delete_mcp_server(
+        &self,
+        server_id: String,
+    ) -> Result<DeleteMcpServerResponse> {
+        self.backend
+            .delete_mcp_server(DeleteMcpServerRequest { server_id })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn external_mcp_decision(
+        &self,
+        request: ExternalMcpDecisionRequest,
+    ) -> Result<ExternalMcpDecisionResponse> {
+        self.backend
+            .external_mcp_decision(request)
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn mcp_conflict_choice(
+        &self,
+        request: McpConflictChoiceRequest,
+    ) -> Result<McpConflictChoiceResponse> {
+        self.backend
+            .mcp_conflict_choice(request)
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
+
+    pub(crate) async fn external_source_snapshot(
+        &self,
+        force_refresh: bool,
+    ) -> std::result::Result<ExternalSourceSnapshotResponse, ExternalSourceOperationError> {
+        self.backend
+            .external_source_snapshot(ExternalSourceSnapshotRequest {
+                workspace_path: self.workspace_path_string(),
+                force_refresh,
+            })
+            .await
+            .map_err(external_source_backend_error)
+    }
+
+    pub(crate) fn subscribe_external_source_updates(
+        &self,
+    ) -> Result<broadcast::Receiver<(String, ExternalSourcePublicSnapshot)>> {
+        shared_receiver(
+            &self.external_source_events,
+            "App Server external source event stream is unavailable",
+        )
+    }
+
+    pub(crate) async fn external_source_control(
+        &self,
+        request: ExternalSourceControlRequestV1,
+    ) -> std::result::Result<ExternalSourceControlResponse, ExternalSourceOperationError> {
+        let operation_id = request.operation_id.clone();
+        self.backend
+            .external_source_control(ExternalSourceControlRequest {
+                workspace_path: self.workspace_path_string(),
+                request,
+            })
+            .await
+            .map_err(|error| external_source_backend_error_with_id(error, Some(&operation_id)))
+    }
+
+    pub(crate) async fn external_source_review(
+        &self,
+        action: ExternalSourceReviewAction,
+    ) -> std::result::Result<ExternalSourceSnapshotResponse, ExternalSourceOperationError> {
+        let operation_id = format!("tui-{}", uuid::Uuid::new_v4());
+        self.backend
+            .external_source_review(ExternalSourceReviewRequest {
+                workspace_path: self.workspace_path_string(),
+                operation_id: operation_id.clone(),
+                action,
+            })
+            .await
+            .map(|response| response.0)
+            .map_err(|error| external_source_backend_error_with_id(error, Some(&operation_id)))
+    }
+
+    pub(crate) async fn set_native_command_choice(
+        &self,
+        native_commands: Vec<NativePromptCommandDescriptor>,
+        selected_candidate_id: String,
+        expected_preference_revision: u64,
+    ) -> std::result::Result<SetNativeCommandChoiceResponse, ExternalSourceOperationError> {
+        let operation_id = format!("tui-{}", uuid::Uuid::new_v4());
+        self.backend
+            .set_native_command_choice(SetNativeCommandChoiceRequest {
+                workspace_path: self.workspace_path_string(),
+                operation_id: operation_id.clone(),
+                native_commands,
+                selected_candidate_id,
+                expected_preference_revision,
+            })
+            .await
+            .map_err(|error| external_source_backend_error_with_id(error, Some(&operation_id)))
+    }
+
+    pub(crate) async fn expand_external_command(
+        &self,
+        command_name: String,
+        arguments: String,
+        native_commands: Vec<NativePromptCommandDescriptor>,
+        candidate_id: Option<String>,
+        content_version: Option<String>,
+        native_conflict_key: Option<String>,
+        expected_preference_revision: Option<u64>,
+        shell_review_decision: Option<PromptCommandShellReviewDecision>,
+    ) -> std::result::Result<ExpandExternalCommandResponse, ExternalSourceOperationError> {
+        let operation_id = format!("tui-{}", uuid::Uuid::new_v4());
+        self.backend
+            .expand_external_command(ExpandExternalCommandRequest {
+                workspace_path: self.workspace_path_string(),
+                operation_id: operation_id.clone(),
+                command_name,
+                arguments,
+                native_commands,
+                candidate_id,
+                content_version,
+                native_conflict_key,
+                expected_preference_revision,
+                shell_review_decision,
+            })
+            .await
+            .map_err(|error| external_source_backend_error_with_id(error, Some(&operation_id)))
+    }
+
+    pub(crate) async fn native_hook_overview(
+        &self,
+    ) -> std::result::Result<NativeHookOverview, ExternalSourceOperationError> {
+        self.backend
+            .native_hook_overview(NativeHookOverviewRequest {
+                workspace_path: self.project_workspace_path_string(),
+            })
+            .await
+            .map(|response| response.0)
+            .map_err(external_source_backend_error)
+    }
+
+    pub(crate) async fn external_hook_snapshot(
+        &self,
+        refresh_updates: bool,
+    ) -> std::result::Result<
+        bitfun_product_domains::external_hook_import::ExternalHookImportSnapshotV1,
+        ExternalSourceOperationError,
+    > {
+        self.backend
+            .external_hook_snapshot(ExternalHookSnapshotRequest {
+                workspace_path: self.project_workspace_path_string(),
+                refresh_updates,
+            })
+            .await
+            .map(|response| response.0)
+            .map_err(external_source_backend_error)
+    }
+
+    pub(crate) async fn external_hook_plan(
+        &self,
+        source: bitfun_product_domains::external_sources::SourceKey,
+    ) -> std::result::Result<
+        bitfun_product_domains::external_hook_import::ExternalHookImportPlanV1,
+        ExternalSourceOperationError,
+    > {
+        self.backend
+            .external_hook_plan(ExternalHookPlanRequest {
+                workspace_path: self.project_workspace_path_string(),
+                source,
+            })
+            .await
+            .map(|response| response.0)
+            .map_err(external_source_backend_error)
+    }
+
+    pub(crate) async fn external_hook_apply(
+        &self,
+        import_request: bitfun_product_domains::external_hook_import::ExternalHookImportApplyRequestV1,
+    ) -> std::result::Result<
+        bitfun_product_domains::external_hook_import::ExternalHookImportApplyResultV1,
+        ExternalSourceOperationError,
+    > {
+        self.backend
+            .external_hook_apply(ExternalHookApplyRequest {
+                workspace_path: self.project_workspace_path_string(),
+                operation_id: format!("tui-hook-{}", uuid::Uuid::new_v4()),
+                import_request,
+            })
+            .await
+            .map(|response| response.0)
+            .map_err(external_source_backend_error)
+    }
+
+    pub(crate) async fn external_hook_mutate(
+        &self,
+        mutation: bitfun_product_domains::external_hook_import::ExternalHookImportMutationRequestV1,
+    ) -> std::result::Result<
+        bitfun_product_domains::external_hook_import::ExternalHookImportSnapshotV1,
+        ExternalSourceOperationError,
+    > {
+        self.backend
+            .external_hook_mutate(ExternalHookMutationRequest {
+                workspace_path: self.project_workspace_path_string(),
+                operation_id: format!("tui-hook-{}", uuid::Uuid::new_v4()),
+                mutation,
+            })
+            .await
+            .map(|response| response.0)
+            .map_err(external_source_backend_error)
+    }
+
+    pub(crate) async fn account_snapshot(&self) -> Result<AccountSnapshotResponse> {
+        self.backend
+            .account_snapshot(AccountSnapshotRequest {
+                workspace_path: self.project_workspace_path_string(),
+            })
+            .await
+            .map_err(worktree_operation_error)
+    }
+
+    pub(crate) async fn account_login(
+        &self,
+        relay_url: String,
+        username: String,
+        password: String,
+    ) -> Result<AccountLoginResponse> {
+        self.backend
+            .account_login(AccountLoginRequest {
+                operation_id: account_operation_id(),
+                relay_url,
+                username,
+                password,
+            })
+            .await
+            .map_err(worktree_operation_error)
+    }
+
+    pub(crate) async fn account_finalize_login(
+        &self,
+        choice: AccountSyncChoice,
+    ) -> Result<AccountSnapshotResponse> {
+        self.backend
+            .account_finalize_login(AccountFinalizeLoginRequest {
+                operation_id: account_operation_id(),
+                choice,
+                workspace_path: self.project_workspace_path_string(),
+            })
+            .await
+            .map_err(worktree_operation_error)
+    }
+
+    pub(crate) async fn account_logout(&self) -> Result<AccountSnapshotResponse> {
+        self.backend
+            .account_logout(AccountLogoutRequest {
+                operation_id: account_operation_id(),
+                workspace_path: self.project_workspace_path_string(),
+            })
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) async fn settings_sync_start(
+        &self,
+        is_first_login: bool,
+    ) -> Result<SettingsSyncResponse> {
+        self.backend
+            .settings_sync_start(SettingsSyncStartRequest {
+                operation_id: account_operation_id(),
+                workspace_path: self.project_workspace_path_string(),
+                is_first_login,
+            })
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) async fn settings_sync_snapshot(&self) -> Result<SettingsSyncResponse> {
+        self.backend
+            .settings_sync_snapshot(SettingsSyncSnapshotRequest {
+                workspace_path: self.project_workspace_path_string(),
+            })
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) async fn settings_sync_cancel(&self) -> Result<SettingsSyncResponse> {
+        self.backend
+            .settings_sync_cancel(SettingsSyncCancelRequest {
+                operation_id: account_operation_id(),
+                workspace_path: self.project_workspace_path_string(),
+            })
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) async fn settings_sync_local_changed(&self) -> Result<SettingsSyncResponse> {
+        self.backend
+            .settings_sync_local_changed(SettingsSyncLocalChangedRequest {
+                operation_id: account_operation_id(),
+                workspace_path: self.project_workspace_path_string(),
+            })
+            .await
+            .map_err(Into::into)
     }
 
     pub(crate) fn subscribe_events(&self) -> Result<broadcast::Receiver<AgenticEventEnvelope>> {
@@ -346,6 +818,71 @@ impl TuiAgentClient {
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .apply_binding(binding);
+    }
+
+    pub(crate) async fn worktree_repository_status(
+        &self,
+        workspace_path: String,
+    ) -> Result<WorktreeRepositoryStatusResponse> {
+        let paths = self
+            .workspace_paths
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.backend
+            .worktree_repository_status(WorktreeRepositoryStatusRequest {
+                workspace_path,
+                remote_connection_id: paths.remote_connection_id.clone(),
+                remote_ssh_host: paths.remote_ssh_host.clone(),
+            })
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) async fn worktree_bind_session(
+        &self,
+        session_id: String,
+        project_workspace_path: Option<String>,
+    ) -> Result<WorktreeBindingResponse> {
+        let (remote_connection_id, remote_ssh_host) = self.remote_workspace_scope();
+        self.backend
+            .worktree_bind_session(WorktreeBindSessionRequest {
+                operation_id: worktree_operation_id(),
+                session_id,
+                project_workspace_path,
+                remote_connection_id,
+                remote_ssh_host,
+            })
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) async fn worktree_release_session(
+        &self,
+        session_id: String,
+        project_workspace_path: Option<String>,
+    ) -> Result<WorktreeBindingResponse> {
+        let (remote_connection_id, remote_ssh_host) = self.remote_workspace_scope();
+        self.backend
+            .worktree_release_session(WorktreeReleaseSessionRequest {
+                operation_id: worktree_operation_id(),
+                session_id,
+                project_workspace_path,
+                remote_connection_id,
+                remote_ssh_host,
+            })
+            .await
+            .map_err(Into::into)
+    }
+
+    fn remote_workspace_scope(&self) -> (Option<String>, Option<String>) {
+        let paths = self
+            .workspace_paths
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        (
+            paths.remote_connection_id.clone(),
+            paths.remote_ssh_host.clone(),
+        )
     }
 
     pub(crate) async fn list_sessions(&self) -> Result<Vec<AgentSessionSummary>> {
@@ -1030,6 +1567,71 @@ impl TuiAgentClient {
     }
 }
 
+fn external_source_backend_error(error: TuiBackendError) -> ExternalSourceOperationError {
+    external_source_backend_error_with_id(error, None)
+}
+
+fn external_source_backend_error_with_id(
+    error: TuiBackendError,
+    operation_id: Option<&str>,
+) -> ExternalSourceOperationError {
+    if let Some(decoded) = ExternalSourceOperationError::decode(&error.message) {
+        return attach_operation_id(decoded, operation_id);
+    }
+    let code = if error.outcome_unknown {
+        ExternalSourceOperationErrorCode::Timeout
+    } else if matches!(error.kind, TuiBackendErrorKind::Unsupported { .. }) {
+        ExternalSourceOperationErrorCode::HostCapabilityUnavailable
+    } else {
+        ExternalSourceOperationErrorCode::Internal
+    };
+    let message = error.message;
+    let retryable = error.outcome_unknown;
+    attach_operation_id(
+        ExternalSourceOperationError::new(code, message, retryable).with_default_recovery_actions(),
+        operation_id,
+    )
+}
+
+fn attach_operation_id(
+    mut error: ExternalSourceOperationError,
+    operation_id: Option<&str>,
+) -> ExternalSourceOperationError {
+    if let Some(operation_id) = operation_id.filter(|id| !id.is_empty()) {
+        if error.correlation_id.is_none() {
+            error = error.with_correlation_id(operation_id);
+        } else if error.causation_id.is_none() {
+            error = error.with_causation_id(operation_id);
+        }
+    }
+    error
+}
+
+fn account_operation_id() -> String {
+    format!("tui-account-{}", uuid::Uuid::new_v4())
+}
+
+fn worktree_operation_error(error: TuiBackendError) -> anyhow::Error {
+    if let Some(worktree) = WorktreeOperationError::decode(&error.message) {
+        let recovery = worktree
+            .recovery_path
+            .as_deref()
+            .map(|path| format!(" Recovery path: {path}"))
+            .unwrap_or_default();
+        return anyhow::anyhow!(
+            "{}: {}{}",
+            worktree.code.as_str(),
+            worktree.message,
+            recovery
+        );
+    }
+    anyhow::anyhow!(error)
+}
+
+fn worktree_operation_id() -> String {
+    format!("tui-worktree-{}", uuid::Uuid::new_v4())
+}
+
 fn shared_receiver<T: Clone>(
     source: &Arc<RwLock<Option<broadcast::Sender<T>>>>,
     message: &str,
@@ -1046,8 +1648,12 @@ fn spawn_event_bridge(
     mut source: broadcast::Receiver<AppServerEvent>,
     agent_sender: broadcast::Sender<AgenticEventEnvelope>,
     permission_sender: broadcast::Sender<PermissionRequestEvent>,
+    external_source_sender: broadcast::Sender<(String, ExternalSourcePublicSnapshot)>,
     agent_owner: Arc<RwLock<Option<broadcast::Sender<AgenticEventEnvelope>>>>,
     permission_owner: Arc<RwLock<Option<broadcast::Sender<PermissionRequestEvent>>>>,
+    external_source_owner: Arc<
+        RwLock<Option<broadcast::Sender<(String, ExternalSourcePublicSnapshot)>>>,
+    >,
     pending: Arc<RwLock<HashMap<String, PermissionRequest>>>,
 ) {
     tokio::spawn(async move {
@@ -1073,6 +1679,16 @@ fn spawn_event_bridge(
                         }
                     }
                     let _ = permission_sender.send(notification.event);
+                }
+                Ok(AppServerEvent::ExternalSource(notification)) => {
+                    let _ = external_source_sender
+                        .send((notification.workspace_path, notification.snapshot));
+                }
+                Ok(AppServerEvent::StreamState(notification))
+                    if notification.stream
+                        == bitfun_app_server_protocol::event::EventStream::ExternalSource =>
+                {
+                    // The next TUI snapshot request is the authoritative recovery path.
                 }
                 Ok(AppServerEvent::StreamState(notification))
                     if matches!(
@@ -1104,6 +1720,9 @@ fn spawn_event_bridge(
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
         *permission_owner
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+        *external_source_owner
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
     });

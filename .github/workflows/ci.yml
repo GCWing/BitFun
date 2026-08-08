@@ -32,6 +32,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
+
       - name: Reject CRLF in shell and deploy assets
         run: |
           bad=$(git ls-files -z \
@@ -52,6 +58,9 @@ jobs:
             bash -n "$f" || { echo "::error file=$f::bash syntax error"; rc=1; }
           done < <(git ls-files -z '*.sh' '*.bash')
           exit "$rc"
+
+      - name: Verify release and version-generation contracts
+        run: node --test scripts/tauri-release-manifest.test.mjs scripts/linux-binaries-manifest.test.mjs scripts/version-generation.test.mjs
 
       - name: Verify minisign download fallback
         run: |

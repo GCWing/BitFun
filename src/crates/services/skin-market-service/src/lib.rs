@@ -436,6 +436,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let approved = json_body(response).await;
         assert_eq!(approved["submission"]["status"], "approved");
+        assert_eq!(approved["submitter"]["login"], "owner");
+        assert_eq!(approved["submitter"]["githubId"], 41);
         assert!(approved["reviewBundleHash"].as_str().is_some());
 
         let response = app

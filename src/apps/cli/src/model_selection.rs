@@ -1,3 +1,4 @@
+use bitfun_app_server_protocol::model::{ListModelsResponse, ModelSummary};
 use bitfun_core::service::config::AIConfig;
 
 fn resolve_model_selector(ai_config: &AIConfig, selector: &str) -> Option<String> {
@@ -25,6 +26,48 @@ pub(crate) fn resolve_session_model_display_id(
         .filter(|selector| !selector.is_empty())
         .unwrap_or(ai_config.agent_model_defaults.mode.as_str());
     resolve_model_selector(ai_config, selector)
+}
+
+pub(crate) fn resolve_tui_model_id(
+    catalog: &ListModelsResponse,
+    session_selector: Option<&str>,
+) -> Option<String> {
+    let selector = session_selector
+        .map(str::trim)
+        .filter(|selector| !selector.is_empty());
+    match selector {
+        None => catalog.mode_default_model_id.clone(),
+        Some("auto" | "default" | "primary") => catalog.primary_model_id.clone(),
+        Some("fast") => catalog
+            .fast_model_id
+            .clone()
+            .or_else(|| catalog.primary_model_id.clone()),
+        Some(model_id) => catalog
+            .models
+            .iter()
+            .find(|model| model.enabled && model.id == model_id)
+            .map(|model| model.id.clone()),
+    }
+}
+
+pub(crate) fn tui_model_display_name(model: &ModelSummary) -> String {
+    let raw_name = model.name.trim();
+    let model_name = model.model_name.trim();
+    let provider = if !raw_name.is_empty() && !model_name.is_empty() {
+        let dashed_suffix = format!(" - {model_name}");
+        let slash_suffix = format!("/{model_name}");
+        raw_name
+            .strip_suffix(&dashed_suffix)
+            .or_else(|| raw_name.strip_suffix(&slash_suffix))
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(raw_name)
+    } else if raw_name.is_empty() {
+        &model.provider
+    } else {
+        raw_name
+    };
+    format!("{} / {}", model.model_name, provider)
 }
 
 #[cfg(test)]

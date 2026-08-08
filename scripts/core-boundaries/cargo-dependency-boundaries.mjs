@@ -147,6 +147,7 @@ const SERVICES_INTEGRATIONS_TOKIO_FEATURES = new Map([
 
 const SERVICES_CORE_TOKIO_FEATURES = new Map([
   ['filesystem', ['fs']],
+  ['json-io', ['fs', 'sync']],
   ['local-storage', ['fs', 'sync']],
   ['process-runtime', ['io-util', 'process']],
   ['workspace-instructions', ['fs', 'io-util']],

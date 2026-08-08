@@ -5,6 +5,8 @@ session management, and machine-owned background tasks. Use `bitfun` for all
 new scripts and integrations; `bitfun-cli` is a deprecated compatibility
 entrypoint.
 
+![BitFun interactive TUI](../../../png/bitfun_cli_tui.png)
+
 ## Install
 
 From the repository root:

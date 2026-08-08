@@ -133,6 +133,10 @@
       "title": "上次會話異常結束",
       "message": "BitFun 發現上次會話留下了崩潰報告。如需回報問題，可以匯出診斷包。"
     },
+    "configRecovery": {
+      "title": "設定已復原",
+      "message": "BitFun 已修復或隔離 {{count}} 個設定問題，應用程式得以繼續啟動。請檢查模型設定後再繼續使用。"
+    },
     "levels": {
       "trace": "Trace",
       "debug": "Debug",

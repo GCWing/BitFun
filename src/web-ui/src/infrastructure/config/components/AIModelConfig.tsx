@@ -3576,6 +3576,7 @@ const AIModelConfig: React.FC = () => {
             key={reasoningPanelDraft.key}
             value={reasoningPanelDraft.reasoning}
             generatedProjection={reasoningPanelProjection}
+            providerCatalog={modelCatalog?.provider_catalog}
             onCancel={() => setReasoningPanelDraftKey(null)}
             onApply={(reasoning) => {
               updateModelDraft(reasoningPanelDraft.modelName, {

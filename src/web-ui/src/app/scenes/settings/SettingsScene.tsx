@@ -12,6 +12,7 @@ import React, {
   useState,
 } from 'react';
 import { useSettingsStore } from './settingsStore';
+import { useExternalAppAwareness } from '@/infrastructure/config/components/external-sources';
 import type { ConfigTab } from './settingsConfig';
 import {
   AcpAgentsConfig,
@@ -77,6 +78,7 @@ function resolveSettingsContent(tab: ConfigTab): React.ComponentType | null {
 }
 
 const SettingsScene: React.FC = () => {
+  useExternalAppAwareness();
   const activeTab = useSettingsStore(s => s.activeTab);
   const setActiveTab = useSettingsStore(s => s.setActiveTab);
 

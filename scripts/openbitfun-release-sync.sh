@@ -15,9 +15,9 @@
 # The published release/latest.json is the Tauri updater fallback endpoint.
 # When GitHub is unreachable, the desktop client automatically falls through
 # to https://openbitfun.com/release/latest.json and downloads from this mirror.
-# The published release/downloads.json is for the website. Its Windows URL
-# points at bitfun-installer.exe while latest.json deliberately keeps the Tauri
-# updater's versioned setup.exe URL.
+# The published release/downloads.json is for the website. Its Windows URL uses
+# latest.json's manual_installers entry while the updater keeps the versioned
+# Tauri setup.exe URL.
 #
 # Cron (every 10 minutes):
 #   */10 * * * * /root/repos/BitFun-AutoUpdate/openbitfun-release-sync.sh \
@@ -46,9 +46,17 @@ GITHUB_LATEST_JSON_URL="https://github.com/GCWing/BitFun/releases/latest/downloa
 GITHUB_LINUX_BINARIES_URL="https://github.com/GCWing/BitFun/releases/latest/download/linux-binaries.json"
 GITHUB_RELAY_IMAGE_URL="https://github.com/GCWing/BitFun/releases/latest/download/relay-image.json"
 OPENBITFUN_BASE_URL="https://openbitfun.com/release"
-WEBSITE_RELEASE_DIR="/root/repos/BitFun-Website/dist/release"
+# The mirror deliberately lives outside the website checkout. It used to be
+# BitFun-Website/dist/release, but `npm run build` empties dist/, so every
+# website deploy silently deleted the mirrored installers and manifests —
+# breaking downloads and the updater fallback until someone noticed. nginx
+# serves this directory through a `location ^~ /release/` alias instead.
+WEBSITE_RELEASE_DIR="${WEBSITE_RELEASE_DIR:-/srv/bitfun-release}"
 LOCK_FILE="/root/repos/BitFun-AutoUpdate/sync.lock"
-WINDOWS_INSTALLER_FILENAME="bitfun-installer.exe"
+LEGACY_WINDOWS_INSTALLER_FILENAME="bitfun-installer.exe"
+WINDOWS_INSTALLER_FILENAME="$LEGACY_WINDOWS_INSTALLER_FILENAME"
+WINDOWS_INSTALLER_URL=""
+WINDOWS_INSTALLER_SIGNATURE_URL=""
 WEBSITE_DOWNLOADS_MANIFEST="downloads.json"
 # Keep enough releases that the mirror still serves a Desktop build a few
 # versions behind and SSH Dispatch can finish an already-confirmed install even
@@ -110,22 +118,47 @@ publish_file_atomically() {
 # /releases/latest/download so the installer and setup package cannot come from
 # different releases while GitHub is advancing the latest-release pointer.
 mirror_windows_installer() {
-  local installer_url
-  installer_url="${RELEASE_ASSET_BASE_URL}/${WINDOWS_INSTALLER_FILENAME}"
+  local installer_url signature_url metadata
+  installer_url="${WINDOWS_INSTALLER_URL:-${RELEASE_ASSET_BASE_URL}/${WINDOWS_INSTALLER_FILENAME}}"
+  signature_url="${WINDOWS_INSTALLER_SIGNATURE_URL:-${installer_url}.sig}"
+
+  if [ -n "${LATEST_JSON:-}" ]; then
+    metadata=$(printf '%s' "$LATEST_JSON" | "$PYTHON" -c "
+import json, sys
+data = json.load(sys.stdin)
+entry = data.get('manual_installers', {}).get('windows-x86_64')
+if entry:
+    print(entry['url'])
+    print(entry.get('signature_url', entry['url'] + '.sig'))
+")
+    if [ -n "$metadata" ]; then
+      installer_url=$(printf '%s\n' "$metadata" | sed -n '1p')
+      signature_url=$(printf '%s\n' "$metadata" | sed -n '2p')
+      if [ "${installer_url%/*}" != "$RELEASE_ASSET_BASE_URL" ]; then
+        log "ERROR: Manual installer URL does not belong to the updater release: $installer_url"
+        return 1
+      fi
+      if [ "$signature_url" != "${installer_url}.sig" ]; then
+        log "ERROR: Manual installer signature URL does not match the installer URL"
+        return 1
+      fi
+      WINDOWS_INSTALLER_FILENAME="${installer_url##*/}"
+    fi
+  fi
 
   log "  Mirroring website Windows installer: ${WINDOWS_INSTALLER_FILENAME}"
   download_asset \
     "$installer_url" \
     "${VERSION_DIR}/${WINDOWS_INSTALLER_FILENAME}" || exit 1
   download_asset \
-    "${installer_url}.sig" \
+    "$signature_url" \
     "${VERSION_DIR}/${WINDOWS_INSTALLER_FILENAME}.sig" || exit 1
 }
 
 # Build a website-only manifest from the already rewritten updater manifest.
 # All non-Windows targets continue to use their mirrored updater packages. The
-# Windows target alone is replaced with the custom installer URL; latest.json
-# is never modified and remains a valid Tauri updater contract.
+# Windows target alone is replaced with the custom installer URL. The updater
+# URL remains untouched; manual_installers is a mirror/website extension only.
 write_website_download_manifest() {
   local output="${VERSION_DIR}/${WEBSITE_DOWNLOADS_MANIFEST}"
   local output_tmp="${output}.part"
@@ -152,9 +185,14 @@ windows = platforms.get("windows-x86_64")
 if windows is None:
     raise SystemExit("latest.json is missing windows-x86_64")
 
-version_base = f"{base}/{version}"
-windows["url"] = f"{version_base}/{windows_installer}"
-windows["signatureUrl"] = f"{version_base}/{windows_installer}.sig"
+manual = updater.get("manual_installers", {}).get("windows-x86_64")
+if manual:
+    windows["url"] = manual["url"]
+    windows["signatureUrl"] = manual.get("signature_url", manual["url"] + ".sig")
+else:
+    version_base = f"{base}/{version}"
+    windows["url"] = f"{version_base}/{windows_installer}"
+    windows["signatureUrl"] = f"{version_base}/{windows_installer}.sig"
 
 website = {
     "schemaVersion": 1,
@@ -480,8 +518,8 @@ main() {
   log "Latest version: $VERSION"
 
   # Resolve the exact tagged release directory from the updater URLs. Using
-  # this base for the standalone installer avoids a latest-release race where
-  # latest.json and bitfun-installer.exe could otherwise resolve to different
+# this base for the standalone installer avoids a latest-release race where
+# latest.json and the manual installer could otherwise resolve to different
   # versions during publication.
   RELEASE_ASSET_BASE_URL=$(printf '%s' "$LATEST_JSON" | "$PYTHON" -c "
 import json, sys
@@ -494,6 +532,35 @@ print(bases.pop())
     log "ERROR: Failed to resolve the release asset base from latest.json"
     exit 1
   }
+
+  INSTALLER_METADATA=$(printf '%s' "$LATEST_JSON" | "$PYTHON" -c "
+import json, sys
+data = json.load(sys.stdin)
+entry = data.get('manual_installers', {}).get('windows-x86_64')
+if entry:
+    print(entry['url'])
+    print(entry.get('signature_url', entry['url'] + '.sig'))
+") || {
+    log "ERROR: Failed to resolve the manual Windows installer from latest.json"
+    exit 1
+  }
+  if [ -n "$INSTALLER_METADATA" ]; then
+    WINDOWS_INSTALLER_URL=$(printf '%s\n' "$INSTALLER_METADATA" | sed -n '1p')
+    WINDOWS_INSTALLER_SIGNATURE_URL=$(printf '%s\n' "$INSTALLER_METADATA" | sed -n '2p')
+    if [ "${WINDOWS_INSTALLER_URL%/*}" != "$RELEASE_ASSET_BASE_URL" ]; then
+      log "ERROR: Manual installer URL does not belong to release $VERSION"
+      exit 1
+    fi
+    if [ "$WINDOWS_INSTALLER_SIGNATURE_URL" != "${WINDOWS_INSTALLER_URL}.sig" ]; then
+      log "ERROR: Manual installer signature URL does not match the installer URL"
+      exit 1
+    fi
+    WINDOWS_INSTALLER_FILENAME="${WINDOWS_INSTALLER_URL##*/}"
+  else
+    WINDOWS_INSTALLER_URL="${RELEASE_ASSET_BASE_URL}/${LEGACY_WINDOWS_INSTALLER_FILENAME}"
+    WINDOWS_INSTALLER_SIGNATURE_URL="${WINDOWS_INSTALLER_URL}.sig"
+    WINDOWS_INSTALLER_FILENAME="$LEGACY_WINDOWS_INSTALLER_FILENAME"
+  fi
 
   # 3. Create version directory
   VERSION_DIR="${WEBSITE_RELEASE_DIR}/${VERSION}"
@@ -524,8 +591,7 @@ for p, info in data.get('platforms', {}).items():
     download_asset "$url" "${VERSION_DIR}/${filename}" || exit 1
   done <<< "$ASSET_LIST"
 
-  # latest.json only lists the Tauri setup.exe. Mirror the custom installer
-  # separately for website users while preserving the updater contract.
+  # Mirror the manual installer separately while preserving the updater URL.
   mirror_windows_installer
 
   # 6. Rewrite URLs in latest.json to point at openbitfun.com
@@ -538,6 +604,10 @@ base = '${OPENBITFUN_BASE_URL}/' + version
 for p, info in data.get('platforms', {}).items():
     fname = info['url'].split('/')[-1]
     info['url'] = base + '/' + fname
+for p, info in data.get('manual_installers', {}).items():
+    for key in ('url', 'signature_url'):
+        if info.get(key):
+            info[key] = base + '/' + info[key].split('/')[-1]
 print(json.dumps(data, indent=2))
 " > "$LATEST_MANIFEST_TMP"
   mv "$LATEST_MANIFEST_TMP" "${VERSION_DIR}/latest.json"

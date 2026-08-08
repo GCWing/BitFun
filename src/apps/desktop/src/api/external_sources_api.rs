@@ -1,21 +1,23 @@
 //! Desktop host API for ecosystem-neutral external AI application sources.
 
 use bitfun_core::external_sources::{
-    apply_external_source_control_action, choose_external_mcp_conflict,
-    choose_external_subagent_conflict, expand_external_prompt_command,
-    external_source_location_for_host_action, external_source_snapshot,
+    acknowledge_external_ecosystems, apply_external_source_control_action,
+    choose_external_mcp_conflict, choose_external_subagent_conflict,
+    expand_external_prompt_command, external_source_location_for_host_action,
+    external_source_snapshot,
     get_external_source_control_snapshot as core_get_external_source_control_snapshot,
     native_prompt_command_conflicts, set_external_mcp_server_decision,
     set_external_prompt_command_conflict_choice, set_external_source_enabled,
     set_external_subagent_activation, set_external_subagent_model_binding,
     set_external_tool_conflict_choice, set_external_tool_target_decision,
-    set_native_prompt_command_conflict_choice, update_external_integration_policy,
-    workspace_reference_snapshot, ExternalIntegrationPolicyMutation,
-    ExternalSourceControlRequestV1, ExternalSourceHostCapabilities, ExternalSourceOperationError,
-    ExternalSourceOperationErrorCode, ExternalSourceOperationResult, ExternalSourcePublicSnapshot,
-    ExternalSourceSurfaceSnapshotV1, ExternalSubagentModelBindingTarget,
-    NativePromptCommandConflictSnapshot, NativePromptCommandDescriptor,
-    PromptCommandInvocationOutcome, PromptCommandShellReviewDecision,
+    set_native_prompt_command_conflict_choice, unacknowledged_external_ecosystems,
+    update_external_integration_policy, workspace_reference_snapshot,
+    ExternalIntegrationPolicyMutation, ExternalSourceControlRequestV1,
+    ExternalSourceHostCapabilities, ExternalSourceOperationError, ExternalSourceOperationErrorCode,
+    ExternalSourceOperationResult, ExternalSourcePublicSnapshot, ExternalSourceSurfaceSnapshotV1,
+    ExternalSubagentModelBindingTarget, NativePromptCommandConflictSnapshot,
+    NativePromptCommandDescriptor, PromptCommandInvocationOutcome,
+    PromptCommandShellReviewDecision,
 };
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use bitfun_core::service::remote_ssh::workspace_state::{
@@ -71,6 +73,25 @@ pub struct SetExternalSourceEnabledRequest {
 pub struct RevealExternalSourceLocationRequest {
     pub workspace_path: Option<String>,
     pub source_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalEcosystemAwarenessRequest {
+    pub workspace_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalEcosystemAwarenessResponse {
+    pub unacknowledged_ecosystem_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AcknowledgeExternalEcosystemsRequest {
+    pub workspace_path: Option<String>,
+    pub ecosystem_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -405,6 +426,37 @@ pub async fn apply_external_source_control_action_command(
 ) -> ExternalSourceOperationResult<ExternalSourceControlResponse> {
     let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
     apply_external_source_control_action(workspace, request.control).await
+}
+
+/// External applications discovered on this host that the user has never been
+/// told about. Surfaces use it to show a low-key "something new" affordance.
+#[tauri::command]
+pub async fn get_external_ecosystem_awareness_command(
+    request: ExternalEcosystemAwarenessRequest,
+) -> ExternalSourceOperationResult<ExternalEcosystemAwarenessResponse> {
+    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    unacknowledged_external_ecosystems(workspace)
+        .await
+        .map(
+            |unacknowledged_ecosystem_ids| ExternalEcosystemAwarenessResponse {
+                unacknowledged_ecosystem_ids,
+            },
+        )
+        .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
+}
+
+/// Records that the user has seen these external applications.
+///
+/// This only clears the "new application" hint. It grants nothing, so it takes
+/// no expected preference revision and leaves approvals and policy untouched.
+#[tauri::command]
+pub async fn acknowledge_external_ecosystems_command(
+    request: AcknowledgeExternalEcosystemsRequest,
+) -> ExternalSourceOperationResult<()> {
+    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    acknowledge_external_ecosystems(workspace, request.ecosystem_ids)
+        .await
+        .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
 }
 
 #[tauri::command]
