@@ -28,6 +28,7 @@ mod model_selection;
 mod modes;
 mod peer_host;
 mod plugin_diagnostics;
+mod plugin_ops;
 mod product_assembly;
 mod prompt_stash;
 mod prompts;

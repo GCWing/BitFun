@@ -42,6 +42,7 @@ use crate::actions::{
 use crate::agent::tui_client::{SessionOperationError, TuiAgentClient, TuiAgentMode};
 use crate::chat_state::{ChatState, ModelTokenUsageSnapshot};
 use crate::config::CliConfig;
+use crate::plugin_ops::{PluginInstallScope, PluginItem};
 use crate::ui::agent_selector::{AgentItem, AgentSelectorAction};
 use crate::ui::chat::{session_status_text, ChatView, MouseGestureOutcome};
 use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
@@ -54,6 +55,7 @@ use crate::ui::mcp_selector::{McpItem, McpItemAction};
 use crate::ui::model_config_form::{ModelFormAction, ModelFormResult};
 use crate::ui::model_selector::ModelItem;
 use crate::ui::permission::PermissionAction;
+use crate::ui::plugin_browser::PluginBrowserAction;
 use crate::ui::prompt_command_shell_review::PromptCommandShellReviewAction;
 use crate::ui::prompt_stash_selector::PromptStashAction;
 use crate::ui::provider_selector::ProviderSelection;
@@ -296,6 +298,26 @@ enum PendingMcpTask {
     },
 }
 
+/// Pending plugin operation (deferred to allow a render frame for loading state)
+enum PendingPluginOp {
+    Toggle(PluginItem),
+    Install {
+        spec: String,
+        scope: PluginInstallScope,
+    },
+}
+
+enum PendingPluginTask {
+    Toggle {
+        plugin_id: String,
+        handle: tokio::task::JoinHandle<std::result::Result<(), String>>,
+    },
+    Install {
+        spec: String,
+        handle: tokio::task::JoinHandle<std::result::Result<(), String>>,
+    },
+}
+
 enum PendingSessionOperationKind {
     Mode {
         mode_id: String,
@@ -514,6 +536,10 @@ pub(crate) struct ChatMode {
     pending_mcp_op: Option<PendingMcpOp>,
     /// Running MCP tasks (non-blocking, polled in main loop)
     pending_mcp_tasks: Vec<PendingMcpTask>,
+    /// Pending plugin operation — set in key handler, executed after one render frame
+    pending_plugin_op: Option<PendingPluginOp>,
+    /// Running plugin tasks (non-blocking, polled in main loop)
+    pending_plugin_tasks: Vec<PendingPluginTask>,
     /// One Session operation in flight. The event loop remains responsive while
     /// the Runtime owner updates or deletes Session state.
     pending_session_operation: Option<PendingSessionOperation>,
@@ -597,6 +623,8 @@ impl ChatMode {
             model_id: None,
             pending_mcp_op: None,
             pending_mcp_tasks: Vec::new(),
+            pending_plugin_op: None,
+            pending_plugin_tasks: Vec::new(),
             pending_session_operation: None,
             pending_workspace_diff: None,
             pending_local_effect: None,
@@ -667,6 +695,7 @@ include!("chat/commands.rs");
 include!("chat/worktree.rs");
 include!("chat/selection.rs");
 include!("chat/mcp.rs");
+include!("chat/plugins.rs");
 include!("chat/sessions.rs");
 include!("chat/workspace_references.rs");
 include!("chat/capabilities.rs");

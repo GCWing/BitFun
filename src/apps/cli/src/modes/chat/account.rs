@@ -213,6 +213,7 @@ impl ChatMode {
             || chat_view.subagent_selector_visible()
             || chat_view.mcp_selector_visible()
             || chat_view.mcp_add_dialog_visible()
+            || chat_view.plugin_browser_visible()
             || chat_view.provider_selector_visible()
             || chat_view.model_config_form_visible()
             || chat_view.login_form_visible()
@@ -241,6 +242,7 @@ impl ChatMode {
         chat_view.hide_subagent_selector();
         chat_view.hide_mcp_selector();
         chat_view.hide_mcp_add_dialog();
+        chat_view.hide_plugin_browser();
         chat_view.hide_provider_selector();
         chat_view.hide_model_config_form();
         chat_view.hide_login_form();
@@ -275,6 +277,7 @@ impl ChatMode {
                 crate::ui::chat::PopupType::SubagentSelector => chat_view.hide_subagent_selector(),
                 crate::ui::chat::PopupType::McpSelector => chat_view.hide_mcp_selector(),
                 crate::ui::chat::PopupType::McpAddDialog => chat_view.hide_mcp_add_dialog(),
+                crate::ui::chat::PopupType::PluginBrowser => chat_view.hide_plugin_browser(),
                 crate::ui::chat::PopupType::ProviderSelector => chat_view.hide_provider_selector(),
                 crate::ui::chat::PopupType::ModelConfigForm => chat_view.hide_model_config_form(),
                 crate::ui::chat::PopupType::LoginForm => chat_view.hide_login_form(),
@@ -314,6 +317,7 @@ impl ChatMode {
                     }
                     crate::ui::chat::PopupType::McpSelector => chat_view.reshow_mcp_selector(),
                     crate::ui::chat::PopupType::McpAddDialog => chat_view.reshow_mcp_add_dialog(),
+                    crate::ui::chat::PopupType::PluginBrowser => chat_view.reshow_plugin_browser(),
                     crate::ui::chat::PopupType::ProviderSelector => {
                         chat_view.reshow_provider_selector()
                     }

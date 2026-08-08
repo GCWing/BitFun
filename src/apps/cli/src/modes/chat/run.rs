@@ -623,6 +623,10 @@ impl ChatMode {
             if self.poll_mcp_task_completion(&mut chat_view, &mut chat_state, &rt_handle) {
                 needs_redraw = true;
             }
+            // Poll completion of non-blocking plugin toggle operations before rendering.
+            if self.poll_plugin_task_completion(&mut chat_view, &mut chat_state, &rt_handle) {
+                needs_redraw = true;
+            }
             match self.poll_session_operation_completion(
                 &mut chat_view,
                 &mut chat_state,
@@ -885,6 +889,34 @@ impl ChatMode {
                         PendingMcpOp::Delete(server_id) => {
                             self.execute_mcp_delete(
                                 &server_id,
+                                &mut chat_view,
+                                &mut chat_state,
+                                &rt_handle,
+                            );
+                        }
+                    }
+                    needs_redraw = true;
+                }
+                if let Some(op) = self.pending_plugin_op.take() {
+                    if !did_render_this_loop {
+                        let displayed_chat_state = self.displayed_chat_state(&chat_state);
+                        terminal.draw(|frame| {
+                            chat_view.render(frame, displayed_chat_state);
+                        })?;
+                    }
+                    match op {
+                        PendingPluginOp::Toggle(item) => {
+                            self.execute_plugin_toggle(
+                                &item,
+                                &mut chat_view,
+                                &mut chat_state,
+                                &rt_handle,
+                            );
+                        }
+                        PendingPluginOp::Install { spec, scope } => {
+                            self.execute_plugin_install(
+                                spec,
+                                scope,
                                 &mut chat_view,
                                 &mut chat_state,
                                 &rt_handle,

@@ -118,6 +118,7 @@ impl ChatView {
         self.render_subagent_selector(frame, chunks[1]);
         self.render_mcp_selector(frame, chunks[1]);
         self.render_mcp_add_dialog(frame, chunks[1]);
+        self.render_plugin_browser(frame, chunks[1]);
         self.render_provider_selector(frame, chunks[1]);
         self.render_model_config_form(frame, chunks[1]);
         self.render_theme_selector(frame, chunks[1]);
@@ -1001,6 +1002,10 @@ impl ChatView {
 
     fn render_mcp_add_dialog(&mut self, frame: &mut Frame, area: Rect) {
         self.mcp_add_dialog.render(frame, area, &self.theme);
+    }
+
+    fn render_plugin_browser(&mut self, frame: &mut Frame, area: Rect) {
+        self.plugin_browser.render(frame, area, &self.theme);
     }
 
     fn render_provider_selector(&mut self, frame: &mut Frame, area: Rect) {

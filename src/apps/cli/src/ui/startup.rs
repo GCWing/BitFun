@@ -6,6 +6,7 @@ use super::image_paste::{self, ImagePaste};
 use super::login_form::{LoginFormAction, LoginFormState};
 use super::model_config_form::{ModelConfigFormState, ModelFormAction, ModelFormResult};
 use super::model_selector::{ModelItem, ModelSelectorState};
+use super::plugin_browser::{PluginBrowserAction, PluginBrowserState};
 use super::provider_selector::{ProviderSelection, ProviderSelectorState};
 use super::session_selector::{SessionAction, SessionItem, SessionSelectorState};
 use super::skill_selector::{SkillItem, SkillSelectorAction, SkillSelectorState};
@@ -22,6 +23,7 @@ use crate::actions::{
     SHARED_TUI_HELP_NOTE,
 };
 use crate::config::CliConfig;
+use crate::plugin_ops::{PluginInstallScope, PluginItem};
 /// Startup page module
 ///
 /// Full-featured startup page with:
@@ -60,6 +62,7 @@ enum PopupType {
     SubagentSelector,
     ThemeSelector,
     ProviderSelector,
+    PluginBrowser,
     ModelConfigForm,
     LoginForm,
 }
@@ -193,6 +196,8 @@ pub(crate) struct StartupPage {
     provider_selector: ProviderSelectorState,
     model_config_form: ModelConfigFormState,
     login_form: LoginFormState,
+    /// Plugin browser popup state
+    plugin_browser: PluginBrowserState,
     theme_preview_original: Option<Theme>,
 
     // ── System context ──
@@ -280,6 +285,7 @@ impl StartupPage {
             provider_selector: ProviderSelectorState::new(),
             model_config_form: ModelConfigFormState::new(),
             login_form: LoginFormState::new(),
+            plugin_browser: PluginBrowserState::new(),
             theme_preview_original: None,
             agent,
             agent_type: default_agent,
@@ -359,6 +365,7 @@ impl StartupPage {
             || self.provider_selector.is_visible()
             || self.model_config_form.is_visible()
             || self.login_form.is_visible()
+            || self.plugin_browser.is_visible()
     }
 
     pub(crate) fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<StartupResult> {
@@ -487,6 +494,7 @@ impl StartupPage {
         self.theme_selector.render(frame, size, &self.theme);
         self.provider_selector.render(frame, size, &self.theme);
         self.model_config_form.render_mut(frame, size, &self.theme);
+        self.plugin_browser.render(frame, size, &self.theme);
 
         // Overlay: command palette (Ctrl+P)
         self.command_palette.render(frame, size, &self.theme);
@@ -765,6 +773,19 @@ impl StartupPage {
         }
 
         // ── Selector popups intercept all keys when active ──
+
+        if self.plugin_browser.is_visible() {
+            let action = self.plugin_browser.handle_key_event(key);
+            match action {
+                PluginBrowserAction::Toggle(item) => self.toggle_plugin(item),
+                PluginBrowserAction::Install { spec, scope } => {
+                    self.install_plugin(spec, scope);
+                }
+                PluginBrowserAction::Dismiss => self.navigate_back(),
+                PluginBrowserAction::None => {}
+            }
+            return None;
+        }
 
         if self.theme_selector.is_visible() {
             match key.code {
@@ -1053,6 +1074,9 @@ impl StartupPage {
                 return Some(StartupResult::NewSession {
                     prompt: Some(ComposerDraft::from_text("/mcp")),
                 });
+            }
+            ActionHandler::Plugins => {
+                self.show_plugin_browser();
             }
             ActionHandler::AcpHelp => {
                 return Some(StartupResult::NewSession {
@@ -1348,6 +1372,9 @@ impl StartupPage {
         } else if self.provider_selector.is_visible() {
             self.popup_stack.push(PopupType::ProviderSelector);
             self.provider_selector.hide();
+        } else if self.plugin_browser.is_visible() {
+            self.popup_stack.push(PopupType::PluginBrowser);
+            self.plugin_browser.hide();
         } else if self.model_config_form.is_visible() {
             self.popup_stack.push(PopupType::ModelConfigForm);
             self.model_config_form.hide();
@@ -1954,6 +1981,71 @@ impl StartupPage {
         self.skill_selector.show_menu();
     }
 
+    fn show_plugin_browser(&mut self) {
+        let items = self.get_plugin_items();
+        self.push_current_popup_to_stack();
+        self.plugin_browser.show(items);
+    }
+
+    fn get_plugin_items(&self) -> Vec<PluginItem> {
+        let workspace = self.workspace_path_buf();
+        crate::plugin_ops::refresh_plugin_items(&workspace, &tokio::runtime::Handle::current())
+    }
+
+    fn toggle_plugin(&mut self, item: PluginItem) {
+        let workspace = self.agent.workspace_path_buf();
+        let plugin_id = item.id.clone();
+        let content_hash = item.content_hash.clone();
+        let was_activated = item.activated;
+        self.plugin_browser.set_loading(Some(plugin_id.clone()));
+        let result = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                crate::plugin_ops::toggle_managed_plugin(
+                    &workspace,
+                    &plugin_id,
+                    &content_hash,
+                    !was_activated,
+                )
+                .await
+            })
+        });
+        match result {
+            Ok(_) => self.status = Some(format!("Plugin '{}' toggled", plugin_id)),
+            Err(error) => {
+                self.status = Some(format!(
+                    "Failed to toggle plugin '{}': {}",
+                    plugin_id, error
+                ))
+            }
+        }
+        let items = self.get_plugin_items();
+        self.plugin_browser.update_items(items);
+        self.plugin_browser.set_loading(None);
+    }
+
+    fn install_plugin(&mut self, spec: String, scope: PluginInstallScope) {
+        let workspace = self.agent.workspace_path_buf();
+        self.plugin_browser.set_install_busy(true);
+        let result = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                crate::plugin_ops::install_managed_plugin(&workspace, &spec, scope).await
+            })
+        });
+        match result {
+            Ok(()) => {
+                self.plugin_browser.set_install_message(None);
+                self.status = Some(format!("Plugin '{}' installed", spec));
+            }
+            Err(error) => {
+                self.plugin_browser.set_install_message(Some(error.clone()));
+                self.status = Some(format!("Failed to install plugin '{}': {}", spec, error));
+            }
+        }
+        let items = self.get_plugin_items();
+        self.plugin_browser.update_items(items);
+        self.plugin_browser.set_install_busy(false);
+    }
+
     fn show_available_skill_list(&mut self) {
         let skills = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current()
@@ -2210,6 +2302,8 @@ impl StartupPage {
             self.cancel_theme_preview();
         } else if self.provider_selector.is_visible() {
             self.provider_selector.hide();
+        } else if self.plugin_browser.is_visible() {
+            self.plugin_browser.hide();
         } else if self.model_config_form.is_visible() {
             self.model_config_form.hide();
         } else if self.login_form.is_visible() {
@@ -2227,6 +2321,7 @@ impl StartupPage {
                 PopupType::SubagentSelector => self.subagent_selector.reshow(),
                 PopupType::ThemeSelector => self.theme_selector.reshow(),
                 PopupType::ProviderSelector => self.provider_selector.reshow(),
+                PopupType::PluginBrowser => self.plugin_browser.reshow(),
                 PopupType::ModelConfigForm => self.model_config_form.reshow(),
                 PopupType::LoginForm => self.login_form.show(),
             }
@@ -2247,6 +2342,7 @@ impl StartupPage {
         self.provider_selector.hide();
         self.model_config_form.hide();
         self.login_form.hide();
+        self.plugin_browser.hide();
         self.popup_stack.clear();
     }
 
