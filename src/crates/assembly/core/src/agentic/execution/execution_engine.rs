@@ -4196,6 +4196,10 @@ impl ExecutionEngine {
                                 "Model round {} ended with partial answer after cancellation, reason: {:?}",
                                 round_index, round_result.finish_reason
                             );
+                            // Mark as truncated so the turn is not reported as
+                            // complete — a cancelled stream with partial text is
+                            // still incomplete.
+                            finalization_reason = Some("partial_truncated");
                             break;
                         }
                     } else {
@@ -4462,7 +4466,9 @@ impl ExecutionEngine {
                     }
                 }
             } else if reason == "partial_truncated" {
-                has_final_response = true;
+                // A truncated response is not a complete final response — the
+                // model output stream ended prematurely.
+                has_final_response = false;
             }
         }
 
@@ -4480,7 +4486,7 @@ impl ExecutionEngine {
         let success = has_final_response
             || matches!(
                 effective_finish_reason,
-                "max_rounds" | "repeated_tool_failures"
+                "max_rounds" | "repeated_tool_failures" | "partial_truncated"
             );
 
         // Post-processing hook: when a DeepResearch dialog turn finishes
