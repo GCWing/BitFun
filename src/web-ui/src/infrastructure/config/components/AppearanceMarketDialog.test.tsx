@@ -248,6 +248,44 @@ describe('AppearanceMarketDialog', () => {
     expect(container.textContent).toContain('package.market.noAutoApply');
   });
 
+  it('holds the grid with placeholder cards while the first page loads', async () => {
+    let resolveBrowse: (page: unknown) => void = () => undefined;
+    mocks.browse.mockImplementation(() => new Promise(resolve => {
+      resolveBrowse = resolve;
+    }));
+
+    await act(async () => {
+      root.render(<AppearanceMarketDialog isOpen onClose={() => undefined} />);
+      await Promise.resolve();
+    });
+
+    // Placeholder cards stand in for the real ones so the dialog keeps one size,
+    // and the empty state never flashes before the first page resolves.
+    expect(container.querySelectorAll('.appearance-market__card--skeleton').length)
+      .toBeGreaterThan(0);
+    expect(container.textContent).not.toContain('package.market.empty');
+
+    await act(async () => {
+      resolveBrowse({ items: [summary] });
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => expect(container.textContent).toContain('Tokyo Night'));
+    expect(container.querySelector('.appearance-market__card--skeleton')).toBeNull();
+  });
+
+  it('keeps an empty result set on the empty state once loading settles', async () => {
+    mocks.browse.mockResolvedValue({ items: [] });
+
+    await act(async () => {
+      root.render(<AppearanceMarketDialog isOpen onClose={() => undefined} />);
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => expect(container.textContent).toContain('package.market.empty'));
+    expect(container.querySelector('.appearance-market__card--skeleton')).toBeNull();
+  });
+
   it('shows the shared-account submissions and admin review workflows', async () => {
     const submission = {
       submissionId: 'submission-1',

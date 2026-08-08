@@ -796,6 +796,10 @@
     "nativeCommandReconfirmationRequired": "先前選擇的外部命令已無法使用。請從斜線選單中選擇 BitFun 命令後再執行。",
     "selectHint": "↑↓ 選擇 · Enter 確認 · Esc 取消",
     "current": "目前",
+    "commandStatus": {
+      "restricted": "受限",
+      "chooseSource": "選擇來源"
+    },
     "computerUseDisabled": "已在「設定 → 工作階段權限」中停用 Computer Use",
     "professionalMode": "專業模式",
     "designMode": "設計模式",

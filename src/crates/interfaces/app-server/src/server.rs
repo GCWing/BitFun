@@ -14,6 +14,7 @@ use std::sync::Arc;
 use agent_client_protocol::{ConnectTo, ConnectionTo, Result};
 
 use crate::agent::BitfunAppRuntime;
+use crate::management::AppManagementService;
 use crate::role::{AppClient, AppServer};
 
 static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
@@ -23,6 +24,7 @@ pub(super) struct ConnectionEventState {
     agent_sequence: AtomicU64,
     permission_sequence: AtomicU64,
     config_sequence: AtomicU64,
+    external_source_sequence: AtomicU64,
 }
 
 impl ConnectionEventState {
@@ -35,6 +37,7 @@ impl ConnectionEventState {
             agent_sequence: AtomicU64::new(0),
             permission_sequence: AtomicU64::new(0),
             config_sequence: AtomicU64::new(0),
+            external_source_sequence: AtomicU64::new(0),
         }
     }
 
@@ -46,6 +49,9 @@ impl ConnectionEventState {
             bitfun_app_server_protocol::event::EventStream::Agent => &self.agent_sequence,
             bitfun_app_server_protocol::event::EventStream::Permission => &self.permission_sequence,
             bitfun_app_server_protocol::event::EventStream::Config => &self.config_sequence,
+            bitfun_app_server_protocol::event::EventStream::ExternalSource => {
+                &self.external_source_sequence
+            }
         };
         bitfun_app_server_protocol::event::EventCursor {
             connection_id: self.id.clone(),
@@ -62,6 +68,9 @@ impl ConnectionEventState {
             bitfun_app_server_protocol::event::EventStream::Agent => &self.agent_sequence,
             bitfun_app_server_protocol::event::EventStream::Permission => &self.permission_sequence,
             bitfun_app_server_protocol::event::EventStream::Config => &self.config_sequence,
+            bitfun_app_server_protocol::event::EventStream::ExternalSource => {
+                &self.external_source_sequence
+            }
         };
         bitfun_app_server_protocol::event::EventCursor {
             connection_id: self.id.clone(),
@@ -75,13 +84,20 @@ impl ConnectionEventState {
 #[derive(Clone)]
 pub struct BitfunAppServer {
     runtime: Arc<BitfunAppRuntime>,
+    management: Option<Arc<AppManagementService>>,
 }
 
 impl BitfunAppServer {
     pub fn new(runtime: BitfunAppRuntime) -> Self {
         Self {
             runtime: Arc::new(runtime),
+            management: None,
         }
+    }
+
+    pub fn with_management(mut self, management: Arc<AppManagementService>) -> Self {
+        self.management = Some(management);
+        self
     }
 
     /// Return the shared runtime used by this server.
@@ -92,22 +108,38 @@ impl BitfunAppServer {
     /// Serve the complete app-server surface on the supplied transport.
     pub async fn serve(self, transport: impl ConnectTo<AppServer> + 'static) -> Result<()> {
         let runtime = self.runtime;
+        let management = self.management;
         let event_state = Arc::new(ConnectionEventState::new());
 
         AppServer
             .builder()
             .name("bitfun-app-server")
-            .with_connection_builder(handlers::app::builder(runtime.clone(), event_state.clone()))
-            .with_connection_builder(handlers::agent::builder(runtime.clone()))
+            .with_connection_builder(handlers::app::builder(
+                runtime.clone(),
+                event_state.clone(),
+                management.clone(),
+            ))
+            .with_connection_builder(handlers::agent::builder(
+                runtime.clone(),
+                management.clone(),
+            ))
+            .with_connection_builder(handlers::account::builder(management.clone()))
             .with_connection_builder(handlers::session::builder(runtime.clone()))
             .with_connection_builder(handlers::permission::builder(runtime.clone()))
-            .with_connection_builder(handlers::tui::builder(runtime.clone()))
+            .with_connection_builder(handlers::workspace::builder(runtime.clone()))
+            .with_connection_builder(handlers::worktree::builder(management.clone()))
+            .with_connection_builder(handlers::model::builder(management.clone()))
+            .with_connection_builder(handlers::skill::builder(management.clone()))
+            .with_connection_builder(handlers::subagent::builder(management.clone()))
+            .with_connection_builder(handlers::mcp::builder(management.clone()))
+            .with_connection_builder(handlers::external_source::builder(management.clone()))
+            .with_connection_builder(handlers::hook::builder(management.clone()))
             .with_connection_builder(handlers::git::builder())
             .with_connection_builder(handlers::config::builder())
             .with_connection_builder(handlers::i18n::builder())
             .with_connection_builder(fallback::builder())
             .connect_with(transport, async move |cx: ConnectionTo<AppClient>| {
-                event_forwarder::run(runtime, cx, event_state).await
+                event_forwarder::run(runtime, management, cx, event_state).await
             })
             .await
     }

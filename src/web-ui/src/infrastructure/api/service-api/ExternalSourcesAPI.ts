@@ -1680,4 +1680,29 @@ export const externalSourcesAPI = {
     emitExternalAgentCatalogUpdated(workspacePath);
     return catalog;
   },
+
+  /**
+   * External applications found on this host that the user has never been told
+   * about. The host owns this derivation so the desktop and the TUI cannot
+   * disagree about what counts as new.
+   */
+  async getEcosystemAwareness(workspacePath?: string): Promise<string[]> {
+    const response = await invokeExternalSourceCommand<{
+      unacknowledgedEcosystemIds?: unknown;
+    }>('get_external_ecosystem_awareness_command', {
+      request: { workspacePath: normalizeOptionalWorkspacePath(workspacePath) },
+    });
+    return normalizeOptionalArray<string>(response.unacknowledgedEcosystemIds)
+      .filter((ecosystemId): ecosystemId is string => typeof ecosystemId === 'string');
+  },
+
+  /** Clears the "new external application" hint for these ecosystems. */
+  acknowledgeEcosystems(workspacePath: string | undefined, ecosystemIds: string[]) {
+    return invokeExternalSourceCommand<void>('acknowledge_external_ecosystems_command', {
+      request: {
+        workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+        ecosystemIds,
+      },
+    });
+  },
 };

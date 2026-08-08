@@ -15,7 +15,7 @@ mod file_lock;
 pub mod filesystem;
 #[cfg(any(feature = "markdown", feature = "workspace-instructions"))]
 pub mod instruction_scope;
-#[cfg(feature = "local-storage")]
+#[cfg(any(feature = "json-io", feature = "local-storage"))]
 pub mod json_store;
 pub mod jsonc;
 pub mod local_instructions;

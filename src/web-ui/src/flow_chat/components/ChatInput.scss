@@ -1738,6 +1738,30 @@
     flex: 0 0 auto;
   }
 
+  /*
+   * External commands that cannot run yet. The badge keeps the reason visible
+   * in the list instead of waiting for the click that reveals it, matching the
+   * hints the TUI command menu appends to its descriptions.
+   */
+  &__slash-command-status {
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    padding: 0.12rem 0.32rem;
+    border-radius: 3px;
+    font-weight: 500;
+    flex: 0 0 auto;
+    white-space: nowrap;
+
+    &--restricted {
+      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 15%, transparent);
+      color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 90%, var(--bf-appearance-token-color-text-primary));
+    }
+
+    &--choose {
+      background: var(--bf-appearance-token-color-bg-tertiary);
+      color: var(--bf-appearance-token-color-text-secondary);
+    }
+  }
+
   &__slash-command-empty {
     padding: var(--bf-appearance-token-size-gap-4) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
     text-align: center;

@@ -19,7 +19,8 @@ crate.
   cross-layer traits.
 - Keep dependency features explicit and keep `default = []`. The coarse service
   capability owners are `filesystem` (local file operations/search),
-  `local-storage` (JSON/session/usage persistence), `process-runtime` (command
+  `json-io` (generic locked and atomic JSON file IO), `local-storage`
+  (JSON/session/usage persistence), `process-runtime` (command
   lookup and supervised child lifecycle), and `workspace-instructions`
   (declarative instruction discovery). Consumers enable those or the narrower
   `lsp`, `workspace-runtime`, `workspace-identity`, `runtime-ownership`,
@@ -63,6 +64,7 @@ crate.
 ```bash
 cargo check -p bitfun-services-core --no-default-features
 cargo check -p bitfun-services-core --no-default-features --features filesystem
+cargo test -p bitfun-services-core --no-default-features --features json-io --lib json_store
 cargo test -p bitfun-services-core --no-default-features --features local-storage --test session_metadata_contracts
 cargo test -p bitfun-services-core --no-default-features --features process-runtime --test process_runtime_contracts
 cargo test -p bitfun-services-core --no-default-features --features workspace-instructions --test declarative_workspace_instruction_contracts

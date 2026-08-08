@@ -623,9 +623,10 @@ export function useComposerVoiceInput({
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [cancelRecording, phase]);
 
-  const disabled = phase === 'recording'
-    ? false
-    : !settings?.enabled || !speechRuntimeSupported || !isMediaCaptureSupported() || phase === 'preparing' || phase === 'transcribing';
+  // Keep the idle control clickable when capture is unavailable so the
+  // start handler can explain the unsupported state instead of silently
+  // presenting a disabled button.
+  const disabled = phase === 'preparing' || phase === 'transcribing';
   const tooltip = useMemo(() => {
     if (!settings?.enabled) return t('input.voiceInput.disabled');
     if (!speechRuntimeSupported || !isMediaCaptureSupported()) return t('input.voiceInput.unsupported');

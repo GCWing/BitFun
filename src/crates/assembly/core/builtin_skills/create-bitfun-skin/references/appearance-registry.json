@@ -1,9 +1,9 @@
 {
   "schema": "bitfun.appearance.registry",
   "schemaVersion": 1,
-  "generatedFrom": "7fdf35b7be1c2693e33caae122dc970fb953865b",
-  "generatedAt": "2026-08-03T01:06:32.137402+00:00",
-  "sourceRevision": "7fdf35b7be1c2693e33caae122dc970fb953865b",
+  "generatedFrom": "71fbdbb26757c930eedfef5cfda55ca12e008ae1",
+  "generatedAt": "2026-08-06T15:48:31.702263+00:00",
+  "sourceRevision": "71fbdbb26757c930eedfef5cfda55ca12e008ae1",
   "sourceDirty": false,
   "sourceTreeHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
   "components": [
@@ -3023,6 +3023,52 @@
       ]
     },
     {
+      "id": "reasoning-preset-selector",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "trigger",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "label",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "menu",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "header",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "option",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [],
+      "states": [
+        {
+          "id": "open",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"open\"]"
+          }
+        },
+        {
+          "id": "selected",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"selected\"]"
+          }
+        }
+      ]
+    },
+    {
       "id": "flow-chat-header",
       "parts": [
         {
@@ -5485,6 +5531,110 @@
         {
           "id": "packageDiagnosticAllowedParts",
           "propertyProfile": "container"
+        },
+        {
+          "id": "packageMissingSelection",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketDialog",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketToolbar",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketGrid",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketCard",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketPreview",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketCardBody",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketStatus",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketEmpty",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketError",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketDetail",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketDetailPreview",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketDetailBody",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketWarning",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketReleaseList",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketRelease",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketActions",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketNav",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketWorkflow",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketManualSubmit",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketSubmissionList",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketSubmission",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketReviewLayout",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketReviewQueue",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketReviewDetail",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketReviewActions",
+          "propertyProfile": "container"
         }
       ],
       "facets": [
@@ -7941,6 +8091,78 @@
       ]
     },
     {
+      "id": "market-account-controls",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "identityTrigger",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "menu",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "profile",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "menuItem",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "login",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "waiting",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "error",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "actions",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [],
+      "states": [
+        {
+          "id": "loading",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"loading\"]"
+          }
+        },
+        {
+          "id": "signedOut",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"signed-out\"]"
+          }
+        },
+        {
+          "id": "signedIn",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"signed-in\"]"
+          }
+        },
+        {
+          "id": "authorizing",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"authorizing\"]"
+          }
+        }
+      ]
+    },
+    {
       "id": "ssh-remote",
       "parts": [
         {
@@ -8270,6 +8492,16 @@
           "id": "sectionContent",
           "propertyProfile": "container",
           "visualRole": "content"
+        },
+        {
+          "id": "assistantSessionActions",
+          "propertyProfile": "control",
+          "visualRole": "control"
+        },
+        {
+          "id": "assistantSessionMenu",
+          "propertyProfile": "overlay",
+          "visualRole": "popup"
         },
         {
           "id": "bottomBar",
@@ -9577,11 +9809,19 @@
           "propertyProfile": "container"
         },
         {
-          "id": "providerGrid",
+          "id": "providerSearch",
           "propertyProfile": "container"
         },
         {
-          "id": "providerCard",
+          "id": "providerList",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "providerRow",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "providerSelect",
           "propertyProfile": "container"
         },
         {
@@ -9593,11 +9833,11 @@
           "propertyProfile": "container"
         },
         {
-          "id": "providerModels",
+          "id": "providerEmpty",
           "propertyProfile": "container"
         },
         {
-          "id": "providerTag",
+          "id": "providerMore",
           "propertyProfile": "container"
         },
         {
@@ -9733,6 +9973,104 @@
           "selector": {
             "kind": "self",
             "suffix": "[data-bf-state~=\"disabled\"]"
+          }
+        }
+      ]
+    },
+    {
+      "id": "reasoning-config-panel",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "body",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "footer",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "error",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "actions",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [],
+      "states": []
+    },
+    {
+      "id": "reasoning-preset-editor",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "section",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "primarySettings",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "binding",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "generated",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "header",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "empty",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "list",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "preset",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "presetSummary",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "presetEditor",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "actions",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "action",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "actionControls",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [],
+      "states": [
+        {
+          "id": "expanded",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"expanded\"]"
           }
         }
       ]
@@ -10406,6 +10744,10 @@
         },
         {
           "id": "newSession",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "setPrimary",
           "propertyProfile": "container"
         },
         {

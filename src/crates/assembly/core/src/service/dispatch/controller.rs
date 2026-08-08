@@ -755,10 +755,19 @@ async fn provision_ssh_workspace(
     let have_tips = target_have_tips(&response);
     if base_commit_is_published(&baseline.worktree_path, &baseline.delivery.base_commit).await {
         // Worth saying out loud: the commit is on the remote, so the target
-        // asking for it means its clone is stale or its network is down.
-        log::info!(
-            "Dispatch target could not reach a published base commit; delivering it by bundle"
-        );
+        // asking for it means its clone is stale or its network is down. Say why
+        // when the target told us — on a cold cache this fallback re-sends the
+        // project's whole history over SSH, and "the remote refused us" is the
+        // difference between a slow dispatch and a misconfigured target.
+        match target_fetch_error(&response) {
+            Some(reason) => log::warn!(
+                "Dispatch target could not fetch a published base commit ({reason}); delivering {} history by bundle instead",
+                if have_tips.is_empty() { "the entire" } else { "the missing" }
+            ),
+            None => log::info!(
+                "Dispatch target could not reach a published base commit; delivering it by bundle"
+            ),
+        }
     }
     let bundle = build_base_bundle(store, baseline, &have_tips).await?;
     let upload = dispatch_ssh::upload_bundle(
@@ -780,6 +789,16 @@ async fn provision_ssh_workspace(
     provisioned_path(&response).ok_or_else(|| {
         anyhow::anyhow!("dispatch target could not check out the base commit after the bundle")
     })
+}
+
+/// Why the target fell back to bundle delivery, when it said.
+pub(super) fn target_fetch_error(response: &Value) -> Option<String> {
+    response
+        .get("fetchError")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|reason| !reason.is_empty())
+        .map(ToOwned::to_owned)
 }
 
 pub(super) fn target_have_tips(response: &Value) -> Vec<String> {

@@ -802,6 +802,10 @@
     "nativeCommandReconfirmationRequired": "The external command you previously chose is no longer available. Choose the BitFun command from the slash menu to run it.",
     "selectHint": "↑↓ Select · Enter Confirm · Esc Cancel",
     "current": "Current",
+    "commandStatus": {
+      "restricted": "Restricted",
+      "chooseSource": "Choose source"
+    },
     "computerUseDisabled": "Computer Use is disabled in Settings → Session permissions",
     "professionalMode": "Expert Mode",
     "designMode": "Design Mode",

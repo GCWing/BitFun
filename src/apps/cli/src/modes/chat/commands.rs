@@ -426,42 +426,11 @@ impl ChatMode {
         }
         let builtin_alias = format!("/{command_name}");
         let builtin_action = action_for_alias(&builtin_alias, ActionContext::Chat);
-        if self.agent.is_shared() {
-            if let Some(action) = builtin_action {
-                let state = self.action_state(chat_state.is_processing, false);
-                if let Some(usage) =
-                    builtin_arguments_error(CommandRoute::Builtin, action.handler, arguments)
-                {
-                    chat_view.set_status(Some(usage.to_string()));
-                    return Ok(None);
-                }
-                if builtin_arguments_route(CommandRoute::Builtin, action.handler) {
-                    if !action.available(state) {
-                        chat_view.set_status(Some(action.unavailable_message(state)));
-                        return Ok(None);
-                    }
-                    return self.start_session_rename(arguments, chat_view, chat_state, rt_handle);
-                }
-                if action.handler == ActionHandler::Reload {
-                    return self.handle_reload_invocation(
-                        reload_invocation.expect("reload action requires a parsed invocation"),
-                        chat_view,
-                        chat_state,
-                        rt_handle,
-                    );
-                }
-                return self.dispatch_action(action, state, chat_view, chat_state, rt_handle);
-            }
-            chat_state.add_system_message(format!(
-                "External prompt command /{command_name} is unavailable in Shared TUI preview. {SHARED_TUI_EMBEDDED_HANDOFF}."
-            ));
-            return Ok(None);
-        }
         let mut external = self.external_command_projection(command_name);
         let authoritative_preferences = tokio::task::block_in_place(|| {
             rt_handle
-                .block_on(external_source_conflict_choices())
-                .map(Into::into)
+                .block_on(self.agent.external_source_snapshot(false))
+                .map(|response| response.preferences.into())
         });
         if let Ok(authoritative_preferences) = authoritative_preferences {
             if authoritative_preferences != self.external_conflict_preferences() {
@@ -731,29 +700,23 @@ impl ChatMode {
             return;
         }
         let native_commands = cli_native_prompt_command_descriptors(command_name);
-        let workspace = self.agent.workspace_path_buf();
         let expected_preference_revision = self
             .external_source_snapshot
             .as_ref()
             .map(|snapshot| snapshot.preference_revision)
             .unwrap_or(0);
         let persisted = tokio::task::block_in_place(|| {
-            rt_handle.block_on(set_native_prompt_command_conflict_choice(
-                Some(&workspace),
+            rt_handle.block_on(self.agent.set_native_command_choice(
                 native_commands,
-                candidate_id,
+                candidate_id.to_string(),
                 expected_preference_revision,
             ))
         });
         match persisted {
-            Ok(projection) => {
-                if let Ok(preferences) = tokio::task::block_in_place(|| {
-                    rt_handle.block_on(external_source_conflict_choices())
-                }) {
-                    self.replace_external_conflict_preferences(preferences.into());
-                }
+            Ok(response) => {
+                self.replace_external_conflict_preferences(response.preferences.into());
                 if let Some(snapshot) = &mut self.external_source_snapshot {
-                    snapshot.preference_revision = projection.preference_revision;
+                    snapshot.preference_revision = response.conflicts.preference_revision;
                 }
             }
             Err(error) => {
@@ -788,22 +751,25 @@ impl ChatMode {
             return Ok(None);
         }
         if let Some(provider_conflict_key) = &projection.provider_conflict_key {
-            let workspace = self.agent.workspace_path_buf();
             let expected_preference_revision = self
                 .external_source_snapshot
                 .as_ref()
                 .map(|snapshot| snapshot.preference_revision)
                 .unwrap_or(0);
             let snapshot = tokio::task::block_in_place(|| {
-                rt_handle.block_on(set_external_prompt_command_conflict_choice(
-                    Some(&workspace),
-                    provider_conflict_key,
-                    &projection.candidate_id,
-                    expected_preference_revision,
+                rt_handle.block_on(self.agent.external_source_review(
+                    ExternalSourceReviewAction::SetPromptCommandConflictChoice {
+                        conflict_key: provider_conflict_key.clone(),
+                        candidate_id: projection.candidate_id.clone(),
+                        expected_preference_revision,
+                    },
                 ))
             });
             let snapshot = match snapshot {
-                Ok(snapshot) => snapshot,
+                Ok(response) => {
+                    self.replace_external_conflict_preferences(response.preferences.into());
+                    response.snapshot
+                }
                 Err(error) => {
                     chat_state.add_system_message(format!(
                         "Could not select {}: {error}",
@@ -907,25 +873,25 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) -> Result<Option<ChatExitReason>> {
-        let workspace = self.agent.workspace_path_buf();
         let expanded = tokio::task::block_in_place(|| {
-            rt_handle.block_on(expand_external_prompt_command(
-                Some(&workspace),
-                &invocation.command_name,
-                &invocation.arguments,
+            rt_handle.block_on(self.agent.expand_external_command(
+                invocation.command_name.clone(),
+                invocation.arguments.clone(),
                 invocation.native_commands.clone(),
-                invocation.candidate_id.as_deref(),
-                invocation.content_version.as_deref(),
-                invocation.native_conflict_key.as_deref(),
+                invocation.candidate_id.clone(),
+                invocation.content_version.clone(),
+                invocation.native_conflict_key.clone(),
                 invocation.expected_preference_revision,
-                shell_review_decision.as_ref(),
+                shell_review_decision,
             ))
         });
         match expanded {
-            Ok(PromptCommandInvocationOutcome::Ready {
-                content,
-                execution_target,
-            }) => {
+            Ok(bitfun_app_server_protocol::external_source::ExpandExternalCommandResponse(
+                PromptCommandInvocationOutcome::Ready {
+                    content,
+                    execution_target,
+                },
+            )) => {
                 match execution_target {
                     PromptCommandExecutionTarget::Inline => {
                         self.send_message_to_agent(content, chat_view, chat_state, rt_handle);
@@ -952,13 +918,15 @@ impl ChatMode {
                 }
                 Ok(None)
             }
-            Ok(PromptCommandInvocationOutcome::ReviewRequired { review }) => {
+            Ok(bitfun_app_server_protocol::external_source::ExpandExternalCommandResponse(
+                PromptCommandInvocationOutcome::ReviewRequired { review },
+            )) => {
                 chat_view.show_prompt_command_shell_review(review.clone());
                 self.pending_prompt_command_shell_invocation =
                     Some(PendingPromptCommandShellInvocation { invocation, review });
                 Ok(None)
             }
-            Err(error) if error.contains("command not found") => Err(anyhow!(error)),
+            Err(error) if error.detail.contains("command not found") => Err(anyhow!(error.detail)),
             Err(error) => {
                 chat_state.add_system_message(format!(
                     "External command /{} is unavailable: {error}",

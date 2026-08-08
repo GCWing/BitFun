@@ -12,6 +12,8 @@ const loadJsonConfigMock = vi.hoisted(() => vi.fn());
 const saveJsonConfigMock = vi.hoisted(() => vi.fn());
 const initializeServersMock = vi.hoisted(() => vi.fn());
 const startServerMock = vi.hoisted(() => vi.fn());
+const deleteServerMock = vi.hoisted(() => vi.fn());
+const confirmDangerMock = vi.hoisted(() => vi.fn());
 const notificationMocks = vi.hoisted(() => ({
   success: vi.fn(),
   warning: vi.fn(),
@@ -35,6 +37,10 @@ vi.mock('@/infrastructure/runtime', () => ({
 vi.mock('@/shared/notification-system', () => ({
   useNotification: () => notificationMocks,
 }));
+vi.mock('@/component-library', async () => {
+  const actual = await vi.importActual<typeof import('@/component-library')>('@/component-library');
+  return { ...actual, confirmDanger: confirmDangerMock };
+});
 vi.mock('../../api/service-api/MCPAPI', () => ({
   MCPAPI: {
     getServers: getServersMock,
@@ -42,6 +48,7 @@ vi.mock('../../api/service-api/MCPAPI', () => ({
     saveMCPJsonConfig: saveJsonConfigMock,
     initializeServers: initializeServersMock,
     startServer: startServerMock,
+    deleteServer: deleteServerMock,
   },
 }));
 vi.mock('../../api/service-api/SystemAPI', () => ({ systemAPI: {} }));
@@ -67,6 +74,8 @@ describe('McpToolsConfig remote behavior', () => {
     saveJsonConfigMock.mockReset().mockResolvedValue(undefined);
     initializeServersMock.mockReset().mockResolvedValue(undefined);
     startServerMock.mockReset().mockResolvedValue(undefined);
+    deleteServerMock.mockReset().mockResolvedValue(undefined);
+    confirmDangerMock.mockReset().mockResolvedValue(true);
     notificationMocks.success.mockReset();
     notificationMocks.warning.mockReset();
     notificationMocks.error.mockReset();
@@ -261,5 +270,46 @@ describe('McpToolsConfig remote behavior', () => {
     expect(notificationMocks.success).not.toHaveBeenCalled();
     expect(notificationMocks.error).not.toHaveBeenCalled();
     expect(getServersMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('deletes a server after confirmation and reloads the list', async () => {
+    peerState.active = false;
+    const server = {
+      id: 'local-test',
+      name: 'Local test server',
+      status: 'Stopped',
+      serverType: 'local',
+      transport: 'stdio',
+      enabled: true,
+      autoStart: false,
+      commandAvailable: true,
+      startSupported: true,
+    };
+    getServersMock
+      .mockResolvedValueOnce([server])
+      .mockResolvedValueOnce([]);
+
+    await act(async () => {
+      root.render(<McpToolsConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const deleteButton = container.querySelector<HTMLButtonElement>('[aria-label="actions.delete"]');
+    expect(deleteButton).not.toBeNull();
+    await act(async () => {
+      deleteButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(confirmDangerMock).toHaveBeenCalledWith(
+      'actions.delete',
+      'messages.deleteConfirm',
+      { confirmText: 'actions.delete', cancelText: 'actions.cancel' },
+    );
+    expect(deleteServerMock).toHaveBeenCalledWith({ serverId: 'local-test' });
+    expect(getServersMock).toHaveBeenCalledTimes(2);
+    expect(container.textContent).not.toContain('Local test server');
   });
 });

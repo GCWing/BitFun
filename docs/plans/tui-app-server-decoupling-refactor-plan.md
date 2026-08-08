@@ -1,8 +1,8 @@
 # TUI 与 App Server 解耦重构计划
 
-> 状态：Phase 0-2 已完成当前定义的边界、协议基础和核心聊天迁移；Phase 3-5 尚未开始。
+> 状态：Phase 0-3 已完成当前定义的边界、协议基础、核心聊天和配置管理迁移；Phase 4 尚未开始，Phase 5 目标待评审。
 >
-> 当前状态基线：2026-08-05。一次性的运行证据保留在对应 PR/Actions 记录中；本文不绑定会因 rebase 失效的提交 SHA。
+> 当前状态基线：2026-08-06。一次性的运行证据保留在对应 PR/Actions 记录中；本文不绑定会因 rebase 失效的提交 SHA。
 >
 > 本文只记录当前差距、阶段和完成证据。稳定架构约束见相邻架构文档；Phase 0 的历史盘点已失效，不再作为当前能力清单。
 
@@ -58,7 +58,7 @@ Shared TUI (--shared)
 
 两条路径统一的是 TUI 可见的行为端口。Shared compatibility adapter 会把 Runtime IPC 的结果和事件映射为 `TuiBackend` 使用的类型，但它没有运行 `BitfunAppServer`，也不是 Shared App Server transport。
 
-Phase 3/4 尚未迁移的配置、MCP、Skill、Subagent、Hook、外部来源、Account 和 Worktree 管理面仍可能通过 CLI Host 中的现有 Core/Service compatibility 路径完成。它们是当前剩余差距，不能据 Phase 2 的核心聊天完成状态宣称整个 TUI 已解耦。
+Phase 3 已将 Mode/Model、Skill、Subagent 和 MCP 管理面迁移到 `TuiBackend` 的 owner-specific typed API。具体 DTO/owner 适配由 App Server 的 `AppManagementService` 持有，并由 Host 显式装配；Embedded TUI 经 App Server 访问既有 owner。Shared 的 Session/chat/mode authority 继续映射 v17，Model、Skill、Subagent 和 MCP 则由 `SharedTuiBackend` 委托同一个具体 management service。该兼容路径保留迁移前的本机同用户产品行为，不扩展 v17 wire，也不适用于 Remote workspace。Phase 4 的 Hook、外部来源、Account、Settings Sync 和 Worktree 管理面仍可能通过 Host 中的 compatibility 路径完成，它们是当前剩余差距，不能据 Phase 3 完成状态宣称整个 TUI 已解耦。
 
 ### 2.2 Proposed target
 
@@ -105,11 +105,11 @@ Shared Runtime IPC v17 在 Shared App Server 的鉴权、实例身份、controll
 | --- | --- | --- | --- |
 | 初始化、版本、健康 | `app/initialize`、`app/health` | adapter 根据 v17 握手结果合成 TUI-facing initialize/health | Embedded 已交付；Shared 尚不是 App Server connection |
 | Agent、Permission 事件 | `agent/event`、`agent/permissionEvent` | IPC 事件桥映射为 `AppServerEvent` | 两边均可驱动当前核心 TUI；底层恢复合同不同 |
-| Config 事件 | `config/event` | 当前 Shared bridge 不投影 Config 事件 | Embedded 已接线；Shared 配置管理面仍属 Phase 3 |
+| Config 事件 | `config/event` | 当前 Shared bridge 不投影 Config 事件 | Embedded 已接线；Shared 的 TUI-facing 管理 capability 来自 Host 装配的 App Server management service，不代表 v17 已有 Config 事件 |
 | 流失效与重同步 | `app/eventStreamState`、`app/syncEvents`、`session/sync` | adapter 投影 connection-local cursor、invalidation/resync 和 closed | 已有连接内 cursor/sync；没有跨连接持久 replay/resume |
 | Session list/create/sync | `agent/listSessions`、`agent/createSession`、`session/sync` | list/create/atomic restore operation | 已交付；sync 包含 Runtime 状态、transcript、workspace binding 和 pending Permission |
 | Session delete/rename/fork | typed App Server methods | v17 controller-scoped operations | 已交付或兼容映射；Shared 继续执行 controller/idle 规则 |
-| Model/mode update | `session/updateModel`、`session/updateMode` | v17 current-controller operations | 当前 Session 更新已覆盖；完整目录和默认值仍属 Phase 3 |
+| Model/mode update | `session/updateModel`、`session/updateMode` | v17 current-controller operations | Session update wire 已覆盖；Embedded 与 Shared 都经 typed 管理 API 取得目录/defaults，Shared 的目录来自 Host 装配的 App Server management service |
 | Submit/cancel/steer | typed Agent methods | v17 Turn operations | 已交付或兼容映射 |
 | User Shell/UserInput | `agent/runUserShellCommand`、`agent/submitUserAnswers` | v17 typed operations | 已交付或兼容映射；执行和权限仍由 Runtime owner 持有 |
 | Permission pending/respond | typed Permission methods/events | v17 pending/respond and event stream | 已交付或兼容映射 |
@@ -125,13 +125,13 @@ Shared Runtime IPC v17 在 Shared App Server 的鉴权、实例身份、controll
 
 当前未交付的是跨连接持久化 cursor、历史事件 replay 和断线后的透明 resume。Shared Runtime IPC v17 仍按自己的 lag/closed、断连取消和 controller 隔离规则工作；`SharedTuiBackend` 只为当前 TUI connection 投影单调 cursor，不能把该投影描述为底层 IPC 已有 replay。
 
-### 3.3 尚未迁移的管理面
+### 3.3 管理面状态
 
-| Domain | 当前状态 | Phase 3/4 需要完成 |
+| Domain | 当前状态 | 当前结论 / 后续 |
 | --- | --- | --- |
-| Mode/Model 管理 | 当前 Session mode/model 更新已交付；目录、secret-safe CRUD 和 defaults 未形成完整 App Server 用例 | Runtime-resolved catalog、secret-safe mutation、默认值与 availability |
-| Skill/Subagent | 仍使用既有 CLI/Core 管理路径 | visible/manageable read model、override/model binding、context reload 触发规则 |
-| MCP | 仍使用既有 CLI/Core/Service 路径 | catalog/status、CRUD、restart、approval、conflict 和 events |
+| Mode/Model 管理 | Embedded 经 typed mode catalog 和 model list/get/add/update/delete/default API；read DTO 只含 secret configured metadata，mutation 使用 preserve/replace/clear | Phase 3 已完成；Shared mode catalog 来自 Runtime Host，model 管理由 Host 装配的 App Server management service 转发，Session model mutation 仍由 v17 owner 提交 |
+| Skill/Subagent | TUI 经 typed list/toggle API 消费 visible/manageable read model；App Server management service 委托既有 registry owner | Phase 3 已完成；Embedded 与 Shared 共用具体 service，Shared capability 明确属于本机 CLI compatibility scope |
+| MCP | 当前 TUI 用例经 typed catalog/status/toggle/add/delete/external decision/conflict API；read projection 与 Debug 输出不暴露凭据 | Phase 3 已完成当前定义；Shared 通过当前 CLI 进程的本地 MCP compatibility service 保留迁移前管理行为。该 service 的 MCP 进程状态和 tool registry 不会即时重配已经运行的 Shared Runtime Host；要取得 Host 侧新状态仍需显式的同步/restart contract，不能把本地 toggle 描述成 v17 远端控制 |
 | External Source/Tool/Command/Agent | 当前 App Server production fallback 明确不支持旧 external route | owner snapshot、mutation、review、conflict、generation 和 typed events |
 | Hooks | 仍使用既有 native/external hook 管理路径 | native overview 与 external import lifecycle；保持两类 Hook 分离 |
 | Account/Settings Sync | 尚无 TUI App Server 闭环 | secret-safe auth flow、sync operation identity、冲突、取消和 snapshot recovery |
@@ -182,7 +182,7 @@ Shared Runtime IPC v17 在 Shared App Server 的鉴权、实例身份、controll
 | Phase 0：边界 | `TuiBackend`、behavior-light protocol/client crate、source/Cargo guard 已建立 | Core boundary tests 和 dependency checks | 已完成 | [PR #2034 checks](https://github.com/GCWing/BitFun/pull/2034/checks) |
 | Phase 1：协议基础 | initialize/health、typed events、connection-local cursor、resync、稳定错误和 Embedded connection 已接线 | App Server protocol/client/server focused tests | 已完成 | [PR #2034 checks](https://github.com/GCWing/BitFun/pull/2034/checks) |
 | Phase 2：核心聊天 | Embedded 核心用例经 App Server；Shared 经同一 `TuiBackend` 映射 v17；TUI 核心不引用 Runtime SDK/IPC operation | CLI、App Server、Runtime IPC 和 boundary focused tests | 已完成当前定义 | [PR #2034 checks](https://github.com/GCWing/BitFun/pull/2034/checks) |
-| Phase 3：配置管理 | TUI 不再访问 config/registry/MCP compatibility owner；secret-safe typed APIs 完成 | owner tests、App Server contract tests、CLI behavior tests | 未开始 | - |
+| Phase 3：配置管理 | TUI controller 不再访问 config/registry/MCP compatibility owner；secret-safe typed APIs 完成，CLI Host adapter 可保留显式 compatibility forwarding | owner tests、App Server contract tests、CLI behavior tests | 已完成当前定义 | 本变更的 protocol/client/server/CLI focused tests 与 Core boundary checks |
 | Phase 4：外部集成 | External Source、Hook、Account、Worktree 管理面经 typed backend；remote 不回落本机 | owner/remote/security contract tests | 未开始 | - |
 | Phase 5：Shared App Server | Shared Host 达到 v17 治理等价，opt-in 双栈验证完成，并有回滚与删除证据 | 跨 transport parity、故障、性能和安全测试 | 未开始，目标待评审 | - |
 
@@ -200,12 +200,22 @@ Shared Runtime IPC v17 在 Shared App Server 的鉴权、实例身份、controll
 
 目标：移除 TUI 对全局 config、registry 和 MCP service 的直接访问。
 
+状态：已完成当前定义。
+
 完成条件：
 
 - 模型、Mode、Skill、Subagent 和 MCP 使用 owner-specific typed APIs。
 - secret 不出现在 read model、日志或 generic config payload 中。
-- capability 由 Host 注入的 provider、授权和健康状态决定。
-- 管理面 unsupported 不静默回退既有直连路径。
+- capability 由 Host 注入的 management service、授权和健康状态决定。
+- management service unavailable 时返回明确 unsupported；Shared 的本机 compatibility forwarding 必须显式装配并发布真实 capability，不能在 Remote workspace 静默回落控制端本机。
+
+交付摘要：
+
+- `app-server-protocol` 提供 Mode、Model、Skill、Subagent 和 MCP 的 owner-specific DTO 与 method；model read model 不返回 secret 值，model mutation 使用 preserve/replace/clear 语义。
+- App Server 由 Host 显式注入具体 `AppManagementService`，按 `tui.modes`、`tui.models`、`tui.skills`、`tui.subagents` 和 `tui.mcp` 发布真实 availability；service 缺失或 unavailable 时返回带 capability id 的 structured unsupported。
+- `AppManagementService` 位于 App Server server wiring，复用现有 config、registry、MCP 和 external-source owner，不成为第二个业务 owner；Startup 与 Chat controller 只经 `TuiAgentClient -> TuiBackend` 调用这些管理用例。
+- `SharedTuiBackend` 继续映射 v17 mode catalog，并将 Model、Skill、Subagent 和 MCP 管理委托 Host 装配的具体 App Server management service。v17 不承载这些目录、CRUD 或 defaults；Shared 发布的是 adapter-scoped 本地 capability，current-Session model update 仍按 v17 controller/idle/outcome-unknown 合同提交给 Runtime Host。Shared MCP service 的运行态只属于当前 CLI 进程，不宣称可以即时控制已经运行的 Shared Runtime Host。
+- Core boundary budgets 已移除 Phase 3 owner 直连债务，并要求 Startup 的 Subagent 管理继续使用 typed backend。
 
 ### 5.3 Phase 4
 
@@ -237,14 +247,15 @@ Phase 5 不以“删除 v17”为起点。建议顺序：
 ```bash
 cargo check -p bitfun-app-server --offline
 cargo test -p bitfun-app-server --offline
-cargo test -p bitfun-app-server-protocol
-cargo test -p bitfun-app-server-client
-cargo check -p bitfun-cli
-cargo test -p bitfun-cli
+cargo test -p bitfun-app-server-protocol --offline
+cargo test -p bitfun-app-server-client --offline
+cargo test -p bitfun-agent-runtime-ipc --offline
+cargo check -p bitfun-cli --bin bitfun --offline
+cargo test -p bitfun-cli --bin bitfun --offline
 pnpm run check:core-boundaries
 ```
 
-Phase 0-2 的具体命令结果和 CI 状态保留在 [PR #2034 checks](https://github.com/GCWing/BitFun/pull/2034/checks) 中，本文只保留可重复执行的验证命令和阶段状态。后续阶段必须在各自变更中重新记录验证结果，不能沿用一次性提交 SHA 作为证据。
+Phase 0-2 的具体命令结果和 CI 状态保留在 [PR #2034 checks](https://github.com/GCWing/BitFun/pull/2034/checks) 中。Phase 3 已运行上列 protocol、client、server、Runtime IPC、CLI binary 和 Core boundary focused checks；命令均通过。本文只保留可重复执行的验证命令和阶段状态，后续阶段必须在各自变更中重新记录验证结果，不能沿用一次性提交 SHA 作为证据。
 
 ### 6.2 行为等价场景
 

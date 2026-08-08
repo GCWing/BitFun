@@ -554,6 +554,12 @@ mod tests {
             "create-bitfun-skin/examples/cinematic-animated-wallpaper/SKILL.md",
         );
         assert!(example.contains("cinematic animated-wallpaper"));
+
+        let metadata = embedded_skill_text("create-bitfun-skin/agents/openai.yaml");
+        assert!(metadata.contains("display_name: \"BitFun Appearance Manual\""));
+
+        let workflow = embedded_skill_text("create-bitfun-skin/references/authoring-workflow.md");
+        assert!(workflow.contains("Bump it whenever the manifest"));
     }
 
     #[test]

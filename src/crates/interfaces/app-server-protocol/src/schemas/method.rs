@@ -1,4 +1,4 @@
-//! Stable method names and naming validation.
+//! Stable method-name schema and naming validation.
 
 pub const INITIALIZE: &str = "app/initialize";
 pub const HEALTH: &str = "app/health";

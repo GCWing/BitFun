@@ -52,18 +52,15 @@ impl ChatMode {
         rt_handle: &tokio::runtime::Handle,
     ) {
         let skills = tokio::task::block_in_place(|| {
-            let workspace = self.agent.workspace_path_buf();
-            let agent_type = self.agent_type.clone();
-            rt_handle.block_on(async {
-                let registry = SkillRegistry::global();
-                registry
-                    .get_user_invocable_skills_for_workspace(
-                        Some(workspace.as_path()),
-                        Some(&agent_type),
-                    )
-                    .await
-            })
+            rt_handle.block_on(self.agent.list_skills(self.agent_type.clone(), false))
         });
+        let skills = match skills {
+            Ok(response) => response.skills,
+            Err(error) => {
+                chat_state.add_system_message(format!("Could not load skills: {error}"));
+                return;
+            }
+        };
 
         if skills.is_empty() {
             chat_state.add_system_message(format!(
@@ -73,8 +70,10 @@ impl ChatMode {
             return;
         }
 
-        let skill_items: Vec<SkillItem> =
-            skills.into_iter().map(Self::skill_item_from_info).collect();
+        let skill_items: Vec<SkillItem> = skills
+            .into_iter()
+            .map(Self::skill_item_from_summary)
+            .collect();
 
         if skill_items.is_empty() {
             chat_state.add_system_message("No skills found.".to_string());
@@ -91,19 +90,19 @@ impl ChatMode {
         rt_handle: &tokio::runtime::Handle,
     ) {
         let skills = tokio::task::block_in_place(|| {
-            let workspace = self.agent.workspace_path_buf();
-            let agent_type = self.agent_type.clone();
-            rt_handle.block_on(async {
-                let registry = SkillRegistry::global();
-                registry
-                    .get_mode_skill_infos_for_workspace(Some(workspace.as_path()), &agent_type)
-                    .await
-            })
+            rt_handle.block_on(self.agent.list_skills(self.agent_type.clone(), true))
         });
+        let skills = match skills {
+            Ok(response) => response.skills,
+            Err(error) => {
+                chat_state.add_system_message(format!("Could not load skills: {error}"));
+                return;
+            }
+        };
 
         let skill_items: Vec<SkillItem> = skills
             .into_iter()
-            .map(Self::skill_item_from_mode_info)
+            .map(Self::skill_item_from_summary)
             .collect();
 
         if skill_items.is_empty() {
@@ -152,49 +151,21 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        let workspace = self.agent.workspace_path_buf();
         let mode_id = self.agent_type.clone();
         let skill = selected.clone();
 
-        let result: Result<(), String> = tokio::task::block_in_place(|| {
-            rt_handle.block_on(async {
-                match skill.level.as_str() {
-                    "user" => {
-                        set_user_mode_skill_state(
-                            &mode_id,
-                            &skill.key,
-                            enabled,
-                            skill.default_enabled,
-                        )
-                        .await
-                        .map_err(|error| error.to_string())?;
-                    }
-                    "project" => {
-                        let mut document = load_project_mode_skills_document_local(&workspace)
-                            .await
-                            .map_err(|error| error.to_string())?;
-                        set_mode_skill_disabled_in_document(
-                            &mut document,
-                            &mode_id,
-                            &skill.key,
-                            !enabled,
-                        )
-                        .map_err(|error| error.to_string())?;
-                        save_project_mode_skills_document_local(&workspace, &document)
-                            .await
-                            .map_err(|error| error.to_string())?;
-                    }
-                    other => {
-                        return Err(format!("Unsupported skill level '{}'", other));
-                    }
-                }
-
-                Ok(())
-            })
+        let result = tokio::task::block_in_place(|| {
+            rt_handle.block_on(self.agent.set_skill_enabled(
+                mode_id,
+                skill.key,
+                enabled,
+                skill.default_enabled,
+                skill.level,
+            ))
         });
 
         match result {
-            Ok(()) => chat_state.add_system_message(format!(
+            Ok(_) => chat_state.add_system_message(format!(
                 "Skill '{}' {} for mode '{}'.",
                 selected.name,
                 if enabled { "enabled" } else { "disabled" },
@@ -207,37 +178,20 @@ impl ChatMode {
         }
     }
 
-    fn skill_item_from_info(info: SkillInfo) -> SkillItem {
+    fn skill_item_from_summary(info: SkillSummary) -> SkillItem {
         SkillItem {
             key: info.key,
             name: info.name,
             description: info.description,
-            level: info.level.as_str().to_string(),
-            source_slot: info.source_slot,
-            source_label: info.source_label,
-            enabled: true,
-            selected_for_runtime: true,
-            default_enabled: true,
+            level: info.level,
+            source_slot: info.source_slot.unwrap_or_default(),
+            source_label: info.source_label.unwrap_or_default(),
+            enabled: info.enabled,
+            selected_for_runtime: info.selected_for_runtime,
+            default_enabled: info.default_enabled,
             is_shadowed: info.is_shadowed,
             shadowed_by_key: info.shadowed_by_key,
             argument_hint: info.argument_hint,
-        }
-    }
-
-    fn skill_item_from_mode_info(info: ModeSkillInfo) -> SkillItem {
-        SkillItem {
-            key: info.skill.key,
-            name: info.skill.name,
-            description: info.skill.description,
-            level: info.skill.level.as_str().to_string(),
-            source_slot: info.skill.source_slot,
-            source_label: info.skill.source_label,
-            enabled: info.effective_enabled,
-            selected_for_runtime: info.selected_for_runtime,
-            default_enabled: info.default_enabled,
-            is_shadowed: info.skill.is_shadowed,
-            shadowed_by_key: info.skill.shadowed_by_key,
-            argument_hint: info.skill.argument_hint,
         }
     }
 
@@ -257,18 +211,16 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        let registry = get_agent_registry();
         let subagents = tokio::task::block_in_place(|| {
-            let workspace = self.agent.workspace_path_buf();
-            let agent_type = self.agent_type.clone();
-            rt_handle.block_on(registry.get_subagents_for_query(&SubagentQueryContext {
-                parent_agent_type: Some(&agent_type),
-                workspace_root: Some(workspace.as_path()),
-                list_scope: SubagentListScope::TaskVisible,
-                include_disabled: false,
-                external_sources_supported: true,
-            }))
+            rt_handle.block_on(self.agent.list_subagents(self.agent_type.clone(), false))
         });
+        let subagents = match subagents {
+            Ok(response) => response.subagents,
+            Err(error) => {
+                chat_state.add_system_message(format!("Could not load subagents: {error}"));
+                return;
+            }
+        };
 
         if subagents.is_empty() {
             chat_state.add_system_message(format!(
@@ -280,7 +232,7 @@ impl ChatMode {
 
         let subagent_items: Vec<SubagentItem> = subagents
             .into_iter()
-            .map(Self::subagent_item_from_info)
+            .map(Self::subagent_item_from_summary)
             .collect();
 
         if subagent_items.is_empty() {
@@ -297,26 +249,21 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        let registry = get_agent_registry();
         let subagents = tokio::task::block_in_place(|| {
-            let workspace = self.agent.workspace_path_buf();
-            let agent_type = self.agent_type.clone();
-            rt_handle.block_on(registry.get_subagents_for_query(&SubagentQueryContext {
-                parent_agent_type: Some(&agent_type),
-                workspace_root: Some(workspace.as_path()),
-                list_scope: SubagentListScope::RegistryManagement,
-                include_disabled: true,
-                external_sources_supported: true,
-            }))
+            rt_handle.block_on(self.agent.list_subagents(self.agent_type.clone(), true))
         });
-
-        let has_external_subagents = subagents
-            .iter()
-            .any(|info| info.subagent_source == Some(SubAgentSource::External));
-        let subagent_items: Vec<SubagentItem> = subagents
+        let response = match subagents {
+            Ok(response) => response,
+            Err(error) => {
+                chat_state.add_system_message(format!("Could not load subagents: {error}"));
+                return;
+            }
+        };
+        let has_external_subagents = response.has_external;
+        let subagent_items: Vec<SubagentItem> = response
+            .subagents
             .into_iter()
-            .filter(|info| info.subagent_source != Some(SubAgentSource::External))
-            .map(Self::subagent_item_from_info)
+            .map(Self::subagent_item_from_summary)
             .collect();
 
         if subagent_items.is_empty() {
@@ -373,27 +320,18 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        let registry = get_agent_registry();
-        let workspace = self.agent.workspace_path_buf();
         let mode_id = self.agent_type.clone();
         let subagent = selected.clone();
 
-        let result: Result<(), String> = tokio::task::block_in_place(|| {
-            rt_handle.block_on(async {
-                registry
-                    .update_subagent_override(
-                        &mode_id,
-                        &subagent.id,
-                        enabled,
-                        Some(workspace.as_path()),
-                    )
-                    .await
-                    .map_err(|error| error.to_string())
-            })
+        let result = tokio::task::block_in_place(|| {
+            rt_handle.block_on(
+                self.agent
+                    .set_subagent_enabled(mode_id, subagent.id, enabled),
+            )
         });
 
         match result {
-            Ok(()) => chat_state.add_system_message(format!(
+            Ok(_) => chat_state.add_system_message(format!(
                 "Subagent '{}' {} for mode '{}'.",
                 selected.name,
                 if enabled { "enabled" } else { "disabled" },
@@ -406,23 +344,14 @@ impl ChatMode {
         }
     }
 
-    fn subagent_item_from_info(info: AgentInfo) -> SubagentItem {
-        let source = match info.subagent_source {
-            Some(SubAgentSource::Builtin) => "builtin",
-            Some(SubAgentSource::Project) => "project",
-            Some(SubAgentSource::User) => "user",
-            Some(SubAgentSource::External) => "external",
-            None => "builtin",
-        }
-        .to_string();
-
+    fn subagent_item_from_summary(info: SubagentSummary) -> SubagentItem {
         SubagentItem {
             key: info.key,
             id: info.id,
             name: info.name,
             description: info.description,
-            source,
-            enabled: info.effective_enabled,
+            source: info.source,
+            enabled: info.enabled,
         }
     }
 }

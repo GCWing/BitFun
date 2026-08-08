@@ -9,6 +9,7 @@ const tag = requireArg(args, 'tag');
 const repo = requireArg(args, 'repo');
 const out = requireArg(args, 'out');
 const requiredPlatforms = parseListArg(args['required-platforms'] || '');
+const manualAssetsDir = args['manual-assets-dir'];
 
 if (!existsSync(assetsDir)) {
   fail(`Assets directory does not exist: ${assetsDir}`);
@@ -54,6 +55,22 @@ const manifest = {
   pub_date: new Date().toISOString(),
   platforms,
 };
+
+if (manualAssetsDir) {
+  const installerName = `BitFun_${version}_windows-x86_64-installer.exe`;
+  const installerPath = join(manualAssetsDir, installerName);
+  const signaturePath = `${installerPath}.sig`;
+  if (!existsSync(installerPath) || !existsSync(signaturePath)) {
+    fail(`Missing signed manual installer pair: ${installerPath} and ${signaturePath}`);
+  }
+  const assetUrl = `https://github.com/${repo}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(installerName)}`;
+  manifest.manual_installers = {
+    'windows-x86_64': {
+      url: assetUrl,
+      signature_url: `${assetUrl}.sig`,
+    },
+  };
+}
 
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');

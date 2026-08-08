@@ -71,4 +71,28 @@ describe('ConfigAPI batch config reads', () => {
       },
     }, undefined);
   });
+
+  it('saves cloud speech configuration through one domain command', async () => {
+    invokeMock.mockResolvedValueOnce({ modelId: 'speech-1', created: true });
+
+    await expect(configAPI.saveCloudSpeechConfig({
+      preset: 'qwen',
+      name: 'Qwen ASR',
+      baseUrl: 'https://example.com/v1',
+      requestUrl: 'https://example.com/v1/audio/transcriptions',
+      modelName: 'qwen-asr',
+      apiKey: 'secret',
+    })).resolves.toEqual({ modelId: 'speech-1', created: true });
+
+    expect(invokeMock).toHaveBeenCalledWith('save_cloud_speech_config', {
+      request: {
+        preset: 'qwen',
+        name: 'Qwen ASR',
+        baseUrl: 'https://example.com/v1',
+        requestUrl: 'https://example.com/v1/audio/transcriptions',
+        modelName: 'qwen-asr',
+        apiKey: 'secret',
+      },
+    });
+  });
 });

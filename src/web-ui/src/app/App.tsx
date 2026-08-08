@@ -829,6 +829,54 @@ function App() {
     };
   }, [interactiveShellReady, t]);
 
+  useEffect(() => {
+    if (!interactiveShellReady) {
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { configAPI } = await import('@/infrastructure/api');
+        const validation = await configAPI.validateConfig();
+        const recoveryDiagnostics = (validation.diagnostics || []).filter(diagnostic =>
+          diagnostic.code === 'CONFIG_DEFAULT_RECOVERY' ||
+          diagnostic.code === 'CONFIG_SHAPE_REPAIRED' ||
+          diagnostic.code === 'INVALID_MODEL_DISABLED' ||
+          diagnostic.code === 'MODEL_FIELD_NOT_APPLICABLE' ||
+          diagnostic.code === 'MODEL_REFERENCE_REPAIRED'
+        );
+        if (cancelled || recoveryDiagnostics.length === 0) {
+          return;
+        }
+        const recoveryKey = `bitfun:config-recovery-notice:${recoveryDiagnostics
+          .map(diagnostic => `${diagnostic.code}:${diagnostic.path}`)
+          .join('|')}`;
+        if (sessionStorage.getItem(recoveryKey) === 'shown') {
+          return;
+        }
+        sessionStorage.setItem(recoveryKey, 'shown');
+        notificationService.warning(t('logging.configRecovery.message', {
+          count: recoveryDiagnostics.length,
+        }), {
+          title: t('logging.configRecovery.title'),
+          duration: 0,
+          metadata: {
+            source: 'config-startup-recovery',
+            diagnosticCodes: recoveryDiagnostics.map(diagnostic => diagnostic.code),
+            diagnosticPaths: recoveryDiagnostics.map(diagnostic => diagnostic.path),
+          },
+        });
+      } catch (error) {
+        log.warn('Failed to check configuration recovery status', error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [interactiveShellReady, t]);
+
   // Unified layout via a single AppLayout
   return (
     <ChatProvider>

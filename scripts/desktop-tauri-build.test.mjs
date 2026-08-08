@@ -125,6 +125,39 @@ test('Desktop Tauri projection consumes only the resolved member identity', () =
   }
 });
 
+test('Windows updater installs NSIS packages without showing its progress window', () => {
+  const fixture = join(tmpdir(), `bitfun-tauri-updater-${process.pid}-${Date.now()}`);
+  const baseConfig = join(fixture, 'tauri.conf.json');
+  const updaterEnv = {
+    BITFUN_ENABLE_UPDATER_ARTIFACTS: process.env.BITFUN_ENABLE_UPDATER_ARTIFACTS,
+    TAURI_SIGNING_PRIVATE_KEY: process.env.TAURI_SIGNING_PRIVATE_KEY,
+    TAURI_UPDATER_PUBKEY: process.env.TAURI_UPDATER_PUBKEY,
+  };
+  mkdirSync(fixture, { recursive: true });
+  writeFileSync(baseConfig, JSON.stringify({ bundle: { resources: {} } }));
+  process.env.BITFUN_ENABLE_UPDATER_ARTIFACTS = 'true';
+  process.env.TAURI_SIGNING_PRIVATE_KEY = 'test-private-key';
+  process.env.TAURI_UPDATER_PUBKEY = 'test-public-key';
+
+  try {
+    const generated = prepareTauriConfig(baseConfig, {
+      desktopDir: fixture,
+      flashgrepBinary: join(fixture, 'flashgrep'),
+    });
+    const config = JSON.parse(readFileSync(generated, 'utf8'));
+    assert.equal(config.plugins.updater.windows.installMode, 'quiet');
+  } finally {
+    for (const [name, value] of Object.entries(updaterEnv)) {
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
+    }
+    rmSync(fixture, { force: true, recursive: true });
+  }
+});
+
 test('Desktop release config bundles models.dev notices and provenance', () => {
   const config = JSON.parse(
     readFileSync(join(ROOT, 'src', 'apps', 'desktop', 'tauri.conf.json'), 'utf8')

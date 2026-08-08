@@ -3,6 +3,18 @@ import type {
   PromptCommandAvailability,
 } from '@/infrastructure/api/service-api/ExternalSourcesAPI';
 
+/**
+ * Why a command needs a decision before it can run.
+ *
+ * Mirrors the states the TUI command menu already surfaces so both entry
+ * points describe the same catalog facts. Each surface renders them with its
+ * own copy and layout; only the derivation is shared, through the snapshot.
+ */
+export type ExternalPromptCommandStatus =
+  | 'available'
+  | 'restricted'
+  | 'choose_source';
+
 export interface ExternalPromptCommandItem {
   id: string;
   command: string;
@@ -13,6 +25,9 @@ export interface ExternalPromptCommandItem {
   unavailableReason?: string;
   conflictKey?: string;
   expectedPreferenceRevision?: number;
+  /** Owning ecosystem, so the list can name the application behind a command. */
+  ecosystemId?: string;
+  status: ExternalPromptCommandStatus;
 }
 
 export type ExternalPromptCommandInvocation =
@@ -80,6 +95,16 @@ function availabilityFacts(availability: PromptCommandAvailability): {
   };
 }
 
+/**
+ * Restricted wins over conflict: a command the policy already blocks cannot be
+ * fixed by picking a source, so showing "choose this source" would be a dead
+ * end. This ordering matches the TUI command menu.
+ */
+function commandStatus(available: boolean, hasConflict: boolean): ExternalPromptCommandStatus {
+  if (!available) return 'restricted';
+  return hasConflict ? 'choose_source' : 'available';
+}
+
 export function buildExternalPromptCommandItems(
   snapshot: ExternalSourceCatalogSnapshot,
 ): ExternalPromptCommandItem[] {
@@ -87,6 +112,12 @@ export function buildExternalPromptCommandItems(
     snapshot.sources.map(source => [
       `${source.record.key.providerId}:${source.record.key.sourceId}`,
       source.record.displayName,
+    ]),
+  );
+  const sourceEcosystems = new Map(
+    snapshot.sources.map(source => [
+      `${source.record.key.providerId}:${source.record.key.sourceId}`,
+      source.record.ecosystemId,
     ]),
   );
   const items = new Map<string, ExternalPromptCommandItem>();
@@ -101,13 +132,16 @@ export function buildExternalPromptCommandItems(
     }
     const sourceKey = `${definition.id.source.providerId}:${definition.id.source.sourceId}`;
     const sourceLabel = sourceLabels.get(sourceKey) ?? definition.id.source.providerId;
+    const facts = availabilityFacts(definition.availability);
     items.set(candidateId, {
       id: candidateId,
       command: `/${definition.name}`,
       label: `${definition.description || definition.name} · ${sourceLabel}`,
       candidateId,
       contentVersion: definition.contentVersion,
-      ...availabilityFacts(definition.availability),
+      ecosystemId: sourceEcosystems.get(sourceKey),
+      status: commandStatus(facts.available, false),
+      ...facts,
     });
   }
 
@@ -119,6 +153,7 @@ export function buildExternalPromptCommandItems(
       if (items.has(candidate.candidateId)) {
         continue;
       }
+      const facts = availabilityFacts(candidate.availability);
       items.set(candidate.candidateId, {
         id: candidate.candidateId,
         command: `/${conflict.commandName}`,
@@ -127,7 +162,10 @@ export function buildExternalPromptCommandItems(
         contentVersion: candidate.contentVersion,
         conflictKey: conflict.conflictKey,
         expectedPreferenceRevision: snapshot.preferenceRevision ?? 0,
-        ...availabilityFacts(candidate.availability),
+        ecosystemId: candidate.ecosystemId,
+        // A resolved conflict no longer asks the user to pick a source.
+        status: commandStatus(facts.available, !conflict.selectedCandidateId),
+        ...facts,
       });
     }
   }

@@ -147,6 +147,10 @@
       "title": "Previous session ended unexpectedly",
       "message": "BitFun found a crash report from the previous session. You can export diagnostics if you want to report the issue."
     },
+    "configRecovery": {
+      "title": "Configuration recovered",
+      "message": "BitFun repaired or isolated {{count}} configuration issue(s) so the app could start. Review your model settings before continuing."
+    },
     "levels": {
       "trace": "Trace",
       "debug": "Debug",

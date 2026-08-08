@@ -66,6 +66,29 @@ describe('ExternalSourcesAPI', () => {
     adapterMocks.isConnected.mockReturnValue(true);
   });
 
+  it('reads and acknowledges backend-owned ecosystem awareness', async () => {
+    invokeMock
+      .mockResolvedValueOnce({ unacknowledgedEcosystemIds: ['opencode', 'codex'] })
+      .mockResolvedValueOnce(undefined);
+
+    await expect(externalSourcesAPI.getEcosystemAwareness('D:/workspace/project'))
+      .resolves.toEqual(['opencode', 'codex']);
+    await externalSourcesAPI.acknowledgeEcosystems(
+      'D:/workspace/project',
+      ['opencode', 'codex'],
+    );
+
+    expect(invokeMock).toHaveBeenNthCalledWith(1, 'get_external_ecosystem_awareness_command', {
+      request: { workspacePath: 'D:/workspace/project' },
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, 'acknowledge_external_ecosystems_command', {
+      request: {
+        workspacePath: 'D:/workspace/project',
+        ecosystemIds: ['opencode', 'codex'],
+      },
+    });
+  });
+
   it('keeps workspace ownership and refresh intent in the public snapshot request', async () => {
     await externalSourcesAPI.getSnapshot('D:/workspace/project', true);
 

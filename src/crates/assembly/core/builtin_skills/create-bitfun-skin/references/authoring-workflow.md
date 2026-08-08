@@ -43,6 +43,8 @@ When a checkout is available, first check registry synchronization and then run 
 
 For generated skins, record source paths and hashes, style input hashes, build parameters, output hashes, registry provenance, host verification, and runtime inspection state. Rebuild from the record and provide a read-only drift check.
 
+Treat the manifest `version` as the release identity of the importable package. Bump it whenever the manifest, declared assets, renderer settings, selected surfaces, or host-compatibility migration changes. Use a patch bump for compatible corrections and a minor bump for new visual coverage or capabilities. Preserve the version only for a byte-equivalent rebuild of the same package content or when changing reports and other files outside `package/`.
+
 Keep reports, source files, and contact sheets outside the importable `package/` directory.
 
 ## 7. Inspect at runtime

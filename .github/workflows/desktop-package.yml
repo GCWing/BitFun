@@ -233,6 +233,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify release version metadata
+        run: node scripts/verify-release-version-sync.mjs --version "${{ needs.prepare.outputs.version }}"
+
       - name: Build desktop app
         run: ${{ matrix.platform.build_command }}
 
@@ -505,6 +508,20 @@ jobs:
           echo "Relay image descriptor:"
           find relay-image-assets -type f | sort
 
+      - name: Prepare versioned Windows installer
+        run: |
+          node scripts/prepare-windows-installer-asset.mjs \
+            --assets-dir release-assets \
+            --version "${{ needs.prepare.outputs.version }}" \
+            --out-dir release-manual-assets
+
+      - name: Sign versioned Windows installer
+        shell: bash
+        env:
+          BITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          BITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: bash scripts/sign-release-assets.sh release-manual-assets/*.exe
+
       - name: Collect updater assets
         run: |
           node scripts/collect-tauri-updater-assets.mjs \
@@ -517,6 +534,7 @@ jobs:
         run: |
           node scripts/generate-tauri-latest-json.mjs \
             --assets-dir release-updater-assets \
+            --manual-assets-dir release-manual-assets \
             --version "${{ needs.prepare.outputs.version }}" \
             --tag "${{ needs.prepare.outputs.release_tag }}" \
             --repo "GCWing/BitFun" \
@@ -528,7 +546,8 @@ jobs:
           node scripts/verify-tauri-latest-json.mjs \
             --manifest release-updater-assets/latest.json \
             --version "${{ needs.prepare.outputs.version }}" \
-            --required-platforms "${REQUIRED_UPDATER_PLATFORMS}"
+            --required-platforms "${REQUIRED_UPDATER_PLATFORMS}" \
+            --required-manual-platforms "windows-x86_64"
 
       - name: Generate Linux binaries manifest
         run: |
@@ -556,7 +575,7 @@ jobs:
           mapfile -t assets < <(
             find release-assets -type f \
               \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \
-                 -o -name '*.dmg' -o -name '*bitfun-installer.exe' \) | sort
+                 -o -name '*.dmg' \) | sort
           )
           if [[ "${#assets[@]}" -eq 0 ]]; then
             echo "No installer packages found to sign."
@@ -575,11 +594,12 @@ jobs:
           generate_release_notes: true
           files: |
             release-updater-assets/*
+            release-manual-assets/*.exe
+            release-manual-assets/*.exe.sig
             release-assets/**/*.AppImage
             release-assets/**/*.deb
             release-assets/**/*.dmg
             release-assets/**/*.rpm
-            release-assets/**/*bitfun-installer.exe
             release-assets/**/*.sig
             release-assets/minisign.pub
             linux-release-assets/bitfun-cli-*.tar.gz
@@ -602,6 +622,7 @@ jobs:
             --manifest latest.published.json \
             --version "${{ needs.prepare.outputs.version }}" \
             --required-platforms "${REQUIRED_UPDATER_PLATFORMS}" \
+            --required-manual-platforms "windows-x86_64" \
             --check-urls true
 
       - name: Verify published Linux binaries manifest

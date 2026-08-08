@@ -666,7 +666,11 @@ async function main() {
     },
     {
       name: 'Generate version info',
-      promise: runCommandPrefixed('version', 'node', ['scripts/generate-version.cjs']),
+      promise: runCommandPrefixed('version', 'node', [
+        'scripts/generate-version.cjs',
+        '--build-env',
+        'development',
+      ]),
     },
   ];
 

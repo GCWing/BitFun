@@ -1853,6 +1853,14 @@ test('services-core capability profiles keep heavy owners out of the empty profi
     'dep:sha2',
     'tokio/fs',
   ]);
+  assert.deepEqual(profiles.get('json-io'), [
+    'dep:fs2',
+    'dep:windows',
+    'tokio/fs',
+    'tokio/sync',
+    'windows/Win32_Foundation',
+    'windows/Win32_Storage_FileSystem',
+  ]);
   assert.deepEqual(profiles.get('local-storage'), [
     'dep:bitfun-core-types',
     'dep:bitfun-events',
@@ -1967,6 +1975,7 @@ test('services-core Tokio capabilities stay owner-scoped', () => {
     ],
     features: {
       filesystem: [],
+      'json-io': [],
       'local-storage': [],
       'process-runtime': [],
       'workspace-instructions': [],

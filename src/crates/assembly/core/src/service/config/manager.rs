@@ -2,10 +2,15 @@
 //!
 //! A complete configuration management system based on the Provider mechanism.
 
+use super::normalization::{
+    isolate_invalid_ai_models, normalize_config_value, normalize_typed_config,
+    reconcile_model_references, reject_unsupported_schema,
+};
 use super::providers::ConfigProviderRegistry;
 use super::types::*;
 use crate::infrastructure::{try_get_path_manager_arc, PathManager};
 use crate::util::errors::*;
+use bitfun_services_core::json_store::JsonFileStore;
 use log::{debug, info, warn};
 
 use serde::{Deserialize, Serialize};
@@ -13,9 +18,6 @@ use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs;
-
-type ConfigMigrationFn = fn(Value) -> BitFunResult<Value>;
-type ConfigMigration = (&'static str, &'static str, ConfigMigrationFn);
 
 fn invalid_config_error(context: &str, result: &ConfigValidationResult) -> BitFunError {
     let messages = result
@@ -143,12 +145,6 @@ pub(crate) fn strip_removed_model_reasoning_fields(mut config: Value) -> Value {
     config
 }
 
-fn normalize_legacy_config_value(config: Value) -> Value {
-    strip_removed_model_reasoning_fields(normalize_legacy_tool_permissions_config_value(
-        normalize_legacy_agent_model_defaults_config_value(config),
-    ))
-}
-
 fn config_value_for_persistence(config: &GlobalConfig) -> BitFunResult<Value> {
     let mut value = serde_json::to_value(config)
         .map_err(|e| BitFunError::config(format!("Failed to serialize config: {}", e)))?;
@@ -204,6 +200,8 @@ pub struct ConfigManager {
     providers: ConfigProviderRegistry,
     config_file: PathBuf,
     path_manager: Arc<PathManager>,
+    backup_count: usize,
+    load_diagnostics: Vec<ConfigDiagnostic>,
 }
 
 /// Configuration manager settings.
@@ -238,6 +236,7 @@ impl ConfigManager {
         let config_file = path_manager.app_config_file();
 
         let providers = ConfigProviderRegistry::new();
+        let backup_count = settings.backup_count;
 
         let mut manager = Self {
             config_dir,
@@ -245,6 +244,8 @@ impl ConfigManager {
             providers,
             config_file,
             path_manager,
+            backup_count,
+            load_diagnostics: Vec::new(),
         };
 
         manager.load_or_create_config().await?;
@@ -290,12 +291,27 @@ impl ConfigManager {
             .await
             .map_err(|e| BitFunError::config(format!("Failed to read config file: {}", e)))?;
 
-        let mut config_value: Value = serde_json::from_str(&content).map_err(|e| {
-            BitFunError::config(format!("Failed to parse config file as JSON: {}", e))
-        })?;
-        let normalized_config_value = normalize_legacy_config_value(config_value.clone());
-        let legacy_config_normalized = normalized_config_value != config_value;
-        config_value = normalized_config_value;
+        let config_value: Value = match serde_json::from_str(&content) {
+            Ok(value) => value,
+            Err(error) => {
+                return self
+                    .activate_default_recovery(
+                        &content,
+                        "invalid-json",
+                        format!("Failed to parse config file as JSON: {error}"),
+                    )
+                    .await;
+            }
+        };
+        let normalized = normalize_config_value(config_value);
+        if let Err(error) = reject_unsupported_schema(&normalized.diagnostics) {
+            return self
+                .activate_default_recovery(&content, "unsupported-schema", error.to_string())
+                .await;
+        }
+        let mut config_value = normalized.value;
+        let mut load_diagnostics = normalized.diagnostics;
+        let compatibility_normalized = normalized.changed;
 
         let file_version = config_value
             .get("version")
@@ -305,16 +321,12 @@ impl ConfigManager {
 
         let current_version = env!("CARGO_PKG_VERSION").to_string();
 
-        let needs_migration = !versions_match(&file_version, &current_version);
-        if needs_migration {
+        let app_version_changed = !versions_match(&file_version, &current_version);
+        if app_version_changed {
             info!(
-                "Config version change detected: {} -> {}",
+                "Config application version updated: {} -> {}",
                 file_version, current_version
             );
-            config_value = self
-                .migrate_config_version(&file_version, config_value)
-                .await?;
-
             if let Some(obj) = config_value.as_object_mut() {
                 obj.insert(
                     "version".to_string(),
@@ -325,8 +337,11 @@ impl ConfigManager {
 
         match serde_json::from_value::<GlobalConfig>(config_value.clone()) {
             Ok(mut config) => {
-                Self::ensure_models_config(&mut config.ai.models);
+                load_diagnostics.extend(normalize_typed_config(&mut config));
                 Self::add_default_func_agent_models_config(&mut config.ai.func_agent_models);
+
+                load_diagnostics.extend(isolate_invalid_ai_models(&mut config).await?);
+                load_diagnostics.extend(reconcile_model_references(&mut config).diagnostics);
 
                 self.config = config;
 
@@ -338,13 +353,22 @@ impl ConfigManager {
                     ));
                 }
 
-                if needs_migration || legacy_config_normalized {
+                if compatibility_normalized || !load_diagnostics.is_empty() {
+                    self.backup_raw_config(&content, "startup-normalization")
+                        .await?;
+                }
+                if app_version_changed || compatibility_normalized || !load_diagnostics.is_empty() {
                     self.config.version = current_version;
                     self.save_config().await?;
-                    info!("Config normalized and saved");
+                    info!(
+                        "Config normalized and saved: diagnostics={}",
+                        load_diagnostics.len()
+                    );
                 } else {
                     debug!("Loaded config from file");
                 }
+
+                self.load_diagnostics = load_diagnostics;
 
                 Ok(())
             }
@@ -353,15 +377,42 @@ impl ConfigManager {
                     "Config file deserialization failed, starting smart merge: {}",
                     e
                 );
+                self.backup_raw_config(&content, "pre-smart-merge").await?;
 
-                self.smart_merge_config_from_value(config_value).await
+                match self.smart_merge_config_from_value(config_value).await {
+                    Ok(()) => {
+                        self.load_diagnostics.insert(
+                            0,
+                            ConfigDiagnostic {
+                                path: "$".to_string(),
+                                message: format!(
+                                    "Repaired an incompatible configuration shape after typed deserialization failed: {e}"
+                                ),
+                                code: "CONFIG_SHAPE_REPAIRED".to_string(),
+                                severity: ConfigDiagnosticSeverity::Warning,
+                                recoverability: ConfigDiagnosticRecoverability::AutoFix,
+                            },
+                        );
+                        Ok(())
+                    }
+                    Err(merge_error) => {
+                        self.activate_default_recovery(
+                            &content,
+                            "invalid-shape",
+                            format!(
+                                "Config deserialization and smart merge failed: deserialize={e}; merge={merge_error}"
+                            ),
+                        )
+                        .await
+                    }
+                }
             }
         }
     }
 
     /// Performs a smart merge from a JSON value.
     async fn smart_merge_config_from_value(&mut self, user_value: Value) -> BitFunResult<()> {
-        let user_value = normalize_legacy_config_value(user_value);
+        let user_value = normalize_config_value(user_value).value;
         let base_config = self.providers.get_default_config();
 
         let base_value = serde_json::to_value(&base_config).map_err(|e| {
@@ -373,8 +424,10 @@ impl ConfigManager {
             BitFunError::config(format!("Failed to deserialize merged config: {}", e))
         })?;
 
-        Self::ensure_models_config(&mut config.ai.models);
+        let mut load_diagnostics = normalize_typed_config(&mut config);
         Self::add_default_func_agent_models_config(&mut config.ai.func_agent_models);
+        load_diagnostics.extend(isolate_invalid_ai_models(&mut config).await?);
+        load_diagnostics.extend(reconcile_model_references(&mut config).diagnostics);
 
         self.config = config;
 
@@ -388,21 +441,39 @@ impl ConfigManager {
 
         self.config.version = env!("CARGO_PKG_VERSION").to_string();
         self.save_config().await?;
+        self.load_diagnostics = load_diagnostics;
         info!("Config automatically fixed and saved");
 
         Ok(())
     }
 
-    /// Auto-completes missing fields in model configuration (backward compatible).
-    /// Ensures older configurations won't panic.
-    fn ensure_models_config(models: &mut [AIModelConfig]) {
-        for model in models.iter_mut() {
-            model.ensure_category_and_capabilities();
-        }
-        debug!(
-            "Auto-completed category and capabilities for {} models",
-            models.len()
+    async fn activate_default_recovery(
+        &mut self,
+        raw_content: &str,
+        reason: &str,
+        message: String,
+    ) -> BitFunResult<()> {
+        let backup_path = self.backup_raw_config(raw_content, reason).await?;
+        self.config = self.providers.get_default_config();
+        Self::add_default_func_agent_models_config(&mut self.config.ai.func_agent_models);
+        self.config.version = env!("CARGO_PKG_VERSION").to_string();
+        self.config.schema_version = CURRENT_CONFIG_SCHEMA_VERSION;
+        self.load_diagnostics = vec![ConfigDiagnostic {
+            path: "$".to_string(),
+            message: format!(
+                "{message}. Started with in-memory defaults; original configuration was preserved at {}",
+                backup_path.display()
+            ),
+            code: "CONFIG_DEFAULT_RECOVERY".to_string(),
+            severity: ConfigDiagnosticSeverity::Warning,
+            recoverability: ConfigDiagnosticRecoverability::DefaultsUsed,
+        }];
+        warn!(
+            "Configuration recovery activated: reason={}, backup_path={}",
+            reason,
+            backup_path.display()
         );
+        Ok(())
     }
 
     /// Adds default configuration for functional agents (`func_agent_models`).
@@ -422,27 +493,6 @@ impl ConfigManager {
         }
     }
 
-    /// Migrates configuration versions.
-    async fn migrate_config_version(
-        &self,
-        from_version: &str,
-        mut config: Value,
-    ) -> BitFunResult<Value> {
-        let migrations: Vec<ConfigMigration> = vec![("0.0.0", "1.0.0", migrate_0_0_0_to_1_0_0)];
-
-        let mut current_version = from_version.to_string();
-
-        for (from, to, migrate_fn) in migrations {
-            if version_gte(&current_version, from) && version_lt(&current_version, to) {
-                debug!("Executing migration: {} -> {}", from, to);
-                config = migrate_fn(config)?;
-                current_version = to.to_string();
-            }
-        }
-
-        Ok(config)
-    }
-
     /// Saves the configuration file.
     async fn save_config(&self) -> BitFunResult<()> {
         let content = serde_json::to_string_pretty(&config_value_for_persistence(&self.config)?)
@@ -459,12 +509,75 @@ impl ConfigManager {
             }
         }
 
-        fs::write(&self.config_file, content).await.map_err(|e| {
-            BitFunError::config(format!(
-                "Failed to write config file {:?}: {}",
-                self.config_file, e
-            ))
-        })?;
+        JsonFileStore
+            .write_text_atomic_strict(&self.config_file, &content)
+            .await
+            .map_err(|e| {
+                BitFunError::config(format!(
+                    "Failed to atomically write config file {:?}: {}",
+                    self.config_file, e
+                ))
+            })?;
+        Ok(())
+    }
+
+    async fn backup_raw_config(&self, content: &str, reason: &str) -> BitFunResult<PathBuf> {
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S_%3f");
+        let backup_dir = self.config_dir.join("backups");
+        fs::create_dir_all(&backup_dir)
+            .await
+            .map_err(|e| BitFunError::config(format!("Failed to create backup directory: {e}")))?;
+        let backup_file = backup_dir.join(format!("app_{reason}_{timestamp}.json"));
+        fs::write(&backup_file, content)
+            .await
+            .map_err(|e| BitFunError::config(format!("Failed to write config backup: {e}")))?;
+        self.prune_backups(&backup_dir).await?;
+        info!(
+            "Created pre-repair config backup: path={}",
+            backup_file.display()
+        );
+        Ok(backup_file)
+    }
+
+    async fn prune_backups(&self, backup_dir: &std::path::Path) -> BitFunResult<()> {
+        if self.backup_count == 0 {
+            return Ok(());
+        }
+        let mut entries = fs::read_dir(backup_dir)
+            .await
+            .map_err(|e| BitFunError::config(format!("Failed to read backup directory: {e}")))?;
+        let mut files = Vec::new();
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| BitFunError::config(format!("Failed to enumerate backups: {e}")))?
+        {
+            let is_repair_backup = entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name.starts_with("app_") && name.ends_with(".json"));
+            if !is_repair_backup {
+                continue;
+            }
+            let metadata = entry
+                .metadata()
+                .await
+                .map_err(|e| BitFunError::config(format!("Failed to inspect backup: {e}")))?;
+            if metadata.is_file() {
+                files.push((metadata.modified().ok(), entry.path()));
+            }
+        }
+        files.sort_by_key(|(modified, _)| *modified);
+        let remove_count = files.len().saturating_sub(self.backup_count);
+        for (_, path) in files.into_iter().take(remove_count) {
+            if let Err(error) = fs::remove_file(&path).await {
+                warn!(
+                    "Failed to prune old config backup: path={}, error={}",
+                    path.display(),
+                    error
+                );
+            }
+        }
         Ok(())
     }
 
@@ -494,6 +607,9 @@ impl ConfigManager {
 
         let path = canonical_config_path(path);
         self.set_value_by_path(path, json_value)?;
+        // Apply capability-driven canonicalization before validation and persistence.
+        // Speech/embedding/image-only models must never carry text-generation sentinels.
+        normalize_typed_config(&mut self.config);
         self.config.last_modified = chrono::Utc::now();
 
         let validation_result = match self.validate_config().await {
@@ -511,7 +627,14 @@ impl ConfigManager {
             ));
         }
 
-        self.notify_config_changed(path, &old_config).await?;
+        if path.is_empty() {
+            for provider_name in self.providers.get_provider_names() {
+                self.notify_config_changed(&provider_name, &old_config)
+                    .await?;
+            }
+        } else {
+            self.notify_config_changed(path, &old_config).await?;
+        }
 
         self.save_config().await?;
 
@@ -568,6 +691,10 @@ impl ConfigManager {
         &self.config
     }
 
+    pub fn load_diagnostics(&self) -> &[ConfigDiagnostic] {
+        &self.load_diagnostics
+    }
+
     /// Validates configuration.
     pub async fn validate_config(&self) -> BitFunResult<ConfigValidationResult> {
         self.providers.validate_config(&self.config).await
@@ -582,10 +709,17 @@ impl ConfigManager {
     /// Imports configuration.
     pub async fn import_config(&mut self, config_data: serde_json::Value) -> BitFunResult<()> {
         let old_config = self.config.clone();
-        let config_data = normalize_legacy_config_value(config_data);
+        let normalized = normalize_config_value(config_data);
+        reject_unsupported_schema(&normalized.diagnostics)?;
+        let config_data = normalized.value;
 
-        let imported_config: GlobalConfig = serde_json::from_value(config_data)
+        let mut imported_config: GlobalConfig = serde_json::from_value(config_data)
             .map_err(|e| BitFunError::config(format!("Failed to parse imported config: {}", e)))?;
+
+        let mut import_diagnostics = normalized.diagnostics;
+        import_diagnostics.extend(normalize_typed_config(&mut imported_config));
+        import_diagnostics.extend(isolate_invalid_ai_models(&mut imported_config).await?);
+        import_diagnostics.extend(reconcile_model_references(&mut imported_config).diagnostics);
 
         let validation_result = self.providers.validate_config(&imported_config).await?;
         if !validation_result.valid {
@@ -596,6 +730,7 @@ impl ConfigManager {
         }
 
         self.config = imported_config;
+        self.load_diagnostics = import_diagnostics;
         self.config.last_modified = chrono::Utc::now();
 
         for provider_name in self.providers.get_provider_names() {
@@ -850,59 +985,6 @@ pub(crate) fn deep_merge(base: Value, overlay: Value) -> Value {
 /// Returns whether two versions match.
 pub(crate) fn versions_match(v1: &str, v2: &str) -> bool {
     v1 == v2
-}
-
-/// Returns whether `v1 >= v2`.
-pub(crate) fn version_gte(v1: &str, v2: &str) -> bool {
-    parse_version(v1) >= parse_version(v2)
-}
-
-/// Returns whether `v1 < v2`.
-pub(crate) fn version_lt(v1: &str, v2: &str) -> bool {
-    parse_version(v1) < parse_version(v2)
-}
-
-/// Parses a version string into a tuple `(major, minor, patch)`.
-pub(crate) fn parse_version(version: &str) -> (u32, u32, u32) {
-    let parts: Vec<&str> = version.split('.').collect();
-    let major = parts.first().and_then(|s| s.parse().ok()).unwrap_or(0);
-    let minor = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
-    let patch = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
-    (major, minor, patch)
-}
-
-/// Migration function: `0.0.0 -> 1.0.0`.
-///
-/// This migration is an example showing how to handle configuration upgrades.
-pub(crate) fn migrate_0_0_0_to_1_0_0(mut config: Value) -> BitFunResult<Value> {
-    debug!("Executing config migration: 0.0.0 -> 1.0.0");
-
-    if let Some(app) = config.get_mut("app").and_then(|v| v.as_object_mut()) {
-        if !app.contains_key("ai_experience") {
-            app.insert(
-                "ai_experience".to_string(),
-                serde_json::json!({
-                    "enable_session_title_generation": true,
-                    "enable_welcome_panel_ai_analysis": false
-                }),
-            );
-        }
-    }
-
-    if let Some(ai) = config.get_mut("ai").and_then(|v| v.as_object_mut()) {
-        if !ai.contains_key("super_agent_models") {
-            ai.insert(
-                "super_agent_models".to_string(),
-                Value::Object(serde_json::Map::new()),
-            );
-        }
-        if !ai.contains_key("sub_agent_models") {
-            ai.insert("sub_agent_models".to_string(), serde_json::json!({}));
-        }
-    }
-
-    debug!("Migration 0.0.0 -> 1.0.0 completed");
-    Ok(config)
 }
 
 #[cfg(test)]

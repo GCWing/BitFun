@@ -216,7 +216,7 @@ export function prepareTauriConfig(
         endpoints: [primaryEndpoint, fallbackEndpoint],
         pubkey,
         windows: {
-          installMode: 'passive',
+          installMode: 'quiet',
         },
       },
     };

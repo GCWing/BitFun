@@ -173,6 +173,22 @@ export function AdminPage({ account, accountResolved, locale, t }: AdminPageProp
                     )}
                   </header>
                   <dl className="review-facts">
+                    <div>
+                      <dt>{t('reviewSubmitter')}</dt>
+                      <dd>
+                        {detail.submitter ? (
+                          <a
+                            className="review-submitter"
+                            href={`https://github.com/${detail.submitter.login}`}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                          >
+                            <img src={detail.submitter.avatarUrl} alt="" loading="lazy" decoding="async" />
+                            <span>@{detail.submitter.login}</span>
+                          </a>
+                        ) : t('reviewSubmitterUnknown')}
+                      </dd>
+                    </div>
                     <div><dt>{t('packageIdentity')}</dt><dd>{detail.submission.packageId || t('notDeclared')}</dd></div>
                     <div><dt>{t('version')}</dt><dd>{detail.submission.packageVersion || t('notDeclared')}</dd></div>
                     <div><dt>{t('compatibility')}</dt><dd>{detail.submission.minBitfunVersion}</dd></div>
