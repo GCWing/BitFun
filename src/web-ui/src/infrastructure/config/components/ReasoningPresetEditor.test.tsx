@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ModelsDevReasoningCatalog } from '@/infrastructure/api/service-api/AIApi';
-import type { ReasoningConfig } from '../types';
+import type { ReasoningCatalogProjection, ReasoningConfig } from '../types';
 import ReasoningPresetEditor from './ReasoningPresetEditor';
 
 vi.mock('react-i18next', () => ({
@@ -12,14 +14,14 @@ vi.mock('react-i18next', () => ({
 }));
 
 interface SelectSpyProps {
-  'aria-label'?: string;
+  triggerAriaLabel?: string;
   value?: string | number | (string | number)[] | null;
   options?: Array<{ label: string; value: string | number }>;
   onChange?: (value: string | number | (string | number)[]) => void;
   disabled?: boolean;
-  allowCustomValue?: boolean;
   searchable?: boolean;
   clearable?: boolean;
+  allowCustomValue?: boolean;
 }
 
 const selectProps: Record<string, SelectSpyProps> = {};
@@ -38,7 +40,7 @@ vi.mock('@/component-library', () => ({
     <button type="button" {...props}>{children}</button>
   ),
   Select: (props: SelectSpyProps) => {
-    const label = props['aria-label'] ?? '';
+    const label = props.triggerAriaLabel ?? '';
     selectProps[label] = props;
     return (
       <select
@@ -85,7 +87,11 @@ const modelsDevReasoningCatalog: ModelsDevReasoningCatalog = {
   ],
 };
 
-function renderEditor(value?: ReasoningConfig) {
+function renderEditor(
+  value?: ReasoningConfig,
+  onChange?: ReturnType<typeof vi.fn>,
+  generatedProjection?: ReasoningCatalogProjection,
+) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -93,7 +99,8 @@ function renderEditor(value?: ReasoningConfig) {
     root.render(
       <ReasoningPresetEditor
         value={value ?? { catalog: { source: 'models_dev', provider: '', model: '' }, presets: [] }}
-        onChange={vi.fn()}
+        onChange={onChange ?? vi.fn()}
+        generatedProjection={generatedProjection}
         modelsDevReasoningCatalog={modelsDevReasoningCatalog}
       />,
     );
@@ -101,32 +108,33 @@ function renderEditor(value?: ReasoningConfig) {
   return { container, root };
 }
 
-describe('ReasoningPresetEditor models-dev binding', () => {
-  let root: Root;
-  let container: HTMLDivElement;
+let activeRoot: Root | null = null;
+let activeContainer: HTMLDivElement | null = null;
 
+describe('ReasoningPresetEditor models-dev binding', () => {
   beforeEach(() => {
     for (const key of Object.keys(selectProps)) delete selectProps[key];
-    container = document.createElement('div');
-    document.body.appendChild(container);
-    root = createRoot(container);
+    activeRoot = null;
+    activeContainer = null;
   });
 
   afterEach(() => {
-    act(() => root?.unmount());
-    container?.remove();
+    if (activeRoot) act(() => activeRoot!.unmount());
+    activeContainer?.remove();
   });
 
+  function render(
+    value?: ReasoningConfig,
+    onChange?: ReturnType<typeof vi.fn>,
+    generatedProjection?: ReasoningCatalogProjection,
+  ) {
+    const { container, root } = renderEditor(value, onChange, generatedProjection);
+    activeRoot = root;
+    activeContainer = container;
+  }
+
   it('has an empty provider value when no provider is selected', () => {
-    act(() => {
-      root.render(
-        <ReasoningPresetEditor
-          value={{ catalog: { source: 'models_dev', provider: '', model: '' }, presets: [] }}
-          onChange={vi.fn()}
-          modelsDevReasoningCatalog={modelsDevReasoningCatalog}
-        />,
-      );
-    });
+    render({ catalog: { source: 'models_dev', provider: '', model: '' }, presets: [] });
     const provider = selectProps['reasoningPresets.catalogProvider'];
     expect(provider).toBeTruthy();
     expect(provider?.options?.map(o => o.value)).toEqual(['', 'deepseek', 'github-copilot']);
@@ -137,15 +145,7 @@ describe('ReasoningPresetEditor models-dev binding', () => {
   });
 
   it('lists only reasoning-capable models of the selected provider', () => {
-    act(() => {
-      root.render(
-        <ReasoningPresetEditor
-          value={{ catalog: { source: 'models_dev', provider: 'deepseek', model: '' }, presets: [] }}
-          onChange={vi.fn()}
-          modelsDevReasoningCatalog={modelsDevReasoningCatalog}
-        />,
-      );
-    });
+    render({ catalog: { source: 'models_dev', provider: 'deepseek', model: '' }, presets: [] });
     const model = selectProps['reasoningPresets.catalogModel'];
     expect(model?.options?.map(o => o.value)).toEqual(['deepseek-v4-flash', 'deepseek-v4-pro']);
     expect(model?.searchable).toBe(true);
@@ -154,67 +154,209 @@ describe('ReasoningPresetEditor models-dev binding', () => {
   });
 
   it('returns empty model options for an unknown provider', () => {
-    act(() => {
-      root.render(
-        <ReasoningPresetEditor
-          value={{ catalog: { source: 'models_dev', provider: 'unknown', model: '' }, presets: [] }}
-          onChange={vi.fn()}
-          modelsDevReasoningCatalog={modelsDevReasoningCatalog}
-        />,
-      );
-    });
+    render({ catalog: { source: 'models_dev', provider: 'unknown', model: '' }, presets: [] });
     const model = selectProps['reasoningPresets.catalogModel'];
     expect(model?.options ?? []).toHaveLength(0);
   });
 
   it('lists a provider outside the BitFun built-in overlay', () => {
-    act(() => {
-      root.render(
-        <ReasoningPresetEditor
-          value={{ catalog: { source: 'models_dev', provider: 'github-copilot', model: '' }, presets: [] }}
-          onChange={vi.fn()}
-          modelsDevReasoningCatalog={modelsDevReasoningCatalog}
-        />,
-      );
-    });
+    render({ catalog: { source: 'models_dev', provider: 'github-copilot', model: '' }, presets: [] });
     const model = selectProps['reasoningPresets.catalogModel'];
     expect(model?.options?.map(o => o.value)).toEqual(['gpt-5.1-codex']);
   });
 
   it('reflects the currently bound provider and model values', () => {
-    act(() => {
-      root.render(
-        <ReasoningPresetEditor
-          value={{ catalog: { source: 'models_dev', provider: 'github-copilot', model: 'gpt-5.1-codex' }, presets: [] }}
-          onChange={vi.fn()}
-          modelsDevReasoningCatalog={modelsDevReasoningCatalog}
-        />,
-      );
-    });
+    render({ catalog: { source: 'models_dev', provider: 'github-copilot', model: 'gpt-5.1-codex' }, presets: [] });
     const provider = selectProps['reasoningPresets.catalogProvider'];
     const model = selectProps['reasoningPresets.catalogModel'];
     expect(provider?.value).toBe('github-copilot');
     expect(model?.value).toBe('gpt-5.1-codex');
   });
 
+  it('enables searchable, clearable and allowCustomValue on both binding selects', () => {
+    render();
+    const provider = selectProps['reasoningPresets.catalogProvider'];
+    const model = selectProps['reasoningPresets.catalogModel'];
+    expect(provider?.searchable).toBe(true);
+    expect(provider?.clearable).toBe(true);
+    expect(provider?.allowCustomValue).toBe(true);
+    expect(model?.searchable).toBe(true);
+    expect(model?.clearable).toBe(true);
+    expect(model?.allowCustomValue).toBe(true);
+  });
+
   it('clears the model when the provider changes', () => {
     const onChange = vi.fn();
+    render(
+      { catalog: { source: 'models_dev', provider: 'deepseek', model: 'deepseek-v4-flash' }, presets: [] },
+      onChange,
+    );
+    const provider = selectProps['reasoningPresets.catalogProvider'];
+    expect(provider).toBeTruthy();
     act(() => {
-      root.render(
-        <ReasoningPresetEditor
-          value={{ catalog: { source: 'models_dev', provider: 'deepseek', model: 'deepseek-v4-pro' }, presets: [] }}
-          onChange={onChange}
-          modelsDevReasoningCatalog={modelsDevReasoningCatalog}
-        />,
-      );
+      provider?.onChange?.('github-copilot');
     });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const updated = onChange.mock.calls[0][0] as ReasoningConfig;
+    expect(updated.catalog?.provider).toBe('github-copilot');
+    expect(updated.catalog?.model).toBe('');
+  });
 
+  it('clearing the provider falls back to the auto catalog source', () => {
+    const onChange = vi.fn();
+    render(
+      { catalog: { source: 'models_dev', provider: 'deepseek', model: 'deepseek-v4-flash' }, presets: [] },
+      onChange,
+    );
+    const provider = selectProps['reasoningPresets.catalogProvider'];
+    expect(provider).toBeTruthy();
     act(() => {
-      selectProps['reasoningPresets.catalogProvider']?.onChange?.('github-copilot');
+      provider?.onChange?.('');
     });
+    const updated = onChange.mock.calls[0][0] as ReasoningConfig;
+    expect(updated.catalog).toEqual({ source: 'auto' });
+  });
 
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
-      catalog: { source: 'models_dev', provider: 'github-copilot', model: '' },
-    }));
+  it('clearing the model falls back to the auto catalog source', () => {
+    const onChange = vi.fn();
+    render(
+      { catalog: { source: 'models_dev', provider: 'github-copilot', model: 'gpt-5.1-codex' }, presets: [] },
+      onChange,
+    );
+    const model = selectProps['reasoningPresets.catalogModel'];
+    expect(model).toBeTruthy();
+    act(() => {
+      model?.onChange?.('');
+    });
+    const updated = onChange.mock.calls[0][0] as ReasoningConfig;
+    expect(updated.catalog).toEqual({ source: 'auto' });
+  });
+
+  it('clearing the provider drops a generated default preset', () => {
+    const onChange = vi.fn();
+    const projection: ReasoningCatalogProjection = {
+      status: 'known',
+      default_preset: 'high',
+      presets: [
+        { id: 'high', label: 'High', order: 0, source: 'models_dev',
+          actions: [{ type: 'effort', value: 'high' }] },
+      ],
+    };
+    render(
+      { catalog: { source: 'models_dev', provider: 'deepseek', model: 'deepseek-v4-flash' },
+        default_preset: 'high', presets: [] },
+      onChange,
+      projection,
+    );
+    const provider = selectProps['reasoningPresets.catalogProvider'];
+    act(() => {
+      provider?.onChange?.('');
+    });
+    const updated = onChange.mock.calls[0][0] as ReasoningConfig;
+    expect(updated.catalog).toEqual({ source: 'auto' });
+    expect(updated.default_preset).toBeUndefined();
+  });
+
+  it('clearing the model drops a generated default preset', () => {
+    const onChange = vi.fn();
+    const projection: ReasoningCatalogProjection = {
+      status: 'known',
+      default_preset: 'high',
+      presets: [
+        { id: 'high', label: 'High', order: 0, source: 'models_dev',
+          actions: [{ type: 'effort', value: 'high' }] },
+      ],
+    };
+    render(
+      { catalog: { source: 'models_dev', provider: 'github-copilot', model: 'gpt-5.1-codex' },
+        default_preset: 'high', presets: [] },
+      onChange,
+      projection,
+    );
+    const model = selectProps['reasoningPresets.catalogModel'];
+    act(() => {
+      model?.onChange?.('');
+    });
+    const updated = onChange.mock.calls[0][0] as ReasoningConfig;
+    expect(updated.catalog).toEqual({ source: 'auto' });
+    expect(updated.default_preset).toBeUndefined();
+  });
+
+  it('re-selecting the current provider keeps the model and default preset', () => {
+    const onChange = vi.fn();
+    const projection: ReasoningCatalogProjection = {
+      status: 'known',
+      default_preset: 'high',
+      presets: [
+        { id: 'high', label: 'High', order: 0, source: 'models_dev',
+          actions: [{ type: 'effort', value: 'high' }] },
+      ],
+    };
+    render(
+      { catalog: { source: 'models_dev', provider: 'deepseek', model: 'deepseek-v4-flash' },
+        default_preset: 'high', presets: [] },
+      onChange,
+      projection,
+    );
+    const provider = selectProps['reasoningPresets.catalogProvider'];
+    act(() => {
+      provider?.onChange?.('deepseek');
+    });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('re-selecting the current model keeps the default preset', () => {
+    const onChange = vi.fn();
+    const projection: ReasoningCatalogProjection = {
+      status: 'known',
+      default_preset: 'high',
+      presets: [
+        { id: 'high', label: 'High', order: 0, source: 'models_dev',
+          actions: [{ type: 'effort', value: 'high' }] },
+      ],
+    };
+    render(
+      { catalog: { source: 'models_dev', provider: 'github-copilot', model: 'gpt-5.1-codex' },
+        default_preset: 'high', presets: [] },
+      onChange,
+      projection,
+    );
+    const model = selectProps['reasoningPresets.catalogModel'];
+    act(() => {
+      model?.onChange?.('gpt-5.1-codex');
+    });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('re-selecting the current catalog source keeps the binding', () => {
+    const onChange = vi.fn();
+    render(
+      { catalog: { source: 'models_dev', provider: 'deepseek', model: 'deepseek-v4-flash' },
+        default_preset: 'high', presets: [] },
+      onChange,
+    );
+    const source = selectProps['reasoningPresets.catalogSource'];
+    expect(source).toBeTruthy();
+    act(() => {
+      source?.onChange?.('models_dev');
+    });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('clearing the provider keeps a custom default preset', () => {
+    const onChange = vi.fn();
+    render(
+      { catalog: { source: 'models_dev', provider: 'deepseek', model: 'deepseek-v4-flash' },
+        default_preset: 'my-custom',
+        presets: [{ id: 'my-custom', label: 'My Custom', actions: [{ type: 'effort', value: 'high' }] }] },
+      onChange,
+    );
+    const provider = selectProps['reasoningPresets.catalogProvider'];
+    act(() => {
+      provider?.onChange?.('');
+    });
+    const updated = onChange.mock.calls[0][0] as ReasoningConfig;
+    expect(updated.catalog).toEqual({ source: 'auto' });
+    expect(updated.default_preset).toBe('my-custom');
   });
 });

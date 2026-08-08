@@ -154,6 +154,19 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
   }, [modelsDevReasoningCatalog, modelsDevProviderId]);
 
   const update = (next: ReasoningConfig) => onChange(cloneReasoningConfig(next));
+  const defaultIsCustom = presets.some(preset => (
+    preset.id === value.default_preset
+    && !preset.disabled
+    && Boolean(preset.actions?.length)
+  ));
+  const rebindCatalog = (nextCatalog: ReasoningConfig['catalog']) => {
+    if (JSON.stringify(nextCatalog) === JSON.stringify(catalog)) return;
+    update({
+      ...value,
+      default_preset: defaultIsCustom ? value.default_preset : undefined,
+      catalog: nextCatalog,
+    });
+  };
   const updatePreset = (index: number, changes: Partial<ReasoningPreset>) => {
     const next = [...presets];
     next[index] = { ...next[index], ...changes };
@@ -273,22 +286,14 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
               )}
               onChange={(next) => {
                 const source = next as 'auto' | 'models_dev' | 'disabled';
-                const defaultIsCustom = presets.some(preset => (
-                  preset.id === value.default_preset
-                  && !preset.disabled
-                  && Boolean(preset.actions?.length)
-                ));
-                update({
-                  ...value,
-                  default_preset: defaultIsCustom ? value.default_preset : undefined,
-                  catalog: source === 'models_dev'
-                    ? {
-                        source,
-                        provider: catalog.source === 'models_dev' ? catalog.provider : '',
-                        model: catalog.source === 'models_dev' ? catalog.model : '',
-                      }
-                    : { source },
-                });
+                const nextCatalog = source === 'models_dev'
+                  ? {
+                      source,
+                      provider: catalog.source === 'models_dev' ? catalog.provider : '',
+                      model: catalog.source === 'models_dev' ? catalog.model : '',
+                    }
+                  : { source };
+                rebindCatalog(nextCatalog);
               }}
             />
           </div>
@@ -317,7 +322,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
               <span>{t('reasoningPresets.catalogProvider')}</span>
               <Select
                 size="small"
-                aria-label={t('reasoningPresets.catalogProvider')}
+                triggerAriaLabel={t('reasoningPresets.catalogProvider')}
                 value={catalog.provider}
                 options={modelsDevProviderOptions}
                 disabled={disabled}
@@ -326,21 +331,19 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                 allowCustomValue
                 customValueHint={t('reasoningPresets.catalogProviderCustomValueHint')}
                 searchPlaceholder={t('reasoningPresets.catalogProvider')}
-                onChange={(next) => update({
-                  ...value,
-                  catalog: {
-                    ...catalog,
-                    provider: String(next || ''),
-                    model: '',
-                  },
-                })}
+                onChange={(next) => {
+                  const provider = String(next || '');
+                  rebindCatalog(provider
+                    ? { ...catalog, provider, model: provider === catalog.provider ? catalog.model : '' }
+                    : { source: 'auto' });
+                }}
               />
             </div>
             <div className="bitfun-reasoning-preset-editor__binding-field">
               <span>{t('reasoningPresets.catalogModel')}</span>
               <Select
                 size="small"
-                aria-label={t('reasoningPresets.catalogModel')}
+                triggerAriaLabel={t('reasoningPresets.catalogModel')}
                 value={catalog.model}
                 options={modelsDevModelOptions}
                 disabled={disabled}
@@ -349,10 +352,12 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                 allowCustomValue
                 customValueHint={t('reasoningPresets.catalogModelCustomValueHint')}
                 searchPlaceholder={t('reasoningPresets.catalogModel')}
-                onChange={(next) => update({
-                  ...value,
-                  catalog: { ...catalog, model: String(next || '') },
-                })}
+                onChange={(next) => {
+                  const model = String(next || '');
+                  rebindCatalog(model
+                    ? { ...catalog, model }
+                    : { source: 'auto' });
+                }}
               />
             </div>
           </div>
