@@ -709,9 +709,19 @@
         "tooltip": "此会话的权限由 ACP 客户端控制。"
       },
       "fullAccessWarningTitle": "启用完全访问？",
-      "fullAccessWarningMessage": "完全访问会默认允许工具执行，不再逐次确认。",
+      "fullAccessWarningMessage": "完全访问会默认放行工具调用，不再逐次确认。该设置仅作用于当前会话，项目规则与强制规则仍然生效。",
       "fullAccessConfirm": "启用完全访问",
-      "cancel": "取消"
+      "cancel": "取消",
+      "sessionScope": "当前会话",
+      "currentSessionOverride": "权限：{{mode}}（仅当前会话）",
+      "resetToDefault": "跟随默认模式",
+      "noSession": "请先打开或新建会话，再修改其权限模式。",
+      "turnScope": "仅下一条消息",
+      "currentTurnOverride": "权限：{{mode}}（仅下一条消息）",
+      "nextTurnOnly": "仅下一条消息使用「{{mode}}」",
+      "nextTurnOnlyShort": "仅一次",
+      "fullAccessWarningMessageNextTurn": "完全访问会默认放行工具调用，不再逐次确认。该设置仅作用于下一条消息，项目规则与强制规则仍然生效。",
+      "openDefaultSettings": "打开权限设置"
     },
     "addModeTooltip": "附加 Plan 或 Debug",
     "boostSectionAgent": "智能体",

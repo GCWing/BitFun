@@ -51,7 +51,7 @@ use crate::util::sanitize_plain_model_output;
 use crate::util::timing::elapsed_ms_u64;
 use bitfun_core_types::SessionExecutionTarget;
 pub use bitfun_runtime_ports::SessionViewRestoreTiming;
-use bitfun_runtime_ports::{SessionStoragePathRequest, SessionStorePort};
+use bitfun_runtime_ports::{PermissionMode, SessionStoragePathRequest, SessionStorePort};
 use bitfun_services_core::session::{
     apply_session_lineage, collect_hidden_subagent_cascade as collect_hidden_subagent_cascade_ids,
     merge_session_custom_metadata as merge_session_custom_metadata_value,
@@ -4015,6 +4015,103 @@ impl SessionManager {
         }
 
         Ok(())
+    }
+
+    /// Sets the session's own tool permission mode (in-memory + persistence).
+    ///
+    /// `None` clears the override so the session follows the user-level default
+    /// again, including later changes to that default. The value only takes
+    /// effect from the next submission: a running turn already resolved its
+    /// mode and must not change permissions halfway through.
+    pub async fn update_session_permission_mode(
+        &self,
+        session_id: &str,
+        permission_mode: Option<PermissionMode>,
+    ) -> BitFunResult<()> {
+        // Match the model-selection path: an evicted session is restored before
+        // the mutation permit is taken, because restore owns the same keyed lock.
+        if !self.sessions.contains_key(session_id) && self.config.enable_persistence {
+            let session_storage_path = self
+                .session_storage_path_index
+                .get(session_id)
+                .map(|entry| entry.value().path.clone());
+            if let Some(session_storage_path) = session_storage_path {
+                debug!(
+                    "Session evicted from memory, restoring for permission mode update: session_id={}",
+                    session_id
+                );
+                let _ = self
+                    .restore_session_from_storage_path(&session_storage_path, session_id)
+                    .await;
+            }
+        }
+
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
+
+        let original_session = self
+            .sessions
+            .get(session_id)
+            .map(|session| session.clone())
+            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
+        if original_session.config.permission_mode == permission_mode {
+            return Ok(());
+        }
+
+        let mut updated_session = original_session.clone();
+        updated_session.config.permission_mode = permission_mode;
+        let now = SystemTime::now();
+        updated_session.updated_at = now;
+        updated_session.last_activity_at = now;
+
+        if self.should_persist_session_id(session_id) {
+            let effective_path = self.effective_session_storage_path(session_id).await;
+            if let Some(workspace_path) = effective_path {
+                if let Err(error) = self
+                    .persistence_manager
+                    .save_session(&workspace_path, &updated_session)
+                    .await
+                {
+                    // A selection that is not durable must not stay applied in
+                    // memory, so restore the previous value before failing.
+                    if let Err(rollback_error) = self
+                        .persistence_manager
+                        .save_session(&workspace_path, &original_session)
+                        .await
+                    {
+                        return Err(BitFunError::session(format!(
+                            "Session permission mode persistence failed and rollback did not complete: session_id={session_id}, error={error}, rollback_error={rollback_error}"
+                        )));
+                    }
+                    return Err(error);
+                }
+            }
+        }
+
+        if let Some(mut session) = self.sessions.get_mut(session_id) {
+            session.config.permission_mode = permission_mode;
+            session.updated_at = now;
+            session.last_activity_at = now;
+        } else {
+            return Err(BitFunError::NotFound(format!(
+                "Session not found: {}",
+                session_id
+            )));
+        }
+
+        debug!(
+            "Session permission mode updated: session_id={}, permission_mode={:?}",
+            session_id, permission_mode
+        );
+
+        Ok(())
+    }
+
+    /// Reads the session's own permission mode without falling back to the
+    /// user-level default. `None` means the session never chose one.
+    pub fn session_permission_mode(&self, session_id: &str) -> Option<PermissionMode> {
+        self.sessions
+            .get(session_id)
+            .and_then(|session| session.config.permission_mode)
     }
 
     /// Rebind where a session executes (in-memory + persistence).
@@ -8010,9 +8107,9 @@ impl SessionManager {
 #[cfg(test)]
 mod tests {
     use super::{
-        should_auto_migrate_session_model, CoreSessionStorePort, SessionExecutionBindingError,
-        SessionExecutionBindingUpdate, SessionManager, SessionManagerConfig,
-        TEST_MODEL_RESOLUTION_AI_CONFIG,
+        should_auto_migrate_session_model, CoreSessionStorePort, PermissionMode,
+        SessionExecutionBindingError, SessionExecutionBindingUpdate, SessionManager,
+        SessionManagerConfig, TEST_MODEL_RESOLUTION_AI_CONFIG,
     };
     use crate::agentic::core::{
         CompressionState, Message, MessageContent, MessageRole, ProcessingPhase, Session,
@@ -8962,6 +9059,74 @@ mod tests {
         assert!(matches!(
             error,
             crate::util::errors::BitFunError::SessionInUse { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn session_permission_mode_is_per_session_and_clearable() {
+        let workspace = TestWorkspace::new();
+        let manager = in_memory_test_manager();
+        let config = SessionConfig {
+            workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+            ..Default::default()
+        };
+        let first = manager
+            .create_session_with_id_and_details(
+                None,
+                "First".to_string(),
+                "agentic".to_string(),
+                config.clone(),
+                None,
+                SessionKind::Standard,
+            )
+            .await
+            .expect("create first session");
+        let second = manager
+            .create_session_with_id_and_details(
+                None,
+                "Second".to_string(),
+                "agentic".to_string(),
+                config,
+                None,
+                SessionKind::Standard,
+            )
+            .await
+            .expect("create second session");
+
+        // A new session starts without an override and follows the default.
+        assert_eq!(manager.session_permission_mode(&first.session_id), None);
+
+        manager
+            .update_session_permission_mode(&first.session_id, Some(PermissionMode::FullAccess))
+            .await
+            .expect("set first session mode");
+
+        // The selection stays inside the session it was made in.
+        assert_eq!(
+            manager.session_permission_mode(&first.session_id),
+            Some(PermissionMode::FullAccess)
+        );
+        assert_eq!(manager.session_permission_mode(&second.session_id), None);
+
+        // Clearing returns the session to the user-level default.
+        manager
+            .update_session_permission_mode(&first.session_id, None)
+            .await
+            .expect("clear first session mode");
+        assert_eq!(manager.session_permission_mode(&first.session_id), None);
+    }
+
+    #[tokio::test]
+    async fn session_permission_mode_update_rejects_a_missing_session() {
+        let manager = in_memory_test_manager();
+
+        let error = manager
+            .update_session_permission_mode("missing-session", Some(PermissionMode::AutoApprove))
+            .await
+            .expect_err("unknown session must not silently succeed");
+        assert!(matches!(
+            error,
+            crate::util::errors::BitFunError::NotFound(_)
         ));
     }
 

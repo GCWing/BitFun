@@ -1,5 +1,7 @@
+use bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
 use bitfun_agent_runtime::sdk::{PermissionRequest, AUTO_APPROVE_ASK_CONTEXT_KEY};
 use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
+use bitfun_runtime_ports::PermissionMode;
 use serde_json::{Map, Value};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,6 +39,21 @@ pub(crate) fn approval_metadata(approval_policy: CliApprovalPolicy) -> Map<Strin
             AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
             Value::Bool(auto_approve_ask),
         );
+        // Carry the whole mode as well, so this invocation resolves through the
+        // same single value as every other surface. `Ask` stays absent: it means
+        // "inherit the persisted preference", not "force the ask mode".
+        metadata.insert(
+            PERMISSION_MODE_CONTEXT_KEY.to_string(),
+            Value::String(
+                if auto_approve_ask {
+                    PermissionMode::AutoApprove
+                } else {
+                    PermissionMode::Ask
+                }
+                .as_str()
+                .to_string(),
+            ),
+        );
     }
     metadata
 }
@@ -55,6 +72,7 @@ pub(crate) fn permission_request_targets_session(
 #[cfg(test)]
 mod tests {
     use super::{approval_metadata, permission_request_targets_session, CliApprovalPolicy};
+    use bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
     use bitfun_agent_runtime::sdk::{
         PermissionDelegationContext, PermissionRequest, PermissionRequestSource,
         PermissionRequestSourceKind, AUTO_APPROVE_ASK_CONTEXT_KEY,
@@ -133,6 +151,27 @@ mod tests {
         assert_eq!(
             approval_metadata(CliApprovalPolicy::DisableAuto).get(AUTO_APPROVE_ASK_CONTEXT_KEY),
             Some(&serde_json::Value::Bool(false))
+        );
+    }
+
+    #[test]
+    fn headless_approval_metadata_carries_the_resolved_permission_mode() {
+        assert_eq!(
+            approval_metadata(CliApprovalPolicy::Auto).get(PERMISSION_MODE_CONTEXT_KEY),
+            Some(&serde_json::Value::String("auto_approve".to_string()))
+        );
+        for policy in [CliApprovalPolicy::DisableAuto, CliApprovalPolicy::Reject] {
+            assert_eq!(
+                approval_metadata(policy).get(PERMISSION_MODE_CONTEXT_KEY),
+                Some(&serde_json::Value::String("ask".to_string()))
+            );
+        }
+
+        // Inheriting the persisted preference must stay absent, so it does not
+        // pin the turn to the ask mode.
+        assert_eq!(
+            approval_metadata(CliApprovalPolicy::Ask).get(PERMISSION_MODE_CONTEXT_KEY),
+            None
         );
     }
 }

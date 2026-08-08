@@ -1118,11 +1118,11 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         >
           <ConfigPageRow
             label={t('permissionPolicy.mode')}
-            description={resolveToolPermissionMode(toolPermissionConfig) === 'full_access'
+            description={`${resolveToolPermissionMode(toolPermissionConfig) === 'full_access'
               ? t('permissionPolicy.fullAccessDescription')
               : resolveToolPermissionMode(toolPermissionConfig) === 'auto'
                 ? t('permissionPolicy.autoApproveDescription')
-                : t('permissionPolicy.askDescription')}
+                : t('permissionPolicy.askDescription')} ${t('permissionPolicy.modeDescription')}`}
             align="center"
           >
             <div className="bitfun-func-agent-config__row-control" data-bf-component="session-config" data-bf-part="control">

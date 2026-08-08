@@ -65,7 +65,7 @@ use bitfun_core_types::{
     WorktreeError, WorktreeErrorCode,
 };
 use bitfun_product_domains::tool_permissions::PermissionRule;
-use bitfun_runtime_ports::SessionTurnWindowRequest;
+use bitfun_runtime_ports::{PermissionMode, SessionTurnWindowRequest};
 
 const SESSION_VIEW_TOOL_RESULT_TOTAL_CHAR_BUDGET: usize = 512 * 1024;
 const SESSION_VIEW_TOOL_RESULT_STRING_CHAR_LIMIT: usize = 16 * 1024;
@@ -241,6 +241,31 @@ pub struct UpdateSessionModelRequest {
     pub remote_ssh_host: Option<String>,
     #[serde(default)]
     pub include_internal: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateSessionPermissionModeRequest {
+    pub session_id: String,
+    /// `None` clears the session override so the session follows the
+    /// user-level default again, including later changes to that default.
+    #[serde(default)]
+    pub mode: Option<String>,
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub include_internal: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionPermissionModeResponse {
+    /// The session's own selection, or `null` when it follows the default.
+    pub mode: Option<PermissionMode>,
 }
 
 fn deserialize_present_nullable<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
@@ -1797,6 +1822,78 @@ pub async fn update_session_model(
     };
     update_result
         .map_err(|error| format!("Failed to update session model: {}", error.into_message()))
+}
+
+/// Sets the tool permission mode this session runs with.
+///
+/// The mode is a per-session selector, so switching it in one conversation
+/// leaves every other open session on its own selection. Passing no mode clears
+/// the override and returns the session to the user-level default.
+#[tauri::command]
+pub async fn update_session_permission_mode(
+    runtime: State<'_, DesktopRuntimeContext>,
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    request: UpdateSessionPermissionModeRequest,
+) -> Result<SessionPermissionModeResponse, String> {
+    let session_id = request.session_id.trim().to_string();
+    if session_id.is_empty() {
+        return Err("session_id is required".to_string());
+    }
+    let mode = match request.mode.as_deref().map(str::trim) {
+        None | Some("") => None,
+        Some(value) => Some(
+            PermissionMode::parse(value)
+                .ok_or_else(|| format!("unsupported permission mode: {value}"))?,
+        ),
+    };
+
+    ensure_session_loaded_for_selector_update(
+        runtime.inner(),
+        &session_id,
+        request.workspace_path,
+        request.remote_connection_id,
+        request.remote_ssh_host,
+        request.include_internal,
+    )
+    .await?;
+
+    coordinator
+        .get_session_manager()
+        .update_session_permission_mode(&session_id, mode)
+        .await
+        .map_err(|error| format!("Failed to update session permission mode: {error}"))?;
+
+    Ok(SessionPermissionModeResponse { mode })
+}
+
+/// Reads the session's own permission mode selection.
+///
+/// `null` means the session never chose one and follows the user-level default.
+#[tauri::command]
+pub async fn get_session_permission_mode(
+    runtime: State<'_, DesktopRuntimeContext>,
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    request: UpdateSessionPermissionModeRequest,
+) -> Result<SessionPermissionModeResponse, String> {
+    let session_id = request.session_id.trim().to_string();
+    if session_id.is_empty() {
+        return Err("session_id is required".to_string());
+    }
+    ensure_session_loaded_for_selector_update(
+        runtime.inner(),
+        &session_id,
+        request.workspace_path,
+        request.remote_connection_id,
+        request.remote_ssh_host,
+        request.include_internal,
+    )
+    .await?;
+
+    Ok(SessionPermissionModeResponse {
+        mode: coordinator
+            .get_session_manager()
+            .session_permission_mode(&session_id),
+    })
 }
 
 async fn ensure_session_loaded_for_selector_update(

@@ -709,9 +709,19 @@
         "tooltip": "此工作階段的權限由 ACP 用戶端控制。"
       },
       "fullAccessWarningTitle": "啟用完全存取？",
-      "fullAccessWarningMessage": "完全存取會預設允許工具執行，不再逐次確認。",
+      "fullAccessWarningMessage": "完全存取會預設放行工具呼叫，不再逐次確認。此設定僅作用於目前工作階段，專案規則與強制規則仍然生效。",
       "fullAccessConfirm": "啟用完全存取",
-      "cancel": "取消"
+      "cancel": "取消",
+      "sessionScope": "目前工作階段",
+      "currentSessionOverride": "權限：{{mode}}（僅目前工作階段）",
+      "resetToDefault": "跟隨預設模式",
+      "noSession": "請先開啟或新建工作階段，再變更其權限模式。",
+      "turnScope": "僅下一則訊息",
+      "currentTurnOverride": "權限：{{mode}}（僅下一則訊息）",
+      "nextTurnOnly": "僅下一則訊息使用「{{mode}}」",
+      "nextTurnOnlyShort": "僅一次",
+      "fullAccessWarningMessageNextTurn": "完全存取會預設放行工具呼叫，不再逐次確認。此設定僅作用於下一則訊息，專案規則與強制規則仍然生效。",
+      "openDefaultSettings": "開啟權限設定"
     },
     "addModeTooltip": "附加 Plan 或 Debug",
     "boostSectionAgent": "智能體",

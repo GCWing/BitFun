@@ -1,11 +1,43 @@
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{AgentProfileConfig, GlobalConfig};
 use crate::util::errors::BitFunResult;
+use bitfun_agent_runtime::permission::{AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY};
 use bitfun_runtime_ports::{
     resolve_child_permission_policy, resolve_permission_policy, ChildPermissionPolicyLayers,
-    PermissionConstraintLayer, PermissionEffect, PermissionPolicyLayers, PermissionRule,
-    PermissionRuntimeCeiling, ResolvedPermissionPolicy,
+    PermissionConstraintLayer, PermissionEffect, PermissionMode, PermissionPolicyLayers,
+    PermissionRule, PermissionRuntimeCeiling, ResolvedPermissionPolicy,
 };
+
+/// Reads the effective mode a submission carried into tool execution.
+///
+/// The owning surface resolves the layered selection once and writes it to the
+/// execution context, so this is a lookup and not a second resolution. The
+/// legacy auto-approve flag is still honored for submissions and product
+/// surfaces that predate the mode key.
+pub(crate) fn permission_mode_from_context(
+    global: &GlobalConfig,
+    context_vars: &std::collections::HashMap<String, String>,
+) -> PermissionMode {
+    if let Some(mode) = context_vars
+        .get(PERMISSION_MODE_CONTEXT_KEY)
+        .map(String::as_str)
+        .and_then(PermissionMode::parse)
+    {
+        return mode;
+    }
+
+    let default_mode = PermissionMode::from_config(&global.tool_permissions);
+    match context_vars
+        .get(AUTO_APPROVE_ASK_CONTEXT_KEY)
+        .and_then(|value| value.parse::<bool>().ok())
+    {
+        // A legacy flag only speaks for the auto-approval half. It must not
+        // downgrade a full-access selection that the same turn resolved.
+        Some(true) if default_mode != PermissionMode::FullAccess => PermissionMode::AutoApprove,
+        Some(false) if default_mode == PermissionMode::AutoApprove => PermissionMode::Ask,
+        _ => default_mode,
+    }
+}
 
 pub(crate) fn derive_parent_permission_runtime_ceiling(
     agent_profile: Option<&AgentProfileConfig>,
@@ -53,8 +85,15 @@ pub(crate) async fn load_parent_permission_runtime_ceiling(
     ))
 }
 
+/// Resolves one turn's effective policy.
+///
+/// `mode` is the already-resolved turn/session/global selection. It only
+/// replaces the preset baseline; every later layer (global rules, project,
+/// agent, enforced, and the constraint layers appended below) is evaluated
+/// afterwards and can still tighten the result.
 pub(crate) fn resolve_effective_permission_policy(
     global: &GlobalConfig,
+    mode: Option<PermissionMode>,
     project_rules: &[PermissionRule],
     agent_profile: Option<&AgentProfileConfig>,
     agent_definition_constraints: Option<&PermissionConstraintLayer>,
@@ -70,6 +109,7 @@ pub(crate) fn resolve_effective_permission_policy(
             resolve_child_permission_policy(ChildPermissionPolicyLayers {
                 product_defaults: &[],
                 global: &global.tool_permissions.policy,
+                mode,
                 project: project_rules,
                 child_agent: agent_rules,
                 parent_runtime_ceiling,
@@ -79,6 +119,7 @@ pub(crate) fn resolve_effective_permission_policy(
         None => resolve_permission_policy(PermissionPolicyLayers {
             product_defaults: &[],
             global: &global.tool_permissions.policy,
+            mode,
             project: project_rules,
             agent: agent_rules,
             enforced,
@@ -101,6 +142,70 @@ mod tests {
 
     fn rule(action: &str, resource: &str, effect: PermissionEffect) -> PermissionRule {
         PermissionRule::new(action, resource, effect)
+    }
+
+    #[test]
+    fn context_mode_key_outranks_the_legacy_auto_approve_flag() {
+        let mut global = GlobalConfig::default();
+        global.tool_permissions.interaction.auto_approve_ask = true;
+        let mut context_vars = std::collections::HashMap::new();
+
+        assert_eq!(
+            permission_mode_from_context(&global, &context_vars),
+            PermissionMode::AutoApprove
+        );
+
+        context_vars.insert(
+            PERMISSION_MODE_CONTEXT_KEY.to_string(),
+            "full_access".to_string(),
+        );
+        context_vars.insert(
+            AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
+            "false".to_string(),
+        );
+        assert_eq!(
+            permission_mode_from_context(&global, &context_vars),
+            PermissionMode::FullAccess
+        );
+    }
+
+    #[test]
+    fn legacy_auto_approve_flag_never_downgrades_a_full_access_default() {
+        let mut global = GlobalConfig::default();
+        global.tool_permissions.policy.preset = PermissionPolicyPreset::FullAccess;
+        let mut context_vars = std::collections::HashMap::new();
+        context_vars.insert(AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(), "true".to_string());
+
+        assert_eq!(
+            permission_mode_from_context(&global, &context_vars),
+            PermissionMode::FullAccess
+        );
+    }
+
+    #[test]
+    fn session_full_access_mode_is_still_bounded_by_project_rules() {
+        let global = GlobalConfig::default();
+        let project = vec![rule("edit", "generated/*", PermissionEffect::Deny)];
+
+        let resolved = resolve_effective_permission_policy(
+            &global,
+            Some(PermissionMode::FullAccess),
+            &project,
+            None,
+            None,
+            None,
+            &[],
+        );
+        let evaluator = PermissionEvaluator::case_sensitive();
+
+        assert_eq!(
+            evaluator.evaluate_policy_resource("edit", "src/main.rs", &resolved),
+            PermissionEffect::Allow
+        );
+        assert_eq!(
+            evaluator.evaluate_policy_resource("edit", "generated/api.rs", &resolved),
+            PermissionEffect::Deny
+        );
     }
 
     #[test]
@@ -156,8 +261,15 @@ mod tests {
             ..AgentProfileConfig::default()
         };
 
-        let resolved =
-            resolve_effective_permission_policy(&global, &project, Some(&profile), None, None, &[]);
+        let resolved = resolve_effective_permission_policy(
+            &global,
+            None,
+            &project,
+            Some(&profile),
+            None,
+            None,
+            &[],
+        );
 
         assert_eq!(
             PermissionEvaluator::case_sensitive().evaluate_policy_resource(
@@ -196,6 +308,7 @@ mod tests {
 
         let resolved = resolve_effective_permission_policy(
             &global,
+            None,
             &[],
             Some(&child_profile),
             None,

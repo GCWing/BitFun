@@ -7,6 +7,9 @@ use bitfun_product_domains::tool_permissions::{
     PermissionRequestSourceKind, PermissionResourceCaseSensitivity, PermissionRule,
     PermissionRuntimeCeiling, ResolvedPermissionPolicy, ToolPermissionConfig,
 };
+use bitfun_product_domains::tool_permissions::{
+    resolve_permission_mode, PermissionMode, PermissionModeLayers, PermissionModeSource,
+};
 use serde_json::json;
 use serde_json::Map;
 
@@ -80,6 +83,7 @@ fn policy_presets_expand_into_ordinary_baseline_rules() {
     let ask_rules = resolve_permission_policy(PermissionPolicyLayers {
         product_defaults: &[],
         global: &ask,
+        mode: None,
         project: &[],
         agent: &[],
         enforced: &[],
@@ -87,6 +91,7 @@ fn policy_presets_expand_into_ordinary_baseline_rules() {
     let full_access_rules = resolve_permission_policy(PermissionPolicyLayers {
         product_defaults: &[],
         global: &full_access,
+        mode: None,
         project: &[],
         agent: &[],
         enforced: &[],
@@ -134,6 +139,7 @@ fn ask_preset_allows_low_risk_actions_and_keeps_mutations_guarded() {
     let rules = resolve_permission_policy(PermissionPolicyLayers {
         product_defaults: &[],
         global: &policy(PermissionPolicyPreset::Ask, Vec::new()),
+        mode: None,
         project: &[],
         agent: &[],
         enforced: &[],
@@ -200,6 +206,7 @@ fn resolved_policy_preserves_layer_order_and_enforced_limits() {
     let resolved = resolve_permission_policy(PermissionPolicyLayers {
         product_defaults: &product_defaults,
         global: &global,
+        mode: None,
         project: &project,
         agent: &agent,
         enforced: &enforced,
@@ -278,6 +285,7 @@ fn child_policy_preserves_exact_layer_order_and_security_precedence() {
     let resolved = resolve_child_permission_policy(ChildPermissionPolicyLayers {
         product_defaults: &product_defaults,
         global: &global,
+        mode: None,
         project: &project,
         child_agent: &child_agent,
         parent_runtime_ceiling: &ceiling,
@@ -316,6 +324,7 @@ fn parent_ceiling_overrides_child_agent_allow() {
     let resolved = resolve_child_permission_policy(ChildPermissionPolicyLayers {
         product_defaults: &[],
         global: &global,
+        mode: None,
         project: &[],
         child_agent: &child_agent,
         parent_runtime_ceiling: &ceiling,
@@ -343,6 +352,7 @@ fn parent_ceiling_ask_does_not_loosen_child_agent_deny() {
     let resolved = resolve_child_permission_policy(ChildPermissionPolicyLayers {
         product_defaults: &[],
         global: &global,
+        mode: None,
         project: &[],
         child_agent: &child_agent,
         parent_runtime_ceiling: &ceiling,
@@ -366,6 +376,7 @@ fn task_and_skill_default_allow_do_not_authorize_child_tools() {
     let resolved = resolve_child_permission_policy(ChildPermissionPolicyLayers {
         product_defaults: &[],
         global: &global,
+        mode: None,
         project: &[],
         child_agent: &[],
         parent_runtime_ceiling: &ceiling,
@@ -669,5 +680,248 @@ fn multi_resource_decision_is_atomic_with_deny_then_ask_precedence() {
             &rules,
         ),
         PermissionEffect::Deny
+    );
+}
+
+#[test]
+fn permission_mode_projects_onto_preset_and_auto_approval() {
+    assert_eq!(PermissionMode::Ask.preset(), PermissionPolicyPreset::Ask);
+    assert!(!PermissionMode::Ask.auto_approve_ask());
+
+    assert_eq!(
+        PermissionMode::AutoApprove.preset(),
+        PermissionPolicyPreset::Ask
+    );
+    assert!(PermissionMode::AutoApprove.auto_approve_ask());
+
+    assert_eq!(
+        PermissionMode::FullAccess.preset(),
+        PermissionPolicyPreset::FullAccess
+    );
+    assert!(!PermissionMode::FullAccess.auto_approve_ask());
+}
+
+#[test]
+fn permission_mode_round_trips_through_stored_configuration() {
+    let mut config = ToolPermissionConfig::default();
+    assert_eq!(PermissionMode::from_config(&config), PermissionMode::Ask);
+
+    config.interaction.auto_approve_ask = true;
+    assert_eq!(
+        PermissionMode::from_config(&config),
+        PermissionMode::AutoApprove
+    );
+
+    // Full access already resolves every ask, so it outranks auto approval.
+    config.policy.preset = PermissionPolicyPreset::FullAccess;
+    assert_eq!(
+        PermissionMode::from_config(&config),
+        PermissionMode::FullAccess
+    );
+
+    for mode in [
+        PermissionMode::Ask,
+        PermissionMode::AutoApprove,
+        PermissionMode::FullAccess,
+    ] {
+        assert_eq!(PermissionMode::parse(mode.as_str()), Some(mode));
+    }
+    assert_eq!(
+        PermissionMode::parse("auto"),
+        Some(PermissionMode::AutoApprove)
+    );
+    assert_eq!(
+        PermissionMode::parse("  Full  "),
+        Some(PermissionMode::FullAccess)
+    );
+    assert_eq!(PermissionMode::parse("elevated"), None);
+}
+
+#[test]
+fn permission_mode_resolution_prefers_the_narrowest_layer() {
+    let base = PermissionModeLayers::new(PermissionMode::Ask);
+
+    let global_only = resolve_permission_mode(base);
+    assert_eq!(global_only.mode, PermissionMode::Ask);
+    assert_eq!(global_only.source, PermissionModeSource::GlobalDefault);
+
+    let session = resolve_permission_mode(base.with_session(Some(PermissionMode::FullAccess)));
+    assert_eq!(session.mode, PermissionMode::FullAccess);
+    assert_eq!(session.source, PermissionModeSource::Session);
+
+    let turn = resolve_permission_mode(
+        base.with_session(Some(PermissionMode::FullAccess))
+            .with_turn(Some(PermissionMode::Ask)),
+    );
+    assert_eq!(turn.mode, PermissionMode::Ask);
+    assert_eq!(turn.source, PermissionModeSource::Turn);
+
+    let project = resolve_permission_mode(PermissionModeLayers {
+        project: Some(PermissionMode::AutoApprove),
+        ..base
+    });
+    assert_eq!(project.mode, PermissionMode::AutoApprove);
+    assert_eq!(project.source, PermissionModeSource::Project);
+}
+
+#[test]
+fn full_access_mode_stays_bounded_by_project_and_enforced_layers() {
+    let global = policy(PermissionPolicyPreset::Ask, Vec::new());
+    let project = vec![rule("edit", "generated/*", PermissionEffect::Deny)];
+    let enforced = vec![rule("bash", "rm *", PermissionEffect::Deny)];
+
+    let resolved = resolve_permission_policy(PermissionPolicyLayers {
+        product_defaults: &[],
+        global: &global,
+        mode: Some(PermissionMode::FullAccess),
+        project: &project,
+        agent: &[],
+        enforced: &enforced,
+    });
+    let evaluator = PermissionEvaluator::case_sensitive();
+
+    // The mode raises the baseline...
+    assert_eq!(
+        evaluator.evaluate_policy_resource("edit", "src/main.rs", &resolved),
+        PermissionEffect::Allow
+    );
+    // ...but never past a later deny layer.
+    assert_eq!(
+        evaluator.evaluate_policy_resource("edit", "generated/api.rs", &resolved),
+        PermissionEffect::Deny
+    );
+    assert_eq!(
+        evaluator.evaluate_policy_resource("bash", "rm -rf target", &resolved),
+        PermissionEffect::Deny
+    );
+}
+
+#[test]
+fn inherited_full_access_mode_cannot_widen_a_parent_runtime_ceiling() {
+    let global = policy(PermissionPolicyPreset::Ask, Vec::new());
+    let ceiling = PermissionRuntimeCeiling::try_new(vec![
+        rule("bash", "rm *", PermissionEffect::Deny),
+        rule("external_directory", "*", PermissionEffect::Ask),
+    ])
+    .expect("ceiling without allow rules should be valid");
+
+    let resolved = resolve_child_permission_policy(ChildPermissionPolicyLayers {
+        product_defaults: &[],
+        global: &global,
+        mode: Some(PermissionMode::FullAccess),
+        project: &[],
+        child_agent: &[],
+        parent_runtime_ceiling: &ceiling,
+        enforced: &[],
+    });
+    let evaluator = PermissionEvaluator::case_sensitive();
+
+    assert_eq!(
+        evaluator.evaluate_policy_resource("edit", "src/main.rs", &resolved),
+        PermissionEffect::Allow
+    );
+    assert_eq!(
+        evaluator.evaluate_policy_resource("bash", "rm -rf target", &resolved),
+        PermissionEffect::Deny
+    );
+    assert_eq!(
+        evaluator.evaluate_policy_resource("external_directory", "C:/outside", &resolved),
+        PermissionEffect::Ask
+    );
+}
+
+#[test]
+fn omitted_mode_keeps_the_stored_global_preset() {
+    let global = policy(PermissionPolicyPreset::FullAccess, Vec::new());
+
+    let resolved = resolve_permission_policy(PermissionPolicyLayers {
+        product_defaults: &[],
+        global: &global,
+        mode: None,
+        project: &[],
+        agent: &[],
+        enforced: &[],
+    });
+
+    assert_eq!(
+        PermissionEvaluator::case_sensitive().evaluate_policy_resource(
+            "edit",
+            "src/main.rs",
+            &resolved
+        ),
+        PermissionEffect::Allow
+    );
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
+struct PersistedModeCarrier {
+    #[serde(
+        default,
+        deserialize_with = "bitfun_product_domains::tool_permissions::deserialize_optional_permission_mode",
+        skip_serializing_if = "Option::is_none"
+    )]
+    permission_mode: Option<PermissionMode>,
+    keep: String,
+}
+
+#[test]
+fn persisted_permission_mode_reads_every_known_value() {
+    for (stored, expected) in [
+        ("ask", PermissionMode::Ask),
+        ("auto_approve", PermissionMode::AutoApprove),
+        ("full_access", PermissionMode::FullAccess),
+    ] {
+        let carrier: PersistedModeCarrier = serde_json::from_value(json!({
+            "permission_mode": stored,
+            "keep": "value",
+        }))
+        .expect("known mode should deserialize");
+        assert_eq!(carrier.permission_mode, Some(expected));
+    }
+}
+
+#[test]
+fn persisted_permission_mode_degrades_instead_of_failing_the_record() {
+    // A value written by a newer build, a null, and a wrong type must all leave
+    // the surrounding record readable. Failing here would take the whole
+    // persisted session state down with one unknown field.
+    for stored in [
+        json!("read_only"),
+        json!(null),
+        json!(7),
+        json!({"mode": "ask"}),
+    ] {
+        let carrier: PersistedModeCarrier = serde_json::from_value(json!({
+            "permission_mode": stored,
+            "keep": "value",
+        }))
+        .expect("an unreadable mode must not fail the record");
+        assert_eq!(carrier.permission_mode, None);
+        assert_eq!(carrier.keep, "value");
+    }
+
+    // An absent field is the ordinary "follows the user-level default" case.
+    let carrier: PersistedModeCarrier =
+        serde_json::from_value(json!({ "keep": "value" })).expect("absent mode is valid");
+    assert_eq!(carrier.permission_mode, None);
+}
+
+#[test]
+fn unset_permission_mode_is_omitted_so_old_builds_see_unchanged_files() {
+    let omitted = serde_json::to_value(PersistedModeCarrier {
+        permission_mode: None,
+        keep: "value".to_string(),
+    })
+    .expect("serialize");
+    assert_eq!(omitted, json!({ "keep": "value" }));
+
+    let written = serde_json::to_value(PersistedModeCarrier {
+        permission_mode: Some(PermissionMode::FullAccess),
+        keep: "value".to_string(),
+    })
+    .expect("serialize");
+    assert_eq!(
+        written,
+        json!({ "permission_mode": "full_access", "keep": "value" })
     );
 }

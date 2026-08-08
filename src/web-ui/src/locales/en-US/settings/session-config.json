@@ -47,8 +47,8 @@
   },
   "permissionPolicy": {
     "sectionTitle": "Tool permissions",
-    "sectionDescription": "Choose the default tool access policy and how permission prompts are handled.",
-    "mode": "Permission mode",
+    "sectionDescription": "Choose the default tool access policy for sessions and how permission prompts are handled.",
+    "mode": "Default permission mode",
     "ask": "Ask for confirmation",
     "askDescription": "External access, file changes, and command execution require confirmation.",
     "fullAccess": "Full access",
@@ -60,7 +60,7 @@
     "autoApprove": "Auto approve",
     "autoApproveDescription": "Automatically approve requests that require confirmation.",
     "showInChatInput": "Show permission mode selector",
-    "showInChatInputDescription": "Show the selector below the chat input. Hiding it does not change the current permission mode.",
+    "showInChatInputDescription": "Show the selector below the chat input, where the mode applies to the current session only. Hiding it does not change any session's permission mode.",
     "globalRules": "Global rules",
     "globalRulesDescription": "Define user-level rules that apply after the selected mode and before project and Agent rules.",
     "manageGlobalRules": "Manage rules",
@@ -78,7 +78,8 @@
     "removeGlobalRule": "Remove rule",
     "discardGlobalRules": "Discard changes",
     "saveGlobalRules": "Save rules",
-    "globalRulesEffects": { "allow": "Allow", "ask": "Ask", "deny": "Deny" }
+    "globalRulesEffects": { "allow": "Allow", "ask": "Ask", "deny": "Deny" },
+    "modeDescription": "Applies to sessions that have not chosen their own mode. Each session can override it from the chat input."
   },
   "projectPermissions": {
     "description": "Always allow decisions are saved as remembered grants for the current project; static project rules apply before a tool runs.",

@@ -24,15 +24,16 @@ mod plugin;
 mod script_tool;
 #[cfg(feature = "permission")]
 pub use bitfun_product_domains::tool_permissions::{
-    resolve_child_permission_policy, resolve_permission_policy, wildcard_matches,
-    ChildPermissionPolicyLayers, PermissionAuditEvent, PermissionAuditRecord,
-    PermissionConstraintLayer, PermissionDelegationContext, PermissionEffect, PermissionEvaluator,
-    PermissionGrant, PermissionGrantKey, PermissionInteractionConfig, PermissionPolicyConfig,
-    PermissionPolicyLayers, PermissionPolicyPreset, PermissionReply, PermissionReplySource,
-    PermissionRequest, PermissionRequestEvent, PermissionRequestSource,
+    deserialize_optional_permission_mode, resolve_child_permission_policy, resolve_permission_mode,
+    resolve_permission_policy, wildcard_matches, ChildPermissionPolicyLayers, PermissionAuditEvent,
+    PermissionAuditRecord, PermissionConstraintLayer, PermissionDelegationContext,
+    PermissionEffect, PermissionEvaluator, PermissionGrant, PermissionGrantKey,
+    PermissionInteractionConfig, PermissionMode, PermissionModeLayers, PermissionModeSource,
+    PermissionPolicyConfig, PermissionPolicyLayers, PermissionPolicyPreset, PermissionReply,
+    PermissionReplySource, PermissionRequest, PermissionRequestEvent, PermissionRequestSource,
     PermissionRequestSourceKind, PermissionResourceCaseSensitivity, PermissionRule,
     PermissionRuleset, PermissionRuntimeCeiling, PermissionRuntimeCeilingValidationError,
-    ResolvedPermissionPolicy, ToolPermissionConfig,
+    ResolvedPermissionMode, ResolvedPermissionPolicy, ToolPermissionConfig,
 };
 pub use local_workspace_snapshot::{
     LocalWorkspaceSnapshotPort, LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotStats,

@@ -47,8 +47,8 @@
   },
   "permissionPolicy": {
     "sectionTitle": "工具权限",
-    "sectionDescription": "设置默认工具访问策略和权限询问的处理方式。",
-    "mode": "权限模式",
+    "sectionDescription": "选择会话的默认工具访问策略，以及权限请求的处理方式。",
+    "mode": "默认权限模式",
     "ask": "需要确认",
     "askDescription": "外部访问，修改文件和执行命令需要确认。",
     "fullAccess": "完全访问",
@@ -60,7 +60,7 @@
     "autoApprove": "自动批准",
     "autoApproveDescription": "自动批准需要确认的请求。",
     "showInChatInput": "显示权限模式选择器",
-    "showInChatInputDescription": "在聊天输入框下方显示权限模式选择器。隐藏它不会更改当前权限模式。",
+    "showInChatInputDescription": "在输入框下方显示选择器，在那里切换的模式仅作用于当前会话。隐藏它不会改变任何会话的权限模式。",
     "globalRules": "全局规则",
     "globalRulesDescription": "定义用户级规则；它们在所选模式之后、项目和 Agent 规则之前应用。",
     "manageGlobalRules": "管理规则",
@@ -78,7 +78,8 @@
     "removeGlobalRule": "删除规则",
     "discardGlobalRules": "放弃更改",
     "saveGlobalRules": "保存规则",
-    "globalRulesEffects": { "allow": "允许", "ask": "询问", "deny": "拒绝" }
+    "globalRulesEffects": { "allow": "允许", "ask": "询问", "deny": "拒绝" },
+    "modeDescription": "作用于尚未单独设置的会话。每个会话都可以在输入框中覆盖该默认值。"
   },
   "projectPermissions": {
     "description": "“始终允许”会保存为当前项目的记忆授权；静态项目规则会在工具执行前直接应用。",

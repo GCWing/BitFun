@@ -235,6 +235,185 @@ pub struct PermissionInteractionConfig {
     pub auto_approve_ask: bool,
 }
 
+/// The interaction mode a dialog turn runs with.
+///
+/// This is the single user-facing selection behind the permission control. It
+/// projects onto the two independent knobs the runtime already owns: the static
+/// policy preset and the interactive auto-answer preference. Keeping both knobs
+/// derived from one value prevents meaningless combinations such as full access
+/// plus auto approval.
+///
+/// A mode never widens the resolved ruleset beyond its preset baseline. Project,
+/// agent, enforced, and constraint layers are evaluated after the baseline, so a
+/// `FullAccess` turn is still bounded by every deny those layers own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum PermissionMode {
+    /// Every `ask` decision is raised to the user.
+    #[default]
+    Ask,
+    /// Static policy is unchanged; interactive `ask` is answered automatically.
+    AutoApprove,
+    /// The policy baseline allows everything the later layers do not deny.
+    FullAccess,
+}
+
+impl PermissionMode {
+    pub const fn preset(self) -> PermissionPolicyPreset {
+        match self {
+            Self::Ask | Self::AutoApprove => PermissionPolicyPreset::Ask,
+            Self::FullAccess => PermissionPolicyPreset::FullAccess,
+        }
+    }
+
+    pub const fn auto_approve_ask(self) -> bool {
+        matches!(self, Self::AutoApprove)
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Ask => "ask",
+            Self::AutoApprove => "auto_approve",
+            Self::FullAccess => "full_access",
+        }
+    }
+
+    /// Parses a wire value, accepting the surface aliases already used by the
+    /// desktop control and the CLI approval flags.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "ask" => Some(Self::Ask),
+            "auto" | "auto_approve" | "autoapprove" => Some(Self::AutoApprove),
+            "full_access" | "fullaccess" | "full" => Some(Self::FullAccess),
+            _ => None,
+        }
+    }
+
+    /// Derives the mode a stored configuration represents.
+    ///
+    /// `full_access` wins over the auto-approve preference: the preset already
+    /// resolves every `ask` to `allow`, so auto-answering is not observable.
+    pub const fn from_config(config: &ToolPermissionConfig) -> Self {
+        match config.policy.preset {
+            PermissionPolicyPreset::FullAccess => Self::FullAccess,
+            PermissionPolicyPreset::Ask if config.interaction.auto_approve_ask => Self::AutoApprove,
+            PermissionPolicyPreset::Ask => Self::Ask,
+        }
+    }
+}
+
+impl fmt::Display for PermissionMode {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+/// Deserializes an optional mode without letting an unrecognized value fail the
+/// whole record it belongs to.
+///
+/// Persisted carriers must use this. A file written by a newer build can hold a
+/// mode this build has never heard of, and the strict derive would turn that
+/// single field into a parse failure for the entire session state — the failure
+/// mode that made incompatible model settings block startup before.
+///
+/// An unreadable value degrades to `None`, which means "follow the user-level
+/// default". That is the same resolution a session that never chose a mode
+/// gets, so the fallback lands on a value the user configured themselves rather
+/// than on a mode nobody asked for. The selection is intentionally dropped
+/// rather than preserved: a value this build cannot evaluate must not decide
+/// how tools get authorized.
+pub fn deserialize_optional_permission_mode<'de, D>(
+    deserializer: D,
+) -> Result<Option<PermissionMode>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<Value>::deserialize(deserializer)?;
+    Ok(value
+        .as_ref()
+        .and_then(Value::as_str)
+        .and_then(PermissionMode::parse))
+}
+
+/// The layer that owns the effective mode of one dialog turn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PermissionModeSource {
+    /// The user-level default applied to sessions that never chose a mode.
+    GlobalDefault,
+    /// A workspace-level default. Reserved: no surface writes this layer yet.
+    Project,
+    /// The session's own selection.
+    Session,
+    /// A single submission's one-off selection.
+    Turn,
+}
+
+/// Ordered mode inputs. Later layers win; every layer is optional except the
+/// global default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PermissionModeLayers {
+    pub global_default: PermissionMode,
+    pub project: Option<PermissionMode>,
+    pub session: Option<PermissionMode>,
+    pub turn: Option<PermissionMode>,
+}
+
+impl PermissionModeLayers {
+    pub const fn new(global_default: PermissionMode) -> Self {
+        Self {
+            global_default,
+            project: None,
+            session: None,
+            turn: None,
+        }
+    }
+
+    pub const fn with_session(mut self, session: Option<PermissionMode>) -> Self {
+        self.session = session;
+        self
+    }
+
+    pub const fn with_turn(mut self, turn: Option<PermissionMode>) -> Self {
+        self.turn = turn;
+        self
+    }
+}
+
+/// One effective mode plus the layer that owns it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedPermissionMode {
+    pub mode: PermissionMode,
+    pub source: PermissionModeSource,
+}
+
+/// Resolves `turn -> session -> project -> global default`.
+pub const fn resolve_permission_mode(layers: PermissionModeLayers) -> ResolvedPermissionMode {
+    if let Some(mode) = layers.turn {
+        return ResolvedPermissionMode {
+            mode,
+            source: PermissionModeSource::Turn,
+        };
+    }
+    if let Some(mode) = layers.session {
+        return ResolvedPermissionMode {
+            mode,
+            source: PermissionModeSource::Session,
+        };
+    }
+    if let Some(mode) = layers.project {
+        return ResolvedPermissionMode {
+            mode,
+            source: PermissionModeSource::Project,
+        };
+    }
+    ResolvedPermissionMode {
+        mode: layers.global_default,
+        source: PermissionModeSource::GlobalDefault,
+    }
+}
+
 /// Root configuration contract for the `tool_permissions` config section.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(default)]
@@ -252,6 +431,10 @@ pub struct ToolPermissionConfig {
 pub struct PermissionPolicyLayers<'a> {
     pub product_defaults: &'a [PermissionRule],
     pub global: &'a PermissionPolicyConfig,
+    /// Effective interaction mode for this resolution. `None` keeps the stored
+    /// global preset, which is the behavior of callers that never resolved a
+    /// session- or turn-scoped mode.
+    pub mode: Option<PermissionMode>,
     pub project: &'a [PermissionRule],
     pub agent: &'a [PermissionRule],
     pub enforced: &'a [PermissionRule],
@@ -266,6 +449,10 @@ pub struct PermissionPolicyLayers<'a> {
 pub struct ChildPermissionPolicyLayers<'a> {
     pub product_defaults: &'a [PermissionRule],
     pub global: &'a PermissionPolicyConfig,
+    /// Effective interaction mode inherited from the delegating turn. The
+    /// parent runtime ceiling is still applied on top, so an inherited
+    /// `FullAccess` cannot widen what the parent restricted.
+    pub mode: Option<PermissionMode>,
     pub project: &'a [PermissionRule],
     pub child_agent: &'a [PermissionRule],
     pub parent_runtime_ceiling: &'a PermissionRuntimeCeiling,
@@ -275,7 +462,7 @@ pub struct ChildPermissionPolicyLayers<'a> {
 /// Expands the configured preset and merges every static rule layer in its
 /// security-significant evaluation order.
 pub fn resolve_permission_policy(layers: PermissionPolicyLayers<'_>) -> ResolvedPermissionPolicy {
-    let baseline = layers.global.preset.baseline_rules();
+    let baseline = effective_preset(layers.mode, layers.global).baseline_rules();
     ResolvedPermissionPolicy::new(
         merge_permission_rule_layers(&[
             layers.product_defaults,
@@ -294,7 +481,7 @@ pub fn resolve_permission_policy(layers: PermissionPolicyLayers<'_>) -> Resolved
 pub fn resolve_child_permission_policy(
     layers: ChildPermissionPolicyLayers<'_>,
 ) -> ResolvedPermissionPolicy {
-    let baseline = layers.global.preset.baseline_rules();
+    let baseline = effective_preset(layers.mode, layers.global).baseline_rules();
     ResolvedPermissionPolicy::new(
         merge_permission_rule_layers(&[
             layers.product_defaults,
@@ -625,6 +812,14 @@ impl Default for PermissionEvaluator {
     fn default() -> Self {
         Self::for_current_platform()
     }
+}
+
+/// Picks the preset baseline a resolution should expand.
+fn effective_preset(
+    mode: Option<PermissionMode>,
+    global: &PermissionPolicyConfig,
+) -> PermissionPolicyPreset {
+    mode.map_or(global.preset, PermissionMode::preset)
 }
 
 /// Merges global, project, and agent rule layers without changing their order.

@@ -709,9 +709,19 @@
         "tooltip": "Permissions for this session are controlled by the ACP client."
       },
       "fullAccessWarningTitle": "Enable full access?",
-      "fullAccessWarningMessage": "Full access allows tools by default without asking each time.",
+      "fullAccessWarningMessage": "Full access allows tools by default without asking each time. This applies to the current session only; project and enforced rules still apply.",
       "fullAccessConfirm": "Enable full access",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "sessionScope": "This session",
+      "currentSessionOverride": "Permissions: {{mode}} (this session only)",
+      "resetToDefault": "Follow the default mode",
+      "noSession": "Open or start a session before changing its permission mode.",
+      "turnScope": "Next message only",
+      "currentTurnOverride": "Permissions: {{mode}} (next message only)",
+      "nextTurnOnly": "Use {{mode}} for the next message only",
+      "nextTurnOnlyShort": "Once",
+      "fullAccessWarningMessageNextTurn": "Full access allows tools by default without asking each time. This applies to the next message only; project and enforced rules still apply.",
+      "openDefaultSettings": "Open permission settings"
     },
     "addModeTooltip": "Add Plan or Debug",
     "boostSectionAgent": "Agent",

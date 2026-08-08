@@ -721,6 +721,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     ("get_session_lineage", RemoteWorkspacePolicy::RemoteRouted),
+    (
+        "get_session_permission_mode",
+        RemoteWorkspacePolicy::RemoteRouted,
+    ),
     ("get_session_files", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "get_session_operations",
@@ -1980,6 +1984,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("update_miniapp", RemoteWorkspacePolicy::LegacyUnaudited),
     ("update_session_mode", RemoteWorkspacePolicy::RemoteRouted),
+    (
+        "update_session_permission_mode",
+        RemoteWorkspacePolicy::RemoteRouted,
+    ),
     (
         "update_session_model",
         RemoteWorkspacePolicy::LegacyUnaudited,

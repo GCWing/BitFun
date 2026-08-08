@@ -14,7 +14,9 @@ use crate::agentic::memories::{
     parse_bitfun_memory_citation, parse_bitfun_memory_citation_payloads,
     strip_bitfun_memory_citations,
 };
-use crate::agentic::permission_policy::resolve_effective_permission_policy;
+use crate::agentic::permission_policy::{
+    permission_mode_from_context, resolve_effective_permission_policy,
+};
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::pipeline::{
     SubagentBatchExecutionPolicy as PipelineSubagentBatchExecutionPolicy, ToolExecutionContext,
@@ -34,7 +36,6 @@ use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
-use bitfun_agent_runtime::permission::AUTO_APPROVE_ASK_CONTEXT_KEY;
 use bitfun_agent_runtime::turn_cancellation::DialogTurnCancellationTokenStore;
 use bitfun_ai_adapters::{
     ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace, ModelExchangeTraceConfig,
@@ -217,6 +218,7 @@ impl RoundExecutor {
 
     fn resolve_permission_policy(
         global: &crate::service::config::types::GlobalConfig,
+        mode: bitfun_runtime_ports::PermissionMode,
         project_rules: &[PermissionRule],
         agent_profile: Option<&AgentProfileConfig>,
         agent_definition_constraints: &bitfun_runtime_ports::PermissionConstraintLayer,
@@ -224,6 +226,7 @@ impl RoundExecutor {
     ) -> bitfun_runtime_ports::ResolvedPermissionPolicy {
         resolve_effective_permission_policy(
             global,
+            Some(mode),
             project_rules,
             agent_profile,
             Some(agent_definition_constraints),
@@ -232,14 +235,16 @@ impl RoundExecutor {
         )
     }
 
-    fn resolve_auto_approve_ask(
+    /// The one place a running round learns its permission mode.
+    ///
+    /// Both the static preset and the interactive auto-answer preference are
+    /// derived from this single value, so a round can never run with a preset
+    /// from one mode and an approval behavior from another.
+    fn resolve_permission_mode(
         global: &crate::service::config::types::GlobalConfig,
         context_vars: &std::collections::HashMap<String, String>,
-    ) -> bool {
-        context_vars
-            .get(AUTO_APPROVE_ASK_CONTEXT_KEY)
-            .and_then(|value| value.parse::<bool>().ok())
-            .unwrap_or(global.tool_permissions.interaction.auto_approve_ask)
+    ) -> bitfun_runtime_ports::PermissionMode {
+        permission_mode_from_context(global, context_vars)
     }
 
     async fn sleep_with_cancellation(
@@ -1056,8 +1061,9 @@ impl RoundExecutor {
             let subagent_batch_execution_policy = Self::map_subagent_batch_execution_policy(
                 global_config.ai.subagent_batch_execution_policy,
             );
-            let auto_approve_ask =
-                Self::resolve_auto_approve_ask(&global_config, &context.context_vars);
+            let permission_mode =
+                Self::resolve_permission_mode(&global_config, &context.context_vars);
+            let auto_approve_ask = permission_mode.auto_approve_ask();
 
             let project_rules = match context.workspace.as_ref() {
                 Some(workspace) if workspace.is_remote() => {
@@ -1089,6 +1095,7 @@ impl RoundExecutor {
                 .get(agent_profile_id.as_ref());
             let permission_policy = Self::resolve_permission_policy(
                 &global_config,
+                permission_mode,
                 &project_rules,
                 agent_profile,
                 &context.permission_constraints,
@@ -1645,7 +1652,9 @@ mod tests {
     use crate::service::config::types::{AgentProfileConfig, GlobalConfig};
     use crate::util::errors::BitFunError;
     use crate::util::types::ai::GeminiUsage;
-    use bitfun_agent_runtime::permission::AUTO_APPROVE_ASK_CONTEXT_KEY;
+    use bitfun_agent_runtime::permission::{
+        AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
+    };
     use bitfun_agent_runtime::turn_cancellation::DialogTurnCancellationTokenStore;
     use bitfun_runtime_ports::{
         DelegationPolicy, PermissionEffect, PermissionEvaluator, PermissionPolicyPreset,
@@ -1772,6 +1781,7 @@ mod tests {
 
         let resolved = RoundExecutor::resolve_permission_policy(
             &global,
+            bitfun_runtime_ports::PermissionMode::Ask,
             &project_rules,
             Some(&agent),
             &Default::default(),
@@ -1798,38 +1808,65 @@ mod tests {
     }
 
     #[test]
-    fn auto_approve_context_overrides_persisted_interaction_preference() {
+    fn permission_mode_context_overrides_persisted_default_mode() {
+        use bitfun_runtime_ports::PermissionMode;
+
         let mut global = GlobalConfig::default();
         global.tool_permissions.interaction.auto_approve_ask = true;
         let mut context_vars = std::collections::HashMap::new();
 
-        assert!(RoundExecutor::resolve_auto_approve_ask(
-            &global,
-            &context_vars
-        ));
+        // No override: the stored configuration is the default mode.
+        assert_eq!(
+            RoundExecutor::resolve_permission_mode(&global, &context_vars),
+            PermissionMode::AutoApprove
+        );
+
+        // The legacy flag still speaks for the auto-approval half.
         context_vars.insert(
             AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
             "false".to_string(),
         );
-
-        assert!(!RoundExecutor::resolve_auto_approve_ask(
-            &global,
-            &context_vars
-        ));
+        assert_eq!(
+            RoundExecutor::resolve_permission_mode(&global, &context_vars),
+            PermissionMode::Ask
+        );
         context_vars.insert(AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(), "true".to_string());
-        assert!(RoundExecutor::resolve_auto_approve_ask(
-            &global,
-            &context_vars
-        ));
-
+        assert_eq!(
+            RoundExecutor::resolve_permission_mode(&global, &context_vars),
+            PermissionMode::AutoApprove
+        );
         context_vars.insert(
             AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
             "invalid".to_string(),
         );
-        assert!(RoundExecutor::resolve_auto_approve_ask(
-            &global,
-            &context_vars
-        ));
+        assert_eq!(
+            RoundExecutor::resolve_permission_mode(&global, &context_vars),
+            PermissionMode::AutoApprove
+        );
+
+        // The resolved mode key outranks the legacy flag.
+        context_vars.insert(
+            PERMISSION_MODE_CONTEXT_KEY.to_string(),
+            PermissionMode::FullAccess.as_str().to_string(),
+        );
+        context_vars.insert(
+            AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
+            "false".to_string(),
+        );
+        assert_eq!(
+            RoundExecutor::resolve_permission_mode(&global, &context_vars),
+            PermissionMode::FullAccess
+        );
+
+        // An unparseable mode falls back instead of failing open.
+        context_vars.insert(
+            PERMISSION_MODE_CONTEXT_KEY.to_string(),
+            "elevated".to_string(),
+        );
+        assert_eq!(
+            RoundExecutor::resolve_permission_mode(&global, &context_vars),
+            PermissionMode::Ask
+        );
     }
 
     #[tokio::test]

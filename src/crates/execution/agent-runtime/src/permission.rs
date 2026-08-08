@@ -20,7 +20,19 @@ const PERMISSION_EVENT_CAPACITY: usize = 128;
 ///
 /// Product surfaces may set this in dialog metadata to keep invocation-scoped
 /// policies (such as CLI `--auto`) separate from persisted user preferences.
+///
+/// Superseded by [`PERMISSION_MODE_CONTEXT_KEY`], which carries the whole mode
+/// instead of the auto-approval half. Still read so existing surfaces and
+/// persisted submissions keep working.
 pub const AUTO_APPROVE_ASK_CONTEXT_KEY: &str = "auto_approve_ask";
+
+/// Effective permission mode for one dialog turn.
+///
+/// The owning surface resolves `turn -> session -> global default` once at
+/// submission time and writes the result here. Everything downstream, including
+/// delegated subagents, reads this single value instead of re-resolving the
+/// layers with partial context.
+pub const PERMISSION_MODE_CONTEXT_KEY: &str = "permission_mode";
 
 /// Provider-neutral result of applying resolved policy and remembered grants.
 ///

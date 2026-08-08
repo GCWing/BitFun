@@ -47,8 +47,8 @@
   },
   "permissionPolicy": {
     "sectionTitle": "工具權限",
-    "sectionDescription": "設定預設工具存取策略和權限詢問的處理方式。",
-    "mode": "權限模式",
+    "sectionDescription": "選擇工作階段的預設工具存取原則，以及權限請求的處理方式。",
+    "mode": "預設權限模式",
     "ask": "需要確認",
     "askDescription": "外部存取、修改檔案和執行命令需要確認。",
     "fullAccess": "完全存取",
@@ -60,7 +60,7 @@
     "autoApprove": "自動批准",
     "autoApproveDescription": "自動批准需要確認的請求。",
     "showInChatInput": "顯示權限模式選擇器",
-    "showInChatInputDescription": "在聊天輸入框下方顯示權限模式選擇器。隱藏它不會變更目前權限模式。",
+    "showInChatInputDescription": "在輸入框下方顯示選擇器，在該處切換的模式僅作用於目前工作階段。隱藏它不會變更任何工作階段的權限模式。",
     "globalRules": "全域規則",
     "globalRulesDescription": "定義使用者級規則；它們在所選模式之後、專案和 Agent 規則之前套用。",
     "manageGlobalRules": "管理規則",
@@ -78,7 +78,8 @@
     "removeGlobalRule": "刪除規則",
     "discardGlobalRules": "放棄變更",
     "saveGlobalRules": "儲存規則",
-    "globalRulesEffects": { "allow": "允許", "ask": "詢問", "deny": "拒絕" }
+    "globalRulesEffects": { "allow": "允許", "ask": "詢問", "deny": "拒絕" },
+    "modeDescription": "作用於尚未單獨設定的工作階段。每個工作階段都可以在輸入框中覆寫該預設值。"
   },
   "projectPermissions": {
     "description": "「始終允許」會儲存為目前專案的記憶授權；靜態專案規則會在工具執行前直接套用。",
