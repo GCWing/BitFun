@@ -252,21 +252,6 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
         ],
       },
       {
-        id: 'hooks',
-        labelKey: 'configCenter.tabs.hooks',
-        descriptionKey: 'configCenter.tabDescriptions.hooks',
-        keywords: [
-          'hooks',
-          'hook',
-          'lifecycle',
-          'pretooluse',
-          'posttooluse',
-          'codex',
-          'automation',
-          'guardrail',
-        ],
-      },
-      {
         id: 'mcp-tools',
         labelKey: 'configCenter.tabs.mcpTools',
         descriptionKey: 'configCenter.tabDescriptions.mcpTools',
@@ -330,6 +315,8 @@ export function normalizeSettingsTab(section: string): ConfigTab {
   if (section === 'session-config') return 'session-personalization';
   if (section === 'deep-review' || section === 'code-review' || section === 'review-team') return 'review';
   if (section === 'shortcuts' || section === 'keybindings' || section === 'hotkeys') return 'keyboard';
+  // Hooks are part of the external AI applications surface, not a standalone page.
+  if (section === 'hooks') return 'external-sources';
   if ((KNOWN_TABS as readonly string[]).includes(section)) return section as ConfigTab;
   return DEFAULT_SETTINGS_TAB;
 }

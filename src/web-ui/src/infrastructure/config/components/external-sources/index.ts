@@ -12,9 +12,7 @@ export type { ExternalSourceSectionProps } from './ExternalSourceSection';
 export { useExternalAppAwareness } from './useExternalAppAwareness';
 export { ExternalAppsOverview } from './ExternalAppsOverview';
 export type { ExternalAppsOverviewProps } from './ExternalAppsOverview';
-export { ExternalAppDetail } from './ExternalAppDetail';
-export type { ExternalAppDetailProps } from './ExternalAppDetail';
-export { buildExternalApplicationsView, buildExternalConnectionMessage } from './applicationModel';
+export { buildExternalApplicationsView } from './applicationModel';
 export type {
   ExternalApplicationView,
   ExternalApplicationsView,

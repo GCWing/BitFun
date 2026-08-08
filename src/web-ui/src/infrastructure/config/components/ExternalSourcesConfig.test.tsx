@@ -320,6 +320,116 @@ describe('ExternalSourcesConfig', () => {
     });
   });
 
+  it('shows one review entry and keeps advanced capability controls collapsed by default', async () => {
+    const policySnapshot = {
+      ...snapshot,
+      preferenceRevision: 4,
+      integrationPolicy,
+      sources: [{
+        ...snapshot.sources[0],
+        record: {
+          ...snapshot.sources[0].record,
+          ecosystemId: 'opencode',
+        },
+      }],
+      commandConflicts: [],
+      toolApprovalRequests: [{
+        approvalKey: 'approval-1',
+        decisionKey: 'decision-1',
+        targetId: {
+          source: { providerId: 'opencode.commands', sourceId: 'project' },
+          localId: 'tool-a',
+        },
+        sourceDisplayName: 'OpenCode',
+        sourceLocation: '<workspace>/.opencode',
+        sourceScope: 'project',
+        toolNames: ['tool-a'],
+        runtimeKind: 'node',
+        workingDirectory: '<workspace>',
+        capabilities: ['file_system'],
+        contentVersion: 'v1',
+      }],
+    };
+    getSnapshotMock.mockResolvedValue(policySnapshot);
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    expect(container.querySelectorAll('[data-bf-part="attentionSummary"]')).toHaveLength(1);
+    expect(container.textContent).toContain('applications.review.title');
+    const advanced = container.querySelector<HTMLDetailsElement>(
+      '.bitfun-external-sources-config__advanced',
+    );
+    expect(advanced?.open).toBe(false);
+
+    const openReview = container.querySelector<HTMLButtonElement>('[data-bf-part="attentionSummary"]');
+    await act(async () => openReview?.click());
+    expect(advanced?.open).toBe(true);
+  });
+
+  it('uses each application switch as the recommended connection control without a dialog', async () => {
+    const policySnapshot = {
+      ...snapshot,
+      preferenceRevision: 4,
+      integrationPolicy: {
+        ...integrationPolicy,
+        userDefaults: {
+          ...integrationPolicy.userDefaults,
+          ecosystems: { opencode: { mode: 'discover_only', capabilityOverrides: {} } },
+        },
+        globalEffective: {
+          ...integrationPolicy.globalEffective,
+          ecosystems: {
+            opencode: {
+              ...integrationPolicy.globalEffective.ecosystems.opencode,
+              mode: 'discover_only',
+            },
+          },
+        },
+        effective: {
+          ...integrationPolicy.effective,
+          ecosystems: {
+            opencode: {
+              ...integrationPolicy.effective.ecosystems.opencode,
+              mode: 'discover_only',
+            },
+          },
+        },
+      },
+      sources: [{
+        ...snapshot.sources[0],
+        record: { ...snapshot.sources[0].record, ecosystemId: 'opencode' },
+      }],
+      commandConflicts: [],
+      diagnostics: [],
+    };
+    getSnapshotMock.mockResolvedValue(policySnapshot);
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    const applicationToggle = container.querySelector<HTMLInputElement>(
+      '[data-bf-part="applicationToggle"] input[type="checkbox"]',
+    );
+    expect(applicationToggle?.checked).toBe(false);
+    await act(async () => applicationToggle?.click());
+
+    expect(container.textContent).not.toContain('applications.connectTitle');
+    expect(updateIntegrationPolicyMock).toHaveBeenCalledWith('D:/workspace/project', {
+      expectedPreferenceRevision: 4,
+      scope: 'workspace',
+      change: {
+        operation: 'set_ecosystem_mode',
+        ecosystemId: 'opencode',
+        mode: 'recommended',
+      },
+    });
+  });
+
   it('keeps compatibility controls compact and applies the safe OpenCode defaults', async () => {
     const policySnapshot = {
       ...snapshot,

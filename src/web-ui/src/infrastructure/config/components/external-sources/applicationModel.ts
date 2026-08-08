@@ -3,7 +3,6 @@ import type {
   ExternalIntegrationMode,
   ExternalSourceCatalogSnapshot,
 } from '@/infrastructure/api/service-api/ExternalSourcesAPI';
-import type { TFunction } from 'i18next';
 import type {
   ExternalSourceCapabilityCounts,
   ExternalSourcePresentationGroup,
@@ -34,13 +33,20 @@ export interface ExternalApplicationCapabilityPlan {
   count: number;
 }
 
+export interface ExternalApplicationActiveCapability {
+  capabilityId: string;
+  count: number;
+}
+
 export interface ExternalApplicationView {
   ecosystemId: string;
   displayName: string;
   mode: ExternalIntegrationMode;
   status: ExternalApplicationStatus;
   primaryAction: ExternalApplicationAction;
+  enabled: boolean;
   counts: ExternalSourceCapabilityCounts;
+  activeCapabilities: ExternalApplicationActiveCapability[];
   sourceCount: number;
   locations: string[];
   /** Attention items that could be attributed to this ecosystem. */
@@ -62,24 +68,6 @@ const CAPABILITY_COUNT_FIELD: Record<string, keyof ExternalSourceCapabilityCount
   subagent: 'agents',
   mcp: 'mcps',
 };
-
-export function buildExternalConnectionMessage(
-  plan: ExternalApplicationCapabilityPlan[],
-  t: TFunction,
-  scope: 'user' | 'workspace' = 'workspace',
-): string {
-  const automaticCount = plan
-    .filter((entry) => entry.recommendedAccess === 'auto')
-    .reduce((total, entry) => total + entry.count, 0);
-  const managedCount = plan
-    .filter((entry) => entry.recommendedAccess !== 'auto')
-    .reduce((total, entry) => total + entry.count, 0);
-  return t('applications.connectSummary', {
-    automaticCount,
-    managedCount,
-    scope: t(`applications.connectScope.${scope}`),
-  });
-}
 
 function sourcePairKey(providerId: string, sourceId: string): string {
   return `${providerId}\u0000${sourceId}`;
@@ -262,9 +250,19 @@ export function buildExternalApplicationsView(
       mcps: total.mcps + group.counts.mcps,
     }), { commands: 0, tools: 0, agents: 0, mcps: 0 });
 
-    const mode = effective.ecosystems[ecosystemId]?.mode ?? 'recommended';
+    const ecosystemPolicy = effective.ecosystems[ecosystemId];
+    const mode = ecosystemPolicy?.mode ?? 'recommended';
     const attentionCount = byEcosystem.get(ecosystemId) ?? 0;
     const status = statusFor(mode, sources.length, attentionCount, snapshot.discoveryPending);
+    const enabled = effective.enabled && (mode === 'recommended' || mode === 'custom');
+    const activeCapabilities = descriptor.capabilities.flatMap((capability) => {
+      const countField = CAPABILITY_COUNT_FIELD[capability.capabilityId];
+      const count = countField ? counts[countField] : 0;
+      const access = ecosystemPolicy?.capabilities?.[capability.capabilityId];
+      return enabled && count > 0 && access !== 'disabled' && access !== 'discover_only'
+        ? [{ capabilityId: capability.capabilityId, count }]
+        : [];
+    });
 
     return {
       ecosystemId,
@@ -272,7 +270,9 @@ export function buildExternalApplicationsView(
       mode,
       status,
       primaryAction: actionFor(status),
+      enabled,
       counts,
+      activeCapabilities,
       sourceCount: sources.length,
       locations: Array.from(new Set(sources.map((source) => source.record.location))),
       attentionCount,

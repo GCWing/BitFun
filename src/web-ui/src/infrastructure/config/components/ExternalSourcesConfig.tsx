@@ -58,12 +58,10 @@ import {
 } from '../externalSourcePresentation';
 import { externalSourceRequestScopeKey } from './externalSourceRequestScope';
 import {
-  ExternalAppDetail,
   ExternalAppsOverview,
   ExternalCommandConflicts,
   ExternalSourceSection,
   buildExternalApplicationsView,
-  buildExternalConnectionMessage,
   type ExternalApplicationView,
 } from './external-sources';
 import './ExternalSourcesConfig.scss';
@@ -391,8 +389,6 @@ const ExternalSourcesConfig: React.FC = () => {
     preferenceRevision: number;
   } | null>(null);
   const [agentChangeNotice, setAgentChangeNotice] = useState<AgentChangeNotice | null>(null);
-  const [connectingApplication, setConnectingApplication] = useState<ExternalApplicationView | null>(null);
-  const [selectedApplicationId, setSelectedApplicationId] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const snapshotRef = useRef<ExternalSourceCatalogSnapshot | null>(null);
   const agentChangeNoticeRef = useRef<AgentChangeNotice | null>(null);
@@ -635,9 +631,6 @@ const ExternalSourcesConfig: React.FC = () => {
     () => buildExternalApplicationsView(snapshot, sourceGroups, policyScope),
     [policyScope, snapshot, sourceGroups],
   );
-  const selectedApplication = applicationsView.applications.find(
-    (application) => application.ecosystemId === selectedApplicationId,
-  ) ?? null;
 
   const commandConflicts = useMemo(
     () => unresolvedFirst(snapshot?.commandConflicts ?? []),
@@ -1092,17 +1085,22 @@ const ExternalSourcesConfig: React.FC = () => {
     );
   }, [policyScope, runMutation, snapshot, t, workspacePath]);
 
-  const connectApplication = useCallback(async () => {
-    const application = connectingApplication;
-    if (!application || !snapshot) return;
-    setConnectingApplication(null);
-    const accepted = await updatePolicy({
+  const toggleApplication = useCallback(async (
+    application: ExternalApplicationView,
+    enabled: boolean,
+  ) => {
+    if (!snapshot) return;
+    // Re-enabling a custom-tuned application restores its custom mode instead of
+    // silently flattening per-capability decisions back to the recommended set.
+    const mode = enabled
+      ? (application.mode === 'custom' ? 'custom' : 'recommended')
+      : 'disabled';
+    await updatePolicy({
       operation: 'set_ecosystem_mode',
       ecosystemId: application.ecosystemId,
-      mode: 'recommended',
+      mode,
     });
-    if (accepted) setOperationStatus(t('applications.connectionComplete'));
-  }, [connectingApplication, snapshot, t, updatePolicy]);
+  }, [snapshot, updatePolicy]);
 
   const updateCapabilityAccess = useCallback((
     ecosystemId: string,
@@ -1155,6 +1153,11 @@ const ExternalSourcesConfig: React.FC = () => {
     target.tabIndex = -1;
     target.focus();
   }, []);
+
+  const openAdvanced = useCallback(() => {
+    setAdvancedOpen(true);
+    window.requestAnimationFrame(scrollToFirstAttentionItem);
+  }, [scrollToFirstAttentionItem]);
 
   const revealSourceLocation = useCallback(async (sourceKey: string): Promise<boolean> => {
     const scope = requestScope;
@@ -1449,22 +1452,16 @@ const ExternalSourcesConfig: React.FC = () => {
                 ) : null}
               </ConfigPageSection>
             ) : null}
-            {snapshot && selectedApplication ? (
-              <ExternalAppDetail
-                application={selectedApplication}
-                t={t}
-                onBack={() => setSelectedApplicationId(null)}
-                onOpenAdvanced={() => {
-                  setAdvancedOpen(true);
-                  window.requestAnimationFrame(scrollToFirstAttentionItem);
-                }}
-              />
-            ) : snapshot ? (
+            {snapshot ? (
               <ExternalAppsOverview
                 applications={applicationsView.applications}
                 t={t}
-                onConnect={(application) => setConnectingApplication(application)}
-                onManage={(application) => setSelectedApplicationId(application.ecosystemId)}
+                totalAttentionCount={applicationsView.totalAttentionCount}
+                busy={busyKey !== null}
+                canMutate={policyCompatible && hostCapabilities.canMutatePolicy}
+                policiesEnabled={selectedPolicyEnabled}
+                onToggle={(application, enabled) => void toggleApplication(application, enabled)}
+                onOpenAdvanced={openAdvanced}
               />
             ) : null}
             <details
@@ -3184,17 +3181,6 @@ const ExternalSourcesConfig: React.FC = () => {
           </>
         )}
       </ConfigPageContent>
-      <ConfirmDialog
-        isOpen={connectingApplication !== null}
-        onClose={() => setConnectingApplication(null)}
-        onConfirm={() => void connectApplication()}
-        title={connectingApplication ? t('applications.connectTitle', { name: connectingApplication.displayName }) : ''}
-        message={connectingApplication
-          ? buildExternalConnectionMessage(connectingApplication.connectPlan, t, policyScope)
-          : ''}
-        type="info"
-        confirmText={t('applications.actions.connect')}
-      />
       <ConfirmDialog
         isOpen={resetPolicyConfirmation !== null}
         onClose={() => setResetPolicyConfirmation(null)}

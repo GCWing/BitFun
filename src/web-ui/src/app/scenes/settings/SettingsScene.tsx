@@ -22,7 +22,6 @@ import {
   BasicsConfig,
   EditorConfig,
   ExternalSourcesConfig,
-  HooksConfig,
   KeyboardShortcutsTab,
   McpToolsConfig,
   MemoriesConfig,
@@ -69,7 +68,8 @@ function resolveSettingsContent(tab: ConfigTab): React.ComponentType | null {
     case 'memories':                return MemoriesConfig;
     case 'mcp-tools':               return McpToolsConfig;
     case 'external-sources':        return ExternalSourcesConfig;
-    case 'hooks':                   return HooksConfig;
+    // Hooks are part of the external AI applications surface.
+    case 'hooks':                   return ExternalSourcesConfig;
     case 'acp-agents':              return AcpAgentsConfig;
     case 'editor':                  return EditorConfig;
     case 'keyboard':                return KeyboardShortcutsTab;

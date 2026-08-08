@@ -4,7 +4,7 @@ import type {
   ExternalSourceRecord,
 } from '@/infrastructure/api/service-api/ExternalSourcesAPI';
 import { buildExternalSourcePresentationGroups } from '../../externalSourcePresentation';
-import { buildExternalApplicationsView, buildExternalConnectionMessage } from './applicationModel';
+import { buildExternalApplicationsView } from './applicationModel';
 
 const OPENCODE_CAPABILITIES = [
   { capabilityId: 'command', recommendedAccess: 'auto' as const, safetyCeiling: 'auto' as const },
@@ -125,6 +125,31 @@ describe('external application model', () => {
     const opencode = result.applications[0];
     expect(opencode.status).toBe('connected');
     expect(opencode.primaryAction).toBe('manage');
+    expect(opencode.enabled).toBe(true);
+  });
+
+  it('reports only capability types that are active under the effective policy', () => {
+    const result = view(snapshot({
+      sources: [source('opencode-user', 'opencode')],
+      integrationPolicy: withMode('opencode', 'recommended'),
+      commands: [{
+        candidateId: 'command-1',
+        definition: {
+          id: {
+            source: { providerId: 'opencode.commands', sourceId: 'user-configuration' },
+            localId: 'review',
+          },
+          name: 'review',
+          description: 'Review',
+          availability: { state: 'available' },
+          contentVersion: 'v1',
+        },
+      }],
+    }));
+
+    expect(result.applications[0].activeCapabilities).toEqual([
+      { capabilityId: 'command', count: 1 },
+    ]);
   });
 
   it('keeps custom ecosystems on manage so a two-state toggle cannot flatten them', () => {
@@ -145,6 +170,7 @@ describe('external application model', () => {
 
     expect(result.applications[0].status).toBe('discovered');
     expect(result.applications[0].primaryAction).toBe('connect');
+    expect(result.applications[0].enabled).toBe(false);
   });
 
   it('attributes tool approvals to the owning ecosystem', () => {
@@ -274,18 +300,5 @@ describe('external application model', () => {
       .toMatchObject({ recommendedAccess: 'auto', count: 1 });
     expect(plan.find((entry) => entry.capabilityId === 'tool'))
       .toMatchObject({ recommendedAccess: 'ask_before_use', count: 0 });
-  });
-
-  it('builds connection copy from the capability plan instead of fixed capability names', () => {
-    const result = view(snapshot({
-      sources: [source('claude-user', 'claude-code')],
-      integrationPolicy: withMode('claude-code', 'discover_only'),
-    }));
-
-    expect(buildExternalConnectionMessage(result.applications[1].connectPlan, (key, params) =>
-      `${key}:${JSON.stringify(params)}`,
-    )).toBe(
-      'applications.connectSummary:{"automaticCount":0,"managedCount":0,"scope":"applications.connectScope.workspace:undefined"}',
-    );
   });
 });

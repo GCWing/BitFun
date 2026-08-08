@@ -36,13 +36,23 @@
       "manage": "Manage",
       "review": "Review"
     },
-    "connectTitle": "Connect {{name}}",
-    "connectSummary": "{{automaticCount}} low-risk items will be available automatically; {{managedCount}} executable items remain managed. Scope: {{scope}}.",
-    "connectScope": {
-      "workspace": "this workspace",
-      "user": "all workspaces in this execution domain"
+    "expand": "Show or hide {{name}} capabilities",
+    "toggleLabel": "Enable or disable {{name}}",
+    "review": {
+      "title_one": "{{count}} item needs review",
+      "title_other": "{{count}} items need review",
+      "description": "BitFun handles the safe defaults automatically. Open to confirm the items that need a decision."
     },
-    "connectionComplete": "The application is connected. Review any capabilities that still need confirmation.",
+    "capabilities": {
+      "command": "Commands",
+      "tool": "Tools",
+      "agents": "Agents",
+      "mcps": "MCP servers"
+    },
+    "capabilityAccess": {
+      "auto": "Available automatically",
+      "managed": "Managed"
+    },
     "advanced": {
       "title": "Advanced settings",
       "description": "Sources, capability access, diagnostics, and conflicts"

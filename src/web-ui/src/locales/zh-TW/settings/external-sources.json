@@ -36,13 +36,23 @@
       "manage": "管理",
       "review": "檢查"
     },
-    "connectTitle": "連線 {{name}}",
-    "connectSummary": "{{automaticCount}} 項低風險內容將自動可用；{{managedCount}} 項可執行內容仍受管理。作用範圍：{{scope}}。",
-    "connectScope": {
-      "workspace": "僅目前工作區",
-      "user": "目前執行域中的所有工作區"
+    "expand": "顯示或隱藏 {{name}} 的能力",
+    "toggleLabel": "啟用或停用 {{name}}",
+    "review": {
+      "title_one": "{{count}} 項需要確認",
+      "title_other": "{{count}} 項需要確認",
+      "description": "BitFun 會自動處理安全預設項。開啟後確認需要你決定的內容。"
     },
-    "connectionComplete": "應用已連線。仍需確認的能力會保留在檢查清單中。",
+    "capabilities": {
+      "command": "命令",
+      "tool": "工具",
+      "agents": "代理",
+      "mcps": "MCP 伺服器"
+    },
+    "capabilityAccess": {
+      "auto": "自動可用",
+      "managed": "受管理"
+    },
     "advanced": {
       "title": "進階設定",
       "description": "設定來源、能力存取、診斷與衝突"

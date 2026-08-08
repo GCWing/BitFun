@@ -34,7 +34,7 @@ export const SETTINGS_TAB_I18N_NAMESPACES: Record<ConfigTab, readonly I18nNamesp
   memories: ['settings/memories'],
   'mcp-tools': ['settings/mcp-tools', 'settings/mcp', 'shared'],
   'external-sources': ['settings/external-sources', 'shared'],
-  hooks: ['settings/hooks'],
+  hooks: ['settings/external-sources', 'shared'],
   'acp-agents': ['settings/acp-agents'],
   editor: ['settings/editor'],
   keyboard: ['settings'],
