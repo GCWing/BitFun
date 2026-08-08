@@ -1,0 +1,29 @@
+feat: customization reference snapshot
+
+Multi-agent collaboration and external ACP agent integration
+enhancements on top of upstream main (e640aa40).
+
+Highlights:
+- ACP tool family: session-level direct connection with external
+  ACP agents (CodeBuddy, Claude Code, etc.) via SessionControl /
+  SessionMessage tools, real-session creation and lifecycle bridge
+- Warden guard system: failure-streak governance with scene
+  fingerprinting, LLM judgement port, goal linkage and reference
+  file following
+- RBAC subagent roles: role pinning for subagent-marked sessions,
+  GeneralPurpose-specific template, K8 template batch
+  (Executor read access)
+- Session/SessionControl enhancements: compact action, model_id,
+  short names, ghost-deletion fix (created_by + owner/ancestor
+  fallback), ghost-delivery fix
+- Engine/injection: runtime facts per-round refresh, user-context
+  once-per-generation injection, context-usage display persistence
+- Legion/task/plan toolchain: legion control, task dual lifecycle
+  with ACP support, plan tool family, goal dual-trigger
+- CodeBuddy provider: local gateway adapter (ApiFormat::CodeBuddy,
+  Runs two-step streaming), empty finish_reason protection
+- Web UI: flow-chat session/turn display, legion pages, model
+  switching UI
+- Notify-style injection: minimal metadata for background task
+  completion (P-19 family), full content retrievable via
+  SessionHistory

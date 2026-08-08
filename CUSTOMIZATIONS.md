@@ -43,7 +43,7 @@ to the files in this pull request.
 7. [Implementation 4: RBAC for Subagents](#7-implementation-4-rbac-for-subagents)
 8. [Implementation 5: Engine and Context Injection](#8-implementation-5-engine-and-context-injection)
 9. [Implementation 6: Orchestration Toolchain (Legion, Task, Plan, Goal)](#9-implementation-6-orchestration-toolchain)
-10. [Implementation 7: CodeBuddy Provider Adapter](#10-implementation-7-codebuddy-provider-adapter)
+10. [Implementation 7: CodeBuddy Integration](#10-implementation-7-codebuddy-integration)
 11. [Implementation 8: Web UI](#11-implementation-8-web-ui)
 12. [Evaluation](#12-evaluation)
 13. [Conclusion and Future Work](#13-conclusion-and-future-work)
@@ -535,31 +535,40 @@ workspace are silent (`.../goal_mode/mod.rs`).
 
 ---
 
-## 10. Implementation 7: CodeBuddy Provider Adapter
+## 10. Implementation 7: CodeBuddy Integration
 
 ### 10.1 Design
 
 CodeBuddy (Tencent's coding agent) exposes an OpenAI-compatible cloud API at
 `https://copilot.tencent.com/v2/chat/completions`. Because the endpoint is
-OpenAI-shaped, BitFun can reuse its existing OpenAI transport; the adapter
-adds a small conversion layer.
+OpenAI-shaped, BitFun reuses its existing OpenAI transport **zero-code**:
+users configure a normal `openai` provider model with the CodeBuddy cloud
+base URL + `ck_` API key (`docs/功能文档/16-codebuddy接入.md` is the single
+authority source). There is no dedicated CodeBuddy provider adapter.
 
-### 10.2 Components
+History: an earlier design ("方案 A") implemented a dedicated CodeBuddy
+provider (`ApiFormat::CodeBuddy` + `providers/codebuddy/` + `/runs` local
+gateway streaming). It was removed in 2026-08-06 because the `codebuddy
+--serve` gateway is agent-execution semantics (non-streaming / 8s waits /
+timeouts), and an independent bridge (`codebuddy-gateway :8090`) dropped
+`tools`/`tool_choice` during message assembly, breaking tool calls. All
+remnants of 方案 A (provider catalog entry, UI format option, type unions)
+were deleted; nothing in the codebase consumes `api_format: "codebuddy"`.
 
-| Piece | File |
+### 10.2 Runtime shape
+
+| Piece | Where |
 |---|---|
-| Provider enum value `CodeBuddy` | `src/crates/adapters/ai-adapters/src/client/format.rs` |
-| Message converter | `.../providers/codebuddy/message_converter.rs` |
-| Request builder | `.../providers/codebuddy/request.rs` |
-| Streaming handler (SSE) | `.../stream/stream_handler/codebuddy.rs` |
-| Provider catalog entry | `src/shared/ai-provider-catalog/providers.json` |
+| Cloud connection | `openai` provider, `https://copilot.tencent.com/v2`, `X-API-Key: ck_...` |
+| Empty `finish_reason` guard | `src/crates/execution/agent-stream/src/lib.rs` + `src/crates/adapters/ai-adapters/src/client/response_aggregator.rs` |
+| ACP channel (`acp:codebuddy`) | existing ACP client manager (VideoGen/ImageGen via CodeBuddy agent tools) |
 
 ### 10.3 Empty `finish_reason` protection
 
-The CodeBuddy stream emits an **empty string** as `finish_reason` on some
-frames. Old code treated any `finish_reason` as "turn done", aborting tool
-calls early. The fix treats only non-empty `finish_reason` as a completion
-signal (`src/crates/execution/agent-stream/src/lib.rs`,
+The CodeBuddy stream emits an **empty string** as `finish_reason` on every
+frame. Old code treated any `finish_reason` as "turn done", aborting tool
+calls early (raw_len=0). The fix treats only non-empty `finish_reason` as a
+completion signal (`src/crates/execution/agent-stream/src/lib.rs`,
 `src/crates/adapters/ai-adapters/src/client/response_aggregator.rs`), guarded
 by contract tests.
 
@@ -567,6 +576,8 @@ by contract tests.
 
 The model settings UI gained a searchable provider picker and a global
 default-model selection (`src/web-ui/src/infrastructure/config/...`).
+CodeBuddy cloud models are configured as ordinary `openai` provider entries;
+no `codebuddy` format option is offered.
 
 ---
 
@@ -622,8 +633,9 @@ The following are known limitations of the snapshot:
 
 - The Warden judgement port requires a model endpoint at runtime; its
   behaviour without a configured model is conservative (no pokes).
-- The CodeBuddy adapter depends on the cloud endpoint's API shape, which may
-  evolve independently.
+- The CodeBuddy cloud endpoint's API shape may evolve independently; the
+  empty-`finish_reason` guard and `tool_choice: "auto"` string form are the
+  two known contract quirks (see §10.3 and `docs/功能文档/16-codebuddy接入.md`).
 - The workflow model in §3 is a *methodology* — it is realized through the
   platform's session/task/tool machinery, but it is not itself a separate
   runtime component.
@@ -641,10 +653,10 @@ stabilizes the prompt-cache prefix and bounds dynamic injection. The workflow
 architecture (C4) provides a separation-of-powers coordination model.
 
 Future work includes: making the Warden judgement port optional-configurable
-per workspace; extending the CodeBuddy adapter to additional endpoints as
-they become OpenAI-compatible; and formalizing the coordination model (§3)
-as an explicit runtime policy (e.g. a declarative workflow configuration
-consumed by the scheduler).
+per workspace; tracking the CodeBuddy cloud endpoint's contract evolution
+(empty `finish_reason`, `tool_choice` string form) as it changes; and
+formalizing the coordination model (§3) as an explicit runtime policy (e.g. a
+declarative workflow configuration consumed by the scheduler).
 
 ---
 
