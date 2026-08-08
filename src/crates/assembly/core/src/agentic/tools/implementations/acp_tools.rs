@@ -15,6 +15,9 @@ use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::agentic::tools::implementations::session_control_tool::{
+    resolve_session_mutation_authorization, SessionMutationAuthOptions,
+};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_runtime_ports::{
@@ -104,6 +107,37 @@ fn workspace_or_context(
         })
 }
 
+/// Authorization gate (PR #2139 R4): before touching an external ACP port,
+/// acp_control delete/cancel reuse SessionControl's shared authorization
+/// decision chain (daemon/warden interception + owner/created_by + ghost ACP
+/// flow session + ancestor traversal). Rejects when there is no global
+/// coordinator or the caller has no caller session (conservative safety).
+async fn authorize_acp_session_mutation(
+    context: &ToolUseContext,
+    workspace_path: &str,
+    session_id: &str,
+    action_label: &str,
+    options: SessionMutationAuthOptions,
+) -> BitFunResult<()> {
+    let caller_session_id = context.session_id.as_ref().ok_or_else(|| {
+        BitFunError::tool(format!(
+            "cannot {action_label} an ACP session without a caller session in tool context"
+        ))
+    })?;
+    let coordinator = get_global_coordinator()
+        .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
+    resolve_session_mutation_authorization(
+        coordinator.get_session_manager(),
+        coordinator.session_tree(),
+        caller_session_id,
+        session_id,
+        std::path::Path::new(workspace_path),
+        action_label,
+        options,
+    )
+    .await
+}
+
 /// Execute one `acp_control` action against the real ACP port.
 pub(crate) async fn run_acp_control(
     port: &dyn AcpClientPort,
@@ -185,8 +219,20 @@ pub(crate) async fn run_acp_control(
         "delete" => {
             let session_id = required_session_id(params.session_id.as_deref(), "delete")?;
             let workspace_path = workspace_or_context(params.workspace_path.as_deref(), context)?;
-            // 删除持久化流会话记录并释放外部进程：两个效果都需要，否则只剩
-            // release 会留下孤儿记录（已回收会话仍出现在列表里）。
+            // R4 authorization gate: rejects deletion when unauthorized (not
+            // owner/creator/ancestor, or not a ghost ACP flow session), sharing
+            // the same decision chain as SessionControl delete.
+            authorize_acp_session_mutation(
+                context,
+                &workspace_path,
+                &session_id,
+                "delete",
+                SessionMutationAuthOptions::delete(),
+            )
+            .await?;
+            // Delete the persisted flow-session record and release the external
+            // process: both effects are required, otherwise only releasing
+            // leaves an orphan record (a reclaimed session still appears in the list).
             port.delete_session_record(session_id.clone(), Some(workspace_path))
                 .await
                 .map_err(port_error)?;
@@ -205,6 +251,19 @@ pub(crate) async fn run_acp_control(
         }
         "cancel" => {
             let session_id = required_session_id(params.session_id.as_deref(), "cancel")?;
+            let workspace_path = workspace_or_context(params.workspace_path.as_deref(), context)?;
+            // R4 authorization gate: cancel follows delete's shared decision
+            // chain; ghost ACP flow sessions (no created_by is the designed
+            // shape) are allowed under delete semantics, and cancel allows them
+            // the same way (flow sessions have no created_by by design).
+            authorize_acp_session_mutation(
+                context,
+                &workspace_path,
+                &session_id,
+                "cancel",
+                SessionMutationAuthOptions::delete(),
+            )
+            .await?;
             port.cancel_session(AcpClientCancelRequest {
                 session_id: session_id.clone(),
             })
@@ -269,9 +328,11 @@ pub(crate) async fn run_acp_message(
         })
         .await
         .map_err(port_error)?;
-    // 方向 C（并列返回面）：result_for_assistant 只内嵌极简通知句（对齐
-    // task/execution.rs acp_send_input_notice 语义），不内嵌 sent.response 全文；
-    // 全文留在 data JSON 的 response 字段，父会话按需取 data / SessionHistory。
+    // Direction C (parallel return surface): result_for_assistant embeds only a
+    // minimal notice sentence (aligned with task/execution.rs
+    // acp_send_input_notice semantics), not the full sent.response text; the
+    // full text stays in the data JSON's response field, and the parent session
+    // fetches data / SessionHistory as needed.
     let result_for_assistant = if sent.response.trim().is_empty() {
         format!("External ACP session '{}' returned an empty response.", session_id)
     } else {
@@ -915,7 +976,8 @@ mod tests {
             session_id: String,
             _workspace_path: Option<String>,
         ) -> PortResult<()> {
-            // 与真实桌面实现一致：delete_session_record 内部会 release + 删除记录
+            // Matches the real desktop implementation: delete_session_record
+            // internally releases + deletes the record
             self.deleted.lock().unwrap().push(session_id);
             Ok(())
         }
@@ -1027,27 +1089,53 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn acp_control_delete_deletes_session_record() {
+    async fn acp_control_delete_without_caller_session_is_rejected() {
+        // R4 authorization gate: no caller session -> reject delete without
+        // touching the ACP port.
         let port = FakeAcpClientPort::default();
-        let results = run_acp_control(
+        let error = run_acp_control(
             &port,
             &json!({
                 "action": "delete",
-                "session_id": "acp_codex_s1",
+                "session_id": "acp_codex_7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b",
                 "workspace_path": "/repo/project",
             }),
             &context(),
         )
         .await
-        .expect("delete should succeed");
-
-        // delete 走 delete_session_record（release + 删除持久记录），而非仅 release
-        assert_eq!(
-            port.deleted.lock().unwrap().as_slice(),
-            &["acp_codex_s1".to_string()]
+        .expect_err("delete without a caller session must be rejected");
+        assert!(
+            error.to_string().contains("without a caller session"),
+            "{error}"
         );
+        assert!(port.deleted.lock().unwrap().is_empty());
         assert!(port.released.lock().unwrap().is_empty());
-        assert_eq!(results[0].content()["session_id"], "acp_codex_s1");
+    }
+
+    #[tokio::test]
+    async fn acp_control_delete_without_global_coordinator_is_rejected() {
+        // R4 authorization gate: has a caller session but no global coordinator
+        // -> reject delete (conservative safety: never touch the external port
+        // when authorization cannot be completed).
+        let port = FakeAcpClientPort::default();
+        let mut ctx = context();
+        ctx.session_id = Some("caller-1".to_string());
+        let error = run_acp_control(
+            &port,
+            &json!({
+                "action": "delete",
+                "session_id": "acp_codex_7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b",
+                "workspace_path": "/repo/project",
+            }),
+            &ctx,
+        )
+        .await
+        .expect_err("delete without a global coordinator must be rejected");
+        assert!(
+            error.to_string().contains("coordinator not initialized"),
+            "{error}"
+        );
+        assert!(port.deleted.lock().unwrap().is_empty());
     }
 
     #[tokio::test]
@@ -1061,20 +1149,51 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn acp_control_cancel_cancels_session() {
+    async fn acp_control_cancel_without_caller_session_is_rejected() {
+        // R4 authorization gate: no caller session -> reject cancel without
+        // touching the ACP port.
         let port = FakeAcpClientPort::default();
-        run_acp_control(
+        let error = run_acp_control(
             &port,
-            &json!({ "action": "cancel", "session_id": "acp_codex_s1" }),
+            &json!({
+                "action": "cancel",
+                "session_id": "acp_codex_7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b",
+                "workspace_path": "/repo/project",
+            }),
             &context(),
         )
         .await
-        .expect("cancel should succeed");
-
-        assert_eq!(
-            port.cancelled.lock().unwrap().as_slice(),
-            &["acp_codex_s1".to_string()]
+        .expect_err("cancel without a caller session must be rejected");
+        assert!(
+            error.to_string().contains("without a caller session"),
+            "{error}"
         );
+        assert!(port.cancelled.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn acp_control_cancel_without_global_coordinator_is_rejected() {
+        // R4 authorization gate: has a caller session but no global coordinator
+        // -> reject cancel.
+        let port = FakeAcpClientPort::default();
+        let mut ctx = context();
+        ctx.session_id = Some("caller-1".to_string());
+        let error = run_acp_control(
+            &port,
+            &json!({
+                "action": "cancel",
+                "session_id": "acp_codex_7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b",
+                "workspace_path": "/repo/project",
+            }),
+            &ctx,
+        )
+        .await
+        .expect_err("cancel without a global coordinator must be rejected");
+        assert!(
+            error.to_string().contains("coordinator not initialized"),
+            "{error}"
+        );
+        assert!(port.cancelled.lock().unwrap().is_empty());
     }
 
     #[tokio::test]
@@ -1118,8 +1237,9 @@ mod tests {
             panic!("expected a result payload");
         };
         let assistant_text = result_for_assistant.as_ref().unwrap();
-        // 方向 C：result_for_assistant 为极简通知句，不含全量 response 全文
-        //（全文留在 data["response"]）；断言收到极简通知而非全文。
+        // Direction C: result_for_assistant is a minimal notice sentence without
+        // the full response text (the full text stays in data["response"]);
+        // assert that a minimal notice is received, not the full text.
         assert!(assistant_text.contains("responded"));
         assert!(assistant_text.contains("SessionHistory"));
         assert!(!assistant_text.contains("external response"));

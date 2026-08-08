@@ -390,7 +390,8 @@ function handleEarlyDetected(
 
   const targetRound = dialogTurn.modelRounds.find(round => round.id === roundId);
   if (!targetRound) {
-    // B1 防御：round 缺失时先惰性建 round，再追加 tool 项，避免工具事件被静默丢弃。
+    // B1 defense: when the round is missing, lazily create it before appending
+    // the tool item, so tool events are never silently dropped.
     ensureModelRoundExists(context, sessionId, turnId, roundId);
   }
 
@@ -502,7 +503,8 @@ function handleStarted(
       pendingTerminalSessionIds.delete(toolEvent.tool_id);
       applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
     } else {
-      // B1 防御：round 缺失时先惰性建 round，再追加 tool 项，避免工具事件被静默丢弃。
+      // B1 defense: when the round is missing, lazily create it before appending
+      // the tool item, so tool events are never silently dropped.
       ensureModelRoundExists(context, sessionId, turnId, roundId);
       store.addModelRoundItem(sessionId, turnId, toolItem, roundId);
       pendingTerminalSessionIds.delete(toolEvent.tool_id);
@@ -784,9 +786,11 @@ export function handleToolTerminalReady(
 }
 
 /**
- * UI-11: turn 到达终态（completed / failed / cancelled）时清理模块级
- * pendingTerminalSessionIds 中属于该 turn 的滞留项——tool 尚未走到 Started
- * 即被终态吞掉时，其 terminal_session_id 不再有机会消费，避免 Map 无限累积。
+ * UI-11: When a turn reaches its terminal state (completed / failed /
+ * cancelled), clean up the module-level pendingTerminalSessionIds entries
+ * belonging to that turn — when a tool is swallowed by the terminal state
+ * before reaching Started, its terminal_session_id never gets consumed,
+ * avoiding unbounded Map growth.
  */
 export function cleanupPendingTerminalSessionIdsForTurn(
   sessionId: string,

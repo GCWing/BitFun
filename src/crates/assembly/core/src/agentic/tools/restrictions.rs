@@ -100,7 +100,7 @@ fn build_default_role_permissions() -> RolePermissionMap {
 
     // ── Executor ───────────────────────────────────────────────────
     // Allowed operation classes: ReadOnly + WriteFile + ExecuteCode
-    // （执行者读代码基本能力：Read/Write/Edit/ExecCommand 三件套配齐）
+    // (Executor's basic code-reading capability: the Read/Write/Edit/ExecCommand set)
     {
         let mut allowed_ops = BTreeSet::new();
         allowed_ops.insert(OperationClass::ReadOnly);
@@ -117,7 +117,7 @@ fn build_default_role_permissions() -> RolePermissionMap {
 
     // ── Reviewer ───────────────────────────────────────────────────
     // Allowed operation classes: ReadOnly + WriteFile + ExecuteCode (≈ Executor).
-    // （审查官读代码审查 + 落盘审查报告：Read/Write/Edit/ExecCommand 三件套配齐）
+    // (Reviewer reads code for review and lands review reports: the Read/Write/Edit/ExecCommand set)
     // Reviewers must be able to inspect and reproduce findings; the signature
     // now intentionally overlaps Executor, so role identity must come from the
     // persisted session role (SESSION_ROLES), never from template inference.
@@ -137,9 +137,9 @@ fn build_default_role_permissions() -> RolePermissionMap {
 
     // ── Warden ─────────────────────────────────────────────────────
     // Allowed operation classes: ReadOnly + WriteFile + Communicate + ExecuteCode
-    // （守卫审计也需读/落盘：Read/Write/Edit/ExecCommand 三件套配齐）
+    // (Warden audits also need read + disk landing: the Read/Write/Edit/ExecCommand set)
     // Allowed tool names: SessionHistory (extra, for cross-session inspection),
-    //                     ExecCommand (for gbrain search/query across full knowledge base),
+    //                     ExecCommand (for knowledge-base search/query),
     //                     Write/Edit (audit report landing)
     {
         let mut allowed_ops = BTreeSet::new();
@@ -163,7 +163,7 @@ fn build_default_role_permissions() -> RolePermissionMap {
     }
 
     // ── PunishmentExecutor ─────────────────────────────────────────
-    // Allowed tool names: Write (path-policy restricted to .master-framework/shame-wall-registry.json),
+    // Allowed tool names: Write (path-policy restricted to violation-registry),
     //                     SessionControl (lock capability)
     {
         let mut allowed_tools = BTreeSet::new();
@@ -186,12 +186,14 @@ fn build_default_role_permissions() -> RolePermissionMap {
     map
 }
 
-/// GeneralPurpose 专属权限模板（P-01 方案 2）。
+/// GeneralPurpose-specific permission template (P-01 plan 2).
 ///
-/// GeneralPurpose 是只读侦察 + 执行混合的子代理：需要 Read/Glob/Grep
-/// 等只读工具，而默认 Executor 模板只允许 {WriteFile, ExecuteCode} 会禁掉
-/// 只读类。专属模板允许 {ReadOnly, WriteFile, ExecuteCode, Communicate}，
-/// 工具集与 general_purpose.rs:17-35 保持一致。
+/// GeneralPurpose is a read-only reconnaissance + execution hybrid subagent:
+/// it needs read-only tools like Read/Glob/Grep, while the default Executor
+/// template only allows {WriteFile, ExecuteCode} which would forbid the
+/// read-only class. The dedicated template allows
+/// {ReadOnly, WriteFile, ExecuteCode, Communicate}, keeping the tool set in
+/// sync with general_purpose.rs:17-35.
 pub fn general_purpose_tool_restrictions() -> ToolRuntimeRestrictions {
     let mut allowed_ops = BTreeSet::new();
     allowed_ops.insert(OperationClass::ReadOnly);
@@ -209,7 +211,7 @@ pub fn general_purpose_tool_restrictions() -> ToolRuntimeRestrictions {
     }
 }
 
-/// GeneralPurpose 默认工具集（与 general_purpose.rs:17-35 保持一致）。
+/// GeneralPurpose default tool set (kept in sync with general_purpose.rs:17-35).
 const GENERAL_PURPOSE_DEFAULT_TOOLS: &[&str] = &[
     "Read",
     "view_image",
@@ -275,10 +277,12 @@ pub fn set_session_role(session_id: &str, role: AgentRole) -> BitFunResult<()> {
     update_restrictions(session_id, Some(role), ToolRuntimeRestrictionsPatch::default())
 }
 
-/// 注册角色并直接设置指定权限模板（不加载角色默认模板）。
+/// Register a role and directly set a specific permission template (does not
+/// load the role's default template).
 ///
-/// P-01 方案 2：GeneralPurpose 子代理的角色仍是 Executor，但应用专属模板
-/// （含 ReadOnly），覆盖默认 Executor 模板禁只读的设计缺口。
+/// P-01 plan 2: the GeneralPurpose subagent's role remains Executor, but it
+/// applies a dedicated template (including ReadOnly) to cover the default
+/// Executor template's design gap that forbids read-only operations.
 pub fn set_session_role_with_restrictions(
     session_id: &str,
     role: AgentRole,
@@ -293,6 +297,37 @@ pub fn set_session_role_with_restrictions(
         .map_err(|e| BitFunError::tool(format!("Session restrictions lock poisoned: {e}")))?
         .insert(session_id.to_string(), restrictions);
     Ok(())
+}
+
+/// Register a main-session role without landing the role's default template
+/// (R3 main-session exemption).
+///
+/// A main session (Standard kind with no creator) is the end user's main-flow
+/// session. If the Commander template were written into SESSION_RESTRICTIONS
+/// like `set_session_role` does, the main session would have even
+/// Read/Grep/Glob/Edit/ExecCommand rejected by the `allowed_tool_names`
+/// whitelist under default config, a severe main-flow regression. This
+/// function only records the role (owner semantics and delegation validation
+/// rely on `get_session_role` and are unaffected) and does not write a
+/// restriction template — the session keeps the context-level default limits
+/// (empty whitelist = everything allowed).
+pub fn register_main_session(session_id: &str, role: AgentRole) -> BitFunResult<()> {
+    session_roles_map()
+        .write()
+        .map_err(|e| BitFunError::tool(format!("Session role lock poisoned: {e}")))?
+        .insert(session_id.to_string(), role);
+    Ok(())
+}
+
+/// Determine whether a session is a "main session" (Standard kind with no
+/// creator).
+///
+/// A main session is a main-flow session initiated directly by the end user,
+/// not any subagent/delegated work. Subagents (Subagent/EphemeralSubagent) or
+/// sessions with a creator are not in this category; they continue through the
+/// full RBAC role template registration.
+pub(crate) fn is_main_session(kind: crate::agentic::core::SessionKind, created_by: Option<&str>) -> bool {
+    kind == crate::agentic::core::SessionKind::Standard && created_by.is_none()
 }
 
 /// Retrieve the assigned RBAC role for a session, if any.
@@ -597,6 +632,57 @@ mod tests {
     }
 
     #[test]
+    fn main_session_registration_records_role_without_landing_template() {
+        // R3 main-session exemption: register_main_session only records the role
+        // and does not write a restriction template, so get_session_restrictions
+        // is empty (enforcement falls back to the context-level default limits =
+        // empty whitelist = everything allowed), and the main session is not
+        // locked down by the Commander template.
+        let session_id = "test-main-session-exempt-01";
+        register_main_session(session_id, AgentRole::Commander).expect("register main session");
+        assert_eq!(
+            get_session_role(session_id),
+            Some(AgentRole::Commander),
+            "main session role must be recorded (owner/delegation semantics intact)"
+        );
+        assert_eq!(
+            get_session_restrictions(session_id),
+            None,
+            "main session must NOT land the Commander default template"
+        );
+
+        // With no session-level restrictions, the default limits (everything
+        // allowed) let main-flow tools through.
+        let unrestricted = ToolRuntimeRestrictions::default();
+        assert!(
+            unrestricted.ensure_tool_allowed("Read").is_ok()
+                && unrestricted.ensure_tool_allowed("Edit").is_ok()
+                && unrestricted.ensure_tool_allowed("ExecCommand").is_ok()
+                && unrestricted.ensure_tool_allowed("Grep").is_ok()
+                && unrestricted.ensure_tool_allowed("Glob").is_ok(),
+            "default (empty) restrictions must allow main-flow tools"
+        );
+
+        // Cleanup: session end clears both the role and the (absent here) template.
+        clear_session_role(session_id);
+        assert_eq!(get_session_role(session_id), None);
+        assert_eq!(get_session_restrictions(session_id), None);
+    }
+
+    #[test]
+    fn is_main_session_matches_standard_without_creator_only() {
+        use crate::agentic::core::SessionKind;
+        // Main session: Standard with no creator.
+        assert!(is_main_session(SessionKind::Standard, None));
+        // Subagents / sessions with a creator are not main sessions and must go
+        // through the full RBAC template registration.
+        assert!(!is_main_session(SessionKind::Subagent, None));
+        assert!(!is_main_session(SessionKind::EphemeralSubagent, None));
+        assert!(!is_main_session(SessionKind::Standard, Some("parent-session")));
+        assert!(!is_main_session(SessionKind::Subagent, Some("parent-session")));
+    }
+
+    #[test]
     fn session_role_registration_lands_role_template() {
         // LEGION-05: registering a role must land the role's default permission
         // template into the session restrictions, otherwise the templates are
@@ -747,7 +833,7 @@ mod tests {
             permissions
                 .allowed_operation_classes
                 .contains(&OperationClass::ExecuteCode),
-            "Warden should allow ExecuteCode for gbrain search"
+            "Warden should allow ExecuteCode for knowledge-base search"
         );
         assert!(
             permissions.allowed_tool_names.contains("SessionHistory"),
@@ -755,7 +841,7 @@ mod tests {
         );
         assert!(
             permissions.allowed_tool_names.contains("ExecCommand"),
-            "Warden should allow ExecCommand for gbrain search/query"
+            "Warden should allow ExecCommand for knowledge-base search/query"
         );
         assert!(
             permissions
@@ -784,7 +870,7 @@ mod tests {
             permissions.allowed_tool_names.contains("SessionControl"),
             "PunishmentExecutor should allow SessionControl tool"
         );
-        // path_policy should restrict Write to shame-wall-registry.json under .master-framework
+        // path_policy should restrict Write to the violation-registry path
         assert!(
             permissions
                 .path_policy

@@ -4069,10 +4069,22 @@ config: {
         return prev;
       }
 
-      // UI-07: 单调 updatedAt 比较。goal 清除后迟到的 thread-goal-updated 若携带
-      // 更旧的 updatedAt，不得复活旧 goal。每次写入（含清除）都推进时钟。
-      const now = Date.now();
-      const lastSeenAt = session.threadGoalUpdatedAt ?? 0;
+      // UI-07: Monotonic updatedAt comparison. A late thread-goal-updated after
+      // a goal clear carrying an older updatedAt must not resurrect the old
+      // goal. Every write (including clear) advances the clock.
+      // R7: Aligned with the backend ThreadGoal.updated_at (second-precision
+      // epoch); millisecond Date.now() would make the post-clear clock far
+      // larger than the backend second-precision updated_at, so a new goal
+      // would always be judged stale.
+      const now = Math.floor(Date.now() / 1000);
+      let lastSeenAt = session.threadGoalUpdatedAt ?? 0;
+      // R7: Tolerate legacy polluted state — pre-fix clear wrote a
+      // millisecond Date.now() into the clock (~1.7e12); normalize to seconds
+      // before the monotonic comparison and clock advance, otherwise the old
+      // clock permanently wedges subsequent sets.
+      if (lastSeenAt > 1e11) {
+        lastSeenAt = Math.floor(lastSeenAt / 1000);
+      }
       const incomingUpdatedAt = goal?.updatedAt ?? now;
       if (goal && lastSeenAt > 0 && incomingUpdatedAt < lastSeenAt) {
         return prev;
@@ -5688,8 +5700,8 @@ config: {
 
   public addModelRound(sessionId: string, dialogTurnId: string, modelRound: ModelRound): void {
     this.updateDialogTurn(sessionId, dialogTurnId, turn => {
-      // UI-03: 迟到的 model-round-started 与 B1 惰性建 round 可能命中同一 roundId，
-      // 按 roundId 去重，避免重复 round。
+      // UI-03: A late model-round-started and the B1 lazy round creation may
+      // target the same roundId; deduplicate by roundId to avoid duplicate rounds.
       if (turn.modelRounds.some(round => round.id === modelRound.id)) {
         return turn;
       }

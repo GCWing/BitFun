@@ -543,7 +543,7 @@ mod tests {
     #[test]
     fn overlay_is_valid_and_keeps_product_endpoint_decisions() {
         let overlay = parse_overlay().expect("valid overlay");
-        assert_eq!(overlay.providers.len(), 14);
+        assert_eq!(overlay.providers.len(), 13);
         let openbitfun = overlay
             .providers
             .iter()
@@ -765,7 +765,7 @@ mod tests {
             "bundle".to_string(),
             ProviderCatalogSource::Bundle,
         );
-        assert_eq!(resolved.providers.len(), 14);
+        assert_eq!(resolved.providers.len(), 13);
         assert!(resolved
             .providers
             .iter()

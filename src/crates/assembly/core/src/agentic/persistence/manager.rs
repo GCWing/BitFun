@@ -808,7 +808,7 @@ impl PersistenceManager {
             .map_err(Self::json_store_error)
     }
 
-    async fn write_text_atomic(&self, path: &Path, text: &str) -> BitFunResult<()> {
+    pub(crate) async fn write_text_atomic(&self, path: &Path, text: &str) -> BitFunResult<()> {
         JsonFileStore
             .write_text_atomic(path, text)
             .await

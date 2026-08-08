@@ -65,8 +65,9 @@ export const BeeColonyMonitor: React.FC = () => {
     }
   }, [themeType, workspacePath, t]);
 
-  // UI-10: 打开面板时加载；主题切换时强制重载（重新编译该主题的 DAG）。
-  // 关闭面板时重置已加载主题，下次打开再重新加载。
+  // UI-10: Load when the panel opens; force a reload on theme switch
+  // (recompile the DAG for that theme). Reset the loaded theme when the panel
+  // closes and reload on the next open.
   useEffect(() => {
     if (!isOpen) {
       lastLoadedThemeRef.current = null;

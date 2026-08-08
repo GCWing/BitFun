@@ -573,7 +573,7 @@ fn shame_wall_persistence_after_penalty() {
 
     // ── 6. Contract constants ────────────────────────────────────────────
     assert_eq!(
-        SHAME_WALL_FILENAME, ".master-framework/shame-wall-registry.json",
+        SHAME_WALL_FILENAME, ".bitfun/warden/violation-registry.json",
         "SHAME_WALL_FILENAME must match the contract path"
     );
     assert_eq!(POKE_PENALTY_KIND, "PokePenalty");

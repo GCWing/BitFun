@@ -639,6 +639,12 @@
     "processingFailed": "处理失败"
   },
   "chatInput": {
+    "conversationLevel": {
+      "main": "主会话",
+      "child": "子会话",
+      "senior": "士官",
+      "childWithSeq": "子会话 {{seq}}"
+    },
     "promptCommandShellReview": {
       "title": "运行提示命令上下文？",
       "message": "{{source}} 将在 {{directory}} 中使用 {{shell}} 运行 {{count}} 条命令。请先检查完整命令；只有标准输出会加入提示词。",

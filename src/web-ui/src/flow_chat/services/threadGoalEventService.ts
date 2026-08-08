@@ -45,9 +45,15 @@ function mapPayloadGoal(
  * which would let a stale event through).
  */
 function isGoalStaleForSession(sessionId: string, snapshot: ThreadGoalSnapshot): boolean {
-  const lastSeenAt = flowChatStore.getState().sessions.get(sessionId)?.threadGoalUpdatedAt ?? 0;
+  let lastSeenAt = flowChatStore.getState().sessions.get(sessionId)?.threadGoalUpdatedAt ?? 0;
   if (lastSeenAt <= 0) {
     return false;
+  }
+  // R7: Normalize millisecond-precision clocks persisted before the fix
+  // (~1.7e12) to seconds; otherwise the backend second-precision updated_at
+  // (~1.7e9) would always be smaller and the goal judged stale.
+  if (lastSeenAt > 1e11) {
+    lastSeenAt = Math.floor(lastSeenAt / 1000);
   }
   return snapshot.updatedAt == null || snapshot.updatedAt < lastSeenAt;
 }

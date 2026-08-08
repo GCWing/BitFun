@@ -18,8 +18,9 @@ interface CreateLegionPageProps {
 
 const log = createLogger('CreateLegionPage');
 
-// UI-01: 后端 create_legion_preset 未实现（LegionPresetAPI 注释确认），
-// 保存按钮保持禁用并标注"规划中"；后端实现后再打开真实保存。
+// UI-01: The backend create_legion_preset is not implemented yet (confirmed by
+// the LegionPresetAPI comments), so the save button stays disabled and is
+// labeled "planned"; real saving will be enabled once the backend lands.
 const LEGION_CREATE_BACKEND_READY = false;
 
 const CreateLegionPage: React.FC<CreateLegionPageProps> = ({ onBack }) => {

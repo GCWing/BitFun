@@ -639,6 +639,12 @@
     "processingFailed": "Processing failed"
   },
   "chatInput": {
+    "conversationLevel": {
+      "main": "Main session",
+      "child": "Child session",
+      "senior": "Senior",
+      "childWithSeq": "Child session {{seq}}"
+    },
     "promptCommandShellReview": {
       "title": "Run prompt command context?",
       "message": "{{source}} wants to run {{count}} command(s) with {{shell}} in {{directory}}. Review the exact commands before adding their standard output to the prompt.",

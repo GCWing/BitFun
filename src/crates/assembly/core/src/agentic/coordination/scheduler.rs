@@ -547,9 +547,14 @@ impl DialogScheduler {
         });
 
         let warden_session_manager = Arc::clone(&session_manager);
-        let warden_runtime = Arc::new(tokio::sync::Mutex::new(WardenRuntime::new(
-            warden_session_manager,
-        )));
+        // Persist the Warden shame wall so recorded violations survive process
+        // restarts — `WardenRuntime::new` keeps the registry in-memory only.
+        let warden_runtime = Arc::new(tokio::sync::Mutex::new(
+            WardenRuntime::with_shame_wall_path(
+                warden_session_manager,
+                Self::resolve_warden_shame_wall_path(),
+            ),
+        ));
         // Inject the Warden runtime into the tool pipeline for tool-level
         // audit (custom point outside the hook dispatch channel). Must happen
         // before `coordinator` is moved into the struct below.
@@ -2762,6 +2767,31 @@ impl DialogScheduler {
                 std::env::temp_dir()
                     .join("bitfun")
                     .join("agent-replies")
+            })
+    }
+
+    /// Default shame-wall registry path for the embedded Warden runtime.
+    ///
+    /// Lives under the BitFun home (`~/.bitfun/warden/shame-wall-registry.json`)
+    /// so violation records are shared across workspaces and survive process
+    /// restarts, without touching any workspace-local file path
+    /// (which is the Warden agent's skill-convention path, not the runtime's).
+    /// Resolved through the shared `PathManager` so `BITFUN_HOME` overrides
+    /// apply; falls back to a deterministic temp path rather than panicking
+    /// when the path manager cannot be constructed.
+    fn resolve_warden_shame_wall_path() -> PathBuf {
+        PathManager::new()
+            .map(|path_manager| {
+                path_manager
+                    .bitfun_home_dir()
+                    .join("warden")
+                    .join("shame-wall-registry.json")
+            })
+            .unwrap_or_else(|_| {
+                std::env::temp_dir()
+                    .join("bitfun")
+                    .join("warden")
+                    .join("shame-wall-registry.json")
             })
     }
 

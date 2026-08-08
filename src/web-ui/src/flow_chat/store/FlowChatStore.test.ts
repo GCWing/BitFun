@@ -6197,3 +6197,69 @@ describe('FlowChatStore historical session hydration state', () => {
     expect(flowChatStore.getState().sessions.get('history-1')?.currentTokenUsage).toBeUndefined();
   });
 });
+
+describe('FlowChatStore thread goal clear-then-set', () => {
+  afterEach(() => {
+    resetStore();
+  });
+
+  const sessionId = 'goal-session-1';
+  const activeGoal = (updatedAt: number) => ({
+    goalId: 'goal-1',
+    objective: 'Ship R7',
+    status: 'active',
+    tokensUsed: 0,
+    tokenBudget: null,
+    timeUsedSeconds: 0,
+    updatedAt,
+  });
+
+  function seedSession(threadGoalUpdatedAt?: number): void {
+    flowChatStore.setState(() => ({
+      sessions: new Map([[
+        sessionId,
+        createSession({
+          sessionId,
+          workspacePath: 'D:/workspace/BitFun',
+          ...(threadGoalUpdatedAt === undefined
+            ? {}
+            : { threadGoalUpdatedAt, goalModeActive: false, threadGoal: undefined }),
+        }),
+      ]]),
+      activeSessionId: sessionId,
+    }));
+  }
+
+  it('accepts a freshly set goal after /goal clear (seconds clock)', () => {
+    seedSession();
+    const setAt = Math.floor(Date.now() / 1000);
+
+    flowChatStore.setThreadGoal(sessionId, activeGoal(setAt));
+    expect(flowChatStore.getState().sessions.get(sessionId)?.threadGoal).toMatchObject({
+      objective: 'Ship R7',
+      status: 'active',
+    });
+
+    flowChatStore.setThreadGoal(sessionId, null);
+    expect(flowChatStore.getState().sessions.get(sessionId)?.threadGoal).toBeUndefined();
+
+    // Backend seconds epoch (~1.7e9) must be treated as newer than the clear
+    // clock (which was written with seconds as well after the R7 fix).
+    flowChatStore.setThreadGoal(sessionId, activeGoal(setAt + 1));
+    expect(flowChatStore.getState().sessions.get(sessionId)?.threadGoal).toMatchObject({
+      objective: 'Ship R7',
+      status: 'active',
+    });
+  });
+
+  it('normalizes a legacy millisecond clock so a new goal is not treated as stale', () => {
+    // Before the fix, clear wrote a millisecond Date.now() (~1.7e12) into threadGoalUpdatedAt.
+    seedSession(1_750_000_000_000);
+
+    flowChatStore.setThreadGoal(sessionId, activeGoal(1_750_000_001));
+    expect(flowChatStore.getState().sessions.get(sessionId)?.threadGoal).toMatchObject({
+      objective: 'Ship R7',
+      status: 'active',
+    });
+  });
+});

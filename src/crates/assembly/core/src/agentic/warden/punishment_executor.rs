@@ -108,8 +108,10 @@ impl PunishmentExecutor {
     /// Verify that `session_id` exists and has `is_daemon = true`.
     ///
     /// The in-process scheduler-embedded runtime ([`super::WARDEN_RUNTIME_SESSION`])
-    /// short-circuits the daemon check: it is an internal source that performs
-    /// the same Warden role without owning a daemon session.
+    /// short-circuits the daemon check: it is an internal trusted source marker
+    /// (crate-private constant, not a user-facing session) that performs the
+    /// same Warden role without owning a daemon session. Any other requester
+    /// must resolve to a real loaded session with `is_daemon = true`.
     async fn verify_warden_session(&self, session_id: &str) -> BitFunResult<()> {
         if session_id == super::WARDEN_RUNTIME_SESSION {
             return Ok(());

@@ -5349,7 +5349,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                       onClick={() => handleSelectConversationLevel(entry.sessionId)}
                       title={entry.session?.title}
                     >
-                      {conversationLevelLabel(entry)}
+                      {conversationLevelLabel(entry, t)}
                       {levelTitle && (
                         <span className="bitfun-chat-input__target-tab-name">{levelTitle}</span>
                       )}

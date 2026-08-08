@@ -78,9 +78,11 @@ function findRound(
 }
 
 /**
- * B1 惰性建 round 公共函数：ACP 直连投递等事件源可能跳过 model-round-started，
- * round 缺失时先建 round（id=roundId）再追加内容，避免数据被静默丢弃。
- * text-chunk 与 tool-event 路径共用。addModelRound 按 roundId 去重，重复调用安全。
+ * B1 shared helper for lazily creating a round: event sources such as ACP
+ * direct delivery may skip model-round-started; when the round is missing,
+ * create it (id=roundId) before appending content, so data is never silently
+ * dropped. Shared by the text-chunk and tool-event paths. addModelRound
+ * deduplicates by roundId, so repeated calls are safe.
  */
 export function ensureModelRoundExists(
   context: FlowChatContext,
@@ -179,8 +181,10 @@ export function processNormalTextChunkInternal(
       attemptIndex,
     };
 
-    // B1 防御：ACP 直连投递等事件源可能跳过 model-round-started，round 缺失时
-    // 先惰性建 round（id=roundId）再追加文本项，避免文本内容被静默丢弃。
+    // B1 defense: event sources such as ACP direct delivery may skip
+    // model-round-started; when the round is missing, lazily create it
+    // (id=roundId) before appending the text item, so text content is never
+    // silently dropped.
     if (!round) {
       ensureModelRoundExists(context, sessionId, turnId, roundId);
     }

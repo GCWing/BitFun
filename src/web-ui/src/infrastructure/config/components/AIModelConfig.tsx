@@ -436,7 +436,6 @@ const AIModelConfig: React.FC = () => {
       { label: 'Anthropic (messages)', value: 'anthropic' },
       { label: 'Gemini (generateContent)', value: 'gemini' },
       { label: 'Gemini Code Assist (cloudcode-pa)', value: 'gemini-code-assist' },
-      { label: 'CodeBuddy (本地网关 /runs)', value: 'codebuddy' },
     ],
     []
   );

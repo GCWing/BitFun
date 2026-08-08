@@ -47,7 +47,7 @@ use bitfun_runtime_ports::{ThreadGoal, WardenAuditJudgementResponse};
 
 /// Default rule set referenced by Challenge-Poke messages.
 ///
-/// Mirrors the Warden SKILL's "iron-rules compliance proof" requirement.
+/// Mirrors the Warden SKILL's compliance-proof requirement.
 pub const DEFAULT_CHALLENGE_RULES: [&str; 1] = ["iron-rules-compliance"];
 
 /// Classification of one finished tool call for Warden audit.
@@ -151,9 +151,9 @@ pub struct WardenRuntime {
     last_tool_errors: HashMap<(String, String), String>,
     /// Internal messages queued for the next turn start of a session.
     pending_reminders: HashMap<String, Vec<Message>>,
-    /// Optional shame-wall persistence path (aligned to the Warden SKILL's
-    /// `.master-framework/shame-wall-registry.json` by default, configurable
-    /// to a skill-convention path such as `L0/SHAME_WALL.md`).
+    /// Optional violation-registry persistence path (aligned to the Warden
+    /// SKILL's `.bitfun/warden/violation-registry.json` convention by default,
+    /// configurable to a custom path).
     shame_wall_path: Option<PathBuf>,
 }
 

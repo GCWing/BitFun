@@ -89,13 +89,16 @@ impl SessionControlTool {
         Ok(session_control_creator_marker(creator_session_id))
     }
 
-    /// ACP 真会话创建：经 AcpClientPort 创建外部 ACP 流会话（返回
-    /// `acp_<client>_<uuid>` session id + `acp:<client>` agent type），与前端
-    /// `create_acp_flow_session` / desktop `AcpClientPort::create_session` 等价——
-    /// 持久记录 + 启动外部进程 + 失败回滚（desktop acp_client_port.rs:97-149）。
-    /// 不创建本地内部会话，因此不写入 createdBy/subagent 元数据、不持久化
-    /// SessionRelationship、不挂军团树；军团侧持返回的 session_id 经
-    /// SessionMessage 直通（acp: 流会话分叉）通信。
+    /// Real ACP session creation: create an external ACP flow session via
+    /// AcpClientPort (returns the `acp_<client>_<uuid>` session id +
+    /// `acp:<client>` agent type), equivalent to the frontend
+    /// `create_acp_flow_session` / desktop `AcpClientPort::create_session` —
+    /// persisted record + external process startup + failure rollback
+    /// (desktop acp_client_port.rs:97-149). Does not create a local internal
+    /// session, so it does not write createdBy/subagent metadata, does not
+    /// persist SessionRelationship, and does not mount the legion tree; the
+    /// legion side communicates via SessionMessage direct path (acp: flow
+    /// session fork) with the returned session_id.
     async fn create_acp_session_via_port(
         &self,
         workspace: &SessionControlWorkspaceTarget,
@@ -351,27 +354,232 @@ fn caller_is_owner_session(caller_session_id: &str) -> bool {
     ) || !crate::service::config::rbac_enabled()
 }
 
-/// 判断一个 session id 是否为 ACP 流会话（`acp_<client>_<uuid>`）。
-///
-/// ACP 流会话经 SessionControl `acp__` / ACP client port 创建，本地只持有
-/// provider=acp 的流会话记录（interfaces/acp session_persistence.rs），
-/// **不写入 createdBy / SessionRelationship 等 SessionMetadata**。因此本地
-/// metadata 为空是 ACP 流会话的正常形态（不是损坏），delete 授权不能仅因
-/// metadata 缺失就拒绝清理。
-fn is_acp_flow_session_id(session_id: &str) -> bool {
-    session_id
-        .strip_prefix("acp_")
-        .is_some_and(|rest| !rest.is_empty() && !rest.starts_with('_'))
+/// Dependency-free canonical uuid shape guard (8-4-4-4-12, 36 chars) for the
+/// trailing segment of an ACP flow session id (`acp_<client_id>_<uuid>`).
+/// Matches the strict checks used by the desktop `AcpClientPort`
+/// (`client_id_from_session_id`) and `SessionMessage`
+/// (`acp_flow_client_id_from_session_id`), so an internal session id that
+/// merely starts with `acp_` is never mistaken for a flow session.
+pub(crate) fn looks_like_uuid(segment: &str) -> bool {
+    segment.len() == 36
+        && segment.bytes().enumerate().all(|(index, byte)| {
+            if matches!(index, 8 | 13 | 18 | 23) {
+                byte == b'-'
+            } else {
+                byte.is_ascii_hexdigit()
+            }
+        })
 }
 
-/// P-06：幽灵 ACP 流会话删除授权判定。
+/// Determine whether a session id is an ACP flow session
+/// (`acp_<client_id>_<uuid>`).
 ///
-/// 当目标会话 metadata 无 created_by（幽灵）且是 ACP 流会话时，授权放行——ACP
-/// 流会话是外部进程记录，metadata 存在但 created_by/relationship 为空是其设计
-/// 形态（interfaces/acp session_persistence 创建时必写 metadata 文件）；否则维持
-/// 原有 created_by 判定（metadata 完整时原样）。
+/// ACP flow sessions are created via SessionControl `acp__` / the ACP client
+/// port; locally they only hold the provider=acp flow-session record
+/// (interfaces/acp session_persistence.rs), and **do not write createdBy /
+/// SessionRelationship etc. SessionMetadata**. Empty local metadata is
+/// therefore the normal shape of an ACP flow session (not corruption), and
+/// delete authorization must not reject cleanup merely because metadata is
+/// missing.
+///
+/// The tail segment must be a canonical uuid (36 chars, dashed, hex) —
+/// consistent with the strict validation of the desktop
+/// `AcpClientPort::client_id_from_session_id` / `SessionMessage`
+/// `acp_flow_client_id_from_session_id`, preventing arbitrary internal session
+/// ids starting with `acp_` from being ghost-released and bypassing the RBAC
+/// ownership model (PR #2139 R4).
+pub(crate) fn is_acp_flow_session_id(session_id: &str) -> bool {
+    let Some(rest) = session_id.strip_prefix("acp_") else {
+        return false;
+    };
+    let Some((client_id, uuid_segment)) = rest.rsplit_once('_') else {
+        return false;
+    };
+    !client_id.is_empty() && looks_like_uuid(uuid_segment)
+}
+
+/// P-06: ghost ACP flow-session delete authorization verdict.
+///
+/// When the target session metadata has no created_by (ghost) and is an ACP
+/// flow session, authorization passes — ACP flow sessions are external-process
+/// records, and metadata existing with empty created_by/relationship is their
+/// designed shape (interfaces/acp session_persistence always writes a metadata
+/// file on creation); otherwise the original created_by verdict is kept
+/// (unchanged when metadata is complete).
 fn ghost_acp_delete_authorized(created_by_is_none: bool, acp_flow_session: bool) -> bool {
     created_by_is_none && acp_flow_session
+}
+
+/// Authorization verdict switches: distinguish delete / cancel authorization
+/// semantics.
+///
+/// - `allow_owner_bypass`: delete allows owner (Commander or RBAC off)
+///   exemption; cancel has no owner exemption (keeps existing behavior).
+/// - `allow_ghost_acp`: delete allows ghost ACP flow-session release (P-06);
+///   cancel does not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct SessionMutationAuthOptions {
+    pub allow_owner_bypass: bool,
+    pub allow_ghost_acp: bool,
+}
+
+impl SessionMutationAuthOptions {
+    pub(crate) const fn delete() -> Self {
+        Self {
+            allow_owner_bypass: true,
+            allow_ghost_acp: true,
+        }
+    }
+
+    pub(crate) const fn cancel() -> Self {
+        Self {
+            allow_owner_bypass: false,
+            allow_ghost_acp: false,
+        }
+    }
+
+    /// Delivery authorization (SessionMessage, PR #2139 #5): owner (Commander
+    /// role or RBAC off) exemption, but no ghost ACP release — targets reaching
+    /// the delivery authorization gate have already excluded the ACP flow
+    /// direct path (flow direct path returns in dispatch_single before the
+    /// gate after registry verification), so ghost ACP release does not apply
+    /// to local delivery semantics.
+    pub(crate) const fn deliver() -> Self {
+        Self {
+            allow_owner_bypass: true,
+            allow_ghost_acp: false,
+        }
+    }
+}
+
+/// Shared session mutation (delete/cancel) authorization verdict, reused by
+/// SessionControl and acp_control (PR #2139 R4).
+///
+/// Decision chain (each step equivalent to the existing SessionControl
+/// delete/cancel semantics):
+/// 1. daemon/warden session interception (R-A.04);
+/// 2. owner exemption (delete only; Commander role or RBAC off);
+/// 3. created_by match (`session-<caller>` marker); delete additionally
+///    allows ghost ACP flow-session release (no created_by in metadata is the
+///    designed shape of an ACP flow session);
+/// 4. ancestor authorization: in-memory tree fast path, falling back to a
+///    persisted metadata chain walk when the tree is empty (an empty tree
+///    cannot be exploited to bypass authorization);
+///
+/// Returns `Ok(())` when authorized; `Err` is the rejection reason (tool error).
+///
+/// Dependency injection is `session_manager` + `tree` (rather than the whole
+/// coordinator), making it easy to construct an isolated lightweight
+/// authorization environment for unit tests.
+pub(crate) async fn resolve_session_mutation_authorization(
+    session_manager: &crate::agentic::session::session_manager::SessionManager,
+    tree: &SessionTreeManager,
+    caller_session_id: &str,
+    target_session_id: &str,
+    workspace_path: &std::path::Path,
+    action_label: &str,
+    options: SessionMutationAuthOptions,
+) -> BitFunResult<()> {
+    // R-A.04: Reject daemon/warden sessions (delete and cancel share this guard).
+    {
+        let is_daemon = if let Some(session) = session_manager.get_session(target_session_id) {
+            session.config.is_daemon || session.agent_type.starts_with("warden-")
+        } else {
+            // Fall back to persisted metadata
+            session_manager
+                .load_session_metadata(workspace_path, target_session_id)
+                .await
+                .ok()
+                .flatten()
+                .map(|m| m.is_daemon || m.agent_type.starts_with("warden-"))
+                .unwrap_or(false)
+        };
+        if is_daemon {
+            return Err(BitFunError::tool(format!(
+                "cannot {action_label} daemon/warden session '{target_session_id}'"
+            )));
+        }
+    }
+
+    // R-26 / user-owner semantics: the human user's main session (Commander
+    // role) is the owner and may act on any session; when the RBAC master
+    // switch is off, the gate is bypassed entirely. Cancel keeps the historical
+    // stricter gate (no owner bypass).
+    let caller_is_owner = options.allow_owner_bypass && caller_is_owner_session(caller_session_id);
+
+    let acp_flow_session = is_acp_flow_session_id(target_session_id);
+    let created_by_match = {
+        let target_metadata = session_manager
+            .load_session_metadata(workspace_path, target_session_id)
+            .await
+            .ok()
+            .flatten();
+        let creator = target_metadata
+            .as_ref()
+            .and_then(|metadata| metadata.created_by.as_deref());
+        if options.allow_ghost_acp
+            && ghost_acp_delete_authorized(creator.is_none(), acp_flow_session)
+        {
+            true
+        } else {
+            creator.is_some_and(|creator| {
+                creator == session_control_creator_marker(caller_session_id)
+            })
+        }
+    };
+
+    if !caller_is_owner && !created_by_match {
+        // Ancestor authorization: verify the calling session is an ancestor of
+        // the target session. First try the in-memory tree (fast path). If the
+        // tree is not yet populated (walk_ancestors returns empty), fall back
+        // to a persisted metadata chain query so that an empty tree cannot be
+        // exploited to bypass authorization.
+        let tree_ancestors = tree.walk_ancestors(target_session_id);
+        let ancestors: Vec<String> = if !tree_ancestors.is_empty() {
+            // Fast path: tree is populated.
+            tree_ancestors
+        } else {
+            // Fallback: tree is empty, walk persisted metadata chain.
+            let mut metadata_ancestors = Vec::new();
+            // Guard against cyclic metadata chains: never revisit a session id
+            // already seen during this walk.
+            let mut visited = std::collections::HashSet::new();
+            visited.insert(target_session_id.to_string());
+            let mut current = target_session_id.to_string();
+            loop {
+                let metadata = session_manager
+                    .load_session_metadata(workspace_path, &current)
+                    .await
+                    .ok()
+                    .flatten();
+                match metadata.and_then(|m| m.relationship.and_then(|r| r.parent_session_id)) {
+                    Some(parent_id) => {
+                        if !visited.insert(parent_id.clone()) {
+                            // Cycle detected; stop walking to avoid hanging on a
+                            // corrupt lineage chain.
+                            break;
+                        }
+                        metadata_ancestors.push(parent_id.clone());
+                        current = parent_id;
+                    }
+                    None => break,
+                }
+            }
+            metadata_ancestors
+        };
+        if ancestors.is_empty() {
+            return Err(BitFunError::tool(format!(
+                "cannot verify ancestor relationship for session '{target_session_id}': tree and metadata are both empty"
+            )));
+        }
+        if !ancestors.iter().any(|id| id == caller_session_id) {
+            return Err(BitFunError::tool(format!(
+                "session '{caller_session_id}' is not authorized to {action_label} session '{target_session_id}': not a parent/ancestor and not the creator"
+            )));
+        }
+    }
+
+    Ok(())
 }
 
 /// Build the delete action result JSON.
@@ -538,7 +746,8 @@ fn build_compact_tree_lines(
     // children_by_parent: parent_session_id -> list of children
     let mut children_by_parent: HashMap<String, Vec<&AgentSessionSummary>> = HashMap::new();
     let mut roots: Vec<&AgentSessionSummary> = Vec::new();
-    // 父链在本列表中无幸存祖先的会话：提升为根节点，但标记 orphaned（与 JSON 模式一致）
+    // Sessions whose parent chain has no surviving ancestor in this list:
+    // promote to root but mark as orphaned (consistent with the JSON mode)
     let mut orphaned: std::collections::HashSet<&str> = std::collections::HashSet::new();
     let known_ids: std::collections::HashSet<&str> =
         sessions.iter().map(|s| s.session_id.as_str()).collect();
@@ -568,7 +777,8 @@ fn build_compact_tree_lines(
             }
             None => {
                 if session.parent_session_id.is_some() {
-                    // 父链全部被过滤：提升为根节点，同时标记 orphaned（与 JSON 模式一致）
+                    // The entire parent chain was filtered: promote to root
+                    // while marking as orphaned (consistent with the JSON mode)
                     orphaned.insert(session.session_id.as_str());
                 }
                 roots.push(session);
@@ -848,14 +1058,17 @@ Arguments:
                     session_control_session_name_or_default(params.session_name.as_deref());
                 let agent_type = session_control_agent_type_or_default(params.agent_type.as_ref());
 
-                // ACP 真会话路径：agent_type `acp__<client_id>`（ACP bridge agent
-                // registry id，见 AcpAgent::agent_id_for）直接经 AcpClientPort 创建
-                // 真外部 ACP 会话——与前端 create_acp_flow_session 等价（持久记录 +
-                // 进程启动 + 失败回滚），不再创建本地内部中转壳会话。流会话记录只存
-                // provider/acpClientId 等 ACP 元数据（interfaces/acp session_persistence.rs:57-64），
-                // 不支持 createdBy/sessionKind=subagent 与军团树挂载（lineage/
-                // register_child）；军团侧持返回的 session_id 经 SessionMessage
-                // 直通（acp: 流会话分叉）通信。
+                // Real ACP session path: agent_type `acp__<client_id>` (ACP
+                // bridge agent registry id, see AcpAgent::agent_id_for) creates
+                // a real external ACP session directly via AcpClientPort —
+                // equivalent to the frontend create_acp_flow_session (persisted
+                // record + process startup + failure rollback), no longer
+                // creating a local internal relay shell session. Flow-session
+                // records only hold ACP metadata such as provider/acpClientId
+                // (interfaces/acp session_persistence.rs:57-64), and do not
+                // support createdBy/sessionKind=subagent or legion tree mounting
+                // (lineage/register_child); the legion side communicates via
+                // SessionMessage direct path (acp: flow session fork).
                 if let Some(client_id) = agent_type
                     .strip_prefix(AcpAgent::agent_id_prefix())
                     .filter(|client_id| !client_id.trim().is_empty())
@@ -895,9 +1108,11 @@ Arguments:
                     }]);
                 }
 
-                // SESSION-01: create 前用 find_agent_entry（经 get_agent 公共包装）校验
-                // agent_type：未在 agent registry 注册的类型直接拒绝，避免任意字符串
-                // 进入 create_session 形成僵尸会话。
+                // SESSION-01: validate agent_type via find_agent_entry (through
+                // the public get_agent wrapper) before create: types not
+                // registered in the agent registry are rejected directly,
+                // preventing arbitrary strings from entering create_session and
+                // forming zombie sessions.
                 {
                     let registry = get_agent_registry();
                     let workspace_path = std::path::Path::new(&workspace.display_workspace);
@@ -985,9 +1200,12 @@ Arguments:
                         depth: Some(child_depth),
                         ..Default::default()
                     };
-                    // SESSION-03: lineage 持久化失败会让重启后的子会话成为孤儿节点。
-                    // 先重试一次以吸收瞬时 IO 故障；仍失败则回滚已创建的子会话，
-                    // 确保不留下无父子关系记录的孤儿会话（绝不静默降级为 log）。
+                    // SESSION-03: a lineage persistence failure would leave the
+                    // child session an orphan after restart. Retry once to
+                    // absorb transient IO faults; if it still fails, roll back
+                    // the created child session so no orphan session without a
+                    // parent-child record is left behind (never silently
+                    // degrade to a log).
                     let mut lineage_result = coordinator
                         .session_manager
                         .persist_session_lineage(&created_session_id, relationship.clone())
@@ -1004,8 +1222,9 @@ Arguments:
                             .await;
                     }
                     if let Err(e) = lineage_result {
-                        // 回滚创建：删除刚创建的子会话；回滚自身失败时仍要上报，
-                        // 让调用方知道存在未被清理的会话。
+                        // Roll back the creation: delete the just-created child
+                        // session; if the rollback itself fails, still report
+                        // so the caller knows there is an uncleaned session.
                         if let Err(rollback_error) = coordinator
                             .delete_session(
                                 std::path::Path::new(&workspace.project_workspace),
@@ -1114,120 +1333,28 @@ Arguments:
                     ));
                 }
 
-                // R-A.04: Reject cancellation of daemon sessions.
-                {
-                    let session_manager = coordinator.get_session_manager();
-                    let is_daemon = if let Some(session) = session_manager.get_session(session_id) {
-                        session.config.is_daemon || session.agent_type.starts_with("warden-")
-                    } else {
-                        // Fall back to persisted metadata
-                        session_manager
-                            .load_session_metadata(
-                                &std::path::PathBuf::from(&workspace.project_workspace),
-                                session_id,
-                            )
-                            .await
-                            .ok()
-                            .flatten()
-                            .map(|m| m.is_daemon || m.agent_type.starts_with("warden-"))
-                            .unwrap_or(false)
-                    };
-                    if is_daemon {
-                        return Err(BitFunError::tool(format!(
-                            "cannot cancel daemon/warden session '{session_id}'"
-                        )));
-                    }
-                }
-
-                // R-011: Skip list-based pre-check so subagent (Task) sessions can be cancelled.
-                // The runtime's cancel_turn handles session-existence internally.
-
-                // R-2: Authorization intentionally widened for full conversation
-                // management: a caller may cancel a session it created (created_by
-                // marker matches) OR any session in its descendant subtree. The
-                // "cannot cancel the current session" guard above is preserved.
+                // R-2: Authorization (shared gate with acp_control; PR #2139 R4):
+                // a caller may cancel a session it created (created_by marker
+                // matches) OR any session in its descendant subtree. The "cannot
+                // cancel the current session" guard above is preserved. Cancel
+                // keeps the historical stricter gate: no owner bypass and no
+                // ghost-ACP release.
                 let current_session_id = context.session_id.as_ref().ok_or_else(|| {
                     BitFunError::tool(
                         "cannot cancel a session without a caller session in tool context"
                             .to_string(),
                     )
                 })?;
-                let created_by_match = {
-                    let session_manager = coordinator.get_session_manager();
-                    let target_metadata = session_manager
-                        .load_session_metadata(
-                            &std::path::PathBuf::from(&workspace.project_workspace),
-                            session_id,
-                        )
-                        .await
-                        .ok()
-                        .flatten();
-                    target_metadata
-                        .as_ref()
-                        .and_then(|metadata| metadata.created_by.as_deref())
-                        .is_some_and(|creator| {
-                            creator == session_control_creator_marker(current_session_id)
-                        })
-                };
-                if !created_by_match {
-                    // Ancestor authorization: verify the calling session is an
-                    // ancestor of the target session. First try the in-memory tree
-                    // (fast path). If the tree is not yet populated (walk_ancestors
-                    // returns empty), fall back to a persisted metadata chain query
-                    // so that an empty tree cannot be exploited to bypass
-                    // authorization.
-                    let tree = coordinator.session_tree();
-                    let tree_ancestors = tree.walk_ancestors(session_id);
-                    let ancestors: Vec<String> = if !tree_ancestors.is_empty() {
-                        // Fast path: tree is populated.
-                        tree_ancestors
-                    } else {
-                        // Fallback: tree is empty, walk persisted metadata chain.
-                        // Known optimization: could use batched queries instead of awaiting each ancestor session serially.
-                        let session_manager = coordinator.get_session_manager();
-                        let mut metadata_ancestors = Vec::new();
-                        // Guard against cyclic metadata chains: never revisit a
-                        // session id already seen during this walk.
-                        let mut visited = std::collections::HashSet::new();
-                        visited.insert(session_id.to_string());
-                        let mut current = session_id.to_string();
-                        loop {
-                            let metadata = session_manager
-                                .load_session_metadata(
-                                    &std::path::PathBuf::from(&workspace.project_workspace),
-                                    &current,
-                                )
-                                .await
-                                .ok()
-                                .flatten();
-                            match metadata
-                                .and_then(|m| m.relationship.and_then(|r| r.parent_session_id))
-                            {
-                                Some(parent_id) => {
-                                    if !visited.insert(parent_id.clone()) {
-                                        // Cycle detected; stop walking to avoid
-                                        // hanging on a corrupt lineage chain.
-                                        break;
-                                    }
-                                    metadata_ancestors.push(parent_id.clone());
-                                    current = parent_id;
-                                }
-                                None => break,
-                            }
-                        }
-                        metadata_ancestors
-                    };
-                    if ancestors.is_empty() {
-                        return Err(BitFunError::tool(format!(
-                            "cannot verify ancestor relationship for session '{session_id}': tree and metadata are both empty"
-                        )));
-                    }
-                    if !ancestors.contains(current_session_id) {
-                        return Err(BitFunError::tool(format!(
-                            "session '{current_session_id}' is not authorized to cancel session '{session_id}': not a parent/ancestor and not the creator"
-                        )));
-                    }
-                }
+                resolve_session_mutation_authorization(
+                    coordinator.get_session_manager(),
+                    coordinator.session_tree(),
+                    current_session_id,
+                    session_id,
+                    std::path::Path::new(&workspace.project_workspace),
+                    "cancel",
+                    SessionMutationAuthOptions::cancel(),
+                )
+                .await?;
 
                 let scheduler = get_global_scheduler();
                 let cancel_route = resolve_session_control_cancel_route(
@@ -1313,143 +1440,29 @@ Arguments:
                     ));
                 }
 
-                // R-A.04: Reject deletion of daemon sessions.
-                {
-                    let session_manager = coordinator.get_session_manager();
-                    let is_daemon = if let Some(session) = session_manager.get_session(session_id) {
-                        session.config.is_daemon || session.agent_type.starts_with("warden-")
-                    } else {
-                        // Fall back to persisted metadata
-                        session_manager
-                            .load_session_metadata(
-                                &std::path::PathBuf::from(&workspace.project_workspace),
-                                session_id,
-                            )
-                            .await
-                            .ok()
-                            .flatten()
-                            .map(|m| m.is_daemon || m.agent_type.starts_with("warden-"))
-                            .unwrap_or(false)
-                    };
-                    if is_daemon {
-                        return Err(BitFunError::tool(format!(
-                            "cannot delete daemon/warden session '{session_id}'"
-                        )));
-                    }
-                }
-
-                // coordinator.delete_session() handles session-existence internally;
-                // skipping the list-based pre-check so subagent (Task) sessions are supported.
-
-                // R-2: Authorization intentionally widened for full conversation
-                // management: a caller may delete a session it created (created_by
-                // marker matches) OR any session in its descendant subtree. The
-                // "cannot delete the current session" and "cannot delete
-                // daemon/warden" guards above are preserved.
+                // R-2: Authorization (shared gate with acp_control; PR #2139 R4):
+                // a caller may delete a session it created (created_by marker
+                // matches) OR any session in its descendant subtree, with the
+                // user-owner (Commander / RBAC-off) bypass and the P-06 ghost-ACP
+                // release. The "cannot delete the current session" guard above is
+                // preserved. Deletion of a daemon/warden session is rejected here
+                // and the tree path enforces the same guard for every member.
                 let current_session_id = context.session_id.as_ref().ok_or_else(|| {
                     BitFunError::tool(
                         "cannot delete a session without a caller session in tool context"
                             .to_string(),
                     )
                 })?;
-
-                // R-26 / user-owner semantics: the human user's main session
-                // (Commander role) is the owner and may delete any session,
-                // including orphaned or detached children whose lineage was
-                // broken by an earlier external deletion. When the RBAC master
-                // switch is off, the authorization gate is bypassed entirely.
-                let caller_is_owner = caller_is_owner_session(current_session_id);
-                let acp_flow_session = is_acp_flow_session_id(session_id);
-                let created_by_match = {
-                    let session_manager = coordinator.get_session_manager();
-                    let target_metadata = session_manager
-                        .load_session_metadata(
-                            &std::path::PathBuf::from(&workspace.project_workspace),
-                            session_id,
-                        )
-                        .await
-                        .ok()
-                        .flatten();
-                    // P-06：幽灵 ACP 流会话（metadata 无 created_by 即幽灵）按 owner
-                    // 语义授权删除（ACP 流会话创建必写 metadata 文件但 created_by 为空
-                    // 是其设计形态，见 interfaces/acp session_persistence）；否则维持原
-                    // created_by 判定（metadata 完整时原样）。
-                    if ghost_acp_delete_authorized(
-                        target_metadata
-                            .as_ref()
-                            .and_then(|metadata| metadata.created_by.as_deref())
-                            .is_none(),
-                        acp_flow_session,
-                    ) {
-                        true
-                    } else {
-                        target_metadata
-                            .as_ref()
-                            .and_then(|metadata| metadata.created_by.as_deref())
-                            .is_some_and(|creator| {
-                                creator == session_control_creator_marker(current_session_id)
-                            })
-                    }
-                };
-                if !caller_is_owner && !created_by_match {
-                    // Ancestor authorization: verify the calling session is an
-                    // ancestor of the target session. First try the in-memory tree
-                    // (fast path). If the tree is not yet populated (walk_ancestors
-                    // returns empty), fall back to a persisted metadata chain query
-                    // so that an empty tree cannot be exploited to bypass
-                    // authorization.
-                    let tree = coordinator.session_tree();
-                    let tree_ancestors = tree.walk_ancestors(session_id);
-                    let ancestors: Vec<String> = if !tree_ancestors.is_empty() {
-                        // Fast path: tree is populated.
-                        tree_ancestors
-                    } else {
-                        // Fallback: tree is empty, walk persisted metadata chain.
-                        // Known optimization: could use batched queries instead of awaiting each ancestor session serially.
-                        let session_manager = coordinator.get_session_manager();
-                        let mut metadata_ancestors = Vec::new();
-                        // Guard against cyclic metadata chains: never revisit a
-                        // session id already seen during this walk.
-                        let mut visited = std::collections::HashSet::new();
-                        visited.insert(session_id.to_string());
-                        let mut current = session_id.to_string();
-                        loop {
-                            let metadata = session_manager
-                                .load_session_metadata(
-                                    &std::path::PathBuf::from(&workspace.project_workspace),
-                                    &current,
-                                )
-                                .await
-                                .ok()
-                                .flatten();
-                            match metadata
-                                .and_then(|m| m.relationship.and_then(|r| r.parent_session_id))
-                            {
-                                Some(parent_id) => {
-                                    if !visited.insert(parent_id.clone()) {
-                                        // Cycle detected; stop walking to avoid
-                                        // hanging on a corrupt lineage chain.
-                                        break;
-                                    }
-                                    metadata_ancestors.push(parent_id.clone());
-                                    current = parent_id;
-                                }
-                                None => break,
-                            }
-                        }
-                        metadata_ancestors
-                    };
-                    if ancestors.is_empty() {
-                        return Err(BitFunError::tool(format!(
-                            "cannot verify ancestor relationship for session '{session_id}': tree and metadata are both empty"
-                        )));
-                    }
-                    if !ancestors.contains(current_session_id) {
-                        return Err(BitFunError::tool(format!(
-                            "session '{current_session_id}' is not authorized to delete session '{session_id}': not a parent/ancestor and not the creator"
-                        )));
-                    }
-                }
+                resolve_session_mutation_authorization(
+                    coordinator.get_session_manager(),
+                    coordinator.session_tree(),
+                    current_session_id,
+                    session_id,
+                    std::path::Path::new(&workspace.project_workspace),
+                    "delete",
+                    SessionMutationAuthOptions::delete(),
+                )
+                .await?;
 
                 // R-012: Cascade-delete the full descendant subtree through
                 // `coordinator.delete_session_tree`, the same all-or-nothing
@@ -1524,10 +1537,10 @@ Arguments:
                 // short_name argument was provided). Best-effort: sessions
                 // without metadata or without a shortName fall back to the
                 // truncated full name in the compact output.
-                // SESSION-06: 一次批量读取全部持久化元数据
-                // （list_session_metadata_including_internal）再逐会话提取
-                // shortName，替代原先对每个会话串行 load_session_metadata 的
-                // N+1 读。
+                // SESSION-06: read all persisted metadata in one batch
+                // (list_session_metadata_including_internal), then extract
+                // shortName per session, replacing the previous N+1 reads of
+                // per-session serial load_session_metadata.
                 let mut short_names: HashMap<String, Option<String>> = HashMap::new();
                 let surfaced_session_ids: std::collections::HashSet<&str> =
                     sessions
@@ -1543,13 +1556,15 @@ Arguments:
                     .await
                 {
                     Ok(metadata_list) => metadata_list,
-                    // 批量读取失败时按“无任何 shortName”处理（与原先逐条
-                    // .ok().flatten() 的最佳努力语义一致，不中断 list 输出）。
+                    // On batch read failure, treat it as "no shortName"
+                    // (consistent with the previous per-item .ok().flatten()
+                    // best-effort semantics; do not interrupt the list output).
                     Err(_) => Vec::new(),
                 };
                 for metadata in metadata_list {
-                    // 仅保留已过滤会话（daemon/warden 已在上方剔除）的
-                    // shortName，保持输出契约不变。
+                    // Keep only the shortName of filtered sessions
+                    // (daemon/warden already removed above), preserving the
+                    // output contract.
                     if !surfaced_session_ids.contains(metadata.session_id.as_str()) {
                         continue;
                     }
@@ -1632,8 +1647,10 @@ Arguments:
                     )
                     .await?;
 
-                // 授权沿用 owner/ancestor/RBAC 语义（不新增放宽）；
-                // Compact 额外允许压缩自己（含自己、含常驻 subagent 工位——契约）。
+                // Authorization follows the owner/ancestor/RBAC semantics (no
+                // new relaxation); Compact additionally allows compacting
+                // itself (including itself and resident subagent slots — the
+                // contract).
                 let current_session_id = context.session_id.as_ref().ok_or_else(|| {
                     BitFunError::tool(
                         "cannot compact a session without a caller session in tool context"
@@ -1706,8 +1723,10 @@ Arguments:
                     }
                 }
 
-                // 幂等：无上下文/已压 → applied=false 不报错（由压缩执行层保证）；
-                // 非 Idle 拒绝由 start_manual_compaction_task 内部校验并带原因。
+                // Idempotent: no context / already compacted -> applied=false
+                // without error (guaranteed by the compaction execution layer);
+                // non-Idle rejection is validated internally by
+                // start_manual_compaction_task with a reason.
                 let outcome = coordinator
                     .compact_session_with_outcome(session_id.to_string())
                     .await
@@ -1765,7 +1784,7 @@ mod tests {
     use std::collections::HashMap;
     use std::fs;
     use std::path::PathBuf;
-    use std::sync::Mutex;
+    use std::sync::{Arc, Mutex};
     use uuid::Uuid;
 
     fn empty_context() -> ToolUseContext {
@@ -1927,7 +1946,8 @@ mod tests {
         assert_eq!(requests[0].client_id, "codebuddy");
         assert_eq!(requests[0].workspace_path, "/repo/project");
         assert_eq!(requests[0].session_name.as_deref(), Some("my acp"));
-        // 与前端 create_acp_flow_session 形态一致：acp_<client>_<uuid> / acp:<client>
+        // Shape consistent with the frontend create_acp_flow_session:
+        // acp_<client>_<uuid> / acp:<client>
         assert_eq!(created.session_id, "acp_codebuddy_session-1");
         assert_eq!(created.agent_type, "acp:codebuddy");
     }
@@ -2220,20 +2240,36 @@ mod tests {
 
     #[test]
     fn acp_flow_session_id_is_recognized() {
+        // Strict uuid tail validation (PR #2139 R4): arbitrary acp_ prefixes
+        // are no longer released; the tail must be a canonical uuid
+        // (8-4-4-4-12, 36 chars, hex + dashes).
         assert!(is_acp_flow_session_id("acp_codex_7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b"));
-        assert!(is_acp_flow_session_id("acp_opensource_abcdef"));
+        assert!(!is_acp_flow_session_id("acp_opensource_abcdef")); // tail is not a uuid
         assert!(!is_acp_flow_session_id("session-1"));
         assert!(!is_acp_flow_session_id("acp__codex")); // agent type prefix, not a flow session id
+        assert!(!is_acp_flow_session_id("acp_codex")); // no uuid tail
+        assert!(!is_acp_flow_session_id("acp_codex_notauuid")); // tail is not a uuid shape
         assert!(!is_acp_flow_session_id(""));
+        assert!(!is_acp_flow_session_id("acp_7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b")); // client_id is empty
+    }
+
+    #[test]
+    fn looks_like_uuid_accepts_only_canonical_shape() {
+        assert!(looks_like_uuid("7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b"));
+        assert!(!looks_like_uuid("7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5")); // one char short
+        assert!(!looks_like_uuid("7f0e1a2b3c4d4e5f8a9b0c1d2e3f4a5b")); // no dashes
+        assert!(!looks_like_uuid("7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5bZ")); // invalid hex
+        assert!(!looks_like_uuid(""));
     }
 
     #[test]
     fn ghost_acp_session_delete_is_authorized_when_created_by_empty() {
-        // P-06：幽灵 ACP 流会话——metadata 无 created_by（而非 metadata 文件缺失）
-        // + ACP 流会话 → 授权放行（ACP 流会话必写 metadata 文件，created_by 空是
-        // 其设计形态）。
+        // P-06: ghost ACP flow session — metadata without created_by (not a
+        // missing metadata file) + ACP flow session -> authorization releases
+        // (ACP flow sessions always write a metadata file; empty created_by is
+        // their designed shape).
         assert!(ghost_acp_delete_authorized(true, true));
-        // 其余组合保持原严格判定（不放行）。
+        // Remaining combinations keep the original strict verdict (no release).
         assert!(!ghost_acp_delete_authorized(false, true));
         assert!(!ghost_acp_delete_authorized(true, false));
         assert!(!ghost_acp_delete_authorized(false, false));
@@ -2241,8 +2277,10 @@ mod tests {
 
     #[test]
     fn ghost_acp_delete_bypasses_ancestor_gate_when_created_by_none() {
-        // 防回退：metadata 存在但 created_by=None + acp 前缀 → created_by_match=true，
-        // 删除不再落入 ancestor 前置校验（原报错点 :1422 'cannot verify ancestor' 不再可达）。
+        // Anti-regression: metadata exists but created_by=None + acp prefix
+        // -> created_by_match=true, so delete no longer falls into the ancestor
+        // pre-check (the old error point :1422 'cannot verify ancestor' is no
+        // longer reachable).
         let target_metadata = Some(crate::service::session::SessionMetadata::new(
             "acp_codebuddy_a4f68de7-c4ec-46a8-9aab-7e2bc417c3d0".to_string(),
             "codebuddy ACP".to_string(),
@@ -2258,6 +2296,213 @@ mod tests {
             created_by_is_none,
             is_acp_flow_session_id("acp_codebuddy_a4f68de7-c4ec-46a8-9aab-7e2bc417c3d0"),
         ));
+    }
+
+    /// Build an isolated SessionManager (in-memory, does not persist to the
+    /// user's real directory).
+    fn test_session_manager() -> Arc<crate::agentic::session::session_manager::SessionManager> {
+        use crate::agentic::persistence::PersistenceManager;
+        use crate::agentic::session::session_manager::{SessionManager, SessionManagerConfig};
+        use crate::agentic::session::{PromptCachePolicy, SessionContextStore};
+        use crate::infrastructure::app_paths::path_manager::PathManager;
+        let user_root = std::env::temp_dir().join(format!(
+            "bitfun-authz-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&user_root).expect("test user root");
+        let path_manager = PathManager::with_user_root_for_tests(user_root.clone());
+        let persistence = PersistenceManager::new(Arc::new(path_manager))
+            .expect("persistence manager");
+        Arc::new(SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            Arc::new(persistence),
+            SessionManagerConfig {
+                max_active_sessions: 100,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: false,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        ))
+    }
+
+    #[tokio::test]
+    async fn shared_authz_rejects_unrelated_caller_delete_without_metadata() {
+        // Unauthorized: caller is not owner, target has no created_by and is
+        // not an ACP flow session shape (tail is not a uuid) -> reject delete.
+        // Non-ACP shape -> ghost release does not apply; no created_by ->
+        // ancestor walk fails (tree and metadata both empty), consistent with
+        // the existing SessionControl delete semantics (reject; no arbitrary
+        // acp_ prefix bypass).
+        let session_manager = test_session_manager();
+        let tree = SessionTreeManager::new(8);
+        let workspace = TestTempDir::new("bitfun-authz-reject-delete");
+        let workspace_string = workspace.as_string();
+        let error = resolve_session_mutation_authorization(
+            &session_manager,
+            &tree,
+            "caller-1",
+            "acp_codex_notauuid",
+            std::path::Path::new(&workspace_string),
+            "delete",
+            SessionMutationAuthOptions::delete(),
+        )
+        .await
+        .expect_err("unrelated caller without metadata must be rejected");
+        assert!(
+            error.to_string().contains("not authorized to delete")
+                || error.to_string().contains("cannot verify ancestor relationship"),
+            "{error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn shared_authz_rejects_unrelated_caller_cancel() {
+        // Unauthorized: caller is not owner, target has no created_by and is
+        // not an ACP flow session shape -> reject cancel (cancel has no owner
+        // exemption and no ghost ACP release). Missing metadata makes the
+        // ancestor walk fail, which is also a rejection.
+        let session_manager = test_session_manager();
+        let tree = SessionTreeManager::new(8);
+        let workspace = TestTempDir::new("bitfun-authz-reject-cancel");
+        let workspace_string = workspace.as_string();
+        let error = resolve_session_mutation_authorization(
+            &session_manager,
+            &tree,
+            "caller-1",
+            "acp_codex_notauuid",
+            std::path::Path::new(&workspace_string),
+            "cancel",
+            SessionMutationAuthOptions::cancel(),
+        )
+        .await
+        .expect_err("unrelated caller without metadata must be rejected");
+        assert!(
+            error.to_string().contains("not authorized to cancel")
+                || error.to_string().contains("cannot verify ancestor relationship"),
+            "{error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn shared_authz_ghost_acp_delete_allowed_but_cancel_requires_shape() {
+        // Ghost ACP flow session (strict uuid tail + no created_by): delete
+        // releases (P-06 designed shape); but any acp_ prefix with a non-uuid
+        // tail does not get the release.
+        let session_manager = test_session_manager();
+        let tree = SessionTreeManager::new(8);
+        let workspace = TestTempDir::new("bitfun-authz-ghost-acp");
+        let workspace_string = workspace.as_string();
+        let workspace_path = std::path::Path::new(&workspace_string);
+        let strict_acp_id = "acp_codex_7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b";
+
+        // Strict ACP shape delete releases with no metadata (ghost).
+        resolve_session_mutation_authorization(
+            &session_manager,
+            &tree,
+            "caller-1",
+            strict_acp_id,
+            workspace_path,
+            "delete",
+            SessionMutationAuthOptions::delete(),
+        )
+        .await
+        .expect("strict acp flow session delete should be released");
+
+        // cancel keeps delete's ghost release semantics (no created_by on a
+        // flow session is the designed shape).
+        resolve_session_mutation_authorization(
+            &session_manager,
+            &tree,
+            "caller-1",
+            strict_acp_id,
+            workspace_path,
+            "cancel",
+            SessionMutationAuthOptions::delete(),
+        )
+        .await
+        .expect("strict acp flow session cancel should be released");
+    }
+
+    #[tokio::test]
+    async fn shared_authz_created_by_match_allows_caller() {
+        // created_by match: target metadata created_by == session-<caller>
+        // -> allow.
+        let session_manager = test_session_manager();
+        let tree = SessionTreeManager::new(8);
+        let workspace = TestTempDir::new("bitfun-authz-created-by");
+        let workspace_string = workspace.as_string();
+        let workspace_path = std::path::Path::new(&workspace_string);
+        let target_id = "target-1";
+        let metadata = crate::service::session::SessionMetadata::new(
+            target_id.to_string(),
+            "target".to_string(),
+            "agentic".to_string(),
+            "auto".to_string(),
+        );
+        let mut created_metadata = metadata.clone();
+        created_metadata.created_by = Some(session_control_creator_marker("caller-1"));
+        session_manager
+            .save_session_metadata(workspace_path, &created_metadata)
+            .await
+            .expect("save metadata");
+
+        resolve_session_mutation_authorization(
+            &session_manager,
+            &tree,
+            "caller-1",
+            target_id,
+            workspace_path,
+            "delete",
+            SessionMutationAuthOptions::delete(),
+        )
+        .await
+        .expect("creator should be authorized to delete");
+    }
+
+    #[tokio::test]
+    async fn shared_authz_owner_bypasses_delete_but_not_cancel() {
+        // Owner (Commander role) delete exemption; cancel has no owner exemption.
+        use crate::agentic::tools::restrictions::{clear_session_role, set_session_role};
+        let _ = set_session_role("authz-owner", AgentRole::Commander);
+        let session_manager = test_session_manager();
+        let tree = SessionTreeManager::new(8);
+        let workspace = TestTempDir::new("bitfun-authz-owner");
+        let workspace_string = workspace.as_string();
+        let workspace_path = std::path::Path::new(&workspace_string);
+
+        resolve_session_mutation_authorization(
+            &session_manager,
+            &tree,
+            "authz-owner",
+            "acp_codex_notauuid",
+            workspace_path,
+            "delete",
+            SessionMutationAuthOptions::delete(),
+        )
+        .await
+        .expect("owner should bypass delete gate");
+
+        // cancel has no owner exemption: even as Commander role, a non-ACP
+        // shape is still rejected (no metadata -> ancestor walk fails, which is
+        // also a rejection).
+        let error = resolve_session_mutation_authorization(
+            &session_manager,
+            &tree,
+            "authz-owner",
+            "acp_codex_notauuid",
+            workspace_path,
+            "cancel",
+            SessionMutationAuthOptions::cancel(),
+        )
+        .await
+        .expect_err("owner must not bypass cancel gate");
+        assert!(
+            error.to_string().contains("not authorized to cancel")
+                || error.to_string().contains("cannot verify ancestor relationship"),
+            "{error}"
+        );
+        clear_session_role("authz-owner");
     }
 
     fn summary(

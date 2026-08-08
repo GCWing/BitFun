@@ -278,6 +278,16 @@ pub struct SessionManager {
     /// The Session lifecycle remains the only owner of acquisition and release.
     session_write_locks: Arc<DashMap<String, SessionWriteLock>>,
 
+    /// Serializes the read-modify-write of one workspace's persistent deletion
+    /// tombstone registry (`deleted-session-ids.json`). Keyed by the resolved
+    /// tombstone file path (derived from the workspace runtime directory) so
+    /// concurrent deletions of different sessions in the same workspace cannot
+    /// interleave and lose entries, while different workspaces never contend.
+    /// Independent from `session_mutation_locks` (which keys by session id and
+    /// is already released by the time the tombstone write happens) and from
+    /// `session_write_locks` (per-session tail-write ownership).
+    tombstone_registry_locks: KeyedAsyncLock,
+
     /// Sub-components
     context_store: Arc<SessionContextStore>,
     prompt_cache_store: Arc<SessionPromptCacheStore>,
@@ -977,6 +987,17 @@ impl SessionManager {
         session_id: &str,
     ) {
         self.deleted_session_ids.remove(session_id);
+        let Some(workspace_runtime_path) = session_storage_path.parent() else {
+            return;
+        };
+        let tombstone_path = workspace_runtime_path.join(DELETED_SESSION_IDS_FILE_NAME);
+        // Serialize the tombstone read-modify-write with any concurrent
+        // record/unmark for the same workspace so no entry can be lost by an
+        // interleaved read of a stale registry snapshot.
+        let _tombstone_guard = self
+            .tombstone_registry_locks
+            .lock(&tombstone_path.to_string_lossy())
+            .await;
         let Ok(ids) = self.list_deleted_session_ids(session_storage_path).await else {
             return;
         };
@@ -984,12 +1005,14 @@ impl SessionManager {
             return;
         }
         let remaining: Vec<String> = ids.into_iter().filter(|id| id != session_id).collect();
-        let Some(workspace_runtime_path) = session_storage_path.parent() else {
-            return;
-        };
-        let tombstone_path = workspace_runtime_path.join(DELETED_SESSION_IDS_FILE_NAME);
         if let Ok(payload) = serde_json::to_string(&remaining) {
-            if let Err(error) = tokio::fs::write(&tombstone_path, payload).await {
+            // Atomic replace (temp + rename) so a concurrent reader or a crash
+            // can never observe a partially written registry.
+            if let Err(error) = self
+                .persistence_manager
+                .write_text_atomic(&tombstone_path, &payload)
+                .await
+            {
                 warn!(
                     "Failed to persist deleted session id unmark: session_id={}, error={}",
                     session_id, error
@@ -1048,6 +1071,14 @@ impl SessionManager {
         let Some(workspace_runtime_path) = session_storage_path.parent() else {
             return Ok(());
         };
+        let tombstone_path = workspace_runtime_path.join(DELETED_SESSION_IDS_FILE_NAME);
+        // Serialize the tombstone read-modify-write with any concurrent
+        // record/unmark for the same workspace so no entry can be lost by an
+        // interleaved read of a stale registry snapshot.
+        let _tombstone_guard = self
+            .tombstone_registry_locks
+            .lock(&tombstone_path.to_string_lossy())
+            .await;
         let mut ids = self.list_deleted_session_ids(session_storage_path).await?;
         if ids.iter().any(|id| id == session_id) {
             return Ok(());
@@ -1057,7 +1088,6 @@ impl SessionManager {
             ids.drain(..ids.len() - DELETED_SESSION_IDS_MAX_ENTRIES);
         }
         let payload = serde_json::to_string(&ids)?;
-        let tombstone_path = workspace_runtime_path.join(DELETED_SESSION_IDS_FILE_NAME);
         // Ensure the workspace runtime directory exists: deletion can succeed
         // while persistence is disabled, in which case the sessions directory
         // (and its parent runtime directory) may never have been created. The
@@ -1065,7 +1095,11 @@ impl SessionManager {
         // configuration, so it must create the parent itself (ghost-session
         // root cause R3).
         tokio::fs::create_dir_all(workspace_runtime_path).await?;
-        tokio::fs::write(&tombstone_path, payload).await?;
+        // Atomic replace (temp + rename) so a concurrent reader or a crash can
+        // never observe a partially written registry.
+        self.persistence_manager
+            .write_text_atomic(&tombstone_path, &payload)
+            .await?;
         Ok(())
     }
 
@@ -2082,6 +2116,7 @@ impl SessionManager {
             session_storage_path_index: Arc::new(DashMap::new()),
             session_mutation_locks: KeyedAsyncLock::default(),
             session_write_locks: Arc::new(DashMap::new()),
+            tombstone_registry_locks: KeyedAsyncLock::default(),
             context_store,
             prompt_cache_store: Arc::new(SessionPromptCacheStore::new()),
             prompt_cache_operation_locks: KeyedAsyncLock::default(),
@@ -2417,6 +2452,7 @@ impl SessionManager {
         let session_storage_path_index = self.session_storage_path_index.clone();
         let session_mutation_locks = self.session_mutation_locks.clone();
         let session_write_locks = self.session_write_locks.clone();
+        let tombstone_registry_locks = self.tombstone_registry_locks.clone();
         let context_store = self.context_store.clone();
         let prompt_cache_store = self.prompt_cache_store.clone();
         let prompt_cache_operation_locks = self.prompt_cache_operation_locks.clone();
@@ -2451,6 +2487,7 @@ impl SessionManager {
                 session_storage_path_index,
                 session_mutation_locks,
                 session_write_locks,
+                tombstone_registry_locks,
                 context_store,
                 prompt_cache_store,
                 prompt_cache_operation_locks,
@@ -8683,6 +8720,7 @@ impl SessionManager {
         let enable_persistence = self.config.enable_persistence;
         let session_mutation_locks = self.session_mutation_locks.clone();
         let session_write_locks = self.session_write_locks.clone();
+        let tombstone_registry_locks = self.tombstone_registry_locks.clone();
         let context_store = self.context_store.clone();
         let prompt_cache_store = self.prompt_cache_store.clone();
         let token_anchor_store = self.token_anchor_store.clone();
@@ -8716,6 +8754,7 @@ impl SessionManager {
                 session_storage_path_index: session_storage_path_index.clone(),
                 session_mutation_locks: session_mutation_locks.clone(),
                 session_write_locks: session_write_locks.clone(),
+                tombstone_registry_locks: tombstone_registry_locks.clone(),
                 context_store: context_store.clone(),
                 prompt_cache_store: prompt_cache_store.clone(),
                 prompt_cache_operation_locks: prompt_cache_operation_locks.clone(),
@@ -8844,6 +8883,42 @@ impl SessionManager {
 
         debug!("Cleanup task started");
     }
+
+    /// Test-only: a thin `Self` handle sharing the same Arc state as `self`
+    /// (including the tombstone registry lock) so concurrent tombstone tests
+    /// can drive `record_deleted_session_id` from separate tasks without
+    /// cloning the full manager.
+    #[cfg(test)]
+    fn clone_for_tombstone_test(&self) -> Self {
+        Self {
+            sessions: self.sessions.clone(),
+            transient_session_ids: self.transient_session_ids.clone(),
+            active_session_capacity: self.active_session_capacity.clone(),
+            active_session_permits: self.active_session_permits.clone(),
+            session_storage_path_index: self.session_storage_path_index.clone(),
+            session_mutation_locks: self.session_mutation_locks.clone(),
+            session_write_locks: self.session_write_locks.clone(),
+            tombstone_registry_locks: self.tombstone_registry_locks.clone(),
+            context_store: self.context_store.clone(),
+            prompt_cache_store: self.prompt_cache_store.clone(),
+            prompt_cache_operation_locks: self.prompt_cache_operation_locks.clone(),
+            token_anchor_store: self.token_anchor_store.clone(),
+            turn_skill_agent_snapshot_store: self.turn_skill_agent_snapshot_store.clone(),
+            skill_agent_baseline_override_snapshot_store: self
+                .skill_agent_baseline_override_snapshot_store
+                .clone(),
+            edit_constraints_store: self.edit_constraints_store.clone(),
+            file_read_state_store: self.file_read_state_store.clone(),
+            evidence_ledger: self.evidence_ledger.clone(),
+            persistence_manager: self.persistence_manager.clone(),
+            memory_database: self.memory_database.clone(),
+            subagent_children: self.subagent_children.clone(),
+            subagent_children_dirty: self.subagent_children_dirty.clone(),
+            disk_removed_loaded_ids: self.disk_removed_loaded_ids.clone(),
+            deleted_session_ids: self.deleted_session_ids.clone(),
+            config: self.config.clone(),
+        }
+    }
 }
 
 /// Traverse the subagent_children index in post-order to collect hidden subagent
@@ -8902,7 +8977,7 @@ mod tests {
     use super::{
         should_auto_migrate_session_model, CoreSessionStorePort, SessionExecutionBindingError,
         SessionExecutionBindingUpdate, SessionManager, SessionManagerConfig,
-        TEST_MODEL_RESOLUTION_AI_CONFIG,
+        TEST_MODEL_RESOLUTION_AI_CONFIG, DELETED_SESSION_IDS_FILE_NAME,
     };
     use crate::agentic::core::{
         CompressionState, Message, MessageContent, MessageRole, ProcessingPhase, Session,
@@ -14147,6 +14222,62 @@ mod tests {
             !deleted_ids_after_recreate.contains(&session_id),
             "re-creation must durably clear the on-disk tombstone"
         );
+    }
+
+    #[tokio::test]
+    async fn concurrent_tombstone_records_for_same_workspace_lose_no_ids() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session_storage_path = manager
+            .resolve_storage_path_for_workspace_path(workspace.path())
+            .await;
+
+        let session_ids: Vec<String> =
+            (0..32).map(|index| format!("concurrent-deleted-{index}")).collect();
+        let mut handles = Vec::new();
+        for session_id in session_ids.clone() {
+            let manager = manager.clone_for_tombstone_test();
+            let storage_path = session_storage_path.clone();
+            handles.push(tokio::spawn(async move {
+                manager
+                    .record_deleted_session_id(&storage_path, &session_id)
+                    .await
+                    .expect("tombstone record should succeed");
+            }));
+        }
+        for handle in handles {
+            handle.await.expect("concurrent record task should finish");
+        }
+
+        let deleted_ids = manager
+            .list_deleted_session_ids(&session_storage_path)
+            .await
+            .expect("tombstone registry should be readable");
+        let deleted: HashSet<String> = deleted_ids.into_iter().collect();
+        for session_id in &session_ids {
+            assert!(
+                deleted.contains(session_id),
+                "concurrent tombstone records must not lose session_id={session_id}"
+            );
+        }
+
+        // A re-read sees the complete, parseable registry: the file itself is
+        // intact after the atomic temp+rename writes.
+        let raw = tokio::fs::read_to_string(
+            session_storage_path
+                .parent()
+                .expect("sessions dir has a parent")
+                .join(DELETED_SESSION_IDS_FILE_NAME),
+        )
+        .await
+        .expect("tombstone file should exist");
+        let reparsed: Vec<String> =
+            serde_json::from_str(&raw).expect("tombstone file must stay parseable");
+        let reparsed: HashSet<String> = reparsed.into_iter().collect();
+        assert_eq!(reparsed, deleted);
     }
 
     #[tokio::test]

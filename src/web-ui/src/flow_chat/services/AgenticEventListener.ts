@@ -73,7 +73,8 @@ export class AgenticEventListener {
 
   async startListening(callbacks: AgenticEventCallbacks): Promise<void> {
     if (this.isListening) {
-      // UI-08: 重入时先卸载旧监听再注册新回调，避免多套监听叠加导致事件重复分发。
+      // UI-08: On re-entry, unload the old listener before registering the new
+      // callback to avoid overlapping listeners duplicating event dispatch.
       logger.warn('Event listener already running; restarting with new callbacks');
       await this.stopListening();
     }

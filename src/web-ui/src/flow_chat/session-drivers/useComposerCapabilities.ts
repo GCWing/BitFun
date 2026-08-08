@@ -88,7 +88,8 @@ export function useComposerCapabilities(input: ComposerCapabilityInput): Compose
     localSlashCommands: !dispatchTransport,
     ops: dispatchTransport ? DISPATCH_SLASH_OPS : LOCAL_SLASH_OPS,
     usageReport: true,
-    // UI-12: ACP 会话走 agent 协议自带 goal 编排，误显本地 threadGoal 入口。
+    // UI-12: ACP sessions rely on agent-protocol-native goal orchestration;
+    // showing the local threadGoal entry would be misleading.
     threadGoal: !displayAsChild && !dispatchTransport && !isAcpFlowSession(session),
     transferInFlight,
     submissionOptionsLocked,

@@ -116,9 +116,16 @@ pub enum PenaltyLevel {
     L1,
     /// Second violation in same session: shame-wall record + context reminder.
     L2,
-    /// ≥3 violations or severe: shame-wall record + escalation reminder + notify user.
+    /// ≥3 violations or severe: shame-wall record + escalation reminder.
+    ///
+    /// WARDEN-10: "notify user" is advisory-only — the core has no UI channel,
+    /// so the runtime surfaces L3 awareness through the warn-level log, not a
+    /// delivered push notification.
     L3,
     /// Cross-session ≥5 violations: shame-wall record (L4 escalation history).
+    ///
+    /// Not currently reachable from the runtime: `ViolationPolicy::level_for`
+    /// caps escalation at L3 and there is no cross-session accumulation logic.
     L4,
 }
 
@@ -300,7 +307,11 @@ pub const POKE_PENALTY_KIND: &str = "PokePenalty";
 /// Session id used by the in-process Warden runtime when it requests a
 /// penalty. `verify_warden_session` short-circuits this source so the
 /// scheduler-embedded runtime does not need a daemon session.
-pub const WARDEN_RUNTIME_SESSION: &str = "warden-runtime";
+///
+/// Deliberately not `pub`: this is an internal trusted source marker for the
+/// scheduler-embedded runtime, not a user-facing session identifier. External
+/// callers must authenticate through a real Warden session (`is_daemon=true`).
+pub(crate) const WARDEN_RUNTIME_SESSION: &str = "warden-runtime";
 
 /// `prepended_reminders` kind value for self-boot check (iron-rule summary +
 /// Warden protocol declaration).
@@ -313,11 +324,11 @@ pub const RBAC_ROLE_REMINDER_KIND: &str = "RbacRoleReminder";
 // Shame-wall file path constant (violation registry file)
 // ---------------------------------------------------------------------------
 
-/// Relative path (resolved against workspace root) for the shame-wall registry file.
+/// Relative path (resolved against workspace root) for the violation registry file.
 ///
 /// Only [`AgentRole::PunishmentExecutor`] is allowed to write to this path,
 /// enforced via [`ToolRuntimeRestrictions::path_policy`].
-pub const SHAME_WALL_FILENAME: &str = ".master-framework/shame-wall-registry.json";
+pub const SHAME_WALL_FILENAME: &str = ".bitfun/warden/violation-registry.json";
 
 // ---------------------------------------------------------------------------
 // 8. Poke-First Protocol (challenge before intervention)

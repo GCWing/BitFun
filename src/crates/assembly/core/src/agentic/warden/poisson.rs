@@ -51,7 +51,7 @@ impl PoissonScheduler {
     /// seeds produce identical scheduling sequences.
     pub fn new(rate: f64, seed: u64) -> Self {
         Self {
-            rate,
+            rate: sanitize_rate(rate),
             rng: StdRng::seed_from_u64(seed),
             counter: 0,
         }
@@ -63,7 +63,7 @@ impl PoissonScheduler {
     /// Scheduling sequences produced by this constructor are **not** reproducible.
     pub fn new_random(rate: f64) -> Self {
         Self {
-            rate,
+            rate: sanitize_rate(rate),
             rng: StdRng::from_entropy(),
             counter: 0,
         }
@@ -75,10 +75,25 @@ impl PoissonScheduler {
     /// a Bernoulli trial with success probability `p = 1 / rate`.
     ///
     /// Returns `true` when the current round is selected for a poke event.
+    ///
+    /// # Guard rails
+    ///
+    /// A rate that is not a positive finite number (`NaN`, `0`, negative, or
+    /// `∞`) is treated as "never poke": the scheduler still advances its round
+    /// counter but always returns `false`, so a misconfigured `rate` can never
+    /// degenerate into a poke on every turn.
     pub fn should_poke(&mut self) -> bool {
         self.counter += 1;
         let p = 1.0 / self.rate;
         self.rng.gen::<f64>() < p
+    }
+
+    /// Replace the configured rate.
+    ///
+    /// The same sanitization as the constructor applies: a non-positive or
+    /// non-finite value becomes the never-poke sentinel.
+    pub fn set_rate(&mut self, rate: f64) {
+        self.rate = sanitize_rate(rate);
     }
 
     /// Reset the scheduler to its initial state.
@@ -111,8 +126,41 @@ impl PoissonScheduler {
     }
 
     /// Expected number of pokes after `rounds` turns (i.e., `rounds / rate`).
+    ///
+    /// With the never-poke sentinel the expectation is 0.
     pub fn expected_pokes(&self, rounds: u64) -> f64 {
         rounds as f64 / self.rate
+    }
+}
+
+/// Maximum accepted average inter-poke interval (rounds between pokes).
+///
+/// A higher rate makes `p = 1/rate` so small that a poke is astronomically
+/// unlikely within any realistic session; rejecting such values keeps a
+/// misconfigured rate from silently disabling the Challenge-Poke protocol.
+/// Callers that intentionally want to disable Challenge-Poke should use
+/// `f64::INFINITY` (accepted) or an empty rule set, not an invalid rate.
+const MAX_RATE: f64 = 1000.0;
+
+/// Non-poke sentinel for an invalid rate.
+///
+/// `1.0 / NEVER_POKE_RATE` underflows to `0.0`, so the Bernoulli trial always
+/// fails: `rate = 0` (which would otherwise produce `p = ∞`) can never poke on
+/// every turn. `expected_pokes` also stays finite and small.
+const NEVER_POKE_RATE: f64 = f64::MAX;
+
+/// Map a configured rate to the value used by the Bernoulli trial.
+///
+/// A rate that is not a positive finite number within [`MAX_RATE`] is mapped
+/// to the never-poke sentinel. `f64::INFINITY` is preserved as a legitimate
+/// "disable Challenge-Poke" value (a natural `p = 0`).
+fn sanitize_rate(rate: f64) -> f64 {
+    if rate.is_finite() && rate > 0.0 && rate <= MAX_RATE {
+        rate
+    } else if rate.is_infinite() && rate > 0.0 {
+        rate
+    } else {
+        NEVER_POKE_RATE
     }
 }
 
@@ -236,5 +284,76 @@ mod tests {
             }
         }
         assert!(pokes < 10, "rate=10000 should rarely poke, got {pokes}");
+    }
+
+    #[test]
+    fn non_positive_rate_never_pokes() {
+        // rate=0 previously produced p = 1/0 = inf → a poke on every turn.
+        // The guard maps it to the never-poke sentinel instead.
+        for rate in [0.0, -1.0, -1000.0] {
+            let mut sched = PoissonScheduler::new(rate, 42);
+            assert_eq!(
+                sched.rate(),
+                f64::MAX,
+                "rate {rate} must be sanitized to the never-poke sentinel"
+            );
+            let mut pokes = 0u32;
+            for _ in 0..1000 {
+                if sched.should_poke() {
+                    pokes += 1;
+                }
+            }
+            assert_eq!(pokes, 0, "rate {rate} must never poke");
+        }
+    }
+
+    #[test]
+    fn non_finite_and_over_limit_rates_never_poke() {
+        for rate in [f64::NAN, f64::NEG_INFINITY] {
+            let mut sched = PoissonScheduler::new(rate, 42);
+            let mut pokes = 0u32;
+            for _ in 0..1000 {
+                if sched.should_poke() {
+                    pokes += 1;
+                }
+            }
+            assert_eq!(pokes, 0, "rate {rate} must never poke");
+        }
+        // Over the accepted upper bound the rate is rejected: never poke.
+        let mut sched = PoissonScheduler::new(5000.0, 42);
+        let mut pokes = 0u32;
+        for _ in 0..10_000 {
+            if sched.should_poke() {
+                pokes += 1;
+            }
+        }
+        assert_eq!(pokes, 0, "rate above the cap must never poke");
+        // Positive infinity remains a legitimate "disable Challenge-Poke".
+        let mut sched = PoissonScheduler::new(f64::INFINITY, 42);
+        assert_eq!(sched.rate(), f64::INFINITY);
+        let mut pokes = 0u32;
+        for _ in 0..10_000 {
+            if sched.should_poke() {
+                pokes += 1;
+            }
+        }
+        assert_eq!(pokes, 0, "infinite rate must never poke");
+    }
+
+    #[test]
+    fn set_rate_applies_the_same_sanitization() {
+        let mut sched = PoissonScheduler::new(6.5, 42);
+        sched.set_rate(0.0);
+        assert_eq!(sched.rate(), f64::MAX);
+        let mut pokes = 0u32;
+        for _ in 0..1000 {
+            if sched.should_poke() {
+                pokes += 1;
+            }
+        }
+        assert_eq!(pokes, 0, "rate 0 must never poke after set_rate");
+        // A valid replacement restores poking.
+        sched.set_rate(1.0);
+        assert!(sched.should_poke(), "rate=1.0 must always poke");
     }
 }

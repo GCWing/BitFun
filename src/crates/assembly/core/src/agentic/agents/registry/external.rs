@@ -500,9 +500,9 @@ impl AgentRegistry {
                     let binding = match route {
                         // 与下方 fall-through（find_agent_entry 直接映射）对齐：
                         // 移除 Mode 过滤，允许 subagent 类型代理续聊/恢复/压缩。
-                        // 上游 is_local_session_primary_entry 白名单保留（指挥官
-                        // 20260806 纠正裁决：融合方案）——下方 fall-through 中
-                        // 命中白名单走确认路径，未命中按本地全量放开。
+                        // 保留上游 is_local_session_primary_entry 白名单（融合方案）
+                        // ——下方 fall-through 中命中白名单走确认路径，未命中按
+                        // 本地全量放开。
                         ExternalSubagentRoute::Local => self
                             .find_agent_entry(logical_id, Some(workspace_root))
                             .map(|entry| local_primary_binding(entry.agent.id()))
@@ -556,10 +556,10 @@ impl AgentRegistry {
         // continued dialog turns, restore, and manual compaction. The Mode
         // filter only guarded the route branch above; the fail-closed
         // `expected_owner == External` guard stays.
-        // 融合（上游 review 修复 + 本地全量放开，指挥官 20260806 纠正裁决）：
+        // 融合（上游 review 修复 + 本地全量放开）：
         // - 命中上游 is_local_session_primary_entry 白名单（Mode 或
         //   CodeReview/DeepReview builtin）→ 白名单确认路径解析（上游功能保留）；
-        // - 未命中（其他 subagent 类型）→ 本地全量放开仍允许（ACP/军团定制超集），
+        // - 未命中（其他 subagent 类型）→ 本地全量放开仍允许（ACP/定制超集），
         //   并 warn 提示该 entry 不在上游白名单、由本地定制放开。
         match self.find_agent_entry(logical_id, workspace_root) {
             Some(entry) => {

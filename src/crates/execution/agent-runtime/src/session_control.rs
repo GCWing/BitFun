@@ -210,7 +210,7 @@ fn validate_mutating_action_target(
 
     // 守卫只依赖会话绑定等价判定：目标 session_id 与当前会话一致即拒绝，
     // 不再依赖 workspace_root，避免远程/未绑定上下文绕过"不能操作当前会话"限制。
-    // Compact 例外：允许压缩自己（含自己、含常驻 subagent 工位——契约）。
+    // Compact 例外：允许压缩自己（含自己、含常驻 subagent 会话——契约）。
     if !matches!(action, SessionControlAction::Compact)
         && context.current_session_id == Some(session_id)
     {

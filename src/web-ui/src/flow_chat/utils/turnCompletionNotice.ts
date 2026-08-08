@@ -19,9 +19,11 @@ interface NormalizedTurnCompletionNoticeState {
   hasFinalResponse?: boolean;
 }
 
-// 'complete' 是 BitFun 正常收尾码；'stop' 是模型原生正常终止码，防御其他事件源。
-// 'eos' / 'tool_calls' 同为模型原生正常终止码：流式 EOF 或模型最终转向工具调用，
-// 都不是"没有可用结果"的异常终止。
+// 'complete' is BitFun's normal wrap-up code; 'stop' is a model-native normal
+// termination code, defending against other event sources. 'eos' / 'tool_calls'
+// are also model-native normal termination codes: streaming EOF or the model
+// finally switching to tool calls is not an abnormal termination meaning "no
+// usable result".
 const NORMAL_FINISH_REASONS = new Set(['complete', 'stop', 'eos', 'tool_calls']);
 
 const TURN_COMPLETION_NOTICE_CONFIG: Record<string, TurnCompletionNoticeConfig> = {

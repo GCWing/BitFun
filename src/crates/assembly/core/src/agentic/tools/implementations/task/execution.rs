@@ -254,7 +254,7 @@ fn acp_background_result_notice(session_id: &str, agent_type: &str) -> String {
 ///
 /// 参照 session_message_tool::persist_acp_direct_delivery_turn 同构：落盘存
 /// 全文（SessionHistory 可检索），查重防重复（同 turn id 跳过、索引冲突跳过），
-/// 失败仅 warn 绝不阻塞主流程通知式注入（03 文档铁则）。
+/// 失败仅 warn 绝不阻塞主流程通知式注入。
 async fn persist_background_acp_turn(
     persistence: &PersistenceManager,
     storage_path: &Path,
@@ -369,7 +369,7 @@ async fn persist_background_acp_turn(
 /// P-03：后台 ACP 回复完整 turn 落盘到工作区（供 SessionHistory 检索全文）。
 ///
 /// 解析有效会话存储路径 + PersistenceManager，再落盘；失败仅 warn 不阻塞
-/// 主流程。注入主会话的 message 仍是通知句（03 文档铁则，不改回全文）。
+/// 主流程。注入主会话的 message 仍是通知句（不改回全文）。
 async fn persist_background_acp_turn_to_workspace(
     workspace_path: Option<String>,
     flow_session_id: &str,
@@ -882,7 +882,7 @@ impl TaskTool {
                 let output_text = match &sent {
                     Ok(result) => {
                         // P-03：后台 ACP 回复完整 turn 落盘（全文供 SessionHistory
-                        // 检索）；注入主会话的 message 保持通知句（03 文档铁则）。
+                        // 检索）；注入主会话的 message 保持通知句。
                         persist_background_acp_turn_to_workspace(
                             workspace_path_for_task.clone(),
                             &flow_session_id_for_task,

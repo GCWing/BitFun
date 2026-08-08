@@ -1,4 +1,7 @@
-use super::session_control_tool::get_available_agent_type_ids_for_creation;
+use super::session_control_tool::{
+    get_available_agent_type_ids_for_creation, resolve_session_mutation_authorization,
+    SessionMutationAuthOptions,
+};
 use super::util::normalize_path;
 use crate::agentic::agents::AcpAgent;
 use crate::agentic::coordination::plan_todo_binding::{
@@ -82,24 +85,29 @@ struct DispatchOutcome {
 /// review/repair need the wider bound, while it stays bounded to avoid hangs).
 const ACP_DIRECT_TIMEOUT_SECONDS: u64 = 1800;
 
-/// COORD-03 流会话注册表元数据键（权威源：interfaces/acp/src/client/
-/// session_persistence.rs:11-16 —— AcpSessionPersistence 创建流会话记录时
-/// 写入 provider/acpClientId 自定义元数据）。core 不依赖 ACP crate，以
-/// 字面量消费同一持久化契约。
+/// COORD-03 flow-session registry metadata keys (authoritative source:
+/// interfaces/acp/src/client/session_persistence.rs:11-16 —
+/// AcpSessionPersistence writes the provider/acpClientId custom metadata when
+/// creating a flow-session record). core does not depend on the ACP crate, so
+/// it consumes the same persistence contract via literals.
 const ACP_FLOW_METADATA_PROVIDER_KEY: &str = "provider";
 const ACP_FLOW_METADATA_PROVIDER_VALUE: &str = "acp";
 const ACP_FLOW_METADATA_CLIENT_ID_KEY: &str = "acpClientId";
 
-/// COORD-03 流会话注册表判定结果：会话 id 形状（`acp_<client>_<uuid>`）
-/// 只作线索，注册表记录才是「是否为活跃外部 ACP 流会话」的权威事实。
+/// COORD-03 flow-session registry verdict: the session id shape
+/// (`acp_<client>_<uuid>`) is only a hint; the registry record is the
+/// authoritative fact for "is an active external ACP flow session".
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum AcpFlowSessionRegistryStatus {
-    /// 注册表记录在册且 provider=acp：活跃外部 ACP 流会话（附记录中的
-    /// client id，与形状解析出的 client id 必须一致）。
+    /// Registered with provider=acp: an active external ACP flow session
+    /// (carries the client id from the record, which must match the client id
+    /// parsed from the shape).
     Active { client_id: String },
-    /// 注册表有记录但不是 ACP 流会话（例如内部会话的 id 恰巧命中形状）。
+    /// Has a registry record but is not an ACP flow session (e.g. an internal
+    /// session whose id happens to match the shape).
     NotAcpFlow,
-    /// 注册表中无记录：会话已被回收（delete_session_record）或从未创建。
+    /// No registry record: the session was reclaimed (delete_session_record)
+    /// or never created.
     Missing,
 }
 
@@ -1084,8 +1092,9 @@ fn acp_direct_delivery_workspace_path(op: &AcpDirectSendOp) -> Option<&str> {
 }
 
 /// Build the persisted `DialogTurnData` for one ACP direct delivery
-/// (a19 后端同构落盘；镜像前端 convertDialogTurnToBackendFormat 的
-/// user_message + 单 model_round text_items 结构)。
+/// (a19 backend-homomorphic persistence; mirrors the frontend
+/// convertDialogTurnToBackendFormat's user_message + single model_round
+/// text_items structure).
 #[allow(clippy::too_many_arguments)]
 fn build_acp_direct_delivery_turn(
     turn_id: &str,
@@ -1196,7 +1205,8 @@ async fn persist_acp_direct_delivery_turn(
         );
         return;
     };
-    // 幂等：同 turn_id 已在会话任意索引落盘 → no-op（不重复追加）。
+    // Idempotent: the same turn_id already persisted at any session index
+    // -> no-op (no duplicate append).
     let known_turn_count = metadata.turn_count;
     for index in 0..known_turn_count {
         if let Ok(Some(existing)) = persistence
@@ -1208,10 +1218,13 @@ async fn persist_acp_direct_delivery_turn(
             }
         }
     }
-    // P-19 全文落盘原则：计算索引（metadata.turn_count）可能被前端/并发写者
-    // 已落盘的既有 turn 占用而元数据未同步（实证「SessionHistory 导出仍只有
-    // turn 0」）。此时不得静默丢弃投递 turn——从 turn_count 起向后扫描第一个
-    // 空闲索引追加，保证 reply 全文始终可经 SessionHistory 检索。
+    // P-19 full-text persistence principle: the computed index
+    // (metadata.turn_count) may already be occupied by an existing turn that
+    // the frontend/concurrent writer persisted while the metadata was not yet
+    // synced (observed as "SessionHistory export still only has turn 0"). The
+    // delivery turn must not be silently dropped in that case — scan forward
+    // from turn_count for the first free index and append there, so the full
+    // reply is always retrievable via SessionHistory.
     let mut turn_index = known_turn_count;
     loop {
         match persistence
@@ -1484,17 +1497,22 @@ impl SessionMessageTool {
         Some(client_id)
     }
 
-    /// COORD-03 权威判定：查 ACP 流会话注册表（workspace 会话存储中的持久
-    /// 化记录）。流会话记录由 `AcpClientPort::create_session` 写入（provider=
-    /// acp + acpClientId 元数据），回收（`delete_session_record`）后记录被
-    /// 删除，因此记录状态是「是否活跃外部 ACP 流会话」的权威事实：
-    /// - `Active`：记录在册且 provider=acp，附记录中的 client id；
-    /// - `NotAcpFlow`：记录在册但不是 ACP 流会话（内部会话命中形状）；
-    /// - `Missing`：无记录（已回收或从未创建）——派发前存活校验失败。
+    /// COORD-03 authoritative verdict: query the ACP flow-session registry
+    /// (the persisted record in the workspace session storage). Flow-session
+    /// records are written by `AcpClientPort::create_session` (provider=acp +
+    /// acpClientId metadata) and deleted on reclaim
+    /// (`delete_session_record`), so the record state is the authoritative
+    /// fact for "is an active external ACP flow session":
+    /// - `Active`: record exists and provider=acp, with the client id from the record;
+    /// - `NotAcpFlow`: record exists but is not an ACP flow session (an
+    ///   internal session matching the shape);
+    /// - `Missing`: no record (reclaimed or never created) — the
+    ///   pre-dispatch liveness check fails.
     ///
-    /// 同一存储目录（`get_effective_session_path`）同时承载内部会话与 ACP
-    /// 流会话记录，provider 标记负责区分；与 desktop `AcpClientPort` 的
-    /// `session_storage_path` 解析一致（本地 workspace，不涉及 remote）。
+    /// The same storage directory (`get_effective_session_path`) hosts both
+    /// internal sessions and ACP flow-session records; the provider marker
+    /// distinguishes them, matching the desktop `AcpClientPort`'s
+    /// `session_storage_path` resolution (local workspace, no remote).
     async fn acp_flow_session_registry_status(
         workspace_path: &str,
         session_id: &str,
@@ -1529,8 +1547,8 @@ impl SessionMessageTool {
             .map(ToString::to_string);
         match client_id {
             Some(client_id) => Ok(AcpFlowSessionRegistryStatus::Active { client_id }),
-            // provider=acp 但 client id 缺失/为空：异常记录，无法确认归属，
-            // 按非 ACP 流会话拒绝（不路由）。
+            // provider=acp but client id missing/empty: an abnormal record that
+            // cannot confirm ownership; reject as a non-ACP flow session (do not route).
             None => Ok(AcpFlowSessionRegistryStatus::NotAcpFlow),
         }
     }
@@ -1602,9 +1620,11 @@ impl SessionMessageTool {
         let turn_id = Uuid::new_v4().to_string();
         let round_id = Uuid::new_v4().to_string();
         let started_at = Instant::now();
-        // a19 后端落盘时间基准：事件流内无法再次取时（事件不携带时间戳）。
+        // a19 backend persistence time base: the event stream cannot take the
+        // time again (events carry no timestamp).
         let turn_started_at_ms = acp_direct_delivery_now_unix_ms();
-        // a19 后端落盘目标工作区：在 `op` 被 move 进发送 future 前提取。
+        // a19 backend persistence target workspace: extracted before `op` is
+        // moved into the send future.
         let target_workspace_path = acp_direct_delivery_workspace_path(&op).map(ToOwned::to_owned);
         coordinator
             .emit_event(AgenticEvent::DialogTurnStarted {
@@ -1630,8 +1650,9 @@ impl SessionMessageTool {
             while let Some(chunk) = chunk_rx.recv().await {
                 if let AcpClientStreamChunk::Text { text } = chunk {
                     if !round_started {
-                        // 与 coordinator.rs 既有模式一致：TextChunk 前先补发
-                        // ModelRoundStarted，让前端正常建立 round 容器，再流式输出文本。
+                        // Consistent with the existing coordinator.rs pattern:
+                        // emit ModelRoundStarted before TextChunk so the
+                        // frontend builds the round container, then stream text.
                         coordinator
                             .emit_event(AgenticEvent::ModelRoundStarted {
                                 session_id: target_session_id.to_string(),
@@ -1693,16 +1714,19 @@ impl SessionMessageTool {
                         duration_ms,
                         partial_recovery_reason: None,
                         success: Some(true),
-                        // "complete" 是前端 NORMAL_FINISH_REASONS 内的正常终止码，
-                        // 避免误报「非标准方式结束」横幅。
+                        // "complete" is a normal terminal code inside the
+                        // frontend NORMAL_FINISH_REASONS, avoiding a false
+                        // "ended in a non-standard way" banner.
                         finish_reason: Some("complete".to_string()),
                         has_final_response: Some(true),
                     })
                     .await;
-                // a19 后端同构落盘：外部回复直接写入目标 ACP 会话的持久化 turn
-                // 文件，不依赖前端事件流（前端未打开/事件流中断时 SessionHistory
-                // 仍可读）。失败仅告警，不破坏通知式路径（COORD-15 follow-up
-                // 照常投递）。
+                // a19 backend-homomorphic persistence: the external reply is
+                // written directly into the target ACP session's persisted turn
+                // files, independent of the frontend event stream (SessionHistory
+                // remains readable when the frontend is not open or the event
+                // stream is interrupted). Failure only warns and does not break
+                // the notification path (COORD-15 follow-up still delivers).
                 if let Some(workspace_path) = target_workspace_path.as_deref() {
                     persist_acp_direct_delivery_to_workspace(
                         workspace_path,
@@ -1720,12 +1744,14 @@ impl SessionMessageTool {
                 // AgentSessionReplyRoute semantics: deliver the external
                 // response back to the sender session as a follow-up.
                 //
-                // COORD-15：事件流（DialogTurnStarted → TextChunk →
-                // DialogTurnCompleted）已在目标会话完成流式渲染，是外部回复的
-                // 唯一完整呈现；follow-up 的 content/display 均只注入通知句
-                // （完成回执），全文保留在 ACP 流会话历史，发起方用
-                // SessionHistory 自查，避免 ACP 直通事件流与本地 follow-up
-                // 双重呈现、也避免全文膨胀发起方上下文。
+                // COORD-15: the event stream (DialogTurnStarted → TextChunk →
+                // DialogTurnCompleted) already renders the external reply in
+                // full in the target session; the follow-up's content/display
+                // only injects a notice sentence (completion receipt), keeping
+                // the full text in the ACP flow session history for the initiator
+                // to inspect via SessionHistory, avoiding dual rendering between
+                // the ACP direct event stream and the local follow-up, and
+                // avoiding inflating the initiator's context with full text.
                 let content = acp_direct_response_notice(&sent.response, target_session_id);
                 let display = format!(
                     "External ACP session '{}' responded; the full reply is streamed in that session's chat view.",
@@ -1787,8 +1813,9 @@ impl SessionMessageTool {
                     "ACP direct delivery failed for session '{}': {}",
                     target_session_id, error
                 );
-                // a19 后端同构落盘：失败 turn 也写入持久化存储（与前端在
-                // DialogTurnFailed 时保存 error turn 的行为同构）。
+                // a19 backend-homomorphic persistence: a failed turn is also
+                // written to persistent storage (homomorphic with the frontend
+                // saving the error turn on DialogTurnFailed).
                 if let Some(workspace_path) = target_workspace_path.as_deref() {
                     persist_acp_direct_delivery_to_workspace(
                         workspace_path,
@@ -1854,23 +1881,33 @@ impl SessionMessageTool {
                     ));
                 }
 
-                // ACP 流会话直通：session_id 形状 `acp_<client_id>_<uuid>`（前端
-                // create_acp_flow_session / acp_control / SessionControl acp__ 创建的
-                // 真外部 ACP 会话）。流会话不在内部 session store，无法走 workspace
-                // binding / list_sessions 解析；直接经 AcpClientPort::send_message 真
-                // 通道转发（与 acp_message 同通道，无本地模型 turn）。投递即返回，
-                // 外部响应经事件流 + follow-up 回传。
+                // ACP flow-session direct path: the session_id shape
+                // `acp_<client_id>_<uuid>` (real external ACP sessions created
+                // by the frontend create_acp_flow_session / acp_control /
+                // SessionControl acp__). Flow sessions are not in the internal
+                // session store, so workspace binding / list_sessions cannot
+                // resolve them; forward directly through
+                // AcpClientPort::send_message (same channel as acp_message, no
+                // local model turn). Delivery returns immediately; the external
+                // response comes back via the event stream + follow-up.
                 //
-                // COORD-03：形状只作线索，ACP 流会话注册表才是权威判定。命中形状
-                // 后先查注册表（派发前存活校验）：记录在册且 provider=acp 且
-                // acpClientId 与形状 client id 一致 → 直通；内部会话命中形状 /
-                // 记录已回收 / 记录归属 client 不一致 → 显式拒绝而非路由，杜绝
-                // 误分流与回收竞态（回收后形状仍命中会把消息发向已释放的会话）。
+                // COORD-03: the shape is only a hint; the ACP flow-session
+                // registry is the authoritative verdict. After matching the
+                // shape, query the registry (pre-dispatch liveness check):
+                // record present with provider=acp and acpClientId matching the
+                // shape's client id -> direct path; internal session matching
+                // the shape / record reclaimed / record ownership mismatch ->
+                // explicit rejection instead of routing, eliminating
+                // mis-routing and reclaim races (after reclaim the shape still
+                // matches and would otherwise send to a released session).
                 if let Some(flow_client_id) =
                     Self::acp_flow_client_id_from_session_id(&target_session_id)
                 {
-                    // 注册表查询需要 workspace 定位会话存储目录；缺失时无法
-                    // 完成权威判定，显式拒绝（不静默直通未校验的会话）。
+                    // The registry query needs the workspace to locate the
+                    // session storage directory; when missing, the
+                    // authoritative verdict cannot be completed, so reject
+                    // explicitly (never silently direct-path an unchecked
+                    // session).
                     let workspace_path = params.workspace.clone().or_else(|| {
                         context
                             .workspace_root()
@@ -2091,10 +2128,14 @@ impl SessionMessageTool {
         // falling back to the local model (a fallback would re-introduce the
         // double-billing path).
         //
-        // COORD-03：agent_type 前缀 `acp__` 只作线索，ACP client 注册表才是
-        // 权威判定。内部会话命中形状但 client 未注册（历史壳会话 / 用户自定义
-        // 类型）时显式拒绝而非路由到外部，防误分流；client 已注册时直通（会话
-        // 级外部进程绑定由发送端口兜底，失败经事件流 + follow-up 回传）。
+        // COORD-03: the agent_type prefix `acp__` is only a hint; the ACP
+        // client registry is the authoritative verdict. An internal session
+        // matching the shape but with an unregistered client (legacy shell
+        // session / user-defined type) is explicitly rejected instead of being
+        // routed externally, preventing mis-routing; when the client is
+        // registered, direct path (session-level external process binding is
+        // handled by the sending port; failures come back via the event stream
+        // + follow-up).
         if let Some(client_id) = Self::acp_client_id_from_agent_type(&target_agent_type) {
             let port = coordinator.acp_client_port().ok_or_else(|| {
                 BitFunError::tool(
@@ -2152,6 +2193,31 @@ impl SessionMessageTool {
                 result_text,
                 acp_response: None,
             });
+        }
+
+        // PR #2139 #5: delivery authorization gate. The target session is
+        // resolved (exists) and not an ACP direct path (both ACP direct paths
+        // above returned after registry verification); only local delivery is
+        // handled here (steer_dialog_turn / submit_dialog_turn). Shares the R4
+        // authorization verdict with SessionControl delete/cancel:
+        // daemon/warden session interception (R-A.04), owner (Commander role
+        // or RBAC off) exemption, created_by matching
+        // (`session-<caller>` marker, written by creator_session_marker when
+        // creating a new session), ancestor authorization (in-memory tree fast
+        // path + persisted metadata chain fallback). The new-session branch
+        // (created_session_id.is_some()) is a self-created session and skips
+        // the gate.
+        if created_session_id.is_none() {
+            resolve_session_mutation_authorization(
+                coordinator.get_session_manager(),
+                coordinator.session_tree(),
+                source_session_id,
+                &target_session_id,
+                std::path::Path::new(&workspace_target.project_workspace_path),
+                "deliver to",
+                SessionMutationAuthOptions::deliver(),
+            )
+            .await?;
         }
 
         let sender_identity = self
@@ -2399,6 +2465,7 @@ mod tests {
         compression::{CompressionConfig, ContextCompressor},
         PromptCachePolicy, SessionContextStore, SessionManager, SessionManagerConfig,
     };
+    use bitfun_services_core::session::tree::SessionTreeManager;
     use crate::agentic::tools::framework::ToolUseContext;
     use crate::agentic::tools::registry::ToolRegistry;
     use crate::agentic::tools::{ToolPipeline, ToolStateManager};
@@ -3969,8 +4036,9 @@ mod tests {
         let mut saw_text = false;
         let mut saw_round_completed = false;
         let mut saw_completed = false;
-        // "complete" 是前端 NORMAL_FINISH_REASONS 内的正常终止码，非标准方式结束
-        // 横幅不会误报（参照 web-ui flow_chat/utils/turnCompletionNotice.ts）。
+        // "complete" is a normal terminal code inside the frontend
+        // NORMAL_FINISH_REASONS, so the "ended in a non-standard way" banner is
+        // not falsely reported (see web-ui flow_chat/utils/turnCompletionNotice.ts).
         let mut saw_complete_finish = false;
         for _ in 0..200 {
             while let Ok(envelope) = event_rx.try_recv() {
@@ -4085,7 +4153,8 @@ mod tests {
         assert!(turn.end_time.is_some());
         assert!(turn.error.is_none());
 
-        // 失败 turn：status=Error + error 字段，空回复不产生文本项。
+        // Failed turn: status=Error + error field; an empty reply produces no
+        // text items.
         let failed = build_acp_direct_delivery_turn(
             "turn-2",
             4,
@@ -4104,11 +4173,15 @@ mod tests {
 
     #[tokio::test]
     async fn acp_direct_delivery_appends_full_reply_even_when_index_occupied() {
-        // 防回退（P-19 全文落盘原则）：acp 流会话投递 turn 的 reply 全文必须可经
-        // SessionHistory 检索。当 metadata.turn_count 落后（既有 turn 已落盘但元数据
-        // 未同步，如前端/并发写者在同一索引先落盘——正是「SessionHistory 导出仍只有
-        // turn 0」的实证场景）时，投递 turn 不得在计算索引处与既有 turn 冲突即静默
-        // 丢弃，必须追加到下一空闲索引，保证全文不丢。
+        // Anti-regression (P-19 full-text persistence principle): the reply
+        // full text of an acp flow-session delivery turn must be retrievable
+        // via SessionHistory. When metadata.turn_count is stale (an existing
+        // turn already persisted but metadata not synced, e.g. the
+        // frontend/concurrent writer persisted at the same index first — the
+        // exact scenario observed as "SessionHistory export still only has
+        // turn 0"), the delivery turn must not silently conflict with the
+        // existing turn at the computed index and be dropped; it must append to
+        // the next free index so the full text is never lost.
         use crate::service::session::SessionMetadata;
 
         let root = tempfile::tempdir().expect("test root");
@@ -4129,7 +4202,8 @@ mod tests {
             .await
             .expect("metadata should be created");
 
-        // 模拟前端/并发写者已落盘 turn 0（index 0 被占用）。
+        // Simulate the frontend/concurrent writer having already persisted
+        // turn 0 (index 0 is occupied).
         persist_acp_direct_delivery_turn(
             &persistence,
             &storage_path,
@@ -4143,7 +4217,8 @@ mod tests {
             None,
         )
         .await;
-        // 再模拟 metadata.turn_count 落后：落盘后置回 0（前端写者未同步元数据）。
+        // Then simulate stale metadata.turn_count: reset to 0 after persisting
+        // (the frontend writer did not sync metadata).
         persistence
             .update_session_metadata(&storage_path, &session_id, |stale| {
                 stale.turn_count = 0;
@@ -4151,7 +4226,8 @@ mod tests {
             .await
             .expect("metadata should update");
 
-        // 后端投递（存活测试）：reply 全文为 'alive'，不得因 index=0 冲突而丢弃。
+        // Backend delivery (liveness test): the reply full text is 'alive' and
+        // must not be dropped because of the index=0 conflict.
         persist_acp_direct_delivery_turn(
             &persistence,
             &storage_path,
@@ -4166,7 +4242,8 @@ mod tests {
         )
         .await;
 
-        // 全文必须追加到下一空闲索引（1）并完整可检索（SessionHistory 导出依据）。
+        // The full text must be appended to the next free index (1) and be
+        // fully retrievable (the basis for SessionHistory export).
         let saved = persistence
             .load_dialog_turn(&storage_path, &session_id, 1)
             .await
@@ -4223,7 +4300,8 @@ mod tests {
         assert_eq!(saved.model_rounds[0].text_items[0].content, "external response");
         assert_eq!(saved.status, crate::service::session::TurnStatus::Completed);
 
-        // 幂等：同 turn 再次落盘为 no-op（不覆盖已保存内容、不报错）。
+        // Idempotent: persisting the same turn again is a no-op (does not
+        // overwrite saved content, does not error).
         persist_acp_direct_delivery_turn(
             &persistence,
             &storage_path,
@@ -4246,5 +4324,230 @@ mod tests {
             saved_again.model_rounds[0].text_items[0].content,
             "external response"
         );
+    }
+
+    // ---------------------------------------------------------------------
+    // PR #2139 #5: delivery authorization gate (dispatch_single local delivery
+    // to an existing session). Reuses the R4 shared verdict
+    // resolve_session_mutation_authorization (daemon/warden interception ->
+    // owner exemption -> created_by match -> ancestor traversal), with option
+    // deliver(): owner exemption + no ghost ACP allowance.
+    // ---------------------------------------------------------------------
+
+    fn delivery_authz_session_manager() -> Arc<SessionManager> {
+        Arc::new(SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            Arc::new(
+                PersistenceManager::new(Arc::new(PathManager::with_user_root_for_tests(
+                    std::env::temp_dir().join(format!(
+                        "bitfun-session-message-authz-{}",
+                        Uuid::new_v4()
+                    )),
+                )))
+                .expect("persistence manager"),
+            ),
+            SessionManagerConfig {
+                max_active_sessions: 100,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: false,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        ))
+    }
+
+    #[tokio::test]
+    async fn delivery_authz_rejects_daemon_session() {
+        // R-A.04: delivery to a daemon session is rejected — even when the
+        // caller is the owner (Commander).
+        use crate::agentic::tools::restrictions::{set_session_role, AgentRole};
+        let _ = set_session_role("delivery-owner", AgentRole::Commander);
+        let session_manager = delivery_authz_session_manager();
+        let tree = SessionTreeManager::new(8);
+        let workspace = TestTempDir::new("bitfun-delivery-authz-daemon");
+        let workspace_string = workspace.as_string();
+        let workspace_path = std::path::Path::new(&workspace_string);
+        session_manager
+            .create_session_with_id(
+                Some("daemon-session".to_string()),
+                "Daemon".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.as_string()),
+                    is_daemon: true,
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create daemon session");
+
+        let error = resolve_session_mutation_authorization(
+            &session_manager,
+            &tree,
+            "delivery-owner",
+            "daemon-session",
+            workspace_path,
+            "deliver to",
+            SessionMutationAuthOptions::deliver(),
+        )
+        .await
+        .expect_err("daemon session delivery must be rejected");
+        assert!(
+            error.to_string().contains("cannot deliver to daemon/warden"),
+            "{error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn delivery_authz_rejects_warden_prefixed_session() {
+        // R-A.04: delivery to a session whose agent_type starts with warden-
+        // is rejected (matches the in-memory session registry).
+        let session_manager = delivery_authz_session_manager();
+        let tree = SessionTreeManager::new(8);
+        let workspace = TestTempDir::new("bitfun-delivery-authz-warden");
+        let workspace_string = workspace.as_string();
+        let workspace_path = std::path::Path::new(&workspace_string);
+        session_manager
+            .create_session_with_id(
+                Some("warden-session".to_string()),
+                "Warden".to_string(),
+                "warden-review".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.as_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create warden session");
+
+        let error = resolve_session_mutation_authorization(
+            &session_manager,
+            &tree,
+            "caller-1",
+            "warden-session",
+            workspace_path,
+            "deliver to",
+            SessionMutationAuthOptions::deliver(),
+        )
+        .await
+        .expect_err("warden session delivery must be rejected");
+        assert!(
+            error.to_string().contains("cannot deliver to daemon/warden"),
+            "{error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn delivery_authz_rejects_unrelated_caller_without_metadata() {
+        // Not owner, target has no created_by, no ancestor relationship
+        // -> reject (consistent with delete semantics).
+        let session_manager = delivery_authz_session_manager();
+        let tree = SessionTreeManager::new(8);
+        let workspace = TestTempDir::new("bitfun-delivery-authz-unrelated");
+        let workspace_string = workspace.as_string();
+        let workspace_path = std::path::Path::new(&workspace_string);
+
+        let error = resolve_session_mutation_authorization(
+            &session_manager,
+            &tree,
+            "caller-1",
+            "target-1",
+            workspace_path,
+            "deliver to",
+            SessionMutationAuthOptions::deliver(),
+        )
+        .await
+        .expect_err("unrelated caller without metadata must be rejected");
+        assert!(
+            error.to_string().contains("not authorized to deliver to")
+                || error.to_string().contains("cannot verify ancestor relationship"),
+            "{error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn delivery_authz_created_by_match_allows_caller() {
+        // created_by match: target metadata created_by == session-<caller>
+        // -> allow.
+        let session_manager = delivery_authz_session_manager();
+        let tree = SessionTreeManager::new(8);
+        let workspace = TestTempDir::new("bitfun-delivery-authz-created-by");
+        let workspace_string = workspace.as_string();
+        let workspace_path = std::path::Path::new(&workspace_string);
+        let target_id = "target-1";
+        let metadata = crate::service::session::SessionMetadata::new(
+            target_id.to_string(),
+            "target".to_string(),
+            "agentic".to_string(),
+            "auto".to_string(),
+        );
+        let mut created_metadata = metadata.clone();
+        created_metadata.created_by = Some("session-caller-1".to_string());
+        session_manager
+            .save_session_metadata(workspace_path, &created_metadata)
+            .await
+            .expect("save metadata");
+
+        resolve_session_mutation_authorization(
+            &session_manager,
+            &tree,
+            "caller-1",
+            target_id,
+            workspace_path,
+            "deliver to",
+            SessionMutationAuthOptions::deliver(),
+        )
+        .await
+        .expect("creator should be authorized to deliver");
+    }
+
+    #[tokio::test]
+    async fn delivery_authz_ancestor_allows_caller() {
+        // Ancestor authorization: caller is an ancestor of the target (tree
+        // registered child relationship) -> allow.
+        let session_manager = delivery_authz_session_manager();
+        let tree = SessionTreeManager::new(8);
+        tree.register_child("caller-1", "child-1", 1)
+            .expect("register child");
+        let workspace = TestTempDir::new("bitfun-delivery-authz-ancestor");
+        let workspace_string = workspace.as_string();
+        let workspace_path = std::path::Path::new(&workspace_string);
+
+        resolve_session_mutation_authorization(
+            &session_manager,
+            &tree,
+            "caller-1",
+            "child-1",
+            workspace_path,
+            "deliver to",
+            SessionMutationAuthOptions::deliver(),
+        )
+        .await
+        .expect("ancestor should be authorized to deliver");
+    }
+
+    #[tokio::test]
+    async fn delivery_authz_owner_bypasses_gate() {
+        // Owner (Commander role) exemption: allowed even when the target has
+        // no metadata.
+        use crate::agentic::tools::restrictions::{set_session_role, AgentRole};
+        let _ = set_session_role("delivery-owner-2", AgentRole::Commander);
+        let session_manager = delivery_authz_session_manager();
+        let tree = SessionTreeManager::new(8);
+        let workspace = TestTempDir::new("bitfun-delivery-authz-owner");
+        let workspace_string = workspace.as_string();
+        let workspace_path = std::path::Path::new(&workspace_string);
+
+        resolve_session_mutation_authorization(
+            &session_manager,
+            &tree,
+            "delivery-owner-2",
+            "no-metadata-target",
+            workspace_path,
+            "deliver to",
+            SessionMutationAuthOptions::deliver(),
+        )
+        .await
+        .expect("owner should bypass the delivery gate");
     }
 }

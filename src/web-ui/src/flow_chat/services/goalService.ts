@@ -70,10 +70,13 @@ function mapGoal(goal: {
   };
 }
 
-// UI-13: goal kickoff 去重改用结构化标记（metadata.threadGoalKickoff），
-// 不再依赖英文文案前缀匹配（多语言下会失效）。
-// 局限：无 threadGoalKickoff 标记的 pending 项（标记引入前的历史队列）仅能靠
-// /goal 命令前缀兜底匹配；backend 注入的 kickoff 文案若无标记则不再在此处去重。
+// UI-13: Goal kickoff deduplication uses a structured marker
+// (metadata.threadGoalKickoff) instead of English copy prefix matching, which
+// breaks under localization.
+// Limitation: pending items without the threadGoalKickoff marker (historical
+// queue rows predating the marker) can only be matched by the /goal command
+// prefix fallback; backend-injected kickoff copy without the marker is no
+// longer deduplicated here.
 function isRedundantGoalKickoffPendingItem(
   displayMessage: string | undefined,
   content: string,
@@ -107,9 +110,17 @@ function syncGoalToStore(sessionId: string, goal: ThreadGoalSnapshot | null): vo
     flowChatStore.setThreadGoal(sessionId, null);
     return;
   }
-  // UI-07: 单调 updatedAt 比较——只接受比 store 已记录的最新写入/清除更新的目标，
-  // 避免迟到的响应/事件把已清除的旧 goal 写回 UI（API 响应始终携带 updatedAt）。
-  const lastSeenAt = flowChatStore.getState().sessions.get(sessionId)?.threadGoalUpdatedAt ?? 0;
+  // UI-07: Monotonic updatedAt comparison — only accept goals newer than the
+  // latest write/clear recorded in the store, so a late response/event cannot
+  // write a cleared old goal back into the UI (API responses always carry
+  // updatedAt).
+  let lastSeenAt = flowChatStore.getState().sessions.get(sessionId)?.threadGoalUpdatedAt ?? 0;
+  // R7: Normalize millisecond-precision clocks persisted before the fix
+  // (~1.7e12) to seconds, aligned with the backend ThreadGoal.updated_at
+  // seconds, so a new goal after clear is not judged stale.
+  if (lastSeenAt > 1e11) {
+    lastSeenAt = Math.floor(lastSeenAt / 1000);
+  }
   if (lastSeenAt > 0 && goal.updatedAt != null && goal.updatedAt < lastSeenAt) {
     return;
   }

@@ -294,32 +294,6 @@
         "curated_models": ["glm-5.2", "deepseek-v4-flash", "deepseek-v4-pro"],
         "additional_models": []
       }
-    },
-    {
-      "id": "codebuddy",
-      "display_order": 90,
-      "region": "any",
-      "name": "CodeBuddy (local gateway)",
-      "description": "Tencent CodeBuddy coding plan via local `codebuddy --serve` gateway",
-      "help_url": "https://www.codebuddy.ai/docs/zh/cli/http-api",
-      "requires_api_key": false,
-      "catalog_provider_ids": [],
-      "endpoints": [
-        {
-          "id": "default",
-          "base_url": "http://127.0.0.1:8080",
-          "api_format": "codebuddy",
-          "label": "default",
-          "is_default": true,
-          "trusted_for_auto_detection": false,
-          "catalog_provider_ids": []
-        }
-      ],
-      "model_policy": {
-        "mode": "curated",
-        "curated_models": ["codebuddy"],
-        "additional_models": []
-      }
     }
   ]
 }

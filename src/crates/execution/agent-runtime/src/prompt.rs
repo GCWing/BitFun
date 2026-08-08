@@ -294,8 +294,8 @@ pub fn render_runtime_facts_reminder(facts: &RuntimeFactsInput) -> String {
         format!("- 时区偏移: {}", facts.timezone_offset),
     ];
 
-    // 主人裁决（P-02）：上下文占比只保留纯数字，与实时时间并列即可；
-    // 删除 30% 提醒/压缩预览/峰谷定价长句（"加那多戏还浪费 token，起反效果"）。
+    // 按评审裁决（P-02）：上下文占比只保留纯数字，与实时时间并列即可；
+    // 删除 30% 提醒/压缩预览/峰谷定价长句。
     if let Some(usage_ratio) = facts.context_usage_ratio {
         let percent = usage_percent(usage_ratio);
         lines.push(format!("- 当前上下文占比: {}%", percent));

@@ -255,11 +255,14 @@ function recoverIdleLatestTurnDataEvent(
 }
 
 /**
- * UI-04: ACP 直连投递会话在非流式状态（IDLE/ERROR）下收到更晚 turn 的数据事件时，
- * 对齐 recoverIdleLatestTurnDataEvent 语义：更新 currentDialogTurnId 并（IDLE 时）
- * START，使后续流式事件不再因 state_not_accepting_data / turn_id_mismatch 被丢弃。
- * 放宽点：recoverIdleLatestTurnDataEvent 要求 currentDialogTurnId 为空且 turn 为
- * 会话最后一个 turn；ACP 会话允许 currentDialogTurnId 已有值但目标 turn 更新。
+ * UI-04: When an ACP direct-delivery session receives a data event for a later
+ * turn while in a non-streaming state (IDLE/ERROR), align with
+ * recoverIdleLatestTurnDataEvent semantics: update currentDialogTurnId and
+ * (when IDLE) START, so subsequent streaming events are not dropped due to
+ * state_not_accepting_data / turn_id_mismatch. Relaxation:
+ * recoverIdleLatestTurnDataEvent requires currentDialogTurnId to be empty and
+ * the turn to be the session's last turn; ACP sessions allow an existing
+ * currentDialogTurnId while still updating the target turn.
  */
 function recoverAcpIdleTurnForDataEvent(
   sessionId: string,
@@ -852,11 +855,12 @@ function updateSubagentParentTaskModel(
 }
 
 /**
- * UI-04: ACP 流会话 id 形状判定（对齐 session_message_tool.rs 的
- * acp_flow_client_id_from_session_id + looks_like_uuid）：
- * `acp_<client_id>_<uuid>`，尾部段为 8-4-4-4-12 的 UUID 形状，client_id 非空。
- * 命中时返回 `acp:<client_id>`，否则返回 null。占位会话据此带 agentType，
- * 使 isAcpFlowSession / ensureDialogTurnForAcpDataEvent 对 ACP 委派回复生效。
+ * UI-04: ACP flow session id shape detection (aligned with
+ * acp_flow_client_id_from_session_id + looks_like_uuid in session_message_tool.rs):
+ * `acp_<client_id>_<uuid>` where the trailing segment is a UUID in the
+ * 8-4-4-4-12 shape and client_id is non-empty. On a hit return `acp:<client_id>`,
+ * otherwise null. Placeholder sessions therefore carry an agentType, so
+ * isAcpFlowSession / ensureDialogTurnForAcpDataEvent work for ACP delegated replies.
  */
 const ACP_FLOW_SESSION_ID_UUID_RE =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -879,8 +883,9 @@ function acpAgentTypeFromFlowSessionId(sessionId: string): string | null {
 }
 
 /**
- * UI-04: ACP 直连投递会话可能完全没有 dialog-turn-started / 状态机。
- * text-chunk / tool-event 到达时惰性建 turn 并补齐状态机，避免数据事件被丢弃。
+ * UI-04: An ACP direct-delivery session may have no dialog-turn-started event
+ * or state machine at all. Lazily create the turn when a text-chunk / tool-event
+ * arrives and backfill the state machine, so data events are not dropped.
  */
 function ensureDialogTurnForAcpDataEvent(sessionId: string, turnId: string): boolean {
   if (!sessionId || !turnId) {
@@ -944,8 +949,9 @@ export function shouldProcessEvent(
   const machine = stateMachineManager.get(sessionId);
   if (!machine) {
     if (eventType === 'data') {
-      // UI-04: ACP 直连投递会话在状态机缺失时，text-chunk / tool-event 到达先惰性建
-      // turn（含状态机），放行处理；其余场景维持丢弃并记录。
+      // UI-04: When an ACP direct-delivery session has no state machine, a
+      // text-chunk / tool-event arrival first lazily creates the turn (with the
+      // state machine) and lets it through; other scenarios keep the drop + log.
       if (
         (eventName === 'TextChunk' || eventName === 'ToolEvent') &&
         turnId &&
@@ -979,9 +985,11 @@ export function shouldProcessEvent(
       return true;
     }
 
-    // UI-04: ACP 直连投递会话在非流式状态（IDLE/ERROR）收到更晚 turn 的数据事件时，
-    // 对齐 recoverIdleLatestTurnDataEvent 语义恢复（更新 currentDialogTurnId + START），
-    // 使 ACP 委派回复在状态机就绪但 turn 已推进的场景不被丢弃。
+    // UI-04: When an ACP direct-delivery session receives a data event for a
+    // later turn while in a non-streaming state (IDLE/ERROR), recover with
+    // recoverIdleLatestTurnDataEvent semantics (update currentDialogTurnId + START),
+    // so ACP delegated replies are not dropped when the state machine is ready
+    // but the turn has already advanced.
     if (
       turnId &&
       recoverAcpIdleTurnForDataEvent(sessionId, turnId, currentState, context.currentDialogTurnId)
@@ -2132,11 +2140,13 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
 function handleTextChunk(context: FlowChatContext, event: any): void {
   const { sessionId, turnId, roundId, text, contentType = 'text', isThinkingEnd = false } = event;
 
-  // UI-05: ACP 流会话（acp_<client>_<uuid>）text-chunk 可能先于 session-created /
-  // dialog-turn-started 到达（事件乱序 / 会话未 hydrate）。对齐 handleDialogTurnStarted
-  // 占位创建模式：可解析 ACP 流会话 id 则先占位创建 session（带 agentType），使
-  // shouldProcessEvent / ensureDialogTurnForAcpDataEvent 惰性建 turn 生效；非 ACP 会话
-  // / 无法解析则维持原丢弃路径（不扩大改动面）。
+  // UI-05: For ACP flow sessions (acp_<client>_<uuid>), a text-chunk may arrive
+  // before session-created / dialog-turn-started (out-of-order events or an
+  // unhydrated session). Align with the handleDialogTurnStarted placeholder
+  // creation pattern: if the ACP flow session id resolves, first create a
+  // placeholder session (with agentType) so shouldProcessEvent /
+  // ensureDialogTurnForAcpDataEvent lazily create the turn; non-ACP sessions or
+  // unresolvable ids keep the original drop path (no widened change surface).
   if (sessionId && turnId && !FlowChatStore.getInstance().getState().sessions.has(sessionId)) {
     const acpAgentType = acpAgentTypeFromFlowSessionId(sessionId);
     if (acpAgentType) {
@@ -2168,8 +2178,9 @@ function handleTextChunk(context: FlowChatContext, event: any): void {
 
   let dialogTurn = session.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
   if (!dialogTurn) {
-    // UI-04: ACP 直连投递会话可能只有 text-chunk 而无 dialog-turn-started，
-    // 惰性建 turn（含状态机）后继续展示；其余会话维持原丢弃路径。
+    // UI-04: An ACP direct-delivery session may have only a text-chunk with no
+    // dialog-turn-started; lazily create the turn (with the state machine) and
+    // keep rendering; other sessions keep the original drop path.
     if (turnId && ensureDialogTurnForAcpDataEvent(sessionId, turnId)) {
       dialogTurn = FlowChatStore.getInstance()
         .getState()
@@ -2747,9 +2758,10 @@ function handleCompressionFailed(context: FlowChatContext, event: any): void {
 /**
  * Handle dialog turn completed event
  */
-// UI-05: 模型原生正常终止码（'eos' / 'tool_calls'）在后端可能被误报为
-// success=false。结合 hasFinalResponse 判断：只要该 turn 确实产出了最终回复，
-// 就按正常收尾处理，而不是失败。口径与 turnCompletionNotice.NORMAL_FINISH_REASONS 对齐。
+// UI-05: Model-native normal termination codes ('eos' / 'tool_calls') may be
+// misreported as success=false by the backend. Combined with hasFinalResponse:
+// as long as the turn did produce a final reply, treat it as a normal wrap-up
+// rather than a failure. The policy aligns with turnCompletionNotice.NORMAL_FINISH_REASONS.
 const MODEL_NATIVE_NORMAL_FINISH_REASONS = new Set(['eos', 'tool_calls']);
 
 function isModelNativeNormalTermination(
@@ -2829,8 +2841,9 @@ export function handleDialogTurnComplete(
     return;
   }
 
-  // UI-05: finishReason 归一化残余——'eos' / 'tool_calls' 等模型原生正常终止码
-  // 若已产出最终回复（hasFinalResponse=true），不应被当作失败。
+  // UI-05: finishReason normalization residue — model-native normal termination
+  // codes such as 'eos' / 'tool_calls' that already produced a final reply
+  // (hasFinalResponse=true) must not be treated as a failure.
   if (success === false && !isModelNativeNormalTermination(finishReason, hasFinalResponse)) {
     handleDialogTurnFailed(context, {
       ...event,
@@ -2851,7 +2864,8 @@ export function handleDialogTurnComplete(
   }
   context.handledTerminalTurnEvents.add(terminalKey);
 
-  // UI-11: 终态清理该 turn 滞留的 pending terminal session 缓存。
+  // UI-11: On terminal state, clean up the pending terminal session cache
+  // entries stranded by this turn.
   cleanupPendingTerminalSessionIdsForTurn(sessionId, turnId);
 
   const machine = stateMachineManager.get(sessionId);
@@ -2920,7 +2934,8 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
     }
     context.handledTerminalTurnEvents.add(terminalKey);
 
-    // UI-11: 终态清理该 turn 滞留的 pending terminal session 缓存。
+    // UI-11: On terminal state, clean up the pending terminal session cache
+    // entries stranded by this turn.
     cleanupPendingTerminalSessionIdsForTurn(sessionId, turnId);
   }
 
@@ -3023,7 +3038,8 @@ function handleDialogTurnCancelled(
     }
     context.handledTerminalTurnEvents.add(terminalKey);
 
-    // UI-11: 终态清理该 turn 滞留的 pending terminal session 缓存。
+    // UI-11: On terminal state, clean up the pending terminal session cache
+    // entries stranded by this turn.
     cleanupPendingTerminalSessionIdsForTurn(sessionId, turnId);
   }
 

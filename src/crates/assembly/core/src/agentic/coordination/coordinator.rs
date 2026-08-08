@@ -1555,8 +1555,9 @@ impl ConversationCoordinator {
         );
 
         if !external_sources_supported {
-            // 契约升级：local_binding 现为 Result，Err（OwnerMismatch/
-            // CandidateUnavailable）直接 fail-closed，不回落任何 fallback。
+            // Contract upgrade: local_binding is now a Result; on Err
+            // (OwnerMismatch/CandidateUnavailable) it fails closed without
+            // falling back to any alternative route.
             return local_binding.map_err(|error| {
                 BitFunError::Validation(format!("Unknown session mode: {agent_type} ({error})"))
             });
@@ -1587,7 +1588,8 @@ impl ConversationCoordinator {
                     "candidate_unavailable: external main agent {agent_type} could not be refreshed"
                 )));
             }
-            // local_binding 现为 Result：Err 时不回落，直接走下方 Service 错误。
+            // local_binding is now a Result: on Err, do not fall back; surface
+            // the Service error below.
             if let Ok(local_binding) = local_binding {
                 warn!(
                     "External agent source discovery failed; continuing with local mode: agent_type={}, error_category={}",
@@ -2660,9 +2662,21 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let creator_role = created_by.and_then(get_session_role);
         let role = Self::resolve_session_role(kind, creator_role);
         let role_key = role.as_str().to_string();
-        // P-01 方案 2：GeneralPurpose 子代理（Executor）应用专属模板，
-        // 否则默认 Executor 模板会禁掉只读侦察工具（Read/Glob/Grep）。
-        let register_result = if role == AgentRole::Executor && agent_type == "GeneralPurpose" {
+        // R3 main-session exemption: the main session (Standard kind with no
+        // creator) only records its role and does not land a role default
+        // template; otherwise the Commander template's allowed_tool_names
+        // allowlist would reject Read/Grep/Glob/Edit/ExecCommand for the main
+        // session under default config. Subagents (Executor/GeneralPurpose
+        // dedicated templates) keep the full RBAC template semantics.
+        let register_result = if crate::agentic::tools::restrictions::is_main_session(
+            kind,
+            created_by,
+        ) {
+            crate::agentic::tools::restrictions::register_main_session(session_id, role.clone())
+        } else if role == AgentRole::Executor && agent_type == "GeneralPurpose" {
+            // P-01 option 2: GeneralPurpose subagents (Executor) get a
+            // dedicated template; otherwise the default Executor template
+            // disables read-only recon tools (Read/Glob/Grep).
             crate::agentic::tools::restrictions::set_session_role_with_restrictions(
                 session_id,
                 role.clone(),
@@ -2730,8 +2744,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             None => (Self::derive_session_role_from_metadata(&metadata), true),
         };
         let role_key = role.as_str().to_string();
-        // P-01 方案 2：GeneralPurpose 子代理 restore 后同样应用专属模板。
-        let register_result = if role == AgentRole::Executor && metadata.agent_type == "GeneralPurpose" {
+        // R3 main-session exemption: a restored main session likewise only
+        // records its role and does not land the Commander default template,
+        // matching the register_session_role exemption semantics (context-level
+        // default restrictions = empty allowlist = allow all).
+        let register_result = if crate::agentic::tools::restrictions::is_main_session(
+            metadata.session_kind,
+            metadata.created_by.as_deref(),
+        ) {
+            crate::agentic::tools::restrictions::register_main_session(session_id, role.clone())
+        } else if role == AgentRole::Executor && metadata.agent_type == "GeneralPurpose" {
+            // P-01 option 2: GeneralPurpose subagents also get the dedicated
+            // template after restore.
             crate::agentic::tools::restrictions::set_session_role_with_restrictions(
                 session_id,
                 role.clone(),
@@ -8245,14 +8269,23 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     }
 
     /// Restore only the UI-visible persisted session view.
+    ///
+    /// R10: desktop restore goes through this path (restore_session_view),
+    /// aligned with restore_session_for_workspace/restore_session_with_turns;
+    /// after restore it re-registers the persisted RBAC role, otherwise a
+    /// missing main-session role falls back to the context-level empty allowlist.
     pub async fn restore_session_view(
         &self,
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
-        self.session_manager
+        let restored = self
+            .session_manager
             .restore_session_view(workspace_path, session_id)
-            .await
+            .await?;
+        self.restore_session_role_best_effort(workspace_path, session_id)
+            .await;
+        Ok(restored)
     }
 
     pub async fn restore_session_view_timed(
@@ -12034,12 +12067,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     }
 }
 
-/// P-19：后台 subagent 完成主会话通知只含极简元信息（session_id + 身份标识 +
-/// 已回复状态 + use SessionHistory 指引），对齐 scheduler.rs
-/// background_result_follow_up_user_input 语义。
+/// P-19: background subagent completion notifies the main session with
+/// minimal metadata only (session_id + identity + replied status + a
+/// use SessionHistory hint), aligned with scheduler.rs
+/// background_result_follow_up_user_input semantics.
 ///
-/// 全量 output_text 不回主会话，只由 SubagentTurnCompleted 事件与子会话自身
-/// turn 持久化承载；按需经 SessionHistory(session_id) 检索。
+/// The full output_text is never sent back to the main session; it is carried
+/// by the SubagentTurnCompleted event and the subagent's own persisted turn,
+/// retrievable on demand via SessionHistory(session_id).
 fn background_subagent_follow_up_notice(session_id: &str, agent_type: &str) -> String {
     let identity = if agent_type.trim().is_empty() {
         "agent".to_string()
@@ -14310,6 +14345,192 @@ mod tests {
             Some("executor"),
             "executor role must be persisted with the session metadata"
         );
+    }
+
+    #[tokio::test]
+    async fn main_session_without_creator_gets_full_tools() {
+        use crate::agentic::tools::{
+            clear_session_role, get_session_restrictions, get_session_role, AgentRole,
+        };
+        use bitfun_agent_tools::ToolRuntimeRestrictions;
+        let (coordinator, _session_manager) = test_persistent_coordinator();
+        let workspace = tempfile::tempdir().expect("workspace");
+        let workspace_path = workspace.path().to_string_lossy().into_owned();
+        let session_id = format!("main-exempt-{}", uuid::Uuid::new_v4());
+
+        // Main session (Standard kind, no creator): role is recorded as
+        // Commander, but the Commander default template is not landed —
+        // otherwise the main flow's Read/Edit/ExecCommand would all be
+        // rejected by the allowed_tool_names allowlist.
+        let session = coordinator
+            .create_session_with_workspace_and_creator_internal(
+                Some(session_id.clone()),
+                "main".to_string(),
+                "agentic".to_string(),
+                SessionConfig::default(),
+                workspace_path.clone(),
+                None,
+                false,
+                false,
+                None,
+                None,
+            )
+            .await
+            .expect("create main session");
+        assert_eq!(session.kind, SessionKind::Standard);
+        assert_eq!(
+            get_session_role(&session_id),
+            Some(AgentRole::Commander),
+            "main session keeps the commander role (owner/delegation semantics)"
+        );
+        assert_eq!(
+            get_session_restrictions(&session_id),
+            None,
+            "main session must NOT land the Commander template; enforcement falls back to context-level defaults (allow all)"
+        );
+        // When session-level restrictions are empty, enforcement uses the
+        // context-level default (empty allowlist) = allow all, so all main
+        // flow tools remain available.
+        let effective = ToolRuntimeRestrictions::default();
+        for tool in ["Read", "Grep", "Glob", "Edit", "Delete", "ExecCommand", "WebSearch"] {
+            assert!(
+                effective.ensure_tool_allowed(tool).is_ok(),
+                "main session default restrictions must allow {tool}"
+            );
+        }
+
+        // Cleanup (the role is also cleared at session end; idempotent).
+        clear_session_role(&session_id);
+        assert_eq!(get_session_role(&session_id), None);
+    }
+
+    #[tokio::test]
+    async fn main_session_restore_keeps_exemption_and_subagent_keeps_executor_template() {
+        use crate::agentic::tools::{clear_session_role, get_session_restrictions, get_session_role, AgentRole};
+        let (coordinator, _session_manager) = test_persistent_coordinator();
+        let workspace = tempfile::tempdir().expect("workspace");
+        let workspace_path = workspace.path().to_string_lossy().into_owned();
+
+        // Main session: keeps the exemption after restore (no template is
+        // landed), consistent with the register path.
+        let main_session_id = format!("main-restore-{}", uuid::Uuid::new_v4());
+        coordinator
+            .create_session_with_workspace_and_creator_internal(
+                Some(main_session_id.clone()),
+                "main".to_string(),
+                "agentic".to_string(),
+                SessionConfig::default(),
+                workspace_path.clone(),
+                None,
+                false,
+                false,
+                None,
+                None,
+            )
+            .await
+            .expect("create main session");
+        clear_session_role(&main_session_id);
+        coordinator
+            .restore_session_role_best_effort(workspace.path(), &main_session_id)
+            .await;
+        assert_eq!(
+            get_session_role(&main_session_id),
+            Some(AgentRole::Commander),
+            "restored main session keeps commander role"
+        );
+        assert_eq!(
+            get_session_restrictions(&main_session_id),
+            None,
+            "restored main session must keep the exemption (no Commander template)"
+        );
+
+        // Subagent: after restore, the Executor role + default Executor
+        // template must be landed (core RBAC customization semantics; must
+        // not be broken by the main-session exemption).
+        let sub_session_id = format!("sub-restore-{}", uuid::Uuid::new_v4());
+        coordinator
+            .create_session_with_workspace_and_creator_internal(
+                Some(sub_session_id.clone()),
+                "subagent".to_string(),
+                "agentic".to_string(),
+                SessionConfig::default(),
+                workspace_path.clone(),
+                Some("parent-session".to_string()),
+                false,
+                true,
+                Some("parent-session".to_string()),
+                Some("TestSubagent".to_string()),
+            )
+            .await
+            .expect("create subagent session");
+        clear_session_role(&sub_session_id);
+        coordinator
+            .restore_session_role_best_effort(workspace.path(), &sub_session_id)
+            .await;
+        assert_eq!(
+            get_session_role(&sub_session_id),
+            Some(AgentRole::Executor),
+            "subagent must restore as executor"
+        );
+        let sub_restrictions = get_session_restrictions(&sub_session_id)
+            .expect("subagent must land the Executor template");
+        assert!(
+            sub_restrictions
+                .ensure_operation_allowed(bitfun_agent_tools::OperationClass::ExecuteCode, "ExecCommand")
+                .is_ok(),
+            "subagent Executor template must allow ExecuteCode"
+        );
+        clear_session_role(&sub_session_id);
+    }
+
+    #[tokio::test]
+    async fn restore_session_view_registers_persisted_role_for_main_session() {
+        use crate::agentic::tools::{clear_session_role, get_session_restrictions, get_session_role, AgentRole};
+        let (coordinator, _session_manager) = test_persistent_coordinator();
+        let workspace = tempfile::tempdir().expect("workspace");
+        let workspace_path = workspace.path().to_string_lossy().into_owned();
+
+        // Main session: desktop restore goes through restore_session_view;
+        // the persisted role (Commander) must be re-registered after restore
+        // while keeping the main-session exemption (no template is landed).
+        let main_session_id = format!("main-view-restore-{}", uuid::Uuid::new_v4());
+        coordinator
+            .create_session_with_workspace_and_creator_internal(
+                Some(main_session_id.clone()),
+                "main".to_string(),
+                "agentic".to_string(),
+                SessionConfig::default(),
+                workspace_path.clone(),
+                None,
+                false,
+                false,
+                None,
+                None,
+            )
+            .await
+            .expect("create main session");
+        clear_session_role(&main_session_id);
+
+        let (restored, _turns) = coordinator
+            .restore_session_view(workspace.path(), &main_session_id)
+            .await
+            .expect("restore session view");
+        assert_eq!(
+            restored.session_id,
+            main_session_id,
+            "restore_session_view returns the restored session"
+        );
+        assert_eq!(
+            get_session_role(&main_session_id),
+            Some(AgentRole::Commander),
+            "restore_session_view must re-register the commander role for a main session"
+        );
+        assert_eq!(
+            get_session_restrictions(&main_session_id),
+            None,
+            "restore_session_view must keep the main-session exemption (no template landed)"
+        );
+        clear_session_role(&main_session_id);
     }
 
     #[tokio::test]
@@ -20312,10 +20533,11 @@ mod tests {
 
     #[test]
     fn background_subagent_follow_up_returns_minimal_metadata_only() {
-        // P-19 防回退（B/C 代表路径）：后台 subagent 完成主会话仅收极简元信息
-        // （session_id + 身份 + 已回复 + use SessionHistory 指引），不含全量
-        // output_text / 全文；全量由 SubagentTurnCompleted 事件与子会话 turn
-        // 落盘承载。
+        // P-19 regression guard (B/C representative paths): a background
+        // subagent completion gives the main session only minimal metadata
+        // (session_id + identity + replied status + use SessionHistory hint),
+        // never the full output_text; the full content is carried by the
+        // SubagentTurnCompleted event and the subagent's persisted turn.
         let full_output = format!("SUBAGENT_FULL_OUTPUT_MARKER_{}", "x".repeat(4096));
         let notice = background_subagent_follow_up_notice("flow-session-9", "acp:claude");
         assert!(notice.contains("flow-session-9"));
@@ -20324,7 +20546,8 @@ mod tests {
         assert!(notice.contains("use SessionHistory"));
         assert!(!notice.contains(&full_output));
         assert!(!notice.contains("SUBAGENT_FULL_OUTPUT_MARKER_"));
-        // 身份为空时回退 "agent"，与 scheduler background_result_follow_up 一致。
+        // When identity is empty it falls back to "agent", matching scheduler
+        // background_result_follow_up behavior.
         let fallback = background_subagent_follow_up_notice("flow-session-8", "");
         assert!(fallback.contains("flow-session-8"));
         assert!(fallback.contains("(agent)"));
