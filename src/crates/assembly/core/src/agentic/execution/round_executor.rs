@@ -1179,7 +1179,19 @@ impl RoundExecutor {
         };
         let parsed_memory_citation =
             Self::parsed_memory_citation_from_stream_result(&stream_result);
-        let (clean_text, _) = strip_bitfun_memory_citations(&stream_result.full_text);
+        let (mut clean_text, _) = strip_bitfun_memory_citations(&stream_result.full_text);
+        // Sanitize leaked tool-invocation XML from assistant text content.
+        // When the model outputs raw tool-call XML as plain text (e.g. due to
+        // inference abnormalities like DeepSeek), the XML tags are re-sent each
+        // round and cause unbounded context expansion (issue #1492).
+        if super::write_content_sanitizer::contains_tool_invocation_artifacts(&clean_text) {
+            warn!(
+                "Tool-invocation artifacts detected in assistant text, stripping leaked XML (len={})",
+                clean_text.len()
+            );
+            clean_text =
+                super::write_content_sanitizer::strip_tool_invocation_artifacts(&clean_text);
+        }
         let assistant_message =
             Message::assistant_with_reasoning(reasoning, clean_text, tool_calls.clone())
                 .with_turn_id(context.dialog_turn_id.clone())
