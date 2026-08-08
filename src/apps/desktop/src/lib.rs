@@ -40,6 +40,7 @@ use bitfun_core::infrastructure::{get_path_manager_arc, try_get_path_manager_arc
 use bitfun_core::service::search::get_global_workspace_search_service;
 use bitfun_core::service::workspace::get_global_workspace_service;
 use bitfun_core::util::{elapsed_ms, TimingCollector};
+use bitfun_events::AgenticEvent;
 use bitfun_transport::{TauriTransportAdapter, TransportAdapter};
 use serde::Deserialize;
 use std::sync::{
@@ -2202,41 +2203,86 @@ fn configure_workspace_search_daemon_env() -> Option<std::path::PathBuf> {
     path
 }
 
+/// Deliver one event to the WebView and, when peer controllers are attached,
+/// fan it out to paired devices. Text chunks arrive here already coalesced by
+/// `TextChunkCoalescer`.
+async fn deliver_event_to_webview(transport: &TauriTransportAdapter, event: AgenticEvent) {
+    if let Err(e) = transport.emit_event(event.clone()).await {
+        log::error!("Failed to emit event: {:?}", e);
+    }
+
+    if !api::peer_host_invoke::attached_controllers().is_empty() {
+        if let Some(projected) = bitfun_events::project_agentic_frontend_event(event) {
+            api::remote_connect_api::fanout_peer_device_event(
+                projected.event_name,
+                projected.payload,
+            );
+        }
+    }
+}
+
 fn start_event_loop_with_transport(
     event_queue: Arc<bitfun_core::agentic::events::EventQueue>,
     event_router: Arc<bitfun_core::agentic::events::EventRouter>,
     transport: Arc<TauriTransportAdapter>,
 ) {
+    use crate::api::event_coalescer::{
+        next_flush_deadline, TextChunkCoalescer, TEXT_CHUNK_COALESCE_WINDOW_MS,
+    };
+    use tokio::time::{sleep_until, Instant};
+
     tokio::spawn(async move {
+        let mut coalescer = TextChunkCoalescer::new();
+        let mut flush_deadline: Option<Instant> = None;
+
         loop {
-            event_queue.wait_for_events().await;
-            loop {
-                let batch = event_queue.dequeue_configured_batch().await;
-                if batch.is_empty() {
-                    break;
+            let window_timer = async {
+                match flush_deadline {
+                    Some(deadline) => sleep_until(deadline).await,
+                    // No buffered chunks: wait for the queue without a timer.
+                    None => std::future::pending::<()>().await,
                 }
+            };
 
-                for envelope in batch {
-                    // Route to internal subscribers (e.g. RemoteSessionStateTracker)
-                    // sequentially so that text chunks are appended in order.
-                    if let Err(e) = event_router.route(envelope.clone()).await {
-                        log::warn!("Internal event routing failed: {:?}", e);
-                    }
-
-                    let event_for_fanout = envelope.event.clone();
-                    if let Err(e) = transport.emit_event(envelope.event).await {
-                        log::error!("Failed to emit event: {:?}", e);
-                    }
-
-                    if !api::peer_host_invoke::attached_controllers().is_empty() {
-                        if let Some(projected) =
-                            bitfun_events::project_agentic_frontend_event(event_for_fanout)
-                        {
-                            api::remote_connect_api::fanout_peer_device_event(
-                                projected.event_name,
-                                projected.payload,
-                            );
+            tokio::select! {
+                _ = event_queue.wait_for_events() => {
+                    loop {
+                        let batch = event_queue.dequeue_configured_batch().await;
+                        if batch.is_empty() {
+                            break;
                         }
+
+                        for envelope in batch {
+                            // Route to internal subscribers (e.g. RemoteSessionStateTracker)
+                            // sequentially so that text chunks are appended in order.
+                            // Internal routing stays on the raw events; only the
+                            // WebView / peer delivery below is coalesced.
+                            if let Err(e) = event_router.route(envelope.clone()).await {
+                                log::warn!("Internal event routing failed: {:?}", e);
+                            }
+
+                            for event in coalescer.push(envelope.event) {
+                                deliver_event_to_webview(&transport, event).await;
+                            }
+                        }
+                    }
+
+                    // Arm the coalescing window when chunks got buffered and no
+                    // deadline is running yet; clear it when a flush drained the
+                    // buffer (e.g. a non-chunk event arrived mid-batch). The
+                    // arm/keep/clear rules live in `next_flush_deadline` so they
+                    // are unit-testable without a live event loop.
+                    flush_deadline = next_flush_deadline(
+                        coalescer.is_pending(),
+                        flush_deadline,
+                        Instant::now(),
+                        Duration::from_millis(TEXT_CHUNK_COALESCE_WINDOW_MS),
+                    );
+                }
+                _ = window_timer => {
+                    flush_deadline = None;
+                    for event in coalescer.flush() {
+                        deliver_event_to_webview(&transport, event).await;
                     }
                 }
             }
