@@ -3,7 +3,7 @@
  * list/row decoration (category badges, the leading slot of
  * `CollapsibleSection`, etc.).
  *
- * Pulls colors from `useHostTheme().category` so a category's swatch and its
+ * Pulls colors from `useHostAppearance().category` so a category's swatch and its
  * `UsageBar` segment for the same `color` stay visually coherent.
  */
 import type { CSSProperties, JSX } from "react";

@@ -8,7 +8,7 @@ import {
   CAPABILITY_ACCENT,
   CAPABILITY_CATEGORIES,
   type CapabilityCategory,
-} from './agentTheme';
+} from './agentAppearance';
 
 export { CAPABILITY_CATEGORIES };
 export type { CapabilityCategory };

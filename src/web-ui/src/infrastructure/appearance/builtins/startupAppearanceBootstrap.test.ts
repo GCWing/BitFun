@@ -1,0 +1,75 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { describe, expect, it } from 'vitest';
+
+import {
+  builtinAppearancePalettes,
+  DEFAULT_DARK_APPEARANCE_ID,
+  DEFAULT_LIGHT_APPEARANCE_ID,
+} from './palettes';
+import { createStartupAppearanceBootstrapManifest } from './startupAppearanceBootstrap';
+import { createAppearancePromptSnapshotManifest } from './appearancePromptSnapshots';
+
+const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
+const generatedManifestPath = path.resolve(
+  currentDirectory,
+  '../../../../../apps/desktop/src/generated/startup_appearance_bootstrap.json',
+);
+const generatedAppearancePromptSnapshotPath = path.resolve(
+  currentDirectory,
+  '../../../../../crates/assembly/core/src/agentic/tools/implementations/generated/appearance_prompt_snapshots.json',
+);
+
+describe('startup appearance bootstrap manifest', () => {
+  it('projects only the desktop first-paint fields from builtin appearances', () => {
+    const manifest = createStartupAppearanceBootstrapManifest(builtinAppearancePalettes);
+
+    expect(manifest).toMatchObject({
+      schemaVersion: 1,
+      defaultLightAppearanceId: DEFAULT_LIGHT_APPEARANCE_ID,
+      defaultDarkAppearanceId: DEFAULT_DARK_APPEARANCE_ID,
+    });
+    expect(manifest.appearances).toHaveLength(builtinAppearancePalettes.length);
+    expect(new Set(manifest.appearances.map(entry => entry.id)).size)
+      .toBe(builtinAppearancePalettes.length);
+
+    const light = manifest.appearances.find(entry => entry.id === DEFAULT_LIGHT_APPEARANCE_ID);
+    const palette = builtinAppearancePalettes.find(entry => entry.id === DEFAULT_LIGHT_APPEARANCE_ID);
+    expect(light).toEqual({
+      id: palette?.id,
+      bgPrimary: palette?.colors.background.primary,
+      bgSecondary: palette?.colors.background.secondary,
+      bgScene: palette?.colors.background.scene,
+      isLight: true,
+      textPrimary: palette?.colors.text.primary,
+      textMuted: palette?.colors.text.muted,
+      accentColor: palette?.colors.accent[500],
+    });
+  });
+
+  it('keeps the committed desktop manifest synchronized', () => {
+    const generated = JSON.parse(fs.readFileSync(generatedManifestPath, 'utf8'));
+    expect(generated).toEqual(createStartupAppearanceBootstrapManifest(builtinAppearancePalettes));
+  });
+});
+
+describe('appearance prompt snapshot manifest', () => {
+  it('projects generative UI fields from builtin appearances', () => {
+    const manifest = createAppearancePromptSnapshotManifest(builtinAppearancePalettes);
+    expect(manifest).toMatchObject({
+      schemaVersion: 1,
+      defaultLightAppearanceId: DEFAULT_LIGHT_APPEARANCE_ID,
+      defaultDarkAppearanceId: DEFAULT_DARK_APPEARANCE_ID,
+    });
+    expect(manifest.appearances).toHaveLength(builtinAppearancePalettes.length);
+    expect(manifest.appearances.find(entry => entry.id === DEFAULT_DARK_APPEARANCE_ID)?.mode)
+      .toBe('dark');
+  });
+
+  it('keeps the committed generative UI manifest synchronized', () => {
+    const generated = JSON.parse(fs.readFileSync(generatedAppearancePromptSnapshotPath, 'utf8'));
+    expect(generated).toEqual(createAppearancePromptSnapshotManifest(builtinAppearancePalettes));
+  });
+});

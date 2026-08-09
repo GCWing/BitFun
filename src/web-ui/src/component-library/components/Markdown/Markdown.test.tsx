@@ -33,8 +33,8 @@ vi.mock('@/infrastructure/i18n', () => ({
   },
 }));
 
-vi.mock('@/infrastructure/theme', () => ({
-  useTheme: () => ({ isLight: false }),
+vi.mock('@/infrastructure/appearance', () => ({
+  useAppearance: () => ({ current: { mode: 'dark' } }),
 }));
 
 vi.mock('../Tooltip', () => ({

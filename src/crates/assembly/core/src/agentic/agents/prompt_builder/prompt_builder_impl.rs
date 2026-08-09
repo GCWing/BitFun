@@ -21,8 +21,10 @@ use bitfun_agent_runtime::prompt::{
     render_workspace_context, PrependedPromptReminders, ProjectLayoutFacts, PromptRelatedPath,
     RemoteExecutionHints, RuntimeContextFacts, RuntimeContextNeeds, RuntimeShellFacts,
     ToolListingSections, UserContextPolicy, UserContextSection, WorkspaceContextFacts,
+    WorktreeContextFacts,
 };
 use bitfun_agent_runtime::remote_file_delivery::user_workspace_relative_file_link;
+use bitfun_core_types::SessionExecutionTargetKind;
 use log::{debug, info, warn};
 use std::path::Path;
 
@@ -44,6 +46,8 @@ pub struct PromptBuilderContext {
     pub model_name: Option<String>,
     /// When set, file/shell tools target this remote environment; OS and path instructions follow it.
     pub remote_execution: Option<RemoteExecutionHints>,
+    /// Explicit worktree identity and owning-project facts shown to the agent.
+    pub worktree: Option<WorktreeContextFacts>,
     /// Pre-built tree text for `{PROJECT_LAYOUT}` when the workspace is not on the local disk.
     pub remote_project_layout: Option<String>,
     /// When `Some(false)`, runtime context includes Computer use text-only guidance (no screenshot tool output).
@@ -56,6 +60,10 @@ pub struct PromptBuilderContext {
     pub remote_file_delivery_channel: bool,
     /// The active response surface can render Markdown image syntax inline.
     pub inline_markdown_image_display: bool,
+    /// Resolved through the active local or remote workspace filesystem provider.
+    pub workspace_instruction_files_context: Option<String>,
+    /// Distinguishes a resolved empty result from a caller that has not resolved instructions.
+    pub workspace_instruction_files_context_resolved: bool,
 }
 
 impl PromptBuilderContext {
@@ -70,12 +78,15 @@ impl PromptBuilderContext {
             session_id,
             model_name,
             remote_execution: None,
+            worktree: None,
             remote_project_layout: None,
             supports_image_understanding: None,
             tool_listing_sections: ToolListingSections::default(),
             runtime_context_needs: RuntimeContextNeeds::default(),
             remote_file_delivery_channel: false,
             inline_markdown_image_display: false,
+            workspace_instruction_files_context: None,
+            workspace_instruction_files_context_resolved: false,
         }
     }
 
@@ -109,6 +120,11 @@ impl PromptBuilderContext {
         self
     }
 
+    pub fn with_worktree_context(mut self, worktree: WorktreeContextFacts) -> Self {
+        self.worktree = Some(worktree);
+        self
+    }
+
     pub fn with_remote_file_delivery_channel(mut self, enabled: bool) -> Self {
         self.remote_file_delivery_channel = enabled;
         self
@@ -116,6 +132,12 @@ impl PromptBuilderContext {
 
     pub fn with_inline_markdown_image_display(mut self, enabled: bool) -> Self {
         self.inline_markdown_image_display = enabled;
+        self
+    }
+
+    pub fn with_workspace_instruction_files_context(mut self, context: Option<String>) -> Self {
+        self.workspace_instruction_files_context = context;
+        self.workspace_instruction_files_context_resolved = true;
         self
     }
 }
@@ -153,6 +175,16 @@ pub async fn build_prompt_context_for_workspace(
     .with_related_paths(related_paths)
     .with_tool_listing_sections(tool_listing_sections)
     .with_runtime_context_needs(runtime_context_needs);
+    if let Some(execution_target) = workspace
+        .execution_target
+        .as_ref()
+        .filter(|target| target.kind != SessionExecutionTargetKind::Local)
+    {
+        base = base.with_worktree_context(WorktreeContextFacts {
+            project_workspace_path: workspace.project_root_path_string(),
+            execution_target: execution_target.clone(),
+        });
+    }
     if let Some(supports_image_understanding) = supports_image_understanding {
         base = base.with_supports_image_understanding(supports_image_understanding);
     }
@@ -270,6 +302,7 @@ impl PromptBuilder {
                 })
                 .collect(),
             remote_execution: self.context.remote_execution.clone(),
+            worktree: self.context.worktree.clone(),
         })
     }
 
@@ -325,9 +358,13 @@ impl PromptBuilder {
             additional_sections.push(self.get_workspace_context());
         }
 
-        if self.context.remote_execution.is_none() {
-            let workspace = Path::new(&self.context.workspace_path);
-            if policy.includes(UserContextSection::WorkspaceInstructions) {
+        if policy.includes(UserContextSection::WorkspaceInstructions) {
+            if let Some(prompt) = &self.context.workspace_instruction_files_context {
+                additional_sections.push(prompt.clone());
+            } else if !self.context.workspace_instruction_files_context_resolved
+                && self.context.remote_execution.is_none()
+            {
+                let workspace = Path::new(&self.context.workspace_path);
                 match build_workspace_instruction_files_context(workspace).await {
                     Ok(Some(prompt)) => additional_sections.push(prompt),
                     Ok(None) => {}
@@ -604,13 +641,19 @@ async fn memory_summary_enabled() -> bool {
 
 #[cfg(test)]
 mod tests {
+    use super::build_prompt_context_for_workspace;
     use super::PromptBuilder;
     use super::PromptBuilderContext;
     use super::RemoteExecutionHints;
     use super::RuntimeContextNeeds;
     use super::ToolListingSections;
     use crate::agentic::agents::UserContextPolicy;
+    use crate::agentic::WorkspaceBinding;
     use crate::service::workspace::RelatedPath;
+    use bitfun_core_types::{
+        SessionExecutionTarget, SessionExecutionTargetKind, WorktreeLifecycle,
+    };
+    use std::path::PathBuf;
 
     #[tokio::test]
     async fn builds_ordered_prepended_reminders_from_tool_listings_and_user_context() {
@@ -858,6 +901,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn remote_user_context_keeps_port_resolved_workspace_instructions() {
+        let context = PromptBuilderContext::new("/workspace/project", None, None)
+            .with_remote_prompt_overlay(
+                RemoteExecutionHints {
+                    connection_display_name: "dev-server".to_string(),
+                    kernel_name: "Linux".to_string(),
+                    hostname: "devbox".to_string(),
+                },
+                None,
+            )
+            .with_workspace_instruction_files_context(Some(
+                "## Codebase and user instructions\n\n<document name=\"AGENTS.md\">\nremote rules\n</document>"
+                    .to_string(),
+            ));
+
+        let user_context = PromptBuilder::new(context)
+            .build_user_context_reminder(&UserContextPolicy::empty().with_workspace_instructions())
+            .await
+            .expect("remote instructions should be rendered");
+
+        assert!(user_context.contains("remote rules"));
+        assert!(user_context.contains("AGENTS.md"));
+    }
+
+    #[tokio::test]
+    async fn resolved_empty_instruction_context_does_not_fall_back_to_local_disk() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(temp.path().join("AGENTS.md"), "stale direct-disk rules\n")
+            .expect("agents file");
+        let context =
+            PromptBuilderContext::new(temp.path().to_string_lossy().to_string(), None, None)
+                .with_workspace_instruction_files_context(None);
+
+        let user_context = PromptBuilder::new(context)
+            .build_user_context_reminder(&UserContextPolicy::empty().with_workspace_instructions())
+            .await;
+
+        assert!(user_context.is_none());
+    }
+
+    #[tokio::test]
     async fn local_terminal_transcript_placeholder_includes_the_agents_path() {
         let context = PromptBuilderContext::new("workspace/root", None, None);
         let prompt = PromptBuilder::new(context)
@@ -999,5 +1083,44 @@ mod tests {
         assert!(workspace_context.contains("Related directories"));
         assert!(workspace_context.contains("  - monorepo/packages/payments"));
         assert!(!workspace_context.contains("payments —"));
+    }
+
+    #[tokio::test]
+    async fn workspace_context_identifies_the_managed_worktree_binding() {
+        let execution_target = SessionExecutionTarget {
+            kind: SessionExecutionTargetKind::ManagedWorktree,
+            worktree_id: Some("wt-1".to_string()),
+            root_path: "/managed/BitFun-wt-1".to_string(),
+            base_ref: Some("HEAD".to_string()),
+            base_commit: Some("0123456789abcdef".to_string()),
+            branch: None,
+            lifecycle: Some(WorktreeLifecycle::Managed),
+        };
+        let workspace = WorkspaceBinding::new(
+            Some("workspace-1".to_string()),
+            PathBuf::from("/managed/BitFun-wt-1"),
+        )
+        .with_project_root_path(PathBuf::from("/projects/BitFun"))
+        .with_execution_target(Some(execution_target));
+        let context = build_prompt_context_for_workspace(
+            &workspace,
+            None,
+            "session-1",
+            Some("primary".to_string()),
+            None,
+            ToolListingSections::default(),
+            RuntimeContextNeeds::default(),
+        )
+        .await
+        .expect("prompt context should build");
+
+        let workspace_context = PromptBuilder::new(context).get_workspace_context();
+
+        assert!(workspace_context.contains("Managed Git worktree created for this session"));
+        assert!(workspace_context.contains("Owning project root"));
+        assert!(workspace_context.contains("/projects/BitFun"));
+        assert!(workspace_context.contains("Worktree ID: wt-1"));
+        assert!(workspace_context.contains("Worktree checkout: detached HEAD"));
+        assert!(workspace_context.contains("Worktree base commit: 0123456789abcdef"));
     }
 }

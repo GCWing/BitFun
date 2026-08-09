@@ -17,18 +17,17 @@ import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useMe
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { Terminal, ExternalLink, Square } from 'lucide-react';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 import { createTerminalTab } from '@/shared/utils/tabUtils';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import { DotMatrixLoader, IconButton } from '../../component-library';
 import { LazyTerminalOutputRenderer } from '@/tools/terminal/components/LazyTerminalOutputRenderer';
 import { createLogger } from '@/shared/utils/logger';
 import { useToolCardHeightContract, type ToolCardCollapseReason } from './useToolCardHeightContract';
+import { useToolCardCompletionGracePeriod } from './useToolCardCompletionGracePeriod';
 import { getTerminalViewState, type TerminalViewState } from './terminalToolCardState';
 import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
 import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActions';
-import { ToolCommandPreview } from './ToolCommandPreview';
+import { CopyableTextPreview } from '../components/CopyableTextPreview';
 import { formatSessionViewPreviewText } from '../utils/sessionViewPreview';
 import './TerminalToolCard.scss';
 
@@ -66,8 +65,19 @@ function getInitialTerminalExpandedState(status: string): boolean {
   return !(isCollapsedTerminalStatus(status) || status === 'pending_confirmation');
 }
 
-function getAutoExpandedStateForTerminalStatus(status: string): boolean | null {
-  if (isCollapsedTerminalStatus(status) || status === 'pending_confirmation') {
+function getAutoExpandedStateForTerminalStatus(
+  status: string,
+  isLastItem: boolean | undefined,
+  keepTailPreview: boolean,
+): boolean | null {
+  if (isCollapsedTerminalStatus(status)) {
+    // A card that was already mounted while live keeps its compact output
+    // visible briefly at the tail. It collapses when a newer conversation
+    // item takes over or when the completion preview grace period expires.
+    return isLastItem === true && keepTailPreview ? null : false;
+  }
+
+  if (status === 'pending_confirmation') {
     return false;
   }
 
@@ -83,23 +93,31 @@ function renderTerminalExpandedContent(params: {
   liveOutput: string;
   parsedResult: ParsedTerminalResult;
   waitingMessage: string | null;
+  compactSettledPreview: boolean;
   t: (key: string, options?: Record<string, unknown>) => string;
 }): React.ReactNode {
-  const { viewState, liveOutput, parsedResult, waitingMessage, t } = params;
+  const {
+    viewState,
+    liveOutput,
+    parsedResult,
+    waitingMessage,
+    compactSettledPreview,
+    t,
+  } = params;
 
   const isStreamingPhase =
     viewState.displayPhase === 'live_output' ||
     viewState.displayPhase === 'receiving_params' ||
     viewState.displayPhase === 'executing';
 
-  const maxRows = isStreamingPhase
+  const maxRows = isStreamingPhase || compactSettledPreview
     ? TERMINAL_OUTPUT_STREAMING_MAX_ROWS
     : TERMINAL_OUTPUT_EXPANDED_MAX_ROWS;
 
   return (
     <>
       {viewState.displayPhase === 'live_output' && (
-        <div className="terminal-execution-output" data-testid="chat-shell-command-output">
+        <div className="terminal-execution-output" data-testid="chat-shell-command-output" data-bf-component="terminal-tool-card" data-bf-part="output">
           <LazyTerminalOutputRenderer
             content={liveOutput}
             className="terminal-xterm-output"
@@ -109,15 +127,15 @@ function renderTerminalExpandedContent(params: {
       )}
 
       {(viewState.displayPhase === 'receiving_params' || viewState.displayPhase === 'executing') && waitingMessage && (
-        <div className="terminal-execution-output terminal-waiting" data-testid="chat-shell-command-output">
+        <div className="terminal-execution-output terminal-waiting" data-testid="chat-shell-command-output" data-bf-component="terminal-tool-card" data-bf-part="waiting">
           <span className="waiting-text">{waitingMessage}</span>
         </div>
       )}
 
       {viewState.showCompletedResult && (
-        <div className="terminal-result-container">
+        <div className="terminal-result-container" data-bf-component="terminal-tool-card" data-bf-part="result">
           {parsedResult.output && (
-            <div className="terminal-result-output" data-testid="chat-shell-command-output">
+            <div className="terminal-result-output" data-testid="chat-shell-command-output" data-bf-component="terminal-tool-card" data-bf-part="output">
               <LazyTerminalOutputRenderer
                 content={parsedResult.output}
                 className="terminal-xterm-output"
@@ -125,7 +143,7 @@ function renderTerminalExpandedContent(params: {
               />
             </div>
           )}
-          <div className="terminal-result-footer">
+          <div className="terminal-result-footer" data-bf-component="terminal-tool-card" data-bf-part="footer">
             {parsedResult.workingDir && (
               <>
                 <span className="terminal-result-label">{t('toolCards.terminal.workingDirectory')}</span>
@@ -150,15 +168,15 @@ function renderTerminalExpandedContent(params: {
       )}
 
       {viewState.showCancelledResult && (
-        <div className="terminal-result-container cancelled">
-          <div className="terminal-result-output" data-testid="chat-shell-command-output">
+        <div className="terminal-result-container cancelled" data-bf-component="terminal-tool-card" data-bf-part="result" data-bf-state="cancelled">
+          <div className="terminal-result-output" data-testid="chat-shell-command-output" data-bf-component="terminal-tool-card" data-bf-part="output">
             <LazyTerminalOutputRenderer
               content={liveOutput}
               className="terminal-xterm-output"
               maxRows={maxRows}
             />
           </div>
-          <div className="terminal-result-footer">
+          <div className="terminal-result-footer" data-bf-component="terminal-tool-card" data-bf-part="footer">
             <span className="terminal-cancelled-text">{t('toolCards.terminal.commandInterrupted')}</span>
           </div>
         </div>
@@ -169,7 +187,7 @@ function renderTerminalExpandedContent(params: {
 
 function renderTerminalErrorContent(errorMessage: string): React.ReactNode {
   return (
-    <div className="error-content">
+    <div data-bf-component="terminal-tool-card" data-bf-part="error" data-bf-state="error" className="error-content">
       <div className="error-message">{errorMessage}</div>
     </div>
   );
@@ -224,6 +242,7 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   toolItem,
   onExpand,
   terminalSessionId: propTerminalSessionId,
+  isLastItem,
 }) => {
   const { t } = useTranslation('flow-chat');
   const toolCall = toolItem.toolCall;
@@ -266,13 +285,23 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
 
   const toolId = toolItem.id ?? toolCall?.id;
   const [isExpanded, setIsExpandedState] = useState(() => getInitialTerminalExpandedState(status));
-  const previousStatusRef = useRef(status);
+  const userToggledRef = useRef(false);
   const {
     cardRootRef,
     applyExpandedState,
   } = useToolCardHeightContract({
     toolId,
     toolName: toolItem.toolName,
+  });
+  const {
+    begin: beginCompletionPreview,
+    isActive: isCompletionPreviewActive,
+  } = useToolCardCompletionGracePeriod({
+    eligible:
+      isCollapsedTerminalStatus(status) &&
+      isLastItem === true &&
+      isExpanded &&
+      !userToggledRef.current,
   });
   const applyTerminalExpandedState = useCallback((
     nextExpanded: boolean,
@@ -289,6 +318,7 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   }, [applyExpandedState, isExpanded, onExpand]);
 
   const toggleExpanded = useCallback(() => {
+    userToggledRef.current = true;
     applyTerminalExpandedState(!isExpanded, { reason: 'manual' });
   }, [applyTerminalExpandedState, isExpanded]);
 
@@ -303,18 +333,22 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   }, [status]);
 
   useLayoutEffect(() => {
-    const prevStatus = previousStatusRef.current;
-    previousStatusRef.current = status;
-
-    if (prevStatus === status) {
+    if (userToggledRef.current) {
       return;
     }
 
-    const nextExpanded = getAutoExpandedStateForTerminalStatus(status);
+    const keepTailPreview = isCollapsedTerminalStatus(status) && beginCompletionPreview();
+    const nextExpanded = getAutoExpandedStateForTerminalStatus(status, isLastItem, keepTailPreview);
     if (nextExpanded !== null) {
       applyTerminalExpandedState(nextExpanded, { reason: 'auto' });
     }
-  }, [applyTerminalExpandedState, status]);
+  }, [
+    applyTerminalExpandedState,
+    beginCompletionPreview,
+    isCompletionPreviewActive,
+    isLastItem,
+    status,
+  ]);
 
   const updateCommandTruncation = useCallback(() => {
     const element = commandRef.current;
@@ -503,14 +537,14 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     }
 
     return (
-      <span className={`terminal-status-text ${viewState.statusClassName}`}>
+      <span data-bf-component="terminal-tool-card" data-bf-part="status" className={`terminal-status-text ${viewState.statusClassName}`}>
         {t(`toolCards.terminal.${viewState.statusLabel}`)}
       </span>
     );
   };
 
   const renderHeaderExtra = (includeInterrupt: boolean) => (
-    <span className="terminal-header-extra">
+    <span className="terminal-header-extra" data-bf-component="terminal-tool-card" data-bf-part="actions">
       {/* Always visible while running: interrupt */}
       {includeInterrupt && viewState.showInterruptButton && (
         <span className="terminal-critical-actions">
@@ -545,14 +579,14 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     const emptyText = t(showConfirmButtons ? 'toolCards.terminal.commandEmpty' : 'toolCards.terminal.noCommand');
 
     return (
-      <ToolCommandPreview
+      <CopyableTextPreview
         ref={commandRef}
         as={variant === 'compact' ? 'span' : 'code'}
-        command={commandText}
+        text={commandText}
         emptyText={emptyText}
         className={
           variant === 'compact'
-            ? 'terminal-command-compact tool-command-preview--compact'
+            ? 'terminal-command-compact copyable-text-preview--compact'
             : 'terminal-command'
         }
         tooltipContent={commandText && isCommandTruncated ? commandText : undefined}
@@ -571,36 +605,29 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     />
   );
 
-  const renderCompactHeader = () => (
-    <CompactToolCardHeader
-      icon={<ToolCardStatusSlot status={status} toolIcon={<Terminal size={16} className="terminal-card-icon" />} defaultIcon="tool" />}
-      action={t('toolCards.terminal.executeCommand')}
-      content={
-        <span className="terminal-compact-content">
-          {renderCommandContent('compact')}
-          {/* Hover-only inline actions — duration, status, copy, open panel */}
-          <span className="compact-extra-on-hover terminal-hover-actions">
-            {renderTimeoutIndicator()}
-            {viewState.hasHeaderExtra && renderStatusText()}
-            <ToolCardHeaderActions className="terminal-header-actions">
-              {renderCopyCommandButton()}
-              {renderOpenInPanelButton()}
-            </ToolCardHeaderActions>
-          </span>
-        </span>
-      }
-      extra={renderHeaderExtra(false)}
-    />
-  );
+  const compactSettledPreview =
+    isExpanded &&
+    isLastItem === true &&
+    isCollapsedTerminalStatus(status) &&
+    !userToggledRef.current;
   const expandedContent = isExpanded
-    ? renderTerminalExpandedContent({ viewState, liveOutput, parsedResult, waitingMessage, t })
+    ? renderTerminalExpandedContent({
+        viewState,
+        liveOutput,
+        parsedResult,
+        waitingMessage,
+        compactSettledPreview,
+        t,
+      })
     : null;
   const errorContent = viewState.isFailed
     ? renderTerminalErrorContent(toolResult?.error || t('toolCards.terminal.executionFailed'))
     : null;
 
   return (
-    <div
+    <div data-bf-component="terminal-tool-card" data-bf-part="root"
+      data-bf-status={status}
+      data-bf-state={[isExpanded && 'expanded', viewState.isFailed && 'error'].filter(Boolean).join(' ') || undefined}
       ref={cardRootRef}
       data-testid="chat-shell-command-card"
       data-tool-card-id={toolId ?? ''}

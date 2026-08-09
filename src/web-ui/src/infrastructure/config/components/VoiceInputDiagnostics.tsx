@@ -259,14 +259,26 @@ export function VoiceInputDiagnostics({
   const volumeState = level < 0.01 ? 'silent' : level < 0.08 ? 'low' : 'normal';
 
   return (
-    <ConfigPageSection title={t('sections.diagnostics')}>
+    <ConfigPageSection
+      title={t('sections.diagnostics')}
+      data-bf-component="voice-input-diagnostics"
+      data-bf-part="root"
+      data-bf-phase={phase}
+      data-bf-state={[
+        testingMicrophone && 'testing-microphone',
+        testingRecognition && 'testing-recognition',
+        error && 'error',
+      ].filter(Boolean).join(' ')}
+    >
       <ConfigPageRow
         label={t('diagnostics.microphone.label')}
         description={t('diagnostics.microphone.description')}
         align="center"
       >
-        <div className="voice-input-config__device-control">
+        <div className="voice-input-config__device-control" data-bf-component="voice-input-diagnostics" data-bf-part="deviceControl">
           <Select
+            data-bf-component="voice-input-diagnostics"
+            data-bf-part="deviceSelect"
             value={settings.microphone_device_id}
             onChange={value => void onDeviceChange(normalizeSelectValue(value))}
             options={microphoneOptions}
@@ -292,9 +304,12 @@ export function VoiceInputDiagnostics({
         description={t('diagnostics.level.description')}
         align="center"
       >
-        <div className="voice-input-config__diagnostic-action">
-          <div className="voice-input-config__level" aria-hidden="true">
+        <div className="voice-input-config__diagnostic-action" data-bf-component="voice-input-diagnostics" data-bf-part="diagnosticAction">
+          <div className="voice-input-config__level" data-bf-component="voice-input-diagnostics" data-bf-part="level" aria-hidden="true">
             <div
+              data-bf-component="voice-input-diagnostics"
+              data-bf-part="levelValue"
+              data-bf-volume={volumeState}
               className={`voice-input-config__level-value voice-input-config__level-value--${volumeState}`}
               style={{ transform: `scaleX(${Math.max(0.02, level)})` }}
             />
@@ -320,7 +335,7 @@ export function VoiceInputDiagnostics({
         description={t('diagnostics.recognition.description')}
         align="start"
       >
-        <div className="voice-input-config__recognition-test">
+        <div className="voice-input-config__recognition-test" data-bf-component="voice-input-diagnostics" data-bf-part="recognitionTest">
           <Button
             variant={phase === 'recording' ? 'secondary' : 'primary'}
             size="small"
@@ -337,17 +352,17 @@ export function VoiceInputDiagnostics({
               : t('diagnostics.recognition.start')}
           </Button>
           {!modelInstalled ? (
-            <span className="voice-input-config__diagnostic-note">
+            <span className="voice-input-config__diagnostic-note" data-bf-component="voice-input-diagnostics" data-bf-part="note">
               {t('diagnostics.recognition.modelRequired')}
             </span>
           ) : null}
           {result?.text.trim() ? (
-            <div className="voice-input-config__recognition-result">
+            <div className="voice-input-config__recognition-result" data-bf-component="voice-input-diagnostics" data-bf-part="result">
               <span>{result.text.trim()}</span>
               <small>{t('diagnostics.recognition.timing', { duration: result.durationMs })}</small>
             </div>
           ) : null}
-          {error ? <span className="voice-input-config__diagnostic-error">{error}</span> : null}
+          {error ? <span className="voice-input-config__diagnostic-error" data-bf-component="voice-input-diagnostics" data-bf-part="error">{error}</span> : null}
         </div>
       </ConfigPageRow>
     </ConfigPageSection>

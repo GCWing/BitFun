@@ -4,7 +4,7 @@
   gap: 14px;
   min-width: 0;
   padding-block: 4px 16px;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 
   &__modal {
     overflow-x: hidden;
@@ -18,11 +18,11 @@
     gap: 14px;
     padding: 16px;
     overflow: hidden;
-    border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 78%, transparent);
     border-radius: 14px;
     background:
-      radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--color-accent-500) 14%, transparent), transparent 36%),
-      color-mix(in srgb, var(--element-bg-subtle) 72%, transparent);
+      radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent), transparent 36%),
+      color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 72%, transparent);
 
     &::after {
       content: '';
@@ -30,7 +30,7 @@
       inset: 0;
       pointer-events: none;
       border-radius: inherit;
-      box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-text-primary) 7%, transparent);
+      box-shadow: inset 0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 7%, transparent);
     }
   }
 
@@ -43,10 +43,10 @@
     width: 38px;
     height: 38px;
     flex-shrink: 0;
-    border: 1px solid color-mix(in srgb, var(--color-accent-500) 24%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 24%, transparent);
     border-radius: 12px;
-    background: color-mix(in srgb, var(--color-accent-500) 12%, var(--element-bg-subtle));
-    color: var(--color-accent-500);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, var(--bf-appearance-token-element-bg-subtle));
+    color: var(--bf-appearance-token-color-accent-500);
   }
 
   &__intro-copy {
@@ -62,7 +62,7 @@
     font-size: 14px;
     font-weight: 650;
     line-height: 1.35;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     letter-spacing: -0.01em;
   }
 
@@ -70,11 +70,11 @@
   &__scope {
     font-size: 12px;
     line-height: 1.55;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 
   &__scope {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__intro-badge {
@@ -85,10 +85,10 @@
     justify-content: center;
     min-height: 24px;
     padding: 0 9px;
-    border: 1px solid color-mix(in srgb, var(--color-accent-500) 18%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 18%, transparent);
     border-radius: 999px;
-    background: color-mix(in srgb, var(--color-accent-500) 9%, transparent);
-    color: var(--color-accent-500);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 9%, transparent);
+    color: var(--bf-appearance-token-color-accent-500);
     white-space: nowrap;
   }
 
@@ -103,10 +103,10 @@
     justify-content: center;
     min-height: 92px;
     padding: 18px 16px;
-    border: 1px dashed color-mix(in srgb, var(--border-subtle) 84%, transparent);
+    border: 1px dashed color-mix(in srgb, var(--bf-appearance-token-border-subtle) 84%, transparent);
     border-radius: 14px;
-    background: color-mix(in srgb, var(--element-bg-subtle) 64%, transparent);
-    color: var(--color-text-secondary);
+    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 64%, transparent);
+    color: var(--bf-appearance-token-color-text-secondary);
     font-size: 12px;
     line-height: 1.5;
     text-align: center;
@@ -118,20 +118,92 @@
     gap: 10px;
   }
 
+  &__section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: 12px;
+    font-weight: 650;
+  }
+
+  &__section-description {
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  &__external-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__read-only {
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  &__diagnostics {
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: 11px;
+
+    summary {
+      cursor: pointer;
+    }
+
+    ul {
+      margin: 6px 0 0;
+      padding-left: 18px;
+    }
+
+    code {
+      font-family: var(--bf-appearance-token-font-family-mono);
+      overflow-wrap: anywhere;
+    }
+  }
+
   &__card {
     display: flex;
     flex-direction: column;
     gap: 10px;
     padding: 12px;
-    border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 82%, transparent);
     border-radius: 12px;
-    background: color-mix(in srgb, var(--element-bg-subtle) 76%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 76%, transparent);
     transition: border-color 0.18s ease, background 0.18s ease;
 
     &:hover {
-      border-color: color-mix(in srgb, var(--border-medium) 74%, transparent);
-      background: color-mix(in srgb, var(--element-bg-soft) 70%, transparent);
+      border-color: color-mix(in srgb, var(--bf-appearance-token-border-medium) 74%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 70%, transparent);
     }
+
+    &--external {
+      gap: 7px;
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 52%, transparent);
+    }
+  }
+
+  &__external-alias {
+    color: var(--bf-appearance-token-color-accent-500);
+    font-family: var(--bf-appearance-token-font-family-mono);
+    font-size: 12px;
+    font-weight: 650;
+  }
+
+  &__external-source {
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: 11px;
+  }
+
+  &__external-path {
+    overflow-wrap: anywhere;
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-family: var(--bf-appearance-token-font-family-mono);
+    font-size: 11px;
+    line-height: 1.45;
   }
 
   &__card-header {
@@ -147,8 +219,8 @@
     height: 20px;
     padding: 0 8px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--element-bg-base) 62%, transparent);
-    color: var(--color-text-secondary);
+    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-base) 62%, transparent);
+    color: var(--bf-appearance-token-color-text-secondary);
     font-size: 11px;
     font-weight: 600;
     line-height: 1;
@@ -163,14 +235,14 @@
     border: 1px solid transparent;
     border-radius: 8px;
     background: transparent;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
     transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
 
     &:hover {
-      border-color: color-mix(in srgb, var(--color-error) 20%, transparent);
-      background: color-mix(in srgb, var(--color-error) 9%, transparent);
-      color: var(--color-error);
+      border-color: color-mix(in srgb, var(--bf-appearance-token-color-error) 20%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 9%, transparent);
+      color: var(--bf-appearance-token-color-error);
     }
   }
 
@@ -188,12 +260,12 @@
 
   &__path-input .bitfun-input-container {
     height: 32px;
-    background: color-mix(in srgb, var(--element-bg-base) 72%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-base) 72%, transparent);
   }
 
   &__select {
     min-width: 84px;
-    border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 90%, transparent);
     border-radius: 8px;
     background: transparent;
     white-space: nowrap;
@@ -209,10 +281,10 @@
 
   &__error {
     padding: 10px 12px;
-    border: 1px solid color-mix(in srgb, var(--color-error) 22%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 22%, transparent);
     border-radius: 10px;
-    background: color-mix(in srgb, var(--color-error) 8%, transparent);
-    color: color-mix(in srgb, var(--color-error) 88%, var(--color-text-primary));
+    background: color-mix(in srgb, var(--bf-appearance-token-color-error) 8%, transparent);
+    color: color-mix(in srgb, var(--bf-appearance-token-color-error) 88%, var(--bf-appearance-token-color-text-primary));
     font-size: 12px;
     line-height: 1.45;
   }

@@ -51,7 +51,12 @@ export const ProgressNotification: React.FC<ProgressNotificationProps> = ({ noti
   };
 
   return (
-    <div className={`progress-notification progress-notification--${status || 'active'} ${mode === 'text-only' ? 'progress-notification--text-only' : ''}`}>
+    <div
+      className={`progress-notification progress-notification--${status || 'active'} ${mode === 'text-only' ? 'progress-notification--text-only' : ''}`}
+      data-bf-component="notification"
+      data-bf-part="progressItem"
+      data-bf-state={status || undefined}
+    >
       
       <div className="progress-notification__icon">
         {getStatusIcon()}
@@ -73,9 +78,11 @@ export const ProgressNotification: React.FC<ProgressNotificationProps> = ({ noti
 
         
         {shouldShowProgressBar && (
-          <div className="progress-notification__progress-bar">
+          <div className="progress-notification__progress-bar" data-bf-component="notification" data-bf-part="progressBar">
             <div
               className="progress-notification__progress-fill"
+              data-bf-component="notification"
+              data-bf-part="progressFill"
               style={{ width: `${progress}%` }}
             />
           </div>

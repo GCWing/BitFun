@@ -3,14 +3,7 @@ import { normalizeStylePresetKey } from './style-presets.js';
 
 export const STORAGE_KEY = 'pptLiveStudioStateV6';
 export const HISTORY_KEY = 'pptLiveDeckHistoryV1';
-export const SCHEMA_VERSION = 6;
-/** Default Cowork model selector when the user has not chosen one yet. */
-export const DEFAULT_PREFERRED_MODEL = 'primary';
-
-export function normalizePreferredModel(value) {
-  const raw = String(value || '').trim();
-  return raw || DEFAULT_PREFERRED_MODEL;
-}
+export const SCHEMA_VERSION = 7;
 export const ELEMENT_TYPES = ['text', 'list', 'shape', 'metric', 'chart', 'media'];
 
 export const THEME_PRESETS = {
@@ -189,7 +182,6 @@ export function createInitialState() {
       runId: '',
       skillKey: '',
     },
-    preferredModel: DEFAULT_PREFERRED_MODEL,
     style: defaultStyle(),
     outline: [],
     sources: { items: [], facts: [], warnings: [], summary: '', fetchedAt: 0 },
@@ -231,7 +223,9 @@ export function ensureState(value) {
     runId: String(state.agentSession?.runId || ''),
     skillKey: String(state.agentSession?.skillKey || ''),
   };
-  state.preferredModel = normalizePreferredModel(state.preferredModel);
+  // Model selection belongs to the host ChatInput. Remove the legacy field so
+  // restored decks cannot overwrite the model selected in the floating chat.
+  delete state.preferredModel;
   state.style = { ...defaultStyle(), ...(state.style || {}) };
   delete state.style.brandPrimary;
   delete state.style.brandAccent;

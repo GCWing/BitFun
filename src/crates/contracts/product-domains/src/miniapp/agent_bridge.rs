@@ -284,13 +284,23 @@ pub fn validate_reused_session(
     Ok(())
 }
 
-pub fn agent_run_metadata(app_id: &str, run_id: &str) -> serde_json::Value {
-    json!({
+/// Metadata carried by every MiniApp agent turn.
+///
+/// `market_strict` mirrors the app's runtime profile so the agent runtime can
+/// pick the marketplace tool allowlist without reaching back into MiniApp
+/// storage. The flag is only serialized for strict apps, keeping the turn
+/// metadata of built-in MiniApps byte-identical to earlier releases.
+pub fn agent_run_metadata(app_id: &str, run_id: &str, market_strict: bool) -> serde_json::Value {
+    let mut metadata = json!({
         "surface": MINIAPP_AGENT_SURFACE,
         "appId": app_id,
         "runId": run_id,
         "acp_transport": true,
-    })
+    });
+    if market_strict {
+        metadata["marketStrict"] = Value::Bool(true);
+    }
+    metadata
 }
 
 pub fn build_agent_submission_plan(
@@ -300,6 +310,7 @@ pub fn build_agent_submission_plan(
     requested_session: Option<&str>,
     workspace_path: &str,
     enable_tools: Option<bool>,
+    market_strict: bool,
 ) -> MiniAppAgentSubmissionPlan {
     MiniAppAgentSubmissionPlan {
         run_id: run_id.to_string(),
@@ -308,7 +319,7 @@ pub fn build_agent_submission_plan(
         requested_session_id: requested_session_id(requested_session),
         workspace_path: workspace_path.to_string(),
         enable_tools: enable_tools.unwrap_or(true),
-        metadata: agent_run_metadata(app_id, run_id),
+        metadata: agent_run_metadata(app_id, run_id, market_strict),
     }
 }
 
@@ -475,6 +486,7 @@ mod tests {
             Some(" session-1 "),
             "/workspace",
             Some(false),
+            false,
         );
         assert_eq!(plan.owner, "miniapp-agent:app-1:run-1");
         assert_eq!(plan.session_name, "Session");
@@ -490,6 +502,25 @@ mod tests {
                 "acp_transport": true,
             })
         );
+    }
+
+    #[test]
+    fn market_strict_runs_tag_their_turn_metadata() {
+        assert_eq!(
+            agent_run_metadata("app-1", "run-1", true),
+            serde_json::json!({
+                "surface": MINIAPP_AGENT_SURFACE,
+                "appId": "app-1",
+                "runId": "run-1",
+                "acp_transport": true,
+                "marketStrict": true,
+            })
+        );
+
+        let plan =
+            build_agent_submission_plan("app-1", "run-1", None, None, "/workspace", None, true);
+        assert!(plan.enable_tools);
+        assert_eq!(plan.metadata["marketStrict"], serde_json::json!(true));
     }
 
     #[test]

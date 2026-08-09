@@ -78,6 +78,7 @@ describe('ToolTimeoutIndicator', () => {
     vi.stubGlobal('document', window.document);
     vi.stubGlobal('navigator', window.navigator);
     vi.stubGlobal('HTMLElement', window.HTMLElement);
+    vi.stubGlobal('HTMLDivElement', window.HTMLDivElement);
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
 
     container = document.createElement('div');
@@ -92,6 +93,7 @@ describe('ToolTimeoutIndicator', () => {
         root!.unmount();
       });
     }
+    document.querySelector('[data-bf-overlay-host="true"]')?.remove();
     container?.remove();
     dom?.window.close();
     vi.unstubAllGlobals();
@@ -166,5 +168,30 @@ describe('ToolTimeoutIndicator', () => {
     });
 
     expect(setSubagentTimeoutMock).toHaveBeenCalledWith('subagent-session', { type: 'disable' });
+  });
+
+  it('portals the restore options outside clipped tool cards', async () => {
+    await act(async () => {
+      root!.render(withI18n(
+        <ToolTimeoutIndicator
+          startTime={Date.now() - 10_000}
+          isRunning
+          timeoutMs={60_000}
+          showControls
+          subagentSessionId="subagent-session"
+          defaultTimeoutDisabled
+        />,
+      ));
+    });
+
+    const button = container!.querySelector<HTMLButtonElement>('.timeout-ignore-btn');
+    await act(async () => {
+      button!.dispatchEvent(new dom!.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const popover = document.querySelector<HTMLElement>('.timeout-extend-popover');
+    expect(popover?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
+    expect(popover?.style.visibility).toBe('visible');
   });
 });

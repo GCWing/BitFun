@@ -497,10 +497,7 @@ fn bot_persistence_lock() -> std::sync::MutexGuard<'static, ()> {
 }
 
 fn bot_persistence_path() -> Option<std::path::PathBuf> {
-    dirs::home_dir().map(|home| {
-        home.join(".bitfun")
-            .join(REMOTE_CONNECT_PERSISTENCE_FILENAME)
-    })
+    super::bitfun_home_dir().map(|home| home.join(REMOTE_CONNECT_PERSISTENCE_FILENAME))
 }
 
 fn bot_persistence_backup_path(path: &std::path::Path) -> std::path::PathBuf {
@@ -512,7 +509,7 @@ fn bot_persistence_backup_path(path: &std::path::Path) -> std::path::PathBuf {
 }
 
 fn legacy_bot_persistence_path() -> Option<std::path::PathBuf> {
-    dirs::home_dir().map(|home| home.join(".bitfun").join(LEGACY_BOT_PERSISTENCE_FILENAME))
+    super::bitfun_home_dir().map(|home| home.join(LEGACY_BOT_PERSISTENCE_FILENAME))
 }
 
 fn load_bot_persistence_unlocked() -> BotPersistenceData {

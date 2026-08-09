@@ -529,6 +529,14 @@ pub(super) enum ComputerUseNavFocus {
     PointCrop { rect: ComputerUseNavigationRect },
 }
 
+/// The `screenshots` crate still bundles image 0.24; rebuild its capture
+/// buffer as a workspace (image 0.25) `RgbaImage` by moving the raw bytes.
+fn to_workspace_rgba(captured: screenshots::image::RgbaImage) -> BitFunResult<image::RgbaImage> {
+    let (w, h) = captured.dimensions();
+    image::RgbaImage::from_raw(w, h, captured.into_raw())
+        .ok_or_else(|| BitFunError::tool("Screenshot buffer conversion failed".to_string()))
+}
+
 impl DesktopComputerUseHost {
     fn encode_jpeg(rgb: &RgbImage, quality: u8) -> BitFunResult<Vec<u8>> {
         let mut buf = Vec::new();
@@ -537,7 +545,7 @@ impl DesktopComputerUseHost {
             rgb.as_raw(),
             rgb.width(),
             rgb.height(),
-            image::ColorType::Rgb8,
+            image::ExtendedColorType::Rgb8,
         )
         .map_err(|e| BitFunError::tool(format!("JPEG encode: {}", e)))?;
         Ok(buf)
@@ -665,7 +673,8 @@ impl DesktopComputerUseHost {
             .map_err(|e| BitFunError::tool(format!("Screen capture init (OCR raw): {}", e)))?;
         let rgba = screen
             .capture()
-            .map_err(|e| BitFunError::tool(format!("Screenshot failed (OCR raw): {}", e)))?;
+            .map_err(|e| BitFunError::tool(format!("Screenshot failed (OCR raw): {}", e)))
+            .and_then(to_workspace_rgba)?;
         let (full_px_w, full_px_h) = rgba.dimensions();
         let d = screen.display_info;
         let disp_w = d.width as f64;
@@ -1187,12 +1196,15 @@ impl DesktopComputerUseHost {
                 .or_else(|_| Screen::from_point(0, 0))
                 .map_err(|e| BitFunError::tool(format!("Screen capture init: {}", e)))?
         };
-        let rgba = screen.capture().map_err(|e| {
-            BitFunError::tool(format!(
-                "Screenshot failed (on macOS grant Screen Recording for BitFun): {}",
-                e
-            ))
-        })?;
+        let rgba = screen
+            .capture()
+            .map_err(|e| {
+                BitFunError::tool(format!(
+                    "Screenshot failed (on macOS grant Screen Recording for BitFun): {}",
+                    e
+                ))
+            })
+            .and_then(to_workspace_rgba)?;
         Ok((rgba, screen))
     }
 
@@ -1625,7 +1637,8 @@ impl DesktopComputerUseHost {
                 })?;
             let rgba = screen
                 .capture()
-                .map_err(|e| BitFunError::tool(format!("Screenshot failed (peek): {}", e)))?;
+                .map_err(|e| BitFunError::tool(format!("Screenshot failed (peek): {}", e)))
+                .and_then(to_workspace_rgba)?;
             Self::screenshot_sync_tool_with_capture(
                 ComputerUseScreenshotParams::default(),
                 None,

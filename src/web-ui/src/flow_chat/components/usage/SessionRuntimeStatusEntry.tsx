@@ -26,14 +26,14 @@ function SessionRuntimeButton({
   const { t } = useTranslation('flow-chat');
   return (
     <Tooltip content={t('usage.runtime.tooltip')}>
-      <button
+      <button data-bf-component="session-runtime-status-entry" data-bf-part="root"
         className="session-runtime-status-entry"
         type="button"
         onClick={onOpen}
         aria-label={t('usage.runtime.open')}
       >
-        <Activity size={13} aria-hidden />
-        <span>{t('usage.runtime.button')}</span>
+        <Activity size={13} data-bf-component="session-runtime-status-entry" data-bf-part="icon" aria-hidden />
+        <span data-bf-component="session-runtime-status-entry" data-bf-part="label">{t('usage.runtime.button')}</span>
       </button>
     </Tooltip>
   );

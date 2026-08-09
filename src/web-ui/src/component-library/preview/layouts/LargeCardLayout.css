@@ -7,21 +7,21 @@
 }
 
 .large-card {
-  background: var(--color-bg-secondary);
+  background: var(--bf-appearance-token-color-bg-secondary);
   border-radius: 12px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   overflow: hidden;
   transition: all 0.3s ease;
 }
 
 .large-card:hover {
-  border-color: var(--border-accent-subtle);
-  box-shadow: var(--shadow-base), var(--glow-shadow-blue);
+  border-color: var(--bf-appearance-token-border-accent-subtle);
+  box-shadow: var(--bf-appearance-token-shadow-base), var(--bf-appearance-token-glow-shadow-blue);
 }
 
 .large-card-header {
   padding: 20px 24px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -36,22 +36,22 @@
   margin: 0 0 8px 0;
   font-size: 20px;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 .large-card-description {
   margin: 0;
   font-size: 14px;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   line-height: 1.5;
 }
 
 .expand-button {
   padding: 8px 16px;
-  background: var(--element-bg-base);
-  border: 1px solid var(--border-base);
+  background: var(--bf-appearance-token-element-bg-base);
+  border: 1px solid var(--bf-appearance-token-border-base);
   border-radius: 6px;
-  color: var(--color-accent-400);
+  color: var(--bf-appearance-token-color-accent-400);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -60,14 +60,14 @@
 }
 
 .expand-button:hover {
-  background: var(--element-bg-medium);
-  border-color: var(--border-accent-subtle);
-  color: var(--color-accent-300);
+  background: var(--bf-appearance-token-element-bg-medium);
+  border-color: var(--bf-appearance-token-border-accent-subtle);
+  color: var(--bf-appearance-token-color-accent-300);
 }
 
 .large-card-preview {
   padding: 24px;
-  background: var(--color-bg-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
   min-height: 400px;
   max-height: 500px;
   overflow: auto;

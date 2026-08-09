@@ -1,13 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import morphdomRuntime from 'morphdom/dist/morphdom-umd.js?raw';
-import { themeService } from '@/infrastructure/theme';
+import { widgetAppearanceAdapter } from '@/infrastructure/appearance/adapters/WidgetAppearanceAdapter';
 import {
-  createWidgetThemeFallbackCss,
-  createWidgetThemeStaticShellCss,
-  readWidgetThemePayload,
-  type WidgetThemePayload,
-} from './themePayload';
-import { createWidgetThemeCompatibilityAliasCss } from './themePayloadCompatibility';
+  createWidgetAppearanceFallbackCss,
+  createWidgetAppearanceStaticShellCss,
+  readWidgetAppearancePayload,
+  type WidgetAppearancePayload,
+} from './appearancePayload';
 import './GenerativeWidgetFrame.scss';
 
 export type WidgetMessage =
@@ -93,20 +92,19 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
   <style>
     * { box-sizing: border-box; }
     :root {
-${createWidgetThemeFallbackCss()}
-      --font-family-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --font-family-mono: "SF Mono", Consolas, monospace;
-${createWidgetThemeStaticShellCss()}
-${createWidgetThemeCompatibilityAliasCss()}
-      --font-size-xs: 12px;
-      --font-size-sm: 13px;
-      --font-size-base: 14px;
-      --font-size-lg: 15px;
-      --font-size-2xl: 18px;
-      --font-weight-medium: 500;
-      --font-weight-semibold: 600;
-      --motion-fast: 0.15s;
-      --easing-standard: ease;
+${createWidgetAppearanceFallbackCss()}
+      --bf-appearance-token-font-family-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --bf-appearance-token-font-family-mono: "SF Mono", Consolas, monospace;
+${createWidgetAppearanceStaticShellCss()}
+      --bf-appearance-token-font-size-xs: 12px;
+      --bf-appearance-token-font-size-sm: 13px;
+      --bf-appearance-token-font-size-base: 14px;
+      --bf-appearance-token-font-size-lg: 15px;
+      --bf-appearance-token-font-size-2xl: 18px;
+      --bf-appearance-token-font-weight-medium: 500;
+      --bf-appearance-token-font-weight-semibold: 600;
+      --bf-appearance-token-motion-fast: 0.15s;
+      --bf-appearance-token-easing-standard: ease;
     }
     html, body {
       margin: 0;
@@ -114,8 +112,8 @@ ${createWidgetThemeCompatibilityAliasCss()}
       width: 100%;
       min-height: 0;
       background: transparent;
-      color: var(--color-text-primary);
-      font-family: var(--font-family-sans);
+      color: var(--bf-appearance-token-color-text-primary);
+      font-family: var(--bf-appearance-token-font-family-sans);
       overflow-x: hidden;
       overflow-y: hidden;
     }
@@ -143,21 +141,21 @@ ${createWidgetThemeCompatibilityAliasCss()}
       word-break: break-word;
     }
     body {
-      font-size: var(--font-size-sm);
+      font-size: var(--bf-appearance-token-font-size-sm);
       line-height: 1.5;
     }
     body, button, input, textarea, select {
-      font-family: var(--font-family-sans);
+      font-family: var(--bf-appearance-token-font-family-sans);
     }
     button, input, textarea, select {
       font: inherit;
     }
     a {
-      color: var(--color-accent-500);
+      color: var(--bf-appearance-token-color-accent-500);
       text-decoration: none;
     }
     a:hover {
-      color: var(--color-accent-600);
+      color: var(--bf-appearance-token-color-accent-600);
     }
     [data-file-path],
     [data-bitfun-open-file] {
@@ -178,25 +176,25 @@ ${createWidgetThemeCompatibilityAliasCss()}
       max-width: 100%;
       display: flex;
       flex-direction: column;
-      gap: var(--size-gap-4);
-      color: var(--color-text-primary);
+      gap: var(--bf-appearance-token-size-gap-4);
+      color: var(--bf-appearance-token-color-text-primary);
     }
     .bf-stack {
       display: flex;
       flex-direction: column;
-      gap: var(--size-gap-3);
+      gap: var(--bf-appearance-token-size-gap-3);
     }
     .bf-row {
       display: flex;
       align-items: center;
-      gap: var(--size-gap-3);
+      gap: var(--bf-appearance-token-size-gap-3);
       min-width: 0;
     }
     .bf-row-wrap {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: var(--size-gap-3);
+      gap: var(--bf-appearance-token-size-gap-3);
       min-width: 0;
     }
     .bf-toolbar {
@@ -204,84 +202,84 @@ ${createWidgetThemeCompatibilityAliasCss()}
       flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: var(--size-gap-3);
-      padding: var(--size-gap-3) var(--size-gap-4);
-      border-radius: var(--size-radius-lg);
-      background: color-mix(in srgb, var(--color-bg-secondary) 82%, transparent);
-      border: 1px solid var(--border-subtle);
-      box-shadow: var(--shadow-xs);
+      gap: var(--bf-appearance-token-size-gap-3);
+      padding: var(--bf-appearance-token-size-gap-3) var(--bf-appearance-token-size-gap-4);
+      border-radius: var(--bf-appearance-token-size-radius-lg);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 82%, transparent);
+      border: 1px solid var(--bf-appearance-token-border-subtle);
+      box-shadow: var(--bf-appearance-token-shadow-xs);
     }
     .bf-section {
       display: flex;
       flex-direction: column;
-      gap: var(--size-gap-3);
+      gap: var(--bf-appearance-token-size-gap-3);
     }
     .bf-section-header {
       display: flex;
       flex-wrap: wrap;
       align-items: flex-start;
       justify-content: space-between;
-      gap: var(--size-gap-3);
+      gap: var(--bf-appearance-token-size-gap-3);
     }
     .bf-title {
       margin: 0;
-      font-size: var(--font-size-lg);
-      font-weight: var(--font-weight-semibold);
+      font-size: var(--bf-appearance-token-font-size-lg);
+      font-weight: var(--bf-appearance-token-font-weight-semibold);
       line-height: 1.2;
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
       letter-spacing: -0.01em;
     }
     .bf-subtitle {
       margin: 0;
-      font-size: var(--font-size-xs);
-      color: var(--color-text-muted);
+      font-size: var(--bf-appearance-token-font-size-xs);
+      color: var(--bf-appearance-token-color-text-muted);
       line-height: 1.5;
     }
     .bf-eyebrow {
       margin: 0;
       font-size: 11px;
-      font-weight: var(--font-weight-medium);
+      font-weight: var(--bf-appearance-token-font-weight-medium);
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
     }
     .bf-card,
     .bf-panel {
       position: relative;
       display: flex;
       flex-direction: column;
-      gap: var(--size-gap-3);
+      gap: var(--bf-appearance-token-size-gap-3);
       width: 100%;
-      padding: var(--size-gap-4);
-      border-radius: var(--size-radius-lg);
-      background: var(--color-bg-secondary);
-      border: 1px solid var(--border-subtle);
-      box-shadow: var(--shadow-sm);
+      padding: var(--bf-appearance-token-size-gap-4);
+      border-radius: var(--bf-appearance-token-size-radius-lg);
+      background: var(--bf-appearance-token-color-bg-secondary);
+      border: 1px solid var(--bf-appearance-token-border-subtle);
+      box-shadow: var(--bf-appearance-token-shadow-sm);
       overflow: hidden;
     }
     .bf-panel {
-      background: color-mix(in srgb, var(--color-bg-secondary) 74%, var(--element-bg-subtle));
+      background: color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 74%, var(--bf-appearance-token-element-bg-subtle));
     }
     [data-bitfun-prompt-selected="true"],
     [data-bitfun-context-selected="true"] {
       position: relative;
-      outline: 2px solid var(--color-accent-500);
+      outline: 2px solid var(--bf-appearance-token-color-accent-500);
       outline-offset: 2px;
       box-shadow:
-        0 0 0 4px color-mix(in srgb, var(--color-accent-500) 18%, transparent),
-        0 10px 24px color-mix(in srgb, var(--color-accent-500) 14%, transparent);
-      border-radius: min(var(--size-radius-base), 12px);
+        0 0 0 4px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 18%, transparent),
+        0 10px 24px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent);
+      border-radius: min(var(--bf-appearance-token-size-radius-base), 12px);
       transition: outline-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
       transform: translateY(-1px);
     }
     .bf-card-accent {
-      background: color-mix(in srgb, var(--color-accent-500) 10%, var(--color-bg-secondary));
-      border-color: color-mix(in srgb, var(--color-accent-500) 30%, var(--border-subtle));
+      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, var(--bf-appearance-token-color-bg-secondary));
+      border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 30%, var(--bf-appearance-token-border-subtle));
     }
     .bf-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
-      gap: var(--size-gap-3);
+      gap: var(--bf-appearance-token-size-gap-3);
       width: 100%;
       min-width: 0;
     }
@@ -290,27 +288,27 @@ ${createWidgetThemeCompatibilityAliasCss()}
       flex-direction: column;
       gap: 6px;
       min-width: 0;
-      padding: var(--size-gap-3);
-      border-radius: var(--size-radius-base);
-      background: var(--element-bg-base);
-      border: 1px solid var(--border-subtle);
+      padding: var(--bf-appearance-token-size-gap-3);
+      border-radius: var(--bf-appearance-token-size-radius-base);
+      background: var(--bf-appearance-token-element-bg-base);
+      border: 1px solid var(--bf-appearance-token-border-subtle);
     }
     .bf-kpi-label {
       font-size: 11px;
-      font-weight: var(--font-weight-medium);
+      font-weight: var(--bf-appearance-token-font-weight-medium);
       text-transform: uppercase;
       letter-spacing: 0.08em;
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
     }
     .bf-kpi-value {
-      font-size: var(--font-size-2xl);
-      font-weight: var(--font-weight-semibold);
+      font-size: var(--bf-appearance-token-font-size-2xl);
+      font-weight: var(--bf-appearance-token-font-weight-semibold);
       line-height: 1.1;
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
     }
     .bf-kpi-meta {
-      font-size: var(--font-size-xs);
-      color: var(--color-text-secondary);
+      font-size: var(--bf-appearance-token-font-size-xs);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
     .bf-badge {
       display: inline-flex;
@@ -320,32 +318,32 @@ ${createWidgetThemeCompatibilityAliasCss()}
       min-height: 24px;
       padding: 0 10px;
       border-radius: 999px;
-      background: var(--element-bg-base);
-      border: 1px solid var(--border-subtle);
+      background: var(--bf-appearance-token-element-bg-base);
+      border: 1px solid var(--bf-appearance-token-border-subtle);
       font-size: 12px;
-      font-weight: var(--font-weight-medium);
-      color: var(--color-text-secondary);
+      font-weight: var(--bf-appearance-token-font-weight-medium);
+      color: var(--bf-appearance-token-color-text-secondary);
       white-space: nowrap;
     }
     .bf-badge-accent {
-      background: color-mix(in srgb, var(--color-accent-500) 14%, transparent);
-      border-color: color-mix(in srgb, var(--color-accent-500) 28%, var(--border-subtle));
-      color: var(--color-accent-500);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent);
+      border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 28%, var(--bf-appearance-token-border-subtle));
+      color: var(--bf-appearance-token-color-accent-500);
     }
     .bf-badge-success {
-      background: color-mix(in srgb, var(--color-success) 14%, transparent);
-      border-color: color-mix(in srgb, var(--color-success) 28%, var(--border-subtle));
-      color: var(--color-success);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 14%, transparent);
+      border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 28%, var(--bf-appearance-token-border-subtle));
+      color: var(--bf-appearance-token-color-success);
     }
     .bf-badge-warning {
-      background: color-mix(in srgb, var(--color-warning) 14%, transparent);
-      border-color: color-mix(in srgb, var(--color-warning) 28%, var(--border-subtle));
-      color: var(--color-warning);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 14%, transparent);
+      border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 28%, var(--bf-appearance-token-border-subtle));
+      color: var(--bf-appearance-token-color-warning);
     }
     .bf-badge-error {
-      background: color-mix(in srgb, var(--color-error) 14%, transparent);
-      border-color: color-mix(in srgb, var(--color-error) 28%, var(--border-subtle));
-      color: var(--color-error);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 14%, transparent);
+      border-color: color-mix(in srgb, var(--bf-appearance-token-color-error) 28%, var(--bf-appearance-token-border-subtle));
+      color: var(--bf-appearance-token-color-error);
     }
     .bf-button {
       display: inline-flex;
@@ -355,28 +353,28 @@ ${createWidgetThemeCompatibilityAliasCss()}
       min-height: 32px;
       max-width: 100%;
       padding: 0 12px;
-      border: 1px solid var(--border-base);
-      border-radius: var(--size-radius-sm);
-      background: var(--element-bg-base);
-      color: var(--color-text-secondary);
+      border: 1px solid var(--bf-appearance-token-border-base);
+      border-radius: var(--bf-appearance-token-size-radius-sm);
+      background: var(--bf-appearance-token-element-bg-base);
+      color: var(--bf-appearance-token-color-text-secondary);
       text-decoration: none;
       white-space: nowrap;
-      transition: all var(--motion-fast) var(--easing-standard);
+      transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
     }
     .bf-button:hover {
-      background: var(--element-bg-medium);
-      color: var(--color-text-primary);
-      border-color: var(--border-medium);
+      background: var(--bf-appearance-token-element-bg-medium);
+      color: var(--bf-appearance-token-color-text-primary);
+      border-color: var(--bf-appearance-token-border-medium);
     }
     .bf-button-primary {
-      background: var(--color-accent-500);
-      color: var(--color-static-white);
+      background: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-appearance-token-color-static-white);
       border-color: transparent;
-      box-shadow: var(--shadow-xs);
+      box-shadow: var(--bf-appearance-token-shadow-xs);
     }
     .bf-button-primary:hover {
-      background: var(--color-accent-600);
-      color: var(--color-static-white);
+      background: var(--bf-appearance-token-color-accent-600);
+      color: var(--bf-appearance-token-color-static-white);
       border-color: transparent;
     }
     .bf-input,
@@ -386,11 +384,11 @@ ${createWidgetThemeCompatibilityAliasCss()}
       max-width: 100%;
       min-width: 0;
       padding: 0 12px;
-      border-radius: var(--size-radius-sm);
-      border: 1px solid var(--border-base);
-      background: var(--element-bg-subtle);
-      color: var(--color-text-primary);
-      transition: all var(--motion-fast) var(--easing-standard);
+      border-radius: var(--bf-appearance-token-size-radius-sm);
+      border: 1px solid var(--bf-appearance-token-border-base);
+      background: var(--bf-appearance-token-element-bg-subtle);
+      color: var(--bf-appearance-token-color-text-primary);
+      transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
     }
     .bf-input,
     .bf-select {
@@ -404,14 +402,14 @@ ${createWidgetThemeCompatibilityAliasCss()}
     }
     .bf-input::placeholder,
     .bf-textarea::placeholder {
-      color: color-mix(in srgb, var(--color-text-muted) 55%, transparent);
+      color: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 55%, transparent);
     }
     .bf-input:focus,
     .bf-textarea:focus,
     .bf-select:focus {
       outline: none;
-      border-color: var(--color-accent-500);
-      background: var(--element-bg-soft);
+      border-color: var(--bf-appearance-token-color-accent-500);
+      background: var(--bf-appearance-token-element-bg-soft);
     }
     .bf-list {
       display: flex;
@@ -423,25 +421,25 @@ ${createWidgetThemeCompatibilityAliasCss()}
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      gap: var(--size-gap-3);
-      padding: var(--size-gap-3);
-      border-radius: var(--size-radius-base);
-      background: var(--element-bg-subtle);
+      gap: var(--bf-appearance-token-size-gap-3);
+      padding: var(--bf-appearance-token-size-gap-3);
+      border-radius: var(--bf-appearance-token-size-radius-base);
+      background: var(--bf-appearance-token-element-bg-subtle);
       border: 1px solid transparent;
     }
     .bf-list-item[data-file-path]:hover,
     .bf-list-item[data-bitfun-open-file]:hover,
     .bf-card[data-file-path]:hover,
     .bf-panel[data-file-path]:hover {
-      border-color: color-mix(in srgb, var(--color-accent-500) 35%, var(--border-subtle));
-      background: color-mix(in srgb, var(--element-bg-base) 76%, var(--color-accent-500));
+      border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 35%, var(--bf-appearance-token-border-subtle));
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-base) 76%, var(--bf-appearance-token-color-accent-500));
     }
     .bf-table-wrap {
       width: 100%;
       overflow-x: auto;
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--size-radius-base);
-      background: var(--color-bg-secondary);
+      border: 1px solid var(--bf-appearance-token-border-subtle);
+      border-radius: var(--bf-appearance-token-size-radius-base);
+      background: var(--bf-appearance-token-color-bg-secondary);
     }
     .bf-table {
       width: 100%;
@@ -453,15 +451,15 @@ ${createWidgetThemeCompatibilityAliasCss()}
       padding: 10px 12px;
       text-align: left;
       vertical-align: top;
-      border-bottom: 1px solid var(--border-subtle);
-      color: var(--color-text-secondary);
+      border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+      color: var(--bf-appearance-token-color-text-secondary);
       font-size: 13px;
       word-break: break-word;
     }
     .bf-table th {
       font-size: 12px;
-      font-weight: var(--font-weight-medium);
-      color: var(--color-text-muted);
+      font-weight: var(--bf-appearance-token-font-weight-medium);
+      color: var(--bf-appearance-token-color-text-muted);
       text-transform: uppercase;
       letter-spacing: 0.04em;
     }
@@ -472,42 +470,42 @@ ${createWidgetThemeCompatibilityAliasCss()}
       justify-content: center;
       gap: 8px;
       min-height: 140px;
-      padding: var(--size-gap-5);
-      border-radius: var(--size-radius-lg);
-      border: 1px dashed var(--border-base);
-      background: color-mix(in srgb, var(--element-bg-subtle) 80%, transparent);
-      color: var(--color-text-muted);
+      padding: var(--bf-appearance-token-size-gap-5);
+      border-radius: var(--bf-appearance-token-size-radius-lg);
+      border: 1px dashed var(--bf-appearance-token-border-base);
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 80%, transparent);
+      color: var(--bf-appearance-token-color-text-muted);
       text-align: center;
     }
     .bf-divider {
       width: 100%;
       height: 1px;
-      background: var(--border-subtle);
+      background: var(--bf-appearance-token-border-subtle);
       border: 0;
       margin: 0;
     }
     .bf-code {
       padding: 2px 6px;
       border-radius: 6px;
-      background: var(--element-bg-base);
-      color: var(--color-text-primary);
-      font-family: var(--font-family-mono);
+      background: var(--bf-appearance-token-element-bg-base);
+      color: var(--bf-appearance-token-color-text-primary);
+      font-family: var(--bf-appearance-token-font-family-mono);
       font-size: 12px;
     }
     .bf-mono {
-      font-family: var(--font-family-mono);
+      font-family: var(--bf-appearance-token-font-family-mono);
     }
     @media (max-width: 560px) {
       .bf-card,
       .bf-panel,
       .bf-toolbar {
-        padding: var(--size-gap-3);
+        padding: var(--bf-appearance-token-size-gap-3);
       }
       .bf-grid {
         grid-template-columns: 1fr;
       }
       .bf-title {
-        font-size: var(--font-size-base);
+        font-size: var(--bf-appearance-token-font-size-base);
       }
     }
     @keyframes bitfunWidgetFadeIn {
@@ -736,26 +734,26 @@ ${createWidgetThemeCompatibilityAliasCss()}
         scheduleResize();
       }
 
-      function applyTheme(theme) {
-        if (!theme) return;
+      function applyAppearance(appearance) {
+        if (!appearance) return;
         var root = document.documentElement;
         if (!root) return;
-        if (theme.id) root.setAttribute('data-theme', String(theme.id));
-        if (theme.type) root.setAttribute('data-theme-type', String(theme.type));
-        var vars = theme.vars || {};
+        if (appearance.id) root.setAttribute('data-bf-appearance', String(appearance.id));
+        if (appearance.mode) root.setAttribute('data-bf-appearance-mode', String(appearance.mode));
+        var vars = appearance.vars || {};
         Object.keys(vars).forEach(function (name) {
           root.style.setProperty(name, String(vars[name]));
         });
         var body = document.body;
         if (body) {
-          body.style.background = vars['--color-bg-primary'] || 'transparent';
+          body.style.background = vars['--bf-appearance-token-color-bg-primary'] || 'transparent';
           body.style.color =
-            vars['--color-text-primary'] ||
-            getComputedStyle(root).getPropertyValue('--color-text-primary') ||
+            vars['--bf-appearance-token-color-text-primary'] ||
+            getComputedStyle(root).getPropertyValue('--bf-appearance-token-color-text-primary') ||
             body.style.color;
           body.style.fontFamily =
-            vars['--font-family-sans'] ||
-            getComputedStyle(root).getPropertyValue('--font-family-sans') ||
+            vars['--bf-appearance-token-font-family-sans'] ||
+            getComputedStyle(root).getPropertyValue('--bf-appearance-token-font-family-sans') ||
             body.style.fontFamily;
         }
       }
@@ -868,7 +866,7 @@ ${createWidgetThemeCompatibilityAliasCss()}
         }
         if (data.type !== 'bitfun-widget:update') return;
         currentWidgetId = data.widgetId || currentWidgetId || '';
-        applyTheme(data.theme);
+        applyAppearance(data.appearance);
         setContent(String(data.html || ''), Boolean(data.runScripts));
       });
 
@@ -907,8 +905,8 @@ export const GenerativeWidgetFrame: React.FC<GenerativeWidgetFrameProps> = ({
   const [isLoaded, setIsLoaded] = useState(false);
   const [frameHeight, setFrameHeight] = useState(160);
   const lastExecutedHtmlRef = useRef('');
-  const [themePayload, setThemePayload] = useState<WidgetThemePayload | null>(() =>
-    readWidgetThemePayload(),
+  const [appearancePayload, setAppearancePayload] = useState<WidgetAppearancePayload | null>(() =>
+    readWidgetAppearancePayload(),
   );
 
   const normalizedCode = useMemo(() => widgetCode || '', [widgetCode]);
@@ -988,12 +986,12 @@ export const GenerativeWidgetFrame: React.FC<GenerativeWidgetFrameProps> = ({
   }, []);
 
   useEffect(() => {
-    const updateTheme = () => {
-      setThemePayload(readWidgetThemePayload());
+    const updateAppearance = () => {
+      setAppearancePayload(readWidgetAppearancePayload());
     };
 
-    updateTheme();
-    const unsubscribe = themeService.on('theme:after-change', updateTheme);
+    updateAppearance();
+    const unsubscribe = widgetAppearanceAdapter.subscribe(updateAppearance);
     return () => {
       unsubscribe?.();
     };
@@ -1011,7 +1009,7 @@ export const GenerativeWidgetFrame: React.FC<GenerativeWidgetFrameProps> = ({
         widgetId,
         title,
         html: normalizedCode,
-        theme: themePayload,
+        appearance: appearancePayload,
         runScripts: shouldRunScripts,
       },
       '*',
@@ -1020,7 +1018,7 @@ export const GenerativeWidgetFrame: React.FC<GenerativeWidgetFrameProps> = ({
     if (shouldRunScripts) {
       lastExecutedHtmlRef.current = normalizedCode;
     }
-  }, [executeScripts, isLoaded, normalizedCode, themePayload, title, widgetId]);
+  }, [appearancePayload, executeScripts, isLoaded, normalizedCode, title, widgetId]);
 
   useEffect(() => {
     if (!isLoaded || !iframeRef.current?.contentWindow) {
@@ -1039,12 +1037,16 @@ export const GenerativeWidgetFrame: React.FC<GenerativeWidgetFrameProps> = ({
   return (
     <div
       className={`bitfun-generative-widget-frame ${className}`.trim()}
+      data-bf-component="generative-widget"
+      data-bf-part="frame"
       style={{ height: `${frameHeight}px` }}
     >
       <iframe
         ref={iframeRef}
         title={title || 'Generative widget'}
         className="bitfun-generative-widget-frame__iframe"
+        data-bf-component="generative-widget"
+        data-bf-part="iframe"
         style={{ width: '100%', minWidth: '100%' }}
         sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
         src="about:blank"

@@ -7,12 +7,15 @@ use crate::{
     ExternalSourceDiscoveryRequest, ExternalSourceDiscoveryResult, ExternalSubagentCoordinator,
     ExternalSubagentDiscoveryRequest, ExternalSubagentDiscoveryResult, ExternalToolCoordinator,
     ExternalToolDiscoveryRequest, ExternalToolDiscoveryResult,
+    ExternalWorkspaceReferenceCoordinator, ExternalWorkspaceReferenceDiscoveryRequest,
+    ExternalWorkspaceReferenceDiscoveryResult,
 };
 use bitfun_product_domains::external_sources::{
     ExternalMcpRevisionKey, ExternalMcpSourceProvider, ExternalSourceContext,
     ExternalToolSourceProvider, PromptCommandSourceProvider,
 };
 use bitfun_product_domains::external_subagents::ExternalSubagentSourceProvider;
+use bitfun_product_domains::workspace_references::ExternalWorkspaceReferenceSourceProvider;
 use std::collections::BTreeSet;
 use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -23,10 +26,12 @@ pub struct ExternalSourceControlPlane {
     tools: Mutex<ExternalToolCoordinator>,
     subagents: Mutex<ExternalSubagentCoordinator>,
     mcp: Mutex<ExternalMcpCoordinator>,
+    workspace_references: Mutex<ExternalWorkspaceReferenceCoordinator>,
     command_lane: DiscoveryLane<ExternalSourceDiscoveryRequest>,
     tool_lane: DiscoveryLane<ExternalToolDiscoveryRequest>,
     subagent_lane: DiscoveryLane<ExternalSubagentDiscoveryRequest>,
     mcp_lane: DiscoveryLane<ExternalMcpDiscoveryRequest>,
+    workspace_reference_lane: DiscoveryLane<ExternalWorkspaceReferenceDiscoveryRequest>,
 }
 
 impl fmt::Debug for ExternalSourceControlPlane {
@@ -46,6 +51,10 @@ impl fmt::Debug for ExternalSourceControlPlane {
                 &self.subagents(|coordinator| format!("{coordinator:?}")),
             )
             .field("mcp", &self.mcp(|coordinator| format!("{coordinator:?}")))
+            .field(
+                "workspace_references",
+                &self.workspace_references(|coordinator| format!("{coordinator:?}")),
+            )
             .finish_non_exhaustive()
     }
 }
@@ -58,6 +67,7 @@ impl ExternalSourceControlPlane {
         tool_providers: Vec<Arc<dyn ExternalToolSourceProvider>>,
         subagent_providers: Vec<Arc<dyn ExternalSubagentSourceProvider>>,
         mcp_providers: Vec<Arc<dyn ExternalMcpSourceProvider>>,
+        workspace_reference_providers: Vec<Arc<dyn ExternalWorkspaceReferenceSourceProvider>>,
     ) -> Result<Self, String> {
         Ok(Self {
             commands: Mutex::new(ExternalSourceCoordinator::new(
@@ -73,14 +83,19 @@ impl ExternalSourceControlPlane {
                 subagent_providers,
             )?),
             mcp: Mutex::new(ExternalMcpCoordinator::new(
-                context,
+                context.clone(),
                 mcp_revision_key,
                 mcp_providers,
+            )?),
+            workspace_references: Mutex::new(ExternalWorkspaceReferenceCoordinator::new(
+                context,
+                workspace_reference_providers,
             )?),
             command_lane: DiscoveryLane::new(),
             tool_lane: DiscoveryLane::new(),
             subagent_lane: DiscoveryLane::new(),
             mcp_lane: DiscoveryLane::new(),
+            workspace_reference_lane: DiscoveryLane::new(),
         })
     }
 
@@ -142,11 +157,35 @@ impl ExternalSourceControlPlane {
         update(&mut lock(&self.mcp, "MCP"))
     }
 
+    pub fn workspace_references<T>(
+        &self,
+        read: impl FnOnce(&ExternalWorkspaceReferenceCoordinator) -> T,
+    ) -> T {
+        read(&lock(&self.workspace_references, "workspace reference"))
+    }
+
+    #[doc(hidden)]
+    pub fn lock_workspace_references(
+        &self,
+    ) -> MutexGuard<'_, ExternalWorkspaceReferenceCoordinator> {
+        lock(&self.workspace_references, "workspace reference")
+    }
+
+    pub fn workspace_references_mut<T>(
+        &self,
+        update: impl FnOnce(&mut ExternalWorkspaceReferenceCoordinator) -> T,
+    ) -> T {
+        update(&mut lock(&self.workspace_references, "workspace reference"))
+    }
+
     pub fn replace_suppressed_sources(&self, sources: BTreeSet<String>) {
         self.commands_mut(|coordinator| coordinator.replace_suppressed_sources(sources.clone()));
         self.tools_mut(|coordinator| coordinator.replace_suppressed_sources(sources.clone()));
         self.subagents_mut(|coordinator| coordinator.replace_suppressed_sources(sources.clone()));
-        self.mcp_mut(|coordinator| coordinator.replace_suppressed_sources(sources));
+        self.mcp_mut(|coordinator| coordinator.replace_suppressed_sources(sources.clone()));
+        self.workspace_references_mut(|coordinator| {
+            coordinator.replace_suppressed_sources(sources)
+        });
     }
 
     pub async fn discover_commands(
@@ -275,6 +314,46 @@ impl ExternalSourceControlPlane {
         completed: CompletedDeferredDiscovery<ExternalMcpDiscoveryResult>,
     ) -> Option<ExternalMcpDiscoveryResult> {
         self.mcp_lane.finalize_deferred(completed).await
+    }
+
+    pub async fn discover_workspace_references(
+        &self,
+        requests: Vec<ExternalWorkspaceReferenceDiscoveryRequest>,
+        timeout: Duration,
+    ) -> DiscoveryBatch<ExternalWorkspaceReferenceDiscoveryResult> {
+        self.workspace_reference_lane
+            .discover(requests, timeout)
+            .await
+    }
+
+    pub async fn complete_workspace_reference(
+        &self,
+        deferred: DeferredDiscovery<ExternalWorkspaceReferenceDiscoveryResult>,
+    ) -> Option<(
+        CompletedDeferredDiscovery<ExternalWorkspaceReferenceDiscoveryResult>,
+        Option<DeferredDiscovery<ExternalWorkspaceReferenceDiscoveryResult>>,
+    )> {
+        self.workspace_reference_lane
+            .complete_deferred(deferred)
+            .await
+    }
+
+    pub async fn resume_abandoned_workspace_reference(
+        &self,
+        deferred: DeferredDiscovery<ExternalWorkspaceReferenceDiscoveryResult>,
+    ) -> Option<DeferredDiscovery<ExternalWorkspaceReferenceDiscoveryResult>> {
+        self.workspace_reference_lane
+            .resume_abandoned(deferred)
+            .await
+    }
+
+    pub async fn finalize_workspace_reference(
+        &self,
+        completed: CompletedDeferredDiscovery<ExternalWorkspaceReferenceDiscoveryResult>,
+    ) -> Option<ExternalWorkspaceReferenceDiscoveryResult> {
+        self.workspace_reference_lane
+            .finalize_deferred(completed)
+            .await
     }
 }
 

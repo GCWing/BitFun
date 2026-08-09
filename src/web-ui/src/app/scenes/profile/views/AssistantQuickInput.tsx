@@ -92,8 +92,8 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
     : t('input.placeholder');
 
   return (
-    <div className="aqi">
-      <div className="aqi__box">
+    <div data-bf-component="assistant-quick-input" data-bf-part="root" className="aqi">
+      <div className="aqi__box" data-bf-component="assistant-quick-input" data-bf-part="box">
         <Textarea
           className="aqi__embed"
           value={value}
@@ -107,10 +107,10 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
           autoResize
           variant="default"
         />
-        <div className="aqi__footer">
-          <div className="aqi__footer-left">
+      <div className="aqi__footer" data-bf-component="assistant-quick-input" data-bf-part="footer">
+        <div className="aqi__footer-left" data-bf-component="assistant-quick-input" data-bf-part="footerLeft">
             <ModelSelector currentMode="Claw" className="aqi__model" />
-            <span className="aqi__hint">
+          <span className="aqi__hint" data-bf-component="assistant-quick-input" data-bf-part="hint">
               {t('input.sendHint')}
             </span>
           </div>

@@ -142,8 +142,7 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 | Workspace create ACP session | `nav-workspace-menu-create-acp-session` | Repeated item. Pair with `data-acp-client-id`. |
 | Workspace create init session | `nav-workspace-menu-create-init-session` | Starts AGENTS.md/init session. |
 | Workspace related paths | `nav-workspace-menu-related-paths` | Opens related paths dialog. |
-| Workspace new worktree | `nav-workspace-menu-new-worktree` | Opens worktree creation dialog. |
-| Workspace delete worktree | `nav-workspace-menu-delete-worktree` | Deletes linked worktree workspace. |
+| Session worktree toggle | `chat-input-worktree-toggle` | Chat input strip. Toggles worktree isolation for the current session. Pair with `data-worktree-enabled`. |
 | Workspace copy path | `nav-workspace-menu-copy-path` | Copies workspace path. |
 | Workspace reveal | `nav-workspace-menu-reveal` | Reveals workspace in file explorer. |
 | Workspace close | `nav-workspace-menu-close` | Closes workspace. |
@@ -190,7 +189,7 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 | Chat input start BTW button | `chat-input-boost-start-btw` | Starts the BTW flow when present. |
 | Chat model selector button | `chat-model-selector-btn` | Opens the session model selector. |
 | Chat model selector menu | `chat-model-selector-menu` | Model selector dropdown root. |
-| Chat model selector option | `chat-model-selector-option` | Repeated item. Pair with `data-option-kind`, `data-model-role`, `data-model-id`, `data-model-name`, `data-provider-id`, and `data-selected`. Alias entries keep `data-model-id` as `auto` / `primary` / `fast`; `primary-alias` and `fast-alias` also expose `data-resolved-model-id`, `data-resolved-model-name`, and `data-resolved-provider-id`. |
+| Chat model selector option | `chat-model-selector-option` | Repeated item. Pair with `data-model-id`, `data-model-name`, and `data-selected`. |
 | Chat user message | `chat-user-message` | Repeated user message. Pair with `data-turn-id`, `data-status`, and `data-failed`. |
 | Chat user message content | `chat-user-message-content` | User message text content. Pair with `data-turn-id`. |
 | Chat assistant message | `chat-assistant-message` | Repeated model round container. Pair with `data-turn-id`, `data-round-id`, `data-status`, `data-model-id`, `data-model-alias`, and `data-streaming`. |
@@ -237,28 +236,25 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 | Model list | `settings-model-list` | Container for configured model rows. |
 | Create first model config button | `settings-model-create-first-config-btn` | Starts the first model provider setup from the empty state. |
 | Custom model config button | `settings-model-custom-config-btn` | Starts custom provider configuration. Includes `data-provider-id="custom"`. |
-| Model provider option | `settings-model-provider-option` | Repeated provider card. Pair with `data-provider-id`, for example `openbitfun`. |
+| Model provider option | `settings-model-provider-option` | Repeated provider row. Pair with `data-provider-id`, for example `openbitfun`. The resting list is truncated, so reach a provider outside it through the search field or the expand button below. |
+| Model provider search | `settings-model-provider-search` | Filters the preset provider list by provider name, id, or model name. |
+| Model provider expand button | `settings-model-provider-expand-btn` | Expands the truncated preset provider list to every provider, and collapses it again. |
 | Model provider name input | `settings-model-provider-name-input` | Provider/config display name field, such as a mock LLM provider name. |
 | Model API key input | `settings-model-api-key-input` | API key field in the model configuration form. Do not hardcode real keys in tests; load them from local config. |
 | Model base URL input | `settings-model-base-url-input` | API base URL field for custom/OpenAI-compatible providers. |
 | Model request format select | `settings-model-request-format-select` | Request format selector, for example OpenAI-compatible vs Anthropic. |
 | Model select button | `settings-model-select-btn` | Opens the model selection dropdown. |
 | Model selection menu | `settings-model-select-menu` | Model selection dropdown root. |
-| Model selection option | `settings-model-option` | Repeated dropdown item. Pair with `data-option-kind="model"`, `data-model-role="normal"`, `data-model-state="selectable"`, `data-model-source`, `data-model-id`, `data-model-name`, `data-provider-id`, and `data-selected`. |
+| Model selection option | `settings-model-option` | Repeated dropdown item. Pair with `data-model-id`, `data-model-name`, and `data-selected`. |
 | Manual model name input | `settings-model-manual-name-input` | Manual/custom model name entry field. |
 | Add custom model button | `settings-model-add-custom-btn` | Adds the manual model name into the selected model list. |
 | Selected model list | `settings-model-selected-list` | Selected model draft list. Includes `data-selected-count`. |
 | Selected model empty state | `settings-model-selected-list-empty` | Empty selected model draft state. Includes `data-selected-count="0"`. |
-| Selected model row | `settings-model-selected-row` | Repeated selected model draft. Pair with `data-option-kind="selected-draft"`, `data-model-role="normal"`, `data-model-state="draft"`, `data-model-id`, `data-model-name`, `data-provider-id`, `data-config-id`, `data-selected`, and `data-expanded`. |
-| Selected model remove button | `settings-model-selected-remove-btn` | Removes a selected model draft. Pair with `data-option-kind="selected-draft"`, `data-model-role="normal"`, `data-model-state="draft"`, `data-model-id`, `data-model-name`, `data-provider-id`, and `data-config-id`. |
+| Selected model row | `settings-model-selected-row` | Repeated selected model draft. Pair with `data-model-id`, `data-model-name`, `data-selected`, and `data-expanded`. |
+| Selected model remove button | `settings-model-selected-remove-btn` | Removes a selected model draft. Pair with `data-model-id` and `data-model-name`. |
 | Model save button | `settings-model-save-btn` | Saves the model provider/configuration form. |
-| Model row | `settings-model-row` | Repeated saved model row. Pair with `data-option-kind="saved-model"`, `data-model-role="normal"`, `data-model-state="saved"`, `data-model-id`, `data-model-name`, `data-provider-id`, and `data-config-id`. |
-| Model test status | `settings-model-test-status` | Repeated saved model test status. Pair with `data-option-kind="saved-model-status"`, `data-model-role="normal"`, `data-model-state="saved"`, `data-model-id`, `data-model-name`, `data-provider-id`, `data-config-id`, and `data-status` (`success` or `error`). |
-
-Model locator guidance:
-- Prefer `data-option-kind` plus `data-model-role` to distinguish alias entries from real model entries. Use `auto`, `primary-alias`, `fast-alias`, `acp-model`, and `model` in chat instead of matching by visible text.
-- Treat `data-model-name` as display metadata, not as a unique key by itself. For unique targeting, combine it with `data-model-id`, `data-provider-id`, or the alias-only `data-resolved-model-id`.
-- In settings flows, use `data-model-state` to separate selectable dropdown options, selected drafts, saved configs, and saved test-status nodes before filtering by model id or provider.
+| Model row | `settings-model-row` | Repeated saved model row. Pair with `data-model-id`, `data-model-name`, and `data-config-id`. |
+| Model test status | `settings-model-test-status` | Repeated saved model test status. Pair with `data-model-id`, `data-model-name`, `data-config-id`, and `data-status` (`success` or `error`). |
 
 ## Settings Appearance
 
@@ -270,9 +266,9 @@ Model locator guidance:
 | Appearance language select | `appearance-language-select` | Language select trigger in Appearance settings. |
 | Appearance language option | `appearance-language-option` | Repeated language dropdown option. Includes `data-locale-id` and Select-provided `data-selected`. |
 | Appearance theme select | `appearance-theme-select` | Theme select trigger in Appearance settings. |
-| Appearance theme option | `appearance-theme-option` | Repeated theme dropdown option. Includes `data-theme-id` and Select-provided `data-selected`. |
-| Appearance font size group | `appearance-font-size-group` | UI font preset button group root for the Appearance page persistence flow. |
-| Appearance font size option | `appearance-font-size-option` | Repeated clickable UI font size option. Includes `data-size-level`, legacy `data-font-level`, `data-selected`, and `aria-pressed`. |
+| Appearance palette option | `appearance-palette-option` | Repeated appearance dropdown option. Includes `data-appearance-id` and Select-provided `data-selected`. |
+| Appearance UI font level group | `appearance-ui-font-level-group` | UI font preset button group root. |
+| Appearance UI font level button | `appearance-ui-font-level-btn` | Repeated preset button. Includes `data-font-level` and `data-selected`. |
 | Appearance UI font custom controls | `appearance-ui-font-custom-controls` | Custom UI font px controls root, rendered when custom is active. |
 | Appearance UI font custom input | `appearance-ui-font-custom-input` | Custom UI font px number input. Includes `data-font-level="custom"`. |
 | Appearance UI font custom step minus | `appearance-ui-font-custom-step-minus` | Custom UI font px decrement button. |

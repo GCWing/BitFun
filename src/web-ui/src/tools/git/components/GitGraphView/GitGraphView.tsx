@@ -7,14 +7,14 @@ import { GitBranch, ChevronUp, ChevronDown } from 'lucide-react';
 import { Search } from '@/component-library';
 import { gitAPI } from '@/infrastructure/api';
 import type { GitGraph, GitGraphNode } from '@/infrastructure/api/service-api/GitAPI';
-import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
+import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 import { 
   GitGraphViewProps, 
   GitGraphViewConfig,
   GitGraphInteractionState 
 } from '../../types/graph';
 import { i18nService } from '@/infrastructure/i18n';
-import { useThemeStore } from '@/infrastructure/theme/store/themeStore';
+import { useAppearance } from '@/infrastructure/appearance';
 import { createLogger } from '@/shared/utils/logger';
 import './GitGraphView.scss';
 
@@ -26,7 +26,7 @@ const DEFAULT_CONFIG: GitGraphViewConfig = {
   rowHeight: 40,
   nodeSize: 5,
   lineWidth: 1.5,
-  colors: [...UI_EXCEPTION_ACCENTS.gitGraphLane],
+  colors: [...APPEARANCE_DOMAIN_TOKENS.gitGraphLane],
   showAvatar: false,
   showRelativeTime: true,
 };
@@ -41,7 +41,7 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
   className = ''
 }) => {
   const { t } = useTranslation('panels/git');
-  const themeId = useThemeStore(state => state.currentThemeId);
+  const { current: appearance } = useAppearance();
   const viewConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
 
 
@@ -177,7 +177,7 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
       const y = index * viewConfig.rowHeight!;
       drawNodeWithInfo(ctx, node, y, viewConfig, { isSelected: false, isHovered: false }, resolveCanvasColor);
     });
-  }, [graphData, viewConfig, themeId]);
+  }, [graphData, viewConfig, appearance?.revision]);
 
 
 
@@ -242,8 +242,8 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
 
   if (loading) {
     return (
-      <div className={`git-graph-view git-graph-view--loading ${className}`}>
-        <div className="git-graph-view__loading">
+      <div className={`git-graph-view git-graph-view--loading ${className}`} data-bf-component="git-tool" data-bf-part="graphRoot" data-bf-state="loading">
+        <div className="git-graph-view__loading" data-bf-component="git-tool" data-bf-part="graphStatus">
           <div className="git-graph-view__spinner" />
           <p>{t('graph.loading')}</p>
         </div>
@@ -253,8 +253,8 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
 
   if (error) {
     return (
-      <div className={`git-graph-view git-graph-view--error ${className}`}>
-        <div className="git-graph-view__error">
+      <div className={`git-graph-view git-graph-view--error ${className}`} data-bf-component="git-tool" data-bf-part="graphRoot" data-bf-state="error">
+        <div className="git-graph-view__error" data-bf-component="git-tool" data-bf-part="graphStatus">
           <p>{t('graph.loadFailedWithMessage', { error })}</p>
           <button onClick={loadGraphData}>{t('common.retry')}</button>
         </div>
@@ -264,8 +264,8 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
 
   if (!graphData || graphData.nodes.length === 0) {
     return (
-      <div className={`git-graph-view git-graph-view--empty ${className}`}>
-        <div className="git-graph-view__empty">
+      <div className={`git-graph-view git-graph-view--empty ${className}`} data-bf-component="git-tool" data-bf-part="graphRoot" data-bf-state="empty">
+        <div className="git-graph-view__empty" data-bf-component="git-tool" data-bf-part="graphStatus">
           <p>{t('graph.empty')}</p>
         </div>
       </div>
@@ -276,8 +276,8 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
   const totalHeight = graphData.nodes.length * viewConfig.rowHeight!;
 
   return (
-    <div className={`git-graph-view ${className}`}>
-      <div className="git-graph-view__header">
+    <div className={`git-graph-view ${className}`} data-bf-component="git-tool" data-bf-part="graphRoot">
+      <div className="git-graph-view__header" data-bf-component="git-tool" data-bf-part="graphHeader">
         <div className="git-graph-view__header-left">
           <h3>{t('graph.title')}</h3>
           {graphData.currentBranch && (
@@ -346,11 +346,15 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
       <div 
         className="git-graph-view__content" 
         ref={containerRef}
+        data-bf-component="git-tool"
+        data-bf-part="graphContent"
       >
         <div style={{ height: totalHeight, width: graphWidth, position: 'relative' }}>
           <canvas
             ref={canvasRef}
             className="git-graph-view__canvas-full"
+            data-bf-component="git-tool"
+            data-bf-part="graphCanvas"
             style={{ 
               width: graphWidth,
               height: totalHeight,
@@ -438,7 +442,7 @@ function drawNodeWithInfo(
   const centerY = y + rowHeight / 2;
   const resolveLaneColor = (lane: number) => ensureMinimumContrast(
     resolveCanvasColor(colors[lane % colors.length]),
-    resolveCanvasColor('var(--color-bg-primary)'),
+    resolveCanvasColor('var(--bf-appearance-token-color-bg-primary)'),
     GIT_GRAPH_LANE_MIN_CONTRAST
   );
   const color = resolveLaneColor(node.lane);
@@ -525,7 +529,7 @@ function drawNodeWithInfo(
   
 
   if (state.isSelected) {
-    ctx.strokeStyle = resolveCanvasColor('var(--color-static-white)');
+    ctx.strokeStyle = resolveCanvasColor('var(--bf-appearance-token-color-static-white)');
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(x, centerY, nodeSize + 1.5, 0, Math.PI * 2);
@@ -584,12 +588,12 @@ function drawNodeWithInfo(
     const bgColor = ensureMinimumContrast(
       resolveCanvasColor(
         ref.refType === 'branch'
-          ? UI_EXCEPTION_ACCENTS.gitGraphLane[0]
+          ? APPEARANCE_DOMAIN_TOKENS.gitGraphLane[0]
           : ref.refType === 'tag'
-            ? UI_EXCEPTION_ACCENTS.gitGraphLane[2]
-            : UI_EXCEPTION_ACCENTS.gitGraphLane[3]
+            ? APPEARANCE_DOMAIN_TOKENS.gitGraphLane[2]
+            : APPEARANCE_DOMAIN_TOKENS.gitGraphLane[3]
       ),
-      resolveCanvasColor('var(--color-static-white)'),
+      resolveCanvasColor('var(--bf-appearance-token-color-static-white)'),
       GIT_GRAPH_LANE_MIN_CONTRAST
     );
     const text = displayName;
@@ -610,7 +614,7 @@ function drawNodeWithInfo(
 
     if (ref.isCurrent) {
       ctx.save();
-      ctx.fillStyle = resolveCanvasColor('var(--color-static-white)');
+      ctx.fillStyle = resolveCanvasColor('var(--bf-appearance-token-color-static-white)');
       ctx.beginPath();
       ctx.arc(refX + refWidth - 4, centerY - refHeight / 2 + 4, 2, 0, Math.PI * 2);
       ctx.fill();
@@ -619,7 +623,7 @@ function drawNodeWithInfo(
     
 
     ctx.save();
-    ctx.fillStyle = resolveCanvasColor('var(--color-static-white)');
+    ctx.fillStyle = resolveCanvasColor('var(--bf-appearance-token-color-static-white)');
     ctx.font = '500 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
@@ -636,7 +640,7 @@ function drawNodeWithInfo(
   ctx.save();
   
 
-  ctx.fillStyle = resolveCanvasColor('var(--color-text-primary)');
+  ctx.fillStyle = resolveCanvasColor('var(--bf-appearance-token-color-text-primary)');
   ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
@@ -657,7 +661,7 @@ function drawNodeWithInfo(
   const metaX = textX + ctx.measureText(displayText).width + 20;
 
 
-  ctx.fillStyle = resolveCanvasColor('var(--color-text-muted)');
+  ctx.fillStyle = resolveCanvasColor('var(--bf-appearance-token-color-text-muted)');
   ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   
   let authorName = node.authorName;
@@ -677,7 +681,7 @@ function drawNodeWithInfo(
   const hashX = metaX + ctx.measureText(metaText).width + 16;
   const hashText = node.hash.substring(0, 7);
   
-  ctx.fillStyle = resolveCanvasColor('var(--color-text-disabled)');
+  ctx.fillStyle = resolveCanvasColor('var(--bf-appearance-token-color-text-disabled)');
   ctx.font = '11px "SF Mono", "Monaco", "Courier New", monospace';
   ctx.fillText(hashText, hashX, centerY);
   

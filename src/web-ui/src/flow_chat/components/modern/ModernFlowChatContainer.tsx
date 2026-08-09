@@ -11,18 +11,25 @@ import { useSessionModeStore } from '@/app/stores/sessionModeStore';
 import {
   VirtualMessageList,
   type FlowChatTurnPinRequestStatus,
+  type HistoryWindowBoundaryIntentResult,
+  type HistoryWindowBoundaryIntentOptions,
   type VirtualMessageListRef,
 } from './VirtualMessageList';
 import {
   FlowChatHeader,
   type FlowChatHeaderCommandSummary,
-  type FlowChatHeaderSubagentSummary,
-  type FlowChatHeaderTurnSummary,
 } from './FlowChatHeader';
+import type { SessionTreeSelection } from './SessionTreePopover';
+import { FlowChatTurnRail, type FlowChatTurnRailItem } from './FlowChatTurnRail';
 import { BackgroundCommandInputDialog } from '../background-command/BackgroundCommandInputDialog';
 import { WelcomePanel } from '../WelcomePanel';
 import { HistorySessionPlaceholder } from './HistorySessionPlaceholder';
-import { FlowChatContext, FlowChatContextValue } from './FlowChatContext';
+import {
+  FlowChatContext,
+  FlowChatContextValue,
+  FlowChatVolatileContext,
+  FlowChatVolatileContextValue,
+} from './FlowChatContext';
 import { useExploreGroupState } from './useExploreGroupState';
 import { useFlowChatFileActions } from './useFlowChatFileActions';
 import { useFlowChatNavigation } from './useFlowChatNavigation';
@@ -30,8 +37,24 @@ import { useFlowChatCopyDialog } from './useFlowChatCopyDialog';
 import { useFlowChatSync } from './useFlowChatSync';
 import { useFlowChatToolActions } from './useFlowChatToolActions';
 import { useFlowChatSearch } from './useFlowChatSearch';
-import { useVirtualItems, useActiveSession, useVisibleTurnInfo, type VisibleTurnInfo } from '../../store/modernFlowChatStore';
-import type { FlowChatConfig, DialogTurn } from '../../types/flow-chat';
+import {
+  sessionToVirtualItems,
+  useVirtualItems,
+  useActiveSession,
+  useVisibleTurnInfo,
+  type VisibleTurnInfo,
+} from '../../store/modernFlowChatStore';
+import type {
+  FlowChatConfig,
+  DialogTurn,
+  Session,
+  SessionHistoryPresentation,
+} from '../../types/flow-chat';
+import type { SessionHistoryWindowDirection } from '../../store/FlowChatStore';
+import type {
+  FlowChatFocusItemRequest,
+  FlowChatPinTurnToTopRequest,
+} from '../../events/flowchatNavigation';
 import {
   useBackgroundCommandActivityStore,
   visibleBackgroundCommandActivitiesForSession,
@@ -39,7 +62,6 @@ import {
 } from '../../store/backgroundCommandActivityStore';
 import {
   useBackgroundSubagentActivityStore,
-  visibleBackgroundSubagentActivitiesForSession,
 } from '../../store/backgroundSubagentActivityStore';
 import type { LineRange } from '@/component-library';
 import { isChatPopupActive, subscribeChatPopupChange } from '../chatPopupState';
@@ -52,6 +74,7 @@ import { isAcpFlowSession } from '../../utils/acpSession';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { openBtwSessionInAuxPane } from '../../services/btwSessionPane';
 import { resolveThreadGoalHeaderTitle } from '../../utils/threadGoalDisplay';
+import { hasActiveSessionLineageDescendants } from '../../utils/sessionLineage';
 import {
   findDialogTurn,
   shouldUseStickyLatestPin,
@@ -72,20 +95,30 @@ import {
   recordHistorySessionDiagnosticEvent,
   warnHistorySessionLoadingLayerStalled,
 } from '../../services/historySessionDiagnostics';
-import {
-  type BackgroundSubagentActivityItem,
-} from '../../utils/backgroundSubagentActivity';
 import './ModernFlowChatContainer.scss';
 import { PermissionRequestPanel } from './PermissionRequestPanel';
 import { pendingPermissionToolCallIdsForSession } from './permissionRequestRouting';
 import { usePermissionRequests } from './usePermissionRequests';
+import {
+  buildContinuousHistoryProjection,
+  canRetainContinuousHistoryProjection,
+} from './continuousHistoryProjection';
+import {
+  canonicalSessionTurns,
+  projectedSessionTurnCount,
+  resolveTurnOrdinal,
+} from '../../utils/flowChatTurnIdentity';
 
 const log = createLogger('ModernFlowChatContainer');
+
 
 interface ModernFlowChatContainerProps {
   className?: string;
   config?: Partial<FlowChatConfig>;
+  isViewportActive?: boolean;
   permissionPanelAboveChatInput?: boolean;
+  /** Host-owned replacement for the ordinary new-session WelcomePanel. */
+  emptyState?: React.ReactNode;
 
   // Callbacks compatible with the legacy version.
   onFileViewRequest?: (filePath: string, fileName: string, lineRange?: LineRange) => void;
@@ -94,7 +127,44 @@ interface ModernFlowChatContainerProps {
   onSwitchToChatPanel?: () => void;
 }
 
-type BackgroundSubagentSummary = BackgroundSubagentActivityItem;
+interface FlowChatTurnSummary {
+  turnId: string;
+  turnIndex: number;
+  storageTurnIndex?: number;
+}
+
+interface FlowChatHistoryPresentationState extends SessionHistoryPresentation {
+  sessionId: string;
+  revision: number;
+}
+
+type FlowChatViewportIntent =
+  | {
+      kind: 'live-tail';
+      sessionId: string;
+    }
+  | {
+      kind: 'turn';
+      sessionId: string;
+      ordinal: number;
+      turnId: string | null;
+      source: 'canonical-tail' | 'history-range';
+    };
+
+interface QueuedTurnNavigation {
+  ordinal: number;
+  turnId: string | null;
+}
+
+type FlowChatHistoryBoundaryState = Record<
+  SessionHistoryWindowDirection,
+  'idle' | 'loading' | 'error'
+>;
+
+const IDLE_HISTORY_BOUNDARY_STATE: FlowChatHistoryBoundaryState = {
+  before: 'idle',
+  after: 'idle',
+};
 
 type BackgroundCommandSummary = {
   execSessionKey: string;
@@ -113,29 +183,8 @@ type BackgroundCommandSummary = {
 const LATEST_TURN_AUTO_PIN_MAX_ATTEMPTS = 8;
 const HISTORY_INITIAL_CONTENT_PAINT_MAX_ATTEMPTS = 30;
 const HISTORY_LOADING_LAYER_STALL_WARN_MS = 800;
-const HEADER_TURN_PIN_RETRY_MAX_ATTEMPTS = 120;
-const MOCK_BACKGROUND_ACTIVITIES_STORAGE_KEY = 'bitfun.flowChat.mockBackgroundActivities';
-
-const MOCK_BACKGROUND_SUBAGENTS: BackgroundSubagentSummary[] = [
-  {
-    sessionId: 'mock-background-subagent-review',
-    parentSessionId: 'mock-parent-session',
-    title: 'Reviewing auth boundary changes',
-    agentType: 'ReviewWorker',
-    status: 'processing',
-    createdAt: Date.now() - 36_000,
-    updatedAt: Date.now() - 4_000,
-  },
-  {
-    sessionId: 'mock-background-subagent-docs',
-    parentSessionId: 'mock-parent-session',
-    title: 'Preparing migration notes for command lifecycle events',
-    agentType: 'GeneralPurpose',
-    status: 'finishing',
-    createdAt: Date.now() - 58_000,
-    updatedAt: Date.now() - 6_000,
-  },
-];
+const TURN_PIN_RETRY_MAX_ATTEMPTS = 120;
+const MOCK_BACKGROUND_COMMANDS_STORAGE_KEY = 'bitfun.flowChat.mockBackgroundCommands';
 
 const MOCK_BACKGROUND_COMMANDS: BackgroundCommandSummary[] = [
   {
@@ -185,15 +234,15 @@ const MOCK_BACKGROUND_COMMANDS: BackgroundCommandSummary[] = [
   },
 ];
 
-function shouldShowMockBackgroundActivities(): boolean {
+function shouldShowMockBackgroundCommands(): boolean {
   if (!import.meta.env.DEV || typeof window === 'undefined') {
     return false;
   }
 
   const params = new URLSearchParams(window.location.search);
   return (
-    params.get('mockBackgroundActivities') === '1' ||
-    window.localStorage?.getItem(MOCK_BACKGROUND_ACTIVITIES_STORAGE_KEY) === '1'
+    (params.get('mockBackgroundCommands') === '1' || params.get('mockBackgroundActivities') === '1') ||
+    window.localStorage?.getItem(MOCK_BACKGROUND_COMMANDS_STORAGE_KEY) === '1'
   );
 }
 
@@ -224,26 +273,150 @@ function backgroundCommandSummaryFromActivity(activity: BackgroundCommandActivit
 export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = ({
   className = '',
   config,
+  isViewportActive = true,
   permissionPanelAboveChatInput = false,
+  emptyState,
   onFileViewRequest,
   onTabOpen,
   onOpenVisualization,
   onSwitchToChatPanel,
 }) => {
   const { t } = useTranslation('flow-chat');
-  const virtualItems = useVirtualItems();
+  const canonicalVirtualItems = useVirtualItems();
   const activeSession = useActiveSession();
+  const [historyPresentation, setHistoryPresentation] = useState<FlowChatHistoryPresentationState | null>(null);
+  const [viewportIntent, setViewportIntent] = useState<FlowChatViewportIntent | null>(null);
+  const [continuousProjectionSessionId, setContinuousProjectionSessionId] = useState<string | null>(null);
+  const [historyBoundaryState, setHistoryBoundaryState] = useState<FlowChatHistoryBoundaryState>(
+    IDLE_HISTORY_BOUNDARY_STATE,
+  );
+  const historyPresentationRef = useRef<FlowChatHistoryPresentationState | null>(null);
+  const viewportIntentRef = useRef<FlowChatViewportIntent | null>(null);
+  const updateViewportIntent = useCallback((next: FlowChatViewportIntent | null) => {
+    viewportIntentRef.current = next;
+    setViewportIntent(next);
+  }, []);
+  const historyBoundaryRequestsRef = useRef<Record<
+    SessionHistoryWindowDirection,
+    Promise<HistoryWindowBoundaryIntentResult> | null
+  >>({
+    before: null,
+    after: null,
+  });
+  const historyPresentationOwnerGenerationRef = useRef(0);
+  const activeHistoryPresentation = historyPresentation?.sessionId === activeSession?.sessionId
+    ? historyPresentation
+    : null;
+  const activeViewportIntent = viewportIntent?.sessionId === activeSession?.sessionId
+    ? viewportIntent
+    : null;
+  const activeSessionKnownTurnCount = activeSession
+    ? projectedSessionTurnCount(activeSession)
+    : 0;
+  const activeHistoryPresentationFitsSession = Boolean(
+    activeHistoryPresentation
+    && activeHistoryPresentation.range.endOrdinalExclusive <= activeSessionKnownTurnCount
+  );
+  const isShowingHistoryPresentation = Boolean(
+    activeHistoryPresentation
+    && activeHistoryPresentationFitsSession
+    && activeViewportIntent?.kind === 'turn'
+    && activeViewportIntent.source === 'history-range'
+  );
+  const isReadingTurnViewport = activeViewportIntent?.kind === 'turn';
+  const canonicalizedHistoryPresentation = useMemo(() => {
+    if (!activeSession || !activeHistoryPresentation) {
+      return null;
+    }
+
+    const canonicalTurnById = new Map(
+      activeSession.dialogTurns.map(turn => [turn.id, turn]),
+    );
+    let changed = false;
+    const turns = activeHistoryPresentation.turns.map(turn => {
+      const canonicalTurn = canonicalTurnById.get(turn.id);
+      if (!canonicalTurn || canonicalTurn === turn) {
+        return turn;
+      }
+      changed = true;
+      return canonicalTurn;
+    });
+    return changed
+      ? { ...activeHistoryPresentation, turns }
+      : activeHistoryPresentation;
+  }, [activeHistoryPresentation, activeSession]);
+  const continuousHistoryPresentation = useMemo(() => {
+    if (!activeSession || !canonicalizedHistoryPresentation) {
+      return null;
+    }
+    const presentation = buildContinuousHistoryProjection(
+      activeSession,
+      canonicalizedHistoryPresentation,
+    );
+    return presentation ? {
+      ...presentation,
+      sessionId: canonicalizedHistoryPresentation.sessionId,
+      revision: canonicalizedHistoryPresentation.revision,
+    } : null;
+  }, [activeSession, canonicalizedHistoryPresentation]);
+  const continuousHistoryVirtualItems = useMemo(() => {
+    if (!activeSession || !continuousHistoryPresentation) {
+      return null;
+    }
+    return sessionToVirtualItems({
+      ...activeSession,
+      dialogTurns: continuousHistoryPresentation.turns,
+    });
+  }, [activeSession, continuousHistoryPresentation]);
+  const continuousHistoryProjectionEligible = canRetainContinuousHistoryProjection(
+    continuousHistoryPresentation,
+    continuousHistoryVirtualItems?.length ?? Number.POSITIVE_INFINITY,
+  );
+  const isRetainingContinuousHistoryProjection = Boolean(
+    activeSession
+    && continuousProjectionSessionId === activeSession.sessionId
+    && continuousHistoryProjectionEligible
+  );
+  const isRenderingContinuousHistoryProjection = Boolean(
+    continuousHistoryProjectionEligible
+    && (isShowingHistoryPresentation || isRetainingContinuousHistoryProjection)
+  );
+  const renderedHistoryPresentation = isRenderingContinuousHistoryProjection
+    ? continuousHistoryPresentation
+    : isShowingHistoryPresentation
+      ? canonicalizedHistoryPresentation
+      : null;
+  const isRenderingHistoryProjection = Boolean(renderedHistoryPresentation);
+  const virtualItems = useMemo(() => {
+    if (!activeSession || !renderedHistoryPresentation) {
+      return canonicalVirtualItems;
+    }
+    if (
+      isRenderingContinuousHistoryProjection
+      && continuousHistoryVirtualItems
+    ) {
+      return continuousHistoryVirtualItems;
+    }
+    return sessionToVirtualItems({
+      ...activeSession,
+      dialogTurns: renderedHistoryPresentation.turns,
+    });
+  }, [
+    activeSession,
+    canonicalVirtualItems,
+    continuousHistoryVirtualItems,
+    isRenderingContinuousHistoryProjection,
+    renderedHistoryPresentation,
+  ]);
+
   const {
     requests: permissionRequests,
     activeBatch: activePermissionBatch,
     respond: respondPermission,
     respondBatch: respondPermissionBatch,
-  } = usePermissionRequests(
-    activeSession?.sessionId,
-  );
+  } = usePermissionRequests(activeSession?.sessionId);
   const visibleTurnInfo = useVisibleTurnInfo();
-  const [pendingHeaderTurnId, setPendingHeaderTurnId] = useState<string | null>(null);
-  const [queuedHeaderTurnPinId, setQueuedHeaderTurnPinId] = useState<string | null>(null);
+  const [queuedTurnNavigation, setQueuedTurnNavigation] = useState<QueuedTurnNavigation | null>(null);
   const [pendingHistoryOpenSession, setPendingHistoryOpenSession] = useState<HistorySessionOpenIntentDetail | null>(null);
   const [searchOpenRequest, setSearchOpenRequest] = useState(0);
   // Track whether a slash-command or @-mention popup is open in ChatInput.
@@ -251,24 +424,25 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   // popup can be closed with Escape instead of cancelling the current task.
   const [chatPopupActive, setChatPopupActive] = useState(() => isChatPopupActive());
   const backgroundCommandActivities = useBackgroundCommandActivityStore(state => state.activities);
-  const backgroundSubagentActivities = useBackgroundSubagentActivityStore(state => state.activities);
 
   useEffect(() => {
     return subscribeChatPopupChange(() => {
       setChatPopupActive(isChatPopupActive());
     });
   }, []);
-  const [stoppingBackgroundSubagentIds, setStoppingBackgroundSubagentIds] = useState<Set<string>>(() => new Set());
   const [stoppingBackgroundCommandIds, setStoppingBackgroundCommandIds] = useState<Set<string>>(() => new Set());
   const [backgroundCommandInputTarget, setBackgroundCommandInputTarget] = useState<FlowChatHeaderCommandSummary | null>(null);
   const [isSendingBackgroundCommandInput, setIsSendingBackgroundCommandInput] = useState(false);
   const autoPinnedTurnKeyRef = useRef<string | null>(null);
   const releasedHistoryCompletionKeyRef = useRef<string | null>(null);
   const visibleTurnInfoRef = useRef<VisibleTurnInfo | null>(visibleTurnInfo);
-  const turnSummariesRef = useRef<FlowChatHeaderTurnSummary[]>([]);
-  const requestHeaderTurnPinRef = useRef<((turnId: string, behavior?: ScrollBehavior) => FlowChatTurnPinRequestStatus) | null>(null);
+  const turnSummariesRef = useRef<FlowChatTurnSummary[]>([]);
+  const turnRailTurnIdsRef = useRef<Set<string>>(new Set());
+  const requestTurnNavigationPinRef = useRef<((turnId: string) => FlowChatTurnPinRequestStatus) | null>(null);
+  const searchFullHistorySessionIdRef = useRef<string | null>(null);
   const virtualListRef = useRef<VirtualMessageListRef>(null);
   const chatScopeRef = useRef<HTMLDivElement>(null);
+  const activeSessionIdRef = useRef<string | null>(null);
   const [historyInitialContentReadyKey, setHistoryInitialContentReadyKey] = useState<string | null>(null);
   const [historyInitialContentPostPaintKey, setHistoryInitialContentPostPaintKey] = useState<string | null>(null);
   const { workspacePath, activeWorkspace } = useWorkspaceContext();
@@ -316,7 +490,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   }, [activeSession?.workspacePath, workspacePath]);
   const {
     searchQuery,
-    onSearchChange,
+    onSearchChange: setSearchQuery,
     matches: searchMatches,
     matchIndices: searchMatchIndices,
     currentMatchIndex: searchCurrentMatchIndex,
@@ -329,17 +503,115 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const searchCurrentMatchFlowItemId = searchCurrentMatch?.flowItemId;
   const searchCurrentMatchTurnId = searchCurrentMatch?.turnId;
   const searchCurrentMatchVirtualItemIndex = searchCurrentMatch?.virtualItemIndex ?? -1;
+  const searchCurrentMatchOccurrenceIndex = searchCurrentMatch?.occurrenceIndex ?? 0;
   const searchCurrentMatchExpandableKey = searchCurrentMatch?.expandableIds?.join('\u0000') ?? '';
 
   useFlowChatSync();
   useFlowChatCopyDialog();
 
-  useFlowChatNavigation({
-    activeSessionId: activeSession?.sessionId,
-    virtualItems,
-    virtualListRef,
-    onExpandExploreGroup: handleExpandGroup,
-  });
+  const switchToLiveTailForSession = useCallback((
+    sessionId: string,
+    options?: { discardRecentHistory?: boolean },
+  ) => {
+    historyPresentationOwnerGenerationRef.current += 1;
+    const retainContinuousProjection = (
+      options?.discardRecentHistory !== true
+      && activeSession?.sessionId === sessionId
+      && continuousHistoryProjectionEligible
+    );
+    if (retainContinuousProjection) {
+      setContinuousProjectionSessionId(sessionId);
+    } else {
+      setContinuousProjectionSessionId(null);
+      flowChatStore.restoreSessionTailPresentation(sessionId);
+    }
+    if (options?.discardRecentHistory === true) {
+      historyPresentationRef.current = null;
+      setHistoryPresentation(null);
+    }
+    updateViewportIntent({ kind: 'live-tail', sessionId });
+    setHistoryBoundaryState(IDLE_HISTORY_BOUNDARY_STATE);
+    setQueuedTurnNavigation(null);
+  }, [activeSession?.sessionId, continuousHistoryProjectionEligible, updateViewportIntent]);
+
+  const handleBeforeTurnPinRequest = useCallback((request: FlowChatPinTurnToTopRequest) => {
+    const currentViewportIntent = viewportIntentRef.current;
+    if (
+      request.source === 'send-message'
+      && currentViewportIntent?.sessionId === request.sessionId
+      && currentViewportIntent.kind === 'turn'
+      && currentViewportIntent.source === 'history-range'
+    ) {
+      switchToLiveTailForSession(request.sessionId);
+    }
+  }, [switchToLiveTailForSession]);
+
+  useEffect(() => {
+    historyPresentationRef.current = historyPresentation;
+  }, [historyPresentation]);
+
+  useLayoutEffect(() => {
+    const sessionId = activeSession?.sessionId;
+    historyPresentationOwnerGenerationRef.current += 1;
+    historyPresentationRef.current = null;
+    setHistoryPresentation(null);
+    setContinuousProjectionSessionId(null);
+    updateViewportIntent(sessionId ? { kind: 'live-tail', sessionId } : null);
+    setHistoryBoundaryState(IDLE_HISTORY_BOUNDARY_STATE);
+    historyBoundaryRequestsRef.current = { before: null, after: null };
+    if (sessionId) {
+      flowChatStore.restoreSessionTailPresentation(sessionId);
+    }
+  }, [activeSession?.sessionId, updateViewportIntent]);
+
+  useEffect(() => {
+    const retainedSessionId = continuousProjectionSessionId;
+    if (!retainedSessionId) {
+      return;
+    }
+    if (retainedSessionId !== activeSession?.sessionId) {
+      flowChatStore.restoreSessionTailPresentation(retainedSessionId);
+      setContinuousProjectionSessionId(null);
+      return;
+    }
+    if (continuousHistoryProjectionEligible) {
+      return;
+    }
+    if (activeViewportIntent?.kind === 'live-tail') {
+      flowChatStore.restoreSessionTailPresentation(retainedSessionId);
+    }
+    setContinuousProjectionSessionId(null);
+  }, [
+    activeSession?.sessionId,
+    activeViewportIntent?.kind,
+    continuousHistoryProjectionEligible,
+    continuousProjectionSessionId,
+  ]);
+
+  useEffect(() => {
+    if (!activeHistoryPresentation || activeHistoryPresentationFitsSession) {
+      return;
+    }
+    historyPresentationOwnerGenerationRef.current += 1;
+    historyPresentationRef.current = null;
+    setHistoryPresentation(null);
+    setContinuousProjectionSessionId(null);
+    if (
+      activeViewportIntent?.kind === 'turn'
+      && activeViewportIntent.source === 'history-range'
+    ) {
+      updateViewportIntent(activeSession?.sessionId
+        ? { kind: 'live-tail', sessionId: activeSession.sessionId }
+        : null);
+    }
+    setHistoryBoundaryState(IDLE_HISTORY_BOUNDARY_STATE);
+  }, [
+    activeHistoryPresentation,
+    activeHistoryPresentationFitsSession,
+    activeSession?.sessionId,
+    activeViewportIntent,
+    updateViewportIntent,
+  ]);
 
   useEffect(() => {
     const handleHistorySessionOpenIntent = (event: Event) => {
@@ -403,6 +675,42 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     showHistoryPlaceholder,
   ]);
 
+  // Scalar session facts for the stable context. Depending on scalars (not the
+  // session object) keeps the context value referentially stable across
+  // streaming flushes, which produce a new session object ~30x/second.
+  const activeSessionId = activeSession?.sessionId;
+  const activeSessionWorkspacePath = activeSession?.workspacePath
+    || activeSession?.config?.workspacePath;
+  const activeSessionRemoteConnectionId = activeSession?.remoteConnectionId
+    || activeSession?.config?.remoteConnectionId;
+  const activeSessionIsHistorical = activeSession?.isHistorical === true;
+  const activeSessionContextRestoreState = activeSession?.contextRestoreState;
+
+  // Reuse the previous Set when the pending permission tool-call ids are
+  // content-equal so consumers do not re-render on identity-only changes.
+  const pendingPermissionToolCallIdsRef = useRef<ReadonlySet<string>>(new Set());
+  const pendingPermissionToolCallIds = useMemo(() => {
+    const next = pendingPermissionToolCallIdsForSession(
+      permissionRequests,
+      activeSessionId,
+    );
+    const previous = pendingPermissionToolCallIdsRef.current;
+    if (previous.size === next.size) {
+      let contentEqual = true;
+      for (const id of next) {
+        if (!previous.has(id)) {
+          contentEqual = false;
+          break;
+        }
+      }
+      if (contentEqual) {
+        return previous;
+      }
+    }
+    pendingPermissionToolCallIdsRef.current = next;
+    return next;
+  }, [permissionRequests, activeSessionId]);
+
   const contextValue: FlowChatContextValue = useMemo(() => ({
     onFileViewRequest: handleFileViewRequest,
     onTabOpen,
@@ -411,12 +719,11 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     onSwitchToChatPanel,
     onToolConfirm: handleToolConfirm,
     onToolReject: handleToolReject,
-    pendingPermissionToolCallIds: pendingPermissionToolCallIdsForSession(
-      permissionRequests,
-      activeSession?.sessionId,
-    ),
-    sessionId: activeSession?.sessionId,
-    activeSessionOverride: activeSession,
+    sessionId: activeSessionId,
+    workspacePath: activeSessionWorkspacePath,
+    remoteConnectionId: activeSessionRemoteConnectionId,
+    isHistoricalSession: activeSessionIsHistorical,
+    contextRestoreState: activeSessionContextRestoreState,
     allowUserMessageRollback,
     config: {
       enableMarkdown: true,
@@ -424,17 +731,12 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       showTimestamps: false,
       maxHistoryRounds: 50,
       enableVirtualScroll: true,
-      theme: 'dark',
       ...config,
     },
-    exploreGroupStates,
     onExploreGroupToggle: handleExploreGroupToggle,
     onExpandGroup: handleExpandGroup,
     onExpandAllInTurn: handleExpandAllInTurn,
     onCollapseGroup: handleCollapseGroup,
-    searchQuery,
-    searchMatchIndices,
-    searchCurrentMatchVirtualIndex,
   }), [
     handleFileViewRequest,
     onTabOpen,
@@ -443,15 +745,28 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     onSwitchToChatPanel,
     handleToolConfirm,
     handleToolReject,
-    permissionRequests,
-    activeSession,
+    activeSessionId,
+    activeSessionWorkspacePath,
+    activeSessionRemoteConnectionId,
+    activeSessionIsHistorical,
+    activeSessionContextRestoreState,
     allowUserMessageRollback,
     config,
-    exploreGroupStates,
     handleExploreGroupToggle,
     handleExpandGroup,
     handleExpandAllInTurn,
     handleCollapseGroup,
+  ]);
+
+  const volatileContextValue: FlowChatVolatileContextValue = useMemo(() => ({
+    pendingPermissionToolCallIds,
+    exploreGroupStates,
+    searchQuery,
+    searchMatchIndices,
+    searchCurrentMatchVirtualIndex,
+  }), [
+    pendingPermissionToolCallIds,
+    exploreGroupStates,
     searchQuery,
     searchMatchIndices,
     searchCurrentMatchVirtualIndex,
@@ -470,57 +785,144 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     return null;
   }, [t]);
 
-  const turnSummaryCacheRef = useRef<Map<string, FlowChatHeaderTurnSummary>>(new Map());
+  const turnSummaries = useMemo<FlowChatTurnSummary[]>(() => {
+    if (!activeSession) {
+      return [];
+    }
+    return canonicalSessionTurns(activeSession).map((turn, index) => ({
+        turnId: turn.id,
+        turnIndex: (resolveTurnOrdinal(activeSession, turn) ?? index) + 1,
+        storageTurnIndex: turn.storageTurnIndex ?? turn.backendTurnIndex,
+      }));
+  }, [activeSession]);
+  const renderedTurns = useMemo(
+    () => renderedHistoryPresentation
+      ? renderedHistoryPresentation.turns
+      : activeSession?.dialogTurns ?? [],
+    [activeSession?.dialogTurns, renderedHistoryPresentation],
+  );
+  const renderedTurnSummaries = useMemo<FlowChatTurnSummary[]>(() => {
+    return renderedTurns
+      .filter(turn => turn.userMessage?.metadata?.usageReportProvisional !== true)
+      .map((turn, index) => ({
+        turnId: turn.id,
+        turnIndex: index + 1,
+        storageTurnIndex: turn.storageTurnIndex ?? turn.backendTurnIndex,
+      }));
+  }, [renderedTurns]);
+  const activeTurnCatalog = activeSession?.turnCatalog;
+  const turnCatalog = activeTurnCatalog?.sessionId === activeSession?.sessionId
+    ? activeTurnCatalog
+    : undefined;
+  const sessionTotalTurnCount = activeSession
+    ? projectedSessionTurnCount(activeSession)
+    : 0;
+  const absoluteRenderedTurnSummaries = useMemo<FlowChatTurnSummary[]>(() => {
+    if (renderedHistoryPresentation) {
+      return renderedTurnSummaries.map((turn, index) => ({
+        ...turn,
+        turnIndex: renderedHistoryPresentation.range.startOrdinal + index + 1,
+      }));
+    }
+    return renderedTurnSummaries.map(turn => ({
+      ...turn,
+      turnIndex: activeSession
+        ? (resolveTurnOrdinal(activeSession, turn.turnId) ?? turn.turnIndex - 1) + 1
+        : turn.turnIndex,
+    }));
+  }, [
+    activeSession,
+    renderedHistoryPresentation,
+    renderedTurnSummaries,
+  ]);
+  const absoluteRenderedTurnSummaryById = useMemo(() => {
+    return new Map(absoluteRenderedTurnSummaries.map(turn => [turn.turnId, turn]));
+  }, [absoluteRenderedTurnSummaries]);
+  const turnRailItems = useMemo<FlowChatTurnRailItem[]>(() => {
+    const historyView = activeSession?.sessionId
+      ? flowChatStore.getSessionHistoryViewState(activeSession.sessionId)
+      : undefined;
+    const loadedTurns = [
+      ...(activeSession?.dialogTurns ?? []),
+      ...(historyView?.loadedRanges.flatMap(range => range.turns) ?? []),
+    ];
+    const dialogTurnById = new Map(loadedTurns.map(turn => [turn.id, turn]));
+    const loadedByStorageIndex = new Map<number, { turnId: string; content: string }>();
+    const loadedByOrdinal = new Map<number, { turnId: string; content: string }>();
+    for (const range of historyView?.loadedRanges ?? []) {
+      range.turns.forEach((turn, index) => {
+        const loaded = { turnId: turn.id, content: turn.userMessage?.content ?? '' };
+        loadedByOrdinal.set(range.startOrdinal + index, loaded);
+        const storageTurnIndex = turn.storageTurnIndex ?? turn.backendTurnIndex;
+        if (typeof storageTurnIndex === 'number') {
+          loadedByStorageIndex.set(storageTurnIndex, loaded);
+        }
+      });
+    }
+    for (const summary of absoluteRenderedTurnSummaries) {
+      const loaded = {
+        turnId: summary.turnId,
+        content: dialogTurnById.get(summary.turnId)?.userMessage?.content ?? '',
+      };
+      loadedByOrdinal.set(Math.max(0, summary.turnIndex - 1), loaded);
+      if (typeof summary.storageTurnIndex === 'number') {
+        loadedByStorageIndex.set(summary.storageTurnIndex, loaded);
+      }
+    }
 
-  // Clear cache on session change
-  useEffect(() => {
-    turnSummaryCacheRef.current.clear();
-  }, [activeSession?.sessionId]);
+    const catalogEntryByOrdinal = new Map(
+      (turnCatalog?.entries ?? []).map(entry => [entry.ordinal, entry]),
+    );
+    const itemCount = Math.max(sessionTotalTurnCount, turnCatalog?.entries.length ?? 0);
+    const usedLoadedTurnIds = new Set<string>();
+    const items = Array.from({ length: itemCount }, (_, ordinal): FlowChatTurnRailItem => {
+      const catalogEntry = catalogEntryByOrdinal.get(ordinal);
+      const storageTurnIndex = catalogEntry?.storageTurnIndex ?? ordinal;
+      const catalogDialogTurn = catalogEntry?.turnId
+        ? dialogTurnById.get(catalogEntry.turnId)
+        : undefined;
+      const loaded = loadedByStorageIndex.get(storageTurnIndex)
+        ?? (catalogEntry?.turnId && catalogDialogTurn ? {
+          turnId: catalogEntry.turnId,
+          content: catalogDialogTurn.userMessage?.content ?? '',
+        } : undefined)
+        ?? loadedByOrdinal.get(ordinal);
+      const turnId = loaded?.turnId ?? catalogEntry?.turnId ?? null;
+      if (loaded?.turnId) {
+        usedLoadedTurnIds.add(loaded.turnId);
+      }
+      return {
+        itemKey: `storage:${storageTurnIndex}`,
+        turnId,
+        ordinal,
+        turnIndex: ordinal + 1,
+        content: loaded?.content ?? catalogEntry?.preview ?? null,
+      };
+    });
 
-  const turnSummaries = useMemo<FlowChatHeaderTurnSummary[]>(() => {
-    const cache = turnSummaryCacheRef.current;
-    const turns = activeSession?.dialogTurns ?? [];
-    const result: FlowChatHeaderTurnSummary[] = [];
-    for (let i = 0; i < turns.length; i++) {
-      const turn = turns[i];
-      if (!turn.userMessage) continue;
-      const cached = cache.get(turn.id);
-      if (cached) {
-        result.push({ ...cached, turnIndex: result.length + 1 });
+    for (const summary of absoluteRenderedTurnSummaries) {
+      if (usedLoadedTurnIds.has(summary.turnId)) {
         continue;
       }
-      const summary: FlowChatHeaderTurnSummary = {
-        turnId: turn.id,
-        turnIndex: result.length + 1,
-        backendTurnIndex: turn.backendTurnIndex,
-        title: resolveLocalCommandHeaderTitle(turn.userMessage?.metadata)
-          ?? turn.userMessage?.content ?? '',
-      };
-      cache.set(turn.id, summary);
-      result.push(summary);
+      items.push({
+        itemKey: typeof summary.storageTurnIndex === 'number'
+          ? `storage:${summary.storageTurnIndex}`
+          : `live:${summary.turnId}`,
+        turnId: summary.turnId,
+        ordinal: Math.max(0, summary.turnIndex - 1),
+        turnIndex: summary.turnIndex,
+        content: dialogTurnById.get(summary.turnId)?.userMessage?.content ?? '',
+      });
     }
-    return result;
-  }, [activeSession?.dialogTurns, resolveLocalCommandHeaderTitle]);
-  const headerTotalTurns = activeSession?.isPartial === true
-    ? Math.max(activeSession.totalTurnCount ?? turnSummaries.length, turnSummaries.length)
-    : turnSummaries.length;
-  const headerTurnIndexOffset = activeSession?.isPartial === true
-    ? Math.max(0, headerTotalTurns - turnSummaries.length)
-    : 0;
-  const headerTurnSummaries = useMemo<FlowChatHeaderTurnSummary[]>(() => {
-    if (headerTurnIndexOffset === 0 && activeSession?.isPartial !== true) {
-      return turnSummaries;
-    }
-    return turnSummaries.map(turn => ({
-      ...turn,
-      turnIndex: typeof turn.backendTurnIndex === 'number'
-        ? turn.backendTurnIndex + 1
-        : turn.turnIndex + headerTurnIndexOffset,
-    }));
-  }, [activeSession?.isPartial, headerTurnIndexOffset, turnSummaries]);
-  const headerTurnSummaryById = useMemo(() => {
-    return new Map(headerTurnSummaries.map(turn => [turn.turnId, turn]));
-  }, [headerTurnSummaries]);
+
+    return items.sort((left, right) => left.turnIndex - right.turnIndex);
+  }, [
+    absoluteRenderedTurnSummaries,
+    activeSession?.dialogTurns,
+    activeSession?.sessionId,
+    sessionTotalTurnCount,
+    turnCatalog,
+  ]);
   const latestTurnId = turnSummaries[turnSummaries.length - 1]?.turnId;
   const hasPendingHistoryCompletion = activeSession?.sessionId
     ? flowChatStore.hasPendingSessionHistoryCompletion(activeSession.sessionId)
@@ -632,7 +1034,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       return null;
     }
 
-    const localTurn = turnSummaries.find(turn => turn.turnId === visibleTurnInfo.turnId);
+    const localTurn = renderedTurnSummaries.find(turn => turn.turnId === visibleTurnInfo.turnId);
     if (!localTurn) {
       return visibleTurnInfo;
     }
@@ -640,9 +1042,9 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     return {
       ...visibleTurnInfo,
       turnIndex: localTurn.turnIndex,
-      totalTurns: turnSummaries.length,
+      totalTurns: renderedTurnSummaries.length,
     };
-  }, [turnSummaries, visibleTurnInfo]);
+  }, [renderedTurnSummaries, visibleTurnInfo]);
   const effectiveVisibleTurnInfo = useMemo<VisibleTurnInfo | null>(() => {
     if (!navigationVisibleTurnInfo) {
       return null;
@@ -650,73 +1052,57 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
 
     return {
       ...navigationVisibleTurnInfo,
-      turnIndex: headerTurnSummaryById.get(navigationVisibleTurnInfo.turnId)?.turnIndex
-        ?? navigationVisibleTurnInfo.turnIndex + headerTurnIndexOffset,
-      totalTurns: headerTotalTurns,
+      turnIndex: absoluteRenderedTurnSummaryById.get(navigationVisibleTurnInfo.turnId)?.turnIndex
+        ?? navigationVisibleTurnInfo.turnIndex,
+      totalTurns: sessionTotalTurnCount,
     };
-  }, [headerTotalTurns, headerTurnIndexOffset, headerTurnSummaryById, navigationVisibleTurnInfo]);
-  const canJumpToPreviousTurn = (navigationVisibleTurnInfo?.turnIndex ?? 0) > 1;
-  const canJumpToNextTurn = !!navigationVisibleTurnInfo &&
-    navigationVisibleTurnInfo.turnIndex > 0 &&
-    navigationVisibleTurnInfo.turnIndex < turnSummaries.length;
-
+  }, [absoluteRenderedTurnSummaryById, navigationVisibleTurnInfo, sessionTotalTurnCount]);
   useEffect(() => {
     visibleTurnInfoRef.current = visibleTurnInfo;
   }, [visibleTurnInfo]);
 
   useEffect(() => {
-    turnSummariesRef.current = turnSummaries;
-  }, [turnSummaries]);
+    turnSummariesRef.current = renderedTurnSummaries;
+  }, [renderedTurnSummaries]);
+
+  useEffect(() => {
+    turnRailTurnIdsRef.current = new Set(
+      turnRailItems.flatMap(turn => turn.turnId ? [turn.turnId] : []),
+    );
+  }, [turnRailItems]);
 
   const currentHeaderMessage = useMemo(() => {
     const turnId = effectiveVisibleTurnInfo?.turnId;
     if (!turnId) {
       return effectiveVisibleTurnInfo?.userMessage ?? '';
     }
-    const turn = activeSession?.dialogTurns.find(item => item.id === turnId);
+    const turn = renderedTurns.find(item => item.id === turnId);
     const localCommandTitle = resolveLocalCommandHeaderTitle(turn?.userMessage?.metadata);
     if (localCommandTitle) {
       return localCommandTitle;
     }
     return effectiveVisibleTurnInfo?.userMessage ?? '';
-  }, [activeSession?.dialogTurns, effectiveVisibleTurnInfo?.turnId, effectiveVisibleTurnInfo?.userMessage, resolveLocalCommandHeaderTitle]);
+  }, [effectiveVisibleTurnInfo?.turnId, effectiveVisibleTurnInfo?.userMessage, renderedTurns, resolveLocalCommandHeaderTitle]);
 
-  useEffect(() => {
-    if (!pendingHeaderTurnId) return;
-
-    if (visibleTurnInfo?.turnId === pendingHeaderTurnId) {
-      setPendingHeaderTurnId(null);
-      return;
+  const requestTurnNavigationPin = useCallback((turnId: string): FlowChatTurnPinRequestStatus => {
+    if (!isViewportActive) {
+      return 'rejected';
     }
-
-    const targetStillExists = turnSummaries.some(turn => turn.turnId === pendingHeaderTurnId);
-    if (!targetStillExists) {
-      setPendingHeaderTurnId(null);
-    }
-  }, [pendingHeaderTurnId, turnSummaries, visibleTurnInfo?.turnId]);
-
-  const requestHeaderTurnPin = useCallback((turnId: string, behavior: ScrollBehavior = 'smooth'): FlowChatTurnPinRequestStatus => {
-    const isLatestTurn = turnSummaries[turnSummaries.length - 1]?.turnId === turnId;
-    const targetTurn = findDialogTurn(activeSession?.dialogTurns, turnId);
-    const pinMode = isLatestTurn && shouldUseStickyLatestPin(targetTurn)
-      ? 'sticky-latest'
-      : 'transient';
-
     return virtualListRef.current?.pinTurnToTopWithStatus(turnId, {
-      behavior,
-      pinMode,
+      behavior: 'auto',
+      pinMode: 'transient',
+      alignmentPolicy: 'best-effort',
     }) ?? 'rejected';
-  }, [activeSession?.dialogTurns, turnSummaries]);
+  }, [isViewportActive]);
   useEffect(() => {
-    requestHeaderTurnPinRef.current = requestHeaderTurnPin;
-  }, [requestHeaderTurnPin]);
+    requestTurnNavigationPinRef.current = requestTurnNavigationPin;
+  }, [requestTurnNavigationPin]);
   const handleVirtualListUserScrollIntent = useCallback(() => {
-    setQueuedHeaderTurnPinId(null);
-    setPendingHeaderTurnId(null);
+    setQueuedTurnNavigation(null);
   }, []);
 
   useEffect(() => {
-    if (!queuedHeaderTurnPinId) return;
+    if (!isViewportActive || !queuedTurnNavigation) return;
 
     let cancelled = false;
     let frameId: number | null = null;
@@ -725,30 +1111,44 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     const retry = () => {
       if (cancelled) return;
 
-      if (visibleTurnInfoRef.current?.turnId === queuedHeaderTurnPinId) {
-        setQueuedHeaderTurnPinId(null);
-        setPendingHeaderTurnId(null);
+      const queuedTurnId = queuedTurnNavigation.turnId
+        ?? turnSummariesRef.current.find(
+          turn => turn.turnIndex === queuedTurnNavigation.ordinal + 1,
+        )?.turnId
+        ?? null;
+      if (!queuedTurnId) {
+        attempts += 1;
+        if (attempts >= TURN_PIN_RETRY_MAX_ATTEMPTS) {
+          setQueuedTurnNavigation(null);
+          return;
+        }
+        frameId = requestAnimationFrame(retry);
         return;
       }
 
-      const targetStillExists = turnSummariesRef.current.some(turn => turn.turnId === queuedHeaderTurnPinId);
-      if (!targetStillExists) {
-        setQueuedHeaderTurnPinId(null);
-        setPendingHeaderTurnId(null);
+      if (visibleTurnInfoRef.current?.turnId === queuedTurnId) {
+        setQueuedTurnNavigation(null);
         return;
       }
 
-      const pinStatus = requestHeaderTurnPinRef.current?.(queuedHeaderTurnPinId, 'auto') ?? 'rejected';
+      if (!turnRailTurnIdsRef.current.has(queuedTurnId)) {
+        setQueuedTurnNavigation(null);
+        return;
+      }
+      const targetIsLoaded = turnSummariesRef.current.some(turn => turn.turnId === queuedTurnId);
+      if (!targetIsLoaded) {
+        return;
+      }
+
+      const pinStatus = requestTurnNavigationPinRef.current?.(queuedTurnId) ?? 'rejected';
       if (pinStatus === 'settled' || pinStatus === 'pending') {
-        setQueuedHeaderTurnPinId(null);
-        setPendingHeaderTurnId(null);
+        setQueuedTurnNavigation(null);
         return;
       }
 
       attempts += 1;
-      if (attempts >= HEADER_TURN_PIN_RETRY_MAX_ATTEMPTS) {
-        setQueuedHeaderTurnPinId(null);
-        setPendingHeaderTurnId(null);
+      if (attempts >= TURN_PIN_RETRY_MAX_ATTEMPTS) {
+        setQueuedTurnNavigation(null);
         return;
       }
 
@@ -764,19 +1164,21 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       }
     };
   }, [
-    queuedHeaderTurnPinId,
+    isViewportActive,
+    queuedTurnNavigation,
+    renderedTurnSummaries.length,
   ]);
 
   useLayoutEffect(() => {
     autoPinnedTurnKeyRef.current = null;
     releasedHistoryCompletionKeyRef.current = null;
+    searchFullHistorySessionIdRef.current = null;
   }, [activeSession?.sessionId]);
 
   useEffect(() => {
     setHistoryInitialContentReadyKey(null);
     setHistoryInitialContentPostPaintKey(null);
-    setPendingHeaderTurnId(null);
-    setQueuedHeaderTurnPinId(null);
+    setQueuedTurnNavigation(null);
   }, [activeSession?.sessionId]);
 
   useLayoutEffect(() => {
@@ -784,7 +1186,14 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     const latestTurnKey = sessionId && latestTurnId
       ? `${sessionId}:${latestTurnId}:${turnSummaries.length}`
       : null;
-    if (!sessionId || !latestTurnId || autoPinnedTurnKeyRef.current === latestTurnKey) {
+    if (
+      !isViewportActive
+      ||
+      !sessionId
+      || isReadingTurnViewport
+      || !latestTurnId
+      || autoPinnedTurnKeyRef.current === latestTurnKey
+    ) {
       return;
     }
 
@@ -795,7 +1204,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       : null;
     if (latestTurnUsesFollowOutput) {
       autoPinnedTurnKeyRef.current = resolvedLatestTurnKey;
-      setPendingHeaderTurnId(null);
       startupTrace.markPhase('historical_session_latest_anchor_skipped', {
         sessionId,
         latestTurnId,
@@ -856,8 +1264,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       });
     }
 
-    setPendingHeaderTurnId(resolvedLatestTurnId);
-
     let frameId: number | null = null;
     let cancelled = false;
     let attempts = 0;
@@ -894,7 +1300,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       }
 
       if (attempts >= LATEST_TURN_AUTO_PIN_MAX_ATTEMPTS) {
-        setPendingHeaderTurnId(null);
         startupTrace.markPhase('historical_session_latest_anchor_failed', {
           sessionId,
           latestTurnId: resolvedLatestTurnId,
@@ -932,6 +1337,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     activeSession?.remoteConnectionId,
     activeSession?.remoteSshHost,
     hasPendingHistoryCompletion,
+    isViewportActive,
+    isReadingTurnViewport,
     latestTurnId,
     latestTurnUsesFollowOutput,
     latestTurnUsesStickyPin,
@@ -942,6 +1349,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   useEffect(() => {
     const sessionId = activeSession?.sessionId;
     if (
+      !isViewportActive ||
       !sessionId ||
       activeSession.historyState !== 'ready' ||
       (
@@ -1021,6 +1429,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     activeSession?.contextRestoreState,
     activeSession?.sessionId,
     hasPendingHistoryCompletion,
+    isViewportActive,
     latestTurnId,
     turnSummaries.length,
   ]);
@@ -1036,6 +1445,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         virtualItemIndex: searchCurrentMatchVirtualItemIndex,
         query: searchQuery,
         flowItemId: searchCurrentMatchFlowItemId,
+        occurrenceIndex: searchCurrentMatchOccurrenceIndex,
         expandableIds: searchCurrentMatchExpandableKey
           ? searchCurrentMatchExpandableKey.split('\u0000')
           : undefined,
@@ -1049,50 +1459,324 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     searchCurrentMatchTurnId,
     searchCurrentMatchExpandableKey,
     searchCurrentMatchVirtualItemIndex,
+    searchCurrentMatchOccurrenceIndex,
     searchQuery,
   ]);
 
-  const handleJumpToTurn = useCallback((turnId: string) => {
-    if (!turnId) return false;
+  const applyHistoryPresentation = useCallback((
+    sessionId: string,
+    presentation: SessionHistoryPresentation,
+    options?: {
+      completedBoundary?: SessionHistoryWindowDirection;
+      viewportTarget?: {
+        ordinal: number;
+        turnId: string | null;
+      };
+    },
+  ) => {
+    historyPresentationOwnerGenerationRef.current += 1;
+    setHistoryPresentation(previous => {
+      const next: FlowChatHistoryPresentationState = {
+        ...presentation,
+        sessionId,
+        revision: (previous?.sessionId === sessionId ? previous.revision : 0) + 1,
+      };
+      historyPresentationRef.current = next;
+      return next;
+    });
+    if (options?.viewportTarget) {
+      updateViewportIntent({
+        kind: 'turn',
+        sessionId,
+        ordinal: options.viewportTarget.ordinal,
+        turnId: options.viewportTarget.turnId,
+        source: 'history-range',
+      });
+    }
+    const completedBoundary = options?.completedBoundary;
+    if (completedBoundary) {
+      setHistoryBoundaryState(previous => ({
+        ...previous,
+        [completedBoundary]: 'idle',
+      }));
+    } else {
+      setHistoryBoundaryState(IDLE_HISTORY_BOUNDARY_STATE);
+    }
+  }, [updateViewportIntent]);
 
-    const targetStillExists = turnSummaries.some(turn => turn.turnId === turnId);
-    if (!targetStillExists) {
-      setQueuedHeaderTurnPinId(null);
-      setPendingHeaderTurnId(null);
+  const restoreTailPresentation = useCallback((options?: {
+    followLatest?: boolean;
+    discardRecentHistory?: boolean;
+  }) => {
+    const sessionId = activeSession?.sessionId;
+    if (!sessionId) {
       return false;
     }
 
-    const pinStatus = requestHeaderTurnPin(turnId);
-    if (pinStatus === 'settled') {
-      setQueuedHeaderTurnPinId(null);
-      setPendingHeaderTurnId(null);
+    switchToLiveTailForSession(sessionId, {
+      discardRecentHistory: options?.discardRecentHistory,
+    });
+
+    if (options?.followLatest) {
+      requestAnimationFrame(() => {
+        if (activeSessionIdRef.current === sessionId) {
+          virtualListRef.current?.scrollToLatestEndPosition();
+        }
+      });
+    }
+    return true;
+  }, [activeSession?.sessionId, switchToLiveTailForSession]);
+
+  const jumpToLiveTail = useCallback(() => {
+    return restoreTailPresentation({ followLatest: true });
+  }, [restoreTailPresentation]);
+
+  const handleSearchChange = useCallback((query: string) => {
+    setSearchQuery(query);
+    const sessionId = activeSession?.sessionId;
+    if (
+      !query.trim()
+      || !sessionId
+      || activeSession.isPartial !== true
+      || searchFullHistorySessionIdRef.current === sessionId
+    ) {
+      return;
+    }
+
+    searchFullHistorySessionIdRef.current = sessionId;
+    void flowChatStore.ensureSessionFullHistory(sessionId, 'flowchat-search').then(ready => {
+      if (ready && activeSessionIdRef.current === sessionId) {
+        restoreTailPresentation({ discardRecentHistory: true });
+      } else if (activeSessionIdRef.current === sessionId) {
+        searchFullHistorySessionIdRef.current = null;
+      }
+    });
+  }, [activeSession?.isPartial, activeSession?.sessionId, restoreTailPresentation, setSearchQuery]);
+
+  const navigateToTurn = useCallback(async (target: FlowChatTurnRailItem | string) => {
+    const targetItem = typeof target === 'string'
+      ? turnRailItems.find(turn => turn.turnId === target)
+      : target;
+    const sessionId = activeSession?.sessionId;
+    if (!targetItem || !sessionId) return false;
+
+    const renderedTargetId = targetItem.turnId;
+    const targetIsRendered = Boolean(
+      renderedTargetId
+      && renderedTurnSummaries.some(turn => turn.turnId === renderedTargetId),
+    );
+    if (renderedTargetId && targetIsRendered) {
+      updateViewportIntent({
+        kind: 'turn',
+        sessionId,
+        ordinal: targetItem.ordinal,
+        turnId: renderedTargetId,
+        source: isRenderingHistoryProjection ? 'history-range' : 'canonical-tail',
+      });
+      const pinStatus = requestTurnNavigationPin(renderedTargetId);
+      if (pinStatus === 'settled' || pinStatus === 'pending') {
+        setQueuedTurnNavigation(null);
+        return true;
+      }
+      setQueuedTurnNavigation({
+        ordinal: targetItem.ordinal,
+        turnId: renderedTargetId,
+      });
       return true;
     }
 
-    if (pinStatus === 'pending') {
-      setQueuedHeaderTurnPinId(null);
-      setPendingHeaderTurnId(null);
+    const recentHistoryPresentation = historyPresentationRef.current?.sessionId === sessionId
+      ? historyPresentationRef.current
+      : null;
+    const recentHistoryTurn = recentHistoryPresentation
+      ? recentHistoryPresentation.turns[
+          targetItem.ordinal - recentHistoryPresentation.range.startOrdinal
+        ]
+      : undefined;
+    const targetIsInRecentHistory = Boolean(
+      recentHistoryPresentation
+      && targetItem.ordinal >= recentHistoryPresentation.range.startOrdinal
+      && targetItem.ordinal < recentHistoryPresentation.range.endOrdinalExclusive
+      && recentHistoryTurn
+      && (!targetItem.turnId || recentHistoryTurn.id === targetItem.turnId)
+    );
+    if (recentHistoryPresentation && targetIsInRecentHistory && recentHistoryTurn) {
+      const reactivatedPresentation = flowChatStore.reactivateSessionHistoryWindow(
+        sessionId,
+        recentHistoryPresentation.range,
+      );
+      if (reactivatedPresentation) {
+        const preparedPin = virtualListRef.current?.prepareTurnPinToTop(recentHistoryTurn.id, {
+          behavior: 'auto',
+          pinMode: 'transient',
+          alignmentPolicy: 'best-effort',
+        }) ?? 'rejected';
+        if (preparedPin !== 'rejected') {
+          applyHistoryPresentation(sessionId, reactivatedPresentation, {
+            viewportTarget: {
+              ordinal: targetItem.ordinal,
+              turnId: recentHistoryTurn.id,
+            },
+          });
+          setQueuedTurnNavigation(null);
+          return true;
+        }
+        flowChatStore.restoreSessionTailPresentation(sessionId);
+      }
+    }
+
+    let result;
+    try {
+      result = await flowChatStore.loadSessionTurnWindow(sessionId, targetItem.ordinal, {
+        source: 'target',
+      });
+    } catch (error) {
+      log.warn('Failed to load the requested session Turn window', {
+        sessionId,
+        targetOrdinal: targetItem.ordinal,
+        error,
+      });
+      return false;
+    }
+
+    if (result.status === 'ready' && result.isCurrent) {
+      const targetTurnId = result.targetTurnId
+        ?? result.range?.turns[result.targetOrdinal - (result.range?.startOrdinal ?? 0)]?.id
+        ?? targetItem.turnId;
+      if (!targetTurnId) {
+        return false;
+      }
+
+      const preparedPin = virtualListRef.current?.prepareTurnPinToTop(targetTurnId, {
+        behavior: 'auto',
+        pinMode: 'transient',
+        alignmentPolicy: 'best-effort',
+      }) ?? 'rejected';
+      if (preparedPin === 'rejected') {
+        return false;
+      }
+      const presentation = flowChatStore.activateSessionHistoryWindow(
+        sessionId,
+        result.targetOrdinal,
+        result.navigationGeneration,
+      );
+      if (!presentation) {
+        return false;
+      }
+
+      applyHistoryPresentation(sessionId, presentation, {
+        viewportTarget: {
+          ordinal: result.targetOrdinal,
+          turnId: targetTurnId,
+        },
+      });
+      setQueuedTurnNavigation(null);
       return true;
     }
 
-    setQueuedHeaderTurnPinId(turnId);
-    setPendingHeaderTurnId(null);
+    if (result.status === 'unsupported' || result.status === 'not-found') {
+      const historyReady = await flowChatStore.ensureSessionFullHistory(
+        sessionId,
+        'turn-rail-navigation',
+      );
+      if (historyReady && activeSessionIdRef.current === sessionId) {
+        restoreTailPresentation({ discardRecentHistory: true });
+        updateViewportIntent({
+          kind: 'turn',
+          sessionId,
+          ordinal: targetItem.ordinal,
+          turnId: targetItem.turnId,
+          source: 'canonical-tail',
+        });
+        setQueuedTurnNavigation({
+          ordinal: targetItem.ordinal,
+          turnId: targetItem.turnId,
+        });
+        return true;
+      }
+    }
+
     return false;
-  }, [requestHeaderTurnPin, turnSummaries]);
+  }, [
+    activeSession?.sessionId,
+    applyHistoryPresentation,
+    isRenderingHistoryProjection,
+    renderedTurnSummaries,
+    requestTurnNavigationPin,
+    restoreTailPresentation,
+    turnRailItems,
+    updateViewportIntent,
+  ]);
 
-  const handleJumpToPreviousTurn = useCallback(() => {
-    if (!navigationVisibleTurnInfo || navigationVisibleTurnInfo.turnIndex <= 1) return;
-    const previousTurn = turnSummaries[navigationVisibleTurnInfo.turnIndex - 2];
-    if (!previousTurn) return;
-    handleJumpToTurn(previousTurn.turnId);
-  }, [handleJumpToTurn, navigationVisibleTurnInfo, turnSummaries]);
+  const handleNavigateToFocusTurn = useCallback(async (request: FlowChatFocusItemRequest) => {
+    const sessionId = activeSession?.sessionId;
+    if (!sessionId || request.sessionId !== sessionId) {
+      return false;
+    }
 
-  const handleJumpToNextTurn = useCallback(() => {
-    if (!navigationVisibleTurnInfo || navigationVisibleTurnInfo.turnIndex >= turnSummaries.length) return;
-    const nextTurn = turnSummaries[navigationVisibleTurnInfo.turnIndex];
-    if (!nextTurn) return;
-    handleJumpToTurn(nextTurn.turnId);
-  }, [handleJumpToTurn, navigationVisibleTurnInfo, turnSummaries]);
+    const requestedTurnId = request.turnId?.trim() || null;
+    const targetById = requestedTurnId
+      ? turnRailItems.find(turn => turn.turnId === requestedTurnId)
+      : undefined;
+    if (targetById) {
+      return navigateToTurn(targetById);
+    }
+
+    if (requestedTurnId) {
+      const historyReady = await flowChatStore.ensureSessionFullHistory(
+        sessionId,
+        'flowchat-focus-navigation',
+      );
+      if (!historyReady || flowChatStore.getState().activeSessionId !== sessionId) {
+        return false;
+      }
+      const hydratedSession = flowChatStore.getState().sessions.get(sessionId);
+      const hydratedTurnIndex = hydratedSession?.dialogTurns.findIndex(
+        turn => turn.id === requestedTurnId,
+      ) ?? -1;
+      if (hydratedTurnIndex < 0) {
+        return false;
+      }
+
+      restoreTailPresentation({ discardRecentHistory: true });
+      updateViewportIntent({
+        kind: 'turn',
+        sessionId,
+        ordinal: hydratedTurnIndex,
+        turnId: requestedTurnId,
+        source: 'canonical-tail',
+      });
+      setQueuedTurnNavigation({
+        ordinal: hydratedTurnIndex,
+        turnId: requestedTurnId,
+      });
+      return true;
+    }
+
+    const requestedOrdinal = typeof request.turnIndex === 'number'
+      ? Math.max(0, Math.floor(request.turnIndex) - 1)
+      : null;
+    if (requestedOrdinal === null) {
+      return false;
+    }
+    const targetByOrdinal = turnRailItems.find(turn => turn.ordinal === requestedOrdinal);
+    return targetByOrdinal ? navigateToTurn(targetByOrdinal) : false;
+  }, [
+    activeSession?.sessionId,
+    navigateToTurn,
+    restoreTailPresentation,
+    turnRailItems,
+    updateViewportIntent,
+  ]);
+
+  useFlowChatNavigation({
+    activeSessionId: activeSession?.sessionId,
+    virtualItems,
+    virtualListRef,
+    onExpandExploreGroup: handleExpandGroup,
+    onBeforeTurnPinRequest: handleBeforeTurnPinRequest,
+    onNavigateToFocusTurn: handleNavigateToFocusTurn,
+  });
 
   const handleRetryHistoryLoad = useCallback(() => {
     const sessionId = activeSession?.sessionId;
@@ -1100,11 +1784,149 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     void FlowChatManager.getInstance().switchChatSession(sessionId);
   }, [activeSession?.sessionId]);
 
-  const activeSessionIdRef = useRef<string | null>(null);
-
   useEffect(() => {
     activeSessionIdRef.current = activeSession?.sessionId ?? null;
   }, [activeSession?.sessionId]);
+
+  const handleHistoryWindowBoundaryIntent = useCallback((
+    direction: SessionHistoryWindowDirection,
+    options?: HistoryWindowBoundaryIntentOptions,
+  ): Promise<HistoryWindowBoundaryIntentResult> => {
+    const existingRequest = historyBoundaryRequestsRef.current[direction];
+    if (existingRequest) {
+      return existingRequest;
+    }
+
+    const request = (async () => {
+      const currentViewportIntent = viewportIntentRef.current;
+      const presentation = currentViewportIntent?.kind === 'turn'
+        && currentViewportIntent.source === 'history-range'
+        ? historyPresentationRef.current
+        : null;
+      const sessionId = activeSessionIdRef.current;
+      const presentationOwnerGeneration = historyPresentationOwnerGenerationRef.current;
+      if (!sessionId || (presentation && presentation.sessionId !== sessionId)) {
+        return 'cancelled';
+      }
+
+      const session = flowChatStore.getState().sessions.get(sessionId);
+      const historyView = flowChatStore.getSessionHistoryViewState(sessionId);
+      const totalTurnCount = Math.max(
+        historyView?.catalog?.totalTurnCount ?? 0,
+        session?.totalTurnCount ?? 0,
+      );
+      let targetOrdinal: number;
+      if (presentation) {
+        targetOrdinal = direction === 'before'
+          ? presentation.range.startOrdinal - 1
+          : presentation.range.endOrdinalExclusive;
+      } else {
+        if (
+          direction !== 'before'
+          || session?.isPartial !== true
+          || session.turnCatalog?.sessionId !== sessionId
+        ) {
+          return 'cancelled';
+        }
+        const canonicalTailRange = flowChatStore.getSessionCanonicalTailRange(sessionId);
+        if (!canonicalTailRange) {
+          return 'not-ready';
+        }
+        targetOrdinal = canonicalTailRange.startOrdinal - 1;
+      }
+      if (targetOrdinal < 0 || targetOrdinal >= totalTurnCount) {
+        return 'exhausted';
+      }
+
+      setHistoryBoundaryState(previous => ({ ...previous, [direction]: 'loading' }));
+      let viewportPreparationStarted = false;
+      try {
+        const result = await flowChatStore.loadSessionTurnWindow(sessionId, targetOrdinal, {
+          source: 'prefetch',
+          before: direction === 'before' ? 12 : 4,
+          after: direction === 'after' ? 12 : 1,
+        });
+        if (!result.isCurrent || activeSessionIdRef.current !== sessionId) {
+          return 'cancelled';
+        }
+        if (result.status !== 'ready') {
+          if (result.status === 'unsupported') {
+            const historyReady = await flowChatStore.ensureSessionFullHistory(
+              sessionId,
+              'sequential-history-navigation',
+            );
+            if (historyReady && activeSessionIdRef.current === sessionId) {
+              setHistoryBoundaryState(previous => ({ ...previous, [direction]: 'idle' }));
+              return 'applied';
+            }
+          }
+          setHistoryBoundaryState(previous => ({ ...previous, [direction]: 'error' }));
+          return 'not-ready';
+        }
+
+        viewportPreparationStarted = Boolean(options?.prepareViewportForPresentationCommit);
+        const preparationResult = await options?.prepareViewportForPresentationCommit?.();
+        const activeSessionIsCurrent = activeSessionIdRef.current === sessionId;
+        const presentationOwnerIsCurrent = (
+          historyPresentationOwnerGenerationRef.current === presentationOwnerGeneration
+        );
+        if (
+          preparationResult === false
+          || !activeSessionIsCurrent
+          || !presentationOwnerIsCurrent
+        ) {
+          if (viewportPreparationStarted) {
+            options?.cancelViewportPresentationCommit?.();
+          }
+          if (activeSessionIsCurrent) {
+            setHistoryBoundaryState(previous => ({ ...previous, [direction]: 'idle' }));
+          }
+          return 'cancelled';
+        }
+
+        const nextPresentation = presentation
+          ? flowChatStore.extendSessionHistoryWindow(sessionId, direction)
+          : flowChatStore.activateSessionHistoryWindowFromTail(sessionId, targetOrdinal);
+        if (!nextPresentation) {
+          if (viewportPreparationStarted) {
+            options?.cancelViewportPresentationCommit?.();
+          }
+          setHistoryBoundaryState(previous => ({ ...previous, [direction]: 'error' }));
+          return 'not-ready';
+        }
+        applyHistoryPresentation(sessionId, nextPresentation, {
+          completedBoundary: direction,
+          ...(!presentation ? {
+            viewportTarget: {
+              ordinal: targetOrdinal,
+              turnId: nextPresentation.turns[
+                targetOrdinal - nextPresentation.range.startOrdinal
+              ]?.id ?? null,
+            },
+          } : {}),
+        });
+        return 'applied';
+      } catch (error) {
+        if (viewportPreparationStarted) {
+          options?.cancelViewportPresentationCommit?.();
+        }
+        if (activeSessionIdRef.current === sessionId) {
+          setHistoryBoundaryState(previous => ({ ...previous, [direction]: 'error' }));
+        }
+        log.warn('Failed to prefetch an adjacent session Turn window', {
+          sessionId,
+          direction,
+          targetOrdinal,
+          error,
+        });
+        return 'not-ready';
+      }
+    })().finally(() => {
+      historyBoundaryRequestsRef.current[direction] = null;
+    });
+    historyBoundaryRequestsRef.current[direction] = request;
+    return request;
+  }, [applyHistoryPresentation]);
 
   useEffect(() => {
     if (!activeSession?.sessionId) {
@@ -1175,13 +1997,24 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     ).map(backgroundCommandSummaryFromActivity),
     [activeSession?.sessionId, backgroundCommandActivities],
   );
-  const backgroundSubagents = useMemo(
-    () => visibleBackgroundSubagentActivitiesForSession(
-      backgroundSubagentActivities,
-      activeSession?.sessionId,
-    ),
-    [activeSession?.sessionId, backgroundSubagentActivities],
+  const [hasActiveSessionTreeDescendants, setHasActiveSessionTreeDescendants] = useState(() =>
+    hasActiveSessionLineageDescendants(activeSession?.sessionId, flowChatStore.getState().sessions),
   );
+
+  useEffect(() => {
+    const rootSessionId = activeSession?.sessionId;
+    const updateActivity = (sessions: Map<string, Session>) => {
+      setHasActiveSessionTreeDescendants(
+        hasActiveSessionLineageDescendants(rootSessionId, sessions),
+      );
+    };
+
+    updateActivity(flowChatStore.getState().sessions);
+    return flowChatStore.subscribeSelector(
+      state => hasActiveSessionLineageDescendants(rootSessionId, state.sessions),
+      setHasActiveSessionTreeDescendants,
+    );
+  }, [activeSession?.sessionId]);
 
   useEffect(() => {
     if (stoppingBackgroundCommandIds.size === 0) {
@@ -1193,7 +2026,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         .filter(command => command.status === 'running')
         .map(command => command.execSessionKey),
     );
-    if (import.meta.env.DEV && shouldShowMockBackgroundActivities()) {
+    if (import.meta.env.DEV && shouldShowMockBackgroundCommands()) {
       for (const command of MOCK_BACKGROUND_COMMANDS) {
         if (command.status === 'running') {
           runningCommandIds.add(command.execSessionKey);
@@ -1206,77 +2039,49 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     });
   }, [backgroundCommands, stoppingBackgroundCommandIds.size]);
 
-  useEffect(() => {
-    if (stoppingBackgroundSubagentIds.size === 0) {
-      return;
-    }
-
-    const runningSubagentIds = new Set(backgroundSubagents.map(subagent => subagent.sessionId));
-    if (import.meta.env.DEV && shouldShowMockBackgroundActivities()) {
-      for (const subagent of MOCK_BACKGROUND_SUBAGENTS) {
-        runningSubagentIds.add(subagent.sessionId);
-      }
-    }
-
-    setStoppingBackgroundSubagentIds((previous) => {
-      const next = new Set([...previous].filter(sessionId => runningSubagentIds.has(sessionId)));
-      return next.size === previous.size ? previous : next;
-    });
-  }, [backgroundSubagents, stoppingBackgroundSubagentIds.size]);
-
-  const handleOpenBackgroundSubagent = useCallback((childSessionId: string) => {
-    const subagent = backgroundSubagents.find(item => item.sessionId === childSessionId);
-    if (!subagent || !activeSession?.sessionId) {
+  const handleOpenSessionTreeSession = useCallback((selection: SessionTreeSelection) => {
+    if (
+      !activeSession?.sessionId ||
+      selection.isRoot ||
+      selection.sessionId === activeSession.sessionId ||
+      !selection.parentSessionId
+    ) {
       return;
     }
 
     openBtwSessionInAuxPane({
-      childSessionId,
-      parentSessionId: activeSession.sessionId,
-      workspacePath: subagent.workspacePath || activeSession.workspacePath,
+      childSessionId: selection.sessionId,
+      parentSessionId: selection.parentSessionId,
+      workspacePath: selection.workspacePath || activeSession.workspacePath,
       sessionKind: 'subagent',
-      sessionTitle: subagent.title,
-      agentType: subagent.agentType,
-      parentToolCallId: subagent.parentToolCallId,
-      subagentType: subagent.subagentType,
-      remoteConnectionId: subagent.remoteConnectionId || activeSession.remoteConnectionId,
-      remoteSshHost: subagent.remoteSshHost || activeSession.remoteSshHost,
+      sessionTitle: selection.title,
+      agentType: selection.agentType,
+      parentToolCallId: selection.parentToolCallId,
+      subagentType: selection.subagentType,
+      remoteConnectionId: selection.remoteConnectionId || activeSession.remoteConnectionId,
+      remoteSshHost: selection.remoteSshHost || activeSession.remoteSshHost,
       includeInternal: true,
     });
-  }, [activeSession, backgroundSubagents]);
+  }, [activeSession]);
 
-  const handleStopBackgroundSubagent = useCallback(async (subagent: FlowChatHeaderSubagentSummary) => {
-    if (stoppingBackgroundSubagentIds.has(subagent.sessionId)) {
-      return;
-    }
-
-    setStoppingBackgroundSubagentIds((previous) => new Set(previous).add(subagent.sessionId));
-
-    if (import.meta.env.DEV && subagent.sessionId.startsWith('mock-background-subagent-')) {
-      window.setTimeout(() => {
-        setStoppingBackgroundSubagentIds((previous) => {
-          const next = new Set(previous);
-          next.delete(subagent.sessionId);
-          return next;
-        });
-      }, 1200);
-      return;
-    }
-
+  const handleCancelSessionTreeSession = useCallback(async (selection: SessionTreeSelection) => {
     try {
-      await agentAPI.cancelSession(subagent.sessionId);
+      const result = await agentAPI.cancelSession(selection.sessionId, { cancelDescendants: false });
+      if (!result.cancelled) {
+        notificationService.error(
+          t('flowChatHeader.agentTreeCancelFailed'),
+          { duration: 5000 },
+        );
+      }
+      return result.cancelled;
     } catch (_error) {
-      setStoppingBackgroundSubagentIds((previous) => {
-        const next = new Set(previous);
-        next.delete(subagent.sessionId);
-        return next;
-      });
       notificationService.error(
-        t('flowChatHeader.backgroundSubagentStopFailed'),
+        t('flowChatHeader.agentTreeCancelFailed'),
         { duration: 5000 },
       );
+      return false;
     }
-  }, [stoppingBackgroundSubagentIds, t]);
+  }, [t]);
 
   const handleOpenBackgroundCommandOutput = useCallback((command: FlowChatHeaderCommandSummary) => {
     createBackgroundCommandOutputTab({
@@ -1377,35 +2182,17 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     }
   }, [t]);
 
-  const showMockBackgroundActivities = shouldShowMockBackgroundActivities();
-  const headerBackgroundSubagents = useMemo(
-    () => (showMockBackgroundActivities
-      ? [...backgroundSubagents, ...MOCK_BACKGROUND_SUBAGENTS]
-      : backgroundSubagents
-    ).map(subagent => ({
-      ...subagent,
-      isStopping: stoppingBackgroundSubagentIds.has(subagent.sessionId),
-    })),
-    [backgroundSubagents, showMockBackgroundActivities, stoppingBackgroundSubagentIds],
-  );
+  const showMockBackgroundCommands = shouldShowMockBackgroundCommands();
   const headerBackgroundCommands = useMemo(
-    () => (showMockBackgroundActivities
+    () => (showMockBackgroundCommands
       ? [...backgroundCommands, ...MOCK_BACKGROUND_COMMANDS]
       : backgroundCommands
     ).map(command => ({
       ...command,
       isStopping: stoppingBackgroundCommandIds.has(command.execSessionKey),
     })),
-    [backgroundCommands, showMockBackgroundActivities, stoppingBackgroundCommandIds],
+    [backgroundCommands, showMockBackgroundCommands, stoppingBackgroundCommandIds],
   );
-  const handleStopAllBackgroundSubagents = useCallback(() => {
-    for (const subagent of headerBackgroundSubagents) {
-      if (subagent.isStopping === true) {
-        continue;
-      }
-      void handleStopBackgroundSubagent(subagent);
-    }
-  }, [handleStopBackgroundSubagent, headerBackgroundSubagents]);
   const handleStopAllBackgroundCommands = useCallback(() => {
     for (const command of headerBackgroundCommands) {
       if (command.status !== 'running' || command.isStopping === true) {
@@ -1474,12 +2261,15 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
 
   return (
     <FlowChatContext.Provider value={contextValue}>
+      <FlowChatVolatileContext.Provider value={volatileContextValue}>
       <div
         ref={chatScopeRef}
         className={`modern-flowchat-container flow-chat-typography ${className}`}
         data-shortcut-scope="chat"
         data-testid="flowchat-container"
         data-session-id={activeSession?.sessionId ?? ''}
+        data-bf-component="modern-flow-chat"
+        data-bf-part="root"
       >
         <FlowChatHeader
           currentTurn={effectiveVisibleTurnInfo?.turnIndex ?? 0}
@@ -1487,29 +2277,22 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           currentUserMessage={currentHeaderMessage}
           visible={virtualItems.length > 0}
           sessionId={activeSession?.sessionId}
-          turns={headerTurnSummaries}
-          onJumpToTurn={handleJumpToTurn}
           onJumpToCurrentTurn={() => {
             const turnId = effectiveVisibleTurnInfo?.turnId;
-            if (turnId) handleJumpToTurn(turnId);
+            if (turnId) navigateToTurn(turnId);
           }}
-          onJumpToPreviousTurn={handleJumpToPreviousTurn}
-          onJumpToNextTurn={handleJumpToNextTurn}
-          canJumpToPreviousTurn={canJumpToPreviousTurn}
-          canJumpToNextTurn={canJumpToNextTurn}
           searchQuery={searchQuery}
-          onSearchChange={onSearchChange}
+          onSearchChange={handleSearchChange}
           searchMatchCount={searchMatches.length}
           searchCurrentMatch={searchMatches.length > 0 ? searchCurrentMatchIndex + 1 : 0}
           onSearchNext={handleSearchNext}
           onSearchPrev={handleSearchPrev}
           onSearchClose={clearSearch}
           searchOpenRequest={searchOpenRequest}
-          backgroundSubagents={headerBackgroundSubagents}
           backgroundCommands={headerBackgroundCommands}
-          onOpenBackgroundSubagent={handleOpenBackgroundSubagent}
-          onStopBackgroundSubagent={handleStopBackgroundSubagent}
-          onStopAllBackgroundSubagents={handleStopAllBackgroundSubagents}
+          onOpenSessionTreeSession={handleOpenSessionTreeSession}
+          hasActiveSessionTreeDescendants={hasActiveSessionTreeDescendants}
+          onCancelSessionTreeSession={handleCancelSessionTreeSession}
           onOpenBackgroundCommandOutput={handleOpenBackgroundCommandOutput}
           onRequestBackgroundCommandInput={handleRequestBackgroundCommandInput}
           onStopBackgroundCommand={handleStopBackgroundCommand}
@@ -1537,6 +2320,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         <div
           className="modern-flowchat-container__messages"
           data-testid="flowchat-messages"
+          data-bf-component="modern-flow-chat"
+          data-bf-part="messages"
           data-active-session-id={activeSession?.sessionId ?? ''}
           data-history-state={historyState ?? 'none'}
           data-context-restore-state={activeSession?.contextRestoreState ?? 'none'}
@@ -1549,6 +2334,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           data-show-history-open-intent-overlay={showHistoryOpenIntentOverlay ? 'true' : 'false'}
           data-has-pending-history-completion={hasPendingHistoryCompletion ? 'true' : 'false'}
           data-has-deferred-history-projection={hasDeferredHistoryProjection ? 'true' : 'false'}
+          data-presentation-mode={isRenderingHistoryProjection ? 'history-window' : 'tail'}
+          data-viewport-intent={activeViewportIntent?.kind ?? 'live-tail'}
           data-latest-turn-id={latestTurnId ?? ''}
           data-history-initial-content-ready={
             historyInitialContentKey === null || historyInitialContentReadyKey === historyInitialContentKey
@@ -1569,30 +2356,51 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
               />
             ) : virtualItems.length === 0 ? (
               showHistoryPlaceholder || showHistoryOpenIntentOverlay ? null : (
-                <WelcomePanel
-                  key={activeSession?.sessionId ?? 'welcome'}
-                  sessionMode={activeSession?.mode}
-                  workspacePath={activeSession?.workspacePath}
-                  onQuickAction={(command) => {
-                    window.dispatchEvent(new CustomEvent('fill-chat-input', {
-                      detail: { message: command }
-                    }));
-                  }}
-                />
+                emptyState !== undefined ? emptyState : (
+                  <WelcomePanel
+                    key={activeSession?.sessionId ?? 'welcome'}
+                    sessionMode={activeSession?.mode}
+                    workspacePath={activeSession?.workspacePath}
+                    onQuickAction={(command) => {
+                      window.dispatchEvent(new CustomEvent('fill-chat-input', {
+                        detail: { message: command }
+                      }));
+                    }}
+                  />
+                )
               )
             ) : (
               <>
                 <VirtualMessageList
                   ref={virtualListRef}
+                  items={virtualItems}
+                  isViewportActive={isViewportActive}
+                  presentationMode={isRenderingHistoryProjection ? 'history-window' : 'tail'}
+                  viewportMode={isReadingTurnViewport ? 'history-reading' : 'live-tail'}
+                  historyWindow={isShowingHistoryPresentation ? activeHistoryPresentation?.range ?? null : null}
+                  presentationRevision={isShowingHistoryPresentation ? activeHistoryPresentation?.revision ?? 0 : 0}
+                  historyBoundaryState={historyBoundaryState}
+                  onHistoryWindowBoundaryIntent={handleHistoryWindowBoundaryIntent}
+                  onRequestJumpToLatest={jumpToLiveTail}
                   onUserScrollIntent={handleVirtualListUserScrollIntent}
                 />
               </>
             )}
+            {virtualItems.length > 0 ? (
+              <FlowChatTurnRail
+                turns={turnRailItems}
+                currentTurnId={effectiveVisibleTurnInfo?.turnId ?? null}
+                visibleTurnIds={effectiveVisibleTurnInfo?.visibleTurnIds ?? []}
+                onNavigate={navigateToTurn}
+              />
+            ) : null}
             {showHistoryLoadingLayer && (
               <div
                 className="modern-flowchat-container__history-overlay"
                 role="status"
                 aria-label={t('historyState.loadingTitle')}
+                data-bf-component="modern-flow-chat"
+                data-bf-part="historyOverlay"
               >
                 <HistorySessionPlaceholder
                   state={historyState === 'metadata-only' ? 'metadata-only' : 'hydrating'}
@@ -1602,11 +2410,15 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
             {showHistoryOpenIntentOverlay && (
               <div
                 className="modern-flowchat-container__history-open-intent-shield"
+                data-bf-component="modern-flow-chat"
+                data-bf-part="historyOpenIntent"
                 role="status"
                 aria-label={t('historyState.loadingTitle')}
               >
                 <span
                   className="modern-flowchat-container__history-open-intent-spinner"
+                  data-bf-component="modern-flow-chat"
+                  data-bf-part="historyOpenIntentSpinner"
                   aria-hidden="true"
                 />
               </div>
@@ -1614,6 +2426,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           </>
         </div>
       </div>
+      </FlowChatVolatileContext.Provider>
     </FlowChatContext.Provider>
   );
 };

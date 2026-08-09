@@ -127,14 +127,6 @@ export function buildReviewTeamPromptBlockContent(
   const deferredManagedFiles = manifest.managedReviewPlan
     ? knownTargetFiles.filter((file) => !plannedManagedFiles.has(file))
     : [];
-  const specialistPool = [
-    ...manifest.coreReviewers,
-    ...manifest.enabledExtraReviewers,
-  ].map((member) => ({
-    subagent_type: member.subagentId,
-    role: member.roleName,
-    model_id: member.model,
-  }));
   const compactManifest = {
     review_mode: manifest.reviewMode,
     selected_strategy: manifest.strategyLevel,
@@ -163,7 +155,8 @@ export function buildReviewTeamPromptBlockContent(
           max_retries_per_role: manifest.executionPolicy.maxRetriesPerRole,
         }
         : {
-          max_specialist_calls: manifest.executionPolicy.maxReviewerCalls ?? 1,
+          max_spawned_calls: manifest.executionPolicy.maxReviewerCalls ?? 1,
+          max_focused_questions: manifest.adaptiveReview?.maxFocusedCalls ?? 0,
           max_review_agent_executions: manifest.tokenBudget.maxReviewerCalls,
           specialist_timeout_seconds: manifest.executionPolicy.reviewerTimeoutSeconds,
           quality_inspector_timeout_seconds: manifest.executionPolicy.judgeTimeoutSeconds,
@@ -185,7 +178,6 @@ export function buildReviewTeamPromptBlockContent(
         ),
       }
       : null,
-    specialist_pool: specialistPool,
     quality_inspector: manifest.qualityGateReviewer
       ? {
         subagent_type: manifest.qualityGateReviewer.subagentId,
@@ -217,14 +209,16 @@ export function buildReviewTeamPromptBlockContent(
       '- Retry only when evidence is still missing and within max_retries_per_role; do not invent additional packets.',
       '- Every packet result must report packet_id and status; preserve missing or inferred packet state in coverage notes.',
       '- LaunchReviewAgent waits in the owning review turn. Never convert managed packets to background Task calls.',
+      '- At most two distinct concrete questions may be attached to existing packets. They do not create extra packets or extra launches.',
       '- When managed_review_plan.deferred_file_count is non-zero, report partial coverage and list the deferred scope; do not present a clean approval as full coverage.',
       '- Submit one structured final report after the prepared packet plan completes.',
     );
   } else {
     rules.push(
       '- Review the prepared target directly before considering delegation.',
-      '- Launch at most one specialist, and only for a concrete uncertainty where a fresh focused pass can materially improve the result.',
-      '- Do not use a specialist to repeat the primary review, divide files, or provide routine role coverage.',
+      '- Use spawned checks only for concrete unresolved questions with independent value, within max_spawned_calls and max_focused_questions.',
+      '- Choose from the concise capability catalog exposed by LaunchReviewAgent. Do not repeat the primary review, divide files, or provide routine role coverage.',
+      '- Do not retry a failed focused check; continue conservatively with the evidence already available.',
       '- Run the quality inspector only when a high-severity finding, conflicting evidence, or low-confidence conclusion needs independent validation.',
       '- If no specialist or quality inspector is needed, complete the report directly.',
       '- Submit one structured final report after review and any justified validation complete.',

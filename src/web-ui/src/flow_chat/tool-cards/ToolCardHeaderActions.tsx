@@ -1,7 +1,7 @@
 import React from 'react';
 import { Check, Copy } from 'lucide-react';
 import { IconButton } from '../../component-library';
-import { useCopyTextAction } from './useCopyTextAction';
+import { useCopyTextAction } from '../hooks/useCopyTextAction';
 import './ToolCardHeaderActions.scss';
 
 interface ToolCardHeaderActionsProps {
@@ -16,6 +16,8 @@ export const ToolCardHeaderActions: React.FC<ToolCardHeaderActionsProps> = ({
   <span
     className={`tool-card-header-actions${className ? ` ${className}` : ''}`}
     onClick={(event) => event.stopPropagation()}
+    data-bf-component="tool-card-header-actions"
+    data-bf-part="root"
   >
     {children}
   </span>
@@ -53,6 +55,8 @@ export const ToolCardCopyAction: React.FC<ToolCardCopyActionProps> = ({
 
   return (
     <IconButton
+      data-bf-component="tool-card-header-actions"
+      data-bf-part="action"
       className={`tool-card-header-action tool-card-copy-action${copied ? ' copied' : ''}${className ? ` ${className}` : ''}`}
       variant="ghost"
       size="xs"

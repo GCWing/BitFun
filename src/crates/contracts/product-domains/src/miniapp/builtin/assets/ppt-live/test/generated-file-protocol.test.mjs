@@ -178,11 +178,20 @@ test('prompt pins the stable skill key and workspace-relative delivery contract'
   assert.match(prompt, /禁止.*Read references\/style-presets/);
 });
 
-test('backend adapter forwards preferred model into agent.run options', async () => {
+test('backend adapter reuses the topic session without overriding the host-selected model', async () => {
   const { installBitFunBackendAdapter } = await import('../src/bitfun-backend-adapter.js');
+  const ensureCalls = [];
   const calls = [];
   const app = {
     agent: {
+      ensureSession: async (options) => {
+        ensureCalls.push(options);
+        return {
+          sessionId: options.sessionId || 's1',
+          workspacePath: '/appdata/decks/demo',
+          created: !options.sessionId,
+        };
+      },
       run: async (_prompt, options) => {
         calls.push(options);
         return { sessionId: 's1', turnId: 't1', actionRunId: 't1' };
@@ -194,15 +203,108 @@ test('backend adapter forwards preferred model into agent.run options', async ()
     },
   };
   installBitFunBackendAdapter(app);
-  await app.backend.call('ppt.generate', { instruction: 'hi' }, {
+  const ensured = await app.backend.ensureSession({
     sessionId: 's1',
     appDataWorkspace: 'decks/demo',
     model: 'fast',
   });
+  await app.backend.call('ppt.generate', { instruction: 'internal prompt' }, {
+    sessionId: 's1',
+    appDataWorkspace: 'decks/demo',
+    model: 'fast',
+    displayText: '随便做几页测试页',
+  });
+  assert.equal(ensured.sessionId, 's1');
+  assert.deepEqual(ensureCalls, [{
+    sessionName: 'PPT Live',
+    sessionId: 's1',
+    appDataWorkspace: 'decks/demo',
+  }]);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].model, 'fast');
+  assert.equal(Object.hasOwn(calls[0], 'model'), false);
   assert.equal(calls[0].sessionId, 's1');
   assert.equal(calls[0].appDataWorkspace, 'decks/demo');
+  assert.equal(calls[0].displayText, '随便做几页测试页');
+});
+
+test('legacy model state is discarded and PPT Live no longer renders its own selector', async () => {
+  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  const previousWindow = globalThis.window;
+  const previousDocument = globalThis.document;
+  globalThis.window = { app: { locale: 'en-US' } };
+  globalThis.document = { documentElement: { lang: 'en-US' } };
+
+  let restored;
+  try {
+    const { ensureState } = await import('../src/state.js');
+    restored = ensureState({ preferredModel: 'fast' });
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+  }
+
+  assert.equal(Object.hasOwn(restored, 'preferredModel'), false);
+  assert.doesNotMatch(html, /modelSelect|propertiesModel/);
+});
+
+test('PPT topic lifecycle eagerly creates or rebinds its dedicated session', async () => {
+  const uiSource = await readFile(new URL('../ui.js', import.meta.url), 'utf8');
+
+  assert.match(uiSource, /async function ensureDeckAgentSession\(\)/);
+  assert.match(uiSource, /payload\?\.displayText/);
+  assert.match(uiSource, /displayText: options\.displayText \|\| requestInput\.instruction/);
+  assert.match(
+    uiSource,
+    /async function restoreHistory[\s\S]*await clearFocusedDeckAgentSession\(\);[\s\S]*await ensureDeckAgentSession\(\);/,
+  );
+  assert.match(
+    uiSource,
+    /async function newDeck[\s\S]*await clearFocusedDeckAgentSession\(\);[\s\S]*await ensureDeckAgentSession\(\);/,
+  );
+  assert.match(
+    uiSource,
+    /await recoverFromRestart\(\);[\s\S]*await ensureDeckAgentSession\(\);/,
+  );
+  assert.match(
+    uiSource,
+    /persistedSessionId[\s\S]*requestSession\(persistedSessionId\)/,
+  );
+  assert.doesNotMatch(
+    uiSource,
+    /state\.agentSession\s*=\s*\{[\s\S]{0,120}id:\s*['"]['"]/,
+  );
+});
+
+test('PPT Live declares a localized host-rendered Agentic bubble entry', async () => {
+  const uiSource = await readFile(new URL('../ui.js', import.meta.url), 'utf8');
+  const i18nSource = await readFile(new URL('../src/i18n.js', import.meta.url), 'utf8');
+
+  assert.match(uiSource, /claimComposer\?\.\(\{\s*composer:\s*\{\s*placeholder:\s*t\('bubblePlaceholder'\)/);
+  assert.doesNotMatch(uiSource, /panelSize:\s*'wide'/);
+  assert.doesNotMatch(uiSource, /composer:\s*\{[\s\S]*?rows:\s*3/);
+  assert.match(uiSource, /welcome:\s*\{[\s\S]*workspaceLabel:\s*t\('bubbleWorkspaceLabel'\)/);
+  assert.match(uiSource, /suggestions:\s*\[[\s\S]*welcomeTip1[\s\S]*welcomeTip2[\s\S]*welcomeTip3/);
+  assert.match(i18nSource, /bubbleWelcomeTitle:/);
+  assert.match(i18nSource, /bubbleWelcomeBody:/);
+  assert.match(i18nSource, /bubbleWorkspaceLabel:/);
+  assert.match(i18nSource, /bubbleSuggestionsLabel:/);
+});
+
+test('PPT Live guides users to the host launcher without placing copy beneath it', async () => {
+  const htmlSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  const styleSource = await readFile(new URL('../style.css', import.meta.url), 'utf8');
+  const i18nSource = await readFile(new URL('../src/i18n.js', import.meta.url), 'utf8');
+
+  assert.match(htmlSource, /class="bubble-hint__heading"/);
+  assert.match(htmlSource, /data-i18n="bubbleHintEyebrow"/);
+  assert.match(htmlSource, /class="bubble-hint__body"/);
+  assert.match(styleSource, /\.agent-card--bubble-hint\s*\{[\s\S]*padding:\s*18px 16px 76px/);
+  assert.match(styleSource, /\.bubble-hint__pointer\s*\{[\s\S]*max-width:\s*calc\(100% - 100px\)/);
+  assert.match(styleSource, /\.statusbar\s*\{[\s\S]*padding:\s*0 84px 0 var\(--space-4\)/);
+  assert.match(i18nSource, /bubbleHintTitle:\s*'Start with the PPT Live button'/);
+  assert.match(i18nSource, /bubbleHintTitle:\s*'从 PPT Live 按钮开始'/);
 });
 
 test('prompt carries a targeted contract diagnostic into same-session continuation', () => {

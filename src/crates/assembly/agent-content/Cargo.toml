@@ -1,0 +1,9 @@
+[package]
+name = "bitfun-agent-content"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Immutable built-in Agent prompt content"
+
+[lints]
+workspace = true

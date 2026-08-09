@@ -4,3 +4,4 @@
 /// remains in the chat and exec mode loops.
 pub(crate) mod agentic_system;
 pub(crate) mod runtime_client;
+pub(crate) mod tui_client;

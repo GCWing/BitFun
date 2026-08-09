@@ -16,6 +16,90 @@ fn context(workspace: &std::path::Path) -> ExternalSourceContext {
 }
 
 #[test]
+fn prepares_only_the_supported_synchronous_codex_command_subset() {
+    let root = tempdir().unwrap();
+    let codex_home = root.path().join("home/.codex");
+    let workspace = root.path().join("workspace");
+    fs::create_dir_all(&codex_home).unwrap();
+    fs::create_dir_all(&workspace).unwrap();
+    fs::create_dir_all(codex_home.join("hooks")).unwrap();
+    fs::write(codex_home.join("hooks/check.py"), b"print('codex')").unwrap();
+    let hooks_path = codex_home.join("hooks.json");
+    fs::write(
+        &hooks_path,
+        r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[
+          {"type":"command","command":"python .codex/hooks/check.py --private","commandWindows":"python .codex/hooks/check.py --private","timeout":17,"statusMessage":"Checking"},
+          {"type":"command","command":"later","async":true},
+          {"type":"prompt","prompt":"private"}
+        ]}],"UnsupportedEvent":[{"hooks":[{"type":"command","command":"never"}]}]}}"#,
+    )
+    .unwrap();
+    let provider = CodexHookProvider::new(CodexHookProviderOptions {
+        codex_home,
+        project_root_override: Some(workspace.clone()),
+        project_hooks_root_override: None,
+        project_hooks_enabled: true,
+    });
+    let ctx = context(&workspace);
+    let first_catalog = provider.discover(&ctx).unwrap();
+    let source = first_catalog.sources[0].clone();
+    let first = provider
+        .prepare_import(&ctx, &source.key, &source.content_version)
+        .unwrap();
+
+    assert_eq!(first.handlers.len(), 1);
+    assert_eq!(first.handlers[0].event, "PreToolUse");
+    assert_eq!(first.handlers[0].matcher.as_deref(), Some("Bash"));
+    assert!(first.handlers[0]
+        .command
+        .contains("__BITFUN_MANAGED_HOOK_ROOT__/hooks/check.py"));
+    assert!(first.handlers[0]
+        .command_windows
+        .as_deref()
+        .unwrap()
+        .contains("__BITFUN_MANAGED_HOOK_ROOT__/hooks/check.py"));
+    assert_eq!(first.handlers[0].timeout_seconds, Some(17));
+    assert_eq!(
+        first.handlers[0].status_message.as_deref(),
+        Some("Checking")
+    );
+    assert_eq!(first.assets.len(), 1);
+    assert_eq!(
+        first.assets[0].relative_path,
+        std::path::Path::new("hooks/check.py")
+    );
+    assert!(first
+        .skipped
+        .iter()
+        .any(|item| item.reason_code == "unsupported_behavior_field" && item.count == 1));
+    assert!(first
+        .skipped
+        .iter()
+        .any(|item| item.reason_code == "unsupported_handler_type" && item.count == 1));
+    assert!(first
+        .skipped
+        .iter()
+        .any(|item| item.reason_code == "unsupported_event" && item.count == 1));
+
+    fs::write(
+        &hooks_path,
+        r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[
+          {"type":"command","command":"python .codex/hooks/check.py --changed","commandWindows":"python .codex/hooks/check.py --private","timeout":17,"statusMessage":"Checking"},
+          {"type":"command","command":"later","async":true},
+          {"type":"prompt","prompt":"private"}
+        ]}],"UnsupportedEvent":[{"hooks":[{"type":"command","command":"never"}]}]}}"#,
+    )
+    .unwrap();
+    let second_catalog = provider.discover(&ctx).unwrap();
+    let second_source = &second_catalog.sources[0];
+    assert_eq!(source.content_version, second_source.content_version);
+    let second = provider
+        .prepare_import(&ctx, &second_source.key, &second_source.content_version)
+        .unwrap();
+    assert_ne!(first.behavior_version, second.behavior_version);
+}
+
+#[test]
 fn discovers_hooks_json_and_inline_toml_without_exposing_handler_content() {
     let root = tempdir().unwrap();
     let codex_home = root.path().join("home/.codex");

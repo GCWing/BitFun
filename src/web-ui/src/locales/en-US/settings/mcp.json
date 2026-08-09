@@ -19,6 +19,16 @@
     "loading": "Checking external MCP sources...",
     "unavailable": "External MCP is temporarily unavailable.",
     "empty": "No external MCP found.",
+    "import": {
+      "preview": "Import into BitFun",
+      "confirm": "Import {{count}} supported server(s) as disabled native entries?",
+      "apply": "Import",
+      "cancel": "Cancel",
+      "applied": "Imported. Review and enable servers from MCP settings when ready.",
+      "stale": "Sources or target settings changed. Review the refreshed plan.",
+      "empty": "No supported servers are available to import.",
+      "failed": "Import is temporarily unavailable."
+    },
     "unknown": "Unknown",
     "scope": {
       "userGlobal": "Global",

@@ -10,10 +10,10 @@ use crate::service::config::agent_profile_project_store::{
 };
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::mode_config_canonicalizer::persist_agent_profile_from_value;
-use crate::service::config::types::AgentProfileConfig;
+use crate::service::config::types::{AgentProfileConfig, SkillSettingsConfig};
 use crate::util::errors::{BitFunError, BitFunResult};
-use bitfun_agent_runtime::skills::normalize_user_mode_skill_overrides;
 pub use bitfun_agent_runtime::skills::UserModeSkillOverrides;
+use bitfun_agent_runtime::skills::{normalize_skill_keys, normalize_user_mode_skill_overrides};
 use serde_json::json;
 use std::collections::HashMap;
 use std::path::Path;
@@ -87,6 +87,48 @@ pub async fn clear_user_mode_skill_overrides(
     .await?;
 
     load_user_mode_skill_overrides(mode_id).await
+}
+
+pub async fn load_globally_disabled_user_skills() -> BitFunResult<Vec<String>> {
+    let config_service = GlobalConfigManager::get_service().await?;
+    let settings: SkillSettingsConfig = config_service
+        .get_config(Some("ai.skill_settings"))
+        .await
+        .unwrap_or_default();
+    Ok(normalize_skill_keys(settings.globally_disabled_user_skills))
+}
+
+pub async fn set_global_user_skill_disabled(
+    skill_key: &str,
+    disabled: bool,
+) -> BitFunResult<Vec<String>> {
+    let skill_key = skill_key.trim();
+    if skill_key.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let config_service = GlobalConfigManager::get_service().await?;
+    let mut settings: SkillSettingsConfig = config_service
+        .get_config(Some("ai.skill_settings"))
+        .await
+        .unwrap_or_default();
+
+    if disabled {
+        settings
+            .globally_disabled_user_skills
+            .push(skill_key.to_string());
+    } else {
+        settings
+            .globally_disabled_user_skills
+            .retain(|key| key != skill_key);
+    }
+    settings.globally_disabled_user_skills =
+        normalize_skill_keys(settings.globally_disabled_user_skills);
+
+    config_service
+        .set_config("ai.skill_settings", &settings)
+        .await?;
+    Ok(settings.globally_disabled_user_skills)
 }
 
 pub fn project_mode_skills_path_for_remote(remote_root: &str) -> String {

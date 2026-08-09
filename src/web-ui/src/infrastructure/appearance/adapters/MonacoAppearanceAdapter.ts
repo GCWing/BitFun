@@ -1,0 +1,150 @@
+import type * as Monaco from 'monaco-editor';
+import { createLogger } from '@/shared/utils/logger';
+import type {
+  AppearanceRendererAdapter,
+  AppearanceRendererContext,
+  MonacoAppearanceSettings,
+} from '../types';
+
+const log = createLogger('MonacoAppearanceAdapter');
+
+export interface MonacoAppearanceChangeEvent {
+  previousThemeId: string | null;
+  currentThemeId: string;
+  revision: number;
+}
+
+type MonacoModule = typeof Monaco;
+type MonacoAppearanceListener = (event: MonacoAppearanceChangeEvent) => void;
+
+const COLOR_PATTERN = /^(?:#[0-9a-f]{3,8}|rgba?\(\s*\d+(?:\.\d+)?\s*,\s*\d+(?:\.\d+)?\s*,\s*\d+(?:\.\d+)?(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\))$/i;
+const TOKEN_COLOR_PATTERN = /^(?:[0-9a-f]{6}|[0-9a-f]{8}|#[0-9a-f]{3,8}|rgba?\(\s*\d+(?:\.\d+)?\s*,\s*\d+(?:\.\d+)?\s*,\s*\d+(?:\.\d+)?(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\))$/i;
+const FONT_STYLE_PATTERN = /^(?:|italic|bold|underline|strikethrough)(?: (?:italic|bold|underline|strikethrough))*$/;
+const THEME_ID_PATTERN = /^[a-z][a-z0-9-]{0,95}$/;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export class MonacoAppearanceAdapter implements AppearanceRendererAdapter<'monaco'> {
+  readonly id = 'monaco';
+
+  private monaco: MonacoModule | null = null;
+  private settings: MonacoAppearanceSettings | null = null;
+  private revision = 0;
+  private currentThemeId: string | null = null;
+  private listeners = new Set<MonacoAppearanceListener>();
+
+  validate(settings: unknown): string[] {
+    const errors: string[] = [];
+    if (!isRecord(settings)) return ['Settings must be an object'];
+    const known = new Set(['id', 'base', 'inherit', 'rules', 'colors']);
+    Object.keys(settings).forEach(key => {
+      if (!known.has(key)) errors.push(`Unknown setting: ${key}`);
+    });
+    if (typeof settings.id !== 'string' || !THEME_ID_PATTERN.test(settings.id)) {
+      errors.push('id must contain only lowercase letters, digits, and hyphens');
+    }
+    if (!['vs', 'vs-dark', 'hc-black', 'hc-light'].includes(String(settings.base))) {
+      errors.push('base must be a supported Monaco base theme');
+    }
+    if (typeof settings.inherit !== 'boolean') errors.push('inherit must be boolean');
+    if (!Array.isArray(settings.rules) || settings.rules.length > 512) {
+      errors.push('rules must be an array with at most 512 entries');
+    } else {
+      settings.rules.forEach((rule, index) => {
+        if (!isRecord(rule) || typeof rule.token !== 'string' || rule.token.length > 160) {
+          errors.push(`rules.${index}.token is invalid`);
+          return;
+        }
+        const keys = new Set(['token', 'foreground', 'background', 'fontStyle']);
+        Object.keys(rule).forEach(key => {
+          if (!keys.has(key)) errors.push(`rules.${index} has unknown field ${key}`);
+        });
+        for (const key of ['foreground', 'background'] as const) {
+          const color = rule[key];
+          if (color !== undefined && (typeof color !== 'string' || !TOKEN_COLOR_PATTERN.test(color))) {
+            errors.push(`rules.${index}.${key} is not a supported color`);
+          }
+        }
+        if (rule.fontStyle !== undefined && (typeof rule.fontStyle !== 'string' || !FONT_STYLE_PATTERN.test(rule.fontStyle))) {
+          errors.push(`rules.${index}.fontStyle is invalid`);
+        }
+      });
+    }
+    if (!isRecord(settings.colors) || Object.keys(settings.colors).length > 512) {
+      errors.push('colors must be an object with at most 512 entries');
+    } else {
+      Object.entries(settings.colors).forEach(([key, value]) => {
+        if (!/^[A-Za-z][A-Za-z0-9.]{0,159}$/.test(key)) errors.push(`colors.${key} has an invalid key`);
+        if (typeof value !== 'string' || !COLOR_PATTERN.test(value)) errors.push(`colors.${key} is not a supported color`);
+      });
+    }
+    return errors;
+  }
+
+  async apply(
+    next: Readonly<MonacoAppearanceSettings> | undefined,
+    _previous: Readonly<MonacoAppearanceSettings> | undefined,
+    context: AppearanceRendererContext,
+  ): Promise<void> {
+    const settings = next ?? null;
+    if (settings) {
+      const errors = this.validate(settings);
+      if (errors.length > 0) throw new Error(`Invalid Monaco appearance: ${errors.join('; ')}`);
+    }
+    this.settings = settings;
+    this.revision = context.revision;
+    if (this.monaco && settings) this.applyToMonaco(this.monaco, settings, context.revision);
+  }
+
+  initialize(): void {
+    if (this.monaco && this.settings) this.applyToMonaco(this.monaco, this.settings, this.revision);
+  }
+
+  attachMonaco(monaco: MonacoModule): string {
+    this.monaco = monaco;
+    const settings = this.requireSettings();
+    this.applyToMonaco(monaco, settings, this.revision);
+    return settings.id;
+  }
+
+  getCurrentThemeId(): string {
+    return this.currentThemeId ?? this.requireSettings().id;
+  }
+
+  subscribe(listener: MonacoAppearanceListener): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private applyToMonaco(monaco: MonacoModule, settings: MonacoAppearanceSettings, revision: number): void {
+    const previousThemeId = this.currentThemeId;
+    monaco.editor.defineTheme(settings.id, {
+      base: settings.base,
+      inherit: settings.inherit,
+      rules: settings.rules,
+      colors: settings.colors,
+    });
+    monaco.editor.setTheme(settings.id);
+    monaco.editor.getEditors().forEach((editor, index) => {
+      try {
+        editor.updateOptions({});
+      } catch (error) {
+        log.warn('Failed to refresh editor after appearance change', { index, error });
+      }
+    });
+    this.currentThemeId = settings.id;
+    if (previousThemeId !== settings.id) {
+      const event = { previousThemeId, currentThemeId: settings.id, revision };
+      this.listeners.forEach(listener => listener(event));
+    }
+  }
+
+  private requireSettings(): MonacoAppearanceSettings {
+    if (!this.settings) throw new Error('Monaco appearance has not been applied');
+    return this.settings;
+  }
+}
+
+export const monacoAppearanceAdapter = new MonacoAppearanceAdapter();

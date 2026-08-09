@@ -32,7 +32,7 @@
 | CLI/TUI | 宿主 `ACTION_SPECS` 已统一 Slash、Palette、Help、Keymap 与 dispatch；启动页及活动 turn 的 Linux PTY / Windows ConPTY 行为由进程级契约保护 | 保持现有 renderer 与交互规格，只按真实故障样例补可靠性契约；macOS 活动 PTY 另行验收 |
 | OpenCode | Prompt Command、受支持的单文件 JavaScript Tool 和 Subagent 安全子集已分别通过能力专属 provider 接入；受管 package plugin 仍只有静态预览 | 先收敛三条已交付路径的诊断、运行时提示和配置失败语义，再按真实阻塞样例评估下一能力切片 |
 | HarmonyOS PC | 未来平台目标，当前未实现 | 目标、问题、风险和旧设计闭环见平台规约；具体工作后续分别立项 |
-| 入口迁移 | CLI 已消费 Runtime Parts；Desktop 主交互消费由现有 owner 构造的窄口径 Runtime SDK 门面，完整 Desktop Runtime Parts 尚未组装；CLI/ACP/Desktop 仍按需保留 `bitfun-core/product-full` 兼容 owner | 保持单一 owner，按真实端口逐项迁移，不批量删除兼容门面或用桩服务提前声明能力 |
+| 入口迁移 | CLI 已消费 Runtime Parts；Desktop 主交互消费由现有 owner 构造的窄口径 Runtime SDK 门面，完整 Desktop Runtime Parts 尚未组装；CLI 与 ACP 选择经过评审的 Core owner feature closure，Desktop 仍保留 `bitfun-core/product-full` 兼容 owner | 保持单一运行时 owner，按真实端口逐项迁移，不批量删除兼容门面或用桩服务提前声明能力 |
 
 ## 3. 工作流一：边界与依赖可信
 

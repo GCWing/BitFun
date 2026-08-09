@@ -19,6 +19,20 @@ const {
 const packageJsonPath = path.resolve(__dirname, '../package.json');
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
 
+function parseBuildEnv(args) {
+  const index = args.indexOf('--build-env');
+  const buildEnv = index >= 0 ? args[index + 1] : undefined;
+  if (!['development', 'production', 'preview'].includes(buildEnv)) {
+    throw new Error('Expected --build-env development|production|preview');
+  }
+  return buildEnv;
+}
+
+function readArg(args, name) {
+  const index = args.indexOf(name);
+  return index >= 0 ? args[index + 1] : undefined;
+}
+
 function getGitInfo() {
   try {
     const gitCommitFull = execSync('git rev-parse HEAD', { encoding: 'utf-8' }).trim();
@@ -40,11 +54,10 @@ function getGitInfo() {
   }
 }
 
-function generateVersionInfo() {
+function generateVersionInfo(buildEnv) {
   const gitInfo = getGitInfo();
   const buildDate = new Date().toISOString();
   const buildTimestamp = Date.now();
-  const buildEnv = process.env.NODE_ENV || 'development';
   const isDev = buildEnv === 'development';
   
   const versionInfo = {
@@ -60,8 +73,8 @@ function generateVersionInfo() {
   return versionInfo;
 }
 
-function saveVersionInfoToJson(versionInfo) {
-  const outputPath = path.resolve(__dirname, '../src/web-ui/public/version.json');
+function saveVersionInfoToJson(versionInfo, outputRoot) {
+  const outputPath = path.resolve(outputRoot, 'src/web-ui/public/version.json');
   
   const dir = path.dirname(outputPath);
   if (!fs.existsSync(dir)) {
@@ -75,8 +88,8 @@ function saveVersionInfoToJson(versionInfo) {
   );
 }
 
-function saveVersionInfoToTS(versionInfo) {
-  const outputPath = path.resolve(__dirname, '../src/web-ui/src/generated/version.ts');
+function saveVersionInfoToTS(versionInfo, outputRoot) {
+  const outputPath = path.resolve(outputRoot, 'src/web-ui/src/generated/version.ts');
   
   const dir = path.dirname(outputPath);
   if (!fs.existsSync(dir)) {
@@ -104,13 +117,16 @@ function generateHtmlInjectionScript(versionInfo) {
 }
 
 function main() {
-  const versionInfo = generateVersionInfo();
+  const args = process.argv.slice(2);
+  const buildEnv = parseBuildEnv(args);
+  const outputRoot = path.resolve(readArg(args, '--output-root') || path.resolve(__dirname, '..'));
+  const versionInfo = generateVersionInfo(buildEnv);
   
-  saveVersionInfoToJson(versionInfo);
-  saveVersionInfoToTS(versionInfo);
+  saveVersionInfoToJson(versionInfo, outputRoot);
+  saveVersionInfoToTS(versionInfo, outputRoot);
   
   const htmlScript = generateHtmlInjectionScript(versionInfo);
-  const htmlScriptPath = path.resolve(__dirname, '../src/web-ui/src/generated/version-injection.html');
+  const htmlScriptPath = path.resolve(outputRoot, 'src/web-ui/src/generated/version-injection.html');
   
   const htmlDir = path.dirname(htmlScriptPath);
   if (!fs.existsSync(htmlDir)) {
@@ -123,12 +139,11 @@ function main() {
   printSuccess(`${versionInfo.name} v${versionInfo.version}${gitStr}`);
 }
 
-// On failure: warn and exit 0 so build is not interrupted
 try {
   main();
 } catch (err) {
-  printWarning('Version info generation failed, skipped: ' + (err.message || err));
-  process.exit(0);
+  printWarning('Version info generation failed: ' + (err.message || err));
+  process.exit(1);
 }
 
 

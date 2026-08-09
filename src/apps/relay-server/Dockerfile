@@ -61,8 +61,9 @@ RUN set -eux; \
         > /usr/local/cargo/config.toml; \
     fi
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+RUN apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update \
+    && apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 \
+      install -y --no-install-recommends \
         pkg-config \
         build-essential \
         ca-certificates \
@@ -145,8 +146,9 @@ RUN set -eux; \
           /etc/apt/sources.list.d/debian.sources; \
       fi; \
     fi; \
-    apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl \
+    apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update \
+    && apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 \
+      install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

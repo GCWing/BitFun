@@ -145,7 +145,7 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
   const isDragging = draggingTabId !== null;
 
   return (
-    <div
+    <div data-bf-component="canvas-editor-group" data-bf-part="root" data-bf-group={groupId} data-bf-state={isActive ? 'active' : ''}
       className={`canvas-editor-group ${isActive ? 'is-active' : ''}`}
       onClick={onGroupFocus}
     >
@@ -175,12 +175,14 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
         splitMode={splitMode}
         onDrop={onDrop}
       >
-        <div className="canvas-editor-group__content">
+        <div data-bf-component="canvas-editor-group" data-bf-part="content" className="canvas-editor-group__content">
           {/* Render cached tabs (active shown, others hidden) for instant switching */}
           {tabsToRender.length > 0 ? (
             tabsToRender.map((tab) => (
               <div
                 key={tab.id}
+                data-bf-component="canvas-editor-group"
+                data-bf-part="tabContent"
                 className="canvas-editor-group__tab-content"
                 style={{ display: group.activeTabId === tab.id ? 'flex' : 'none' }}
               >
@@ -201,8 +203,8 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
               </div>
             ))
           ) : visibleTabs.length === 0 ? (
-            <div className="canvas-editor-group__empty">
-              <div className="canvas-editor-group__empty-content">
+            <div data-bf-component="canvas-editor-group" data-bf-part="empty" className="canvas-editor-group__empty">
+              <div data-bf-component="canvas-editor-group" data-bf-part="emptyContent" className="canvas-editor-group__empty-content">
                 <span>{t('canvas.dragTabHere')}</span>
               </div>
             </div>

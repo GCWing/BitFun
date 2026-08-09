@@ -34,7 +34,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
   if (displayMode === 'compact') {
     return (
-      <div className={`task-card task-card--compact task-card--${status}`}>
+      <div className={`task-card task-card--compact task-card--${status}`} data-bf-component="flow-chat-card" data-bf-part="compact" data-bf-display="compact" data-bf-status={status}>
         <Bot className="task-card__icon" size={14} />
         <span className="task-card__action">{resolvedTaskType}:</span>
         <span className="task-card__description" title={resolvedDescription}>
@@ -54,7 +54,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       displayMode={displayMode}
       input={input}
       result={result}
-      primaryColor="var(--color-purple-600)"
+      primaryColor="var(--bf-appearance-token-color-purple-600)"
       className="task-card"
       {...baseProps}
     >
@@ -70,7 +70,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       </div>
 
       {status === 'completed' && resolvedResult && (
-        <div className="task-card__result-section">
+        <div className="task-card__result-section" data-bf-component="flow-chat-card" data-bf-part="result">
           <button
             className="task-card__result-header"
             onClick={() => setIsExpanded(!isExpanded)}
@@ -89,7 +89,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       )}
 
       {(status === 'running' || status === 'streaming') && (
-        <div className="task-card__executing">
+        <div className="task-card__executing" data-bf-component="flow-chat-card" data-bf-part="processing">
           <Bot className="task-card__executing-icon" size={14} />
           <span>{t('flowChatCards.taskCard.processing')}</span>
         </div>

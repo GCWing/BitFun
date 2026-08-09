@@ -74,19 +74,19 @@ export const Avatar: React.FC<AvatarProps> = ({
 
   const renderContent = () => {
     if (src && !imgError) {
-      return <img src={src} alt={alt} onError={handleImgError} />;
+      return <img src={src} alt={alt} onError={handleImgError} data-bf-component="avatar" data-bf-part="image" />;
     }
     if (icon) {
-      return <span className="bitfun-avatar__icon">{icon}</span>;
+      return <span className="bitfun-avatar__icon" data-bf-component="avatar" data-bf-part="icon">{icon}</span>;
     }
     if (children) {
-      return <span className="bitfun-avatar__text">{children}</span>;
+      return <span className="bitfun-avatar__text" data-bf-component="avatar" data-bf-part="text">{children}</span>;
     }
     return null;
   };
 
   return (
-    <span className={avatarClass} style={avatarStyle}>
+    <span className={avatarClass} style={avatarStyle} data-bf-component="avatar" data-bf-part="root" data-bf-size={typeof size === 'string' ? size : 'custom'} data-bf-shape={shape}>
       {renderContent()}
     </span>
   );
@@ -105,10 +105,10 @@ export const AvatarGroup: React.FC<AvatarGroupProps> = ({
   const restCount = childrenArray.length - maxCount;
 
   return (
-    <div className={`bitfun-avatar-group ${className}`} style={style}>
+    <div className={`bitfun-avatar-group ${className}`} style={style} data-bf-component="avatar" data-bf-part="group">
       {displayChildren}
       {restCount > 0 && (
-        <Avatar className="bitfun-avatar-group__rest">+{restCount}</Avatar>
+        <Avatar className="bitfun-avatar-group__rest"><span data-bf-component="avatar" data-bf-part="overflow">+{restCount}</span></Avatar>
       )}
     </div>
   );

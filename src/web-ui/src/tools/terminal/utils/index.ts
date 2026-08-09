@@ -31,10 +31,5 @@ export type {
   ResizeRepaintScreenSnapshot,
   ResizeRepaintSuppressionDetails,
 } from './resizeRepaintGuard';
-export {
-  buildXtermTheme,
-  getXtermAnsiPalette,
-  getXtermFontWeights,
-  DEFAULT_XTERM_MINIMUM_CONTRAST_RATIO,
-} from './xtermTheme';
+export { DEFAULT_XTERM_MINIMUM_CONTRAST_RATIO } from './xtermRendering';
 

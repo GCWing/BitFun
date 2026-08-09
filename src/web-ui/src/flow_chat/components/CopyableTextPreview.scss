@@ -1,0 +1,68 @@
+.copyable-text-preview {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--bf-appearance-token-tool-card-font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.copyable-text-preview.copyable-text-preview--theme-font {
+  font-family: var(--bf-appearance-token-font-family-sans);
+}
+
+.copyable-text-preview--compact {
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+  line-height: var(--bf-appearance-token-flowchat-support-line-height);
+  font-weight: normal;
+  color: var(--bf-appearance-token-color-text-muted);
+}
+
+.copyable-text-preview__empty {
+  color: color-mix(in srgb, var(--bf-appearance-token-color-error) 72%, var(--bf-appearance-token-color-static-white));
+  font-style: italic;
+}
+
+.copyable-text-preview-tooltip-content {
+  max-width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bf-appearance-token-size-gap-2);
+  font-family: var(--bf-appearance-token-font-family-sans);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  line-height: var(--bf-appearance-token-flowchat-support-line-height);
+}
+
+.copyable-text-preview-tooltip-content__text {
+  min-width: 0;
+  flex: 1;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.copyable-text-preview-tooltip {
+  .bitfun-tooltip__content {
+    max-width: min(960px, calc(100vw - 32px));
+  }
+}
+
+.copyable-text-preview-tooltip__copy {
+  flex: none;
+  margin-top: 1px;
+  color: var(--bf-appearance-token-color-text-muted);
+
+  &.icon-btn--xs {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+
+    svg {
+      width: 12px;
+      height: 12px;
+    }
+  }
+
+  &.copied {
+    color: var(--bf-appearance-token-color-success);
+  }
+}

@@ -3,10 +3,71 @@
 本文定义 BitFun 如何从同一源码构建不同产品，以及产品内置扩展与用户插件如何共存。仓库级边界以
 [产品架构](product-architecture.md)为准；主题规则见[主题设计](theme-token-optimization.md)；运行时扩展见
 [OpenCode 扩展兼容总览](extensions/opencode-extension-compatibility.md)和
-[插件运行时主机](extensions/plugin-runtime-host-design.md)。
+[插件运行时与 Plugin Host](extensions/plugin-runtime-design.md)。
 
-本文是目标设计，不表示相关构建任务或配置格式已实现。设计只保留已有或近期有明确消费方的概念，不建立通用
-白标平台、构建脚本运行时或跨 GUI/TUI 的组件协议。
+本文同时记录长期目标边界与最小架构切片。设计只保留已有或近期有明确消费方的概念，不建立通用
+白标平台、构建脚本运行时或跨 GUI/TUI 的组件协议；未在“当前实现”中列出的对象只是后续边界，不应被视为已支持能力。
+
+## 0. 当前实现（C0a）
+
+C0a 实现一个构建期 JSONC 产品定义、严格解析器和确定性解析摘要，入口位于 `products/` 与
+`scripts/product-customization/`。默认命令不需要参数；只有多产品仓库、CI 矩阵或外部定义文件需要显式传入
+`--product-config <path>`。不存在产品 ID 注册表、运行时主选择器或用于选源的环境变量。
+
+当前真实消费者只有：
+
+- Desktop build adapter：从解析结果覆盖 Tauri `productName`、`mainBinaryName` 与 bundle identifier；
+- CLI dev/build wrapper：从同一解析结果设置命令名、隔离定制构建缓存，并按成员 `binaryName` 暂存构建产物；
+
+`product:check` / `product:explain` 只是构建作者的校验与解释工具，不计作产品字段的生产消费者。C0a 不生成无人读取的
+通用产品 manifest 或 locale projection；Desktop 与 CLI build adapter 直接消费同一次内存解析结果。
+
+产品定义 v1 仅包含已被这些消费者读取的字段，未知字段一律拒绝。localized 名称独立于技术 ID，并按共享 locale contract
+校验后交给各自 build adapter。
+
+C0a 不声称生成可独立发行的完整品牌产品。品牌资产、GUI/TUI 布局、插件/内置扩展选择、Installer/Store target、
+用户数据隔离、更新与签名、运行时全量品牌替换均延期；每一项必须在出现真实 owner 和消费者后独立扩展 schema 与组装结果。
+
+### 0.1 当前定义与解析契约
+
+产品定义描述一个 family，其中 Desktop 与 CLI 是分别命名、分别消费的成员；Installer 与 Store 是可能的 Desktop
+交付目标，不是独立成员，当前也没有对应实现。schema v1 只接受以下已消费字段：
+
+```jsonc
+{
+  "$schema": "../schemas/product-definition.schema.json",
+  "schemaVersion": 1,
+  "localeRoot": "./locales",
+  "members": {
+    "desktop": {
+      "displayNameKey": "product.desktop.name",
+      "binaryName": "acme-desktop",
+      "bundleId": "com.acme.desktop"
+    },
+    "cli": {
+      "displayNameKey": "product.cli.name",
+      "binaryName": "acme"
+    }
+  }
+}
+```
+
+解析器先校验完整 family、双方 locale key、owned path 与技术 ID，再选择命令对应成员；digest-bearing `assembly`
+只携带 schema/source digest、成员、display-name key、binary/bundle identity、locale contract facts 与 assembly digest。
+构建 adapter 所需的源路径、localized 名称、输出目录和 default-product 标记保留在外围 build context，不扩展成通用
+manifest。相同输入必须产生相同摘要；非默认产品使用 digest-scoped Cargo target 目录，避免复用其他产品的编译期身份。
+
+默认构建不需要选择参数。构建作者与 CI 只通过
+`--product-config <path>` 指向定义；`product:check` 校验完整 family 并报告选定成员 assembly，`product:explain`
+解释来源、localized 名称、技术 identity 与摘要。binary/bundle identity 不作为可见名称，产品 locale 必须符合共享
+i18n locale 集合和 key parity。
+
+### 0.2 修改与验证
+
+- 只修改默认产品定义或资源引用时运行 `pnpm run product:check`；非默认定义运行
+  `pnpm run product:check -- --product-config <path>`，确保校验实际改动的产品；
+- 修改 schema、resolver 或 Desktop/CLI build adapter 行为时，再运行 `pnpm run product:test`；
+- 打包和平台矩阵只在变更触及对应交付路径时运行，不作为产品定义的默认本地预检。
 
 ## 1. 设计结论
 
@@ -50,7 +111,7 @@ flowchart LR
   Registry["产品能力与界面注册表"] --> Validate
   Validate --> Result["产品组装结果"]
   Result --> Package["Desktop / Web / CLI / Installer 打包"]
-  Result --> Runtime["运行时产品组装"]
+  Result --> Runtime["Product Assembly"]
   User["用户配置与插件"] --> Runtime
 ```
 
@@ -63,7 +124,7 @@ flowchart LR
 5. 解析内置扩展的固定版本、内容摘要、必要性和不可用时的产品行为。
 6. 输出产品组装结果，供打包、签名和运行时启动使用。
 
-交付形态与目标平台保持正交。HarmonyOS PC 原生 TUI 仍是 `CLI` 交付，不把 HAP 或手机 Remote App 写入 CLI
+交付形态与目标平台保持互不影响。HarmonyOS PC 原生 TUI 仍是 `CLI` 交付，不把 HAP 或手机 Remote App 写入 CLI
 组装结果；具体平台适配、PC GUI 和移动端均另立专题。
 
 相同输入必须产生相同的产品组装结果。未知必需字段、未注册 ID、缺失资源、能力冲突和摘要不匹配直接使构建
@@ -113,8 +174,8 @@ flowchart LR
 | 产品能力注册表 | 声明当前源码真正可组装的能力及依赖 | 保存运行时健康状态或用户权限 |
 | GUI 宿主 | 注册 GUI 布局、场景、面板、主题和可访问性约束 | 解释 TUI 布局或 OpenCode TUI 组件 |
 | CLI/TUI 宿主 | 注册终端布局、命令、状态、键位和主题 | 读取 GUI 组件或 CSS 变量 |
-| 运行时产品组装 | 使用组装结果选择已编译服务和默认值，再加载用户配置与插件 | 执行构建脚本或重新解析品牌资源 |
-| 插件运行时主机 | 执行产品内置扩展和用户插件，提供隔离、期限与恢复 | 决定产品身份或能力上限 |
+| Product Assembly | 使用组装结果选择已编译服务和默认值，再加载用户配置与插件 | 执行构建脚本或重新解析品牌资源 |
+| `PluginRuntimeClient` + Plugin Host | 前者提供调用可靠性，后者在子进程执行用户插件；产品内置扩展是否进入同一边界由其真实执行方式决定 | 决定产品身份或能力上限 |
 
 品牌资源生成、locale 校验和图标转换继续由现有构建脚本完成。脚本输出进入品牌资源目录后，再由构建期校验器
 统一检查。若未来确有多个产品复用同一种生成任务，应先复用普通构建工具；没有真实需求前不发布通用脚本 API。
@@ -163,13 +224,13 @@ GUI 主题由 Web/TS 主题模块定义，TUI 主题由 CLI/TUI 宿主定义，I
 | 维度 | 产品内置扩展 | BitFun 原生包 | OpenCode 标准来源 |
 |---|---|---|---|
 | 版本 | 由产品组装结果固定版本和内容摘要 | 按现有 BitFun 包记录管理 | 按配置、目录、npm/file spec 和执行版本记录管理 |
-| 启用 | 由产品定义选择 | 保留现有来源确认和激活 | 标准来源自动发现；可执行 target 首次按来源/执行域/能力摘要确认，同一摘要下不逐层重复审批 |
-| 更新 | 随产品升级和回滚 | 用户或组织独立更新、停用和卸载 | 来源身份/完整性和更新策略允许时自动准备普通候选；软件包版本/完整性未获更新策略覆盖或能力扩大时等待确认；失败时只保留仍合规的健康旧进程，精确旧物化目录可校验时才重建 |
+| 启用 | 由产品定义选择 | 保留现有来源确认和激活 | 标准来源自动发现；可执行插件首次按来源、插件身份、执行域和能力摘要确认，同一摘要下不逐层重复审批 |
+| 更新 | 随产品升级和回滚 | 用户或组织独立更新、停用和卸载 | 来源身份/完整性和更新策略允许时自动准备普通候选；软件包版本/完整性未获更新策略覆盖或能力扩大时等待确认；失败时只保留仍合规的健康旧进程，经内容摘要校验的旧版本副本仍存在时才重建 |
 | 权限 | 使用同一有效策略；直接脚本副作用受真实 OS/容器边界限制 | 同左 | 同左 |
 | 执行 | 与其他插件走同一进程隔离、期限、取消和恢复路径 | 同左 | 同左 |
 | 冲突 | 作为 BitFun 候选保留并在选择界面优先展示；少量产品保护项除外 | 与其他 BitFun 候选一并优先展示 | 生态内按 OpenCode 顺序；跨生态同名时由用户选择，不静默覆盖 |
 
-管理、停用和更新使用包含生态、来源类型、规范化来源地址和 target 的来源限定运行实例身份；声明 `id` 只参与
+管理、停用和更新使用包含生态、来源类型、规范化来源地址和插件身份的来源限定运行实例身份；声明 `id` 只参与
 生态识别和贡献覆盖，不能单独作为管理键。因此同名产品内置、BitFun 原生和 OpenCode 来源可以共存，且状态与
 更新互不串用。
 

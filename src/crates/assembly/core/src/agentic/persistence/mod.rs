@@ -7,6 +7,6 @@ pub mod session_branch;
 
 pub use bitfun_runtime_ports::SessionTurnLoadTiming;
 pub use bitfun_services_core::session::{
-    SessionBranchRequest, SessionBranchResult, SessionMetadataPage,
+    SessionBranchRequest, SessionBranchResult, SessionLineageSnapshot, SessionMetadataPage,
 };
 pub use manager::{MaterializedSessionReferenceTranscript, PersistenceManager};

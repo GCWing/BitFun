@@ -17,10 +17,10 @@ use tokio::time::{timeout, Duration};
 
 use crate::api::app_state::AppState;
 use bitfun_core::agentic::tools::implementations::skills::mode_overrides::{
-    clear_user_mode_skill_overrides, load_project_mode_skills_document_local,
-    project_mode_skills_path_for_remote, save_project_mode_skills_document_local,
-    set_disabled_mode_skills_in_document, set_mode_skill_disabled_in_document,
-    set_user_mode_skill_state,
+    clear_user_mode_skill_overrides, load_globally_disabled_user_skills,
+    load_project_mode_skills_document_local, project_mode_skills_path_for_remote,
+    save_project_mode_skills_document_local, set_disabled_mode_skills_in_document,
+    set_global_user_skill_disabled, set_mode_skill_disabled_in_document, set_user_mode_skill_state,
 };
 use bitfun_core::agentic::tools::implementations::skills::{
     resolver::resolve_skill_default_enabled_for_mode, ModeSkillInfo, SkillData, SkillInfo,
@@ -121,6 +121,19 @@ pub struct ReplaceModeSkillSelectionRequest {
 pub struct ResetModeSkillSelectionRequest {
     pub mode_id: String,
     pub workspace_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetGlobalSkillDisabledRequest {
+    pub skill_key: String,
+    pub disabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalSkillSettingsResponse {
+    pub globally_disabled_user_skill_keys: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -495,6 +508,51 @@ pub async fn get_skill_configs(
 
     serde_json::to_value(all_skills)
         .map_err(|e| format!("Failed to serialize skill configs: {}", e))
+}
+
+#[tauri::command]
+pub async fn get_global_skill_settings() -> Result<GlobalSkillSettingsResponse, String> {
+    let globally_disabled_user_skill_keys = load_globally_disabled_user_skills()
+        .await
+        .map_err(|error| format!("Failed to load global Skill settings: {}", error))?;
+    Ok(GlobalSkillSettingsResponse {
+        globally_disabled_user_skill_keys,
+    })
+}
+
+#[tauri::command]
+pub async fn set_global_skill_disabled(
+    request: SetGlobalSkillDisabledRequest,
+) -> Result<GlobalSkillSettingsResponse, String> {
+    let skill_key = request.skill_key.trim();
+    if !skill_key.starts_with("user::") {
+        return Err("Global Skill availability only applies to user-level Skills".to_string());
+    }
+
+    let known_skill = SkillRegistry::global()
+        .get_all_skills()
+        .await
+        .into_iter()
+        .any(|skill| skill.key == skill_key && skill.level == SkillLocation::User);
+    if !known_skill {
+        return Err(format!("User-level Skill '{}' was not found", skill_key));
+    }
+
+    let globally_disabled_user_skill_keys =
+        set_global_user_skill_disabled(skill_key, request.disabled)
+            .await
+            .map_err(|error| format!("Failed to update global Skill settings: {}", error))?;
+    if let Err(error) = bitfun_core::service::config::reload_global_config().await {
+        log::warn!(
+            "Failed to reload global configuration after Skill availability update: skill_key={}, error={}",
+            skill_key,
+            error
+        );
+    }
+
+    Ok(GlobalSkillSettingsResponse {
+        globally_disabled_user_skill_keys,
+    })
 }
 
 #[tauri::command]

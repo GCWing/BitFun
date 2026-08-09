@@ -147,6 +147,8 @@ export const GitDiffEditor: React.FC<GitDiffEditorProps> = ({
   return (
     <div 
       className="git-diff-editor"
+      data-bf-component="git-tool"
+      data-bf-part="diffEditor"
       onKeyDownCapture={handleContainerKeyDown}
     >
       {error && (

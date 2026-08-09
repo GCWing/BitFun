@@ -4,7 +4,9 @@
 //! catalog, interaction, and tool-registration logic can evolve independently.
 
 mod auth;
+mod auth_callback;
 mod catalog;
+mod external_lifecycle;
 mod interaction;
 mod lifecycle;
 mod reconnect;
@@ -26,7 +28,7 @@ use bitfun_services_integrations::mcp::server::MCPServerRuntimeState;
 use log::{debug, error, info, warn};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -54,6 +56,7 @@ struct ActiveRemoteOAuthSession {
 pub struct MCPServerManager {
     config_service: Arc<MCPConfigService>,
     runtime: Arc<MCPServerRuntimeState>,
+    oauth_data_dir: Option<PathBuf>,
     reconnect_monitor_started: Arc<AtomicBool>,
     connection_event_tasks: Arc<tokio::sync::RwLock<HashMap<String, JoinHandle<()>>>>,
     pending_interactions: Arc<tokio::sync::RwLock<HashMap<String, PendingMCPInteraction>>>,
@@ -69,9 +72,17 @@ pub struct MCPServerManager {
 impl MCPServerManager {
     /// Creates a new server manager.
     pub fn new(config_service: Arc<MCPConfigService>) -> Self {
+        Self::assemble(config_service, None)
+    }
+
+    pub(crate) fn assemble(
+        config_service: Arc<MCPConfigService>,
+        oauth_data_dir: Option<PathBuf>,
+    ) -> Self {
         Self {
             config_service,
             runtime: Arc::new(MCPServerRuntimeState::new()),
+            oauth_data_dir,
             reconnect_monitor_started: Arc::new(AtomicBool::new(false)),
             connection_event_tasks: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             pending_interactions: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
@@ -117,7 +128,7 @@ impl MCPServerManager {
             .await
             .get(server_id)
             .cloned();
-        let workspace_key = crate::external_tools::workspace_route_key(workspace_root);
+        let workspace_key = crate::agentic::workspace::workspace_route_key(workspace_root);
         self.tool_context_policy.server_available_for_route(
             server_id,
             external_workspace_scope.as_deref(),

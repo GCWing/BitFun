@@ -1,5 +1,5 @@
 /**
- * UI primitives for `bitfun/canvas`. Styling follows the BitFun dark theme; no extra packages required.
+ * UI primitives for `bitfun/canvas`. Styling follows the BitFun dark appearance; no extra packages required.
  */
 import { type CSSProperties, type JSX, type ReactNode } from "react";
 /**

@@ -92,6 +92,25 @@ fn run_command(program: &str, args: &[&str]) -> Result<std::process::Output> {
         .with_context(|| format!("run `{program} {}`", args.join(" ")))
 }
 
+#[cfg(all(unix, not(target_os = "macos")))]
+fn run_systemctl_user(args: &[&str]) -> Result<std::process::Output> {
+    // Non-interactive SSH commands commonly omit XDG_RUNTIME_DIR even when
+    // logind has a healthy user manager. Supplying its canonical owner-only
+    // runtime directory lets systemctl find the same user bus without putting
+    // any account secret in the environment.
+    // SAFETY: getuid has no preconditions and does not dereference pointers.
+    let uid = unsafe { libc::getuid() };
+    let mut command = std::process::Command::new("systemctl");
+    command.arg("--user").args(args);
+    if std::env::var_os("XDG_RUNTIME_DIR").is_none() {
+        command.env("XDG_RUNTIME_DIR", format!("/run/user/{uid}"));
+    }
+    command
+        .output()
+        .with_context(|| format!("run `systemctl --user {}`", args.join(" ")))
+}
+
+#[cfg(target_os = "macos")]
 fn ensure_success(program: &str, args: &[&str]) -> Result<()> {
     let output = run_command(program, args)?;
     if output.status.success() {
@@ -123,14 +142,36 @@ fn service_unit_installed() -> bool {
 
 #[cfg(all(unix, not(target_os = "macos")))]
 fn ensure_systemd_user_available() -> Result<()> {
-    match run_command("systemctl", &["--user", "show-environment"]) {
-        Ok(output) if output.status.success() => Ok(()),
-        _ => Err(anyhow!(
-            "systemd user session is not available (no user bus; common in containers, WSL, or SSH sessions without systemd --user).\n\
-             Enable a systemd user session for this account, or run the daemon under your own supervisor instead:\n\
-             \x20 bitfun daemon run"
-        )),
+    // Enabling linger can create the user manager needed by a headless SSH
+    // account. Keep the call best-effort here: the strict provisioning path
+    // verifies the resulting state after installation.
+    let _ = run_command("loginctl", &["enable-linger"]);
+    for attempt in 0..20 {
+        if run_systemctl_user(&["show-environment"]).is_ok_and(|output| output.status.success()) {
+            return Ok(());
+        }
+        if attempt < 19 {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
     }
+    Err(anyhow!(
+        "systemd user session is not available (no user bus; common in containers, WSL, or SSH accounts without a logind user manager).\n\
+         Enable a systemd user session for this account, or run the daemon under your own supervisor instead:\n\
+         \x20 bitfun daemon run"
+    ))
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn ensure_systemctl_user_success(args: &[&str]) -> Result<()> {
+    let output = run_systemctl_user(args)?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(anyhow!(
+        "`systemctl --user {}` failed: {}",
+        args.join(" "),
+        String::from_utf8_lossy(&output.stderr).trim()
+    ))
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
@@ -145,11 +186,8 @@ fn install_platform_service(executable: &Path) -> Result<String> {
     std::fs::write(&unit_path, render_systemd_unit(executable))
         .with_context(|| format!("write systemd unit {}", unit_path.display()))?;
 
-    ensure_success("systemctl", &["--user", "daemon-reload"])?;
-    ensure_success(
-        "systemctl",
-        &["--user", "enable", "--now", SYSTEMD_UNIT_NAME],
-    )?;
+    ensure_systemctl_user_success(&["daemon-reload"])?;
+    ensure_systemctl_user_success(&["enable", "--now", SYSTEMD_UNIT_NAME])?;
 
     // Linger keeps the user manager (and therefore the daemon) running without
     // an interactive login session, and starts it at boot. This is what makes
@@ -212,13 +250,10 @@ fn uninstall_platform_service() -> Result<String> {
         return Ok("Auto-start service is not installed.".to_string());
     }
     // disable --now stops and disables; ignore failure when already stopped.
-    let _ = run_command(
-        "systemctl",
-        &["--user", "disable", "--now", SYSTEMD_UNIT_NAME],
-    );
+    let _ = run_systemctl_user(&["disable", "--now", SYSTEMD_UNIT_NAME]);
     std::fs::remove_file(&unit_path)
         .with_context(|| format!("remove systemd unit {}", unit_path.display()))?;
-    let _ = run_command("systemctl", &["--user", "daemon-reload"]);
+    let _ = run_systemctl_user(&["daemon-reload"]);
     Ok("Stopped and removed the systemd user service.".to_string())
 }
 
@@ -247,7 +282,7 @@ fn uninstall_platform_service() -> Result<String> {
 
 #[cfg(all(unix, not(target_os = "macos")))]
 fn platform_service_active() -> Option<bool> {
-    let output = run_command("systemctl", &["--user", "is-active", SYSTEMD_UNIT_NAME]).ok()?;
+    let output = run_systemctl_user(&["is-active", SYSTEMD_UNIT_NAME]).ok()?;
     Some(output.status.success())
 }
 
@@ -270,19 +305,57 @@ fn platform_service_active() -> Option<bool> {
 /// Install and start the auto-start service. Requires a persisted account
 /// session (the daemon logs in from `~/.bitfun/account_session.enc`).
 pub(crate) fn install_service() -> Result<()> {
-    match bitfun_core::service::remote_connect::session_store::load_session() {
-        Ok(Some(_)) => {}
-        Ok(None) => {
-            return Err(anyhow!(
-                "not logged in; run `bitfun`, log in with `/login`, then re-run `bitfun daemon install`"
-            ));
-        }
-        Err(error) => return Err(anyhow!("read account session: {error}")),
-    }
-
+    ensure_persisted_account_session()?;
     let executable = current_exe_path()?;
     let message = install_platform_service(&executable)?;
     println!("{message}");
+    Ok(())
+}
+
+fn ensure_persisted_account_session() -> Result<()> {
+    match bitfun_core::service::remote_connect::session_store::load_session() {
+        Ok(Some(_)) => Ok(()),
+        Ok(None) => {
+            Err(anyhow!(
+                "not logged in; run `bitfun`, log in with `/login`, then re-run `bitfun daemon install`"
+            ))
+        }
+        Err(error) => Err(anyhow!("read account session: {error}")),
+    }
+}
+
+/// Install without printing human-oriented output. The provisioning command
+/// needs stdout to remain a single JSON document for the SSH controller.
+pub(super) fn install_service_for_provisioning() -> Result<String> {
+    let executable = current_exe_path()?;
+    let message = install_platform_service(&executable)?;
+    if let Err(error) = ensure_platform_service_persistent() {
+        let _ = uninstall_platform_service();
+        return Err(error);
+    }
+    Ok(message)
+}
+
+/// Best-effort rollback companion for account provisioning.
+pub(super) fn uninstall_service_for_provisioning() -> Result<String> {
+    uninstall_platform_service()
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn ensure_platform_service_persistent() -> Result<()> {
+    // SAFETY: getuid has no preconditions and does not dereference pointers.
+    let uid = unsafe { libc::getuid() }.to_string();
+    let output = run_command("loginctl", &["show-user", &uid, "-p", "Linger", "--value"])?;
+    if output.status.success() && String::from_utf8_lossy(&output.stdout).trim() == "yes" {
+        return Ok(());
+    }
+    Err(anyhow!(
+        "the daemon started, but login linger could not be enabled; refusing to claim reboot persistence"
+    ))
+}
+
+#[cfg(any(target_os = "macos", not(unix)))]
+fn ensure_platform_service_persistent() -> Result<()> {
     Ok(())
 }
 

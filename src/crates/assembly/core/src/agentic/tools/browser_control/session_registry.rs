@@ -61,7 +61,6 @@ pub struct BrowserSessionState {
     console_events: Mutex<VecDeque<Value>>,
     js_errors: Mutex<VecDeque<Value>>,
     dialog_handler: Mutex<Option<DialogHandler>>,
-    active_frame_id: Mutex<Option<String>>,
 }
 
 impl BrowserSessionState {
@@ -414,14 +413,6 @@ impl BrowserSessionState {
 
     pub async fn take_dialog_handler(&self) -> Option<DialogHandler> {
         self.dialog_handler.lock().await.take()
-    }
-
-    pub async fn set_active_frame(&self, frame_id: Option<String>) {
-        *self.active_frame_id.lock().await = frame_id;
-    }
-
-    pub async fn active_frame(&self) -> Option<String> {
-        self.active_frame_id.lock().await.clone()
     }
 }
 

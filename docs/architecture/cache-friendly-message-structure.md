@@ -244,6 +244,15 @@ What usually breaks reuse:
 - explicit prompt-cache invalidation
 - context compression, which resets prompt cache after rewriting history
 
+The user-facing `/reload instructions` command intentionally invalidates only
+the current Session's `UserContext` cache. The active turn is not rewritten;
+workspace instructions are read again when the next message is assembled.
+Plain `/reload` combines that operation with the independently owned Skill
+Registry refresh, while `/reload skills` leaves `UserContext` intact.
+An in-memory generation guard rejects a user-context build that started before
+the invalidation from repopulating the cache after it, so active-turn reloads
+preserve the same next-message guarantee.
+
 ### 6. Conversation history
 
 What it is:

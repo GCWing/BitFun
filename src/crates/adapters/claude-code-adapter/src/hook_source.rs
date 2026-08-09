@@ -5,17 +5,24 @@ use bitfun_product_domains::external_hook_catalog::{
     ExternalHookSourceKind, ExternalHookSourceProvider,
 };
 use bitfun_product_domains::external_hook_contributions::ExternalHookPoint;
+use bitfun_product_domains::external_hook_import::{
+    ExternalHookImportSkippedV1, PreparedExternalHookAsset, PreparedExternalHookHandler,
+    PreparedExternalHookImport,
+};
 use bitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
     ExternalSourceHealth, ExternalSourceProviderError, ExternalSourceScope, SourceKey,
 };
 use bitfun_static_hook_support::{
-    bounded_project_ancestors, parse_hook_document, read_bounded_file,
-    redacted_parse_content_version, regular_file_exists, BoundedFileRead, StaticHookDocumentFormat,
-    StaticHookHandlerRule, StaticHookParseIssue,
+    bounded_project_ancestors, importable_hook_matcher, optional_hook_string,
+    optional_positive_hook_u64, parse_hook_document, prepare_static_hook_command,
+    read_bounded_file, redacted_parse_content_version, regular_file_exists, required_hook_string,
+    static_hook_handler_fact, visit_hook_document, BoundedFileRead, StaticHookDocumentFormat,
+    StaticHookHandlerFact, StaticHookHandlerRule, StaticHookParseIssue, StaticHookParseResult,
 };
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 const PROVIDER_ID: &str = "claude-code.hooks";
@@ -239,6 +246,302 @@ impl ExternalHookSourceProvider for ClaudeCodeHookProvider {
         })?;
         Ok(snapshot)
     }
+
+    fn prepare_import(
+        &self,
+        context: &ExternalSourceContext,
+        requested_source: &SourceKey,
+        expected_catalog_content_version: &str,
+    ) -> Result<PreparedExternalHookImport, ExternalSourceProviderError> {
+        if requested_source.provider_id.as_str() != PROVIDER_ID {
+            return Err(import_error(
+                "claude.hook.import_provider_mismatch",
+                "The requested Hook source belongs to another provider",
+            ));
+        }
+        let layers = self.layers(context);
+        let Some(layer) = layers
+            .iter()
+            .find(|layer| layer.source_id == requested_source.source_id.as_str())
+        else {
+            return Err(import_error(
+                "claude.hook.import_source_missing",
+                "The requested Claude Code Hook source is no longer available",
+            ));
+        };
+        let bytes = match read_bounded_file(&layer.path, MAX_SETTINGS_FILE_BYTES) {
+            Ok(BoundedFileRead::Content(bytes)) => bytes,
+            Ok(BoundedFileRead::TooLarge) => {
+                return Err(import_error(
+                    "claude.hook.import_source_too_large",
+                    "Claude Code settings exceed the 1 MiB import limit",
+                ))
+            }
+            Err(error) => {
+                return Err(ExternalSourceProviderError::new(
+                    "claude.hook.import_source_unreadable",
+                    format!("Claude Code Hook settings could not be read: {error}"),
+                    true,
+                ))
+            }
+        };
+        let effective_disabled = effective_disable_for_import(&layers, &layer.path, &bytes)?;
+        prepare_claude_import(
+            layer,
+            requested_source.clone(),
+            &bytes,
+            expected_catalog_content_version,
+            effective_disabled,
+        )
+    }
+}
+
+fn prepare_claude_import(
+    layer: &SettingsLayer,
+    source_key: SourceKey,
+    bytes: &[u8],
+    expected_catalog_content_version: &str,
+    effective_disabled: bool,
+) -> Result<PreparedExternalHookImport, ExternalSourceProviderError> {
+    let mut catalog_handlers = Vec::<StaticHookHandlerFact>::new();
+    let mut handlers = Vec::new();
+    let mut skipped = BTreeMap::<&'static str, u32>::new();
+    let mut assets = BTreeMap::new();
+    let source_config_dir = layer.path.parent().unwrap_or(Path::new("."));
+    let source_stable_key = source_key.stable_key();
+    let summary = visit_hook_document(
+        bytes,
+        StaticHookDocumentFormat::Json,
+        MAX_HANDLERS,
+        |candidate| {
+            let catalog_fact = static_hook_handler_fact(&candidate, HANDLER_RULES);
+            if let Some(fact) = catalog_fact.as_ref() {
+                catalog_handlers.push(fact.clone());
+            }
+            if !summary_event_supported(candidate.native_event) {
+                increment_skip(&mut skipped, "unsupported_event");
+                return catalog_fact.is_some();
+            }
+            if summary_group_has_unknown_fields(candidate.group) {
+                increment_skip(&mut skipped, "unsupported_group_field");
+                return catalog_fact.is_some();
+            }
+            let existing_asset_paths = assets.keys().cloned().collect::<BTreeSet<_>>();
+            match claude_handler(
+                &candidate,
+                &source_stable_key,
+                source_config_dir,
+                &mut assets,
+            ) {
+                Ok(handler) => handlers.push(handler),
+                Err(reason) => {
+                    assets.retain(|path, _| existing_asset_paths.contains(path));
+                    increment_skip(&mut skipped, reason);
+                }
+            }
+            catalog_fact.is_some()
+        },
+    );
+    let parsed = StaticHookParseResult {
+        handlers: catalog_handlers,
+        issues: summary.issues,
+        all_disabled: summary.all_disabled,
+        inspected_handlers: summary.inspected_handlers,
+    };
+    let content_version = redacted_parse_content_version(&parsed);
+    if content_version != expected_catalog_content_version {
+        return Err(import_error(
+            "claude.hook.import_catalog_stale",
+            "Claude Code Hook configuration changed after discovery",
+        ));
+    }
+    if effective_disabled {
+        handlers.clear();
+        skipped.clear();
+        skipped.insert("all_disabled", 1);
+    }
+    let mut source_diagnostics = parsed
+        .issues
+        .iter()
+        .copied()
+        .map(|issue| parse_issue_diagnostic(issue, &source_key))
+        .collect::<Vec<_>>();
+    if parsed.all_disabled {
+        source_diagnostics.push(hook_warning(
+            "claude.hook.all_disabled",
+            "Claude Code declares disableAllHooks for this settings layer; entries remain visible for inspection",
+            Some(source_key.clone()),
+        ));
+    }
+    let prepared_source = source(
+        layer,
+        source_key,
+        if source_diagnostics.is_empty() {
+            ExternalSourceHealth::Available
+        } else {
+            ExternalSourceHealth::Degraded
+        },
+        content_version,
+        source_diagnostics,
+    );
+    PreparedExternalHookImport::new(
+        prepared_source,
+        handlers,
+        skipped
+            .into_iter()
+            .map(|(reason_code, count)| ExternalHookImportSkippedV1 {
+                reason_code: reason_code.to_string(),
+                count,
+            })
+            .collect(),
+        assets
+            .into_iter()
+            .map(|(relative_path, bytes)| PreparedExternalHookAsset {
+                relative_path,
+                bytes,
+            })
+            .collect(),
+    )
+    .map_err(|error| import_error("claude.hook.import_invalid", error.to_string()))
+}
+
+fn effective_disable_for_import(
+    layers: &[SettingsLayer],
+    selected_path: &Path,
+    selected_bytes: &[u8],
+) -> Result<bool, ExternalSourceProviderError> {
+    let mut effective_disabled = false;
+    for layer in layers {
+        let selected = layer.path == selected_path;
+        let owned_bytes;
+        let bytes = if selected {
+            selected_bytes
+        } else {
+            match regular_file_exists(&layer.path) {
+                Ok(false) => continue,
+                Ok(true) => {}
+                Err(error) => {
+                    return Err(ExternalSourceProviderError::new(
+                        "claude.hook.import_activation_unavailable",
+                        format!("Claude Code Hook activation metadata is unavailable: {error}"),
+                        true,
+                    ))
+                }
+            }
+            owned_bytes =
+                match read_bounded_file(&layer.path, MAX_SETTINGS_FILE_BYTES) {
+                    Ok(BoundedFileRead::Content(bytes)) => bytes,
+                    Ok(BoundedFileRead::TooLarge) => return Err(import_error(
+                        "claude.hook.import_activation_unavailable",
+                        "Claude Code Hook activation cannot be verified from oversized settings",
+                    )),
+                    Err(error) => {
+                        return Err(ExternalSourceProviderError::new(
+                            "claude.hook.import_activation_unavailable",
+                            format!("Claude Code Hook activation could not be read: {error}"),
+                            true,
+                        ))
+                    }
+                };
+            &owned_bytes
+        };
+        match parse_disable_all_hooks(bytes) {
+            Ok(Some(disabled)) => effective_disabled = disabled,
+            Ok(None) => {}
+            Err(()) => {
+                return Err(import_error(
+                    "claude.hook.import_activation_unavailable",
+                    "Claude Code Hook activation cannot be verified from invalid settings",
+                ))
+            }
+        }
+        if selected {
+            break;
+        }
+    }
+    Ok(effective_disabled)
+}
+
+fn claude_handler(
+    candidate: &bitfun_static_hook_support::StaticHookHandlerRef<'_>,
+    source_stable_key: &str,
+    source_config_dir: &Path,
+    assets: &mut BTreeMap<PathBuf, Vec<u8>>,
+) -> Result<PreparedExternalHookHandler, &'static str> {
+    let handler = candidate.handler.as_object().ok_or("invalid_handler")?;
+    let handler_type = handler
+        .get("type")
+        .map(|value| value.as_str().ok_or("invalid_handler"))
+        .transpose()?
+        .unwrap_or("command");
+    if handler_type != "command" {
+        return Err("unsupported_handler_type");
+    }
+    if handler.keys().any(|field| {
+        !matches!(
+            field.as_str(),
+            "type" | "command" | "timeoutSec" | "statusMessage"
+        )
+    }) {
+        return Err("unsupported_behavior_field");
+    }
+    let command = required_hook_string(handler, "command")?;
+    let prepared_command =
+        prepare_static_hook_command(&command, source_config_dir, ".claude", assets)
+            .map_err(|error| error.skip_reason())?;
+    let timeout_seconds = optional_positive_hook_u64(handler, "timeoutSec")?;
+    let status_message = optional_hook_string(handler, "statusMessage")?;
+    Ok(PreparedExternalHookHandler {
+        stable_key: format!(
+            "claude-hook:{}",
+            short_hash(
+                format!(
+                    "{source_stable_key}:{}:{}:{}",
+                    candidate.native_event, candidate.group_index, candidate.handler_index
+                )
+                .as_bytes()
+            )
+        ),
+        event: candidate.native_event.to_string(),
+        matcher: importable_hook_matcher(candidate.group.get("matcher"))?,
+        command: prepared_command.command,
+        command_windows: None,
+        timeout_seconds,
+        status_message,
+        dependencies: prepared_command.dependencies,
+    })
+}
+
+fn summary_event_supported(event: &str) -> bool {
+    matches!(
+        event,
+        "PreToolUse"
+            | "PermissionRequest"
+            | "PostToolUse"
+            | "PreCompact"
+            | "PostCompact"
+            | "SessionStart"
+            | "SessionEnd"
+            | "UserPromptSubmit"
+            | "SubagentStart"
+            | "SubagentStop"
+            | "Stop"
+    )
+}
+
+fn summary_group_has_unknown_fields(group: &serde_json::Map<String, Value>) -> bool {
+    group
+        .keys()
+        .any(|field| !matches!(field.as_str(), "matcher" | "hooks"))
+}
+
+fn increment_skip(skipped: &mut BTreeMap<&'static str, u32>, reason: &'static str) {
+    let count = skipped.entry(reason).or_default();
+    *count = count.saturating_add(1);
+}
+
+fn import_error(code: &'static str, message: impl Into<String>) -> ExternalSourceProviderError {
+    ExternalSourceProviderError::new(code, message, false)
 }
 
 struct SettingsLayer {

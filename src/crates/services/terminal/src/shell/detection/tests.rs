@@ -116,12 +116,49 @@ fn cached_validation_keeps_the_current_discovery_source() {
     assert_eq!(from_path.id, from_system.id);
 }
 
+#[cfg(unix)]
+#[test]
+fn approval_time_shell_resolution_never_runs_a_version_probe() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let executable = directory.path().join("bash");
+    let marker = directory.path().join("probe-ran");
+    std::fs::write(
+        &executable,
+        format!("#!/bin/sh\nprintf probed > '{}'\n", marker.display()),
+    )
+    .expect("write fake shell");
+    let mut permissions = std::fs::metadata(&executable).unwrap().permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(&executable, permissions).unwrap();
+
+    let resolved = ShellDetector::resolve_configured_shell_without_probe(
+        executable.to_string_lossy().as_ref(),
+    )
+    .expect("regular configured shell should resolve without probing");
+
+    assert_eq!(resolved.path, executable);
+    assert_eq!(resolved.version, None);
+    assert!(!marker.exists());
+}
+
 #[test]
 fn normalized_identity_uses_canonical_path_when_available() {
     assert!(!path::normalized_path_identity(
         &std::env::current_exe().expect("current test executable")
     )
     .is_empty());
+}
+
+#[test]
+fn approval_time_shell_resolution_rejects_relative_paths_with_directories() {
+    let relative = if cfg!(windows) {
+        r".\repo-shell.exe"
+    } else {
+        "./repo-shell"
+    };
+    assert!(ShellDetector::resolve_configured_shell_without_probe(relative).is_none());
 }
 
 #[cfg(windows)]
@@ -151,6 +188,7 @@ fn windows_path_lookup_respects_pathext() {
     assert!(path::executable_names("pwsh")
         .iter()
         .any(|name| name.eq_ignore_ascii_case("pwsh.exe")));
+    assert_eq!(path::executable_names("pwsh.exe"), ["pwsh.exe"]);
 }
 
 #[cfg(not(windows))]

@@ -158,8 +158,8 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
   }, [addContext, evalInWebview, getCurrentUrl, getWebviewLabel, hasWebview, isInspectorActive, isTauri, stopInspector]);
 
   return (
-    <div className="browser-panel" data-testid="browser-panel">
-      <form className="browser-panel__toolbar" onSubmit={handleSubmit} data-testid="browser-panel-title">
+    <div data-bf-component="browser-panel" data-bf-part="root" data-bf-state={isLoading ? 'loading' : ''} className="browser-panel" data-testid="browser-panel">
+      <form data-bf-component="browser-panel" data-bf-part="toolbar" className="browser-panel__toolbar" onSubmit={handleSubmit} data-testid="browser-panel-title">
         <IconButton
           type="button"
           variant="ghost"
@@ -195,7 +195,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
             data-testid={isLoading ? 'browser-loading-indicator' : undefined}
           />
         </IconButton>
-        <div className="browser-panel__address">
+        <div data-bf-component="browser-panel" data-bf-part="address" className="browser-panel__address">
           <Globe size={16} />
           <input
             type="text"
@@ -221,15 +221,17 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
       </form>
 
       {error ? (
-        <div className="browser-panel__error" data-testid="browser-error-message">
+        <div data-bf-component="browser-panel" data-bf-part="error" className="browser-panel__error" data-testid="browser-error-message">
           <AlertTriangle size={16} />
           <span>{error}</span>
         </div>
       ) : null}
 
-      <div className="browser-panel__content" data-testid="browser-page-frame">
+      <div data-bf-component="browser-panel" data-bf-part="content" className="browser-panel__content" data-testid="browser-page-frame">
         {!isTauri ? (
           <iframe
+            data-bf-component="browser-panel"
+            data-bf-part="iframe"
             className="browser-panel__iframe"
             src={currentUrl}
             title="Embedded Browser Panel"
@@ -238,10 +240,12 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
         ) : (
           <div
             ref={viewportRef}
+            data-bf-component="browser-panel"
+            data-bf-part="webviewHost"
             className="browser-panel__webview-host"
             data-webview-label={webviewLabel}
           >
-            <div className="browser-panel__webview-placeholder">
+            <div data-bf-component="browser-panel" data-bf-part="placeholder" className="browser-panel__webview-placeholder">
               <Globe size={20} />
               <span data-testid="browser-current-url">{currentUrl}</span>
             </div>

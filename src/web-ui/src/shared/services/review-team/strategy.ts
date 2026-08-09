@@ -26,7 +26,7 @@ export const REVIEW_STRATEGY_PROFILES: Record<
     level: 'quick',
     label: 'Quick',
     summary:
-      'Quick keeps the main review concise and allows narrowly focused extra checks only when justified.',
+      'Quick keeps the review concise and adds checks only when a specific concern needs more evidence.',
     defaultModelSlot: 'fast',
     promptDirective:
       'Prefer a concise diff-focused pass. Report only high-confidence correctness, security, or regression risks and avoid speculative design rewrites.',
@@ -41,7 +41,7 @@ export const REVIEW_STRATEGY_PROFILES: Record<
     level: 'normal',
     label: 'Normal',
     summary:
-      'Normal balances evidence depth with optional independent checks selected for the current change.',
+      'Normal balances evidence depth with additional checks used only for specific concerns.',
     defaultModelSlot: 'fast',
     promptDirective:
       'Perform a practical evidence-backed review and stop investigating once each suspected issue is confirmed or dismissed.',
@@ -56,7 +56,7 @@ export const REVIEW_STRATEGY_PROFILES: Record<
     level: 'deep',
     label: 'Deep',
     summary:
-      'Deep gives the main review and any justified independent checks the longest bounded budget.',
+      'Deep gives the review and any evidence-driven validation the longest bounded budget.',
     defaultModelSlot: 'primary',
     promptDirective:
       'Inspect edge cases, cross-file interactions, failure modes, and remediation tradeoffs before finalizing findings.',

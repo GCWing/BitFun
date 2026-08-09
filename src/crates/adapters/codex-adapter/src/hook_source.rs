@@ -5,13 +5,19 @@ use bitfun_product_domains::external_hook_catalog::{
     ExternalHookSourceKind, ExternalHookSourceProvider,
 };
 use bitfun_product_domains::external_hook_contributions::ExternalHookPoint;
+use bitfun_product_domains::external_hook_import::{
+    ExternalHookImportSkippedV1, PreparedExternalHookAsset, PreparedExternalHookHandler,
+    PreparedExternalHookImport,
+};
 use bitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
     ExternalSourceHealth, ExternalSourceProviderError, ExternalSourceScope, SourceKey,
 };
 use bitfun_static_hook_support::{
-    bounded_project_ancestors, parse_hook_document, read_bounded_file,
-    redacted_parse_content_version, regular_file_exists, BoundedFileRead, StaticHookDocumentFormat,
+    bounded_project_ancestors, importable_hook_matcher, optional_hook_string,
+    optional_positive_hook_u64, parse_hook_document, prepare_static_hook_command,
+    read_bounded_file, redacted_parse_content_version, regular_file_exists, required_hook_string,
+    static_hook_handler_fact, visit_hook_document, BoundedFileRead, StaticHookDocumentFormat,
     StaticHookHandlerFact, StaticHookHandlerRule, StaticHookParseIssue, StaticHookParseResult,
 };
 use serde_json::Value;
@@ -183,6 +189,32 @@ impl CodexHookProvider {
         }
         layers
     }
+
+    fn resolved_layers(
+        &self,
+        context: &ExternalSourceContext,
+    ) -> Result<ResolvedCodexLayers, ExternalSourceProviderError> {
+        let user_config_path = self.options.codex_home.join("config.toml");
+        let user_config = load_config_file(&user_config_path)?;
+        let (project_root_markers, project_root_markers_invalid) = match &user_config {
+            Some(LoadedConfigFile::Content(bytes)) => match codex_toml_root(bytes) {
+                Some(root) => match codex_project_root_markers(&root) {
+                    Ok(Some(markers)) => (markers, false),
+                    Ok(None) => (vec![".git".to_string()], false),
+                    Err(()) => (Vec::new(), true),
+                },
+                None => (Vec::new(), false),
+            },
+            Some(LoadedConfigFile::TooLarge) => (Vec::new(), false),
+            None => (vec![".git".to_string()], false),
+        };
+        Ok(ResolvedCodexLayers {
+            layers: self.layers(context, &project_root_markers),
+            user_config_path,
+            user_config,
+            project_root_markers_invalid,
+        })
+    }
 }
 
 impl Default for CodexHookProvider {
@@ -212,21 +244,11 @@ impl ExternalHookSourceProvider for CodexHookProvider {
                 false,
             ));
         }
-        let user_config_path = self.options.codex_home.join("config.toml");
-        let user_config = load_config_file(&user_config_path)?;
-        let (project_root_markers, project_root_markers_invalid) = match &user_config {
-            Some(LoadedConfigFile::Content(bytes)) => match codex_toml_root(bytes) {
-                Some(root) => match codex_project_root_markers(&root) {
-                    Ok(Some(markers)) => (markers, false),
-                    Ok(None) => (vec![".git".to_string()], false),
-                    Err(()) => (Vec::new(), true),
-                },
-                None => (Vec::new(), false),
-            },
-            Some(LoadedConfigFile::TooLarge) => (Vec::new(), false),
-            None => (vec![".git".to_string()], false),
-        };
-        let layers = self.layers(context, &project_root_markers);
+        let resolved = self.resolved_layers(context)?;
+        let user_config_path = resolved.user_config_path;
+        let user_config = resolved.user_config;
+        let project_root_markers_invalid = resolved.project_root_markers_invalid;
+        let layers = resolved.layers;
         let paths = layers
             .iter()
             .map(|layer| layer.path.clone())
@@ -299,6 +321,60 @@ impl ExternalHookSourceProvider for CodexHookProvider {
         })?;
         Ok(snapshot)
     }
+
+    fn prepare_import(
+        &self,
+        context: &ExternalSourceContext,
+        requested_source: &SourceKey,
+        expected_catalog_content_version: &str,
+    ) -> Result<PreparedExternalHookImport, ExternalSourceProviderError> {
+        if requested_source.provider_id.as_str() != PROVIDER_ID {
+            return Err(import_error(
+                "codex.hook.import_provider_mismatch",
+                "The requested Hook source belongs to another provider",
+            ));
+        }
+        let resolved = self.resolved_layers(context)?;
+        let Some(layer) = resolved
+            .layers
+            .iter()
+            .find(|layer| layer.source_id == requested_source.source_id.as_str())
+        else {
+            return Err(import_error(
+                "codex.hook.import_source_missing",
+                "The requested Codex Hook source is no longer available",
+            ));
+        };
+        let bytes = match read_bounded_file(&layer.path, MAX_CONFIG_FILE_BYTES) {
+            Ok(BoundedFileRead::Content(bytes)) => bytes,
+            Ok(BoundedFileRead::TooLarge) => {
+                return Err(import_error(
+                    "codex.hook.import_source_too_large",
+                    "Codex Hook configuration exceeds the 1 MiB import limit",
+                ))
+            }
+            Err(error) => {
+                return Err(ExternalSourceProviderError::new(
+                    "codex.hook.import_source_unreadable",
+                    format!("Codex Hook configuration could not be read: {error}"),
+                    true,
+                ))
+            }
+        };
+        prepare_codex_import(
+            layer,
+            requested_source.clone(),
+            &bytes,
+            expected_catalog_content_version,
+        )
+    }
+}
+
+struct ResolvedCodexLayers {
+    layers: Vec<ConfigLayer>,
+    user_config_path: PathBuf,
+    user_config: Option<LoadedConfigFile>,
+    project_root_markers_invalid: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -310,6 +386,181 @@ enum ConfigFormat {
 enum LoadedConfigFile {
     Content(Vec<u8>),
     TooLarge,
+}
+
+fn prepare_codex_import(
+    layer: &ConfigLayer,
+    source_key: SourceKey,
+    bytes: &[u8],
+    expected_catalog_content_version: &str,
+) -> Result<PreparedExternalHookImport, ExternalSourceProviderError> {
+    let source_stable_key = source_key.stable_key();
+    let mut catalog_handlers = Vec::<StaticHookHandlerFact>::new();
+    let mut handlers = Vec::new();
+    let mut skipped = BTreeMap::<&'static str, u32>::new();
+    let mut assets = BTreeMap::new();
+    let source_config_dir = layer.path.parent().unwrap_or(Path::new("."));
+    let format = match layer.format {
+        ConfigFormat::Json => StaticHookDocumentFormat::Json,
+        ConfigFormat::Toml => StaticHookDocumentFormat::Toml,
+    };
+    let summary = visit_hook_document(bytes, format, MAX_HANDLERS, |candidate| {
+        let catalog_fact = static_hook_handler_fact(&candidate, HANDLER_RULES);
+        if let Some(fact) = catalog_fact.as_ref() {
+            catalog_handlers.push(fact.clone());
+        }
+        if !CODEX_HOOK_EVENTS.contains(&candidate.native_event) {
+            increment_skip(&mut skipped, "unsupported_event");
+            return catalog_fact.is_some();
+        }
+        if candidate
+            .group
+            .keys()
+            .any(|field| !matches!(field.as_str(), "matcher" | "hooks"))
+        {
+            increment_skip(&mut skipped, "unsupported_group_field");
+            return catalog_fact.is_some();
+        }
+        let existing_asset_paths = assets.keys().cloned().collect::<BTreeSet<_>>();
+        match codex_handler(
+            &candidate,
+            &source_stable_key,
+            source_config_dir,
+            &mut assets,
+        ) {
+            Ok(handler) => handlers.push(handler),
+            Err(reason) => {
+                assets.retain(|path, _| existing_asset_paths.contains(path));
+                increment_skip(&mut skipped, reason);
+            }
+        }
+        catalog_fact.is_some()
+    });
+    let mut parsed = StaticHookParseResult {
+        handlers: catalog_handlers,
+        issues: summary.issues,
+        all_disabled: summary.all_disabled,
+        inspected_handlers: summary.inspected_handlers,
+    };
+    validate_codex_document(bytes, layer.format, &mut parsed);
+    let content_version = codex_redacted_content_version(&parsed);
+    if content_version != expected_catalog_content_version {
+        return Err(import_error(
+            "codex.hook.import_catalog_stale",
+            "Codex Hook configuration changed after discovery",
+        ));
+    }
+    let source_diagnostics = parsed
+        .issues
+        .iter()
+        .copied()
+        .map(|issue| parse_issue_diagnostic(issue, &source_key))
+        .collect::<Vec<_>>();
+    let prepared_source = source(
+        layer,
+        source_key,
+        if source_diagnostics.is_empty() {
+            ExternalSourceHealth::Available
+        } else {
+            ExternalSourceHealth::Degraded
+        },
+        content_version,
+        source_diagnostics,
+    );
+    PreparedExternalHookImport::new(
+        prepared_source,
+        handlers,
+        skipped
+            .into_iter()
+            .map(|(reason_code, count)| ExternalHookImportSkippedV1 {
+                reason_code: reason_code.to_string(),
+                count,
+            })
+            .collect(),
+        assets
+            .into_iter()
+            .map(|(relative_path, bytes)| PreparedExternalHookAsset {
+                relative_path,
+                bytes,
+            })
+            .collect(),
+    )
+    .map_err(|error| import_error("codex.hook.import_invalid", error.to_string()))
+}
+
+fn codex_handler(
+    candidate: &bitfun_static_hook_support::StaticHookHandlerRef<'_>,
+    source_stable_key: &str,
+    source_config_dir: &Path,
+    assets: &mut BTreeMap<PathBuf, Vec<u8>>,
+) -> Result<PreparedExternalHookHandler, &'static str> {
+    let handler = candidate.handler.as_object().ok_or("invalid_handler")?;
+    match handler.get("type").and_then(Value::as_str) {
+        Some("command") => {}
+        Some("prompt" | "agent") => return Err("unsupported_handler_type"),
+        _ => return Err("invalid_handler"),
+    }
+    if handler.keys().any(|field| {
+        !matches!(
+            field.as_str(),
+            "type" | "command" | "commandWindows" | "command_windows" | "timeout" | "statusMessage"
+        )
+    }) {
+        return Err("unsupported_behavior_field");
+    }
+    let command = required_hook_string(handler, "command")?;
+    let command_windows = match (
+        optional_hook_string(handler, "commandWindows")?,
+        optional_hook_string(handler, "command_windows")?,
+    ) {
+        (Some(left), Some(right)) if left != right => return Err("conflicting_windows_command"),
+        (Some(value), _) | (_, Some(value)) => Some(value),
+        (None, None) => None,
+    };
+    let prepared_command =
+        prepare_static_hook_command(&command, source_config_dir, ".codex", assets)
+            .map_err(|error| error.skip_reason())?;
+    let prepared_windows = command_windows
+        .as_deref()
+        .map(|command| prepare_static_hook_command(command, source_config_dir, ".codex", assets))
+        .transpose()
+        .map_err(|error| error.skip_reason())?;
+    let mut dependencies = prepared_command.dependencies;
+    if let Some(prepared_windows) = &prepared_windows {
+        for dependency in &prepared_windows.dependencies {
+            if !dependencies.contains(dependency) {
+                dependencies.push(dependency.clone());
+            }
+        }
+    }
+    Ok(PreparedExternalHookHandler {
+        stable_key: format!(
+            "codex-hook:{}",
+            short_hash(
+                format!(
+                    "{source_stable_key}:{}:{}:{}",
+                    candidate.native_event, candidate.group_index, candidate.handler_index
+                )
+                .as_bytes()
+            )
+        ),
+        event: candidate.native_event.to_string(),
+        matcher: importable_hook_matcher(candidate.group.get("matcher"))?,
+        command: prepared_command.command,
+        command_windows: prepared_windows.map(|prepared| prepared.command),
+        timeout_seconds: optional_positive_hook_u64(handler, "timeout")?,
+        status_message: optional_hook_string(handler, "statusMessage")?,
+        dependencies,
+    })
+}
+
+fn increment_skip(skipped: &mut BTreeMap<&'static str, u32>, reason: &'static str) {
+    let count = skipped.entry(reason).or_default();
+    *count = count.saturating_add(1);
+}
+
+fn import_error(code: &'static str, message: impl Into<String>) -> ExternalSourceProviderError {
+    ExternalSourceProviderError::new(code, message, false)
 }
 
 fn load_config_file(path: &Path) -> Result<Option<LoadedConfigFile>, ExternalSourceProviderError> {

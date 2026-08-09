@@ -13,6 +13,7 @@ interface UseShellNavMenuStateReturn {
   setWorkspaceMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
   workspaceMenuPosition: MenuPosition | null;
   menuRef: React.RefObject<HTMLDivElement>;
+  menuPopoverRef: React.RefObject<HTMLDivElement>;
   workspaceMenuRef: React.RefObject<HTMLDivElement>;
   workspaceTriggerRef: React.RefObject<HTMLButtonElement>;
 }
@@ -25,6 +26,7 @@ export function useShellNavMenuState(
   const [workspaceMenuPosition, setWorkspaceMenuPosition] = useState<MenuPosition | null>(null);
 
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuPopoverRef = useRef<HTMLDivElement>(null);
   const workspaceMenuRef = useRef<HTMLDivElement>(null);
   const workspaceTriggerRef = useRef<HTMLButtonElement>(null);
 
@@ -38,6 +40,7 @@ export function useShellNavMenuState(
       if (
         target &&
         (menuRef.current?.contains(target) ||
+          menuPopoverRef.current?.contains(target) ||
           workspaceMenuRef.current?.contains(target) ||
           workspaceTriggerRef.current?.contains(target))
       ) {
@@ -117,6 +120,7 @@ export function useShellNavMenuState(
     setWorkspaceMenuOpen,
     workspaceMenuPosition,
     menuRef,
+    menuPopoverRef,
     workspaceMenuRef,
     workspaceTriggerRef,
   };

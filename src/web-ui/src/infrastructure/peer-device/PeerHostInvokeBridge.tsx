@@ -74,7 +74,7 @@ export function PeerHostInvokeBridge(): null {
 
     void (async () => {
       try {
-        unlisten = await listen<HostInvokeBridgeRequest>('peer-host-invoke://request', async (event) => {
+        const resolvedUnlisten = await listen<HostInvokeBridgeRequest>('peer-host-invoke://request', async (event) => {
           if (disposed) return;
           const { id, command, args } = event.payload;
           const result = await idempotencyCache.execute(
@@ -97,6 +97,13 @@ export function PeerHostInvokeBridge(): null {
             });
           }
         });
+        // Cleanup may have run while awaiting: unlisten immediately instead
+        // of leaking the registration (StrictMode first mount hits this).
+        if (disposed) {
+          resolvedUnlisten();
+          return;
+        }
+        unlisten = resolvedUnlisten;
       } catch {
         log.error('Failed to register peer host invoke listener', {
           error_category: 'listener_registration',

@@ -1,25 +1,35 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, Info } from 'lucide-react';
-import { Button, Switch, Select, IconButton, NumberInput, Card, Modal, Input, Textarea, Tooltip, type SelectOption } from '@/component-library';
-import { 
+import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Info, Brain, FolderOpen } from 'lucide-react';
+import { Button, Switch, Select, IconButton, NumberInput, Card, Modal, Input, Search, Textarea, Tooltip, type SelectOption } from '@/component-library';
+import {
   AIModelConfig as AIModelConfigType, 
   ProxyConfig, 
   ModelCategory,
-  ReasoningMode
+  ReasoningCatalogBinding,
+  ReasoningCatalogProjection,
+  ReasoningConfig,
 } from '../types';
 import { configManager } from '../services/ConfigManager';
 import { getCapabilitiesByCategory, resolveModelCategory } from '../services/modelCategory';
-import { allocateModelConfigId, PROVIDER_TEMPLATES, getModelDisplayName, getProviderDisplayName, getProviderTemplateId } from '../services/modelConfigs';
-import { DEFAULT_REASONING_MODE, getEffectiveReasoningMode, supportsAnthropicAdaptive, supportsAnthropicReasoning, supportsAnthropicThinkingBudget, supportsDeepSeekReasoningEffort, supportsResponsesReasoning } from '../utils/reasoning';
+import { allocateModelConfigId, getModelDisplayName, getProviderDisplayName, getProviderTemplateId } from '../services/modelConfigs';
+import { resolveProviderTemplates } from '../services/builtinProviderCatalog';
+import { normalizeProviderBaseUrl } from '../services/providerCatalog';
+import { supportsResponsesReasoning } from '../utils/reasoning';
+import { canonicalReasoningConfig, validateReasoningConfig } from '../utils/reasoningPresets';
 import { aiApi, systemAPI } from '@/infrastructure/api';
-import type { SubscriptionAccount } from '@/infrastructure/api/service-api/AIApi';
-import type { SubscriptionProvider } from '../types';
+import type {
+  SubscriptionAccount,
+  SubscriptionApiOffering,
+} from '@/infrastructure/api/service-api/AIApi';
+import type { ProviderRegion } from '@/shared/types';
+import type { OpenCodePlan, SubscriptionProvider } from '../types';
 import { useNotification } from '@/shared/notification-system';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow, ConfigCollectionItem } from './common';
 import DefaultModelConfig from './DefaultModelConfig';
 import SubagentModelConfig from './SubagentModelConfig';
 import SessionTitleConfig from './SessionTitleConfig';
+import ReasoningConfigPanel from './ReasoningConfigPanel';
 import { createLogger } from '@/shared/utils/logger';
 import { translateConnectionTestMessage } from '@/shared/utils/aiConnectionTestMessages';
 import { i18nService } from '@/infrastructure/i18n';
@@ -31,6 +41,10 @@ import {
 import './AIModelConfig.scss';
 
 const log = createLogger('AIModelConfig');
+const MODELS_DEV_DOWNLOAD_URL = 'https://models.dev/api.json';
+
+/** Rows the preset picker shows before the user searches or expands the list. */
+const COLLAPSED_PROVIDER_COUNT = 6;
 
 interface RemoteModelOption {
   id: string;
@@ -44,9 +58,8 @@ interface SelectedModelDraft {
   category: ModelCategory;
   contextWindow: number;
   maxTokens?: number;
-  reasoningMode: ReasoningMode;
-  reasoningEffort?: string;
-  thinkingBudgetTokens?: number;
+  reasoning: ReasoningConfig;
+  reasoningProjectionCatalog?: ReasoningCatalogBinding;
 }
 
 interface ProviderGroup {
@@ -89,6 +102,7 @@ function createModelDraft(
   overrides?: Partial<SelectedModelDraft>
 ): SelectedModelDraft {
   const trimmedModelName = modelName.trim();
+  const reasoning = overrides?.reasoning ?? canonicalReasoningConfig(baseConfig as AIModelConfigType);
 
   return {
     key: overrides?.key ?? overrides?.configId ?? baseConfig?.id ?? trimmedModelName,
@@ -97,47 +111,16 @@ function createModelDraft(
     category: overrides?.category ?? baseConfig?.category ?? 'general_chat',
     contextWindow: overrides?.contextWindow ?? baseConfig?.context_window ?? 200000,
     maxTokens: overrides?.maxTokens ?? baseConfig?.max_tokens,
-    reasoningMode: overrides?.reasoningMode ?? getEffectiveReasoningMode(baseConfig),
-    reasoningEffort: overrides?.reasoningEffort ?? baseConfig?.reasoning_effort,
-    thinkingBudgetTokens: overrides?.thinkingBudgetTokens ?? baseConfig?.thinking_budget_tokens,
+    reasoning,
+    reasoningProjectionCatalog: overrides?.reasoningProjectionCatalog ?? reasoning.catalog,
   };
 }
 
-function normalizeDraftReasoningForProvider(
-  draft: SelectedModelDraft,
-  config?: Partial<Pick<AIModelConfigType, 'name' | 'provider' | 'base_url'>>
-): SelectedModelDraft {
-  const provider = config?.provider;
-  let reasoningMode = draft.reasoningMode;
-
-  if (supportsResponsesReasoning(provider)) {
-    reasoningMode = DEFAULT_REASONING_MODE;
-  } else if (!supportsAnthropicReasoning(provider) && reasoningMode === 'adaptive') {
-    reasoningMode = 'enabled';
-  } else if (supportsAnthropicReasoning(provider)
-    && reasoningMode === 'adaptive'
-    && !supportsAnthropicAdaptive(draft.modelName)) {
-    reasoningMode = 'enabled';
-  }
-
-  const supportsDeepSeekEffort = supportsDeepSeekReasoningEffort({
-    name: config?.name,
-    base_url: config?.base_url,
-    model_name: draft.modelName,
-  });
-  const keepReasoningEffort = supportsResponsesReasoning(provider)
-    || (supportsAnthropicReasoning(provider) && reasoningMode === 'adaptive')
-    || (supportsDeepSeekEffort && reasoningMode !== 'disabled');
-  const keepThinkingBudget = supportsAnthropicReasoning(provider)
-    && reasoningMode === 'enabled'
-    && supportsAnthropicThinkingBudget(draft.modelName);
-
-  return {
-    ...draft,
-    reasoningMode,
-    reasoningEffort: keepReasoningEffort ? draft.reasoningEffort : undefined,
-    thinkingBudgetTokens: keepThinkingBudget ? draft.thinkingBudgetTokens : undefined,
-  };
+function reasoningCatalogBindingsEqual(
+  left?: ReasoningCatalogBinding,
+  right?: ReasoningCatalogBinding,
+): boolean {
+  return JSON.stringify(left ?? { source: 'auto' }) === JSON.stringify(right ?? { source: 'auto' });
 }
 
 function uniqModelNames(modelNames: string[]): string[] {
@@ -191,24 +174,6 @@ function formatTokenCountShort(n: number): string {
   return String(n);
 }
 
-function automaticMaxOutputTokens(contextWindow: number): number {
-  const quarterContext = Math.floor(contextWindow / 4);
-  return [64000, 32000, 24000, 16000, 8000].find(tier => tier <= quarterContext) ?? quarterContext;
-}
-
-function effectiveMaxOutputTokens(draft: SelectedModelDraft): number {
-  const configuredMaxTokens = draft.maxTokens;
-  if (
-    configuredMaxTokens != null
-    && configuredMaxTokens > 0
-    && configuredMaxTokens * 100 <= draft.contextWindow * 40
-  ) {
-    return configuredMaxTokens;
-  }
-
-  return automaticMaxOutputTokens(draft.contextWindow);
-}
-
 function parseOptionalPositiveIntegerInput(value: string): number | null | undefined {
   const trimmed = value.trim();
   if (trimmed === '') {
@@ -227,7 +192,6 @@ function parseOptionalPositiveIntegerInput(value: string): number | null | undef
   return parsed;
 }
 
-const DEEPSEEK_REASONING_EFFORT_MODE_PREFIX = 'deepseek-effort:';
 const PROVIDER_INSTANCE_METADATA_KEY = 'provider_instance_id';
 
 function generateProviderInstanceId(): string {
@@ -244,27 +208,6 @@ function getProviderGroupKey(config: AIModelConfigType): string {
   return getProviderInstanceId(config) || config.id || `${config.name}:${config.model_name}`;
 }
 
-function getDeepSeekReasoningModeSelectValue(draft: SelectedModelDraft): string {
-  if (draft.reasoningMode === 'enabled' && draft.reasoningEffort) {
-    return `${DEEPSEEK_REASONING_EFFORT_MODE_PREFIX}${draft.reasoningEffort}`;
-  }
-
-  return draft.reasoningMode;
-}
-
-function getUpdatesFromDeepSeekReasoningModeSelectValue(value: string): Partial<SelectedModelDraft> {
-  if (value.startsWith(DEEPSEEK_REASONING_EFFORT_MODE_PREFIX)) {
-    return {
-      reasoningMode: 'enabled',
-      reasoningEffort: value.slice(DEEPSEEK_REASONING_EFFORT_MODE_PREFIX.length),
-    };
-  }
-
-  return {
-    reasoningMode: value as ReasoningMode,
-    reasoningEffort: undefined,
-  };
-}
 
 /** Last line of defense: same logical model name once per save; prefer draft tied to an existing config id. */
 function dedupeSelectedModelDraftsByModelName(drafts: SelectedModelDraft[]): SelectedModelDraft[] {
@@ -299,7 +242,8 @@ function resolveRequestUrl(baseUrl: string, provider: string, _modelName = ''): 
     return trimmed.endsWith('responses') ? trimmed : `${trimmed}/responses`;
   }
   if (provider === 'anthropic') {
-    return trimmed.endsWith('v1/messages') ? trimmed : `${trimmed}/v1/messages`;
+    if (trimmed.endsWith('/messages')) return trimmed;
+    return trimmed.endsWith('/v1') ? `${trimmed}/messages` : `${trimmed}/v1/messages`;
   }
   if (provider === 'gemini') {
     return geminiBaseUrl(trimmed);
@@ -379,10 +323,27 @@ function modelRequestBehaviorChanged(
     previous.max_tokens !== next.max_tokens ||
     previous.category !== next.category ||
     stableJson(previous.capabilities || []) !== stableJson(next.capabilities || []) ||
-    normalizeComparableString(previous.reasoning_mode) !== normalizeComparableString(next.reasoning_mode) ||
-    normalizeComparableString(previous.reasoning_effort) !== normalizeComparableString(next.reasoning_effort) ||
-    previous.thinking_budget_tokens !== next.thinking_budget_tokens ||
+    stableJson(canonicalReasoningConfig(previous)) !== stableJson(next.reasoning || canonicalReasoningConfig(next)) ||
     (previous.inline_think_in_text ?? true) !== (next.inline_think_in_text ?? true)
+  );
+}
+
+function modelDraftHasUnsavedChanges(
+  draft: SelectedModelDraft,
+  persistedModels: AIModelConfigType[],
+): boolean {
+  const persisted = draft.configId
+    ? persistedModels.find(model => model.id === draft.configId)
+    : undefined;
+
+  if (!persisted) return true;
+
+  return (
+    normalizeComparableString(draft.modelName) !== normalizeComparableString(persisted.model_name) ||
+    draft.category !== (persisted.category ?? 'general_chat') ||
+    draft.contextWindow !== (persisted.context_window || 200000) ||
+    draft.maxTokens !== persisted.max_tokens ||
+    stableJson(draft.reasoning) !== stableJson(canonicalReasoningConfig(persisted))
   );
 }
 
@@ -411,10 +372,15 @@ function configsNeedingAutoTest(
 }
 
 const AIModelConfig: React.FC = () => {
-  const { t } = useTranslation('settings/ai-model');
+  const { t, i18n } = useTranslation('settings/ai-model');
   const { t: tDefault } = useTranslation('settings/default-model');
   const { t: tComponents } = useTranslation('components');
   const [aiModels, setAiModels] = useState<AIModelConfigType[]>([]);
+  const [modelCatalog, setModelCatalog] = useState<Awaited<ReturnType<typeof aiApi.getModelCatalog>> | null>(null);
+  const [modelsDevStatus, setModelsDevStatus] = useState<Awaited<ReturnType<typeof aiApi.getModelsDevCatalogStatus>> | null>(null);
+  const [modelsDevStatusAvailable, setModelsDevStatusAvailable] = useState(true);
+  const [isRefreshingModelsDev, setIsRefreshingModelsDev] = useState(false);
+  const [showModelsDevDetails, setShowModelsDevDetails] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingConfig, setEditingConfig] = useState<Partial<AIModelConfigType> | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -426,7 +392,9 @@ const AIModelConfig: React.FC = () => {
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
 
   const [creationMode, setCreationMode] = useState<'selection' | 'form' | null>(null);
-  
+  const [providerQuery, setProviderQuery] = useState('');
+  const [showAllProviders, setShowAllProviders] = useState(false);
+
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const [proxyConfig, setProxyConfig] = useState<ProxyConfig>({
     enabled: false,
@@ -448,6 +416,7 @@ const AIModelConfig: React.FC = () => {
   const [editingProviderModelIds, setEditingProviderModelIds] = useState<Set<string>>(new Set());
   const [manualModelInput, setManualModelInput] = useState('');
   const [expandedModelCards, setExpandedModelCards] = useState<Set<string>>(new Set());
+  const [reasoningPanelDraftKey, setReasoningPanelDraftKey] = useState<string | null>(null);
   const [subscriptionAccounts, setSubscriptionAccounts] = useState<SubscriptionAccount[]>([]);
   const [isLoadingSubscriptions, setIsLoadingSubscriptions] = useState(false);
   const [loggingInProvider, setLoggingInProvider] = useState<SubscriptionProvider | null>(null);
@@ -481,62 +450,6 @@ const AIModelConfig: React.FC = () => {
     ) as Record<string, string>,
     [requestFormatOptions]
   );
-
-  const responsesReasoningEffortOptions = useMemo(
-    () => [
-      { label: 'None', value: 'none' },
-      { label: 'Minimal', value: 'minimal' },
-      { label: 'Low', value: 'low' },
-      { label: 'Medium', value: 'medium' },
-      { label: 'High', value: 'high' },
-      { label: 'Extra High', value: 'xhigh' },
-    ],
-    []
-  );
-
-  const anthropicReasoningEffortOptions = useMemo(
-    () => [
-      { label: 'Low', value: 'low' },
-      { label: 'Medium', value: 'medium' },
-      { label: 'High', value: 'high' },
-      { label: 'Max', value: 'max' },
-    ],
-    []
-  );
-
-  const deepSeekReasoningEffortOptions = useMemo<SelectOption[]>(
-    () => [
-      { label: 'High', value: 'high' },
-      { label: 'Max', value: 'max' },
-    ],
-    []
-  );
-
-  const buildReasoningModeOptions = useCallback((provider?: string, modelName?: string, currentMode?: ReasoningMode): SelectOption[] => {
-    const options: SelectOption[] = [
-      { label: t('thinking.optionDefault'), value: DEFAULT_REASONING_MODE },
-      { label: t('thinking.optionEnabled'), value: 'enabled' },
-      { label: t('thinking.optionDisabled'), value: 'disabled' },
-    ];
-
-    if (supportsDeepSeekReasoningEffort({ name: editingConfig?.name, base_url: editingConfig?.base_url, model_name: modelName })) {
-      options.splice(
-        1,
-        1,
-        ...deepSeekReasoningEffortOptions.map(option => ({
-          label: `${t('thinking.optionEnabled')} · ${option.label}`,
-          value: `${DEEPSEEK_REASONING_EFFORT_MODE_PREFIX}${option.value}`,
-        }))
-      );
-    } else if (
-      supportsAnthropicReasoning(provider)
-      && (supportsAnthropicAdaptive(modelName) || currentMode === 'adaptive')
-    ) {
-      options.push({ label: t('thinking.optionAdaptive'), value: 'adaptive' });
-    }
-
-    return options;
-  }, [deepSeekReasoningEffortOptions, editingConfig?.base_url, editingConfig?.name, t]);
 
   const categoryOptions = useMemo<SelectOption[]>(
     () => [
@@ -587,7 +500,47 @@ const AIModelConfig: React.FC = () => {
       : t('advancedSettings.customRequestBody.modeMergeHint');
   }, [getCustomRequestBodyTrimHint, t]);
 
-  
+  const loadModelCatalog = useCallback(async () => {
+    try {
+      setModelCatalog(await aiApi.getModelCatalog());
+    } catch (error) {
+      setModelCatalog(null);
+      log.warn('Failed to load model reasoning catalog', { error });
+    }
+  }, []);
+
+  const loadModelsDevStatus = useCallback(async () => {
+    try {
+      setModelsDevStatus(await aiApi.getModelsDevCatalogStatus());
+      setModelsDevStatusAvailable(true);
+    } catch (error) {
+      setModelsDevStatusAvailable(false);
+      log.warn('Failed to load models.dev catalog status', { error });
+    }
+  }, []);
+
+  const handleRefreshModelsDev = useCallback(async () => {
+    setIsRefreshingModelsDev(true);
+    try {
+      const result = await aiApi.refreshModelsDevCatalogNow();
+      setModelsDevStatus(result.status);
+      await loadModelCatalog();
+      notification.success(
+        result.outcome === 'updated'
+          ? t('modelsDevCatalog.refreshSuccess')
+          : result.outcome === 'throttled'
+            ? t('modelsDevCatalog.refreshThrottled')
+            : t('modelsDevCatalog.alreadyCurrent'),
+      );
+    } catch (error) {
+      log.warn('Failed to refresh models.dev catalog', { error });
+      notification.error(t('modelsDevCatalog.refreshFailed'));
+      await loadModelsDevStatus();
+    } finally {
+      setIsRefreshingModelsDev(false);
+    }
+  }, [loadModelCatalog, loadModelsDevStatus, notification, t]);
+
   const loadConfig = useCallback(async () => {
     try {
       const [models, proxy, streamIdleTimeoutSecs, streamTtftTimeoutSecs, allowJsonRepair] = await Promise.all([
@@ -598,6 +551,8 @@ const AIModelConfig: React.FC = () => {
         configManager.getConfig<boolean>('ai.allow_tool_json_repair'),
       ]);
       setAiModels(models);
+      await loadModelCatalog();
+      await loadModelsDevStatus();
       if (proxy) {
         setProxyConfig(proxy);
       }
@@ -611,11 +566,16 @@ const AIModelConfig: React.FC = () => {
     } catch (error) {
       log.error('Failed to load AI config', error);
     }
-  }, []);
+  }, [loadModelCatalog, loadModelsDevStatus]);
 
   useEffect(() => {
+    const unsubscribeCatalog = aiApi.onModelCatalogUpdated(() => {
+      void loadModelCatalog();
+      void loadModelsDevStatus();
+    });
     loadConfig();
-  }, [loadConfig]);
+    return unsubscribeCatalog;
+  }, [loadConfig, loadModelCatalog, loadModelsDevStatus]);
 
   const refreshSubscriptionAccounts = useCallback(async () => {
     setIsLoadingSubscriptions(true);
@@ -641,29 +601,65 @@ const AIModelConfig: React.FC = () => {
   }, [subscriptionLoginPanel]);
   
   // Provider options with translations (must be at top level, before any conditional returns)
-  const providerOrder = useMemo(
-    () => ['openbitfun', 'zhipu', 'qwen', 'deepseek', 'volcengine', 'minimax', 'moonshot', 'gemini', 'anthropic'],
-    []
+  const providerTemplates = useMemo(
+    () => resolveProviderTemplates(modelCatalog?.provider_catalog),
+    [modelCatalog?.provider_catalog],
   );
+  const providerOrder = useMemo(
+    () => Object.values(providerTemplates)
+      .sort((left, right) => (left.displayOrder ?? 999) - (right.displayOrder ?? 999))
+      .map(provider => provider.id),
+    [providerTemplates],
+  );
+  // A Chinese UI leads with mainland providers, every other UI leads with the
+  // international ones. Both keep the full list, only the order changes.
+  const preferredProviderRegion: ProviderRegion = i18n.language.toLowerCase().startsWith('zh') ? 'cn' : 'global';
   const providers = useMemo(() => {
-    const sorted = Object.values(PROVIDER_TEMPLATES).sort((a, b) => {
-      const indexA = providerOrder.indexOf(a.id);
-      const indexB = providerOrder.indexOf(b.id);
-      return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
-    });
-    
+    const regionRank = (region: ProviderRegion) => {
+      if (region === 'any') return 0;
+      return region === preferredProviderRegion ? 1 : 2;
+    };
+
     // Dynamically get translated name and description
-    return sorted.map(provider => ({
-      ...provider,
-      name: t(`providers.${provider.id}.name`),
-      description: t(`providers.${provider.id}.description`)
-    }));
-  }, [providerOrder, t]);
+    return Object.values(providerTemplates)
+      .map(provider => {
+        const localizedName = t(`providers.${provider.id}.name`);
+        const localizedDescription = t(`providers.${provider.id}.description`);
+        return {
+          ...provider,
+          name: localizedName,
+          description: localizedDescription,
+          // Keeps the catalog's English name searchable while a CJK locale renders the localized one.
+          searchText: [provider.id, provider.name, localizedName, localizedDescription, ...provider.models]
+            .join(' ')
+            .toLowerCase(),
+        };
+      })
+      .sort((left, right) => (
+        regionRank(left.region ?? 'any') - regionRank(right.region ?? 'any')
+        || (left.displayOrder ?? 999) - (right.displayOrder ?? 999)
+        || left.name.localeCompare(right.name)
+      ));
+  }, [preferredProviderRegion, providerTemplates, t]);
+
+  const normalizedProviderQuery = providerQuery.trim().toLowerCase();
+  const matchedProviders = useMemo(() => (
+    normalizedProviderQuery
+      ? providers.filter(provider => provider.searchText.includes(normalizedProviderQuery))
+      : providers
+  ), [normalizedProviderQuery, providers]);
+  // Searching always reveals every hit; only the resting list stays short.
+  const canToggleProviderList = !normalizedProviderQuery
+    && matchedProviders.length > COLLAPSED_PROVIDER_COUNT;
+  const isProviderListCollapsed = canToggleProviderList && !showAllProviders;
+  const visibleProviders = isProviderListCollapsed
+    ? matchedProviders.slice(0, COLLAPSED_PROVIDER_COUNT)
+    : matchedProviders;
 
   // Current template with translations (must be at top level, before any conditional returns)
   const currentTemplate = useMemo(() => {
     if (!selectedProviderId) return null;
-    const template = PROVIDER_TEMPLATES[selectedProviderId];
+    const template = providerTemplates[selectedProviderId];
     if (!template) return null;
     // Dynamically get translated name, description, and baseUrlOptions notes
     return {
@@ -675,16 +671,14 @@ const AIModelConfig: React.FC = () => {
         note: t(`providers.${template.id}.urlOptions.${opt.note}`, { defaultValue: opt.note })
       }))
     };
-  }, [selectedProviderId, t]);
+  }, [providerTemplates, selectedProviderId, t]);
 
   const createDraftsFromConfigs = (configs: AIModelConfigType[]) => (
     configs.map(config => createModelDraft(config.model_name, config, {
       configId: config.id,
       contextWindow: config.context_window || 200000,
       maxTokens: config.max_tokens,
-      reasoningMode: getEffectiveReasoningMode(config),
-      reasoningEffort: config.reasoning_effort,
-      thinkingBudgetTokens: config.thinking_budget_tokens,
+      reasoning: canonicalReasoningConfig(config),
     }))
   );
 
@@ -697,16 +691,29 @@ const AIModelConfig: React.FC = () => {
     activeRemoteFetchSignatureRef.current = null;
   }, []);
 
+  const getOpenCodePlanLabel = useCallback((plan: OpenCodePlan): string => (
+    plan === 'go'
+      ? t('subscriptionAuth.openCodePlans.go.label')
+      : t('subscriptionAuth.openCodePlans.zen.label')
+  ), [t]);
+
+  const getOpenCodePlanDescription = useCallback((plan: OpenCodePlan): string => (
+    plan === 'go'
+      ? t('subscriptionAuth.openCodePlans.go.description')
+      : t('subscriptionAuth.openCodePlans.zen.description')
+  ), [t]);
+
+  const getOpenCodeFormatLabel = useCallback((format: SubscriptionApiOffering['format']): string => {
+    if (format === 'responses') return t('subscriptionAuth.openCodeFormats.responses');
+    if (format === 'anthropic') return t('subscriptionAuth.openCodeFormats.messages');
+    return t('subscriptionAuth.openCodeFormats.chatCompletions');
+  }, [t]);
+
   const syncSelectedModelDrafts = (
     modelNames: string[],
     baseConfig?: Partial<AIModelConfigType>,
     singleSelection = false
   ) => {
-    const reasoningProviderConfig = {
-      name: baseConfig?.name ?? editingConfig?.name ?? currentTemplate?.name,
-      provider: baseConfig?.provider ?? editingConfig?.provider ?? currentTemplate?.format,
-      base_url: baseConfig?.base_url ?? editingConfig?.base_url ?? currentTemplate?.baseUrl,
-    };
     const nextModelNames = normalizeProviderModelNameList(
       modelNames,
       singleSelection
@@ -724,21 +731,28 @@ const AIModelConfig: React.FC = () => {
 
         if (existingDraft) {
           const configId = pinnedRowId ?? existingDraft.configId;
-          return normalizeDraftReasoningForProvider({
+          return {
             ...existingDraft,
             modelName,
             configId,
             key: configId ?? modelName,
-          }, reasoningProviderConfig);
+          };
         }
 
         const draftBaseConfig = baseConfig
           ? { ...baseConfig, max_tokens: undefined }
           : undefined;
 
-        return normalizeDraftReasoningForProvider(createModelDraft(modelName, draftBaseConfig, {
+        const catalogModel = selectedProviderId
+          ? modelCatalog?.provider_catalog?.providers
+              .find(provider => provider.id === selectedProviderId)
+              ?.models.find(model => model.id === modelName)
+          : undefined;
+        return createModelDraft(modelName, draftBaseConfig, {
           configId: pinnedRowId,
-        }), reasoningProviderConfig);
+          contextWindow: catalogModel?.limits?.context,
+          category: catalogModel?.capabilities.attachment ? 'multimodal' : undefined,
+        });
       })
     );
 
@@ -768,6 +782,18 @@ const AIModelConfig: React.FC = () => {
       draft.modelName === modelName ? { ...draft, ...updates } : draft
     )));
   };
+
+  const resolveDraftCatalogEntry = (draft: SelectedModelDraft) => (
+    modelCatalog?.models.find(model => (
+      model.id === draft.configId
+      || model.id === editingConfig?.id
+      || (
+        model.model_name === draft.modelName
+        && model.provider === (editingConfig?.provider || 'openai')
+        && model.base_url === editingConfig?.base_url
+      )
+    ))
+  );
 
   const toggleSelectedModelCardExpanded = useCallback((draftKey: string) => {
     setExpandedModelCards(prev => {
@@ -866,10 +892,8 @@ const AIModelConfig: React.FC = () => {
       capabilities: config.capabilities || ['text_chat'],
       recommended_for: config.recommended_for || [],
       metadata: config.metadata || {},
-      reasoning_mode: config.reasoning_mode ?? getEffectiveReasoningMode(config),
       inline_think_in_text: config.inline_think_in_text ?? true,
-      reasoning_effort: config.reasoning_effort,
-      thinking_budget_tokens: config.thinking_budget_tokens,
+      reasoning: canonicalReasoningConfig(config),
       custom_headers: config.custom_headers,
       custom_headers_mode: config.custom_headers_mode,
       skip_ssl_verify: config.skip_ssl_verify ?? false,
@@ -961,18 +985,33 @@ const AIModelConfig: React.FC = () => {
     setManualModelInput('');
     setShowApiKey(false);
     setSelectedProviderId(null);
+    setProviderQuery('');
+    setShowAllProviders(false);
     setCreationMode('selection');
   };
 
-  const handleImportFromSubscription = useCallback((account: SubscriptionAccount) => {
+  const handleImportFromSubscription = useCallback((
+    account: SubscriptionAccount,
+    offering?: SubscriptionApiOffering,
+  ) => {
     resetRemoteModelDiscovery();
+    const offeringModels = (offering?.models || []).map((model) => ({
+      id: model.id,
+      display_name: model.display_name || undefined,
+    }));
+    if (offeringModels.length > 0) {
+      setRemoteModelOptions(offeringModels);
+      setHasAttemptedRemoteFetch(true);
+    }
     setManualModelInput('');
     setShowApiKey(false);
     setSelectedProviderId(null);
     setEditingConfig({
-      name: account.display_label,
-      provider: account.suggested_format,
-      base_url: account.suggested_base_url,
+      name: offering
+        ? getOpenCodePlanLabel(offering.plan)
+        : account.display_label,
+      provider: offering?.format || account.suggested_format,
+      base_url: offering?.base_url || account.suggested_base_url,
       // Leave request_url + model_name empty so the user must pick a model
       // from the live list. We never inject a hard-coded default slug.
       request_url: '',
@@ -985,14 +1024,18 @@ const AIModelConfig: React.FC = () => {
       recommended_for: [],
       metadata: {},
       inline_think_in_text: true,
-      auth: { type: 'subscription', provider: account.provider },
+      auth: {
+        type: 'subscription',
+        provider: account.provider,
+        ...(offering ? { plan: offering.plan } : {}),
+      },
     });
     setSelectedModelDrafts([]);
     setEditingProviderModelIds(new Set());
     setShowAdvancedSettings(false);
     setCreationMode('form');
     setIsEditing(true);
-  }, [resetRemoteModelDiscovery]);
+  }, [getOpenCodePlanLabel, resetRemoteModelDiscovery]);
 
   const loginCoordinatorRef = React.useRef(new SubscriptionLoginCoordinator());
   const subscriptionLoginMountedRef = React.useRef(true);
@@ -1306,7 +1349,7 @@ const AIModelConfig: React.FC = () => {
 
   
   const handleSelectProvider = (providerId: string) => {
-    const template = PROVIDER_TEMPLATES[providerId];
+    const template = providerTemplates[providerId];
     if (!template) return;
     resetRemoteModelDiscovery();
     setManualModelInput('');
@@ -1338,9 +1381,9 @@ const AIModelConfig: React.FC = () => {
     });
     setSelectedModelDrafts(
       defaultModel ? [createModelDraft(defaultModel, {
-            context_window: 200000,
-            reasoning_mode: DEFAULT_REASONING_MODE,
-          })] : []
+        context_window: 200000,
+        reasoning: { catalog: { source: 'auto' }, presets: [] },
+      })] : []
     );
     setEditingProviderModelIds(new Set());
     setShowAdvancedSettings(false);
@@ -1413,6 +1456,7 @@ const AIModelConfig: React.FC = () => {
       skip_ssl_verify: config.skip_ssl_verify ?? false,
       custom_request_body: config.custom_request_body,
       custom_request_body_mode: config.custom_request_body_mode,
+      auth: config.auth || { type: 'api_key' },
     });
     setSelectedModelDrafts(createDraftsFromConfigs(configuredProviderModels));
     setShowAdvancedSettings(
@@ -1435,9 +1479,7 @@ const AIModelConfig: React.FC = () => {
       createModelDraft(config.model_name, config, {
         contextWindow: config.context_window || 200000,
         maxTokens: config.max_tokens,
-        reasoningMode: getEffectiveReasoningMode(config),
-        reasoningEffort: config.reasoning_effort,
-        thinkingBudgetTokens: config.thinking_budget_tokens,
+        reasoning: canonicalReasoningConfig(config),
       })
     ]);
     
@@ -1478,6 +1520,22 @@ const AIModelConfig: React.FC = () => {
       const draftsToSave = dedupeSelectedModelDraftsByModelName(selectedModelDrafts);
       if (draftsToSave.some(draft => draft.contextWindow < 32000)) {
         notification.warning(t('messages.contextWindowTooSmall'));
+        return;
+      }
+      if (draftsToSave.some(draft => (
+        validateReasoningConfig(
+          draft.reasoning,
+          reasoningCatalogBindingsEqual(
+            draft.reasoning.catalog,
+            draft.reasoningProjectionCatalog,
+          )
+            ? resolveDraftCatalogEntry(draft)?.reasoning?.presets
+                ?.filter(preset => preset.source !== 'model_config')
+                .map(preset => preset.id)
+            : [],
+        ) !== null
+      ))) {
+        notification.warning(t('messages.invalidReasoningPresets'));
         return;
       }
       const existingProviderInstanceId = getProviderInstanceId(editingConfig);
@@ -1529,10 +1587,8 @@ const AIModelConfig: React.FC = () => {
             ...(editingConfig.metadata || {}),
             [PROVIDER_INSTANCE_METADATA_KEY]: providerInstanceId,
           },
-          reasoning_mode: draft.reasoningMode,
+          reasoning: draft.reasoning,
           inline_think_in_text: editingConfig.inline_think_in_text ?? true,
-          reasoning_effort: draft.reasoningEffort,
-          thinking_budget_tokens: draft.thinkingBudgetTokens,
           custom_headers: editingConfig.custom_headers,
           custom_headers_mode: editingConfig.custom_headers_mode,
           skip_ssl_verify: editingConfig.skip_ssl_verify ?? false,
@@ -1817,6 +1873,9 @@ const AIModelConfig: React.FC = () => {
     setEditingConfig(null);
     setCreationMode(null);
     setSelectedProviderId(null);
+    setProviderQuery('');
+    setShowAllProviders(false);
+    setReasoningPanelDraftKey(null);
   };
 
   const providerGroups = useMemo<ProviderGroup[]>(() => {
@@ -1853,91 +1912,127 @@ const AIModelConfig: React.FC = () => {
   
   if (creationMode === 'selection') {
     return (
-      <ConfigPageLayout className="bitfun-ai-model-config">
+      <ConfigPageLayout className="bitfun-ai-model-config" data-bf-component="ai-model-config" data-bf-part="root" data-bf-view="selection">
         <ConfigPageHeader
           title={t('providerSelection.title')}
           subtitle={t('providerSelection.subtitle')}
         />
 
         <ConfigPageContent className="bitfun-ai-model-config__content bitfun-ai-model-config__content--selection">
-          <div className="bitfun-ai-model-config__provider-selection">
+          <div className="bitfun-ai-model-config__provider-selection" data-bf-component="ai-model-config" data-bf-part="providerSelection">
             
             <Card
               data-testid="settings-model-custom-config-btn"
               data-provider-id="custom"
               variant="default"
-              padding="medium"
+              padding="small"
               interactive
               className="bitfun-ai-model-config__custom-option"
               onClick={handleSelectCustom}
             >
-              <div className="bitfun-ai-model-config__custom-option-content">
-                <Settings size={24} />
+              <div className="bitfun-ai-model-config__custom-option-content" data-bf-component="ai-model-config" data-bf-part="customOption">
+                <Settings size={18} />
                 <div>
-                  <div className="bitfun-ai-model-config__custom-option-title">{t('providerSelection.customTitle')}</div>
-                  <div className="bitfun-ai-model-config__custom-option-description">{t('providerSelection.customDescription')}</div>
+                  <div className="bitfun-ai-model-config__custom-option-title" data-bf-component="ai-model-config" data-bf-part="customOptionTitle">{t('providerSelection.customTitle')}</div>
+                  <div className="bitfun-ai-model-config__custom-option-description" data-bf-component="ai-model-config" data-bf-part="customOptionDescription">{t('providerSelection.customDescription')}</div>
                 </div>
               </div>
             </Card>
 
             
-            <div className="bitfun-ai-model-config__selection-divider">
+            <div className="bitfun-ai-model-config__selection-divider" data-bf-component="ai-model-config" data-bf-part="selectionDivider">
               <span>{t('providerSelection.orSelectProvider')}</span>
             </div>
 
-            
-            <div className="bitfun-ai-model-config__provider-grid">
-              {providers.map(provider => (
-                <Card
+
+            <Search
+              size="small"
+              className="bitfun-ai-model-config__provider-search"
+              data-testid="settings-model-provider-search"
+              data-bf-component="ai-model-config"
+              data-bf-part="providerSearch"
+              value={providerQuery}
+              placeholder={t('providerSelection.searchProviders')}
+              inputAriaLabel={t('providerSelection.searchProviders')}
+              onChange={setProviderQuery}
+              onSearch={() => {
+                const firstMatch = visibleProviders[0];
+                if (normalizedProviderQuery && firstMatch) handleSelectProvider(firstMatch.id);
+              }}
+            />
+
+
+            <div className="bitfun-ai-model-config__provider-list" data-bf-component="ai-model-config" data-bf-part="providerList">
+              {visibleProviders.map(provider => (
+                // The help link is a sibling of the select button, not a child:
+                // a button may not contain interactive content.
+                <div
                   key={provider.id}
-                  data-testid="settings-model-provider-option"
-                  data-provider-id={provider.id}
-                  variant="default"
-                  padding="medium"
-                  interactive
-                  className="bitfun-ai-model-config__provider-card"
-                  onClick={() => handleSelectProvider(provider.id)}
+                  className="bitfun-ai-model-config__provider-row"
+                  data-bf-component="ai-model-config"
+                  data-bf-part="providerRow"
                 >
-                  <div className="bitfun-ai-model-config__provider-card-content">
-                    <div className="bitfun-ai-model-config__provider-name">{provider.name}</div>
-                    <div className="bitfun-ai-model-config__provider-description">{provider.description}</div>
-                    <div className="bitfun-ai-model-config__provider-models">
-                      {provider.models.slice(0, 3).map(model => (
-                        <span key={model} className="bitfun-ai-model-config__provider-model-tag">{model}</span>
-                      ))}
-                      {provider.models.length > 3 && (
-                        <span className="bitfun-ai-model-config__provider-model-tag bitfun-ai-model-config__provider-model-tag--more">
-                          +{provider.models.length - 3}
-                        </span>
-                      )}
-                    </div>
-                    {provider.helpUrl && (
-                      <a
-                        href={provider.helpUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="bitfun-ai-model-config__provider-help-link"
-                        onClick={async (e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          try {
-                            await systemAPI.openExternal(provider.helpUrl!);
-                          } catch (error) {
-                            console.error('[AIModelConfig] Failed to open external URL:', error);
-                          }
-                        }}
-                      >
-                        <ExternalLink size={12} />
-                        {t('providerSelection.getApiKey')}
-                      </a>
-                    )}
-                  </div>
-                </Card>
+                  <button
+                    type="button"
+                    data-testid="settings-model-provider-option"
+                    data-provider-id={provider.id}
+                    className="bitfun-ai-model-config__provider-select"
+                    data-bf-component="ai-model-config"
+                    data-bf-part="providerSelect"
+                    onClick={() => handleSelectProvider(provider.id)}
+                  >
+                    <span className="bitfun-ai-model-config__provider-name" data-bf-component="ai-model-config" data-bf-part="providerName">{provider.name}</span>
+                    <span className="bitfun-ai-model-config__provider-description" data-bf-component="ai-model-config" data-bf-part="providerDescription">{provider.description}</span>
+                  </button>
+                  {provider.helpUrl && (
+                    <a
+                      href={provider.helpUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bitfun-ai-model-config__provider-help-link"
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        try {
+                          await systemAPI.openExternal(provider.helpUrl!);
+                        } catch (error) {
+                          console.error('[AIModelConfig] Failed to open external URL:', error);
+                        }
+                      }}
+                    >
+                      <ExternalLink size={12} />
+                      {t('providerSelection.getApiKey')}
+                    </a>
+                  )}
+                  <ChevronRight size={14} className="bitfun-ai-model-config__provider-chevron" aria-hidden="true" />
+                </div>
               ))}
+
+              {visibleProviders.length === 0 && (
+                <div className="bitfun-ai-model-config__provider-empty" data-bf-component="ai-model-config" data-bf-part="providerEmpty">
+                  {t('providerSelection.noProviderMatches')}
+                </div>
+              )}
+
+              {canToggleProviderList && (
+                <button
+                  type="button"
+                  data-testid="settings-model-provider-expand-btn"
+                  className="bitfun-ai-model-config__provider-more"
+                  data-bf-component="ai-model-config"
+                  data-bf-part="providerMore"
+                  onClick={() => setShowAllProviders(previous => !previous)}
+                >
+                  {isProviderListCollapsed
+                    ? t('providerSelection.showAllProviders', { count: matchedProviders.length })
+                    : t('providerSelection.collapseProviders')}
+                  {isProviderListCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                </button>
+              )}
             </div>
 
-            
-            <div className="bitfun-ai-model-config__selection-actions">
+
+            <div className="bitfun-ai-model-config__selection-actions" data-bf-component="ai-model-config" data-bf-part="selectionActions">
               <Button variant="secondary" onClick={() => setCreationMode(null)}>
                 {t('actions.cancel')}
               </Button>
@@ -1953,6 +2048,41 @@ const AIModelConfig: React.FC = () => {
     if (!isEditing || !editingConfig) return null;
     const isFromTemplate = !editingConfig.id && !!currentTemplate;
     const isProviderScopedEditing = !editingConfig.id;
+    const catalogProvider = selectedProviderId
+      ? modelCatalog?.provider_catalog?.providers.find(provider => provider.id === selectedProviderId)
+      : undefined;
+    const normalizedEditingBaseUrl = editingConfig.base_url
+      ? normalizeProviderBaseUrl(editingConfig.base_url)
+      : '';
+    const selectedEndpointId = catalogProvider?.endpoints
+      .filter(endpoint => !editingConfig.provider || endpoint.api_format === editingConfig.provider)
+      .sort((left, right) => (
+        normalizeProviderBaseUrl(right.base_url).length
+        - normalizeProviderBaseUrl(left.base_url).length
+      ))
+      .find(endpoint => {
+        const normalizedEndpoint = normalizeProviderBaseUrl(endpoint.base_url);
+        return normalizedEndpoint === normalizedEditingBaseUrl
+          || normalizedEndpoint.startsWith(`${normalizedEditingBaseUrl}/`)
+          || normalizedEditingBaseUrl.startsWith(`${normalizedEndpoint}/`);
+      })?.id;
+    const catalogModelOptions: SelectOption[] = (catalogProvider?.models || [])
+      .filter(model => (
+        !selectedEndpointId
+        || !model.endpoint_ids?.length
+        || model.endpoint_ids.includes(selectedEndpointId)
+      ))
+      .map(model => ({
+        label: model.display_name || model.id,
+        value: model.id,
+        description: model.display_name && model.display_name !== model.id ? model.id : undefined,
+        testId: 'settings-model-option',
+        testAttributes: {
+          'data-model-id': model.id,
+          'data-model-name': model.id,
+          'data-model-source': model.source,
+        },
+      }));
     const fetchedOrPresetModelOptions: SelectOption[] = remoteModelOptions.length > 0
       ? remoteModelOptions.map(model => ({
           label: model.display_name || model.id,
@@ -1964,7 +2094,9 @@ const AIModelConfig: React.FC = () => {
             'data-model-name': model.id,
           },
         }))
-      : (currentTemplate?.models || []).map(model => ({
+      : catalogModelOptions.length > 0
+        ? catalogModelOptions
+        : (currentTemplate?.models || []).map(model => ({
           label: model,
           value: model,
           testId: 'settings-model-option',
@@ -1994,7 +2126,7 @@ const AIModelConfig: React.FC = () => {
         ? remoteModelsError
         : remoteModelOptions.length > 0
           ? null
-          : currentTemplate?.models?.length
+          : fetchedOrPresetModelOptions.length > 0
             ? t('providerSelection.usingPresetModels')
             : hasAttemptedRemoteFetch
               ? t('providerSelection.noPresetModels')
@@ -2031,47 +2163,35 @@ const AIModelConfig: React.FC = () => {
       </button>
     );
 
-    const formatReasoningSummary = (draft: SelectedModelDraft) => {
-      const parts: string[] = [];
-
-      switch (draft.reasoningMode) {
-        case 'enabled':
-          parts.push(t('thinking.summaryEnabled'));
-          break;
-        case 'disabled':
-          parts.push(t('thinking.summaryDisabled'));
-          break;
-        case 'adaptive':
-          parts.push(t('thinking.summaryAdaptive'));
-          break;
-        default:
-          parts.push(t('thinking.summaryDefault'));
-          break;
-      }
-
-      if (draft.reasoningEffort) {
-        parts.push(draft.reasoningEffort);
-      }
-
-      return parts.join(' · ');
-    };
-
-    const getDraftReasoningEffortOptions = (
-      config?: Partial<Pick<AIModelConfigType, 'name' | 'provider' | 'base_url' | 'model_name'>>
+    const formatReasoningSummary = (
+      draft: SelectedModelDraft,
+      generatedProjection?: ReasoningCatalogProjection,
     ) => {
-      if (supportsDeepSeekReasoningEffort(config)) {
-        return deepSeekReasoningEffortOptions;
-      }
-
-      if (supportsResponsesReasoning(config?.provider)) {
-        return responsesReasoningEffortOptions;
-      }
-
-      if (supportsAnthropicReasoning(config?.provider)) {
-        return anthropicReasoningEffortOptions;
-      }
-
-      return [];
+      const presetCount = draft.reasoning.presets?.length ?? 0;
+      const catalogSource = draft.reasoning.catalog?.source ?? 'auto';
+      const catalogLabel = catalogSource === 'models_dev'
+        ? t('reasoningPresets.catalogSummary.modelsDev')
+        : catalogSource === 'disabled'
+          ? t('reasoningPresets.catalogSummary.disabled')
+          : t('reasoningPresets.catalogSummary.auto');
+      const selected = draft.reasoning.presets?.find(
+        preset => preset.id === draft.reasoning.default_preset,
+      ) ?? generatedProjection?.presets?.find(
+        preset => preset.id === draft.reasoning.default_preset,
+      );
+      const defaultLabel = draft.reasoning.default_preset
+        ? selected?.label?.trim() || selected?.id || draft.reasoning.default_preset
+        : t('reasoningPresets.autoShort');
+      return presetCount > 0
+        ? t('reasoningPresets.summaryWithCustom', {
+            source: catalogLabel,
+            default: defaultLabel,
+            count: presetCount,
+          })
+        : t('reasoningPresets.summary', {
+            source: catalogLabel,
+            default: defaultLabel,
+          });
     };
 
     const renderSelectedModelRows = () => {
@@ -2095,30 +2215,15 @@ const AIModelConfig: React.FC = () => {
         >
           {selectedModelDrafts.map(draft => {
             const isExpanded = expandedModelCards.has(draft.key) || selectedModelDrafts.length === 1;
+            const hasUnsavedChanges = modelDraftHasUnsavedChanges(draft, aiModels);
             const categoryLabel = categoryCompactLabels[draft.category] ?? draft.category;
             const canToggleExpand = selectedModelDrafts.length > 1;
             const modelDisplayName = draft.modelName;
-            const reasoningModeOptions = buildReasoningModeOptions(editingConfig.provider, draft.modelName, draft.reasoningMode);
-            const reasoningCapabilityConfig = {
-              name: editingConfig.name,
-              provider: editingConfig.provider,
-              base_url: editingConfig.base_url,
-              model_name: draft.modelName,
-            };
-            const reasoningEffortOptions = getDraftReasoningEffortOptions(reasoningCapabilityConfig);
-            const showReasoningModeControl = !supportsResponsesReasoning(editingConfig.provider);
-            const supportsDeepSeekEffort = supportsDeepSeekReasoningEffort(reasoningCapabilityConfig);
-            const showReasoningEffortControl = reasoningEffortOptions.length > 0
-              && !supportsDeepSeekEffort
-              && (
-                supportsResponsesReasoning(editingConfig.provider)
-                || (supportsAnthropicReasoning(editingConfig.provider) && draft.reasoningMode === 'adaptive')
-              );
-            const showThinkingBudgetControl = supportsAnthropicReasoning(editingConfig.provider)
-              && draft.reasoningMode === 'enabled'
-              && supportsAnthropicThinkingBudget(draft.modelName);
-            const displayedThinkingBudget = draft.thinkingBudgetTokens
-              ?? Math.min(Math.floor(effectiveMaxOutputTokens(draft) * 0.75), 10000);
+            const catalogEntry = resolveDraftCatalogEntry(draft);
+            const reasoningProjection = reasoningCatalogBindingsEqual(
+              draft.reasoning.catalog,
+              draft.reasoningProjectionCatalog,
+            ) ? catalogEntry?.reasoning : undefined;
 
             return (
               <div
@@ -2129,6 +2234,7 @@ const AIModelConfig: React.FC = () => {
                 data-model-name={draft.modelName}
                 data-selected="true"
                 data-expanded={isExpanded ? 'true' : 'false'}
+                data-unsaved={hasUnsavedChanges ? 'true' : 'false'}
               >
                 <div
                   className={[
@@ -2157,6 +2263,16 @@ const AIModelConfig: React.FC = () => {
                         {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                       </div>
                       <div className="bitfun-ai-model-config__selected-model-name">{modelDisplayName}</div>
+                      {hasUnsavedChanges && (
+                        <span
+                          className="bitfun-ai-model-config__selected-model-unsaved"
+                          title={t('providerSelection.unsavedModelHint')}
+                          aria-label={t('providerSelection.unsavedModelHint')}
+                          data-testid="settings-model-unsaved-badge"
+                        >
+                          {t('providerSelection.unsavedModel')}
+                        </span>
+                      )}
                     </div>
                     {!editingConfig.id && (
                       <IconButton
@@ -2183,7 +2299,7 @@ const AIModelConfig: React.FC = () => {
                         {' · '}
                         {formatTokenCountShort(draft.contextWindow)} ctx
                         {' · '}
-                        {formatReasoningSummary(draft)}
+                        {formatReasoningSummary(draft, reasoningProjection)}
                       </span>
                     </div>
                   )}
@@ -2198,6 +2314,8 @@ const AIModelConfig: React.FC = () => {
                         options={categoryOptions}
                         size="small"
                         className="bitfun-ai-model-config__selected-model-category-select"
+                        dropdownClassName="bitfun-ai-model-config__selected-model-category-dropdown"
+                        dropdownMatchTriggerWidth={false}
                         renderValue={(option) => {
                           if (!option || Array.isArray(option)) {
                             return null;
@@ -2225,48 +2343,23 @@ const AIModelConfig: React.FC = () => {
                         disableWheel
                       />
                     </div>
-                    {showReasoningModeControl && (
-                      <div className="bitfun-ai-model-config__selected-model-field">
-                        <span>{t('thinking.mode')}</span>
-                        <Select
-                          value={supportsDeepSeekEffort ? getDeepSeekReasoningModeSelectValue(draft) : draft.reasoningMode}
-                          onChange={(value) => updateModelDraft(
-                            draft.modelName,
-                            supportsDeepSeekEffort
-                              ? getUpdatesFromDeepSeekReasoningModeSelectValue(value as string)
-                              : { reasoningMode: value as ReasoningMode }
-                          )}
-                          options={reasoningModeOptions}
-                          size="small"
-                        />
-                      </div>
-                    )}
-                    {showReasoningEffortControl && (
-                      <div className="bitfun-ai-model-config__selected-model-field">
-                        <span>{t('reasoningEffort.label')}</span>
-                        <Select
-                          value={draft.reasoningEffort || ''}
-                          onChange={(value) => updateModelDraft(draft.modelName, { reasoningEffort: (value as string) || undefined })}
-                          placeholder={t('reasoningEffort.placeholder')}
-                          options={reasoningEffortOptions}
-                          size="small"
-                        />
-                      </div>
-                    )}
-                    {showThinkingBudgetControl && (
-                      <div className="bitfun-ai-model-config__selected-model-field">
-                        <span>{t('thinking.budgetTokens')}</span>
-                        <NumberInput
-                          value={displayedThinkingBudget}
-                          onChange={(value) => updateModelDraft(draft.modelName, { thinkingBudgetTokens: value || undefined })}
-                          min={1024}
-                          max={Math.min(effectiveMaxOutputTokens(draft), 50000)}
-                          step={1024}
-                          size="small"
-                          disableWheel
-                        />
-                      </div>
-                    )}
+                    <button
+                      type="button"
+                      className="bitfun-ai-model-config__reasoning-summary"
+                      onClick={() => setReasoningPanelDraftKey(draft.key)}
+                      data-testid="settings-model-reasoning-edit"
+                    >
+                      <span className="bitfun-ai-model-config__reasoning-summary-icon">
+                        <Brain size={16} aria-hidden="true" />
+                      </span>
+                      <span className="bitfun-ai-model-config__reasoning-summary-content">
+                        <strong>{t('reasoningPresets.configTitle')}</strong>
+                        <span>{formatReasoningSummary(draft, reasoningProjection)}</span>
+                      </span>
+                      <span className="bitfun-ai-model-config__reasoning-summary-action">
+                        {t('actions.edit')}
+                      </span>
+                    </button>
                   </div>
                 )}
               </div>
@@ -2280,14 +2373,22 @@ const AIModelConfig: React.FC = () => {
     const authIsSubscription = authType === 'subscription';
     const selectedSubscriptionProvider: SubscriptionProvider | undefined =
       editingConfig.auth?.type === 'subscription' ? editingConfig.auth.provider : undefined;
+    const selectedOpenCodePlan: OpenCodePlan | undefined =
+      editingConfig.auth?.type === 'subscription'
+      && editingConfig.auth.provider === 'opencode'
+        ? editingConfig.auth.plan || 'zen'
+        : undefined;
     const authSelectValue = authIsSubscription
-      ? `subscription:${selectedSubscriptionProvider || 'codex'}`
+      ? selectedSubscriptionProvider === 'opencode'
+        ? `subscription:opencode:${selectedOpenCodePlan || 'zen'}`
+        : `subscription:${selectedSubscriptionProvider || 'codex'}`
       : 'api_key';
     const authOptions: SelectOption[] = [
       { value: 'api_key', label: t('subscriptionAuth.options.apiKey') },
       { value: 'subscription:codex', label: t('subscriptionAuth.options.codex') },
       { value: 'subscription:antigravity', label: t('subscriptionAuth.options.antigravity') },
-      { value: 'subscription:opencode', label: t('subscriptionAuth.options.opencode') },
+      { value: 'subscription:opencode:zen', label: t('subscriptionAuth.options.opencodeZen') },
+      { value: 'subscription:opencode:go', label: t('subscriptionAuth.options.opencodeGo') },
     ];
     const matchedSubscription = selectedSubscriptionProvider
       ? subscriptionAccounts.find((account) => account.provider === selectedSubscriptionProvider)
@@ -2304,11 +2405,33 @@ const AIModelConfig: React.FC = () => {
                 setEditingConfig((prev) => ({ ...prev, auth: { type: 'api_key' } }));
                 return;
               }
-              const provider = next.replace('subscription:', '') as SubscriptionProvider;
-              setEditingConfig((prev) => ({
-                ...prev,
-                auth: { type: 'subscription', provider },
-              }));
+              const [, providerValue, planValue] = next.split(':');
+              const provider = providerValue as SubscriptionProvider;
+              const plan = provider === 'opencode'
+                ? (planValue || 'zen') as OpenCodePlan
+                : undefined;
+              setEditingConfig((prev) => {
+                if (!prev) return prev;
+                if (provider !== 'opencode') {
+                  return {
+                    ...prev,
+                    auth: { type: 'subscription', provider },
+                  };
+                }
+                const format = ['openai', 'responses', 'anthropic'].includes(prev.provider || '')
+                  ? prev.provider || 'openai'
+                  : 'openai';
+                const baseUrl = plan === 'go'
+                  ? 'https://opencode.ai/zen/go/v1'
+                  : 'https://opencode.ai/zen/v1';
+                return {
+                  ...prev,
+                  provider: format,
+                  base_url: baseUrl,
+                  request_url: resolveRequestUrl(baseUrl, format, prev.model_name || ''),
+                  auth: { type: 'subscription', provider, plan },
+                };
+              });
             }}
             options={authOptions}
             size="small"
@@ -2351,8 +2474,8 @@ const AIModelConfig: React.FC = () => {
 
     return (
       <>
-        <div className="bitfun-ai-model-config__form bitfun-ai-model-config__form--modal">
-          <div className="bitfun-ai-model-config__form-scrollable">
+        <div className="bitfun-ai-model-config__form bitfun-ai-model-config__form--modal" data-bf-component="ai-model-config" data-bf-part="form">
+          <div className="bitfun-ai-model-config__form-scrollable" data-bf-component="ai-model-config" data-bf-part="formBody">
             <ConfigPageSection
               title={isProviderScopedEditing ? t('editProviderSubtitle') : t('editSubtitle')}
               className="bitfun-ai-model-config__edit-section"
@@ -2421,13 +2544,6 @@ const AIModelConfig: React.FC = () => {
                     onChange={(value) => {
                       const provider = value as string;
                       resetRemoteModelDiscovery();
-                      setSelectedModelDrafts(prevDrafts =>
-                        prevDrafts.map(draft => normalizeDraftReasoningForProvider(draft, {
-                          name: editingConfig?.name,
-                          provider,
-                          base_url: editingConfig?.base_url,
-                        }))
-                      );
                       setEditingConfig(prev => ({
                         ...prev,
                         provider,
@@ -2537,13 +2653,6 @@ const AIModelConfig: React.FC = () => {
                       <Select data-testid="settings-model-request-format-select" value={editingConfig.provider || 'openai'} onChange={(value) => {
                         const provider = value as string;
                         resetRemoteModelDiscovery();
-                        setSelectedModelDrafts(prevDrafts =>
-                          prevDrafts.map(draft => normalizeDraftReasoningForProvider(draft, {
-                            name: editingConfig?.name,
-                            provider,
-                            base_url: editingConfig?.base_url,
-                          }))
-                        );
                         setEditingConfig(prev => ({
                           ...prev,
                           provider,
@@ -2572,7 +2681,7 @@ const AIModelConfig: React.FC = () => {
                             : [String(value)];
                           syncSelectedModelDrafts(nextModelNames, editingConfig, !!editingConfig.id);
                         }}
-                        placeholder="glm-4.7"
+                        placeholder="glm-5.2"
                         options={availableModelOptions}
                         searchable
                         multiple={!editingConfig.id}
@@ -2780,7 +2889,7 @@ const AIModelConfig: React.FC = () => {
                   className="bitfun-ai-model-config__custom-request-body-row"
                 >
                   <div className="bitfun-ai-model-config__row-control--stack">
-                    <Textarea value={editingConfig.custom_request_body || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, custom_request_body: e.target.value }))} placeholder={t('advancedSettings.customRequestBody.placeholder')} rows={8} style={{ fontFamily: 'var(--font-family-mono)', fontSize: '13px' }} />
+                    <Textarea value={editingConfig.custom_request_body || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, custom_request_body: e.target.value }))} placeholder={t('advancedSettings.customRequestBody.placeholder')} rows={8} style={{ fontFamily: 'var(--bf-appearance-token-font-family-mono)', fontSize: '13px' }} />
                     {editingConfig.custom_request_body && editingConfig.custom_request_body.trim() !== '' && (() => {
                       try { JSON.parse(editingConfig.custom_request_body); return <small className="bitfun-ai-model-config__json-status bitfun-ai-model-config__json-status--success">{t('advancedSettings.customRequestBody.validJson')}</small>; }
                       catch { return <small className="bitfun-ai-model-config__json-status bitfun-ai-model-config__json-status--error">{t('advancedSettings.customRequestBody.invalidJson')}</small>; }
@@ -2792,7 +2901,7 @@ const AIModelConfig: React.FC = () => {
           </ConfigPageSection>
           </div>
 
-          <div className="bitfun-ai-model-config__form-actions bitfun-ai-model-config__form-actions--sticky">
+          <div className="bitfun-ai-model-config__form-actions bitfun-ai-model-config__form-actions--sticky" data-bf-component="ai-model-config" data-bf-part="formActions">
             <Button variant="secondary" onClick={closeEditingModal}>{t('actions.cancel')}</Button>
             <Button data-testid="settings-model-save-btn" variant="primary" onClick={handleSave}>{t('actions.save')}</Button>
           </div>
@@ -2811,7 +2920,11 @@ const AIModelConfig: React.FC = () => {
 
     const badge = (
       <>
-        <span className="bitfun-ai-model-config__meta-tag">
+        <span
+          className="bitfun-ai-model-config__meta-tag"
+          data-bf-component="ai-model-config"
+          data-bf-part="modelMeta"
+        >
           {t(`category.${config.category}`)}
         </span>
         {testResult && (
@@ -2829,7 +2942,11 @@ const AIModelConfig: React.FC = () => {
     );
 
     const details = (
-      <div className="bitfun-ai-model-config__details">
+      <div
+        className="bitfun-ai-model-config__details"
+        data-bf-component="ai-model-config"
+        data-bf-part="modelDetails"
+      >
         <div className="bitfun-ai-model-config__details-section">
           <div className="bitfun-ai-model-config__details-section-title">
             {t('details.basicInfo')}
@@ -2879,7 +2996,11 @@ const AIModelConfig: React.FC = () => {
     );
 
     const control = (
-      <>
+      <div
+        className="bitfun-ai-model-config__model-actions"
+        data-bf-component="ai-model-config"
+        data-bf-part="modelActions"
+      >
         <Switch
           checked={config.enabled}
           onChange={(e) => {
@@ -2912,7 +3033,7 @@ const AIModelConfig: React.FC = () => {
         >
           <Trash2 size={14} />
         </IconButton>
-      </>
+      </div>
     );
 
     return (
@@ -2929,6 +3050,9 @@ const AIModelConfig: React.FC = () => {
         data-config-id={config.id || ''}
         data-model-id={config.model_name}
         data-model-name={config.model_name}
+        data-bf-component="ai-model-config"
+        data-bf-part="modelItem"
+        data-bf-state={[isExpanded && 'expanded', !config.enabled && 'disabled'].filter(Boolean).join(' ') || undefined}
       />
     );
   };
@@ -2964,10 +3088,29 @@ const AIModelConfig: React.FC = () => {
       </Tooltip>
     </span>
   );
+  const reasoningPanelDraft = reasoningPanelDraftKey
+    ? selectedModelDrafts.find(draft => draft.key === reasoningPanelDraftKey)
+    : undefined;
+  const reasoningPanelProjection = reasoningPanelDraft
+    && reasoningCatalogBindingsEqual(
+      reasoningPanelDraft.reasoning.catalog,
+      reasoningPanelDraft.reasoningProjectionCatalog,
+    )
+    ? resolveDraftCatalogEntry(reasoningPanelDraft)?.reasoning
+    : undefined;
+  const modelsDevSourceLabel = modelsDevStatus
+    ? t(`modelsDevCatalog.source.${modelsDevStatus.active_source}`)
+    : t('modelsDevCatalog.loading');
+  const modelsDevUpdatedAt = modelsDevStatus?.cache_updated_at_ms
+    ? i18nService.formatDate(new Date(modelsDevStatus.cache_updated_at_ms), {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+    : t('modelsDevCatalog.noCache');
 
   
   return (
-    <ConfigPageLayout className="bitfun-ai-model-config">
+    <ConfigPageLayout className="bitfun-ai-model-config" data-bf-component="ai-model-config" data-bf-part="root" data-bf-view="settings">
       <ConfigPageHeader
         title={t('title')}
         subtitle={t('subtitle')}
@@ -3002,9 +3145,9 @@ const AIModelConfig: React.FC = () => {
             </IconButton>
           )}
         >
-          <div className="bitfun-ai-model-config__cli-discovery">
+          <div className="bitfun-ai-model-config__cli-discovery" data-bf-component="ai-model-config" data-bf-part="subscriptionArea">
             {showSubscriptionMigrationNotice && (
-              <div className="bitfun-ai-model-config__subscription-migration-notice" role="status">
+              <div className="bitfun-ai-model-config__subscription-migration-notice" data-bf-component="ai-model-config" data-bf-part="subscriptionNotice" role="status">
                 <Info size={16} aria-hidden="true" />
                 <span>{t('subscriptionAuth.secureStoreMigrationNotice')}</span>
                 <Button
@@ -3048,6 +3191,21 @@ const AIModelConfig: React.FC = () => {
                 ? Math.max(0, Math.ceil((loginPanel.deadlineMs - subscriptionLoginClock) / 1000))
                 : 0;
               const countdown = `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`;
+              const openCodePlanRows = account.provider === 'opencode'
+                ? (['zen', 'go'] as const).map((plan) => {
+                    const planOfferings = (account.api_offerings || [])
+                      .filter((offering) => offering.plan === plan);
+                    const populatedOfferings = planOfferings
+                      .filter((offering) => offering.models.length > 0);
+                    return {
+                      plan,
+                      offerings: populatedOfferings.length > 0
+                        ? populatedOfferings
+                        : planOfferings,
+                    };
+                  }).filter((row) => row.offerings.length > 0)
+                : [];
+              const hasOpenCodeOfferings = openCodePlanRows.length > 0;
               return (
                 <React.Fragment key={account.provider}>
                   <ConfigPageRow
@@ -3082,14 +3240,16 @@ const AIModelConfig: React.FC = () => {
                           >
                             {t('subscriptionAuth.logout')}
                           </Button>
-                          <Button
-                            size="small"
-                            variant="primary"
-                            disabled={anyLoginInProgress}
-                            onClick={() => handleImportFromSubscription(account)}
-                          >
-                            {t('subscriptionAuth.import')}
-                          </Button>
+                          {(account.provider !== 'opencode' || !hasOpenCodeOfferings) && (
+                            <Button
+                              size="small"
+                              variant="primary"
+                              disabled={anyLoginInProgress}
+                              onClick={() => handleImportFromSubscription(account)}
+                            >
+                              {t('subscriptionAuth.import')}
+                            </Button>
+                          )}
                         </>
                       ) : account.vault_unavailable ? (
                         <Button
@@ -3124,12 +3284,48 @@ const AIModelConfig: React.FC = () => {
                     </div>
                   </ConfigPageRow>
 
+                  {account.connected && openCodePlanRows.map(({ plan, offerings }) => (
+                    <ConfigPageRow
+                      key={`${account.provider}:${plan}`}
+                      label={getOpenCodePlanLabel(plan)}
+                      description={getOpenCodePlanDescription(plan)}
+                      className="bitfun-ai-model-config__opencode-plan"
+                      align="center"
+                    >
+                      <div className="bitfun-ai-model-config__cli-actions bitfun-ai-model-config__opencode-plan-actions">
+                        {offerings.map((offering) => {
+                          const formatLabel = getOpenCodeFormatLabel(offering.format);
+                          const label = offering.models.length > 0
+                            ? t('subscriptionAuth.useFormatWithCount', {
+                                format: formatLabel,
+                                modelCount: i18nService.formatNumber(offering.models.length),
+                              })
+                            : t('subscriptionAuth.useFormat', { format: formatLabel });
+                          return (
+                            <Button
+                              key={`${offering.plan}:${offering.format}`}
+                              size="small"
+                              variant="secondary"
+                              disabled={anyLoginInProgress}
+                              onClick={() => handleImportFromSubscription(account, offering)}
+                            >
+                              {label}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    </ConfigPageRow>
+                  ))}
+
                   {loginPanel && (
                     <div
                       className={`bitfun-ai-model-config__subscription-login-panel bitfun-ai-model-config__subscription-login-panel--${loginPanel.status}`}
+                      data-bf-component="ai-model-config"
+                      data-bf-part="subscriptionPanel"
+                      data-bf-status={loginPanel.status}
                       role={loginPanel.status === 'failed' ? 'alert' : 'status'}
                     >
-                      <div className="bitfun-ai-model-config__subscription-login-summary">
+                      <div className="bitfun-ai-model-config__subscription-login-summary" data-bf-component="ai-model-config" data-bf-part="subscriptionSummary">
                         <strong>
                           {loginPanel.status === 'failed'
                             ? t('subscriptionAuth.loginNeedsRetry')
@@ -3146,14 +3342,14 @@ const AIModelConfig: React.FC = () => {
                       </div>
 
                       {loginPanel.status === 'pending' && loginPanel.userCode && (
-                        <div className="bitfun-ai-model-config__subscription-code">
+                        <div className="bitfun-ai-model-config__subscription-code" data-bf-component="ai-model-config" data-bf-part="subscriptionCode">
                           <span>{t('subscriptionAuth.verificationCode')}</span>
                           <code>{loginPanel.userCode}</code>
                         </div>
                       )}
 
                       {(loginPanel.status === 'pending' || loginPanel.status === 'failed') && (
-                        <div className="bitfun-ai-model-config__subscription-login-actions">
+                        <div className="bitfun-ai-model-config__subscription-login-actions" data-bf-component="ai-model-config" data-bf-part="subscriptionActions">
                           {loginPanel.status === 'pending' && loginPanel.userCode && (
                             <Button
                               size="small"
@@ -3194,6 +3390,7 @@ const AIModelConfig: React.FC = () => {
 
         <ConfigPageSection
           className="bitfun-ai-model-config__models-section"
+          mouseGlowSurface={false}
           title={tDefault('tabs.models')}
           description={t('subtitle')}
           extra={(
@@ -3208,7 +3405,7 @@ const AIModelConfig: React.FC = () => {
           )}
         >
           {aiModels.length === 0 ? (
-            <div className="bitfun-ai-model-config__empty">
+            <div className="bitfun-ai-model-config__empty" data-bf-component="ai-model-config" data-bf-part="empty">
               <Wifi size={36} />
               <p>{t('empty.noModels')}</p>
               <Button data-testid="settings-model-create-first-config-btn" variant="primary" size="small" onClick={handleCreateNew}>
@@ -3217,18 +3414,18 @@ const AIModelConfig: React.FC = () => {
               </Button>
             </div>
           ) : (
-            <div className="bitfun-ai-model-config__collection" data-testid="settings-model-list">
+            <div className="bitfun-ai-model-config__collection" data-bf-component="ai-model-config" data-bf-part="collection" data-testid="settings-model-list">
               {providerGroups.map(group => (
-                <div key={group.key} className="bitfun-ai-model-config__provider-group">
-                  <div className="bitfun-ai-model-config__provider-group-header">
-                    <div className="bitfun-ai-model-config__provider-group-title">
+                <div key={group.key} className="bitfun-ai-model-config__provider-group" data-bf-component="ai-model-config" data-bf-part="providerGroup">
+                  <div className="bitfun-ai-model-config__provider-group-header" data-bf-component="ai-model-config" data-bf-part="providerGroupHeader">
+                    <div className="bitfun-ai-model-config__provider-group-title" data-bf-component="ai-model-config" data-bf-part="providerGroupTitle">
                       <span>{group.providerName}</span>
                       <span className="bitfun-ai-model-config__provider-group-count">{group.models.length}</span>
                       <span className="bitfun-ai-model-config__meta-tag">
                         {requestFormatLabelMap[group.models[0]?.provider || 'openai'] || (group.models[0]?.provider || 'openai')}
                       </span>
                     </div>
-                    <div className="bitfun-ai-model-config__provider-group-actions">
+                    <div className="bitfun-ai-model-config__provider-group-actions" data-bf-component="ai-model-config" data-bf-part="providerGroupActions">
                       <IconButton
                         variant="ghost"
                         size="small"
@@ -3239,7 +3436,7 @@ const AIModelConfig: React.FC = () => {
                       </IconButton>
                     </div>
                   </div>
-                  <div className="bitfun-ai-model-config__provider-group-list">
+                  <div className="bitfun-ai-model-config__provider-group-list" data-bf-component="ai-model-config" data-bf-part="providerGroupList">
                     {group.models.map(config => renderModelCollectionItem(config))}
                   </div>
                 </div>
@@ -3247,6 +3444,40 @@ const AIModelConfig: React.FC = () => {
             </div>
           )}
         </ConfigPageSection>
+
+        {modelsDevStatusAvailable && <ConfigPageSection
+          title={t('modelsDevCatalog.title')}
+          description={t('modelsDevCatalog.description')}
+          mouseGlowSurface={false}
+          extra={(
+            <div className="bitfun-ai-model-config__catalog-actions">
+              <IconButton
+                variant="ghost"
+                size="small"
+                tooltip={t('modelsDevCatalog.viewDetails')}
+                onClick={() => setShowModelsDevDetails(true)}
+              >
+                <Eye size={14} aria-hidden="true" />
+              </IconButton>
+              <IconButton
+                variant="ghost"
+                size="small"
+                tooltip={t(isRefreshingModelsDev
+                  ? 'modelsDevCatalog.refreshing'
+                  : 'modelsDevCatalog.refreshNow')}
+                onClick={() => void handleRefreshModelsDev()}
+                disabled={isRefreshingModelsDev}
+              >
+                <RefreshCw
+                  size={14}
+                  className={isRefreshingModelsDev ? 'bitfun-ai-model-config__spin' : ''}
+                />
+              </IconButton>
+            </div>
+          )}
+        >
+          <span />
+        </ConfigPageSection>}
 
         <ConfigPageSection
           title={t('streamIdleTimeout.title')}
@@ -3361,13 +3592,92 @@ const AIModelConfig: React.FC = () => {
       </ConfigPageContent>
 
       <Modal
+        isOpen={showModelsDevDetails}
+        onClose={() => setShowModelsDevDetails(false)}
+        title={t('modelsDevCatalog.detailsTitle')}
+        size="small"
+      >
+        <div className="bitfun-ai-model-config__catalog-details">
+          <ConfigPageRow label={t('modelsDevCatalog.activeSource')} align="center">
+            <span className="bitfun-ai-model-config__catalog-status-value">{modelsDevSourceLabel}</span>
+          </ConfigPageRow>
+          <ConfigPageRow label={t('modelsDevCatalog.catalogSize')} align="center">
+            <span className="bitfun-ai-model-config__catalog-status-value">
+              {modelsDevStatus
+                ? t('modelsDevCatalog.catalogSizeValue', {
+                    providers: i18nService.formatNumber(modelsDevStatus.provider_count),
+                    models: i18nService.formatNumber(modelsDevStatus.reasoning_model_count),
+                  })
+                : t('modelsDevCatalog.loading')}
+            </span>
+          </ConfigPageRow>
+          <ConfigPageRow label={t('modelsDevCatalog.cacheUpdatedAt')} align="center">
+            <span className="bitfun-ai-model-config__catalog-status-value">{modelsDevUpdatedAt}</span>
+          </ConfigPageRow>
+          <ConfigPageRow label={t('modelsDevCatalog.cachePath')} align="center" wide>
+            <div className="bitfun-ai-model-config__catalog-path">
+              <code title={modelsDevStatus?.cache_path}>{modelsDevStatus?.cache_path || '—'}</code>
+              <IconButton
+                variant="ghost"
+                size="small"
+                tooltip={t('modelsDevCatalog.reveal')}
+                onClick={() => {
+                  void aiApi.revealModelsDevCacheDirectory().catch((error) => {
+                    log.warn('Failed to reveal models.dev cache', { error });
+                    notification.error(t('modelsDevCatalog.revealFailed'));
+                  });
+                }}
+              >
+                <FolderOpen size={14} aria-hidden="true" />
+              </IconButton>
+            </div>
+          </ConfigPageRow>
+          <ConfigPageRow label={t('modelsDevCatalog.revision')} align="center">
+            <code className="bitfun-ai-model-config__catalog-revision" title={modelsDevStatus?.revision}>
+              {modelsDevStatus?.revision ? `${modelsDevStatus.revision.slice(0, 12)}…` : '—'}
+            </code>
+          </ConfigPageRow>
+          <div className="bitfun-ai-model-config__catalog-offline-help" role="note">
+            <Info size={15} aria-hidden="true" />
+            <div>
+              <strong>{t('modelsDevCatalog.offlineTitle')}</strong>
+              <p>{t('modelsDevCatalog.offlineDescription')}</p>
+              <div className="bitfun-ai-model-config__catalog-offline-actions">
+                <Button
+                  variant="ghost"
+                  size="small"
+                  onClick={() => void systemAPI.openExternal(MODELS_DEV_DOWNLOAD_URL)}
+                >
+                  <ExternalLink size={14} aria-hidden="true" />
+                  {t('modelsDevCatalog.downloadOriginal')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="small"
+                  onClick={() => {
+                    void aiApi.revealModelsDevCacheDirectory().catch((error) => {
+                      log.warn('Failed to reveal models.dev cache directory', { error });
+                      notification.error(t('modelsDevCatalog.revealFailed'));
+                    });
+                  }}
+                >
+                  <FolderOpen size={14} aria-hidden="true" />
+                  {t('modelsDevCatalog.openCacheDirectory')}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
         isOpen={!!subscriptionLogoutRequest}
         onClose={() => setSubscriptionLogoutRequest(null)}
         title={t('subscriptionAuth.logoutConfirmTitle')}
         size="small"
         closeOnOverlayClick={false}
       >
-        <div className="bitfun-ai-model-config__subscription-logout-confirm">
+        <div className="bitfun-ai-model-config__subscription-logout-confirm" data-bf-component="ai-model-config" data-bf-part="logoutConfirm">
           <p>
             {subscriptionLogoutRequest?.affectedModels.length
               ? t('subscriptionAuth.logoutAffectedModels', {
@@ -3383,7 +3693,7 @@ const AIModelConfig: React.FC = () => {
             </ul>
           )}
           <p>{t('subscriptionAuth.logoutConsequence')}</p>
-          <div className="bitfun-ai-model-config__subscription-logout-actions">
+          <div className="bitfun-ai-model-config__subscription-logout-actions" data-bf-component="ai-model-config" data-bf-part="logoutActions">
             <Button
               size="small"
               variant="secondary"
@@ -3404,16 +3714,38 @@ const AIModelConfig: React.FC = () => {
 
       <Modal
         isOpen={isEditing && !!editingConfig}
-        onClose={closeEditingModal}
-        title={editingConfig?.id
-          ? t('editModel')
-          : (getProviderInstanceId(editingConfig)
-            ? t('editProvider')
-            : (currentTemplate ? `${t('newProvider')} - ${currentTemplate.name}` : t('newProvider')))}
+        onClose={reasoningPanelDraft ? () => setReasoningPanelDraftKey(null) : closeEditingModal}
+        title={reasoningPanelDraft
+          ? t('reasoningPresets.dialogTitle', {
+              provider: editingConfig?.name?.trim()
+                || currentTemplate?.name
+                || editingConfig?.provider
+                || '',
+              model: reasoningPanelDraft.modelName,
+            })
+          : editingConfig?.id
+            ? t('editModel')
+            : (getProviderInstanceId(editingConfig)
+              ? t('editProvider')
+              : (currentTemplate ? `${t('newProvider')} - ${currentTemplate.name}` : t('newProvider')))}
         size="xlarge"
         contentClassName="modal__content--fill-flex bitfun-ai-model-config__form--modal"
       >
-        {renderEditingForm()}
+        {reasoningPanelDraft ? (
+          <ReasoningConfigPanel
+            key={reasoningPanelDraft.key}
+            value={reasoningPanelDraft.reasoning}
+            generatedProjection={reasoningPanelProjection}
+            modelsDevReasoningCatalog={modelCatalog?.models_dev_reasoning_catalog}
+            onCancel={() => setReasoningPanelDraftKey(null)}
+            onApply={(reasoning) => {
+              updateModelDraft(reasoningPanelDraft.modelName, {
+                reasoning,
+              });
+              setReasoningPanelDraftKey(null);
+            }}
+          />
+        ) : renderEditingForm()}
       </Modal>
     </ConfigPageLayout>
   );

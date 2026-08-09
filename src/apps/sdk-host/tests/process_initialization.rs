@@ -28,3 +28,18 @@ fn sdk_host_process_keeps_cleanup_warnings_on_stderr() {
     assert!(entrypoint.contains(".with_max_level(tracing::Level::WARN)"));
     assert!(entrypoint.contains(".with_writer(std::io::stderr)"));
 }
+
+#[test]
+fn sdk_host_injects_core_ownership_before_runtime_initialization() {
+    let runtime = include_str!("../src/runtime.rs");
+    let ownership = runtime
+        .find("CoreRuntimeOwnership::fixed_workspace")
+        .expect("SDK Host Core ownership assembly");
+    let initialize = runtime
+        .find("init_agentic_system_for_profile_with_runtime_ownership")
+        .expect("SDK Host ownership-aware AgenticSystem initialization");
+
+    assert!(ownership < initialize);
+    assert!(runtime.contains("RuntimeDeployment::Embedded"));
+    assert!(!runtime.contains("WorkspaceRuntimeOwnership"));
+}

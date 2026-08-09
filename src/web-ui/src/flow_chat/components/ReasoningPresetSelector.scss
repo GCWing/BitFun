@@ -1,0 +1,133 @@
+@use '../../component-library/styles/tokens' as *;
+
+.bitfun-reasoning-preset-selector {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+
+  &__trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    max-width: 112px;
+    padding: 0 8px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    cursor: pointer;
+    opacity: 0.72;
+    outline: none;
+
+    .bitfun-chat-input__box:focus-within &,
+    &:hover,
+    &:focus-visible,
+    &--open {
+      color: var(--bf-appearance-token-color-text-primary);
+      opacity: 1;
+    }
+
+    &:hover,
+    &--open {
+      background: var(--bf-appearance-token-element-bg-medium);
+    }
+
+    &:focus-visible {
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 20%, transparent);
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.4;
+    }
+  }
+
+  &__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__menu {
+    min-width: clamp(0px, 190px, calc(100vw - 16px));
+    max-width: clamp(0px, 240px, calc(100vw - 16px));
+    padding: 4px;
+    overflow: hidden;
+    background: var(--bf-appearance-token-color-bg-elevated);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: 6px;
+    box-shadow: 0 8px 32px var(--bf-appearance-token-color-overlay-black-50);
+    z-index: $z-popover;
+  }
+
+  &__header {
+    padding: 5px 7px 7px;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-weight: 500;
+  }
+
+  &__option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    min-height: 34px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-secondary);
+    text-align: left;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--bf-appearance-token-element-bg-medium);
+      color: var(--bf-appearance-token-color-text-primary);
+      outline: none;
+    }
+
+    &[aria-checked='true'] {
+      background: var(--bf-appearance-token-element-bg-subtle);
+    }
+
+    > span {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    strong,
+    small {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      letter-spacing: 0;
+    }
+
+    strong {
+      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      font-weight: 500;
+    }
+
+    small {
+      color: var(--bf-appearance-token-color-text-muted);
+      font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    }
+
+    svg {
+      flex-shrink: 0;
+      color: var(--bf-appearance-token-color-accent-500);
+    }
+  }
+}
+
+@media (max-width: 520px) {
+  .bitfun-reasoning-preset-selector__trigger {
+    max-width: 84px;
+  }
+}

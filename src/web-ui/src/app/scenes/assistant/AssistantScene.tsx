@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useMemo, useEffect } from 'react';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { WorkspaceKind } from '@/shared/types';
-import { ProcessingIndicator } from '@/flow_chat/components/modern/ProcessingIndicator';
+import { DotMatrixLoader } from '@/component-library';
 import { useMyAgentStore } from '../my-agent/myAgentStore';
 import './AssistantScene.scss';
 
@@ -16,13 +16,16 @@ const AssistantScene: React.FC<AssistantSceneProps> = ({ workspacePath }) => {
   const { t } = useI18n('common');
   const selectedAssistantWorkspaceId = useMyAgentStore((s) => s.selectedAssistantWorkspaceId);
   const setSelectedAssistantWorkspaceId = useMyAgentStore((s) => s.setSelectedAssistantWorkspaceId);
-  const { currentWorkspace, assistantWorkspacesList } = useWorkspaceContext();
+  const { currentWorkspace, assistantWorkspacesList, primaryAssistantWorkspaceId } = useWorkspaceContext();
   const activeAssistantWorkspace =
     currentWorkspace?.workspaceKind === WorkspaceKind.Assistant ? currentWorkspace : null;
 
   const defaultAssistantWorkspace = useMemo(
-    () => assistantWorkspacesList.find((workspace) => !workspace.assistantId) ?? assistantWorkspacesList[0] ?? null,
-    [assistantWorkspacesList]
+    () => assistantWorkspacesList.find((workspace) => workspace.id === primaryAssistantWorkspaceId)
+      ?? assistantWorkspacesList.find((workspace) => !workspace.assistantId)
+      ?? assistantWorkspacesList[0]
+      ?? null,
+    [assistantWorkspacesList, primaryAssistantWorkspaceId]
   );
 
   const selectedAssistantWorkspace = useMemo(() => {
@@ -69,16 +72,18 @@ const AssistantScene: React.FC<AssistantSceneProps> = ({ workspacePath }) => {
   ]);
 
   return (
-    <div className="bitfun-assistant-scene">
+    <div className="bitfun-assistant-scene" data-bf-scene="assistant" data-bf-part="root">
       <Suspense
         fallback={(
           <div
             className="bitfun-assistant-scene__loading"
+            data-bf-scene="assistant"
+            data-bf-part="loading"
             role="status"
             aria-busy="true"
             aria-label={t('loading.scenes')}
           >
-            <ProcessingIndicator visible />
+            <DotMatrixLoader size="medium" />
           </div>
         )}
       >

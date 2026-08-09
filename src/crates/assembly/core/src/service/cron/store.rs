@@ -182,6 +182,8 @@ fn migrate_legacy_job(legacy: LegacyCronJobV1) -> CronJob {
             workspace: CronWorkspaceRef {
                 workspace_id: None,
                 workspace_path: legacy.workspace_path,
+                project_workspace_path: None,
+                execution_target: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
             },

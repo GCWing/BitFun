@@ -35,7 +35,12 @@ export const LoadingNotification: React.FC<LoadingNotificationProps> = ({ notifi
   };
 
   return (
-    <div className={`loading-notification loading-notification--${status || 'active'}`}>
+    <div
+      className={`loading-notification loading-notification--${status || 'active'}`}
+      data-bf-component="notification"
+      data-bf-part="loadingItem"
+      data-bf-state={status || undefined}
+    >
       
       <div className="loading-notification__icon">
         {getStatusIcon()}

@@ -70,6 +70,15 @@ const DISABLE_MINIAPP: SkillPolicyRule = SkillPolicyRule {
     effect: PolicyEffect::Disable,
 };
 
+// ControlHub's browser domain is the single default browser-automation path.
+// The computer-use skill group (agent-browser) stays opt-in in every mode so the
+// model never sees two parallel browser stacks; users can still enable it via
+// mode skill overrides or invoke it explicitly.
+const DISABLE_COMPUTER_USE: SkillPolicyRule = SkillPolicyRule {
+    selector: SkillSelector::Group(BuiltinSkillGroup::ComputerUse),
+    effect: PolicyEffect::Disable,
+};
+
 const ENABLE_OFFICE: SkillPolicyRule = SkillPolicyRule {
     selector: SkillSelector::Group(BuiltinSkillGroup::Office),
     effect: PolicyEffect::Enable,
@@ -87,7 +96,7 @@ const OPEN_META_ONLY_POLICY: ModeSkillPolicy = ModeSkillPolicy {
 
 const AGENTIC_POLICY: ModeSkillPolicy = ModeSkillPolicy {
     builtin_default: PolicyEffect::Enable,
-    rules: &[DISABLE_OFFICE, DISABLE_GSTACK],
+    rules: &[DISABLE_OFFICE, DISABLE_GSTACK, DISABLE_COMPUTER_USE],
 };
 
 const COWORK_POLICY: ModeSkillPolicy = ModeSkillPolicy {
@@ -97,7 +106,7 @@ const COWORK_POLICY: ModeSkillPolicy = ModeSkillPolicy {
 
 const TEAM_POLICY: ModeSkillPolicy = ModeSkillPolicy {
     builtin_default: PolicyEffect::Enable,
-    rules: &[DISABLE_OFFICE, DISABLE_MINIAPP],
+    rules: &[DISABLE_OFFICE, DISABLE_MINIAPP, DISABLE_COMPUTER_USE],
 };
 
 fn policy_for_mode(mode_id: &str) -> ModeSkillPolicy {
@@ -141,6 +150,29 @@ mod tests {
     use super::*;
     use crate::agents::SHARED_CODING_MODE_IDS;
     use crate::skills::catalog::BUILTIN_SKILL_SPECS;
+
+    #[test]
+    fn agent_browser_defaults_off_in_every_mode() {
+        for mode_id in [
+            "agentic",
+            "Plan",
+            "debug",
+            "Multitask",
+            "coding_shared",
+            "Claw",
+            "Cowork",
+            "Team",
+            "ComputerUse",
+            "DeepResearch",
+            "SomeUnknownMode",
+        ] {
+            assert_eq!(
+                resolve_builtin_default_enabled("agent-browser", mode_id),
+                Some(false),
+                "agent-browser must stay opt-in for mode {mode_id}: ControlHub's browser domain is the default browser path"
+            );
+        }
+    }
 
     #[test]
     fn shared_coding_modes_use_identical_builtin_skill_defaults() {

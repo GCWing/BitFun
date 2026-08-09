@@ -290,9 +290,9 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
 
   return (
     <>
-      <section className="background-command-output-panel">
-        <header className="background-command-output-panel__header">
-          <div className="background-command-output-panel__title-group">
+      <section data-bf-component="background-command-output-panel" data-bf-part="root" data-bf-state={[loading && 'loading', error && 'error'].filter(Boolean).join(' ') || undefined} className="background-command-output-panel">
+        <header data-bf-component="background-command-output-panel" data-bf-part="header" className="background-command-output-panel__header">
+          <div data-bf-component="background-command-output-panel" data-bf-part="title" className="background-command-output-panel__title-group">
             <span className="background-command-output-panel__icon">
               <Terminal size={16} aria-hidden="true" />
             </span>
@@ -301,7 +301,7 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
               <p title={command}>{command}</p>
             </div>
           </div>
-          <div className="background-command-output-panel__header-actions">
+          <div data-bf-component="background-command-output-panel" data-bf-part="headerActions" className="background-command-output-panel__header-actions">
             <IconButton
               variant="ghost"
               size="small"
@@ -337,7 +337,7 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
           </div>
         </header>
 
-        <div className="background-command-output-panel__meta">
+        <div data-bf-component="background-command-output-panel" data-bf-part="meta" className="background-command-output-panel__meta">
           <div className="background-command-output-panel__meta-status">
             {metadata ? (
               <>
@@ -371,35 +371,39 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
         </div>
 
         {metadata?.truncatedFromStart ? (
-          <div className="background-command-output-panel__notice">
+          <div data-bf-component="background-command-output-panel" data-bf-part="notice" className="background-command-output-panel__notice">
             <AlertCircle size={14} aria-hidden="true" />
             <span>{t('backgroundCommandOutput.truncatedFromStart')}</span>
           </div>
         ) : null}
 
         {error ? (
-          <div className="background-command-output-panel__error">
+          <div data-bf-component="background-command-output-panel" data-bf-part="error" className="background-command-output-panel__error">
             <AlertCircle size={14} aria-hidden="true" />
             <span>{t('backgroundCommandOutput.error', { message: error })}</span>
           </div>
         ) : null}
 
-        <div className="background-command-output-panel__output">
+        <div data-bf-component="background-command-output-panel" data-bf-part="output" className="background-command-output-panel__output">
           {displayedOutput ? (
-            <LazyTerminalOutputRenderer
-              content={displayedOutput}
-              className="background-command-output-panel__terminal"
-              minHeight={420}
-              maxHeight={1200}
-            />
+            <div data-bf-component="background-command-output-panel" data-bf-part="terminal">
+              <LazyTerminalOutputRenderer
+                content={displayedOutput}
+                className="background-command-output-panel__terminal"
+                minHeight={420}
+                maxHeight={1200}
+              />
+            </div>
           ) : (
-            <div className="background-command-output-panel__empty">
+            <div data-bf-component="background-command-output-panel" data-bf-part="empty" className="background-command-output-panel__empty">
               {loading ? t('backgroundCommandOutput.loading') : t('backgroundCommandOutput.empty')}
             </div>
           )}
         </div>
         {isInputEditorOpen ? (
           <form
+            data-bf-component="background-command-output-panel"
+            data-bf-part="inputEditor"
             className="background-command-output-panel__input-editor"
             onSubmit={(event) => {
               event.preventDefault();
@@ -420,7 +424,7 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
               spellCheck={false}
             />
             <div className="background-command-output-panel__input-editor-footer">
-              <div className="background-command-output-panel__input-options">
+              <div data-bf-component="background-command-output-panel" data-bf-part="inputOptions" className="background-command-output-panel__input-options">
                 <Checkbox
                   className="background-command-output-panel__input-option"
                   size="small"
@@ -438,7 +442,7 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
                   label={t('backgroundCommandInput.maskInput')}
                 />
               </div>
-              <div className="background-command-output-panel__input-editor-actions">
+              <div data-bf-component="background-command-output-panel" data-bf-part="inputActions" className="background-command-output-panel__input-editor-actions">
                 <Button
                   type="button"
                   variant="secondary"

@@ -28,14 +28,6 @@ export interface DeepReviewConsentControls {
   deepReviewConsentDialog: React.ReactNode;
 }
 
-function getReviewCallLimit(preview: ReviewTeamRunManifest): number {
-  return Math.max(
-    1,
-    preview.tokenBudget.estimatedReviewerCalls || 1,
-    preview.tokenBudget.maxReviewerCalls || 1,
-  );
-}
-
 function getReviewTargetFileCount(preview: ReviewTeamRunManifest): number {
   return preview.target.files.filter((file) => {
     if (typeof file === 'string') {
@@ -120,16 +112,15 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
     const skippedCount = skippedReviewers.length;
     const selectedStrategyLabel = getStrategyLabel(preview.strategyLevel, t);
     const targetSummary = getReviewTargetSummary(preview, t);
-    const reviewCallLimit = getReviewCallLimit(preview);
     return (
-      <div className="deep-review-consent__summary">
-        <div className="deep-review-consent__summary-header">
+      <div data-bf-component="deep-review-consent-dialog" data-bf-part="summary" className="deep-review-consent__summary">
+        <div data-bf-component="deep-review-consent-dialog" data-bf-part="summaryHeader" className="deep-review-consent__summary-header">
           <span className="deep-review-consent__fact-title">
             {t('deepReviewConsent.summaryTitle')}
           </span>
         </div>
 
-        <div className="deep-review-consent__summary-stats">
+        <div data-bf-component="deep-review-consent-dialog" data-bf-part="summaryStats" className="deep-review-consent__summary-stats">
           <span>{targetSummary}</span>
           {skippedCount > 0 && (
             <span className="deep-review-consent__summary-stat--warning">
@@ -139,7 +130,7 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
             </span>
           )}
         </div>
-        <div className="deep-review-consent__impact-grid">
+        <div data-bf-component="deep-review-consent-dialog" data-bf-part="impactGrid" className="deep-review-consent__impact-grid">
           <div>
             <span>{t('deepReviewConsent.costLabel')}</span>
             <strong>{t('deepReviewConsent.cost')}</strong>
@@ -154,16 +145,8 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
           </div>
         </div>
 
-        <div className="deep-review-consent__token-estimate">
-          <strong>
-            {t('deepReviewConsent.callLimit', {
-              count: reviewCallLimit,
-            })}
-          </strong>
-        </div>
-
         {preview.workspacePath && (
-          <div className="deep-review-consent__strategy-control">
+          <div data-bf-component="deep-review-consent-dialog" data-bf-part="strategy" className="deep-review-consent__strategy-control">
             <div className="deep-review-consent__strategy-current">
               <strong>
                 {t('deepReviewConsent.runStrategy', {
@@ -176,7 +159,7 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
         )}
 
         {skippedReviewers.length > 0 && (
-          <div className="deep-review-consent__reviewer-group">
+          <div data-bf-component="deep-review-consent-dialog" data-bf-part="reviewerGroup" className="deep-review-consent__reviewer-group">
             <div className="deep-review-consent__reviewer-group-title deep-review-consent__reviewer-group-title--warning">
               <AlertTriangle size={13} />
               {t('deepReviewConsent.skippedGroupTitle')}
@@ -202,9 +185,9 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
       contentClassName="deep-review-consent-modal"
       ariaLabel={t('deepReviewConsent.windowTitle')}
     >
-      <div className="deep-review-consent">
-        <div className="deep-review-consent__header">
-          <div className="deep-review-consent__heading">
+      <div data-bf-component="deep-review-consent-dialog" data-bf-part="root" className="deep-review-consent">
+        <div data-bf-component="deep-review-consent-dialog" data-bf-part="header" className="deep-review-consent__header">
+          <div data-bf-component="deep-review-consent-dialog" data-bf-part="heading" className="deep-review-consent__heading">
             <span className="deep-review-consent__eyebrow">
               {t('deepReviewConsent.eyebrow')}
             </span>
@@ -215,6 +198,8 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
           </div>
           <button
             type="button"
+            data-bf-component="deep-review-consent-dialog"
+            data-bf-part="close"
             className="deep-review-consent__close"
             aria-label={t('deepReviewConsent.cancel')}
             onClick={() => void settleConsent(false)}
@@ -224,7 +209,7 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
         </div>
 
         {pendingConsent.launchContext?.sessionConcurrencyGuard?.highActivity && (
-          <div className="deep-review-consent__capacity-note">
+          <div data-bf-component="deep-review-consent-dialog" data-bf-part="capacityNote" className="deep-review-consent__capacity-note">
             <div className="deep-review-consent__fact-icon deep-review-consent__fact-icon--warning">
               <AlertTriangle size={16} />
             </div>
@@ -243,8 +228,8 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
 
         {pendingConsent.preview && renderLaunchSummary(pendingConsent.preview)}
 
-        <div className="deep-review-consent__footer">
-          <div className="deep-review-consent__actions">
+        <div data-bf-component="deep-review-consent-dialog" data-bf-part="footer" className="deep-review-consent__footer">
+          <div data-bf-component="deep-review-consent-dialog" data-bf-part="actions" className="deep-review-consent__actions">
             <Button
               variant="secondary"
               size="small"

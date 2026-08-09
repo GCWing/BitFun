@@ -1,0 +1,1255 @@
+import { describe, it, expect } from '@ohos/hypium';
+import { RemoteI18n } from '../main/ets/i18n/RemoteI18n';
+import { ChatSessionController, ChatSessionSnapshot } from '../main/ets/services/ChatSessionController';
+import { ChatComposerPolicy } from '../main/ets/services/ChatComposerPolicy';
+import { ChatTimelineItem, ChatTimelineProjector } from '../main/ets/services/ChatTimelineProjector';
+import { ChatTimelineStore } from '../main/ets/services/ChatTimelineStore';
+import { ConversationEvent } from '../main/ets/services/ConversationEvent';
+import { AsyncLifecycleGate } from '../main/ets/services/AsyncLifecycleGate';
+import { Encoding } from '../main/ets/services/Encoding';
+import {
+  GeneralChatDraftStore,
+  GeneralChatLocalStore,
+  GeneralChatSendResult,
+  GeneralChatStreamCallbacks,
+  GeneralChatStreamObserver
+} from '../main/ets/services/general-chat/GeneralChatPort';
+import { GeneralChatApiClient } from '../main/ets/services/general-chat/GeneralChatApiClient';
+import { GeneralChatBootstrapController } from '../main/ets/services/general-chat/GeneralChatBootstrapController';
+import { GeneralChatCommandClient, GeneralChatCommandController } from '../main/ets/services/general-chat/GeneralChatCommandController';
+import {
+  GeneralChatConfigSnapshot,
+  GeneralChatConfigStore,
+  GeneralChatConfigValidator,
+  GeneralChatModelSelectionPolicy
+} from '../main/ets/services/general-chat/GeneralChatConfigStore';
+import { GeneralChatDraftController, GeneralChatDraftScheduler } from '../main/ets/services/general-chat/GeneralChatDraftController';
+import { GeneralChatDraftLifecycleController } from '../main/ets/services/general-chat/GeneralChatDraftLifecycleController';
+import { GeneralChatCloudConfigPolicy } from '../main/ets/services/general-chat/GeneralChatCloudConfigPolicy';
+import { GeneralChatEventMapper } from '../main/ets/services/general-chat/GeneralChatEventMapper';
+import { GeneralChatExportFormatter } from '../main/ets/services/general-chat/GeneralChatExportFormatter';
+import {
+  GeneralChatHttpHeaders,
+  GeneralChatHttpMethod,
+  GeneralChatHttpResponse,
+  GeneralChatHttpTransport,
+  GeneralChatTokenProvider
+} from '../main/ets/services/general-chat/GeneralChatHttpTransport';
+import { GeneralChatRepository } from '../main/ets/services/general-chat/GeneralChatRepository';
+import {
+  GeneralChatServiceState,
+  GeneralChatServiceStatus
+} from '../main/ets/services/general-chat/GeneralChatServiceState';
+import { GeneralChatStreamCoordinator } from '../main/ets/services/general-chat/GeneralChatStreamCoordinator';
+import { GeneralChatStreamLifecycleController } from '../main/ets/services/general-chat/GeneralChatStreamLifecycleController';
+import {
+  ModelProviderGeneralChatAdapter,
+  ModelProviderMessage,
+  ModelProviderHttpTransport,
+  ModelProviderProtocol
+} from '../main/ets/services/general-chat/ModelProviderGeneralChatAdapter';
+import { ModelProviderSseParser } from '../main/ets/services/general-chat/ModelProviderSseParser';
+import { MockGeneralChatAdapter } from '../main/ets/services/general-chat/MockGeneralChatAdapter';
+import { MarkdownParser } from '../main/ets/services/MarkdownParser';
+import { RemoteCommandFactory } from '../main/ets/services/RemoteCommandFactory';
+import { RemoteCrypto, RemoteCryptoCipher } from '../main/ets/services/RemoteCrypto';
+import { RemoteDescriptorParser } from '../main/ets/services/RemoteDescriptorParser';
+import { RemoteActivityLifecycleController } from '../main/ets/services/RemoteActivityLifecycleController';
+import { RemoteChatCommandClient, RemoteChatCommandController } from '../main/ets/services/RemoteChatCommandController';
+import { RemoteChatPollingLifecycleController } from '../main/ets/services/RemoteChatPollingLifecycleController';
+import {
+  RemoteFileDownloadClient,
+  RemoteFileDownloadController,
+  RemoteFileDownloadScheduler
+} from '../main/ets/services/RemoteFileDownloadController';
+import { RemoteHeartbeatController, RemoteHeartbeatScheduler } from '../main/ets/services/RemoteHeartbeatController';
+import {
+  RemoteModelClient,
+  RemoteModelController,
+  RemoteModelPreferenceStore
+} from '../main/ets/services/RemoteModelController';
+import { RemotePairingPolicy } from '../main/ets/services/RemotePairingPolicy';
+import { RemoteResponseMapper } from '../main/ets/services/RemoteResponseMapper';
+import { RemoteSessionClient, RemoteSessionController } from '../main/ets/services/RemoteSessionController';
+import { RemoteSessionManager } from '../main/ets/services/RemoteSessionManager';
+import { RemoteWorkspaceCoordinator } from '../main/ets/services/RemoteWorkspaceCoordinator';
+import { RemoteWorkspaceDataSource } from '../main/ets/services/RemoteWorkspaceRepository';
+import { RemoteToolActionClient, RemoteToolActionController } from '../main/ets/services/RemoteToolActionController';
+import { RemoteUiState } from '../main/ets/services/RemoteUiState';
+import {
+  VoiceInputLifecycleCallbacks,
+  VoiceInputLifecycleController,
+  VoiceInputRouteSnapshot
+} from '../main/ets/services/VoiceInputLifecycleController';
+import { VoiceInputCallbacks, VoiceInputService } from '../main/ets/services/VoiceInputService';
+import { AppShellState } from '../main/ets/pages/state/AppShellState';
+import { GeneralChatPageState } from '../main/ets/pages/state/GeneralChatPageState';
+import { RemotePageState } from '../main/ets/pages/state/RemotePageState';
+import { ConversationViewState } from '../main/ets/pages/state/ConversationViewState';
+import {
+  GENERAL_CHAT_COMPOSER_CAPABILITIES,
+  REMOTE_CHAT_COMPOSER_CAPABILITIES
+} from '../main/ets/pages/components/ChatComposerCapabilities';
+import { ChatSurface } from '../main/ets/pages/components/ChatSurface';
+import { ConversationViewContract } from '../main/ets/pages/components/ConversationViewContract';
+import {
+  AppNavigationBackAction,
+  AppNavigationPathSpec,
+  AppRoute,
+  AppRouteContract
+} from '../main/ets/pages/navigation/AppRouteContract';
+import { TimeFormat } from '../main/ets/services/TimeFormat';
+import { X25519 } from '../main/ets/services/X25519';
+import {
+  ChatMessage,
+  FileInfo,
+  ImageAttachment,
+  PollSessionResult,
+  RecentWorkspaceEntry,
+  AssistantEntry,
+  CreateSessionOptions,
+  RemoteImageContext,
+  RemoteQuestionAnswerPayload,
+  RemoteModelCatalog,
+  ReadFileResult,
+  RemoteSession,
+  SelectedImageAttachment,
+  SessionListResult,
+  SessionMessagesResult,
+  SessionSummary,
+  WorkspaceInfo
+} from '../main/ets/model/RemoteModels';
+
+import {
+  ToolInputFixture,
+  CryptoImageFixture,
+  CryptoCommandFixture,
+  CryptoSimpleCommandFixture,
+  GeneralChatRecordedRequest,
+  FakeRemoteWorkspaceDataSource,
+  FakeRemoteCryptoCipher,
+  hexToBytes,
+  bytesToHex,
+  fixedRandomBytes,
+  expectCommandJson,
+  connectedPeers,
+  chatMessage,
+  remoteSession,
+  selectedImage,
+  remoteModelCatalog,
+  activeChatMessage,
+  chatMessageWithImage,
+  imageAttachment,
+  pollResult,
+  delay,
+  FakePollSessionManager,
+  BlockingPollSessionManager,
+  FakeGeneralChatLocalStore,
+  FailingGeneralChatAdapter,
+  PartialFailingGeneralChatAdapter,
+  FakeGeneralChatTokenProvider,
+  FakeGeneralChatHttpTransport,
+  FakeRemoteHeartbeatScheduler,
+  FakeGeneralChatDraftScheduler,
+  FakeVoiceInputLifecycleService,
+  FakeRemoteFileDownloadScheduler,
+  FakeRemoteFileDownloadClient,
+  RemoteDownloadStatusRecord,
+  FakeRemoteToolActionClient,
+  FakeRemoteModelClient,
+  FakeRemoteModelPreferenceStore,
+  RemoteModelProjectionRecord,
+  FakeRemoteSessionClient,
+  RemoteSessionProjectionRecord,
+  FakeRemoteChatCommandClient,
+  RemoteChatMessagesProjectionRecord,
+  FakeGeneralChatCommandClient,
+  FakeGeneralChatConfigStore
+} from './LocalTestFixtures';
+
+class ModelProviderRecordedRequest {
+  url: string = '';
+  apiKey: string = '';
+  body: string = '';
+  protocol: ModelProviderProtocol = ModelProviderProtocol.OpenAi;
+}
+
+class ModelProviderRecordedResponse {
+  statusCode: number = 200;
+  body: string = '';
+}
+
+class FakeModelProviderHttpTransport implements ModelProviderHttpTransport {
+  requests: ModelProviderRecordedRequest[] = [];
+  responses: ModelProviderRecordedResponse[] = [];
+
+  async postStream(
+    url: string,
+    apiKey: string,
+    body: string,
+    protocol: ModelProviderProtocol,
+    onData: (chunk: string) => void
+  ): Promise<ModelProviderRecordedResponse> {
+    const request = new ModelProviderRecordedRequest();
+    request.url = url;
+    request.apiKey = apiKey;
+    request.body = body;
+    request.protocol = protocol;
+    this.requests.push(request);
+    const response = this.responses.shift();
+    if (!response) {
+      throw new Error('Missing fake model provider HTTP response.');
+    }
+    if (response.body.length > 0) {
+      onData(response.body);
+    }
+    return response;
+  }
+
+  cancel(): void {
+  }
+}
+
+function modelProviderRecordedResponse(statusCode: number, body: string): ModelProviderRecordedResponse {
+  const response = new ModelProviderRecordedResponse();
+  response.statusCode = statusCode;
+  response.body = body;
+  return response;
+}
+
+export default function transportAndGeneralChatUnitTest() {
+  describe('RemoteDescriptorParser', () => {
+    it('parses hash route URLs', 0, () => {
+      const descriptor = RemoteDescriptorParser.parse('https://relay.example.com/r/mobile#/pair?room=room-a&pk=public-key');
+      expect(descriptor.roomId).assertEqual('room-a');
+      expect(descriptor.publicKey).assertEqual('public-key');
+      expect(descriptor.relayUrl).assertEqual('https://relay.example.com');
+    });
+
+    it('normalizes relay websocket URLs', 0, () => {
+      const descriptor = RemoteDescriptorParser.parse('https://app.example.com/#/pair?room=room-b&pk=key-b&relay=wss%3A%2F%2Frelay.example.com%2Fws');
+      expect(descriptor.relayUrl).assertEqual('https://relay.example.com');
+    });
+
+    it('parses account pairing metadata', 0, () => {
+      const descriptor = RemoteDescriptorParser.parse('https://relay.example.com/#/pair?room=room-account&pk=key-account&auth=account&user=alice');
+      expect(descriptor.accountAuth).assertTrue();
+      expect(descriptor.accountUsername).assertEqual('alice');
+    });
+
+    it('parses raw query strings', 0, () => {
+      const descriptor = RemoteDescriptorParser.parse('room=room-c&pk=key%2Bc%3D&relay=http%3A%2F%2F127.0.0.1%3A30333');
+      expect(descriptor.roomId).assertEqual('room-c');
+      expect(descriptor.publicKey).assertEqual('key+c=');
+      expect(descriptor.relayUrl).assertEqual('http://127.0.0.1:30333');
+    });
+
+    it('rejects URLs missing room', 0, () => {
+      let didThrow = false;
+      try {
+        RemoteDescriptorParser.parse('https://relay.example.com/#/pair?pk=key-only');
+      } catch (_err) {
+        didThrow = true;
+      }
+      expect(didThrow).assertEqual(true);
+    });
+
+    it('rejects URLs missing pk', 0, () => {
+      let didThrow = false;
+      try {
+        RemoteDescriptorParser.parse('https://relay.example.com/#/pair?room=room-only');
+      } catch (_err) {
+        didThrow = true;
+      }
+      expect(didThrow).assertEqual(true);
+    });
+  });
+
+  describe('RemotePairingPolicy', () => {
+    it('prefills account username from QR only over the default install id', 0, () => {
+      const policy = new RemotePairingPolicy();
+      const projection = policy.projection('https://relay.example.com/#/pair?room=room-a&pk=key-a&auth=account&user=alice');
+
+      expect(projection.requiresAccountAuth).assertTrue();
+      expect(projection.accountUsername).assertEqual('alice');
+      expect(policy.userIdAfterProjection('harmony-device', 'harmony-device', projection)).assertEqual('alice');
+      expect(policy.userIdAfterProjection('manual-user', 'harmony-device', projection)).assertEqual('manual-user');
+    });
+
+    it('blocks passwordless account reconnects and builds encrypted pairing identity', 0, () => {
+      const policy = new RemotePairingPolicy();
+      const descriptor = RemoteDescriptorParser.parse('https://relay.example.com/#/pair?room=room-a&pk=key-a&auth=account&user=alice');
+
+      expect(policy.shouldAutoReconnect({
+        autoReconnectAttempted: false,
+        remoteUrl: 'https://relay.example.com/#/pair?room=room-a&pk=key-a&auth=account&user=alice',
+        userId: 'alice',
+        requiresAccountAuth: true
+      })).assertFalse();
+
+      const identity = policy.identityForConnect(descriptor, '', 'harmony-device', 'secret-password', false);
+      expect(identity.userId).assertEqual('alice');
+      expect(identity.password).assertEqual('secret-password');
+    });
+
+    it('keeps ordinary pairing passwordless and auto reconnectable', 0, () => {
+      const policy = new RemotePairingPolicy();
+      const descriptor = RemoteDescriptorParser.parse('https://relay.example.com/#/pair?room=room-a&pk=key-a');
+      const identity = policy.identityForConnect(descriptor, '', 'harmony-device', '', true);
+
+      expect(identity.userId).assertEqual('harmony-device');
+      expect(identity.password || '').assertEqual('');
+      expect(policy.shouldAutoReconnect({
+        autoReconnectAttempted: false,
+        remoteUrl: 'https://relay.example.com/#/pair?room=room-a&pk=key-a',
+        userId: 'harmony-device',
+        requiresAccountAuth: false
+      })).assertTrue();
+    });
+  });
+
+  describe('X25519', () => {
+    const alicePrivate = '77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a';
+    const alicePublic = '8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a';
+    const bobPrivate = '5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb';
+    const bobPublic = 'de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f';
+    const sharedSecret = '4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742';
+    const mobileWebPrivate = '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f';
+    const mobileWebPublic = '8f40c5adb68f25624ae5b214ea767a6ec94d829d3d7b5e1ad1ba6f3e2138285f';
+    const desktopPrivate = 'f0e1d2c3b4a5968778695a4b3c2d1e0f00112233445566778899aabbccddeeff';
+    const desktopPublic = 'ed99ba8df1a6a8c6396beafc3a42b8212fde389a7663217e170e82b68377e858';
+    const mobileWebSharedSecret = '251b4e394babbef8dc30269e5a065946c08d89d6df010376549baa469c552f4b';
+
+    it('matches RFC 7748 public key vectors', 0, () => {
+      expect(bytesToHex(X25519.scalarMultBase(hexToBytes(alicePrivate)))).assertEqual(alicePublic);
+      expect(bytesToHex(X25519.scalarMultBase(hexToBytes(bobPrivate)))).assertEqual(bobPublic);
+    });
+
+    it('matches RFC 7748 shared secret vector from both peers', 0, () => {
+      expect(bytesToHex(X25519.scalarMult(hexToBytes(alicePrivate), hexToBytes(bobPublic)))).assertEqual(sharedSecret);
+      expect(bytesToHex(X25519.scalarMult(hexToBytes(bobPrivate), hexToBytes(alicePublic)))).assertEqual(sharedSecret);
+    });
+
+    it('matches the mobile-web noble-curves shared secret shape', 0, () => {
+      expect(bytesToHex(X25519.scalarMultBase(hexToBytes(mobileWebPrivate)))).assertEqual(mobileWebPublic);
+      expect(bytesToHex(X25519.scalarMultBase(hexToBytes(desktopPrivate)))).assertEqual(desktopPublic);
+      expect(bytesToHex(X25519.scalarMult(hexToBytes(mobileWebPrivate), hexToBytes(desktopPublic))))
+        .assertEqual(mobileWebSharedSecret);
+      expect(bytesToHex(X25519.scalarMult(hexToBytes(desktopPrivate), hexToBytes(mobileWebPublic))))
+        .assertEqual(mobileWebSharedSecret);
+    });
+  });
+
+  describe('RemoteCrypto', () => {
+    it('encrypts and decrypts JSON between derived peers', 0, async () => {
+      const peers = connectedPeers();
+      const alice = peers[0];
+      const bob = peers[1];
+      const command: CryptoCommandFixture = {
+        cmd: 'send_message',
+        session_id: 'session-1',
+        content: 'hello from mobile',
+        agent_type: 'code',
+        image_contexts: [{
+          id: 'image-1',
+          data_url: 'data:image/png;base64,aGVsbG8=',
+          mime_type: 'image/png'
+        }]
+      };
+
+      const encrypted = await alice.encryptJson(command);
+      const decrypted = await bob.decryptJson<CryptoCommandFixture>(encrypted);
+
+      expect(decrypted.cmd).assertEqual(command.cmd);
+      expect(decrypted.session_id).assertEqual(command.session_id);
+      expect(decrypted.content).assertEqual(command.content);
+      expect(decrypted.agent_type).assertEqual(command.agent_type);
+      expect(decrypted.image_contexts.length).assertEqual(1);
+      expect(decrypted.image_contexts[0].id).assertEqual('image-1');
+      expect(decrypted.image_contexts[0].mime_type).assertEqual('image/png');
+    });
+
+    it('produces relay-compatible encrypted payload shape', 0, async () => {
+      const peers = connectedPeers();
+      const command: CryptoSimpleCommandFixture = {
+        cmd: 'get_workspace_info'
+      };
+      const encrypted = await peers[0].encryptJson(command);
+      const keys = Object.keys(encrypted).sort().join(',');
+      const nonce = Encoding.base64ToBytes(encrypted.nonce);
+      const encryptedData = Encoding.base64ToBytes(encrypted.encrypted_data);
+
+      expect(keys).assertEqual('encrypted_data,nonce');
+      expect(nonce.length).assertEqual(12);
+      expect(encryptedData.length).assertLarger(16);
+      expect(encrypted.encrypted_data.indexOf('get_workspace_info')).assertEqual(-1);
+      const decrypted = await peers[1].decryptJson<CryptoCommandFixture>(encrypted);
+      expect(decrypted.cmd).assertEqual('get_workspace_info');
+    });
+
+    it('rejects use before shared-key derivation', 0, async () => {
+      let didThrow = false;
+      try {
+        const command: CryptoSimpleCommandFixture = {
+          cmd: 'ping'
+        };
+        const privateKey = hexToBytes('77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a');
+        await new RemoteCrypto({
+          cipher: new FakeRemoteCryptoCipher(),
+          keyPair: {
+            privateKey,
+            publicKey: X25519.scalarMultBase(privateKey)
+          },
+          randomBytes: fixedRandomBytes
+        }).encryptJson(command);
+      } catch (_err) {
+        didThrow = true;
+      }
+      expect(didThrow).assertEqual(true);
+    });
+  });
+
+  describe('TimeFormat', () => {
+    const now = Date.parse('2026-06-10T12:00:00.000Z');
+
+    it('formats recent timestamps as just now', 0, () => {
+      expect(TimeFormat.relative('2026-06-10T11:59:45.000Z', now)).assertEqual('刚刚');
+    });
+
+    it('formats minute and hour relative timestamps', 0, () => {
+      expect(TimeFormat.relative('2026-06-10T11:42:00.000Z', now)).assertEqual('18 分钟前');
+      expect(TimeFormat.relative('2026-06-10T09:00:00.000Z', now)).assertEqual('3 小时前');
+    });
+
+    it('formats older timestamps as days or dates', 0, () => {
+      expect(TimeFormat.relative('2026-06-08T12:00:00.000Z', now)).assertEqual('2 天前');
+      expect(TimeFormat.relative('2026-05-30T12:00:00.000Z', now)).assertEqual('2026-05-30');
+    });
+
+    it('does not show invalid timestamps as just now', 0, () => {
+      expect(TimeFormat.relative('', now)).assertEqual('时间未知');
+      expect(TimeFormat.relative('not-a-date', now)).assertEqual('时间未知');
+    });
+
+    it('formats numeric timestamps and future timestamps safely', 0, () => {
+      expect(TimeFormat.relative('1781091720', now)).assertEqual('18 分钟前');
+      expect(TimeFormat.timestampMs('1781091720000')).assertEqual(now - 18 * 60 * 1000);
+      expect(TimeFormat.timestampMs('1781091720000000')).assertEqual(now - 18 * 60 * 1000);
+      expect(TimeFormat.timestampMs('1781091720000000000')).assertEqual(now - 18 * 60 * 1000);
+      expect(TimeFormat.relative('2026-06-12T12:00:00.000Z', now)).assertEqual('2026-06-12');
+    });
+  });
+
+  describe('GeneralChatRepository', () => {
+    it('persists a complete ordinary chat and restores it without Remote state', 0, async () => {
+      const localStore = new FakeGeneralChatLocalStore();
+      const repository = new GeneralChatRepository(new MockGeneralChatAdapter(), localStore);
+      const session = await repository.createSession('帮我整理一份发布计划');
+      const result = await repository.sendMessage(session.id, '先给我三个步骤');
+      await repository.recordAssistantMessage(session.id, result.assistantMessage);
+
+      expect(repository.listSessions().length).assertEqual(1);
+      expect(repository.listSessions()[0].agentType).assertEqual('chat');
+      expect(repository.listSessions()[0].messageCount).assertEqual(2);
+
+      const restored = new GeneralChatRepository(new MockGeneralChatAdapter(), localStore);
+      await restored.restoreFromLocal();
+      const restoredMessages = await restored.messages(session.id);
+      expect(restored.listSessions().length).assertEqual(1);
+      expect(restoredMessages.length).assertEqual(2);
+      expect(restoredMessages[0].role).assertEqual('user');
+      expect(restoredMessages[1].role).assertEqual('assistant');
+    });
+
+    it('renames ordinary chat sessions through the local repository', 0, async () => {
+      const localStore = new FakeGeneralChatLocalStore();
+      const repository = new GeneralChatRepository(new MockGeneralChatAdapter(), localStore);
+      const session = await repository.createSession('原始标题');
+      await repository.renameSession(session.id, '新的标题');
+
+      expect(repository.listSessions()[0].title).assertEqual('新的标题');
+      expect(localStore.sessions[0].title).assertEqual('新的标题');
+    });
+
+    it('archives ordinary chat sessions and restores the archived state', 0, async () => {
+      const localStore = new FakeGeneralChatLocalStore();
+      const repository = new GeneralChatRepository(new MockGeneralChatAdapter(), localStore);
+      const session = await repository.createSession('待归档会话');
+      await repository.archiveSession(session.id, true);
+
+      const restored = new GeneralChatRepository(new MockGeneralChatAdapter(), localStore);
+      await restored.restoreFromLocal();
+      expect(restored.listSessions()[0].status).assertEqual('archived');
+
+      await restored.archiveSession(session.id, false);
+      expect(restored.listSessions()[0].status).assertEqual('ready');
+      expect(localStore.sessions[0].status).assertEqual('ready');
+    });
+
+    it('persists drafts independently and removes session-owned data on delete', 0, async () => {
+      const localStore = new FakeGeneralChatLocalStore();
+      const repository = new GeneralChatRepository(new MockGeneralChatAdapter(), localStore);
+      const session = await repository.createSession('待删除会话');
+      await repository.saveDraft('new-chat', '首页草稿');
+      await repository.saveDraft(session.id, '会话草稿');
+      await repository.sendMessage(session.id, '一条消息');
+
+      expect(await repository.draft('new-chat')).assertEqual('首页草稿');
+      expect(await repository.draft(session.id)).assertEqual('会话草稿');
+      await repository.deleteSession(session.id);
+
+      expect(repository.listSessions().length).assertEqual(0);
+      expect((await repository.messages(session.id)).length).assertEqual(0);
+      expect(await repository.draft(session.id)).assertEqual('');
+      expect(await repository.draft('new-chat')).assertEqual('首页草稿');
+    });
+
+    it('persists a failed user message when the provider rejects before streaming', 0, async () => {
+      const localStore = new FakeGeneralChatLocalStore();
+      const repository = new GeneralChatRepository(new FailingGeneralChatAdapter(), localStore);
+      const session = await repository.createSession('失败状态');
+      let failed = false;
+      try {
+        await repository.sendMessage(session.id, '请重试我');
+      } catch (_err) {
+        failed = true;
+      }
+
+      const messages = await repository.messages(session.id);
+      expect(failed).assertEqual(true);
+      expect(messages.length).assertEqual(1);
+      expect(messages[0].status).assertEqual('failed');
+    });
+
+    it('keeps the user message sent when a stream fails after receiving content', 0, async () => {
+      const localStore = new FakeGeneralChatLocalStore();
+      const repository = new GeneralChatRepository(new PartialFailingGeneralChatAdapter(), localStore);
+      const session = await repository.createSession('流中断状态');
+      try {
+        await repository.sendMessage(session.id, '保留这条消息');
+      } catch (_err) {
+      }
+
+      const messages = await repository.messages(session.id);
+      expect(messages.length).assertEqual(1);
+      expect(messages[0].status).assertEqual('sent');
+    });
+
+    it('does not persist assistant retry detail after an interrupted turn', 0, async () => {
+      const localStore = new FakeGeneralChatLocalStore();
+      const repository = new GeneralChatRepository(new MockGeneralChatAdapter(), localStore);
+      const session = await repository.createSession('中断恢复');
+      const interrupted = chatMessage('assistant-failed-1', 'assistant', 'Partial reply', 'failed');
+      interrupted.detail = 'Retry prompt';
+
+      await repository.recordAssistantMessage(session.id, interrupted);
+
+      const messages = await repository.messages(session.id);
+      expect(messages[0].status).assertEqual('failed');
+      expect(messages[0].detail || '').assertEqual('');
+      expect((await localStore.loadMessages(session.id))[0].detail || '').assertEqual('');
+    });
+  });
+
+  describe('GeneralChatExportFormatter', () => {
+    it('exports visible conversation content as Markdown without hidden error detail', 0, () => {
+      const session: RemoteSession = {
+        id: 'chat-export',
+        title: '发布计划',
+        agentType: 'chat',
+        status: 'ready',
+        updatedAt: '2026-07-20T10:00:00.000Z',
+        createdAt: '2026-07-20T09:00:00.000Z',
+        messageCount: 2
+      };
+      const failedAssistant = chatMessage('assistant-1', 'assistant', '先检查发布清单。', 'failed');
+      failedAssistant.detail = 'secret retry context';
+      const markdown = GeneralChatExportFormatter.markdown(session, [
+        chatMessage('user-1', 'user', '帮我整理发布计划'),
+        failedAssistant
+      ]);
+
+      expect(markdown).assertEqual('# 发布计划\n\n## 用户\n\n帮我整理发布计划\n\n## BitFun\n\n先检查发布清单。\n');
+      expect(markdown.indexOf('secret retry context')).assertEqual(-1);
+    });
+  });
+
+  describe('GeneralChatStreamCoordinator', () => {
+    it('batches deltas into one stable active message and flushes before completion', 0, () => {
+      const coordinator = new GeneralChatStreamCoordinator();
+      const first = coordinator.begin('chat-1', 'turn-1');
+      const flushed: ChatMessage[] = [];
+      coordinator.append('chat-1', '第一段\n\n\n', () => true, (message: ChatMessage) => {
+        flushed.push(message);
+      });
+      coordinator.append('chat-1', '第二段', () => true, (message: ChatMessage) => {
+        flushed.push(message);
+      });
+      const terminal = coordinator.flush('chat-1', true);
+
+      expect(first.id).assertEqual('active-turn-1');
+      expect(terminal?.id || '').assertEqual(first.id);
+      expect(terminal?.text || '').assertEqual('第一段\n\n第二段');
+      expect(coordinator.text()).assertEqual('第一段\n\n第二段');
+      coordinator.reset();
+    });
+
+    it('rejects late deltas after reset or from another session', 0, () => {
+      const coordinator = new GeneralChatStreamCoordinator();
+      coordinator.begin('chat-1', 'turn-1');
+      coordinator.reset();
+
+      expect(coordinator.append('chat-1', 'late', () => true, (_message: ChatMessage) => {}))
+        .assertEqual(false);
+      expect(coordinator.append('chat-2', 'wrong', () => true, (_message: ChatMessage) => {}))
+        .assertEqual(false);
+      expect(coordinator.hasActiveStream()).assertEqual(false);
+    });
+  });
+
+  describe('GeneralChatStreamLifecycleController', () => {
+    it('owns stream request lifecycle state around coordinator updates', 0, () => {
+      const controller = new GeneralChatStreamLifecycleController();
+      const active = controller.begin('chat-1');
+      const flushed: ChatMessage[] = [];
+
+      controller.setRequestInFlight(true);
+      expect(controller.isRequestInFlight()).assertEqual(true);
+      expect(active.id.indexOf('active-')).assertEqual(0);
+      expect(controller.append('chat-1', 'hello', () => true, (message: ChatMessage) => {
+        flushed.push(message);
+      })).assertEqual(true);
+      const terminal = controller.flush('chat-1', true);
+      expect(terminal?.text || '').assertEqual('hello');
+      expect(controller.text()).assertEqual('hello');
+
+      controller.markRequestCancelled();
+      expect(controller.takeRequestCancelled()).assertEqual(true);
+      expect(controller.takeRequestCancelled()).assertEqual(false);
+      controller.setPendingFinalMessage(chatMessage('assistant-final', 'assistant', 'stopped', 'cancelled'));
+      expect(controller.takePendingFinalMessage()?.id || '').assertEqual('assistant-final');
+      expect(controller.takePendingFinalMessage() === undefined).assertTrue();
+
+      controller.setRequestInFlight(false);
+      controller.reset();
+      expect(controller.isRequestInFlight()).assertEqual(false);
+      expect(controller.currentSessionId()).assertEqual('');
+      expect(controller.hasActiveStream()).assertEqual(false);
+    });
+  });
+
+  describe('GeneralChatServiceStatus', () => {
+    it('derives readiness only from complete model configuration', 0, () => {
+      expect(GeneralChatServiceStatus.fromConfiguration('https://api.example.com', 'model', true))
+        .assertEqual(GeneralChatServiceState.Ready);
+      expect(GeneralChatServiceStatus.fromConfiguration('', 'model', true))
+        .assertEqual(GeneralChatServiceState.Unconfigured);
+    });
+
+    it('classifies authentication, network and provider failures independently from Remote state', 0, () => {
+      expect(GeneralChatServiceStatus.fromError(RemoteI18n.t('generalChat.authenticationFailed')))
+        .assertEqual(GeneralChatServiceState.AuthExpired);
+      expect(GeneralChatServiceStatus.fromError('Network connection timeout.'))
+        .assertEqual(GeneralChatServiceState.Offline);
+      expect(GeneralChatServiceStatus.fromError(RemoteI18n.t('generalChat.serviceUnavailable')))
+        .assertEqual(GeneralChatServiceState.Failed);
+    });
+  });
+
+  describe('ChatComposerPolicy', () => {
+    it('keeps ordinary chat send enabled across every Remote connection state', 0, () => {
+      const states = ['idle', 'pairing', 'connected', 'reconnecting', 'failed', 'disconnected'];
+      states.forEach((state: string) => {
+        expect(ChatComposerPolicy.canSend('普通问题', 0, false, false, state)).assertEqual(true);
+      });
+    });
+
+    it('still gates Remote chat when the desktop connection is unavailable', 0, () => {
+      expect(ChatComposerPolicy.canSend('运行任务', 0, false, true, 'failed')).assertEqual(false);
+      expect(ChatComposerPolicy.canSend('运行任务', 0, false, true, 'connected')).assertEqual(true);
+      expect(ChatComposerPolicy.canSend('运行任务', 0, false, true, 'reconnecting')).assertEqual(true);
+    });
+  });
+
+  describe('GeneralChatApiClient', () => {
+    it('builds authenticated session and turn requests', 0, async () => {
+      const transport = new FakeGeneralChatHttpTransport();
+      transport.responses = [{
+        statusCode: 200,
+        body: '{"session":{"id":"chat-1","title":"计划","status":"ready","created_at":"now","updated_at":"now","message_count":0}}'
+      }, {
+        statusCode: 202,
+        body: '{"turn_id":"turn-1","accepted_at":"now","version":1}'
+      }];
+      const client = new GeneralChatApiClient(
+        'https://chat.example.com/',
+        new FakeGeneralChatTokenProvider(),
+        transport
+      );
+
+      const session = await client.createSession('  计划  ');
+      const receipt = await client.sendTurn(session.session.id, '  生成步骤  ', '  chat-model  ');
+
+      expect(session.session.id).assertEqual('chat-1');
+      expect(receipt.turn_id).assertEqual('turn-1');
+      expect(transport.requests[0].url).assertEqual('https://chat.example.com/api/mobile/v1/chat/sessions');
+      expect(transport.requests[0].authorization).assertEqual('Bearer test-token');
+      expect(transport.requests[0].body).assertEqual('{"title":"计划"}');
+      expect(transport.requests[1].method).assertEqual(GeneralChatHttpMethod.Post);
+      expect(transport.requests[1].body).assertEqual('{"content":"生成步骤","model":"chat-model"}');
+    });
+
+    it('maps authentication failures without exposing response bodies', 0, async () => {
+      const transport = new FakeGeneralChatHttpTransport();
+      transport.responses = [{ statusCode: 401, body: '{"token":"must-not-leak"}' }];
+      const client = new GeneralChatApiClient(
+        'https://chat.example.com',
+        new FakeGeneralChatTokenProvider(),
+        transport
+      );
+      let message = '';
+      try {
+        await client.capabilities();
+      } catch (err) {
+        message = err instanceof Error ? err.message : `${err}`;
+      }
+
+      expect(message).assertEqual('General chat authentication expired.');
+      expect(message.indexOf('must-not-leak')).assertEqual(-1);
+    });
+  });
+
+  describe('GeneralChatConfigValidator', () => {
+    it('accepts an existing key when URL and model are valid', 0, () => {
+      const error = GeneralChatConfigValidator.validate({
+        apiUrl: 'https://chat.example.com/',
+        apiKey: '',
+        modelName: 'chat-model',
+        clearApiKey: false
+      }, true);
+      expect(error).assertEqual('');
+    });
+
+    it('rejects unsafe URLs and incomplete new configurations', 0, () => {
+      const urlError = GeneralChatConfigValidator.validate({
+        apiUrl: 'file:///tmp/chat',
+        apiKey: 'secret',
+        modelName: 'chat-model',
+        clearApiKey: false
+      }, false);
+      const keyError = GeneralChatConfigValidator.validate({
+        apiUrl: 'https://chat.example.com',
+        apiKey: '',
+        modelName: 'chat-model',
+        clearApiKey: false
+      }, false);
+      expect(urlError).assertEqual('API URL 必须以 http:// 或 https:// 开头。');
+      expect(keyError).assertEqual('请输入 API Key。');
+    });
+  });
+
+  describe('GeneralChatModelSelectionPolicy', () => {
+    it('keeps an existing cloud selection when a local model is saved', 0, () => {
+      const shouldActivateLocal = GeneralChatModelSelectionPolicy.shouldActivateSavedLocalModel({
+        version: 4,
+        models: [{
+          id: 'cloud:account-model',
+          name: 'Account model',
+          provider: 'openai',
+          base_url: 'https://chat.example.com/v1',
+          model_name: 'account-model',
+          enabled: true,
+          capabilities: []
+        }],
+        default_models: { primary: 'cloud:account-model' },
+        session_model_id: 'cloud:account-model'
+      });
+
+      expect(shouldActivateLocal).assertFalse();
+    });
+
+    it('activates the first saved local model when no model was previously available', 0, () => {
+      const shouldActivateLocal = GeneralChatModelSelectionPolicy.shouldActivateSavedLocalModel({
+        version: 1,
+        models: [],
+        default_models: {}
+      });
+
+      expect(shouldActivateLocal).assertTrue();
+    });
+  });
+
+  describe('GeneralChatCloudConfigPolicy', () => {
+    it('orders the primary model first while retaining other compatible account models', 0, () => {
+      const payload = '{"config":{"ai":{"default_models":{"primary":"primary-model"},"models":[' +
+        '{"id":"fallback-model","provider":"openai","model_name":"fallback","base_url":"https://fallback.example.com/v1","api_key":"fallback-key","enabled":true,"category":"general_chat"},' +
+        '{"id":"primary-model","provider":"openai","model_name":"primary","base_url":"https://primary.example.com/v1/","api_key":"primary-key","enabled":true,"category":"code_specialized"}' +
+        ']}}}';
+
+      const models = GeneralChatCloudConfigPolicy.models(payload);
+
+      expect(models.length).assertEqual(2);
+      expect(models[0].modelId).assertEqual('cloud:primary-model');
+      expect(models[0].apiUrl).assertEqual('https://primary.example.com/v1');
+      expect(models[0].modelName).assertEqual('primary');
+      expect(models[0].apiKey).assertEqual('primary-key');
+      expect(models[1].modelId).assertEqual('cloud:fallback-model');
+    });
+
+    it('skips subscription models and adapts an Anthropic general-chat endpoint', 0, () => {
+      const payload = '{"ai":{"default_models":{"primary":"subscription-model"},"models":[' +
+        '{"id":"subscription-model","provider":"openai","model_name":"codex","base_url":"https://subscription.example.com","api_key":"unused","enabled":true,"category":"general_chat","auth":{"type":"subscription"}},' +
+        '{"id":"anthropic-model","provider":"anthropic","model_name":"claude","base_url":"https://api.anthropic.com/","api_key":"anthropic-key","enabled":true,"category":"general_chat"}' +
+        ']}}';
+
+      const selected = GeneralChatCloudConfigPolicy.selectModel(payload);
+
+      expect(selected?.modelId).assertEqual('cloud:anthropic-model');
+      expect(selected?.apiUrl).assertEqual('https://api.anthropic.com/v1/messages');
+    });
+
+    it('returns no model for malformed or unusable cloud settings', 0, () => {
+      const unusable = '{"ai":{"models":[{"id":"disabled","enabled":false,"base_url":"https://api.example.com","model_name":"model","api_key":"key"}]}}';
+      expect(GeneralChatCloudConfigPolicy.models('{not-json').length).assertEqual(0);
+      expect(GeneralChatCloudConfigPolicy.models(unusable).length).assertEqual(0);
+    });
+  });
+
+  describe('ModelProviderGeneralChatAdapter', () => {
+    it('infers provider protocol and request URL without a protocol setting', 0, () => {
+      const openBitFunProtocol = ModelProviderGeneralChatAdapter.resolveProtocol('https://api.openbitfun.com');
+      const customProtocol = ModelProviderGeneralChatAdapter.resolveProtocol('https://llm.example.com/v1');
+
+      expect(openBitFunProtocol).assertEqual(ModelProviderProtocol.Anthropic);
+      expect(customProtocol).assertEqual(ModelProviderProtocol.OpenAi);
+      expect(ModelProviderGeneralChatAdapter.resolveRequestUrl(
+        'https://api.openbitfun.com/',
+        openBitFunProtocol
+      )).assertEqual('https://api.openbitfun.com/v1/messages');
+      expect(ModelProviderGeneralChatAdapter.resolveRequestUrl(
+        'https://llm.example.com/v1',
+        customProtocol
+      )).assertEqual('https://llm.example.com/v1/chat/completions');
+    });
+
+    it('probes Anthropic-compatible endpoints with a minimal streaming request', 0, async () => {
+      const transport = new FakeModelProviderHttpTransport();
+      transport.responses.push(modelProviderRecordedResponse(
+        200,
+        'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"ok"}}\n\n'
+      ));
+
+      await ModelProviderGeneralChatAdapter.probeConfiguration(
+        'https://api.openbitfun.com/',
+        'sk-test-token',
+        'deepseek-v4-flash',
+        transport
+      );
+
+      expect(transport.requests.length).assertEqual(1);
+      expect(transport.requests[0].url).assertEqual('https://api.openbitfun.com/v1/messages');
+      expect(transport.requests[0].apiKey).assertEqual('sk-test-token');
+      expect(transport.requests[0].protocol).assertEqual(ModelProviderProtocol.Anthropic);
+      expect(transport.requests[0].body.indexOf('"max_tokens":1')).assertLarger(-1);
+      expect(transport.requests[0].body.indexOf('Reply with one short word.')).assertLarger(-1);
+    });
+
+    it('rejects probe responses that never produce visible text', 0, async () => {
+      const transport = new FakeModelProviderHttpTransport();
+      transport.responses.push(modelProviderRecordedResponse(200, 'data: [DONE]\n\n'));
+
+      let message = '';
+      try {
+        await ModelProviderGeneralChatAdapter.probeConfiguration(
+          'https://api.openbitfun.com',
+          'sk-test-token',
+          'deepseek-v4-flash',
+          transport
+        );
+      } catch (err) {
+        message = err instanceof Error ? err.message : `${err}`;
+      }
+
+      expect(message).assertEqual('模型没有返回文字内容。');
+    });
+
+    it('extracts text from Anthropic and OpenAI compatible responses', 0, () => {
+      const anthropicText = ModelProviderGeneralChatAdapter.responseText(
+        '{"content":[{"type":"text","text":"你好"}]}',
+        ModelProviderProtocol.Anthropic
+      );
+      const openAiText = ModelProviderGeneralChatAdapter.responseText(
+        '{"choices":[{"message":{"content":"Hello"}}]}',
+        ModelProviderProtocol.OpenAi
+      );
+
+      expect(anthropicText).assertEqual('你好');
+      expect(openAiText).assertEqual('Hello');
+    });
+
+    it('places the BitFun system prompt in both request formats', 0, () => {
+      const messages: ModelProviderMessage[] = [{ role: 'user', content: 'BitFun 是什么？' }];
+      const anthropicBody = ModelProviderGeneralChatAdapter.buildRequestBody(
+        'model-a',
+        messages,
+        ModelProviderProtocol.Anthropic
+      );
+      const openAiBody = ModelProviderGeneralChatAdapter.buildRequestBody(
+        'model-b',
+        messages,
+        ModelProviderProtocol.OpenAi
+      );
+
+      expect(anthropicBody.indexOf('local AI workbench')).assertLarger(-1);
+      expect(anthropicBody.indexOf('"system"')).assertLarger(-1);
+      expect(openAiBody.indexOf('"role":"system"')).assertLarger(-1);
+      expect(openAiBody.indexOf('blockchain')).assertLarger(-1);
+    });
+  });
+
+  describe('ModelProviderSseParser', () => {
+    it('parses Anthropic deltas split across network chunks', 0, () => {
+      const parser = new ModelProviderSseParser(ModelProviderProtocol.Anthropic);
+      const first = parser.feed(
+        'event: message_start\ndata: {"type":"message_start","message":{"id":"msg-1"}}\n\n' +
+        'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_'
+      );
+      const second = parser.feed('delta","text":"你好"}}\n\n');
+      const third = parser.feed(
+        'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"！"}}\n\n'
+      );
+
+      expect(first.length).assertEqual(0);
+      expect(second.join('')).assertEqual('你好');
+      expect(third.join('')).assertEqual('！');
+      expect(parser.responseId()).assertEqual('msg-1');
+    });
+
+    it('parses OpenAI CRLF events and ignores the done marker', 0, () => {
+      const parser = new ModelProviderSseParser(ModelProviderProtocol.OpenAi);
+      const deltas = parser.feed(
+        'data: {"id":"chat-1","choices":[{"delta":{"content":"Hello"}}]}\r\n\r\n' +
+        'data: {"id":"chat-1","choices":[{"delta":{"content":" world"}}]}\r\n\r\n' +
+        'data: [DONE]\r\n\r\n'
+      );
+
+      expect(deltas.join('')).assertEqual('Hello world');
+      expect(parser.responseId()).assertEqual('chat-1');
+      expect(parser.finish().length).assertEqual(0);
+    });
+  });
+
+  describe('GeneralChatEventMapper', () => {
+    it('projects ordered stream deltas and ignores duplicate versions', 0, () => {
+      let projection = GeneralChatEventMapper.emptyProjection('chat-1', 'turn-1');
+      projection = GeneralChatEventMapper.apply(projection, {
+        event_id: 'event-1',
+        version: 1,
+        session_id: 'chat-1',
+        turn_id: 'turn-1',
+        type: 'message.delta',
+        delta: '你好'
+      });
+      const duplicate = GeneralChatEventMapper.apply(projection, {
+        event_id: 'event-1',
+        version: 1,
+        session_id: 'chat-1',
+        turn_id: 'turn-1',
+        type: 'message.delta',
+        delta: '不应重复'
+      });
+      projection = GeneralChatEventMapper.apply(duplicate, {
+        event_id: 'event-2',
+        version: 2,
+        session_id: 'chat-1',
+        turn_id: 'turn-1',
+        type: 'turn.completed'
+      });
+
+      expect(projection.text).assertEqual('你好');
+      expect(projection.status).assertEqual('completed');
+      expect(projection.version).assertEqual(2);
+    });
+
+    it('rejects stream version gaps so callers can reload a snapshot', 0, () => {
+      const projection = GeneralChatEventMapper.emptyProjection('chat-1', 'turn-1', 3);
+      let didThrow = false;
+      try {
+        GeneralChatEventMapper.apply(projection, {
+          event_id: 'event-5',
+          version: 5,
+          session_id: 'chat-1',
+          turn_id: 'turn-1',
+          type: 'message.delta',
+          delta: '缺少版本 4'
+        });
+      } catch (_err) {
+        didThrow = true;
+      }
+      expect(didThrow).assertEqual(true);
+    });
+
+    it('preserves text and tool event order while updating a stable tool item', 0, () => {
+      let projection = GeneralChatEventMapper.emptyProjection('chat-1', 'turn-1');
+      projection = GeneralChatEventMapper.apply(projection, {
+        event_id: 'text-1', version: 1, session_id: 'chat-1', turn_id: 'turn-1',
+        type: 'message.delta', delta: 'before'
+      });
+      projection = GeneralChatEventMapper.apply(projection, {
+        event_id: 'tool-event-1', version: 2, session_id: 'chat-1', turn_id: 'turn-1',
+        type: 'tool.started', tool: { id: 'tool-1', name: 'WebSearch', status: 'running' }
+      });
+      projection = GeneralChatEventMapper.apply(projection, {
+        event_id: 'tool-event-2', version: 3, session_id: 'chat-1', turn_id: 'turn-1',
+        type: 'tool.completed', tool: { id: 'tool-1', name: 'WebSearch', status: 'completed' }
+      });
+      projection = GeneralChatEventMapper.apply(projection, {
+        event_id: 'text-2', version: 4, session_id: 'chat-1', turn_id: 'turn-1',
+        type: 'message.delta', delta: 'after'
+      });
+
+      expect(projection.items.length).assertEqual(3);
+      expect(projection.items[0].content).assertEqual('before');
+      expect(projection.items[1].tool?.id || '').assertEqual('tool-1');
+      expect(projection.items[1].tool?.status || '').assertEqual('completed');
+      expect(projection.items[2].content).assertEqual('after');
+      expect(projection.tools.length).assertEqual(1);
+    });
+
+    it('projects permission and capability states and ignores late terminal events', 0, () => {
+      let projection = GeneralChatEventMapper.emptyProjection('chat-1', 'turn-1');
+      projection = GeneralChatEventMapper.apply(projection, {
+        event_id: 'permission-1', version: 1, session_id: 'chat-1', turn_id: 'turn-1',
+        type: 'permission.required',
+        tool: { id: 'tool-1', name: 'Write', status: 'waiting' }
+      });
+      expect(projection.status).assertEqual('pending_confirmation');
+      expect(projection.tools[0].status || '').assertEqual('pending_confirmation');
+
+      projection = GeneralChatEventMapper.apply(projection, {
+        event_id: 'capability-1', version: 2, session_id: 'chat-1', turn_id: 'turn-1',
+        type: 'capability.required', capability: 'remote_workspace'
+      });
+      expect(projection.status).assertEqual('capability_required');
+      expect(projection.capabilityRequired).assertEqual('remote_workspace');
+
+      projection = GeneralChatEventMapper.apply(projection, {
+        event_id: 'cancel-1', version: 3, session_id: 'chat-1', turn_id: 'turn-1',
+        type: 'turn.cancelled'
+      });
+      const terminal = GeneralChatEventMapper.apply(projection, {
+        event_id: 'late-1', version: 4, session_id: 'chat-1', turn_id: 'turn-1',
+        type: 'message.delta', delta: 'late'
+      });
+      expect(terminal.status).assertEqual('cancelled');
+      expect(terminal.version).assertEqual(3);
+      expect(terminal.text).assertEqual('');
+    });
+  });
+
+  describe('RemoteCommandFactory', () => {
+    it('builds workspace and assistant commands', 0, () => {
+      expectCommandJson(RemoteCommandFactory.getWorkspaceInfo(), '{"cmd":"get_workspace_info"}');
+      expectCommandJson(RemoteCommandFactory.listRecentWorkspaces(), '{"cmd":"list_recent_workspaces"}');
+      expectCommandJson(RemoteCommandFactory.setWorkspace('/repo'), '{"cmd":"set_workspace","path":"/repo"}');
+      expectCommandJson(RemoteCommandFactory.listAssistants(), '{"cmd":"list_assistants"}');
+      expectCommandJson(RemoteCommandFactory.setAssistant('/assistant'), '{"cmd":"set_assistant","path":"/assistant"}');
+    });
+
+    it('builds session list and creation commands without unsupported fields', 0, () => {
+      const listCommand = RemoteCommandFactory.listSessions('/repo', 8, 16, '  auth  ');
+      expectCommandJson(listCommand, '{"cmd":"list_sessions","workspace_path":"/repo","limit":8,"offset":16,"query":"auth"}');
+      expect(JSON.stringify(listCommand).indexOf('agent_type')).assertEqual(-1);
+
+      const createCommand = RemoteCommandFactory.createSession({
+        agentType: 'cowork',
+        title: '',
+        instruction: 'hello'
+      }, '/repo');
+      expectCommandJson(createCommand, '{"cmd":"create_session","agent_type":"cowork","session_name":"Remote Cowork Session","workspace_path":"/repo"}');
+      expect(JSON.stringify(createCommand).indexOf('run_mode')).assertEqual(-1);
+    });
+
+    it('builds message and polling commands', 0, () => {
+      expectCommandJson(RemoteCommandFactory.sendMessage('s1', 'hello', 'code'), '{"cmd":"send_message","session_id":"s1","content":"hello","agent_type":"code"}');
+      expectCommandJson(RemoteCommandFactory.sendMessage('s1', 'look', 'code', [{
+        id: 'img1',
+        data_url: 'data:image/png;base64,abc',
+        mime_type: 'image/png'
+      }]), '{"cmd":"send_message","session_id":"s1","content":"look","agent_type":"code","image_contexts":[{"id":"img1","data_url":"data:image/png;base64,abc","mime_type":"image/png"}]}');
+      expectCommandJson(RemoteCommandFactory.getSessionMessages('s1'), '{"cmd":"get_session_messages","session_id":"s1"}');
+      expectCommandJson(RemoteCommandFactory.pollSession('s1', 7, 3, 2), '{"cmd":"poll_session","session_id":"s1","since_version":7,"known_msg_count":3,"known_model_catalog_version":2}');
+    });
+
+    it('builds model and session lifecycle commands', 0, () => {
+      expectCommandJson(RemoteCommandFactory.getModelCatalog('s1'), '{"cmd":"get_model_catalog","session_id":"s1"}');
+      expectCommandJson(RemoteCommandFactory.setSessionModel('s1', 'model-a'), '{"cmd":"set_session_model","session_id":"s1","model_id":"model-a"}');
+      expectCommandJson(RemoteCommandFactory.cancelTask('s1'), '{"cmd":"cancel_task","session_id":"s1"}');
+      expectCommandJson(RemoteCommandFactory.cancelTask('s1', 'turn-9'), '{"cmd":"cancel_task","session_id":"s1","turn_id":"turn-9"}');
+      expectCommandJson(RemoteCommandFactory.renameSession('s1', 'Next'), '{"cmd":"update_session_title","session_id":"s1","title":"Next"}');
+      expectCommandJson(RemoteCommandFactory.deleteSession('s1'), '{"cmd":"delete_session","session_id":"s1"}');
+      expectCommandJson(RemoteCommandFactory.ping(), '{"cmd":"ping"}');
+    });
+
+    it('builds tool and file commands', 0, () => {
+      const answers: RemoteQuestionAnswerPayload = { answer: 'yes', '0': 'yes' };
+
+      expectCommandJson(RemoteCommandFactory.confirmTool('tool-1'), '{"cmd":"confirm_tool","tool_id":"tool-1"}');
+      expectCommandJson(RemoteCommandFactory.rejectTool('tool-1', 'no'), '{"cmd":"reject_tool","tool_id":"tool-1","reason":"no"}');
+      expectCommandJson(RemoteCommandFactory.cancelTool('tool-1', 'stop'), '{"cmd":"cancel_tool","tool_id":"tool-1","reason":"stop"}');
+      expectCommandJson(RemoteCommandFactory.answerQuestion('tool-2', answers), '{"cmd":"answer_question","tool_id":"tool-2","answers":{"0":"yes","answer":"yes"}}');
+      expectCommandJson(RemoteCommandFactory.getFileInfo('/tmp/a.txt', 's1'), '{"cmd":"get_file_info","path":"/tmp/a.txt","session_id":"s1"}');
+      expectCommandJson(RemoteCommandFactory.readFileChunk('/tmp/a.txt', 12, 64, 's1'), '{"cmd":"read_file_chunk","path":"/tmp/a.txt","offset":12,"limit":64,"session_id":"s1"}');
+    });
+  });
+
+  describe('RemoteResponseMapper', () => {
+    it('maps session response items', 0, () => {
+      const sessions = RemoteResponseMapper.sessions([{
+        session_id: 'session-abcdef',
+        name: 'Fallback title',
+        agent_type: 'agentic',
+        status: 'running',
+        updated_at: '2026-06-10T12:00:00.000Z',
+        created_at: '2026-06-09T12:00:00.000Z',
+        message_count: 4,
+        workspace_path: '/repo',
+        workspace_name: 'Repo'
+      }]);
+      expect(sessions.length).assertEqual(1);
+      expect(sessions[0].id).assertEqual('session-abcdef');
+      expect(sessions[0].title).assertEqual('Fallback title');
+      expect(sessions[0].agentType).assertEqual('agentic');
+      expect(sessions[0].messageCount).assertEqual(4);
+      expect(sessions[0].workspaceName).assertEqual('Repo');
+    });
+
+    it('maps alternate session time fields', 0, () => {
+      const sessions = RemoteResponseMapper.sessions([{
+        session_id: 'session-time',
+        title: 'Alternate time fields',
+        last_message_at: 1781092800000,
+        createdAt: '2026-06-09 12:00:00',
+        message_count: 1
+      }]);
+      expect(sessions.length).assertEqual(1);
+      expect(sessions[0].updatedAt).assertEqual('1781092800000');
+      expect(sessions[0].createdAt).assertEqual('2026-06-09 12:00:00');
+    });
+
+    it('maps assistant messages and nested tools', 0, () => {
+      const message = RemoteResponseMapper.chatMessage({
+        id: 'm1',
+        role: 'assistant',
+        content: '',
+        thinking: 'Thinking out loud',
+        timestamp: '2026-06-10T12:00:00.000Z',
+        items: [{
+          type: 'tool',
+          tool: {
+            id: 'tool-1',
+            name: 'shell',
+            status: 'pending'
+          },
+          subItems: [{
+            type: 'tool',
+            tool: {
+              id: 'tool-2',
+              name: 'edit',
+              status: 'done'
+            }
+          }]
+        }]
+      });
+      expect(message.id).assertEqual('m1');
+      expect(message.text).assertEqual('');
+      expect(message.thinking || '').assertEqual('Thinking out loud');
+      expect(message.status).assertEqual('done');
+      expect(message.detail).assertEqual('shell · pending\nedit · done');
+      expect(message.tools ? message.tools.length : 0).assertEqual(2);
+    });
+
+    it('uses fallback ids for message rendering keys', 0, () => {
+      const fromMessageId = RemoteResponseMapper.chatMessage({
+        message_id: 'desktop-message-1',
+        role: 'assistant',
+        content: 'Mapped from alternate id',
+        timestamp: '2026-06-10T12:00:00.000Z'
+      });
+      const generated = RemoteResponseMapper.chatMessage({
+        role: 'user',
+        content: 'No id in response',
+        timestamp: '2026-06-10T12:01:00.000Z'
+      });
+
+      expect(fromMessageId.id).assertEqual('desktop-message-1');
+      expect(generated.id.length > 0).assertTrue();
+      expect(generated.id.indexOf('user-2026-06-10T12:01:00.000Z-')).assertEqual(0);
+    });
+
+    it('maps active turns with item fallback text and tool detail', 0, () => {
+      const message = RemoteResponseMapper.activeTurnToMessage({
+        turn_id: 'turn-1',
+        status: 'active',
+        items: [{
+          type: 'text',
+          content: 'Working on it'
+        }],
+        tools: [{
+          id: 'tool-3',
+          name: 'read_file',
+          status: 'running'
+        }]
+      });
+      expect(message.id).assertEqual('active-turn-1');
+      expect(message.turnId || '').assertEqual('turn-1');
+      expect(message.role).assertEqual('assistant');
+      expect(message.text).assertEqual('Working on it');
+      expect(message.status).assertEqual('active');
+      expect(message.detail).assertEqual('read_file · running');
+    });
+
+    it('does not promote subagent progress to active turn text', 0, () => {
+      const message = RemoteResponseMapper.activeTurnToMessage({
+        turn_id: 'turn-structured',
+        status: 'active',
+        items: [{
+          type: 'subagent',
+          is_subagent: true,
+          content: 'Subagent check',
+          subItems: [{
+            type: 'text',
+            content: 'Nested progress'
+          }, {
+            type: 'tool',
+            tool: {
+              id: 'tool-nested-1',
+              name: 'inspect',
+              status: 'running'
+            }
+          }]
+        }]
+      });
+
+      expect(message.text).assertEqual('');
+      expect(message.tools ? message.tools.length : 0).assertEqual(1);
+      expect(message.detail).assertEqual('inspect · running');
+    });
+
+    it('does not use thinking as active turn final text', 0, () => {
+      const message = RemoteResponseMapper.activeTurnToMessage({
+        turn_id: 'turn-thinking-only',
+        status: 'completed',
+        thinking: 'Still reasoning',
+        items: [{
+          type: 'thinking',
+          content: 'Still reasoning'
+        }]
+      });
+
+      expect(message.text).assertEqual('');
+      expect(message.thinking || '').assertEqual('Still reasoning');
+      expect(message.status).assertEqual('completed');
+    });
+  });
+}

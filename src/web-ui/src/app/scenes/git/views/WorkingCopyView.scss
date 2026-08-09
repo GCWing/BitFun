@@ -8,7 +8,7 @@
   &__commit-bar {
     flex-shrink: 0;
     padding: 8px 12px;
-    border-bottom: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -23,12 +23,12 @@
 
   &__branch {
     font-weight: 500;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__badge {
     font-size: 10px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__sync-actions {
@@ -75,7 +75,7 @@
     flex-shrink: 0;
     width: 1px;
     cursor: col-resize;
-    background: var(--border-subtle);
+    background: var(--bf-appearance-token-border-subtle);
   }
 
   &__search {
@@ -90,7 +90,7 @@
     padding: 4px 8px;
     font-size: 11px;
     font-weight: 600;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -103,10 +103,10 @@
     padding: 4px 8px;
     font-size: 12px;
     cursor: pointer;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
 
     &:hover {
-      background: var(--element-bg-soft);
+      background: var(--bf-appearance-token-element-bg-soft);
     }
   }
 
@@ -116,7 +116,7 @@
     background: none;
     cursor: pointer;
     padding: 0;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__file-name {
@@ -129,7 +129,7 @@
 
   &__file-dir {
     font-size: 10px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     flex-shrink: 0;
   }
 
@@ -138,24 +138,24 @@
     font-size: 10px;
     font-weight: 600;
 
-    &.wcv-status--modified { color: var(--color-warning); }
-    &.wcv-status--added { color: var(--color-success); }
-    &.wcv-status--deleted { color: var(--color-error); }
-    &.wcv-status--renamed { color: var(--color-info); }
+    &.wcv-status--modified { color: var(--bf-appearance-token-color-warning); }
+    &.wcv-status--added { color: var(--bf-appearance-token-color-success); }
+    &.wcv-status--deleted { color: var(--bf-appearance-token-color-error); }
+    &.wcv-status--renamed { color: var(--bf-appearance-token-color-info); }
   }
 
   &__empty {
     padding: 12px;
     font-size: 12px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__file-list-placeholder {
     padding: 12px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: 12px;
 
-    span { font-weight: 500; color: var(--color-text-secondary); }
+    span { font-weight: 500; color: var(--bf-appearance-token-color-text-secondary); }
   }
 
   &__diff-area {
@@ -173,7 +173,7 @@
     justify-content: center;
     flex: 1;
     gap: 8px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: 14px;
   }
 
@@ -184,7 +184,7 @@
 }
 
 .wcv-file--selected {
-  background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
 }
 
 .wcv-file--loading {

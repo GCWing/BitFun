@@ -23,8 +23,8 @@ use enigo::{Axis, Button, Coordinate, Direction, Enigo, Key, Keyboard, Mouse, Se
 use log::debug;
 use std::time::Duration;
 
-/// Relative nudges (`pointer_move_rel`, `ComputerUseMouseStep`) right after a model-driven screenshot are almost always wrong when deltas are guessed from the image; block until a trusted absolute move.
-const VISION_PIXEL_NUDGE_AFTER_SCREENSHOT_MSG: &str = "Computer use refused: do not use `pointer_move_rel` or `ComputerUseMouseStep` immediately after a `screenshot` — nudging from the JPEG is inaccurate. First reposition with `move_to_text`, `click_element`, `locate` + `mouse_move` (`use_screen_coordinates`: true), or `mouse_move` using globals from tool JSON; then relative nudges are allowed if still needed.";
+/// Relative nudges (`pointer_move_rel`) right after a model-driven screenshot are almost always wrong when deltas are guessed from the image; block until a trusted absolute move.
+const VISION_PIXEL_NUDGE_AFTER_SCREENSHOT_MSG: &str = "Computer use refused: do not use `pointer_move_rel` immediately after a `screenshot` — nudging from the JPEG is inaccurate. First reposition with `move_to_text`, `click_element`, `locate` + `mouse_move` (`use_screen_coordinates`: true), or `mouse_move` using globals from tool JSON; then relative nudges are allowed if still needed.";
 
 impl DesktopComputerUseHost {
     pub(super) fn ensure_input_automation_allowed() -> BitFunResult<()> {
@@ -602,7 +602,7 @@ impl DesktopComputerUseHost {
                     .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
                 let Some(map) = s.pointer_map else {
                     return Err(BitFunError::tool(
-                        "Run action screenshot first: on macOS, pointer_move_relative / ComputerUseMouseStep convert pixel deltas using the last capture scale."
+                        "Run action screenshot first: on macOS, `pointer_move_rel` converts pixel deltas using the last capture scale."
                             .to_string(),
                     ));
                 };

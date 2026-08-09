@@ -13,6 +13,7 @@ const installClientCliMock = vi.hoisted(() => vi.fn());
 const predownloadClientAdapterMock = vi.hoisted(() => vi.fn());
 const listSavedConnectionsMock = vi.hoisted(() => vi.fn());
 const notifyErrorMock = vi.hoisted(() => vi.fn());
+const notifyInfoMock = vi.hoisted(() => vi.fn());
 const notifySuccessMock = vi.hoisted(() => vi.fn());
 const translate = (_key: string, options?: Record<string, unknown> & { defaultValue?: string }) => (
   options?.defaultValue ?? _key
@@ -122,6 +123,7 @@ vi.mock('@/features/ssh-remote/sshApi', () => ({
 vi.mock('@/shared/notification-system', () => ({
   useNotification: () => ({
     error: notifyErrorMock,
+    info: notifyInfoMock,
     success: notifySuccessMock,
   }),
 }));
@@ -372,6 +374,46 @@ describe('AcpAgentsConfig', () => {
     expect(container.textContent).toContain('registry.enabled');
     expect(container.textContent).not.toContain('registry.cliMissing');
     expect(container.textContent).not.toContain('registry.configInvalid');
+  });
+
+  it('labels self-managed missing CLIs as config-only before adding', async () => {
+    probeClientRequirementsMock.mockResolvedValue([
+      {
+        id: 'opencode',
+        tool: { name: 'opencode', installed: true },
+        runnable: true,
+        notes: [],
+      },
+      {
+        id: 'omp',
+        tool: { name: 'omp', installed: false },
+        runnable: false,
+        notes: ['omp is not available on PATH'],
+      },
+    ]);
+
+    await act(async () => {
+      root.render(<AcpAgentsConfig />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const addConfigButtons = Array.from(container.querySelectorAll('button'))
+      .filter(button => button.textContent?.includes('actions.addConfig'));
+    expect(addConfigButtons.length).toBeGreaterThan(0);
+
+    await act(async () => {
+      addConfigButtons[0].click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(installClientCliMock).not.toHaveBeenCalled();
+    expect(saveJsonConfigMock).toHaveBeenCalledWith(expect.stringContaining('"omp"'));
+    expect(notifySuccessMock).toHaveBeenCalledWith('notifications.configAddedManualCliRequired');
   });
 
   it('does not downgrade enabled agents on transient probe timeouts during refresh', async () => {

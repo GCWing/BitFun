@@ -6,6 +6,7 @@
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
+import { isSessionInUseError } from '@/infrastructure/api/errors/TauriCommandError';
 import { notificationService } from '../../../shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { isRemoteTraceContext, startupTrace } from '@/shared/utils/startupTrace';
@@ -14,15 +15,19 @@ import { i18nService } from '@/infrastructure/i18n';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import { normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
-import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
-import type { AIModelConfig, AgentModelDefaultsConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
-import type { FlowChatContext, SessionConfig } from './types';
+import { isRemoteWorkspace, WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
+import type {
+  FlowChatContext,
+  SessionConfig,
+  SessionHistoryHydrationLocation,
+} from './types';
 import type { Session } from '../../types/flow-chat';
 import { touchSessionActivity, cleanupSaveState, updateSessionMetadata } from './PersistenceModule';
 import { cleanupSessionBuffers } from './TextChunkModule';
 import {
   createTextSessionTitleDescriptor,
   createDefaultSessionTitleDescriptor,
+  deriveSessionTitleStateFromMetadata,
   getNextDefaultSessionTitleCount,
   resolveSessionTitle,
 } from '../../utils/sessionTitle';
@@ -40,9 +45,28 @@ import {
   DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH,
   normalizeUserDefaultChatInputModeId,
 } from '../../utils/chatInputMode';
+import {
+  requireSessionProjectWorkspacePath,
+  sessionProjectWorkspacePath,
+} from '../../utils/sessionWorkspace';
+import { driverForCreation, driverForSession } from '../../session-drivers/registry';
+import {
+  isProjectedFirstRuntimeTurn,
+  isProjectedSessionEmpty,
+} from '../../utils/flowChatTurnIdentity';
 
 const log = createLogger('SessionModule');
 const pendingSessionCreations = new Map<string, Promise<string>>();
+
+const getHydrationLocationKey = (
+  location: SessionHistoryHydrationLocation | undefined,
+): string => location?.workspacePath
+  ? JSON.stringify([
+      location.workspacePath,
+      location.remoteConnectionId ?? '',
+      location.remoteSshHost ?? '',
+    ])
+  : '';
 export const SESSION_ACTIVITY_TOUCH_DELAY_MS = 350;
 let latestSwitchRequestId = 0;
 let pendingActivityTouchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -143,16 +167,47 @@ async function hydrateHistoricalSession(
   options?: {
     isRetryStillRelevant?: () => boolean;
     retryActiveStaleReuse?: boolean;
+    allowNonHistorical?: boolean;
+    includeInternal?: boolean;
+    deferFullHistoryUntilActive?: boolean;
+    location?: SessionHistoryHydrationLocation;
   },
 ): Promise<void> {
   const existing = context.pendingHistoryLoads.get(sessionId);
   if (existing) {
+    const existingCapabilities = context.pendingHistoryLoadCapabilities?.get(sessionId);
+    const requestedLocationKey = getHydrationLocationKey(options?.location);
+    const requiresStrongerHydrate =
+      (options?.includeInternal === true && existingCapabilities?.includeInternal !== true) ||
+      (options?.deferFullHistoryUntilActive === false &&
+        existingCapabilities?.deferFullHistoryUntilActive !== false) ||
+      (Boolean(requestedLocationKey) && existingCapabilities?.locationKey !== requestedLocationKey);
     startupTrace.markPhase('historical_session_hydrate_reused');
     recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_reused_pending', {
       notifyOnError,
       retryActiveStaleReuse: options?.retryActiveStaleReuse === true,
     });
-    await existing;
+    let existingFailed = false;
+    let existingError: unknown;
+    try {
+      await existing;
+    } catch (error) {
+      existingFailed = true;
+      existingError = error;
+    }
+    if (requiresStrongerHydrate) {
+      if (context.pendingHistoryLoads.get(sessionId) === existing) {
+        context.pendingHistoryLoads.delete(sessionId);
+      }
+      if (context.pendingHistoryLoadCapabilities?.get(sessionId)?.promise === existing) {
+        context.pendingHistoryLoadCapabilities.delete(sessionId);
+      }
+      await hydrateHistoricalSession(context, sessionId, notifyOnError, options);
+      return;
+    }
+    if (existingFailed) {
+      throw existingError;
+    }
     const retryStillRelevant = options?.isRetryStillRelevant?.() !== false;
     const shouldRetryActiveStale = shouldRetryActiveStaleHydrate(context, sessionId);
     recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_reused_settled', {
@@ -184,19 +239,25 @@ async function hydrateHistoricalSession(
 
   const loadPromise = (async () => {
     const session = context.flowChatStore.getState().sessions.get(sessionId);
-    if (!session?.isHistorical) {
+    if (!session || (!session.isHistorical && options?.allowNonHistorical !== true)) {
       recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_request_skipped', {
         reason: session ? 'not_historical' : 'missing_session',
       });
       return;
     }
 
-    const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);
-    const remote = isRemoteTraceContext(session.remoteConnectionId, session.remoteSshHost);
+    const workspacePath = requireSessionWorkspacePath(
+      session.workspacePath || options?.location?.workspacePath,
+      sessionId,
+    );
+    const storedConnectionId = options?.location?.remoteConnectionId || session.remoteConnectionId;
+    const storedSshHost = options?.location?.remoteSshHost || session.remoteSshHost;
+    const remote = isRemoteTraceContext(storedConnectionId, storedSshHost);
+    const deferFullHistoryUntilActive = options?.deferFullHistoryUntilActive ?? true;
     markHistorySessionHydratePending(sessionId, {
       notifyOnError,
       remote,
-      deferFullHistoryUntilActive: true,
+      deferFullHistoryUntilActive,
     });
     startupTrace.markPhase('historical_session_hydrate_request', { remote });
     recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_request_started', {
@@ -210,13 +271,13 @@ async function hydrateHistoricalSession(
     // remoteConnectionId becomes stale; the active workspace always
     // carries the up-to-date connection_id.
     const effectiveConnectionId = resolveEffectiveConnectionId(
-      session.remoteConnectionId,
-      session.remoteSshHost,
+      storedConnectionId,
+      storedSshHost,
       workspacePath
     );
     const effectiveSshHost = resolveEffectiveSshHost(
-      session.remoteSshHost,
-      session.remoteConnectionId,
+      storedSshHost,
+      storedConnectionId,
       workspacePath
     );
 
@@ -226,11 +287,22 @@ async function hydrateHistoricalSession(
       undefined,
       effectiveConnectionId,
       effectiveSshHost,
-      { deferFullHistoryUntilActive: true },
+      {
+        includeInternal: options?.includeInternal,
+        deferFullHistoryUntilActive,
+      },
     );
   })();
 
   context.pendingHistoryLoads.set(sessionId, loadPromise);
+  const pendingHistoryLoadCapabilities =
+    context.pendingHistoryLoadCapabilities ??= new Map();
+  pendingHistoryLoadCapabilities.set(sessionId, {
+    promise: loadPromise,
+    includeInternal: options?.includeInternal === true,
+    deferFullHistoryUntilActive: options?.deferFullHistoryUntilActive ?? true,
+    locationKey: getHydrationLocationKey(options?.location),
+  });
 
   try {
     await loadPromise;
@@ -257,7 +329,24 @@ async function hydrateHistoricalSession(
     if (context.pendingHistoryLoads.get(sessionId) === loadPromise) {
       context.pendingHistoryLoads.delete(sessionId);
     }
+    if (context.pendingHistoryLoadCapabilities?.get(sessionId)?.promise === loadPromise) {
+      context.pendingHistoryLoadCapabilities.delete(sessionId);
+    }
   }
+}
+
+export async function hydrateSessionHistoryForDetail(
+  context: FlowChatContext,
+  sessionId: string,
+  location?: SessionHistoryHydrationLocation,
+): Promise<void> {
+  const session = context.flowChatStore.getState().sessions.get(sessionId);
+  await hydrateHistoricalSession(context, sessionId, false, {
+    allowNonHistorical: true,
+    includeInternal: session?.sessionKind === 'subagent',
+    deferFullHistoryUntilActive: false,
+    location,
+  });
 }
 
 function shouldHydrateHistoricalSessionBeforeSwitch(session: Session | undefined): session is Session {
@@ -423,7 +512,11 @@ export const resolveAgentTypeForSessionCreation = async (
       return normalizedRequestedMode || 'agentic';
     }
 
-    const availableModes = await agentAPI.getAvailableModes();
+    const availableModes = await agentAPI.getAvailableModes({
+      workspacePath: workspace?.rootPath,
+      remoteConnectionId: isRemoteWorkspace(workspace) ? workspace?.connectionId : undefined,
+      remoteSshHost: isRemoteWorkspace(workspace) ? workspace?.sshHost : undefined,
+    });
     if (availableModes.some(mode => mode.id === configuredDefaultMode)) {
       return configuredDefaultMode;
     }
@@ -450,101 +543,7 @@ function requireSessionWorkspacePath(
   return workspacePath;
 }
 
-/**
- * Get model's maximum token count
- */
-function findEnabledModel(models: AIModelConfig[], modelRef: string | null | undefined): AIModelConfig | null {
-  const value = modelRef?.trim();
-  if (!value) return null;
-  return models.find(model =>
-    model.enabled !== false
-    && (model.id === value || model.name === value || model.model_name === value)
-  ) ?? null;
-}
-
-function resolveModelForContextWindow(
-  modelRef: string | null | undefined,
-  models: AIModelConfig[],
-  defaultModels: DefaultModelsConfig,
-): AIModelConfig | null {
-  const value = modelRef?.trim();
-  if (!value) return null;
-
-  if (value === 'primary') {
-    return findEnabledModel(models, defaultModels.primary);
-  }
-
-  if (value === 'fast') {
-    return findEnabledModel(models, defaultModels.fast) ?? findEnabledModel(models, defaultModels.primary);
-  }
-
-  if (value === 'auto' || value === 'default') {
-    return null;
-  }
-
-  return findEnabledModel(models, value);
-}
-
-export async function getModelMaxTokens(modelName?: string, agentType?: string): Promise<number> {
-  try {
-    const configManager = await import('@/infrastructure/config/services/ConfigManager').then(m => m.configManager);
-    const configData = await configManager.getConfigs([
-      'ai.models',
-      'ai.default_models',
-      'ai.agent_model_defaults',
-    ]);
-    const models = (configData['ai.models'] as AIModelConfig[] | undefined) || [];
-    const defaultModels = (configData['ai.default_models'] as DefaultModelsConfig | undefined) || {};
-    const agentModelDefaults = configData['ai.agent_model_defaults'] as AgentModelDefaultsConfig | undefined;
-
-    const normalizedModelName = modelName?.trim();
-    const explicitModel = resolveModelForContextWindow(modelName, models, defaultModels);
-    if (explicitModel?.context_window) {
-      return explicitModel.context_window;
-    }
-
-    // Only legacy sessions without a model selector inherit the current mode
-    // default. Explicit symbolic selectors such as "auto" remain session-owned.
-    if (!normalizedModelName) {
-      const modeModel = resolveModelForContextWindow(
-        agentModelDefaults?.mode,
-        models,
-        defaultModels,
-      );
-      if (modeModel?.context_window) {
-        return modeModel.context_window;
-      }
-    }
-
-    const primaryModel = resolveModelForContextWindow('primary', models, defaultModels);
-    if (primaryModel?.context_window) {
-      return primaryModel.context_window;
-    }
-    
-    log.debug('Model context_window config not found, using default', { modelName, agentType });
-    return 128128;
-  } catch (error) {
-    log.warn('Failed to get model max tokens', { modelName, agentType, error });
-    return 128128;
-  }
-}
-
-async function resolveModelForSessionCreation(modelName?: string): Promise<string> {
-  const explicitModelName = modelName?.trim();
-  if (explicitModelName) {
-    return explicitModelName;
-  }
-
-  try {
-    const configManager = await import('@/infrastructure/config/services/ConfigManager').then(m => m.configManager);
-    const configData = await configManager.getConfigs(['ai.agent_model_defaults']);
-    const agentModelDefaults = configData['ai.agent_model_defaults'] as AgentModelDefaultsConfig | undefined;
-    return agentModelDefaults?.mode?.trim() || 'auto';
-  } catch (error) {
-    log.warn('Failed to resolve model default during session creation', { error });
-    return 'auto';
-  }
-}
+export { getModelMaxTokens } from '../../utils/modelResolution';
 
 /**
  * Create new chat session (managed by backend)
@@ -561,6 +560,7 @@ export async function createChatSession(
     if (!workspacePath) {
       throw new Error('Workspace path is required to create a session');
     }
+    const projectWorkspacePath = config.projectWorkspacePath || workspacePath;
     const remoteConnectionId =
       workspace?.workspaceKind === WorkspaceKind.Remote ? workspace.connectionId : undefined;
     const remoteSshHost =
@@ -575,7 +575,12 @@ export async function createChatSession(
         : remoteConnectionId != null && remoteConnectionId !== ''
           ? `${remoteConnectionId}\n${workspacePath}`
           : workspacePath;
-    const creationKey = JSON.stringify([workspaceCreationKey, agentType]);
+    const creationKey = JSON.stringify([
+      workspaceCreationKey,
+      agentType,
+      config.executionTargetRequest ?? { kind: 'local' },
+      config.dispatchTargetRequest ?? { kind: 'local' },
+    ]);
 
     const pendingCreation = pendingSessionCreations.get(creationKey);
     if (pendingCreation) {
@@ -602,54 +607,17 @@ export async function createChatSession(
       );
       const sessionName = titleDescriptor.text;
 
-      const sessionModelName = await resolveModelForSessionCreation(config.modelName);
-      const maxContextTokens = await getModelMaxTokens(sessionModelName, agentType);
-
-      const mergedConfig: SessionConfig = {
-        ...config,
-        modelName: sessionModelName,
-        workspaceId: workspace?.id ?? config.workspaceId,
-      };
-
-      const response = await agentAPI.createSession({
-        sessionName,
+      return driverForCreation(config).createSession(context, {
+        config,
         agentType,
-        workspacePath,
-        workspaceId: mergedConfig.workspaceId,
-        remoteConnectionId,
-        remoteSshHost,
-        config: {
-          modelName: sessionModelName,
-          enableTools: true,
-          safeMode: true,
-          autoCompact: true,
-          maxContextTokens: maxContextTokens,
-          enableContextCompression: true,
-          remoteConnectionId,
-          remoteSshHost,
-        }
-      });
-
-      context.flowChatStore.createSession(
-        response.sessionId, 
-        mergedConfig, 
-        undefined,
         sessionName,
-        maxContextTokens,
-        agentType,
-        workspacePath,
-        remoteConnectionId,
-        remoteSshHost,
         titleDescriptor,
-      );
-
-      // Persist the title metadata (incl. the i18n title key/params) at creation
-      // so an empty session can re-localize its default name on a later reload +
-      // locale switch. createSession only stored the localized sessionName string;
-      // without this, empty sessions have no title key on disk and can't re-localize.
-      await updateSessionMetadata(context, response.sessionId);
-
-      return response.sessionId;
+        workspacePath,
+        projectWorkspacePath,
+        workspaceId: workspace?.id,
+        remoteConnectionId,
+        remoteSshHost,
+      });
     });
 
     pendingSessionCreations.set(creationKey, createPromise);
@@ -696,6 +664,9 @@ export async function switchChatSession(
     });
 
     const touchActiveSessionInBackground = () => {
+      if (driverForSession(sessionId, session).id === 'dispatch') {
+        return;
+      }
       scheduleSessionActivityTouch(() => {
         const latestState = context.flowChatStore.getState();
         const latestSession = latestState.sessions.get(sessionId);
@@ -704,7 +675,7 @@ export async function switchChatSession(
         }
         touchSessionActivity(
           sessionId,
-          latestSession.workspacePath,
+          sessionProjectWorkspacePath(latestSession),
           latestSession.remoteConnectionId,
           latestSession.remoteSshHost
         ).catch(error => {
@@ -799,14 +770,10 @@ export async function deleteChatSession(
       stateBeforeDelete.activeSessionId
       && removedSessionIdSet.has(stateBeforeDelete.activeSessionId)
     );
-    await context.flowChatStore.deleteSession(
-      sessionId,
-      removedActiveSession ? { nextActiveSessionId: null } : undefined,
-    );
-
-    removedSessionIds.forEach(id => {
-      context.processingManager.clearSessionStatus(id);
-      cleanupSaveState(context, id);
+    const session = stateBeforeDelete.sessions.get(sessionId);
+    await driverForSession(sessionId, session).deleteSession(context, sessionId, {
+      removedSessionIds,
+      removedActiveSession,
     });
   } catch (error) {
     log.error('Failed to delete chat session', { sessionId, error });
@@ -835,24 +802,9 @@ export async function archiveChatSession(
       && removedSessionIdSet.has(stateBeforeArchive.activeSessionId)
     );
 
-    await sessionAPI.archiveSession(
-      sessionId,
-      requireSessionWorkspacePath(session.workspacePath, sessionId),
-      session.remoteConnectionId,
-      session.remoteSshHost,
-    );
-
-    const { stateMachineManager } = await import('../../state-machine');
-    context.flowChatStore.removeSession(
-      sessionId,
-      removedActiveSession ? { nextActiveSessionId: null } : undefined,
-    );
-
-    removedSessionIds.forEach(id => {
-      stateMachineManager.delete(id);
-      context.processingManager.clearSessionStatus(id);
-      cleanupSaveState(context, id);
-      cleanupSessionBuffers(context, id);
+    await driverForSession(sessionId, session).archiveSession(context, sessionId, {
+      removedSessionIds,
+      removedActiveSession,
     });
   } catch (error) {
     log.error('Failed to archive chat session', { sessionId, error });
@@ -881,17 +833,37 @@ export async function renameChatSessionTitle(
     await context.flowChatStore.updateSessionTitle(sessionId, trimmedTitle, 'generated');
     return trimmedTitle;
   }
+  return driverForSession(sessionId, session).renameSession(context, sessionId, trimmedTitle);
+}
 
-  const updatedTitle = await agentAPI.updateSessionTitle({
+export async function reloadSessionTitle(
+  context: FlowChatContext,
+  sessionId: string,
+): Promise<void> {
+  const session = context.flowChatStore.getState().sessions.get(sessionId);
+  if (!session) return;
+
+  const metadata = await sessionAPI.loadSessionMetadata(
     sessionId,
-    title: trimmedTitle,
-    workspacePath: session.workspacePath,
-    remoteConnectionId: session.remoteConnectionId,
-    remoteSshHost: session.remoteSshHost,
-  });
+    requireSessionProjectWorkspacePath(session, sessionId),
+    session.remoteConnectionId,
+    session.remoteSshHost,
+  );
+  if (!metadata) return;
 
-  await context.flowChatStore.updateSessionTitle(sessionId, updatedTitle, 'generated');
-  return updatedTitle;
+  const titleState = deriveSessionTitleStateFromMetadata(metadata);
+  context.flowChatStore.setState(previous => {
+    const current = previous.sessions.get(sessionId);
+    if (!current) return previous;
+
+    const sessions = new Map(previous.sessions);
+    sessions.set(sessionId, {
+      ...current,
+      ...titleState,
+      titleStatus: 'generated',
+    });
+    return { ...previous, sessions };
+  });
 }
 
 export async function forkChatSession(
@@ -903,16 +875,23 @@ export async function forkChatSession(
   if (!sourceSession) {
     throw new Error(`Session does not exist: ${sourceSessionId}`);
   }
+  if (driverForSession(sourceSessionId, sourceSession).id === 'dispatch') {
+    throw new Error('Forking a detached dispatch session is not supported');
+  }
 
-  const workspacePath = requireSessionWorkspacePath(
+  const executionWorkspacePath = requireSessionWorkspacePath(
     sourceSession.workspacePath,
     sourceSessionId
+  );
+  const projectWorkspacePath = requireSessionProjectWorkspacePath(
+    sourceSession,
+    sourceSessionId,
   );
 
   const response = await sessionAPI.forkSession(
     sourceSessionId,
     sourceTurnId,
-    workspacePath,
+    projectWorkspacePath,
     sourceSession.remoteConnectionId,
     sourceSession.remoteSshHost
   );
@@ -923,7 +902,8 @@ export async function forkChatSession(
       response.sessionId,
       {
         ...sourceSession.config,
-        workspacePath,
+        workspacePath: executionWorkspacePath,
+        projectWorkspacePath,
         workspaceId: sourceSession.workspaceId,
         remoteConnectionId: sourceSession.remoteConnectionId,
         remoteSshHost: sourceSession.remoteSshHost,
@@ -932,7 +912,7 @@ export async function forkChatSession(
       response.sessionName,
       sourceSession.maxContextTokens,
       sourceSession.mode,
-      workspacePath,
+      executionWorkspacePath,
       sourceSession.remoteConnectionId,
       sourceSession.remoteSshHost,
       createTextSessionTitleDescriptor(response.sessionName),
@@ -943,7 +923,7 @@ export async function forkChatSession(
 
   await context.flowChatStore.loadSessionHistory(
     response.sessionId,
-    workspacePath,
+    projectWorkspacePath,
     undefined,
     sourceSession.remoteConnectionId,
     sourceSession.remoteSshHost,
@@ -968,6 +948,9 @@ export async function ensureBackendSession(
   if (session.isTransient) {
     return;
   }
+  if (driverForSession(sessionId, session).id === 'dispatch') {
+    return;
+  }
 
   if (session.isHistorical) {
     await hydrateHistoricalSession(context, sessionId, false);
@@ -975,6 +958,7 @@ export async function ensureBackendSession(
 
   const latestSession = context.flowChatStore.getState().sessions.get(sessionId) ?? session;
   const workspacePath = requireSessionWorkspacePath(latestSession.workspacePath, sessionId);
+  const projectWorkspacePath = requireSessionProjectWorkspacePath(latestSession, sessionId);
 
   // Resolve effective connection info: prefer the current workspace's
   // connection_id over the session's stored value.  When the user changes
@@ -991,17 +975,17 @@ export async function ensureBackendSession(
   );
 
   const isHistoricalSession = latestSession.isHistorical === true;
-  const isFirstTurn = latestSession.dialogTurns.length <= 1;
+  const isFirstTurn = isProjectedFirstRuntimeTurn(latestSession);
   const requiresContextRestore =
     latestSession.contextRestoreState === 'pending' ||
     latestSession.contextRestoreState === 'failed';
   const needsBackendSetup = isHistoricalSession || isFirstTurn || requiresContextRestore;
-  const hasLoadedTurns = latestSession.dialogTurns.length > 0;
+  const hasProjectedTurns = !isProjectedSessionEmpty(latestSession);
   /** Avoid createSession when historical data is already loaded but backend files are missing (e.g. new SSH connection id). */
   const allowRecreateOnCoordinatorFailure =
     needsBackendSetup &&
-    !(requiresContextRestore && hasLoadedTurns) &&
-    !(isHistoricalSession && hasLoadedTurns);
+    !(requiresContextRestore && hasProjectedTurns) &&
+    !(isHistoricalSession && hasProjectedTurns);
 
   const markBackendContextReady = () => {
     if (!isHistoricalSession && !requiresContextRestore) return;
@@ -1035,7 +1019,7 @@ export async function ensureBackendSession(
   const ensureCoordinator = async () => {
     await agentAPI.ensureCoordinatorSession({
       sessionId,
-      workspacePath,
+      workspacePath: projectWorkspacePath,
       remoteConnectionId: effectiveConnectionId,
       remoteSshHost: effectiveSshHost,
       includeInternal: latestSession.sessionKind === 'subagent',
@@ -1049,7 +1033,7 @@ export async function ensureBackendSession(
     }
     const restoreKey = [
       sessionId,
-      workspacePath,
+      projectWorkspacePath,
       effectiveConnectionId ?? '',
       effectiveSshHost ?? '',
     ].join('\u001f');
@@ -1079,6 +1063,9 @@ export async function ensureBackendSession(
 
     await ensureCoordinator();
   } catch (e: any) {
+    if (isSessionInUseError(e)) {
+      throw e;
+    }
     if (!allowRecreateOnCoordinatorFailure) {
       const raw = typeof e?.message === 'string' ? e.message : String(e);
       const hint =
@@ -1096,6 +1083,14 @@ export async function ensureBackendSession(
         `Session ${sessionId.slice(0, 8)}`,
       agentType: latestSession.mode || 'agentic',
       workspacePath,
+      projectWorkspacePath,
+      executionTarget:
+        latestSession.config.executionTarget?.worktreeId
+          ? {
+              kind: 'existingWorktree',
+              worktreeId: latestSession.config.executionTarget.worktreeId,
+            }
+          : { kind: 'local' },
       workspaceId: latestSession.workspaceId,
       remoteConnectionId: effectiveConnectionId,
       remoteSshHost: effectiveSshHost,
@@ -1130,7 +1125,8 @@ export async function retryCreateBackendSession(
   }
 
   const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);
-  
+  const projectWorkspacePath = requireSessionProjectWorkspacePath(session, sessionId);
+
   await agentAPI.createSession({
     sessionId: sessionId,
     sessionName:
@@ -1138,6 +1134,14 @@ export async function retryCreateBackendSession(
       `Session ${sessionId.slice(0, 8)}`,
     agentType: session.mode || 'agentic',
     workspacePath,
+    projectWorkspacePath,
+    executionTarget:
+      session.config.executionTarget?.worktreeId
+        ? {
+            kind: 'existingWorktree',
+            worktreeId: session.config.executionTarget.worktreeId,
+          }
+        : { kind: 'local' },
     workspaceId: session.workspaceId,
     remoteConnectionId: session.remoteConnectionId,
     remoteSshHost: session.remoteSshHost,

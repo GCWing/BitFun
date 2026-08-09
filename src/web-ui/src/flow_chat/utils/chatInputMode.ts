@@ -337,17 +337,27 @@ export function resolveAvailableChatInputMode(params: {
   const availableModeIds = new Set(
     Array.from(params.availableModeIds, (modeId) => modeId.trim()).filter(Boolean),
   );
+  const normalizedSessionMode = params.sessionMode?.trim();
+  const synchronizedMode = resolveWorkspaceChatInputMode(params);
+
+  // A persisted standard-Session mode is an execution binding, not a catalog
+  // suggestion. If its source is temporarily unavailable, retain the logical
+  // id and let the backend's durable route owner fail closed. Only an explicit
+  // user selection may replace it. Assistant workspaces keep their product
+  // rule below, where Claw remains authoritative.
+  if (!params.isAssistantWorkspace && normalizedSessionMode) {
+    return synchronizedMode;
+  }
+
   if (availableModeIds.size === 0) {
     return null;
   }
 
-  const synchronizedMode = resolveWorkspaceChatInputMode(params);
   if (synchronizedMode && availableModeIds.has(synchronizedMode)) {
     return synchronizedMode;
   }
 
   const normalizedCurrentMode = params.currentMode.trim();
-  const normalizedSessionMode = params.sessionMode?.trim();
   const normalizedUserDefaultModeId = normalizeUserDefaultChatInputModeId(params.userDefaultModeId);
   const effectiveUserDefaultModeId =
     normalizedUserDefaultModeId && availableModeIds.has(normalizedUserDefaultModeId)

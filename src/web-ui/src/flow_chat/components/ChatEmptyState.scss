@@ -12,7 +12,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-bg-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
   padding: 0;
   margin: 0;
   
@@ -26,8 +26,8 @@
     height: 300px;
     background: radial-gradient(
       ellipse at center,
-      var(--color-accent-50) 0%,
-      color-mix(in srgb, var(--color-purple-500) 4%, transparent) 40%,
+      var(--bf-appearance-token-color-accent-50) 0%,
+      color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 4%, transparent) 40%,
       transparent 70%
     );
     filter: blur(60px);
@@ -59,15 +59,15 @@
     
     p {
       margin: 0;
-      font-size: var(--flowchat-font-size-2xl);
-      color: var(--color-text-secondary);
+      font-size: var(--bf-appearance-token-flowchat-font-size-2xl);
+      color: var(--bf-appearance-token-color-text-secondary);
       font-weight: $font-weight-normal;
       line-height: $line-height-relaxed;
       
       &:first-child {
-        font-size: var(--flowchat-font-size-3xl);
+        font-size: var(--bf-appearance-token-flowchat-font-size-3xl);
         font-weight: $font-weight-semibold;
-        color: var(--color-text-primary);
+        color: var(--bf-appearance-token-color-text-primary);
         letter-spacing: -0.02em;
       }
     }
@@ -80,16 +80,16 @@
     font-family: $font-family-mono;
     font-weight: $font-weight-medium;
     font-size: inherit;
-    color: var(--color-text-primary);
-    background: var(--element-bg-soft);
-    border: 1px solid var(--border-medium);
+    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-appearance-token-element-bg-soft);
+    border: 1px solid var(--bf-appearance-token-border-medium);
     border-radius: $size-radius-sm;
-    line-height: var(--flowchat-support-line-height);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
     transition: all $motion-base $easing-standard;
     
     &:hover {
-      background: var(--element-bg-hover);
-      border-color: var(--border-strong);
+      background: var(--bf-appearance-token-element-bg-hover);
+      border-color: var(--bf-appearance-token-border-strong);
     }
   }
   
@@ -100,16 +100,16 @@
     font-family: $font-family-mono;
     font-weight: $font-weight-medium;
     font-size: inherit;
-    color: var(--color-text-primary);
-    background: var(--element-bg-soft);
-    border: 1px solid var(--border-medium);
+    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-appearance-token-element-bg-soft);
+    border: 1px solid var(--bf-appearance-token-border-medium);
     border-radius: $size-radius-sm;
-    line-height: var(--flowchat-support-line-height);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
     transition: all $motion-base $easing-standard;
     
     &:hover {
-      background: var(--element-bg-hover);
-      border-color: var(--border-strong);
+      background: var(--bf-appearance-token-element-bg-hover);
+      border-color: var(--bf-appearance-token-border-strong);
     }
   }
   
@@ -120,9 +120,9 @@
     margin: $size-gap-2 0;
     background: linear-gradient(
       90deg,
-      var(--border-strong) 0%,
-      var(--border-medium) 40%,
-      var(--border-base) 70%,
+      var(--bf-appearance-token-border-strong) 0%,
+      var(--bf-appearance-token-border-medium) 40%,
+      var(--bf-appearance-token-border-base) 70%,
       transparent 100%
     );
   }
@@ -134,8 +134,8 @@
     
     p {
       margin: 0 0 $size-gap-3;
-      font-size: var(--flowchat-font-size-2xl);
-      color: var(--color-text-secondary);
+      font-size: var(--bf-appearance-token-flowchat-font-size-2xl);
+      color: var(--bf-appearance-token-color-text-secondary);
       line-height: $line-height-relaxed;
       font-weight: $font-weight-normal;
       
@@ -146,8 +146,8 @@
   }
   
   &__hint {
-    font-size: var(--flowchat-font-size-xl);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xl);
+    color: var(--bf-appearance-token-color-text-muted);
     font-style: italic;
   }
   
@@ -160,26 +160,26 @@
     
     p {
       margin: 0;
-      font-size: var(--flowchat-font-size-xl);
-      color: var(--color-text-secondary);
-      line-height: var(--flowchat-text-line-height);
+      font-size: var(--bf-appearance-token-flowchat-font-size-xl);
+      color: var(--bf-appearance-token-color-text-secondary);
+      line-height: var(--bf-appearance-token-flowchat-text-line-height);
       font-weight: $font-weight-normal;
     }
     
     &-hint {
       margin-top: $size-gap-4;
       padding: $size-gap-3 $size-gap-4;
-      font-size: var(--flowchat-font-size-lg);
-      color: var(--color-text-muted);
+      font-size: var(--bf-appearance-token-flowchat-font-size-lg);
+      color: var(--bf-appearance-token-color-text-muted);
       font-style: italic;
-      background: var(--element-bg-subtle);
-      border-left: 2px solid var(--border-strong);
+      background: var(--bf-appearance-token-element-bg-subtle);
+      border-left: 2px solid var(--bf-appearance-token-border-strong);
       border-radius: 0 $size-radius-sm $size-radius-sm 0;
       transition: all $motion-base $easing-standard;
       
       &:hover {
-        background: var(--element-bg-soft);
-        border-left-color: var(--color-text-muted);
+        background: var(--bf-appearance-token-element-bg-soft);
+        border-left-color: var(--bf-appearance-token-color-text-muted);
       }
     }
   }

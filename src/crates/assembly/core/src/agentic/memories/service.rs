@@ -35,7 +35,7 @@ const ROLLOUT_SUMMARY_BEGIN_MARKER: &str = "<<<ROLLOUT_SUMMARY_BEGIN>>>";
 const ROLLOUT_SUMMARY_END_MARKER: &str = "<<<ROLLOUT_SUMMARY_END>>>";
 const ROLLOUT_SLUG_BEGIN_MARKER: &str = "<<<ROLLOUT_SLUG_BEGIN>>>";
 const ROLLOUT_SLUG_END_MARKER: &str = "<<<ROLLOUT_SLUG_END>>>";
-const PHASE1_SYSTEM_PROMPT: &str = include_str!("prompts/phase1_system.md");
+const PHASE1_SYSTEM_PROMPT: &str = bitfun_agent_content::memories::PHASE1_SYSTEM;
 const CLAW_PERSONA_MEMORY_RULES: &str = "\
 assistant_persona_memory_rules:\n\
 - This rollout is from an assistant-persona session. `BOOTSTRAP.md`, `IDENTITY.md`, `USER.md`, and `SOUL.md` are assistant-local persona/profile setup files.\n\
@@ -456,10 +456,17 @@ async fn process_single_session(
         source.turn_count,
         format_unix_secs(source.last_finished_unix_secs)
     );
-    let turns = match persistence
-        .load_session_turns(session_storage_path, &source.session_id)
-        .await
-    {
+    let turns_result = match crate::agentic::coordination::get_global_coordinator() {
+        Some(coordinator) => {
+            coordinator
+                .load_visible_persisted_session_turns(session_storage_path, &source.session_id)
+                .await
+        }
+        None => Err(BitFunError::service(
+            "Core coordinator is unavailable for AI Memory history reads",
+        )),
+    };
+    let turns = match turns_result {
         Ok(turns) => turns,
         Err(error) => {
             record_failure(
@@ -978,7 +985,7 @@ async fn record_failure(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_ai_adapters::{AIConfig, ReasoningMode};
+    use bitfun_ai_adapters::AIConfig;
     use std::collections::VecDeque;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex;
@@ -995,13 +1002,10 @@ mod tests {
             max_tokens,
             temperature: None,
             top_p: None,
-            reasoning_mode: ReasoningMode::Default,
             inline_think_in_text: false,
             custom_headers: None,
             custom_headers_mode: None,
             skip_ssl_verify: false,
-            reasoning_effort: None,
-            thinking_budget_tokens: None,
             custom_request_body: None,
             custom_request_body_mode: None,
         }

@@ -7,6 +7,7 @@ pub enum MiniAppCustomizationOriginKind {
     Builtin,
     Imported,
     UserCreated,
+    Market,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -14,6 +15,8 @@ pub struct MiniAppCustomizationOrigin {
     pub kind: MiniAppCustomizationOriginKind,
     pub builtin_id: Option<String>,
     pub builtin_version: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub market: Option<crate::miniapp::market::InstalledMarketOrigin>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -88,6 +91,7 @@ pub fn apply_draft_customization_metadata(
                 kind: MiniAppCustomizationOriginKind::Builtin,
                 builtin_id: Some(builtin_id),
                 builtin_version: Some(builtin_version),
+                market: None,
             },
             local_override: true,
             last_applied_draft_id: None,
@@ -100,6 +104,7 @@ pub fn apply_draft_customization_metadata(
                 kind: MiniAppCustomizationOriginKind::UserCreated,
                 builtin_id: None,
                 builtin_version: None,
+                market: None,
             },
             local_override: false,
             last_applied_draft_id: None,
@@ -121,6 +126,8 @@ pub fn apply_draft_customization_metadata(
             metadata.origin.builtin_version = Some(builtin_version);
             metadata.available_builtin_update = None;
         }
+    } else if matches!(metadata.origin.kind, MiniAppCustomizationOriginKind::Market) {
+        metadata.local_override = true;
     }
 
     metadata.last_applied_draft_id = Some(draft_id.to_string());
@@ -309,6 +316,63 @@ pub fn diff_permissions(
         &mut added,
         &mut removed,
     );
+    diff_enabled_flag(
+        "notifications.system",
+        active
+            .notifications
+            .as_ref()
+            .map(|permissions| permissions.system),
+        draft
+            .notifications
+            .as_ref()
+            .map(|permissions| permissions.system),
+        &mut added,
+        &mut removed,
+    );
+    for (name, active, draft) in [
+        (
+            "host.dialog",
+            active.host.as_ref().map(|host| host.dialog),
+            draft.host.as_ref().map(|host| host.dialog),
+        ),
+        (
+            "host.clipboard_read",
+            active.host.as_ref().map(|host| host.clipboard_read),
+            draft.host.as_ref().map(|host| host.clipboard_read),
+        ),
+        (
+            "host.clipboard_write",
+            active.host.as_ref().map(|host| host.clipboard_write),
+            draft.host.as_ref().map(|host| host.clipboard_write),
+        ),
+        (
+            "host.open_external",
+            active.host.as_ref().map(|host| host.open_external),
+            draft.host.as_ref().map(|host| host.open_external),
+        ),
+        (
+            "host.reveal_in_folder",
+            active.host.as_ref().map(|host| host.reveal_in_folder),
+            draft.host.as_ref().map(|host| host.reveal_in_folder),
+        ),
+        (
+            "host.deck_render",
+            active.host.as_ref().map(|host| host.deck_render),
+            draft.host.as_ref().map(|host| host.deck_render),
+        ),
+        (
+            "host.chat_composer",
+            active.host.as_ref().map(|host| host.chat_composer),
+            draft.host.as_ref().map(|host| host.chat_composer),
+        ),
+        (
+            "host.system_info",
+            active.host.as_ref().map(|host| host.system_info),
+            draft.host.as_ref().map(|host| host.system_info),
+        ),
+    ] {
+        diff_enabled_flag(name, active, draft, &mut added, &mut removed);
+    }
 
     let high_risk = added
         .iter()
@@ -331,6 +395,13 @@ pub fn is_high_risk_permission_change(item: &str) -> bool {
         || item == "node.enabled"
         || item == "ai.enabled"
         || item == "agent.enabled"
+        || item == "host.dialog"
+        || item == "host.clipboard_read"
+        || item == "host.clipboard_write"
+        || item == "host.open_external"
+        || item == "host.reveal_in_folder"
+        || item == "host.deck_render"
+        || item == "host.chat_composer"
 }
 
 fn diff_enabled_flag(

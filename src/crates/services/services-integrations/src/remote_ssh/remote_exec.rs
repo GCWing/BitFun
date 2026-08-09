@@ -4,6 +4,7 @@
 //! workspaces while keeping tool-owned command sessions separate from UI
 //! terminal sessions.
 
+use crate::remote_ssh::transport::{ssh_exit_code_for_signal, SSH_EXIT_STATUS_AFTER_EOF_GRACE};
 use crate::remote_ssh::SSHConnectionManager;
 use anyhow::{anyhow, Context};
 use rand::Rng;
@@ -820,6 +821,7 @@ async fn workspace_pipe_owner(
     let (mut stdin, mut stdout, mut stderr, control, completion) = transport.into_parts();
     let mut completion_task = tokio::spawn(completion.wait());
     let mut exit_code = None;
+    let mut process_completed = false;
     let mut control_state: Option<RemotePipeControlState> = None;
     let mut stdout_closed = false;
     let mut stderr_closed = false;
@@ -827,7 +829,7 @@ async fn workspace_pipe_owner(
     let mut stderr_buffer = vec![0u8; 16 * 1024];
 
     loop {
-        if exit_code.is_some() && stdout_closed && stderr_closed {
+        if process_completed && stdout_closed && stderr_closed {
             break;
         }
         if let Some(state) = control_state {
@@ -910,11 +912,12 @@ async fn workspace_pipe_owner(
                 }
             }
 
-            completed = &mut completion_task, if exit_code.is_none() => {
+            // An unknown status stays unknown. Reporting a synthetic `-1` here
+            // used to make a command that ran fine look like it failed, and the
+            // model cannot tell that apart from a real non-zero exit.
+            completed = &mut completion_task, if !process_completed => {
                 exit_code = completed.ok().and_then(|exit| exit.exit_code);
-                if exit_code.is_none() {
-                    exit_code = Some(-1);
-                }
+                process_completed = true;
             }
 
             _ = tokio::time::sleep(wait_budget), if control_state.is_some() => {}
@@ -935,14 +938,21 @@ async fn remote_pty_owner(
 ) {
     let mut exit_code = None;
     let mut close_after_control_at: Option<Instant> = None;
+    let mut exit_status_deadline: Option<Instant> = None;
 
     loop {
         if close_after_control_at.is_some_and(|deadline| Instant::now() >= deadline) {
             let _ = channel.close().await;
             break;
         }
+        if exit_status_deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+            break;
+        }
 
         let wait_budget = close_after_control_at
+            .into_iter()
+            .chain(exit_status_deadline)
+            .min()
             .map(|deadline| deadline.saturating_duration_since(Instant::now()))
             .filter(|duration| !duration.is_zero())
             .unwrap_or_else(|| Duration::from_millis(100));
@@ -982,21 +992,35 @@ async fn remote_pty_owner(
                     }
                     Some(ChannelMsg::ExitStatus { exit_status }) => {
                         exit_code = Some(exit_status as i32);
+                        if exit_status_deadline.is_some() {
+                            break;
+                        }
                     }
-                    Some(ChannelMsg::ExitSignal { signal_name, .. }) => {
-                        exit_code = Some(match signal_name {
-                            Sig::INT => 130,
-                            Sig::KILL => 137,
-                            Sig::TERM => 143,
-                            _ => -1,
+                    Some(ChannelMsg::ExitSignal { ref signal_name, .. }) => {
+                        if exit_code.is_none() {
+                            exit_code = ssh_exit_code_for_signal(signal_name);
+                        }
+                        if exit_status_deadline.is_some() && exit_code.is_some() {
+                            break;
+                        }
+                    }
+                    // See `run_ssh_channel`: EOF may precede the exit status, so
+                    // keep the channel open long enough to collect it.
+                    Some(ChannelMsg::Eof) => {
+                        if exit_code.is_some() {
+                            break;
+                        }
+                        exit_status_deadline.get_or_insert_with(|| {
+                            Instant::now() + SSH_EXIT_STATUS_AFTER_EOF_GRACE
                         });
                     }
-                    Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
+                    Some(ChannelMsg::Close) | None => break,
                     Some(_) => {}
                 }
             }
 
-            _ = tokio::time::sleep(wait_budget), if close_after_control_at.is_some() => {}
+            _ = tokio::time::sleep(wait_budget),
+                if close_after_control_at.is_some() || exit_status_deadline.is_some() => {}
         }
     }
 
@@ -1354,9 +1378,59 @@ fn new_chunk_id() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        decode_utf8_stream, new_session_id, HeadTailText, OutputStream, PendingUtf8Streams,
+        decode_utf8_stream, new_session_id, workspace_pipe_owner, HeadTailText, OutputState,
+        OutputStream, PendingUtf8Streams,
     };
+    use crate::remote_ssh::transport::WorkspaceStdio;
     use std::collections::HashMap;
+    use std::sync::Arc;
+    use tokio::sync::mpsc;
+    use tokio::time::Duration;
+
+    #[cfg(unix)]
+    async fn pipe_owner_exit_code(script: &str) -> Option<i32> {
+        let transport =
+            WorkspaceStdio::spawn_local_process("sh", &["-lc".to_string(), script.to_string()])
+                .expect("local workspace process should start");
+        let output = Arc::new(OutputState::new(None));
+        let (_command_tx, command_rx) = mpsc::channel(8);
+        tokio::spawn(workspace_pipe_owner(
+            transport,
+            command_rx,
+            Arc::clone(&output),
+        ));
+
+        tokio::time::timeout(Duration::from_secs(10), output.wait_closed())
+            .await
+            .expect("pipe owner should close the output state")
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn pipe_owner_reports_successful_process_exit_code() {
+        assert_eq!(pipe_owner_exit_code("df -h >/dev/null 2>&1").await, Some(0));
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn pipe_owner_reports_failing_process_exit_code() {
+        assert_eq!(pipe_owner_exit_code("exit 3").await, Some(3));
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn pipe_owner_reports_exit_code_after_large_output() {
+        assert_eq!(
+            pipe_owner_exit_code("head -c 400000 /dev/zero | tr '\\0' 'a'").await,
+            Some(0)
+        );
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn pipe_owner_reports_signal_death_as_conventional_status() {
+        assert_eq!(pipe_owner_exit_code("kill -TERM $$").await, Some(143));
+    }
 
     #[test]
     fn remote_exec_session_ids_match_local_test_baseline() {

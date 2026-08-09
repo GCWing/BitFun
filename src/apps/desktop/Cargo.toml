@@ -23,8 +23,8 @@ bitfun-core = { path = "../../crates/assembly/core", default-features = false, f
 bitfun-relay-service = { path = "../../crates/services/relay-service" }
 bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime" }
 bitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports" }
-bitfun-product-domains = { path = "../../crates/contracts/product-domains", default-features = false }
-bitfun-services-integrations = { path = "../../crates/services/services-integrations", default-features = false, features = ["canvas-runtime", "feedback", "privacy", "speech"] }
+bitfun-product-domains = { path = "../../crates/contracts/product-domains", default-features = false, features = ["appearance-market"] }
+bitfun-services-integrations = { path = "../../crates/services/services-integrations", default-features = false, features = ["canvas-runtime", "miniapp-market", "speech"] }
 bitfun-core-types = { path = "../../crates/contracts/core-types" }
 bitfun-agent-tools = { path = "../../crates/execution/tool-contracts" }
 bitfun-transport = { path = "../../crates/adapters/transport", features = ["tauri-adapter"] }
@@ -40,6 +40,7 @@ tauri-plugin-log = { workspace = true }
 napi-ohos = { workspace = true }
 napi-derive-ohos = { workspace = true }
 keepawake = { workspace = true }
+# Keep Tauri's transitive time resolution on the known-good release.
 tauri-plugin-global-shortcut = { workspace = true }
 # Keep Tauri's transitive time resolution on the known-good release in CI,
 # where the root Cargo.lock is intentionally ignored.
@@ -49,7 +50,7 @@ alloc-no-stdlib = { workspace = true }
 alloc-stdlib = { workspace = true }
 
 # Inherited from workspace
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
@@ -62,7 +63,8 @@ dirs = { workspace = true }
 similar = { workspace = true }
 ignore = { workspace = true }
 urlencoding = { workspace = true }
-reqwest = { workspace = true }
+reqwest = { workspace = true, features = ["rustls"] }
+semver = { workspace = true }
 zip = { workspace = true }
 tar = { workspace = true }
 flate2 = { workspace = true }
@@ -74,9 +76,11 @@ async-trait = { workspace = true }
 axum = { workspace = true }
 tower-http = { workspace = true }
 sha1 = { workspace = true }
-image = { version = "0.24", default-features = false, features = ["png", "jpeg"] }
+sha2 = { workspace = true }
+image = { workspace = true }
 resvg = { workspace = true }
 arboard = "3"
+tempfile = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 bitflags = { workspace = true }
@@ -120,6 +124,7 @@ windows = { workspace = true, features = [
   "Win32_UI_WindowsAndMessaging",
 ] }
 windows-core = { workspace = true }
+webview2-com = { workspace = true }
 
 [features]
 default = []

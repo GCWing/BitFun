@@ -14,22 +14,37 @@
   max-height: 320px;
   background: linear-gradient(
     135deg,
-    var(--color-bg-elevated) 0%,
-    var(--color-bg-tertiary) 100%
+    var(--bf-appearance-token-color-bg-elevated) 0%,
+    var(--bf-appearance-token-color-bg-tertiary) 100%
   );
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: 8px;
   box-shadow:
-    0 8px 32px rgba(var(--color-static-black-rgb), 0.35),
-    0 4px 16px var(--color-overlay-black-20),
-    0 0 1px color-mix(in srgb, var(--color-accent-500) 30%, transparent),
-    inset 0 1px 0 var(--color-overlay-white-08);
+    0 8px 32px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.35),
+    0 4px 16px var(--bf-appearance-token-color-overlay-black-20),
+    0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 30%, transparent),
+    inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-08);
   overflow: hidden;
   z-index: 1100;
   display: flex;
   flex-direction: column;
   backdrop-filter: blur(20px) saturate(1.2);
   -webkit-backdrop-filter: blur(20px) saturate(1.2);
+
+  &--overlay {
+    position: fixed;
+    // The non-portalled picker is positioned with `bottom`; clear that
+    // constraint when the overlay is placed by the viewport anchor hook.
+    bottom: auto;
+    left: auto;
+    z-index: $z-popover;
+    width: min(400px, calc(100vw - 16px));
+    min-width: min(260px, calc(100vw - 16px));
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+    color: var(--bf-appearance-token-color-text-primary);
+    font-family: var(--bf-appearance-token-font-family-sans);
+  }
   
   // Entry animation
   animation: mentionPickerSlideUp 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -48,11 +63,11 @@
   &__header {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap);
-    padding: var(--flowchat-inline-gap) var(--flowchat-card-expanded-pad-x);
-    border-bottom: 1px solid var(--border-subtle);
-    color: var(--color-text-muted);
-    font-size: var(--flowchat-font-size-xs);
+    gap: var(--bf-appearance-token-flowchat-inline-gap);
+    padding: var(--bf-appearance-token-flowchat-inline-gap) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
     font-weight: 500;
     letter-spacing: 0.02em;
     
@@ -68,16 +83,16 @@
     width: 18px;
     height: 18px;
     padding: 0;
-    background: var(--color-overlay-white-08);
-    border: 1px solid var(--color-overlay-white-12);
+    background: var(--bf-appearance-token-color-overlay-white-08);
+    border: 1px solid var(--bf-appearance-token-color-overlay-white-12);
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.15s ease;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     
     &:hover {
-      background: var(--color-overlay-white-15);
-      color: var(--color-text-primary);
+      background: var(--bf-appearance-token-color-overlay-white-15);
+      color: var(--bf-appearance-token-color-text-primary);
     }
   }
   
@@ -86,7 +101,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
   
   &__content {
@@ -103,10 +118,10 @@
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    gap: var(--flowchat-inline-gap);
-    padding: var(--flowchat-card-expanded-pad-x);
-    color: var(--color-text-muted);
-    font-size: var(--flowchat-font-size-xs);
+    gap: var(--bf-appearance-token-flowchat-inline-gap);
+    padding: var(--bf-appearance-token-flowchat-card-expanded-pad-x);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
     
     span {
       opacity: 0.7;
@@ -115,7 +130,7 @@
   
   &__spinner {
     animation: spin 1s linear infinite;
-    color: var(--color-accent-500);
+    color: var(--bf-appearance-token-color-accent-500);
     
     @keyframes spin {
       from { transform: rotate(0deg); }
@@ -130,14 +145,14 @@
   &__item {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap);
-    padding: 0.25rem var(--flowchat-card-expanded-pad-y);
+    gap: var(--bf-appearance-token-flowchat-inline-gap);
+    padding: 0.25rem var(--bf-appearance-token-flowchat-card-expanded-pad-y);
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.12s ease;
     
     &:hover {
-      background: var(--color-overlay-white-08);
+      background: var(--bf-appearance-token-color-overlay-white-08);
       
       .file-mention-picker__expand-icon {
         opacity: 1;
@@ -145,10 +160,10 @@
     }
     
     &--selected {
-      background: linear-gradient(135deg, var(--color-accent-200), color-mix(in srgb, var(--color-accent-600) 10%, transparent));
+      background: linear-gradient(135deg, var(--bf-appearance-token-color-accent-200), color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 10%, transparent));
       
       .file-mention-picker__item-name {
-        color: var(--flowchat-link-hover-color);
+        color: var(--bf-appearance-token-flowchat-link-hover-color);
       }
       
       .file-mention-picker__expand-icon {
@@ -161,34 +176,34 @@
     flex-shrink: 0;
     
     &--file {
-      color: color-mix(in srgb, var(--color-accent-500) 85%, transparent);
+      color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 85%, transparent);
     }
     
     &--folder {
-      color: color-mix(in srgb, var(--color-warning) 85%, transparent);
+      color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 85%, transparent);
     }
 
     &--session {
-      color: color-mix(in srgb, var(--color-success) 85%, transparent);
+      color: color-mix(in srgb, var(--bf-appearance-token-color-success) 85%, transparent);
     }
   }
   
   &__item-name {
     flex: 1;
-    font-size: var(--flowchat-font-size-sm);
+    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
     font-weight: 400;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: var(--flowchat-support-line-height);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
   }
 
   &__item-detail {
     flex-shrink: 1;
     max-width: 42%;
-    color: var(--color-text-muted);
-    font-size: var(--flowchat-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -197,7 +212,7 @@
   &__expand-icon {
     flex-shrink: 0;
     opacity: 0.4;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     transition: opacity 0.15s ease;
   }
   
@@ -205,11 +220,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--flowchat-control-gap);
-    padding: var(--flowchat-inline-gap) var(--flowchat-card-expanded-pad-x);
-    border-top: 1px solid var(--border-subtle);
-    font-size: var(--flowchat-font-size-xxs);
-    color: var(--color-text-muted);
+    gap: var(--bf-appearance-token-flowchat-control-gap);
+    padding: var(--bf-appearance-token-flowchat-inline-gap) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    color: var(--bf-appearance-token-color-text-muted);
     
     span {
       display: flex;
@@ -225,55 +240,55 @@
       min-width: 16px;
       height: 16px;
       padding: 0 3px;
-      background: var(--color-overlay-white-08);
-      border: 1px solid var(--color-overlay-white-12);
+      background: var(--bf-appearance-token-color-overlay-white-08);
+      border: 1px solid var(--bf-appearance-token-color-overlay-white-12);
       border-radius: 3px;
-      font-size: var(--flowchat-font-size-xxs);
+      font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
       font-family: $font-family-mono;
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
   }
 
-  :root[data-theme="light"] &,
-  :root[data-theme-type="light"] &,
+  :root[data-bf-appearance-mode="light"] &,
+  :root[data-bf-appearance-mode="light"] &,
   .light & {
     // Blur over chat content reads as muddy/dark; use a solid elevated surface
-    background: var(--color-bg-elevated);
+    background: var(--bf-appearance-token-color-bg-elevated);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
-    border-color: var(--border-subtle);
+    border-color: var(--bf-appearance-token-border-subtle);
     box-shadow:
-      0 4px 18px var(--color-overlay-slate-04),
-      0 1px 3px var(--color-overlay-slate-04),
-      inset 0 1px 0 var(--color-overlay-white-95);
+      0 4px 18px var(--bf-appearance-token-color-overlay-slate-04),
+      0 1px 3px var(--bf-appearance-token-color-overlay-slate-04),
+      inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-95);
 
     &__back-btn {
-      background: var(--color-overlay-slate-04);
-      border-color: var(--color-overlay-slate-08);
+      background: var(--bf-appearance-token-color-overlay-slate-04);
+      border-color: var(--bf-appearance-token-color-overlay-slate-08);
 
       &:hover {
-        background: var(--color-overlay-slate-08);
+        background: var(--bf-appearance-token-color-overlay-slate-08);
       }
     }
 
     &__item:hover {
-      background: var(--element-bg-soft);
+      background: var(--bf-appearance-token-element-bg-soft);
     }
 
     &__item--selected {
       // Fallback when color-mix is unsupported; keeps keyboard highlight visible on light surfaces
-      background: var(--element-bg-medium);
+      background: var(--bf-appearance-token-element-bg-medium);
       background: color-mix(
         in srgb,
-        var(--color-accent-500) 22%,
-        var(--color-bg-elevated) 78%
+        var(--bf-appearance-token-color-accent-500) 22%,
+        var(--bf-appearance-token-color-bg-elevated) 78%
       );
 
       .file-mention-picker__item-name {
         color: color-mix(
           in srgb,
-          var(--color-accent-500) 72%,
-          var(--color-text-primary)
+          var(--bf-appearance-token-color-accent-500) 72%,
+          var(--bf-appearance-token-color-text-primary)
         );
       }
 
@@ -281,16 +296,16 @@
       .file-mention-picker__expand-icon {
         color: color-mix(
           in srgb,
-          var(--color-accent-500) 65%,
-          var(--color-text-primary)
+          var(--bf-appearance-token-color-accent-500) 65%,
+          var(--bf-appearance-token-color-text-primary)
         );
         opacity: 0.92;
       }
     }
 
     &__footer kbd {
-      background: var(--color-overlay-slate-04);
-      border-color: var(--color-overlay-slate-08);
+      background: var(--bf-appearance-token-color-overlay-slate-04);
+      border-color: var(--bf-appearance-token-color-overlay-slate-08);
     }
   }
 }

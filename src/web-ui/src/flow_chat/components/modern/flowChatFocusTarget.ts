@@ -1,6 +1,11 @@
 import type { FlowChatFocusItemRequest } from '../../events/flowchatNavigation';
 import type { VirtualItem } from '../../store/modernFlowChatStore';
 import type { Session } from '../../types/flow-chat';
+import {
+  absoluteSessionTurnIndexForId,
+  absoluteSessionTurnIndexForLocalIndex,
+  loadedSessionTurnIdForAbsoluteIndex,
+} from '../../utils/flowChatTurnOrdinal';
 
 export interface ResolvedFocusTarget {
   resolvedVirtualIndex?: number;
@@ -19,11 +24,14 @@ export function resolveFlowChatFocusTarget(
   const { turnIndex, itemId, source } = request;
   let resolvedVirtualIndex: number | undefined = undefined;
   let resolvedTurnIndex = turnIndex;
-  let resolvedTurnId: string | undefined = undefined;
+  let resolvedTurnId = request.turnId?.trim() || undefined;
   let expandExploreGroupId: string | undefined = undefined;
 
-  if (targetSession && turnIndex && turnIndex >= 1 && turnIndex <= targetSession.dialogTurns.length) {
-    resolvedTurnId = targetSession.dialogTurns[turnIndex - 1]?.id;
+  if (targetSession && turnIndex && turnIndex >= 1 && !resolvedTurnId) {
+    resolvedTurnId = loadedSessionTurnIdForAbsoluteIndex(targetSession, turnIndex);
+  }
+  if (targetSession && resolvedTurnId && resolvedTurnIndex === undefined) {
+    resolvedTurnIndex = absoluteSessionTurnIndexForId(targetSession, resolvedTurnId);
   }
 
   if (itemId) {
@@ -32,7 +40,7 @@ export function resolveFlowChatFocusTarget(
         const turn = targetSession.dialogTurns[i];
         const found = turn.modelRounds?.some(round => round.items?.some(item => item.id === itemId));
         if (found) {
-          resolvedTurnIndex = i + 1;
+          resolvedTurnIndex = absoluteSessionTurnIndexForLocalIndex(targetSession, i);
           resolvedTurnId = turn.id;
           break;
         }
@@ -45,6 +53,7 @@ export function resolveFlowChatFocusTarget(
         const hit = item.data?.items?.some(flowItem => flowItem?.id === itemId);
         if (hit) {
           resolvedVirtualIndex = i;
+          resolvedTurnId = resolvedTurnId ?? item.turnId;
           break;
         }
       } else if (item.type === 'explore-group') {

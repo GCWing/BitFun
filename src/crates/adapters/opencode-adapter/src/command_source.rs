@@ -1,11 +1,20 @@
-use bitfun_product_domains::external_sources::{
-    EcosystemId, ExpandedPromptCommand, ExternalSourceAssetKind, ExternalSourceContext,
-    ExternalSourceDiagnostic, ExternalSourceHealth, ExternalSourceProviderError,
-    ExternalSourceRecord, ExternalSourceScope, ExternalWatchRoot, PromptCommandAvailability,
-    PromptCommandDefinition, PromptCommandProviderIdentity, PromptCommandProviderSnapshot,
-    PromptCommandSourceProvider, SourceKey, SourceQualifiedCommandId,
+use crate::local_source_paths::{
+    find_project_root, local_source_plan, local_source_watch_roots, LocalConfigDirectoryKind,
+    LocalConfigDocument, LocalConfigDocumentKind, LocalSourcePlanItem, OpenCodeLocalConfigOptions,
 };
-use bitfun_services_core::markdown::FrontMatterMarkdown;
+use bitfun_product_domains::external_sources::{
+    EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
+    ExternalSourceHealth, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
+    ExternalWatchRoot, PromptCommandAvailability, PromptCommandDefinition,
+    PromptCommandExecutionTarget, PromptCommandExpansion, PromptCommandProviderIdentity,
+    PromptCommandProviderSnapshot, PromptCommandShellExpansion, PromptCommandShellInvocation,
+    PromptCommandShellPreference, PromptCommandSourceProvider, SourceKey, SourceQualifiedCommandId,
+};
+pub(crate) use bitfun_services_core::jsonc::strip_jsonc;
+use bitfun_services_core::markdown::{
+    parse_prompt_shell_directives, prompt_template_expansion_upper_bound, FrontMatterMarkdown,
+};
+use bitfun_services_core::workspace_text::normalize_workspace_relative_path;
 use bitfun_static_hook_support::{
     collect_bounded_regular_files, read_bounded_text, BoundedDirectoryWalkError,
     BoundedDirectoryWalkLimits, BoundedTextRead,
@@ -24,39 +33,9 @@ const MAX_COMMAND_FILES: usize = 2048;
 const MAX_COMMAND_FILE_BYTES: usize = 256 * 1024;
 const MAX_COMMAND_TEMPLATE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_CONFIG_FILE_BYTES: usize = 1024 * 1024;
+const MAX_EXPANDED_COMMAND_BYTES: usize = 1024 * 1024;
 
-#[derive(Debug, Clone)]
-pub struct OpenCodeCommandProviderOptions {
-    pub user_config_dir: PathBuf,
-    pub legacy_user_config_dir: Option<PathBuf>,
-    pub explicit_config_file: Option<PathBuf>,
-    pub explicit_config_dir: Option<PathBuf>,
-    pub project_config_enabled: bool,
-}
-
-impl OpenCodeCommandProviderOptions {
-    pub fn from_environment() -> Self {
-        let home = dirs::home_dir();
-        let user_config_dir = opencode_user_config_dir(
-            std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from),
-            home.clone(),
-        );
-        let legacy_user_config_dir = home.map(|home| home.join(".opencode"));
-        Self {
-            user_config_dir,
-            legacy_user_config_dir,
-            explicit_config_file: std::env::var_os("OPENCODE_CONFIG").map(PathBuf::from),
-            explicit_config_dir: std::env::var_os("OPENCODE_CONFIG_DIR").map(PathBuf::from),
-            project_config_enabled: !environment_truthy("OPENCODE_DISABLE_PROJECT_CONFIG"),
-        }
-    }
-}
-
-impl Default for OpenCodeCommandProviderOptions {
-    fn default() -> Self {
-        Self::from_environment()
-    }
-}
+pub type OpenCodeCommandProviderOptions = OpenCodeLocalConfigOptions;
 
 pub struct OpenCodeCommandProvider {
     options: OpenCodeCommandProviderOptions,
@@ -67,88 +46,43 @@ impl OpenCodeCommandProvider {
         Self { options }
     }
 
-    fn discover_layers(&self, context: &ExternalSourceContext) -> Vec<SourceLayer> {
+    fn discover_layers(&self, workspace_root: Option<&Path>) -> Vec<SourceLayer> {
         let mut layers = Vec::new();
-        // Phase 1: global JSON configuration.
-        push_config_file_layer(
-            &mut layers,
-            &self.options.user_config_dir.join("config.json"),
-            ExternalSourceScope::UserGlobal,
-            "OpenCode user configuration",
-        );
-        push_config_directory_layers(
-            &mut layers,
-            &self.options.user_config_dir,
-            ExternalSourceScope::UserGlobal,
-            "OpenCode user configuration",
-        );
-        // Phase 2: OPENCODE_CONFIG.
-        if let Some(path) = &self.options.explicit_config_file {
-            push_config_file_layer(
-                &mut layers,
-                path,
-                ExternalSourceScope::UserGlobal,
-                "OpenCode OPENCODE_CONFIG",
-            );
-        }
-        // Phase 3: project JSON configuration, root first.
-        if self.options.project_config_enabled {
-            if let Some(workspace_root) = &context.workspace_root {
-                let project_root = find_project_root(workspace_root);
-                for directory in directories_between(&project_root, workspace_root) {
-                    push_config_directory_layers(
-                        &mut layers,
-                        &directory,
-                        ExternalSourceScope::Project,
-                        "OpenCode project configuration",
-                    );
+        for item in local_source_plan(&self.options, workspace_root, None) {
+            let LocalSourcePlanItem::Directory(directory) = item else {
+                if let LocalSourcePlanItem::Config(document) = item {
+                    push_config_document_layer(&mut layers, document);
                 }
-            }
-        }
-        // Phase 4: global command directories.
-        push_command_directory_layer(
-            &mut layers,
-            &self.options.user_config_dir,
-            ExternalSourceScope::UserGlobal,
-            "OpenCode user command directory",
-        );
-        // Phase 5: project .opencode directories, nearest first. Since later
-        // values win, the outer project directory wins a same-name tie.
-        if self.options.project_config_enabled {
-            if let Some(workspace_root) = &context.workspace_root {
-                let project_root = find_project_root(workspace_root);
-                for directory in directories_between(&project_root, workspace_root)
-                    .into_iter()
-                    .rev()
-                {
-                    push_directory_layers(
+                continue;
+            };
+            match directory.kind {
+                LocalConfigDirectoryKind::User => push_command_directory_layer(
+                    &mut layers,
+                    &directory.path,
+                    directory.scope,
+                    "OpenCode user command directory",
+                ),
+                LocalConfigDirectoryKind::Project => {
+                    push_command_directory_layer(
                         &mut layers,
-                        &directory.join(".opencode"),
-                        ExternalSourceScope::Project,
+                        &directory.path,
+                        directory.scope,
                         "OpenCode project command directory",
                     );
                 }
-            }
-        }
-        // Phase 6: ~/.opencode compatibility directory.
-        if let Some(legacy) = &self.options.legacy_user_config_dir {
-            if legacy != &self.options.user_config_dir {
-                push_directory_layers(
+                LocalConfigDirectoryKind::Legacy => push_command_directory_layer(
                     &mut layers,
-                    legacy,
-                    ExternalSourceScope::UserGlobal,
+                    &directory.path,
+                    directory.scope,
                     "OpenCode legacy user configuration",
-                );
+                ),
+                LocalConfigDirectoryKind::Explicit => push_command_directory_layer(
+                    &mut layers,
+                    &directory.path,
+                    directory.scope,
+                    "OpenCode OPENCODE_CONFIG_DIR",
+                ),
             }
-        }
-        // Phase 7: OPENCODE_CONFIG_DIR.
-        if let Some(directory) = &self.options.explicit_config_dir {
-            push_directory_layers(
-                &mut layers,
-                directory,
-                ExternalSourceScope::WorkspaceLocal,
-                "OpenCode OPENCODE_CONFIG_DIR",
-            );
         }
         deduplicate_layers_keep_last(layers)
     }
@@ -188,11 +122,24 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
         let mut unavailable_command_ids = Vec::new();
         let mut provider_template_bytes = 0usize;
 
-        for layer in self.discover_layers(context) {
-            let parsed = match &layer.kind {
-                SourceLayerKind::ConfigFile(path) => parse_config_file(path),
-                SourceLayerKind::CommandDirectory(path) => parse_command_directory(path),
-            };
+        let parsed_layers = self
+            .discover_layers(context.workspace_root.as_deref())
+            .into_iter()
+            .map(|layer| {
+                let parsed = match &layer.kind {
+                    SourceLayerKind::Config(document) => parse_config_document_layer(document),
+                    SourceLayerKind::CommandDirectory(path) => parse_command_directory(path),
+                };
+                (layer, parsed)
+            })
+            .collect::<Vec<_>>();
+        let configured_shell = parsed_layers
+            .iter()
+            .filter_map(|(_, parsed)| parsed.configured_shell.as_deref())
+            .last()
+            .map(str::to_string);
+
+        for (layer, parsed) in parsed_layers {
             let source_key = source_key(&layer);
             let ParsedLayer {
                 commands,
@@ -200,6 +147,7 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
                 diagnostics: parsed_diagnostics,
                 content_version,
                 mut fatal,
+                configured_shell: _,
             } = parsed;
             let mut layer_diagnostics = parsed_diagnostics
                 .into_iter()
@@ -231,7 +179,12 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
                     |name| SourceQualifiedCommandId::new(source_key.clone(), name).ok(),
                 ));
                 for (name, input) in commands {
-                    match command_definition(source_key.clone(), name.clone(), input) {
+                    match command_definition(
+                        source_key.clone(),
+                        name.clone(),
+                        input,
+                        configured_shell.as_deref(),
+                    ) {
                         Ok(definition) => {
                             has_restricted_commands |= !matches!(
                                 definition.availability,
@@ -271,7 +224,7 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
                 display_name: layer.display_name,
                 source_kind: layer.source_kind.to_string(),
                 scope: layer.scope,
-                location: layer.location.to_string_lossy().to_string(),
+                location: layer.location,
                 execution_domain_id: context.execution_domain_id.clone(),
                 health: source_health,
                 content_version,
@@ -298,9 +251,10 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
 
     fn expand(
         &self,
+        context: &ExternalSourceContext,
         command: &PromptCommandDefinition,
         arguments: &str,
-    ) -> Result<ExpandedPromptCommand, ExternalSourceProviderError> {
+    ) -> Result<PromptCommandExpansion, ExternalSourceProviderError> {
         if command.id.source.provider_id.as_str() != PROVIDER_ID {
             return Err(ExternalSourceProviderError::new(
                 "opencode.command.identity_mismatch",
@@ -309,9 +263,62 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
             ));
         }
         match &command.availability {
-            PromptCommandAvailability::Available => Ok(ExpandedPromptCommand {
-                content: expand_template(&command.template, arguments),
-            }),
+            PromptCommandAvailability::Available => {
+                if prompt_template_expansion_upper_bound(&command.template, arguments)
+                    .is_none_or(|size| size > MAX_EXPANDED_COMMAND_BYTES)
+                {
+                    return Err(ExternalSourceProviderError::new(
+                        "opencode.command.expansion_too_large",
+                        "expanded command would exceed the 1048576 byte limit",
+                        false,
+                    ));
+                }
+                let expanded = expand_template(&command.template, arguments);
+                let parsed = parse_prompt_shell_directives(&command.template, &expanded).map_err(
+                    |error| {
+                        ExternalSourceProviderError::new(
+                            "opencode.command.shell_structure_invalid",
+                            error,
+                            false,
+                        )
+                    },
+                )?;
+                let shell = if parsed.directives.is_empty() {
+                    None
+                } else {
+                    let workspace = context.workspace_root.as_deref().ok_or_else(|| {
+                        ExternalSourceProviderError::new(
+                            "opencode.command.shell_workspace_required",
+                            "OpenCode shell-backed commands require a local workspace",
+                            false,
+                        )
+                    })?;
+                    Some(PromptCommandShellExpansion {
+                        working_directory: find_project_root(workspace),
+                        preference: command
+                            .shell_preference
+                            .clone()
+                            .unwrap_or(PromptCommandShellPreference::HostDefault),
+                        invocations: parsed
+                            .directives
+                            .iter()
+                            .map(|directive| PromptCommandShellInvocation {
+                                range_start: directive.range.start,
+                                range_end: directive.range.end,
+                                command: directive.command.clone(),
+                                can_remember: directive.can_remember,
+                            })
+                            .collect(),
+                    })
+                };
+                Ok(PromptCommandExpansion {
+                    content: parsed.content,
+                    workspace_file_references: literal_file_references(
+                        &parsed.template_without_directives,
+                    ),
+                    shell,
+                })
+            }
             PromptCommandAvailability::Restricted { reason, .. }
             | PromptCommandAvailability::Invalid { reason } => {
                 Err(ExternalSourceProviderError::new(
@@ -366,39 +373,15 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
     }
 
     fn watch_roots(&self, context: &ExternalSourceContext) -> Vec<ExternalWatchRoot> {
-        let mut roots = BTreeMap::new();
-        add_directory_watch_roots(&mut roots, &self.options.user_config_dir);
-        if let Some(path) = &self.options.legacy_user_config_dir {
-            add_directory_watch_roots(&mut roots, path);
-        }
-        if let Some(path) = &self.options.explicit_config_file {
-            if let Some(parent) = path.parent() {
-                add_nearest_existing_watch_root(&mut roots, parent);
-            }
-        }
-        if let Some(path) = &self.options.explicit_config_dir {
-            add_directory_watch_roots(&mut roots, path);
-        }
-        if self.options.project_config_enabled {
-            if let Some(workspace_root) = &context.workspace_root {
-                let project_root = find_project_root(workspace_root);
-                for directory in directories_between(&project_root, workspace_root) {
-                    add_watch_root(&mut roots, directory.clone(), false);
-                    add_directory_watch_roots(&mut roots, &directory.join(".opencode"));
-                }
-            }
-        }
-        roots
-            .into_iter()
-            .map(|(path, recursive)| ExternalWatchRoot { path, recursive })
-            .collect()
+        local_source_watch_roots(&self.options, context.workspace_root.as_deref(), None)
     }
 }
 
 #[derive(Debug)]
 struct SourceLayer {
     kind: SourceLayerKind,
-    location: PathBuf,
+    location: String,
+    identity: String,
     scope: ExternalSourceScope,
     display_name: String,
     source_kind: &'static str,
@@ -406,29 +389,8 @@ struct SourceLayer {
 
 #[derive(Debug)]
 enum SourceLayerKind {
-    ConfigFile(PathBuf),
+    Config(LocalConfigDocument),
     CommandDirectory(PathBuf),
-}
-
-fn push_directory_layers(
-    layers: &mut Vec<SourceLayer>,
-    directory: &Path,
-    scope: ExternalSourceScope,
-    display_name: &str,
-) {
-    push_config_directory_layers(layers, directory, scope, display_name);
-    push_command_directory_layer(layers, directory, scope, display_name);
-}
-
-fn push_config_directory_layers(
-    layers: &mut Vec<SourceLayer>,
-    directory: &Path,
-    scope: ExternalSourceScope,
-    display_name: &str,
-) {
-    for name in ["opencode.json", "opencode.jsonc"] {
-        push_config_file_layer(layers, &directory.join(name), scope, display_name);
-    }
 }
 
 fn push_command_directory_layer(
@@ -447,7 +409,11 @@ fn push_command_directory_layer(
     {
         layers.push(SourceLayer {
             kind: SourceLayerKind::CommandDirectory(directory.to_path_buf()),
-            location: directory.to_path_buf(),
+            location: directory.to_string_lossy().into_owned(),
+            identity: dunce::canonicalize(directory)
+                .unwrap_or_else(|_| directory.to_path_buf())
+                .to_string_lossy()
+                .into_owned(),
             scope,
             display_name: display_name.to_string(),
             source_kind: "opencode_command_directory",
@@ -455,30 +421,42 @@ fn push_command_directory_layer(
     }
 }
 
-fn push_config_file_layer(
-    layers: &mut Vec<SourceLayer>,
-    path: &Path,
-    scope: ExternalSourceScope,
-    display_name: &str,
-) {
-    if path.is_file() {
-        layers.push(SourceLayer {
-            kind: SourceLayerKind::ConfigFile(path.to_path_buf()),
-            location: path.to_path_buf(),
-            scope,
-            display_name: display_name.to_string(),
-            source_kind: "opencode_config",
-        });
-    }
+fn push_config_document_layer(layers: &mut Vec<SourceLayer>, document: LocalConfigDocument) {
+    let display_name = match document.kind {
+        LocalConfigDocumentKind::User => "OpenCode user configuration",
+        LocalConfigDocumentKind::ExplicitFile => "OpenCode OPENCODE_CONFIG",
+        LocalConfigDocumentKind::Project
+        | LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::Project) => {
+            "OpenCode project configuration"
+        }
+        LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::Legacy) => {
+            "OpenCode legacy user configuration"
+        }
+        LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::Explicit) => {
+            "OpenCode OPENCODE_CONFIG_DIR"
+        }
+        LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::User) => {
+            "OpenCode user configuration"
+        }
+        LocalConfigDocumentKind::Inline => "OpenCode OPENCODE_CONFIG_CONTENT",
+    };
+    let location = document.location();
+    let identity = document.identity();
+    layers.push(SourceLayer {
+        scope: document.scope,
+        kind: SourceLayerKind::Config(document),
+        location,
+        identity,
+        display_name: display_name.to_string(),
+        source_kind: "opencode_config",
+    });
 }
 
 fn source_key(layer: &SourceLayer) -> SourceKey {
     let mut hasher = Sha256::new();
     hasher.update(layer.source_kind.as_bytes());
     hasher.update([0]);
-    let identity_path = dunce::canonicalize(&layer.location)
-        .unwrap_or_else(|_| normalize_path_lexically(&layer.location));
-    hasher.update(identity_path.to_string_lossy().as_bytes());
+    hasher.update(layer.identity.as_bytes());
     let digest = hex::encode(hasher.finalize());
     SourceKey::new(
         PROVIDER_ID,
@@ -498,24 +476,10 @@ fn deduplicate_layers_keep_last(layers: Vec<SourceLayer>) -> Vec<SourceLayer> {
     unique
 }
 
-fn normalize_path_lexically(path: &Path) -> PathBuf {
-    use std::path::Component;
-
-    let mut normalized = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                normalized.pop();
-            }
-            component => normalized.push(component.as_os_str()),
-        }
-    }
-    normalized
-}
-
 #[derive(Debug, Default, Deserialize)]
 struct OpenCodeConfigDocument {
+    #[serde(default)]
+    shell: Option<String>,
     #[serde(default, rename = "command")]
     commands: BTreeMap<String, OpenCodeCommandInput>,
 }
@@ -541,12 +505,14 @@ struct ParsedLayer {
     diagnostics: Vec<ExternalSourceDiagnostic>,
     content_version: String,
     fatal: bool,
+    configured_shell: Option<String>,
 }
 
-fn parse_config_file(path: &Path) -> ParsedLayer {
-    match read_bounded_text(path, MAX_CONFIG_FILE_BYTES) {
+fn parse_config_document_layer(document: &LocalConfigDocument) -> ParsedLayer {
+    match document.read_bounded(MAX_CONFIG_FILE_BYTES) {
         Ok(BoundedTextRead::Content(content)) => {
-            let content_version = content_version([(path, content.as_bytes())]);
+            let identity = document.identity();
+            let content_version = content_version([(Path::new(&identity), content.as_bytes())]);
             match parse_config_document(&content) {
                 Ok(document) => ParsedLayer {
                     commands: document.commands,
@@ -554,6 +520,10 @@ fn parse_config_file(path: &Path) -> ParsedLayer {
                     diagnostics: Vec::new(),
                     content_version,
                     fatal: false,
+                    configured_shell: document
+                        .shell
+                        .map(|shell| shell.trim().to_string())
+                        .filter(|shell| !shell.is_empty()),
                 },
                 Err(error) => ParsedLayer {
                     commands: BTreeMap::new(),
@@ -565,6 +535,7 @@ fn parse_config_file(path: &Path) -> ParsedLayer {
                     )],
                     content_version,
                     fatal: true,
+                    configured_shell: None,
                 },
             }
         }
@@ -578,6 +549,7 @@ fn parse_config_file(path: &Path) -> ParsedLayer {
             )],
             content_version: "too-large".to_string(),
             fatal: true,
+            configured_shell: None,
         },
         Ok(BoundedTextRead::InvalidUtf8) => ParsedLayer {
             commands: BTreeMap::new(),
@@ -589,6 +561,7 @@ fn parse_config_file(path: &Path) -> ParsedLayer {
             )],
             content_version: "invalid-utf8".to_string(),
             fatal: true,
+            configured_shell: None,
         },
         Err(error) => ParsedLayer {
             commands: BTreeMap::new(),
@@ -600,6 +573,7 @@ fn parse_config_file(path: &Path) -> ParsedLayer {
             )],
             content_version: "unreadable".to_string(),
             fatal: true,
+            configured_shell: None,
         },
     }
 }
@@ -746,6 +720,7 @@ fn parse_command_directory(directory: &Path) -> ParsedLayer {
         diagnostics,
         content_version: format!("sha256:{}", hex::encode(version_hasher.finalize())),
         fatal: scan_failed || template_budget_exhausted,
+        configured_shell: None,
     }
 }
 
@@ -865,16 +840,38 @@ fn command_definition(
     source: SourceKey,
     name: String,
     input: OpenCodeCommandInput,
+    configured_shell: Option<&str>,
 ) -> Result<PromptCommandDefinition, ExternalSourceProviderError> {
-    let content_version = command_content_version(&name, &input);
     let mut required_capabilities = Vec::new();
-    if shell_regex().is_match(&input.template) {
-        required_capabilities.push("command.shell".to_string());
-    }
-    if file_regex().is_match(&input.template) {
-        required_capabilities.push("command.file_reference".to_string());
-    }
-    if input.agent.is_some() {
+    let shell_preference = shell_regex().is_match(&input.template).then(|| {
+        configured_shell.map_or(PromptCommandShellPreference::HostDefault, |executable| {
+            PromptCommandShellPreference::Preferred {
+                executable: executable.to_string(),
+            }
+        })
+    });
+    let content_version = command_content_version(&name, &input, shell_preference.as_ref());
+    let execution_target = match (
+        input.agent.as_deref(),
+        input.subtask,
+        input.model.as_ref(),
+        input.variant.as_ref(),
+    ) {
+        (Some(agent), None | Some(true), None, None) => {
+            PromptCommandExecutionTarget::FreshExternalSubagent {
+                ecosystem_id: EcosystemId::new(ECOSYSTEM_ID).map_err(|error| {
+                    ExternalSourceProviderError::new(
+                        "opencode.command.ecosystem_invalid",
+                        error.to_string(),
+                        false,
+                    )
+                })?,
+                logical_id: agent.to_string(),
+            }
+        }
+        _ => PromptCommandExecutionTarget::Inline,
+    };
+    if input.agent.is_some() && execution_target.is_inline() {
         required_capabilities.push("command.agent".to_string());
     }
     if input.model.is_some() {
@@ -883,12 +880,18 @@ fn command_definition(
     if input.variant.is_some() {
         required_capabilities.push("command.variant".to_string());
     }
-    if input.subtask.is_some() {
+    if input.subtask.is_some() && execution_target.is_inline() {
         required_capabilities.push("command.subtask".to_string());
+    }
+    if !execution_target.is_inline() && shell_preference.is_some() {
+        required_capabilities.push("command.external_subagent.shell".to_string());
     }
     if config_variable_regex().is_match(&input.template) {
         required_capabilities.push("command.config_variable".to_string());
     }
+    required_capabilities.extend(file_reference_capabilities(&input.template));
+    required_capabilities.sort();
+    required_capabilities.dedup();
     let availability = if required_capabilities.is_empty() {
         PromptCommandAvailability::Available
     } else {
@@ -913,6 +916,8 @@ fn command_definition(
             .description
             .unwrap_or_else(|| format!("OpenCode command /{name}")),
         template: input.template,
+        shell_preference,
+        execution_target,
         availability,
         content_version,
     };
@@ -935,7 +940,11 @@ fn parse_config_document(input: &str) -> Result<OpenCodeConfigDocument, String> 
     serde_json::from_value(value).map_err(|error| error.to_string())
 }
 
-fn command_content_version(name: &str, input: &OpenCodeCommandInput) -> String {
+fn command_content_version(
+    name: &str,
+    input: &OpenCodeCommandInput,
+    shell_preference: Option<&PromptCommandShellPreference>,
+) -> String {
     let mut hasher = Sha256::new();
     for value in [
         Some(name),
@@ -955,114 +964,11 @@ fn command_content_version(name: &str, input: &OpenCodeCommandInput) -> String {
     }
     hasher.update([u8::from(input.subtask.unwrap_or(false))]);
     hasher.update([u8::from(input.subtask.is_some())]);
+    hasher.update(
+        serde_json::to_vec(&shell_preference)
+            .expect("prompt command shell preference is serializable"),
+    );
     format!("sha256:{}", hex::encode(hasher.finalize()))
-}
-
-pub(crate) fn opencode_user_config_dir(
-    xdg_config_home: Option<PathBuf>,
-    home: Option<PathBuf>,
-) -> PathBuf {
-    xdg_config_home
-        .or_else(|| home.map(|home| home.join(".config")))
-        .unwrap_or_else(|| PathBuf::from(".config"))
-        .join("opencode")
-}
-
-fn environment_truthy(key: &str) -> bool {
-    std::env::var(key)
-        .ok()
-        .is_some_and(|value| matches!(value.to_ascii_lowercase().as_str(), "true" | "1"))
-}
-
-pub(crate) fn strip_jsonc(input: &str) -> String {
-    let mut without_comments = String::with_capacity(input.len());
-    let chars = input.chars().collect::<Vec<_>>();
-    let mut index = 0;
-    let mut in_string = false;
-    let mut escaped = false;
-    while index < chars.len() {
-        let current = chars[index];
-        if in_string {
-            without_comments.push(current);
-            if escaped {
-                escaped = false;
-            } else if current == '\\' {
-                escaped = true;
-            } else if current == '"' {
-                in_string = false;
-            }
-            index += 1;
-            continue;
-        }
-        if current == '"' {
-            in_string = true;
-            without_comments.push(current);
-            index += 1;
-            continue;
-        }
-        if current == '/' && chars.get(index + 1) == Some(&'/') {
-            index += 2;
-            while index < chars.len() && chars[index] != '\n' {
-                index += 1;
-            }
-            without_comments.push('\n');
-            index += usize::from(index < chars.len());
-            continue;
-        }
-        if current == '/' && chars.get(index + 1) == Some(&'*') {
-            index += 2;
-            while index + 1 < chars.len() && !(chars[index] == '*' && chars[index + 1] == '/') {
-                if chars[index] == '\n' {
-                    without_comments.push('\n');
-                }
-                index += 1;
-            }
-            index = (index + 2).min(chars.len());
-            continue;
-        }
-        without_comments.push(current);
-        index += 1;
-    }
-
-    let chars = without_comments.chars().collect::<Vec<_>>();
-    let mut output = String::with_capacity(chars.len());
-    let mut index = 0;
-    let mut in_string = false;
-    let mut escaped = false;
-    while index < chars.len() {
-        let current = chars[index];
-        if in_string {
-            output.push(current);
-            if escaped {
-                escaped = false;
-            } else if current == '\\' {
-                escaped = true;
-            } else if current == '"' {
-                in_string = false;
-            }
-            index += 1;
-            continue;
-        }
-        if current == '"' {
-            in_string = true;
-            output.push(current);
-            index += 1;
-            continue;
-        }
-        if current == ',' {
-            let mut lookahead = index + 1;
-            while lookahead < chars.len() && chars[lookahead].is_whitespace() {
-                lookahead += 1;
-            }
-            if matches!(chars.get(lookahead), Some('}') | Some(']')) {
-                index += 1;
-                continue;
-            }
-        }
-        output.push(current);
-        index += 1;
-    }
-    output
 }
 
 fn expand_template(template: &str, arguments: &str) -> String {
@@ -1132,6 +1038,36 @@ fn file_regex() -> &'static Regex {
     })
 }
 
+fn literal_file_references(template: &str) -> Vec<String> {
+    let mut seen = BTreeSet::new();
+    file_regex()
+        .captures_iter(template)
+        .filter_map(|capture| capture.get(1).map(|value| value.as_str()))
+        .filter(|path| !is_dynamic_file_reference(path))
+        .filter_map(|path| normalize_workspace_relative_path(path).ok())
+        .filter(|path| seen.insert(path.clone()))
+        .collect()
+}
+
+fn file_reference_capabilities(template: &str) -> Vec<String> {
+    let mut capabilities = Vec::new();
+    for path in file_regex()
+        .captures_iter(template)
+        .filter_map(|capture| capture.get(1).map(|value| value.as_str()))
+    {
+        if is_dynamic_file_reference(path) {
+            capabilities.push("command.file_reference.dynamic".to_string());
+        } else if normalize_workspace_relative_path(path).is_err() {
+            capabilities.push("command.file_reference.unsafe_path".to_string());
+        }
+    }
+    capabilities
+}
+
+fn is_dynamic_file_reference(path: &str) -> bool {
+    path.contains('$') || path.contains('{') || path.contains('}')
+}
+
 fn config_variable_regex() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
     REGEX
@@ -1163,87 +1099,4 @@ fn content_version<'a>(entries: impl IntoIterator<Item = (&'a Path, &'a [u8])>) 
         hasher.update([0]);
     }
     format!("sha256:{}", hex::encode(hasher.finalize()))
-}
-
-fn find_project_root(start: &Path) -> PathBuf {
-    let start = if start.is_file() {
-        start.parent().unwrap_or(start)
-    } else {
-        start
-    };
-    start
-        .ancestors()
-        .find(|path| path.join(".git").exists())
-        .unwrap_or(start)
-        .to_path_buf()
-}
-
-fn directories_between(root: &Path, opened: &Path) -> Vec<PathBuf> {
-    let opened = if opened.is_file() {
-        opened.parent().unwrap_or(opened)
-    } else {
-        opened
-    };
-    let mut directories = opened
-        .ancestors()
-        .take_while(|path| path.starts_with(root))
-        .map(Path::to_path_buf)
-        .collect::<Vec<_>>();
-    directories.reverse();
-    directories
-}
-
-fn nearest_existing_path(mut path: PathBuf) -> Option<PathBuf> {
-    loop {
-        if path.exists() {
-            return Some(path);
-        }
-        if !path.pop() {
-            return None;
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::opencode_user_config_dir;
-    use std::path::PathBuf;
-
-    #[test]
-    fn default_config_root_uses_xdg_semantics_on_every_platform() {
-        assert_eq!(
-            opencode_user_config_dir(None, Some(PathBuf::from("home"))),
-            PathBuf::from("home/.config/opencode")
-        );
-        assert_eq!(
-            opencode_user_config_dir(
-                Some(PathBuf::from("custom-config")),
-                Some(PathBuf::from("home"))
-            ),
-            PathBuf::from("custom-config/opencode")
-        );
-    }
-}
-
-fn add_watch_root(roots: &mut BTreeMap<PathBuf, bool>, path: PathBuf, recursive: bool) {
-    roots
-        .entry(path)
-        .and_modify(|existing| *existing |= recursive)
-        .or_insert(recursive);
-}
-
-fn add_nearest_existing_watch_root(roots: &mut BTreeMap<PathBuf, bool>, path: &Path) {
-    if let Some(path) = nearest_existing_path(path.to_path_buf()) {
-        add_watch_root(roots, path, false);
-    }
-}
-
-fn add_directory_watch_roots(roots: &mut BTreeMap<PathBuf, bool>, directory: &Path) {
-    if let Some(parent) = directory.parent() {
-        add_nearest_existing_watch_root(roots, parent);
-    }
-    // Keep the desired root even before it exists. The host watches its nearest
-    // existing parent non-recursively, then promotes this root to a recursive
-    // watch after a creation event and a successful rescan.
-    add_watch_root(roots, directory.to_path_buf(), true);
 }

@@ -5,14 +5,14 @@
  * in whatever combination serves the content. Read the canvas skill for full
  * design guidance. Key constraints:
  *
- * - Colors from `useHostTheme()` tokens. No hardcoded hex.
+ * - Colors from `useHostAppearance()` tokens. No hardcoded hex.
  * - No gradients, no box-shadows, no emojis as decoration.
  * - Don't wrap every section in Card — mix open sections with cards.
  * - Run the pre-delivery self-check before returning code.
  */
 /** Shared category color palette used by `Swatch`, `UsageBar`, etc. */
 export type { CategoryPalette, Color } from "./canvas-tokens.js";
-export { categoryPaletteDark, categoryPaletteLight, colorPalette, usageColorSequence, } from "./canvas-tokens.js";
+export { categoryPaletteDark, categoryPaletteLight, usageColorSequence, } from "./canvas-tokens.js";
 /** Charts. */
 export type { BarChartProps, ChartDataPoint, ChartReferenceLine, ChartSeries, ChartTone, LineChartProps, PieChartProps, } from "./chart-primitives.js";
 export { BarChart, LineChart, PieChart } from "./chart-primitives.js";
@@ -33,14 +33,14 @@ export { DiffStats, DiffView } from "./diff-view.js";
 export type { CheckboxProps, IconButtonProps, SelectOption, SelectProps, TextAreaProps, TextInputProps, ToggleProps, } from "./form-primitives.js";
 export { Checkbox, IconButton, Select, TextArea, TextInput, Toggle, } from "./form-primitives.js";
 /** Host state hooks. */
-export type { CanvasAction, CanvasHostTheme, SetCanvasState } from "./hooks.js";
-export { useCanvasAction, useCanvasState, useHostTheme } from "./hooks.js";
+export type { CanvasAction, CanvasHostAppearance, SetCanvasState } from "./hooks.js";
+export { useCanvasAction, useCanvasState, useHostAppearance } from "./hooks.js";
 /** Colored category swatch (uses the shared `Color` palette). */
 export type { SwatchProps } from "./swatch.js";
 export { Swatch } from "./swatch.js";
 /** Semantic design tokens for custom styling. */
-export type { CanvasPalette, CanvasTokens } from "./theme.js";
-export { canvasPaletteDark, canvasPaletteLight, canvasTokens, canvasTokensLight, } from "./theme.js";
+export type { CanvasPalette, CanvasTokens } from "./appearance.js";
+export { canvasPaletteDark, canvasPaletteLight, canvasTokens, canvasTokensLight, } from "./appearance.js";
 export type { TodoItem, TodoListCardProps, TodoListProps, TodoStatus, } from "./todo-list.js";
 export { TodoList, TodoListCard } from "./todo-list.js";
 /** Component props types. */

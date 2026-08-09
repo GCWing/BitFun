@@ -12,9 +12,9 @@
 .column-nav {
   width: 220px;
   flex-shrink: 0;
-  background: var(--color-bg-secondary);
+  background: var(--bf-appearance-token-color-bg-secondary);
   border-radius: 12px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   padding: 20px;
   position: sticky;
   top: 0;
@@ -26,7 +26,7 @@
 .column-nav-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 16px;
@@ -43,7 +43,7 @@
   background: transparent;
   border: none;
   border-radius: 6px;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   font-size: 13px;
   font-weight: 500;
   text-align: left;
@@ -55,14 +55,14 @@
 }
 
 .column-nav-item:hover {
-  background: var(--element-bg-base);
-  color: var(--color-text-primary);
+  background: var(--bf-appearance-token-element-bg-base);
+  color: var(--bf-appearance-token-color-text-primary);
   transform: translateX(4px);
 }
 
 .column-nav-item:active {
-  background: var(--element-bg-medium);
-  color: var(--color-accent-400);
+  background: var(--bf-appearance-token-element-bg-medium);
+  color: var(--bf-appearance-token-color-accent-400);
 }
 
 .column-content {
@@ -76,42 +76,42 @@
 }
 
 .column-item {
-  background: var(--color-bg-secondary);
+  background: var(--bf-appearance-token-color-bg-secondary);
   border-radius: 10px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   overflow: hidden;
   transition: all 0.2s;
   scroll-margin-top: 20px;
 }
 
 .column-item:hover {
-  border-color: var(--border-accent-subtle);
-  box-shadow: var(--shadow-sm), var(--glow-shadow-blue);
+  border-color: var(--bf-appearance-token-border-accent-subtle);
+  box-shadow: var(--bf-appearance-token-shadow-sm), var(--bf-appearance-token-glow-shadow-blue);
 }
 
 .column-item-header {
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--element-bg-subtle);
+  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  background: var(--bf-appearance-token-element-bg-subtle);
 }
 
 .column-item-title {
   margin: 0 0 6px 0;
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 .column-item-description {
   margin: 0;
   font-size: 12px;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   line-height: 1.5;
 }
 
 .column-item-preview {
   padding: 20px;
-  background: var(--color-bg-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
   min-height: 80px;
 }
 

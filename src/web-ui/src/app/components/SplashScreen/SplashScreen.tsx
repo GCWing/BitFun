@@ -49,12 +49,12 @@ const SplashScreen: React.FC<SplashScreenProps> = ({
   }, [isExiting, handleExited]);
 
   return (
-    <div
+    <div data-bf-component="splash-screen" data-bf-part="root" data-bf-state={isExiting ? 'exiting' : ''}
       className={`splash-screen${isExiting ? ' splash-screen--exiting' : ''}`}
       aria-hidden={!showDelayedMessage}
     >
-      <div className="splash-screen__center">
-        <div className="splash-screen__logo-wrap">
+      <div className="splash-screen__center" data-bf-component="splash-screen" data-bf-part="center">
+        <div className="splash-screen__logo-wrap" data-bf-component="splash-screen" data-bf-part="logo">
           <img
             src="/Logo-ICON-128.png"
             alt="BitFun"
@@ -66,6 +66,8 @@ const SplashScreen: React.FC<SplashScreenProps> = ({
         {showDelayedMessage && delayedMessage && !isExiting && (
           <div
             className="splash-screen__message splash-screen__message--visible"
+            data-bf-component="splash-screen"
+            data-bf-part="message"
             role="status"
             aria-live="polite"
           >

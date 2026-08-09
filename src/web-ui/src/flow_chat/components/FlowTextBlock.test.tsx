@@ -16,13 +16,6 @@ vi.mock('@/component-library', () => ({
     mocks.markdownRenderer(props);
     return <div data-testid="markdown-renderer">{props.content}</div>;
   },
-  DotMatrixLoader: () => <div data-testid="dot-matrix-loader" />,
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: () => [],
-  }),
 }));
 
 vi.mock('./modern/FlowChatContext', () => ({
@@ -70,4 +63,5 @@ describe('FlowTextBlock', () => {
 
     expect(mocks.markdownRenderer).toHaveBeenCalledTimes(1);
   });
+
 });

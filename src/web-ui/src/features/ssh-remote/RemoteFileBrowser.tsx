@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n';
 import { Button } from '@/component-library';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -385,10 +386,10 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
   };
 
   const browser = (
-    <div className="remote-file-browser-overlay">
-      <div className="remote-file-browser">
+    <div className="remote-file-browser-overlay" data-bf-component="ssh-remote" data-bf-part="browserOverlay">
+      <div className="remote-file-browser" data-bf-component="ssh-remote" data-bf-part="browser">
         {/* Header */}
-        <div className="remote-file-browser__header">
+        <div className="remote-file-browser__header" data-bf-component="ssh-remote" data-bf-part="browserHeader">
           <h2 className="remote-file-browser__header-title">
             {t('ssh.remote.selectWorkspace')}
           </h2>
@@ -398,7 +399,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
         </div>
 
         {/* Path Breadcrumb / Input */}
-        <div className="remote-file-browser__breadcrumb">
+        <div className="remote-file-browser__breadcrumb" data-bf-component="ssh-remote" data-bf-part="breadcrumb">
           {isEditingPath ? (
             <input
               ref={pathInputRef}
@@ -451,7 +452,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
         </div>
 
         {/* Toolbar */}
-        <div className="remote-file-browser__toolbar">
+        <div className="remote-file-browser__toolbar" data-bf-component="ssh-remote" data-bf-part="toolbar">
           <button
             className="remote-file-browser__toolbar-btn"
             onClick={() => loadDirectory(currentPath)}
@@ -490,7 +491,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
         )}
 
         {/* File List */}
-        <div className="remote-file-browser__content">
+        <div className="remote-file-browser__content" data-bf-component="ssh-remote" data-bf-part="content">
           {error && (
             <div className="remote-file-browser__error">
               <span>{error}</span>
@@ -667,7 +668,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
         />
 
         {/* Footer */}
-        <div className="remote-file-browser__footer">
+        <div className="remote-file-browser__footer" data-bf-component="ssh-remote" data-bf-part="footer">
           <div className="remote-file-browser__footer-info">
             {!selectDirectoriesOnly && selectedPath ? (
               <>
@@ -698,7 +699,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
     </div>
   );
 
-  return createPortal(browser, document.body);
+  return createPortal(browser, getAppearanceOverlayHost());
 };
 
 export default RemoteFileBrowser;

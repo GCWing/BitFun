@@ -11,6 +11,9 @@ export type FlowChatPinTurnToTopMode = 'transient' | 'sticky-latest';
 
 export interface FlowChatFocusItemRequest {
   sessionId: string;
+  /** Stable Turn identity. When present, this is authoritative over `turnIndex`. */
+  turnId?: string;
+  /** Absolute, one-based visible Turn index within the Session. */
   turnIndex?: number;
   itemId?: string;
   source?: FlowChatFocusItemSource;

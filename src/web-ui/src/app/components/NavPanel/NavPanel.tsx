@@ -102,12 +102,23 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
     'bitfun-nav-panel__layer bitfun-nav-panel__layer--scene',
     hasMountedSceneNav && 'is-active',
   ].filter(Boolean).join(' ');
+  const appearanceState = [
+    showSceneNav && 'scene',
+    useSplitOpen && 'split',
+  ].filter(Boolean).join(' ');
 
   return (
-    <nav className={`bitfun-nav-panel ${className}`} aria-label={t('nav.aria.mainNav')} data-testid="nav-panel">
-      <div ref={contentRef} className={contentCls}>
+    <nav
+      data-bf-component="nav-panel"
+      data-bf-part="root"
+      data-bf-state={appearanceState}
+      className={`bitfun-nav-panel ${className}`}
+      aria-label={t('nav.aria.mainNav')}
+      data-testid="nav-panel"
+    >
+      <div ref={contentRef} className={contentCls} data-bf-component="nav-panel" data-bf-part="content">
 
-        <div className="bitfun-nav-panel__layer bitfun-nav-panel__layer--main">
+        <div className="bitfun-nav-panel__layer bitfun-nav-panel__layer--main" data-bf-component="nav-panel" data-bf-part="mainLayer" data-bf-layer="main">
           <MainNav
             isDeparting={useSplitOpen}
             anchorNavSceneId={useSplitOpen ? mountedSceneId : null}
@@ -115,9 +126,9 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
         </div>
 
         {SceneNavComponent && (
-          <div className={sceneCls}>
+          <div className={sceneCls} data-bf-component="nav-panel" data-bf-part="sceneLayer" data-bf-layer="scene" data-bf-state={showSceneNav ? 'active' : ''}>
             <Suspense fallback={null}>
-              <div className="bitfun-nav-panel__scene-inner">
+              <div key={mountedSceneId} className="bitfun-nav-panel__scene-inner" data-bf-component="nav-panel" data-bf-part="sceneContent">
                 <SceneNavComponent />
               </div>
             </Suspense>

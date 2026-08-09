@@ -39,6 +39,16 @@ export interface MiniAppPermissions {
     rate_limit_per_minute?: number;
   };
   notifications?: { system?: boolean };
+  host?: {
+    dialog?: boolean;
+    clipboard_read?: boolean;
+    clipboard_write?: boolean;
+    open_external?: boolean;
+    reveal_in_folder?: boolean;
+    deck_render?: boolean;
+    chat_composer?: boolean;
+    system_info?: boolean;
+  };
 }
 
 // ─── AI Types ─────────────────────────────────────────────────────────────────
@@ -90,6 +100,11 @@ export interface AiModelInfo {
 export interface AgentRunOptions {
   runId?: string;
   sessionName?: string;
+  /**
+   * User-facing request shown in the shared conversation surface. The full
+   * `prompt` remains the MiniApp-owned agent protocol.
+   */
+  displayText?: string;
   /** Defaults to true host-side; only applies when a new session is created. */
   enableTools?: boolean;
   /** Reuse an existing hidden agent session from an earlier run of this app. */
@@ -113,6 +128,24 @@ export interface AgentRunStartedResult {
   status: string;
 }
 
+export interface AgentEnsureSessionOptions {
+  /** Rebind to the session already associated with this MiniApp topic. */
+  sessionId?: string;
+  sessionName?: string;
+  /** Relative workspace inside the MiniApp's own appdata directory. */
+  appDataWorkspace: string;
+  /** Defaults to true host-side and applies only when a session is created. */
+  enableTools?: boolean;
+  /** Model selector applied on create and when reusing an existing session. */
+  model?: string;
+}
+
+export interface AgentEnsureSessionResult {
+  sessionId: string;
+  workspacePath: string;
+  created: boolean;
+}
+
 export interface AgentTurnTextResult {
   text: string;
 }
@@ -123,11 +156,14 @@ export interface AgentCancelStaleRunsResult {
 
 export interface MiniAppRuntimeState {
   source_revision: string;
+  content_hash: string;
   deps_revision: string;
   deps_dirty: boolean;
   worker_restart_required: boolean;
   ui_recompile_required: boolean;
 }
+
+export type MiniAppRuntimeProfile = 'compatibility' | 'market_strict';
 
 export interface MiniAppLocaleStrings {
   name?: string;
@@ -152,6 +188,7 @@ export interface MiniAppMeta {
   updated_at: number;
   permissions: MiniAppPermissions;
   runtime?: MiniAppRuntimeState;
+  runtime_profile?: MiniAppRuntimeProfile;
   /** Optional per-locale overrides for `name` / `description` / `tags`. */
   i18n?: MiniAppI18n;
 }
@@ -227,9 +264,15 @@ export interface MiniAppPermissionDiff {
 
 export interface MiniAppCustomizationMetadata {
   origin: {
-    kind: 'builtin' | 'imported' | 'user_created';
+    kind: 'builtin' | 'imported' | 'user_created' | 'market';
     builtin_id?: string;
     builtin_version?: number;
+    market?: {
+      listingId: string;
+      releaseId: string;
+      releaseNumber: number;
+      packageSha256: string;
+    };
   };
   local_override: boolean;
   last_applied_draft_id?: string;
@@ -266,10 +309,10 @@ export class MiniAppAPI {
     }
   }
 
-  async getMiniApp(appId: string, theme?: string, workspacePath?: string): Promise<MiniApp> {
+  async getMiniApp(appId: string, appearanceMode?: string, workspacePath?: string): Promise<MiniApp> {
     try {
       const raw = await api.invoke<MiniApp & { compiledHtml?: string }>('get_miniapp', {
-        request: { appId, theme: theme ?? undefined, workspacePath }
+        request: { appId, appearanceMode: appearanceMode ?? undefined, workspacePath }
       });
       const normalized = normalizeMiniApp(raw);
       return normalized;
@@ -388,10 +431,10 @@ export class MiniAppAPI {
     }
   }
 
-  async recompile(appId: string, theme?: string, workspacePath?: string): Promise<RecompileResult> {
+  async recompile(appId: string, appearanceMode?: string, workspacePath?: string): Promise<RecompileResult> {
     try {
       return await api.invoke('miniapp_recompile', {
-        request: { appId, theme: theme ?? undefined, workspacePath }
+        request: { appId, appearanceMode: appearanceMode ?? undefined, workspacePath }
       });
     } catch (error) {
       throw createTauriCommandError('miniapp_recompile', error, { appId, workspacePath });
@@ -408,10 +451,10 @@ export class MiniAppAPI {
     }
   }
 
-  async syncFromFs(appId: string, theme?: string, workspacePath?: string): Promise<MiniApp> {
+  async syncFromFs(appId: string, appearanceMode?: string, workspacePath?: string): Promise<MiniApp> {
     try {
       return await api.invoke('miniapp_sync_from_fs', {
-        request: { appId, theme: theme ?? undefined, workspacePath }
+        request: { appId, appearanceMode: appearanceMode ?? undefined, workspacePath }
       });
     } catch (error) {
       throw createTauriCommandError('miniapp_sync_from_fs', error, { appId, workspacePath });
@@ -420,10 +463,10 @@ export class MiniAppAPI {
 
   // ─── Draft commands ─────────────────────────────────────────────────────────
 
-  async createDraft(appId: string, theme?: string, workspacePath?: string): Promise<MiniAppDraft> {
+  async createDraft(appId: string, appearanceMode?: string, workspacePath?: string): Promise<MiniAppDraft> {
     try {
       return await api.invoke('miniapp_create_draft', {
-        request: { appId, theme: theme ?? undefined, workspacePath }
+        request: { appId, appearanceMode: appearanceMode ?? undefined, workspacePath }
       });
     } catch (error) {
       throw createTauriCommandError('miniapp_create_draft', error, { appId, workspacePath });
@@ -443,12 +486,12 @@ export class MiniAppAPI {
   async syncDraftFromFs(
     appId: string,
     draftId: string,
-    theme?: string,
+    appearanceMode?: string,
     workspacePath?: string,
   ): Promise<MiniAppDraft> {
     try {
       return await api.invoke('miniapp_sync_draft_from_fs', {
-        request: { appId, draftId, theme: theme ?? undefined, workspacePath }
+        request: { appId, draftId, appearanceMode: appearanceMode ?? undefined, workspacePath }
       });
     } catch (error) {
       throw createTauriCommandError('miniapp_sync_draft_from_fs', error, { appId, draftId, workspacePath });
@@ -459,12 +502,12 @@ export class MiniAppAPI {
     appId: string,
     draftId: string,
     permissions: MiniAppPermissions,
-    theme?: string,
+    appearanceMode?: string,
     workspacePath?: string,
   ): Promise<MiniAppDraft> {
     try {
       return await api.invoke('miniapp_set_draft_permissions', {
-        request: { appId, draftId, permissions, theme: theme ?? undefined, workspacePath }
+        request: { appId, draftId, permissions, appearanceMode: appearanceMode ?? undefined, workspacePath }
       });
     } catch (error) {
       throw createTauriCommandError('miniapp_set_draft_permissions', error, { appId, draftId, workspacePath });
@@ -484,12 +527,12 @@ export class MiniAppAPI {
   async applyDraft(
     appId: string,
     draftId: string,
-    theme?: string,
+    appearanceMode?: string,
     workspacePath?: string,
   ): Promise<MiniApp> {
     try {
       return await api.invoke('miniapp_apply_draft', {
-        request: { appId, draftId, theme: theme ?? undefined, workspacePath }
+        request: { appId, draftId, appearanceMode: appearanceMode ?? undefined, workspacePath }
       });
     } catch (error) {
       throw createTauriCommandError('miniapp_apply_draft', error, { appId, draftId, workspacePath });
@@ -653,6 +696,26 @@ export class MiniAppAPI {
 
   // ─── Agent bridge commands ──────────────────────────────────────────────────
 
+  async agentEnsureSession(
+    appId: string,
+    options: AgentEnsureSessionOptions,
+  ): Promise<AgentEnsureSessionResult> {
+    try {
+      return await api.invoke('miniapp_agent_ensure_session', {
+        request: {
+          appId,
+          sessionId: options.sessionId,
+          sessionName: options.sessionName,
+          appDataWorkspace: options.appDataWorkspace,
+          enableTools: options.enableTools,
+          model: options.model,
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_agent_ensure_session', error, { appId });
+    }
+  }
+
   async agentRun(
     appId: string,
     prompt: string,
@@ -666,6 +729,7 @@ export class MiniAppAPI {
           prompt,
           runId: options?.runId,
           sessionName: options?.sessionName,
+          displayText: options?.displayText,
           workspacePath,
           enableTools: options?.enableTools,
           sessionId: options?.sessionId,

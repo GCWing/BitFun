@@ -7,7 +7,7 @@
 
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Trash2, Check, X, Bot, Code2, ClipboardList, Panda, MoreHorizontal, Loader2, Archive, Clock3, Copy, CircleHelp } from 'lucide-react';
+import { Pencil, Trash2, Check, X, Bot, Code2, ClipboardList, Panda, MoreHorizontal, Loader2, Archive, Clock3, Copy, CircleHelp, FileDown, ChevronLeft } from 'lucide-react';
 import { IconButton, Input, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
@@ -17,6 +17,7 @@ import { hasPendingAskUserQuestion, resolveTrackedTurn } from '../../../../../fl
 import { useSceneStore } from '../../../../stores/sceneStore';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import {
   openBtwSessionInAuxPane,
@@ -48,10 +49,19 @@ import type {
   BackgroundSubagentActivityItem,
 } from '@/flow_chat/utils/backgroundSubagentActivity';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
+import { exportSessionToMarkdown } from '@/flow_chat/services/sessionMarkdownExport';
+import type { TranscriptExportScope } from '@/flow_chat/utils/dialogTranscriptExport';
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
 import { notificationService } from '@/shared/notification-system';
 import { copyTextToClipboard } from '@/shared/utils/textSelection';
+import { isOutcomeUnknownError } from '@/infrastructure/api/errors/TauriCommandError';
 import { scheduleAfterStartupPaint, scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
+import {
+  isNonLocalDispatchTarget,
+  type DispatchJobState,
+} from '@/features/dispatch/types';
+import { useDispatchJobStore } from '@/features/dispatch/dispatchJobStore';
+import { resolveDispatchNavPresentation } from '@/features/dispatch/dispatchNavPresentation';
 import {
   SESSION_METADATA_DEFERRED_FALLBACK_MS,
   SESSION_METADATA_DEFERRED_FRAME_COUNT,
@@ -62,10 +72,12 @@ import {
 } from './sessionMetadataStartup';
 import {
   getEffectiveTopLevelSessionCount,
+  getSessionBufferPrefetchLimit,
   getSessionExpandToggleState,
   SESSIONS_LEVEL_0,
   SESSIONS_LEVEL_1,
 } from './sessionNavExpand';
+import { useSessionRowRemovalTransition } from './sessionRowShift';
 import './SessionsSection.scss';
 
 const log = createLogger('SessionsSection');
@@ -73,6 +85,15 @@ const ScheduledJobsModal = lazy(() => import('@/app/components/scheduled-jobs/Sc
 
 type SessionMode = 'code' | 'cowork' | 'claw';
 type HistoryOpenIntentDispatchResult = 'none' | 'dispatched' | 'already-pending';
+
+/** Page size for the fully-expanded (level 2) session list. */
+const SESSIONS_LEVEL_2_PAGE = 200;
+
+/**
+ * Delay before topping the off-screen row buffer back up. Keeps the refill out
+ * of the startup burst and coalesces the repeated deletes of a cleanup pass.
+ */
+const SESSIONS_BUFFER_PREFETCH_DELAY_MS = 800;
 
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -91,7 +112,7 @@ const countTopLevelSessionsInScope = (
   sessions: Iterable<Session>,
   workspacePath?: string,
   remoteConnectionId?: string | null,
-  remoteSshHost?: string | null
+  remoteSshHost?: string | null,
 ): number => {
   const scopedSessions = Array.from(sessions).filter((session: Session) => {
     if (session.isTransient || session.sessionKind === 'subagent') {
@@ -178,9 +199,19 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     flowChatStore.getState()
   );
   const backgroundSubagentActivities = useBackgroundSubagentActivityStore(state => state.activities);
+  const dispatchTransportByJobId = useDispatchJobStore(state => state.transportByJobId);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [expandLevel, setExpandLevel] = useState<0 | 1 | 2>(0);
+  // Level-2 ("show all") renders in pages of 200 rows so a huge session
+  // history cannot mount thousands of un-virtualized rows at once.
+  const [level2DisplayCount, setLevel2DisplayCount] = useState(SESSIONS_LEVEL_2_PAGE);
+
+  useEffect(() => {
+    if (expandLevel !== 2) {
+      setLevel2DisplayCount(SESSIONS_LEVEL_2_PAGE);
+    }
+  }, [expandLevel]);
   const [metadataPageState, setMetadataPageState] = useState<{
     totalTopLevelCount: number | null;
     syncedTopLevelCount: number | null;
@@ -198,13 +229,23 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   });
   const [openMenuSessionId, setOpenMenuSessionId] = useState<string | null>(null);
   const [sessionMenuPosition, setSessionMenuPosition] = useState<{ top: number; left: number } | null>(null);
+  /** Second level of the session menu: pick what a Markdown export includes. */
+  const [isExportScopeMenu, setIsExportScopeMenu] = useState(false);
+  const [exportingSessionId, setExportingSessionId] = useState<string | null>(null);
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(new Set());
   const [scheduledJobsSessionId, setScheduledJobsSessionId] = useState<string | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const sessionMenuPopoverRef = useRef<HTMLDivElement>(null);
   const sessionMenuAnchorRef = useRef<HTMLButtonElement>(null);
   const metadataLoadRequestIdRef = useRef(0);
+  /** User-driven metadata loads still running; background loads yield to them. */
+  const foregroundLoadCountRef = useRef(0);
   const initialMetadataLoadKeyRef = useRef<string | null>(null);
+  const sessionListRef = useRef<HTMLDivElement>(null);
+  /** Last (scope, live, synced) triple a background reconcile ran for. */
+  const liveReconcileSignatureRef = useRef<string | null>(null);
+  /** Last (scope, cursor, size) triple a buffer prefetch ran for. */
+  const bufferPrefetchSignatureRef = useRef<string | null>(null);
 
   // Subscribe to state machine changes for running status
   useEffect(() => {
@@ -237,11 +278,18 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         const latestTurn = session.dialogTurns[session.dialogTurns.length - 1];
         const trackedTurn = resolveTrackedTurn(session);
         const hasAskUser = hasPendingAskUserQuestion(trackedTurn);
+        const dispatchTarget = session.config.dispatchTarget;
+        const dispatchTargetSnapshot = dispatchTarget?.kind === 'ssh'
+          ? `ssh:${dispatchTarget.connectionId}:${dispatchTarget.workspacePath}:${dispatchTarget.displayName}`
+          : dispatchTarget?.kind === 'device'
+            ? `device:${dispatchTarget.deviceId}:${dispatchTarget.workspacePath}:${dispatchTarget.displayName}`
+            : 'local';
         parts.push(
           `${session.sessionId}|${session.isTransient ? '1':'0'}|${session.sessionKind}|` +
           `${session.parentSessionId ?? ''}|${session.parentToolCallId ?? ''}|${session.subagentType ?? ''}|` +
           `${session.workspacePath ?? ''}|${session.mode ?? ''}|${session.needsUserAttention ? '1':'0'}|` +
-          `${session.hasUnreadCompletion ? '1':'0'}|${latestTurn?.status ?? ''}|${hasAskUser ? '1':'0'}|${trackedTurn?.id ?? ''}|${session.title ?? ''}`
+          `${session.hasUnreadCompletion ? '1':'0'}|${latestTurn?.status ?? ''}|${hasAskUser ? '1':'0'}|${trackedTurn?.id ?? ''}|` +
+          `${session.title ?? ''}|${dispatchTargetSnapshot}|${session.config.dispatchJobState ?? ''}`
         );
       }
       return parts.join(';');
@@ -286,6 +334,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   useEffect(() => {
     metadataLoadRequestIdRef.current += 1;
     initialMetadataLoadKeyRef.current = null;
+    liveReconcileSignatureRef.current = null;
+    bufferPrefetchSignatureRef.current = null;
     setExpandLevel(0);
     setMetadataPageState({
       totalTopLevelCount: null,
@@ -298,18 +348,39 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   }, [workspaceId, workspacePath, remoteConnectionId, remoteSshHost]);
 
   const loadMetadataPage = useCallback(
-    async (limit: number, cursor: string | undefined, source: string) => {
+    async (
+      limit: number,
+      cursor: string | undefined,
+      source: string,
+      options?: { background?: boolean },
+    ) => {
       if (!workspacePath || limit <= 0) {
         return null;
       }
 
-      const requestId = metadataLoadRequestIdRef.current + 1;
-      metadataLoadRequestIdRef.current = requestId;
-      setMetadataPageState(prev => ({
-        ...prev,
-        isLoading: true,
-        loadError: false,
-      }));
+      // A background refresh only re-syncs counts for a list that is already on
+      // screen. Surfacing its spinner (or its retry state) would make routine
+      // upkeep — such as replacing the row a delete consumed — flash the list.
+      // It also leaves the request id alone so it cannot strand a user-driven
+      // load (which would otherwise never clear its spinner); instead it drops
+      // its own result if anything else claimed the list meanwhile.
+      const isBackgroundLoad = options?.background === true;
+      if (isBackgroundLoad && foregroundLoadCountRef.current > 0) {
+        return null;
+      }
+
+      const requestId = isBackgroundLoad
+        ? metadataLoadRequestIdRef.current
+        : metadataLoadRequestIdRef.current + 1;
+      if (!isBackgroundLoad) {
+        metadataLoadRequestIdRef.current = requestId;
+        foregroundLoadCountRef.current += 1;
+        setMetadataPageState(prev => ({
+          ...prev,
+          isLoading: true,
+          loadError: false,
+        }));
+      }
 
       try {
         const page = await flowChatStore.loadSessionMetadataPage(
@@ -325,7 +396,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             flowChatStore.getState().sessions.values(),
             workspacePath,
             remoteConnectionId,
-            remoteSshHost
+            remoteSshHost,
           );
           setMetadataPageState({
             totalTopLevelCount: page.totalTopLevelCount,
@@ -338,7 +409,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         }
         return page;
       } catch (error) {
-        if (metadataLoadRequestIdRef.current === requestId) {
+        if (metadataLoadRequestIdRef.current === requestId && !isBackgroundLoad) {
           setMetadataPageState(prev => ({
             ...prev,
             isLoading: false,
@@ -347,6 +418,10 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         }
         log.warn('Failed to load visible session metadata page', { error, workspacePath, cursor, limit });
         return null;
+      } finally {
+        if (!isBackgroundLoad) {
+          foregroundLoadCountRef.current = Math.max(foregroundLoadCountRef.current - 1, 0);
+        }
       }
     },
     [workspacePath, remoteConnectionId, remoteSshHost]
@@ -450,6 +525,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   useEffect(() => {
     const handler = () => {
       metadataLoadRequestIdRef.current += 1;
+      liveReconcileSignatureRef.current = null;
+      bufferPrefetchSignatureRef.current = null;
       setExpandLevel(0);
       setMetadataPageState({
         totalTopLevelCount: null,
@@ -467,17 +544,22 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     return () => window.removeEventListener('bitfun:session-archived', handler);
   }, [isVisible, workspacePath, loadMetadataPage]);
 
+  const closeSessionMenu = useCallback(() => {
+    setOpenMenuSessionId(null);
+    setSessionMenuPosition(null);
+    setIsExportScopeMenu(false);
+  }, []);
+
   useEffect(() => {
     if (!openMenuSessionId) return;
     const handleOutside = (event: MouseEvent) => {
       if (!sessionMenuPopoverRef.current?.contains(event.target as Node)) {
-        setOpenMenuSessionId(null);
-        setSessionMenuPosition(null);
+        closeSessionMenu();
       }
     };
     document.addEventListener('mousedown', handleOutside);
     return () => document.removeEventListener('mousedown', handleOutside);
-  }, [openMenuSessionId]);
+  }, [closeSessionMenu, openMenuSessionId]);
 
   const updateSessionMenuPosition = useCallback(() => {
     const anchor = sessionMenuAnchorRef.current;
@@ -502,6 +584,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   useEffect(() => {
     if (!openMenuSessionId) return;
 
+    // The second menu level has a different height; re-anchor on switch.
     updateSessionMenuPosition();
 
     const handleViewportChange = () => updateSessionMenuPosition();
@@ -512,7 +595,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       window.removeEventListener('resize', handleViewportChange);
       window.removeEventListener('scroll', handleViewportChange, true);
     };
-  }, [openMenuSessionId, updateSessionMenuPosition]);
+  }, [isExportScopeMenu, openMenuSessionId, updateSessionMenuPosition]);
 
   // Clear unread completion mark after the switched session renders
   useEffect(() => {
@@ -550,7 +633,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     [flowChatState.sessions, workspacePath, remoteConnectionId, remoteSshHost]
   );
 
-  const { topLevelSessions, childrenByParent } = useMemo(() => {
+  const { topLevelSessions: allTopLevelSessions, childrenByParent } = useMemo(() => {
     const childMap = new Map<string, Session[]>();
     const parents: Session[] = [];
 
@@ -577,20 +660,24 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     };
   }, [sessions]);
 
+  const topLevelSessions = allTopLevelSessions;
+
   const sessionDisplayLimit = useMemo(() => {
     const total = topLevelSessions.length;
-    if (expandLevel === 2 || total <= SESSIONS_LEVEL_0) return total;
+    if (expandLevel === 2) return Math.min(total, level2DisplayCount);
+    if (total <= SESSIONS_LEVEL_0) return total;
     if (expandLevel === 1) return Math.min(total, SESSIONS_LEVEL_1);
     return SESSIONS_LEVEL_0;
-  }, [topLevelSessions.length, expandLevel]);
+  }, [topLevelSessions.length, expandLevel, level2DisplayCount]);
 
   const totalTopLevelSessionCount = getEffectiveTopLevelSessionCount(
     metadataPageState.totalTopLevelCount,
     metadataPageState.syncedTopLevelCount,
-    topLevelSessions.length,
-    metadataPageState.isLoading
+    allTopLevelSessions.length,
+    metadataPageState.isLoading,
   );
-  const hasMoreUnloadedSessions = topLevelSessions.length < totalTopLevelSessionCount;
+  const hasMoreUnloadedSessions =
+    allTopLevelSessions.length < totalTopLevelSessionCount;
   const expandToggleState = getSessionExpandToggleState(totalTopLevelSessionCount, expandLevel);
 
   useEffect(() => {
@@ -600,19 +687,88 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       metadataPageState.isLoading ||
       metadataPageState.totalTopLevelCount === null ||
       metadataPageState.syncedTopLevelCount === null ||
-      topLevelSessions.length === metadataPageState.syncedTopLevelCount
+      allTopLevelSessions.length === metadataPageState.syncedTopLevelCount
     ) {
       return;
     }
 
-    void loadMetadataPage(SESSIONS_LEVEL_0, undefined, 'sessions_nav_live_reconcile');
+    // Re-running for a scope whose counts have not moved would spin on a
+    // failing backend, since a background load leaves the state untouched.
+    const signature = [
+      initialMetadataKey,
+      allTopLevelSessions.length,
+      metadataPageState.syncedTopLevelCount,
+    ].join('\n');
+    if (liveReconcileSignatureRef.current === signature) {
+      return;
+    }
+    liveReconcileSignatureRef.current = signature;
+
+    void loadMetadataPage(SESSIONS_LEVEL_0, undefined, 'sessions_nav_live_reconcile', {
+      background: true,
+    });
   }, [
+    initialMetadataKey,
     isVisible,
     loadMetadataPage,
     metadataPageState.isLoading,
     metadataPageState.syncedTopLevelCount,
     metadataPageState.totalTopLevelCount,
-    topLevelSessions.length,
+    allTopLevelSessions.length,
+    workspacePath,
+  ]);
+
+  // Keep a few rows loaded past the visible slice. Deleting a session then
+  // promotes an already-loaded row in the same commit instead of leaving a gap
+  // until a metadata round trip lands.
+  useEffect(() => {
+    if (
+      !isVisible ||
+      !workspacePath ||
+      metadataPageState.isLoading ||
+      metadataPageState.loadError ||
+      metadataPageState.totalTopLevelCount === null ||
+      !metadataPageState.nextCursor
+    ) {
+      return;
+    }
+
+    const prefetchLimit = getSessionBufferPrefetchLimit({
+      expandLevel,
+      loadedTopLevelCount: allTopLevelSessions.length,
+      totalTopLevelCount: totalTopLevelSessionCount,
+      hasMore: metadataPageState.hasMore,
+    });
+    if (prefetchLimit <= 0) {
+      return;
+    }
+
+    const signature = [initialMetadataKey, metadataPageState.nextCursor, prefetchLimit].join('\n');
+    if (bufferPrefetchSignatureRef.current === signature) {
+      return;
+    }
+
+    const cursor = metadataPageState.nextCursor;
+    const timer = window.setTimeout(() => {
+      bufferPrefetchSignatureRef.current = signature;
+      void loadMetadataPage(prefetchLimit, cursor, 'sessions_nav_buffer_prefetch', {
+        background: true,
+      });
+    }, SESSIONS_BUFFER_PREFETCH_DELAY_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    allTopLevelSessions.length,
+    expandLevel,
+    initialMetadataKey,
+    isVisible,
+    loadMetadataPage,
+    metadataPageState.hasMore,
+    metadataPageState.isLoading,
+    metadataPageState.loadError,
+    metadataPageState.nextCursor,
+    metadataPageState.totalTopLevelCount,
+    totalTopLevelSessionCount,
     workspacePath,
   ]);
 
@@ -626,6 +782,12 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     }
     return out;
   }, [childrenByParent, sessionDisplayLimit, topLevelSessions]);
+
+  const visibleRowSignature = useMemo(
+    () => visibleItems.map(item => item.session.sessionId).join('|'),
+    [visibleItems],
+  );
+  useSessionRowRemovalTransition(sessionListRef, visibleRowSignature);
 
   const activeSessionId = flowChatState.activeSessionId;
   const scheduledJobsSession = scheduledJobsSessionId
@@ -789,17 +951,55 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     (e: React.MouseEvent, sessionId: string) => {
       e.stopPropagation();
       if (openMenuSessionId === sessionId) {
-        setOpenMenuSessionId(null);
-        setSessionMenuPosition(null);
+        closeSessionMenu();
         return;
       }
       const btn = e.currentTarget as HTMLElement;
       const rect = btn.getBoundingClientRect();
       const { top, left } = computeFixedPopoverPosition(rect, 160, 120, 4, 8);
       setSessionMenuPosition({ top, left });
+      setIsExportScopeMenu(false);
       setOpenMenuSessionId(sessionId);
     },
-    [openMenuSessionId]
+    [closeSessionMenu, openMenuSessionId]
+  );
+
+  const handleExportMarkdown = useCallback(
+    async (e: React.MouseEvent, session: Session, scope: TranscriptExportScope) => {
+      e.stopPropagation();
+      closeSessionMenu();
+      if (exportingSessionId) return;
+
+      setExportingSessionId(session.sessionId);
+      try {
+        await exportSessionToMarkdown(
+          {
+            sessionId: session.sessionId,
+            title: resolveSessionTitle(session),
+            workspacePath:
+              session.projectWorkspacePath
+              || session.config.projectWorkspacePath
+              || session.workspacePath
+              || workspacePath,
+            // The nav row carries the workspace's current connection; a session's
+            // stored ids can be stale (e.g. after an SSH port change).
+            remoteConnectionId: remoteConnectionId ?? session.remoteConnectionId,
+            remoteSshHost: remoteSshHost ?? session.remoteSshHost,
+          },
+          scope
+        );
+      } finally {
+        setExportingSessionId(null);
+      }
+    },
+    [
+      closeSessionMenu,
+      exportingSessionId,
+      remoteConnectionId,
+      remoteSshHost,
+      resolveSessionTitle,
+      workspacePath,
+    ]
   );
 
   const handleDelete = useCallback(
@@ -861,12 +1061,23 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       try {
         await flowChatManager.renameChatSessionTitle(editingSessionId, trimmed);
       } catch (err) {
-        log.error('Failed to update session title', err);
+        log.error('Failed to update session title', { sessionId: editingSessionId, error: err });
+        if (isOutcomeUnknownError(err)) {
+          notificationService.warning(t('nav.sessions.renameOutcomeUnknown'), { duration: 6000 });
+          try {
+            await flowChatManager.reloadSessionTitle(editingSessionId);
+          } catch (refreshError) {
+            log.error('Failed to reload the session title after an unknown rename outcome', {
+              sessionId: editingSessionId,
+              error: refreshError,
+            });
+          }
+        }
       }
     }
     setEditingSessionId(null);
     setEditingTitle('');
-  }, [editingSessionId, editingTitle]);
+  }, [editingSessionId, editingTitle, t]);
 
   const handleCancelEdit = useCallback(() => {
     setEditingSessionId(null);
@@ -938,11 +1149,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     totalTopLevelSessionCount,
   ]);
 
-  if (topLevelSessions.length === 0) {
+  if (allTopLevelSessions.length === 0) {
     if (metadataPageState.isLoading) {
       return (
-        <div className="bitfun-nav-panel__inline-list">
-          <div className="bitfun-nav-panel__inline-loading">
+        <div data-bf-component="sessions-section" data-bf-part="root" className="bitfun-nav-panel__inline-list">
+          <div className="bitfun-nav-panel__inline-loading" data-bf-component="sessions-section" data-bf-part="loading" data-bf-state="loading">
             <Loader2 size={12} />
             <span>{t('nav.sessions.loading')}</span>
           </div>
@@ -951,10 +1162,12 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     }
     if (metadataPageState.loadError) {
       return (
-        <div className="bitfun-nav-panel__inline-list">
+        <div data-bf-component="sessions-section" data-bf-part="root" className="bitfun-nav-panel__inline-list">
           <button
             type="button"
             className="bitfun-nav-panel__inline-action"
+            data-bf-component="sessions-section"
+            data-bf-part="retry"
             onClick={() => {
               void loadInitialMetadataPage('sessions_nav_manual_retry');
             }}
@@ -964,11 +1177,17 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         </div>
       );
     }
-    return null;
+    return (
+      <div className="bitfun-nav-panel__inline-list">
+        <div className="bitfun-nav-panel__inline-empty" aria-disabled="true">
+          {t('nav.sessions.noSessions')}
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="bitfun-nav-panel__inline-list">
+    <div className="bitfun-nav-panel__inline-list" ref={sessionListRef}>
       {visibleItems.map(({ session, level }) => {
           const isEditing = editingSessionId === session.sessionId;
           const relationship = resolveSessionRelationship(session);
@@ -1006,7 +1225,45 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           const parentTurnIndex = relationship.origin?.parentTurnIndex;
           const trimmedAssistant = assistantLabel?.trim() ?? '';
           const showAssistantInTooltip = trimmedAssistant.length > 0;
-          const showRichTooltip = showAssistantInTooltip || isChildSession || showBackgroundSubagentActivity;
+          const dispatchTarget = session.config.dispatchTarget;
+          const isDispatched = isNonLocalDispatchTarget(dispatchTarget);
+          const dispatchTargetLabel =
+            dispatchTarget?.kind === 'ssh' || dispatchTarget?.kind === 'device'
+              ? dispatchTarget.displayName
+              : '';
+          const dispatchState = session.config.dispatchJobState ?? 'submitting';
+          const dispatchStateLabel = {
+            submitting: t('nav.sessions.dispatchStates.submitting'),
+            submission_unknown: t('nav.sessions.dispatchStates.submission_unknown'),
+            queued: t('nav.sessions.dispatchStates.queued'),
+            running: t('nav.sessions.dispatchStates.running'),
+            succeeded: t('nav.sessions.dispatchStates.succeeded'),
+            failed: t('nav.sessions.dispatchStates.failed'),
+            cancelled: t('nav.sessions.dispatchStates.cancelled'),
+          } satisfies Record<DispatchJobState, string>;
+          const dispatchTransport = session.config.dispatchJobId
+            ? dispatchTransportByJobId[session.config.dispatchJobId]
+            : undefined;
+          const dispatchPresentation = isDispatched
+            ? resolveDispatchNavPresentation({
+                targetLabel: dispatchTargetLabel,
+                state: dispatchState,
+                reachability: dispatchTransport?.reachability,
+                runningSummary: t('nav.sessions.dispatchRunningOn', {
+                  target: dispatchTargetLabel,
+                  state: dispatchStateLabel[dispatchState],
+                }),
+                unreachableLabel: t('nav.sessions.dispatchUnreachable'),
+                unreachableSummary: t('nav.sessions.dispatchUnreachableDetails', {
+                  target: dispatchTargetLabel,
+                }),
+              })
+            : null;
+          const showRichTooltip =
+            showAssistantInTooltip ||
+            isChildSession ||
+            showBackgroundSubagentActivity ||
+            isDispatched;
           const tooltipContent = showRichTooltip ? (
             <div className="bitfun-nav-panel__inline-item-tooltip">
               <div className="bitfun-nav-panel__inline-item-tooltip-title">{sessionTitle}</div>
@@ -1025,6 +1282,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                     : t('nav.sessions.childSourceWithoutTurn', {
                         parentTitle: parentTitle || t('nav.sessions.parentSession'),
                   })}
+                </div>
+              ) : null}
+              {isDispatched ? (
+                <div className="bitfun-nav-panel__inline-item-tooltip-meta">
+                  {dispatchPresentation?.summary}
                 </div>
               ) : null}
               {showBackgroundSubagentActivity && backgroundSubagentActivity ? (
@@ -1080,6 +1342,13 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               ]
                 .filter(Boolean)
                 .join(' ')}
+              data-bf-component="sessions-section"
+              data-bf-part="row"
+              data-bf-state={[
+                isRowActive && 'active',
+                isEditing && 'editing',
+                openMenuSessionId === session.sessionId && 'menuOpen',
+              ].filter(Boolean).join(' ') || undefined}
               data-testid="nav-session-item"
               data-session-id={session.sessionId}
               data-session-kind={relationship.kind}
@@ -1153,7 +1422,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               ) : null}
 
               {isEditing ? (
-                <div className="bitfun-nav-panel__inline-item-edit" onClick={e => e.stopPropagation()}>
+                <div className="bitfun-nav-panel__inline-item-edit" data-bf-component="sessions-section" data-bf-part="edit" onClick={e => e.stopPropagation()}>
                   <Input
                     ref={editInputRef}
                     className="bitfun-nav-panel__inline-item-edit-field"
@@ -1187,10 +1456,19 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                 </div>
               ) : (
                 <>
-                  <span className="bitfun-nav-panel__inline-item-main">
+                  <span className="bitfun-nav-panel__inline-item-main" data-bf-component="sessions-section" data-bf-part="rowMain">
                     <span className="bitfun-nav-panel__inline-item-label">{sessionTitle}</span>
                     {isChildSession ? (
                       <span className="bitfun-nav-panel__inline-item-btw-badge">{childSessionBadge}</span>
+                    ) : null}
+                    {isDispatched ? (
+                      <span
+                        className="bitfun-nav-panel__inline-item-dispatch-badge"
+                        data-state={dispatchPresentation?.visualState}
+                        title={dispatchPresentation?.summary}
+                      >
+                        {dispatchPresentation?.badgeLabel}
+                      </span>
                     ) : null}
                     {attentionKind === 'ask_user' || attentionKind === 'tool_confirm' ? (
                       <span className="bitfun-nav-panel__inline-item-attention-badge">
@@ -1227,6 +1505,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                   </span>
                   <div
                     className={`bitfun-nav-panel__inline-item-actions${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
+                    data-bf-component="sessions-section"
+                    data-bf-part="actions"
+                    data-bf-state={openMenuSessionId === session.sessionId ? 'menuOpen' : undefined}
                   >
                     <button
                       type="button"
@@ -1243,84 +1524,171 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                     <div
                       ref={sessionMenuPopoverRef}
                       className="bitfun-nav-panel__inline-item-menu-popover"
+                      data-bf-component="sessions-section"
+                      data-bf-part="menu"
+                      data-bf-state="menuOpen"
                       role="menu"
                       style={{ top: `${sessionMenuPosition.top}px`, left: `${sessionMenuPosition.left}px` }}
                       data-testid="nav-session-menu"
                       data-session-id={session.sessionId}
                     >
-                      <button
-                        type="button"
-                        className="bitfun-nav-panel__inline-item-menu-item"
-                        onClick={e => { setOpenMenuSessionId(null); handleStartEdit(e, session); }}
-                        data-testid="nav-session-menu-rename"
-                        data-session-id={session.sessionId}
-                      >
-                        <Pencil size={13} />
-                        <span>{t('nav.sessions.rename')}</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="bitfun-nav-panel__inline-item-menu-item"
-                        onClick={e => { setOpenMenuSessionId(null); void handleCopySessionId(e, session.sessionId); }}
-                        data-testid="nav-session-menu-copy-id"
-                        data-session-id={session.sessionId}
-                      >
-                        <Copy size={13} />
-                        <span>{t('nav.sessions.copySessionId')}</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="bitfun-nav-panel__inline-item-menu-item"
-                        onClick={e => {
-                          e.stopPropagation();
-                          setOpenMenuSessionId(null);
-                          setScheduledJobsSessionId(session.sessionId);
-                        }}
-                        disabled={!workspacePath}
-                        data-testid="nav-session-menu-scheduled-jobs"
-                        data-session-id={session.sessionId}
-                      >
-                        <Clock3 size={13} />
-                        <span>{t('nav.scheduledJobs.open')}</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="bitfun-nav-panel__inline-item-menu-item"
-                        onClick={e => { setOpenMenuSessionId(null); void handleArchive(e, session.sessionId); }}
-                        data-testid="nav-session-menu-archive"
-                        data-session-id={session.sessionId}
-                      >
-                        <Archive size={13} />
-                        <span>{t('nav.sessions.archive')}</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="bitfun-nav-panel__inline-item-menu-item is-danger"
-                        onClick={e => { setOpenMenuSessionId(null); void handleDelete(e, session.sessionId); }}
-                        data-testid="nav-session-menu-delete"
-                        data-session-id={session.sessionId}
-                      >
-                        <Trash2 size={13} />
-                        <span>{t('nav.sessions.delete')}</span>
-                      </button>
+                      {isExportScopeMenu ? (
+                        <>
+                          <button
+                            type="button"
+                            className="bitfun-nav-panel__inline-item-menu-item"
+                            onClick={e => {
+                              e.stopPropagation();
+                              setIsExportScopeMenu(false);
+                            }}
+                            data-testid="nav-session-menu-export-back"
+                            data-session-id={session.sessionId}
+                          >
+                            <ChevronLeft size={13} />
+                            <span>{t('nav.sessions.exportMarkdown')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="bitfun-nav-panel__inline-item-menu-item"
+                            onClick={e => { void handleExportMarkdown(e, session, 'full'); }}
+                            data-testid="nav-session-menu-export-full"
+                            data-session-id={session.sessionId}
+                          >
+                            <FileDown size={13} />
+                            <span>{t('nav.sessions.exportMarkdownFull')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="bitfun-nav-panel__inline-item-menu-item"
+                            onClick={e => { void handleExportMarkdown(e, session, 'result'); }}
+                            data-testid="nav-session-menu-export-result"
+                            data-session-id={session.sessionId}
+                          >
+                            <FileDown size={13} />
+                            <span>{t('nav.sessions.exportMarkdownResult')}</span>
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="bitfun-nav-panel__inline-item-menu-item"
+                            onClick={e => { closeSessionMenu(); handleStartEdit(e, session); }}
+                            data-testid="nav-session-menu-rename"
+                            data-session-id={session.sessionId}
+                          >
+                            <Pencil size={13} />
+                            <span>{t('nav.sessions.rename')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="bitfun-nav-panel__inline-item-menu-item"
+                            onClick={e => { closeSessionMenu(); void handleCopySessionId(e, session.sessionId); }}
+                            data-testid="nav-session-menu-copy-id"
+                            data-session-id={session.sessionId}
+                          >
+                            <Copy size={13} />
+                            <span>{t('nav.sessions.copySessionId')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="bitfun-nav-panel__inline-item-menu-item"
+                            onClick={e => {
+                              e.stopPropagation();
+                              setIsExportScopeMenu(true);
+                            }}
+                            disabled={exportingSessionId === session.sessionId}
+                            data-testid="nav-session-menu-export-markdown"
+                            data-session-id={session.sessionId}
+                          >
+                            {exportingSessionId === session.sessionId
+                              ? <Loader2 size={13} className="bitfun-nav-panel__inline-toggle-spinner" />
+                              : <FileDown size={13} />}
+                            <span>{t('nav.sessions.exportMarkdown')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="bitfun-nav-panel__inline-item-menu-item"
+                            onClick={e => {
+                              e.stopPropagation();
+                              closeSessionMenu();
+                              setScheduledJobsSessionId(session.sessionId);
+                            }}
+                            disabled={!workspacePath}
+                            data-testid="nav-session-menu-scheduled-jobs"
+                            data-session-id={session.sessionId}
+                          >
+                            <Clock3 size={13} />
+                            <span>{t('nav.scheduledJobs.open')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="bitfun-nav-panel__inline-item-menu-item"
+                            onClick={e => { closeSessionMenu(); void handleArchive(e, session.sessionId); }}
+                            data-testid="nav-session-menu-archive"
+                            data-session-id={session.sessionId}
+                          >
+                            <Archive size={13} />
+                            <span>{t('nav.sessions.archive')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="bitfun-nav-panel__inline-item-menu-item is-danger"
+                            onClick={e => { closeSessionMenu(); void handleDelete(e, session.sessionId); }}
+                            data-testid="nav-session-menu-delete"
+                            data-session-id={session.sessionId}
+                          >
+                            <Trash2 size={13} />
+                            <span>{t('nav.sessions.delete')}</span>
+                          </button>
+                        </>
+                      )}
                     </div>,
-                    document.body
+                    getAppearanceOverlayHost()
                   )}
                 </>
               )}
             </div>
           );
-          return isEditing || openMenuSessionId !== null ? row : (
-            <Tooltip key={session.sessionId} content={tooltipContent} placement="right" followCursor>
+          // Always wrapped, even while editing or with a row menu open: swapping
+          // the wrapper out would change every row's element type, remounting
+          // the whole list (and flashing it) on each menu open/close.
+          return (
+            <Tooltip
+              key={session.sessionId}
+              content={tooltipContent}
+              placement="right"
+              followCursor
+              disabled={isEditing || openMenuSessionId !== null}
+            >
               {row}
             </Tooltip>
           );
         })}
 
+      {expandLevel === 2 && topLevelSessions.length > sessionDisplayLimit && (
+        <button
+          type="button"
+          className="bitfun-nav-panel__inline-toggle"
+          data-testid="nav-session-list-load-more"
+          onClick={() => setLevel2DisplayCount(prev => prev + SESSIONS_LEVEL_2_PAGE)}
+        >
+          <span className="bitfun-nav-panel__inline-toggle-dots">···</span>
+          <span>
+            {t('nav.sessions.showMore', {
+              count: topLevelSessions.length - sessionDisplayLimit,
+            })}
+          </span>
+        </button>
+      )}
+
       {expandToggleState.shouldRender && (
         <button
           type="button"
           className={`bitfun-nav-panel__inline-toggle${metadataPageState.isLoading ? ' is-loading' : ''}`}
+          data-bf-component="sessions-section"
+          data-bf-part="toggle"
+          data-bf-state={metadataPageState.isLoading ? 'loading' : undefined}
           data-testid="nav-session-list-toggle"
           data-session-nav-toggle-action={expandToggleState.action}
           disabled={metadataPageState.isLoading}

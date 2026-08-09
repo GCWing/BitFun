@@ -3,21 +3,21 @@
 
 /* Compact mode (single-line listing) */
 .todo-write-compact {
-  font-size: var(--tool-card-action-font-size);
-  line-height: var(--tool-card-action-line-height);
+  font-size: var(--bf-appearance-token-tool-card-action-font-size);
+  line-height: var(--bf-appearance-token-tool-card-action-line-height);
 
   .todo-count {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: inherit;
     flex-shrink: 0;
-    font-family: var(--tool-card-font-mono);
+    font-family: var(--bf-appearance-token-tool-card-font-mono);
   }
 
   .todo-progress {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: inherit;
-    margin-left: var(--flowchat-inline-gap);
-    font-family: var(--tool-card-font-mono);
+    margin-left: var(--bf-appearance-token-flowchat-inline-gap);
+    font-family: var(--bf-appearance-token-tool-card-font-mono);
   }
 }
 
@@ -37,8 +37,8 @@
   .compact-card-content .todo-header-current,
   .compact-card-content .todo-header-more,
   .compact-card-content .todo-stats {
-    font-size: var(--tool-card-action-font-size);
-    line-height: var(--tool-card-action-line-height);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    line-height: var(--bf-appearance-token-tool-card-action-line-height);
   }
 
   .compact-card-content .todo-header-more {
@@ -51,11 +51,11 @@
 
   /* Expanded shell: thin neutral frame, no heavy elevation. */
   .base-tool-card-wrapper.todo-write-card {
-    border: 1px solid var(--border-subtle);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
     box-shadow: none;
 
     &:hover {
-      border-color: var(--border-base);
+      border-color: var(--bf-appearance-token-border-base);
       box-shadow: none;
     }
 
@@ -68,7 +68,7 @@
   .todo-header-action-cluster {
     display: inline-flex;
     align-items: baseline;
-    gap: var(--flowchat-inline-gap);
+    gap: var(--bf-appearance-token-flowchat-inline-gap);
     min-width: 0;
   }
 
@@ -78,13 +78,13 @@
 
   /* Muted body copy (expanded header has no action column). */
   .compact-card-content {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-weight: 400;
   }
 
   .base-tool-card-wrapper.compact-tool-card-wrapper--expanded-card {
     .compact-card-content {
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
       font-weight: 400;
     }
 
@@ -103,21 +103,21 @@
   .todo-header-content {
     display: inline-flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap);
+    gap: var(--bf-appearance-token-flowchat-inline-gap);
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-weight: 400;
 
     &--muted {
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
       font-weight: 400;
     }
 
     &--success {
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
       font-weight: 400;
     }
   }
@@ -126,14 +126,14 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-weight: 400;
   }
 
   .todo-header-more {
     flex-shrink: 0;
-    color: var(--color-text-muted);
-    background: var(--element-bg-subtle);
+    color: var(--bf-appearance-token-color-text-muted);
+    background: var(--bf-appearance-token-element-bg-subtle);
     border-radius: 8px;
     font-family: inherit;
     font-variant-numeric: tabular-nums;
@@ -143,7 +143,7 @@
   .todo-stats {
     font-family: inherit;
     font-variant-numeric: tabular-nums;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     letter-spacing: normal;
     white-space: nowrap;
 
@@ -154,7 +154,7 @@
 
   /* Expanded body — align list with card edges */
   .todo-expanded-body {
-    margin: calc(var(--flowchat-card-expanded-pad-y) * -1) calc(var(--tool-card-expanded-pad-x) * -1);
+    margin: calc(var(--bf-appearance-token-flowchat-card-expanded-pad-y) * -1) calc(var(--bf-appearance-token-tool-card-expanded-pad-x) * -1);
   }
   .todo-full-list {
     background: transparent;
@@ -169,7 +169,7 @@
       background: transparent;
     }
     &::-webkit-scrollbar-thumb {
-      background: var(--border-base);
+      background: var(--bf-appearance-token-border-base);
       border-radius: 2px;
     }
   }
@@ -177,23 +177,23 @@
   .todo-item {
     display: flex;
     align-items: center;
-    padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
-    font-size: var(--tool-card-action-font-size);
-    line-height: var(--tool-card-action-line-height);
+    padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    line-height: var(--bf-appearance-token-tool-card-action-line-height);
     font-weight: 400;
     transition: background 0.12s ease;
     position: relative;
     border-left: none;
 
     &:hover {
-      background: var(--element-bg-subtle);
+      background: var(--bf-appearance-token-element-bg-subtle);
     }
 
     &.status-in_progress {
-      background: var(--element-bg-subtle);
+      background: var(--bf-appearance-token-element-bg-subtle);
 
       .todo-content {
-        color: var(--color-text-muted);
+        color: var(--bf-appearance-token-color-text-muted);
         font-weight: 400;
       }
     }
@@ -201,7 +201,7 @@
     &.status-completed {
       .todo-content {
         text-decoration: line-through;
-        color: var(--color-text-muted);
+        color: var(--bf-appearance-token-color-text-muted);
         opacity: 0.75;
       }
     }
@@ -210,19 +210,19 @@
       opacity: 0.65;
       .todo-content {
         text-decoration: line-through;
-        color: var(--color-text-muted);
+        color: var(--bf-appearance-token-color-text-muted);
       }
     }
 
     &.status-pending .todo-content {
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
     }
   }
 
   .todo-item-left {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap);
+    gap: var(--bf-appearance-token-flowchat-inline-gap);
     flex: 1;
     min-width: 0;
   }
@@ -232,12 +232,12 @@
     width: 12px;
     height: 12px;
 
-    &--completed  { color: var(--color-text-muted); opacity: 0.85; }
-    &--pending    { color: var(--color-text-muted); opacity: 0.65; }
-    &--cancelled  { color: var(--color-text-muted); opacity: 0.65; }
+    &--completed  { color: var(--bf-appearance-token-color-text-muted); opacity: 0.85; }
+    &--pending    { color: var(--bf-appearance-token-color-text-muted); opacity: 0.65; }
+    &--cancelled  { color: var(--bf-appearance-token-color-text-muted); opacity: 0.65; }
 
     &--in-progress {
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
       width: auto;
       height: auto;
     }
@@ -245,15 +245,15 @@
 
   .todo-content {
     flex: 1;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-weight: 400;
-    line-height: var(--tool-card-action-line-height);
+    line-height: var(--bf-appearance-token-tool-card-action-line-height);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   .todo-compact-loading-icon {
-    color: var(--color-info);
+    color: var(--bf-appearance-token-color-info);
   }
 }

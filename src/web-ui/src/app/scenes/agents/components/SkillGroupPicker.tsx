@@ -287,9 +287,9 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
       contentInset
       testId="skill-group-manager"
     >
-      <div className="skill-group-manager">
+      <div className="skill-group-manager" data-bf-component="skill-group-picker" data-bf-part="manager">
         {isEditing ? (
-          <div className="skill-group-manager__editor">
+          <div className="skill-group-manager__editor" data-bf-component="skill-group-picker" data-bf-part="managerEditor">
             <div className="skill-group-manager__field">
               <label htmlFor="skill-group-name">{t('agentsOverview.skillGroupPicker.groupName')}</label>
               <Input
@@ -309,7 +309,7 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
             </div>
             <div className="skill-group-manager__field">
               <span>{t('agentsOverview.skillGroupPicker.groupSkills')}</span>
-              <div className="skill-group-manager__token-grid">
+              <div className="skill-group-manager__token-grid" data-bf-component="skill-group-picker" data-bf-part="tokenGrid">
                 {selectableSkills.map((skill) => {
                   const selected = skillKeys.has(skill.key);
                   const tooltipFields = skillTooltipFields(skill, t);
@@ -324,6 +324,9 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
                       <button
                         type="button"
                         className={`skill-group-manager__token${selected ? ' is-on' : ''}`}
+                        data-bf-component="skill-group-picker"
+                        data-bf-part="token"
+                        data-bf-state={selected ? 'selected' : undefined}
                         onClick={() => toggleSkill(skill.key)}
                         disabled={saving}
                         aria-label={capabilityTooltipAriaLabel(
@@ -363,11 +366,11 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
             {groups.length === 0 ? (
               <p className="skill-group-manager__empty">{t('agentsOverview.skillGroupPicker.noUserGroups')}</p>
             ) : (
-              <div className="skill-group-manager__list">
+              <div className="skill-group-manager__list" data-bf-component="skill-group-picker" data-bf-part="managerList">
                 {groups.map((group, index) => {
                   const unavailable = unavailableUserSkillKeys(group, skills);
                   return (
-                    <div key={group.id} className="skill-group-manager__group-row">
+                    <div data-bf-component="skill-group-picker" data-bf-part="managerGroup" key={group.id} className="skill-group-manager__group-row">
                       <div className="skill-group-manager__group-copy">
                         <span className="skill-group-manager__group-name">{group.name}</span>
                         <span className="skill-group-manager__group-meta">
@@ -377,7 +380,7 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
                             : ''}
                         </span>
                       </div>
-                      <div className="skill-group-manager__group-actions">
+                      <div className="skill-group-manager__group-actions" data-bf-component="skill-group-picker" data-bf-part="groupActions">
                         <IconButton
                           type="button"
                           size="small"
@@ -465,8 +468,8 @@ export const SkillGroupPicker: React.FC<SkillGroupPickerProps> = ({
   }, [groups, t]);
 
   return (
-    <div className="skill-group-picker" data-testid={testId}>
-      <div className="skill-group-picker__head">
+    <div data-bf-component="skill-group-picker" data-bf-part="root" className="skill-group-picker" data-testid={testId}>
+      <div className="skill-group-picker__head" data-bf-component="skill-group-picker" data-bf-part="head">
         <span className="skill-group-picker__selected-count">
           {t('agentsOverview.skillGroupPicker.selectedCount', { count: selectedCount })}
         </span>
@@ -480,23 +483,23 @@ export const SkillGroupPicker: React.FC<SkillGroupPickerProps> = ({
           {t('agentsOverview.skillGroupPicker.manageGroups')}
         </Button>
       </div>
-      <div className="skill-group-picker__sections">
+      <div className="skill-group-picker__sections" data-bf-component="skill-group-picker" data-bf-part="sections">
         {sections.map(([sectionLabel, sectionGroups]) => (
-          <section key={sectionLabel} className="skill-group-picker__section">
+          <section key={sectionLabel} className="skill-group-picker__section" data-bf-component="skill-group-picker" data-bf-part="section">
             <span className="skill-group-picker__section-label">{sectionLabel}</span>
             {sectionGroups.map((group) => {
               const selectedInGroup = selectedGroupSkillCount(group, selectedSkillKeys);
               const allSelected = isGroupEnabled(group, selectedSkillKeys);
               return (
-                <div key={group.id} className="skill-group-picker__group">
-                  <div className="skill-group-picker__group-head">
+                <div data-bf-component="skill-group-picker" data-bf-part="group" key={group.id} className="skill-group-picker__group">
+                  <div className="skill-group-picker__group-head" data-bf-component="skill-group-picker" data-bf-part="groupHeader">
                     <div className="skill-group-picker__group-title-wrap">
                       <span className="skill-group-picker__group-name">{group.label}</span>
                       <span className="skill-group-picker__group-count">
                         {selectedInGroup}/{group.skills.length}
                       </span>
                     </div>
-                    <div className="skill-group-picker__group-actions">
+                    <div className="skill-group-picker__group-actions" data-bf-component="skill-group-picker" data-bf-part="groupActions">
                       {selectedInGroup > 0 && !allSelected ? (
                         <Button
                           variant="ghost"
@@ -526,7 +529,7 @@ export const SkillGroupPicker: React.FC<SkillGroupPickerProps> = ({
                       />
                     </div>
                   </div>
-                  <div className="skill-group-picker__token-grid">
+                  <div className="skill-group-picker__token-grid" data-bf-component="skill-group-picker" data-bf-part="tokenGrid">
                     {group.skills.map((skill) => {
                       const selected = selectedSkillKeys.includes(skill.key);
                       const tooltipFields = skillTooltipFields(skill, t);
@@ -541,6 +544,9 @@ export const SkillGroupPicker: React.FC<SkillGroupPickerProps> = ({
                           <button
                             type="button"
                             className={`skill-group-picker__token${selected ? ' is-on' : ''}`}
+                            data-bf-component="skill-group-picker"
+                            data-bf-part="token"
+                            data-bf-state={selected ? 'selected' : undefined}
                             onClick={() => onSelectionChange(
                               toggleSkillSelection(selectedSkillKeys, skill.key),
                             )}
@@ -588,13 +594,13 @@ export const SkillGroupSummary: React.FC<SkillGroupSummaryProps> = ({
   }), [selectedSkillKeys, skills, t, userGroups]);
 
   if (groups.length === 0) {
-    return <span className="agent-card__empty-inline">{t('agentsOverview.noSkills')}</span>;
+    return <span data-bf-component="skill-group-picker" data-bf-part="empty" className="agent-card__empty-inline">{t('agentsOverview.noSkills')}</span>;
   }
 
   return (
-    <div className="skill-group-summary">
+    <div data-bf-component="skill-group-picker" data-bf-part="summary" className="skill-group-summary">
       {groups.map((group) => (
-        <div key={group.id} className="skill-group-summary__group">
+        <div key={group.id} className="skill-group-summary__group" data-bf-component="skill-group-picker" data-bf-part="summaryGroup">
           <span className="skill-group-summary__label">{group.label}</span>
           <div className="skill-group-summary__skills">
             {group.skills.map((skill) => {

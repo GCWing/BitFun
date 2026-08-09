@@ -1,13 +1,12 @@
-//! Process-local pending permission requests and reply coordination.
-//!
-//! This owner is intentionally not connected to the legacy tool confirmation
-//! pipeline yet. It persists remembered grants and audit facts only when an
-//! explicit permission reply is delivered through this standalone contract.
+//! Provider-neutral permission planning, pending requests, and reply coordination.
 
+use bitfun_agent_tools::PermissionIntent;
 use bitfun_runtime_ports::{
-    ClockPort, PermissionAuditEvent, PermissionAuditRecord, PermissionAuditStorePort,
-    PermissionGrant, PermissionGrantStorePort, PermissionReply, PermissionReplySource,
-    PermissionReplyStorePort, PermissionRequest, PermissionRequestEvent, PortError,
+    wildcard_matches, ClockPort, PermissionAuditEvent, PermissionAuditRecord,
+    PermissionAuditStorePort, PermissionEffect, PermissionEvaluator, PermissionGrant,
+    PermissionGrantStorePort, PermissionReply, PermissionReplySource, PermissionReplyStorePort,
+    PermissionRequest, PermissionRequestEvent, PermissionResourceCaseSensitivity, PortError,
+    ResolvedPermissionPolicy,
 };
 use dashmap::DashMap;
 use std::collections::{HashMap, HashSet};
@@ -21,7 +20,144 @@ const PERMISSION_EVENT_CAPACITY: usize = 128;
 ///
 /// Product surfaces may set this in dialog metadata to keep invocation-scoped
 /// policies (such as CLI `--auto`) separate from persisted user preferences.
+///
+/// Superseded by [`PERMISSION_MODE_CONTEXT_KEY`], which carries the whole mode
+/// instead of the auto-approval half. Still read so existing surfaces and
+/// persisted submissions keep working.
 pub const AUTO_APPROVE_ASK_CONTEXT_KEY: &str = "auto_approve_ask";
+
+/// Effective permission mode for one dialog turn.
+///
+/// The owning surface resolves `turn -> session -> global default` once at
+/// submission time and writes the result here. Everything downstream, including
+/// delegated subagents, reads this single value instead of re-resolving the
+/// layers with partial context.
+pub const PERMISSION_MODE_CONTEXT_KEY: &str = "permission_mode";
+
+/// Provider-neutral result of applying resolved policy and remembered grants.
+///
+/// Product orchestration remains responsible for scope derivation, native hooks,
+/// interactive request construction, and tool execution.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PermissionIntentPlan {
+    Allowed,
+    Denied(PermissionIntent),
+    RequiresApproval(Vec<PermissionIntent>),
+}
+
+/// Applies the resolved permission policy to one ordered set of tool intents.
+///
+/// A denial short-circuits the whole set. Intents that still require approval
+/// keep their input order so the product layer can create deterministic requests.
+pub fn plan_permission_intents(
+    intents: Vec<PermissionIntent>,
+    policy: &ResolvedPermissionPolicy,
+    grants: &[PermissionGrant],
+    case_sensitivity: PermissionResourceCaseSensitivity,
+) -> PermissionIntentPlan {
+    let mut approvals = Vec::new();
+
+    for intent in intents {
+        match permission_intent_effect(&intent, policy, grants, case_sensitivity) {
+            PermissionEffect::Allow => {}
+            PermissionEffect::Ask => approvals.push(intent),
+            PermissionEffect::Deny => return PermissionIntentPlan::Denied(intent),
+        }
+    }
+
+    if approvals.is_empty() {
+        PermissionIntentPlan::Allowed
+    } else {
+        PermissionIntentPlan::RequiresApproval(approvals)
+    }
+}
+
+fn permission_intent_effect(
+    intent: &PermissionIntent,
+    policy: &ResolvedPermissionPolicy,
+    grants: &[PermissionGrant],
+    case_sensitivity: PermissionResourceCaseSensitivity,
+) -> PermissionEffect {
+    let evaluator = PermissionEvaluator::new(case_sensitivity);
+    let mut aggregate = PermissionEffect::Allow;
+
+    for resource in &intent.resources {
+        let configured_effect = if intent.action == "bash" {
+            policy
+                .rules()
+                .iter()
+                .rev()
+                .find(|rule| {
+                    wildcard_matches(
+                        &intent.action,
+                        &rule.action,
+                        PermissionResourceCaseSensitivity::Sensitive,
+                    ) && match rule.effect {
+                        PermissionEffect::Allow => {
+                            rule.resource == *resource
+                                || (rule.action == "*" && rule.resource == "*")
+                        }
+                        PermissionEffect::Ask | PermissionEffect::Deny => {
+                            wildcard_matches(resource, &rule.resource, case_sensitivity)
+                        }
+                    }
+                })
+                .map(|rule| rule.effect)
+                .unwrap_or(PermissionEffect::Ask)
+        } else {
+            evaluator.evaluate_resource(&intent.action, resource, policy.rules())
+        };
+        let configured_effect =
+            policy
+                .constraint_layers()
+                .iter()
+                .fold(configured_effect, |effect, layer| {
+                    effect.most_restrictive(evaluator.evaluate_constraint_resource(
+                        &intent.action,
+                        resource,
+                        layer,
+                    ))
+                });
+
+        match configured_effect {
+            PermissionEffect::Deny => return PermissionEffect::Deny,
+            PermissionEffect::Allow => {}
+            PermissionEffect::Ask => {
+                let remembered = grants.iter().any(|grant| {
+                    if intent.action == "bash" {
+                        grant.action == intent.action && grant.resource == *resource
+                    } else {
+                        wildcard_matches(
+                            &intent.action,
+                            &grant.action,
+                            PermissionResourceCaseSensitivity::Sensitive,
+                        ) && wildcard_matches(resource, &grant.resource, case_sensitivity)
+                    }
+                });
+                if !remembered {
+                    aggregate = PermissionEffect::Ask;
+                }
+            }
+        }
+    }
+
+    let effect = if intent.resources.is_empty() {
+        PermissionEffect::Ask
+    } else {
+        aggregate
+    };
+    if effect != PermissionEffect::Deny
+        && intent
+            .display_metadata
+            .get("requiresFreshApproval")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+    {
+        PermissionEffect::Ask
+    } else {
+        effect
+    }
+}
 
 pub type PermissionRequestEventReceiver = broadcast::Receiver<PermissionRequestEvent>;
 

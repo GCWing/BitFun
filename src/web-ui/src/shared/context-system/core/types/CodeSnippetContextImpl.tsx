@@ -9,7 +9,7 @@ import type {
   ContextCardRenderer 
 } from '../../../services/ContextRegistry';
 import { i18nService } from '@/infrastructure/i18n';
-import { getCodeSnippetLanguageAccent } from '@/shared/theme/languageIdentityAccents';
+import { getCodeSnippetLanguageAccent } from '@/infrastructure/appearance/appearanceDomainTokens';
 
 
 

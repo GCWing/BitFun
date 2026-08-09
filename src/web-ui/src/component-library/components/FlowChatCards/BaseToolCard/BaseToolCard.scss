@@ -5,7 +5,7 @@
 @use '../shared-styles' as shared;
 
 .base-tool-card {
-  --base-tool-card-accent-color: var(--color-accent-600);
+  --base-tool-card-accent-color: var(--bf-appearance-token-color-accent-600);
 
   @include shared.liquid-card-base;
   @include shared.card-light-flow;
@@ -45,7 +45,7 @@
       display: flex;
       align-items: center;
       gap: tokens.$size-gap-3;
-      font-size: var(--font-size-sm);
+      font-size: var(--bf-appearance-token-font-size-sm);
       position: relative;
       z-index: 2;
 
@@ -59,7 +59,7 @@
         border: none;
 
         svg {
-          color: var(--color-accent-500);
+          color: var(--bf-appearance-token-color-accent-500);
         }
       }
     }
@@ -104,22 +104,22 @@
   }
 
   &__name {
-    font-size: var(--font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: tokens.$font-weight-semibold;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     margin-bottom: 2px;
     letter-spacing: -0.01em;
   }
 
   &__description {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
     line-height: 1.4;
   }
 
   &__action {
     font-weight: tokens.$font-weight-medium;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 
 
@@ -128,11 +128,11 @@
     align-items: center;
     gap: 4px;
     font-size: 11px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     padding: 2px 6px;
-    background: var(--element-bg-subtle);
+    background: var(--bf-appearance-token-element-bg-subtle);
     border-radius: tokens.$size-radius-sm;
-    border: 1px solid var(--border-base);
+    border: 1px solid var(--bf-appearance-token-border-base);
   }
 
   &__status-icon {
@@ -142,23 +142,23 @@
 
   &__status-spinner {
     animation: spin 1s linear infinite;
-    color: var(--color-accent-500);
+    color: var(--bf-appearance-token-color-accent-500);
   }
 
   &__status-success {
-    color: var(--color-success);
+    color: var(--bf-appearance-token-color-success);
   }
 
   &__status-cancelled {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__status-error {
-    color: var(--color-error);
+    color: var(--bf-appearance-token-color-error);
   }
 
   &__status-pending {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__status {
@@ -179,17 +179,17 @@
   }
 
   &__input-label {
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
     font-weight: tokens.$font-weight-semibold;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     margin-bottom: tokens.$size-gap-2;
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
 
   &__input-content {
-    background: var(--color-bg-elevated);
-    border: 1px solid var(--border-base);
+    background: var(--bf-appearance-token-color-bg-elevated);
+    border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: tokens.$size-radius-base;
     padding: tokens.$size-gap-3;
     overflow-x: auto;
@@ -198,8 +198,8 @@
 
     pre {
       margin: 0;
-      font-size: var(--font-size-xs);
-      color: var(--color-text-secondary);
+      font-size: var(--bf-appearance-token-font-size-xs);
+      color: var(--bf-appearance-token-color-text-secondary);
       font-family: tokens.$font-family-mono;
       line-height: 1.5;
     }
@@ -236,17 +236,17 @@
   }
 
   &__result-label {
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
     font-weight: tokens.$font-weight-semibold;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     margin-bottom: tokens.$size-gap-2;
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
 
   &__result-content {
-    background: var(--color-bg-elevated);
-    border: 1px solid var(--border-base);
+    background: var(--bf-appearance-token-color-bg-elevated);
+    border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: tokens.$size-radius-base;
     padding: tokens.$size-gap-3;
     overflow-x: auto;
@@ -257,8 +257,8 @@
 
     pre {
       margin: 0;
-      font-size: var(--font-size-xs);
-      color: var(--color-text-secondary);
+      font-size: var(--bf-appearance-token-font-size-xs);
+      color: var(--bf-appearance-token-color-text-secondary);
       font-family: tokens.$font-family-mono;
       line-height: 1.5;
     }
@@ -272,9 +272,9 @@
     gap: tokens.$size-gap-3;
     padding: tokens.$size-gap-4;
     background: linear-gradient(135deg,
-      color-mix(in srgb, var(--color-error) 8%, transparent) 0%,
-      color-mix(in srgb, var(--color-error) 6%, transparent) 100%);
-    border: 1px solid var(--color-error-border);
+      color-mix(in srgb, var(--bf-appearance-token-color-error) 8%, transparent) 0%,
+      color-mix(in srgb, var(--bf-appearance-token-color-error) 6%, transparent) 100%);
+    border: 1px solid var(--bf-appearance-token-color-error-border);
     border-radius: tokens.$size-radius-base;
     margin-top: tokens.$size-gap-4;
     backdrop-filter: blur(8px);
@@ -282,14 +282,14 @@
   }
 
   &__error-icon {
-    color: var(--color-error);
+    color: var(--bf-appearance-token-color-error);
     flex-shrink: 0;
     margin-top: 2px;
   }
 
   &__error-message {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-sm);
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: tokens.$line-height-base;
     flex: 1;
   }

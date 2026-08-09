@@ -237,14 +237,14 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
       contentClassName="workspace-project-permissions-dialog__modal"
       overlayClassName="workspace-project-permissions-dialog-overlay"
     >
-      <div className="workspace-project-permissions-dialog">
-        <div className="workspace-project-permissions-dialog__intro">
+      <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="root" className="workspace-project-permissions-dialog">
+        <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="intro" className="workspace-project-permissions-dialog__intro">
           <ShieldCheck size={18} aria-hidden="true" />
           <p>{t('projectPermissions.description')}</p>
         </div>
 
-        <section className="workspace-project-permissions-dialog__section">
-          <div className="workspace-project-permissions-dialog__section-header">
+        <section data-bf-component="workspace-project-permissions-dialog" data-bf-part="section" className="workspace-project-permissions-dialog__section">
+          <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="sectionHeader" className="workspace-project-permissions-dialog__section-header">
             <span>{t('projectPermissions.grantsTitle')}</span>
             {permissionGrants.length > 0 ? (
               <Button
@@ -259,15 +259,15 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
             ) : null}
           </div>
 
-          <div className="workspace-project-permissions-dialog__grants">
+          <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="grants" className="workspace-project-permissions-dialog__grants">
             {grantsLoading && permissionGrants.length === 0 ? (
-              <div className="workspace-project-permissions-dialog__empty">{t('loading.text')}</div>
+              <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="empty" className="workspace-project-permissions-dialog__empty">{t('loading.text')}</div>
             ) : permissionGrants.length === 0 ? (
-              <div className="workspace-project-permissions-dialog__empty">{t('projectPermissions.grantsEmpty')}</div>
+              <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="empty" className="workspace-project-permissions-dialog__empty">{t('projectPermissions.grantsEmpty')}</div>
             ) : permissionGrants.map((grant) => {
               const key = `${grant.action}\n${grant.resource}`;
               return (
-                <div key={key} className="workspace-project-permissions-dialog__grant-row">
+                <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="grant" key={key} className="workspace-project-permissions-dialog__grant-row">
                   <div className="workspace-project-permissions-dialog__grant-copy">
                     <code>{grant.action}</code>
                     <code title={grant.resource}>{grant.resource}</code>
@@ -290,8 +290,8 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
           </div>
         </section>
 
-        <section className="workspace-project-permissions-dialog__section workspace-project-permissions-dialog__rules-section">
-          <div className="workspace-project-permissions-dialog__section-header">
+        <section data-bf-component="workspace-project-permissions-dialog" data-bf-part="section" className="workspace-project-permissions-dialog__section workspace-project-permissions-dialog__rules-section">
+          <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="sectionHeader" className="workspace-project-permissions-dialog__section-header">
             <span>{t('projectPermissions.rulesTitle')}</span>
             <Button
               size="small"
@@ -305,11 +305,11 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
           </div>
 
           {rulesLoading ? (
-            <div className="workspace-project-permissions-dialog__empty">{t('loading.text')}</div>
+            <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="empty" className="workspace-project-permissions-dialog__empty">{t('loading.text')}</div>
           ) : draftRules.length === 0 ? (
-            <div className="workspace-project-permissions-dialog__empty">{t('projectPermissions.rulesEmpty')}</div>
+            <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="empty" className="workspace-project-permissions-dialog__empty">{t('projectPermissions.rulesEmpty')}</div>
           ) : (
-            <div className="workspace-project-permissions-dialog__rules">
+            <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="rules" className="workspace-project-permissions-dialog__rules">
               <div className="workspace-project-permissions-dialog__rule-heading" aria-hidden="true">
                 <span>{t('projectPermissions.effect')}</span>
                 <span>{t('projectPermissions.action')}</span>
@@ -317,7 +317,7 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
                 <span />
               </div>
               {draftRules.map((rule, index) => (
-                <div key={rule.localId} className="workspace-project-permissions-dialog__rule-row">
+                <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="rule" key={rule.localId} className="workspace-project-permissions-dialog__rule-row">
                   <Select
                     size="small"
                     value={rule.effect}
@@ -345,7 +345,7 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
                     error={!rule.resource.trim()}
                     onChange={(event) => updateDraftRule(rule.localId, { resource: event.target.value })}
                   />
-                  <div className="workspace-project-permissions-dialog__rule-actions">
+                  <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="ruleActions" className="workspace-project-permissions-dialog__rule-actions">
                     <IconButton
                       type="button"
                       size="small"
@@ -386,7 +386,7 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
           )}
 
           {rulesDirty ? (
-            <div className="workspace-project-permissions-dialog__footer">
+            <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="footer" className="workspace-project-permissions-dialog__footer">
               <Button type="button" variant="ghost" onClick={handleDiscardRules} disabled={isBusy}>
                 {t('projectPermissions.cancel')}
               </Button>

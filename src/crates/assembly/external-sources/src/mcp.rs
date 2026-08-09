@@ -4,8 +4,8 @@ use bitfun_product_domains::external_sources::{
     ExternalMcpSourceProvider, ExternalMcpStaticStatus, ExternalSourceAssetKind,
     ExternalSourceCatalogEntry, ExternalSourceContext, ExternalSourceDiagnostic,
     ExternalSourceHealth, ExternalSourceLifecycleState, ExternalSourceProviderError,
-    ExternalWatchRoot, PreparedExternalMcpServer, ProviderId, SourceKey,
-    SourceQualifiedMcpServerId,
+    ExternalWatchRoot, PreparedExternalMcpImportServer, PreparedExternalMcpServer, ProviderId,
+    SourceKey, SourceQualifiedMcpServerId,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -277,6 +277,50 @@ impl ExternalMcpCoordinator {
         server_id: &SourceQualifiedMcpServerId,
         expected_behavior_version: &str,
     ) -> Result<PreparedExternalMcpServer, ExternalSourceProviderError> {
+        let (provider, input) =
+            self.guarded_preparation(server_id, expected_behavior_version, "activation")?;
+        let prepared =
+            provider
+                .provider
+                .prepare_server(&input, server_id, expected_behavior_version)?;
+        if prepared.id != *server_id || prepared.behavior_version != expected_behavior_version {
+            return Err(ExternalSourceProviderError::new(
+                "external_mcp.prepared_server_mismatch",
+                "MCP provider prepared a different server revision",
+                false,
+            ));
+        }
+        Ok(prepared)
+    }
+
+    pub fn prepare_import_guarded(
+        &self,
+        server_id: &SourceQualifiedMcpServerId,
+        expected_behavior_version: &str,
+    ) -> Result<PreparedExternalMcpImportServer, ExternalSourceProviderError> {
+        let (provider, input) =
+            self.guarded_preparation(server_id, expected_behavior_version, "import")?;
+        let prepared =
+            provider
+                .provider
+                .prepare_import(&input, server_id, expected_behavior_version)?;
+        if prepared.id != *server_id || prepared.behavior_version != expected_behavior_version {
+            return Err(ExternalSourceProviderError::new(
+                "external_mcp.prepared_import_mismatch",
+                "MCP provider prepared a different import revision",
+                false,
+            ));
+        }
+        Ok(prepared)
+    }
+
+    fn guarded_preparation(
+        &self,
+        server_id: &SourceQualifiedMcpServerId,
+        expected_behavior_version: &str,
+        purpose: &'static str,
+    ) -> Result<(&McpProviderGeneration, ExternalMcpDiscoveryInput), ExternalSourceProviderError>
+    {
         let current = self.snapshot.servers.iter().find(|server| {
             &server.id == server_id && server.behavior_version == expected_behavior_version
         });
@@ -291,7 +335,7 @@ impl ExternalMcpCoordinator {
         {
             return Err(ExternalSourceProviderError::new(
                 "external_mcp.server_unavailable",
-                "MCP server configuration is not available for activation",
+                format!("MCP server configuration is not available for {purpose}"),
                 false,
             ));
         }
@@ -306,23 +350,14 @@ impl ExternalMcpCoordinator {
                     false,
                 )
             })?;
-        let prepared = provider.provider.prepare_server(
-            &ExternalMcpDiscoveryInput {
+        Ok((
+            provider,
+            ExternalMcpDiscoveryInput {
                 context: self.context.clone(),
                 suppressed_sources: self.suppressed_source_keys(),
                 revision_key: self.revision_key.clone(),
             },
-            server_id,
-            expected_behavior_version,
-        )?;
-        if prepared.id != *server_id || prepared.behavior_version != expected_behavior_version {
-            return Err(ExternalSourceProviderError::new(
-                "external_mcp.prepared_server_mismatch",
-                "MCP provider prepared a different server revision",
-                false,
-            ));
-        }
-        Ok(prepared)
+        ))
     }
 
     pub fn watch_roots(&self) -> Vec<ExternalWatchRoot> {

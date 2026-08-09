@@ -16,8 +16,13 @@ import {
   ImageAnalysisResult,
   AnyFlowItem,
   AcpContextUsage,
+  ActiveTurnRenderRange,
+  LoadedTurnRange,
+  LoadedTurnRangeSource,
   SessionConfig,
   SessionContextRestoreState,
+  SessionHistoryViewState,
+  SessionHistoryPresentation,
   SessionHistoryState,
   TokenUsage,
 } from '../types/flow-chat';
@@ -28,11 +33,19 @@ import {
   startupTrace,
 } from '@/shared/utils/startupTrace';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
+import { normalizeRemoteSessionScope } from '@/shared/utils/remoteSessionScope';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
-import type { DialogTurnData, LocalCommandMetadata, SessionKind } from '@/shared/types/session-history';
+import type {
+  DialogTurnData,
+  LocalCommandMetadata,
+  SessionContextUsage,
+  SessionKind,
+  SessionTurnCatalog,
+} from '@/shared/types/session-history';
 import {
   agentAPI,
+  type LoadSessionTurnWindowResponse,
   type SessionInfo as AgentSessionInfo,
   type SessionViewRestoreTiming,
 } from '@/infrastructure/api/service-api/AgentAPI';
@@ -42,7 +55,10 @@ import {
   deriveSessionRelationshipFromMetadata,
   normalizeSessionRelationship,
 } from '../utils/sessionMetadata';
+import { sessionProjectWorkspacePath } from '../utils/sessionWorkspace';
 import type { SessionTitleDescriptor } from '../utils/sessionTitle';
+import { deriveContextUsageFromTurns } from '../utils/tokenUsageDisplay';
+import { isAcpAgentType } from '../utils/acpSession';
 import {
   deriveSessionTitleState,
   deriveSessionTitleStateFromMetadata,
@@ -54,19 +70,235 @@ import {
   normalizeRecoveredTextStatus,
   normalizeRecoveredThinkingStatus,
   normalizeRecoveredToolStatus,
+  normalizeRecoveredTurnFinishReason,
   normalizeRecoveredTurnStatus,
+  settleDialogTurnToTerminalStatus,
   settleInterruptedDialogTurn,
 } from '../utils/dialogTurnStability';
 import type { WorkspaceInfo } from '@/shared/types';
 import { sessionBelongsToWorkspaceNavRow } from '../utils/sessionOrdering';
 import { sessionMatchesWorkspace } from '../utils/workspaceScope';
 import { resolveThreadGoalUserMessageDisplay } from '../utils/threadGoalDisplay';
+import { cleanRemoteUserInput } from '../utils/userInputText';
 import { useBackgroundSubagentActivityStore } from './backgroundSubagentActivityStore';
 import { sessionComposerStore } from './sessionComposerStore';
 import { recordHistorySessionDiagnosticEvent } from '../services/historySessionDiagnostics';
+import {
+  isDispatchJobTerminal,
+  isNonLocalDispatchTarget,
+} from '@/features/dispatch/types';
+import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
+import { resolveSessionDriverId } from '../session-drivers/resolve';
+import {
+  isProvisionalUsageReportTurn,
+  isProjectedSessionEmpty,
+  canonicalSessionTurns,
+  projectedSessionTurnCount,
+  resolveDialogTurnIdentity,
+  resolveStorageTurnIndex,
+} from '../utils/flowChatTurnIdentity';
 import { storage } from '@/shared/utils/storageAdapter';
 
 const log = createLogger('FlowChatStore');
+
+function firstNonEmptyString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function persistedCurrentContextUsageValue(
+  metadata: { currentContextUsage?: SessionContextUsage },
+): unknown {
+  return metadata.currentContextUsage;
+}
+
+function deriveRestoredCurrentTokenUsage(value: unknown): TokenUsage | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const inputTokens = record.inputTokens;
+  if (typeof inputTokens !== 'number' || !Number.isFinite(inputTokens) || inputTokens <= 0) {
+    return undefined;
+  }
+  const totalTokens = record.totalTokens;
+  const turnId = typeof record.turnId === 'string' && record.turnId.trim()
+    ? record.turnId.trim()
+    : undefined;
+  const source = record.source === 'model_request' || record.source === 'context_compression'
+    ? record.source
+    : undefined;
+  const outputTokens = record.outputTokens;
+  const timestamp = record.timestamp;
+  if (
+    !turnId
+    || !source
+    || typeof totalTokens !== 'number'
+    || !Number.isFinite(totalTokens)
+    || totalTokens < 0
+    || (
+      outputTokens !== undefined
+      && (
+        typeof outputTokens !== 'number'
+        || !Number.isFinite(outputTokens)
+        || outputTokens < 0
+      )
+    )
+    || typeof timestamp !== 'number'
+    || !Number.isFinite(timestamp)
+  ) {
+    return undefined;
+  }
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens,
+    timestamp,
+    turnId,
+    source,
+  };
+}
+
+function reconcileHydratedCurrentTokenUsage(
+  currentTokenUsage: TokenUsage | undefined,
+  dialogTurns: DialogTurn[],
+  restoredAgentType: string | undefined,
+  sourceVisibilityTurns: DialogTurn[] = dialogTurns,
+): TokenUsage | undefined {
+  if (isAcpAgentType(restoredAgentType)) {
+    return undefined;
+  }
+
+  const sourceTurnId = currentTokenUsage?.turnId;
+  const retainedUsage = sourceTurnId
+    && !sourceVisibilityTurns.some(turn => turn.id === sourceTurnId)
+    ? undefined
+    : currentTokenUsage;
+
+  return retainedUsage ?? deriveContextUsageFromTurns(dialogTurns);
+}
+
+function reconcileRestoreViewCurrentTokenUsage(
+  currentTokenUsage: TokenUsage | undefined,
+  authoritativeUsage: SessionContextUsage | null | undefined,
+  dialogTurns: DialogTurn[],
+  restoredAgentType: string | undefined,
+  sourceVisibilityTurns: DialogTurn[] = dialogTurns,
+): TokenUsage | undefined {
+  if (isAcpAgentType(restoredAgentType)) {
+    return undefined;
+  }
+  const candidateUsage = authoritativeUsage === undefined
+    ? currentTokenUsage
+    : authoritativeUsage === null
+      ? undefined
+      : deriveRestoredCurrentTokenUsage(authoritativeUsage);
+  return reconcileHydratedCurrentTokenUsage(
+    candidateUsage,
+    dialogTurns,
+    restoredAgentType,
+    sourceVisibilityTurns,
+  );
+}
+
+function currentTokenUsageAfterSourceRemoval(
+  session: Pick<Session, 'currentTokenUsage' | 'isPartial'>,
+  dialogTurns: DialogTurn[],
+  sourceRemoved: boolean,
+): TokenUsage | undefined {
+  if (!sourceRemoved) {
+    return session.currentTokenUsage;
+  }
+  return session.isPartial === true
+    ? undefined
+    : deriveContextUsageFromTurns(dialogTurns);
+}
+
+function persistedSessionRemoteScope(
+  metadata: {
+    remoteConnectionId?: unknown;
+    remoteSshHost?: unknown;
+    workspaceHostname?: unknown;
+  },
+  fallbackRemoteConnectionId?: string,
+  fallbackRemoteSshHost?: string,
+) {
+  const connectionId = firstNonEmptyString(
+    metadata.remoteConnectionId,
+    fallbackRemoteConnectionId,
+  );
+  for (const host of [
+    metadata.remoteSshHost,
+    metadata.workspaceHostname,
+    fallbackRemoteSshHost,
+  ]) {
+    const scope = normalizeRemoteSessionScope(connectionId, host);
+    if (scope.remoteSshHost) {
+      return scope;
+    }
+  }
+  return normalizeRemoteSessionScope(connectionId);
+}
+
+function dispatchObserverOwnsSession(
+  sessionId: string,
+  session?: Session,
+): boolean {
+  return resolveSessionDriverId(sessionId, session) === 'dispatch';
+}
+
+function logPersistedDispatchMetadataOverlap(
+  metadata: Record<string, unknown>,
+  source: 'metadata-page' | 'metadata-list',
+): void {
+  const sessionId =
+    typeof metadata.sessionId === 'string' ? metadata.sessionId : undefined;
+  if (!sessionId) return;
+
+  const dispatchState = dispatchJobStore.getState();
+  const observerJobIds = Object.values(dispatchState.jobs)
+    .filter(job => job.sessionId === sessionId)
+    .map(job => job.jobId);
+  const sessionTombstoned = dispatchState.dismissedSessionIds.includes(sessionId);
+  const metadataDispatchJobId =
+    typeof metadata.dispatchJobId === 'string'
+      ? metadata.dispatchJobId
+      : typeof metadata.dispatch_job_id === 'string'
+        ? metadata.dispatch_job_id
+        : undefined;
+  if (!sessionTombstoned && observerJobIds.length === 0 && !metadataDispatchJobId) {
+    return;
+  }
+
+  log.info('Dispatch diagnostic: persisted backend metadata overlaps observer state', {
+    source,
+    sessionId,
+    metadataDispatchJobId,
+    observerJobIds,
+    sessionTombstoned,
+    dismissedSessionCount: dispatchState.dismissedSessionIds.length,
+  });
+}
+
+function sameDispatchTargetIdentity(
+  left: NonNullable<SessionConfig['dispatchTarget']>,
+  right: NonNullable<SessionConfig['dispatchTarget']>,
+): boolean {
+  if (left.kind !== right.kind) return false;
+  switch (left.kind) {
+    case 'ssh':
+      return right.kind === 'ssh' && left.connectionId === right.connectionId;
+    case 'device':
+      return right.kind === 'device' && left.deviceId === right.deviceId;
+    case 'local':
+      return right.kind === 'local';
+  }
+}
+
 const VALID_AGENT_TYPES = new Set([
   'agentic',
   'Multitask',
@@ -83,6 +315,13 @@ const HISTORICAL_SESSION_INITIAL_LOCAL_TAIL_TURN_COUNT = 3;
 const HISTORICAL_SESSION_FULL_HISTORY_IDLE_TIMEOUT_MS = 1500;
 const HISTORICAL_SESSION_PREVIOUS_WINDOW_TURN_COUNT = 12;
 const PEER_SESSION_REFRESH_TAIL_TURN_COUNT = 3;
+const SESSION_TURN_WINDOW_DEFAULT_BEFORE = 4;
+const SESSION_TURN_WINDOW_DEFAULT_AFTER = 12;
+const SESSION_HISTORY_PRESENTATION_SOFT_TURN_BUDGET = 48;
+const SESSION_HISTORY_PRESENTATION_HARD_TURN_BUDGET = 64;
+const SESSION_HISTORY_PRESENTATION_PREFETCH_TURN_COUNT = 16;
+const SESSION_HISTORY_LOADED_RANGE_CACHE_SOFT_TURN_BUDGET = 48;
+const SESSION_HISTORY_LOADED_RANGE_CACHE_HARD_TURN_BUDGET = 64;
 
 type RemoveSessionOptions = {
   nextActiveSessionId?: string | null;
@@ -95,6 +334,57 @@ export interface PeerSessionSnapshotRefreshResult {
   backendState: string;
   latestTurnId?: string;
   latestTurnStatus?: DialogTurn['status'];
+}
+
+export interface DispatchSnapshotApplyResult {
+  applied: boolean;
+  cursor: number;
+}
+
+export interface LoadSessionTurnWindowOptions {
+  before?: number;
+  after?: number;
+  includeInternal?: boolean;
+  source?: Exclude<LoadedTurnRangeSource, 'initial-tail' | 'live'>;
+}
+
+export type SessionHistoryWindowDirection = 'before' | 'after';
+
+export interface SessionTurnOrdinalRange {
+  startOrdinal: number;
+  endOrdinalExclusive: number;
+}
+
+export type SessionTurnWindowLoadResult = {
+  status: 'ready' | 'stale' | 'not-found' | 'unsupported';
+  sessionId: string;
+  targetOrdinal: number;
+  targetTurnId?: string;
+  navigationGeneration: number;
+  isCurrent: boolean;
+  cacheHit: boolean;
+  range?: LoadedTurnRange;
+  catalog?: SessionTurnCatalog;
+  fallbackRequested?: boolean;
+};
+
+interface OrdinalInterval {
+  startOrdinal: number;
+  endOrdinalExclusive: number;
+}
+
+interface SessionTurnWindowProtection extends OrdinalInterval {
+  sessionId: string;
+  retainCount: number;
+}
+
+function dispatchTerminalTurnStatus(
+  state: NonNullable<SessionConfig['dispatchJobState']>,
+): 'completed' | 'cancelled' | 'error' | null {
+  if (state === 'succeeded') return 'completed';
+  if (state === 'cancelled') return 'cancelled';
+  if (state === 'failed') return 'error';
+  return null;
 }
 
 export function isBackendSessionActivelyProcessing(state: unknown): boolean {
@@ -192,12 +482,14 @@ function normalizeLiveItemStatus(
 }
 
 function compareDialogTurnOrder(left: DialogTurn, right: DialogTurn): number {
+  const leftStorageIndex = left.storageTurnIndex ?? left.backendTurnIndex;
+  const rightStorageIndex = right.storageTurnIndex ?? right.backendTurnIndex;
   if (
-    typeof left.backendTurnIndex === 'number' &&
-    typeof right.backendTurnIndex === 'number' &&
-    left.backendTurnIndex !== right.backendTurnIndex
+    typeof leftStorageIndex === 'number' &&
+    typeof rightStorageIndex === 'number' &&
+    leftStorageIndex !== rightStorageIndex
   ) {
-    return left.backendTurnIndex - right.backendTurnIndex;
+    return leftStorageIndex - rightStorageIndex;
   }
   return left.startTime - right.startTime;
 }
@@ -231,10 +523,7 @@ function runningStatusRank(status: string | undefined): number {
 }
 
 function substantiveRoundItems(round: ModelRound): AnyFlowItem[] {
-  return round.items.filter(item => (
-    item.type !== 'text' ||
-    !(item as AnyFlowItem & { runtimeStatus?: unknown }).runtimeStatus
-  ));
+  return round.items;
 }
 
 type RunningStreamItem = AnyFlowItem & {
@@ -398,7 +687,6 @@ function normalizeSupersededItem(item: AnyFlowItem, endedAt: number): AnyFlowIte
       ...item,
       isStreaming: false,
       status: 'completed',
-      runtimeStatus: undefined,
     };
   }
 
@@ -678,6 +966,7 @@ interface FullHistoryHydrationRequest {
   sessionTraceId: string;
   promise: Promise<void>;
   cancel?: () => void;
+  startNow?: () => void;
   releaseAfterInitialPaint?: (options?: FullHistoryHydrationReleaseOptions) => void;
 }
 
@@ -688,6 +977,7 @@ interface CompleteSessionHistoryLoadRequest {
   remoteSshHost?: string;
   includeInternal?: boolean;
   requireActiveSession?: boolean;
+  startImmediately?: boolean;
   initialSessionTraceId: string;
   expectedDialogTurnIds: string[];
 }
@@ -704,6 +994,285 @@ interface DeferredFullHistoryProjection {
 
 function areStringArraysEqual(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function selectPreferredTurnCatalog(
+  current: SessionTurnCatalog | undefined,
+  restored: SessionTurnCatalog | undefined,
+): SessionTurnCatalog | undefined {
+  if (!restored) {
+    return current;
+  }
+  if (!current) {
+    return restored;
+  }
+  if (current.complete && !restored.complete) {
+    return current;
+  }
+  if (
+    current.revision === restored.revision
+    && current.complete === restored.complete
+    && current.totalTurnCount === restored.totalTurnCount
+  ) {
+    return current;
+  }
+  return restored;
+}
+
+function truncateTurnCatalog(
+  catalog: SessionTurnCatalog,
+  endOrdinalExclusive: number,
+  revision: string,
+): SessionTurnCatalog {
+  return {
+    ...catalog,
+    revision,
+    totalTurnCount: endOrdinalExclusive,
+    entries: catalog.entries
+      .filter(entry => entry.ordinal < endOrdinalExclusive)
+      .map(entry => ({ ...entry })),
+  };
+}
+
+function mergeLoadedTurnRanges(
+  ranges: readonly LoadedTurnRange[],
+  incoming: LoadedTurnRange,
+): LoadedTurnRange[] {
+  const sorted = [...ranges, incoming]
+    .filter(range =>
+      range.startOrdinal >= 0
+      && range.endOrdinalExclusive > range.startOrdinal
+      && range.turns.length === range.endOrdinalExclusive - range.startOrdinal
+    )
+    .sort((left, right) =>
+      left.startOrdinal - right.startOrdinal
+      || left.endOrdinalExclusive - right.endOrdinalExclusive
+      || left.lastAccessedAt - right.lastAccessedAt
+    );
+  const merged: LoadedTurnRange[] = [];
+
+  for (const range of sorted) {
+    const previous = merged[merged.length - 1];
+    if (!previous || range.startOrdinal > previous.endOrdinalExclusive) {
+      merged.push({ ...range, turns: [...range.turns] });
+      continue;
+    }
+
+    const startOrdinal = previous.startOrdinal;
+    const endOrdinalExclusive = Math.max(
+      previous.endOrdinalExclusive,
+      range.endOrdinalExclusive,
+    );
+    const turnsByOrdinal = new Map<number, DialogTurn>();
+    previous.turns.forEach((turn, index) => {
+      turnsByOrdinal.set(previous.startOrdinal + index, turn);
+    });
+    range.turns.forEach((turn, index) => {
+      turnsByOrdinal.set(range.startOrdinal + index, turn);
+    });
+    const turns: DialogTurn[] = [];
+    for (let ordinal = startOrdinal; ordinal < endOrdinalExclusive; ordinal += 1) {
+      const turn = turnsByOrdinal.get(ordinal);
+      if (!turn) {
+        break;
+      }
+      turns.push(turn);
+    }
+    if (turns.length !== endOrdinalExclusive - startOrdinal) {
+      merged.push({ ...range, turns: [...range.turns] });
+      continue;
+    }
+
+    merged[merged.length - 1] = {
+      startOrdinal,
+      endOrdinalExclusive,
+      turns,
+      lastAccessedAt: Math.max(previous.lastAccessedAt, range.lastAccessedAt),
+      source:
+        range.lastAccessedAt >= previous.lastAccessedAt
+          ? range.source
+          : previous.source,
+    };
+  }
+
+  return merged;
+}
+
+function sliceLoadedTurnRange(
+  range: LoadedTurnRange,
+  startOrdinal: number,
+  endOrdinalExclusive: number,
+): DialogTurn[] | null {
+  if (
+    startOrdinal < range.startOrdinal
+    || endOrdinalExclusive > range.endOrdinalExclusive
+    || endOrdinalExclusive <= startOrdinal
+  ) {
+    return null;
+  }
+
+  const turns = range.turns.slice(
+    startOrdinal - range.startOrdinal,
+    endOrdinalExclusive - range.startOrdinal,
+  );
+  return turns.length === endOrdinalExclusive - startOrdinal ? turns : null;
+}
+
+function mergeOrdinalIntervals(intervals: readonly OrdinalInterval[]): OrdinalInterval[] {
+  const sorted = intervals
+    .filter(interval => interval.endOrdinalExclusive > interval.startOrdinal)
+    .map(interval => ({ ...interval }))
+    .sort((left, right) =>
+      left.startOrdinal - right.startOrdinal
+      || left.endOrdinalExclusive - right.endOrdinalExclusive
+    );
+  const merged: OrdinalInterval[] = [];
+
+  for (const interval of sorted) {
+    const previous = merged[merged.length - 1];
+    if (!previous || interval.startOrdinal > previous.endOrdinalExclusive) {
+      merged.push(interval);
+      continue;
+    }
+    previous.endOrdinalExclusive = Math.max(
+      previous.endOrdinalExclusive,
+      interval.endOrdinalExclusive,
+    );
+  }
+
+  return merged;
+}
+
+function ordinalIsInIntervals(
+  ordinal: number,
+  intervals: readonly OrdinalInterval[],
+): boolean {
+  return intervals.some(interval =>
+    interval.startOrdinal <= ordinal && interval.endOrdinalExclusive > ordinal
+  );
+}
+
+function ordinalDistanceFromIntervals(
+  ordinal: number,
+  intervals: readonly OrdinalInterval[],
+): number {
+  if (intervals.length === 0) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  let distance = Number.MAX_SAFE_INTEGER;
+  for (const interval of intervals) {
+    if (ordinal < interval.startOrdinal) {
+      distance = Math.min(distance, interval.startOrdinal - ordinal);
+    } else if (ordinal >= interval.endOrdinalExclusive) {
+      distance = Math.min(distance, ordinal - interval.endOrdinalExclusive + 1);
+    } else {
+      return 0;
+    }
+  }
+  return distance;
+}
+
+function subtractOrdinalIntervals(
+  interval: OrdinalInterval,
+  exclusions: readonly OrdinalInterval[],
+): OrdinalInterval[] {
+  const remaining: OrdinalInterval[] = [];
+  let cursor = interval.startOrdinal;
+
+  for (const exclusion of exclusions) {
+    if (exclusion.endOrdinalExclusive <= cursor) {
+      continue;
+    }
+    if (exclusion.startOrdinal >= interval.endOrdinalExclusive) {
+      break;
+    }
+    if (exclusion.startOrdinal > cursor) {
+      remaining.push({
+        startOrdinal: cursor,
+        endOrdinalExclusive: Math.min(exclusion.startOrdinal, interval.endOrdinalExclusive),
+      });
+    }
+    cursor = Math.max(cursor, exclusion.endOrdinalExclusive);
+    if (cursor >= interval.endOrdinalExclusive) {
+      break;
+    }
+  }
+
+  if (cursor < interval.endOrdinalExclusive) {
+    remaining.push({
+      startOrdinal: cursor,
+      endOrdinalExclusive: interval.endOrdinalExclusive,
+    });
+  }
+  return remaining;
+}
+
+function selectTargetHistoryPresentationRange(
+  range: LoadedTurnRange,
+  targetOrdinal: number,
+): { startOrdinal: number; endOrdinalExclusive: number } {
+  if (range.endOrdinalExclusive - range.startOrdinal <= SESSION_HISTORY_PRESENTATION_SOFT_TURN_BUDGET) {
+    return {
+      startOrdinal: range.startOrdinal,
+      endOrdinalExclusive: range.endOrdinalExclusive,
+    };
+  }
+
+  const beforeBudget = Math.min(
+    SESSION_TURN_WINDOW_DEFAULT_BEFORE,
+    SESSION_HISTORY_PRESENTATION_SOFT_TURN_BUDGET - 1,
+  );
+  let startOrdinal = Math.max(range.startOrdinal, targetOrdinal - beforeBudget);
+  const endOrdinalExclusive = Math.min(
+    range.endOrdinalExclusive,
+    startOrdinal + SESSION_HISTORY_PRESENTATION_SOFT_TURN_BUDGET,
+  );
+  startOrdinal = Math.max(
+    range.startOrdinal,
+    endOrdinalExclusive - SESSION_HISTORY_PRESENTATION_SOFT_TURN_BUDGET,
+  );
+
+  return { startOrdinal, endOrdinalExclusive };
+}
+
+function selectExtendedHistoryPresentationRange(
+  loadedRange: LoadedTurnRange,
+  activeRange: ActiveTurnRenderRange,
+  direction: SessionHistoryWindowDirection,
+): { startOrdinal: number; endOrdinalExclusive: number } {
+  let startOrdinal = activeRange.startOrdinal;
+  let endOrdinalExclusive = activeRange.endOrdinalExclusive;
+
+  if (direction === 'before') {
+    startOrdinal = Math.max(
+      loadedRange.startOrdinal,
+      activeRange.startOrdinal - SESSION_HISTORY_PRESENTATION_PREFETCH_TURN_COUNT,
+    );
+  } else {
+    endOrdinalExclusive = Math.min(
+      loadedRange.endOrdinalExclusive,
+      activeRange.endOrdinalExclusive + SESSION_HISTORY_PRESENTATION_PREFETCH_TURN_COUNT,
+    );
+  }
+
+  if (endOrdinalExclusive - startOrdinal <= SESSION_HISTORY_PRESENTATION_HARD_TURN_BUDGET) {
+    return { startOrdinal, endOrdinalExclusive };
+  }
+
+  if (direction === 'before') {
+    endOrdinalExclusive = Math.min(
+      loadedRange.endOrdinalExclusive,
+      startOrdinal + SESSION_HISTORY_PRESENTATION_SOFT_TURN_BUDGET,
+    );
+  } else {
+    startOrdinal = Math.max(
+      loadedRange.startOrdinal,
+      endOrdinalExclusive - SESSION_HISTORY_PRESENTATION_SOFT_TURN_BUDGET,
+    );
+  }
+
+  return { startOrdinal, endOrdinalExclusive };
 }
 
 function startsWithStringArray(values: string[], prefix: string[]): boolean {
@@ -804,6 +1373,7 @@ function sessionViewRestoreTimingTraceFields(
     restoreVisibilityMetadataDurationMs: timing.visibilityMetadataDurationMs,
     restoreLoadSessionWithTurnsDurationMs: timing.loadSessionWithTurnsDurationMs,
     restoreNormalizeTurnIdsDurationMs: timing.normalizeTurnIdsDurationMs,
+    restoreTurnCatalogDurationMs: timing.turnCatalogDurationMs,
     restoreTotalDurationMs: timing.totalDurationMs,
     restoreTurnTailCount: timing.turnLoad?.requestedTailTurnCount,
     restoreTurnLoadedCount: timing.turnLoad?.loadedTurnCount,
@@ -904,6 +1474,13 @@ export class FlowChatStore {
   private fullHistoryHydrationRequests = new Map<string, FullHistoryHydrationRequest>();
   private deferredFullHistoryProjections = new Map<string, DeferredFullHistoryProjection>();
   private fullHistoryProjectionApplyRequests = new Set<string>();
+  private sessionHistoryViews = new Map<string, SessionHistoryViewState>();
+  /** Per-ordinal recency survives adjacent range merges and enables stable range slicing. */
+  private sessionHistoryTurnAccessTimes = new Map<string, Map<number, number>>();
+  private sessionHistoryAccessClock = 0;
+  private sessionTurnWindowRequests = new Map<string, Promise<LoadSessionTurnWindowResponse>>();
+  /** Requested intervals remain protected until every deduplicated caller processes the response. */
+  private sessionTurnWindowProtections = new Map<string, SessionTurnWindowProtection>();
   private unsupportedRestoreCommands = new Set<string>();
   private pendingRemoveSessionOptions = new Map<string, RemoveSessionOptions>();
   private onPersistUnreadCompletion?: (sessionId: string, value: 'completed' | 'error' | 'interrupted' | undefined) => void;
@@ -957,6 +1534,694 @@ export class FlowChatStore {
     return this.state;
   }
 
+  public getSessionHistoryViewState(sessionId: string): SessionHistoryViewState | undefined {
+    const view = this.sessionHistoryViews.get(sessionId);
+    if (!view) {
+      return undefined;
+    }
+    return {
+      ...view,
+      loadedRanges: view.loadedRanges.map(range => ({
+        ...range,
+        turns: [...range.turns],
+      })),
+      activeRange: view.activeRange ? { ...view.activeRange } : null,
+    };
+  }
+
+  public getSessionCanonicalTailRange(sessionId: string): SessionTurnOrdinalRange | null {
+    const interval = this.getSessionHistoryTailProtectedIntervals(
+      sessionId,
+      this.sessionHistoryViews.get(sessionId),
+    )[0];
+    return interval ? { ...interval } : null;
+  }
+
+  public activateSessionHistoryWindow(
+    sessionId: string,
+    targetOrdinal: number,
+    navigationGeneration: number,
+  ): SessionHistoryPresentation | null {
+    const view = this.sessionHistoryViews.get(sessionId);
+    const normalizedTargetOrdinal = Math.max(0, Math.floor(targetOrdinal));
+    if (
+      this.state.activeSessionId !== sessionId
+      || !view
+      || view.navigationGeneration !== navigationGeneration
+      || view.pendingTargetOrdinal !== normalizedTargetOrdinal
+    ) {
+      return null;
+    }
+
+    const loadedRange = view.loadedRanges.find(range =>
+      range.startOrdinal <= normalizedTargetOrdinal
+      && range.endOrdinalExclusive > normalizedTargetOrdinal
+    );
+    if (!loadedRange) {
+      return null;
+    }
+
+    const selected = selectTargetHistoryPresentationRange(loadedRange, normalizedTargetOrdinal);
+    const turns = sliceLoadedTurnRange(
+      loadedRange,
+      selected.startOrdinal,
+      selected.endOrdinalExclusive,
+    );
+    if (!turns) {
+      return null;
+    }
+
+    const targetTurn = turns[normalizedTargetOrdinal - selected.startOrdinal];
+    const range: ActiveTurnRenderRange = {
+      ...selected,
+      targetTurnId: targetTurn?.id ?? null,
+      mode: 'history-window',
+    };
+    this.touchSessionHistoryTurnRange(
+      sessionId,
+      loadedRange,
+      selected.startOrdinal,
+      selected.endOrdinalExclusive,
+    );
+    view.activeRange = range;
+    view.pendingTargetOrdinal = null;
+    this.pruneSessionLoadedTurnRanges(sessionId, view);
+    return { range: { ...range }, turns: [...turns] };
+  }
+
+  public reactivateSessionHistoryWindow(
+    sessionId: string,
+    range: ActiveTurnRenderRange,
+  ): SessionHistoryPresentation | null {
+    const view = this.sessionHistoryViews.get(sessionId);
+    if (
+      this.state.activeSessionId !== sessionId
+      || !view
+      || range.mode !== 'history-window'
+    ) {
+      return null;
+    }
+
+    const loadedRange = view.loadedRanges.find(candidate =>
+      candidate.startOrdinal <= range.startOrdinal
+      && candidate.endOrdinalExclusive >= range.endOrdinalExclusive
+    );
+    if (!loadedRange) {
+      return null;
+    }
+
+    const turns = sliceLoadedTurnRange(
+      loadedRange,
+      range.startOrdinal,
+      range.endOrdinalExclusive,
+    );
+    if (!turns) {
+      return null;
+    }
+
+    const targetTurnId = range.targetTurnId && turns.some(turn => turn.id === range.targetTurnId)
+      ? range.targetTurnId
+      : null;
+    const nextRange: ActiveTurnRenderRange = {
+      ...range,
+      targetTurnId,
+      mode: 'history-window',
+    };
+    view.navigationGeneration += 1;
+    view.pendingTargetOrdinal = null;
+    this.touchSessionHistoryTurnRange(
+      sessionId,
+      loadedRange,
+      nextRange.startOrdinal,
+      nextRange.endOrdinalExclusive,
+    );
+    view.activeRange = nextRange;
+    this.pruneSessionLoadedTurnRanges(sessionId, view);
+    return { range: { ...nextRange }, turns: [...turns] };
+  }
+
+  public extendSessionHistoryWindow(
+    sessionId: string,
+    direction: SessionHistoryWindowDirection,
+  ): SessionHistoryPresentation | null {
+    const view = this.sessionHistoryViews.get(sessionId);
+    const activeRange = view?.activeRange;
+    if (
+      this.state.activeSessionId !== sessionId
+      || !view
+      || !activeRange
+      || activeRange.mode !== 'history-window'
+    ) {
+      return null;
+    }
+
+    const loadedRange = view.loadedRanges.find(range =>
+      range.startOrdinal <= activeRange.startOrdinal
+      && range.endOrdinalExclusive >= activeRange.endOrdinalExclusive
+    );
+    if (!loadedRange) {
+      return null;
+    }
+
+    const selected = selectExtendedHistoryPresentationRange(loadedRange, activeRange, direction);
+    const turns = sliceLoadedTurnRange(
+      loadedRange,
+      selected.startOrdinal,
+      selected.endOrdinalExclusive,
+    );
+    if (!turns) {
+      return null;
+    }
+
+    const targetTurnId = activeRange.targetTurnId && turns.some(turn => turn.id === activeRange.targetTurnId)
+      ? activeRange.targetTurnId
+      : null;
+    const range: ActiveTurnRenderRange = {
+      ...selected,
+      targetTurnId,
+      mode: 'history-window',
+    };
+    this.touchSessionHistoryTurnRange(
+      sessionId,
+      loadedRange,
+      selected.startOrdinal,
+      selected.endOrdinalExclusive,
+    );
+    view.activeRange = range;
+    this.pruneSessionLoadedTurnRanges(sessionId, view);
+    return { range: { ...range }, turns: [...turns] };
+  }
+
+  public activateSessionHistoryWindowFromTail(
+    sessionId: string,
+    targetOrdinal: number,
+  ): SessionHistoryPresentation | null {
+    const session = this.state.sessions.get(sessionId);
+    const view = this.sessionHistoryViews.get(sessionId);
+    if (
+      this.state.activeSessionId !== sessionId
+      || !session
+      || !view
+      || view.activeRange !== null
+    ) {
+      return null;
+    }
+
+    const totalTurnCount = projectedSessionTurnCount(session);
+    const normalizedTargetOrdinal = Math.max(0, Math.floor(targetOrdinal));
+    const tailOrdinal = totalTurnCount - 1;
+    const loadedRange = view.loadedRanges.find(range =>
+      range.startOrdinal <= normalizedTargetOrdinal
+      && range.endOrdinalExclusive > normalizedTargetOrdinal
+      && range.startOrdinal <= tailOrdinal
+      && range.endOrdinalExclusive > tailOrdinal
+    );
+    if (!loadedRange) {
+      return null;
+    }
+
+    const endOrdinalExclusive = Math.min(totalTurnCount, loadedRange.endOrdinalExclusive);
+    const startOrdinal = Math.max(
+      loadedRange.startOrdinal,
+      endOrdinalExclusive - SESSION_HISTORY_PRESENTATION_HARD_TURN_BUDGET,
+    );
+    if (normalizedTargetOrdinal < startOrdinal) {
+      return null;
+    }
+    const turns = sliceLoadedTurnRange(loadedRange, startOrdinal, endOrdinalExclusive);
+    if (!turns) {
+      return null;
+    }
+
+    const range: ActiveTurnRenderRange = {
+      startOrdinal,
+      endOrdinalExclusive,
+      targetTurnId: null,
+      mode: 'history-window',
+    };
+    this.touchSessionHistoryTurnRange(
+      sessionId,
+      loadedRange,
+      startOrdinal,
+      endOrdinalExclusive,
+    );
+    view.activeRange = range;
+    this.pruneSessionLoadedTurnRanges(sessionId, view);
+    return { range: { ...range }, turns: [...turns] };
+  }
+
+  public restoreSessionTailPresentation(sessionId: string): void {
+    const view = this.sessionHistoryViews.get(sessionId);
+    if (!view) {
+      return;
+    }
+    view.navigationGeneration += 1;
+    view.pendingTargetOrdinal = null;
+    view.activeRange = null;
+    this.pruneSessionLoadedTurnRanges(sessionId, view);
+  }
+
+  private ensureSessionHistoryView(
+    sessionId: string,
+    catalog?: SessionTurnCatalog | null,
+  ): SessionHistoryViewState {
+    const existing = this.sessionHistoryViews.get(sessionId);
+    if (existing) {
+      if (catalog !== undefined && existing.catalog === null) {
+        existing.catalog = catalog;
+      }
+      return existing;
+    }
+
+    const created: SessionHistoryViewState = {
+      catalog: catalog ?? null,
+      loadedRanges: [],
+      activeRange: null,
+      pendingTargetOrdinal: null,
+      navigationGeneration: 0,
+    };
+    this.sessionHistoryViews.set(sessionId, created);
+    return created;
+  }
+
+  private nextSessionHistoryAccessTime(candidate: number = Date.now()): number {
+    this.sessionHistoryAccessClock = Math.max(
+      this.sessionHistoryAccessClock + 1,
+      candidate,
+    );
+    return this.sessionHistoryAccessClock;
+  }
+
+  private getSessionHistoryTurnAccessTimes(sessionId: string): Map<number, number> {
+    const existing = this.sessionHistoryTurnAccessTimes.get(sessionId);
+    if (existing) {
+      return existing;
+    }
+    const created = new Map<number, number>();
+    this.sessionHistoryTurnAccessTimes.set(sessionId, created);
+    return created;
+  }
+
+  private touchSessionHistoryTurnRange(
+    sessionId: string,
+    range: LoadedTurnRange,
+    startOrdinal: number,
+    endOrdinalExclusive: number,
+    accessedAt: number = this.nextSessionHistoryAccessTime(),
+  ): void {
+    const boundedStartOrdinal = Math.max(range.startOrdinal, startOrdinal);
+    const boundedEndOrdinalExclusive = Math.min(
+      range.endOrdinalExclusive,
+      endOrdinalExclusive,
+    );
+    if (boundedEndOrdinalExclusive <= boundedStartOrdinal) {
+      return;
+    }
+
+    const accessTimes = this.getSessionHistoryTurnAccessTimes(sessionId);
+    for (
+      let ordinal = boundedStartOrdinal;
+      ordinal < boundedEndOrdinalExclusive;
+      ordinal += 1
+    ) {
+      accessTimes.set(ordinal, accessedAt);
+    }
+    range.lastAccessedAt = Math.max(range.lastAccessedAt, accessedAt);
+  }
+
+  private getSessionHistoryTailProtectedIntervals(
+    sessionId: string,
+    _view?: SessionHistoryViewState,
+  ): OrdinalInterval[] {
+    const session = this.state.sessions.get(sessionId);
+    if (!session || session.dialogTurns.length === 0) {
+      return [];
+    }
+    const canonicalTailTurns = session.dialogTurns.filter(
+      turn => !isProvisionalUsageReportTurn(turn),
+    );
+    if (canonicalTailTurns.length === 0) {
+      return [];
+    }
+
+    const totalTurnCount = projectedSessionTurnCount(session);
+    if (totalTurnCount <= 0) {
+      return [];
+    }
+
+    return [{
+      startOrdinal: Math.max(0, totalTurnCount - canonicalTailTurns.length),
+      endOrdinalExclusive: totalTurnCount,
+    }];
+  }
+
+  private getSessionHistoryProtectedIntervals(
+    sessionId: string,
+    view: SessionHistoryViewState,
+    tailIntervals: readonly OrdinalInterval[],
+  ): OrdinalInterval[] {
+    const intervals: OrdinalInterval[] = [...tailIntervals];
+    if (view.activeRange) {
+      intervals.push({
+        startOrdinal: view.activeRange.startOrdinal,
+        endOrdinalExclusive: view.activeRange.endOrdinalExclusive,
+      });
+    }
+    const pendingTargetOrdinal = view.pendingTargetOrdinal;
+    if (pendingTargetOrdinal !== null) {
+      const pendingRange = view.loadedRanges.find(range =>
+        range.startOrdinal <= pendingTargetOrdinal
+        && range.endOrdinalExclusive > pendingTargetOrdinal
+      );
+      if (pendingRange) {
+        intervals.push(selectTargetHistoryPresentationRange(
+          pendingRange,
+          pendingTargetOrdinal,
+        ));
+      } else {
+        intervals.push({
+          startOrdinal: pendingTargetOrdinal,
+          endOrdinalExclusive: pendingTargetOrdinal + 1,
+        });
+      }
+    }
+    for (const protection of this.sessionTurnWindowProtections.values()) {
+      if (protection.sessionId !== sessionId) {
+        continue;
+      }
+      intervals.push({
+        startOrdinal: protection.startOrdinal,
+        endOrdinalExclusive: protection.endOrdinalExclusive,
+      });
+    }
+    return mergeOrdinalIntervals(intervals);
+  }
+
+  private pruneSessionLoadedTurnRanges(
+    sessionId: string,
+    view: SessionHistoryViewState = this.ensureSessionHistoryView(sessionId),
+  ): void {
+    // The canonical tail is retained outside the ordinary cache budget. When
+    // non-tail data crosses the hard limit, LRU entries are sliced back toward
+    // the soft limit without touching active or pending navigation intervals.
+    const tailIntervals = mergeOrdinalIntervals(
+      this.getSessionHistoryTailProtectedIntervals(sessionId, view),
+    );
+    const nonTailSegments = view.loadedRanges.flatMap(range =>
+      subtractOrdinalIntervals(range, tailIntervals).map(interval => ({
+        ...interval,
+        range,
+      }))
+    );
+    const nonTailTurnCount = nonTailSegments.reduce(
+      (count, segment) => count + segment.endOrdinalExclusive - segment.startOrdinal,
+      0,
+    );
+    if (
+      nonTailTurnCount
+      <= SESSION_HISTORY_LOADED_RANGE_CACHE_HARD_TURN_BUDGET
+    ) {
+      return;
+    }
+    const nonTailOrdinals = nonTailSegments.flatMap(segment =>
+      Array.from(
+        { length: segment.endOrdinalExclusive - segment.startOrdinal },
+        (_, index) => ({
+          ordinal: segment.startOrdinal + index,
+          range: segment.range,
+        }),
+      )
+    );
+
+    const protectedIntervals = this.getSessionHistoryProtectedIntervals(
+      sessionId,
+      view,
+      tailIntervals,
+    );
+    const protectedNonTailCount = nonTailOrdinals.reduce(
+      (count, entry) => count + Number(
+        ordinalIsInIntervals(entry.ordinal, protectedIntervals),
+      ),
+      0,
+    );
+    const retainedNonTailTarget = Math.max(
+      SESSION_HISTORY_LOADED_RANGE_CACHE_SOFT_TURN_BUDGET,
+      protectedNonTailCount,
+    );
+    const evictionCount = Math.max(
+      0,
+      nonTailOrdinals.length - retainedNonTailTarget,
+    );
+    if (evictionCount === 0) {
+      return;
+    }
+
+    const accessTimes = this.getSessionHistoryTurnAccessTimes(sessionId);
+    const candidates = nonTailOrdinals
+      .filter(entry => !ordinalIsInIntervals(entry.ordinal, protectedIntervals))
+      .sort((left, right) => {
+        const leftAccessedAt = accessTimes.get(left.ordinal) ?? left.range.lastAccessedAt;
+        const rightAccessedAt = accessTimes.get(right.ordinal) ?? right.range.lastAccessedAt;
+        return leftAccessedAt - rightAccessedAt
+          || ordinalDistanceFromIntervals(right.ordinal, protectedIntervals)
+            - ordinalDistanceFromIntervals(left.ordinal, protectedIntervals)
+          || left.ordinal - right.ordinal;
+      });
+    const evictedOrdinals = new Set(
+      candidates.slice(0, evictionCount).map(entry => entry.ordinal),
+    );
+    if (evictedOrdinals.size === 0) {
+      return;
+    }
+
+    const retainedRanges: LoadedTurnRange[] = [];
+    const retainedOrdinals = new Set<number>();
+    for (const range of view.loadedRanges) {
+      let segmentStartOrdinal: number | null = null;
+      for (
+        let ordinal = range.startOrdinal;
+        ordinal <= range.endOrdinalExclusive;
+        ordinal += 1
+      ) {
+        const retained = ordinal < range.endOrdinalExclusive
+          && !evictedOrdinals.has(ordinal);
+        if (retained && segmentStartOrdinal === null) {
+          segmentStartOrdinal = ordinal;
+          continue;
+        }
+        if (retained || segmentStartOrdinal === null) {
+          continue;
+        }
+
+        const segmentTurns = range.turns.slice(
+          segmentStartOrdinal - range.startOrdinal,
+          ordinal - range.startOrdinal,
+        );
+        if (segmentTurns.length > 0) {
+          let lastAccessedAt = range.lastAccessedAt;
+          for (
+            let retainedOrdinal = segmentStartOrdinal;
+            retainedOrdinal < ordinal;
+            retainedOrdinal += 1
+          ) {
+            retainedOrdinals.add(retainedOrdinal);
+            lastAccessedAt = Math.max(
+              lastAccessedAt,
+              accessTimes.get(retainedOrdinal) ?? range.lastAccessedAt,
+            );
+          }
+          retainedRanges.push({
+            startOrdinal: segmentStartOrdinal,
+            endOrdinalExclusive: ordinal,
+            turns: segmentTurns,
+            lastAccessedAt,
+            source: range.source,
+          });
+        }
+        segmentStartOrdinal = null;
+      }
+    }
+
+    for (const ordinal of accessTimes.keys()) {
+      if (!retainedOrdinals.has(ordinal)) {
+        accessTimes.delete(ordinal);
+      }
+    }
+    if (accessTimes.size === 0) {
+      this.sessionHistoryTurnAccessTimes.delete(sessionId);
+    }
+    view.loadedRanges = retainedRanges;
+  }
+
+  private cacheSessionLoadedTurnRange(
+    sessionId: string,
+    range: LoadedTurnRange,
+    catalog?: SessionTurnCatalog | null,
+    preferredOrdinal: number = range.startOrdinal,
+  ): LoadedTurnRange {
+    const view = this.ensureSessionHistoryView(sessionId, catalog);
+    const accessedAt = this.nextSessionHistoryAccessTime(range.lastAccessedAt);
+    const incomingRange = { ...range, lastAccessedAt: accessedAt };
+    view.loadedRanges = mergeLoadedTurnRanges(view.loadedRanges, incomingRange);
+    const mergedRange = view.loadedRanges.find(candidate =>
+      candidate.startOrdinal <= incomingRange.startOrdinal
+      && candidate.endOrdinalExclusive >= incomingRange.endOrdinalExclusive
+    );
+    if (mergedRange) {
+      this.touchSessionHistoryTurnRange(
+        sessionId,
+        mergedRange,
+        incomingRange.startOrdinal,
+        incomingRange.endOrdinalExclusive,
+        accessedAt,
+      );
+    }
+    this.pruneSessionLoadedTurnRanges(sessionId, view);
+    return view.loadedRanges.find(candidate =>
+      candidate.startOrdinal <= preferredOrdinal
+      && candidate.endOrdinalExclusive > preferredOrdinal
+    ) ?? incomingRange;
+  }
+
+  private seedSessionHistoryLoadedRanges(
+    sessionId: string,
+    source: LoadedTurnRangeSource = 'initial-tail',
+  ): void {
+    const session = this.state.sessions.get(sessionId);
+    if (!session) {
+      return;
+    }
+    const catalog = session.turnCatalog?.sessionId === sessionId
+      ? session.turnCatalog
+      : undefined;
+    const view = this.ensureSessionHistoryView(sessionId, catalog ?? null);
+    if (catalog) {
+      view.catalog = catalog;
+    }
+    const canonicalTailTurns = session.dialogTurns.filter(
+      turn => !isProvisionalUsageReportTurn(turn),
+    );
+    if (canonicalTailTurns.length === 0) {
+      return;
+    }
+
+    const entryByTurnId = new Map(
+      (catalog?.entries ?? [])
+        .filter(entry => typeof entry.turnId === 'string')
+        .map(entry => [entry.turnId as string, entry]),
+    );
+    const entryByStorageIndex = new Map(
+      (catalog?.entries ?? []).map(entry => [entry.storageTurnIndex, entry]),
+    );
+    const located = canonicalTailTurns
+      .map(turn => {
+        const storageTurnIndex = resolveStorageTurnIndex(session, turn);
+        const entry = entryByTurnId.get(turn.id)
+          ?? (storageTurnIndex !== undefined
+            ? entryByStorageIndex.get(storageTurnIndex)
+            : undefined);
+        return entry ? { ordinal: entry.ordinal, turn } : null;
+      })
+      .filter((value): value is { ordinal: number; turn: DialogTurn } => value !== null)
+      .sort((left, right) => left.ordinal - right.ordinal);
+    const uniqueLocated = located.filter(
+      (value, index) => index === 0 || located[index - 1].ordinal !== value.ordinal,
+    );
+    const now = Date.now();
+
+    if (uniqueLocated.length === canonicalTailTurns.length) {
+      let groupStart = 0;
+      for (let index = 1; index <= uniqueLocated.length; index += 1) {
+        const continues = index < uniqueLocated.length
+          && uniqueLocated[index].ordinal === uniqueLocated[index - 1].ordinal + 1;
+        if (continues) {
+          continue;
+        }
+        const group = uniqueLocated.slice(groupStart, index);
+        this.cacheSessionLoadedTurnRange(sessionId, {
+          startOrdinal: group[0].ordinal,
+          endOrdinalExclusive: group[group.length - 1].ordinal + 1,
+          turns: group.map(value => value.turn),
+          lastAccessedAt: now,
+          source,
+        }, catalog ?? null);
+        groupStart = index;
+      }
+      return;
+    }
+
+    const totalTurnCount = projectedSessionTurnCount(session);
+    const startOrdinal = Math.max(0, totalTurnCount - canonicalTailTurns.length);
+    this.cacheSessionLoadedTurnRange(sessionId, {
+      startOrdinal,
+      endOrdinalExclusive: startOrdinal + canonicalTailTurns.length,
+      turns: [...canonicalTailTurns],
+      lastAccessedAt: now,
+      source,
+    }, catalog ?? null);
+  }
+
+  private updateAuthoritativeSessionTurnCatalog(
+    sessionId: string,
+    catalog: SessionTurnCatalog,
+  ): void {
+    if (catalog.sessionId !== sessionId) {
+      return;
+    }
+    this.ensureSessionHistoryView(sessionId, catalog).catalog = catalog;
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session) {
+        return prev;
+      }
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        turnCatalog: catalog,
+        totalTurnCount: catalog.totalTurnCount,
+      });
+      return { ...prev, sessions: newSessions };
+    });
+  }
+
+  private isSessionTurnNavigationCurrent(
+    sessionId: string,
+    generation: number,
+    targetOrdinal: number,
+  ): boolean {
+    const view = this.sessionHistoryViews.get(sessionId);
+    return this.state.activeSessionId === sessionId
+      && view?.navigationGeneration === generation
+      && view.pendingTargetOrdinal === targetOrdinal;
+  }
+
+  private isSessionTurnWindowRequestCurrent(
+    sessionId: string,
+    generation: number,
+    targetOrdinal: number,
+    source: 'target' | 'prefetch',
+  ): boolean {
+    if (source === 'target') {
+      return this.isSessionTurnNavigationCurrent(sessionId, generation, targetOrdinal);
+    }
+
+    const view = this.sessionHistoryViews.get(sessionId);
+    return this.state.activeSessionId === sessionId
+      && view?.navigationGeneration === generation
+      && (view.activeRange === null || view.activeRange.mode === 'history-window');
+  }
+
+  private invalidateSessionTurnNavigationIntents(): void {
+    for (const [sessionId, view] of this.sessionHistoryViews) {
+      if (view.pendingTargetOrdinal === null) {
+        continue;
+      }
+      view.navigationGeneration += 1;
+      view.pendingTargetOrdinal = null;
+      this.pruneSessionLoadedTurnRanges(sessionId, view);
+    }
+  }
+
   private getMetadataListRequestKey(
     workspacePath: string,
     remoteConnectionId?: string,
@@ -1001,7 +2266,9 @@ export class FlowChatStore {
     ]);
   }
 
-  private scheduleCompleteSessionHistoryLoad(request: CompleteSessionHistoryLoadRequest): void {
+  private scheduleCompleteSessionHistoryLoad(
+    request: CompleteSessionHistoryLoadRequest,
+  ): FullHistoryHydrationRequest {
     const requestKey = this.getFullHistoryHydrationKey(
       request.sessionId,
       request.workspacePath,
@@ -1009,8 +2276,12 @@ export class FlowChatStore {
       request.remoteSshHost,
       request.includeInternal,
     );
-    if (this.fullHistoryHydrationRequests.has(requestKey)) {
-      return;
+    const existingRequest = this.fullHistoryHydrationRequests.get(requestKey);
+    if (existingRequest) {
+      if (request.startImmediately === true) {
+        existingRequest.startNow?.();
+      }
+      return existingRequest;
     }
 
     const remote = isRemoteTraceContext(request.remoteConnectionId, request.remoteSshHost);
@@ -1027,9 +2298,17 @@ export class FlowChatStore {
     let cancelScheduled: (() => void) | undefined;
     let releaseAfterInitialPaint: ((options?: FullHistoryHydrationReleaseOptions) => void) | undefined;
     let resolveRequest: (() => void) | undefined;
+    let started = false;
+    let startFullHydrate: (
+      trigger: 'idle' | 'initial_paint' | 'timeout' | 'explicit',
+    ) => void = () => undefined;
     const promise = new Promise<void>(resolve => {
       resolveRequest = resolve;
-      const startFullHydrate = (trigger: 'idle' | 'initial_paint' | 'timeout' | 'explicit') => {
+      startFullHydrate = (trigger: 'idle' | 'initial_paint' | 'timeout' | 'explicit') => {
+        if (started) {
+          return;
+        }
+        started = true;
         startupTrace.markPhase('historical_session_full_hydrate_released', {
           remote,
           sessionId: request.sessionId,
@@ -1050,6 +2329,11 @@ export class FlowChatStore {
           })
           .finally(resolve);
       };
+
+      if (request.startImmediately === true) {
+        startFullHydrate('explicit');
+        return;
+      }
 
       if (remote) {
         cancelScheduled = scheduleHistoricalSessionFullHydrate(() => startFullHydrate('idle'));
@@ -1076,6 +2360,10 @@ export class FlowChatStore {
         cancelScheduled?.();
         resolveRequest?.();
       },
+      startNow: () => {
+        cancelScheduled?.();
+        startFullHydrate('explicit');
+      },
     };
 
     if (releaseAfterInitialPaint) {
@@ -1085,6 +2373,7 @@ export class FlowChatStore {
     }
 
     this.fullHistoryHydrationRequests.set(requestKey, hydrationRequest);
+    return hydrationRequest;
   }
 
   private cancelLocalSessionHistoryCompletion(sessionId: string, reason: string): boolean {
@@ -1130,10 +2419,28 @@ export class FlowChatStore {
     for (const sessionId of removedSessionIds) {
       this.deferredFullHistoryProjections.delete(sessionId);
       this.fullHistoryProjectionApplyRequests.delete(sessionId);
+      this.sessionHistoryViews.delete(sessionId);
+      this.sessionHistoryTurnAccessTimes.delete(sessionId);
+    }
+
+    for (const requestKey of this.sessionTurnWindowRequests.keys()) {
+      try {
+        const [sessionId] = JSON.parse(requestKey) as [string];
+        if (removedSessionIds.has(sessionId)) {
+          this.sessionTurnWindowRequests.delete(requestKey);
+        }
+      } catch {
+        // Ignore malformed internal keys; they expire when their request settles.
+      }
+    }
+    for (const [requestKey, protection] of this.sessionTurnWindowProtections) {
+      if (removedSessionIds.has(protection.sessionId)) {
+        this.sessionTurnWindowProtections.delete(requestKey);
+      }
     }
   }
 
-  private scheduleActiveLocalPartialSessionHistoryCompletion(
+  private scheduleActiveLegacyPartialSessionHistoryCompletion(
     sessionId: string,
     reason: string
   ): boolean {
@@ -1143,6 +2450,7 @@ export class FlowChatStore {
       !session ||
       session.historyState !== 'ready' ||
       session.isPartial !== true ||
+      session.turnCatalog?.sessionId === sessionId ||
       isRemoteTraceContext(session.remoteConnectionId, session.remoteSshHost) ||
       this.hasPendingSessionHistoryCompletion(sessionId) ||
       this.hasDeferredSessionHistoryProjection(sessionId)
@@ -1150,8 +2458,9 @@ export class FlowChatStore {
       return false;
     }
 
-    const workspacePath = session.workspacePath || session.config.workspacePath;
-    if (!workspacePath || session.dialogTurns.length === 0) {
+    const canonicalTurns = canonicalSessionTurns(session);
+    const workspacePath = sessionProjectWorkspacePath(session);
+    if (!workspacePath || canonicalTurns.length === 0) {
       return false;
     }
 
@@ -1161,7 +2470,7 @@ export class FlowChatStore {
       sessionId,
       sessionTraceId,
       reason,
-      loadedTurnCount: session.dialogTurns.length,
+      loadedTurnCount: canonicalTurns.length,
       totalTurnCount: session.totalTurnCount,
     });
     this.scheduleCompleteSessionHistoryLoad({
@@ -1169,7 +2478,7 @@ export class FlowChatStore {
       workspacePath,
       initialSessionTraceId: sessionTraceId,
       requireActiveSession: true,
-      expectedDialogTurnIds: session.dialogTurns.map(turn => turn.id),
+      expectedDialogTurnIds: canonicalTurns.map(turn => turn.id),
     });
     return true;
   }
@@ -1187,28 +2496,464 @@ export class FlowChatStore {
     return this.deferredFullHistoryProjections.has(sessionId);
   }
 
-  public requestSessionFullHistoryProjection(sessionId: string, reason: string): boolean {
-    this.fullHistoryProjectionApplyRequests.add(sessionId);
-    const applied = this.applyDeferredSessionHistoryProjection(sessionId, reason);
-    const released = this.releaseSessionHistoryCompletionAfterInitialPaint(sessionId, {
-      immediate: true,
-      reason,
-    });
-
-    if (!applied && !released) {
-      this.fullHistoryProjectionApplyRequests.delete(sessionId);
+  public async ensureSessionFullHistory(sessionId: string, reason: string): Promise<boolean> {
+    const session = this.state.sessions.get(sessionId);
+    if (!session || session.historyState !== 'ready') {
+      return false;
+    }
+    if (session.isPartial !== true) {
+      return true;
     }
 
-    if (applied || released) {
-      startupTrace.markPhase('historical_session_full_hydrate_projection_requested', {
+    this.fullHistoryProjectionApplyRequests.add(sessionId);
+    const applied = this.applyDeferredSessionHistoryProjection(sessionId, reason);
+    if (applied) {
+      return true;
+    }
+
+    let hydrationRequest = Array.from(this.fullHistoryHydrationRequests.values()).find(
+      request => request.sessionId === sessionId,
+    );
+    if (!hydrationRequest) {
+      const canonicalTurns = canonicalSessionTurns(session);
+      const workspacePath = sessionProjectWorkspacePath(session);
+      if (!workspacePath || canonicalTurns.length === 0) {
+        this.fullHistoryProjectionApplyRequests.delete(sessionId);
+        return false;
+      }
+
+      const sessionTraceId = `${sessionId.slice(0, 8)}-${Math.random().toString(36).slice(2, 8)}`;
+      hydrationRequest = this.scheduleCompleteSessionHistoryLoad({
         sessionId,
-        reason,
-        applied,
-        released,
+        workspacePath,
+        remoteConnectionId: session.remoteConnectionId,
+        remoteSshHost: session.remoteSshHost,
+        includeInternal: session.sessionKind === 'subagent',
+        requireActiveSession: false,
+        startImmediately: true,
+        initialSessionTraceId: sessionTraceId,
+        expectedDialogTurnIds: canonicalTurns.map(turn => turn.id),
+      });
+    } else {
+      hydrationRequest.startNow?.();
+    }
+
+    startupTrace.markPhase('historical_session_full_history_ensure_requested', {
+      sessionId,
+      reason,
+      remote: hydrationRequest.remote,
+      loadedTurnCount: canonicalSessionTurns(session).length,
+      totalTurnCount: session.totalTurnCount,
+    });
+    await hydrationRequest.promise;
+
+    const appliedAfterLoad = this.applyDeferredSessionHistoryProjection(sessionId, reason);
+    const ready = this.state.sessions.get(sessionId)?.isPartial !== true;
+    if (!ready) {
+      this.fullHistoryProjectionApplyRequests.delete(sessionId);
+    }
+    startupTrace.markPhase('historical_session_full_history_ensure_finished', {
+      sessionId,
+      reason,
+      remote: hydrationRequest.remote,
+      ready,
+      applied: appliedAfterLoad,
+    });
+    return ready;
+  }
+
+  private requestTurnWindowCompatibilityFallback(sessionId: string): boolean {
+    const session = this.state.sessions.get(sessionId);
+    if (!session || session.historyState !== 'ready' || session.isPartial !== true) {
+      return false;
+    }
+    void this.ensureSessionFullHistory(sessionId, 'turn-window-unsupported');
+    return true;
+  }
+
+  private retainSessionTurnWindowProtection(
+    key: string,
+    protection: Omit<SessionTurnWindowProtection, 'retainCount'>,
+  ): () => void {
+    const existing = this.sessionTurnWindowProtections.get(key);
+    if (existing) {
+      existing.retainCount += 1;
+    } else {
+      this.sessionTurnWindowProtections.set(key, {
+        ...protection,
+        retainCount: 1,
       });
     }
 
-    return applied || released;
+    return () => {
+      const current = this.sessionTurnWindowProtections.get(key);
+      if (!current) {
+        return;
+      }
+      current.retainCount -= 1;
+      if (current.retainCount <= 0) {
+        this.sessionTurnWindowProtections.delete(key);
+      }
+    };
+  }
+
+  private async invokeSessionTurnWindowRequest(
+    key: string,
+    request: Parameters<typeof agentAPI.loadSessionTurnWindow>[0],
+  ): Promise<LoadSessionTurnWindowResponse> {
+    const existing = this.sessionTurnWindowRequests.get(key);
+    if (existing) {
+      return existing;
+    }
+
+    const promise = agentAPI.loadSessionTurnWindow(request);
+    this.sessionTurnWindowRequests.set(key, promise);
+    try {
+      return await promise;
+    } finally {
+      if (this.sessionTurnWindowRequests.get(key) === promise) {
+        this.sessionTurnWindowRequests.delete(key);
+      }
+    }
+  }
+
+  public async loadSessionTurnWindow(
+    sessionId: string,
+    targetOrdinal: number,
+    options?: LoadSessionTurnWindowOptions,
+  ): Promise<SessionTurnWindowLoadResult> {
+    const session = this.state.sessions.get(sessionId);
+    const catalog = session?.turnCatalog?.sessionId === sessionId
+      ? session.turnCatalog
+      : this.sessionHistoryViews.get(sessionId)?.catalog ?? undefined;
+    const normalizedTargetOrdinal = Math.max(0, Math.floor(targetOrdinal));
+    const view = this.ensureSessionHistoryView(sessionId, catalog ?? null);
+    const source = options?.source ?? 'target';
+    if (source === 'target' && view.pendingTargetOrdinal !== normalizedTargetOrdinal) {
+      view.navigationGeneration += 1;
+      view.pendingTargetOrdinal = normalizedTargetOrdinal;
+    }
+    const generation = view.navigationGeneration;
+    const entry = catalog?.entries.find(
+      candidate => candidate.ordinal === normalizedTargetOrdinal,
+    );
+    if (!session || !catalog || !entry) {
+      return {
+        status: 'not-found',
+        sessionId,
+        targetOrdinal: normalizedTargetOrdinal,
+        navigationGeneration: generation,
+        isCurrent: this.isSessionTurnWindowRequestCurrent(
+          sessionId,
+          generation,
+          normalizedTargetOrdinal,
+          source,
+        ),
+        cacheHit: false,
+        ...(catalog ? { catalog } : {}),
+      };
+    }
+
+    const cachedRange = view.loadedRanges.find(range =>
+      range.startOrdinal <= normalizedTargetOrdinal
+      && range.endOrdinalExclusive > normalizedTargetOrdinal
+    );
+    if (cachedRange) {
+      const cachedTarget = cachedRange.turns[normalizedTargetOrdinal - cachedRange.startOrdinal];
+      if (!entry.turnId || cachedTarget?.id === entry.turnId) {
+        const selected = selectTargetHistoryPresentationRange(
+          cachedRange,
+          normalizedTargetOrdinal,
+        );
+        this.touchSessionHistoryTurnRange(
+          sessionId,
+          cachedRange,
+          selected.startOrdinal,
+          selected.endOrdinalExclusive,
+        );
+        return {
+          status: 'ready',
+          sessionId,
+          targetOrdinal: normalizedTargetOrdinal,
+          targetTurnId: cachedTarget?.id,
+          navigationGeneration: generation,
+          isCurrent: this.isSessionTurnWindowRequestCurrent(
+            sessionId,
+            generation,
+            normalizedTargetOrdinal,
+            source,
+          ),
+          cacheHit: true,
+          range: cachedRange,
+          catalog,
+        };
+      }
+    }
+
+    const workspacePath = sessionProjectWorkspacePath(session);
+    if (!workspacePath) {
+      return {
+        status: 'not-found',
+        sessionId,
+        targetOrdinal: normalizedTargetOrdinal,
+        navigationGeneration: generation,
+        isCurrent: this.isSessionTurnWindowRequestCurrent(
+          sessionId,
+          generation,
+          normalizedTargetOrdinal,
+          source,
+        ),
+        cacheHit: false,
+        catalog,
+      };
+    }
+
+    const before = Math.min(
+      SESSION_HISTORY_PRESENTATION_PREFETCH_TURN_COUNT,
+      Math.max(0, Math.floor(options?.before ?? SESSION_TURN_WINDOW_DEFAULT_BEFORE)),
+    );
+    const after = Math.min(
+      SESSION_HISTORY_PRESENTATION_PREFETCH_TURN_COUNT,
+      Math.max(1, Math.floor(options?.after ?? SESSION_TURN_WINDOW_DEFAULT_AFTER)),
+    );
+    return this.loadSessionTurnWindowAttempt({
+      sessionId,
+      workspacePath,
+      remoteConnectionId: session.remoteConnectionId,
+      remoteSshHost: session.remoteSshHost,
+      includeInternal:
+        options?.includeInternal
+        ?? session.sessionKind === 'subagent',
+      targetOrdinal: normalizedTargetOrdinal,
+      targetStorageTurnIndex: entry.storageTurnIndex,
+      originalTargetTurnId: entry.turnId,
+      catalog,
+      before,
+      after,
+      source,
+      generation,
+      staleRetryCount: 0,
+    });
+  }
+
+  private async loadSessionTurnWindowAttempt(request: {
+    sessionId: string;
+    workspacePath: string;
+    remoteConnectionId?: string;
+    remoteSshHost?: string;
+    includeInternal: boolean;
+    targetOrdinal: number;
+    targetStorageTurnIndex: number;
+    originalTargetTurnId?: string;
+    catalog: SessionTurnCatalog;
+    before: number;
+    after: number;
+    source: 'target' | 'prefetch';
+    generation: number;
+    staleRetryCount: number;
+  }): Promise<SessionTurnWindowLoadResult> {
+    const supportKey = restoreCommandSupportKey(
+      'load_session_turn_window',
+      request.remoteConnectionId,
+      request.remoteSshHost,
+    );
+    if (
+      typeof agentAPI.loadSessionTurnWindow !== 'function'
+      || this.unsupportedRestoreCommands.has(supportKey)
+    ) {
+      const fallbackRequested = this.requestTurnWindowCompatibilityFallback(request.sessionId);
+      return {
+        status: 'unsupported',
+        sessionId: request.sessionId,
+        targetOrdinal: request.targetOrdinal,
+        targetTurnId: request.originalTargetTurnId,
+        navigationGeneration: request.generation,
+        isCurrent: this.isSessionTurnWindowRequestCurrent(
+          request.sessionId,
+          request.generation,
+          request.targetOrdinal,
+          request.source,
+        ),
+        cacheHit: false,
+        catalog: request.catalog,
+        fallbackRequested,
+      };
+    }
+
+    const requestKey = JSON.stringify([
+      request.sessionId,
+      request.workspacePath,
+      request.remoteConnectionId ?? '',
+      request.remoteSshHost ?? '',
+      request.targetStorageTurnIndex,
+      request.catalog.revision,
+      request.before,
+      request.after,
+    ]);
+    const releaseWindowProtection = this.retainSessionTurnWindowProtection(
+      requestKey,
+      {
+        sessionId: request.sessionId,
+        startOrdinal: Math.max(0, request.targetOrdinal - request.before),
+        endOrdinalExclusive: Math.min(
+          request.catalog.totalTurnCount,
+          request.targetOrdinal + request.after + 1,
+        ),
+      },
+    );
+    let response: LoadSessionTurnWindowResponse;
+    try {
+      response = await this.invokeSessionTurnWindowRequest(requestKey, {
+        sessionId: request.sessionId,
+        workspacePath: request.workspacePath,
+        includeInternal: request.includeInternal,
+        targetStorageTurnIndex: request.targetStorageTurnIndex,
+        expectedTurnId: request.originalTargetTurnId,
+        expectedCatalogRevision: request.catalog.revision,
+        before: request.before,
+        after: request.after,
+        remoteConnectionId: request.remoteConnectionId,
+        remoteSshHost: request.remoteSshHost,
+      });
+    } catch (error) {
+      releaseWindowProtection();
+      if (!isUnsupportedTauriCommandError(error, 'load_session_turn_window')) {
+        throw error;
+      }
+      this.unsupportedRestoreCommands.add(supportKey);
+      const fallbackRequested = this.requestTurnWindowCompatibilityFallback(request.sessionId);
+      startupTrace.markPhase('historical_session_turn_window_fallback', {
+        sessionId: request.sessionId,
+        remote: isRemoteTraceContext(request.remoteConnectionId, request.remoteSshHost),
+        reason: 'unsupported-command',
+        fallbackRequested,
+      });
+      return {
+        status: 'unsupported',
+        sessionId: request.sessionId,
+        targetOrdinal: request.targetOrdinal,
+        targetTurnId: request.originalTargetTurnId,
+        navigationGeneration: request.generation,
+        isCurrent: this.isSessionTurnWindowRequestCurrent(
+          request.sessionId,
+          request.generation,
+          request.targetOrdinal,
+          request.source,
+        ),
+        cacheHit: false,
+        catalog: request.catalog,
+        fallbackRequested,
+      };
+    }
+
+    try {
+      if (response.status === 'ready') {
+        if (
+          response.endOrdinalExclusive <= response.startOrdinal
+          || response.turns.length !== response.endOrdinalExclusive - response.startOrdinal
+        ) {
+          throw new Error('Session Turn window response is not contiguous');
+        }
+        const liveTurnId = [...(this.state.sessions.get(request.sessionId)?.dialogTurns ?? [])]
+          .reverse()
+          .find(turn => !['completed', 'cancelled', 'error'].includes(turn.status))?.id;
+        const turns = this.convertToDialogTurns(response.turns, {
+          activeTurnId: liveTurnId,
+        });
+        const incomingRange: LoadedTurnRange = {
+          startOrdinal: response.startOrdinal,
+          endOrdinalExclusive: response.endOrdinalExclusive,
+          turns,
+          lastAccessedAt: Date.now(),
+          source: request.source,
+        };
+        const currentCatalog = this.sessionHistoryViews.get(request.sessionId)?.catalog;
+        const range = this.state.sessions.has(request.sessionId)
+          && (!currentCatalog || currentCatalog.revision === response.catalogRevision)
+          ? this.cacheSessionLoadedTurnRange(
+            request.sessionId,
+            incomingRange,
+            undefined,
+            request.targetOrdinal,
+          )
+          : incomingRange;
+        return {
+          status: 'ready',
+          sessionId: request.sessionId,
+          targetOrdinal: request.targetOrdinal,
+          targetTurnId: response.targetTurnId,
+          navigationGeneration: request.generation,
+          isCurrent: this.isSessionTurnWindowRequestCurrent(
+            request.sessionId,
+            request.generation,
+            request.targetOrdinal,
+            request.source,
+          ),
+          cacheHit: false,
+          range,
+          catalog: request.catalog,
+        };
+      }
+
+      const isCurrent = this.isSessionTurnWindowRequestCurrent(
+        request.sessionId,
+        request.generation,
+        request.targetOrdinal,
+        request.source,
+      );
+      const currentCatalog = this.sessionHistoryViews.get(request.sessionId)?.catalog;
+      if (
+        isCurrent
+        || !currentCatalog
+        || currentCatalog.revision === request.catalog.revision
+      ) {
+        this.updateAuthoritativeSessionTurnCatalog(request.sessionId, response.catalog);
+      }
+      if (response.status === 'stale' && request.staleRetryCount === 0 && isCurrent) {
+        const relocatedEntry = request.originalTargetTurnId
+          ? response.catalog.entries.find(entry => entry.turnId === request.originalTargetTurnId)
+          : response.catalog.entries.find(
+            entry => entry.storageTurnIndex === request.targetStorageTurnIndex,
+          );
+        if (relocatedEntry) {
+          const view = this.sessionHistoryViews.get(request.sessionId);
+          if (request.source === 'target' && view?.navigationGeneration === request.generation) {
+            view.pendingTargetOrdinal = relocatedEntry.ordinal;
+          }
+          return this.loadSessionTurnWindowAttempt({
+            ...request,
+            targetOrdinal: relocatedEntry.ordinal,
+            targetStorageTurnIndex: relocatedEntry.storageTurnIndex,
+            originalTargetTurnId: relocatedEntry.turnId ?? request.originalTargetTurnId,
+            catalog: response.catalog,
+            staleRetryCount: 1,
+          });
+        }
+        return {
+          status: 'not-found',
+          sessionId: request.sessionId,
+          targetOrdinal: request.targetOrdinal,
+          targetTurnId: request.originalTargetTurnId,
+          navigationGeneration: request.generation,
+          isCurrent,
+          cacheHit: false,
+          catalog: response.catalog,
+        };
+      }
+
+      return {
+        status: response.status,
+        sessionId: request.sessionId,
+        targetOrdinal: request.targetOrdinal,
+        targetTurnId: request.originalTargetTurnId,
+        navigationGeneration: request.generation,
+        isCurrent,
+        cacheHit: false,
+        catalog: response.catalog,
+      };
+    } finally {
+      releaseWindowProtection();
+    }
   }
 
   public releaseSessionHistoryCompletionAfterInitialPaint(
@@ -1230,12 +2975,12 @@ export class FlowChatStore {
   }
 
   private shouldDeferFullHistoryProjection(sessionId: string, remote: boolean, _requireActiveSession: boolean): boolean {
-    if (remote) {
-      return true;
-    }
-
     if (this.fullHistoryProjectionApplyRequests.has(sessionId)) {
       return false;
+    }
+
+    if (remote) {
+      return true;
     }
 
     return this.state.activeSessionId === sessionId;
@@ -1269,7 +3014,7 @@ export class FlowChatStore {
       return false;
     }
 
-    if (projection.remote) {
+    if (projection.remote && !this.fullHistoryProjectionApplyRequests.has(sessionId)) {
       startupTrace.markPhase('historical_session_full_hydrate_remote_projection_blocked', {
         remote: true,
         sessionId,
@@ -1357,11 +3102,11 @@ export class FlowChatStore {
       }
       revealed = true;
       revealedTurnCount = previousWindow.length;
-      loadedTurnCount = mergedDialogTurns.length;
+      loadedTurnCount = canonicalSessionTurns({ dialogTurns: mergedDialogTurns }).length;
       totalTurnCount = Math.max(
         session.totalTurnCount ?? 0,
         projection.dialogTurns.length,
-        mergedDialogTurns.length,
+        loadedTurnCount,
       );
       remainingBefore = startIndex;
 
@@ -1448,6 +3193,7 @@ export class FlowChatStore {
         ...projection.dialogTurns.map(turn => currentDialogTurnsById.get(turn.id) ?? turn),
         ...appendedCurrentDialogTurns,
       ];
+      const mergedCanonicalTurnCount = canonicalSessionTurns({ dialogTurns: mergedDialogTurns }).length;
       preservedTurnCount = mergedDialogTurns.reduce(
         (count, turn) => count + (currentDialogTurnsById.get(turn.id) === turn ? 1 : 0),
         0,
@@ -1457,8 +3203,12 @@ export class FlowChatStore {
         ...session,
         dialogTurns: mergedDialogTurns,
         isPartial: false,
-        loadedTurnCount: mergedDialogTurns.length,
-        totalTurnCount: mergedDialogTurns.length,
+        loadedTurnCount: mergedCanonicalTurnCount,
+        totalTurnCount: Math.max(
+          session.totalTurnCount ?? 0,
+          projection.dialogTurns.length,
+          mergedCanonicalTurnCount,
+        ),
         contextRestoreState:
           session.contextRestoreState === 'ready' ? 'ready' : projection.contextRestoreState,
         mode: projection.restoredSessionInfo?.agentType || session.mode,
@@ -1473,6 +3223,10 @@ export class FlowChatStore {
         sessions: newSessions,
       };
     });
+
+    if (applied) {
+      this.seedSessionHistoryLoadedRanges(sessionId, 'initial-tail');
+    }
 
     return { applied, preservedTurnCount };
   }
@@ -1520,6 +3274,29 @@ export class FlowChatStore {
         durationMs: elapsedMs(startedAt),
       });
       return;
+    }
+
+    if (restored.turnCatalog?.sessionId === request.sessionId) {
+      this.setState(prev => {
+        const session = prev.sessions.get(request.sessionId);
+        if (!session) {
+          return prev;
+        }
+        const turnCatalog = selectPreferredTurnCatalog(session.turnCatalog, restored.turnCatalog);
+        if (turnCatalog === session.turnCatalog) {
+          return prev;
+        }
+
+        const newSessions = new Map(prev.sessions);
+        newSessions.set(request.sessionId, {
+          ...session,
+          turnCatalog,
+        });
+        return {
+          ...prev,
+          sessions: newSessions,
+        };
+      });
     }
 
     const convertStartedAt = nowMs();
@@ -1803,6 +3580,7 @@ export class FlowChatStore {
         lastUserDialogMode: undefined,
         lastSubmittedMode: undefined,
         workspacePath,
+        projectWorkspacePath: config.projectWorkspacePath,
         workspaceId: config.workspaceId,
         remoteConnectionId,
         remoteSshHost,
@@ -1844,8 +3622,12 @@ export class FlowChatStore {
       isTransient?: boolean;
       agentBackedTransient?: boolean;
       deepReviewRunManifest?: Session['deepReviewRunManifest'];
+      focusedReviewDisplayLabel?: Session['focusedReviewDisplayLabel'];
       reviewTargetEvidence?: Session['reviewTargetEvidence'];
       reviewTargetFilePaths?: Session['reviewTargetFilePaths'];
+      projectWorkspacePath?: string;
+      executionTarget?: Session['config']['executionTarget'];
+      workspaceId?: string;
     },
     remoteConnectionId?: string,
     remoteSshHost?: string
@@ -1869,7 +3651,15 @@ export class FlowChatStore {
         titleStatus: 'generated',
         dialogTurns: [],
         status: 'idle',
-        config: { maxContextTokens: 128128, autoCompact: true, enableTools: true } as any,
+        config: {
+          maxContextTokens: 128128,
+          autoCompact: true,
+          enableTools: true,
+          workspacePath,
+          projectWorkspacePath: meta?.projectWorkspacePath,
+          executionTarget: meta?.executionTarget,
+          workspaceId: meta?.workspaceId,
+        } as any,
         createdAt: Date.now(),
         lastActiveAt: Date.now(),
         lastFinishedAt: undefined,
@@ -1881,6 +3671,8 @@ export class FlowChatStore {
         isHistorical: false,
         historyState: 'new',
         workspacePath,
+        projectWorkspacePath: meta?.projectWorkspacePath,
+        workspaceId: meta?.workspaceId,
         remoteConnectionId,
         remoteSshHost,
         parentSessionId: relationship.parentSessionId,
@@ -1890,6 +3682,7 @@ export class FlowChatStore {
         btwThreads: [],
         btwOrigin: relationship.btwOrigin,
         deepReviewRunManifest: meta?.deepReviewRunManifest,
+        focusedReviewDisplayLabel: meta?.focusedReviewDisplayLabel,
         reviewTargetEvidence: meta?.reviewTargetEvidence,
         reviewTargetFilePaths: meta?.reviewTargetFilePaths,
         isTransient: meta?.isTransient ?? false,
@@ -1909,6 +3702,9 @@ export class FlowChatStore {
   public switchSession(sessionId: string): void {
     const previousSessionId = this.state.activeSessionId;
     const targetSessionExists = this.state.sessions.has(sessionId);
+    if (targetSessionExists && previousSessionId !== sessionId) {
+      this.invalidateSessionTurnNavigationIntents();
+    }
     if (targetSessionExists && previousSessionId && previousSessionId !== sessionId) {
       this.cancelLocalSessionHistoryCompletion(previousSessionId, 'session-switch');
     }
@@ -1941,7 +3737,7 @@ export class FlowChatStore {
     }));
 
     if (targetSessionExists && previousSessionId !== sessionId) {
-      this.scheduleActiveLocalPartialSessionHistoryCompletion(sessionId, 'session-switch');
+      this.scheduleActiveLegacyPartialSessionHistoryCompletion(sessionId, 'session-switch');
     }
   }
 
@@ -2099,6 +3895,470 @@ export class FlowChatStore {
         ...prev,
         sessions: newSessions,
       };
+    });
+  }
+
+  public updateSessionReasoningPreset(sessionId: string, presetId?: string | null): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session) return prev;
+
+      const normalizedPreset = presetId?.trim() || undefined;
+      if (session.config.reasoningPreset === normalizedPreset) return prev;
+
+      const updatedSession = {
+        ...session,
+        config: {
+          ...session.config,
+          reasoningPreset: normalizedPreset,
+        },
+        lastActiveAt: Date.now(),
+      };
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, updatedSession);
+      return { ...prev, sessions: newSessions };
+    });
+  }
+
+  /**
+   * Apply a backend `SessionModelAutoMigrated` notice as a compare-and-swap.
+   *
+   * The backend emits this while restoring a session whose persisted model is
+   * gone. That restore is frequently triggered by the very model update the
+   * user just made, so the notice can land *after* the composer already stored
+   * the newly picked model. Applying it blindly reverts the user's choice, and
+   * the reverted value is what the next send pushes back to the backend.
+   *
+   * Only migrate while the session still holds the model the backend migrated
+   * away from (or holds no selection yet). Mirrors the CLI guard in
+   * `src/apps/cli/src/modes/chat/selection.rs`.
+   *
+   * Returns whether the migration was applied.
+   */
+  public applySessionModelAutoMigration(
+    sessionId: string,
+    previousModelId: string,
+    newModelId: string,
+  ): boolean {
+    const session = this.state.sessions.get(sessionId);
+    if (!session) return false;
+
+    const currentModelName = session.config.modelName?.trim();
+    if (currentModelName && currentModelName !== previousModelId.trim()) {
+      return false;
+    }
+
+    this.updateSessionModelName(sessionId, newModelId);
+    return true;
+  }
+
+  /** Clear a backend-invalidated reasoning preset without overwriting a newer choice. */
+  public applySessionReasoningPresetAutoClear(
+    sessionId: string,
+    previousPresetId: string,
+  ): boolean {
+    const session = this.state.sessions.get(sessionId);
+    if (
+      !session
+      || session.config.reasoningPreset?.trim() !== previousPresetId.trim()
+    ) {
+      return false;
+    }
+
+    this.updateSessionReasoningPreset(sessionId, undefined);
+    return true;
+  }
+
+  /** Update the target-owned model choice before an observer job is submitted. */
+  public updateSessionDispatchModel(sessionId: string, modelName: string): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      const normalizedModelName = modelName.trim();
+      if (
+        !session
+        || !normalizedModelName
+        || session.config.dispatchModel === normalizedModelName
+      ) {
+        return prev;
+      }
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        config: {
+          ...session.config,
+          dispatchModel: normalizedModelName,
+          dispatchReasoningPreset: 'auto',
+        },
+        lastActiveAt: Date.now(),
+      });
+      return { ...prev, sessions: newSessions };
+    });
+  }
+
+  /** Update the target-owned reasoning choice for the next dispatch turn. */
+  public updateSessionDispatchReasoningPreset(sessionId: string, presetId: string): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      const normalizedPreset = presetId.trim();
+      if (!session || !normalizedPreset || session.config.dispatchReasoningPreset === normalizedPreset) {
+        return prev;
+      }
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        config: { ...session.config, dispatchReasoningPreset: normalizedPreset },
+        lastActiveAt: Date.now(),
+      });
+      return { ...prev, sessions: newSessions };
+    });
+  }
+
+  /** Update the approval policy; the next turn carries it to the target. */
+  public updateSessionDispatchApprovalPolicy(
+    sessionId: string,
+    approvalPolicy: NonNullable<SessionConfig['dispatchApprovalPolicy']>,
+  ): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session || session.config.dispatchApprovalPolicy === approvalPolicy) {
+        return prev;
+      }
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        config: {
+          ...session.config,
+          dispatchApprovalPolicy: approvalPolicy,
+        },
+        lastActiveAt: Date.now(),
+      });
+      return { ...prev, sessions: newSessions };
+    });
+  }
+
+  /**
+   * Apply a backend session rebind (worktree isolation toggled on or off).
+   * The project root stays put; only the execution directory moves.
+   */
+  public updateSessionExecutionTarget(
+    sessionId: string,
+    binding: {
+      workspacePath: string;
+      projectWorkspacePath: string;
+      workspaceId?: string;
+      executionTarget: Session['config']['executionTarget'];
+    },
+  ): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session) return prev;
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        workspacePath: binding.workspacePath,
+        projectWorkspacePath: binding.projectWorkspacePath,
+        workspaceId: binding.workspaceId ?? session.workspaceId,
+        config: {
+          ...session.config,
+          workspacePath: binding.workspacePath,
+          projectWorkspacePath: binding.projectWorkspacePath,
+          workspaceId: binding.workspaceId ?? session.config.workspaceId,
+          executionTarget: binding.executionTarget,
+        },
+        lastActiveAt: Date.now(),
+      });
+
+      return { ...prev, sessions: newSessions };
+    });
+  }
+
+  /**
+   * Bind an observer-only session to its immutable dispatch target.
+   * This updates frontend state only; it must never create a local runtime
+   * session or write the normal session store.
+   */
+  public updateSessionDispatchTarget(
+    sessionId: string,
+    binding: {
+      targetRequest: NonNullable<SessionConfig['dispatchTargetRequest']>;
+      target: NonNullable<SessionConfig['dispatchTarget']>;
+      jobId: string;
+      approvalPolicy: NonNullable<SessionConfig['dispatchApprovalPolicy']>;
+      model?: string;
+      reasoningPreset?: string;
+      modelCatalog?: SessionConfig['dispatchModelCatalog'];
+      availableModels?: string[];
+      defaultModel?: string;
+      state?: NonNullable<SessionConfig['dispatchJobState']>;
+      cursor?: number;
+      /**
+       * Observer recovery may deliberately resume from a transcript cache that
+       * trails the renderer cursor persisted before shutdown. Only that paired
+       * cache/replay path may move the projection cursor backwards.
+       */
+      cursorReset?: boolean;
+      sourceWorkspacePath?: string;
+      sourceWorkspaceId?: string;
+    },
+  ): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session) return prev;
+
+      const currentTarget = session.config.dispatchTarget;
+      if (
+        currentTarget &&
+        currentTarget.kind !== 'local' &&
+        !sameDispatchTargetIdentity(currentTarget, binding.target)
+      ) {
+        log.warn('Ignoring dispatch target mutation for an existing observer session', {
+          sessionId,
+          currentTarget,
+          requestedTarget: binding.target,
+        });
+        return prev;
+      }
+
+      const newSessions = new Map(prev.sessions);
+      const sourceWorkspacePath = binding.sourceWorkspacePath?.trim() || undefined;
+      const sourceWorkspaceId = binding.sourceWorkspaceId?.trim() || undefined;
+      newSessions.set(sessionId, {
+        ...session,
+        // Observer projections are reconstructed from the target event log,
+        // never from the local session-history API. Reclassifying a startup
+        // metadata row here prevents a later click from hydrating empty local
+        // history over a dispatch transcript restored by the observer.
+        isHistorical: false,
+        historyState: 'ready',
+        contextRestoreState: 'ready',
+        isPartial: false,
+        loadedTurnCount: canonicalSessionTurns(session).length,
+        totalTurnCount: projectedSessionTurnCount(session),
+        workspacePath: sourceWorkspacePath ?? session.workspacePath,
+        projectWorkspacePath:
+          sourceWorkspacePath ?? session.projectWorkspacePath,
+        workspaceId: sourceWorkspaceId ?? session.workspaceId,
+        config: {
+          ...session.config,
+          workspacePath:
+            sourceWorkspacePath ?? session.config.workspacePath,
+          projectWorkspacePath:
+            sourceWorkspacePath ?? session.config.projectWorkspacePath,
+          workspaceId: sourceWorkspaceId ?? session.config.workspaceId,
+          dispatchTargetRequest: binding.targetRequest,
+          dispatchTarget: binding.target,
+          dispatchJobId: binding.jobId,
+          dispatchApprovalPolicy: binding.approvalPolicy,
+          dispatchModel: binding.model ?? session.config.dispatchModel,
+          dispatchReasoningPreset:
+            binding.reasoningPreset ?? session.config.dispatchReasoningPreset,
+          dispatchModelCatalog:
+            binding.modelCatalog ?? session.config.dispatchModelCatalog,
+          dispatchAvailableModels:
+            binding.availableModels ?? session.config.dispatchAvailableModels,
+          dispatchDefaultModel:
+            binding.defaultModel ?? session.config.dispatchDefaultModel,
+          dispatchJobState: binding.state ?? session.config.dispatchJobState ?? 'queued',
+          dispatchCursor: binding.cursorReset
+            ? Math.max(0, binding.cursor ?? 0)
+            : Math.max(0, binding.cursor ?? session.config.dispatchCursor ?? 0),
+        },
+        lastActiveAt: Date.now(),
+      });
+      return { ...prev, sessions: newSessions };
+    });
+  }
+
+  /**
+   * Restore an observer projection's transcript from the controller's UI cache.
+   *
+   * Frontend state only, exactly like {@link updateSessionDispatchTarget}: the
+   * target CLI still owns the durable session, so this must not create a local
+   * runtime session or write the normal session store.
+   *
+   * The turns and the cursor are cached together, so the cursor may only be
+   * adopted when this call reports success. Refuses to hydrate a session that
+   * already has turns — replacing live content with a stale cache would drop
+   * whatever the observer projected in the meantime.
+   */
+  public hydrateDispatchTranscript(
+    sessionId: string,
+    turns: DialogTurn[],
+  ): boolean {
+    if (turns.length === 0) return false;
+    let hydrated = false;
+
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (
+        !session ||
+        !isProjectedSessionEmpty(session) ||
+        !session.config.dispatchTarget ||
+        session.config.dispatchTarget.kind === 'local'
+      ) {
+        return prev;
+      }
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        isHistorical: false,
+        historyState: 'ready',
+        contextRestoreState: 'ready',
+        isPartial: false,
+        loadedTurnCount: turns.length,
+        totalTurnCount: turns.length,
+        dialogTurns: [...turns].sort(compareDialogTurnOrder),
+      });
+      hydrated = true;
+      return { ...prev, sessions: newSessions };
+    });
+
+    return hydrated;
+  }
+
+  /**
+   * Commit a target-side status snapshot only when it still follows the cursor
+   * that was polled. The observer applies all events first, then calls this
+   * method; a stale response therefore cannot jump the durable cursor forward.
+   */
+  public applyDispatchSnapshot(
+    sessionId: string,
+    snapshot: {
+      jobId: string;
+      state: NonNullable<SessionConfig['dispatchJobState']>;
+      cursor: number;
+      lastError?: string;
+      expectedCursor?: number;
+      cursorReset?: boolean;
+      /**
+       * True only after the observer receives an empty terminal page at the
+       * same cursor. Earlier terminal pages may still have projected events.
+       */
+      terminalDrained?: boolean;
+    },
+  ): DispatchSnapshotApplyResult {
+    let result: DispatchSnapshotApplyResult = {
+      applied: false,
+      cursor: this.state.sessions.get(sessionId)?.config.dispatchCursor ?? 0,
+    };
+
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (
+        !session ||
+        session.config.dispatchJobId !== snapshot.jobId ||
+        !session.config.dispatchTarget ||
+        session.config.dispatchTarget.kind === 'local'
+      ) {
+        return prev;
+      }
+      const currentCursor = session.config.dispatchCursor ?? 0;
+      if (
+        (!snapshot.cursorReset && snapshot.cursor < currentCursor) ||
+        (
+          snapshot.expectedCursor !== undefined &&
+          snapshot.expectedCursor !== currentCursor
+        )
+      ) {
+        result = { applied: false, cursor: currentCursor };
+        return prev;
+      }
+
+      const effectiveState = isDispatchJobTerminal(session.config.dispatchJobState)
+        ? session.config.dispatchJobState!
+        : snapshot.state;
+      const terminal = isDispatchJobTerminal(effectiveState);
+      const settledAt = Date.now();
+      const terminalTurnStatus = snapshot.terminalDrained
+        ? dispatchTerminalTurnStatus(effectiveState)
+        : null;
+      let dialogTurns = session.dialogTurns;
+      const lastTurn = dialogTurns[dialogTurns.length - 1];
+      if (terminalTurnStatus && lastTurn) {
+        const settledTurn = settleDialogTurnToTerminalStatus(
+          lastTurn,
+          terminalTurnStatus,
+          settledAt,
+          terminalTurnStatus === 'error'
+            ? snapshot.lastError || session.error || 'Dispatched task failed'
+            : undefined,
+        );
+        if (settledTurn !== lastTurn) {
+          dialogTurns = [...dialogTurns.slice(0, -1), settledTurn];
+        }
+      }
+      const terminalError = effectiveState === 'failed'
+        ? snapshot.lastError || session.error || 'Dispatched task failed'
+        : session.error;
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        dialogTurns,
+        error: terminalError,
+        lastActiveAt: settledAt,
+        lastFinishedAt: terminal
+          ? session.lastFinishedAt ?? settledAt
+          : session.lastFinishedAt,
+        config: {
+          ...session.config,
+          dispatchJobState: effectiveState,
+          dispatchCursor: snapshot.cursor,
+          dispatchLastError:
+            snapshot.lastError ?? session.config.dispatchLastError,
+        },
+      });
+      result = { applied: true, cursor: snapshot.cursor };
+      return { ...prev, sessions: newSessions };
+    });
+
+    return result;
+  }
+
+  /**
+   * Record an empty session's desired isolation state without touching Git.
+   * MessageModule materializes this preference only after the user submits the
+   * first prompt.
+   */
+  public setSessionWorktreeIsolationRequested(
+    sessionId: string,
+    requested: boolean | undefined,
+  ): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session) return prev;
+
+      const newSessions = new Map(prev.sessions);
+      const config = { ...session.config };
+      if (requested === undefined) {
+        delete config.worktreeIsolationRequested;
+      } else {
+        config.worktreeIsolationRequested = requested;
+      }
+      newSessions.set(sessionId, {
+        ...session,
+        config,
+        lastActiveAt: Date.now(),
+      });
+      return { ...prev, sessions: newSessions };
+    });
+  }
+
+  public updateSessionFocusedReviewDisplayLabel(
+    sessionId: string,
+    focusedReviewDisplayLabel: Session['focusedReviewDisplayLabel'],
+  ): void {
+    if (!focusedReviewDisplayLabel) return;
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session || session.focusedReviewDisplayLabel === focusedReviewDisplayLabel) return prev;
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, { ...session, focusedReviewDisplayLabel });
+      return { ...prev, sessions: newSessions };
     });
   }
 
@@ -2291,7 +4551,7 @@ export class FlowChatStore {
       const deleteResults = await Promise.allSettled(
         sessionIdsToDelete.map(async id => {
           const sess = this.state.sessions.get(id);
-          const workspacePath = sess?.workspacePath;
+          const workspacePath = sess ? sessionProjectWorkspacePath(sess) : undefined;
           if (!workspacePath) {
             throw new Error(`Workspace path not found for session ${id}`);
           }
@@ -2437,16 +4697,21 @@ export class FlowChatStore {
   public async cancelRunningSessionsForWorkspace(
     workspace: Pick<WorkspaceInfo, 'id' | 'rootPath' | 'connectionId' | 'sshHost'>
   ): Promise<string[]> {
-    const runningSessionIds = Array.from(this.state.sessions.values())
+    const runningSessions = Array.from(this.state.sessions.values())
       .filter(session => sessionMatchesWorkspace(session, workspace))
       .filter(session => {
+        if (isNonLocalDispatchTarget(session.config.dispatchTarget)) {
+          // Closing the source workspace must not stop a detached target job.
+          // Only the explicit task Stop action owns dispatch cancellation.
+          return false;
+        }
         const lastTurn = session.dialogTurns[session.dialogTurns.length - 1];
         return Boolean(
           lastTurn &&
           !['completed', 'cancelled', 'error'].includes(lastTurn.status)
         );
-      })
-      .map(session => session.sessionId);
+      });
+    const runningSessionIds = runningSessions.map(session => session.sessionId);
 
     if (runningSessionIds.length === 0) {
       return [];
@@ -2454,7 +4719,8 @@ export class FlowChatStore {
 
     const { agentAPI } = await import('@/infrastructure/api/service-api/AgentAPI');
     await Promise.allSettled(
-      runningSessionIds.map(async sessionId => {
+      runningSessions.map(async session => {
+        const sessionId = session.sessionId;
         try {
           await agentAPI.cancelSession(sessionId);
         } catch (error) {
@@ -2548,6 +4814,7 @@ export class FlowChatStore {
   }
 
   public addDialogTurn(sessionId: string, dialogTurn: DialogTurn): void {
+    let appendedTurn = false;
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
       if (!session) return prev;
@@ -2557,21 +4824,59 @@ export class FlowChatStore {
       }
 
       const updatedDialogTurns = [...session.dialogTurns, dialogTurn];
+      const updatedCanonicalTurnCount = canonicalSessionTurns({
+        dialogTurns: updatedDialogTurns,
+      }).length;
+      const storageTurnIndex = resolveStorageTurnIndex(session, dialogTurn);
+      const catalog = session.turnCatalog?.sessionId === sessionId
+        ? session.turnCatalog
+        : undefined;
+      const catalogAlreadyCountsTurn = catalog?.entries.some(entry =>
+        entry.turnId === dialogTurn.id
+        || (
+          storageTurnIndex !== undefined
+          && entry.storageTurnIndex === storageTurnIndex
+        )
+      ) === true;
+      const previousTotalTurnCount = projectedSessionTurnCount(session);
       const updatedSession = {
         ...session,
         dialogTurns: updatedDialogTurns,
+        loadedTurnCount: updatedCanonicalTurnCount,
+        totalTurnCount: Math.max(
+          updatedCanonicalTurnCount,
+          previousTotalTurnCount + (catalogAlreadyCountsTurn ? 0 : 1),
+        ),
         lastUserDialogMode: this.deriveLastUserDialogMode(updatedDialogTurns),
         lastActiveAt: Date.now()
       };
 
       const newSessions = new Map(prev.sessions);
       newSessions.set(sessionId, updatedSession);
+      appendedTurn = true;
 
       return {
         ...prev,
         sessions: newSessions
       };
     });
+    const updatedSession = this.state.sessions.get(sessionId);
+    if (appendedTurn && updatedSession) {
+      const catalog = updatedSession.turnCatalog?.sessionId === sessionId
+        ? updatedSession.turnCatalog
+        : undefined;
+      const identity = resolveDialogTurnIdentity(updatedSession, dialogTurn);
+      if (!identity) {
+        return;
+      }
+      this.cacheSessionLoadedTurnRange(sessionId, {
+        startOrdinal: identity.ordinal,
+        endOrdinalExclusive: identity.ordinal + 1,
+        turns: [dialogTurn],
+        lastAccessedAt: Date.now(),
+        source: 'live',
+      }, catalog ?? null);
+    }
   }
 
   public addLocalUsageReportTurn(params: {
@@ -2597,8 +4902,8 @@ export class FlowChatStore {
       modelVisible: false,
       usageReport: params.report,
       usageReportStatus: params.status ?? 'completed',
+      usageReportProvisional: true,
     };
-    const turnIndex = session.dialogTurns.length;
     const dialogTurn: DialogTurn = {
       id: `local-usage-${params.reportId}`,
       sessionId: params.sessionId,
@@ -2613,7 +4918,6 @@ export class FlowChatStore {
       status: params.status === 'loading' ? 'processing' : 'completed',
       startTime: params.generatedAt,
       endTime: params.generatedAt,
-      backendTurnIndex: turnIndex,
     };
 
     this.setState(prev => {
@@ -2638,16 +4942,137 @@ export class FlowChatStore {
     return dialogTurn;
   }
 
+  public commitLocalUsageReportTurn(params: {
+    sessionId: string;
+    dialogTurnId: string;
+    turnId: string;
+    storageTurnIndex: number;
+    totalTurnCount: number;
+    turnCatalog: SessionTurnCatalog;
+  }): boolean {
+    if (
+      params.turnCatalog.sessionId !== params.sessionId
+      || params.totalTurnCount !== params.turnCatalog.totalTurnCount
+      || !Number.isInteger(params.storageTurnIndex)
+      || params.storageTurnIndex < 0
+    ) {
+      log.warn('Cannot commit local usage report with an invalid authoritative catalog', {
+        sessionId: params.sessionId,
+        dialogTurnId: params.dialogTurnId,
+        turnId: params.turnId,
+        storageTurnIndex: params.storageTurnIndex,
+      });
+      return false;
+    }
+    const catalogEntry = params.turnCatalog.entries.find(entry =>
+      entry.turnId === params.turnId
+      && entry.storageTurnIndex === params.storageTurnIndex
+    );
+    if (!catalogEntry) {
+      log.warn('Cannot commit local usage report missing from authoritative catalog', {
+        sessionId: params.sessionId,
+        dialogTurnId: params.dialogTurnId,
+        turnId: params.turnId,
+        storageTurnIndex: params.storageTurnIndex,
+      });
+      return false;
+    }
+
+    let committedTurn: DialogTurn | null = null;
+    this.setState(prev => {
+      const session = prev.sessions.get(params.sessionId);
+      const provisionalTurn = session?.dialogTurns.find(turn => turn.id === params.dialogTurnId);
+      if (
+        !session
+        || !provisionalTurn
+        || provisionalTurn.id !== params.turnId
+        || !isProvisionalUsageReportTurn(provisionalTurn)
+      ) {
+        return prev;
+      }
+
+      const dialogTurns = session.dialogTurns.map(turn => {
+        if (turn.id !== params.dialogTurnId) {
+          return turn;
+        }
+        const metadata = { ...turn.userMessage.metadata } as LocalCommandMetadata;
+        delete metadata.usageReportProvisional;
+        const nextTurn: DialogTurn = {
+          ...turn,
+          storageTurnIndex: params.storageTurnIndex,
+          backendTurnIndex: params.storageTurnIndex,
+          userMessage: {
+            ...turn.userMessage,
+            metadata,
+          },
+        };
+        committedTurn = nextTurn;
+        return nextTurn;
+      });
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(params.sessionId, {
+        ...session,
+        dialogTurns,
+        turnCatalog: params.turnCatalog,
+        totalTurnCount: params.totalTurnCount,
+        loadedTurnCount: canonicalSessionTurns({ dialogTurns }).length,
+      });
+      return {
+        ...prev,
+        sessions: newSessions,
+      };
+    });
+
+    if (!committedTurn) {
+      log.warn('Cannot commit missing provisional local usage report', {
+        sessionId: params.sessionId,
+        dialogTurnId: params.dialogTurnId,
+      });
+      return false;
+    }
+
+    this.ensureSessionHistoryView(params.sessionId, params.turnCatalog).catalog = params.turnCatalog;
+    this.cacheSessionLoadedTurnRange(params.sessionId, {
+      startOrdinal: catalogEntry.ordinal,
+      endOrdinalExclusive: catalogEntry.ordinal + 1,
+      turns: [committedTurn],
+      lastAccessedAt: Date.now(),
+      source: 'live',
+    }, params.turnCatalog, catalogEntry.ordinal);
+    return true;
+  }
+
   public deleteDialogTurn(sessionId: string, dialogTurnId: string): void {
+    let deletedTurn: DialogTurn | undefined;
+    let deletedOrdinal: number | undefined;
+    let shiftLaterOrdinals = false;
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
       if (!session) return prev;
 
+      deletedTurn = session.dialogTurns.find(turn => turn.id === dialogTurnId);
+      if (!deletedTurn) return prev;
+      deletedOrdinal = resolveDialogTurnIdentity(session, deletedTurn)?.ordinal;
       const updatedDialogTurns = session.dialogTurns.filter(turn => turn.id !== dialogTurnId);
+      const catalogCountsDeletedTurn = resolveStorageTurnIndex(session, deletedTurn) !== undefined;
+      const countedOptimisticTurn = !catalogCountsDeletedTurn
+        && !isProvisionalUsageReportTurn(deletedTurn);
+      shiftLaterOrdinals = countedOptimisticTurn;
+      const nextCanonicalTurnCount = canonicalSessionTurns({ dialogTurns: updatedDialogTurns }).length;
+      const currentTokenUsage = currentTokenUsageAfterSourceRemoval(
+        session,
+        updatedDialogTurns,
+        session.currentTokenUsage?.turnId === dialogTurnId,
+      );
 
       const updatedSession = {
         ...session,
         dialogTurns: updatedDialogTurns,
+        currentTokenUsage,
+        loadedTurnCount: nextCanonicalTurnCount,
+        totalTurnCount: countedOptimisticTurn
+          ? Math.max(nextCanonicalTurnCount, projectedSessionTurnCount(session) - 1)
+          : session.totalTurnCount,
         lastUserDialogMode: this.deriveLastUserDialogMode(updatedDialogTurns),
         lastActiveAt: Date.now()
       };
@@ -2660,6 +5085,86 @@ export class FlowChatStore {
         sessions: newSessions
       };
     });
+    const view = this.sessionHistoryViews.get(sessionId);
+    if (view && deletedTurn && deletedOrdinal !== undefined) {
+      const retainedRanges: LoadedTurnRange[] = [];
+      for (const range of view.loadedRanges) {
+        let groupStartOrdinal: number | undefined;
+        let groupTurns: DialogTurn[] = [];
+        const flushGroup = () => {
+          if (groupStartOrdinal === undefined || groupTurns.length === 0) {
+            return;
+          }
+          retainedRanges.push({
+            ...range,
+            startOrdinal: groupStartOrdinal,
+            endOrdinalExclusive: groupStartOrdinal + groupTurns.length,
+            turns: groupTurns,
+          });
+          groupStartOrdinal = undefined;
+          groupTurns = [];
+        };
+
+        range.turns.forEach((turn, localIndex) => {
+          if (turn.id === dialogTurnId) {
+            flushGroup();
+            return;
+          }
+          const ordinal = range.startOrdinal + localIndex;
+          const nextOrdinal = shiftLaterOrdinals && ordinal > deletedOrdinal!
+            ? ordinal - 1
+            : ordinal;
+          if (
+            groupStartOrdinal !== undefined
+            && nextOrdinal !== groupStartOrdinal + groupTurns.length
+          ) {
+            flushGroup();
+          }
+          groupStartOrdinal ??= nextOrdinal;
+          groupTurns.push(turn);
+        });
+        flushGroup();
+      }
+      view.loadedRanges = retainedRanges;
+
+      if (shiftLaterOrdinals) {
+        const accessTimes = this.sessionHistoryTurnAccessTimes.get(sessionId);
+        if (accessTimes) {
+          const shiftedAccessTimes = new Map<number, number>();
+          for (const [ordinal, accessedAt] of accessTimes) {
+            if (ordinal === deletedOrdinal) {
+              continue;
+            }
+            shiftedAccessTimes.set(
+              ordinal > deletedOrdinal ? ordinal - 1 : ordinal,
+              accessedAt,
+            );
+          }
+          if (shiftedAccessTimes.size > 0) {
+            this.sessionHistoryTurnAccessTimes.set(sessionId, shiftedAccessTimes);
+          } else {
+            this.sessionHistoryTurnAccessTimes.delete(sessionId);
+          }
+        }
+        if (view.pendingTargetOrdinal !== null && view.pendingTargetOrdinal > deletedOrdinal) {
+          view.pendingTargetOrdinal -= 1;
+        }
+        if (view.activeRange) {
+          const startOrdinal = view.activeRange.startOrdinal > deletedOrdinal
+            ? view.activeRange.startOrdinal - 1
+            : view.activeRange.startOrdinal;
+          const endOrdinalExclusive = view.activeRange.endOrdinalExclusive > deletedOrdinal
+            ? view.activeRange.endOrdinalExclusive - 1
+            : view.activeRange.endOrdinalExclusive;
+          view.activeRange = endOrdinalExclusive > startOrdinal
+            ? { ...view.activeRange, startOrdinal, endOrdinalExclusive }
+            : null;
+        }
+      }
+    }
+    if (deletedTurn && !isProvisionalUsageReportTurn(deletedTurn)) {
+      this.seedSessionHistoryLoadedRanges(sessionId, 'live');
+    }
   }
 
   /**
@@ -2674,15 +5179,78 @@ export class FlowChatStore {
 
       const clampedIndex = Math.max(0, Math.min(turnIndex, session.dialogTurns.length));
       const updatedDialogTurns = session.dialogTurns.slice(0, clampedIndex);
+      const removedCurrentUsageSource = Boolean(
+        session.currentTokenUsage?.turnId
+        && session.dialogTurns.slice(clampedIndex).some(
+          turn => turn.id === session.currentTokenUsage?.turnId,
+        ),
+      );
+      const hasCompleteHistory = session.isPartial !== true;
+      const historyView = this.sessionHistoryViews.get(sessionId);
+      const currentCatalog = session.turnCatalog?.sessionId === sessionId
+        ? session.turnCatalog
+        : historyView?.catalog?.sessionId === sessionId
+          ? historyView.catalog
+          : undefined;
+      const truncatedCatalog = hasCompleteHistory && currentCatalog
+        ? truncateTurnCatalog(
+          currentCatalog,
+          clampedIndex,
+          `${currentCatalog.revision}:rollback:${clampedIndex}:${Date.now()}`,
+        )
+        : undefined;
       const updatedSession = {
         ...session,
         dialogTurns: updatedDialogTurns,
+        currentTokenUsage: currentTokenUsageAfterSourceRemoval(
+          session,
+          updatedDialogTurns,
+          removedCurrentUsageSource,
+        ),
+        ...(hasCompleteHistory ? {
+          loadedTurnCount: updatedDialogTurns.length,
+          totalTurnCount: updatedDialogTurns.length,
+          turnCatalog: truncatedCatalog,
+        } : {}),
         lastUserDialogMode: this.deriveLastUserDialogMode(updatedDialogTurns),
         lastActiveAt: Date.now()
       };
 
       const newSessions = new Map(prev.sessions);
       newSessions.set(sessionId, updatedSession);
+
+      if (hasCompleteHistory) {
+        if (historyView) {
+          historyView.navigationGeneration += 1;
+          historyView.pendingTargetOrdinal = null;
+          historyView.activeRange = null;
+          historyView.catalog = truncatedCatalog ?? null;
+          historyView.loadedRanges = historyView.loadedRanges.flatMap(range => {
+            if (range.startOrdinal >= clampedIndex) {
+              return [];
+            }
+            const endOrdinalExclusive = Math.min(range.endOrdinalExclusive, clampedIndex);
+            return [{
+              ...range,
+              endOrdinalExclusive,
+              turns: range.turns.slice(0, endOrdinalExclusive - range.startOrdinal),
+            }];
+          });
+        }
+        const accessTimes = this.sessionHistoryTurnAccessTimes.get(sessionId);
+        if (accessTimes) {
+          for (const ordinal of accessTimes.keys()) {
+            if (ordinal >= clampedIndex) {
+              accessTimes.delete(ordinal);
+            }
+          }
+          if (accessTimes.size === 0) {
+            this.sessionHistoryTurnAccessTimes.delete(sessionId);
+          }
+        }
+        this.deferredFullHistoryProjections.delete(sessionId);
+        this.fullHistoryProjectionApplyRequests.delete(sessionId);
+      }
 
       return {
         ...prev,
@@ -2721,6 +5289,47 @@ export class FlowChatStore {
         sessions: newSessions
       };
     });
+  }
+
+  /**
+   * Replace a provisional Turn in place so projected counts and cached history
+   * keep one stable ordinal across runtime adoption.
+   */
+  public replaceOptimisticDialogTurn(
+    sessionId: string,
+    optimisticTurnId: string,
+    replacement: DialogTurn,
+  ): boolean {
+    let replaced = false;
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session) return prev;
+      const localIndex = session.dialogTurns.findIndex(turn => turn.id === optimisticTurnId);
+      if (localIndex < 0) return prev;
+
+      const dialogTurns = [...session.dialogTurns];
+      dialogTurns[localIndex] = replacement;
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        dialogTurns,
+        lastUserDialogMode: this.deriveLastUserDialogMode(dialogTurns),
+        lastActiveAt: Date.now(),
+      });
+      replaced = true;
+      return { ...prev, sessions: newSessions };
+    });
+
+    if (replaced) {
+      const view = this.sessionHistoryViews.get(sessionId);
+      if (view) {
+        view.loadedRanges = view.loadedRanges.map(range => ({
+          ...range,
+          turns: range.turns.map(turn => turn.id === optimisticTurnId ? replacement : turn),
+        }));
+      }
+    }
+    return replaced;
   }
 
   /**
@@ -3108,18 +5717,23 @@ export class FlowChatStore {
 
   public updateTokenUsage(
     sessionId: string, 
-    tokenUsage: { inputTokens: number; outputTokens?: number; totalTokens: number },
+    tokenUsage: Pick<
+      TokenUsage,
+      'inputTokens' | 'outputTokens' | 'totalTokens' | 'turnId' | 'source'
+    >,
     dialogTurnId?: string
   ): void {
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
       if (!session) return prev;
 
-      const nextTokenUsage = {
+      const nextTokenUsage: TokenUsage = {
         inputTokens: tokenUsage.inputTokens,
         outputTokens: tokenUsage.outputTokens,
         totalTokens: tokenUsage.totalTokens,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        ...(tokenUsage.turnId ? { turnId: tokenUsage.turnId } : {}),
+        ...(tokenUsage.source ? { source: tokenUsage.source } : {}),
       };
       let dialogTurns = session.dialogTurns;
       if (dialogTurnId) {
@@ -3461,8 +6075,11 @@ export class FlowChatStore {
       if (session.isTransient) {
         return;
       }
+      if (isNonLocalDispatchTarget(session.config.dispatchTarget)) {
+        return;
+      }
 
-      const workspacePath = session.workspacePath;
+      const workspacePath = sessionProjectWorkspacePath(session);
       if (!workspacePath) {
         log.warn('Workspace path not available, skipping save', { sessionId, turnId });
         return;
@@ -3474,7 +6091,14 @@ export class FlowChatStore {
         return;
       }
 
-      const turnIndex = session.dialogTurns.findIndex(t => t.id === turnId);
+      const turnIndex = resolveStorageTurnIndex(session, dialogTurn);
+      if (turnIndex === undefined) {
+        log.debug('Cancelled dialog turn has no storage identity, deferring persistence', {
+          sessionId,
+          turnId,
+        });
+        return;
+      }
       
       const turnData = {
         turnId,
@@ -3490,7 +6114,7 @@ export class FlowChatStore {
         },
         modelRounds: dialogTurn.modelRounds.map((round, roundIndex) => {
           const textItems = round.items
-            .filter(item => item.type === 'text' && !(item as any).runtimeStatus)
+            .filter(item => item.type === 'text')
             .map(item => ({
               id: item.id,
               content: (item as any).content || '',
@@ -3715,6 +6339,7 @@ export class FlowChatStore {
 
     const processSession = async (metadata: any) => {
       try {
+        logPersistedDispatchMetadataOverlap(metadata, 'metadata-page');
         if (surfaceGeneration !== this.surfaceGeneration) {
           return;
         }
@@ -3752,6 +6377,12 @@ export class FlowChatStore {
         const lastFinishedAt = deriveLastFinishedAtFromMetadata(metadata);
         const titleState = deriveSessionTitleStateFromMetadata(metadata);
         const hasDynamicDefaultTitle = titleState.titleSource === 'i18n';
+        const remoteScope = persistedSessionRemoteScope(
+          metadata,
+          remoteConnectionId,
+          remoteSshHost,
+        );
+        const persistedCurrentContextUsage = persistedCurrentContextUsageValue(metadata);
 
         this.setState(prev => {
           if (surfaceGeneration !== this.surfaceGeneration) {
@@ -3763,6 +6394,9 @@ export class FlowChatStore {
 
           const rawAgentType = metadata.agentType || 'agentic';
           const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'agentic';
+          const restoredCurrentTokenUsage = isAcpAgentType(validatedAgentType)
+            ? undefined
+            : deriveRestoredCurrentTokenUsage(persistedCurrentContextUsage);
 
           if (rawAgentType !== validatedAgentType) {
             log.warn('Invalid agentType, falling back to agentic', { sessionId: metadata.sessionId, rawAgentType, validatedAgentType });
@@ -3781,6 +6415,9 @@ export class FlowChatStore {
             config: {
               agentType: validatedAgentType,
               modelName: metadata.modelName,
+              workspacePath: metadata.workspacePath || workspacePath,
+              projectWorkspacePath: metadata.projectWorkspacePath || workspacePath,
+              executionTarget: metadata.executionTarget,
             },
             createdAt: metadata.createdAt,
             lastActiveAt: metadata.lastActiveAt,
@@ -3790,13 +6427,15 @@ export class FlowChatStore {
             historyState: 'metadata-only',
             todos: (metadata as any).todos || [],
             maxContextTokens,
+            currentTokenUsage: restoredCurrentTokenUsage,
             mode: validatedAgentType,
             lastUserDialogMode: metadata.lastUserDialogAgentType,
             lastSubmittedMode: metadata.lastSubmittedAgentType,
             workspacePath: (metadata as any).workspacePath || workspacePath,
-            remoteConnectionId: metadata.remoteConnectionId || remoteConnectionId,
-            remoteSshHost:
-              metadata.remoteSshHost || metadata.workspaceHostname || remoteSshHost,
+            projectWorkspacePath: metadata.projectWorkspacePath || workspacePath,
+            remoteConnectionId: remoteScope.remoteConnectionId,
+            remoteSshHost: remoteScope.remoteSshHost,
+            workspaceHostname: metadata.workspaceHostname,
             parentSessionId: relationship.parentSessionId,
             sessionKind: relationship.sessionKind,
             parentToolCallId: relationship.parentToolCallId,
@@ -4086,6 +6725,7 @@ export class FlowChatStore {
 
       const processSession = async (metadata: any) => {
         try {
+          logPersistedDispatchMetadataOverlap(metadata, 'metadata-list');
           const existingSession = this.state.sessions.get(metadata.sessionId);
           if (existingSession) {
             return;
@@ -4120,6 +6760,12 @@ export class FlowChatStore {
           const lastFinishedAt = deriveLastFinishedAtFromMetadata(metadata);
           const titleState = deriveSessionTitleStateFromMetadata(metadata);
           const hasDynamicDefaultTitle = titleState.titleSource === 'i18n';
+          const remoteScope = persistedSessionRemoteScope(
+            metadata,
+            remoteConnectionId,
+            remoteSshHost,
+          );
+          const persistedCurrentContextUsage = persistedCurrentContextUsageValue(metadata);
 
           this.setState(prev => {
             if (prev.sessions.has(metadata.sessionId)) {
@@ -4128,6 +6774,9 @@ export class FlowChatStore {
 
             const rawAgentType = metadata.agentType || 'agentic';
             const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'agentic';
+            const restoredCurrentTokenUsage = isAcpAgentType(validatedAgentType)
+              ? undefined
+              : deriveRestoredCurrentTokenUsage(persistedCurrentContextUsage);
 
             if (rawAgentType !== validatedAgentType) {
               log.warn('Invalid agentType, falling back to agentic', { sessionId: metadata.sessionId, rawAgentType, validatedAgentType });
@@ -4146,6 +6795,9 @@ export class FlowChatStore {
               config: {
                 agentType: validatedAgentType,
                 modelName: metadata.modelName,
+                workspacePath: metadata.workspacePath || workspacePath,
+                projectWorkspacePath: metadata.projectWorkspacePath || workspacePath,
+                executionTarget: metadata.executionTarget,
               },
               createdAt: metadata.createdAt,
               lastActiveAt: metadata.lastActiveAt,
@@ -4155,13 +6807,15 @@ export class FlowChatStore {
               historyState: 'metadata-only',
               todos: (metadata as any).todos || [],
               maxContextTokens,
+              currentTokenUsage: restoredCurrentTokenUsage,
               mode: validatedAgentType,
               lastUserDialogMode: metadata.lastUserDialogAgentType,
               lastSubmittedMode: metadata.lastSubmittedAgentType,
               workspacePath: (metadata as any).workspacePath || workspacePath,
-              remoteConnectionId: metadata.remoteConnectionId || remoteConnectionId,
-              remoteSshHost:
-                metadata.remoteSshHost || metadata.workspaceHostname || remoteSshHost,
+              projectWorkspacePath: metadata.projectWorkspacePath || workspacePath,
+              remoteConnectionId: remoteScope.remoteConnectionId,
+              remoteSshHost: remoteScope.remoteSshHost,
+              workspaceHostname: metadata.workspaceHostname,
               parentSessionId: relationship.parentSessionId,
               sessionKind: relationship.sessionKind,
               parentToolCallId: relationship.parentToolCallId,
@@ -4333,11 +6987,28 @@ export class FlowChatStore {
         }
       }
 
-      if (!turnsChanged) {
+      mergedTurns.sort(compareDialogTurnOrder);
+      const turnCatalog = restored.turnCatalog?.sessionId === sessionId
+        ? selectPreferredTurnCatalog(session.turnCatalog, restored.turnCatalog)
+        : session.turnCatalog;
+      const restoredAgentType =
+        restored.session.agentType || session.mode || session.config.agentType;
+      const currentTokenUsage = reconcileRestoreViewCurrentTokenUsage(
+        session.currentTokenUsage,
+        restored.currentContextUsage,
+        mergedTurns,
+        restoredAgentType,
+        snapshotTurns,
+      );
+      if (
+        !turnsChanged
+        && turnCatalog === session.turnCatalog
+        && restoredAgentType === session.mode
+        && currentTokenUsage === session.currentTokenUsage
+      ) {
         return prev;
       }
 
-      mergedTurns.sort(compareDialogTurnOrder);
       const newSessions = new Map(prev.sessions);
       newSessions.set(sessionId, {
         ...session,
@@ -4355,17 +7026,22 @@ export class FlowChatStore {
           restored.totalTurnCount ?? restored.session.turnCount,
           mergedTurns.length,
         ),
+        turnCatalog,
         config: {
           ...session.config,
           ...(restored.session.modelName
             ? { modelName: restored.session.modelName }
             : {}),
+          ...(restored.session.reasoningPreset !== undefined
+            ? { reasoningPreset: restored.session.reasoningPreset?.trim() || undefined }
+            : {}),
         },
-        mode: restored.session.agentType || session.mode,
+        mode: restoredAgentType,
         lastUserDialogMode:
           restored.session.lastUserDialogAgentType || session.lastUserDialogMode,
         lastSubmittedMode:
           restored.session.lastSubmittedAgentType ?? session.lastSubmittedMode,
+        currentTokenUsage,
       });
       applied = true;
 
@@ -4374,6 +7050,10 @@ export class FlowChatStore {
         sessions: newSessions,
       };
     });
+
+    if (applied) {
+      this.seedSessionHistoryLoadedRanges(sessionId, 'initial-tail');
+    }
 
     const latestTurn = snapshotTurns[snapshotTurns.length - 1];
     return {
@@ -4407,6 +7087,61 @@ export class FlowChatStore {
       sessionTraceId,
     });
     const initialSession = this.state.sessions.get(sessionId);
+    const preserveDispatchObserverProjection = (): boolean => {
+      const latestSession = this.state.sessions.get(sessionId);
+      if (!dispatchObserverOwnsSession(sessionId, latestSession)) {
+        return false;
+      }
+
+      // If the observer has already bound the target, make its ownership
+      // explicit. If only the durable job index is present, leave the metadata
+      // placeholder untouched until ensureProjection supplies the full target.
+      if (isNonLocalDispatchTarget(latestSession?.config.dispatchTarget)) {
+        this.setState(prev => {
+          const session = prev.sessions.get(sessionId);
+          if (
+            !session
+            || !isNonLocalDispatchTarget(session.config.dispatchTarget)
+          ) {
+            return prev;
+          }
+          const newSessions = new Map(prev.sessions);
+          newSessions.set(sessionId, {
+            ...session,
+            isHistorical: false,
+            historyState: 'ready',
+            contextRestoreState: 'ready',
+            isPartial: false,
+            loadedTurnCount: canonicalSessionTurns(session).length,
+            totalTurnCount: projectedSessionTurnCount(session),
+          });
+          return { ...prev, sessions: newSessions };
+        });
+      }
+      return true;
+    };
+    const finishDispatchObserverSkip = (stage: 'initial' | 'late' | 'failed'): void => {
+      startupTrace.markPhase('historical_session_hydrate_end', {
+        remote,
+        sessionId,
+        sessionTraceId,
+        skipped: true,
+        reason: 'dispatch-observer-owned',
+        stage,
+        durationMs: elapsedMs(traceStartedAt),
+      });
+    };
+    if (preserveDispatchObserverProjection()) {
+      finishDispatchObserverSkip('initial');
+      return;
+    }
+    // The caller remains authoritative for legacy and remote sessions. Only a
+    // persisted dual-root binding may redirect history storage to the project
+    // root; otherwise a stale in-memory execution path can cross workspaces.
+    const storageWorkspacePath =
+      initialSession?.projectWorkspacePath
+      || initialSession?.config.projectWorkspacePath
+      || workspacePath;
     const suppressInitialHydratingState =
       !remote &&
       options?.deferFullHistoryUntilActive === true &&
@@ -4435,7 +7170,9 @@ export class FlowChatStore {
       let restoredHistoryPartial = false;
       let restoredLoadedTurnCount: number | undefined;
       let restoredTotalTurnCount: number | undefined;
+      let restoredTurnCatalog: SessionTurnCatalog | undefined;
       let restoredTiming: SessionViewRestoreTiming | undefined;
+      let restoredCurrentContextUsage: SessionContextUsage | null | undefined;
 
       // Finish or resume relay history import before Core restores its model
       // context. Ordinary local sessions return after one metadata read, while
@@ -4444,7 +7181,7 @@ export class FlowChatStore {
       //
       // Peer Device Mode: cloud turn fetch is paused on the controller; session
       // history must come from the peer host via restore_session_view.
-      if (!remote && workspacePath && !isPeerDeviceModeActive()) {
+      if (!remote && storageWorkspacePath && !isPeerDeviceModeActive()) {
         const relayImportStartedAt = nowMs();
         startupTrace.markPhase('historical_session_relay_import_start', {
           remote,
@@ -4457,7 +7194,7 @@ export class FlowChatStore {
           );
           const fetched = await remoteConnectAPI.accountFetchSessionTurns(
             sessionId,
-            workspacePath
+            storageWorkspacePath
           );
           startupTrace.markPhase('historical_session_relay_import_end', {
             remote,
@@ -4508,7 +7245,7 @@ export class FlowChatStore {
               try {
                 const restoredPromise = agentAPI.restoreSessionWithTurns(
                   sessionId,
-                  workspacePath,
+                  storageWorkspacePath,
                   remoteConnectionId,
                   remoteSshHost,
                   sessionTraceId,
@@ -4538,7 +7275,7 @@ export class FlowChatStore {
 
             const restoredSessionPromise = agentAPI.restoreSession(
               sessionId,
-              workspacePath,
+              storageWorkspacePath,
               remoteConnectionId,
               remoteSshHost,
               sessionTraceId,
@@ -4556,7 +7293,7 @@ export class FlowChatStore {
             try {
               const restoredPromise = agentAPI.restoreSessionView(
                 sessionId,
-                workspacePath,
+                storageWorkspacePath,
                 remoteConnectionId,
                 remoteSshHost,
                 sessionTraceId,
@@ -4572,7 +7309,11 @@ export class FlowChatStore {
               restoredHistoryPartial = restored.isPartial === true;
               restoredLoadedTurnCount = restored.loadedTurnCount;
               restoredTotalTurnCount = restored.totalTurnCount;
+              restoredTurnCatalog = restored.turnCatalog?.sessionId === sessionId
+                ? restored.turnCatalog
+                : undefined;
               restoredTiming = restored.timings;
+              restoredCurrentContextUsage = restored.currentContextUsage;
             } catch (error) {
               if (!isUnsupportedTauriCommandError(error, 'restore_session_view')) {
                 throw error;
@@ -4629,7 +7370,7 @@ export class FlowChatStore {
         const { sessionAPI } = await import('@/infrastructure/api/service-api/SessionAPI');
         turns = await sessionAPI.loadSessionTurns(
           sessionId,
-          workspacePath,
+          storageWorkspacePath,
           limit,
           remoteConnectionId,
           remoteSshHost
@@ -4642,7 +7383,16 @@ export class FlowChatStore {
           durationMs: elapsedMs(turnsLoadStartedAt),
         });
       }
-      const { stateMachineManager, SessionExecutionEvent } = await stateMachineManagerPromise;
+      const stateMachineModule = await stateMachineManagerPromise;
+      // A local restore may have started just before the observer bound this
+      // session. Re-check ownership after every restore await and before any
+      // commit or state-machine mutation so that late empty history cannot
+      // overwrite a reconstructed dispatch transcript.
+      if (preserveDispatchObserverProjection()) {
+        finishDispatchObserverSkip('late');
+        return;
+      }
+      const { stateMachineManager, SessionExecutionEvent } = stateMachineModule;
       stateMachineManager.getOrCreate(sessionId);
       startupTrace.markPhase('historical_session_turns_loaded', {
         remote,
@@ -4701,7 +7451,7 @@ export class FlowChatStore {
         });
         return;
       }
-
+      
       const convertStartedAt = nowMs();
       const activeTurnId = isBackendSessionActivelyProcessing(restoredSessionInfo?.state)
         ? turns[turns.length - 1]?.turnId
@@ -4722,6 +7472,9 @@ export class FlowChatStore {
         const session = prev.sessions.get(sessionId);
         if (!session) return prev;
 
+        const restoredAgentType =
+          restoredSessionInfo?.agentType || session.mode || session.config.agentType;
+
         const updatedSession = {
           ...session,
           dialogTurns,
@@ -4731,17 +7484,27 @@ export class FlowChatStore {
           isPartial: restoredHistoryPartial,
           loadedTurnCount: restoredLoadedTurnCount ?? dialogTurns.length,
           totalTurnCount: restoredTotalTurnCount ?? dialogTurns.length,
+          turnCatalog: selectPreferredTurnCatalog(session.turnCatalog, restoredTurnCatalog),
           error: null,
           config: {
             ...session.config,
             ...(restoredSessionInfo?.modelName
               ? { modelName: restoredSessionInfo.modelName }
               : {}),
+            ...(restoredSessionInfo?.reasoningPreset !== undefined
+              ? { reasoningPreset: restoredSessionInfo.reasoningPreset?.trim() || undefined }
+              : {}),
           },
-          mode: restoredSessionInfo?.agentType || session.mode,
+          mode: restoredAgentType,
           lastUserDialogMode: restoredLastUserDialogMode,
           lastSubmittedMode:
             restoredSessionInfo?.lastSubmittedAgentType ?? session.lastSubmittedMode,
+          currentTokenUsage: reconcileRestoreViewCurrentTokenUsage(
+            session.currentTokenUsage,
+            restoredCurrentContextUsage,
+            dialogTurns,
+            restoredAgentType,
+          ),
         };
         
         const newSessions = new Map(prev.sessions);
@@ -4752,6 +7515,7 @@ export class FlowChatStore {
           sessions: newSessions,
         };
       });
+      this.seedSessionHistoryLoadedRanges(sessionId, 'initial-tail');
       startupTrace.markPhase('historical_session_state_commit_end', {
         remote,
         sessionId,
@@ -4800,14 +7564,24 @@ export class FlowChatStore {
         durationMs: elapsedMs(traceStartedAt),
       });
       if (restoredHistoryPartial) {
+        const supportsTurnCatalog = restoredTurnCatalog?.sessionId === sessionId;
         const deferFullHistoryUntilActive =
           !remote &&
           options?.deferFullHistoryUntilActive === true &&
           this.state.activeSessionId !== sessionId;
-        if (!deferFullHistoryUntilActive) {
+        if (supportsTurnCatalog) {
+          startupTrace.markPhase('historical_session_full_hydrate_skipped', {
+            remote,
+            sessionId,
+            sessionTraceId,
+            reason: 'turn-catalog-windowing-available',
+            loadedTurnCount: dialogTurns.length,
+            totalTurnCount: restoredTotalTurnCount,
+          });
+        } else if (!deferFullHistoryUntilActive) {
           this.scheduleCompleteSessionHistoryLoad({
             sessionId,
-            workspacePath,
+            workspacePath: storageWorkspacePath,
             remoteConnectionId,
             remoteSshHost,
             includeInternal: options?.includeInternal,
@@ -4827,6 +7601,13 @@ export class FlowChatStore {
         }
       }
     } catch (error) {
+      // The same race can fail instead of resolving. Once dispatch owns the
+      // session, that stale local failure must not relabel its projection as a
+      // failed historical session or surface an irrelevant restore error.
+      if (preserveDispatchObserverProjection()) {
+        finishDispatchObserverSkip('failed');
+        return;
+      }
       this.setState(prev => {
         const session = prev.sessions.get(sessionId);
         if (!session) return prev;
@@ -4858,21 +7639,6 @@ export class FlowChatStore {
   }
 
   /**
-   * Strip agent-internal XML wrapper tags from persisted user inputs.
-   */
-  private cleanRemoteUserInput(raw: string): string {
-    const s = raw.trim();
-    const userQueryMatch = s.match(/<user_query>\s*([\s\S]*?)\s*<\/user_query>/);
-    if (userQueryMatch) {
-      return userQueryMatch[1].trim();
-    }
-
-    return s
-      .replace(/<system(?:_|-)reminder>[\s\S]*?<\/system(?:_|-)reminder>/g, '')
-      .trim();
-  }
-
-  /**
    * Convert DialogTurnData to FlowChat DialogTurn format
    */
   private convertToDialogTurns(
@@ -4900,7 +7666,7 @@ export class FlowChatStore {
           || metadata?.threadGoalObjectiveUpdated
           || metadata?.threadGoalContinuation
           ? turn.userMessage.content
-          : metadata?.original_text || this.cleanRemoteUserInput(turn.userMessage.content);
+          : metadata?.original_text || cleanRemoteUserInput(turn.userMessage.content);
       const displayContent = resolveThreadGoalUserMessageDisplay(
         rawDisplay,
         metadata as Record<string, unknown> | undefined
@@ -4908,6 +7674,12 @@ export class FlowChatStore {
       const normalizedTurnStatus = isLiveTurn
         ? normalizeLiveTurnStatus(turn.status)
         : normalizeRecoveredTurnStatus(turn.status, { error: undefined });
+      const persistedFinishReason =
+        typeof turn.finishReason === 'string'
+          ? turn.finishReason
+          : typeof turn.finish_reason === 'string'
+            ? turn.finish_reason
+            : undefined;
       const rawTokenUsage = turn.tokenUsage ?? turn.token_usage;
 
       return {
@@ -5010,7 +7782,7 @@ export class FlowChatStore {
         ].sort((a: any, b: any) => {
           const aIndex = a.orderIndex !== undefined ? a.orderIndex : a.timestamp || 0;
           const bIndex = b.orderIndex !== undefined ? b.orderIndex : b.timestamp || 0;
-
+          
           return aIndex - bIndex;
         });
 
@@ -5049,12 +7821,9 @@ export class FlowChatStore {
       }),
       timestamp: turn.timestamp,
       status: normalizedTurnStatus,
-      finishReason:
-        typeof turn.finishReason === 'string'
-          ? turn.finishReason
-          : typeof turn.finish_reason === 'string'
-            ? turn.finish_reason
-            : undefined,
+      finishReason: isLiveTurn
+        ? persistedFinishReason
+        : normalizeRecoveredTurnFinishReason(turn.status, persistedFinishReason),
       hasFinalResponse:
         typeof turn.hasFinalResponse === 'boolean'
           ? turn.hasFinalResponse
@@ -5073,6 +7842,7 @@ export class FlowChatStore {
             timestamp: rawTokenUsage.timestamp,
           }
         : undefined,
+      storageTurnIndex: turn.turnIndex,
       backendTurnIndex: turn.turnIndex,
     };
     });

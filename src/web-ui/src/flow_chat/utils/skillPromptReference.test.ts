@@ -3,6 +3,7 @@ import {
   appendSkillPromptReferenceToken,
   createSkillPromptReferenceToken,
   getSkillPromptReferenceMatches,
+  isSkillAvailableForUserInvocation,
   isSlashAddressableSkillName,
   parseSkillPromptReferenceToken,
   replaceLeadingSlashCommandWithSkillToken,
@@ -47,5 +48,19 @@ describe('skillPromptReference', () => {
     expect(isSlashAddressableSkillName('pdf')).toBe(true);
     expect(isSlashAddressableSkillName('browser-control')).toBe(true);
     expect(isSlashAddressableSkillName('browser control')).toBe(false);
+  });
+
+  it('keeps user invocation visibility independent from runtime selection', () => {
+    expect(isSkillAvailableForUserInvocation({
+      selectedForRuntime: true,
+      allowUserInvocation: true,
+    })).toBe(true);
+    expect(isSkillAvailableForUserInvocation({
+      selectedForRuntime: true,
+      allowUserInvocation: false,
+    })).toBe(false);
+    expect(isSkillAvailableForUserInvocation({
+      selectedForRuntime: false,
+    })).toBe(false);
   });
 });

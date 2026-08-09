@@ -2,9 +2,10 @@
 
 # OpenCode Adapter
 
-The current crate owns the static OpenCode source preview used by the existing
+The current crate owns OpenCode user Instruction path/config precedence, the static OpenCode source preview used by the existing
 managed-package path, the OpenCode-specific implementations of command,
-standalone-tool, subagent, and MCP provider contracts, and runtime-free mapping
+standalone-tool, subagent, and MCP provider contracts, the bounded projection of
+configured local Skill roots, and runtime-free mapping
 of caller-normalized tool Hook descriptors. It preserves OpenCode source
 discovery, precedence, formats, argument expansion, and versioned compatibility semantics.
 Shared source catalog, lifecycle coordination, file-watch implementation,
@@ -16,39 +17,44 @@ Product-source boundary:
 - The current `load_opencode_package_adapter` entry remains static-preview only
   until OC-R1/OC-R2 replace its production role. Do not extend this P0 entry into
   another managed OpenCode package format.
-- Standard OpenCode Command, standalone Tool, and Subagent config and directories
-  are current read-only live sources. Full plugin directories and package specs
+- Standard OpenCode Command, standalone Tool, Subagent, and configured local
+  Skill paths are current read-only live sources. Configured Skill URLs remain
+  unsupported and must never be fetched. Full plugin directories and package specs
   remain target work rather than executable production sources. Source files need
   no BitFun import. Low-risk declarative results follow the
-  user's auto-apply/ask preference; executable sources require a source/target
-  decision before first import. Pre-import execution-envelope expansion and
+  user's auto-apply/ask preference; executable sources require a source, plugin,
+  and execution-domain
+  decision before first import. Broader pre-import execution permissions and
   post-import contribution expansion are separate gates, not repeated approval
   for every internal lifecycle state. Code updates may prepare automatically only
   when source identity/integrity, the source update policy, and the current
-  execution envelope still allow it.
-- A global source preference is deduplicated by source/target/execution domain, but
-  each project/workspace execution instance recomputes its effective source graph,
-  working directory/environment, credentials, and policy. Raw parsing and exact
-  materialization caches may be shared; candidate workers and health may not be
-  treated as one global result. Crossing projects alone does not prompt again;
-  only an expanded execution envelope, credential scope, or capability does.
-- The shared source coordinator owns candidate generations and atomic provider
+  execution conditions still allow it.
+- A global source preference is deduplicated by source/plugin/execution domain, but
+  every activation/import recomputes its effective source graph, working
+  directory/environment, credentials, and policy. Workspace participates only when
+  the owning config or logical plugin instance has workspace-specific state. Raw parsing
+  and exact materialization caches may be shared; physical health follows the actual
+  process grouping and is not keyed globally or by workspace by default. Crossing projects alone does not prompt again;
+  only broader execution permissions, credential scope, or capability does.
+- `ExternalSourceControlPlane` owns candidate versions and atomic provider
   replacement. This adapter supplies OpenCode-qualified source identity/order and
   watch roots through narrow provider contracts; the reusable file-watch service
-  supplies change facts. Config owners provide normalized config snapshots; the script
-  execution service owns dependencies, workers, process trees, and physical
-  health; Plugin Runtime Host owns logical target state and contribution registration.
+  supplies change facts. Config modules provide normalized config snapshots; the services
+  implementation behind `ScriptToolRuntime` owns dependencies, workers, process trees,
+  and physical health; `PluginRuntimeClient` currently owns request reliability,
+  diagnostics and fault status while consuming lifecycle facts from their responsible modules;
+  capability modules register contributions.
 - Effective policy and safe-start mode must be recomputed before third-party
-  module import from the source, target, actual execution domain/user,
+  module import from the source, plugin identity, actual execution domain/user,
   product/organization policy bounds, credential scope, and environment scope.
   Discovery or config-import approval is not an execution decision. The product
-  source experience and existing capability owners provide the source/target
+  source experience and existing capability owners provide the source/plugin
   decision; this adapter consumes it but does not own prompts or trust state.
   After activation, the default local runtime policy is compatibility mode.
 - Final tool creation, permission decisions, authoritative state, and audit facts
   stay in their tool, permission, product, and runtime owner paths.
 - Standalone-tool preparation may return only a version-checked, bounded module
-  for an already approved target. It must not spawn a process, install a package,
+  for an already approved script. It must not spawn a process, install a package,
   persist approval, or interpret another ecosystem. Static import restrictions
   describe the current compatibility subset; they are not a security sandbox.
 - The user's local `opencode` CLI installation is unrelated to loading
@@ -58,12 +64,19 @@ Product-source boundary:
 ## Boundary Rules
 
 - Depend on stable contracts such as `bitfun-runtime-ports` and the
-  `PluginHostAdapter` boundary trait, not `bitfun-core`, app crates, Tauri
+  `PluginRuntimeAdapter` boundary trait, not `bitfun-core`, app crates, Tauri
   APIs, product UI, or concrete service managers.
 - Keep OpenCode config JSON, source ordering, loader compatibility, and argument
   expansion inside this crate. Cross-crate outputs use typed source snapshots,
-  adapter bindings, and Plugin Runtime Host DTOs; do not expose raw OpenCode JSON
+  adapter bindings, and PluginRuntimeClient DTOs; do not expose raw OpenCode JSON
   or source syntax as product contracts.
+- `local_source_paths` owns the adapter-private local source plan: user config,
+  `OPENCODE_CONFIG`, project files, ordered config directories, and
+  `OPENCODE_CONFIG_CONTENT`. Capability providers consume only the plan items
+  they understand and retain their field-specific merge and validation rules;
+  do not introduce a generic merged OpenCode config contract. Inline content is
+  bounded, uses a redacted virtual source identity, has no watch root, and may
+  resolve relative paths only from an explicit workspace context.
 - Current source inspection recognizes only the tested declarative subset. The
   adapter may reuse the workspace-pinned parse-only OXC profile for syntax-safe static
   projection, but it is not a general JavaScript/TypeScript semantic analyzer or
@@ -81,11 +94,15 @@ Product-source boundary:
   and diagnostics with incomplete safety. Parse failures must remain explicit
   diagnostics, while event payload types must not be treated as Hook properties.
   The adapter must not load handlers, dispatch Hooks, or imply executable support.
-- The reviewed product composition root selects and constructs the compiled
-  OpenCode adapter/provider and injects it into Plugin Runtime Host. It does not
+- The reviewed product assembly entrypoint selects and constructs the compiled
+  OpenCode adapter/provider. External-source providers and configured Skill-root
+  facts are projected through `bitfun-core/external_sources`; managed-package
+  bindings are injected into PluginRuntimeClient. Product consumers do not
+  import the adapter directly. The composition layer does not
   discover dynamic sources, prepare dependencies, or import plugin modules.
 - Product Assembly may consume this crate only from reviewed composition modules
-  such as `bitfun-core/plugin_runtime` or `bitfun-core/external_sources`; boundary
+  such as `bitfun-core/plugin_runtime`, `bitfun-core/external_sources`, or
+  `bitfun-core/instruction_sources`; boundary
   guards and focused assembly-path tests must change with any additional consumer.
 - This crate must not depend on Codex, Claude Code, or another ecosystem adapter.
   New ecosystems are sibling adapters registered by Product Assembly, not modes of
@@ -101,5 +118,5 @@ Product-source boundary:
 - `cargo test -p bitfun-opencode-adapter --test tool_source_contracts`
 - `cargo test -p bitfun-opencode-adapter --test opencode_subagent_adapter`
 - `cargo test -p bitfun-opencode-adapter p0_c2_fixture`
-- `cargo test -p bitfun-opencode-adapter host_path_projects_trusted_custom_tool_candidate_with_permission_prompt`
+- `cargo test -p bitfun-opencode-adapter client_path_projects_trusted_custom_tool_candidate_with_permission_prompt`
 - `node scripts/check-core-boundaries.mjs`

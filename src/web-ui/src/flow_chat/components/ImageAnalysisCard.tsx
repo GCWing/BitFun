@@ -35,35 +35,35 @@ export const ImageAnalysisCard: React.FC<ImageAnalysisCardProps> = ({
     : '';
   
   return (
-    <div className="image-analysis-card" data-status={status}>
-      <div className="image-analysis-card__header">
-        <div className="image-analysis-card__thumbnail">
+    <div data-bf-component="image-analysis-card" data-bf-part="root" data-bf-status={status} data-bf-state={expanded ? 'expanded' : ''} className="image-analysis-card" data-status={status}>
+      <div data-bf-component="image-analysis-card" data-bf-part="header" className="image-analysis-card__header">
+        <div data-bf-component="image-analysis-card" data-bf-part="thumbnail" className="image-analysis-card__thumbnail">
           {imageContext.thumbnailUrl || imageContext.dataUrl ? (
             <img 
               src={imageContext.thumbnailUrl || imageContext.dataUrl} 
               alt={imageContext.imageName}
             />
           ) : (
-            <div className="image-analysis-card__thumbnail-placeholder">
+            <div data-bf-component="image-analysis-card" data-bf-part="placeholder" className="image-analysis-card__thumbnail-placeholder">
               <Eye size={24} />
             </div>
           )}
         </div>
         
-        <div className="image-analysis-card__info">
-          <div className="image-analysis-card__filename">
+        <div data-bf-component="image-analysis-card" data-bf-part="info" className="image-analysis-card__info">
+          <div data-bf-component="image-analysis-card" data-bf-part="filename" className="image-analysis-card__filename">
             {imageContext.imageName}
           </div>
           
           {status === 'analyzing' && (
-            <div className="image-analysis-card__status analyzing">
+            <div data-bf-component="image-analysis-card" data-bf-part="status" className="image-analysis-card__status analyzing">
               <Loader className="spinner" size={14} />
               <span>AI is analyzing the image...</span>
             </div>
           )}
           
           {status === 'completed' && result && (
-            <div className="image-analysis-card__status completed">
+            <div data-bf-component="image-analysis-card" data-bf-part="status" className="image-analysis-card__status completed">
               <CheckCircle className="icon" size={14} />
               <span>Analysis complete</span>
               {duration && (
@@ -73,7 +73,7 @@ export const ImageAnalysisCard: React.FC<ImageAnalysisCardProps> = ({
           )}
           
           {status === 'error' && (
-            <div className="image-analysis-card__status error">
+            <div data-bf-component="image-analysis-card" data-bf-part="status" className="image-analysis-card__status error">
               <AlertCircle className="icon" size={14} />
               <span>Analysis failed</span>
               {onRetry && (
@@ -87,13 +87,15 @@ export const ImageAnalysisCard: React.FC<ImageAnalysisCardProps> = ({
       </div>
       
       {status === 'completed' && result && (
-        <div className="image-analysis-card__content">
-          <div className="image-analysis-card__summary">
+        <div data-bf-component="image-analysis-card" data-bf-part="content" className="image-analysis-card__content">
+          <div data-bf-component="image-analysis-card" data-bf-part="summary" className="image-analysis-card__summary">
             <Sparkles size={14} className="summary-icon" />
             <span>{result.summary}</span>
           </div>
           
           <Button 
+            data-bf-component="image-analysis-card"
+            data-bf-part="expand"
             variant="ghost"
             size="small"
             className="image-analysis-card__expand-btn"
@@ -111,16 +113,16 @@ export const ImageAnalysisCard: React.FC<ImageAnalysisCardProps> = ({
           </Button>
           
           {expanded && (
-            <div className="image-analysis-card__detailed">
-              <div className="detail-section">
+            <div data-bf-component="image-analysis-card" data-bf-part="details" className="image-analysis-card__detailed">
+              <div data-bf-component="image-analysis-card" data-bf-part="section" className="detail-section">
                 <h4>Detailed description</h4>
                 <p>{result.detailed_description}</p>
               </div>
               
               {result.detected_elements.length > 0 && (
-                <div className="detail-section">
+                <div data-bf-component="image-analysis-card" data-bf-part="section" className="detail-section">
                   <h4>Key elements detected</h4>
-                  <div className="tags">
+                  <div data-bf-component="image-analysis-card" data-bf-part="tags" className="tags">
                     {result.detected_elements.map((elem, idx) => (
                       <span key={idx} className="tag">{elem}</span>
                     ))}
@@ -128,7 +130,7 @@ export const ImageAnalysisCard: React.FC<ImageAnalysisCardProps> = ({
                 </div>
               )}
               
-              <div className="detail-section metadata">
+              <div data-bf-component="image-analysis-card" data-bf-part="metadata" className="detail-section metadata">
                 <span className="meta-item">
                   Confidence: {(result.confidence * 100).toFixed(1)}%
                 </span>
@@ -143,7 +145,7 @@ export const ImageAnalysisCard: React.FC<ImageAnalysisCardProps> = ({
       )}
       
       {status === 'error' && error && (
-        <div className="image-analysis-card__error">
+        <div data-bf-component="image-analysis-card" data-bf-part="error" className="image-analysis-card__error">
           <AlertCircle size={16} />
           <span>{error}</span>
         </div>

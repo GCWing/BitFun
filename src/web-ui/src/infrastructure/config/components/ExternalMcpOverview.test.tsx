@@ -7,7 +7,9 @@ import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import ExternalMcpOverview from './ExternalMcpOverview';
 
 const getSnapshotMock = vi.hoisted(() => vi.fn());
-const workspaceState = vi.hoisted(() => ({ path: 'D:/workspace/project' }));
+const planMcpImportMock = vi.hoisted(() => vi.fn());
+const applyMcpImportMock = vi.hoisted(() => vi.fn());
+const workspaceState = vi.hoisted(() => ({ path: 'D:/workspace/project', kind: 'normal' }));
 const peerState = vi.hoisted(() => ({ deviceId: '' }));
 const warnMock = vi.hoisted(() => vi.fn());
 const apiErrorState = vi.hoisted(() => ({
@@ -32,7 +34,7 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({
   useCurrentWorkspace: () => ({
-    workspace: { id: workspaceState.path, workspaceKind: 'local' },
+    workspace: { id: workspaceState.path, workspaceKind: workspaceState.kind },
     workspacePath: workspaceState.path,
   }),
 }));
@@ -46,7 +48,11 @@ vi.mock('@/infrastructure/peer-device/peerDeviceContextState', () => ({
 
 vi.mock('@/infrastructure/api/service-api/ExternalSourcesAPI', () => ({
   ExternalSourceApiError: apiErrorState.ExternalSourceApiError,
-  externalSourcesAPI: { getSnapshot: getSnapshotMock },
+  externalSourcesAPI: {
+    getSnapshot: getSnapshotMock,
+    planMcpImport: planMcpImportMock,
+    applyMcpImport: applyMcpImportMock,
+  },
 }));
 
 vi.mock('@/shared/utils/logger', () => ({
@@ -130,8 +136,27 @@ describe('ExternalMcpOverview', () => {
     document.body.appendChild(container);
     root = createRoot(container);
     getSnapshotMock.mockReset().mockResolvedValue(snapshot);
+    planMcpImportMock.mockReset().mockResolvedValue({
+      schemaVersion: 1,
+      planFingerprint: 'sha256:plan-v1',
+      items: [{
+        candidateId: 'opencode-project-docs',
+        displayName: 'docs',
+        transport: 'local_stdio',
+        proposedNativeId: 'docs',
+        disposition: 'eligible',
+      }],
+    });
+    applyMcpImportMock.mockReset().mockResolvedValue({
+      schemaVersion: 1,
+      outcome: {
+        status: 'applied',
+        imported: [{ candidateId: 'opencode-project-docs', nativeId: 'docs' }],
+      },
+    });
     warnMock.mockReset();
     workspaceState.path = 'D:/workspace/project';
+    workspaceState.kind = 'normal';
     peerState.deviceId = '';
     useSettingsStore.setState({ activeTab: 'mcp-tools', searchQuery: '' });
   });
@@ -170,6 +195,263 @@ describe('ExternalMcpOverview', () => {
       (container.querySelector('[aria-label="external.manage"]') as HTMLButtonElement).click();
     });
     expect(useSettingsStore.getState().activeTab).toBe('external-sources');
+  });
+
+  it('previews before applying and delegates later enablement to MCP settings', async () => {
+    await act(async () => {
+      root.render(<ExternalMcpOverview />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const importArea = container.querySelector('[data-testid="external-mcp-import"]')!;
+    await act(async () => {
+      (importArea.querySelector('button') as HTMLButtonElement).click();
+      await Promise.resolve();
+    });
+    expect(planMcpImportMock).toHaveBeenCalledWith('D:/workspace/project');
+    expect(importArea.textContent).toContain('external.import.confirm');
+    await act(async () => {
+      (importArea.querySelector('button') as HTMLButtonElement).click();
+      await Promise.resolve();
+    });
+    expect(applyMcpImportMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      expect.objectContaining({ planFingerprint: 'sha256:plan-v1' }),
+      [{ candidateId: 'opencode-project-docs' }],
+    );
+    expect(importArea.textContent).toContain('external.import.applied');
+  });
+
+  it('locks import choices while an apply request is in flight', async () => {
+    let resolveApply!: (value: unknown) => void;
+    applyMcpImportMock.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveApply = resolve;
+    }));
+    await act(async () => {
+      root.render(<ExternalMcpOverview />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const importArea = container.querySelector('[data-testid="external-mcp-import"]')!;
+    await act(async () => {
+      (importArea.querySelector('button') as HTMLButtonElement).click();
+      await Promise.resolve();
+    });
+    const checkbox = importArea.querySelector('input[type="checkbox"]') as HTMLInputElement;
+
+    await act(async () => {
+      (importArea.querySelector('.bitfun-mcp-tools__import-actions button') as HTMLButtonElement).click();
+      await Promise.resolve();
+    });
+    expect(checkbox.disabled).toBe(true);
+
+    await act(async () => {
+      resolveApply({
+        schemaVersion: 1,
+        outcome: {
+          status: 'applied',
+          imported: [{ candidateId: 'opencode-project-docs', nativeId: 'docs' }],
+        },
+      });
+      await Promise.resolve();
+    });
+  });
+
+  it('defaults eligible imports to selected and allows a compact per-item choice with source scope', async () => {
+    const codexSource = {
+      stableKey: 'codex-mcp-user',
+      lifecycle: 'available',
+      record: {
+        key: { providerId: 'codex.mcp', sourceId: 'user' },
+        ecosystemId: 'codex',
+        displayName: 'Codex user MCP',
+        sourceKind: 'mcp',
+        scope: 'user_global',
+        location: '~/.codex/config.toml',
+        executionDomainId: 'local:test',
+        health: 'available',
+        contentVersion: '1',
+      },
+    };
+    getSnapshotMock.mockResolvedValue({
+      ...snapshot,
+      sources: [...snapshot.sources, codexSource],
+      mcpServers: [
+        snapshot.mcpServers[0],
+        {
+          ...snapshot.mcpServers[0],
+          candidateId: 'codex-user-search',
+          definition: {
+            ...snapshot.mcpServers[0].definition,
+            id: {
+              source: { providerId: 'codex.mcp', sourceId: 'user' },
+              localId: 'search',
+            },
+            provenance: [{ providerId: 'codex.mcp', sourceId: 'user' }],
+            name: 'search',
+          },
+        },
+      ],
+      integrationPolicy: {
+        ...snapshot.integrationPolicy,
+        registeredEcosystems: [
+          ...snapshot.integrationPolicy.registeredEcosystems,
+          {
+            ecosystemId: 'codex',
+            displayName: 'Codex',
+            adapterRevision: '1',
+            capabilities: [],
+          },
+        ],
+      },
+    });
+    planMcpImportMock.mockResolvedValue({
+      schemaVersion: 1,
+      planFingerprint: 'sha256:multi',
+      items: [
+        {
+          candidateId: 'opencode-project-docs',
+          displayName: 'docs',
+          transport: 'local_stdio',
+          proposedNativeId: 'docs',
+          disposition: 'eligible',
+        },
+        {
+          candidateId: 'codex-user-search',
+          displayName: 'search',
+          transport: 'local_stdio',
+          proposedNativeId: 'search',
+          disposition: 'eligible',
+        },
+      ],
+    });
+
+    await act(async () => {
+      root.render(<ExternalMcpOverview />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const importArea = container.querySelector('[data-testid="external-mcp-import"]')!;
+    await act(async () => {
+      (importArea.querySelector('button') as HTMLButtonElement).click();
+      await Promise.resolve();
+    });
+
+    const checkboxes = Array.from(importArea.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+    expect(checkboxes).toHaveLength(2);
+    expect(checkboxes.every((checkbox) => checkbox.checked)).toBe(true);
+    expect(importArea.textContent).toContain('OpenCode');
+    expect(importArea.textContent).toContain('external.scope.project');
+    expect(importArea.textContent).toContain('Codex');
+    expect(importArea.textContent).toContain('external.scope.userGlobal');
+
+    await act(async () => {
+      checkboxes[1].click();
+    });
+    await act(async () => {
+      (importArea.querySelector('.bitfun-mcp-tools__import-actions button') as HTMLButtonElement).click();
+      await Promise.resolve();
+    });
+    expect(applyMcpImportMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      expect.objectContaining({ planFingerprint: 'sha256:multi' }),
+      [{ candidateId: 'opencode-project-docs' }],
+    );
+  });
+
+  it('keeps only still-eligible previous selections when a stale plan is refreshed', async () => {
+    planMcpImportMock.mockResolvedValue({
+      schemaVersion: 1,
+      planFingerprint: 'sha256:old',
+      items: [
+        {
+          candidateId: 'opencode-project-docs',
+          displayName: 'docs',
+          transport: 'local_stdio',
+          proposedNativeId: 'docs',
+          disposition: 'eligible',
+        },
+        {
+          candidateId: 'old-candidate',
+          displayName: 'old',
+          transport: 'local_stdio',
+          proposedNativeId: 'old',
+          disposition: 'eligible',
+        },
+      ],
+    });
+    applyMcpImportMock.mockResolvedValue({
+      schemaVersion: 1,
+      outcome: {
+        status: 'stale',
+        refreshedPlan: {
+          schemaVersion: 1,
+          planFingerprint: 'sha256:new',
+          items: [
+            {
+              candidateId: 'opencode-project-docs',
+              displayName: 'docs',
+              transport: 'local_stdio',
+              proposedNativeId: 'docs',
+              disposition: 'eligible',
+            },
+            {
+              candidateId: 'new-candidate',
+              displayName: 'new',
+              transport: 'local_stdio',
+              proposedNativeId: 'new',
+              disposition: 'eligible',
+            },
+          ],
+        },
+      },
+    });
+
+    await act(async () => {
+      root.render(<ExternalMcpOverview />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const importArea = container.querySelector('[data-testid="external-mcp-import"]')!;
+    await act(async () => {
+      (importArea.querySelector('button') as HTMLButtonElement).click();
+      await Promise.resolve();
+    });
+    let checkboxes = Array.from(importArea.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+    await act(async () => {
+      checkboxes[1].click();
+    });
+    await act(async () => {
+      (importArea.querySelector('.bitfun-mcp-tools__import-actions button') as HTMLButtonElement).click();
+      await Promise.resolve();
+    });
+
+    checkboxes = Array.from(importArea.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+    expect(checkboxes).toHaveLength(2);
+    expect(checkboxes[0].checked).toBe(true);
+    expect(checkboxes[1].checked).toBe(false);
+    expect(importArea.textContent).toContain('external.import.stale');
+  });
+
+  it('does not expose import mutation in Peer or remote workspace mode', async () => {
+    peerState.deviceId = 'peer-a';
+    await act(async () => {
+      root.render(<ExternalMcpOverview />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(container.querySelector('[data-testid="external-mcp-import"]')).toBeNull();
+    expect(planMcpImportMock).not.toHaveBeenCalled();
+
+    peerState.deviceId = '';
+    workspaceState.kind = 'remote';
+    await act(async () => {
+      root.render(<ExternalMcpOverview />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(container.querySelector('[data-testid="external-mcp-import"]')).toBeNull();
+    expect(applyMcpImportMock).not.toHaveBeenCalled();
   });
 
   it('clears the previous workspace snapshot while the next host loads or fails', async () => {

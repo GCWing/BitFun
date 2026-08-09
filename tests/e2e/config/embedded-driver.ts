@@ -473,7 +473,9 @@ function sharedAfterTest(): Options.Testrunner['afterTest'] {
     const screenshotName = `failure-${test.title.replace(/\s+/g, '_')}-${timestamp}.png`;
 
     try {
-      const screenshotPath = path.resolve(__dirname, '..', 'reports', 'screenshots', screenshotName);
+      const screenshotDirectory = path.resolve(__dirname, '..', 'reports', 'screenshots');
+      fs.mkdirSync(screenshotDirectory, { recursive: true });
+      const screenshotPath = path.join(screenshotDirectory, screenshotName);
       await browser.saveScreenshot(screenshotPath);
       console.log(`Screenshot saved: ${screenshotName}`);
     } catch (screenshotError) {
@@ -514,6 +516,17 @@ export function createEmbeddedConfig(specs: string[], label: string): Options.Te
     hostname: DRIVER_HOST,
     port: DRIVER_PORT,
     path: '/',
+    // Node 26's built-in Undici rejects the hop-by-hop `Connection` header
+    // that WebDriverIO 9 adds by default. The embedded driver is a local HTTP
+    // endpoint and does not need callers to manage connection persistence.
+    transformRequest: (requestOptions) => {
+      const headers = requestOptions.headers as {
+        delete?: (name: string) => void;
+      } | undefined;
+      headers?.delete?.('Connection');
+      headers?.delete?.('Content-Length');
+      return requestOptions;
+    },
 
     framework: 'mocha',
     reporters: ['spec'],

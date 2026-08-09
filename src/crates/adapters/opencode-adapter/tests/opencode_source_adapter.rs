@@ -1,11 +1,11 @@
 use bitfun_opencode_adapter::load_opencode_package_adapter;
-use bitfun_plugin_runtime_host::PluginRuntimeHost;
+use bitfun_plugin_runtime_client::DefaultPluginRuntimeClient;
 use bitfun_product_domains::plugin_source::{PluginActivationAuthority, PluginPackageInput};
 use bitfun_runtime_ports::{
     PluginCapabilityRef, PluginDataClassification, PluginDispatchEnvelope, PluginOwnerKind,
     PluginOwnerRef, PluginPayloadRedaction, PluginPayloadRef, PluginPermissionGate,
-    PluginRuntimeClient, PluginRuntimeEpochs, PluginRuntimeReadRequest, PluginStatusKind,
-    PluginTrustLevel,
+    PluginRuntimeAvailability, PluginRuntimeClient, PluginRuntimeEpochs, PluginRuntimeReadRequest,
+    PluginRuntimeUnavailableReason, PluginStatusKind, PluginTrustLevel,
 };
 use bitfun_services_integrations::plugin_source::{
     ManagedPluginSourceService, ManagedPluginTrustDecision,
@@ -154,18 +154,26 @@ impl Drop for ManagedPackageFixture {
 }
 
 #[tokio::test]
-async fn managed_package_is_read_through_plugin_runtime_host() {
+async fn managed_package_is_read_through_plugin_runtime_client() {
     let fixture = ManagedPackageFixture::new("read", PLUGIN_SOURCE);
     let input = fixture.approved_input().await;
     let adapter = load_opencode_package_adapter(input, None, 1_720_000_001)
         .expect("create OpenCode package adapter")
         .0;
-    let host = PluginRuntimeHost::new(adapter);
+    let client = DefaultPluginRuntimeClient::new(adapter);
 
-    let response = host
+    assert_eq!(
+        client.availability(),
+        PluginRuntimeAvailability::ProjectionOnly {
+            reason: PluginRuntimeUnavailableReason::HostUnavailable
+        },
+        "managed packages must not report executable availability before a Plugin Host exists"
+    );
+
+    let response = client
         .read_plugins(read_request())
         .await
-        .expect("read package through host");
+        .expect("read package through client");
 
     assert_eq!(response.sources.len(), 1);
     assert!(response.sources[0]
@@ -189,12 +197,12 @@ async fn tool_hook_is_statically_mapped_in_read_diagnostics_without_execution() 
     let adapter = load_opencode_package_adapter(input, None, 1_720_000_001)
         .expect("create OpenCode package adapter")
         .0;
-    let host = PluginRuntimeHost::new(adapter);
+    let client = DefaultPluginRuntimeClient::new(adapter);
 
-    let response = host
+    let response = client
         .read_plugins(read_request())
         .await
-        .expect("read package through host");
+        .expect("read package through client");
     let diagnostic = response
         .diagnostics
         .iter()
@@ -218,12 +226,12 @@ async fn single_line_expression_body_hook_is_statically_mapped() {
     let adapter = load_opencode_package_adapter(input, None, 1_720_000_001)
         .expect("create OpenCode package adapter")
         .0;
-    let host = PluginRuntimeHost::new(adapter);
+    let client = DefaultPluginRuntimeClient::new(adapter);
 
-    let response = host
+    let response = client
         .read_plugins(read_request())
         .await
-        .expect("read package through host");
+        .expect("read package through client");
     let diagnostic = response
         .diagnostics
         .iter()
@@ -253,12 +261,12 @@ export const EventObserverPlugin: Plugin = async () => {
     let adapter = load_opencode_package_adapter(input, None, 1_720_000_001)
         .expect("create OpenCode package adapter")
         .0;
-    let host = PluginRuntimeHost::new(adapter);
+    let client = DefaultPluginRuntimeClient::new(adapter);
 
-    let response = host
+    let response = client
         .read_plugins(read_request())
         .await
-        .expect("read package through host");
+        .expect("read package through client");
 
     assert!(!response
         .diagnostics
@@ -292,12 +300,12 @@ export const UnsupportedHooksPlugin: Plugin = async () => ({
     let adapter = load_opencode_package_adapter(input, None, 1_720_000_001)
         .expect("create OpenCode package adapter")
         .0;
-    let host = PluginRuntimeHost::new(adapter);
+    let client = DefaultPluginRuntimeClient::new(adapter);
 
-    let response = host
+    let response = client
         .read_plugins(read_request())
         .await
-        .expect("read package through host");
+        .expect("read package through client");
     let messages = response
         .diagnostics
         .iter()
@@ -337,12 +345,12 @@ export const BrokenHookPlugin: Plugin = async () => ({
     let adapter = load_opencode_package_adapter(input, None, 1_720_000_001)
         .expect("preserve custom-tool projection with Hook parse diagnostic")
         .0;
-    let host = PluginRuntimeHost::new(adapter);
+    let client = DefaultPluginRuntimeClient::new(adapter);
 
-    let response = host
+    let response = client
         .read_plugins(read_request())
         .await
-        .expect("read package through host");
+        .expect("read package through client");
 
     assert!(response
         .diagnostics
@@ -361,17 +369,17 @@ async fn source_approval_does_not_create_custom_tool_candidate() {
     let adapter = load_opencode_package_adapter(input, None, 1_720_000_001)
         .expect("create OpenCode package adapter")
         .0;
-    let host = PluginRuntimeHost::new(adapter);
-    let source = host
+    let client = DefaultPluginRuntimeClient::new(adapter);
+    let source = client
         .read_plugins(read_request())
         .await
-        .expect("read package through host")
+        .expect("read package through client")
         .sources
         .into_iter()
         .next()
         .expect("plugin source");
 
-    let response = host
+    let response = client
         .dispatch(dispatch_envelope(source))
         .await
         .expect("dispatch remains readable");
@@ -384,7 +392,7 @@ async fn source_approval_does_not_create_custom_tool_candidate() {
 }
 
 #[tokio::test]
-async fn activated_package_projects_permission_required_candidate_through_host() {
+async fn activated_package_projects_permission_required_candidate_through_client() {
     let fixture = ManagedPackageFixture::new("activated", PLUGIN_SOURCE);
     let (input, authority) = fixture.activated_input().await;
     let (project_domain_id, workspace_id, _, activation_epoch) = authority.clone().into_parts();
@@ -392,9 +400,9 @@ async fn activated_package_projects_permission_required_candidate_through_host()
         load_opencode_package_adapter(input, Some(authority), 1_720_000_001)
             .expect("create activated OpenCode package adapter");
     assert!(!dispatch_targets.is_empty());
-    let host = PluginRuntimeHost::new(adapter);
+    let client = DefaultPluginRuntimeClient::new(adapter);
     let request = read_request_for(&project_domain_id, &workspace_id, activation_epoch);
-    let source = host
+    let source = client
         .read_plugins(request)
         .await
         .expect("read activated package")
@@ -404,7 +412,7 @@ async fn activated_package_projects_permission_required_candidate_through_host()
         .expect("activated source");
 
     assert_eq!(source.trust_level, PluginTrustLevel::Trusted);
-    let response = host
+    let response = client
         .dispatch(dispatch_envelope_for(
             source,
             &project_domain_id,
@@ -430,13 +438,13 @@ async fn activated_adapter_rejects_wrong_scope_and_epoch() {
     let fixture = ManagedPackageFixture::new("activation-scope", PLUGIN_SOURCE);
     let (input, authority) = fixture.activated_input().await;
     let (project_domain_id, workspace_id, _, activation_epoch) = authority.clone().into_parts();
-    let host = PluginRuntimeHost::new(
+    let client = DefaultPluginRuntimeClient::new(
         load_opencode_package_adapter(input, Some(authority), 1_720_000_001)
             .expect("create activated adapter")
             .0,
     );
 
-    assert!(host
+    assert!(client
         .read_plugins(read_request_for(
             "wrong-project",
             &workspace_id,
@@ -444,7 +452,7 @@ async fn activated_adapter_rejects_wrong_scope_and_epoch() {
         ))
         .await
         .is_err());
-    assert!(host
+    assert!(client
         .read_plugins(read_request_for(
             &project_domain_id,
             &workspace_id,
@@ -453,7 +461,7 @@ async fn activated_adapter_rejects_wrong_scope_and_epoch() {
         .await
         .is_err());
 
-    let source = host
+    let source = client
         .read_plugins(read_request_for(
             &project_domain_id,
             &workspace_id,
@@ -465,7 +473,7 @@ async fn activated_adapter_rejects_wrong_scope_and_epoch() {
         .into_iter()
         .next()
         .expect("activated source");
-    let stale = host
+    let stale = client
         .dispatch(dispatch_envelope_for(
             source.clone(),
             &project_domain_id,
@@ -481,7 +489,7 @@ async fn activated_adapter_rejects_wrong_scope_and_epoch() {
         .iter()
         .any(|diagnostic| diagnostic.code == "opencode.activation_stale"));
 
-    let current = host
+    let current = client
         .dispatch(dispatch_envelope_for(
             source,
             &project_domain_id,
@@ -509,8 +517,8 @@ async fn fixed_package_input_is_not_re_read_or_executed() {
     let adapter = load_opencode_package_adapter(input, None, 1_720_000_001)
         .expect("adapter reads only fixed input")
         .0;
-    let host = PluginRuntimeHost::new(adapter);
-    let response = host
+    let client = DefaultPluginRuntimeClient::new(adapter);
+    let response = client
         .read_plugins(read_request())
         .await
         .expect("read fixed package input");
@@ -609,9 +617,9 @@ async fn invalid_plugin_diagnostic_keeps_managed_package_identity() {
     let adapter = load_opencode_package_adapter(input, None, 1_720_000_001)
         .expect("create adapter for invalid plugin")
         .0;
-    let host = PluginRuntimeHost::new(adapter);
+    let client = DefaultPluginRuntimeClient::new(adapter);
 
-    let response = host
+    let response = client
         .read_plugins(read_request())
         .await
         .expect("invalid plugin remains diagnosable");
@@ -637,12 +645,12 @@ async fn invalid_config_diagnostics_are_isolated_by_managed_source() {
     let mut ids = Vec::new();
     let mut diagnostic_ids = Vec::new();
     for fixture in [&first, &second] {
-        let host = PluginRuntimeHost::new(
+        let client = DefaultPluginRuntimeClient::new(
             load_opencode_package_adapter(fixture.approved_input().await, None, 1_720_000_001)
                 .expect("create adapter")
                 .0,
         );
-        let response = host
+        let response = client
             .read_plugins(read_request())
             .await
             .expect("read invalid config");
@@ -660,27 +668,27 @@ async fn invalid_config_diagnostics_are_isolated_by_managed_source() {
 }
 
 #[tokio::test]
-async fn host_source_identity_distinguishes_managed_package_origins() {
+async fn client_source_identity_distinguishes_managed_package_origins() {
     let first = ManagedPackageFixture::new("origin-a", PLUGIN_SOURCE);
     let second = ManagedPackageFixture::new("origin-b", PLUGIN_SOURCE);
-    let first_host = PluginRuntimeHost::new(
+    let first_client = DefaultPluginRuntimeClient::new(
         load_opencode_package_adapter(first.approved_input().await, None, 1_720_000_001)
             .expect("create first adapter")
             .0,
     );
-    let second_host = PluginRuntimeHost::new(
+    let second_client = DefaultPluginRuntimeClient::new(
         load_opencode_package_adapter(second.approved_input().await, None, 1_720_000_001)
             .expect("create second adapter")
             .0,
     );
 
-    let first_source = first_host
+    let first_source = first_client
         .read_plugins(read_request())
         .await
         .expect("read first source")
         .sources
         .remove(0);
-    let second_source = second_host
+    let second_source = second_client
         .read_plugins(read_request())
         .await
         .expect("read second source")
@@ -699,13 +707,13 @@ async fn managed_source_uri_encodes_reserved_path_characters() {
         PLUGIN_SOURCE,
         ".opencode/plugins/nested #dir/workspace-tools.ts",
     );
-    let host = PluginRuntimeHost::new(
+    let client = DefaultPluginRuntimeClient::new(
         load_opencode_package_adapter(fixture.approved_input().await, None, 1_720_000_001)
             .expect("create adapter")
             .0,
     );
 
-    let source = host
+    let source = client
         .read_plugins(read_request())
         .await
         .expect("read source")
@@ -725,18 +733,18 @@ async fn npm_projection_identity_distinguishes_managed_package_origins() {
     let second = ManagedPackageFixture::new("npm-origin-b", PLUGIN_SOURCE);
     first.add_opencode_config(config);
     second.add_opencode_config(config);
-    let first_host = PluginRuntimeHost::new(
+    let first_client = DefaultPluginRuntimeClient::new(
         load_opencode_package_adapter(first.approved_input().await, None, 1_720_000_001)
             .expect("create first adapter")
             .0,
     );
-    let second_host = PluginRuntimeHost::new(
+    let second_client = DefaultPluginRuntimeClient::new(
         load_opencode_package_adapter(second.approved_input().await, None, 1_720_000_001)
             .expect("create second adapter")
             .0,
     );
 
-    let first_source = first_host
+    let first_source = first_client
         .read_plugins(read_request())
         .await
         .expect("read first source")
@@ -744,7 +752,7 @@ async fn npm_projection_identity_distinguishes_managed_package_origins() {
         .into_iter()
         .find(|source| source.plugin_id.starts_with("opencode.npm.same_plugin."))
         .expect("first npm projection");
-    let second_source = second_host
+    let second_source = second_client
         .read_plugins(read_request())
         .await
         .expect("read second source")
@@ -765,12 +773,12 @@ async fn npm_projection_identity_distinguishes_managed_package_origins() {
     assert_eq!(digest.len(), 32);
     assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit()));
 
-    let repeated_host = PluginRuntimeHost::new(
+    let repeated_client = DefaultPluginRuntimeClient::new(
         load_opencode_package_adapter(first.approved_input().await, None, 1_720_000_001)
             .expect("create repeated adapter")
             .0,
     );
-    let repeated_source = repeated_host
+    let repeated_source = repeated_client
         .read_plugins(read_request())
         .await
         .expect("read repeated source")
@@ -790,13 +798,13 @@ async fn managed_local_plugin_ids_distinguish_nested_and_dotted_paths() {
     );
     fixture.add_declared_file(".opencode/plugins/b/foo.ts", PLUGIN_SOURCE.as_bytes());
     fixture.add_declared_file(".opencode/plugins/foo.test.ts", PLUGIN_SOURCE.as_bytes());
-    let host = PluginRuntimeHost::new(
+    let client = DefaultPluginRuntimeClient::new(
         load_opencode_package_adapter(fixture.approved_input().await, None, 1_720_000_001)
             .expect("create adapter")
             .0,
     );
 
-    let response = host
+    let response = client
         .read_plugins(read_request())
         .await
         .expect("read local projections");
@@ -819,13 +827,13 @@ async fn npm_projection_ids_distinguish_collisions_and_deduplicate_exact_entries
         "plugin": ["foo-bar", "foo_bar", "foo-bar", long_name]
     });
     fixture.add_opencode_config(&serde_json::to_string(&config).expect("serialize config"));
-    let host = PluginRuntimeHost::new(
+    let client = DefaultPluginRuntimeClient::new(
         load_opencode_package_adapter(fixture.approved_input().await, None, 1_720_000_001)
             .expect("create adapter")
             .0,
     );
 
-    let response = host
+    let response = client
         .read_plugins(read_request())
         .await
         .expect("read npm projections");
@@ -843,13 +851,13 @@ async fn npm_projection_ids_distinguish_collisions_and_deduplicate_exact_entries
 #[tokio::test]
 async fn package_without_recognized_opencode_entries_reports_diagnostic() {
     let fixture = ManagedPackageFixture::new_with_path("unsupported-layout", "notes", "README.md");
-    let host = PluginRuntimeHost::new(
+    let client = DefaultPluginRuntimeClient::new(
         load_opencode_package_adapter(fixture.approved_input().await, None, 1_720_000_001)
             .expect("create adapter")
             .0,
     );
 
-    let response = host
+    let response = client
         .read_plugins(read_request())
         .await
         .expect("read unsupported package layout");

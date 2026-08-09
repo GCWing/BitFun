@@ -3,3 +3,4 @@
  */
 
 export * from './EventBus';
+export * from './permissionRequestNotificationEvent';

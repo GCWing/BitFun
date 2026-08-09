@@ -73,14 +73,14 @@ const ArchivedRow: React.FC<ArchivedRowProps> = ({ entry, onRestore, onDelete, t
   const dateStr = formatDateTime(session.lastActiveAt);
 
   return (
-    <div className="archived-sessions-config__row">
-      <div className="archived-sessions-config__row-info">
+    <div data-bf-component="archived-sessions-config" data-bf-part="row" className="archived-sessions-config__row">
+      <div data-bf-component="archived-sessions-config" data-bf-part="rowInfo" className="archived-sessions-config__row-info">
         <span className="archived-sessions-config__row-name">{displayName}</span>
         {dateStr && (
           <span className="archived-sessions-config__row-date">{dateStr}</span>
         )}
       </div>
-      <div className="archived-sessions-config__row-actions">
+      <div data-bf-component="archived-sessions-config" data-bf-part="rowActions" className="archived-sessions-config__row-actions">
         <Button
           size="small"
           variant="ghost"
@@ -306,7 +306,7 @@ const ArchivedSessionsConfig: React.FC = () => {
   const hasEntries = entries.length > 0;
 
   const headerExtra = (
-    <div className="archived-sessions-config__header-actions">
+    <div data-bf-component="archived-sessions-config" data-bf-part="headerActions" className="archived-sessions-config__header-actions">
       <Button
         size="small"
         variant="ghost"
@@ -330,14 +330,14 @@ const ArchivedSessionsConfig: React.FC = () => {
   );
 
   return (
-    <ConfigPageLayout className="archived-sessions-config">
+    <ConfigPageLayout data-bf-component="archived-sessions-config" data-bf-part="root" className="archived-sessions-config">
       <ConfigPageHeader
         title={t('nav.sessions.archivedSessions')}
         subtitle={t('nav.sessions.archivedSessionsDescription')}
       />
       <ConfigPageContent>
         {loading ? (
-          <div className="archived-sessions-config__loading">
+          <div data-bf-component="archived-sessions-config" data-bf-part="loading" className="archived-sessions-config__loading">
             {t('nav.sessions.loading')}
           </div>
         ) : !hasEntries ? (
@@ -345,7 +345,7 @@ const ArchivedSessionsConfig: React.FC = () => {
             title={t('nav.sessions.archivedSessions')}
             extra={headerExtra}
           >
-            <div className="archived-sessions-config__empty">
+            <div data-bf-component="archived-sessions-config" data-bf-part="empty" className="archived-sessions-config__empty">
               <Inbox size={32} className="archived-sessions-config__empty-icon" />
               <span>{t('nav.sessions.noArchivedSessions')}</span>
             </div>
@@ -358,9 +358,11 @@ const ArchivedSessionsConfig: React.FC = () => {
             {Array.from(grouped.entries()).map(([workspacePath, group]) => {
               const isCollapsed = collapsedWorkspaces.has(workspacePath);
               return (
-              <div key={workspacePath} className="archived-sessions-config__group">
+              <div data-bf-component="archived-sessions-config" data-bf-part="group" data-bf-state={isCollapsed ? 'collapsed' : undefined} key={workspacePath} className="archived-sessions-config__group">
                 <button
                   type="button"
+                  data-bf-component="archived-sessions-config"
+                  data-bf-part="groupHeader"
                   className="archived-sessions-config__group-header"
                   onClick={() => toggleWorkspace(workspacePath)}
                 >
@@ -375,7 +377,7 @@ const ArchivedSessionsConfig: React.FC = () => {
                   </span>
                 </button>
                 {!isCollapsed && (
-                <div className="archived-sessions-config__group-list">
+                <div data-bf-component="archived-sessions-config" data-bf-part="groupList" className="archived-sessions-config__group-list">
                   {group.entries.map(entry => (
                     <ArchivedRow
                       key={entry.session.sessionId}

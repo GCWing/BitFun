@@ -43,8 +43,8 @@ use bitfun_agent_tools::{
     build_user_rejected_tool_presentation, build_user_rejected_tool_presentation_with_instruction,
     build_user_steering_interrupted_presentation, is_write_like_tool_name,
     render_tool_result_for_assistant, truncate_raw_tool_arguments_preview_to,
-    truncate_tool_arguments_preview, TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES,
-    USER_REJECTED_TOOL_MESSAGE, USER_STEERING_INTERRUPTED_MESSAGE,
+    TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES, USER_REJECTED_TOOL_MESSAGE,
+    USER_STEERING_INTERRUPTED_MESSAGE,
 };
 use bitfun_agent_tools::{
     build_mcp_tool_bridge_definition, build_mcp_tool_bridge_name, build_mcp_tool_bridge_result,
@@ -463,27 +463,40 @@ fn tool_error_preview_truncates_at_utf8_boundary_with_current_marker() {
 }
 
 #[test]
-fn tool_error_presentation_preserves_argument_echo_shape() {
-    let arguments = json!({
-        "path": "src/main.rs",
-        "content": "hello"
-    });
-    let preview = truncate_tool_arguments_preview(&arguments);
+fn tool_error_presentation_preserves_unparseable_raw_arguments() {
+    let raw_arguments = "{\"path\":\"src/main.rs\"".to_string();
     let presentation = build_tool_execution_error_presentation(
         "Write",
         "invalid_arguments",
         "path is required",
-        Some(preview.clone()),
+        Some(raw_arguments.clone()),
     );
 
     assert_eq!(presentation.result_json["category"], "invalid_arguments");
     assert_eq!(presentation.result_json["tool_name"], "Write");
-    assert_eq!(presentation.result_json["provided_arguments"], preview);
+    assert_eq!(
+        presentation.result_json["provided_arguments"],
+        raw_arguments
+    );
     assert_eq!(
         presentation.result_for_assistant,
-        format!(
-            "Tool 'Write' failed (invalid_arguments): path is required\nProvided arguments: {preview}"
-        )
+        "Tool 'Write' failed (invalid_arguments): path is required\nProvided arguments: {\"path\":\"src/main.rs\""
+    );
+}
+
+#[test]
+fn tool_error_presentation_omits_arguments_for_execution_failures() {
+    let presentation = build_tool_execution_error_presentation(
+        "Write",
+        "execution_error",
+        "disk is unavailable",
+        Some(r#"{\"path\":\"src/main.rs\"}"#.to_string()),
+    );
+
+    assert!(presentation.result_json["provided_arguments"].is_null());
+    assert_eq!(
+        presentation.result_for_assistant,
+        "Tool 'Write' failed (execution_error): disk is unavailable"
     );
 }
 

@@ -22,6 +22,22 @@ export interface ParsedMarkdownBlock {
   inlines: ParsedMarkdownInline[];
 }
 
+export class MarkdownParseCache {
+  private text: string = '';
+  private blocks: ParsedMarkdownBlock[] = [];
+  private initialized: boolean = false;
+
+  blocksFor(text: string): ParsedMarkdownBlock[] {
+    if (this.initialized && this.text === text) {
+      return this.blocks;
+    }
+    this.text = text;
+    this.blocks = MarkdownParser.parse(text);
+    this.initialized = true;
+    return this.blocks;
+  }
+}
+
 export class MarkdownParser {
   static parse(text: string): ParsedMarkdownBlock[] {
     const lines = text.replace(/\r\n/g, '\n').split('\n');

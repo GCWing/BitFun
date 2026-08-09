@@ -11,6 +11,8 @@ export const publicApiContractSlices = [
   'external-source-subagent-contract',
   'external-source-mcp-contract',
   'external-source-hook-contract',
+  'external-source-reference-contract',
+  'user-instruction-source-boundary',
   'external-integration-policy-contract',
 ];
 
@@ -25,6 +27,8 @@ const contractSlices = {
   externalSourceSubagentContract: 'external-source-subagent-contract',
   externalSourceMcpContract: 'external-source-mcp-contract',
   externalSourceHookContract: 'external-source-hook-contract',
+  externalSourceReferenceContract: 'external-source-reference-contract',
+  userInstructionSourceBoundary: 'user-instruction-source-boundary',
   externalIntegrationPolicyContract: 'external-integration-policy-contract',
 };
 
@@ -57,8 +61,8 @@ export const pluginRuntimePublicApiEntries = [
     pluginRuntimeEntry(
       symbol,
       'plugin discovery, status, and config-validation projection',
-      'Plugin Runtime Host read model and product assembly plugin status projection',
-      'runtime-ports read-model contract tests, OpenCode fixture projection tests, and plugin-runtime-host read-model tests',
+      'PluginRuntimeClient read model and product assembly plugin status projection',
+      'runtime-ports read-model contract tests, OpenCode fixture projection tests, and plugin-runtime-client read-model tests',
       contractSlices.bitfunPluginExtension,
     ),
   ),
@@ -85,8 +89,8 @@ export const pluginRuntimePublicApiEntries = [
     pluginRuntimeEntry(
       symbol,
       'plugin permission, effect-preview, and provider handoff',
-      'Plugin Runtime Host, tool ABI integration, and security-control candidate validation',
-      'runtime-ports candidate-effect contract tests and plugin-runtime-host permission/effect validation tests',
+      'PluginRuntimeClient, tool ABI integration, and security-control candidate validation',
+      'runtime-ports candidate-effect contract tests and plugin-runtime-client permission/effect validation tests',
       contractSlices.bitfunPluginExtension,
     ),
   ),
@@ -102,8 +106,8 @@ export const pluginRuntimePublicApiEntries = [
     pluginRuntimeEntry(
       symbol,
       'plugin diagnostics and quarantine read-model projection',
-      'Plugin Runtime Host read model and capability-service diagnostics projection',
-      'runtime-ports diagnostics tests and plugin-runtime-host quarantine/read-model owner tests',
+      'PluginRuntimeClient read model and capability-service diagnostics projection',
+      'runtime-ports diagnostics tests and plugin-runtime-client quarantine/read-model owner tests',
       contractSlices.bitfunPluginExtension,
     ),
   ),
@@ -126,9 +130,9 @@ export const pluginRuntimePublicApiEntries = [
   ].map((symbol) =>
     pluginRuntimeEntry(
       symbol,
-      'plugin host boundary, lifecycle, and execution availability',
-      'Product assembly host handoff and Agent Runtime plugin binding',
-      'runtime-ports contract tests and plugin-runtime-host owner validation',
+      'plugin runtime boundary, lifecycle facts, and execution availability',
+      'Product assembly client injection and Agent Runtime plugin binding',
+      'runtime-ports contract tests and plugin-runtime-client owner validation',
       contractSlices.pluginRuntimeInternalAbi,
     ),
   ),
@@ -138,29 +142,29 @@ export const pluginRuntimePublicApiSymbols = pluginRuntimePublicApiEntries.map(
   (entry) => entry.symbol,
 );
 
-function pluginRuntimeHostEntry(symbol, consumer) {
+function pluginRuntimeClientEntry(symbol, consumer) {
   return {
     symbol,
-    owner: 'plugin-runtime-host owner',
+    owner: 'plugin-runtime-client owner',
     consumer,
-    verification: 'plugin-runtime-host owner tests and product assembly host binding checks',
-    p0: 'Plugin Runtime Host executable boundary for the OpenCode-compatible P0 vertical slice',
+    verification: 'plugin-runtime-client owner tests and product assembly binding checks',
+    p0: 'PluginRuntimeClient executable boundary for the OpenCode-compatible P0 vertical slice',
     contractSlice: contractSlices.pluginRuntimeInternalAbi,
     wireImpact: false,
     rationale:
-      'P0 host execution needs a narrow injected adapter boundary without exposing concrete plugin runtimes',
-    exit: 'remove only if Host ownership moves to a reviewed replacement crate with equivalent boundary tests',
+      'P0 execution needs a narrow injected adapter boundary without exposing concrete plugin runtimes',
+    exit: 'remove only if the client implementation moves to a reviewed replacement crate with equivalent boundary tests',
   };
 }
 
-export const pluginRuntimeHostPublicApiEntries = [
-  pluginRuntimeHostEntry(
-    'PluginHostAdapter',
-    'PluginRuntimeHost::new injected adapter boundary and plugin-runtime-host owner tests',
+export const pluginRuntimeClientPublicApiEntries = [
+  pluginRuntimeClientEntry(
+    'PluginRuntimeAdapter',
+    'DefaultPluginRuntimeClient::new injected adapter boundary and plugin-runtime-client owner tests',
   ),
-  pluginRuntimeHostEntry(
-    'PluginRuntimeHost',
-    'Product Assembly host binding, AgentRuntimeBuilder runtime handoff, and plugin-runtime-host contract tests',
+  pluginRuntimeClientEntry(
+    'DefaultPluginRuntimeClient',
+    'Product Assembly runtime binding, AgentRuntimeBuilder handoff, and plugin-runtime-client contract tests',
   ),
 ];
 
@@ -170,14 +174,14 @@ function opencodeAdapterEntry(symbol, consumer) {
     owner: 'opencode-adapter owner',
     consumer,
     verification:
-      'opencode-adapter source adapter tests, PluginRuntimeHost integration path, and core-boundary public API budget checks',
+      'opencode-adapter source adapter tests, DefaultPluginRuntimeClient integration path, and core-boundary public API budget checks',
     p0: 'OpenCode-compatible P0-C.1 source discovery/read model and P0-C.2 custom tool candidate mapping',
     contractSlice: contractSlices.opencodeAdapterBoundary,
     wireImpact: false,
     rationale:
-      'P0-C needs one adapter factory that consumes fixed BitFun-managed package content and returns the existing PluginHostAdapter boundary',
+      'P0-C needs one adapter factory that consumes fixed BitFun-managed package content and returns the existing PluginRuntimeAdapter boundary',
     exit:
-      'remove only if source discovery moves behind a reviewed product source registry with equivalent host tests',
+      'remove only if source discovery moves behind a reviewed product source registry with equivalent client tests',
   };
 }
 
@@ -198,10 +202,27 @@ function opencodeHookAdapterEntry(symbol, consumer) {
   };
 }
 
+function opencodeReferenceAdapterEntry(symbol, consumer) {
+  return {
+    symbol,
+    owner: 'opencode-adapter workspace Reference source owner',
+    consumer,
+    verification:
+      'OpenCode workspace Reference fixtures, bitfun-core composition tests, and core-boundary public API budget checks',
+    p0: 'runtime-free OpenCode local workspace Reference discovery',
+    contractSlice: contractSlices.opencodeAdapterBoundary,
+    wireImpact: false,
+    rationale:
+      'the product catalog needs one OpenCode-specific parser behind the ecosystem-neutral workspace Reference provider contract',
+    exit:
+      'remove only if OpenCode workspace Reference discovery moves behind another reviewed adapter with equivalent precedence and fail-closed tests',
+  };
+}
+
 export const opencodeAdapterPublicApiEntries = [
   opencodeAdapterEntry(
     'load_opencode_package_adapter',
-    'bitfun-core managed plugin composition root and PluginRuntimeHost integration tests',
+    'bitfun-core managed plugin composition root and DefaultPluginRuntimeClient integration tests',
   ),
   opencodeAdapterEntry(
     'OpenCodeCommandProvider',
@@ -210,6 +231,18 @@ export const opencodeAdapterPublicApiEntries = [
   opencodeAdapterEntry(
     'OpenCodeCommandProviderOptions',
     'OpenCode command adapter fixture tests and explicit environment injection',
+  ),
+  opencodeAdapterEntry(
+    'OpenCodeConfiguredSkillRoot',
+    'bitfun-core external source composition root and OpenCode configured Skill fixtures',
+  ),
+  opencodeAdapterEntry(
+    'OpenCodeSkillRootProvider',
+    'bitfun-core external source composition root and OpenCode configured Skill fixtures',
+  ),
+  opencodeAdapterEntry(
+    'OpenCodeSkillRootProviderOptions',
+    'OpenCode configured Skill fixture tests and explicit environment injection',
   ),
   opencodeAdapterEntry(
     'OpenCodeToolProvider',
@@ -243,6 +276,16 @@ export const opencodeAdapterPublicApiEntries = [
     'OpenCodeHookProviderOptions',
     'OpenCode static Hook fixture tests and explicit environment injection',
   ),
+  opencodeReferenceAdapterEntry(
+    'OpenCodeWorkspaceReferenceProvider',
+    'bitfun-core workspace Reference composition root and OpenCode adapter fixtures',
+  ),
+  opencodeReferenceAdapterEntry(
+    'OpenCodeWorkspaceReferenceProviderOptions',
+    'OpenCode workspace Reference fixtures and explicit environment injection',
+  ),
+  userInstructionSourceAdapterEntry('load_opencode_user_instructions', 'OpenCode'),
+  userInstructionSourceAdapterEntry('OpenCodeInstructionSourceOptions', 'OpenCode'),
 ];
 
 function staticHookAdapterEntry(symbol, owner, consumer) {
@@ -299,6 +342,51 @@ function declarativeSourceAdapterEntry(
   };
 }
 
+function userInstructionSourceAdapterEntry(symbol, ecosystem) {
+  return {
+    symbol,
+    owner: `${ecosystem} adapter user Instruction source owner`,
+    consumer: 'bitfun-core instruction_sources composition root',
+    verification:
+      `${ecosystem} user Instruction fixtures, bitfun-core prompt composition tests, and core-boundary public API budget checks`,
+    p0: 'runtime-free local user Instruction source discovery',
+    contractSlice: contractSlices.userInstructionSourceBoundary,
+    wireImpact: false,
+    rationale:
+      'ecosystem-specific user file precedence belongs in its adapter while Product Assembly owns cross-ecosystem order',
+    exit:
+      'remove only if the ecosystem source semantics move behind an equivalent reviewed adapter boundary',
+  };
+}
+
+function userInstructionSourceServiceEntry(symbol) {
+  return {
+    symbol,
+    owner: 'services-core bounded local user Instruction file owner',
+    consumer: 'reviewed OpenCode, Claude Code, and Codex adapters plus bitfun-core prompt composition',
+    verification:
+      'services-core bounded file tests, ecosystem Instruction fixtures, prompt composition tests, and core-boundary public API checks',
+    p0: 'runtime-free bounded local user Instruction reads and accumulation',
+    contractSlice: contractSlices.userInstructionSourceBoundary,
+    wireImpact: false,
+    rationale:
+      'sibling adapters need one canonical, bounded file implementation while raw content stays inside backend prompt composition',
+    exit:
+      'remove only if every reviewed adapter migrates to an equivalent bounded local source owner',
+  };
+}
+
+export const userInstructionSourceServicePublicApiEntries = [
+  'MAX_LOCAL_INSTRUCTION_FILE_BYTES',
+  'MAX_LOCAL_INSTRUCTION_FILES',
+  'MAX_LOCAL_INSTRUCTION_TOTAL_BYTES',
+  'LocalInstructionFile',
+  'LocalInstructionFiles',
+  'local_instruction_path_exists',
+  'read_local_instruction_file',
+  'read_local_text_file',
+].map(userInstructionSourceServiceEntry);
+
 export const claudeCodeAdapterPublicApiEntries = [
   'ClaudeCodeHookProvider',
   'ClaudeCodeHookProviderOptions',
@@ -319,7 +407,10 @@ export const claudeCodeAdapterPublicApiEntries = [
   `bitfun-core composition root and Claude Code ${capability} fixtures`,
   capability,
   contractSlice,
-)));
+))).concat([
+  'load_claude_code_user_instructions',
+  'ClaudeCodeInstructionSourceOptions',
+].map((symbol) => userInstructionSourceAdapterEntry(symbol, 'Claude Code')));
 
 export const codexAdapterPublicApiEntries = [
   'CodexHookProvider',
@@ -339,7 +430,10 @@ export const codexAdapterPublicApiEntries = [
   `bitfun-core composition root and Codex ${capability} fixtures`,
   capability,
   contractSlice,
-)));
+))).concat([
+  'load_codex_user_instructions',
+  'CodexInstructionSourceOptions',
+].map((symbol) => userInstructionSourceAdapterEntry(symbol, 'Codex')));
 
 export const staticHookSupportPublicApiEntries = [
   'BoundedFileRead',
@@ -358,6 +452,22 @@ export const staticHookSupportPublicApiEntries = [
   'static-hook-support parser owner',
   'OpenCode, Claude Code, and Codex static Hook source adapters',
 )).concat([
+  'PreparedStaticHookCommand',
+  'StaticHookAssetError',
+  'importable_hook_matcher',
+  'required_hook_string',
+  'optional_hook_string',
+  'optional_positive_hook_u64',
+  'prepare_static_hook_command',
+  'StaticHookVisitSummary',
+  'StaticHookHandlerRef',
+  'visit_hook_document',
+  'static_hook_handler_fact',
+].map((symbol) => staticHookAdapterEntry(
+  symbol,
+  'static-hook-support command import owner',
+  'Claude Code and Codex command Hook adapters',
+))).concat([
   'BoundedFileResolveError',
   'resolve_bounded_regular_file',
   'redacted_executable_preview',
@@ -527,8 +637,8 @@ function externalSubagentEntry(symbol, owner, consumer, wireImpact = false) {
     owner,
     consumer,
     verification:
-      'external subagent contract, coordinator, OpenCode adapter, product reconciliation, registry lease, TUI, Desktop, and Web tests',
-    p0: 'PR3 ecosystem-neutral fresh subagent activation and OpenCode agent vertical slice',
+      'external subagent contract, coordinator, OpenCode, Claude Code, and Codex adapters, product reconciliation, registry lease, TUI, Desktop, and Web tests',
+    p0: 'ecosystem-neutral fresh subagent activation and declarative model binding vertical slice',
     contractSlice: contractSlices.externalSourceSubagentContract,
     wireImpact,
     rationale:
@@ -555,6 +665,40 @@ function externalMcpEntry(symbol, owner, consumer, wireImpact = false) {
   };
 }
 
+function externalReferenceEntry(symbol, owner, consumer, wireImpact = false) {
+  return {
+    symbol,
+    owner,
+    consumer,
+    verification:
+      'workspace Reference contract, coordinator, OpenCode adapter, product composition, Desktop, and Web tests',
+    p0: 'runtime-free named local workspace Reference discovery and native-first product projection',
+    contractSlice: contractSlices.externalSourceReferenceContract,
+    wireImpact,
+    rationale:
+      'workspace Reference discovery needs typed provider facts and one product projection without granting filesystem permissions or leaking ecosystem payloads',
+    exit:
+      'remove only through a reviewed workspace Reference contract migration with equivalent precedence, policy, remote, and permission-boundary tests',
+  };
+}
+
+export const workspaceReferenceContractPublicApiEntries = [
+  'ExternalWorkspaceReferenceProviderIdentity',
+  'ExternalWorkspaceReferenceDefinition',
+  'ExternalWorkspaceReferenceProviderSnapshot',
+  'ExternalWorkspaceReferenceSourceProvider',
+  'WorkspaceReferenceOrigin',
+  'WorkspaceReferenceCatalogEntry',
+  'WorkspaceReferenceSnapshot',
+].map((symbol) =>
+  externalReferenceEntry(
+    symbol,
+    'product-domains workspace Reference contract owner',
+    'OpenCode provider, external-sources coordinator, bitfun-core composition, and Desktop/Web workspace surfaces',
+    true,
+  ),
+);
+
 export const externalSourceContractPublicApiEntries = [
   'ExternalSourceContractError',
   'SourceKey',
@@ -567,7 +711,16 @@ export const externalSourceContractPublicApiEntries = [
   'ExternalSourceRecord',
   'PromptCommandAvailability',
   'PromptCommandDefinition',
+  'PromptCommandExecutionTarget',
   'ExpandedPromptCommand',
+  'PromptCommandExpansion',
+  'PromptCommandShellPreference',
+  'PromptCommandShellReviewMode',
+  'PromptCommandShellReviewDecision',
+  'PromptCommandShellReviewPlan',
+  'PromptCommandInvocationOutcome',
+  'PromptCommandShellInvocation',
+  'PromptCommandShellExpansion',
   'PromptCommandProviderIdentity',
   'PromptCommandProviderSnapshot',
   'ExternalSourceContext',
@@ -635,6 +788,8 @@ export const externalSourceContractPublicApiEntries = [
     'SourceQualifiedMcpServerId',
     'ExternalMcpTransportKind',
     'ExternalMcpStaticStatus',
+    'ExternalMcpTimeouts',
+    'MAX_EXTERNAL_MCP_TIMEOUT_MS',
     'ExternalMcpServerDefinition',
     'ExternalMcpActivationState',
     'ExternalMcpCatalogEntry',
@@ -644,6 +799,17 @@ export const externalSourceContractPublicApiEntries = [
     'SecretValue',
     'PreparedExternalMcpTransport',
     'PreparedExternalMcpServer',
+    'PreparedExternalMcpImportTransport',
+    'PreparedExternalMcpImportServer',
+    'EXTERNAL_MCP_IMPORT_SCHEMA_V1',
+    'ExternalMcpImportDispositionV1',
+    'ExternalMcpImportPlanItemV1',
+    'ExternalMcpImportPlanV1',
+    'ExternalMcpImportSelectionV1',
+    'ExternalMcpImportApplyRequestV1',
+    'ExternalMcpImportedItemV1',
+    'ExternalMcpImportApplyOutcomeV1',
+    'ExternalMcpImportApplyResultV1',
     'ExternalMcpProviderIdentity',
     'ExternalMcpProviderSnapshot',
     'ExternalMcpSourceProvider',
@@ -663,6 +829,8 @@ export const externalSourceContractPublicApiEntries = [
 
 export const externalSourceControlPublicApiEntries = [
   'EXTERNAL_SOURCE_CONTROL_SCHEMA_V1',
+  'EXTERNAL_APPLICATION_SCHEMA_V2',
+  'EXTERNAL_APPLICATION_REVIEW_PAGE_MAX_ITEMS',
   'ExternalSourceOperationStage',
   'ExternalSourceRecoveryActionV1',
   'ExternalSourceDiscoveryState',
@@ -678,6 +846,39 @@ export const externalSourceControlPublicApiEntries = [
   'ExternalSourceSurfaceSnapshotV1',
   'ExternalSourceControlActionV1',
   'ExternalSourceControlRequestV1',
+  'ExternalApplicationTargetScopeV2',
+  'ExternalApplicationDesiredConnectionV2',
+  'ExternalApplicationUserDecisionV2',
+  'ExternalApplicationDiscoveryStateV2',
+  'ExternalApplicationConnectionStateV2',
+  'ExternalApplicationHealthV2',
+  'ExternalApplicationEffectiveStatusV2',
+  'ExternalApplicationPrimaryActionV2',
+  'derive_external_application_status_v2',
+  'ExternalApplicationDefaultConnectionPolicyV2',
+  'ExternalApplicationRiskLevelV2',
+  'ExternalApplicationSafetyCeilingV2',
+  'ExternalApplicationRecoveryActionV2',
+  'ExternalApplicationHostCapabilitiesV2',
+  'ExternalApplicationRiskSummaryV2',
+  'ExternalApplicationReviewItemKindV2',
+  'ExternalApplicationReviewItemRefV2',
+  'ExternalApplicationOwnerGenerationV2',
+  'ExternalApplicationReviewCategoryCountV2',
+  'ExternalApplicationReviewRecommendationSummaryV2',
+  'ExternalApplicationReviewSummaryV2',
+  'ExternalApplicationSummaryV2',
+  'ExternalApplicationSnapshotV2',
+  'ExternalApplicationReviewItemV2',
+  'ExternalApplicationReviewPageRequestV2',
+  'ExternalApplicationReviewPageV2',
+  'ExternalApplicationReviewSelectionBaselineV2',
+  'ExternalApplicationReviewSelectionOverrideV2',
+  'ExternalApplicationControlActionV2',
+  'ExternalApplicationControlRequestV2',
+  'ExternalApplicationOperationOutcomeV2',
+  'ExternalApplicationReviewItemResultV2',
+  'ExternalApplicationControlResultV2',
 ].map((symbol) =>
   externalSourceControlEntry(
     symbol,
@@ -697,6 +898,11 @@ export const externalSubagentContractPublicApiEntries = [
   'ExternalSubagentProviderIdentity',
   'ExternalSubagentMode',
   'ExternalSubagentModelRequest',
+  'ExternalSubagentModelProfileRequest',
+  'ExternalSubagentModelBindingTarget',
+  'ExternalSubagentModelBindingMethod',
+  'ExternalSubagentModelBindingOption',
+  'ExternalSubagentModelBindingGroup',
   'ExternalSubagentToolSelector',
   'ExternalSubagentToolRequest',
   'ExternalSubagentCompatibilityState',
@@ -712,6 +918,7 @@ export const externalSubagentContractPublicApiEntries = [
   'external_subagent_candidate_id',
   'external_subagent_approval_key',
   'external_subagent_conflict_key',
+  'external_subagent_model_binding_key',
 ].map((symbol) =>
   externalSubagentEntry(
     symbol,
@@ -788,6 +995,18 @@ export const externalSourceCoordinatorPublicApiEntries = [
       'bitfun-core bounded concurrent external-MCP provider scheduler',
     ),
   ),
+  ...[
+    'ExternalWorkspaceReferenceCoordinator',
+    'ExternalWorkspaceReferenceCoordinatorSnapshot',
+    'ExternalWorkspaceReferenceDiscoveryRequest',
+    'ExternalWorkspaceReferenceDiscoveryResult',
+  ].map((symbol) =>
+    externalReferenceEntry(
+      symbol,
+      'external-sources workspace Reference coordinator owner',
+      'bitfun-core bounded concurrent workspace Reference provider scheduler',
+    ),
+  ),
 ];
 
 export const externalSourceCorePublicApiEntries = [
@@ -801,6 +1020,9 @@ export const externalSourceCorePublicApiEntries = [
     'EXTERNAL_SOURCE_CONTROL_SCHEMA_V1',
     'get_external_source_control_snapshot',
     'apply_external_source_control_action',
+    'get_external_application_snapshot_v2',
+    'get_external_application_review_page_v2',
+    'apply_external_application_action_v2',
   ].map((symbol) =>
     externalSourceControlEntry(
       symbol,
@@ -823,6 +1045,7 @@ export const externalSourceCorePublicApiEntries = [
     'EXTERNAL_CAPABILITY_TOOL',
     'EXTERNAL_CAPABILITY_SUBAGENT',
     'EXTERNAL_CAPABILITY_MCP',
+    'EXTERNAL_CAPABILITY_REFERENCE',
     'update_external_integration_policy',
   ].map((symbol) =>
     externalIntegrationPolicyEntry(
@@ -847,6 +1070,11 @@ export const externalSourceCorePublicApiEntries = [
     'PromptCommandAvailability',
     'PromptCommandCatalogEntry',
     'PromptCommandDefinition',
+    'PromptCommandExecutionTarget',
+    'PromptCommandInvocationOutcome',
+    'PromptCommandShellReviewDecision',
+    'PromptCommandShellReviewMode',
+    'PromptCommandShellReviewPlan',
     'SourceKey',
     'prompt_command_conflict_key',
     'native_prompt_command_conflict_key',
@@ -860,6 +1088,7 @@ export const externalSourceCorePublicApiEntries = [
     'set_external_prompt_command_conflict_choice',
     'external_source_snapshot',
     'external_source_read_only_snapshot',
+    'ensure_external_source_workspace_snapshot',
     'set_external_source_enabled',
     'expand_external_prompt_command',
     'sanitize_external_source_operation_error',
@@ -873,12 +1102,35 @@ export const externalSourceCorePublicApiEntries = [
       'BitFun CLI and desktop host APIs',
     ),
   ),
+  externalReferenceEntry(
+    'workspace_reference_snapshot',
+    'bitfun-core workspace Reference composition facade',
+    'Desktop and Web workspace directory surfaces',
+    true,
+  ),
   externalSourceEntry(
     'external_source_location_for_host_action',
     'bitfun-core external source composition owner',
     'Desktop external-source configuration host adapter',
     true,
   ),
+  ...[
+    'unacknowledged_external_ecosystems',
+    'acknowledge_external_ecosystems',
+  ].map((symbol) => ({
+    symbol,
+    owner: 'bitfun-core external source composition facade',
+    consumer: 'Desktop settings navigation and CLI/TUI external application entry points',
+    verification:
+      'core acknowledgement persistence and execution-domain scoping tests, plus Desktop and TUI first-discovery hint tests',
+    p0: 'first-discovery hint for external applications shared by GUI and TUI',
+    contractSlice: contractSlices.externalSourceCommandContract,
+    wireImpact: true,
+    rationale:
+      'both surfaces must derive "an external application the user has not seen" from one owner, otherwise GUI and TUI drift; awareness stays outside the preference-revision contract because it grants nothing and only suppresses a hint',
+    exit:
+      'remove once the versioned application-level read model owns notice state, together with its cross-surface deduplication tests',
+  })),
   ...[
     'ExternalToolActivationState',
     'ExternalToolApprovalRequest',
@@ -901,8 +1153,15 @@ export const externalSourceCorePublicApiEntries = [
     'ExternalSubagentCompatibilityState',
     'ExternalSubagentConflict',
     'ExternalSubagentConflictCandidate',
+    'ExternalSubagentModelBindingGroup',
+    'ExternalSubagentModelBindingMethod',
+    'ExternalSubagentModelBindingOption',
+    'ExternalSubagentModelBindingTarget',
+    'ExternalSubagentModelProfileRequest',
+    'ExternalSubagentModelRequest',
     'ExternalSubagentSummary',
     'set_external_subagent_activation',
+    'set_external_subagent_model_binding',
     'choose_external_subagent_conflict',
   ].map((symbol) =>
     externalSubagentEntry(
@@ -939,7 +1198,7 @@ function pluginSourceEntry(symbol, owner, consumer, verification, wireImpact) {
     contractSlice: contractSlices.bitfunPluginExtension,
     wireImpact,
     rationale:
-      'P0-C needs one ecosystem-neutral package identity, review, and fixed-content boundary without exposing adapter or Host ABI types',
+      'P0-C needs one ecosystem-neutral package identity, review, and fixed-content boundary without exposing adapter or plugin-internal ABI types',
     exit:
       'remove only after a reviewed package-source owner migration with equivalent CLI and trust-state tests',
   };
@@ -1035,7 +1294,7 @@ export const publicApiAllowlistRules = [
   {
     path: 'src/crates/adapters/opencode-adapter/src/lib.rs',
     reason:
-      'OpenCode adapter public API must stay limited to source and candidate mapping through the Plugin Runtime Host adapter boundary',
+      'OpenCode adapter public API must stay limited to reviewed runtime-free sources and the PluginRuntimeClient adapter boundary',
     allowedSymbolEntries: opencodeAdapterPublicApiEntries,
   },
   {
@@ -1054,10 +1313,16 @@ export const publicApiAllowlistRules = [
     allowedSymbolEntries: staticHookSupportPublicApiEntries,
   },
   {
-    path: 'src/crates/execution/plugin-runtime-host/src/lib.rs',
+    path: 'src/crates/services/services-core/src/local_instructions.rs',
     reason:
-      'Plugin Runtime Host public API must stay limited to the injected adapter trait and host boundary type',
-    allowedSymbolEntries: pluginRuntimeHostPublicApiEntries,
+      'bounded local user Instruction file support must stay narrow, backend-only, and explicitly consumer-backed',
+    allowedSymbolEntries: userInstructionSourceServicePublicApiEntries,
+  },
+  {
+    path: 'src/crates/execution/plugin-runtime-client/src/lib.rs',
+    reason:
+      'PluginRuntimeClient public API must stay limited to the injected adapter trait and client boundary type',
+    allowedSymbolEntries: pluginRuntimeClientPublicApiEntries,
   },
   {
     path: 'src/crates/contracts/product-domains/src/plugin_source.rs',
@@ -1100,6 +1365,12 @@ export const publicApiAllowlistRules = [
     reason:
       'external Hook catalog contracts must stay ecosystem-neutral, runtime-free, redacted, bounded, and explicitly consumer-backed',
     allowedSymbolEntries: externalHookCatalogPublicApiEntries,
+  },
+  {
+    path: 'src/crates/contracts/product-domains/src/workspace_references.rs',
+    reason:
+      'workspace Reference contracts must stay ecosystem-neutral, runtime-free, non-authorizing, bounded, and explicitly consumer-backed',
+    allowedSymbolEntries: workspaceReferenceContractPublicApiEntries,
   },
   {
     path: 'src/crates/assembly/external-sources/src/lib.rs',

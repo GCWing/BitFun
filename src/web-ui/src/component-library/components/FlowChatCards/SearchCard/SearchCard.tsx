@@ -6,7 +6,7 @@
 import React, { useState, useMemo } from 'react';
 import { Search, File, FolderOpen, ChevronDown, ChevronUp, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
-import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
+import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 import { BaseToolCard, BaseToolCardProps } from '../BaseToolCard';
 import { ToolProcessingDots } from '../ToolProcessingDots';
 import './SearchCard.scss';
@@ -88,7 +88,7 @@ export const SearchCard: React.FC<SearchCardProps> = ({
   const isGrepSearch = searchType === 'grep';
   const cardTitle = isGrepSearch ? t('flowChatCards.searchCard.grepTitle') : t('flowChatCards.searchCard.globTitle');
   const cardIcon = isGrepSearch ? <Search size={18} /> : <FolderOpen size={18} />;
-  const cardColor = UI_EXCEPTION_ACCENTS.toolIdentity.search;
+  const cardColor = APPEARANCE_DOMAIN_TOKENS.toolIdentity.search;
 
   const getStatusIcon = () => {
     switch (status) {
@@ -108,6 +108,10 @@ export const SearchCard: React.FC<SearchCardProps> = ({
     return (
       <div
         className={`search-card search-card--compact search-card--${searchType} status-${status}`}
+        data-bf-component="flow-chat-card"
+        data-bf-part="compact"
+        data-bf-display="compact"
+        data-bf-status={status}
         style={{ '--private-search-card-identity-color': cardColor } as React.CSSProperties}
       >
         {isGrepSearch ? (
@@ -141,7 +145,7 @@ export const SearchCard: React.FC<SearchCardProps> = ({
       className={`search-card search-card--${searchType}`}
       {...baseProps}
     >
-      <div className="search-card__info">
+        <div className="search-card__info" data-bf-component="flow-chat-card" data-bf-part="details">
         <div className="search-card__info-row">
           <span className="search-card__label">{t('flowChatCards.searchCard.pattern')}:</span>
           <span className="search-card__value">{searchPattern}</span>
@@ -177,9 +181,9 @@ export const SearchCard: React.FC<SearchCardProps> = ({
           </button>
           
           {isExpanded && (
-            <div className="search-card__file-list">
+            <div className="search-card__file-list" data-bf-component="flow-chat-card" data-bf-part="list">
               {topFiles.map(({ file, count }, index) => (
-                <div key={index} className="search-card__file-item">
+                <div key={index} className="search-card__file-item" data-bf-component="flow-chat-card" data-bf-part="item">
                   <File size={12} />
                   <span className="search-card__file-name" title={file}>
                     {file.split('/').pop() || file}
@@ -193,7 +197,7 @@ export const SearchCard: React.FC<SearchCardProps> = ({
       )}
 
       {status === 'completed' && stats.matches === 0 && (
-        <div className="search-card__no-results">
+        <div className="search-card__no-results" data-bf-component="flow-chat-card" data-bf-part="empty">
           {isGrepSearch ? t('flowChatCards.searchCard.noTextMatch') : t('flowChatCards.searchCard.noFileMatch')}
         </div>
       )}

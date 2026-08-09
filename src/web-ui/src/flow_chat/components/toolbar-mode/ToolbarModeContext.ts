@@ -52,10 +52,18 @@ export interface ToolbarModeContextType {
   updateToolbarState: (state: Partial<ToolbarModeState>) => void;
 }
 
+/**
+ * Toolbar window sizes, in logical (CSS) pixels — the same unit the
+ * stylesheets use. resolveToolbarWindowGeometry converts them to the physical
+ * pixels the Tauri window APIs expect.
+ */
 export const TOOLBAR_COMPACT_SIZE = { width: 700, height: 140 };
 export const TOOLBAR_COMPACT_MIN = { width: 400, height: 100 };
-export const TOOLBAR_EXPANDED_SIZE = { width: 700, height: 1400 };
+/** Matches the floating chat bubble panel ($panel-width/$panel-height). */
+export const TOOLBAR_EXPANDED_SIZE = { width: 440, height: 680 };
 export const TOOLBAR_EXPANDED_MIN = { width: 400, height: 500 };
+export const MAIN_WINDOW_DEFAULT_SIZE = { width: 1200, height: 800 };
+export const MAIN_WINDOW_MIN_SIZE = { width: 800, height: 600 };
 
 export const ToolbarModeContext = createContext<ToolbarModeContextType | undefined>(undefined);
 

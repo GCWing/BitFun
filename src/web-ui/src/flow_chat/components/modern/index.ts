@@ -10,5 +10,10 @@ export { UserMessageItem } from './UserMessageItem';
 export { ModelRoundItem } from './ModelRoundItem';
 export { FlowChatHeader } from './FlowChatHeader';
 export type { FlowChatHeaderProps } from './FlowChatHeader';
-export { FlowChatContext, useFlowChatContext } from './FlowChatContext';
+export {
+  FlowChatContext,
+  useFlowChatContext,
+  FlowChatVolatileContext,
+  useFlowChatVolatileContext,
+} from './FlowChatContext';
 export type { FlowChatContextValue } from './FlowChatContext';

@@ -1087,6 +1087,7 @@ interface ReviewTeamManifestOptions {
   includeQualityGate?: boolean;
   targetEvidence?: ReviewTargetEvidence;
   managedBatching?: boolean;
+  maxFocusedCalls?: number;
 }
 
 // Provider-backed PR diffs are acquired per file by the runtime. Keep this
@@ -1203,16 +1204,15 @@ export function buildEffectiveReviewTeamManifest(
     }),
     options.rateLimitStatus,
   );
-  const managedMaxParallelInstances = options.managedBatching
-    ? Math.min(2, resolvedConcurrencyPolicy.maxParallelInstances)
-    : undefined;
-  const concurrencyPolicy = managedMaxParallelInstances === undefined
-    ? resolvedConcurrencyPolicy
-    : {
-      ...resolvedConcurrencyPolicy,
-      maxParallelInstances: managedMaxParallelInstances,
-    };
+  const concurrencyPolicy = {
+    ...resolvedConcurrencyPolicy,
+    maxParallelInstances: Math.min(2, resolvedConcurrencyPolicy.maxParallelInstances),
+  };
   const strategyLevel = options.strategyOverride ?? team.strategyLevel;
+  const maxFocusedCalls = Math.max(
+    0,
+    Math.min(3, options.maxFocusedCalls ?? (strategyLevel === 'deep' ? 3 : 2)),
+  );
   const strategyBudget = REVIEW_STRATEGY_RUNTIME_BUDGETS[strategyLevel];
   const tokenBudgetMode = options.tokenBudgetMode ?? strategyBudget.tokenBudgetMode;
   const scopeProfile = buildDeepReviewScopeProfile(strategyLevel);
@@ -1230,9 +1230,6 @@ export function buildEffectiveReviewTeamManifest(
   });
   const preReviewSummary = buildPreReviewSummary(target, changeStats);
   const coreMembers = team.coreMembers.map((member) =>
-    applyTeamStrategyOverrideToMember(member, strategyLevel),
-  );
-  const extraMembers = team.extraMembers.map((member) =>
     applyTeamStrategyOverrideToMember(member, strategyLevel),
   );
   const availableCoreMembers = coreMembers.filter((member) => member.available);
@@ -1262,7 +1259,12 @@ export function buildEffectiveReviewTeamManifest(
   const qualityGateReviewer = qualityGateReviewerMember
     ? toManifestMember(qualityGateReviewerMember)
     : undefined;
-  const eligibleExtraMembers = extraMembers
+  // New adaptive manifests discover configured read-only reviewers as
+  // capability guidance. They are not a fixed roster and must not appear as
+  // enabled or budget-skipped members, including new managed file packets.
+  // Persisted historical manifests retain their own member ids at runtime.
+  const manifestExtraMembers: ReviewTeamMember[] = [];
+  const eligibleExtraMembers = manifestExtraMembers
     .filter((member) => member.available && member.enabled);
   const strategyMaxExtraReviewers = resolveMaxExtraReviewers(
     tokenBudgetMode,
@@ -1284,12 +1286,12 @@ export function buildEffectiveReviewTeamManifest(
       target,
       changeStats,
     }),
-    // A strict run is reviewed by the DeepReview agent itself. Specialist
-    // agents are optional fresh perspectives, not a pre-scheduled team.
+    // The owner reviews directly. Spawned checks are admitted only for
+    // concrete target-bound questions and share this explicit allowance.
     reviewerFileSplitThreshold: 0,
     maxSameRoleInstances: 1,
     maxRetriesPerRole: 0,
-    maxReviewerCalls: 1,
+    maxReviewerCalls: maxFocusedCalls,
   };
   const prioritizedEvidenceFiles = options.targetEvidence
     ? [
@@ -1341,7 +1343,9 @@ export function buildEffectiveReviewTeamManifest(
   const tokenBudget = buildTokenBudgetPlan({
     mode: tokenBudgetMode,
     activeReviewerCalls: options.managedBatching ? workPackets.length : 1,
-    maxReviewerCalls: options.managedBatching ? workPackets.length : 3,
+    maxReviewerCalls: options.managedBatching
+      ? workPackets.length
+      : 1 + maxFocusedCalls,
     eligibleExtraReviewerCount: eligibleExtraMembers.length,
     maxExtraReviewers,
     skippedReviewerIds: budgetLimitedExtraMembers.map((member) => member.subagentId),
@@ -1351,7 +1355,7 @@ export function buildEffectiveReviewTeamManifest(
     workPackets,
   });
   const skippedReviewers = [
-    ...extraMembers
+    ...manifestExtraMembers
       .filter((member) => !member.available || !member.enabled)
       .map((member) =>
         toManifestMember(
@@ -1375,6 +1379,10 @@ export function buildEffectiveReviewTeamManifest(
 
   return {
     reviewMode: 'deep',
+    adaptiveReview: {
+      version: 1,
+      maxFocusedCalls,
+    },
     ...(options.workspacePath ? { workspacePath: options.workspacePath } : {}),
     policySource: options.policySource ?? 'default-review-team-config',
     target,
@@ -1409,6 +1417,72 @@ export function buildEffectiveReviewTeamManifest(
       }
       : {}),
   };
+}
+
+/**
+ * Builds the ordinary Review manifest without registry or configuration I/O.
+ * The owner is CodeReview; ReviewWorker is only a runtime target for admitted
+ * focused questions, so launch latency must not depend on loading a full team.
+ */
+export function buildAdaptiveStandardReviewManifest(options: {
+  workspacePath?: string;
+  target: ReviewTargetClassification;
+  changeStats: ReviewTeamChangeStats;
+  targetEvidence: ReviewTargetEvidence;
+}): ReviewTeamRunManifest {
+  const storedConfig = normalizeStoredConfig(undefined);
+  const workerDefinition = DEFAULT_REVIEW_TEAM_CORE_ROLES.find(
+    (role) => role.key === 'worker',
+  );
+  if (!workerDefinition) {
+    throw new Error('Default ReviewWorker definition is unavailable');
+  }
+  const workerInfo: SubagentInfo = {
+    key: 'builtin::builtin::ReviewWorker',
+    id: 'ReviewWorker',
+    name: workerDefinition.funName,
+    description: workerDefinition.description,
+    isReadonly: true,
+    isReview: true,
+    toolCount: REVIEW_WORK_PACKET_ALLOWED_TOOLS.length,
+    defaultTools: [...REVIEW_WORK_PACKET_ALLOWED_TOOLS],
+    defaultEnabled: true,
+    effectiveEnabled: true,
+    source: 'builtin',
+    subagentSource: 'builtin',
+  };
+  const worker = buildCoreMember(
+    workerDefinition,
+    workerInfo,
+    storedConfig,
+    undefined,
+    FALLBACK_REVIEW_TEAM_DEFINITION.strategyProfiles,
+  );
+  const team: ReviewTeam = {
+    id: FALLBACK_REVIEW_TEAM_DEFINITION.id,
+    name: FALLBACK_REVIEW_TEAM_DEFINITION.name,
+    description: FALLBACK_REVIEW_TEAM_DEFINITION.description,
+    warning: FALLBACK_REVIEW_TEAM_DEFINITION.warning,
+    strategyLevel: 'quick',
+    memberStrategyOverrides: {},
+    executionPolicy: executionPolicyFromStoredConfig(storedConfig),
+    concurrencyPolicy: concurrencyPolicyFromStoredConfig(storedConfig),
+    definition: FALLBACK_REVIEW_TEAM_DEFINITION,
+    members: [worker],
+    coreMembers: [worker],
+    extraMembers: [],
+  };
+  return buildEffectiveReviewTeamManifest(team, {
+    workspacePath: options.workspacePath,
+    target: options.target,
+    changeStats: options.changeStats,
+    targetEvidence: options.targetEvidence,
+    strategyOverride: 'quick',
+    includeQualityGate: false,
+    maxCoreReviewers: 1,
+    maxExtraReviewers: 0,
+    maxFocusedCalls: 2,
+  });
 }
 
 function resolveManagedPlanFileLimit(

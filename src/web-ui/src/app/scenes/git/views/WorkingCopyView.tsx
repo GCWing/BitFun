@@ -384,8 +384,8 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
 
   if (!workspacePath) {
     return (
-      <div className="bitfun-git-scene-working-copy">
-        <div className="bitfun-git-scene-working-copy__placeholder">
+      <div data-bf-component="working-copy-view" data-bf-part="root" className="bitfun-git-scene-working-copy">
+        <div className="bitfun-git-scene-working-copy__placeholder" data-bf-component="working-copy-view" data-bf-part="placeholder">
           <FileCode2 size={48} aria-hidden />
           <p>{t('tabs.changes')}</p>
           <p className="bitfun-git-scene-working-copy__hint">Open a workspace to see changes.</p>
@@ -395,11 +395,11 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
   }
 
   return (
-    <div className="bitfun-git-scene-working-copy">
-      <div className="bitfun-git-scene-working-copy__commit-bar">
-        <div className="bitfun-git-scene-working-copy__status-row">
+    <div data-bf-component="working-copy-view" data-bf-part="root" className="bitfun-git-scene-working-copy">
+      <div className="bitfun-git-scene-working-copy__commit-bar" data-bf-component="working-copy-view" data-bf-part="commitBar">
+        <div className="bitfun-git-scene-working-copy__status-row" data-bf-component="working-copy-view" data-bf-part="statusRow">
           <GitBranch size={12} />
-          <span className="bitfun-git-scene-working-copy__branch">{status?.current_branch ?? t('common.unknown')}</span>
+          <span className="bitfun-git-scene-working-copy__branch" data-bf-component="working-copy-view" data-bf-part="branch">{status?.current_branch ?? t('common.unknown')}</span>
           {(status?.ahead ?? 0) > 0 && (
             <Tooltip content={t('status.ahead')}>
               <span className="bitfun-git-scene-working-copy__badge wcv-badge--ahead">↑{status?.ahead}</span>
@@ -410,7 +410,7 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
               <span className="bitfun-git-scene-working-copy__badge wcv-badge--behind">↓{status?.behind}</span>
             </Tooltip>
           )}
-          <div className="bitfun-git-scene-working-copy__sync-actions">
+          <div className="bitfun-git-scene-working-copy__sync-actions" data-bf-component="working-copy-view" data-bf-part="syncActions">
             <IconButton size="xs" variant="ghost" onClick={handlePull} disabled={isOperating} tooltip={t('actions.pull')}>
               <ArrowDown size={14} />
             </IconButton>
@@ -419,7 +419,7 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
             </IconButton>
           </div>
         </div>
-        <div className="bitfun-git-scene-working-copy__commit-input-row">
+        <div className="bitfun-git-scene-working-copy__commit-input-row" data-bf-component="working-copy-view" data-bf-part="commitInput">
           <Textarea
             className="bitfun-git-scene-working-copy__message"
             placeholder={status?.staged?.length ? t('commit.inputPlaceholder') : t('commit.inputPlaceholderNoStaged')}
@@ -441,7 +441,7 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
             </IconButton>
           )}
         </div>
-        <div className="bitfun-git-scene-working-copy__commit-actions">
+        <div className="bitfun-git-scene-working-copy__commit-actions" data-bf-component="working-copy-view" data-bf-part="commitActions">
           <Button
             size="small"
             variant={quickCommitMessage.trim() && status?.staged?.length ? 'primary' : 'secondary'}
@@ -453,9 +453,9 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
         </div>
       </div>
 
-      <div className="bitfun-git-scene-working-copy__main" ref={mainRef}>
-        <div className="bitfun-git-scene-working-copy__file-list" style={{ width: fileListWidth }}>
-          <div className="bitfun-git-scene-working-copy__search">
+      <div className="bitfun-git-scene-working-copy__main" ref={mainRef} data-bf-component="working-copy-view" data-bf-part="main">
+        <div className="bitfun-git-scene-working-copy__file-list" style={{ width: fileListWidth }} data-bf-component="working-copy-view" data-bf-part="fileList">
+          <div className="bitfun-git-scene-working-copy__search" data-bf-component="working-copy-view" data-bf-part="search">
             <SearchComponent
               placeholder={t('search.files')}
               value={searchQuery}
@@ -469,6 +469,8 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
                 <>
                   <div
                     className="bitfun-git-scene-working-copy__group-header"
+                    data-bf-component="working-copy-view"
+                    data-bf-part="groupHeader"
                     onClick={() => toggleFileGroup('unstaged')}
                   >
                     {expandedFileGroups.has('unstaged') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -508,15 +510,18 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
                       const isLoading = loadingDiffFiles.has(file.path);
                       const isSelected = selectedFiles.has(file.path);
                       return (
-                        <div
+                        <div data-bf-component="working-copy-view" data-bf-part="file"
                           key={`u-${idx}`}
                           className={`bitfun-git-scene-working-copy__file-row ${isSelected ? 'wcv-file--selected' : ''} ${isLoading ? 'wcv-file--loading' : ''}`}
+                          data-bf-state={[isSelected && 'selected', isLoading && 'loading'].filter(Boolean).join(' ') || undefined}
                           onClick={() => !isLoading && handleOpenFileDiff(file.path, file.status)}
                           title={t('tooltips.viewDiff')}
                         >
                           <button
                             type="button"
                             className="bitfun-git-scene-working-copy__file-check"
+                            data-bf-component="working-copy-view"
+                            data-bf-part="fileCheck"
                             onClick={e => {
                               e.stopPropagation();
                               toggleFileSelection(file.path);
@@ -524,9 +529,9 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
                           >
                             {isSelected ? <Check size={14} /> : <Circle size={14} />}
                           </button>
-                          <span className="bitfun-git-scene-working-copy__file-name">{fileName}</span>
+                          <span className="bitfun-git-scene-working-copy__file-name" data-bf-component="working-copy-view" data-bf-part="fileName">{fileName}</span>
                           {dirPath && <span className="bitfun-git-scene-working-copy__file-dir">{dirPath}</span>}
-                          <span className={`bitfun-git-scene-working-copy__file-status ${statusInfo.className}`}>{statusInfo.text}</span>
+                          <span className={`bitfun-git-scene-working-copy__file-status ${statusInfo.className}`} data-bf-component="working-copy-view" data-bf-part="fileStatus">{statusInfo.text}</span>
                           <IconButton
                             size="xs"
                             variant="ghost"
@@ -546,7 +551,7 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
               )}
               {filteredFiles.untracked.length > 0 && (
                 <>
-                  <div className="bitfun-git-scene-working-copy__group-header" onClick={() => toggleFileGroup('untracked')}>
+                  <div className="bitfun-git-scene-working-copy__group-header" onClick={() => toggleFileGroup('untracked')} data-bf-component="working-copy-view" data-bf-part="groupHeader">
                     {expandedFileGroups.has('untracked') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                     <span>
                       {searchQuery
@@ -560,15 +565,18 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
                       const isLoading = loadingDiffFiles.has(filePath);
                       const isSelected = selectedFiles.has(filePath);
                       return (
-                        <div
+                        <div data-bf-component="working-copy-view" data-bf-part="file"
                           key={`ut-${idx}`}
                           className={`bitfun-git-scene-working-copy__file-row ${isSelected ? 'wcv-file--selected' : ''} ${isLoading ? 'wcv-file--loading' : ''}`}
+                          data-bf-state={[isSelected && 'selected', isLoading && 'loading'].filter(Boolean).join(' ') || undefined}
                           onClick={() => !isLoading && handleOpenFileDiff(filePath, 'Untracked')}
                           title={t('tooltips.viewDiff')}
                         >
                           <button
                             type="button"
                             className="bitfun-git-scene-working-copy__file-check"
+                            data-bf-component="working-copy-view"
+                            data-bf-part="fileCheck"
                             onClick={e => {
                               e.stopPropagation();
                               toggleFileSelection(filePath);
@@ -576,9 +584,9 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
                           >
                             {isSelected ? <Check size={14} /> : <Circle size={14} />}
                           </button>
-                          <span className="bitfun-git-scene-working-copy__file-name">{fileName}</span>
+                          <span className="bitfun-git-scene-working-copy__file-name" data-bf-component="working-copy-view" data-bf-part="fileName">{fileName}</span>
                           {dirPath && <span className="bitfun-git-scene-working-copy__file-dir">{dirPath}</span>}
-                          <span className="bitfun-git-scene-working-copy__file-status wcv-status--added">U</span>
+                          <span className="bitfun-git-scene-working-copy__file-status wcv-status--added" data-bf-component="working-copy-view" data-bf-part="fileStatus">U</span>
                           <IconButton
                             size="xs"
                             variant="ghost"
@@ -598,7 +606,7 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
               )}
               {filteredFiles.staged.length > 0 && (
                 <>
-                  <div className="bitfun-git-scene-working-copy__group-header" onClick={() => toggleFileGroup('staged')}>
+                  <div className="bitfun-git-scene-working-copy__group-header" onClick={() => toggleFileGroup('staged')} data-bf-component="working-copy-view" data-bf-part="groupHeader">
                     {expandedFileGroups.has('staged') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                     <span>
                       {searchQuery
@@ -611,14 +619,15 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
                       const statusInfo = getFileStatusInfo(file.status);
                       const isLoading = loadingDiffFiles.has(file.path);
                       return (
-                        <div
+                        <div data-bf-component="working-copy-view" data-bf-part="file"
                           key={`s-${idx}`}
                           className={`bitfun-git-scene-working-copy__file-row ${isLoading ? 'wcv-file--loading' : ''}`}
+                          data-bf-state={isLoading ? 'loading' : undefined}
                           onClick={() => !isLoading && handleOpenFileDiff(file.path, file.status)}
                           title={t('tooltips.viewDiff')}
                         >
-                          <span className="bitfun-git-scene-working-copy__file-name">{file.path}</span>
-                          <span className={`bitfun-git-scene-working-copy__file-status ${statusInfo.className}`}>{statusInfo.text}</span>
+                          <span className="bitfun-git-scene-working-copy__file-name" data-bf-component="working-copy-view" data-bf-part="fileName">{file.path}</span>
+                          <span className={`bitfun-git-scene-working-copy__file-status ${statusInfo.className}`} data-bf-component="working-copy-view" data-bf-part="fileStatus">{statusInfo.text}</span>
                           <IconButton
                             size="xs"
                             variant="ghost"
@@ -638,18 +647,20 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
               )}
             </>
           ) : (
-            <div className="bitfun-git-scene-working-copy__empty">{t('empty.noChanges')}</div>
+            <div className="bitfun-git-scene-working-copy__empty" data-bf-component="working-copy-view" data-bf-part="empty">{t('empty.noChanges')}</div>
           )}
         </div>
         <div
           className="bitfun-git-scene-working-copy__resizer"
+          data-bf-component="working-copy-view"
+          data-bf-part="resizer"
           onMouseDown={handleResizerMouseDown}
           role="separator"
           aria-orientation="vertical"
           aria-valuenow={fileListWidth}
           title={t('tooltips.resizeFileList')}
         />
-        <div className="bitfun-git-scene-working-copy__diff-area">
+        <div className="bitfun-git-scene-working-copy__diff-area" data-bf-component="working-copy-view" data-bf-part="diffArea">
           <CanvasStoreModeContext.Provider value="git">
             <ContentCanvas workspacePath={workspacePath} mode="git" onInteraction={handleInteraction} onBeforeClose={handleBeforeClose} />
           </CanvasStoreModeContext.Provider>

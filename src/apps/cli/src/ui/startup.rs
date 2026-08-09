@@ -1,6 +1,8 @@
 use super::agent_selector::{AgentItem, AgentSelectorAction, AgentSelectorState};
 use super::command_menu::CommandMenuState;
 use super::command_palette::{CommandPaletteState, PaletteAction};
+use super::composer::{ComposerDraft, ComposerImageAttachment};
+use super::image_paste::{self, ImagePaste};
 use super::login_form::{LoginFormAction, LoginFormState};
 use super::model_config_form::{ModelConfigFormState, ModelFormAction, ModelFormResult};
 use super::model_selector::{ModelItem, ModelSelectorState};
@@ -16,7 +18,8 @@ use super::theme::{
 use super::theme_selector::{ThemeItem, ThemeSelectorState};
 use crate::actions::{
     action_by_id, action_for_alias, removed_management_command_hint, ActionContext, ActionHandler,
-    ActionSpec, ActionState, ResolvedKeymap,
+    ActionSpec, ActionState, ResolvedKeymap, IMAGE_ATTACHMENTS_REQUIRE_MESSAGE,
+    SHARED_TUI_HELP_NOTE,
 };
 use crate::config::CliConfig;
 /// Startup page module
@@ -27,6 +30,11 @@ use crate::config::CliConfig;
 /// - Model/Agent/Session/Skill/Subagent selector popups
 /// - Random tips
 use anyhow::Result;
+use bitfun_app_server_protocol::model::{
+    AddModelRequest, ModelDefaultSlot, SetModelDefaultRequest, UpdateModelRequest,
+};
+use bitfun_app_server_protocol::skill::SkillSummary;
+use bitfun_app_server_protocol::subagent::SubagentSummary;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     backend::Backend,
@@ -36,22 +44,10 @@ use ratatui::{
     widgets::{Block, Paragraph},
     Frame, Terminal,
 };
+use std::sync::Arc;
 use std::time::Duration;
 
-use bitfun_agent_runtime::sdk::AgentRuntime;
-use bitfun_core::agentic::agents::{
-    get_agent_registry, AgentInfo, SubAgentSource, SubagentListScope, SubagentQueryContext,
-};
-use bitfun_core::agentic::tools::implementations::skills::{
-    mode_overrides::{
-        load_project_mode_skills_document_local, save_project_mode_skills_document_local,
-        set_mode_skill_disabled_in_document, set_user_mode_skill_state,
-    },
-    registry::SkillRegistry,
-    ModeSkillInfo, SkillInfo,
-};
-use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
-use bitfun_core::service::config::GlobalConfigManager;
+use crate::agent::tui_client::{TuiAgentClient, TuiAgentMode};
 
 /// Types of popups that can be shown on the startup page
 #[derive(Debug, Clone, PartialEq)]
@@ -102,7 +98,7 @@ impl PopupStack {
 #[derive(Debug, Clone)]
 pub(crate) enum StartupResult {
     /// Start a new session with an optional initial prompt
-    NewSession { prompt: Option<String> },
+    NewSession { prompt: Option<ComposerDraft> },
     /// Continue last session (session ID)
     ContinueSession(String),
     /// User cancelled exit
@@ -124,6 +120,15 @@ const TIPS: &[&str] = &[
     "Use /acp to copy editor setup commands for ACP hosts",
     "Press Up/Down to cycle through input history",
     "Use /new to start a fresh conversation session",
+];
+
+const SHARED_TUI_TIPS: &[&str] = &[
+    "Type /help to see the Shared TUI command scope",
+    "Use /sessions to list and continue previous conversations",
+    "Use /new to start a fresh conversation session",
+    "Press Ctrl+E to toggle browse mode for scrolling history",
+    "Press Ctrl+O to expand or collapse tool output",
+    "Use /theme to switch the CLI theme",
 ];
 
 const FANCY_LOGO: [&str; 6] = [
@@ -162,6 +167,7 @@ fn append_styled_logo_lines(
 pub(crate) struct StartupPage {
     /// Multiline text input component
     text_input: TextInput,
+    image_attachments: Vec<ComposerImageAttachment>,
     /// Theme
     theme: Theme,
     /// CLI config, including persisted theme preference.
@@ -190,14 +196,16 @@ pub(crate) struct StartupPage {
     theme_preview_original: Option<Theme>,
 
     // ── System context ──
-    agent_runtime: AgentRuntime,
-    compatibility: CoreAgentRuntimeCompatibility,
+    agent: Arc<TuiAgentClient>,
 
     // ── State ──
     /// Selected agent type (can be changed via /agent or Tab)
     agent_type: String,
     /// Display name of selected model
     model_display_name: String,
+    /// Explicit model chosen for the new Session being composed. Persisted
+    /// defaults and an agent profile remain inputs only until the user chooses.
+    selected_model_id: Option<String>,
     /// Workspace path for display in bottom bar
     workspace_display: String,
     /// Status message (temporarily shown instead of tip)
@@ -212,8 +220,7 @@ pub(crate) struct StartupPage {
 impl StartupPage {
     pub(crate) fn new(
         config: CliConfig,
-        agent_runtime: AgentRuntime,
-        compatibility: CoreAgentRuntimeCompatibility,
+        agent: Arc<TuiAgentClient>,
         default_agent: String,
         workspace: Option<String>,
     ) -> Self {
@@ -242,20 +249,27 @@ impl StartupPage {
             }
         };
 
+        let tips = if agent.is_shared() {
+            SHARED_TUI_TIPS
+        } else {
+            TIPS
+        };
         let tip_index = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as usize
-            % TIPS.len();
+            % tips.len();
 
         let keymap = ResolvedKeymap::new(&config.shortcuts);
+        let action_state = ActionState::startup(false).with_shared_tui(agent.is_shared());
         let mut page = Self {
             text_input: TextInput::new(),
+            image_attachments: Vec::new(),
             theme,
             config,
             keymap,
-            tip: TIPS[tip_index],
-            command_menu: CommandMenuState::new(ActionState::startup(false)),
+            tip: tips[tip_index],
+            command_menu: CommandMenuState::new(action_state),
             command_palette: CommandPaletteState::new(),
             model_selector: ModelSelectorState::new(),
             agent_selector: AgentSelectorState::new(),
@@ -267,10 +281,10 @@ impl StartupPage {
             model_config_form: ModelConfigFormState::new(),
             login_form: LoginFormState::new(),
             theme_preview_original: None,
-            agent_runtime,
-            compatibility,
+            agent,
             agent_type: default_agent,
             model_display_name: String::new(),
+            selected_model_id: None,
             workspace_display: workspace.unwrap_or_else(|| {
                 std::env::current_dir()
                     .ok()
@@ -293,6 +307,21 @@ impl StartupPage {
         &self.agent_type
     }
 
+    /// Set a model ID override (from `--model` flag) for display and session
+    /// composition. The ID is validated when applied to the session; an invalid
+    /// ID logs a warning and falls back to the default model.
+    pub(crate) fn set_model_override(&mut self, model_id: Option<String>) {
+        if model_id.is_some() {
+            self.selected_model_id = model_id;
+        }
+        self.load_current_model_name();
+    }
+
+    /// Return the model explicitly selected for the new Session, if any.
+    pub(crate) fn selected_model_id(&self) -> Option<&str> {
+        self.selected_model_id.as_deref()
+    }
+
     /// Get the current workspace path for this CLI process.
     pub(crate) fn workspace(&self) -> Option<String> {
         if self.workspace_display.is_empty() {
@@ -300,6 +329,10 @@ impl StartupPage {
         } else {
             Some(self.workspace_display.clone())
         }
+    }
+
+    fn action_state(&self, popup_open: bool) -> ActionState {
+        ActionState::startup(popup_open).with_shared_tui(self.agent.is_shared())
     }
 
     /// Get the current CLI config after startup-page edits.
@@ -387,7 +420,11 @@ impl StartupPage {
                     }
                 } else if self.command_menu.captures_mouse(&mouse) {
                     if let Some(action_id) = self.command_menu.handle_mouse_event(&mouse) {
-                        self.text_input.clear();
+                        if !self.image_attachments.is_empty() {
+                            self.status = Some(IMAGE_ATTACHMENTS_REQUIRE_MESSAGE.to_string());
+                            return Ok(None);
+                        }
+                        self.clear_composer();
                         self.refresh_command_menu();
                         return Ok(self.handle_palette_action(&action_id));
                     }
@@ -397,8 +434,7 @@ impl StartupPage {
                 if self.login_form.is_visible() {
                     self.login_form.insert_paste(&text);
                 } else if self.info_popup.is_none() && !self.any_popup_visible() {
-                    self.text_input.insert_paste(&text);
-                    self.refresh_command_menu();
+                    self.paste_terminal_text(&text);
                 }
             }
             Event::Resize(_, _) => {
@@ -620,15 +656,18 @@ impl StartupPage {
 
     fn render_bottom_bar(&self, frame: &mut Frame, area: Rect) {
         let version = format!("v{}", env!("CARGO_PKG_VERSION"));
-        let mcp_status = crate::get_mcp_status_text();
-
-        // Determine MCP status color
-        let mcp_color = if mcp_status.contains("Ready") {
-            self.theme.success
-        } else if mcp_status.contains("Failed") {
-            self.theme.error
+        let (runtime_status, runtime_color) = if self.agent.is_shared() {
+            ("Runtime: Shared".to_string(), self.theme.success)
         } else {
-            self.theme.warning
+            let mcp_status = crate::get_mcp_status_text();
+            let color = if mcp_status.contains("Ready") {
+                self.theme.success
+            } else if mcp_status.contains("Failed") {
+                self.theme.error
+            } else {
+                self.theme.warning
+            };
+            (mcp_status, color)
         };
 
         // Left: workspace path
@@ -638,9 +677,9 @@ impl StartupPage {
         )));
         frame.render_widget(left, area);
 
-        // Right: MCP status | version
+        // Right: deployment/MCP status | version
         let right = Paragraph::new(Line::from(vec![
-            Span::styled(&mcp_status, Style::default().fg(mcp_color)),
+            Span::styled(&runtime_status, Style::default().fg(runtime_color)),
             Span::styled(
                 format!(" | {}  ", version),
                 Style::default().fg(self.theme.muted),
@@ -706,8 +745,7 @@ impl StartupPage {
         // Clear transient status on any key press
         self.status = None;
 
-        let modal_state =
-            ActionState::startup(self.info_popup.is_some() || self.any_popup_visible());
+        let modal_state = self.action_state(self.info_popup.is_some() || self.any_popup_visible());
         if let Some(action) = self.keymap.resolve_modal_safe(key, modal_state) {
             return self.dispatch_action(action, modal_state);
         }
@@ -720,7 +758,7 @@ impl StartupPage {
 
         // Host recovery keys win over configured actions while a popup is open.
         if self.any_popup_visible() {
-            let state = ActionState::startup(true);
+            let state = self.action_state(true);
             if let Some(action) = self.keymap.resolve_reserved(key, state) {
                 return self.dispatch_action(action, state);
             }
@@ -906,14 +944,14 @@ impl StartupPage {
 
         // ── Normal key handling ──
 
-        if let Some(action) = self.keymap.resolve(key, ActionState::startup(false)) {
-            return self.dispatch_action(action, ActionState::startup(false));
+        if let Some(action) = self.keymap.resolve(key, self.action_state(false)) {
+            return self.dispatch_action(action, self.action_state(false));
         }
 
         match (key.code, key.modifiers) {
             (KeyCode::Esc, _) => {
                 if !self.text_input.is_empty() {
-                    self.text_input.clear();
+                    self.clear_composer();
                     self.refresh_command_menu();
                 }
             }
@@ -921,31 +959,30 @@ impl StartupPage {
                 if !self.text_input.move_cursor_up() {
                     self.text_input.set_cursor_home();
                 }
+                self.snap_cursor_out_of_image();
                 self.refresh_command_menu();
             }
             (KeyCode::Down, KeyModifiers::NONE) => {
                 if !self.text_input.move_cursor_down() {
                     self.text_input.set_cursor_end();
                 }
+                self.snap_cursor_out_of_image();
                 self.refresh_command_menu();
             }
             (KeyCode::Char(c), _) => {
-                self.text_input.handle_char(c);
-                self.refresh_command_menu();
+                self.handle_composer_char(c);
             }
             (KeyCode::Backspace, _) => {
-                self.text_input.handle_backspace();
-                self.refresh_command_menu();
+                self.handle_composer_backspace();
             }
             (KeyCode::Delete, _) => {
-                self.text_input.handle_delete();
-                self.refresh_command_menu();
+                self.handle_composer_delete();
             }
             (KeyCode::Left, _) => {
-                self.text_input.move_cursor_left();
+                self.text_input.cursor = self.draft_snapshot().cursor_left(self.text_input.cursor);
             }
             (KeyCode::Right, _) => {
-                self.text_input.move_cursor_right();
+                self.text_input.cursor = self.draft_snapshot().cursor_right(self.text_input.cursor);
             }
             (KeyCode::Home, _) => {
                 self.text_input.set_cursor_home();
@@ -965,7 +1002,7 @@ impl StartupPage {
             self.status = Some(format!("Unknown palette action: {action_id}"));
             return None;
         };
-        self.dispatch_action(action, ActionState::startup(false))
+        self.dispatch_action(action, self.action_state(false))
     }
 
     fn dispatch_action(
@@ -977,10 +1014,14 @@ impl StartupPage {
             self.status = Some(action.unavailable_message(state));
             return None;
         }
-
         match action.handler {
             ActionHandler::Help => {
-                self.info_popup = Some(self.keymap.help_text(ActionState::startup(false)));
+                let mut help = self.keymap.help_text(self.action_state(false));
+                if self.agent.is_shared() {
+                    help.push_str("\n\n");
+                    help.push_str(SHARED_TUI_HELP_NOTE);
+                }
+                self.info_popup = Some(help);
             }
             ActionHandler::Exit => return Some(StartupResult::Exit),
             ActionHandler::NewSession => {
@@ -990,8 +1031,19 @@ impl StartupPage {
             ActionHandler::SelectModel => self.show_model_selector(),
             ActionHandler::SelectTheme => self.show_theme_selector(),
             ActionHandler::AddModel => {
-                self.push_current_popup_to_stack();
-                self.provider_selector.show();
+                let agent = self.agent.clone();
+                let catalog = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(agent.model_catalog())
+                });
+                match catalog {
+                    Ok(catalog) => {
+                        self.push_current_popup_to_stack();
+                        self.provider_selector.show(catalog.provider_catalog);
+                    }
+                    Err(error) => {
+                        self.status = Some(format!("Failed to load model providers: {error}"));
+                    }
+                }
             }
             ActionHandler::OpenAgentSelector => self.show_agent_selector(),
             ActionHandler::SwitchAgent => self.cycle_agent(1),
@@ -999,12 +1051,12 @@ impl StartupPage {
             ActionHandler::Skills => self.show_skill_selector(),
             ActionHandler::McpServers => {
                 return Some(StartupResult::NewSession {
-                    prompt: Some("/mcp".to_string()),
+                    prompt: Some(ComposerDraft::from_text("/mcp")),
                 });
             }
             ActionHandler::AcpHelp => {
                 return Some(StartupResult::NewSession {
-                    prompt: Some("/acp".to_string()),
+                    prompt: Some(ComposerDraft::from_text("/acp")),
                 });
             }
             ActionHandler::Login => self.show_login_form(),
@@ -1015,37 +1067,47 @@ impl StartupPage {
             ActionHandler::Init => match crate::prompts::get_cli_prompt("init") {
                 Some(prompt) => {
                     return Some(StartupResult::NewSession {
-                        prompt: Some(prompt.to_string()),
+                        prompt: Some(ComposerDraft::from_text(prompt)),
                     });
                 }
                 None => self.status = Some("Init prompt not found".to_string()),
             },
             ActionHandler::OpenPalette => {
                 self.push_current_popup_to_stack();
-                self.command_palette.show(ActionState::startup(false));
+                self.command_palette.show(self.action_state(false));
             }
             ActionHandler::SubmitInput => return self.submit_input(),
             ActionHandler::InsertNewline => {
-                self.text_input.handle_newline();
-                self.refresh_command_menu();
+                self.handle_composer_newline();
             }
-            ActionHandler::Paste => {
-                if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                    if let Ok(text) = clipboard.get_text() {
-                        self.text_input.insert_paste(&text);
-                        self.refresh_command_menu();
-                    }
-                }
-            }
+            ActionHandler::Paste => self.paste_clipboard(),
             ActionHandler::ClosePopups => self.close_all_popups(),
             ActionHandler::NavigateBack => self.navigate_back(),
-            ActionHandler::ClearConversation
-            | ActionHandler::ReloadSkills
+            ActionHandler::RenameSession
+            | ActionHandler::ViewSubagents
+            | ActionHandler::Timeline
+            | ActionHandler::ForkSession
+            | ActionHandler::UndoSession
+            | ActionHandler::RedoSession
+            | ActionHandler::Reload
             | ActionHandler::Tools
             | ActionHandler::Extensions
-            | ActionHandler::Hooks
-            | ActionHandler::History
+            | ActionHandler::NativeHooks
+            | ActionHandler::ExternalHooks
+            | ActionHandler::Status
+            | ActionHandler::WorkspaceDiff
+            | ActionHandler::CompactSession
+            | ActionHandler::Editor
+            | ActionHandler::PromptStash
+            | ActionHandler::PromptStashPop
+            | ActionHandler::PromptStashList
+            | ActionHandler::ToggleTimestamps
+            | ActionHandler::ToggleThinking
+            | ActionHandler::ToggleToolDetails
+            | ActionHandler::CopyTranscript
+            | ActionHandler::ExportTranscript
             | ActionHandler::ToggleAutoApprove
+            | ActionHandler::ToggleWorktree
             | ActionHandler::Interrupt
             | ActionHandler::ToggleFocusedTool
             | ActionHandler::PreviousTool
@@ -1064,9 +1126,144 @@ impl StartupPage {
         None
     }
 
+    fn draft_snapshot(&self) -> ComposerDraft {
+        ComposerDraft {
+            text: self.text_input.text().to_string(),
+            workspace_references: Vec::new(),
+            image_attachments: self.image_attachments.clone(),
+        }
+    }
+
+    fn apply_draft_at_cursor(&mut self, draft: ComposerDraft, cursor: usize) {
+        self.text_input.set_text_and_cursor(&draft.text, cursor);
+        self.image_attachments = draft.image_attachments;
+        self.refresh_command_menu();
+    }
+
+    fn clear_composer(&mut self) {
+        self.text_input.clear();
+        self.image_attachments.clear();
+    }
+
+    fn snap_cursor_out_of_image(&mut self) {
+        self.text_input.cursor = self
+            .draft_snapshot()
+            .safe_insertion_cursor(self.text_input.cursor);
+    }
+
+    fn reconcile_composer_edit(
+        &mut self,
+        edit_start: usize,
+        removed_chars: usize,
+        inserted_chars: usize,
+    ) {
+        let cursor = self.text_input.cursor;
+        let mut draft = self.draft_snapshot();
+        draft.reconcile_edit(edit_start, removed_chars, inserted_chars);
+        draft.retain_valid_sources();
+        self.apply_draft_at_cursor(draft, cursor);
+    }
+
+    fn handle_composer_char(&mut self, character: char) {
+        self.snap_cursor_out_of_image();
+        let cursor = self.text_input.cursor;
+        self.text_input.handle_char(character);
+        let inserted = self.text_input.cursor.saturating_sub(cursor);
+        self.reconcile_composer_edit(cursor, 0, inserted);
+    }
+
+    fn handle_composer_newline(&mut self) {
+        self.snap_cursor_out_of_image();
+        let cursor = self.text_input.cursor;
+        self.text_input.handle_newline();
+        self.reconcile_composer_edit(cursor, 0, 1);
+    }
+
+    fn handle_composer_backspace(&mut self) {
+        let cursor = self.text_input.cursor;
+        if cursor > 0 {
+            let mut draft = self.draft_snapshot();
+            if let Some(cursor) = draft.remove_image_overlapping_edit(cursor - 1, 1) {
+                self.apply_draft_at_cursor(draft, cursor);
+                return;
+            }
+        }
+        self.text_input.handle_backspace();
+        if self.text_input.cursor < cursor {
+            self.reconcile_composer_edit(cursor - 1, 1, 0);
+        } else {
+            self.refresh_command_menu();
+        }
+    }
+
+    fn handle_composer_delete(&mut self) {
+        let mut draft = self.draft_snapshot();
+        if let Some(cursor) = draft.remove_image_overlapping_edit(self.text_input.cursor, 1) {
+            self.apply_draft_at_cursor(draft, cursor);
+            return;
+        }
+        let cursor = self.text_input.cursor;
+        let before = self.text_input.text().chars().count();
+        self.text_input.handle_delete();
+        if self.text_input.text().chars().count() < before {
+            self.reconcile_composer_edit(cursor, 1, 0);
+        } else {
+            self.refresh_command_menu();
+        }
+    }
+
+    fn paste_clipboard(&mut self) {
+        match image_paste::read_clipboard(&self.workspace_path_buf()) {
+            Ok(Some(paste)) => self.apply_composer_paste(paste),
+            Ok(None) => {}
+            Err(error) => self.status = Some(error.to_string()),
+        }
+    }
+
+    fn paste_terminal_text(&mut self, text: &str) {
+        match image_paste::classify_pasted_text(text, &self.workspace_path_buf()) {
+            Ok(paste) => self.apply_composer_paste(paste),
+            Err(error) => self.status = Some(error.to_string()),
+        }
+    }
+
+    fn apply_composer_paste(&mut self, paste: ImagePaste) {
+        match paste {
+            ImagePaste::Text(text) => {
+                self.snap_cursor_out_of_image();
+                let cursor = self.text_input.cursor;
+                self.text_input.insert_paste(&text);
+                let inserted = self.text_input.cursor.saturating_sub(cursor);
+                self.reconcile_composer_edit(cursor, 0, inserted);
+            }
+            ImagePaste::Image(_image) if self.agent.is_shared() => {
+                self.status = Some(crate::actions::shared_tui_image_attachment_error());
+                return;
+            }
+            ImagePaste::Image(image) => {
+                let name = image.name.clone();
+                let mut draft = self.draft_snapshot();
+                let cursor = draft.safe_insertion_cursor(self.text_input.cursor);
+                match draft.insert_image(cursor, image) {
+                    Ok(cursor) => self.apply_draft_at_cursor(draft, cursor),
+                    Err(error) => {
+                        self.status = Some(error.to_string());
+                        return;
+                    }
+                }
+                self.status = Some(format!("Attached image: {name}"));
+            }
+        }
+        self.refresh_command_menu();
+    }
+
     fn submit_input(&mut self) -> Option<StartupResult> {
+        if !self.image_attachments.is_empty() && self.command_menu.is_visible() {
+            self.status = Some(IMAGE_ATTACHMENTS_REQUIRE_MESSAGE.to_string());
+            return None;
+        }
         if let Some(action_id) = self.command_menu.apply_selection() {
-            self.text_input.clear();
+            self.clear_composer();
             self.refresh_command_menu();
             return self.handle_palette_action(&action_id);
         }
@@ -1079,26 +1276,25 @@ impl StartupPage {
             return Some(StartupResult::Exit);
         }
         if trimmed.starts_with('/') {
+            if !self.image_attachments.is_empty() {
+                self.status = Some(IMAGE_ATTACHMENTS_REQUIRE_MESSAGE.to_string());
+                return None;
+            }
             return self.handle_command(&trimmed);
         }
+        let mut draft = self.draft_snapshot();
+        draft.replace_text_from_external_editor(trimmed);
         Some(StartupResult::NewSession {
-            prompt: Some(trimmed),
+            prompt: Some(draft),
         })
     }
 
     fn logout(&mut self) {
-        let logged_in = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(crate::account::is_logged_in())
-        });
-        if !logged_in {
-            self.status = Some("Not logged in.".to_string());
-            return;
-        }
         self.status = Some(
             match tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(crate::account::logout())
+                tokio::runtime::Handle::current().block_on(self.agent.account_logout())
             }) {
-                Ok(()) => "Logged out.".to_string(),
+                Ok(_) => "Logged out.".to_string(),
                 Err(error) => format!("Logout failed: {error}"),
             },
         );
@@ -1109,7 +1305,7 @@ impl StartupPage {
     fn handle_command(&mut self, command: &str) -> Option<StartupResult> {
         let cmd = command.split_whitespace().next().unwrap_or("");
 
-        self.text_input.clear();
+        self.clear_composer();
         self.refresh_command_menu();
         let Some(action) = action_for_alias(cmd, ActionContext::Startup) else {
             self.status = Some(
@@ -1121,7 +1317,7 @@ impl StartupPage {
             );
             return None;
         };
-        self.dispatch_action(action, ActionState::startup(false))
+        self.dispatch_action(action, self.action_state(false))
     }
 
     // ======================== Selectors ========================
@@ -1164,53 +1360,52 @@ impl StartupPage {
     fn show_login_form(&mut self) {
         self.close_all_popups();
         let logged_in = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(crate::account::is_logged_in())
+            tokio::runtime::Handle::current().block_on(self.agent.account_snapshot())
         });
-        if logged_in {
-            self.open_account_panel();
-        } else {
-            self.login_form.show();
-        }
-    }
-
-    fn workspace_path_for_sync(&self) -> std::path::PathBuf {
-        self.workspace_path_buf()
-    }
-
-    fn open_account_panel(&mut self) {
-        let (info, devices, progress) = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                let info = crate::account::account_info().await;
-                let devices = crate::account::list_devices().await.unwrap_or_default();
-                let progress = crate::account_sync::current_sync_progress().await;
-                (info, devices, progress)
-            })
-        });
-        match info {
-            Ok(info) => self.login_form.show_account(info, devices, progress),
-            Err(e) => {
-                self.status = Some(format!("Failed to load account: {e}"));
+        match logged_in {
+            Ok(snapshot) if snapshot.logged_in => self.open_account_panel(snapshot),
+            Ok(_) => self.login_form.show(),
+            Err(error) => {
                 self.login_form.show();
+                self.login_form
+                    .set_error(format!("Failed to load account: {error}"));
             }
         }
+    }
+
+    fn open_account_panel(
+        &mut self,
+        snapshot: bitfun_app_server_protocol::account::AccountSnapshotResponse,
+    ) {
+        let Some(info) = snapshot.info else {
+            self.login_form.show();
+            return;
+        };
+        self.login_form
+            .show_account(info, snapshot.devices, snapshot.sync);
     }
 
     fn refresh_account_panel_live(&mut self) {
         if !self.login_form.is_visible() {
             return;
         }
-        let progress = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(crate::account_sync::current_sync_progress())
-        });
+        let Ok(progress) = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(self.agent.settings_sync_snapshot())
+        }) else {
+            return;
+        };
+        let progress = progress.progress;
         // Refresh devices occasionally while syncing / after done.
         let devices = if matches!(
             progress.status,
-            crate::account_sync::SyncStatus::Syncing | crate::account_sync::SyncStatus::Done
+            bitfun_app_server_protocol::account::SettingsSyncStatus::Syncing
+                | bitfun_app_server_protocol::account::SettingsSyncStatus::Done
         ) {
             tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current()
-                    .block_on(crate::account::list_devices())
+                    .block_on(self.agent.account_snapshot())
                     .ok()
+                    .map(|snapshot| snapshot.devices)
             })
         } else {
             None
@@ -1219,13 +1414,19 @@ impl StartupPage {
     }
 
     fn start_sync_and_show_account(&mut self, is_first_login: bool) {
-        let workspace = self.workspace_path_for_sync();
-        crate::account_sync::start_auto_sync_background(
-            self.compatibility.clone(),
-            is_first_login,
-            workspace,
-        );
-        self.open_account_panel();
+        let result = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current()
+                .block_on(self.agent.settings_sync_start(is_first_login))
+        });
+        if let Err(error) = result {
+            self.status = Some(format!("Account settings sync failed: {error}"));
+            return;
+        }
+        if let Ok(snapshot) = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(self.agent.account_snapshot())
+        }) {
+            self.open_account_panel(snapshot);
+        }
         self.status = Some(if is_first_login {
             "Sync started (use local / upload settings).".to_string()
         } else {
@@ -1237,13 +1438,11 @@ impl StartupPage {
         match action {
             LoginFormAction::Submit(creds) => {
                 let result = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(
-                        crate::account::login_with_credentials(
-                            &creds.relay_url,
-                            &creds.username,
-                            &creds.password,
-                        ),
-                    )
+                    tokio::runtime::Handle::current().block_on(self.agent.account_login(
+                        creds.relay_url,
+                        creds.username,
+                        creds.password,
+                    ))
                 });
                 match result {
                     Ok(login) => {
@@ -1261,47 +1460,61 @@ impl StartupPage {
                 }
             }
             LoginFormAction::SyncUseLocal => {
-                if let Err(e) = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current()
-                        .block_on(crate::account::finalize_login_after_sync_choice())
-                }) {
-                    self.login_form
-                        .set_error(format!("Finalize login failed: {e}"));
-                    let _ = tokio::task::block_in_place(|| {
-                        tokio::runtime::Handle::current().block_on(crate::account::logout())
-                    });
-                    self.login_form.show();
-                    return None;
+                let result = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(self.agent.account_finalize_login(
+                        bitfun_app_server_protocol::account::AccountSyncChoice::Local,
+                    ))
+                });
+                match result {
+                    Ok(snapshot) => {
+                        self.open_account_panel(snapshot);
+                        self.status =
+                            Some("Sync started (use local / upload settings).".to_string());
+                    }
+                    Err(error) => {
+                        self.login_form
+                            .set_error(format!("Finalize login failed: {error}"));
+                        let _ = tokio::task::block_in_place(|| {
+                            tokio::runtime::Handle::current().block_on(self.agent.account_logout())
+                        });
+                        self.login_form.show();
+                    }
                 }
-                self.start_sync_and_show_account(true);
             }
             LoginFormAction::SyncUseCloud => {
-                if let Err(e) = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current()
-                        .block_on(crate::account::finalize_login_after_sync_choice())
-                }) {
-                    self.login_form
-                        .set_error(format!("Finalize login failed: {e}"));
-                    let _ = tokio::task::block_in_place(|| {
-                        tokio::runtime::Handle::current().block_on(crate::account::logout())
-                    });
-                    self.login_form.show();
-                    return None;
+                let result = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(self.agent.account_finalize_login(
+                        bitfun_app_server_protocol::account::AccountSyncChoice::Cloud,
+                    ))
+                });
+                match result {
+                    Ok(snapshot) => {
+                        self.open_account_panel(snapshot);
+                        self.status =
+                            Some("Sync started (use cloud / download settings).".to_string());
+                    }
+                    Err(error) => {
+                        self.login_form
+                            .set_error(format!("Finalize login failed: {error}"));
+                        let _ = tokio::task::block_in_place(|| {
+                            tokio::runtime::Handle::current().block_on(self.agent.account_logout())
+                        });
+                        self.login_form.show();
+                    }
                 }
-                self.start_sync_and_show_account(false);
             }
             LoginFormAction::SyncCancel => {
                 let _ = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(crate::account::logout())
+                    tokio::runtime::Handle::current().block_on(self.agent.settings_sync_cancel())
                 });
                 self.login_form.show();
                 self.status = Some("Sync cancelled; logged out.".to_string());
             }
             LoginFormAction::Logout => {
                 match tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(crate::account::logout())
+                    tokio::runtime::Handle::current().block_on(self.agent.account_logout())
                 }) {
-                    Ok(()) => {
+                    Ok(_) => {
                         self.login_form.show();
                         self.status = Some("Logged out.".to_string());
                     }
@@ -1320,20 +1533,18 @@ impl StartupPage {
 
     fn show_session_selector(&mut self) {
         self.push_current_popup_to_stack();
-        let agent_runtime = self.agent_runtime.clone();
+        let agent = Arc::clone(&self.agent);
         let sessions = tokio::task::block_in_place(|| {
-            let workspace_path = self.workspace_path_buf();
-            tokio::runtime::Handle::current().block_on(async {
-                agent_runtime
-                    .list_sessions(bitfun_runtime_ports::AgentSessionListRequest {
-                        workspace_path: workspace_path.to_string_lossy().to_string(),
-                        remote_connection_id: None,
-                        remote_ssh_host: None,
-                    })
-                    .await
-                    .unwrap_or_default()
-            })
+            tokio::runtime::Handle::current().block_on(agent.list_sessions())
         });
+        let sessions = match sessions {
+            Ok(sessions) => sessions,
+            Err(error) => {
+                tracing::error!("Failed to list sessions: {error}");
+                self.status = Some(format!("Failed to load sessions: {error}"));
+                return;
+            }
+        };
 
         if sessions.is_empty() {
             self.status = Some("No sessions found.".to_string());
@@ -1366,25 +1577,15 @@ impl StartupPage {
             })
             .collect();
 
-        self.session_selector.show(session_items, None);
+        self.session_selector.show(session_items, None, true);
     }
 
     fn handle_session_delete(&mut self, item: &SessionItem) {
-        let agent_runtime = self.agent_runtime.clone();
+        let agent = Arc::clone(&self.agent);
         let sid = item.session_id.clone();
 
         let result = tokio::task::block_in_place(|| {
-            let workspace_path = self.workspace_path_buf();
-            tokio::runtime::Handle::current().block_on(async {
-                agent_runtime
-                    .delete_session(bitfun_runtime_ports::AgentSessionDeleteRequest {
-                        workspace_path: workspace_path.to_string_lossy().to_string(),
-                        session_id: sid,
-                        remote_connection_id: None,
-                        remote_ssh_host: None,
-                    })
-                    .await
-            })
+            tokio::runtime::Handle::current().block_on(async { agent.delete_session(&sid).await })
         });
 
         match result {
@@ -1400,26 +1601,26 @@ impl StartupPage {
 
     fn show_model_selector(&mut self) {
         self.push_current_popup_to_stack();
+        let profile_model_id = self.selected_agent_mode().and_then(|mode| mode.model_id);
+        let explicitly_selected_model_id = self.selected_model_id.clone();
 
         let result = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
-                let config_service = GlobalConfigManager::get_service().await.ok()?;
-                let models: Vec<bitfun_core::service::config::AIModelConfig> =
-                    config_service.get_ai_models().await.ok()?;
-                let global_config: bitfun_core::service::config::GlobalConfig =
-                    config_service.get_config(None).await.ok()?;
-
-                let current_model_id =
-                    crate::model_selection::resolve_mode_model_id(&global_config.ai);
-
-                let model_items: Vec<ModelItem> = models
+                let catalog = self.agent.list_models().await.ok()?;
+                let current_model_id = resolve_startup_model_id(
+                    explicitly_selected_model_id,
+                    profile_model_id,
+                    catalog.mode_default_model_id.clone(),
+                );
+                let model_items: Vec<ModelItem> = catalog
+                    .models
                     .into_iter()
-                    .filter(|m| m.enabled)
-                    .map(|m| ModelItem {
-                        id: m.id,
-                        name: m.name,
-                        provider: m.provider,
-                        model_name: m.model_name,
+                    .filter(|model| model.enabled)
+                    .map(|model| ModelItem {
+                        id: model.id,
+                        name: model.name,
+                        provider: model.provider,
+                        model_name: model.model_name,
                     })
                     .collect();
 
@@ -1429,7 +1630,7 @@ impl StartupPage {
 
         match result {
             Some((models, current_id)) if !models.is_empty() => {
-                self.model_selector.show(models, current_id);
+                self.model_selector.show(models, current_id, true, false);
             }
             _ => {
                 self.status = Some("No available models found.".to_string());
@@ -1440,19 +1641,24 @@ impl StartupPage {
     fn apply_model_selection(&mut self, selected: &ModelItem) {
         let selected_id = selected.id.clone();
         let selected_display_name = format!("{} / {}", selected.model_name, selected.name);
+        let selected_agent_mode = self.selected_agent_mode();
+        let persist_shared_default =
+            should_persist_shared_model_default(selected_agent_mode.as_ref());
 
         let success = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
-                let config_service = match GlobalConfigManager::get_service().await {
-                    Ok(s) => s,
-                    Err(_) => return false,
-                };
-
-                if let Err(e) = config_service
-                    .set_config("ai.agent_model_defaults.mode", &selected_id)
+                if !persist_shared_default {
+                    return true;
+                }
+                if let Err(error) = self
+                    .agent
+                    .set_model_default(SetModelDefaultRequest {
+                        slot: ModelDefaultSlot::Mode,
+                        model_id: Some(selected_id.clone()),
+                    })
                     .await
                 {
-                    tracing::error!("Failed to set future mode model: {}", e);
+                    tracing::error!("Failed to set future mode model: {error}");
                     return false;
                 }
 
@@ -1461,9 +1667,15 @@ impl StartupPage {
         });
 
         if success {
+            self.selected_model_id = Some(selected_id);
             self.model_display_name = selected_display_name.clone();
             self.status = Some(format!("Model switched to: {}", selected_display_name));
-            crate::account_sync::notify_local_settings_changed();
+            if persist_shared_default {
+                let _ = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current()
+                        .block_on(self.agent.settings_sync_local_changed())
+                });
+            }
         } else {
             self.status = Some("Failed to switch model".to_string());
         }
@@ -1497,99 +1709,27 @@ impl StartupPage {
                 .as_millis()
         );
 
-        let custom_headers: Option<std::collections::HashMap<String, String>> =
-            if result.custom_headers.is_empty() {
-                None
-            } else {
-                serde_json::from_str(&result.custom_headers).ok()
-            };
-
-        let custom_request_body: Option<String> = if result.custom_request_body.is_empty() {
-            None
-        } else {
-            Some(result.custom_request_body.clone())
-        };
-
-        let model_config = bitfun_core::service::config::AIModelConfig {
-            id: model_id.clone(),
-            name: result.name.clone(),
-            provider: result.provider_format.clone(),
-            model_name: result.model_name.clone(),
-            base_url: result.base_url.clone(),
-            api_key: result.api_key.clone(),
-            context_window: Some(result.context_window),
-            max_tokens: Some(result.max_tokens),
-            enabled: true,
-            enable_thinking_process: result.enable_thinking || result.support_preserved_thinking,
-            skip_ssl_verify: result.skip_ssl_verify,
-            custom_headers,
-            custom_headers_mode: if result.custom_headers_mode.is_empty()
-                || result.custom_headers_mode == "merge"
-            {
-                None
-            } else {
-                Some(result.custom_headers_mode.clone())
-            },
-            custom_request_body,
-            ..Default::default()
-        };
-
         let result_name = result.name.clone();
         let result_model_display = format!("{} / {}", result.model_name, result.name);
+        let request = AddModelRequest {
+            model: result.to_mutation(model_id.clone()),
+            make_primary_if_empty: true,
+        };
 
         let success = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                let config_service = match GlobalConfigManager::get_service().await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        tracing::error!("Failed to get config service: {}", e);
-                        return false;
-                    }
-                };
-
-                if let Err(e) = config_service.add_ai_model(model_config).await {
-                    tracing::error!("Failed to add AI model: {}", e);
-                    return false;
-                }
-
-                // Auto-set as primary model if no primary model exists
-                match config_service
-                    .get_config::<bitfun_core::service::config::GlobalConfig>(None)
-                    .await
-                {
-                    Ok(global_config) => {
-                        let has_primary = global_config
-                            .ai
-                            .default_models
-                            .primary
-                            .as_ref()
-                            .map(|p| !p.is_empty())
-                            .unwrap_or(false);
-                        if !has_primary {
-                            if let Err(e) = config_service
-                                .set_config("ai.default_models.primary", &model_id)
-                                .await
-                            {
-                                tracing::warn!("Failed to auto-set primary model: {}", e);
-                            } else {
-                                tracing::info!("Auto-set primary model: {}", model_id);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!("Failed to read config for auto-primary: {}", e);
-                    }
-                }
-
-                true
-            })
+            tokio::runtime::Handle::current()
+                .block_on(self.agent.add_model(request))
+                .map_err(|error| tracing::error!("Failed to add AI model: {error}"))
+                .is_ok()
         });
 
         if success {
             self.model_display_name = result_model_display;
             self.status = Some(format!("Model added: {}", result_name));
             tracing::info!("Added new AI model: {}", model_id);
-            crate::account_sync::notify_local_settings_changed();
+            let _ = tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(self.agent.settings_sync_local_changed())
+            });
             // Reload model name display
             self.load_current_model_name();
         } else {
@@ -1601,41 +1741,16 @@ impl StartupPage {
     fn edit_model(&mut self, selected: &ModelItem) {
         let model_id = selected.id.clone();
         let result = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                let config_service = GlobalConfigManager::get_service().await.ok()?;
-                let models: Vec<bitfun_core::service::config::AIModelConfig> =
-                    config_service.get_ai_models().await.ok()?;
-                models.into_iter().find(|m| m.id == model_id)
-            })
+            tokio::runtime::Handle::current().block_on(self.agent.get_model(model_id.clone()))
         });
 
         match result {
-            Some(model) => {
-                let form_data = ModelFormResult {
-                    editing_model_id: Some(model.id.clone()),
-                    name: model.name,
-                    model_name: model.model_name,
-                    base_url: model.base_url,
-                    api_key: model.api_key,
-                    provider_format: model.provider.clone(),
-                    context_window: model.context_window.unwrap_or(128000),
-                    max_tokens: model.max_tokens.unwrap_or(8192),
-                    enable_thinking: model.enable_thinking_process,
-                    support_preserved_thinking: model.inline_think_in_text,
-                    skip_ssl_verify: model.skip_ssl_verify,
-                    custom_headers: model
-                        .custom_headers
-                        .map(|h| serde_json::to_string(&h).unwrap_or_default())
-                        .unwrap_or_default(),
-                    custom_headers_mode: model
-                        .custom_headers_mode
-                        .unwrap_or_else(|| "merge".to_string()),
-                    custom_request_body: model.custom_request_body.unwrap_or_default(),
-                };
-                self.model_config_form.show_for_edit(&model.id, &form_data);
+            Ok(response) => {
+                let form_data = ModelFormResult::from_projection(response.model);
+                self.model_config_form.show_for_edit(&model_id, &form_data);
             }
-            None => {
-                self.status = Some("Failed to load model configuration".to_string());
+            Err(error) => {
+                self.status = Some(format!("Failed to load model configuration: {error}"));
             }
         }
     }
@@ -1647,73 +1762,27 @@ impl StartupPage {
             None => return,
         };
 
-        let custom_headers: Option<std::collections::HashMap<String, String>> =
-            if result.custom_headers.is_empty() {
-                None
-            } else {
-                serde_json::from_str(&result.custom_headers).ok()
-            };
-
-        let custom_request_body: Option<String> = if result.custom_request_body.is_empty() {
-            None
-        } else {
-            Some(result.custom_request_body.clone())
-        };
-
-        let model_config = bitfun_core::service::config::AIModelConfig {
-            id: model_id.clone(),
-            name: result.name.clone(),
-            provider: result.provider_format.clone(),
-            model_name: result.model_name.clone(),
-            base_url: result.base_url.clone(),
-            api_key: result.api_key.clone(),
-            context_window: Some(result.context_window),
-            max_tokens: Some(result.max_tokens),
-            enabled: true,
-            enable_thinking_process: result.enable_thinking || result.support_preserved_thinking,
-            skip_ssl_verify: result.skip_ssl_verify,
-            custom_headers,
-            custom_headers_mode: if result.custom_headers_mode.is_empty()
-                || result.custom_headers_mode == "merge"
-            {
-                None
-            } else {
-                Some(result.custom_headers_mode.clone())
-            },
-            custom_request_body,
-            ..Default::default()
-        };
-
         let result_name = result.name.clone();
         let result_model_display = format!("{} / {}", result.model_name, result.name);
+        let request = UpdateModelRequest {
+            model_id: model_id.clone(),
+            model: result.to_mutation(model_id.clone()),
+        };
 
         let success = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                let config_service = match GlobalConfigManager::get_service().await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        tracing::error!("Failed to get config service: {}", e);
-                        return false;
-                    }
-                };
-
-                if let Err(e) = config_service
-                    .update_ai_model(&model_id, model_config)
-                    .await
-                {
-                    tracing::error!("Failed to update AI model: {}", e);
-                    return false;
-                }
-
-                true
-            })
+            tokio::runtime::Handle::current()
+                .block_on(self.agent.update_model(request))
+                .map_err(|error| tracing::error!("Failed to update AI model: {error}"))
+                .is_ok()
         });
 
         if success {
             self.model_display_name = result_model_display;
             self.status = Some(format!("Model updated: {}", result_name));
             tracing::info!("Updated AI model: {}", model_id);
-            crate::account_sync::notify_local_settings_changed();
+            let _ = tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(self.agent.settings_sync_local_changed())
+            });
             self.load_current_model_name();
         } else {
             self.status = Some("Failed to update model".to_string());
@@ -1721,14 +1790,20 @@ impl StartupPage {
     }
 
     fn show_agent_selector(&mut self) {
-        self.push_current_popup_to_stack();
-
         let modes = self.get_mode_agents();
         if modes.is_empty() {
-            self.status = Some(
-                "Main agent modes are unavailable; agent management remains available.".to_string(),
-            );
+            let message = if self.agent.is_shared() {
+                "Main agent modes are unavailable."
+            } else {
+                "Main agent modes are unavailable; agent management remains available."
+            };
+            self.status = Some(message.to_string());
+            if self.agent.is_shared() {
+                return;
+            }
         }
+
+        self.push_current_popup_to_stack();
 
         let agent_items: Vec<AgentItem> = modes
             .into_iter()
@@ -1858,9 +1933,10 @@ impl StartupPage {
 
     fn apply_theme_selection(&mut self, theme: &ThemeItem) {
         let (base, appearance, scheme) = self.current_base_theme();
-        self.config.ui.theme_id = theme.id.clone();
-
-        match self.config.save() {
+        match self
+            .config
+            .update(|config| config.ui.theme_id = theme.id.clone())
+        {
             Ok(()) => {
                 self.status = Some(format!("Theme set to: {}", theme.id));
             }
@@ -1880,26 +1956,29 @@ impl StartupPage {
 
     fn show_available_skill_list(&mut self) {
         let skills = tokio::task::block_in_place(|| {
-            let workspace = self.workspace_path_buf();
-            let agent_type = self.agent_type.clone();
-            tokio::runtime::Handle::current().block_on(async {
-                let registry = SkillRegistry::global();
-                registry
-                    .get_resolved_skills_for_workspace(Some(workspace.as_path()), Some(&agent_type))
-                    .await
-            })
+            tokio::runtime::Handle::current()
+                .block_on(self.agent.list_skills(self.agent_type.clone(), false))
         });
+        let skills = match skills {
+            Ok(response) => response.skills,
+            Err(error) => {
+                self.status = Some(format!("Could not load skills: {error}"));
+                return;
+            }
+        };
 
         if skills.is_empty() {
             self.status = Some(format!(
-                "No enabled skills found for agent mode '{}'.",
+                "No user-invocable skills found for agent mode '{}'.",
                 self.agent_type
             ));
             return;
         }
 
-        let skill_items: Vec<SkillItem> =
-            skills.into_iter().map(Self::skill_item_from_info).collect();
+        let skill_items: Vec<SkillItem> = skills
+            .into_iter()
+            .map(Self::skill_item_from_summary)
+            .collect();
 
         if skill_items.is_empty() {
             self.status = Some("No skills found.".to_string());
@@ -1911,19 +1990,20 @@ impl StartupPage {
 
     fn show_skill_config_selector(&mut self) {
         let skills = tokio::task::block_in_place(|| {
-            let workspace = self.workspace_path_buf();
-            let agent_type = self.agent_type.clone();
-            tokio::runtime::Handle::current().block_on(async {
-                let registry = SkillRegistry::global();
-                registry
-                    .get_mode_skill_infos_for_workspace(Some(workspace.as_path()), &agent_type)
-                    .await
-            })
+            tokio::runtime::Handle::current()
+                .block_on(self.agent.list_skills(self.agent_type.clone(), true))
         });
+        let skills = match skills {
+            Ok(response) => response.skills,
+            Err(error) => {
+                self.status = Some(format!("Could not load skills: {error}"));
+                return;
+            }
+        };
 
         let skill_items: Vec<SkillItem> = skills
             .into_iter()
-            .map(Self::skill_item_from_mode_info)
+            .map(Self::skill_item_from_summary)
             .collect();
 
         if skill_items.is_empty() {
@@ -1940,7 +2020,7 @@ impl StartupPage {
             SkillSelectorAction::ConfigureSkills => self.show_skill_config_selector(),
             SkillSelectorAction::Execute(selected) => {
                 self.skill_selector.hide();
-                self.set_input(&format!("Execute the {} skill.", selected.name));
+                self.set_input(&selected.invocation_text());
             }
             SkillSelectorAction::Toggle(selected) => {
                 self.set_skill_enabled(&selected, !selected.enabled);
@@ -1950,49 +2030,21 @@ impl StartupPage {
     }
 
     fn set_skill_enabled(&mut self, selected: &SkillItem, enabled: bool) {
-        let workspace = self.workspace_path_buf();
         let mode_id = self.agent_type.clone();
         let skill = selected.clone();
 
-        let result: Result<(), String> = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                match skill.level.as_str() {
-                    "user" => {
-                        set_user_mode_skill_state(
-                            &mode_id,
-                            &skill.key,
-                            enabled,
-                            skill.default_enabled,
-                        )
-                        .await
-                        .map_err(|error| error.to_string())?;
-                    }
-                    "project" => {
-                        let mut document = load_project_mode_skills_document_local(&workspace)
-                            .await
-                            .map_err(|error| error.to_string())?;
-                        set_mode_skill_disabled_in_document(
-                            &mut document,
-                            &mode_id,
-                            &skill.key,
-                            !enabled,
-                        )
-                        .map_err(|error| error.to_string())?;
-                        save_project_mode_skills_document_local(&workspace, &document)
-                            .await
-                            .map_err(|error| error.to_string())?;
-                    }
-                    other => {
-                        return Err(format!("Unsupported skill level '{}'", other));
-                    }
-                }
-
-                Ok(())
-            })
+        let result = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(self.agent.set_skill_enabled(
+                mode_id,
+                skill.key,
+                enabled,
+                skill.default_enabled,
+                skill.level,
+            ))
         });
 
         self.status = Some(match result {
-            Ok(()) => format!(
+            Ok(_) => format!(
                 "Skill '{}' {} for mode '{}'.",
                 selected.name,
                 if enabled { "enabled" } else { "disabled" },
@@ -2002,35 +2054,20 @@ impl StartupPage {
         });
     }
 
-    fn skill_item_from_info(info: SkillInfo) -> SkillItem {
+    fn skill_item_from_summary(info: SkillSummary) -> SkillItem {
         SkillItem {
             key: info.key,
             name: info.name,
             description: info.description,
-            level: info.level.as_str().to_string(),
-            source_slot: info.source_slot,
-            source_label: info.source_label,
-            enabled: true,
-            selected_for_runtime: true,
-            default_enabled: true,
-            is_shadowed: info.is_shadowed,
-            shadowed_by_key: info.shadowed_by_key,
-        }
-    }
-
-    fn skill_item_from_mode_info(info: ModeSkillInfo) -> SkillItem {
-        SkillItem {
-            key: info.skill.key,
-            name: info.skill.name,
-            description: info.skill.description,
-            level: info.skill.level.as_str().to_string(),
-            source_slot: info.skill.source_slot,
-            source_label: info.skill.source_label,
-            enabled: info.effective_enabled,
+            level: info.level,
+            source_slot: info.source_slot.unwrap_or_default(),
+            source_label: info.source_label.unwrap_or_default(),
+            enabled: info.enabled,
             selected_for_runtime: info.selected_for_runtime,
             default_enabled: info.default_enabled,
-            is_shadowed: info.skill.is_shadowed,
-            shadowed_by_key: info.skill.shadowed_by_key,
+            is_shadowed: info.is_shadowed,
+            shadowed_by_key: info.shadowed_by_key,
+            argument_hint: info.argument_hint,
         }
     }
 
@@ -2040,20 +2077,17 @@ impl StartupPage {
     }
 
     fn show_available_subagent_list(&mut self) {
-        let registry = get_agent_registry();
         let subagents = tokio::task::block_in_place(|| {
-            let workspace = self.workspace_path_buf();
-            let agent_type = self.agent_type.clone();
-            tokio::runtime::Handle::current().block_on(registry.get_subagents_for_query(
-                &SubagentQueryContext {
-                    parent_agent_type: Some(&agent_type),
-                    workspace_root: Some(workspace.as_path()),
-                    list_scope: SubagentListScope::TaskVisible,
-                    include_disabled: false,
-                    external_sources_supported: false,
-                },
-            ))
+            tokio::runtime::Handle::current()
+                .block_on(self.agent.list_subagents(self.agent_type.clone(), false))
         });
+        let subagents = match subagents {
+            Ok(response) => response.subagents,
+            Err(error) => {
+                self.status = Some(format!("Could not load subagents: {error}"));
+                return;
+            }
+        };
 
         if subagents.is_empty() {
             self.status = Some(format!(
@@ -2065,7 +2099,7 @@ impl StartupPage {
 
         let subagent_items: Vec<SubagentItem> = subagents
             .into_iter()
-            .map(Self::subagent_item_from_info)
+            .map(Self::subagent_item_from_summary)
             .collect();
 
         if subagent_items.is_empty() {
@@ -2077,25 +2111,21 @@ impl StartupPage {
     }
 
     fn show_subagent_config_selector(&mut self) {
-        let registry = get_agent_registry();
         let subagents = tokio::task::block_in_place(|| {
-            let workspace = self.workspace_path_buf();
-            let agent_type = self.agent_type.clone();
-            tokio::runtime::Handle::current().block_on(registry.get_subagents_for_query(
-                &SubagentQueryContext {
-                    parent_agent_type: Some(&agent_type),
-                    workspace_root: Some(workspace.as_path()),
-                    list_scope: SubagentListScope::RegistryManagement,
-                    include_disabled: true,
-                    external_sources_supported: false,
-                },
-            ))
+            tokio::runtime::Handle::current()
+                .block_on(self.agent.list_subagents(self.agent_type.clone(), true))
         });
-
-        let subagent_items: Vec<SubagentItem> = subagents
+        let response = match subagents {
+            Ok(response) => response,
+            Err(error) => {
+                self.status = Some(format!("Could not load subagents: {error}"));
+                return;
+            }
+        };
+        let subagent_items: Vec<SubagentItem> = response
+            .subagents
             .into_iter()
-            .filter(|info| info.subagent_source != Some(SubAgentSource::External))
-            .map(Self::subagent_item_from_info)
+            .map(Self::subagent_item_from_summary)
             .collect();
 
         if subagent_items.is_empty() {
@@ -2125,27 +2155,19 @@ impl StartupPage {
     }
 
     fn set_subagent_enabled(&mut self, selected: &SubagentItem, enabled: bool) {
-        let registry = get_agent_registry();
-        let workspace = self.workspace_path_buf();
         let mode_id = self.agent_type.clone();
         let subagent = selected.clone();
 
-        let result: Result<(), String> = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                registry
-                    .update_subagent_override(
-                        &mode_id,
-                        &subagent.id,
-                        enabled,
-                        Some(workspace.as_path()),
-                    )
-                    .await
-                    .map_err(|error| error.to_string())
-            })
+        let result = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(self.agent.set_subagent_enabled(
+                mode_id,
+                subagent.id,
+                enabled,
+            ))
         });
 
         self.status = Some(match result {
-            Ok(()) => format!(
+            Ok(_) => format!(
                 "Subagent '{}' {} for mode '{}'.",
                 selected.name,
                 if enabled { "enabled" } else { "disabled" },
@@ -2155,23 +2177,14 @@ impl StartupPage {
         });
     }
 
-    fn subagent_item_from_info(info: AgentInfo) -> SubagentItem {
-        let source = match info.subagent_source {
-            Some(SubAgentSource::Builtin) => "builtin",
-            Some(SubAgentSource::Project) => "project",
-            Some(SubAgentSource::User) => "user",
-            Some(SubAgentSource::External) => "external",
-            None => "builtin",
-        }
-        .to_string();
-
+    fn subagent_item_from_summary(info: SubagentSummary) -> SubagentItem {
         SubagentItem {
             key: info.key,
             id: info.id,
             name: info.name,
             description: info.description,
-            source,
-            enabled: info.effective_enabled,
+            source: info.source,
+            enabled: info.enabled,
         }
     }
 
@@ -2237,12 +2250,21 @@ impl StartupPage {
         self.popup_stack.clear();
     }
 
-    fn get_mode_agents(&self) -> Vec<AgentInfo> {
-        let registry = get_agent_registry();
-        let modes = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(registry.get_modes_info())
-        });
-        modes
+    fn get_mode_agents(&self) -> Vec<TuiAgentMode> {
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current()
+                .block_on(self.agent.available_agent_modes())
+                .unwrap_or_else(|error| {
+                    tracing::warn!("Failed to load main agent modes: {error}");
+                    Vec::new()
+                })
+        })
+    }
+
+    fn selected_agent_mode(&self) -> Option<TuiAgentMode> {
+        self.get_mode_agents()
+            .into_iter()
+            .find(|mode| mode.id == self.agent_type)
     }
 
     fn cycle_agent(&mut self, offset: isize) {
@@ -2265,48 +2287,21 @@ impl StartupPage {
     }
 
     fn load_current_model_name(&mut self) {
+        let explicitly_selected_model_id = self.selected_model_id.clone();
+        let profile_model_id = self.selected_agent_mode().and_then(|mode| mode.model_id);
         let result: Option<String> = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
-                let config_service = GlobalConfigManager::get_service().await.ok()?;
-                let models: Vec<bitfun_core::service::config::AIModelConfig> =
-                    config_service.get_ai_models().await.ok()?;
-                let global_config: bitfun_core::service::config::GlobalConfig =
-                    config_service.get_config(None).await.ok()?;
-
-                let model_id = crate::model_selection::resolve_mode_model_id(&global_config.ai)?;
-
-                fn provider_display_name(
-                    model: &bitfun_core::service::config::AIModelConfig,
-                ) -> String {
-                    let raw_name = model.name.trim();
-                    let model_name = model.model_name.trim();
-                    if !raw_name.is_empty() && !model_name.is_empty() {
-                        let dashed_suffix = format!(" - {}", model_name);
-                        let slash_suffix = format!("/{}", model_name);
-                        if let Some(provider) = raw_name.strip_suffix(&dashed_suffix) {
-                            return provider.trim().to_string();
-                        }
-                        if let Some(provider) = raw_name.strip_suffix(&slash_suffix) {
-                            return provider.trim().to_string();
-                        }
-                    }
-                    if raw_name.is_empty() {
-                        model.provider.clone()
-                    } else {
-                        raw_name.to_string()
-                    }
-                }
-
-                fn model_display_name(
-                    model: &bitfun_core::service::config::AIModelConfig,
-                ) -> String {
-                    format!("{} / {}", model.model_name, provider_display_name(model))
-                }
-
-                models
+                let catalog = self.agent.list_models().await.ok()?;
+                let model_id = resolve_startup_model_id(
+                    explicitly_selected_model_id,
+                    profile_model_id,
+                    catalog.mode_default_model_id.clone(),
+                )?;
+                catalog
+                    .models
                     .iter()
                     .find(|model| model.id == model_id)
-                    .map(model_display_name)
+                    .map(crate::model_selection::tui_model_display_name)
             })
         });
 
@@ -2324,10 +2319,66 @@ impl StartupPage {
     }
 }
 
+fn resolve_startup_model_id(
+    explicitly_selected_model_id: Option<String>,
+    profile_model_id: Option<String>,
+    default_model_id: Option<String>,
+) -> Option<String> {
+    explicitly_selected_model_id
+        .or(profile_model_id)
+        .or(default_model_id)
+}
+
+fn should_persist_shared_model_default(mode: Option<&TuiAgentMode>) -> bool {
+    mode.is_some_and(|mode| !mode.is_external)
+}
+
 #[cfg(test)]
 mod logo_contract_tests {
     use super::*;
     use ratatui::style::Color;
+
+    #[test]
+    fn explicit_startup_model_overrides_profile_and_default() {
+        assert_eq!(
+            resolve_startup_model_id(
+                Some("explicit".to_string()),
+                Some("profile".to_string()),
+                Some("default".to_string()),
+            )
+            .as_deref(),
+            Some("explicit")
+        );
+        assert_eq!(
+            resolve_startup_model_id(
+                None,
+                Some("profile".to_string()),
+                Some("default".to_string()),
+            )
+            .as_deref(),
+            Some("profile")
+        );
+    }
+
+    #[test]
+    fn external_or_unknown_startup_modes_do_not_change_the_shared_default() {
+        let local = TuiAgentMode {
+            id: "agentic".to_string(),
+            description: String::new(),
+            model_id: None,
+            is_external: false,
+        };
+        let external = TuiAgentMode {
+            id: "reviewer".to_string(),
+            description: String::new(),
+            model_id: None,
+            is_external: true,
+        };
+
+        assert!(should_persist_shared_model_default(Some(&local)));
+        assert!(!should_persist_shared_model_default(Some(&external)));
+        assert!(!should_persist_shared_model_default(None));
+    }
 
     #[test]
     fn fancy_logo_keeps_line_order_and_color_style_mapping() {

@@ -8,20 +8,20 @@
  $popover-z: 360;
  $popover-gap: 4px;
  $popover-radius: 6px;
- $popover-shadow: 0 4px 16px rgba(var(--color-static-black-rgb), 0.35);
+ $popover-shadow: 0 4px 16px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.35);
 
  .status-bar-popover {
    position: fixed;
    z-index: $popover-z;
    min-width: 200px;
    max-width: 320px;
-   background: var(--color-bg-elevated);
-   border: 1px solid var(--border-subtle);
+   background: var(--bf-appearance-token-color-bg-elevated);
+   border: 1px solid var(--bf-appearance-token-border-subtle);
    border-radius: $popover-radius;
    box-shadow: $popover-shadow;
    font-size: 12px;
    font-family: $font-family-sans;
-   color: var(--color-text-primary);
+   color: var(--bf-appearance-token-color-text-primary);
    transform: translateY(-100%);
    animation: status-bar-popover-enter 0.15s $easing-decelerate forwards;
 
@@ -66,20 +66,20 @@
      transition: background 0.1s ease;
     font-size: 12px;
     font-weight: 400;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
 
      &:hover {
-       background: var(--color-overlay-white-08);
+       background: var(--bf-appearance-token-color-overlay-white-08);
      }
 
     &:focus-visible {
       outline: none;
-      background: var(--color-overlay-white-12);
+      background: var(--bf-appearance-token-color-overlay-white-12);
     }
 
      &--active {
-       background: var(--color-overlay-white-12);
-       color: var(--color-accent-400);
+       background: var(--bf-appearance-token-color-overlay-white-12);
+       color: var(--bf-appearance-token-color-accent-400);
      }
    }
 
@@ -91,19 +91,19 @@
      height: 18px;
      margin-right: 8px;
      flex-shrink: 0;
-     color: var(--color-text-muted);
+     color: var(--bf-appearance-token-color-text-muted);
      opacity: 0.9;
    }
 
    .status-bar-popover__item--active &__item-icon {
-     color: var(--color-accent-400);
+     color: var(--bf-appearance-token-color-accent-400);
    }
 
    &__hint {
      padding: 6px 12px;
      font-size: 11px;
-     color: var(--color-text-muted);
-     border-bottom: 1px solid var(--border-subtle);
+     color: var(--bf-appearance-token-color-text-muted);
+     border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
    }
  }
 

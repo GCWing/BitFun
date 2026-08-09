@@ -106,6 +106,8 @@ pub struct AcpSessionOptions {
 pub struct AcpSessionModelOption {
     pub id: String,
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_name: Option<String>,
     #[serde(default)]
     pub description: Option<String>,
 }
@@ -117,6 +119,8 @@ pub struct AcpSessionConfigOption {
     pub name: String,
     #[serde(default)]
     pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
     #[serde(flatten)]
     pub kind: AcpSessionConfigKind,
 }
@@ -224,6 +228,16 @@ fn session_config_option_from_protocol(
         id: option.id.to_string(),
         name: option.name.clone(),
         description: option.description.clone(),
+        category: option
+            .category
+            .as_ref()
+            .and_then(|category| match category {
+                SessionConfigOptionCategory::Mode => Some("mode".to_string()),
+                SessionConfigOptionCategory::Model => Some("model".to_string()),
+                SessionConfigOptionCategory::ThoughtLevel => Some("thought_level".to_string()),
+                SessionConfigOptionCategory::Other(value) => Some(value.clone()),
+                _ => None,
+            }),
         kind,
     })
 }
@@ -243,10 +257,38 @@ pub(super) fn model_config_id(config_options: &[SessionConfigOption]) -> Option<
 }
 
 fn model_option_from_model_info(model: &ModelInfo) -> AcpSessionModelOption {
+    let id = model.model_id.to_string();
     AcpSessionModelOption {
-        id: model.model_id.to_string(),
+        provider_name: provider_name_from_model_identity(&id, model.description.as_deref()),
+        id,
         name: model.name.clone(),
         description: model.description.clone(),
+    }
+}
+
+fn provider_name_from_model_identity(id: &str, description: Option<&str>) -> Option<String> {
+    description
+        .and_then(provider_prefix)
+        .or_else(|| provider_prefix(id))
+}
+
+fn normalized_provider_name(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+fn provider_prefix(value: &str) -> Option<String> {
+    let (provider, model) = value.trim().split_once('/')?;
+    let provider = provider.trim();
+    let model = model.trim();
+    if provider.is_empty() || model.is_empty() {
+        None
+    } else {
+        Some(provider.to_string())
     }
 }
 
@@ -274,19 +316,32 @@ fn select_model_values(
     let models = match &select.options {
         SessionConfigSelectOptions::Ungrouped(options) => options
             .iter()
-            .map(|option| AcpSessionModelOption {
-                id: option.value.to_string(),
-                name: option.name.clone(),
-                description: option.description.clone(),
+            .map(|option| {
+                let id = option.value.to_string();
+                AcpSessionModelOption {
+                    provider_name: provider_name_from_model_identity(
+                        &id,
+                        option.description.as_deref(),
+                    ),
+                    id,
+                    name: option.name.clone(),
+                    description: option.description.clone(),
+                }
             })
             .collect(),
         SessionConfigSelectOptions::Grouped(groups) => groups
             .iter()
             .flat_map(|group| {
-                group.options.iter().map(|option| AcpSessionModelOption {
-                    id: option.value.to_string(),
-                    name: option.name.clone(),
-                    description: option.description.clone(),
+                group.options.iter().map(|option| {
+                    let id = option.value.to_string();
+                    AcpSessionModelOption {
+                        provider_name: normalized_provider_name(&group.name).or_else(|| {
+                            provider_name_from_model_identity(&id, option.description.as_deref())
+                        }),
+                        id,
+                        name: option.name.clone(),
+                        description: option.description.clone(),
+                    }
                 })
             })
             .collect(),
@@ -314,6 +369,21 @@ mod tests {
     }
 
     #[test]
+    fn extracts_provider_name_from_native_model_identity() {
+        let state = SessionModelState::new(
+            "openai/gpt-5.4",
+            vec![ModelInfo::new("openai/gpt-5.4", "GPT 5.4")],
+        );
+
+        let options = session_options_from_state(Some(&state), &[], None);
+
+        assert_eq!(
+            options.available_models[0].provider_name.as_deref(),
+            Some("openai")
+        );
+    }
+
+    #[test]
     fn converts_model_config_option_fallback() {
         let config = SessionConfigOption::select(
             "model",
@@ -332,6 +402,59 @@ mod tests {
         assert_eq!(options.model_config_id.as_deref(), Some("model"));
         assert_eq!(options.available_models.len(), 2);
         assert_eq!(options.available_models[1].id, "smart");
+    }
+
+    #[test]
+    fn extracts_provider_name_from_model_config_description() {
+        let config = SessionConfigOption::select(
+            "model",
+            "Model",
+            "openai/gpt-5.4",
+            vec![
+                agent_client_protocol::schema::SessionConfigSelectOption::new(
+                    "openai/gpt-5.4",
+                    "GPT 5.4",
+                )
+                .description("openai/gpt-5.4"),
+            ],
+        )
+        .category(SessionConfigOptionCategory::Model);
+
+        let options = session_options_from_state(None, &[config], None);
+
+        assert_eq!(
+            options.available_models[0].provider_name.as_deref(),
+            Some("openai")
+        );
+    }
+
+    #[test]
+    fn preserves_model_config_group_name_as_provider_name() {
+        let config = SessionConfigOption::select(
+            "model",
+            "Model",
+            "openai/gpt-5.4",
+            vec![
+                agent_client_protocol::schema::SessionConfigSelectGroup::new(
+                    "openai",
+                    "OpenAI",
+                    vec![
+                        agent_client_protocol::schema::SessionConfigSelectOption::new(
+                            "openai/gpt-5.4",
+                            "GPT 5.4",
+                        ),
+                    ],
+                ),
+            ],
+        )
+        .category(SessionConfigOptionCategory::Model);
+
+        let options = session_options_from_state(None, &[config], None);
+
+        assert_eq!(
+            options.available_models[0].provider_name.as_deref(),
+            Some("OpenAI")
+        );
     }
 
     #[test]

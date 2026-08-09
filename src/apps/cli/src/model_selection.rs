@@ -1,13 +1,73 @@
+use bitfun_app_server_protocol::model::{ListModelsResponse, ModelSummary};
 use bitfun_core::service::config::AIConfig;
+
+fn resolve_model_selector(ai_config: &AIConfig, selector: &str) -> Option<String> {
+    match selector.trim() {
+        "" | "auto" | "default" => ai_config.resolve_model_selection("primary"),
+        selector => ai_config.resolve_model_selection(selector),
+    }
+}
 
 /// Resolve the shared future-mode selector to the concrete enabled model shown
 /// by CLI model pickers and status surfaces.
 pub(crate) fn resolve_mode_model_id(ai_config: &AIConfig) -> Option<String> {
-    let selector = ai_config.agent_model_defaults.mode.trim();
+    resolve_model_selector(ai_config, &ai_config.agent_model_defaults.mode)
+}
+
+/// Resolve the Runtime-owned Session selector to the concrete catalog model
+/// used by CLI display surfaces. A missing selector is limited to the fresh
+/// Session fallback; it does not become Session authority in the Client.
+pub(crate) fn resolve_session_model_display_id(
+    ai_config: &AIConfig,
+    session_selector: Option<&str>,
+) -> Option<String> {
+    let selector = session_selector
+        .map(str::trim)
+        .filter(|selector| !selector.is_empty())
+        .unwrap_or(ai_config.agent_model_defaults.mode.as_str());
+    resolve_model_selector(ai_config, selector)
+}
+
+pub(crate) fn resolve_tui_model_id(
+    catalog: &ListModelsResponse,
+    session_selector: Option<&str>,
+) -> Option<String> {
+    let selector = session_selector
+        .map(str::trim)
+        .filter(|selector| !selector.is_empty());
     match selector {
-        "" | "auto" | "default" => ai_config.resolve_model_selection("primary"),
-        selector => ai_config.resolve_model_selection(selector),
+        None => catalog.mode_default_model_id.clone(),
+        Some("auto" | "default" | "primary") => catalog.primary_model_id.clone(),
+        Some("fast") => catalog
+            .fast_model_id
+            .clone()
+            .or_else(|| catalog.primary_model_id.clone()),
+        Some(model_id) => catalog
+            .models
+            .iter()
+            .find(|model| model.enabled && model.id == model_id)
+            .map(|model| model.id.clone()),
     }
+}
+
+pub(crate) fn tui_model_display_name(model: &ModelSummary) -> String {
+    let raw_name = model.name.trim();
+    let model_name = model.model_name.trim();
+    let provider = if !raw_name.is_empty() && !model_name.is_empty() {
+        let dashed_suffix = format!(" - {model_name}");
+        let slash_suffix = format!("/{model_name}");
+        raw_name
+            .strip_suffix(&dashed_suffix)
+            .or_else(|| raw_name.strip_suffix(&slash_suffix))
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(raw_name)
+    } else if raw_name.is_empty() {
+        &model.provider
+    } else {
+        raw_name
+    };
+    format!("{} / {}", model.model_name, provider)
 }
 
 #[cfg(test)]
@@ -63,6 +123,38 @@ mod tests {
         assert_eq!(
             resolve_mode_model_id(&config_with_selector("explicit-model")).as_deref(),
             Some("explicit-model")
+        );
+    }
+
+    #[test]
+    fn resolves_runtime_session_selectors_to_the_effective_catalog_model() {
+        let config = config_with_selector("fast");
+
+        assert_eq!(
+            resolve_session_model_display_id(&config, Some("auto")).as_deref(),
+            Some("primary-model")
+        );
+        assert_eq!(
+            resolve_session_model_display_id(&config, Some("primary")).as_deref(),
+            Some("primary-model")
+        );
+        assert_eq!(
+            resolve_session_model_display_id(&config, Some("fast")).as_deref(),
+            Some("fast-model")
+        );
+        assert_eq!(
+            resolve_session_model_display_id(&config, Some("explicit-model")).as_deref(),
+            Some("explicit-model")
+        );
+    }
+
+    #[test]
+    fn missing_runtime_session_selector_uses_the_future_session_default_for_display_only() {
+        let config = config_with_selector("fast");
+
+        assert_eq!(
+            resolve_session_model_display_id(&config, None).as_deref(),
+            Some("fast-model")
         );
     }
 }

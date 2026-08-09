@@ -19,7 +19,7 @@ Main areas:
 - `src/agentic/`: agents, prompts, tools, sessions, execution, persistence
 - `src/service/`: config, filesystem, terminal, git, LSP, MCP, remote connect, AI memory
 - `src/infrastructure/`: AI clients, app paths, event system, storage, debug log server
-- `src/product_runtime/`: product-full compatibility adapters and runtime service provider wiring
+- `src/product_runtime/`: Core Agent Runtime compatibility adapters and runtime service provider wiring
 
 Agent runtime mental model:
 
@@ -63,12 +63,13 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   owner design says otherwise.
 - `plugin_source` may inject product-owned paths and keep compatibility exports;
   concrete managed-package discovery and trust persistence stay in
-  `services-integrations`, while ecosystem parsing and Plugin Runtime Host
+  `services-integrations`, while ecosystem parsing and PluginRuntimeClient
   behavior remain in their adapter and execution owners.
-- `plugin_runtime` and `external_sources` are the reviewed product-full
-  composition files allowed to select ecosystem adapters for their respective
-  capability contracts. Product surfaces consume product-level views and must
-  not import adapter or Host ABI types.
+- `plugin_runtime`, `external_sources`, and `instruction_sources` are the
+  reviewed owner-feature composition files allowed to select ecosystem adapters
+  for their respective capability contracts. Product surfaces consume
+  product-level views and must not import adapter or raw plugin runtime client
+  types.
 - External-source Desktop, TUI, Peer, and Server surfaces share the versioned
   product-domain control DTO and closed generic actions. Capability-specific
   approvals and conflict choices remain typed owner operations; do not add a
@@ -79,6 +80,32 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 - Feature work must keep `product-full` as the compatibility product assembly
   boundary unless a separate product matrix review changes default capability
   selection.
+- `agent-runtime` owns the existing Core Agent Runtime compatibility facade,
+  including its MCP, Remote Connect, workspace-search, and native Hook runtime
+  services. `external-sources` adds third-party discovery/import adapters,
+  `plugin-runtime` adds executable plugin-client wiring, and `debug-log` keeps
+  the debug ingest server separate. None may enable `product-full`.
+- CLI/ACP closure checks keep Cargo resolver-v2 normal and host
+  (build/proc-macro) feature contexts separate, while treating all
+  target-specific declarations within each context as one reviewed architecture
+  boundary. Split a package/module owner when platforms genuinely differ; do
+  not hide an unreviewed Core capability behind mutually exclusive Cargo `cfg`
+  branches.
+- Keep the light compatibility features independently compilable. Local service
+  profiles are `dispatch-store`, `lsp`, `terminal`, `workspace-runtime`, and
+  `workspace-watch`; `remote-workspace` adds only the remote workspace facade,
+  while `ssh-remote` adds concrete SSH transport. Integration facades
+  `announcement`, `file-watch`, `git`, and `review-platform` remain independent,
+  with `service-integrations` only their compatibility aggregate. None of these
+  narrow features may enable `product-full` directly or transitively.
+- `product-full` must explicitly compose every capability it consumes, including
+  product-only `services-core` features such as `permission`, `session-git`, and
+  `runtime-ownership`. Do not put those features on the dependency declaration,
+  because Cargo feature union would force them into every core consumer.
+- Keep `cargo check -p bitfun-core --no-default-features` viable. Gate
+  product-only modules at their owner feature; if a light facade operation
+  cannot safely complete without a product owner, fail closed and preserve any
+  durable recovery state instead of enabling `product-full` implicitly.
 
 ## Owner References
 
@@ -103,12 +130,18 @@ Narrower local guides already exist for some subtrees:
 
 ## Verification
 
-Use the smallest check that matches the touched behavior:
+This guide owns Core verification. Select one command pattern that matches the
+change; do not run every feature variant:
 
 ```bash
-cargo check --workspace
-cargo test -p bitfun-core <test_name> -- --nocapture
-node scripts/check-core-boundaries.mjs
+cargo check -p bitfun-core --no-default-features
+cargo check -p bitfun-core --no-default-features --features <touched-owner-feature>
+cargo test -p bitfun-core --no-default-features --features <minimal-features> --lib <module>::<test>
 ```
 
-For documentation-only changes, run `git diff --check`.
+Use the first command when the feature-free facade changed, the second when one
+feature boundary changed, and the third for behavior. Run
+`pnpm run check:core-boundaries` only for Cargo features, dependency direction,
+or test-target layout. Workspace checks and product-wide tests are CI-backed and
+are not the default Core precheck. For documentation-only changes, run
+`git diff --check`.

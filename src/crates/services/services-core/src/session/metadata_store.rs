@@ -11,6 +11,7 @@ use super::metadata::{
 use super::page::{build_session_metadata_page, empty_session_metadata_page};
 use super::types::{SessionMetadata, StoredSessionIndexFile, StoredSessionMetadataFile};
 use super::SessionMetadataPage;
+use crate::file_lock::{FileLock, FileLockError, FileLockMode};
 use crate::json_store::{JsonFileStore, JsonFileStoreError};
 use bitfun_core_types::validate_session_id;
 use log::warn;
@@ -45,6 +46,12 @@ pub enum SessionMetadataStoreError {
     },
     #[error("Failed to create session directory: {source}")]
     CreateSessionDir {
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("Failed to lock Session index {path}: {source}")]
+    LockSessionIndex {
+        path: PathBuf,
         #[source]
         source: std::io::Error,
     },
@@ -113,6 +120,26 @@ impl SessionMetadataStore {
             .entry(index_path)
             .or_insert_with(|| Arc::new(Mutex::new(())))
             .clone()
+    }
+
+    async fn lock_index_file(&self) -> Result<FileLock, SessionMetadataStoreError> {
+        fs::create_dir_all(self.sessions_root())
+            .await
+            .map_err(|source| SessionMetadataStoreError::CreateSessionDir { source })?;
+        let lock_path = self.sessions_root().join(".index.lock");
+        let task_path = lock_path.clone();
+        tokio::task::spawn_blocking(move || FileLock::acquire(&task_path, FileLockMode::Exclusive))
+            .await
+            .map_err(|error| SessionMetadataStoreError::LockSessionIndex {
+                path: lock_path.clone(),
+                source: std::io::Error::other(error),
+            })?
+            .map_err(|error| SessionMetadataStoreError::LockSessionIndex {
+                path: lock_path,
+                source: match error {
+                    FileLockError::Open(source) | FileLockError::Unavailable(source) => source,
+                },
+            })
     }
 
     async fn read_json_optional<T: serde::de::DeserializeOwned>(
@@ -208,14 +235,56 @@ impl SessionMetadataStore {
         Ok(count)
     }
 
-    async fn rebuild_index_locked(
+    async fn rebuild_index_snapshot_locked(
         &self,
-    ) -> Result<Vec<SessionMetadata>, SessionMetadataStoreError> {
+    ) -> Result<(StoredSessionIndexFile, Vec<SessionMetadata>), SessionMetadataStoreError> {
         let metadata_list = self.scan_metadata_dirs().await?;
         let (index, visible_sessions) =
             build_session_index_snapshot(metadata_list, current_unix_ms());
         self.write_json_atomic(&self.index_path(), &index).await?;
-        Ok(visible_sessions)
+        Ok((index, visible_sessions))
+    }
+
+    async fn rebuild_index_locked(
+        &self,
+    ) -> Result<Vec<SessionMetadata>, SessionMetadataStoreError> {
+        self.rebuild_index_snapshot_locked()
+            .await
+            .map(|(_, visible_sessions)| visible_sessions)
+    }
+
+    /// Load the rebuildable Session index while the caller owns both index locks.
+    ///
+    /// Per-session `metadata.json` files are authoritative. Older BitFun versions
+    /// can leave `index.json` missing, empty, or truncated if the machine stops
+    /// during the Windows direct-overwrite fallback. Treat only index
+    /// deserialization failures as recoverable; real filesystem errors must still
+    /// reach the caller.
+    async fn read_or_rebuild_index_locked(
+        &self,
+    ) -> Result<(StoredSessionIndexFile, bool), SessionMetadataStoreError> {
+        let index_path = self.index_path();
+        match self
+            .read_json_optional::<StoredSessionIndexFile>(&index_path)
+            .await
+        {
+            Ok(Some(index)) => Ok((index, false)),
+            Ok(None) => self
+                .rebuild_index_snapshot_locked()
+                .await
+                .map(|(index, _)| (index, true)),
+            Err(error) if error.is_deserialization() => {
+                warn!(
+                    "Session index is unreadable; rebuilding from per-session metadata: path={}, error={}",
+                    index_path.display(),
+                    error
+                );
+                self.rebuild_index_snapshot_locked()
+                    .await
+                    .map(|(index, _)| (index, true))
+            }
+            Err(error) => Err(error),
+        }
     }
 
     async fn upsert_index_entry_locked(
@@ -223,23 +292,18 @@ impl SessionMetadataStore {
         metadata: &SessionMetadata,
         metadata_file_created: bool,
     ) -> Result<(), SessionMetadataStoreError> {
-        let index_path = self.index_path();
-        let existing_index = self
-            .read_json_optional::<StoredSessionIndexFile>(&index_path)
-            .await?;
-        let disk_metadata_file_count = if existing_index.is_some() {
-            0
-        } else {
-            self.count_metadata_dirs().await?
-        };
+        let (existing_index, rebuilt) = self.read_or_rebuild_index_locked().await?;
+        if rebuilt {
+            return Ok(());
+        }
         let index = upsert_session_index_entry(
-            existing_index,
+            Some(existing_index),
             metadata,
             metadata_file_created,
-            disk_metadata_file_count,
+            0,
             current_unix_ms(),
         );
-        self.write_json_atomic(&index_path, &index).await
+        self.write_json_atomic(&self.index_path(), &index).await
     }
 
     async fn remove_index_entry_locked(
@@ -247,19 +311,19 @@ impl SessionMetadataStore {
         session_id: &str,
         metadata_file_count_delta: isize,
     ) -> Result<(), SessionMetadataStoreError> {
-        let index_path = self.index_path();
-        let existing_index = self
-            .read_json_optional::<StoredSessionIndexFile>(&index_path)
-            .await?;
+        let (existing_index, rebuilt) = self.read_or_rebuild_index_locked().await?;
+        if rebuilt {
+            return Ok(());
+        }
         let Some(index) = remove_session_index_entry(
-            existing_index,
+            Some(existing_index),
             session_id,
             metadata_file_count_delta,
             current_unix_ms(),
         ) else {
             return Ok(());
         };
-        self.write_json_atomic(&index_path, &index).await
+        self.write_json_atomic(&self.index_path(), &index).await
     }
 
     pub async fn list_metadata(&self) -> Result<Vec<SessionMetadata>, SessionMetadataStoreError> {
@@ -269,38 +333,33 @@ impl SessionMetadataStore {
 
         let lock = self.get_index_lock().await;
         let _guard = lock.lock().await;
+        let _file_guard = self.lock_index_file().await?;
         let index_path = self.index_path();
-        if let Some(index) = self
-            .read_json_optional::<StoredSessionIndexFile>(&index_path)
-            .await?
-        {
-            let has_stale_entry = index
-                .sessions
-                .iter()
-                .any(|metadata| !self.metadata_path(&metadata.session_id).exists());
-            if has_stale_entry {
-                warn!(
-                    "Session index contains stale entries, rebuilding: {}",
-                    index_path.display()
-                );
-                return self.rebuild_index_locked().await;
-            }
-
-            let disk_count = self.count_metadata_dirs().await?;
-            if index.metadata_file_count != disk_count {
-                warn!(
-                    "Session index incomplete (index: {}, disk: {}), rebuilding: {}",
-                    index.metadata_file_count,
-                    disk_count,
-                    index_path.display()
-                );
-                return self.rebuild_index_locked().await;
-            }
-
-            return Ok(index.sessions);
+        let (index, _) = self.read_or_rebuild_index_locked().await?;
+        let has_stale_entry = index
+            .sessions
+            .iter()
+            .any(|metadata| !self.metadata_path(&metadata.session_id).exists());
+        if has_stale_entry {
+            warn!(
+                "Session index contains stale entries, rebuilding: {}",
+                index_path.display()
+            );
+            return self.rebuild_index_locked().await;
         }
 
-        self.rebuild_index_locked().await
+        let disk_count = self.count_metadata_dirs().await?;
+        if index.metadata_file_count != disk_count {
+            warn!(
+                "Session index incomplete (index: {}, disk: {}), rebuilding: {}",
+                index.metadata_file_count,
+                disk_count,
+                index_path.display()
+            );
+            return self.rebuild_index_locked().await;
+        }
+
+        Ok(index.sessions)
     }
 
     pub async fn list_metadata_page(
@@ -315,24 +374,19 @@ impl SessionMetadataStore {
         let limit = limit.max(1);
         let lock = self.get_index_lock().await;
         let _guard = lock.lock().await;
+        let _file_guard = self.lock_index_file().await?;
         let index_path = self.index_path();
-        let indexed_sessions = if let Some(index) = self
-            .read_json_optional::<StoredSessionIndexFile>(&index_path)
-            .await?
-        {
-            if index.metadata_file_count < index.sessions.len() {
-                warn!(
-                    "Session index has invalid metadata count before page read (index: {}, sessions: {}), rebuilding: {}",
-                    index.metadata_file_count,
-                    index.sessions.len(),
-                    index_path.display()
-                );
-                self.rebuild_index_locked().await?
-            } else {
-                index.sessions
-            }
-        } else {
+        let (index, _) = self.read_or_rebuild_index_locked().await?;
+        let indexed_sessions = if index.metadata_file_count < index.sessions.len() {
+            warn!(
+                "Session index has invalid metadata count before page read (index: {}, sessions: {}), rebuilding: {}",
+                index.metadata_file_count,
+                index.sessions.len(),
+                index_path.display()
+            );
             self.rebuild_index_locked().await?
+        } else {
+            index.sessions
         };
 
         let page = build_session_metadata_page(indexed_sessions, cursor, limit);
@@ -361,6 +415,7 @@ impl SessionMetadataStore {
     pub async fn rebuild_index(&self) -> Result<Vec<SessionMetadata>, SessionMetadataStoreError> {
         let lock = self.get_index_lock().await;
         let _guard = lock.lock().await;
+        let _file_guard = self.lock_index_file().await?;
         self.rebuild_index_locked().await
     }
 
@@ -376,6 +431,7 @@ impl SessionMetadataStore {
 
         let lock = self.get_index_lock().await;
         let _guard = lock.lock().await;
+        let _file_guard = self.lock_index_file().await?;
         let metadata_file_created = !metadata_path.exists();
         self.write_json_atomic(&metadata_path, &file).await?;
         if !metadata.should_hide_from_user_lists() {
@@ -409,6 +465,7 @@ impl SessionMetadataStore {
         validate_session_id(session_id).map_err(SessionMetadataStoreError::InvalidSessionId)?;
         let lock = self.get_index_lock().await;
         let _guard = lock.lock().await;
+        let _file_guard = self.lock_index_file().await?;
         let dir = self.session_dir(session_id);
         let metadata_file_removed = self.metadata_path(session_id).exists();
         if dir.exists() {
@@ -466,6 +523,74 @@ mod tests {
     use crate::session::{SessionStatus, StoredSessionIndexFile};
     use tempfile::tempdir;
 
+    #[test]
+    fn index_lock_child_holds_the_cross_process_guard() {
+        if std::env::var_os("BITFUN_SESSION_INDEX_LOCK_CHILD").is_none() {
+            return;
+        }
+        let sessions_root =
+            PathBuf::from(std::env::var_os("BITFUN_SESSION_INDEX_ROOT").expect("index lock root"));
+        let ready_path = PathBuf::from(
+            std::env::var_os("BITFUN_SESSION_INDEX_READY").expect("index lock ready path"),
+        );
+        let release_path = PathBuf::from(
+            std::env::var_os("BITFUN_SESSION_INDEX_RELEASE").expect("index lock release path"),
+        );
+        std::fs::create_dir_all(&sessions_root).expect("sessions root");
+        let _guard = FileLock::acquire(&sessions_root.join(".index.lock"), FileLockMode::Exclusive)
+            .expect("child index lock");
+        std::fs::write(&ready_path, b"ready").expect("publish child readiness");
+        while !release_path.exists() {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+
+    #[tokio::test]
+    async fn metadata_save_waits_for_a_cross_process_index_writer() {
+        use std::process::{Command, Stdio};
+        use std::time::{Duration, Instant};
+
+        let dir = tempdir().expect("tempdir");
+        let ready_path = dir.path().join("child-ready");
+        let release_path = dir.path().join("child-release");
+        let mut child = Command::new(std::env::current_exe().expect("test executable"))
+            .arg("--exact")
+            .arg("session::metadata_store::tests::index_lock_child_holds_the_cross_process_guard")
+            .arg("--nocapture")
+            .env("BITFUN_SESSION_INDEX_LOCK_CHILD", "1")
+            .env("BITFUN_SESSION_INDEX_ROOT", dir.path())
+            .env("BITFUN_SESSION_INDEX_READY", &ready_path)
+            .env("BITFUN_SESSION_INDEX_RELEASE", &release_path)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn index lock child");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !ready_path.exists() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        if !ready_path.exists() {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("index lock child did not become ready");
+        }
+
+        let store = SessionMetadataStore::new(dir.path());
+        let mut save =
+            tokio::spawn(async move { store.save_metadata(&metadata("session-a", 10)).await });
+        let blocked = tokio::time::timeout(Duration::from_millis(50), &mut save)
+            .await
+            .is_err();
+
+        std::fs::write(&release_path, b"release").expect("release child index lock");
+        save.await.expect("save task").expect("metadata save");
+        assert!(child.wait().expect("index lock child").success());
+        assert!(
+            blocked,
+            "metadata save must wait while another process owns the index"
+        );
+    }
+
     fn metadata(session_id: &str, last_active_at: u64) -> SessionMetadata {
         let mut metadata = SessionMetadata::new(
             session_id.to_string(),
@@ -497,6 +622,201 @@ mod tests {
         let listed = store.list_metadata().await.expect("list metadata");
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].session_id, "session-a");
+    }
+
+    #[tokio::test]
+    async fn metadata_store_recovers_empty_index_while_saving_new_metadata() {
+        let dir = tempdir().expect("tempdir");
+        let store = SessionMetadataStore::new(dir.path());
+        store
+            .save_metadata(&metadata("historical", 20))
+            .await
+            .expect("save historical metadata");
+        let historical_turn = store
+            .session_dir("historical")
+            .join("turns")
+            .join("turn-0000.json");
+        fs::create_dir_all(historical_turn.parent().expect("turn parent"))
+            .await
+            .expect("create historical turns directory");
+        fs::write(&historical_turn, b"historical turn payload")
+            .await
+            .expect("write historical turn sentinel");
+
+        fs::write(store.index_path(), b"")
+            .await
+            .expect("simulate an empty index after an interrupted write");
+        store
+            .save_metadata(&metadata("new-session", 10))
+            .await
+            .expect("a corrupt derived index must not block a new session");
+
+        let listed = store.list_metadata().await.expect("list rebuilt metadata");
+        assert_eq!(
+            listed
+                .iter()
+                .map(|value| value.session_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["historical", "new-session"]
+        );
+        assert_eq!(
+            fs::read(&historical_turn)
+                .await
+                .expect("historical turn must remain readable"),
+            b"historical turn payload"
+        );
+        let rebuilt = store
+            .read_json_optional::<StoredSessionIndexFile>(&store.index_path())
+            .await
+            .expect("read rebuilt index")
+            .expect("rebuilt index exists");
+        assert_eq!(rebuilt.metadata_file_count, 2);
+        assert_eq!(rebuilt.sessions.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn metadata_store_page_recovers_truncated_index() {
+        let dir = tempdir().expect("tempdir");
+        let store = SessionMetadataStore::new(dir.path());
+        store
+            .save_metadata(&metadata("older", 10))
+            .await
+            .expect("save older metadata");
+        store
+            .save_metadata(&metadata("newer", 20))
+            .await
+            .expect("save newer metadata");
+        fs::write(store.index_path(), br#"{"schema_version":2,"updated_at":"#)
+            .await
+            .expect("simulate a truncated index");
+
+        let page = store
+            .list_metadata_page(None, 10)
+            .await
+            .expect("paged listing must rebuild a truncated index");
+
+        assert_eq!(
+            page.sessions
+                .iter()
+                .map(|value| value.session_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["newer", "older"]
+        );
+    }
+
+    #[tokio::test]
+    async fn metadata_store_delete_recovers_corrupt_index_and_preserves_other_sessions() {
+        let dir = tempdir().expect("tempdir");
+        let store = SessionMetadataStore::new(dir.path());
+        store
+            .save_metadata(&metadata("historical", 20))
+            .await
+            .expect("save historical metadata");
+        store
+            .save_metadata(&metadata("partial-create", 10))
+            .await
+            .expect("save partial create metadata");
+        fs::write(store.index_path(), b"")
+            .await
+            .expect("simulate an empty index");
+
+        store
+            .delete_session_dir_and_index("partial-create")
+            .await
+            .expect("cleanup must rebuild the corrupt index");
+
+        assert!(!store.session_dir("partial-create").exists());
+        assert!(store.session_dir("historical").exists());
+        let listed = store.list_metadata().await.expect("list surviving session");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].session_id, "historical");
+    }
+
+    #[tokio::test]
+    async fn metadata_store_rebuilds_missing_index_before_save_without_hiding_history() {
+        let dir = tempdir().expect("tempdir");
+        let store = SessionMetadataStore::new(dir.path());
+        store
+            .save_metadata(&metadata("historical", 20))
+            .await
+            .expect("save historical metadata");
+        fs::remove_file(store.index_path())
+            .await
+            .expect("simulate the replace gap left by an older version");
+
+        store
+            .save_metadata(&metadata("new-session", 10))
+            .await
+            .expect("save with a missing derived index");
+
+        let listed = store.list_metadata().await.expect("list rebuilt metadata");
+        assert_eq!(
+            listed
+                .iter()
+                .map(|value| value.session_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["historical", "new-session"]
+        );
+    }
+
+    #[tokio::test]
+    async fn metadata_store_rebuilds_legacy_index_without_metadata_file_count() {
+        let dir = tempdir().expect("tempdir");
+        let store = SessionMetadataStore::new(dir.path());
+        let historical = metadata("historical", 20);
+        store
+            .save_metadata(&historical)
+            .await
+            .expect("save historical metadata");
+        let legacy_index = serde_json::json!({
+            "schema_version": 2,
+            "updated_at": 1,
+            "sessions": [historical]
+        });
+        fs::write(
+            store.index_path(),
+            serde_json::to_vec(&legacy_index).expect("serialize legacy index"),
+        )
+        .await
+        .expect("write legacy index");
+
+        let listed = store
+            .list_metadata()
+            .await
+            .expect("legacy index remains upgrade-compatible");
+
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].session_id, "historical");
+        let rebuilt = store
+            .read_json_optional::<StoredSessionIndexFile>(&store.index_path())
+            .await
+            .expect("read upgraded index")
+            .expect("upgraded index exists");
+        assert_eq!(rebuilt.metadata_file_count, 1);
+    }
+
+    #[tokio::test]
+    async fn metadata_store_does_not_treat_index_io_errors_as_corruption() {
+        let dir = tempdir().expect("tempdir");
+        let store = SessionMetadataStore::new(dir.path());
+        store
+            .save_metadata(&metadata("session-a", 10))
+            .await
+            .expect("save metadata");
+        fs::remove_file(store.index_path())
+            .await
+            .expect("remove index file");
+        fs::create_dir(store.index_path())
+            .await
+            .expect("replace index with an unreadable directory");
+
+        let error = store
+            .list_metadata()
+            .await
+            .expect_err("filesystem errors must not be swallowed as corrupt JSON");
+
+        assert!(!error.is_deserialization());
+        assert!(store.index_path().is_dir());
     }
 
     #[tokio::test]

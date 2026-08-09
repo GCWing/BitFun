@@ -121,9 +121,9 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
         role(
             "worker",
             REVIEW_WORKER_AGENT_TYPE,
-            "Focused Review",
-            "On-demand Review Check",
-            "A read-only check whose focus and scope are chosen for the current change when more evidence would be useful.",
+            "Additional check",
+            "On-demand check",
+            "A read-only check used when the main review needs more evidence for a specific concern.",
             &[
                 "Check only the question assigned by the main review.",
                 "Stay within the selected scope and support conclusions with concrete evidence.",
@@ -134,8 +134,8 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
         role(
             "judge",
             REVIEW_JUDGE_AGENT_TYPE,
-            "Independent Review Check",
-            "Review Quality Check",
+            "Independent validation",
+            "Quality check",
             "A read-only independent check used only when a serious finding, conflicting evidence, or an uncertain conclusion needs validation.",
             &[
                 "Confirm or reject disputed findings using concrete evidence.",
@@ -152,7 +152,7 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
             strategy_profile(
                 "quick",
                 "Quick",
-                "Quick keeps the main review concise and allows narrowly focused extra checks only when justified.",
+                "Quick keeps the review concise and adds checks only when a specific concern needs more evidence.",
                 "0.4-0.6x",
                 "0.5-0.7x",
                 "fast",
@@ -166,7 +166,7 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
             strategy_profile(
                 "normal",
                 "Normal",
-                "Normal balances evidence depth with optional independent checks selected for the current change.",
+                "Normal balances evidence depth with additional checks used only for specific concerns.",
                 "1x",
                 "1x",
                 "fast",
@@ -180,7 +180,7 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
             strategy_profile(
                 "deep",
                 "Deep",
-                "Deep gives the main review and any justified independent checks the longest bounded budget.",
+                "Deep gives the review and any evidence-driven validation the longest bounded budget.",
                 "1.8-2.5x",
                 "1.5-2.5x",
                 "primary",
@@ -208,8 +208,11 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
     ReviewTeamDefinition {
         id: "default-review-team".to_string(),
         name: "Code Review".to_string(),
-        description: "One main review that can request focused independent checks when more evidence is needed.".to_string(),
-        warning: "Strict review may take longer and usually consumes more tokens than a standard review.".to_string(),
+        description: "One review that can add checks when a specific concern needs more evidence."
+            .to_string(),
+        warning:
+            "Strict review may take longer and usually consumes more tokens than a standard review."
+                .to_string(),
         default_model: "fast".to_string(),
         default_strategy_level: "normal".to_string(),
         default_execution_policy: ReviewTeamExecutionPolicyDefinition {
@@ -256,13 +259,13 @@ mod tests {
         let worker = &definition.core_roles[0];
         let judge = &definition.core_roles[1];
 
-        assert_eq!(worker.fun_name, "Focused Review");
-        assert_eq!(worker.role_name, "On-demand Review Check");
-        assert_eq!(judge.fun_name, "Independent Review Check");
-        assert_eq!(judge.role_name, "Review Quality Check");
+        assert_eq!(worker.fun_name, "Additional check");
+        assert_eq!(worker.role_name, "On-demand check");
+        assert_eq!(judge.fun_name, "Independent validation");
+        assert_eq!(judge.role_name, "Quality check");
         assert_eq!(
             definition.description,
-            "One main review that can request focused independent checks when more evidence is needed."
+            "One review that can add checks when a specific concern needs more evidence."
         );
 
         let user_facing_copy = definition
@@ -273,7 +276,7 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n")
             .to_ascii_lowercase();
-        for implementation_term in ["worker", "lens", "specialist", "inspector"] {
+        for implementation_term in ["worker", "lens", "specialist", "inspector", "focused"] {
             assert!(
                 !user_facing_copy.contains(implementation_term),
                 "user-facing copy should not contain {implementation_term}"
@@ -292,7 +295,7 @@ mod tests {
         assert_eq!(value["name"], "Code Review");
         assert_eq!(
             value["description"],
-            "One main review that can request focused independent checks when more evidence is needed."
+            "One review that can add checks when a specific concern needs more evidence."
         );
         assert_eq!(value["coreRoles"][0]["subagentId"], "ReviewWorker");
         assert_eq!(value["coreRoles"][0]["accentColor"], "#3b82f6");

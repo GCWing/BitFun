@@ -180,16 +180,6 @@ export function useAgentIdentityDocument(
 
   useEffect(() => {
     if (!workspacePath || !identityFilePath || !hasUnsavedChanges) {
-      if (saveStatus === 'saved') {
-        const clearSavedStatus = setTimeout(() => {
-          if (mountedRef.current) {
-            setSaveStatus((currentStatus) => (currentStatus === 'saved' ? 'idle' : currentStatus));
-          }
-        }, 1500);
-
-        return () => clearTimeout(clearSavedStatus);
-      }
-
       return;
     }
 
@@ -198,6 +188,7 @@ export function useAgentIdentityDocument(
     }
 
     saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
       void saveDocument();
     }, AUTOSAVE_DEBOUNCE_MS);
 
@@ -206,7 +197,21 @@ export function useAgentIdentityDocument(
         clearTimeout(saveTimerRef.current);
       }
     };
-  }, [hasUnsavedChanges, identityFilePath, saveDocument, saveStatus, workspacePath]);
+  }, [hasUnsavedChanges, identityFilePath, saveDocument, workspacePath]);
+
+  useEffect(() => {
+    if (saveStatus !== 'saved') {
+      return;
+    }
+
+    const clearSavedStatus = setTimeout(() => {
+      if (mountedRef.current) {
+        setSaveStatus((currentStatus) => (currentStatus === 'saved' ? 'idle' : currentStatus));
+      }
+    }, 1500);
+
+    return () => clearTimeout(clearSavedStatus);
+  }, [saveStatus]);
 
   useEffect(() => {
     if (!workspacePath || !identityFilePath) {
@@ -255,7 +260,8 @@ export function useAgentIdentityDocument(
   const updateField = useCallback(
     <K extends keyof IdentityDocument>(field: K, value: IdentityDocument[K]) => {
       setDocument((previous) => ({ ...previous, [field]: value }));
-      if (saveStatus === 'external-update') {
+      if (saveStatus === 'external-update' || saveStatus === 'error') {
+        setError(null);
         setSaveStatus('idle');
       }
     },

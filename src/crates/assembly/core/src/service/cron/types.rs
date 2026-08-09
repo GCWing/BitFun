@@ -4,6 +4,7 @@ use bitfun_agent_runtime::scheduled_job::DEFAULT_SCHEDULED_JOB_RETRY_DELAY_MS;
 pub use bitfun_agent_runtime::scheduled_job::{
     ScheduledJobRunStatus as CronJobRunStatus, ScheduledJobRuntimeState as CronJobState,
 };
+use bitfun_core_types::SessionExecutionTarget;
 use serde::{Deserialize, Serialize};
 
 pub const CRON_JOBS_VERSION: u32 = 2;
@@ -77,6 +78,10 @@ pub struct CronWorkspaceRef {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_id: Option<String>,
     pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_target: Option<SessionExecutionTarget>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_connection_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

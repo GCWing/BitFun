@@ -5,17 +5,17 @@
   --mouse-glow-border-width: 1px;
   --mouse-glow-core: color-mix(
     in srgb,
-    var(--color-accent-500) 78%,
-    var(--color-purple-500)
+    var(--bf-appearance-token-color-accent-500) 78%,
+    var(--bf-appearance-token-color-purple-500)
   );
   --mouse-glow-falloff: color-mix(
     in srgb,
-    var(--color-accent-500) 22%,
+    var(--bf-appearance-token-color-accent-500) 22%,
     transparent
   );
   --mouse-glow-shadow: color-mix(
     in srgb,
-    var(--color-accent-500) 42%,
+    var(--bf-appearance-token-color-accent-500) 42%,
     transparent
   );
 
@@ -61,22 +61,21 @@
   }
 }
 
-:root[data-theme-type='light'] .bitfun-mouse-glow-overlay,
-[data-theme-type='light'] .bitfun-mouse-glow-overlay {
+:root[data-bf-appearance-mode='light'] .bitfun-mouse-glow-overlay {
   --mouse-glow-border-width: 1.5px;
   --mouse-glow-core: color-mix(
     in srgb,
-    var(--color-accent-500) 88%,
-    var(--color-static-white)
+    var(--bf-appearance-token-color-accent-500) 88%,
+    var(--bf-appearance-token-color-static-white)
   );
   --mouse-glow-falloff: color-mix(
     in srgb,
-    var(--color-accent-500) 40%,
+    var(--bf-appearance-token-color-accent-500) 40%,
     transparent
   );
   --mouse-glow-shadow: color-mix(
     in srgb,
-    var(--color-accent-500) 34%,
+    var(--bf-appearance-token-color-accent-500) 34%,
     transparent
   );
 

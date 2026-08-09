@@ -16,6 +16,26 @@ const TOOL_CARD_ESTIMATE_HEIGHT_PX = 88;
 const EXPLORE_GROUP_BASE_HEIGHT_PX = 96;
 const ESTIMATED_TEXT_CHARS_PER_LINE = 60;
 
+export function getLeadingVirtualItemIndexDelta<T>(
+  previousItems: readonly T[],
+  nextItems: readonly T[],
+  getStableKey: (item: T) => string,
+): number {
+  if (previousItems.length === 0 || nextItems.length === 0) {
+    return 0;
+  }
+
+  const previousFirstKey = getStableKey(previousItems[0]);
+  const prependedCount = nextItems.findIndex(item => getStableKey(item) === previousFirstKey);
+  if (prependedCount > 0) {
+    return -prependedCount;
+  }
+
+  const nextFirstKey = getStableKey(nextItems[0]);
+  const removedCount = previousItems.findIndex(item => getStableKey(item) === nextFirstKey);
+  return removedCount > 0 ? removedCount : 0;
+}
+
 export function getVirtualMessageDefaultItemHeight(params: {
   isHistorical: boolean;
   hasCompactHistoricalProjection: boolean;
@@ -127,36 +147,6 @@ export interface InitialHistoryRenderWindow {
   renderedEstimatedHeightPx: number;
   totalEstimatedHeightPx: number;
   isWindowed: boolean;
-}
-
-export function mapInitialHistoryExpansionScrollTop(params: {
-  previousScrollTop: number;
-  previousScrollHeight: number;
-  nextScrollHeight: number;
-  omittedEstimatedHeightPx: number;
-  wasAtBottom: boolean;
-  clientHeight: number;
-}): number {
-  const nextMaxScrollTop = Math.max(0, params.nextScrollHeight - params.clientHeight);
-  if (params.wasAtBottom) {
-    return nextMaxScrollTop;
-  }
-
-  const heightDelta = params.nextScrollHeight - params.previousScrollHeight;
-  const omittedEstimatedHeightPx = Math.max(0, params.omittedEstimatedHeightPx);
-  if (
-    omittedEstimatedHeightPx > 0 &&
-    params.previousScrollTop <= omittedEstimatedHeightPx
-  ) {
-    const actualOmittedHeightPx = Math.max(0, omittedEstimatedHeightPx + heightDelta);
-    const omittedRatio = Math.max(
-      0,
-      Math.min(1, params.previousScrollTop / omittedEstimatedHeightPx),
-    );
-    return Math.min(nextMaxScrollTop, actualOmittedHeightPx * omittedRatio);
-  }
-
-  return Math.min(nextMaxScrollTop, Math.max(0, params.previousScrollTop + heightDelta));
 }
 
 function uniqueTurnCount(items: VirtualItem[]): number {

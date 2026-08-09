@@ -142,20 +142,29 @@ impl IsolationManager {
 
     /// Validates that a file path is safe (does not impact Git).
     pub fn is_path_safe_for_modification(&self, path: &Path) -> bool {
-        if !path.starts_with(&self.workspace_dir) {
-            return false;
-        }
-
         let git_dir = self.workspace_dir.join(".git");
-        if path.starts_with(&git_dir) {
+        if path_starts_with_scope(path, &git_dir)
+            || path_starts_with_scope(path, &self.runtime_context.runtime_root)
+        {
             return false;
         }
 
-        if path.starts_with(&self.runtime_context.runtime_root) {
+        let Some(path) = canonicalize_for_scope(path) else {
             return false;
-        }
+        };
+        let Some(workspace_dir) = canonicalize_for_scope(&self.workspace_dir) else {
+            return false;
+        };
+        let Some(git_dir) = canonicalize_for_scope(&git_dir) else {
+            return false;
+        };
+        let Some(runtime_root) = canonicalize_for_scope(&self.runtime_context.runtime_root) else {
+            return false;
+        };
 
-        true
+        path_starts_with_scope(&path, &workspace_dir)
+            && !path_starts_with_scope(&path, &git_dir)
+            && !path_starts_with_scope(&path, &runtime_root)
     }
 
     /// Returns a path relative to the workspace directory.
@@ -169,5 +178,151 @@ impl IsolationManager {
                     absolute_path.display()
                 ))
             })
+    }
+}
+
+fn canonicalize_for_scope(path: &Path) -> Option<PathBuf> {
+    let mut ancestor = path;
+    let mut missing_suffix = Vec::new();
+
+    loop {
+        if let Ok(mut resolved) = dunce::canonicalize(ancestor) {
+            for component in missing_suffix.iter().rev() {
+                resolved.push(component);
+            }
+            return Some(resolved);
+        }
+
+        missing_suffix.push(ancestor.file_name()?.to_os_string());
+        ancestor = ancestor.parent()?;
+    }
+}
+
+#[cfg(not(windows))]
+fn path_starts_with_scope(path: &Path, root: &Path) -> bool {
+    path.starts_with(root)
+}
+
+#[cfg(windows)]
+fn path_starts_with_scope(path: &Path, root: &Path) -> bool {
+    use std::os::windows::ffi::OsStrExt;
+
+    fn lower_ascii(unit: u16) -> u16 {
+        if (u16::from(b'A')..=u16::from(b'Z')).contains(&unit) {
+            unit + u16::from(b'a' - b'A')
+        } else {
+            unit
+        }
+    }
+
+    let mut path_components = path.components();
+    root.components().all(|root_component| {
+        path_components.next().is_some_and(|path_component| {
+            path_component
+                .as_os_str()
+                .encode_wide()
+                .map(lower_ascii)
+                .eq(root_component.as_os_str().encode_wide().map(lower_ascii))
+        })
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::IsolationManager;
+    use crate::service::workspace_runtime::{WorkspaceRuntimeContext, WorkspaceRuntimeTarget};
+    use std::path::{Path, PathBuf};
+
+    fn manager(workspace_dir: PathBuf, runtime_root: PathBuf) -> IsolationManager {
+        let runtime_context = WorkspaceRuntimeContext::new(
+            WorkspaceRuntimeTarget::LocalWorkspace {
+                workspace_root: workspace_dir.clone(),
+            },
+            runtime_root,
+        );
+        IsolationManager::new(workspace_dir, runtime_context)
+    }
+
+    fn aliased_workspace(root: &Path) -> PathBuf {
+        let anchor = root.join("alias-anchor");
+        std::fs::create_dir_all(&anchor).expect("alias anchor");
+        anchor.join("..")
+    }
+
+    #[test]
+    fn accepts_existing_file_through_workspace_alias() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let workspace_root = dunce::canonicalize(workspace.path()).expect("canonical workspace");
+        let alias = aliased_workspace(workspace.path());
+        let file = workspace.path().join("tracked.txt");
+        std::fs::write(&file, "tracked").expect("tracked file");
+        let manager = manager(workspace_root, workspace.path().join(".bitfun"));
+
+        assert!(manager.is_path_safe_for_modification(&alias.join("tracked.txt")));
+    }
+
+    #[test]
+    fn accepts_nested_new_file_through_workspace_alias() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let workspace_root = dunce::canonicalize(workspace.path()).expect("canonical workspace");
+        let alias = aliased_workspace(workspace.path());
+        let manager = manager(workspace_root, workspace.path().join(".bitfun"));
+
+        assert!(manager.is_path_safe_for_modification(&alias.join("new/deep/file.txt")));
+    }
+
+    #[test]
+    fn rejects_runtime_path_before_alias_resolution() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let workspace_root = dunce::canonicalize(workspace.path()).expect("canonical workspace");
+        let alias = aliased_workspace(workspace.path());
+        let runtime_root = alias.join(".bitfun");
+        std::fs::create_dir_all(&runtime_root).expect("runtime root");
+        let manager = manager(workspace_root, runtime_root.clone());
+
+        assert!(!manager.is_path_safe_for_modification(&runtime_root.join("state.json")));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn rejects_case_variant_missing_git_directory() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let workspace_root = dunce::canonicalize(workspace.path()).expect("canonical workspace");
+        let manager = manager(workspace_root, workspace.path().join(".bitfun"));
+
+        assert!(!manager.is_path_safe_for_modification(&workspace.path().join(".GIT/config")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_git_symlink_target_inside_workspace() {
+        use std::os::unix::fs::symlink;
+
+        let workspace = tempfile::tempdir().expect("workspace");
+        let metadata = workspace.path().join("metadata");
+        std::fs::create_dir_all(&metadata).expect("metadata target");
+        std::fs::write(metadata.join("config"), "config").expect("git config");
+        symlink(&metadata, workspace.path().join(".git")).expect("git symlink");
+        let workspace_root = dunce::canonicalize(workspace.path()).expect("canonical workspace");
+        let manager = manager(workspace_root, workspace.path().join(".bitfun"));
+
+        assert!(!manager.is_path_safe_for_modification(&workspace.path().join(".git/config")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_workspace_symlink_that_escapes_scope() {
+        use std::os::unix::fs::symlink;
+
+        let workspace = tempfile::tempdir().expect("workspace");
+        let outside = tempfile::tempdir().expect("outside");
+        std::fs::write(outside.path().join("outside.txt"), "outside").expect("outside file");
+        symlink(outside.path(), workspace.path().join("escape")).expect("escape symlink");
+        let workspace_root = dunce::canonicalize(workspace.path()).expect("canonical workspace");
+        let manager = manager(workspace_root, workspace.path().join(".bitfun"));
+
+        assert!(
+            !manager.is_path_safe_for_modification(&workspace.path().join("escape/outside.txt"))
+        );
     }
 }

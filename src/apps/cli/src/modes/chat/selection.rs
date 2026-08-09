@@ -1,36 +1,56 @@
-enum ModelSelectionApplyOutcome {
+enum SessionUpdateApplyOutcome {
     SessionUpdateFailed(String),
-    Applied {
-        default_persist_error: Option<String>,
-    },
-}
-
-enum ModeSelectionApplyOutcome {
-    SessionUpdateFailed(String),
+    OutcomeUnknown(String),
     Applied,
 }
 
-enum ModeChangePollOutcome {
+enum SessionUpdatePollOutcome {
     NoChange,
     Redraw,
     ExitAfterSave,
+    ExitAfterUnknownOutcome(String),
 }
 
-fn previous_session_mode_change_status(
-    mode_id: &str,
-    outcome: &ModeSelectionApplyOutcome,
+fn previous_session_update_status(
+    setting_name: &str,
+    selected_id: &str,
+    outcome: &SessionUpdateApplyOutcome,
 ) -> String {
     match outcome {
-        ModeSelectionApplyOutcome::Applied => format!(
-            "The previous session mode was changed to {mode_id}; the current session was not modified."
+        SessionUpdateApplyOutcome::Applied => format!(
+            "The previous session {setting_name} was changed to {selected_id}; the current session was not modified."
         ),
-        ModeSelectionApplyOutcome::SessionUpdateFailed(error) => format!(
-            "The previous session mode change to {mode_id} failed: {error}. Return to that session to retry."
+        SessionUpdateApplyOutcome::SessionUpdateFailed(error) => format!(
+            "The previous session {setting_name} change to {selected_id} failed: {error}. Return to that session to retry."
+        ),
+        SessionUpdateApplyOutcome::OutcomeUnknown(error) => format!(
+            "The previous session {setting_name} change to {selected_id} has an unknown outcome: {error}. This TUI is closing; reopen it, restore that session, and inspect its current {setting_name} before retrying."
         ),
     }
 }
 
-fn mode_change_completion_should_exit(exit_requested: bool, applied: bool) -> bool {
+fn session_delete_feedback(
+    session_name: &str,
+    outcome: &SessionUpdateApplyOutcome,
+) -> (bool, String) {
+    match outcome {
+        SessionUpdateApplyOutcome::Applied => {
+            (true, format!("Session deleted: {session_name}"))
+        }
+        SessionUpdateApplyOutcome::SessionUpdateFailed(error) => (
+            false,
+            format!("Failed to delete session {session_name}: {error}"),
+        ),
+        SessionUpdateApplyOutcome::OutcomeUnknown(error) => (
+            false,
+            format!(
+                "Session deletion for {session_name} has an unknown outcome: {error}. This TUI is closing; reopen it and inspect /sessions before retrying."
+            ),
+        ),
+    }
+}
+
+fn session_update_completion_should_exit(exit_requested: bool, applied: bool) -> bool {
     exit_requested && applied
 }
 
@@ -38,10 +58,10 @@ fn apply_agent_mode_feedback(
     current_mode: &mut String,
     chat_state: &mut ChatState,
     selected_mode: &str,
-    outcome: ModeSelectionApplyOutcome,
+    outcome: SessionUpdateApplyOutcome,
 ) -> bool {
     match outcome {
-        ModeSelectionApplyOutcome::SessionUpdateFailed(error) => {
+        SessionUpdateApplyOutcome::SessionUpdateFailed(error) => {
             tracing::error!(
                 "Failed to switch agent mode to {}: {}",
                 selected_mode,
@@ -52,7 +72,18 @@ fn apply_agent_mode_feedback(
             ));
             false
         }
-        ModeSelectionApplyOutcome::Applied => {
+        SessionUpdateApplyOutcome::OutcomeUnknown(error) => {
+            tracing::error!(
+                "Agent mode update outcome is unknown for {}: {}",
+                selected_mode,
+                error
+            );
+            chat_state.add_system_message(format!(
+                "Agent mode update outcome is unknown: {error}. This TUI is closing; reopen it, restore this session, and inspect its current mode before retrying."
+            ));
+            false
+        }
+        SessionUpdateApplyOutcome::Applied => {
             *current_mode = selected_mode.to_string();
             chat_state.agent_type = selected_mode.to_string();
             tracing::info!("Agent mode switched to: {}", selected_mode);
@@ -79,10 +110,10 @@ fn apply_model_selection_feedback(
     chat_state: &mut ChatState,
     selected_display_name: &str,
     selected_id: &str,
-    outcome: ModelSelectionApplyOutcome,
-) {
+    outcome: SessionUpdateApplyOutcome,
+) -> bool {
     match outcome {
-        ModelSelectionApplyOutcome::SessionUpdateFailed(error) => {
+        SessionUpdateApplyOutcome::SessionUpdateFailed(error) => {
             tracing::error!(
                 "Failed to switch model to {} ({}): {}",
                 selected_display_name,
@@ -92,40 +123,110 @@ fn apply_model_selection_feedback(
             chat_state.add_system_message(format!(
                 "Current session model was not changed: {error}. Please retry."
             ));
+            false
         }
-        ModelSelectionApplyOutcome::Applied {
-            default_persist_error,
-        } => {
+        SessionUpdateApplyOutcome::OutcomeUnknown(error) => {
+            tracing::error!(
+                "Model update outcome is unknown for {} ({}): {}",
+                selected_display_name,
+                selected_id,
+                error
+            );
+            chat_state.add_system_message(format!(
+                "Model update outcome is unknown: {error}. This TUI is closing; reopen it, restore this session, and inspect its current model before retrying."
+            ));
+            false
+        }
+        SessionUpdateApplyOutcome::Applied => {
+            chat_state.current_model_id = Some(selected_id.to_string());
             chat_state.current_model_name = selected_display_name.to_string();
             tracing::info!(
                 "Model switched to: {} ({})",
                 selected_display_name,
                 selected_id
             );
-            if let Some(error) = default_persist_error {
-                tracing::warn!(
-                    "Current session model changed, but the future default could not be saved: {}",
-                    error
-                );
-                chat_state.add_system_message(
-                    "Model switched for the current session, but the default for future sessions could not be saved. Check configuration storage and retry if needed."
-                        .to_string(),
-                );
-            }
+            true
         }
     }
 }
 
+fn apply_session_rename_feedback(
+    chat_state: &mut ChatState,
+    session_name: &str,
+    outcome: SessionUpdateApplyOutcome,
+) -> bool {
+    match outcome {
+        SessionUpdateApplyOutcome::SessionUpdateFailed(error) => {
+            tracing::error!("Failed to rename the current session: {}", error);
+            chat_state.add_system_message(format!(
+                "Current session name was not changed: {error}. Please retry."
+            ));
+            false
+        }
+        SessionUpdateApplyOutcome::OutcomeUnknown(error) => {
+            tracing::error!("Session rename outcome is unknown: {}", error);
+            chat_state.add_system_message(format!(
+                "Session rename outcome is unknown: {error}. This TUI is closing; reopen it, restore this session, and inspect its current name before retrying."
+            ));
+            false
+        }
+        SessionUpdateApplyOutcome::Applied => {
+            chat_state.session_name = session_name.to_string();
+            tracing::info!("Current session renamed");
+            true
+        }
+    }
+}
+
+fn apply_session_model_migration(
+    chat_state: &mut ChatState,
+    event_session_id: &str,
+    previous_model_id: &str,
+    new_model_id: &str,
+    reason: &str,
+) -> bool {
+    if event_session_id != chat_state.core_session_id {
+        tracing::debug!(
+            "Ignoring model migration for another session: current_session_id={}, event_session_id={}",
+            chat_state.core_session_id,
+            event_session_id
+        );
+        return false;
+    }
+    if chat_state.current_model_id.as_deref() != Some(previous_model_id) {
+        tracing::debug!(
+            "Ignoring stale model migration: session_id={}, current_model_id={:?}, previous_model_id={}",
+            event_session_id,
+            chat_state.current_model_id,
+            previous_model_id
+        );
+        return false;
+    }
+    chat_state.current_model_id = Some(new_model_id.to_string());
+    chat_state.current_model_name = new_model_id.to_string();
+    chat_state.add_system_message(format!(
+        "The current session model changed from {previous_model_id} to {new_model_id} because {reason}."
+    ));
+    true
+}
+
 impl ChatMode {
     fn logout(&self, chat_state: &mut ChatState, rt_handle: &tokio::runtime::Handle) {
-        let logged_in =
-            tokio::task::block_in_place(|| rt_handle.block_on(crate::account::is_logged_in()));
-        if !logged_in {
-            chat_state.add_system_message("Not logged in.".to_string());
-            return;
+        let snapshot =
+            tokio::task::block_in_place(|| rt_handle.block_on(self.agent.account_snapshot()));
+        match snapshot {
+            Ok(snapshot) if !snapshot.logged_in => {
+                chat_state.add_system_message("Not logged in.".to_string());
+                return;
+            }
+            Err(error) => {
+                chat_state.add_system_message(format!("Logout failed: {error}"));
+                return;
+            }
+            Ok(_) => {}
         }
-        match tokio::task::block_in_place(|| rt_handle.block_on(crate::account::logout())) {
-            Ok(()) => chat_state.add_system_message("Logged out.".to_string()),
+        match tokio::task::block_in_place(|| rt_handle.block_on(self.agent.account_logout())) {
+            Ok(_) => chat_state.add_system_message("Logged out.".to_string()),
             Err(error) => chat_state.add_system_message(format!("Logout failed: {error}")),
         }
     }
@@ -150,14 +251,12 @@ impl ChatMode {
             .or_else(|| self.workspace.clone())
             .or_else(|| Some(self.agent.workspace_path_string()));
         let agent = self.agent.clone();
-        let runtime = Arc::clone(&self.runtime);
 
         let report_result: Result<bitfun_core::service::session_usage::SessionUsageReport> =
             tokio::task::block_in_place(|| {
                 let session_id = session_id.clone();
                 let workspace_path = workspace_path.clone();
                 let agent = agent.clone();
-                let runtime = Arc::clone(&runtime);
                 rt_handle.block_on(async move {
                     let workspace_path = workspace_path
                         .filter(|path| !path.trim().is_empty())
@@ -176,8 +275,7 @@ impl ChatMode {
                     let markdown = render_usage_report_markdown(&report);
                     let generated_at = u64::try_from(report.generated_at).unwrap_or_default();
                     let metadata = usage_report_metadata(&report)?;
-                    runtime
-                        .agent_runtime()
+                    agent
                         .record_completed_local_command_turn(AgentLocalCommandTurnRecordRequest {
                             session_id,
                             content: markdown,
@@ -187,8 +285,7 @@ impl ChatMode {
                                 anyhow!("Usage report metadata must be an object")
                             })?,
                         })
-                        .await
-                        .map_err(|error| anyhow!(error.into_message()))?;
+                        .await?;
 
                     Ok(report)
                 })
@@ -284,8 +381,10 @@ impl ChatMode {
             (false, EffectiveColorScheme::Truecolor) => Theme::dark(),
         };
 
-        self.config.ui.theme_id = theme.id.clone();
-        if let Err(e) = self.config.save() {
+        if let Err(e) = self
+            .config
+            .update(|config| config.ui.theme_id = theme.id.clone())
+        {
             chat_view.set_status(Some(format!("Failed to save config: {}", e)));
         }
 
@@ -294,10 +393,15 @@ impl ChatMode {
         chat_view.set_status(Some(format!("Theme set to: {}", theme.id)));
     }
 
-    fn get_mode_agents(&self, rt_handle: &tokio::runtime::Handle) -> Vec<AgentInfo> {
-        let registry = get_agent_registry();
-        let modes = tokio::task::block_in_place(|| rt_handle.block_on(registry.get_modes_info()));
-        modes
+    fn get_mode_agents(&self, rt_handle: &tokio::runtime::Handle) -> Vec<TuiAgentMode> {
+        tokio::task::block_in_place(|| {
+            rt_handle
+                .block_on(self.agent.available_agent_modes())
+                .unwrap_or_else(|error| {
+                    tracing::warn!("Failed to load main agent modes: {error}");
+                    Vec::new()
+                })
+        })
     }
 
     fn cycle_agent(
@@ -325,9 +429,12 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        if !agent_mode_switch_allowed(chat_state.is_processing, self.pending_mode_change.is_some())
-        {
-            chat_view.set_status(Some(mode_switch_unavailable_message(
+        if !session_update_allowed(
+            chat_state.is_processing,
+            self.pending_session_operation.is_some(),
+        ) {
+            chat_view.set_status(Some(session_update_unavailable_message(
+                "Agent mode",
                 chat_state.is_processing,
             )));
             return;
@@ -353,61 +460,35 @@ impl ChatMode {
         self.apply_agent_selection(&selected, chat_view, chat_state, rt_handle);
     }
 
-    /// Load current model name from global config for display
+    /// Resolve the Runtime-owned Session model through the local product catalog.
     fn load_current_model_name(
         &self,
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
+        let session_model_id = chat_state.current_model_id.clone();
         let result: Option<String> = tokio::task::block_in_place(|| {
             rt_handle.block_on(async {
-                let config_service = GlobalConfigManager::get_service().await.ok()?;
-                let models: Vec<bitfun_core::service::config::AIModelConfig> =
-                    config_service.get_ai_models().await.ok()?;
-                let global_config: bitfun_core::service::config::GlobalConfig =
-                    config_service.get_config(None).await.ok()?;
-
-                let model_id = crate::model_selection::resolve_mode_model_id(&global_config.ai)?;
-
-                fn provider_display_name(
-                    model: &bitfun_core::service::config::AIModelConfig,
-                ) -> String {
-                    let raw_name = model.name.trim();
-                    let model_name = model.model_name.trim();
-                    if !raw_name.is_empty() && !model_name.is_empty() {
-                        let dashed_suffix = format!(" - {}", model_name);
-                        let slash_suffix = format!("/{}", model_name);
-                        if let Some(provider) = raw_name.strip_suffix(&dashed_suffix) {
-                            return provider.trim().to_string();
-                        }
-                        if let Some(provider) = raw_name.strip_suffix(&slash_suffix) {
-                            return provider.trim().to_string();
-                        }
-                    }
-                    if raw_name.is_empty() {
-                        model.provider.clone()
-                    } else {
-                        raw_name.to_string()
-                    }
-                }
-
-                fn model_display_name(
-                    model: &bitfun_core::service::config::AIModelConfig,
-                ) -> String {
-                    format!("{} / {}", model.model_name, provider_display_name(model))
-                }
-
-                let model_name = models
-                    .iter()
-                    .find(|model| model.id == model_id)
-                    .map(model_display_name);
-
-                model_name
+                let catalog = self.agent.list_models().await.ok()?;
+                let model_id = crate::model_selection::resolve_tui_model_id(
+                    &catalog,
+                    session_model_id.as_deref(),
+                )?;
+                Some(
+                    catalog
+                        .models
+                        .iter()
+                        .find(|model| model.id == model_id)
+                        .map(crate::model_selection::tui_model_display_name)
+                        .unwrap_or(model_id),
+                )
             })
         });
 
         if let Some(name) = result {
             chat_state.current_model_name = name;
+        } else if let Some(model_id) = chat_state.current_model_id.as_ref() {
+            chat_state.current_model_name = model_id.clone();
         }
     }
 
@@ -420,41 +501,29 @@ impl ChatMode {
     ) {
         let result = tokio::task::block_in_place(|| {
             rt_handle.block_on(async {
-                let config_service = match GlobalConfigManager::get_service().await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        tracing::error!("Failed to get config service: {}", e);
-                        return None;
-                    }
-                };
-
-                let models: Vec<bitfun_core::service::config::AIModelConfig> =
-                    config_service.get_ai_models().await.ok()?;
-                let global_config: bitfun_core::service::config::GlobalConfig =
-                    config_service.get_config(None).await.ok()?;
-
-                let current_model_id =
-                    crate::model_selection::resolve_mode_model_id(&global_config.ai);
-
-                // Convert to ModelItem list (only enabled models)
-                let model_items: Vec<ModelItem> = models
+                let catalog = self.agent.list_models().await.ok()?;
+                let current_model_id = crate::model_selection::resolve_tui_model_id(
+                    &catalog,
+                    chat_state.current_model_id.as_deref(),
+                );
+                let model_items: Vec<ModelItem> = catalog
+                    .models
                     .into_iter()
-                    .filter(|m| m.enabled)
-                    .map(|m| ModelItem {
-                        id: m.id,
-                        name: m.name,
-                        provider: m.provider,
-                        model_name: m.model_name,
+                    .filter(|model| model.enabled)
+                    .map(|model| ModelItem {
+                        id: model.id,
+                        name: model.name,
+                        provider: model.provider,
+                        model_name: model.model_name,
                     })
                     .collect();
-
                 Some((model_items, current_model_id))
             })
         });
 
         match result {
             Some((models, current_id)) if !models.is_empty() => {
-                chat_view.show_model_selector(models, current_id);
+                chat_view.show_model_selector(models, current_id, !self.agent.is_shared(), true);
             }
             _ => {
                 chat_state.add_system_message(
@@ -464,55 +533,55 @@ impl ChatMode {
         }
     }
 
-    /// Apply the current-session model and best-effort future-session default.
+    /// Apply only the current Session model through the Runtime owner.
     fn apply_model_selection(
-        &self,
+        &mut self,
         selected: &ModelItem,
-        _chat_view: &mut ChatView,
+        chat_view: &mut ChatView,
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
         let selected_id = selected.id.clone();
         let selected_display_name = format!("{} / {}", selected.model_name, selected.name);
+        if chat_state.current_model_id.as_deref() == Some(selected_id.as_str()) {
+            chat_view.set_status(Some(format!(
+                "Current session already uses {selected_display_name}"
+            )));
+            return;
+        }
+        if !session_update_allowed(
+            chat_state.is_processing,
+            self.pending_session_operation.is_some(),
+        ) {
+            chat_view.set_status(Some(session_update_unavailable_message(
+                "Model",
+                chat_state.is_processing,
+            )));
+            return;
+        }
         let session_id = chat_state.core_session_id.clone();
-
-        let outcome = tokio::task::block_in_place(|| {
-            rt_handle.block_on(async {
-                if let Err(e) = self
-                    .agent
-                    .update_session_model(&session_id, &selected_id)
-                    .await
-                {
-                    return ModelSelectionApplyOutcome::SessionUpdateFailed(e.to_string());
-                }
-
-                let config_service = match GlobalConfigManager::get_service().await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        return ModelSelectionApplyOutcome::Applied {
-                            default_persist_error: Some(e.to_string()),
-                        };
-                    }
-                };
-
-                if let Err(e) = config_service
-                    .set_config("ai.agent_model_defaults.mode", &selected_id)
-                    .await
-                {
-                    return ModelSelectionApplyOutcome::Applied {
-                        default_persist_error: Some(e.to_string()),
-                    };
-                }
-
-                crate::account_sync::notify_local_settings_changed();
-
-                ModelSelectionApplyOutcome::Applied {
-                    default_persist_error: None,
-                }
-            })
+        let task_session_id = session_id.clone();
+        let task_model_id = selected_id.clone();
+        let agent = self.agent.clone();
+        chat_view.set_status(Some(format!(
+            "Changing current session model to {selected_display_name}..."
+        )));
+        let handle = rt_handle.spawn(async move {
+            agent
+                .update_session_model(&task_session_id, &task_model_id)
+                .await
         });
-
-        apply_model_selection_feedback(chat_state, &selected_display_name, &selected_id, outcome);
+        self.pending_session_operation = Some(PendingSessionOperation {
+            session_id,
+            kind: PendingSessionOperationKind::Model {
+                model_id: selected_id,
+                display_name: selected_display_name,
+            },
+            started_at: Instant::now(),
+            slow_notice_shown: false,
+            exit_warning_shown: false,
+            handle,
+        });
     }
 
     /// Show agent selector popup with all available agent modes
@@ -524,9 +593,15 @@ impl ChatMode {
     ) {
         let modes = self.get_mode_agents(rt_handle);
         if modes.is_empty() {
-            chat_view.set_status(Some(
-                "Main agent modes are unavailable; agent management remains available.".to_string(),
-            ));
+            let message = if self.agent.is_shared() {
+                "Main agent modes are unavailable."
+            } else {
+                "Main agent modes are unavailable; agent management remains available."
+            };
+            chat_view.set_status(Some(message.to_string()));
+            if self.agent.is_shared() {
+                return;
+            }
         }
 
         let agent_items: Vec<AgentItem> = modes
@@ -537,11 +612,15 @@ impl ChatMode {
             })
             .collect();
 
+        let allow_mode_switch = session_update_allowed(
+            chat_state.is_processing,
+            self.pending_session_operation.is_some(),
+        );
         chat_view.show_agent_selector(
             agent_items,
             Some(self.agent_type.clone()),
-            true,
-            agent_mode_switch_allowed(chat_state.is_processing, self.pending_mode_change.is_some()),
+            !self.agent.is_shared(),
+            allow_mode_switch,
         );
     }
 
@@ -554,11 +633,12 @@ impl ChatMode {
     ) {
         match action {
             AgentSelectorAction::SwitchMode(selected) => {
-                if !agent_mode_switch_allowed(
+                if !session_update_allowed(
                     chat_state.is_processing,
-                    self.pending_mode_change.is_some(),
+                    self.pending_session_operation.is_some(),
                 ) {
-                    chat_view.set_status(Some(mode_switch_unavailable_message(
+                    chat_view.set_status(Some(session_update_unavailable_message(
+                        "Agent mode",
                         chat_state.is_processing,
                     )));
                     return;
@@ -584,13 +664,9 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        if selected.id == self.agent_type {
-            return;
-        }
-
-        if self.pending_mode_change.is_some() {
+        if self.pending_session_operation.is_some() {
             chat_view.set_status(Some(
-                "An agent mode change is already in progress. Please wait.".to_string(),
+                "A Session operation is already in progress. Please wait.".to_string(),
             ));
             return;
         }
@@ -606,9 +682,9 @@ impl ChatMode {
                 .update_session_mode(&task_session_id, &task_mode_id)
                 .await
         });
-        self.pending_mode_change = Some(PendingModeChange {
+        self.pending_session_operation = Some(PendingSessionOperation {
             session_id,
-            mode_id,
+            kind: PendingSessionOperationKind::Mode { mode_id },
             started_at: Instant::now(),
             slow_notice_shown: false,
             exit_warning_shown: false,
@@ -616,64 +692,135 @@ impl ChatMode {
         });
     }
 
-    fn poll_mode_change_completion(
+    fn poll_session_operation_completion(
         &mut self,
         chat_view: &mut ChatView,
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
-    ) -> ModeChangePollOutcome {
-        let Some(pending) = self.pending_mode_change.as_mut() else {
-            return ModeChangePollOutcome::NoChange;
+    ) -> SessionUpdatePollOutcome {
+        let Some(pending) = self.pending_session_operation.as_mut() else {
+            return SessionUpdatePollOutcome::NoChange;
         };
         if !pending.handle.is_finished() {
-            if !pending.slow_notice_shown && pending.started_at.elapsed() >= MODE_CHANGE_SLOW_NOTICE
+            if !pending.slow_notice_shown
+                && pending.started_at.elapsed() >= SESSION_OPERATION_SLOW_NOTICE
             {
                 pending.slow_notice_shown = true;
                 if !pending.exit_warning_shown {
-                    chat_view.set_status(Some(
-                        "The agent mode change is still being saved. You can edit or switch sessions; sending in this session waits."
-                            .to_string(),
-                    ));
+                    let message = if self.agent.is_shared() {
+                        "The Session operation is still running. You can keep editing; changing sessions and sending wait for the result."
+                    } else {
+                        "The Session operation is still running. You can edit or switch sessions; sending in the affected Session waits."
+                    };
+                    chat_view.set_status(Some(message.to_string()));
                 }
-                return ModeChangePollOutcome::Redraw;
+                return SessionUpdatePollOutcome::Redraw;
             }
-            return ModeChangePollOutcome::NoChange;
+            return SessionUpdatePollOutcome::NoChange;
         }
         let pending = self
-            .pending_mode_change
+            .pending_session_operation
             .take()
-            .expect("finished mode task should remain present");
+            .expect("finished session operation should remain present");
         let outcome = match tokio::task::block_in_place(|| rt_handle.block_on(pending.handle)) {
-            Ok(Ok(())) => ModeSelectionApplyOutcome::Applied,
-            Ok(Err(error)) => ModeSelectionApplyOutcome::SessionUpdateFailed(error.to_string()),
-            Err(error) => ModeSelectionApplyOutcome::SessionUpdateFailed(format!(
-                "mode update task failed: {error}"
+            Ok(Ok(())) => SessionUpdateApplyOutcome::Applied,
+            Ok(Err(error)) if error.outcome_unknown() => {
+                SessionUpdateApplyOutcome::OutcomeUnknown(error.to_string())
+            }
+            Ok(Err(error)) => SessionUpdateApplyOutcome::SessionUpdateFailed(error.to_string()),
+            Err(error) => SessionUpdateApplyOutcome::SessionUpdateFailed(format!(
+                "session operation task failed: {error}"
             )),
         };
-        if chat_state.core_session_id != pending.session_id {
-            if let ModeSelectionApplyOutcome::SessionUpdateFailed(error) = &outcome {
+        let unknown_outcome = matches!(&outcome, SessionUpdateApplyOutcome::OutcomeUnknown(_));
+        if let PendingSessionOperationKind::Delete { session_name } = &pending.kind {
+            let (remove_item, status) = session_delete_feedback(session_name, &outcome);
+            if remove_item {
+                chat_view.session_selector_remove_item(&pending.session_id);
+                chat_view.forget_session_composer(&pending.session_id);
+                tracing::info!("Deleted session: {}", pending.session_id);
+            } else {
                 tracing::error!(
-                    "Failed to switch previous session {} to agent mode {}: {}",
+                    session_id = %pending.session_id,
+                    outcome = if unknown_outcome { "unknown" } else { "failed" },
+                    "Session deletion was not confirmed"
+                );
+            }
+            chat_view.set_status(Some(status.clone()));
+            if unknown_outcome {
+                return SessionUpdatePollOutcome::ExitAfterUnknownOutcome(status);
+            }
+            chat_view.reshow_session_selector();
+            return if session_update_completion_should_exit(pending.exit_warning_shown, remove_item)
+            {
+                SessionUpdatePollOutcome::ExitAfterSave
+            } else {
+                SessionUpdatePollOutcome::Redraw
+            };
+        }
+        if chat_state.core_session_id != pending.session_id {
+            if let SessionUpdateApplyOutcome::SessionUpdateFailed(error) = &outcome {
+                tracing::error!(
+                    "Failed to change previous session {} {} to {}: {}",
                     pending.session_id,
-                    pending.mode_id,
+                    pending.kind.name(),
+                    pending.kind.selected_id(),
                     error
                 );
             }
-            chat_view.set_status(Some(previous_session_mode_change_status(
-                &pending.mode_id,
+            let status = previous_session_update_status(
+                pending.kind.name(),
+                pending.kind.selected_id(),
                 &outcome,
-            )));
-            return ModeChangePollOutcome::Redraw;
+            );
+            chat_view.set_status(Some(status.clone()));
+            if unknown_outcome {
+                return SessionUpdatePollOutcome::ExitAfterUnknownOutcome(status);
+            }
+            return SessionUpdatePollOutcome::Redraw;
         }
-        let applied =
-            apply_agent_mode_feedback(&mut self.agent_type, chat_state, &pending.mode_id, outcome);
+        let applied = match &pending.kind {
+            PendingSessionOperationKind::Mode { mode_id } => {
+                apply_agent_mode_feedback(&mut self.agent_type, chat_state, mode_id, outcome)
+            }
+            PendingSessionOperationKind::Model {
+                model_id,
+                display_name,
+            } => apply_model_selection_feedback(chat_state, display_name, model_id, outcome),
+            PendingSessionOperationKind::Rename { session_name } => {
+                apply_session_rename_feedback(chat_state, session_name, outcome)
+            }
+            PendingSessionOperationKind::Delete { .. } => {
+                unreachable!("session deletion is handled before current-session feedback")
+            }
+        };
         if applied {
-            chat_view.set_status(Some(format!("Agent mode set to {}", pending.mode_id)));
+            chat_view.set_status(Some(format!(
+                "Current session {} set to {}",
+                pending.kind.name(),
+                pending.kind.selected_id()
+            )));
+        } else if unknown_outcome {
+            let message = format!(
+                "Current session {} update outcome is unknown. This TUI is closing; reopen it, restore the session, and inspect its current {} before retrying.",
+                pending.kind.name(),
+                pending.kind.name()
+            );
+            chat_view.set_status(Some(message.clone()));
+            return SessionUpdatePollOutcome::ExitAfterUnknownOutcome(message);
         } else {
-            chat_view.set_status(Some("Agent mode change failed. Please retry.".to_string()));
+            chat_view.set_status(Some(format!(
+                "Current session {} change failed. Please retry.",
+                pending.kind.name()
+            )));
         }
 
-        if applied && pending.mode_id == "HarmonyOSDev" {
+        if applied
+            && matches!(
+                &pending.kind,
+                PendingSessionOperationKind::Mode { mode_id } if mode_id == "HarmonyOSDev"
+            )
+        {
             let deveco_home = std::env::var("DEVECO_HOME").ok();
             let missing = deveco_home
                 .as_deref()
@@ -686,38 +833,50 @@ impl ChatMode {
                 );
             }
         }
-        if mode_change_completion_should_exit(pending.exit_warning_shown, applied) {
-            ModeChangePollOutcome::ExitAfterSave
+        if session_update_completion_should_exit(pending.exit_warning_shown, applied) {
+            SessionUpdatePollOutcome::ExitAfterSave
         } else {
-            ModeChangePollOutcome::Redraw
+            SessionUpdatePollOutcome::Redraw
         }
     }
 
     // ============ MCP management ============
 }
 
-fn agent_mode_switch_allowed(is_processing: bool, mode_change_pending: bool) -> bool {
-    !is_processing && !mode_change_pending
+fn session_update_allowed(is_processing: bool, update_pending: bool) -> bool {
+    !is_processing && !update_pending
 }
 
-fn mode_switch_unavailable_message(is_processing: bool) -> String {
+fn session_update_unavailable_message(setting_name: &str, is_processing: bool) -> String {
     if is_processing {
-        "Agent mode cannot be changed during the current turn. Subagent and external source management remain available."
-            .to_string()
+        format!("{setting_name} cannot be changed during the current turn.")
     } else {
-        "An agent mode change is already in progress. Please wait.".to_string()
+        "A Session operation is already in progress. Please wait.".to_string()
     }
 }
 
 #[cfg(test)]
 mod usage_metadata_tests {
-    use super::{agent_mode_switch_allowed, usage_report_metadata, SessionUsageReport};
+    use super::{
+        session_update_allowed, session_update_unavailable_message, usage_report_metadata,
+        SessionUsageReport,
+    };
 
     #[test]
-    fn mode_switch_is_rechecked_when_an_idle_popup_outlives_turn_start() {
-        assert!(agent_mode_switch_allowed(false, false));
-        assert!(!agent_mode_switch_allowed(true, false));
-        assert!(!agent_mode_switch_allowed(false, true));
+    fn session_update_is_rechecked_when_an_idle_popup_outlives_turn_start() {
+        assert!(session_update_allowed(false, false));
+        assert!(!session_update_allowed(true, false));
+        assert!(!session_update_allowed(false, true));
+    }
+
+    #[test]
+    fn active_turn_message_does_not_advertise_hidden_management() {
+        let message = session_update_unavailable_message("Agent mode", true);
+
+        assert_eq!(
+            message,
+            "Agent mode cannot be changed during the current turn."
+        );
     }
 
     #[test]

@@ -29,6 +29,9 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             session_name,
             agent_type,
             workspace_path,
+            project_workspace_path,
+            execution_target,
+            workspace_id,
             remote_connection_id,
             remote_ssh_host,
         } => Some(AgenticFrontendEvent::new(
@@ -38,6 +41,9 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "sessionName": session_name,
                 "agentType": agent_type,
                 "workspacePath": workspace_path,
+                "projectWorkspacePath": project_workspace_path,
+                "executionTarget": execution_target,
+                "workspaceId": workspace_id,
                 "remoteConnectionId": remote_connection_id,
                 "remoteSshHost": remote_ssh_host,
             }),
@@ -98,6 +104,7 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             parent_tool_call_id,
             agent_type,
             model_id,
+            focused_review_display_label,
         } => Some(AgenticFrontendEvent::new(
             "agentic://subagent-session-linked",
             json!({
@@ -108,6 +115,7 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "parentToolCallId": parent_tool_call_id,
                 "agentType": agent_type,
                 "modelId": model_id,
+                "focusedReviewDisplayLabel": focused_review_display_label,
             }),
         )),
         AgenticEvent::ModelRoundStarted {
@@ -190,6 +198,7 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
         AgenticEvent::DialogTurnCompleted {
             session_id,
             turn_id,
+            duration_ms,
             partial_recovery_reason,
             success,
             finish_reason,
@@ -200,6 +209,7 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             json!({
                 "sessionId": session_id,
                 "turnId": turn_id,
+                "durationMs": duration_ms,
                 "partialRecoveryReason": partial_recovery_reason,
                 "success": success,
                 "finishReason": finish_reason,
@@ -302,6 +312,7 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             duration_ms,
             has_summary,
             summary_source,
+            applied,
         } => Some(AgenticFrontendEvent::new(
             "agentic://context-compression-completed",
             json!({
@@ -315,6 +326,7 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "durationMs": duration_ms,
                 "hasSummary": has_summary,
                 "summarySource": summary_source,
+                "applied": applied,
             }),
         )),
         AgenticEvent::ContextCompressionFailed {
@@ -348,6 +360,10 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "newState": new_state,
             }),
         )),
+        AgenticEvent::SessionHistoryChanged { session_id } => Some(AgenticFrontendEvent::new(
+            "agentic://session-history-changed",
+            json!({ "sessionId": session_id }),
+        )),
         AgenticEvent::SessionModelAutoMigrated {
             session_id,
             previous_model_id,
@@ -359,6 +375,18 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "sessionId": session_id,
                 "previousModelId": previous_model_id,
                 "newModelId": new_model_id,
+                "reason": reason,
+            }),
+        )),
+        AgenticEvent::SessionReasoningPresetAutoCleared {
+            session_id,
+            previous_preset_id,
+            reason,
+        } => Some(AgenticFrontendEvent::new(
+            "agentic://session-reasoning-preset-auto-cleared",
+            json!({
+                "sessionId": session_id,
+                "previousPresetId": previous_preset_id,
                 "reason": reason,
             }),
         )),
@@ -464,6 +492,38 @@ mod tests {
         DeepReviewQueueReason, DeepReviewQueueState, DeepReviewQueueStatus,
         ModelRoundAttemptDiagnostic,
     };
+    use bitfun_core_types::{
+        SessionExecutionTarget, SessionExecutionTargetKind, WorktreeLifecycle,
+    };
+
+    #[test]
+    fn session_created_projects_worktree_binding_fields() {
+        let projected = project_agentic_frontend_event(AgenticEvent::SessionCreated {
+            session_id: "session-1".to_string(),
+            session_name: "Isolated task".to_string(),
+            agent_type: "agentic".to_string(),
+            workspace_path: Some("/worktrees/wt-1".to_string()),
+            project_workspace_path: Some("/repo".to_string()),
+            execution_target: Some(SessionExecutionTarget {
+                kind: SessionExecutionTargetKind::ManagedWorktree,
+                worktree_id: Some("wt-1".to_string()),
+                root_path: "/worktrees/wt-1".to_string(),
+                base_ref: Some("HEAD".to_string()),
+                base_commit: Some("0123456789abcdef".to_string()),
+                branch: None,
+                lifecycle: Some(WorktreeLifecycle::Managed),
+            }),
+            workspace_id: Some("workspace-wt-1".to_string()),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        })
+        .expect("projected");
+
+        assert_eq!(projected.payload["workspacePath"], "/worktrees/wt-1");
+        assert_eq!(projected.payload["projectWorkspacePath"], "/repo");
+        assert_eq!(projected.payload["executionTarget"]["worktreeId"], "wt-1");
+        assert_eq!(projected.payload["workspaceId"], "workspace-wt-1");
+    }
 
     #[test]
     fn thinking_chunk_projects_to_text_chunk_event() {
@@ -484,6 +544,45 @@ mod tests {
     }
 
     #[test]
+    fn context_compression_completion_projects_applied_state() {
+        let projected = project_agentic_frontend_event(AgenticEvent::ContextCompressionCompleted {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            compression_id: "compression-1".to_string(),
+            compression_count: 1,
+            tokens_before: 100,
+            tokens_after: 100,
+            compression_ratio: 1.0,
+            duration_ms: 5,
+            has_summary: false,
+            summary_source: "none".to_string(),
+            applied: false,
+        })
+        .expect("projected");
+
+        assert_eq!(projected.payload["applied"], false);
+    }
+
+    #[test]
+    fn dialog_turn_completion_projects_duration() {
+        let projected = project_agentic_frontend_event(AgenticEvent::DialogTurnCompleted {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            total_rounds: 2,
+            total_tools: 1,
+            duration_ms: 21_206,
+            partial_recovery_reason: None,
+            success: Some(true),
+            finish_reason: Some("stop".to_string()),
+            has_final_response: Some(true),
+        })
+        .expect("projected");
+
+        assert_eq!(projected.event_name, "agentic://dialog-turn-completed");
+        assert_eq!(projected.payload["durationMs"], 21_206);
+    }
+
+    #[test]
     fn subagent_session_linked_projects_the_child_model() {
         let projected = project_agentic_frontend_event(AgenticEvent::SubagentSessionLinked {
             session_id: "child-session".to_string(),
@@ -493,12 +592,17 @@ mod tests {
             parent_tool_call_id: "task-tool".to_string(),
             agent_type: Some("Explore".to_string()),
             model_id: Some("fast".to_string()),
+            focused_review_display_label: Some("Authentication boundary".to_string()),
         })
         .expect("projected");
 
         assert_eq!(projected.event_name, "agentic://subagent-session-linked");
         assert_eq!(projected.payload["sessionId"], "child-session");
         assert_eq!(projected.payload["modelId"], "fast");
+        assert_eq!(
+            projected.payload["focusedReviewDisplayLabel"],
+            "Authentication boundary"
+        );
     }
 
     #[test]
@@ -619,5 +723,24 @@ mod tests {
         assert_eq!(projected.event_name, "session_title_generated");
         assert_eq!(projected.payload["sessionId"], "session-1");
         assert!(projected.payload["timestamp"].as_i64().is_some());
+    }
+
+    #[test]
+    fn reasoning_preset_auto_clear_projects_canonical_auto_transition() {
+        let projected =
+            project_agentic_frontend_event(AgenticEvent::SessionReasoningPresetAutoCleared {
+                session_id: "session-1".to_string(),
+                previous_preset_id: "high".to_string(),
+                reason: "reasoning_catalog_updated".to_string(),
+            })
+            .expect("projected");
+
+        assert_eq!(
+            projected.event_name,
+            "agentic://session-reasoning-preset-auto-cleared"
+        );
+        assert_eq!(projected.payload["sessionId"], "session-1");
+        assert_eq!(projected.payload["previousPresetId"], "high");
+        assert_eq!(projected.payload["reason"], "reasoning_catalog_updated");
     }
 }

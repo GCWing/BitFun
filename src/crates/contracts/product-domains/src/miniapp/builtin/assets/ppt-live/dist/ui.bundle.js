@@ -203,14 +203,14 @@ var require_trees = __commonJS({
       s.pending_buf[s.pending++] = w & 255;
       s.pending_buf[s.pending++] = w >>> 8 & 255;
     }
-    function send_bits(s, value2, length) {
+    function send_bits(s, value, length) {
       if (s.bi_valid > Buf_size - length) {
-        s.bi_buf |= value2 << s.bi_valid & 65535;
+        s.bi_buf |= value << s.bi_valid & 65535;
         put_short(s, s.bi_buf);
-        s.bi_buf = value2 >> Buf_size - s.bi_valid;
+        s.bi_buf = value >> Buf_size - s.bi_valid;
         s.bi_valid += length - Buf_size;
       } else {
-        s.bi_buf |= value2 << s.bi_valid & 65535;
+        s.bi_buf |= value << s.bi_valid & 65535;
         s.bi_valid += length;
       }
     }
@@ -1550,7 +1550,7 @@ var require_deflate = __commonJS({
     }
     function deflate(strm, flush) {
       var old_flush, s;
-      var beg, val2;
+      var beg, val;
       if (!strm || !strm.state || flush > Z_BLOCK || flush < 0) {
         return strm ? err(strm, Z_STREAM_ERROR) : Z_STREAM_ERROR;
       }
@@ -1662,21 +1662,21 @@ var require_deflate = __commonJS({
               flush_pending(strm);
               beg = s.pending;
               if (s.pending === s.pending_buf_size) {
-                val2 = 1;
+                val = 1;
                 break;
               }
             }
             if (s.gzindex < s.gzhead.name.length) {
-              val2 = s.gzhead.name.charCodeAt(s.gzindex++) & 255;
+              val = s.gzhead.name.charCodeAt(s.gzindex++) & 255;
             } else {
-              val2 = 0;
+              val = 0;
             }
-            put_byte(s, val2);
-          } while (val2 !== 0);
+            put_byte(s, val);
+          } while (val !== 0);
           if (s.gzhead.hcrc && s.pending > beg) {
             strm.adler = crc32(strm.adler, s.pending_buf, s.pending - beg, beg);
           }
-          if (val2 === 0) {
+          if (val === 0) {
             s.gzindex = 0;
             s.status = COMMENT_STATE;
           }
@@ -1695,21 +1695,21 @@ var require_deflate = __commonJS({
               flush_pending(strm);
               beg = s.pending;
               if (s.pending === s.pending_buf_size) {
-                val2 = 1;
+                val = 1;
                 break;
               }
             }
             if (s.gzindex < s.gzhead.comment.length) {
-              val2 = s.gzhead.comment.charCodeAt(s.gzindex++) & 255;
+              val = s.gzhead.comment.charCodeAt(s.gzindex++) & 255;
             } else {
-              val2 = 0;
+              val = 0;
             }
-            put_byte(s, val2);
-          } while (val2 !== 0);
+            put_byte(s, val);
+          } while (val !== 0);
           if (s.gzhead.hcrc && s.pending > beg) {
             strm.adler = crc32(strm.adler, s.pending_buf, s.pending - beg, beg);
           }
-          if (val2 === 0) {
+          if (val === 0) {
             s.status = HCRC_STATE;
           }
         } else {
@@ -6663,6 +6663,18 @@ var STRINGS = {
     oneBoxPlaceholder: 'Generate from scratch: give the topic, audience, and rough page count, e.g. "Build a 10-page AI product strategy deck for executives".\nEdit: name the page and the change, e.g. "Turn page 3 into a data comparison page".\nIncremental: add new information, e.g. "Add a competitor analysis section after page 4".',
     sendPrompt: "Send",
     promptRequired: "Type what you want PPT Live to do.",
+    bubbleHintEyebrow: "PPT Live Agent",
+    bubbleHintTitle: "Start with the PPT Live button",
+    bubbleHintBody: "Click the button at the bottom-right, describe the deck you need, and keep every revision in the same conversation.",
+    bubbleHintPointer: "Open PPT Live",
+    bubblePlaceholder: 'Describe your deck, e.g. "Build a 10-page AI product strategy deck for executives" \u2014 or an edit like "Turn page 3 into a data comparison page".',
+    bubbleComposerHint: "Create and refine this deck with PPT Live",
+    bubbleWelcomeTitle: "What do you want to present?",
+    bubbleWelcomeBody: "Tell PPT Live the topic, audience, and outcome. It will plan the story, design editable slides, and keep every follow-up in this deck workspace.",
+    bubbleWorkspaceLabel: "PPT Live deck workspace",
+    bubbleSuggestionsLabel: "Start with an example",
+    bubbleBusy: "A generation is already running \u2014 stop it first or wait for it to finish.",
+    bubbleUnavailable: "The session bubble is unavailable in this runtime.",
     topicLabel: "Goal",
     topicPlaceholder: "Describe the deck you want. Mention page count or URLs only when you need them.",
     audienceLabel: "Audience",
@@ -6920,8 +6932,8 @@ var STRINGS = {
     exportPngFailed: "PNG export failed:",
     exportDeckEmpty: "Generate slides before exporting.",
     slidesEmptyHint: "Slides appear here after generation.",
-    welcomeTitle: "Describe your deck to get started",
-    welcomeSubcopy: "One prompt creates the outline, designed slides, and an editable deck you can refine page by page.",
+    welcomeTitle: "Describe your deck in the session bubble",
+    welcomeSubcopy: "Use the floating chat bubble at the bottom-right. One prompt creates the outline, designed slides, and an editable deck you can refine page by page. Pick an example to start from:",
     welcomeTip1: "10-page strategy deck",
     welcomeTip2: "Investor pitch rewrite",
     welcomeTip3: "Make this page more visual",
@@ -7019,10 +7031,6 @@ var STRINGS = {
     propertiesFont: "Font",
     propertiesColorMode: "Slide colors",
     propertiesStylePreset: "Style preset",
-    propertiesModel: "Model",
-    modelOptionAuto: "Auto (host default)",
-    modelOptionPrimary: "Primary",
-    modelOptionFast: "Fast",
     colorModeLight: "Light",
     colorModeDark: "Dark",
     fontSansSerif: "Sans-serif",
@@ -7063,6 +7071,18 @@ var STRINGS = {
     oneBoxPlaceholder: "0-1 \u751F\u6210\uFF1A\u5199\u6E05\u4E3B\u9898\u3001\u53D7\u4F17\u548C\u5927\u81F4\u9875\u6570\uFF0C\u4F8B\u5982\u201C\u4E3A\u9AD8\u7BA1\u505A\u4E00\u4EFD 10 \u9875\u7684 AI \u4EA7\u54C1\u6218\u7565 PPT\u201D\u3002\n\u4FEE\u6539\uFF1A\u6307\u660E\u54EA\u4E00\u9875\u4EE5\u53CA\u600E\u4E48\u6539\uFF0C\u4F8B\u5982\u201C\u628A\u7B2C 3 \u9875\u6539\u6210\u6570\u636E\u5BF9\u6BD4\u9875\u201D\u3002\n\u589E\u91CF\u751F\u6210\uFF1A\u8865\u5145\u65B0\u4FE1\u606F\uFF0C\u4F8B\u5982\u201C\u8865\u5145\u4E00\u6BB5\u7ADE\u54C1\u5206\u6790\uFF0C\u52A0\u5230\u7B2C 4 \u9875\u4E4B\u540E\u201D\u3002",
     sendPrompt: "\u53D1\u9001",
     promptRequired: "\u8BF7\u8F93\u5165\u4F60\u5E0C\u671B PPT Live \u505A\u4EC0\u4E48\u3002",
+    bubbleHintEyebrow: "PPT Live Agent",
+    bubbleHintTitle: "\u4ECE PPT Live \u6309\u94AE\u5F00\u59CB",
+    bubbleHintBody: "\u70B9\u51FB\u53F3\u4E0B\u89D2\u6309\u94AE\uFF0C\u63CF\u8FF0\u4F60\u8981\u7684\u6F14\u793A\u7A3F\uFF1B\u751F\u6210\u8FDB\u5EA6\u548C\u540E\u7EED\u4FEE\u6539\u90FD\u4F1A\u7559\u5728\u540C\u4E00\u4F1A\u8BDD\u4E2D\u3002",
+    bubbleHintPointer: "\u6253\u5F00 PPT Live",
+    bubblePlaceholder: '\u63CF\u8FF0\u4F60\u7684 PPT \u9700\u6C42\uFF0C\u4F8B\u5982"\u4E3A\u9AD8\u7BA1\u505A\u4E00\u4EFD 10 \u9875\u7684 AI \u4EA7\u54C1\u6218\u7565\u6C47\u62A5"\uFF0C\u6216"\u628A\u7B2C 3 \u9875\u6539\u6210\u6570\u636E\u5BF9\u6BD4\u9875"\u3002',
+    bubbleComposerHint: "\u5728\u8FD9\u4E2A\u4E3B\u9898\u4E2D\u6301\u7EED\u751F\u6210\u548C\u4FEE\u6539\u6F14\u793A\u7A3F",
+    bubbleWelcomeTitle: "\u4ECA\u5929\u60F3\u505A\u4E00\u4EFD\u4EC0\u4E48\u6837\u7684 PPT\uFF1F",
+    bubbleWelcomeBody: "\u544A\u8BC9 PPT Live \u4E3B\u9898\u3001\u53D7\u4F17\u548C\u76EE\u6807\u3002\u5B83\u4F1A\u89C4\u5212\u53D9\u4E8B\u3001\u751F\u6210\u53EF\u7F16\u8F91\u9875\u9762\uFF0C\u5E76\u628A\u540E\u7EED\u4FEE\u6539\u6301\u7EED\u4FDD\u7559\u5728\u5F53\u524D\u6F14\u793A\u7A3F\u7684\u4E13\u5C5E\u5DE5\u4F5C\u533A\u4E2D\u3002",
+    bubbleWorkspaceLabel: "PPT Live \u6F14\u793A\u7A3F\u5DE5\u4F5C\u533A",
+    bubbleSuggestionsLabel: "\u4ECE\u4E00\u4E2A\u793A\u4F8B\u5F00\u59CB",
+    bubbleBusy: "\u5F53\u524D\u5DF2\u6709\u751F\u6210\u4EFB\u52A1\u5728\u8FDB\u884C\u2014\u2014\u8BF7\u5148\u505C\u6B62\u6216\u7B49\u5F85\u5B8C\u6210\u3002",
+    bubbleUnavailable: "\u5F53\u524D\u8FD0\u884C\u73AF\u5883\u6CA1\u6709\u4F1A\u8BDD\u6C14\u6CE1\u3002",
     topicLabel: "\u76EE\u6807",
     topicPlaceholder: "\u76F4\u63A5\u63CF\u8FF0\u4F60\u60F3\u8981\u7684\u6F14\u793A\u7A3F\uFF1B\u4EC5\u5728\u9700\u8981\u65F6\u8BF4\u660E\u9875\u6570\u6216\u53C2\u8003 URL\u3002",
     audienceLabel: "\u53D7\u4F17",
@@ -7320,8 +7340,8 @@ var STRINGS = {
     exportPngFailed: "PNG \u5BFC\u51FA\u5931\u8D25\uFF1A",
     exportDeckEmpty: "\u8BF7\u5148\u751F\u6210\u5E7B\u706F\u7247\u540E\u518D\u5BFC\u51FA\u3002",
     slidesEmptyHint: "\u751F\u6210\u540E\u9875\u9762\u7F29\u7565\u56FE\u4F1A\u663E\u793A\u5728\u8FD9\u91CC\u3002",
-    welcomeTitle: "\u63CF\u8FF0\u4F60\u7684 PPT\uFF0C\u4E00\u952E\u5F00\u59CB",
-    welcomeSubcopy: "\u4E00\u6761 Prompt \u5373\u53EF\u751F\u6210\u5927\u7EB2\u3001\u8BBE\u8BA1\u9875\u9762\u548C\u53EF\u7F16\u8F91\u6F14\u793A\u7A3F\uFF0C\u4E4B\u540E\u53EF\u9010\u9875\u7EE7\u7EED\u4FEE\u6539\u3002",
+    welcomeTitle: "\u5728\u4F1A\u8BDD\u6C14\u6CE1\u91CC\u63CF\u8FF0\u4F60\u7684 PPT",
+    welcomeSubcopy: "\u70B9\u51FB\u53F3\u4E0B\u89D2\u7684\u60AC\u6D6E\u4F1A\u8BDD\u6C14\u6CE1\uFF0C\u4E00\u6761 Prompt \u5373\u53EF\u751F\u6210\u5927\u7EB2\u3001\u8BBE\u8BA1\u9875\u9762\u548C\u53EF\u7F16\u8F91\u6F14\u793A\u7A3F\uFF0C\u4E4B\u540E\u53EF\u9010\u9875\u7EE7\u7EED\u4FEE\u6539\u3002\u4E5F\u53EF\u4EE5\u5148\u9009\u4E00\u4E2A\u793A\u4F8B\uFF1A",
     welcomeTip1: "10 \u9875\u6218\u7565\u65B9\u6848",
     welcomeTip2: "\u6539\u6210\u6295\u8D44\u4EBA\u7248\u672C",
     welcomeTip3: "\u672C\u9875\u66F4\u89C6\u89C9\u5316",
@@ -7419,10 +7439,6 @@ var STRINGS = {
     propertiesFont: "\u5B57\u4F53",
     propertiesColorMode: "\u5E7B\u706F\u7247\u914D\u8272",
     propertiesStylePreset: "\u98CE\u683C\u9884\u8BBE",
-    propertiesModel: "\u6A21\u578B",
-    modelOptionAuto: "\u81EA\u52A8\uFF08\u8DDF\u968F\u4E3B\u673A\u9ED8\u8BA4\uFF09",
-    modelOptionPrimary: "\u4E3B\u6A21\u578B",
-    modelOptionFast: "\u5FEB\u901F\u6A21\u578B",
     colorModeLight: "\u6D45\u8272",
     colorModeDark: "\u6DF1\u8272",
     fontSansSerif: "\u975E\u886C\u7EBF",
@@ -7442,11 +7458,11 @@ function getLocale() {
 function translate(key, params = {}) {
   const table = STRINGS[getLocale()] || STRINGS["en-US"];
   const fallback = STRINGS["en-US"][key] || key;
-  let value2 = table[key] || fallback;
+  let value = table[key] || fallback;
   Object.entries(params).forEach(([name, replacement]) => {
-    value2 = value2.replaceAll(`{{${name}}}`, String(replacement));
+    value = value.replaceAll(`{{${name}}}`, String(replacement));
   });
-  return value2;
+  return value;
 }
 
 // src/style-presets.js
@@ -7719,12 +7735,7 @@ function getAllStylePresets(locale) {
 // src/state.js
 var STORAGE_KEY = "pptLiveStudioStateV6";
 var HISTORY_KEY = "pptLiveDeckHistoryV1";
-var SCHEMA_VERSION = 6;
-var DEFAULT_PREFERRED_MODEL = "primary";
-function normalizePreferredModel(value2) {
-  const raw = String(value2 || "").trim();
-  return raw || DEFAULT_PREFERRED_MODEL;
-}
+var SCHEMA_VERSION = 7;
 var ELEMENT_TYPES = ["text", "list", "shape", "metric", "chart", "media"];
 var THEME_PRESETS = {
   executive: {
@@ -7767,14 +7778,14 @@ var THEME_PRESETS = {
 function uid(prefix = "id") {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
-function clone(value2) {
-  return JSON.parse(JSON.stringify(value2));
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
 }
-function clamp(value2, min, max) {
-  return Math.max(min, Math.min(max, value2));
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
-function escapeHtml(value2) {
-  return String(value2 ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+function escapeHtml(value) {
+  return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 function defaultBrief() {
   return {
@@ -7817,15 +7828,15 @@ function methodologyFor(deckType = "strategy") {
   };
   return profiles[deckType] || profiles.strategy;
 }
-function normalizeDensity(value2 = "standard") {
-  const raw = String(value2 || "standard");
+function normalizeDensity(value = "standard") {
+  const raw = String(value || "standard");
   if (raw === "loose") return "spacious";
   if (["compact", "standard", "spacious"].includes(raw)) return raw;
   return "standard";
 }
 var DENSITY_LEVELS = ["spacious", "standard", "compact"];
-function densityToIndex(value2 = "standard") {
-  const normalized = normalizeDensity(value2);
+function densityToIndex(value = "standard") {
+  const normalized = normalizeDensity(value);
   const index = DENSITY_LEVELS.indexOf(normalized);
   return index >= 0 ? index : 1;
 }
@@ -7842,8 +7853,8 @@ function densityProfile(density = "standard") {
   };
   return profiles[normalized] || profiles.standard;
 }
-function normalizeSlideTarget(value2 = 0) {
-  const num = Number(value2);
+function normalizeSlideTarget(value = 0) {
+  const num = Number(value);
   if (!Number.isFinite(num) || num <= 0) return 0;
   return clamp(num, 3, 24);
 }
@@ -7882,7 +7893,6 @@ function createInitialState() {
       runId: "",
       skillKey: ""
     },
-    preferredModel: DEFAULT_PREFERRED_MODEL,
     style: defaultStyle(),
     outline: [],
     sources: { items: [], facts: [], warnings: [], summary: "", fetchedAt: 0 },
@@ -7903,10 +7913,10 @@ function createInitialState() {
   };
   return state2;
 }
-function ensureState(value2) {
+function ensureState(value) {
   const state2 = {
     ...createInitialState(),
-    ...value2 || {}
+    ...value || {}
   };
   state2.schemaVersion = SCHEMA_VERSION;
   const legacyBrief = state2.brief || {};
@@ -7923,7 +7933,7 @@ function ensureState(value2) {
     runId: String(state2.agentSession?.runId || ""),
     skillKey: String(state2.agentSession?.skillKey || "")
   };
-  state2.preferredModel = normalizePreferredModel(state2.preferredModel);
+  delete state2.preferredModel;
   state2.style = { ...defaultStyle(), ...state2.style || {} };
   delete state2.style.brandPrimary;
   delete state2.style.brandAccent;
@@ -7954,13 +7964,13 @@ function ensureState(value2) {
   state2.updatedAt = Date.now();
   return state2;
 }
-function normalizeSources(value2 = {}) {
+function normalizeSources(value = {}) {
   return {
-    items: Array.isArray(value2.items) ? value2.items : [],
-    facts: Array.isArray(value2.facts) ? value2.facts : [],
-    warnings: Array.isArray(value2.warnings) ? value2.warnings : [],
-    summary: typeof value2.summary === "string" ? value2.summary : "",
-    fetchedAt: Number(value2.fetchedAt || 0)
+    items: Array.isArray(value.items) ? value.items : [],
+    facts: Array.isArray(value.facts) ? value.facts : [],
+    warnings: Array.isArray(value.warnings) ? value.warnings : [],
+    summary: typeof value.summary === "string" ? value.summary : "",
+    fetchedAt: Number(value.fetchedAt || 0)
   };
 }
 var GENERATION_PHASE_ORDER = ["skill", "outline", "slides", "verify"];
@@ -7988,17 +7998,17 @@ function normalizeGenerationEvent(event = {}) {
     timestamp
   };
 }
-function normalizeGeneration(value2 = {}) {
-  const known = new Map((Array.isArray(value2.steps) ? value2.steps : []).map((step) => [step.id, step]));
-  const events = Array.isArray(value2.events) ? value2.events.map(normalizeGenerationEvent).slice(-GENERATION_EVENT_LIMIT) : [];
+function normalizeGeneration(value = {}) {
+  const known = new Map((Array.isArray(value.steps) ? value.steps : []).map((step) => [step.id, step]));
+  const events = Array.isArray(value.events) ? value.events.map(normalizeGenerationEvent).slice(-GENERATION_EVENT_LIMIT) : [];
   const maxEventSeq = events.reduce((max, event) => Math.max(max, Number(event.seq) || 0), 0);
-  const stream2 = Array.isArray(value2.agentStream) ? value2.agentStream.slice(-GENERATION_STREAM_LIMIT) : [];
+  const stream2 = Array.isArray(value.agentStream) ? value.agentStream.slice(-GENERATION_STREAM_LIMIT) : [];
   return {
-    active: Boolean(value2.active),
-    current: value2.current || "idle",
-    draftedCount: Number(value2.draftedCount) || 0,
-    slideTarget: Number(value2.slideTarget) || 0,
-    eventSeq: Math.max(Number(value2.eventSeq) || 0, maxEventSeq),
+    active: Boolean(value.active),
+    current: value.current || "idle",
+    draftedCount: Number(value.draftedCount) || 0,
+    slideTarget: Number(value.slideTarget) || 0,
+    eventSeq: Math.max(Number(value.eventSeq) || 0, maxEventSeq),
     steps: generationSteps().map((step) => ({
       ...step,
       status: known.get(step.id)?.status || "pending"
@@ -8062,10 +8072,10 @@ function normalizeSlide(slide, index, state2) {
   }
   return normalized;
 }
-function normalizeSlideQuality(value2 = {}) {
-  const issues = Array.isArray(value2?.issues) ? value2.issues : [];
+function normalizeSlideQuality(value = {}) {
+  const issues = Array.isArray(value?.issues) ? value.issues : [];
   return {
-    score: clamp(Number(value2?.score ?? 100), 0, 100),
+    score: clamp(Number(value?.score ?? 100), 0, 100),
     issues: issues.slice(0, 12).map((issue) => ({
       id: String(issue?.id || uid("quality")),
       severity: ["high", "medium", "low"].includes(issue?.severity) ? issue.severity : "low",
@@ -8223,8 +8233,8 @@ function extractHtmlSlideBackground(html) {
   }
   return null;
 }
-function normalizeCssColor(value2) {
-  const raw = String(value2 || "").trim().replace(/\s+!important$/i, "");
+function normalizeCssColor(value) {
+  const raw = String(value || "").trim().replace(/\s+!important$/i, "");
   if (!raw || /^transparent$/i.test(raw)) return null;
   if (/^#[0-9a-f]{3,8}$/i.test(raw)) return normalizeHex(raw, raw);
   if (/^rgb/i.test(raw) || /^hsl/i.test(raw)) return raw;
@@ -8268,13 +8278,13 @@ function contrastRatio(a, b) {
 }
 function relativeLuminance(hex2) {
   const { r, g, b } = hexToRgb(hex2);
-  return [r, g, b].map((value2) => {
-    const channel = value2 / 255;
+  return [r, g, b].map((value) => {
+    const channel = value / 255;
     return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
-  }).reduce((sum2, value2, index) => sum2 + value2 * [0.2126, 0.7152, 0.0722][index], 0);
+  }).reduce((sum2, value, index) => sum2 + value * [0.2126, 0.7152, 0.0722][index], 0);
 }
-function normalizeHex(value2, fallback) {
-  const raw = String(value2 || "").trim();
+function normalizeHex(value, fallback) {
+  const raw = String(value || "").trim();
   const short = raw.match(/^#([0-9a-f]{3})$/i);
   if (short) return `#${short[1].split("").map((part) => part + part).join("")}`.toLowerCase();
   if (/^#[0-9a-f]{6}$/i.test(raw)) return raw.toLowerCase();
@@ -8282,8 +8292,8 @@ function normalizeHex(value2, fallback) {
 }
 function hexToRgb(hex2) {
   const raw = normalizeHex(hex2, "#000000").slice(1);
-  const value2 = parseInt(raw, 16);
-  return { r: value2 >> 16 & 255, g: value2 >> 8 & 255, b: value2 & 255 };
+  const value = parseInt(raw, 16);
+  return { r: value >> 16 & 255, g: value >> 8 & 255, b: value & 255 };
 }
 function layoutForIndex(index, total) {
   if (index === 0) return "cover";
@@ -8646,7 +8656,7 @@ if (typeof window !== "undefined" && typeof document !== "undefined" && !window.
 }
 
 // src/element-model-html.js
-var escapeHtml2 = (value2) => String(value2 ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+var escapeHtml2 = (value) => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 var DEFAULT_THEME = {
   background: "#ffffff",
   ink: "#111111",
@@ -8657,20 +8667,20 @@ var DEFAULT_THEME = {
 };
 function colorMix(hex2, alpha) {
   const raw = String(hex2 || DEFAULT_THEME.primary).replace("#", "");
-  const normalized = raw.length === 3 ? raw.split("").map((value2) => value2 + value2).join("") : raw;
+  const normalized = raw.length === 3 ? raw.split("").map((value) => value + value).join("") : raw;
   const parsed = Number.parseInt(normalized, 16);
   if (!Number.isFinite(parsed)) return `rgba(15, 118, 110, ${alpha})`;
   return `rgba(${parsed >> 16 & 255}, ${parsed >> 8 & 255}, ${parsed & 255}, ${alpha})`;
 }
-function resolveElementColor(value2, theme = {}) {
+function resolveElementColor(value, theme = {}) {
   const palette = { ...DEFAULT_THEME, ...theme };
-  if (!value2 || value2 === "transparent") return "transparent";
-  if (value2 === "soft") return colorMix(palette.primary, 0.1);
-  if (Object.hasOwn(palette, value2)) return palette[value2];
-  return String(value2);
+  if (!value || value === "transparent") return "transparent";
+  if (value === "soft") return colorMix(palette.primary, 0.1);
+  if (Object.hasOwn(palette, value)) return palette[value];
+  return String(value);
 }
-function editorFontSize(value2) {
-  const size = Math.max(8, Number(value2) || 24);
+function editorFontSize(value) {
+  const size = Math.max(8, Number(value) || 24);
   const cqw = Math.round(size / 10.2 * 1e3) / 1e3;
   return `clamp(8px, ${cqw}cqw, ${size}px)`;
 }
@@ -8703,9 +8713,9 @@ function semanticElementContent(element2, mediaPlaceholder) {
     const points = Array.isArray(element2.data) ? element2.data : [];
     const max = Math.max(1, ...points.map((point) => Math.abs(Number(point?.value) || 0)));
     return `<p class="chart-title">${escapeHtml2(element2.text || "")}</p><div class="chart-bars">${points.map((point) => {
-      const value2 = Number(point?.value) || 0;
-      const height = Math.max(8, Math.abs(value2) / max * 100);
-      return `<div class="chart-item"><div class="chart-bar" style="height:${height}%"></div><p class="chart-label">${escapeHtml2(point?.label || "")}</p><p class="chart-value">${escapeHtml2(value2)}</p></div>`;
+      const value = Number(point?.value) || 0;
+      const height = Math.max(8, Math.abs(value) / max * 100);
+      return `<div class="chart-item"><div class="chart-bar" style="height:${height}%"></div><p class="chart-label">${escapeHtml2(point?.label || "")}</p><p class="chart-value">${escapeHtml2(value)}</p></div>`;
     }).join("")}</div>`;
   }
   if (type === "media") {
@@ -9084,8 +9094,8 @@ var SVG_TAG_ALLOWED_ATTRIBUTES = Object.freeze({
   mask: /* @__PURE__ */ new Set(["x", "y", "width", "height", "maskunits", "maskcontentunits"]),
   filter: /* @__PURE__ */ new Set(["x", "y", "width", "height", "filterunits", "primitiveunits"])
 });
-function canonicalizeCssEscapes(value2) {
-  let current = String(value2 || "");
+function canonicalizeCssEscapes(value) {
+  let current = String(value || "");
   for (let pass = 0; pass < 4; pass += 1) {
     const decoded = current.replace(/\\([0-9a-f]{1,6})(?:\r\n|[ \n\r\t\f])?/gi, (_match, hex2) => String.fromCodePoint(Number.parseInt(hex2, 16) || 0)).replace(/\\([^\n\r\f0-9a-f])/gi, "$1");
     if (decoded === current) break;
@@ -9093,34 +9103,34 @@ function canonicalizeCssEscapes(value2) {
   }
   return current;
 }
-function hasUnsafeCss(value2) {
-  const css = canonicalizeCssEscapes(value2).toLowerCase();
+function hasUnsafeCss(value) {
+  const css = canonicalizeCssEscapes(value).toLowerCase();
   return /url\s*\(|@import\b|@font-face\b|expression\s*\(|behavior\s*:|-moz-binding\b|(?:-webkit-)?image-set\s*\(|(?:image|cross-fade|element|src)\s*\(/.test(css);
 }
-function isSafeRasterDataImage(value2) {
-  const candidate = String(value2 || "").trim();
+function isSafeRasterDataImage(value) {
+  const candidate = String(value || "").trim();
   const match = candidate.match(/^data:image\/(png|jpeg|gif|webp)((?:;[a-z0-9._-]+=[a-z0-9._-]+)*)(;base64)?,([\s\S]*)$/i);
   if (!match) return false;
   const payload = match[4];
   if (!payload) return false;
   return match[3] ? /^[a-z0-9+/=\s]+$/i.test(payload) : !/[<>"'`]/.test(payload) && /^(?:%[0-9a-f]{2}|[a-z0-9!$&()*+,\-./:;=?@_~\s])+$/i.test(payload);
 }
-function isAllowedResource(node, name, value2) {
+function isAllowedResource(node, name, value) {
   const localName = String(node.localName || "").toLowerCase();
   const isSvg = node.namespaceURI === SVG_NAMESPACE || node.closest?.("svg");
   if ((name === "href" || name === "xlink:href") && isSvg) {
-    return /^#[a-z_][\w:.-]*$/i.test(canonicalizeCssEscapes(value2).trim());
+    return /^#[a-z_][\w:.-]*$/i.test(canonicalizeCssEscapes(value).trim());
   }
-  if (name === "src") return localName === "img" && isSafeRasterDataImage(value2);
+  if (name === "src") return localName === "img" && isSafeRasterDataImage(value);
   return false;
 }
-function normalizedLocalPaintServer(value2) {
-  const canonical = canonicalizeCssEscapes(value2).trim();
+function normalizedLocalPaintServer(value) {
+  const canonical = canonicalizeCssEscapes(value).trim();
   const match = canonical.match(/^url\(\s*(#[a-z_][\w:.-]*)\s*\)$/i);
   return match ? `url(${match[1]})` : null;
 }
-function normalizedSvgResourceAttribute(name, value2) {
-  const canonical = canonicalizeCssEscapes(value2).trim();
+function normalizedSvgResourceAttribute(name, value) {
+  const canonical = canonicalizeCssEscapes(value).trim();
   const lower = canonical.toLowerCase();
   if (name === "href" || name === "xlink:href") {
     return /^#[a-z_][\w:.-]*$/i.test(canonical) ? canonical : null;
@@ -9134,8 +9144,8 @@ function normalizedSvgResourceAttribute(name, value2) {
   }
   return /^(?:none|inherit|initial|unset)$/i.test(canonical) ? canonical : null;
 }
-function hasSafeCustomAttributeValue(value2) {
-  const canonical = canonicalizeCssEscapes(value2).trim().toLowerCase();
+function hasSafeCustomAttributeValue(value) {
+  const canonical = canonicalizeCssEscapes(value).trim().toLowerCase();
   return !/(?:javascript|vbscript|file|data|blob|https?):|(?:^|[\s"'(])\/\//.test(canonical) && !hasUnsafeCss(canonical);
 }
 function isSvgElement(node) {
@@ -9151,21 +9161,21 @@ function allowedAttributeName(node, name) {
   }
   return GLOBAL_ALLOWED_ATTRIBUTES.has(name) || Boolean(TAG_ALLOWED_ATTRIBUTES[tag]?.has(name));
 }
-function isAllowedSanitizedAttribute(node, rawName, value2) {
+function isAllowedSanitizedAttribute(node, rawName, value) {
   const name = String(rawName || "").toLowerCase();
   if (!name || name.startsWith("on") || !allowedAttributeName(node, name)) return false;
   if (name.startsWith("data-") || name.startsWith("aria-")) {
-    return hasSafeCustomAttributeValue(value2);
+    return hasSafeCustomAttributeValue(value);
   }
-  if (name === "style") return !hasUnsafeCss(value2);
+  if (name === "style") return !hasUnsafeCss(value);
   if (name === "src" || name === "href" || name === "xlink:href") {
-    return isAllowedResource(node, name, value2);
+    return isAllowedResource(node, name, value);
   }
   if (isSvgElement(node) && SVG_RESOURCE_PRESENTATION_ATTRIBUTES.has(name)) {
-    return normalizedSvgResourceAttribute(name, value2) !== null;
+    return normalizedSvgResourceAttribute(name, value) !== null;
   }
-  if (name === "xmlns") return value2 === SVG_NAMESPACE;
-  if (name === "xmlns:xlink") return value2 === "http://www.w3.org/1999/xlink";
+  if (name === "xmlns") return value === SVG_NAMESPACE;
+  if (name === "xmlns:xlink") return value === "http://www.w3.org/1999/xlink";
   return true;
 }
 function unwrapNode(node) {
@@ -9862,8 +9872,8 @@ function currentActivityLabel(state2, merged) {
   if (currentStep?.label) return `${currentStep.label}\u2026`;
   return translate("generationProgressPulse");
 }
-function truncateText(value2, limit = 200) {
-  const text2 = String(value2 || "").replace(/\s+/g, " ").trim();
+function truncateText(value, limit = 200) {
+  const text2 = String(value || "").replace(/\s+/g, " ").trim();
   if (!text2) return "";
   return text2.length > limit ? `${text2.slice(0, limit - 1)}\u2026` : text2;
 }
@@ -9892,42 +9902,39 @@ function renderGenerationOverlay(state2) {
   spinner.setAttribute("aria-hidden", isActive ? "false" : "true");
 }
 function syncFontFamilyToggle(fontFamily = "sans") {
-  const value2 = fontFamily === "serif" ? "serif" : "sans";
+  const value = fontFamily === "serif" ? "serif" : "sans";
   document.querySelectorAll("[data-font-family]").forEach((button) => {
-    const active = button.dataset.fontFamily === value2;
+    const active = button.dataset.fontFamily === value;
     button.classList.toggle("is-active", active);
     button.setAttribute("aria-pressed", active ? "true" : "false");
   });
 }
 function syncColorModeToggle(colorMode = "light") {
-  const value2 = colorMode === "dark" ? "dark" : "light";
+  const value = colorMode === "dark" ? "dark" : "light";
   document.querySelectorAll("[data-color-mode]").forEach((button) => {
-    const active = button.dataset.colorMode === value2;
+    const active = button.dataset.colorMode === value;
     button.classList.toggle("is-active", active);
     button.setAttribute("aria-pressed", active ? "true" : "false");
   });
 }
 function syncDensitySlider(density = "standard") {
-  const value2 = normalizeDensity(density);
-  const index = densityToIndex(value2);
+  const value = normalizeDensity(density);
+  const index = densityToIndex(value);
   const root = document.getElementById("densitySlider");
   if (root) {
     root.style.setProperty("--density-index", String(index));
     root.dataset.index = String(index);
     root.setAttribute("aria-valuenow", String(index));
-    const labelKey = `density${value2.charAt(0).toUpperCase()}${value2.slice(1)}`;
+    const labelKey = `density${value.charAt(0).toUpperCase()}${value.slice(1)}`;
     root.setAttribute("aria-valuetext", translate(labelKey));
     root.querySelectorAll("[data-density-index]").forEach((tick) => {
       const active = Number(tick.dataset.densityIndex) === index;
       tick.classList.toggle("is-active", active);
     });
   }
-  document.querySelector(".ppt-live")?.setAttribute("data-density", value2);
+  document.querySelector(".ppt-live")?.setAttribute("data-density", value);
 }
 function syncInputs(state2) {
-  const promptDraft = typeof state2.promptDraft === "string" ? state2.promptDraft : "";
-  const hasDeck = Array.isArray(state2.slides) && state2.slides.length > 0;
-  value("topicInput", hasDeck ? promptDraft : promptDraft || state2.brief.topic);
   text("deckTitle", state2.title || translate("defaultDeckTitle"));
   text("deckMeta", translate("slidesMeta", { count: state2.slides.length }));
   text("currentSlideIndex", String(getActiveIndex(state2) + 1));
@@ -9962,8 +9969,7 @@ function syncStylePanelFromState(state2) {
 function readInputs(state2, options = {}) {
   const includeTopic = options.includeTopic !== false;
   if (includeTopic) {
-    state2.brief.topic = val("topicInput");
-    state2.promptDraft = state2.brief.topic;
+    state2.brief.topic = String(state2.promptDraft || "").trim();
     inferBriefFromPrompt(state2);
   }
 }
@@ -10168,7 +10174,7 @@ function renderSlideCanvas(state2, handlers2) {
     canvas.classList.remove("is-html-slide");
     canvas.classList.add("is-empty");
     canvas.innerHTML = isGenerating ? `<div class="slide-empty-state"><span aria-hidden="true">PL</span><strong>${escapeHtml(translate("generationAgentWorking"))}</strong><p>${escapeHtml(translate("agentWorkingDetail"))}</p></div>` : `<div class="welcome-hero"><span class="welcome-hero__icon" aria-hidden="true">PL</span><h2>${escapeHtml(translate("welcomeTitle"))}</h2><p>${escapeHtml(translate("welcomeSubcopy"))}</p><div class="welcome-hero__tips"><button type="button" class="welcome-tip" data-welcome-prompt="${escapeHtml(translate("welcomeTip1"))}">${escapeHtml(translate("welcomeTip1"))}</button><button type="button" class="welcome-tip" data-welcome-prompt="${escapeHtml(translate("welcomeTip2"))}">${escapeHtml(translate("welcomeTip2"))}</button><button type="button" class="welcome-tip" data-welcome-prompt="${escapeHtml(translate("welcomeTip3"))}">${escapeHtml(translate("welcomeTip3"))}</button></div></div>`;
-    bindWelcomeTips(canvas);
+    bindWelcomeTips(canvas, handlers2);
     applySlideCanvasBackground(canvas, null);
     fitSlideCanvas();
     return;
@@ -10188,7 +10194,7 @@ function renderSlideCanvas(state2, handlers2) {
         </div>
       </div>
     `;
-    bindWelcomeTips(canvas);
+    bindWelcomeTips(canvas, handlers2);
     applySlideCanvasBackground(canvas, null);
     fitSlideCanvas();
     return;
@@ -10389,13 +10395,10 @@ function slideQualityBadge(slide) {
   const label = highCount ? translate("qualityNeedsReview") : translate("qualityHasWarnings");
   return `<div class="slide-quality-badge" data-severity="${highCount ? "high" : "medium"}">${escapeHtml(label)}</div>`;
 }
-function bindWelcomeTips(canvas) {
+function bindWelcomeTips(canvas, handlers2) {
   canvas.querySelectorAll("[data-welcome-prompt]").forEach((node) => {
     node.addEventListener("click", () => {
-      const input = byId("topicInput");
-      if (!input) return;
-      input.value = node.dataset.welcomePrompt || node.textContent || "";
-      input.focus();
+      handlers2?.useWelcomePrompt?.(node.dataset.welcomePrompt || node.textContent || "");
     });
   });
 }
@@ -10474,19 +10477,12 @@ function normalizeSlideDocument(html) {
 function byId(id) {
   return document.getElementById(id);
 }
-function value(id, next) {
+function text(id, value) {
   const node = byId(id);
-  if (node && document.activeElement !== node) node.value = next ?? "";
+  if (node) node.textContent = String(value ?? "");
 }
-function val(id) {
-  return byId(id)?.value || "";
-}
-function text(id, value2) {
-  const node = byId(id);
-  if (node) node.textContent = String(value2 ?? "");
-}
-function round(value2) {
-  return Math.round(Number(value2) * 10) / 10;
+function round(value) {
+  return Math.round(Number(value) * 10) / 10;
 }
 
 // src/sanitize-slide-html.js
@@ -10992,9 +10988,9 @@ function sanitizeSlideDocumentRoot(doc = document, aggressive = false) {
       if (computed.position && computed.position !== "static") style.position = computed.position;
       if (computed.display && computed.display !== "inline") style.display = computed.display;
       ["left", "top", "right", "bottom", "width", "height", "maxWidth", "maxHeight"].forEach((prop) => {
-        const value2 = computed[prop];
-        if (value2 && value2 !== "auto" && value2 !== "none" && value2 !== "0px") {
-          style[prop] = value2;
+        const value = computed[prop];
+        if (value && value !== "auto" && value !== "none" && value !== "0px") {
+          style[prop] = value;
         }
       });
       if (computed.zIndex && computed.zIndex !== "auto") style.zIndex = computed.zIndex;
@@ -11164,8 +11160,8 @@ function classifySvgPresetPolygon(points) {
   const matches = expected.every((target) => points.some((point) => Math.abs(point.x - target.x) <= tolerance && Math.abs(point.y - target.y) <= tolerance));
   return matches ? { shapeType: "diamond", rotate: 0 } : null;
 }
-function clipsOverflowAxis(value2) {
-  return value2 === "hidden" || value2 === "clip";
+function clipsOverflowAxis(value) {
+  return value === "hidden" || value === "clip";
 }
 function measureBodyDimensions(doc = document) {
   const view = doc.defaultView || window;
@@ -11527,7 +11523,7 @@ function extractSlideDataFromDocument(doc = document) {
     const match = authored.match(new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+)`, "i"));
     return match?.[1]?.trim() || "";
   };
-  const elementBoxShadow = (element2, computed) => [computed?.boxShadow, element2?.style?.boxShadow, authoredStyleValue2(element2, "box-shadow")].find((value2) => value2 && value2 !== "none") || "none";
+  const elementBoxShadow = (element2, computed) => [computed?.boxShadow, element2?.style?.boxShadow, authoredStyleValue2(element2, "box-shadow")].find((value) => value && value !== "none") || "none";
   const elementBackgroundColor = (element2, computed) => {
     if (!isTransparentBg(computed.backgroundColor)) return computed.backgroundColor;
     return element2.style.backgroundColor || authoredStyleValue2(element2, "background-color") || element2.style.background || authoredStyleValue2(element2, "background") || computed.backgroundColor;
@@ -11894,16 +11890,16 @@ function extractSlideDataFromDocument(doc = document) {
     }
     return true;
   };
-  const svgColor = (value2, fallback = null) => {
-    if (!value2 || value2 === "none" || value2 === "transparent") return fallback;
-    return rgbToHex2(value2);
+  const svgColor = (value, fallback = null) => {
+    if (!value || value === "none" || value === "transparent") return fallback;
+    return rgbToHex2(value);
   };
-  const svgNumber = (value2, fallback = 0) => {
-    const parsed = parseFloat(String(value2 || ""));
+  const svgNumber = (value, fallback = 0) => {
+    const parsed = parseFloat(String(value || ""));
     return Number.isFinite(parsed) ? parsed : fallback;
   };
-  const svgDashStyle = (value2) => {
-    const values2 = String(value2 || "").match(/[-+]?(?:\d*\.)?\d+/g)?.map(Number).filter((item) => Number.isFinite(item) && item >= 0) || [];
+  const svgDashStyle = (value) => {
+    const values2 = String(value || "").match(/[-+]?(?:\d*\.)?\d+/g)?.map(Number).filter((item) => Number.isFinite(item) && item >= 0) || [];
     if (!values2.length) return null;
     if (values2.length >= 4 && values2[2] <= values2[0] * 0.5) return "dashDot";
     if (values2.length >= 2 && values2[0] <= values2[1] * 0.5) return "dot";
@@ -11918,8 +11914,8 @@ function extractSlideDataFromDocument(doc = document) {
     left[0] * right[4] + left[2] * right[5] + left[4],
     left[1] * right[4] + left[3] * right[5] + left[5]
   ];
-  const parseSvgTransform = (value2 = "") => {
-    const raw = String(value2 || "").trim();
+  const parseSvgTransform = (value = "") => {
+    const raw = String(value || "").trim();
     let matrix = identityMatrix();
     let layoutMatrix = identityMatrix();
     let rotation = 0;
@@ -12025,7 +12021,7 @@ function extractSlideDataFromDocument(doc = document) {
           return { matrix, layoutMatrix, rotation, reliable: false };
         }
         let computedMatrix = computedTransform.matrix;
-        const originValues = String(view.getComputedStyle(item).transformOrigin || "").split(/\s+/).map((value2) => parseFloat(value2));
+        const originValues = String(view.getComputedStyle(item).transformOrigin || "").split(/\s+/).map((value) => parseFloat(value));
         if (Number.isFinite(originValues[0]) && Number.isFinite(originValues[1]) && computedTransform.rotation) {
           computedMatrix = multiplyMatrix(
             multiplyMatrix(
@@ -12052,8 +12048,8 @@ function extractSlideDataFromDocument(doc = document) {
     x: matrix[0] * point.x + matrix[2] * point.y + matrix[4],
     y: matrix[1] * point.x + matrix[3] * point.y + matrix[5]
   });
-  const parseSvgPoints = (value2) => {
-    const numbers = String(value2 || "").trim().split(/[\s,]+/).filter(Boolean).map(Number);
+  const parseSvgPoints = (value) => {
+    const numbers = String(value || "").trim().split(/[\s,]+/).filter(Boolean).map(Number);
     const points = [];
     for (let index = 0; index + 1 < numbers.length; index += 2) {
       if (Number.isFinite(numbers[index]) && Number.isFinite(numbers[index + 1])) {
@@ -12751,8 +12747,8 @@ function extractSlideDataFromDocument(doc = document) {
       const items = [];
       const ulComputed = view.getComputedStyle(el);
       const ulPaddingLeftPt = (() => {
-        const value2 = pxToPoints(ulComputed.paddingLeft);
-        return Number.isFinite(value2) && value2 >= 0 ? value2 : 18;
+        const value = pxToPoints(ulComputed.paddingLeft);
+        return Number.isFinite(value) && value >= 0 ? value : 18;
       })();
       const marginLeft = ulPaddingLeftPt * 0.5;
       const textIndent = ulPaddingLeftPt * 0.5;
@@ -12783,8 +12779,8 @@ function extractSlideDataFromDocument(doc = document) {
         items.push(...runs);
       });
       const listFrame = expandTextFrame(el, rect, null);
-      const inchPad = (value2) => {
-        const px2 = parseFloat(value2);
+      const inchPad = (value) => {
+        const px2 = parseFloat(value);
         return Number.isFinite(px2) && px2 > 0 ? pxToInch(px2) : 0;
       };
       const ulPadR = inchPad(ulComputed.paddingRight);
@@ -12946,23 +12942,23 @@ function editableSceneError(scene, code, message, sourceId = null) {
     message
   });
 }
-function isObject(value2) {
-  return Boolean(value2) && !Array.isArray(value2) && typeof value2 === "object";
+function isObject(value) {
+  return Boolean(value) && !Array.isArray(value) && typeof value === "object";
 }
-function hasOnlyFields(value2, fields) {
-  return isObject(value2) && Object.keys(value2).every((field) => fields.has(field));
+function hasOnlyFields(value, fields) {
+  return isObject(value) && Object.keys(value).every((field) => fields.has(field));
 }
-function isColor(value2) {
-  return typeof value2 === "string" && /^[0-9A-F]{6}$/i.test(value2);
+function isColor(value) {
+  return typeof value === "string" && /^[0-9A-F]{6}$/i.test(value);
 }
-function isOptionalColor(value2) {
-  return value2 === void 0 || value2 === null || isColor(value2);
+function isOptionalColor(value) {
+  return value === void 0 || value === null || isColor(value);
 }
-function isNonNegativeFinite(value2) {
-  return Number.isFinite(value2) && value2 >= 0;
+function isNonNegativeFinite(value) {
+  return Number.isFinite(value) && value >= 0;
 }
-function isPercentage(value2) {
-  return Number.isFinite(value2) && value2 >= 0 && value2 <= 100;
+function isPercentage(value) {
+  return Number.isFinite(value) && value >= 0 && value <= 100;
 }
 var TEXT_STYLE_FIELDS = /* @__PURE__ */ new Set([
   "fontSize",
@@ -13060,8 +13056,8 @@ var DASH_TYPES = /* @__PURE__ */ new Set(["dash", "dot", "dashDot"]);
 var TEXT_ALIGNS = /* @__PURE__ */ new Set(["left", "center", "right", "justify"]);
 var TEXT_VALIGNS = /* @__PURE__ */ new Set(["top", "mid", "bottom"]);
 var TEXT_VERTS = /* @__PURE__ */ new Set(["horz", "vert", "vert270", "wordArtVert", "eaVert", "mongolianVert"]);
-function hasValidMargin(value2) {
-  return value2 === void 0 || isNonNegativeFinite(value2) || Array.isArray(value2) && value2.length === 4 && value2.every(isNonNegativeFinite);
+function hasValidMargin(value) {
+  return value === void 0 || isNonNegativeFinite(value) || Array.isArray(value) && value.length === 4 && value.every(isNonNegativeFinite);
 }
 function hasValidTextStyle(style) {
   return hasOnlyFields(style, TEXT_STYLE_FIELDS) && (style.fontSize === void 0 || Number.isFinite(style.fontSize) && style.fontSize > 0) && (style.fontFace === void 0 || typeof style.fontFace === "string" && Boolean(style.fontFace.trim())) && isOptionalColor(style.color) && isOptionalColor(style.bulletColor) && ["bold", "italic"].every((field) => style[field] === void 0 || typeof style[field] === "boolean") && (style.underline === void 0 || typeof style.underline === "boolean" || typeof style.underline === "string") && (style.align === void 0 || TEXT_ALIGNS.has(style.align)) && (style.valign === void 0 || TEXT_VALIGNS.has(style.valign)) && ["lineSpacing", "paraSpaceBefore", "paraSpaceAfter"].every((field) => style[field] === void 0 || isNonNegativeFinite(style[field])) && (style.charSpacing === void 0 || Number.isFinite(style.charSpacing)) && hasValidMargin(style.margin) && (style.rotate === void 0 || Number.isFinite(style.rotate)) && (style.vert === void 0 || TEXT_VERTS.has(style.vert)) && (style.transparency === void 0 || style.transparency === null || isPercentage(style.transparency));
@@ -13070,9 +13066,9 @@ function hasValidTextRunOptions(options) {
   if (options === void 0) return true;
   return hasOnlyFields(options, TEXT_RUN_OPTION_FIELDS) && (options.fontSize === void 0 || Number.isFinite(options.fontSize) && options.fontSize > 0) && (options.fontFace === void 0 || typeof options.fontFace === "string" && Boolean(options.fontFace.trim())) && isOptionalColor(options.color) && ["bold", "italic", "breakLine"].every((field) => options[field] === void 0 || typeof options[field] === "boolean") && (options.underline === void 0 || typeof options.underline === "boolean" || typeof options.underline === "string") && (options.transparency === void 0 || isPercentage(options.transparency)) && (options.charSpacing === void 0 || Number.isFinite(options.charSpacing)) && (options.bullet === void 0 || hasOnlyFields(options.bullet, BULLET_FIELDS) && (options.bullet.type === void 0 || options.bullet.type === "bullet") && (options.bullet.indent === void 0 || isNonNegativeFinite(options.bullet.indent)) && (options.bullet.type === "bullet" || options.bullet.indent !== void 0));
 }
-function hasValidTextValue(value2, allowEmpty = false) {
-  if (!isTextValue(value2, allowEmpty)) return false;
-  return !Array.isArray(value2) || value2.every((run) => hasValidTextRunOptions(run.options));
+function hasValidTextValue(value, allowEmpty = false) {
+  if (!isTextValue(value, allowEmpty)) return false;
+  return !Array.isArray(value) || value.every((run) => hasValidTextRunOptions(run.options));
 }
 function hasValidLineStyle(style, { allowNull = false } = {}) {
   if (allowNull && (style === null || style === void 0)) return true;
@@ -13084,21 +13080,21 @@ function hasValidShapeStyle(style, shapeType) {
 function hasValidShadow(shadow) {
   return hasOnlyFields(shadow, SHADOW_FIELDS) && shadow.type === "outer" && Number.isFinite(shadow.angle) && shadow.angle >= 0 && shadow.angle < 360 && isNonNegativeFinite(shadow.blur) && isColor(shadow.color) && isNonNegativeFinite(shadow.offset) && Number.isFinite(shadow.opacity) && shadow.opacity >= 0 && shadow.opacity <= 1;
 }
-function findForbiddenFallbackMetadata(value2, {
+function findForbiddenFallbackMetadata(value, {
   allowDirectData = false,
   skipKeys = /* @__PURE__ */ new Set(),
   seen = /* @__PURE__ */ new Set()
 } = {}) {
-  if (!value2 || typeof value2 !== "object" || seen.has(value2)) return null;
-  seen.add(value2);
-  if (Array.isArray(value2)) {
-    for (const item of value2) {
+  if (!value || typeof value !== "object" || seen.has(value)) return null;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    for (const item of value) {
       const nestedField = findForbiddenFallbackMetadata(item, { seen });
       if (nestedField) return nestedField;
     }
     return null;
   }
-  for (const [field, nestedValue] of Object.entries(value2)) {
+  for (const [field, nestedValue] of Object.entries(value)) {
     if (skipKeys.has(field)) continue;
     const normalizedField = field.toLowerCase();
     if (normalizedField.includes("fallback") || normalizedField === ["suppressed", "native", "visual", "ids"].join("") || FORBIDDEN_FALLBACK_FIELDS.includes(field)) return field;
@@ -13109,11 +13105,11 @@ function findForbiddenFallbackMetadata(value2, {
   }
   return null;
 }
-function isTextValue(value2, allowEmpty = false) {
-  if (typeof value2 === "string") return allowEmpty || Boolean(value2.trim());
-  if (!Array.isArray(value2) || !value2.length) return false;
-  if (!value2.every((run) => hasOnlyFields(run, /* @__PURE__ */ new Set(["text", "options"])) && typeof run.text === "string" && (run.options === void 0 || isObject(run.options)))) return false;
-  return allowEmpty || Boolean(value2.map((run) => run.text).join("").trim());
+function isTextValue(value, allowEmpty = false) {
+  if (typeof value === "string") return allowEmpty || Boolean(value.trim());
+  if (!Array.isArray(value) || !value.length) return false;
+  if (!value.every((run) => hasOnlyFields(run, /* @__PURE__ */ new Set(["text", "options"])) && typeof run.text === "string" && (run.options === void 0 || isObject(run.options)))) return false;
+  return allowEmpty || Boolean(value.map((run) => run.text).join("").trim());
 }
 function hasValidBoxGeometry(node, { allowNegativeOrigin = false } = {}) {
   return Number.isFinite(node.x) && Number.isFinite(node.y) && Number.isFinite(node.w) && Number.isFinite(node.h) && (allowNegativeOrigin || node.x >= 0) && (allowNegativeOrigin || node.y >= 0) && node.w > 0 && node.h > 0;
@@ -13121,8 +13117,8 @@ function hasValidBoxGeometry(node, { allowNegativeOrigin = false } = {}) {
 function hasValidLineGeometry(node, { allowNegativeOrigin = false } = {}) {
   return Number.isFinite(node.x1) && Number.isFinite(node.y1) && Number.isFinite(node.x2) && Number.isFinite(node.y2) && (allowNegativeOrigin || node.x1 >= 0) && (allowNegativeOrigin || node.y1 >= 0) && (allowNegativeOrigin || node.x2 >= 0) && (allowNegativeOrigin || node.y2 >= 0) && (node.x1 !== node.x2 || node.y1 !== node.y2);
 }
-function isPositiveInteger(value2) {
-  return Number.isInteger(value2) && value2 > 0;
+function isPositiveInteger(value) {
+  return Number.isInteger(value) && value > 0;
 }
 function hasValidTableBorderSide(side) {
   return hasOnlyFields(side, TABLE_BORDER_FIELDS) && /^[0-9A-F]{6}$/i.test(side.color) && Number.isFinite(side.width) && side.width >= 0;
@@ -13135,7 +13131,7 @@ function hasValidTableBorder(border) {
   return hasOnlyFields(border, TABLE_BORDER_FIELDS) && /^[0-9A-F]{6}$/i.test(border.color) && Number.isFinite(border.width) && border.width >= 0;
 }
 function hasValidTableCellStyle(style) {
-  return hasOnlyFields(style, TABLE_CELL_STYLE_FIELDS) && (style.fill === null || /^[0-9A-F]{6}$/i.test(style.fill)) && hasValidTableBorder(style.border) && ["left", "center", "right"].includes(style.align) && (style.valign === void 0 || ["top", "mid", "bottom"].includes(style.valign)) && (style.padding === void 0 || Array.isArray(style.padding) && style.padding.length === 4 && style.padding.every((value2) => Number.isFinite(value2) && value2 >= 0)) && (style.fontFamily === void 0 || typeof style.fontFamily === "string" && Boolean(style.fontFamily.trim())) && (style.fontSize === void 0 || Number.isFinite(style.fontSize) && style.fontSize > 0) && (style.fontColor === void 0 || /^[0-9A-F]{6}$/i.test(style.fontColor)) && (style.bold === void 0 || typeof style.bold === "boolean");
+  return hasOnlyFields(style, TABLE_CELL_STYLE_FIELDS) && (style.fill === null || /^[0-9A-F]{6}$/i.test(style.fill)) && hasValidTableBorder(style.border) && ["left", "center", "right"].includes(style.align) && (style.valign === void 0 || ["top", "mid", "bottom"].includes(style.valign)) && (style.padding === void 0 || Array.isArray(style.padding) && style.padding.length === 4 && style.padding.every((value) => Number.isFinite(value) && value >= 0)) && (style.fontFamily === void 0 || typeof style.fontFamily === "string" && Boolean(style.fontFamily.trim())) && (style.fontSize === void 0 || Number.isFinite(style.fontSize) && style.fontSize > 0) && (style.fontColor === void 0 || /^[0-9A-F]{6}$/i.test(style.fontColor)) && (style.bold === void 0 || typeof style.bold === "boolean");
 }
 function hasValidTableCell(cell) {
   return hasOnlyFields(cell, TABLE_CELL_FIELDS) && Object.prototype.hasOwnProperty.call(cell, "text") && hasValidTextValue(cell.text, true) && hasValidTableCellStyle(cell.style) && (cell.rowspan === void 0 || isPositiveInteger(cell.rowspan)) && (cell.colspan === void 0 || isPositiveInteger(cell.colspan));
@@ -13178,8 +13174,8 @@ function readUint32BigEndian(bytes, offset) {
 function readUint32LittleEndian(bytes, offset) {
   return bytes[offset] + (bytes[offset + 1] << 8) + (bytes[offset + 2] << 16) + (bytes[offset + 3] << 24 >>> 0) >>> 0;
 }
-function bytesEqualAscii(bytes, offset, value2) {
-  return [...value2].every((character, index) => bytes[offset + index] === character.charCodeAt(0));
+function bytesEqualAscii(bytes, offset, value) {
+  return [...value].every((character, index) => bytes[offset + index] === character.charCodeAt(0));
 }
 function pngCrc32(bytes, start, end) {
   let crc = 4294967295;
@@ -13542,11 +13538,11 @@ function failSource(slideNumber, sourceId, code, message) {
     message
   });
 }
-function isTransparent(value2) {
-  return !value2 || value2 === "none" || value2 === "transparent" || /^rgba\([^)]*,\s*0(?:\.0+)?\s*\)$/i.test(value2);
+function isTransparent(value) {
+  return !value || value === "none" || value === "transparent" || /^rgba\([^)]*,\s*0(?:\.0+)?\s*\)$/i.test(value);
 }
-function parseColor(value2) {
-  const raw = String(value2 || "").trim().toLowerCase();
+function parseColor(value) {
+  const raw = String(value || "").trim().toLowerCase();
   const named = {
     black: "000000",
     white: "FFFFFF",
@@ -13587,8 +13583,8 @@ function parseColor(value2) {
   }
   return null;
 }
-function colorToHex(value2, fallback = null) {
-  return parseColor(value2)?.hex || fallback;
+function colorToHex(value, fallback = null) {
+  return parseColor(value)?.hex || fallback;
 }
 function elementBox(element2, bodyRect) {
   const rect = element2.getBoundingClientRect();
@@ -13682,13 +13678,13 @@ function editableErrorPreflight(doc, slideNumber) {
       element2.style?.getPropertyValue?.("mask"),
       element2.style?.getPropertyValue?.("mask-image"),
       element2.getAttribute?.("style")?.match(/(?:^|;)\s*(?:-webkit-)?mask(?:-image)?\s*:\s*([^;]+)/i)?.[1]
-    ].find((value2) => value2 && value2 !== "none");
+    ].find((value) => value && value !== "none");
     if (mask) {
       fail(slideNumber, element2, "css_mask", "CSS masks cannot be represented by editable PowerPoint objects.");
     }
     for (const attribute of ["src", "href", "xlink:href"]) {
-      const value2 = element2.getAttribute?.(attribute);
-      if (value2 && /^(?:https?:|\/\/|file:|blob:)/i.test(value2.trim())) {
+      const value = element2.getAttribute?.(attribute);
+      if (value && /^(?:https?:|\/\/|file:|blob:)/i.test(value.trim())) {
         fail(slideNumber, element2, "external_resource", "External resources are not allowed in editable slide export.");
       }
     }
@@ -13786,8 +13782,8 @@ function editableErrorPreflight(doc, slideNumber) {
     }
   }
 }
-function splitGradientArguments(value2) {
-  const inner = value2.slice(value2.indexOf("(") + 1, value2.lastIndexOf(")"));
+function splitGradientArguments(value) {
+  const inner = value.slice(value.indexOf("(") + 1, value.lastIndexOf(")"));
   const parts = [];
   let depth = 0;
   let start = 0;
@@ -13819,8 +13815,8 @@ function interpolateColor(left, right, amount) {
     alpha
   };
 }
-function parseLinearGradient(value2) {
-  const args = splitGradientArguments(value2);
+function parseLinearGradient(value) {
+  const args = splitGradientArguments(value);
   let angle = 180;
   const angleMatch = args[0]?.match(/^(-?(?:\d*\.)?\d+)(deg|turn|rad|grad)$/i);
   if (angleMatch) {
@@ -14039,20 +14035,20 @@ function authoredStyleValue(cssText, property) {
     new RegExp(`(?:^|;)\\s*${escaped}\\s*:\\s*([^;]+)`, "i")
   )?.[1]?.trim() || "";
 }
-function cssLengthToPoints(value2) {
-  const match = String(value2 || "").trim().match(/^(-?(?:\d*\.)?\d+)(pt|px)$/i);
+function cssLengthToPoints(value) {
+  const match = String(value || "").trim().match(/^(-?(?:\d*\.)?\d+)(pt|px)$/i);
   if (!match) return 0;
   const amount = Number(match[1]);
   return match[2].toLowerCase() === "pt" ? amount : amount * 0.75;
 }
-function cssLengthToInches(value2) {
-  const match = String(value2 || "").trim().match(/^(-?(?:\d*\.)?\d+)(pt|px)$/i);
+function cssLengthToInches(value) {
+  const match = String(value || "").trim().match(/^(-?(?:\d*\.)?\d+)(pt|px)$/i);
   if (!match) return 0;
   const amount = Number(match[1]);
   return amount / (match[2].toLowerCase() === "pt" ? 72 : PX_PER_IN);
 }
-function authoredBoxValues(value2) {
-  const values2 = String(value2 || "").trim().split(/\s+/).filter(Boolean);
+function authoredBoxValues(value) {
+  const values2 = String(value || "").trim().split(/\s+/).filter(Boolean);
   if (!values2.length || values2.length > 4) return null;
   if (values2.length === 1) return [values2[0], values2[0], values2[0], values2[0]];
   if (values2.length === 2) return [values2[0], values2[1], values2[0], values2[1]];
@@ -14109,7 +14105,7 @@ function tableCellStyle(cell, doc) {
       Number.parseFloat(computed.paddingRight) || 0,
       Number.parseFloat(computed.paddingBottom) || 0,
       Number.parseFloat(computed.paddingLeft) || 0
-    ].map((value2) => value2 / PX_PER_IN)
+    ].map((value) => value / PX_PER_IN)
   };
 }
 function tableZIndex(table, doc) {
@@ -14207,10 +14203,10 @@ function tableNodes(doc, bodyRect, slideNumber, paintOrderBySource) {
       })
     ].sort((left, right) => left - right);
     const boundaries = [];
-    rawBoundaries.forEach((value2) => {
+    rawBoundaries.forEach((value) => {
       const previous = boundaries.at(-1);
-      if (previous == null || Math.abs(value2 - previous) > tolerance) boundaries.push(value2);
-      else boundaries[boundaries.length - 1] = (previous + value2) / 2;
+      if (previous == null || Math.abs(value - previous) > tolerance) boundaries.push(value);
+      else boundaries[boundaries.length - 1] = (previous + value) / 2;
     });
     if (boundaries.length < 2 || Math.abs(boundaries[0] - rect.left) > tolerance || Math.abs(boundaries.at(-1) - rect.right) > tolerance) {
       fail(
@@ -14224,7 +14220,7 @@ function tableNodes(doc, bodyRect, slideNumber, paintOrderBySource) {
     boundaries[boundaries.length - 1] = rect.right;
     const columnCount = boundaries.length - 1;
     const grid = rows.map(() => Array(columnCount).fill(null));
-    const nearestBoundary = (value2) => boundaries.findIndex((boundary) => Math.abs(boundary - value2) <= tolerance);
+    const nearestBoundary = (value) => boundaries.findIndex((boundary) => Math.abs(boundary - value) <= tolerance);
     const normalizedRows = rows.map((row, rowIndex) => {
       const normalizedCells = cellsByRow[rowIndex].map((cell) => {
         const cellRect = cell.getBoundingClientRect();
@@ -14448,8 +14444,8 @@ function parseEditablePath(data, slideNumber, element2) {
   }
   return points;
 }
-function dashStyle(value2) {
-  const values2 = String(value2 || "").match(/[-+]?(?:\d*\.)?\d+/g)?.map(Number).filter((item) => Number.isFinite(item) && item >= 0) || [];
+function dashStyle(value) {
+  const values2 = String(value || "").match(/[-+]?(?:\d*\.)?\d+/g)?.map(Number).filter((item) => Number.isFinite(item) && item >= 0) || [];
   if (!values2.length) return null;
   if (values2.length >= 4 && values2[2] <= values2[0] * 0.5) return "dashDot";
   if (values2.length >= 2 && values2[0] <= values2[1] * 0.5) return "dot";
@@ -14695,7 +14691,7 @@ function normalizeDocumentToEditableScene(doc, { slideNumber, width, height } = 
       computed.textShadow,
       element2.style?.textShadow,
       authoredStyleValue(element2.dataset?.pptxAuthoredStyle, "text-shadow")
-    ].find((value2) => value2 && value2 !== "none");
+    ].find((value) => value && value !== "none");
     if (textShadow) {
       fail(
         slideNumber,
@@ -14708,7 +14704,7 @@ function normalizeDocumentToEditableScene(doc, { slideNumber, width, height } = 
       computed.boxShadow,
       element2.style?.boxShadow,
       authoredStyleValue(element2.dataset?.pptxAuthoredStyle, "box-shadow")
-    ].find((value2) => value2 && value2 !== "none");
+    ].find((value) => value && value !== "none");
     if (!boxShadow) continue;
     const sourceId = sourceIdOf(element2);
     const nativeShadow = extracted.elements.some((candidate) => candidate.sourceId === sourceId && candidate.shape?.shadow);
@@ -14803,14 +14799,14 @@ function normalizeDocumentToEditableScene(doc, { slideNumber, width, height } = 
 // src/pptx-element-export.js
 var SLIDE_W = 13.333;
 var SLIDE_H = 7.5;
-function pct(value2) {
-  return Math.max(0, Math.min(100, Number(value2) || 0)) / 100;
+function pct(value) {
+  return Math.max(0, Math.min(100, Number(value) || 0)) / 100;
 }
-function pxToPt(value2) {
-  return Math.max(6, Math.min(66, Math.round((Number(value2) || 22) * 0.58)));
+function pxToPt(value) {
+  return Math.max(6, Math.min(66, Math.round((Number(value) || 22) * 0.58)));
 }
-function hex(value2, fallback = "111827") {
-  const raw = String(value2 || "").trim();
+function hex(value, fallback = "111827") {
+  const raw = String(value || "").trim();
   if (/^#[0-9a-f]{6}$/i.test(raw)) return raw.slice(1).toUpperCase();
   if (/^[0-9a-f]{6}$/i.test(raw)) return raw.toUpperCase();
   if (/^#[0-9a-f]{3}$/i.test(raw)) {
@@ -14829,10 +14825,10 @@ function themeFor(sourceSlide = {}) {
     panel: hex(theme.panel, "FFFFFF")
   };
 }
-function resolveColor(value2, theme) {
-  const key = String(value2 || "").replace(/^#/, "").toLowerCase();
+function resolveColor(value, theme) {
+  const key = String(value || "").replace(/^#/, "").toLowerCase();
   if (theme[key]) return theme[key];
-  return hex(value2, theme.ink);
+  return hex(value, theme.ink);
 }
 function elementBox2(element2) {
   return {
@@ -14890,8 +14886,8 @@ function elementModelError(slideNumber, sourceId, code, message) {
     message
   });
 }
-function hasText(value2) {
-  return typeof value2 === "string" && Boolean(value2.trim());
+function hasText(value) {
+  return typeof value === "string" && Boolean(value.trim());
 }
 function normalizeElement2(element2, index, theme, paintOrder, slideNumber) {
   const box = elementBox2(element2);
@@ -15145,8 +15141,8 @@ function normalizeElementSlideToEditableScene(sourceSlide = {}, { slideNumber = 
 
 // src/export-degrade.js
 var MAX_REPAIRS_PER_SLIDE = 48;
-function colorToHex2(value2, fallback = null) {
-  const raw = String(value2 || "").trim().toLowerCase();
+function colorToHex2(value, fallback = null) {
+  const raw = String(value || "").trim().toLowerCase();
   if (!raw || raw === "transparent") return fallback;
   const hex2 = raw.match(/^#([\da-f]{3}|[\da-f]{6})$/i)?.[1];
   if (hex2) {
@@ -15525,7 +15521,7 @@ function buildSimplifiedEditableScene({
   if (!lines.length && slide) {
     lines = [
       String(slide.title || "").trim(),
-      ...(Array.isArray(slide.elements) ? slide.elements : []).flatMap((element2) => [element2?.text, ...Array.isArray(element2?.items) ? element2.items : []]).map((value2) => String(value2 || "").trim()).filter(Boolean)
+      ...(Array.isArray(slide.elements) ? slide.elements : []).flatMap((element2) => [element2?.text, ...Array.isArray(element2?.items) ? element2.items : []]).map((value) => String(value || "").trim()).filter(Boolean)
     ].filter(Boolean);
   }
   lines = [...new Set(lines)].map((line) => line.length > 120 ? `${line.slice(0, 117)}\u2026` : line).slice(0, 10);
@@ -15864,22 +15860,22 @@ function __rest(s, e) {
   return t;
 }
 function __awaiter(thisArg, _arguments, P, generator) {
-  function adopt(value2) {
-    return value2 instanceof P ? value2 : new P(function(resolve) {
-      resolve(value2);
+  function adopt(value) {
+    return value instanceof P ? value : new P(function(resolve) {
+      resolve(value);
     });
   }
   return new (P || (P = Promise))(function(resolve, reject) {
-    function fulfilled(value2) {
+    function fulfilled(value) {
       try {
-        step(generator.next(value2));
+        step(generator.next(value));
       } catch (e) {
         reject(e);
       }
     }
-    function rejected(value2) {
+    function rejected(value) {
       try {
-        step(generator["throw"](value2));
+        step(generator["throw"](value));
       } catch (e) {
         reject(e);
       }
@@ -16048,12 +16044,12 @@ var charFromCode = function(code) {
 var charFromHexCode = function(hex2) {
   return charFromCode(parseInt(hex2, 16));
 };
-var padStart = function(value2, length, padChar) {
+var padStart = function(value, length, padChar) {
   var padding = "";
-  for (var idx = 0, len = length - value2.length; idx < len; idx++) {
+  for (var idx = 0, len = length - value.length; idx < len; idx++) {
     padding += padChar;
   }
-  return padding + value2;
+  return padding + value;
 };
 var copyStringIntoBuffer = function(str, buffer, offset) {
   var length = str.length;
@@ -16153,12 +16149,12 @@ var parseDate = function(dateStr) {
   var date = /* @__PURE__ */ new Date(year + "-" + month + "-" + day + "T" + hours + ":" + mins + ":" + secs + tzOffset);
   return date;
 };
-var findLastMatch = function(value2, regex) {
+var findLastMatch = function(value, regex) {
   var _a;
   var position = 0;
   var lastMatch;
-  while (position < value2.length) {
-    var match = value2.substring(position).match(regex);
+  while (position < value.length) {
+    var match = value.substring(position).match(regex);
     if (!match)
       return { match: lastMatch, pos: position };
     lastMatch = match;
@@ -16171,13 +16167,13 @@ var findLastMatch = function(value2, regex) {
 var last = function(array) {
   return array[array.length - 1];
 };
-var typedArrayFor = function(value2) {
-  if (value2 instanceof Uint8Array)
-    return value2;
-  var length = value2.length;
+var typedArrayFor = function(value) {
+  if (value instanceof Uint8Array)
+    return value;
+  var length = value.length;
   var typedArray = new Uint8Array(length);
   for (var idx = 0; idx < length; idx++) {
-    typedArray[idx] = value2.charCodeAt(idx);
+    typedArray[idx] = value.charCodeAt(idx);
   }
   return typedArray;
 };
@@ -16480,12 +16476,12 @@ var arrayToString = function(array) {
 var decompressJson = function(compressedJson) {
   return arrayToString(import_pako.default.inflate(decodeFromBase642(compressedJson)));
 };
-var padStart2 = function(value2, length, padChar) {
+var padStart2 = function(value, length, padChar) {
   var padding = "";
-  for (var idx = 0, len = length - value2.length; idx < len; idx++) {
+  for (var idx = 0, len = length - value.length; idx < len; idx++) {
     padding += padChar;
   }
-  return padding + value2;
+  return padding + value;
 };
 
 // ../../../../../../../../../node_modules/.pnpm/@pdf-lib+standard-fonts@1.0.0/node_modules/@pdf-lib/standard-fonts/es/Courier-Bold.compressed.json
@@ -16655,45 +16651,45 @@ var rectanglesAreEqual = function(a, b) {
 };
 
 // ../../../../../../../../../node_modules/.pnpm/pdf-lib@1.17.1/node_modules/pdf-lib/es/utils/validators.js
-var backtick = function(val2) {
-  return "`" + val2 + "`";
+var backtick = function(val) {
+  return "`" + val + "`";
 };
-var singleQuote = function(val2) {
-  return "'" + val2 + "'";
+var singleQuote = function(val) {
+  return "'" + val + "'";
 };
-var formatValue = function(value2) {
-  var type = typeof value2;
+var formatValue = function(value) {
+  var type = typeof value;
   if (type === "string")
-    return singleQuote(value2);
+    return singleQuote(value);
   else if (type === "undefined")
-    return backtick(value2);
+    return backtick(value);
   else
-    return value2;
+    return value;
 };
-var createValueErrorMsg = function(value2, valueName, values2) {
+var createValueErrorMsg = function(value, valueName, values2) {
   var allowedValues = new Array(values2.length);
   for (var idx = 0, len = values2.length; idx < len; idx++) {
     var v = values2[idx];
     allowedValues[idx] = formatValue(v);
   }
   var joinedValues = allowedValues.join(" or ");
-  return backtick(valueName) + " must be one of " + joinedValues + ", but was actually " + formatValue(value2);
+  return backtick(valueName) + " must be one of " + joinedValues + ", but was actually " + formatValue(value);
 };
-var assertIsOneOf = function(value2, valueName, allowedValues) {
+var assertIsOneOf = function(value, valueName, allowedValues) {
   if (!Array.isArray(allowedValues)) {
     allowedValues = values(allowedValues);
   }
   for (var idx = 0, len = allowedValues.length; idx < len; idx++) {
-    if (value2 === allowedValues[idx])
+    if (value === allowedValues[idx])
       return;
   }
-  throw new TypeError(createValueErrorMsg(value2, valueName, allowedValues));
+  throw new TypeError(createValueErrorMsg(value, valueName, allowedValues));
 };
-var assertIsOneOfOrUndefined = function(value2, valueName, allowedValues) {
+var assertIsOneOfOrUndefined = function(value, valueName, allowedValues) {
   if (!Array.isArray(allowedValues)) {
     allowedValues = values(allowedValues);
   }
-  assertIsOneOf(value2, valueName, allowedValues.concat(void 0));
+  assertIsOneOf(value, valueName, allowedValues.concat(void 0));
 };
 var assertIsSubset = function(values2, valueName, allowedValues) {
   if (!Array.isArray(allowedValues)) {
@@ -16703,59 +16699,59 @@ var assertIsSubset = function(values2, valueName, allowedValues) {
     assertIsOneOf(values2[idx], valueName, allowedValues);
   }
 };
-var getType = function(val2) {
-  if (val2 === null)
+var getType = function(val) {
+  if (val === null)
     return "null";
-  if (val2 === void 0)
+  if (val === void 0)
     return "undefined";
-  if (typeof val2 === "string")
+  if (typeof val === "string")
     return "string";
-  if (isNaN(val2))
+  if (isNaN(val))
     return "NaN";
-  if (typeof val2 === "number")
+  if (typeof val === "number")
     return "number";
-  if (typeof val2 === "boolean")
+  if (typeof val === "boolean")
     return "boolean";
-  if (typeof val2 === "symbol")
+  if (typeof val === "symbol")
     return "symbol";
-  if (typeof val2 === "bigint")
+  if (typeof val === "bigint")
     return "bigint";
-  if (val2.constructor && val2.constructor.name)
-    return val2.constructor.name;
-  if (val2.name)
-    return val2.name;
-  if (val2.constructor)
-    return String(val2.constructor);
-  return String(val2);
+  if (val.constructor && val.constructor.name)
+    return val.constructor.name;
+  if (val.name)
+    return val.name;
+  if (val.constructor)
+    return String(val.constructor);
+  return String(val);
 };
-var isType = function(value2, type) {
+var isType = function(value, type) {
   if (type === "null")
-    return value2 === null;
+    return value === null;
   if (type === "undefined")
-    return value2 === void 0;
+    return value === void 0;
   if (type === "string")
-    return typeof value2 === "string";
+    return typeof value === "string";
   if (type === "number")
-    return typeof value2 === "number" && !isNaN(value2);
+    return typeof value === "number" && !isNaN(value);
   if (type === "boolean")
-    return typeof value2 === "boolean";
+    return typeof value === "boolean";
   if (type === "symbol")
-    return typeof value2 === "symbol";
+    return typeof value === "symbol";
   if (type === "bigint")
-    return typeof value2 === "bigint";
+    return typeof value === "bigint";
   if (type === Date)
-    return value2 instanceof Date;
+    return value instanceof Date;
   if (type === Array)
-    return value2 instanceof Array;
+    return value instanceof Array;
   if (type === Uint8Array)
-    return value2 instanceof Uint8Array;
+    return value instanceof Uint8Array;
   if (type === ArrayBuffer)
-    return value2 instanceof ArrayBuffer;
+    return value instanceof ArrayBuffer;
   if (type === Function)
-    return value2 instanceof Function;
-  return value2 instanceof type[0];
+    return value instanceof Function;
+  return value instanceof type[0];
 };
-var createTypeErrorMsg = function(value2, valueName, types) {
+var createTypeErrorMsg = function(value, valueName, types) {
   var allowedTypes = new Array(types.length);
   for (var idx = 0, len = types.length; idx < len; idx++) {
     var type = types[idx];
@@ -16783,51 +16779,51 @@ var createTypeErrorMsg = function(value2, valueName, types) {
       allowedTypes[idx] = backtick(type[1]);
   }
   var joinedTypes = allowedTypes.join(" or ");
-  return backtick(valueName) + " must be of type " + joinedTypes + ", but was actually of type " + backtick(getType(value2));
+  return backtick(valueName) + " must be of type " + joinedTypes + ", but was actually of type " + backtick(getType(value));
 };
-var assertIs = function(value2, valueName, types) {
+var assertIs = function(value, valueName, types) {
   for (var idx = 0, len = types.length; idx < len; idx++) {
-    if (isType(value2, types[idx]))
+    if (isType(value, types[idx]))
       return;
   }
-  throw new TypeError(createTypeErrorMsg(value2, valueName, types));
+  throw new TypeError(createTypeErrorMsg(value, valueName, types));
 };
-var assertOrUndefined = function(value2, valueName, types) {
-  assertIs(value2, valueName, types.concat("undefined"));
+var assertOrUndefined = function(value, valueName, types) {
+  assertIs(value, valueName, types.concat("undefined"));
 };
 var assertEachIs = function(values2, valueName, types) {
   for (var idx = 0, len = values2.length; idx < len; idx++) {
     assertIs(values2[idx], valueName, types);
   }
 };
-var assertRange = function(value2, valueName, min, max) {
-  assertIs(value2, valueName, ["number"]);
+var assertRange = function(value, valueName, min, max) {
+  assertIs(value, valueName, ["number"]);
   assertIs(min, "min", ["number"]);
   assertIs(max, "max", ["number"]);
   max = Math.max(min, max);
-  if (value2 < min || value2 > max) {
-    throw new Error(backtick(valueName) + " must be at least " + min + " and at most " + max + ", but was actually " + value2);
+  if (value < min || value > max) {
+    throw new Error(backtick(valueName) + " must be at least " + min + " and at most " + max + ", but was actually " + value);
   }
 };
-var assertRangeOrUndefined = function(value2, valueName, min, max) {
-  assertIs(value2, valueName, ["number", "undefined"]);
-  if (typeof value2 === "number")
-    assertRange(value2, valueName, min, max);
+var assertRangeOrUndefined = function(value, valueName, min, max) {
+  assertIs(value, valueName, ["number", "undefined"]);
+  if (typeof value === "number")
+    assertRange(value, valueName, min, max);
 };
-var assertMultiple = function(value2, valueName, multiplier) {
-  assertIs(value2, valueName, ["number"]);
-  if (value2 % multiplier !== 0) {
-    throw new Error(backtick(valueName) + " must be a multiple of " + multiplier + ", but was actually " + value2);
+var assertMultiple = function(value, valueName, multiplier) {
+  assertIs(value, valueName, ["number"]);
+  if (value % multiplier !== 0) {
+    throw new Error(backtick(valueName) + " must be a multiple of " + multiplier + ", but was actually " + value);
   }
 };
-var assertInteger = function(value2, valueName) {
-  if (!Number.isInteger(value2)) {
-    throw new Error(backtick(valueName) + " must be an integer, but was actually " + value2);
+var assertInteger = function(value, valueName) {
+  if (!Number.isInteger(value)) {
+    throw new Error(backtick(valueName) + " must be an integer, but was actually " + value);
   }
 };
-var assertPositive = function(value2, valueName) {
-  if (![1, 0].includes(Math.sign(value2))) {
-    throw new Error(backtick(valueName) + " must be a positive number or 0, but was actually " + value2);
+var assertPositive = function(value, valueName) {
+  if (![1, 0].includes(Math.sign(value))) {
+    throw new Error(backtick(valueName) + " must be a positive number or 0, but was actually " + value);
   }
 };
 
@@ -17058,9 +17054,9 @@ var InvalidPDFDateStringError = (
   /** @class */
   (function(_super) {
     __extends(InvalidPDFDateStringError2, _super);
-    function InvalidPDFDateStringError2(value2) {
+    function InvalidPDFDateStringError2(value) {
       var _this = this;
-      var msg = 'Attempted to convert "' + value2 + '" to a date, but it does not match the PDF date string format.';
+      var msg = 'Attempted to convert "' + value + '" to a date, but it does not match the PDF date string format.';
       _this = _super.call(this, msg) || this;
       return _this;
     }
@@ -17162,9 +17158,9 @@ var NumberParsingError = (
   /** @class */
   (function(_super) {
     __extends(NumberParsingError2, _super);
-    function NumberParsingError2(pos, value2) {
+    function NumberParsingError2(pos, value) {
       var _this = this;
-      var msg = "Failed to parse number " + ("(line:" + pos.line + " col:" + pos.column + " offset=" + pos.offset + '): "' + value2 + '"');
+      var msg = "Failed to parse number " + ("(line:" + pos.line + " col:" + pos.column + " offset=" + pos.offset + '): "' + value + '"');
       _this = _super.call(this, msg) || this;
       return _this;
     }
@@ -17425,10 +17421,10 @@ var PDFNumber = (
   /** @class */
   (function(_super) {
     __extends(PDFNumber2, _super);
-    function PDFNumber2(value2) {
+    function PDFNumber2(value) {
       var _this = _super.call(this) || this;
-      _this.numberValue = value2;
-      _this.stringValue = numberToString(value2);
+      _this.numberValue = value;
+      _this.stringValue = numberToString(value);
       return _this;
     }
     PDFNumber2.prototype.asNumber = function() {
@@ -17450,8 +17446,8 @@ var PDFNumber = (
       offset += copyStringIntoBuffer(this.stringValue, buffer, offset);
       return this.stringValue.length;
     };
-    PDFNumber2.of = function(value2) {
-      return new PDFNumber2(value2);
+    PDFNumber2.of = function(value) {
+      return new PDFNumber2(value);
     };
     return PDFNumber2;
   })(PDFObject_default)
@@ -17580,12 +17576,12 @@ var PDFBool = (
   /** @class */
   (function(_super) {
     __extends(PDFBool2, _super);
-    function PDFBool2(enforcer, value2) {
+    function PDFBool2(enforcer, value) {
       var _this = this;
       if (enforcer !== ENFORCER)
         throw new PrivateConstructorError("PDFBool");
       _this = _super.call(this) || this;
-      _this.value = value2;
+      _this.value = value;
       return _this;
     }
     PDFBool2.prototype.asBoolean = function() {
@@ -17829,21 +17825,21 @@ var PDFDict = (
     PDFDict2.prototype.entries = function() {
       return Array.from(this.dict.entries());
     };
-    PDFDict2.prototype.set = function(key, value2) {
-      this.dict.set(key, value2);
+    PDFDict2.prototype.set = function(key, value) {
+      this.dict.set(key, value);
     };
     PDFDict2.prototype.get = function(key, preservePDFNull) {
       if (preservePDFNull === void 0) {
         preservePDFNull = false;
       }
-      var value2 = this.dict.get(key);
-      if (value2 === PDFNull_default && !preservePDFNull)
+      var value = this.dict.get(key);
+      if (value === PDFNull_default && !preservePDFNull)
         return void 0;
-      return value2;
+      return value;
     };
     PDFDict2.prototype.has = function(key) {
-      var value2 = this.dict.get(key);
-      return value2 !== void 0 && value2 !== PDFNull_default;
+      var value = this.dict.get(key);
+      return value !== void 0 && value !== PDFNull_default;
     };
     PDFDict2.prototype.lookupMaybe = function(key) {
       var _a;
@@ -17852,10 +17848,10 @@ var PDFDict = (
         types[_i - 1] = arguments[_i];
       }
       var preservePDFNull = types.includes(PDFNull_default);
-      var value2 = (_a = this.context).lookupMaybe.apply(_a, __spreadArrays([this.get(key, preservePDFNull)], types));
-      if (value2 === PDFNull_default && !preservePDFNull)
+      var value = (_a = this.context).lookupMaybe.apply(_a, __spreadArrays([this.get(key, preservePDFNull)], types));
+      if (value === PDFNull_default && !preservePDFNull)
         return void 0;
-      return value2;
+      return value;
     };
     PDFDict2.prototype.lookup = function(key) {
       var _a;
@@ -17864,10 +17860,10 @@ var PDFDict = (
         types[_i - 1] = arguments[_i];
       }
       var preservePDFNull = types.includes(PDFNull_default);
-      var value2 = (_a = this.context).lookup.apply(_a, __spreadArrays([this.get(key, preservePDFNull)], types));
-      if (value2 === PDFNull_default && !preservePDFNull)
+      var value = (_a = this.context).lookup.apply(_a, __spreadArrays([this.get(key, preservePDFNull)], types));
+      if (value === PDFNull_default && !preservePDFNull)
         return void 0;
-      return value2;
+      return value;
     };
     PDFDict2.prototype.delete = function(key) {
       return this.dict.delete(key);
@@ -17890,8 +17886,8 @@ var PDFDict = (
       var clone2 = PDFDict2.withContext(context || this.context);
       var entries = this.entries();
       for (var idx = 0, len = entries.length; idx < len; idx++) {
-        var _a = entries[idx], key = _a[0], value2 = _a[1];
-        clone2.set(key, value2);
+        var _a = entries[idx], key = _a[0], value = _a[1];
+        clone2.set(key, value);
       }
       return clone2;
     };
@@ -17899,8 +17895,8 @@ var PDFDict = (
       var dictString = "<<\n";
       var entries = this.entries();
       for (var idx = 0, len = entries.length; idx < len; idx++) {
-        var _a = entries[idx], key = _a[0], value2 = _a[1];
-        dictString += key.toString() + " " + value2.toString() + "\n";
+        var _a = entries[idx], key = _a[0], value = _a[1];
+        dictString += key.toString() + " " + value.toString() + "\n";
       }
       dictString += ">>";
       return dictString;
@@ -17909,8 +17905,8 @@ var PDFDict = (
       var size = 5;
       var entries = this.entries();
       for (var idx = 0, len = entries.length; idx < len; idx++) {
-        var _a = entries[idx], key = _a[0], value2 = _a[1];
-        size += key.sizeInBytes() + value2.sizeInBytes() + 2;
+        var _a = entries[idx], key = _a[0], value = _a[1];
+        size += key.sizeInBytes() + value.sizeInBytes() + 2;
       }
       return size;
     };
@@ -17921,10 +17917,10 @@ var PDFDict = (
       buffer[offset++] = CharCodes_default.Newline;
       var entries = this.entries();
       for (var idx = 0, len = entries.length; idx < len; idx++) {
-        var _a = entries[idx], key = _a[0], value2 = _a[1];
+        var _a = entries[idx], key = _a[0], value = _a[1];
         offset += key.copyBytesInto(buffer, offset);
         buffer[offset++] = CharCodes_default.Space;
-        offset += value2.copyBytesInto(buffer, offset);
+        offset += value.copyBytesInto(buffer, offset);
         buffer[offset++] = CharCodes_default.Newline;
       }
       buffer[offset++] = CharCodes_default.GreaterThan;
@@ -18110,12 +18106,12 @@ var PDFOperator = (
       return PDFOperator2.of(this.name, args);
     };
     PDFOperator2.prototype.toString = function() {
-      var value2 = "";
+      var value = "";
       for (var idx = 0, len = this.args.length; idx < len; idx++) {
-        value2 += String(this.args[idx]) + " ";
+        value += String(this.args[idx]) + " ";
       }
-      value2 += this.name;
-      return value2;
+      value += this.name;
+      return value;
     };
     PDFOperator2.prototype.sizeInBytes = function() {
       var size = 0;
@@ -18289,11 +18285,11 @@ var PDFContentStream = (
       return PDFContentStream2.of(dict.clone(context), operators, encode);
     };
     PDFContentStream2.prototype.getContentsString = function() {
-      var value2 = "";
+      var value = "";
       for (var idx = 0, len = this.operators.length; idx < len; idx++) {
-        value2 += this.operators[idx] + "\n";
+        value += this.operators[idx] + "\n";
       }
-      return value2;
+      return value;
     };
     PDFContentStream2.prototype.getUnencodedContents = function() {
       var buffer = new Uint8Array(this.getUnencodedContentsSize());
@@ -18450,9 +18446,9 @@ var PDFContext = (
         var keys = Object.keys(literal);
         for (var idx = 0, len = keys.length; idx < len; idx++) {
           var key = keys[idx];
-          var value2 = literal[key];
-          if (value2 !== void 0)
-            dict.set(PDFName_default.of(key), this.obj(value2));
+          var value = literal[key];
+          if (value !== void 0)
+            dict.set(PDFName_default.of(key), this.obj(value));
         }
         return dict;
       }
@@ -18533,8 +18529,8 @@ var PDFPageLeaf = (
       var clone2 = PDFPageLeaf2.fromMapWithContext(/* @__PURE__ */ new Map(), context || this.context, this.autoNormalizeCTM);
       var entries = this.entries();
       for (var idx = 0, len = entries.length; idx < len; idx++) {
-        var _a = entries[idx], key = _a[0], value2 = _a[1];
-        clone2.set(key, value2);
+        var _a = entries[idx], key = _a[0], value = _a[1];
+        clone2.set(key, value);
       }
       return clone2;
     };
@@ -18732,9 +18728,9 @@ var PDFObjectCopier = (
         var InheritableEntries = PDFPageLeaf_default.InheritableEntries;
         for (var idx = 0, len = InheritableEntries.length; idx < len; idx++) {
           var key = PDFName_default.of(InheritableEntries[idx]);
-          var value2 = clonedPage.getInheritableAttribute(key);
-          if (!clonedPage.get(key) && value2)
-            clonedPage.set(key, value2);
+          var value = clonedPage.getInheritableAttribute(key);
+          if (!clonedPage.get(key) && value)
+            clonedPage.set(key, value);
         }
         clonedPage.delete(PDFName_default.of("Parent"));
         return _this.copyPDFDict(clonedPage);
@@ -18747,8 +18743,8 @@ var PDFObjectCopier = (
         _this.traversedObjects.set(originalDict, clonedDict);
         var entries = originalDict.entries();
         for (var idx = 0, len = entries.length; idx < len; idx++) {
-          var _a = entries[idx], key = _a[0], value2 = _a[1];
-          clonedDict.set(key, _this.copy(value2));
+          var _a = entries[idx], key = _a[0], value = _a[1];
+          clonedDict.set(key, _this.copy(value));
         }
         return clonedDict;
       };
@@ -18759,8 +18755,8 @@ var PDFObjectCopier = (
         var clonedArray = originalArray.clone(_this.dest);
         _this.traversedObjects.set(originalArray, clonedArray);
         for (var idx = 0, len = originalArray.size(); idx < len; idx++) {
-          var value2 = originalArray.get(idx);
-          clonedArray.set(idx, _this.copy(value2));
+          var value = originalArray.get(idx);
+          clonedArray.set(idx, _this.copy(value));
         }
         return clonedArray;
       };
@@ -18772,8 +18768,8 @@ var PDFObjectCopier = (
         _this.traversedObjects.set(originalStream, clonedStream);
         var entries = originalStream.dict.entries();
         for (var idx = 0, len = entries.length; idx < len; idx++) {
-          var _a = entries[idx], key = _a[0], value2 = _a[1];
-          clonedStream.dict.set(key, _this.copy(value2));
+          var _a = entries[idx], key = _a[0], value = _a[1];
+          clonedStream.dict.set(key, _this.copy(value));
         }
         return clonedStream;
       };
@@ -19021,12 +19017,12 @@ var PDFObjectStream = (
       return PDFObjectStream2.withContextAndObjects(context || this.dict.context, this.objects.slice(), this.encode);
     };
     PDFObjectStream2.prototype.getContentsString = function() {
-      var value2 = this.offsetsString;
+      var value = this.offsetsString;
       for (var idx = 0, len = this.objects.length; idx < len; idx++) {
         var _a = this.objects[idx], object = _a[1];
-        value2 += object + "\n";
+        value += object + "\n";
       }
-      return value2;
+      return value;
     };
     PDFObjectStream2.prototype.getUnencodedContents = function() {
       var buffer = new Uint8Array(this.getUnencodedContentsSize());
@@ -19351,23 +19347,23 @@ var PDFCrossRefStream = (
     PDFCrossRefStream2.prototype.getContentsString = function() {
       var entryTuples = this.entryTuplesCache.access();
       var byteWidths = this.maxByteWidthsCache.access();
-      var value2 = "";
+      var value = "";
       for (var entryIdx = 0, entriesLen = entryTuples.length; entryIdx < entriesLen; entryIdx++) {
         var _a = entryTuples[entryIdx], first = _a[0], second = _a[1], third = _a[2];
         var firstBytes = reverseArray(bytesFor(first));
         var secondBytes = reverseArray(bytesFor(second));
         var thirdBytes = reverseArray(bytesFor(third));
         for (var idx = byteWidths[0] - 1; idx >= 0; idx--) {
-          value2 += (firstBytes[idx] || 0).toString(2);
+          value += (firstBytes[idx] || 0).toString(2);
         }
         for (var idx = byteWidths[1] - 1; idx >= 0; idx--) {
-          value2 += (secondBytes[idx] || 0).toString(2);
+          value += (secondBytes[idx] || 0).toString(2);
         }
         for (var idx = byteWidths[2] - 1; idx >= 0; idx--) {
-          value2 += (thirdBytes[idx] || 0).toString(2);
+          value += (thirdBytes[idx] || 0).toString(2);
         }
       }
-      return value2;
+      return value;
     };
     PDFCrossRefStream2.prototype.getUnencodedContents = function() {
       var entryTuples = this.entryTuplesCache.access();
@@ -19533,9 +19529,9 @@ var PDFHexString = (
   /** @class */
   (function(_super) {
     __extends(PDFHexString2, _super);
-    function PDFHexString2(value2) {
+    function PDFHexString2(value) {
       var _this = _super.call(this) || this;
-      _this.value = value2;
+      _this.value = value;
       return _this;
     }
     PDFHexString2.prototype.asBytes = function() {
@@ -19583,11 +19579,11 @@ var PDFHexString = (
       buffer[offset++] = CharCodes_default.GreaterThan;
       return this.value.length + 2;
     };
-    PDFHexString2.of = function(value2) {
-      return new PDFHexString2(value2);
+    PDFHexString2.of = function(value) {
+      return new PDFHexString2(value);
     };
-    PDFHexString2.fromText = function(value2) {
-      var encoded = utf16Encode(value2);
+    PDFHexString2.fromText = function(value) {
+      var encoded = utf16Encode(value);
       var hex2 = "";
       for (var idx = 0, len = encoded.length; idx < len; idx++) {
         hex2 += toHexStringOfMinLength(encoded[idx], 4);
@@ -19706,8 +19702,8 @@ var cmapHexFormat = function() {
   }
   return "<" + values2.join("") + ">";
 };
-var cmapHexString = function(value2) {
-  return toHexStringOfMinLength(value2, 4);
+var cmapHexString = function(value) {
+  return toHexStringOfMinLength(value, 4);
 };
 var cmapCodePointFormat = function(codePoint) {
   if (isWithinBMP(codePoint))
@@ -19765,9 +19761,9 @@ var PDFString = (
   /** @class */
   (function(_super) {
     __extends(PDFString2, _super);
-    function PDFString2(value2) {
+    function PDFString2(value) {
       var _this = _super.call(this) || this;
-      _this.value = value2;
+      _this.value = value;
       return _this;
     }
     PDFString2.prototype.asBytes = function() {
@@ -19853,8 +19849,8 @@ var PDFString = (
       buffer[offset++] = CharCodes_default.RightParen;
       return this.value.length + 2;
     };
-    PDFString2.of = function(value2) {
-      return new PDFString2(value2);
+    PDFString2.of = function(value) {
+      return new PDFString2(value);
     };
     PDFString2.fromDate = function(date) {
       var year = padStart(String(date.getUTCFullYear()), 4, "0");
@@ -20879,19 +20875,19 @@ UPNG.decode._readInterlace = function(data, out) {
       var cdi = di + y * bpll << 3;
       while (col < w) {
         if (bpp == 1) {
-          var val2 = data[cdi >> 3];
-          val2 = val2 >> 7 - (cdi & 7) & 1;
-          img[row * bpl + (col >> 3)] |= val2 << 7 - ((col & 7) << 0);
+          var val = data[cdi >> 3];
+          val = val >> 7 - (cdi & 7) & 1;
+          img[row * bpl + (col >> 3)] |= val << 7 - ((col & 7) << 0);
         }
         if (bpp == 2) {
-          var val2 = data[cdi >> 3];
-          val2 = val2 >> 6 - (cdi & 7) & 3;
-          img[row * bpl + (col >> 2)] |= val2 << 6 - ((col & 3) << 1);
+          var val = data[cdi >> 3];
+          val = val >> 6 - (cdi & 7) & 3;
+          img[row * bpl + (col >> 2)] |= val << 6 - ((col & 3) << 1);
         }
         if (bpp == 4) {
-          var val2 = data[cdi >> 3];
-          val2 = val2 >> 4 - (cdi & 7) & 15;
-          img[row * bpl + (col >> 1)] |= val2 << 4 - ((col & 1) << 2);
+          var val = data[cdi >> 3];
+          val = val >> 4 - (cdi & 7) & 15;
+          img[row * bpl + (col >> 1)] |= val << 4 - ((col & 1) << 2);
         }
         if (bpp >= 8) {
           var ii = row * bpl + col * cbpp;
@@ -23064,8 +23060,8 @@ var FlateStream = (
       var size = 1 << maxLen;
       var codes = new Int32Array(size);
       for (var len = 1, code = 0, skip = 2; len <= maxLen; ++len, code <<= 1, skip <<= 1) {
-        for (var val2 = 0; val2 < n; ++val2) {
-          if (lengths[val2] === len) {
+        for (var val = 0; val < n; ++val) {
+          if (lengths[val] === len) {
             var code2 = 0;
             var t = code;
             for (i = 0; i < len; ++i) {
@@ -23073,7 +23069,7 @@ var FlateStream = (
               t >>= 1;
             }
             for (i = code2; i < size; i += skip) {
-              codes[i] = len << 16 | val2;
+              codes[i] = len << 16 | val;
             }
             ++code;
           }
@@ -24183,9 +24179,9 @@ var PDFAcroButton = (
       }
       var values2 = [];
       for (var idx = 0, len = opt.size(); idx < len; idx++) {
-        var value2 = opt.lookup(idx);
-        if (value2 instanceof PDFString_default || value2 instanceof PDFHexString_default) {
-          values2.push(value2);
+        var value = opt.lookup(idx);
+        if (value instanceof PDFString_default || value instanceof PDFHexString_default) {
+          values2.push(value);
         }
       }
       return values2;
@@ -24253,17 +24249,17 @@ var PDFAcroCheckBox = (
     function PDFAcroCheckBox2() {
       return _super !== null && _super.apply(this, arguments) || this;
     }
-    PDFAcroCheckBox2.prototype.setValue = function(value2) {
+    PDFAcroCheckBox2.prototype.setValue = function(value) {
       var _a;
       var onValue = (_a = this.getOnValue()) !== null && _a !== void 0 ? _a : PDFName_default.of("Yes");
-      if (value2 !== onValue && value2 !== PDFName_default.of("Off")) {
+      if (value !== onValue && value !== PDFName_default.of("Off")) {
         throw new InvalidAcroFieldValueError();
       }
-      this.dict.set(PDFName_default.of("V"), value2);
+      this.dict.set(PDFName_default.of("V"), value);
       var widgets = this.getWidgets();
       for (var idx = 0, len = widgets.length; idx < len; idx++) {
         var widget = widgets[idx];
-        var state2 = widget.getOnValue() === value2 ? value2 : PDFName_default.of("Off");
+        var state2 = widget.getOnValue() === value ? value : PDFName_default.of("Off");
         widget.setAppearanceState(state2);
       }
     };
@@ -24359,9 +24355,9 @@ var PDFAcroChoice = (
     PDFAcroChoice2.prototype.valuesAreValid = function(values2) {
       var options = this.getOptions();
       var _loop_1 = function(idx2, len2) {
-        var val2 = values2[idx2].decodeText();
+        var val = values2[idx2].decodeText();
         if (!options.find(function(o) {
-          return val2 === (o.display || o.value).decodeText();
+          return val === (o.display || o.value).decodeText();
         })) {
           return { value: false };
         }
@@ -24378,9 +24374,9 @@ var PDFAcroChoice = (
         var indices = new Array(values2.length);
         var options = this.getOptions();
         var _loop_2 = function(idx2, len2) {
-          var val2 = values2[idx2].decodeText();
+          var val = values2[idx2].decodeText();
           indices[idx2] = options.findIndex(function(o) {
-            return val2 === (o.display || o.value).decodeText();
+            return val === (o.display || o.value).decodeText();
           });
         };
         for (var idx = 0, len = values2.length; idx < len; idx++) {
@@ -24398,9 +24394,9 @@ var PDFAcroChoice = (
       if (v instanceof PDFArray_default) {
         var values2 = [];
         for (var idx = 0, len = v.size(); idx < len; idx++) {
-          var value2 = v.lookup(idx);
-          if (value2 instanceof PDFString_default || value2 instanceof PDFHexString_default) {
-            values2.push(value2);
+          var value = v.lookup(idx);
+          if (value instanceof PDFString_default || value instanceof PDFHexString_default) {
+            values2.push(value);
           }
         }
         return values2;
@@ -24413,8 +24409,8 @@ var PDFAcroChoice = (
     PDFAcroChoice2.prototype.setOptions = function(options) {
       var newOpt = new Array(options.length);
       for (var idx = 0, len = options.length; idx < len; idx++) {
-        var _a = options[idx], value2 = _a.value, display = _a.display;
-        newOpt[idx] = this.dict.context.obj([value2, display || value2]);
+        var _a = options[idx], value = _a.value, display = _a.display;
+        newOpt[idx] = this.dict.context.obj([value, display || value]);
       }
       this.dict.set(PDFName_default.of("Opt"), this.dict.context.obj(newOpt));
     };
@@ -24558,8 +24554,8 @@ var PDFAcroText = (
       var _a;
       return (_a = this.Q()) === null || _a === void 0 ? void 0 : _a.asNumber();
     };
-    PDFAcroText2.prototype.setValue = function(value2) {
-      this.dict.set(PDFName_default.of("V"), value2);
+    PDFAcroText2.prototype.setValue = function(value) {
+      this.dict.set(PDFName_default.of("V"), value);
     };
     PDFAcroText2.prototype.removeValue = function() {
       this.dict.delete(PDFName_default.of("V"));
@@ -24619,16 +24615,16 @@ var PDFAcroRadioButton = (
     function PDFAcroRadioButton2() {
       return _super !== null && _super.apply(this, arguments) || this;
     }
-    PDFAcroRadioButton2.prototype.setValue = function(value2) {
+    PDFAcroRadioButton2.prototype.setValue = function(value) {
       var onValues = this.getOnValues();
-      if (!onValues.includes(value2) && value2 !== PDFName_default.of("Off")) {
+      if (!onValues.includes(value) && value !== PDFName_default.of("Off")) {
         throw new InvalidAcroFieldValueError();
       }
-      this.dict.set(PDFName_default.of("V"), value2);
+      this.dict.set(PDFName_default.of("V"), value);
       var widgets = this.getWidgets();
       for (var idx = 0, len = widgets.length; idx < len; idx++) {
         var widget = widgets[idx];
-        var state2 = widget.getOnValue() === value2 ? value2 : PDFName_default.of("Off");
+        var state2 = widget.getOnValue() === value ? value : PDFName_default.of("Off");
         widget.setAppearanceState(state2);
       }
     };
@@ -25100,26 +25096,26 @@ var BaseParser = (
       this.capNumbers = capNumbers;
     }
     BaseParser2.prototype.parseRawInt = function() {
-      var value2 = "";
+      var value = "";
       while (!this.bytes.done()) {
         var byte = this.bytes.peek();
         if (!IsDigit[byte])
           break;
-        value2 += charFromCode(this.bytes.next());
+        value += charFromCode(this.bytes.next());
       }
-      var numberValue = Number(value2);
-      if (!value2 || !isFinite(numberValue)) {
-        throw new NumberParsingError(this.bytes.position(), value2);
+      var numberValue = Number(value);
+      if (!value || !isFinite(numberValue)) {
+        throw new NumberParsingError(this.bytes.position(), value);
       }
       return numberValue;
     };
     BaseParser2.prototype.parseRawNumber = function() {
-      var value2 = "";
+      var value = "";
       while (!this.bytes.done()) {
         var byte = this.bytes.peek();
         if (!IsNumeric[byte])
           break;
-        value2 += charFromCode(this.bytes.next());
+        value += charFromCode(this.bytes.next());
         if (byte === CharCodes_default.Period)
           break;
       }
@@ -25127,19 +25123,19 @@ var BaseParser = (
         var byte = this.bytes.peek();
         if (!IsDigit[byte])
           break;
-        value2 += charFromCode(this.bytes.next());
+        value += charFromCode(this.bytes.next());
       }
-      var numberValue = Number(value2);
-      if (!value2 || !isFinite(numberValue)) {
-        throw new NumberParsingError(this.bytes.position(), value2);
+      var numberValue = Number(value);
+      if (!value || !isFinite(numberValue)) {
+        throw new NumberParsingError(this.bytes.position(), value);
       }
       if (numberValue > Number.MAX_SAFE_INTEGER) {
         if (this.capNumbers) {
-          var msg = "Parsed number that is too large for some PDF readers: " + value2 + ", using Number.MAX_SAFE_INTEGER instead.";
+          var msg = "Parsed number that is too large for some PDF readers: " + value + ", using Number.MAX_SAFE_INTEGER instead.";
           console.warn(msg);
           return Number.MAX_SAFE_INTEGER;
         } else {
-          var msg = "Parsed number that is too large for some PDF readers: " + value2 + ", not capping.";
+          var msg = "Parsed number that is too large for some PDF readers: " + value + ", not capping.";
           console.warn(msg);
         }
       }
@@ -25386,21 +25382,21 @@ var PDFObjectParser = (
       return PDFNumber_default.of(firstNum);
     };
     PDFObjectParser2.prototype.parseHexString = function() {
-      var value2 = "";
+      var value = "";
       this.bytes.assertNext(CharCodes_default.LessThan);
       while (!this.bytes.done() && this.bytes.peek() !== CharCodes_default.GreaterThan) {
-        value2 += charFromCode(this.bytes.next());
+        value += charFromCode(this.bytes.next());
       }
       this.bytes.assertNext(CharCodes_default.GreaterThan);
-      return PDFHexString_default.of(value2);
+      return PDFHexString_default.of(value);
     };
     PDFObjectParser2.prototype.parseString = function() {
       var nestingLvl = 0;
       var isEscaped = false;
-      var value2 = "";
+      var value = "";
       while (!this.bytes.done()) {
         var byte = this.bytes.next();
-        value2 += charFromCode(byte);
+        value += charFromCode(byte);
         if (!isEscaped) {
           if (byte === CharCodes_default.LeftParen)
             nestingLvl += 1;
@@ -25413,7 +25409,7 @@ var PDFObjectParser = (
           isEscaped = false;
         }
         if (nestingLvl === 0) {
-          return PDFString_default.of(value2.substring(1, value2.length - 1));
+          return PDFString_default.of(value.substring(1, value.length - 1));
         }
       }
       throw new UnbalancedParenthesisError(this.bytes.position());
@@ -25449,8 +25445,8 @@ var PDFObjectParser = (
       var dict = /* @__PURE__ */ new Map();
       while (!this.bytes.done() && this.bytes.peek() !== CharCodes_default.GreaterThan && this.bytes.peekAhead(1) !== CharCodes_default.GreaterThan) {
         var key = this.parseName();
-        var value2 = this.parseObject();
-        dict.set(key, value2);
+        var value = this.parseObject();
+        dict.set(key, value);
         this.skipWhitespaceAndComments();
       }
       this.skipWhitespaceAndComments();
@@ -28410,8 +28406,8 @@ var PDFDropdown = (
       var rawOptions = this.acroField.getOptions();
       var options = new Array(rawOptions.length);
       for (var idx = 0, len = options.length; idx < len; idx++) {
-        var _a = rawOptions[idx], display = _a.display, value2 = _a.value;
-        options[idx] = (display !== null && display !== void 0 ? display : value2).decodeText();
+        var _a = rawOptions[idx], display = _a.display, value = _a.value;
+        options[idx] = (display !== null && display !== void 0 ? display : value).decodeText();
       }
       return options;
     };
@@ -28611,8 +28607,8 @@ var PDFOptionList = (
       var rawOptions = this.acroField.getOptions();
       var options = new Array(rawOptions.length);
       for (var idx = 0, len = options.length; idx < len; idx++) {
-        var _a = rawOptions[idx], display = _a.display, value2 = _a.value;
-        options[idx] = (display !== null && display !== void 0 ? display : value2).decodeText();
+        var _a = rawOptions[idx], display = _a.display, value = _a.value;
+        options[idx] = (display !== null && display !== void 0 ? display : value).decodeText();
       }
       return options;
     };
@@ -28807,18 +28803,18 @@ var PDFRadioGroup = (
       return onOptions;
     };
     PDFRadioGroup2.prototype.getSelected = function() {
-      var value2 = this.acroField.getValue();
-      if (value2 === PDFName_default.of("Off"))
+      var value = this.acroField.getValue();
+      if (value === PDFName_default.of("Off"))
         return void 0;
       var exportValues = this.acroField.getExportValues();
       if (exportValues) {
         var onValues = this.acroField.getOnValues();
         for (var idx = 0, len = onValues.length; idx < len; idx++) {
-          if (onValues[idx] === value2)
+          if (onValues[idx] === value)
             return exportValues[idx].decodeText();
         }
       }
-      return value2.decodeText();
+      return value.decodeText();
     };
     PDFRadioGroup2.prototype.select = function(option) {
       assertIs(option, "option", ["string"]);
@@ -28835,9 +28831,9 @@ var PDFRadioGroup = (
         }
       } else {
         for (var idx = 0, len = onValues.length; idx < len; idx++) {
-          var value2 = onValues[idx];
-          if (value2.decodeText() === option)
-            this.acroField.setValue(value2);
+          var value = onValues[idx];
+          if (value.decodeText() === option)
+            this.acroField.setValue(value);
         }
       }
     };
@@ -28964,11 +28960,11 @@ var PDFTextField = (
       return _this;
     }
     PDFTextField2.prototype.getText = function() {
-      var value2 = this.acroField.getValue();
-      if (!value2 && this.isRichFormatted()) {
+      var value = this.acroField.getValue();
+      if (!value && this.isRichFormatted()) {
         throw new RichTextFieldReadError(this.getName());
       }
-      return value2 === null || value2 === void 0 ? void 0 : value2.decodeText();
+      return value === null || value === void 0 ? void 0 : value.decodeText();
     };
     PDFTextField2.prototype.setText = function(text2) {
       assertOrUndefined(text2, "text", ["string"]);
@@ -29448,8 +29444,8 @@ var PDFForm = (
       var _a;
       var refOrDict = widget.getNormalAppearance();
       if (refOrDict instanceof PDFDict_default && (field instanceof PDFCheckBox_default || field instanceof PDFRadioGroup_default)) {
-        var value2 = field.acroField.getValue();
-        var ref = (_a = refOrDict.get(value2)) !== null && _a !== void 0 ? _a : refOrDict.get(PDFName_default.of("Off"));
+        var value = field.acroField.getValue();
+        var ref = (_a = refOrDict.get(value)) !== null && _a !== void 0 ? _a : refOrDict.get(PDFName_default.of("Off"));
         if (ref instanceof PDFRef_default) {
           refOrDict = ref;
         }
@@ -31220,22 +31216,22 @@ var import_jszip3 = __toESM(require_jszip_min(), 1);
 // ../../../../../../../../../node_modules/.pnpm/pptxgenjs@4.0.1/node_modules/pptxgenjs/dist/pptxgen.es.js
 var import_jszip = __toESM(require_jszip_min());
 function __awaiter2(thisArg, _arguments, P, generator) {
-  function adopt(value2) {
-    return value2 instanceof P ? value2 : new P(function(resolve) {
-      resolve(value2);
+  function adopt(value) {
+    return value instanceof P ? value : new P(function(resolve) {
+      resolve(value);
     });
   }
   return new (P || (P = Promise))(function(resolve, reject) {
-    function fulfilled(value2) {
+    function fulfilled(value) {
       try {
-        step(generator.next(value2));
+        step(generator.next(value));
       } catch (e) {
         reject(e);
       }
     }
-    function rejected(value2) {
+    function rejected(value) {
       try {
-        step(generator["throw"](value2));
+        step(generator["throw"](value));
       } catch (e) {
         reject(e);
       }
@@ -32113,9 +32109,9 @@ function getSlidesForTableRows(tableRows = [], tableProps = {}, presLayout, mast
       const firstRow = tableRows[0] || [];
       firstRow.forEach(() => arrColW.push(tableProps.colW));
       tableProps.colW = [];
-      arrColW.forEach((val2) => {
+      arrColW.forEach((val) => {
         if (Array.isArray(tableProps.colW))
-          tableProps.colW.push(val2);
+          tableProps.colW.push(val);
       });
     } else {
       tableProps.colW = [];
@@ -32358,17 +32354,17 @@ function genTableToSlides(pptx, tabEleId, options = {}, masterSlide) {
         if (window.getComputedStyle(cell).getPropertyValue("padding-left")) {
           cellOpts.margin = [0, 0, 0, 0];
           const sidesPad = ["padding-top", "padding-right", "padding-bottom", "padding-left"];
-          sidesPad.forEach((val2, idxs) => {
-            cellOpts.margin[idxs] = Math.round(Number(window.getComputedStyle(cell).getPropertyValue(val2).replace(/\D/gi, "")));
+          sidesPad.forEach((val, idxs) => {
+            cellOpts.margin[idxs] = Math.round(Number(window.getComputedStyle(cell).getPropertyValue(val).replace(/\D/gi, "")));
           });
         }
         if (window.getComputedStyle(cell).getPropertyValue("border-top-width") || window.getComputedStyle(cell).getPropertyValue("border-right-width") || window.getComputedStyle(cell).getPropertyValue("border-bottom-width") || window.getComputedStyle(cell).getPropertyValue("border-left-width")) {
           cellOpts.border = [null, null, null, null];
           const sidesBor = ["top", "right", "bottom", "left"];
-          sidesBor.forEach((val2, idxb) => {
-            const intBorderW = Math.round(Number(window.getComputedStyle(cell).getPropertyValue("border-" + val2 + "-width").replace("px", "")));
+          sidesBor.forEach((val, idxb) => {
+            const intBorderW = Math.round(Number(window.getComputedStyle(cell).getPropertyValue("border-" + val + "-width").replace("px", "")));
             let arrRGB = [];
-            arrRGB = window.getComputedStyle(cell).getPropertyValue("border-" + val2 + "-color").replace(/\s+/gi, "").replace("rgba(", "").replace("rgb(", "").replace(")", "").split(",");
+            arrRGB = window.getComputedStyle(cell).getPropertyValue("border-" + val + "-color").replace(/\s+/gi, "").replace("rgba(", "").replace("rgb(", "").replace(")", "").split(",");
             const strBorderC = rgbToHex(Number(arrRGB[0]), Number(arrRGB[1]), Number(arrRGB[2]));
             cellOpts.border[idxb] = { pt: intBorderW, color: strBorderC };
           });
@@ -32566,8 +32562,8 @@ function addChartDefinition(target, type, data, opt) {
   options.lineDataSymbolLineSize = options.lineDataSymbolLineSize && !isNaN(options.lineDataSymbolLineSize) ? valToPts(options.lineDataSymbolLineSize) : valToPts(0.75);
   if (options.layout) {
     ["x", "y", "w", "h"].forEach((key) => {
-      const val2 = options.layout[key];
-      if (isNaN(Number(val2)) || val2 < 0 || val2 > 1) {
+      const val = options.layout[key];
+      if (isNaN(Number(val)) || val < 0 || val > 1) {
         console.warn("Warning: chart.layout." + key + " can only be 0-1");
         delete options.layout[key];
       }
@@ -33281,13 +33277,13 @@ var Slide = class {
     this._slideObjects = [];
     this._slideNumberProps = ((_a = this._slideLayout) === null || _a === void 0 ? void 0 : _a._slideNumberProps) ? this._slideLayout._slideNumberProps : null;
   }
-  set bkgd(value2) {
-    this._bkgd = value2;
+  set bkgd(value) {
+    this._bkgd = value;
     if (!this._background || !this._background.color) {
       if (!this._background)
         this._background = {};
-      if (typeof value2 === "string")
-        this._background.color = value2;
+      if (typeof value === "string")
+        this._background.color = value;
     }
   }
   get bkgd() {
@@ -33301,14 +33297,14 @@ var Slide = class {
   get background() {
     return this._background;
   }
-  set color(value2) {
-    this._color = value2;
+  set color(value) {
+    this._color = value;
   }
   get color() {
     return this._color;
   }
-  set hidden(value2) {
-    this._hidden = value2;
+  set hidden(value) {
+    this._hidden = value;
   }
   get hidden() {
     return this._hidden;
@@ -33316,9 +33312,9 @@ var Slide = class {
   /**
    * @type {SlideNumberProps}
    */
-  set slideNumber(value2) {
-    this._slideNumberProps = value2;
-    this._setSlideNum(value2);
+  set slideNumber(value) {
+    this._slideNumberProps = value;
+    this._setSlideNum(value);
   }
   get slideNumber() {
     return this._slideNumberProps;
@@ -33522,9 +33518,9 @@ function createExcelWorksheet(chartObject, zip) {
             strSheetXml += `<c r="${getExcelColName(idx + 1)}1" t="s"><v>${idx}</v></c>`;
           }
           strSheetXml += "</row>";
-          data[0].values.forEach((val2, idx) => {
+          data[0].values.forEach((val, idx) => {
             strSheetXml += `<row r="${idx + 2}" spans="1:${intBubbleCols}">`;
-            strSheetXml += `<c r="A${idx + 2}"><v>${val2}</v></c>`;
+            strSheetXml += `<c r="A${idx + 2}"><v>${val}</v></c>`;
             let idxColLtr = 2;
             for (let idy = 1; idy < data.length; idy++) {
               strSheetXml += `<c r="${getExcelColName(idxColLtr)}${idx + 2}"><v>${data[idy].values[idx] || ""}</v></c>`;
@@ -33541,9 +33537,9 @@ function createExcelWorksheet(chartObject, zip) {
             strSheetXml += `<c r="${getExcelColName(idx + 1)}1" t="s"><v>${idx}</v></c>`;
           }
           strSheetXml += "</row>";
-          data[0].values.forEach((val2, idx) => {
+          data[0].values.forEach((val, idx) => {
             strSheetXml += `<row r="${idx + 2}" spans="1:${data.length}">`;
-            strSheetXml += `<c r="A${idx + 2}"><v>${val2}</v></c>`;
+            strSheetXml += `<c r="A${idx + 2}"><v>${val}</v></c>`;
             for (let idy = 1; idy < data.length; idy++) {
               strSheetXml += `<c r="${getExcelColName(idy + 1)}${idx + 2}"><v>${data[idy].values[idx] || data[idy].values[idx] === 0 ? data[idy].values[idx] : ""}</v></c>`;
             }
@@ -33863,8 +33859,8 @@ function makeChartType(chartType, data, opts, valAxisId, catAxisId, isMultiTypeC
           strXml += "</c:marker>";
         }
         if ((chartType === CHART_TYPE.BAR || chartType === CHART_TYPE.BAR3D) && data.length === 1 && (opts.chartColors && opts.chartColors !== BARCHART_COLORS && opts.chartColors.length > 1 || ((_a = opts.invertedColors) === null || _a === void 0 ? void 0 : _a.length))) {
-          obj.values.forEach((value2, index) => {
-            const arrColors = value2 < 0 ? opts.invertedColors || opts.chartColors || BARCHART_COLORS : opts.chartColors || [];
+          obj.values.forEach((value, index) => {
+            const arrColors = value < 0 ? opts.invertedColors || opts.chartColors || BARCHART_COLORS : opts.chartColors || [];
             strXml += "  <c:dPt>";
             strXml += `    <c:idx val="${index}"/>`;
             strXml += '      <c:invertIfNegative val="0"/>';
@@ -33921,7 +33917,7 @@ function makeChartType(chartType, data, opts, valAxisId, catAxisId, isMultiTypeC
           strXml += "    <c:numCache>";
           strXml += "      <c:formatCode>" + (opts.valLabelFormatCode || opts.dataTableFormatCode || "General") + "</c:formatCode>";
           strXml += `      <c:ptCount val="${obj.labels[0].length}"/>`;
-          obj.values.forEach((value2, idx) => strXml += `<c:pt idx="${idx}"><c:v>${value2 || value2 === 0 ? value2 : ""}</c:v></c:pt>`);
+          obj.values.forEach((value, idx) => strXml += `<c:pt idx="${idx}"><c:v>${value || value === 0 ? value : ""}</c:v></c:pt>`);
           strXml += "    </c:numCache>";
           strXml += "  </c:numRef>";
           strXml += "</c:val>";
@@ -34134,8 +34130,8 @@ function makeChartType(chartType, data, opts, valAxisId, catAxisId, isMultiTypeC
           }
         }
         if (data.length === 1 && opts.chartColors !== BARCHART_COLORS) {
-          obj.values.forEach((value2, index) => {
-            const arrColors = value2 < 0 ? opts.invertedColors || opts.chartColors || BARCHART_COLORS : opts.chartColors || [];
+          obj.values.forEach((value, index) => {
+            const arrColors = value < 0 ? opts.invertedColors || opts.chartColors || BARCHART_COLORS : opts.chartColors || [];
             strXml += "  <c:dPt>";
             strXml += `    <c:idx val="${index}"/>`;
             strXml += '      <c:invertIfNegative val="0"/>';
@@ -34160,8 +34156,8 @@ function makeChartType(chartType, data, opts, valAxisId, catAxisId, isMultiTypeC
           strXml += "    <c:numCache>";
           strXml += "      <c:formatCode>General</c:formatCode>";
           strXml += `      <c:ptCount val="${data[0].values.length}"/>`;
-          data[0].values.forEach((value2, idx2) => {
-            strXml += `<c:pt idx="${idx2}"><c:v>${value2 || value2 === 0 ? value2 : ""}</c:v></c:pt>`;
+          data[0].values.forEach((value, idx2) => {
+            strXml += `<c:pt idx="${idx2}"><c:v>${value || value === 0 ? value : ""}</c:v></c:pt>`;
           });
           strXml += "    </c:numCache>";
           strXml += "  </c:numRef>";
@@ -34252,8 +34248,8 @@ function makeChartType(chartType, data, opts, valAxisId, catAxisId, isMultiTypeC
           strXml += "    <c:numCache>";
           strXml += "      <c:formatCode>General</c:formatCode>";
           strXml += `      <c:ptCount val="${data[0].values.length}"/>`;
-          data[0].values.forEach((value2, idx2) => {
-            strXml += `<c:pt idx="${idx2}"><c:v>${value2 || value2 === 0 ? value2 : ""}</c:v></c:pt>`;
+          data[0].values.forEach((value, idx2) => {
+            strXml += `<c:pt idx="${idx2}"><c:v>${value || value === 0 ? value : ""}</c:v></c:pt>`;
           });
           strXml += "    </c:numCache>";
           strXml += "  </c:numRef>";
@@ -34279,8 +34275,8 @@ function makeChartType(chartType, data, opts, valAxisId, catAxisId, isMultiTypeC
         strXml += "      <c:numCache>";
         strXml += "        <c:formatCode>General</c:formatCode>";
         strXml += `           <c:ptCount val="${obj.sizes.length}"/>`;
-        obj.sizes.forEach((value2, idx2) => {
-          strXml += `<c:pt idx="${idx2}"><c:v>${value2 || ""}</c:v></c:pt>`;
+        obj.sizes.forEach((value, idx2) => {
+          strXml += `<c:pt idx="${idx2}"><c:v>${value || ""}</c:v></c:pt>`;
         });
         strXml += "      </c:numCache>";
         strXml += "    </c:numRef>";
@@ -34411,8 +34407,8 @@ function makeChartType(chartType, data, opts, valAxisId, catAxisId, isMultiTypeC
       strXml += `      <c:f>Sheet1!$B$2:$B$${optsChartData.labels[0].length + 1}</c:f>`;
       strXml += "      <c:numCache>";
       strXml += `           <c:ptCount val="${optsChartData.labels[0].length}"/>`;
-      optsChartData.values.forEach((value2, idx) => {
-        strXml += `<c:pt idx="${idx}"><c:v>${value2 || value2 === 0 ? value2 : ""}</c:v></c:pt>`;
+      optsChartData.values.forEach((value, idx) => {
+        strXml += `<c:pt idx="${idx}"><c:v>${value || value === 0 ? value : ""}</c:v></c:pt>`;
       });
       strXml += "      </c:numCache>";
       strXml += "    </c:numRef>";
@@ -35760,9 +35756,9 @@ function genXmlTextBody(slideObj) {
       textObj.options.paraSpaceAfter = textObj.options.paraSpaceAfter || opts.paraSpaceAfter;
       paragraphPropXml = genXmlParagraphProperties(textObj, false);
       strSlideXml += paragraphPropXml.replace("<a:pPr></a:pPr>", "");
-      Object.entries(opts).filter(([key]) => !(textObj.options.hyperlink && key === "color")).forEach(([key, val2]) => {
+      Object.entries(opts).filter(([key]) => !(textObj.options.hyperlink && key === "color")).forEach(([key, val]) => {
         if (key !== "bullet" && !textObj.options[key])
-          textObj.options[key] = val2;
+          textObj.options[key] = val;
       });
       strSlideXml += genXmlTextRun(textObj);
       if (!textObj.text && opts.fontSize || textObj.options.fontSize) {
@@ -36059,10 +36055,10 @@ function makeXmlViewProps() {
 }
 var VERSION = "4.0.1";
 var PptxGenJS = class {
-  set layout(value2) {
-    const newLayout = this.LAYOUTS[value2];
+  set layout(value) {
+    const newLayout = this.LAYOUTS[value];
     if (newLayout) {
-      this._layout = value2;
+      this._layout = value;
       this._presLayout = newLayout;
     } else {
       throw new Error("UNKNOWN-LAYOUT");
@@ -36074,44 +36070,44 @@ var PptxGenJS = class {
   get version() {
     return this._version;
   }
-  set author(value2) {
-    this._author = value2;
+  set author(value) {
+    this._author = value;
   }
   get author() {
     return this._author;
   }
-  set company(value2) {
-    this._company = value2;
+  set company(value) {
+    this._company = value;
   }
   get company() {
     return this._company;
   }
-  set revision(value2) {
-    this._revision = value2;
+  set revision(value) {
+    this._revision = value;
   }
   get revision() {
     return this._revision;
   }
-  set subject(value2) {
-    this._subject = value2;
+  set subject(value) {
+    this._subject = value;
   }
   get subject() {
     return this._subject;
   }
-  set theme(value2) {
-    this._theme = value2;
+  set theme(value) {
+    this._theme = value;
   }
   get theme() {
     return this._theme;
   }
-  set title(value2) {
-    this._title = value2;
+  set title(value) {
+    this._title = value;
   }
   get title() {
     return this._title;
   }
-  set rtlMode(value2) {
-    this._rtlMode = value2;
+  set rtlMode(value) {
+    this._rtlMode = value;
   }
   get rtlMode() {
     return this._rtlMode;
@@ -36615,11 +36611,11 @@ function toImagePayload(src) {
 function tableCellBorders(border = {}) {
   const uniform = border.color ? { color: border.color, width: border.width || 0 } : null;
   return ["top", "right", "bottom", "left"].map((side) => {
-    const value2 = border[side] || uniform || { color: "000000", width: 0 };
+    const value = border[side] || uniform || { color: "000000", width: 0 };
     return {
-      type: value2.width > 0 ? "solid" : "none",
-      color: value2.color,
-      pt: value2.width
+      type: value.width > 0 ? "solid" : "none",
+      color: value.color,
+      pt: value.width
     };
   });
 }
@@ -36751,9 +36747,9 @@ function pptxTextMargin(margin) {
   const [top, right, bottom, left] = margin;
   return [left, right, bottom, top].map((inches) => inches * 72);
 }
-function pptxTextValue(value2) {
-  if (!Array.isArray(value2)) return value2;
-  return value2.map((run) => {
+function pptxTextValue(value) {
+  if (!Array.isArray(value)) return value;
+  return value.map((run) => {
     const options = withResolvedFontFace({ ...run.options || {} }, run.text);
     if (options.bullet?.type === "bullet") {
       const bullet = { ...options.bullet };
@@ -37106,8 +37102,8 @@ function uint8ToBase64(bytes) {
   }
   return btoa(binary);
 }
-function exportFileSafe(value2) {
-  return String(value2 || "ppt-live").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 96);
+function exportFileSafe(value) {
+  return String(value || "ppt-live").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 96);
 }
 async function pptxToExportResult(pptx, deck) {
   const base64 = await pptx.write({ outputType: "base64" });
@@ -37266,8 +37262,8 @@ function downloadBase64File(base64, filename, mimeType) {
   link.remove();
   URL.revokeObjectURL(url);
 }
-function fileSafe(value2) {
-  return String(value2 || "ppt-live").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 96);
+function fileSafe(value) {
+  return String(value || "ppt-live").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 96);
 }
 function deckCss() {
   return `
@@ -37368,7 +37364,7 @@ ${prompt}`;
 
 ## \u7EA6\u675F
 
-- \u7528\u6237\u53EA\u80FD\u770B\u5230 PPT Live UI\uFF0C\u65E0\u6CD5\u56DE\u7B54\u63D0\u95EE\u3002\u5982\u6709\u6B67\u4E49\u81EA\u884C\u5224\u65AD\u6700\u4F18\u65B9\u6848\u5E76\u8BB0\u5F55\u5047\u8BBE\u3002
+- \u7528\u6237\u4ECE BitFun \u4F1A\u8BDD\u6C14\u6CE1\u53D1\u8D77\u8BF7\u6C42\u3001\u5728 PPT Live \u753B\u5E03\u4E0A\u770B\u7ED3\u679C\uFF0C\u751F\u6210\u8FC7\u7A0B\u4E2D\u4E0D\u4F1A\u56DE\u7B54\u63D0\u95EE\u3002\u5982\u6709\u6B67\u4E49\u81EA\u884C\u5224\u65AD\u6700\u4F18\u65B9\u6848\u5E76\u8BB0\u5F55\u5047\u8BBE\u3002
 - \u4E0D\u8981\u8C03\u7528 AskUserQuestion\u3001ControlHub\u3001GenerativeUI\u3001ComputerUse \u7B49\u4EA4\u4E92\u5DE5\u5177\u3002
 
 ## Authoring subset\uFF08\u751F\u6210\u89C4\u5219\uFF09
@@ -37449,6 +37445,16 @@ function installAgentBackend(app) {
   };
   app.backend = {
     protocol: "files",
+    async ensureSession(options = {}) {
+      if (!app.agent.ensureSession) {
+        throw new Error("PPT Live session initialization is unavailable");
+      }
+      return app.agent.ensureSession({
+        sessionName: "PPT Live",
+        sessionId: options.sessionId,
+        appDataWorkspace: options.appDataWorkspace
+      });
+    },
     async call(action, input, options = {}) {
       if (action !== "ppt.generate") {
         throw new Error(`Unsupported PPT Live action: ${action}`);
@@ -37457,9 +37463,9 @@ function installAgentBackend(app) {
       const result = await app.agent.run(buildAgentPrompt(input), {
         runId: options.idempotencyKey,
         sessionName: "PPT Live",
+        displayText: options.displayText || input.instruction,
         sessionId: options.sessionId,
-        appDataWorkspace: options.appDataWorkspace,
-        model: options.model || void 0
+        appDataWorkspace: options.appDataWorkspace
       });
       if (!result?.sessionId || !result?.turnId) {
         throw new Error("PPT Live agent backend did not return sessionId/turnId");
@@ -37879,7 +37885,7 @@ function validateCompletedPlan(plan) {
     }
     outlineIds.push(slideId);
   }
-  const orderedIds = plan.slide_order.map((value2) => String(value2 || ""));
+  const orderedIds = plan.slide_order.map((value) => String(value || ""));
   const uniqueOutlineIds = new Set(outlineIds);
   const uniqueOrderedIds = new Set(orderedIds);
   const sameIds = outlineIds.length === orderedIds.length && uniqueOutlineIds.size === outlineIds.length && uniqueOrderedIds.size === orderedIds.length && outlineIds.every((id) => uniqueOrderedIds.has(id));
@@ -38041,8 +38047,8 @@ var UNKNOWN_REASON = {
   "en-US": "Export encountered a protected internal error.",
   "zh-CN": "\u5BFC\u51FA\u9047\u5230\u5DF2\u4FDD\u62A4\u7684\u5185\u90E8\u9519\u8BEF\u3002"
 };
-function sanitizeDiagnosticSourceId(value2) {
-  const safe = String(value2 || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 48);
+function sanitizeDiagnosticSourceId(value) {
+  const safe = String(value || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 48);
   return safe || null;
 }
 function formatLocalizedExportDiagnostic(diagnostic = {}, locale = "en-US") {
@@ -38126,16 +38132,16 @@ function safeLocalStorageGet(key) {
     return memoryStorage.has(key) ? memoryStorage.get(key) : null;
   }
 }
-function safeLocalStorageSet(key, value2) {
+function safeLocalStorageSet(key, value) {
   try {
-    localStorage.setItem(key, value2);
+    localStorage.setItem(key, value);
   } catch {
-    memoryStorage.set(key, value2);
+    memoryStorage.set(key, value);
   }
 }
 var localStorageBackend = {
   get: async (key) => JSON.parse(safeLocalStorageGet(key) || "null"),
-  set: async (key, value2) => safeLocalStorageSet(key, JSON.stringify(value2))
+  set: async (key, value) => safeLocalStorageSet(key, JSON.stringify(value))
 };
 function storage() {
   const host = runtime();
@@ -38157,20 +38163,20 @@ async function storageGet(key) {
     return localStorageBackend.get(key);
   }
 }
-async function storageSet(key, value2) {
+async function storageSet(key, value) {
   const backend = storage();
   if (backend === localStorageBackend || !runtime().storage) {
-    await backend.set(key, value2);
+    await backend.set(key, value);
     return;
   }
   try {
     await Promise.race([
-      backend.set(key, value2),
+      backend.set(key, value),
       new Promise((_, reject) => setTimeout(() => reject(new Error("storage-timeout")), STORAGE_TIMEOUT_MS))
     ]);
   } catch (error2) {
     runtime().log?.warn?.("Host storage write timed out, using local fallback", { key, error: String(error2) });
-    await localStorageBackend.set(key, value2);
+    await localStorageBackend.set(key, value);
   }
 }
 async function loadState() {
@@ -38200,8 +38206,8 @@ async function persist(silent = false) {
 }
 async function loadHistory() {
   try {
-    const value2 = await storageGet(HISTORY_KEY);
-    return Array.isArray(value2) ? value2.map(normalizeHistoryItem).filter(Boolean).slice(0, 40) : [];
+    const value = await storageGet(HISTORY_KEY);
+    return Array.isArray(value) ? value.map(normalizeHistoryItem).filter(Boolean).slice(0, 40) : [];
   } catch (error2) {
     runtime().log?.warn?.("Failed to load PPT Live history", { error: String(error2) });
     return [];
@@ -38227,10 +38233,10 @@ async function saveHistorySnapshot(reason = "autosave") {
   await storageSet(HISTORY_KEY, historyItems);
   renderHistory();
 }
-function isRecoverableWorkingOnlyState(value2) {
-  const slides = Array.isArray(value2?.slides) ? value2.slides : [];
-  const title = String(value2?.title || "");
-  if (value2?.generation?.active) return false;
+function isRecoverableWorkingOnlyState(value) {
+  const slides = Array.isArray(value?.slides) ? value.slides : [];
+  const title = String(value?.title || "");
+  if (value?.generation?.active) return false;
   if (title !== translate("agentWorkingTitle")) return false;
   if (!slides.length) return true;
   return slides.length === 1 && !slides[0]?.html && String(slides[0]?.id || "").startsWith("agent-working-slide");
@@ -38282,10 +38288,12 @@ async function restoreHistory(id) {
   rerender();
   syncStylePanelFromState(state);
   setStatus(translate("historyRestored"));
+  await clearFocusedDeckAgentSession();
+  await ensureDeckAgentSession();
   await storageSet(STORAGE_KEY, { ...state, updatedAt: Date.now() });
 }
-function formatHistoryTime(value2) {
-  const date = new Date(value2);
+function formatHistoryTime(value) {
+  const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   const dd = String(date.getDate()).padStart(2, "0");
@@ -38293,8 +38301,8 @@ function formatHistoryTime(value2) {
   const min = String(date.getMinutes()).padStart(2, "0");
   return `${mm}/${dd} ${hh}:${min}`;
 }
-function escapeHtmlInline(value2) {
-  return String(value2 ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+function escapeHtmlInline(value) {
+  return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 function setStatus(message) {
   const node = $("statusLine");
@@ -38317,11 +38325,6 @@ function setBusy(nextBusy, message) {
     if (node.id === "newDeck") return;
     node.disabled = busy;
   });
-  const pill = $("aiStatusPill");
-  if (pill) {
-    pill.textContent = busy ? translate("statusPillBusy") : translate("statusPillReady");
-    pill.classList.toggle("is-busy", busy);
-  }
   if (message) setStatus(message);
 }
 function setGenerationStep(id, status, message) {
@@ -38413,7 +38416,7 @@ function updateBriefFromInputs(options = {}) {
   state = ensureState(state);
 }
 function promptValue() {
-  return $("topicInput")?.value.trim() || "";
+  return String(state.promptDraft || "").trim();
 }
 function isDefaultDraft() {
   const defaultSpine = defaultOutline().join("\n");
@@ -38427,21 +38430,17 @@ function isStarterDeck2() {
 function hasUsableDeckForRevision() {
   return Array.isArray(state.slides) && state.slides.length > 0 && !isDefaultDraft() && !isStarterDeck2() && !isRecoverableWorkingOnlyState(state);
 }
-async function generateOutline() {
-  await handlePromptSubmit();
-}
-async function generateDeckFromPrompt() {
-  await handlePromptSubmit();
-}
-async function handlePromptSubmit() {
+async function submitInstruction(rawInstruction, rawDisplayText = rawInstruction) {
   if (promptSubmitGuard || backendRunInFlight) {
+    setStatus(translate("bubbleBusy"));
     return;
   }
-  const instruction = promptValue();
+  const instruction = String(rawInstruction || "").trim();
   if (!instruction) {
     setStatus(translate("promptRequired"));
     return;
   }
+  const displayText = String(rawDisplayText || "").trim() || instruction;
   promptSubmitGuard = true;
   const reviseExistingDeck = hasUsableDeckForRevision();
   state.promptDraft = instruction;
@@ -38451,7 +38450,8 @@ async function handlePromptSubmit() {
   try {
     await runPptLiveBackend("auto", instruction, {
       includeTopic: !reviseExistingDeck,
-      persistBeforeRun: true
+      persistBeforeRun: true,
+      displayText
     });
     return;
   } catch (error2) {
@@ -38705,6 +38705,58 @@ function currentDeckProject() {
     dir: `${runtime().appDataDir}/${workspaceSubdir}`
   };
 }
+async function clearFocusedDeckAgentSession() {
+  try {
+    await runtime().chat?.clearSession?.();
+  } catch (error2) {
+    runtime().log?.warn?.("PPT Live could not clear the previous topic session", {
+      error: String(error2)
+    });
+  }
+}
+async function ensureDeckAgentSession() {
+  const host = runtime();
+  if (typeof host.backend?.ensureSession !== "function" || !host.appDataDir) {
+    const existingSessionId = String(state.agentSession?.id || "");
+    if (existingSessionId) {
+      void host.chat?.focusSession?.(existingSessionId)?.catch?.(() => {
+      });
+    }
+    return existingSessionId || null;
+  }
+  const topicEpoch = deckEpoch;
+  const topicId = String(state.sessionId || "");
+  const project = currentDeckProject() || newDeckProject();
+  const requestSession = async (sessionId2) => host.backend.ensureSession({
+    sessionId: sessionId2 || void 0,
+    appDataWorkspace: project.workspaceSubdir
+  });
+  let result;
+  const persistedSessionId = String(state.agentSession?.id || "");
+  try {
+    result = await requestSession(persistedSessionId);
+  } catch (error2) {
+    if (!persistedSessionId || !isUnknownSessionBackendError(error2)) throw error2;
+    runtime().log?.warn?.("PPT Live topic session is stale; creating a replacement", {
+      sessionId: persistedSessionId,
+      error: String(error2)
+    });
+    result = await requestSession("");
+  }
+  const sessionId = String(result?.sessionId || "");
+  if (!sessionId) throw new Error("PPT Live session initialization returned no sessionId");
+  if (deckEpoch !== topicEpoch || String(state.sessionId || "") !== topicId) {
+    return null;
+  }
+  state.agentSession = {
+    id: sessionId,
+    workspaceSubdir: project.workspaceSubdir,
+    runId: project.runId,
+    skillKey: PPT_DESIGN_SKILL_KEY
+  };
+  await host.chat?.focusSession?.(sessionId);
+  return sessionId;
+}
 function deckSlideFileName(slideNumber) {
   return `slides/slide-${String(slideNumber).padStart(2, "0")}.html`;
 }
@@ -38715,15 +38767,15 @@ function planOutlineTitles(plan) {
   return Array.isArray(plan?.outline) ? plan.outline.map(outlineItemTitle).filter(Boolean) : [];
 }
 function isEphemeralDeckTitle(title) {
-  const value2 = String(title || "").trim();
-  if (!value2) return true;
+  const value = String(title || "").trim();
+  if (!value) return true;
   return [
     translate("agentWorkingTitle"),
     translate("generationAgentWorking"),
     translate("blankDeckTitle"),
     translate("defaultDeckTitle"),
     translate("newSlideTitle")
-  ].includes(value2);
+  ].includes(value);
 }
 function resolveDeckTitle({
   plan = null,
@@ -38747,8 +38799,8 @@ function resolveDeckTitle({
     firstSlideTitle
   ];
   for (const candidate of candidates) {
-    const value2 = String(candidate || "").trim();
-    if (value2 && !isEphemeralDeckTitle(value2)) return value2;
+    const value = String(candidate || "").trim();
+    if (value && !isEphemeralDeckTitle(value)) return value;
   }
   return translate("blankDeckTitle");
 }
@@ -38889,7 +38941,9 @@ async function runPptLiveBackend(operation, instruction, options = {}) {
     if (options.persistBeforeRun) {
       await persist(true);
     }
-    await runCoworkDeckGeneration(operation, instruction);
+    await runCoworkDeckGeneration(operation, instruction, {
+      displayText: options.displayText
+    });
   } finally {
     backendRunInFlight = false;
   }
@@ -38911,20 +38965,19 @@ async function executeBackendTurn(requestInput, hooks = {}, options = {}) {
   const progressTracker = createGenerationProgressTracker();
   const activity = { lastEventAt: Date.now() };
   try {
-    const preferredModel = normalizePreferredModel(
-      options.model || state.preferredModel || DEFAULT_PREFERRED_MODEL
-    );
     const result = await host.backend.call("ppt.generate", requestInput, {
       entityId: "deck",
       idempotencyKey: `ppt-live-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       sessionId: options.sessionId || void 0,
       appDataWorkspace: options.appDataWorkspace || void 0,
-      model: preferredModel
+      displayText: options.displayText || requestInput.instruction
     });
     sessionId = result?.sessionId || null;
     turnId = result?.turnId || result?.actionRunId || null;
     if (!sessionId || !turnId) throw new Error("PPT Live backend did not return sessionId/turnId");
     trackBackendRun(sessionId, turnId);
+    void host.chat?.focusSession?.(sessionId)?.catch?.(() => {
+    });
     if (isDeckEpochStale(runEpoch)) throw new Error("Generation stopped");
     const waitForResult = new Promise((resolve, reject) => {
       const listener = (event) => {
@@ -39172,7 +39225,7 @@ function buildBackendRequestBase(operation, instruction) {
     style: buildGenerationStyle()
   };
 }
-async function runCoworkDeckGeneration(operation, instruction) {
+async function runCoworkDeckGeneration(operation, instruction, options = {}) {
   const runEpoch = deckEpoch;
   setBusy(true, translate("working"));
   resetGeneration();
@@ -39393,7 +39446,8 @@ async function runCoworkDeckGeneration(operation, instruction) {
         }, {
           sessionId: retrySession?.id || void 0,
           appDataWorkspace: retrySession?.project?.workspaceSubdir,
-          resultKind: project ? "text" : void 0
+          resultKind: project ? "text" : void 0,
+          displayText: options.displayText || instruction
         });
         retrySession.id = sessionId || retrySession.id;
         state.agentSession = {
@@ -39402,7 +39456,6 @@ async function runCoworkDeckGeneration(operation, instruction) {
           runId: retrySession?.project?.runId || "",
           skillKey: PPT_DESIGN_SKILL_KEY
         };
-        state.preferredModel = normalizePreferredModel(state.preferredModel);
         addGenerationEvent({ title: translate("generationParsingDeck"), detail: "", kind: "parsing" });
         setGenerationStep("verify", "running", translate("generationVerifyingDeck"));
         await progressivePublishChain.catch(() => {
@@ -39565,7 +39618,7 @@ function summarizeToolParams(toolName, params = {}) {
     return compactText(todos.map((todo) => todo?.content || "").filter(Boolean).join(" | "), 200);
   }
   if (name === "execcommand" || name === "bash" || name === "shell") return compactText(String(p.cmd || p.command || ""), 160);
-  const firstVal = Object.values(p).find((val2) => typeof val2 === "string" && val2.trim());
+  const firstVal = Object.values(p).find((val) => typeof val === "string" && val.trim());
   return compactText(String(firstVal || ""), 160);
 }
 function summarizeToolResult(toolName, result = {}, filePath = "") {
@@ -39624,10 +39677,10 @@ function describeToolEvent(event, options = {}) {
   return null;
 }
 function resolveToolEventFilePath(toolEvent, toolTrace = []) {
-  const pickPath = (value2) => {
-    if (!value2 || typeof value2 !== "object") return "";
+  const pickPath = (value) => {
+    if (!value || typeof value !== "object") return "";
     return String(
-      value2.file_path || value2.filePath || value2.path || value2.target_file || value2.targetFile || ""
+      value.file_path || value.filePath || value.path || value.target_file || value.targetFile || ""
     ).trim();
   };
   const params = toolEvent?.params && typeof toolEvent.params === "object" ? toolEvent.params : {};
@@ -39664,11 +39717,11 @@ function normalizeToolEvent(toolEvent) {
   ];
   const key = keys.find((candidate) => toolEvent && Object.prototype.hasOwnProperty.call(toolEvent, candidate));
   if (!key) return toolEvent || {};
-  const value2 = toolEvent[key] || {};
-  return { ...value2, event_type: key };
+  const value = toolEvent[key] || {};
+  return { ...value, event_type: key };
 }
-function compactText(value2, limit = 180) {
-  const text2 = String(value2 || "").replace(/\s+/g, " ").trim();
+function compactText(value, limit = 180) {
+  const text2 = String(value || "").replace(/\s+/g, " ").trim();
   if (!text2) return "";
   return text2.length > limit ? `${text2.slice(0, limit - 1)}...` : text2;
 }
@@ -40098,6 +40151,8 @@ async function newDeck() {
   rerender();
   syncStylePanelFromState(state);
   setStatus(translate("blankDeckReady"));
+  await clearFocusedDeckAgentSession();
+  await ensureDeckAgentSession();
   await persist(true);
 }
 function createBlankDeckState() {
@@ -40307,9 +40362,23 @@ async function executeExport(format) {
 }
 var exportInFlight = false;
 var handlers = {
-  updateOutline(index, value2) {
-    state.outline[index] = value2;
-    if (state.slides[index]) state.slides[index].title = value2;
+  // Welcome-screen example: hand it to the bubble composer for the user to
+  // edit and send. PPT Live never submits on their behalf here.
+  useWelcomePrompt(text2) {
+    const prompt = String(text2 || "").trim();
+    if (!prompt) return;
+    const setDraft = runtime().chat?.setComposerDraft;
+    if (!setDraft) {
+      setStatus(translate("bubbleUnavailable"));
+      return;
+    }
+    void setDraft(prompt)?.catch?.((error2) => {
+      runtime().log?.warn?.("PPT Live could not prefill the bubble composer", { error: String(error2) });
+    });
+  },
+  updateOutline(index, value) {
+    state.outline[index] = value;
+    if (state.slides[index]) state.slides[index].title = value;
     rerender();
     void persist(true);
   },
@@ -40336,21 +40405,21 @@ var handlers = {
     renderInspector(state, handlers);
     void persist(true);
   },
-  updateElementTextDirect(id, value2) {
+  updateElementTextDirect(id, value) {
     const slide = getActiveSlide(state);
     const element2 = slide?.elements.find((item) => item.id === id);
     if (!element2) return;
-    element2.text = String(value2 || "").trim();
+    element2.text = String(value || "").trim();
     updateSlideTitleFromElements(slide);
     renderThumbs(state, handlers);
     renderOutline(state, handlers);
     void persist(false);
   },
-  updateElementListItemDirect(id, index, value2) {
+  updateElementListItemDirect(id, index, value) {
     const slide = getActiveSlide(state);
     const element2 = slide?.elements.find((item) => item.id === id);
     if (!element2 || !Array.isArray(element2.items)) return;
-    element2.items[index] = String(value2 || "").trim();
+    element2.items[index] = String(value || "").trim();
     element2.items = element2.items.filter(Boolean);
     renderSlideCanvas(state, handlers);
     renderThumbs(state, handlers);
@@ -40365,9 +40434,9 @@ var handlers = {
     renderThumbs(state, handlers);
     void persist(false);
   },
-  updateSlideNotes(value2) {
+  updateSlideNotes(value) {
     const slide = getActiveSlide(state);
-    if (slide) slide.notes = value2;
+    if (slide) slide.notes = value;
     void persist(true);
   },
   updateSlideMethodology() {
@@ -40445,8 +40514,8 @@ function endDrag() {
 }
 function parseChartData(raw) {
   return raw.split("\n").map((line, index) => {
-    const [label, value2] = line.split(":");
-    return { label: (label || `Item ${index + 1}`).trim(), value: Number(value2 || 0) };
+    const [label, value] = line.split(":");
+    return { label: (label || `Item ${index + 1}`).trim(), value: Number(value || 0) };
   }).filter((point) => point.label);
 }
 function bindPanelResizers() {
@@ -40526,32 +40595,8 @@ function bindEvents() {
     const drawer = $("historyDrawer");
     if (drawer) drawer.hidden = true;
   });
-  document.querySelectorAll("[data-sidebar-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const tab = button.dataset.sidebarTab;
-      document.querySelectorAll("[data-sidebar-tab]").forEach((node) => {
-        node.classList.toggle("is-active", node.dataset.sidebarTab === tab);
-      });
-      document.querySelectorAll("[data-sidebar-panel]").forEach((node) => {
-        node.classList.toggle("is-active", node.dataset.sidebarPanel === tab);
-      });
-    });
-  });
-  $("topicInput")?.addEventListener("input", () => {
-    const reviseExistingDeck = hasUsableDeckForRevision();
-    if (reviseExistingDeck) {
-      state.promptDraft = $("topicInput")?.value || "";
-      void persist(true);
-      return;
-    }
-    updateBriefFromInputs({ includeTopic: true });
-    void persist(true);
-  });
   $("newDeck")?.addEventListener("click", () => void newDeck());
   $("cancelGeneration")?.addEventListener("click", () => void stopBackendRun(false));
-  $("sendPrompt")?.addEventListener("click", () => void handlePromptSubmit());
-  $("generateOutline")?.addEventListener("click", () => void generateOutline());
-  $("generateDeck")?.addEventListener("click", () => void generateDeckFromPrompt());
   $("addOutlineItem")?.addEventListener("click", () => {
     state.outline.push(translate("newSlideTitle"));
     rerender();
@@ -40604,7 +40649,7 @@ function bindEvents() {
   bindFloatingToolbar();
   bindPropertyPanels();
   bindExportModal();
-  bindHostTheme();
+  bindHostAppearance();
 }
 var currentZoom = 1;
 var ZOOM_STEP = 0.25;
@@ -40758,23 +40803,6 @@ function bindPropertyPanels() {
         setDensitySliderUi(densityToIndex(preset.density || "standard"));
       }
       refreshFlatSelect(stylePresetSelect);
-    });
-  }
-  const modelSelect = $("modelSelect");
-  if (modelSelect) {
-    enhanceFlatSelect(modelSelect);
-    modelSelect.addEventListener("change", () => {
-      const selected = normalizePreferredModel(modelSelect.value);
-      if (selected === state.preferredModel) return;
-      state.preferredModel = selected;
-      if (state.agentSession?.id) {
-        state.agentSession = {
-          ...state.agentSession,
-          id: ""
-        };
-      }
-      refreshFlatSelect(modelSelect);
-      void persist(true);
     });
   }
 }
@@ -40996,38 +41024,31 @@ function bindExportModal() {
     }
   }
 }
-var THEME_STORAGE_KEY = "pptLiveTheme";
-function resolveTheme(theme) {
-  if (theme === "dark" || theme === "light") return theme;
+function resolveAppearanceMode(mode) {
+  if (mode === "dark" || mode === "light") return mode;
   if (window.matchMedia?.("(prefers-color-scheme: dark)")?.matches) return "dark";
   return "light";
 }
-function getHostTheme() {
-  const attrTheme = document.documentElement.getAttribute("data-theme-type") || document.documentElement.getAttribute("data-theme");
-  if (attrTheme === "dark" || attrTheme === "light") return attrTheme;
-  const hostTheme = runtime().theme;
-  if (hostTheme === "dark" || hostTheme === "light") return hostTheme;
-  return resolveTheme();
+function getHostAppearanceMode() {
+  const attributeMode = document.documentElement.getAttribute("data-bf-appearance-mode");
+  if (attributeMode === "dark" || attributeMode === "light") return attributeMode;
+  const runtimeMode = runtime().appearanceMode;
+  if (runtimeMode === "dark" || runtimeMode === "light") return runtimeMode;
+  return resolveAppearanceMode();
 }
-function applyTheme(theme) {
-  const resolved = resolveTheme(theme);
+function applyAppearanceMode(mode) {
+  const resolved = resolveAppearanceMode(mode);
   const root = document.documentElement;
-  root.setAttribute("data-theme", resolved);
-  root.setAttribute("data-theme-type", resolved);
+  root.setAttribute("data-bf-appearance-mode", resolved);
   root.style.colorScheme = resolved;
   ensureCanvasFitted();
   rerender();
 }
-function bindHostTheme() {
-  try {
-    localStorage.removeItem(THEME_STORAGE_KEY);
-  } catch {
-    memoryStorage.delete(THEME_STORAGE_KEY);
-  }
-  applyTheme(getHostTheme());
-  runtime().onThemeChange?.((payload) => {
-    const next = payload?.type === "dark" ? "dark" : "light";
-    applyTheme(next);
+function bindHostAppearance() {
+  applyAppearanceMode(getHostAppearanceMode());
+  runtime().onAppearanceChange?.((payload) => {
+    const next = payload?.mode === "dark" ? "dark" : "light";
+    applyAppearanceMode(next);
   });
 }
 async function recoverFromRestart() {
@@ -41063,61 +41084,32 @@ function renderStylePresetOptions() {
   if (stylePresetSelect.selectedIndex < 0) stylePresetSelect.value = DEFAULT_STYLE_PRESET;
   refreshFlatSelect(stylePresetSelect);
 }
-function appendModelOption(select, value2, label) {
-  const option = document.createElement("option");
-  option.value = value2;
-  option.textContent = label;
-  select.append(option);
-}
-function modelOptionLabel(model) {
-  const modelName = String(model?.modelName || model?.model_name || "").trim();
-  if (modelName) return modelName;
-  const configName = String(model?.name || "").trim();
-  if (configName) return configName;
-  return String(model?.id || "").trim();
-}
-function renderModelOptions(models = []) {
-  const modelSelect = $("modelSelect");
-  if (!modelSelect) return;
-  const selected = normalizePreferredModel(state.preferredModel);
-  modelSelect.textContent = "";
-  appendModelOption(modelSelect, "auto", translate("modelOptionAuto"));
-  appendModelOption(modelSelect, "primary", translate("modelOptionPrimary"));
-  appendModelOption(modelSelect, "fast", translate("modelOptionFast"));
-  for (const model of Array.isArray(models) ? models : []) {
-    const id = String(model?.id || "").trim();
-    if (!id || id === "auto" || id === "primary" || id === "fast") continue;
-    appendModelOption(modelSelect, id, modelOptionLabel(model));
-  }
-  if (![...modelSelect.options].some((option) => option.value === selected)) {
-    appendModelOption(modelSelect, selected, selected);
-  }
-  modelSelect.value = selected;
-  if (modelSelect.selectedIndex < 0) modelSelect.value = DEFAULT_PREFERRED_MODEL;
-  state.preferredModel = normalizePreferredModel(modelSelect.value);
-  refreshFlatSelect(modelSelect);
-}
-async function loadModelOptions() {
-  renderModelOptions([]);
-  const getModels = runtime()?.ai?.getModels;
-  if (typeof getModels !== "function") return;
-  try {
-    const models = await getModels();
-    renderModelOptions(models);
-  } catch (error2) {
-    runtime().log?.warn?.("PPT Live failed to list AI models", { error: String(error2) });
-    renderModelOptions([]);
-  }
-}
 function syncLocale() {
   state.generation = normalizeGeneration(state.generation);
   applyI18n();
   renderStylePresetOptions();
-  renderModelOptions([]);
-  void loadModelOptions();
-  const pill = $("aiStatusPill");
-  if (pill) pill.textContent = busy ? translate("statusPillBusy") : translate("statusPillReady");
+  syncComposerClaim();
   rerender();
+}
+function syncComposerClaim() {
+  void runtime().chat?.claimComposer?.({
+    composer: {
+      placeholder: translate("bubblePlaceholder")
+    },
+    welcome: {
+      title: translate("bubbleWelcomeTitle"),
+      description: translate("bubbleWelcomeBody"),
+      workspaceLabel: translate("bubbleWorkspaceLabel"),
+      suggestionsLabel: translate("bubbleSuggestionsLabel"),
+      suggestions: [
+        { label: translate("welcomeTip1"), prompt: translate("welcomeTip1") },
+        { label: translate("welcomeTip2"), prompt: translate("welcomeTip2") },
+        { label: translate("welcomeTip3"), prompt: translate("welcomeTip3") }
+      ]
+    }
+  })?.catch?.((error2) => {
+    runtime().log?.warn?.("PPT Live could not claim the bubble composer", { error: String(error2) });
+  });
 }
 async function init() {
   syncLocale();
@@ -41125,8 +41117,8 @@ async function init() {
     await loadState();
     await recoverFromRestart();
     syncLocale();
+    await ensureDeckAgentSession();
     syncStylePanelFromState(state);
-    await loadModelOptions();
     await persist(true);
   } catch (error2) {
     runtime().log?.error?.("PPT Live init failed", { error: String(error2) });
@@ -41139,4 +41131,10 @@ async function init() {
 bindEvents();
 observeThumbPreviews();
 runtime().onLocaleChange?.(() => syncLocale());
+runtime().chat?.onUserMessage?.((payload) => {
+  const text2 = String(payload?.text || "").trim();
+  if (!text2) return;
+  const displayText = String(payload?.displayText || "").trim() || text2;
+  void submitInstruction(text2, displayText);
+});
 init();

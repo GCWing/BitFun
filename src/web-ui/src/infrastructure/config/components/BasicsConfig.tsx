@@ -118,7 +118,7 @@ function BasicsLaunchAtLoginSection() {
   }
 
   return (
-    <div className="bitfun-launch-at-login-config">
+    <div className="bitfun-launch-at-login-config" data-bf-component="basics-config" data-bf-part="launchAtLogin">
       <div className="bitfun-launch-at-login-config__content">
         <ConfigPageMessage message={message} />
         <ConfigPageSection
@@ -215,7 +215,7 @@ function BasicsAutoUpdateSection() {
   }
 
   return (
-    <div className="bitfun-auto-update-config">
+    <div className="bitfun-auto-update-config" data-bf-component="basics-config" data-bf-part="autoUpdate">
       <div className="bitfun-auto-update-config__content">
         <ConfigPageMessage message={message} />
         <ConfigPageSection
@@ -377,7 +377,7 @@ function BasicsLoggingSection() {
   }
 
   return (
-    <div className="bitfun-logging-config">
+    <div className="bitfun-logging-config" data-bf-component="basics-config" data-bf-part="logging">
       <div className="bitfun-logging-config__content">
         <ConfigPageMessage message={message} />
 
@@ -408,14 +408,12 @@ function BasicsLoggingSection() {
             description={t('logging.level.description')}
             align="center"
           >
-            <div className="bitfun-logging-config__select-wrapper">
-              <Select
-                value={configLevel}
-                onChange={(v) => handleLevelChange(v as string)}
-                options={levelOptions}
-                disabled={saving}
-              />
-            </div>
+            <Select
+              value={configLevel}
+              onChange={(v) => handleLevelChange(v as string)}
+              options={levelOptions}
+              disabled={saving}
+            />
           </ConfigPageRow>
           <ConfigPageRow
             label={t('logging.sensitiveDiagnostics.label')}
@@ -435,7 +433,7 @@ function BasicsLoggingSection() {
             description={t('logging.path.description')}
             multiline
           >
-            <div className="bitfun-logging-config__path-row">
+            <div className="bitfun-logging-config__path-row" data-bf-component="basics-config" data-bf-part="logPath">
               <div className="bitfun-logging-config__path-box">
                 {runtimeInfo?.sessionLogDir || '-'}
               </div>
@@ -588,12 +586,12 @@ function BasicsTerminalSection() {
   const renderShellOption = useCallback((option: SelectOption) => {
     const shellOption = option as TerminalShellOption;
     if (!shellOption.shell) {
-      return <div className="bitfun-terminal-config__shell-option-name">{option.label}</div>;
+      return <div className="bitfun-terminal-config__shell-option-name" data-bf-component="basics-config" data-bf-part="shellOption">{option.label}</div>;
     }
 
     const { shell } = shellOption;
     const content = (
-      <div className="bitfun-terminal-config__shell-option">
+      <div className="bitfun-terminal-config__shell-option" data-bf-component="basics-config" data-bf-part="shellOption">
         <div className="bitfun-terminal-config__shell-option-name">{formatShellLabel(shell)}</div>
       </div>
     );
@@ -633,7 +631,7 @@ function BasicsTerminalSection() {
   }
 
   return (
-    <div className="bitfun-terminal-config">
+    <div className="bitfun-terminal-config" data-bf-component="basics-config" data-bf-part="terminal">
       <div className="bitfun-terminal-config__content">
         <ConfigPageMessage message={message} />
 
@@ -652,21 +650,19 @@ function BasicsTerminalSection() {
             description={t('terminal.controls.description')}
             align="center"
           >
-            <div className="bitfun-terminal-config__select-wrapper">
-              {availableShells.length > 0 ? (
-                <Select
-                  value={selectedShellValue}
-                  onChange={(v) => handleShellChange(v as string)}
-                  options={shellOptions}
-                  renderOption={renderShellOption}
-                  renderValue={renderShellValue}
-                  placeholder={t('terminal.controls.placeholder')}
-                  disabled={saving}
-                />
-              ) : (
-                <div className="bitfun-terminal-config__no-shells">{t('terminal.controls.noShells')}</div>
-              )}
-            </div>
+            {availableShells.length > 0 ? (
+              <Select
+                value={selectedShellValue}
+                onChange={(v) => handleShellChange(v as string)}
+                options={shellOptions}
+                renderOption={renderShellOption}
+                renderValue={renderShellValue}
+                placeholder={t('terminal.controls.placeholder')}
+                disabled={saving}
+              />
+            ) : (
+              <div className="bitfun-terminal-config__no-shells">{t('terminal.controls.noShells')}</div>
+            )}
           </ConfigPageRow>
 
           <ConfigPageRow
@@ -674,15 +670,13 @@ function BasicsTerminalSection() {
             description={t('terminal.panelPosition.description')}
             align="center"
           >
-            <div className="bitfun-terminal-config__select-wrapper">
-              <Select
-                value={terminalPanelPosition}
-                onChange={(v) => handleTerminalPanelPositionChange(v as TerminalPanelPosition)}
-                options={terminalPanelPositionOptions}
-                placeholder={t('terminal.panelPosition.placeholder')}
-                disabled={saving}
-              />
-            </div>
+            <Select
+              value={terminalPanelPosition}
+              onChange={(v) => handleTerminalPanelPositionChange(v as TerminalPanelPosition)}
+              options={terminalPanelPositionOptions}
+              placeholder={t('terminal.panelPosition.placeholder')}
+              disabled={saving}
+            />
           </ConfigPageRow>
         </ConfigPageSection>
       </div>
@@ -761,7 +755,7 @@ function BasicsWindowBehaviorSection() {
   }
 
   return (
-    <div className="bitfun-window-behavior-config">
+    <div className="bitfun-window-behavior-config" data-bf-component="basics-config" data-bf-part="windowBehavior">
       <div className="bitfun-window-behavior-config__content">
         <ConfigPageMessage message={message} />
         <ConfigPageSection
@@ -773,14 +767,12 @@ function BasicsWindowBehaviorSection() {
             description={t('windowBehavior.closeButtonDescription')}
             align="center"
           >
-            <div className="bitfun-window-behavior-config__select-wrapper">
-              <Select
-                value={behavior}
-                onChange={(v) => { void handleChange(v as string); }}
-                options={behaviorOptions}
-                disabled={saving}
-              />
-            </div>
+            <Select
+              value={behavior}
+              onChange={(v) => { void handleChange(v as string); }}
+              options={behaviorOptions}
+              disabled={saving}
+            />
           </ConfigPageRow>
         </ConfigPageSection>
       </div>
@@ -788,8 +780,10 @@ function BasicsWindowBehaviorSection() {
   );
 }
 
-function BasicsNotificationsSection() {  const { t } = useTranslation('settings/basics');
+function BasicsNotificationsSection() {
+  const { t } = useTranslation('settings/basics');
   const [dialogNotify, setDialogNotify] = useState(true);
+  const [permissionRequestNotify, setPermissionRequestNotify] = useState(true);
   const [startupTips, setStartupTips] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -797,14 +791,17 @@ function BasicsNotificationsSection() {  const { t } = useTranslation('settings/
   useEffect(() => {
     void (async () => {
       try {
-        const [notify, tips] = await Promise.all([
+        const [notify, permissionNotify, tips] = await Promise.all([
           configManager.getConfig<boolean>('app.notifications.dialog_completion_notify'),
+          configManager.getConfig<boolean>('app.notifications.permission_request_notify'),
           configManager.getConfig<boolean>('app.notifications.enable_startup_tips'),
         ]);
         setDialogNotify(notify !== false);
+        setPermissionRequestNotify(permissionNotify !== false);
         setStartupTips(tips !== false);
       } catch {
         setDialogNotify(true);
+        setPermissionRequestNotify(true);
         setStartupTips(true);
       }
     })();
@@ -815,6 +812,19 @@ function BasicsNotificationsSection() {  const { t } = useTranslation('settings/
     try {
       await configAPI.setConfig('app.notifications.dialog_completion_notify', checked);
       setDialogNotify(checked);
+      setMessage({ type: 'success', text: t('notifications.messages.saveSuccess') });
+    } catch {
+      setMessage({ type: 'error', text: t('notifications.messages.saveFailed') });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePermissionRequestNotifyToggle = async (checked: boolean) => {
+    setSaving(true);
+    try {
+      await configManager.setConfig('app.notifications.permission_request_notify', checked);
+      setPermissionRequestNotify(checked);
       setMessage({ type: 'success', text: t('notifications.messages.saveSuccess') });
     } catch {
       setMessage({ type: 'error', text: t('notifications.messages.saveFailed') });
@@ -840,6 +850,8 @@ function BasicsNotificationsSection() {  const { t } = useTranslation('settings/
     <ConfigPageSection
       title={t('notifications.title')}
       description={t('notifications.hint')}
+      data-bf-component="basics-config"
+      data-bf-part="notifications"
     >
       <ConfigPageMessage message={message} />
       <ConfigPageRow
@@ -850,6 +862,17 @@ function BasicsNotificationsSection() {  const { t } = useTranslation('settings/
         <Switch
           checked={dialogNotify}
           onChange={(e) => { void handleDialogNotifyToggle(e.target.checked); }}
+          disabled={saving}
+        />
+      </ConfigPageRow>
+      <ConfigPageRow
+        label={t('notifications.permissionRequest.label')}
+        description={t('notifications.permissionRequest.description')}
+        align="center"
+      >
+        <Switch
+          checked={permissionRequestNotify}
+          onChange={(e) => { void handlePermissionRequestNotifyToggle(e.target.checked); }}
           disabled={saving}
         />
       </ConfigPageRow>
@@ -1140,9 +1163,9 @@ const BasicsConfig: React.FC = () => {
   const { t } = useTranslation('settings/basics');
 
   return (
-    <ConfigPageLayout className="bitfun-basics-config">
+    <ConfigPageLayout className="bitfun-basics-config" data-bf-component="basics-config" data-bf-part="root">
       <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
-      <ConfigPageContent className="bitfun-basics-config__content">
+      <ConfigPageContent className="bitfun-basics-config__content" data-bf-component="basics-config" data-bf-part="content">
         <BasicsLaunchAtLoginSection />
         <BasicsAutoUpdateSection />
         <BasicsWindowBehaviorSection />

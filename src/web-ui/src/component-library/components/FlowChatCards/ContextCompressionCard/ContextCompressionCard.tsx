@@ -6,7 +6,7 @@
 import React from 'react';
 import { Loader2, CheckCircle, XCircle, Archive } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
-import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
+import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 import { BaseToolCard, BaseToolCardProps } from '../BaseToolCard';
 import './ContextCompressionCard.scss';
 
@@ -91,21 +91,21 @@ export const ContextCompressionCard: React.FC<ContextCompressionCardProps> = ({
 
   if (displayMode === 'compact') {
     return (
-      <div className={`context-compression-card context-compression-card--compact status-${status}`}>
-        <span className="context-compression-card__status-icon">{getStatusIcon(14)}</span>
+      <div className={`context-compression-card context-compression-card--compact status-${status}`} data-bf-component="context-compression-card" data-bf-part="compact" data-bf-display="compact" data-bf-status={status}>
+        <span className="context-compression-card__status-icon" data-bf-component="context-compression-card" data-bf-part="status">{getStatusIcon(14)}</span>
         
-        <span className="context-compression-card__action">
+        <span className="context-compression-card__action" data-bf-component="context-compression-card" data-bf-part="action">
           {status === 'running' || status === 'streaming' ? t('flowChatCards.contextCompressionCard.compressing') : t('flowChatCards.contextCompressionCard.title')}
         </span>
         
         {resolvedTokensBefore !== undefined && resolvedTokensAfter !== undefined && (
-          <span className="context-compression-card__tokens">
+          <span className="context-compression-card__tokens" data-bf-component="context-compression-card" data-bf-part="tokens">
             {formatNumber(resolvedTokensBefore)} → {formatNumber(resolvedTokensAfter)} tokens
           </span>
         )}
         
         {status === 'completed' && savedTokens !== undefined && savedRatio !== undefined && (
-          <span className="context-compression-card__result">
+          <span className="context-compression-card__result" data-bf-component="context-compression-card" data-bf-part="result">
             {t('flowChatCards.contextCompressionCard.savedTokens', { count: formatNumber(savedTokens), ratio: (savedRatio * 100).toFixed(0) })}
           </span>
         )}
@@ -123,12 +123,12 @@ export const ContextCompressionCard: React.FC<ContextCompressionCardProps> = ({
       displayMode={displayMode}
       input={input}
       result={result}
-      primaryColor={UI_EXCEPTION_ACCENTS.contextCompression}
+      primaryColor={APPEARANCE_DOMAIN_TOKENS.contextCompression}
       className="context-compression-card"
       {...baseProps}
     >
       {(status === 'running' || status === 'streaming') && (
-        <div className="context-compression-card__processing">
+        <div className="context-compression-card__processing" data-bf-component="context-compression-card" data-bf-part="processing">
           <Loader2 className="context-compression-card__processing-icon" size={14} />
           <span>{t('flowChatCards.contextCompressionCard.analyzing')}</span>
         </div>
@@ -136,7 +136,7 @@ export const ContextCompressionCard: React.FC<ContextCompressionCardProps> = ({
 
       {status === 'completed' && (
         <>
-          <div className="context-compression-card__simple-row">
+          <div className="context-compression-card__simple-row" data-bf-component="context-compression-card" data-bf-part="summaryRow">
             <span className="context-compression-card__simple-label">
               {t('flowChatCards.contextCompressionCard.triggerTime', { trigger: getTriggerText(resolvedTrigger), count: resolvedCompressionCount })}
             </span>
@@ -148,7 +148,7 @@ export const ContextCompressionCard: React.FC<ContextCompressionCardProps> = ({
           </div>
 
           {resolvedTokensBefore !== undefined && resolvedTokensAfter !== undefined && (
-            <div className="context-compression-card__simple-row context-compression-card__simple-row--stats">
+            <div className="context-compression-card__simple-row context-compression-card__simple-row--stats" data-bf-component="context-compression-card" data-bf-part="statsRow">
               <span className="context-compression-card__simple-tokens">
                 {formatNumber(resolvedTokensBefore)} → {formatNumber(resolvedTokensAfter)} tokens
               </span>

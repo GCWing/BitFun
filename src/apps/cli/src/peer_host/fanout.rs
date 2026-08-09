@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::sync::OnceLock;
 
-use bitfun_agent_runtime::sdk::PermissionRequestEvent;
+use bitfun_agent_runtime::sdk::{AgentEventReceiver, PermissionRequestEvent};
 use bitfun_agent_tools::effective_tool_invocation;
 use bitfun_core::service::remote_connect::encryption::encrypt_to_base64;
 use bitfun_core::service::remote_connect::remote_server::RemoteCommand;
@@ -85,9 +85,8 @@ fn peer_event_sender() -> &'static mpsc::Sender<QueuedPeerDeviceEvent> {
 }
 
 /// Subscribe to the invocation-scoped event source and forward only Peer-owned turns.
-pub(crate) fn start_peer_event_fanout(state: PeerHostState) {
+pub(crate) fn start_peer_event_fanout(state: PeerHostState, mut rx: AgentEventReceiver) {
     start_peer_permission_event_fanout(state.clone());
-    let mut rx = state.agent_events.subscribe();
     state.turns.mark_event_stream_ready();
     tokio::spawn(async move {
         loop {
@@ -661,7 +660,7 @@ async fn fanout_peer_device_event_once(queued: QueuedPeerDeviceEvent) {
         };
         let correlation_id = uuid::Uuid::new_v4().to_string();
         if let Err(error) = relay_client
-            .send_device_message(&target, &correlation_id, &encrypted_data, &nonce)
+            .send_device_message(target, &correlation_id, &encrypted_data, &nonce)
             .await
         {
             tracing::debug!("Peer event fanout to {target} failed: {error}");

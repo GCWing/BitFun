@@ -5,39 +5,41 @@
 
 .virtual-item-wrapper {
   width: 100%;
-  max-width: 1200px;
+  /*
+   * Single reading column shared by every item type (model rounds, explore
+   * groups, user messages, notices). Matches ChatInput's 900px so headers,
+   * `>` collapse rows, and bubbles all sit on the same leading edge.
+   */
+  max-width: 900px;
   margin: 0 auto;
   box-sizing: border-box;
   min-height: 1px;
   padding: 0;
-
-  @media (max-width: 1400px) {
-    max-width: 1000px;
-  }
-
-  @media (max-width: 1200px) {
-    max-width: 900px;
-  }
 
   @media (max-width: 768px) {
     max-width: 100%;
   }
 
   &--search-match {
-    outline: 1px solid color-mix(in srgb, var(--color-accent-500) 35%, transparent);
+    outline: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 35%, transparent);
     outline-offset: -1px;
     border-radius: 6px;
   }
 
   &--search-current {
-    outline: 2px solid color-mix(in srgb, var(--color-accent-500) 75%, transparent);
+    outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 75%, transparent);
     outline-offset: -1px;
     border-radius: 6px;
-    background: color-mix(in srgb, var(--color-accent-500) 8%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 8%, transparent);
   }
 }
 
 ::highlight(bitfun-flowchat-search-current) {
   color: inherit;
-  background: color-mix(in srgb, var(--color-accent-500) 42%, transparent);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 42%, transparent);
+}
+
+::highlight(bitfun-flowchat-search-match) {
+  color: inherit;
+  background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 16%, transparent);
 }

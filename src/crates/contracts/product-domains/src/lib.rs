@@ -8,6 +8,9 @@ pub mod feedback;
 pub mod privacy;
 pub mod tool_permissions;
 
+#[cfg(feature = "appearance-market")]
+pub mod appearance_market;
+
 #[cfg(feature = "external-sources")]
 pub mod external_integration_policy;
 
@@ -18,6 +21,9 @@ pub mod external_hook_contributions;
 pub mod external_hook_catalog;
 
 #[cfg(feature = "external-sources")]
+pub mod external_hook_import;
+
+#[cfg(feature = "external-sources")]
 pub mod external_source_control;
 
 #[cfg(feature = "external-sources")]
@@ -25,6 +31,9 @@ pub mod external_sources;
 
 #[cfg(feature = "external-sources")]
 pub mod external_subagents;
+
+#[cfg(feature = "external-sources")]
+pub mod workspace_references;
 
 #[cfg(feature = "plugin-source")]
 pub mod plugin_source;

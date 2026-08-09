@@ -4,10 +4,10 @@
 
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, BufRead, BufReader, Write};
+use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-use std::time::SystemTime;
+use std::sync::{Arc, Mutex, Weak};
+use std::time::{Duration, Instant, SystemTime};
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use rand::Rng;
@@ -23,6 +23,10 @@ const AGENTS_FILE_NAME: &str = "AGENTS.md";
 const TRANSCRIPT_ID_LENGTH: usize = 6;
 const TRANSCRIPT_ID_ALPHABET: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
 const MAX_TRANSCRIPT_ID_ALLOCATION_ATTEMPTS: usize = 32;
+/// Buffer size for the always-open per-session segment writer.
+const TRANSCRIPT_WRITE_BUFFER_BYTES: usize = 128 * 1024;
+/// How often buffered transcript output is flushed to disk.
+const TRANSCRIPT_FLUSH_INTERVAL: Duration = Duration::from_millis(500);
 
 const TRANSCRIPT_AGENTS_DOCUMENT: &str = r#"# User terminal transcripts
 
@@ -81,6 +85,10 @@ struct TranscriptWriter {
     current_segment: u64,
     current_segment_bytes: u64,
     header_bytes: u64,
+    /// Always-open buffered handle for the current segment; avoids a full
+    /// open/write/flush/close cycle per output chunk.
+    file: BufWriter<File>,
+    last_flush: Instant,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -125,9 +133,40 @@ impl TranscriptRecorder {
             log::warn!("Failed to recover terminal transcripts: {}", error);
         }
 
-        Some(Self {
-            inner: Arc::new(Mutex::new(store)),
-        })
+        let inner = Arc::new(Mutex::new(store));
+
+        // Dedicated flusher thread keeps disk writes off the tokio PTY event
+        // loop: appends only copy into the in-memory buffer, and this thread
+        // periodically flushes them. It exits once the recorder is dropped.
+        let weak: Weak<Mutex<TranscriptStore>> = Arc::downgrade(&inner);
+        let spawn_result = std::thread::Builder::new()
+            .name("terminal-transcript-flush".to_string())
+            .spawn(move || loop {
+                std::thread::sleep(TRANSCRIPT_FLUSH_INTERVAL);
+                let Some(store) = weak.upgrade() else {
+                    break;
+                };
+                let Ok(mut guard) = store.lock() else {
+                    break;
+                };
+                guard.flush_writers();
+            });
+        if let Err(error) = spawn_result {
+            log::warn!(
+                "Failed to spawn terminal transcript flush thread: {}",
+                error
+            );
+        }
+
+        Some(Self { inner })
+    }
+
+    /// Flushes all buffered transcript output to disk.
+    #[cfg(test)]
+    pub(crate) fn flush_all(&self) {
+        if let Ok(mut store) = self.inner.lock() {
+            store.flush_writers();
+        }
     }
 
     pub(crate) fn start_session(&self, session: &TerminalSession) -> io::Result<()> {
@@ -143,7 +182,16 @@ impl TranscriptRecorder {
             return Ok(());
         }
 
-        self.with_store(|store| store.append(session_id, data))
+        self.with_store(|store| store.append(session_id, data, false))
+    }
+
+    /// Records a structured `[bitfun: ...]` marker. Markers are the anchors
+    /// readers navigate by (command boundaries, exit codes, cwd changes), so
+    /// they are flushed to disk immediately: a crash or force-quit must not be
+    /// able to leave a command's output on disk without its exit code, nor a
+    /// prompt-less tail of raw text.
+    fn record_marker(&self, session_id: &str, data: &str) -> io::Result<()> {
+        self.with_store(|store| store.append(session_id, data, true))
     }
 
     pub(crate) fn record_command(&self, session_id: &str, command: &str) -> io::Result<()> {
@@ -151,18 +199,18 @@ impl TranscriptRecorder {
             return Ok(());
         }
 
-        self.record_output(
+        self.record_marker(
             session_id,
             &format!("\n[bitfun: command={}]\n", one_line(command)),
         )
     }
 
     pub(crate) fn record_exit_code(&self, session_id: &str, exit_code: i32) -> io::Result<()> {
-        self.record_output(session_id, &format!("\n[bitfun: exit_code={exit_code}]\n"))
+        self.record_marker(session_id, &format!("\n[bitfun: exit_code={exit_code}]\n"))
     }
 
     pub(crate) fn record_cwd_changed(&self, session_id: &str, cwd: &str) -> io::Result<()> {
-        self.record_output(session_id, &format!("\n[bitfun: cwd={cwd}]\n"))
+        self.record_marker(session_id, &format!("\n[bitfun: cwd={cwd}]\n"))
     }
 
     pub(crate) fn finish_session(
@@ -178,8 +226,7 @@ impl TranscriptRecorder {
         operation: impl FnOnce(&mut TranscriptStore) -> io::Result<T>,
     ) -> io::Result<T> {
         let mut store = self.inner.lock().map_err(|_| {
-            io::Error::new(
-                io::ErrorKind::Other,
+            io::Error::other(
                 "terminal transcript recorder lock is poisoned",
             )
         })?;
@@ -344,13 +391,14 @@ impl TranscriptStore {
             segments: vec![segment.clone()],
         };
         let segment_path = session_dir.join(&segment);
-        let header_bytes = match (|| -> io::Result<u64> {
+        let (header_bytes, file) = match (|| -> io::Result<(u64, File)> {
             let mut file = File::create(&segment_path)?;
             write_segment_header_from_index(&mut file, &index, 1, None)?;
             file.flush()?;
-            Ok(file.metadata()?.len())
+            let header_bytes = file.metadata()?.len();
+            Ok((header_bytes, file))
         })() {
-            Ok(header_bytes) => header_bytes,
+            Ok(created) => created,
             Err(error) => {
                 if let Err(remove_error) = fs::remove_dir_all(&session_dir) {
                     log::warn!(
@@ -370,13 +418,15 @@ impl TranscriptStore {
                 current_segment: 1,
                 current_segment_bytes: header_bytes,
                 header_bytes,
+                file: BufWriter::with_capacity(TRANSCRIPT_WRITE_BUFFER_BYTES, file),
+                last_flush: Instant::now(),
             },
         );
         self.apply_session_retention()?;
         self.write_index()
     }
 
-    fn append(&mut self, session_id: &str, data: &str) -> io::Result<()> {
+    fn append(&mut self, session_id: &str, data: &str, flush: bool) -> io::Result<()> {
         if !self.sessions.contains_key(session_id) {
             return Ok(());
         }
@@ -389,7 +439,7 @@ impl TranscriptStore {
             return Ok(());
         }
 
-        let result = self.append_inner(session_id, data);
+        let result = self.append_inner(session_id, data, flush);
         match result {
             Ok(()) => {
                 if let Some(error) = self.recovered_write_errors.remove(session_id) {
@@ -397,7 +447,7 @@ impl TranscriptStore {
                         "\n[bitfun: recorder_recovered_after_error={}]\n",
                         one_line(&error)
                     );
-                    self.append_inner(session_id, &recovery_marker)?;
+                    self.append_inner(session_id, &recovery_marker, true)?;
                 }
                 Ok(())
             }
@@ -409,7 +459,7 @@ impl TranscriptStore {
         }
     }
 
-    fn append_inner(&mut self, session_id: &str, data: &str) -> io::Result<()> {
+    fn append_inner(&mut self, session_id: &str, data: &str, flush: bool) -> io::Result<()> {
         let data_len = data.len() as u64;
         let rotate_before_write = {
             let writer = self.ensure_writer(session_id)?;
@@ -422,19 +472,32 @@ impl TranscriptStore {
             self.rotate(session_id)?;
         }
 
-        let current_segment = self.ensure_writer(session_id)?.current_segment;
-        let segment_path = self
-            .session_dir(session_id)?
-            .join(segment_name(current_segment));
-
-        let mut file = OpenOptions::new().append(true).open(&segment_path)?;
-        file.write_all(data.as_bytes())?;
-        file.flush()?;
-
+        // Write into the always-open buffered handle; data reaches disk on
+        // buffer pressure, the periodic flusher thread, rotation, or session
+        // close.
         let writer = self.ensure_writer(session_id)?;
-        debug_assert_eq!(writer.current_segment, current_segment);
+        writer.file.write_all(data.as_bytes())?;
         writer.current_segment_bytes = writer.current_segment_bytes.saturating_add(data_len);
+        if flush || writer.last_flush.elapsed() >= TRANSCRIPT_FLUSH_INTERVAL {
+            writer.file.flush()?;
+            writer.last_flush = Instant::now();
+        }
         Ok(())
+    }
+
+    /// Flushes all buffered per-session writers, logging (not propagating)
+    /// failures. Called by the periodic flusher thread.
+    fn flush_writers(&mut self) {
+        for (session_id, writer) in self.writers.iter_mut() {
+            match writer.file.flush() {
+                Ok(()) => writer.last_flush = Instant::now(),
+                Err(error) => log::warn!(
+                    "Failed to flush terminal transcript: session_id={} error={}",
+                    one_line(session_id),
+                    error
+                ),
+            }
+        }
     }
 
     fn finish_session(&mut self, session_id: &str, exit_code: Option<i32>) -> io::Result<()> {
@@ -449,18 +512,30 @@ impl TranscriptStore {
             Some(code) => format!("\n[bitfun: session_closed exit_code={code}]\n"),
             None => "\n[bitfun: session_closed]\n".to_string(),
         };
-        self.append(session_id, &marker)?;
+        self.append(session_id, &marker, true)?;
 
         if let Some(session) = self.sessions.get_mut(session_id) {
             session.state = TranscriptSessionState::Closed;
             session.closed_at = Some(format_timestamp(Utc::now()));
         }
-        self.writers.remove(session_id);
+        if let Some(mut writer) = self.writers.remove(session_id) {
+            if let Err(error) = writer.file.flush() {
+                log::warn!(
+                    "Failed to flush terminal transcript on close: session_id={} error={}",
+                    one_line(session_id),
+                    error
+                );
+            }
+        }
         self.apply_session_retention()?;
         self.write_index()
     }
 
     fn rotate(&mut self, session_id: &str) -> io::Result<()> {
+        // Seal the previous segment: flush any buffered output before the
+        // writer handle is replaced.
+        self.ensure_writer(session_id)?.file.flush()?;
+
         let next_segment = self.ensure_writer(session_id)?.current_segment + 1;
         let previous_segment = segment_name(next_segment - 1);
         let session = self.sessions.get(session_id).cloned().ok_or_else(|| {
@@ -486,6 +561,8 @@ impl TranscriptStore {
         writer.current_segment = next_segment;
         writer.current_segment_bytes = header_bytes;
         writer.header_bytes = header_bytes;
+        writer.file = BufWriter::with_capacity(TRANSCRIPT_WRITE_BUFFER_BYTES, file);
+        writer.last_flush = Instant::now();
 
         let retained_segments = {
             let session = self
@@ -544,12 +621,15 @@ impl TranscriptStore {
                 .map(|metadata| metadata.len())
                 .unwrap_or(0);
             let header_bytes = segment_header_bytes(&segment_path).unwrap_or(0);
+            let file = OpenOptions::new().append(true).open(&segment_path)?;
             self.writers.insert(
                 session_id.to_string(),
                 TranscriptWriter {
                     current_segment,
                     current_segment_bytes,
                     header_bytes,
+                    file: BufWriter::with_capacity(TRANSCRIPT_WRITE_BUFFER_BYTES, file),
+                    last_flush: Instant::now(),
                 },
             );
         }
@@ -604,8 +684,7 @@ impl TranscriptStore {
         });
         let index = TranscriptIndex { sessions };
         let serialized = serde_json::to_vec_pretty(&index).map_err(|error| {
-            io::Error::new(
-                io::ErrorKind::Other,
+            io::Error::other(
                 format!("serialize terminal transcript index: {error}"),
             )
         })?;
@@ -950,6 +1029,7 @@ mod tests {
         recorder
             .record_output(&session.id, "hello\n")
             .expect("output should append");
+        recorder.flush_all();
 
         let root = temp_dir.path().join("terminals");
         let transcript_id = transcript_id_for(&root, &session.id);
@@ -958,6 +1038,38 @@ mod tests {
 
         assert!(segment.contains("[bitfun: command=echo hello]\nhello\n"));
         assert_eq!(segment.matches("[bitfun: command=").count(), 1);
+    }
+
+    #[test]
+    fn structured_markers_reach_disk_without_an_explicit_flush() {
+        // Bulk output is buffered for throughput, but the structured
+        // `[bitfun: ...]` anchors must be durable immediately: a crash or
+        // force-quit must never leave output on disk without its exit code.
+        let temp_dir = TempDir::new().expect("temporary directory should create");
+        let mut transcript_config = config(&temp_dir);
+        transcript_config.segment_size_bytes = 1024 * 1024;
+        let recorder = TranscriptRecorder::from_config(&transcript_config)
+            .expect("recorder should be configured");
+        let session = session("manual-1");
+
+        recorder
+            .start_session(&session)
+            .expect("session transcript should start");
+        recorder
+            .record_output(&session.id, "hello\n")
+            .expect("output should append");
+        recorder
+            .record_exit_code(&session.id, 0)
+            .expect("exit code should append");
+
+        let root = temp_dir.path().join("terminals");
+        let transcript_id = transcript_id_for(&root, &session.id);
+        let segment = fs::read_to_string(root.join(transcript_id).join("000001.log"))
+            .expect("segment should be readable");
+
+        // Flushing the marker also flushes everything buffered before it.
+        assert!(segment.contains("hello\n"));
+        assert!(segment.contains("[bitfun: exit_code=0]"));
     }
 
     #[test]

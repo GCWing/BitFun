@@ -3,6 +3,7 @@
 pub mod client;
 pub mod diagnostics;
 pub mod model_selector;
+pub mod models_dev;
 pub mod providers;
 pub mod stream;
 #[cfg(feature = "subscription-auth")]
@@ -19,10 +20,10 @@ pub use model_selector::{
 pub use stream::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
 pub use trace::{
     ModelExchangeRequestAttempt, ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace,
-    ModelExchangeTraceConfig, ModelExchangeTraceSink,
+    ModelExchangeRoundAttempt, ModelExchangeTraceConfig, ModelExchangeTraceSink,
 };
 pub use types::{
     resolve_request_url, AIConfig, ConnectionTestMessageCode, ConnectionTestResult, GeminiResponse,
-    GeminiUsage, Message, ProxyConfig, ReasoningMode, RemoteModelInfo, ToolCall, ToolDefinition,
-    ToolImageAttachment,
+    GeminiUsage, Message, ProxyConfig, ReasoningPresetAction, ReasoningPresetDescriptor,
+    RemoteModelInfo, ToolCall, ToolDefinition, ToolImageAttachment,
 };

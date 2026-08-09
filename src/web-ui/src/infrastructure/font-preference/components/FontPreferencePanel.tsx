@@ -131,7 +131,11 @@ export function FontPreferencePanel() {
   );
 
   return (
-    <div data-testid="appearance-font-section">
+    <div
+      data-testid="appearance-font-section"
+      data-bf-component="font-preference"
+      data-bf-part="root"
+    >
       <ConfigPageSection
         title={t('appearance.fontSize.title')}
         description={t('appearance.fontSize.hint')}
@@ -150,7 +154,9 @@ export function FontPreferencePanel() {
               className="font-pref-panel__level-buttons"
               role="group"
               aria-label={t('appearance.fontSize.uiSizeLabel')}
-              data-testid="appearance-font-size-group"
+              data-testid="appearance-ui-font-level-group"
+              data-bf-component="font-preference"
+              data-bf-part="levelGroup"
             >
               {UI_LEVELS.map((l) => (
                 <button
@@ -162,10 +168,13 @@ export function FontPreferencePanel() {
                   ].join(' ').trim()}
                   onClick={() => void handleLevelClick(l)}
                   aria-pressed={level === l}
-                  data-testid="appearance-font-size-option"
-                  data-size-level={l}
+                  data-testid="appearance-ui-font-level-btn"
                   data-font-level={l}
                   data-selected={level === l ? 'true' : 'false'}
+                  data-bf-component="font-preference"
+                  data-bf-part="levelButton"
+                  data-bf-level={l}
+                  data-bf-state={level === l ? 'selected' : undefined}
                 >
                   <span
                     className="font-pref-panel__level-label"
@@ -188,6 +197,10 @@ export function FontPreferencePanel() {
                   data-size-level="custom"
                   data-font-level="custom"
                   data-selected={level === 'custom' ? 'true' : 'false'}
+                  data-bf-component="font-preference"
+                  data-bf-part="levelButton"
+                  data-bf-level="custom"
+                  data-bf-state={level === 'custom' ? 'selected' : undefined}
                 >
                   <span
                     className="font-pref-panel__level-label"
@@ -202,6 +215,8 @@ export function FontPreferencePanel() {
                     role="group"
                     aria-label={t('appearance.fontSize.customPxLabel')}
                     data-testid="appearance-ui-font-custom-controls"
+                    data-bf-component="font-preference"
+                    data-bf-part="customControls"
                   >
                     <div className="font-pref-panel__stepper">
                       <button
@@ -227,6 +242,9 @@ export function FontPreferencePanel() {
                         aria-invalid={!!customError}
                         data-testid="appearance-ui-font-custom-input"
                         data-font-level="custom"
+                        data-bf-component="font-preference"
+                        data-bf-part="numberInput"
+                        data-bf-state={customError ? 'error' : undefined}
                       />
                       <button
                         type="button"
@@ -243,7 +261,14 @@ export function FontPreferencePanel() {
             </div>
           </div>
           {customError && (
-            <span className="font-pref-panel__error">{customError}</span>
+            <span
+              className="font-pref-panel__error"
+              data-bf-component="font-preference"
+              data-bf-part="error"
+              data-bf-state="error"
+            >
+              {customError}
+            </span>
           )}
 
           {/* Live preview */}
@@ -252,6 +277,8 @@ export function FontPreferencePanel() {
             style={{ fontSize: `${previewBasePx}px` }}
             aria-label="Font size preview"
             data-testid="appearance-ui-font-preview"
+            data-bf-component="font-preference"
+            data-bf-part="preview"
           >
             {t('appearance.fontSize.previewText')}
           </div>
@@ -276,7 +303,11 @@ export function FontPreferencePanel() {
             />
           </div>
           {fcIndependent && (
-            <div className="font-pref-panel__flow-chat-controls">
+            <div
+              className="font-pref-panel__flow-chat-controls"
+              data-bf-component="font-preference"
+              data-bf-part="flowChatControls"
+            >
               <Select
                 size="small"
                 value={flowChatPxValue}
@@ -297,6 +328,8 @@ export function FontPreferencePanel() {
           className="font-pref-panel__reset-btn"
           onClick={() => void handleReset()}
           data-testid="appearance-font-reset-btn"
+          data-bf-component="font-preference"
+          data-bf-part="resetButton"
         >
           {t('appearance.fontSize.resetButton')}
         </button>

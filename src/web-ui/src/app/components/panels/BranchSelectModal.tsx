@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { GitBranch, Plus, X } from 'lucide-react';
 import { createLogger } from '@/shared/utils/logger';
 import { IconButton, Button, Input, Checkbox } from '@/component-library';
@@ -169,10 +170,12 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
   if (!isOpen) return null;
 
   const modalContent = (
-    <div className="branch-select-overlay" onClick={onClose}>
-      <div className="branch-select-dialog" onClick={(e) => e.stopPropagation()}>
+    <div data-bf-component="branch-select-modal" data-bf-part="overlay" className="branch-select-overlay" onClick={onClose}>
+      <div data-bf-component="branch-select-modal" data-bf-part="root" className="branch-select-dialog" onClick={(e) => e.stopPropagation()}>
         <IconButton 
           className="branch-select-dialog__close"
+          data-bf-component="branch-select-modal"
+          data-bf-part="close"
           variant="ghost"
           size="xs"
           onClick={onClose}
@@ -181,13 +184,15 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
           <X size={14} />
         </IconButton>
 
-        <div className="branch-select-dialog__header">
+        <div data-bf-component="branch-select-modal" data-bf-part="header" className="branch-select-dialog__header">
           <h2 className="branch-select-dialog__title">{resolvedTitle}</h2>
         </div>
 
-        <div className="branch-select-dialog__content">
+        <div data-bf-component="branch-select-modal" data-bf-part="content" className="branch-select-dialog__content">
           <div className="branch-select-dialog__input-wrapper">
             <Input
+              data-bf-component="branch-select-modal"
+              data-bf-part="input"
               ref={inputRef}
               type="text"
               placeholder={t('branchSelect.inputPlaceholder')}
@@ -198,14 +203,14 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
           </div>
 
           {error && (
-            <div className="branch-select-dialog__error">
+            <div data-bf-component="branch-select-modal" data-bf-part="error" className="branch-select-dialog__error">
               {error}
             </div>
           )}
 
-          <div className="branch-select-dialog__list">
+          <div data-bf-component="branch-select-modal" data-bf-part="list" className="branch-select-dialog__list">
             {isLoading ? (
-              <div className="branch-select-dialog__loading">
+              <div data-bf-component="branch-select-modal" data-bf-part="loading" className="branch-select-dialog__loading">
                 <div className="branch-select-dialog__loading-dots">
                   <span></span>
                   <span></span>
@@ -217,6 +222,9 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
               <>
                 {canCreateNewBranch && (
                   <div
+                    data-bf-component="branch-select-modal"
+                    data-bf-part="item"
+                    data-bf-state={selectedBranch === searchTerm && isNewBranch ? 'selected' : undefined}
                     className={`branch-select-dialog__item branch-select-dialog__item--new ${
                       selectedBranch === searchTerm && isNewBranch ? 'selected' : ''
                     }`}
@@ -224,7 +232,7 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
                     onDoubleClick={() => handleDoubleClick(searchTerm.trim(), true)}
                   >
                     <Plus size={14} className="branch-select-dialog__item-icon branch-select-dialog__item-icon--new" />
-                    <span className="branch-select-dialog__item-name">
+                    <span data-bf-component="branch-select-modal" data-bf-part="itemName" className="branch-select-dialog__item-name">
                       {t('branchSelect.createNewLabel')} <strong>{searchTerm.trim()}</strong>
                     </span>
                   </div>
@@ -235,7 +243,11 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
                   const hasWorktree = branch.hasWorktree;
 
                   return (
-                    <div
+                    <div data-bf-component="branch-select-modal" data-bf-part="item"
+                      data-bf-state={[
+                        selectedBranch === branch.name && !isNewBranch && 'selected',
+                        branch.current && 'current',
+                      ].filter(Boolean).join(' ') || undefined}
                       key={branch.name}
                       className={`branch-select-dialog__item ${
                         selectedBranch === branch.name && !isNewBranch ? 'selected' : ''
@@ -244,14 +256,14 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
                       onDoubleClick={() => !isDisabled && handleDoubleClick(branch.name, false)}
                     >
                       <GitBranch size={14} className="branch-select-dialog__item-icon" />
-                      <span className="branch-select-dialog__item-name">
+                      <span data-bf-component="branch-select-modal" data-bf-part="itemName" className="branch-select-dialog__item-name">
                         {branch.name}
                       </span>
                       {branch.current && (
-                        <span className="branch-select-dialog__item-badge">{t('branch.current')}</span>
+                        <span data-bf-component="branch-select-modal" data-bf-part="badge" className="branch-select-dialog__item-badge">{t('branch.current')}</span>
                       )}
                       {hasWorktree && !branch.current && (
-                        <span className="branch-select-dialog__item-badge branch-select-dialog__item-badge--worktree">
+                        <span data-bf-component="branch-select-modal" data-bf-part="badge" className="branch-select-dialog__item-badge branch-select-dialog__item-badge--worktree">
                           {t('branchSelect.badges.inUse')}
                         </span>
                       )}
@@ -260,7 +272,7 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
                 })}
 
                 {filteredBranches.length === 0 && !canCreateNewBranch && (
-                  <div className="branch-select-dialog__empty">
+                  <div data-bf-component="branch-select-modal" data-bf-part="empty" className="branch-select-dialog__empty">
                     {searchTerm ? t('empty.noMatchingBranches') : t('empty.noBranches')}
                   </div>
                 )}
@@ -269,9 +281,9 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
           </div>
         </div>
 
-        <div className="branch-select-dialog__footer">
+        <div data-bf-component="branch-select-modal" data-bf-part="footer" className="branch-select-dialog__footer">
           {showOpenAfterCreate ? (
-            <div className="branch-select-dialog__options">
+            <div data-bf-component="branch-select-modal" data-bf-part="options" className="branch-select-dialog__options">
               <Checkbox
                 checked={openAfterCreate}
                 onChange={(event) => setOpenAfterCreate(event.target.checked)}
@@ -304,7 +316,7 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
     return modalContent;
   }
 
-  return createPortal(modalContent, document.body);
+  return createPortal(modalContent, getAppearanceOverlayHost());
 };
 
 export default BranchSelectModal;

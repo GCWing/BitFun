@@ -1,0 +1,299 @@
+{
+  "schema_version": 1,
+  "catalog_kind": "bitfun_builtin_provider_overlay",
+  "providers": [
+    {
+      "id": "openbitfun",
+      "display_order": 0,
+      "region": "any",
+      "name": "OpenBitFun",
+      "description": "OpenBitFun hosted AI service",
+      "requires_api_key": true,
+      "catalog_provider_ids": [],
+      "endpoints": [
+        {
+          "id": "default",
+          "base_url": "https://api.openbitfun.com",
+          "api_format": "anthropic",
+          "label": "default",
+          "is_default": true,
+          "trusted_for_auto_detection": true,
+          "catalog_provider_ids": [],
+          "reasoning_catalog_bindings": [
+            { "model_id": "glm-5.2", "source_provider_id": "zhipuai", "source_model_id": "glm-5.2" },
+            { "model_id": "deepseek-v4-flash", "source_provider_id": "deepseek", "source_model_id": "deepseek-v4-flash" },
+            { "model_id": "deepseek-v4-pro", "source_provider_id": "deepseek", "source_model_id": "deepseek-v4-pro" }
+          ]
+        },
+        {
+          "id": "openai",
+          "base_url": "https://api.openbitfun.com/v1",
+          "api_format": "openai",
+          "label": "openai",
+          "trusted_for_auto_detection": true,
+          "catalog_provider_ids": [],
+          "reasoning_catalog_bindings": [
+            { "model_id": "glm-5.2", "source_provider_id": "zhipuai", "source_model_id": "glm-5.2" },
+            { "model_id": "deepseek-v4-flash", "source_provider_id": "deepseek", "source_model_id": "deepseek-v4-flash" },
+            { "model_id": "deepseek-v4-pro", "source_provider_id": "deepseek", "source_model_id": "deepseek-v4-pro" }
+          ]
+        }
+      ],
+      "model_policy": {
+        "mode": "curated",
+        "curated_models": ["glm-5.2", "deepseek-v4-flash", "deepseek-v4-pro"],
+        "additional_models": []
+      }
+    },
+    {
+      "id": "zhipu",
+      "display_order": 10,
+      "region": "cn",
+      "name": "Zhipu AI",
+      "description": "Zhipu GLM series",
+      "help_url": "https://open.bigmodel.cn/usercenter/apikeys",
+      "requires_api_key": true,
+      "catalog_provider_ids": ["zhipuai"],
+      "endpoints": [
+        { "id": "default", "base_url": "https://open.bigmodel.cn/api/paas/v4", "api_format": "openai", "label": "default", "is_default": true, "trusted_for_auto_detection": true, "catalog_provider_ids": ["zhipuai"] },
+        { "id": "anthropic", "base_url": "https://open.bigmodel.cn/api/anthropic", "api_format": "anthropic", "label": "anthropic", "trusted_for_auto_detection": true, "catalog_provider_ids": ["zhipuai"] },
+        { "id": "coding-plan", "base_url": "https://open.bigmodel.cn/api/coding/paas/v4", "api_format": "openai", "label": "codingPlan", "trusted_for_auto_detection": true, "catalog_provider_ids": ["zhipuai"] },
+        { "id": "international", "base_url": "https://api.z.ai/api/paas/v4", "api_format": "openai", "label": "intl", "trusted_for_auto_detection": true, "catalog_provider_ids": ["zhipuai"] },
+        { "id": "international-anthropic", "base_url": "https://api.z.ai/api/anthropic", "api_format": "anthropic", "label": "intlAnthropic", "trusted_for_auto_detection": true, "catalog_provider_ids": ["zhipuai"] },
+        { "id": "international-coding-plan", "base_url": "https://api.z.ai/api/coding/paas/v4", "api_format": "openai", "label": "intlCodingPlan", "trusted_for_auto_detection": true, "catalog_provider_ids": ["zhipuai"] }
+      ],
+      "model_policy": {
+        "mode": "catalog_with_fallback",
+        "curated_models": ["glm-5.2", "glm-5.1", "glm-5"],
+        "additional_models": []
+      }
+    },
+    {
+      "id": "qwen",
+      "display_order": 20,
+      "region": "cn",
+      "name": "Qwen (Alibaba)",
+      "description": "Alibaba Qwen series",
+      "help_url": "https://dashscope.console.aliyun.com/apiKey",
+      "requires_api_key": true,
+      "catalog_provider_ids": ["alibaba"],
+      "endpoints": [
+        { "id": "default", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "api_format": "openai", "label": "default", "is_default": true, "trusted_for_auto_detection": true, "catalog_provider_ids": ["alibaba"] },
+        { "id": "international", "base_url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", "api_format": "openai", "label": "intl", "trusted_for_auto_detection": true, "catalog_provider_ids": ["alibaba"] },
+        { "id": "coding-plan", "base_url": "https://coding.dashscope.aliyuncs.com/v1", "api_format": "openai", "label": "codingPlan", "trusted_for_auto_detection": true, "catalog_provider_ids": ["alibaba"] },
+        { "id": "coding-plan-anthropic", "base_url": "https://coding.dashscope.aliyuncs.com/apps/anthropic", "api_format": "anthropic", "label": "codingPlanAnthropic", "trusted_for_auto_detection": true, "catalog_provider_ids": ["alibaba"] },
+        { "id": "international-coding-plan", "base_url": "https://coding-intl.dashscope.aliyuncs.com/v1", "api_format": "openai", "label": "intlCodingPlan", "trusted_for_auto_detection": true, "catalog_provider_ids": ["alibaba"] }
+      ],
+      "model_policy": {
+        "mode": "catalog_with_fallback",
+        "curated_models": ["qwen3.7-plus", "qwen3.7-max", "qwen3.6-flash"],
+        "additional_models": []
+      }
+    },
+    {
+      "id": "deepseek",
+      "display_order": 30,
+      "region": "cn",
+      "name": "DeepSeek",
+      "description": "DeepSeek AI models",
+      "help_url": "https://platform.deepseek.com/api_keys",
+      "requires_api_key": true,
+      "catalog_provider_ids": ["deepseek"],
+      "endpoints": [
+        { "id": "default", "base_url": "https://api.deepseek.com/v1", "api_format": "openai", "label": "default", "is_default": true, "trusted_for_auto_detection": true, "trusted_aliases": ["https://api.deepseek.com"], "catalog_provider_ids": ["deepseek"] },
+        { "id": "anthropic", "base_url": "https://api.deepseek.com/anthropic", "api_format": "anthropic", "label": "anthropic", "trusted_for_auto_detection": true, "catalog_provider_ids": ["deepseek"] }
+      ],
+      "model_policy": {
+        "mode": "catalog_with_fallback",
+        "curated_models": ["deepseek-v4-flash", "deepseek-v4-pro"],
+        "additional_models": []
+      }
+    },
+    {
+      "id": "volcengine",
+      "display_order": 40,
+      "region": "cn",
+      "name": "Volcengine",
+      "description": "ByteDance Volcengine",
+      "help_url": "https://console.volcengine.com/ark/",
+      "requires_api_key": true,
+      "catalog_provider_ids": [],
+      "endpoints": [
+        { "id": "default", "base_url": "https://ark.cn-beijing.volces.com/api/v3", "api_format": "openai", "label": "default", "is_default": true, "trusted_for_auto_detection": true, "catalog_provider_ids": [] },
+        { "id": "coding-plan", "base_url": "https://ark.cn-beijing.volces.com/api/coding/v3", "api_format": "openai", "label": "codingPlan", "trusted_for_auto_detection": true, "catalog_provider_ids": [] },
+        { "id": "international", "base_url": "https://ark.ap-southeast.bytepluses.com/api/v3", "api_format": "openai", "label": "intl", "trusted_for_auto_detection": true, "catalog_provider_ids": [] }
+      ],
+      "model_policy": {
+        "mode": "curated",
+        "curated_models": ["doubao-seed-2-1-pro-260628", "doubao-seed-2-0-code-preview-260215", "doubao-seed-2-0-pro-260215"],
+        "additional_models": []
+      }
+    },
+    {
+      "id": "minimax",
+      "display_order": 50,
+      "region": "cn",
+      "name": "MiniMax",
+      "description": "MiniMax AI models",
+      "help_url": "https://platform.minimax.io/",
+      "requires_api_key": true,
+      "catalog_provider_ids": ["minimax-cn", "minimax", "minimax-cn-coding-plan", "minimax-coding-plan"],
+      "endpoints": [
+        { "id": "default", "base_url": "https://api.minimaxi.com/anthropic", "api_format": "anthropic", "label": "default", "is_default": true, "trusted_for_auto_detection": true, "catalog_provider_ids": ["minimax-cn", "minimax-cn-coding-plan"] },
+        { "id": "openai", "base_url": "https://api.minimaxi.com/v1", "api_format": "openai", "label": "openai", "trusted_for_auto_detection": true, "catalog_provider_ids": ["minimax-cn", "minimax-cn-coding-plan"] },
+        { "id": "international", "base_url": "https://api.minimax.io/anthropic", "api_format": "anthropic", "label": "intl", "trusted_for_auto_detection": true, "catalog_provider_ids": ["minimax", "minimax-coding-plan"] },
+        { "id": "international-openai", "base_url": "https://api.minimax.io/v1", "api_format": "openai", "label": "intlOpenai", "trusted_for_auto_detection": true, "catalog_provider_ids": ["minimax", "minimax-coding-plan"] }
+      ],
+      "model_policy": {
+        "mode": "catalog_with_fallback",
+        "curated_models": ["MiniMax-M3", "MiniMax-M2.7", "MiniMax-M2.7-highspeed"],
+        "additional_models": []
+      }
+    },
+    {
+      "id": "moonshot",
+      "display_order": 60,
+      "region": "cn",
+      "name": "Moonshot (Kimi)",
+      "description": "Moonshot Kimi series",
+      "help_url": "https://platform.kimi.ai/console",
+      "requires_api_key": true,
+      "catalog_provider_ids": ["moonshotai", "moonshotai-cn", "kimi-for-coding"],
+      "endpoints": [
+        { "id": "default", "base_url": "https://api.moonshot.cn/v1", "api_format": "openai", "label": "default", "is_default": true, "trusted_for_auto_detection": true, "catalog_provider_ids": ["moonshotai-cn"] },
+        { "id": "anthropic", "base_url": "https://api.moonshot.cn/anthropic", "api_format": "anthropic", "label": "anthropic", "trusted_for_auto_detection": true, "catalog_provider_ids": ["moonshotai-cn"] },
+        { "id": "international", "base_url": "https://api.moonshot.ai/v1", "api_format": "openai", "label": "intl", "trusted_for_auto_detection": true, "catalog_provider_ids": ["moonshotai"] },
+        { "id": "international-anthropic", "base_url": "https://api.moonshot.ai/anthropic", "api_format": "anthropic", "label": "intlAnthropic", "trusted_for_auto_detection": true, "catalog_provider_ids": ["moonshotai"] },
+        { "id": "kimi-for-coding", "base_url": "https://api.kimi.com/coding", "api_format": "anthropic", "label": "kimiForCoding", "trusted_for_auto_detection": true, "catalog_provider_ids": ["kimi-for-coding"] }
+      ],
+      "model_policy": {
+        "mode": "catalog_with_fallback",
+        "curated_models": ["kimi-k3", "kimi-k2.7-code", "kimi-k2.6"],
+        "additional_models": []
+      }
+    },
+    {
+      "id": "gemini",
+      "display_order": 70,
+      "region": "global",
+      "name": "Google Gemini",
+      "description": "Google Gemini API models",
+      "help_url": "https://aistudio.google.com/app/apikey",
+      "requires_api_key": true,
+      "catalog_provider_ids": ["google"],
+      "endpoints": [
+        { "id": "default", "base_url": "https://generativelanguage.googleapis.com", "api_format": "gemini", "label": "default", "is_default": true, "trusted_for_auto_detection": true, "catalog_provider_ids": ["google"] }
+      ],
+      "model_policy": {
+        "mode": "catalog_with_fallback",
+        "curated_models": ["gemini-3.1-pro-preview", "gemini-3.6-flash", "gemini-3.5-flash-lite"],
+        "additional_models": []
+      }
+    },
+    {
+      "id": "anthropic",
+      "display_order": 80,
+      "region": "global",
+      "name": "Anthropic",
+      "description": "Anthropic Claude series",
+      "help_url": "https://platform.claude.com/",
+      "requires_api_key": true,
+      "catalog_provider_ids": ["anthropic"],
+      "endpoints": [
+        { "id": "default", "base_url": "https://api.anthropic.com", "api_format": "anthropic", "label": "default", "is_default": true, "trusted_for_auto_detection": true, "catalog_provider_ids": ["anthropic"] }
+      ],
+      "model_policy": {
+        "mode": "catalog_with_fallback",
+        "curated_models": ["claude-opus-5", "claude-fable-5", "claude-sonnet-5", "claude-haiku-4-5"],
+        "additional_models": []
+      }
+    },
+    {
+      "id": "siliconflow",
+      "display_order": 90,
+      "region": "cn",
+      "name": "SiliconFlow",
+      "description": "SiliconFlow model marketplace",
+      "help_url": "https://cloud.siliconflow.cn/account/ak",
+      "requires_api_key": true,
+      "catalog_provider_ids": ["siliconflow"],
+      "endpoints": [
+        { "id": "default", "base_url": "https://api.siliconflow.cn/v1", "api_format": "openai", "label": "default", "is_default": true, "trusted_for_auto_detection": true, "catalog_provider_ids": ["siliconflow"] },
+        { "id": "anthropic", "base_url": "https://api.siliconflow.cn/v1/messages", "api_format": "anthropic", "label": "anthropic", "trusted_for_auto_detection": true, "catalog_provider_ids": ["siliconflow"] },
+        { "id": "international", "base_url": "https://api.siliconflow.com/v1", "api_format": "openai", "label": "intl", "trusted_for_auto_detection": true, "catalog_provider_ids": ["siliconflow"] }
+      ],
+      "model_policy": {
+        "mode": "catalog_with_fallback",
+        "curated_models": ["zai-org/GLM-5.2", "deepseek-ai/DeepSeek-V4-Pro", "deepseek-ai/DeepSeek-V4-Flash"],
+        "additional_models": []
+      }
+    },
+    {
+      "id": "nvidia",
+      "display_order": 100,
+      "region": "global",
+      "name": "NVIDIA",
+      "description": "NVIDIA NIM models",
+      "help_url": "https://build.nvidia.com/settings/api-keys",
+      "requires_api_key": true,
+      "catalog_provider_ids": ["nvidia"],
+      "endpoints": [
+        { "id": "default", "base_url": "https://integrate.api.nvidia.com/v1", "api_format": "openai", "label": "default", "is_default": true, "trusted_for_auto_detection": true, "catalog_provider_ids": ["nvidia"] }
+      ],
+      "model_policy": {
+        "mode": "catalog",
+        "curated_models": [],
+        "additional_models": []
+      }
+    },
+    {
+      "id": "openrouter",
+      "display_order": 110,
+      "region": "global",
+      "name": "OpenRouter",
+      "description": "OpenRouter model marketplace",
+      "help_url": "https://openrouter.ai/keys",
+      "requires_api_key": true,
+      "catalog_provider_ids": ["openrouter"],
+      "endpoints": [
+        { "id": "default", "base_url": "https://openrouter.ai/api/v1", "api_format": "openai", "label": "default", "is_default": true, "trusted_for_auto_detection": true, "catalog_provider_ids": ["openrouter"] }
+      ],
+      "model_policy": {
+        "mode": "catalog",
+        "curated_models": [],
+        "additional_models": []
+      }
+    },
+    {
+      "id": "tokendance",
+      "display_order": 120,
+      "region": "cn",
+      "name": "TokenDance",
+      "description": "TokenDance unified AI model gateway",
+      "help_url": "https://tokendance.space/keys",
+      "requires_api_key": true,
+      "catalog_provider_ids": [],
+      "endpoints": [
+        {
+          "id": "default",
+          "base_url": "https://tokendance.space/gateway/v1",
+          "api_format": "openai",
+          "label": "default",
+          "is_default": true,
+          "trusted_for_auto_detection": true,
+          "catalog_provider_ids": [],
+          "reasoning_catalog_bindings": [
+            { "model_id": "glm-5.2", "source_provider_id": "zhipuai", "source_model_id": "glm-5.2" },
+            { "model_id": "deepseek-v4-flash", "source_provider_id": "deepseek", "source_model_id": "deepseek-v4-flash" },
+            { "model_id": "deepseek-v4-pro", "source_provider_id": "deepseek", "source_model_id": "deepseek-v4-pro" }
+          ]
+        }
+      ],
+      "model_policy": {
+        "mode": "curated",
+        "curated_models": ["glm-5.2", "deepseek-v4-flash", "deepseek-v4-pro"],
+        "additional_models": []
+      }
+    }
+  ]
+}

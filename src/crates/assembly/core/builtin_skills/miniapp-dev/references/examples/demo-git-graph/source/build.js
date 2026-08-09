@@ -10,7 +10,7 @@ const ROOT = path.dirname(SOURCE_DIR);
 
 const UI_ORDER = [
   'ui/state.js',
-  'ui/theme.js',
+  'ui/appearance.js',
   'ui/graph/layout.js',
   'ui/graph/renderRowSvg.js',
   'ui/services/gitClient.js',

@@ -1,5 +1,7 @@
 //! Versioned JSON-RPC contracts for the local SDK Host.
 
+use bitfun_core_types::SessionExecutionTarget;
+use bitfun_runtime_ports::AgentSessionCreateResult;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -333,6 +335,29 @@ pub struct SessionCreateResult {
     pub session_name: String,
     pub agent: String,
     pub lifetime: SessionLifetime,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_target: Option<SessionExecutionTarget>,
+}
+
+impl SessionCreateResult {
+    pub fn from_runtime(created: AgentSessionCreateResult, lifetime: SessionLifetime) -> Self {
+        Self {
+            session_id: created.session_id,
+            session_name: created.session_name,
+            agent: created.agent_type,
+            lifetime,
+            workspace_path: created.workspace_path,
+            workspace_id: created.workspace_id,
+            project_workspace_path: created.project_workspace_path,
+            execution_target: created.execution_target,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -466,4 +491,33 @@ impl QueryResultError {
 
 fn empty_object() -> serde_json::Value {
     serde_json::Value::Object(serde_json::Map::new())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SessionCreateResult, SessionLifetime};
+    use bitfun_core_types::SessionExecutionTarget;
+    use bitfun_runtime_ports::AgentSessionCreateResult;
+
+    #[test]
+    fn session_create_result_preserves_runtime_placement_facts() {
+        let mut created = AgentSessionCreateResult::new("session_1", "Main", "agentic");
+        created.workspace_path = Some("/worktrees/session_1".to_string());
+        created.workspace_id = Some("workspace_1".to_string());
+        created.project_workspace_path = Some("/workspace/project".to_string());
+        created.execution_target = Some(SessionExecutionTarget::local("/worktrees/session_1"));
+
+        let result = SessionCreateResult::from_runtime(created, SessionLifetime::Connection);
+        let json = serde_json::to_value(result).expect("serialize SDK Host create result");
+
+        assert_eq!(json["sessionId"], "session_1");
+        assert_eq!(json["sessionName"], "Main");
+        assert_eq!(json["agent"], "agentic");
+        assert!(json.get("agentType").is_none());
+        assert_eq!(json["workspacePath"], "/worktrees/session_1");
+        assert_eq!(json["workspaceId"], "workspace_1");
+        assert_eq!(json["projectWorkspacePath"], "/workspace/project");
+        assert_eq!(json["executionTarget"]["kind"], "local");
+        assert_eq!(json["lifetime"], "connection");
+    }
 }

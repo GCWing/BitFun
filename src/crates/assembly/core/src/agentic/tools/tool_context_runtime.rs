@@ -87,6 +87,14 @@ impl ToolUseContext {
         self.workspace.as_ref().map(|binding| binding.root_path())
     }
 
+    /// Main project root used by project-scoped orchestration tools. File,
+    /// terminal, and Git tools must continue to use [`Self::workspace_root`].
+    pub fn project_workspace_root(&self) -> Option<&Path> {
+        self.workspace
+            .as_ref()
+            .map(|binding| binding.project_root_path())
+    }
+
     pub fn is_remote(&self) -> bool {
         self.workspace
             .as_ref()

@@ -40,7 +40,7 @@ import {
 } from './agentsStore';
 import { useAgentsList } from './hooks/useAgentsList';
 import { AGENT_ICON_MAP } from './agentsIcons';
-import { CAPABILITY_ACCENT, CORE_AGENT_ACCENTS, DEFAULT_CORE_AGENT_ACCENT } from './agentTheme';
+import { CAPABILITY_ACCENT, CORE_AGENT_ACCENTS, DEFAULT_CORE_AGENT_ACCENT } from './agentAppearance';
 import { getCardGradient } from '@/shared/utils/cardGradients';
 import { isUserSelectableToolName } from '@/shared/utils/toolVisibility';
 import { getAgentBadge, getAgentDescription, getCapabilityLabel } from './utils';
@@ -53,7 +53,7 @@ import {
   isLocallyManageableSubagent,
 } from './agentVisibility';
 import { CustomAgentAPI } from '@/infrastructure/api/service-api/CustomAgentAPI';
-import { configManager } from '@/infrastructure/config/services/ConfigManager';
+import { useComputerUseEnabled } from '@/infrastructure/config/hooks/useComputerUseEnabled';
 import type { ModeSkillInfo, SubagentModelSelection } from '@/infrastructure/config/types';
 import {
   buildSkillCoverageSourceMap,
@@ -197,7 +197,7 @@ const AgentsHomeView: React.FC = () => {
   const [savingSkills, setSavingSkills] = React.useState(false);
   const [savingSubagents, setSavingSubagents] = React.useState(false);
   const [savingSubagentModel, setSavingSubagentModel] = React.useState(false);
-  const [computerUseEnabled, setComputerUseEnabled] = useState(true);
+  const { computerUseEnabled } = useComputerUseEnabled();
   const { buildModelOption, renderModelOption, renderModelValue } = useModelSelectPresentation();
   const {
     groups: userToolGroups,
@@ -241,23 +241,6 @@ const AgentsHomeView: React.FC = () => {
       void loadAgents();
     },
   });
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadComputerUseEnabled = () => {
-      void configManager.getConfig<boolean>('ai.computer_use_enabled').then((enabled) => {
-        if (!cancelled) setComputerUseEnabled(enabled ?? false);
-      });
-    };
-    loadComputerUseEnabled();
-    const unsubscribe = configManager.onConfigChange((path) => {
-      if (path === 'ai.computer_use_enabled' || path === 'ai') loadComputerUseEnabled();
-    });
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
-  }, []);
 
   const coreAgentMeta = useMemo((): Record<string, CoreAgentMeta> => ({
     agentic: {
@@ -614,12 +597,17 @@ const AgentsHomeView: React.FC = () => {
   );
 
   return (
-    <GalleryLayout className="bitfun-agents-scene" data-testid="agent-skill-panel">
+    <GalleryLayout
+      className="bitfun-agents-scene"
+      data-testid="agent-skill-panel"
+      data-bf-scene="agents"
+      data-bf-part="root"
+    >
       <GalleryPageHeader
         title={t('page.title')}
         subtitle={t('page.subtitle')}
         extraContent={(
-          <div className="gallery-anchor-bar">
+          <div className="gallery-anchor-bar" data-bf-scene="agents" data-bf-part="anchorBar">
             <button
               type="button"
               className="gallery-anchor-btn"
@@ -662,7 +650,7 @@ const AgentsHomeView: React.FC = () => {
         )}
       />
 
-      <div className="gallery-zones" data-testid="agent-list">
+      <div className="gallery-zones" data-bf-scene="agents" data-bf-part="zones" data-testid="agent-list">
         <GalleryZone
           id="core-agents-zone"
           data-testid="agents-core-zone"
@@ -673,7 +661,12 @@ const AgentsHomeView: React.FC = () => {
           )}
         >
           {loading ? (
-            <GallerySkeleton count={3} cardHeight={160} className="core-agent-skeleton" />
+            <GallerySkeleton
+              count={3}
+              cardHeight={160}
+              minCardWidth={360}
+              className="core-agent-skeleton"
+            />
           ) : coreAgents.length === 0 ? (
             <GalleryEmpty
               icon={<Cpu size={32} strokeWidth={1.5} />}
@@ -681,7 +674,7 @@ const AgentsHomeView: React.FC = () => {
               testId="agent-list-empty"
             />
           ) : (
-            <div className="core-agents-grid">
+            <GalleryGrid minCardWidth={360} data-bf-scene="agents" data-bf-part="coreGrid">
               {coreAgents.map((agent, index) => (
                 <CoreAgentCard
                   key={agent.id}
@@ -707,7 +700,7 @@ const AgentsHomeView: React.FC = () => {
                   }
                 />
               ))}
-            </div>
+            </GalleryGrid>
           )}
         </GalleryZone>
 
@@ -718,7 +711,7 @@ const AgentsHomeView: React.FC = () => {
           subtitle={t('agentsZone.subtitle')}
           tools={(
             <>
-              <div className="bitfun-agents-scene__agent-filters">
+              <div className="bitfun-agents-scene__agent-filters" data-bf-scene="agents" data-bf-part="filters">
                 <div className="bitfun-agents-scene__agent-filter-group">
                   <span className="bitfun-agents-scene__agent-filter-label">
                     {t('filters.source')}
@@ -897,7 +890,7 @@ const AgentsHomeView: React.FC = () => {
             </div>
 
             {selectedAgent.agentKind === 'mode' && selectedAgentUsesSharedProfile ? (
-              <div className="agent-card__section">
+              <div className="agent-card__section" data-bf-scene="agents" data-bf-part="detailSection">
                 <div className="agent-card__section-head">
                   <div className="agent-card__section-title">
                     <span>{t('agentsOverview.sharedProfileLabel')}</span>
@@ -1123,6 +1116,8 @@ const AgentsHomeView: React.FC = () => {
                     size="small"
                     searchable
                     className="bitfun-agents-scene__subagent-model-select model-select-presentation__select"
+                    dropdownClassName="model-select-presentation__dropdown"
+                    dropdownMode="inline"
                     options={subagentModelOptions}
                     value={selectedSubagentModelValue}
                     onChange={(value) => void handleSubagentModelChange(value)}
@@ -1326,7 +1321,7 @@ const AgentsScene: React.FC = () => {
 
   if (page === 'createAgent') {
     return (
-      <div className="bitfun-agents-scene bitfun-agents-scene--page">
+      <div className="bitfun-agents-scene bitfun-agents-scene--page" data-bf-scene="agents" data-bf-part="root">
         <CreateAgentPage />
       </div>
     );

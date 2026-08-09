@@ -8,7 +8,6 @@ import type { EditorInstance } from '../meditor';
 import { createLogger } from '@/shared/utils/logger';
 import { CubeLoading, Button, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
-import { useTheme } from '@/infrastructure/theme/hooks/useTheme';
 import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { fileSystemService } from '@/tools/file-system/services/FileSystemService';
@@ -59,8 +58,6 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
   jumpToColumn: _jumpToColumn,
 }) => {
   const { t } = useI18n('tools');
-  const { isLight } = useTheme();
-  const mEditorTheme = isLight ? 'light' : 'dark';
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [planData, setPlanData] = useState<PlanData | null>(null);
@@ -532,7 +529,12 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
     const toolbarClassName = `${placement === 'trailing' ? 'trailing-todo-toolbar' : 'todo-inline-toolbar'} ${isEditingYaml ? 'todo-toolbar--yaml' : ''}`;
 
     return (
-      <div className={panelClassName}>
+      <div
+        className={panelClassName}
+        data-bf-component="plan-viewer"
+        data-bf-part="editorPanel"
+        data-bf-state={isInline && isTodosExpanded ? 'expanded' : undefined}
+      >
         <div className={toolbarClassName}>
           {isYamlEditingInPanel ? (
             <Tooltip content={t('editor.planViewer.toggleYamlEditOff')} placement="top">
@@ -599,7 +601,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
         </div>
 
         {isYamlEditingInPanel ? (
-          <div className="yaml-editor-section">
+          <div className="yaml-editor-section" data-bf-component="plan-viewer" data-bf-part="editor">
             <div className="yaml-editor-content">
               <MEditor
                 ref={yamlEditorRef}
@@ -607,7 +609,6 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
                 onChange={handleYamlChange}
                 onSave={handleSave}
                 mode="edit"
-                theme={mEditorTheme}
                 height="200px"
                 width="100%"
                 placeholder={t('editor.planViewer.yamlPlaceholder')}
@@ -618,11 +619,13 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
             </div>
           </div>
         ) : (
-          <div className="todos-list">
+          <div className="todos-list" data-bf-component="plan-viewer" data-bf-part="todos">
             {panelTodos.map((todo, index) => (
               <div
                 key={todo.id || index}
                 className={`todo-item status-${todo.status || 'pending'}`}
+                data-bf-component="plan-viewer"
+                data-bf-part="todo"
               >
                 {getTodoIcon(todo.status)}
                 {isPanelEditing ? (
@@ -684,7 +687,6 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
     trailingTodoDrafts,
     yamlContent,
     yamlEditorPlacement,
-    mEditorTheme,
   ]);
 
   // Build button click handler
@@ -740,7 +742,7 @@ ${JSON.stringify(simpleTodos, null, 2)}
   // Render loading state
   if (loading) {
     return (
-      <div className="bitfun-plan-viewer bitfun-plan-viewer--loading">
+      <div className="bitfun-plan-viewer bitfun-plan-viewer--loading" data-bf-component="plan-viewer" data-bf-part="loading" data-bf-state="loading">
         <CubeLoading size="medium" text={t('editor.planViewer.loadingPlan')} />
       </div>
     );
@@ -749,7 +751,7 @@ ${JSON.stringify(simpleTodos, null, 2)}
   // Render error state
   if (error) {
     return (
-      <div className="bitfun-plan-viewer bitfun-plan-viewer--error">
+      <div className="bitfun-plan-viewer bitfun-plan-viewer--error" data-bf-component="plan-viewer" data-bf-part="error" data-bf-state="error">
         <div className="error-content">
           <AlertCircle className="error-icon" />
           <p>{error}</p>
@@ -762,16 +764,23 @@ ${JSON.stringify(simpleTodos, null, 2)}
   }
 
   return (
-    <div className="bitfun-plan-viewer">
+    <div
+      className="bitfun-plan-viewer"
+      data-bf-component="plan-viewer"
+      data-bf-part="root"
+      data-bf-state={hasTodos && isTodosExpanded ? 'expanded' : undefined}
+    >
       <div
         className={`plan-viewer-header ${hasTodos ? 'plan-viewer-header--collapsible' : ''}`}
+        data-bf-component="plan-viewer"
+        data-bf-part="header"
         onClick={() => {
           if (hasTodos && !isEditingYaml) {
             setIsTodosExpanded(!isTodosExpanded);
           }
         }}
       >
-        <div className="header-left">
+        <div className="header-left" data-bf-component="plan-viewer" data-bf-part="headerMain">
           {hasTodos && (
             <span
               className={`header-expand-indicator ${isTodosExpanded ? 'header-expand-indicator--expanded' : ''} ${isEditingYaml ? 'header-expand-indicator--disabled' : ''}`}
@@ -783,7 +792,7 @@ ${JSON.stringify(simpleTodos, null, 2)}
           <span className="file-name">{displayFileName}</span>
           {hasUnsavedChanges && <span className="unsaved-indicator">{t('editor.planViewer.unsaved')}</span>}
         </div>
-        <div className="header-right" onClick={(e) => e.stopPropagation()}>
+        <div className="header-right" onClick={(e) => e.stopPropagation()} data-bf-component="plan-viewer" data-bf-part="headerActions">
           {hasTodos && (
             <>
               <span className="todos-count">{t('editor.planViewer.remainingTodos', { count: remainingTodos })}</span>
@@ -814,8 +823,8 @@ ${JSON.stringify(simpleTodos, null, 2)}
 
       {hasTodos && (yamlEditorPlacement === 'inline' || isTodosExpanded) && renderSharedTodoPanel('inline')}
 
-      <div className="plan-viewer-content">
-        <div className="plan-markdown">
+      <div className="plan-viewer-content" data-bf-component="plan-viewer" data-bf-part="content">
+        <div className="plan-markdown" data-bf-component="plan-viewer" data-bf-part="markdown">
           <MEditor
             ref={editorRef}
             value={planContent}
@@ -823,7 +832,6 @@ ${JSON.stringify(simpleTodos, null, 2)}
             onDirtyChange={handleContentDirtyChange}
             onSave={handleSave}
             mode="ir"
-            theme={mEditorTheme}
             height="auto"
             width="100%"
             placeholder={t('editor.planViewer.contentPlaceholder')}

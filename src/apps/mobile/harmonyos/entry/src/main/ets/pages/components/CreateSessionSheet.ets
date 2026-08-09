@@ -1,5 +1,5 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { ACCENT, CARD, INK, LINE, MUTED, PAGE_BG, SOFT, SUBTLE } from './Theme';
+import { CARD, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, SOFT, SUBTLE } from './Theme';
 
 @Component
 export struct CreateSessionSheet {
@@ -87,8 +87,8 @@ export struct CreateSessionSheet {
           .height(56)
           .fontSize(17)
           .fontWeight(FontWeight.Medium)
-          .fontColor(CARD)
-          .backgroundColor(ACCENT)
+          .fontColor(PRIMARY_ACTION_TEXT)
+          .backgroundColor(PRIMARY_ACTION)
           .borderRadius(14)
           .enabled(!this.isBusy)
           .onClick(() => {

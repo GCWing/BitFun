@@ -32,7 +32,6 @@ const DEFAULT_CONFIG: EditorConfig = {
     side: 'right',
     size: 'proportional'
   },
-  theme: 'vs-dark',
   cursorStyle: 'line',
   cursorBlinking: 'blink',
   renderWhitespace: 'selection',

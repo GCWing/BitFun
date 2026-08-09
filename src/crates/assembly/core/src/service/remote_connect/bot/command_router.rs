@@ -436,6 +436,7 @@ async fn select_model(
         &runtime,
         &session_id,
         model_id,
+        None,
     )
     .await
     {
@@ -454,6 +455,27 @@ async fn select_model(
 }
 
 // ── Public entry points ────────────────────────────────────────────
+
+async fn open_bot_workspace(
+    workspace_service: &crate::service::workspace::WorkspaceService,
+    path: std::path::PathBuf,
+    remote_connection_id: Option<&str>,
+    remote_ssh_host: Option<&str>,
+    log_context: &str,
+) -> Result<crate::service::workspace::WorkspaceInfo, String> {
+    let coordinator = crate::agentic::coordination::get_global_coordinator()
+        .ok_or_else(|| "Conversation coordinator not initialized".to_string())?;
+    coordinator
+        .open_workspace_with_runtime_ownership(
+            workspace_service,
+            path,
+            remote_connection_id,
+            remote_ssh_host,
+            log_context,
+        )
+        .await
+        .map_err(|error| error.to_string())
+}
 
 /// IM pairing bootstrap: assistant mode + default assistant workspace + new
 /// Claw session.  Mutates `state.display_mode/current_assistant/
@@ -478,24 +500,25 @@ pub async fn bootstrap_im_chat_after_pairing(state: &mut BotChatState) -> String
         }
     }
 
-    let picked = assistants
-        .iter()
-        .find(|w| w.assistant_id.is_none())
-        .cloned()
+    let picked = ws_service
+        .get_primary_assistant_workspace()
+        .await
         .or_else(|| assistants.first().cloned());
 
     let Some(ws_info) = picked else {
         return s.bootstrap_workspace_unavailable.to_string();
     };
 
-    let path_buf = ws_info.root_path.clone();
-    if let Err(e) = ws_service.open_workspace(path_buf.clone()).await {
-        return format!("{}{e}", s.workspace_open_failed_prefix);
-    }
-    if let Err(e) =
-        crate::service::snapshot::initialize_snapshot_manager_for_workspace(path_buf, None).await
+    if let Err(e) = open_bot_workspace(
+        ws_service.as_ref(),
+        ws_info.root_path.clone(),
+        None,
+        None,
+        "IM bot pairing",
+    )
+    .await
     {
-        error!("IM bot bootstrap: snapshot init after pairing: {e}");
+        return format!("{}{e}", s.workspace_open_failed_prefix);
     }
 
     state.current_assistant = Some(ws_info.root_path.to_string_lossy().to_string());
@@ -1205,23 +1228,16 @@ async fn select_workspace(
         }
     };
     let path_buf = std::path::PathBuf::from(&choice.path);
-    match ws_service
-        .open_workspace_resolving_known(
-            path_buf,
-            choice.remote_connection_id.as_deref(),
-            choice.remote_ssh_host.as_deref(),
-        )
-        .await
+    match open_bot_workspace(
+        ws_service.as_ref(),
+        path_buf,
+        choice.remote_connection_id.as_deref(),
+        choice.remote_ssh_host.as_deref(),
+        "bot workspace switch",
+    )
+    .await
     {
         Ok(info) => {
-            if let Err(e) = crate::service::snapshot::initialize_snapshot_manager_for_workspace(
-                info.root_path.clone(),
-                None,
-            )
-            .await
-            {
-                error!("Failed to init snapshot after bot workspace switch: {e}");
-            }
             let workspace_path = info.root_path.to_string_lossy().to_string();
             let remote_connection_id = info
                 .remote_ssh_connection_id()
@@ -1280,16 +1296,16 @@ async fn select_assistant(
         }
     };
     let path_buf = std::path::PathBuf::from(path);
-    match ws_service.open_workspace(path_buf).await {
-        Ok(info) => {
-            if let Err(e) = crate::service::snapshot::initialize_snapshot_manager_for_workspace(
-                info.root_path.clone(),
-                None,
-            )
-            .await
-            {
-                error!("Failed to init snapshot after bot assistant switch: {e}");
-            }
+    match open_bot_workspace(
+        ws_service.as_ref(),
+        path_buf,
+        None,
+        None,
+        "bot assistant switch",
+    )
+    .await
+    {
+        Ok(_info) => {
             state.current_assistant = Some(path.to_string());
             state.current_assistant_name = Some(name.to_string());
             state.current_session_id = None;
@@ -1780,18 +1796,14 @@ async fn load_last_dialog_pair_from_turns(
     workspace: Option<&BotWorkspaceRef>,
     session_id: &str,
 ) -> Option<(String, String)> {
-    use crate::agentic::persistence::PersistenceManager;
-    use crate::infrastructure::PathManager;
-
     const MAX_USER_LEN: usize = 200;
     const MAX_AI_LEN: usize = 400;
 
     let workspace = workspace?;
     let storage_path = resolve_bot_session_storage_path_for_ref(workspace).await?;
-    let pm = std::sync::Arc::new(PathManager::new().ok()?);
-    let store = PersistenceManager::new(pm).ok()?;
-    let turns = store
-        .load_session_turns(&storage_path, session_id)
+    let coordinator = crate::agentic::coordination::get_global_coordinator()?;
+    let turns = coordinator
+        .load_visible_persisted_session_turns(&storage_path, session_id)
         .await
         .ok()?;
     let turn = turns.last()?;
@@ -1986,28 +1998,26 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
                     );
                 }
             };
-            let workspaces = ws_service.get_assistant_workspaces().await;
-            let resolved: Option<(String, String)> = if let Some(default_ws) =
-                workspaces.into_iter().find(|w| w.assistant_id.is_none())
-            {
-                Some((
-                    default_ws.root_path.to_string_lossy().to_string(),
-                    default_ws.name.clone(),
-                ))
-            } else {
-                match ws_service.create_assistant_workspace(None).await {
-                    Ok(ws_info) => Some((
-                        ws_info.root_path.to_string_lossy().to_string(),
-                        ws_info.name.clone(),
-                    )),
-                    Err(e) => {
-                        return result_from_menu(
-                            state,
-                            MenuView::plain(format!("{}{e}", s.assistant_create_failed_prefix)),
-                        );
+            let resolved: Option<(String, String)> =
+                if let Some(primary_ws) = ws_service.get_primary_assistant_workspace().await {
+                    Some((
+                        primary_ws.root_path.to_string_lossy().to_string(),
+                        primary_ws.name.clone(),
+                    ))
+                } else {
+                    match ws_service.create_assistant_workspace(None).await {
+                        Ok(ws_info) => Some((
+                            ws_info.root_path.to_string_lossy().to_string(),
+                            ws_info.name.clone(),
+                        )),
+                        Err(e) => {
+                            return result_from_menu(
+                                state,
+                                MenuView::plain(format!("{}{e}", s.assistant_create_failed_prefix)),
+                            );
+                        }
                     }
-                }
-            };
+                };
             if let Some((ref path, ref name)) = resolved {
                 state.current_assistant = Some(path.clone());
                 state.current_assistant_name = Some(name.clone());

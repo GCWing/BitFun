@@ -8,10 +8,10 @@
  */
 
 import { useEffect, useRef, useState, forwardRef, useImperativeHandle, useCallback } from 'react';
-import * as monaco from 'monaco-editor';
+import type * as monaco from 'monaco-editor';
 import { createLogger } from '@/shared/utils/logger';
 import { monacoInitManager } from '../services/MonacoInitManager';
-import { themeManager } from '../services/ThemeManager';
+import { monacoApi } from '../services/monacoRuntime';
 import { buildDiffEditorOptions } from '../services/EditorOptionsBuilder';
 import type { MonacoDiffCoreProps } from './types';
 import type { EditorOptionsOverrides } from '../services/EditorOptionsBuilder';
@@ -44,7 +44,6 @@ export const MonacoDiffCore = forwardRef<MonacoDiffCoreRef, MonacoDiffCoreProps>
       preset = 'diff',
       config,
       readOnly = false,
-      theme,
       renderSideBySide = true,
       renderOverviewRuler = false,
       renderIndicators = true,
@@ -77,7 +76,6 @@ export const MonacoDiffCore = forwardRef<MonacoDiffCoreRef, MonacoDiffCoreProps>
     const presetRef = useRef(preset);
     const configRef = useRef(config);
     const readOnlyRef = useRef(readOnly);
-    const themeRef = useRef(theme);
     const renderSideBySideRef = useRef(renderSideBySide);
     const renderOverviewRulerRef = useRef(renderOverviewRuler);
     const renderIndicatorsRef = useRef(renderIndicators);
@@ -98,7 +96,6 @@ export const MonacoDiffCore = forwardRef<MonacoDiffCoreRef, MonacoDiffCoreProps>
     presetRef.current = preset;
     configRef.current = config;
     readOnlyRef.current = readOnly;
-    themeRef.current = theme;
     renderSideBySideRef.current = renderSideBySide;
     renderOverviewRulerRef.current = renderOverviewRuler;
     renderIndicatorsRef.current = renderIndicators;
@@ -157,7 +154,7 @@ export const MonacoDiffCore = forwardRef<MonacoDiffCoreRef, MonacoDiffCoreProps>
       const timestamp = Date.now();
       const random = Math.random().toString(36).substring(2, 8);
       const basePath = filePathRef.current || 'untitled';
-      return monaco.Uri.parse(`inmemory://diff/${type}/${timestamp}/${random}/${basePath}`);
+      return monacoApi.Uri.parse(`inmemory://diff/${type}/${timestamp}/${random}/${basePath}`);
     }, []);
 
     const registerEventListeners = useCallback((
@@ -191,14 +188,12 @@ export const MonacoDiffCore = forwardRef<MonacoDiffCoreRef, MonacoDiffCoreProps>
           
           if (isUnmountedRef.current) return;
           
-          themeManager.initialize();
-          
-          const originalModel = monaco.editor.createModel(
+          const originalModel = monacoApi.editor.createModel(
             originalContentRef.current,
             languageRef.current,
             generateUri('original')
           );
-          const modifiedModel = monaco.editor.createModel(
+          const modifiedModel = monacoApi.editor.createModel(
             modifiedContentRef.current,
             languageRef.current,
             generateUri('modified')
@@ -209,7 +204,6 @@ export const MonacoDiffCore = forwardRef<MonacoDiffCoreRef, MonacoDiffCoreProps>
           const overrides: EditorOptionsOverrides = {
             readOnly: readOnlyRef.current,
             minimap: showMinimapRef.current,
-            theme: themeRef.current,
           };
           
           const diffOptions = buildDiffEditorOptions({
@@ -218,7 +212,7 @@ export const MonacoDiffCore = forwardRef<MonacoDiffCoreRef, MonacoDiffCoreProps>
             overrides,
           });
           
-          const diffEditor = monaco.editor.createDiffEditor(container, {
+          const diffEditor = monacoApi.editor.createDiffEditor(container, {
             ...diffOptions,
             renderSideBySide: renderSideBySideRef.current,
             renderOverviewRuler: renderOverviewRulerRef.current,
@@ -287,10 +281,10 @@ export const MonacoDiffCore = forwardRef<MonacoDiffCoreRef, MonacoDiffCoreProps>
       if (!isReady) return;
       
       if (originalModelRef.current) {
-        monaco.editor.setModelLanguage(originalModelRef.current, language);
+        monacoApi.editor.setModelLanguage(originalModelRef.current, language);
       }
       if (modifiedModelRef.current) {
-        monaco.editor.setModelLanguage(modifiedModelRef.current, language);
+        monacoApi.editor.setModelLanguage(modifiedModelRef.current, language);
       }
     }, [isReady, language]);
     
@@ -302,14 +296,6 @@ export const MonacoDiffCore = forwardRef<MonacoDiffCoreRef, MonacoDiffCoreProps>
         hasRevealedRef.current = true;
       }
     }, [isReady, revealLine]);
-    
-    useEffect(() => {
-      const unsubscribe = themeManager.onThemeChange((event) => {
-        monaco.editor.setTheme(event.currentThemeId);
-      });
-      
-      return unsubscribe;
-    }, []);
     
     return (
       <div

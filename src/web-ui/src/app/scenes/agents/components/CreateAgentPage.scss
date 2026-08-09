@@ -9,7 +9,7 @@
   &::-webkit-scrollbar { width: 4px; }
   &::-webkit-scrollbar-track { background: transparent; }
   &::-webkit-scrollbar-thumb {
-    background: var(--border-subtle);
+    background: var(--bf-appearance-token-border-subtle);
     border-radius: 2px;
   }
 }
@@ -23,16 +23,16 @@
 }
 
 .th__title {
-  font-size: var(--font-size-xl);
+  font-size: var(--bf-appearance-token-font-size-xl);
   font-weight: $font-weight-semibold;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   margin: 0;
   line-height: $line-height-tight;
 }
 
 .th__title-sub {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-sm);
+  color: var(--bf-appearance-token-color-text-muted);
   margin: 0;
   line-height: $line-height-relaxed;
 }
@@ -71,7 +71,7 @@
 
   &--definition {
     padding-right: clamp($size-gap-3, 1.5vw, $size-gap-4);
-    border-right: 1px solid var(--border-subtle);
+    border-right: 1px solid var(--bf-appearance-token-border-subtle);
   }
 
   &--capabilities {
@@ -118,7 +118,7 @@
   box-sizing: border-box;
   padding: $size-gap-3;
   border-radius: $size-radius-base;
-  background: var(--element-bg-subtle);
+  background: var(--bf-appearance-token-element-bg-subtle);
   max-height: 360px;
   min-height: 96px;
   overflow-y: auto;
@@ -136,20 +136,20 @@
 }
 
 .th-create-panel__label {
-  font-size: var(--font-size-xs);
+  font-size: var(--bf-appearance-token-font-size-xs);
   font-weight: $font-weight-medium;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
 }
 
 .th-create-panel__label-hint {
   font-weight: $font-weight-normal;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   margin-left: 4px;
 }
 
 .th-create-panel__error {
-  font-size: var(--font-size-xs);
-  color: var(--color-error);
+  font-size: var(--bf-appearance-token-font-size-xs);
+  color: var(--bf-appearance-token-color-error);
 }
 
 .th-create-panel__readonly-row {
@@ -170,12 +170,12 @@
   align-items: center;
   height: 26px;
   padding: 0 $size-gap-3;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: $size-radius-full;
   background: transparent;
-  font-size: var(--font-size-xs);
+  font-size: var(--bf-appearance-token-font-size-xs);
   font-weight: $font-weight-medium;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   cursor: pointer;
   transition:
     border-color $motion-fast $easing-standard,
@@ -183,14 +183,14 @@
     color $motion-fast $easing-standard;
 
   &:hover:not(:disabled) {
-    border-color: var(--border-medium);
-    color: var(--color-text-primary);
+    border-color: var(--bf-appearance-token-border-medium);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &.is-active {
-    border-color: var(--color-accent-500);
-    background: rgba(var(--color-accent-500-rgb) / 0.08);
-    color: var(--color-text-primary);
+    border-color: var(--bf-appearance-token-color-accent-500);
+    background: rgba(var(--bf-appearance-token-color-accent-500-rgb) / 0.08);
+    color: var(--bf-appearance-token-color-text-primary);
     font-weight: $font-weight-semibold;
   }
 
@@ -214,8 +214,8 @@
   border-radius: $size-radius-sm;
   border: 1px solid transparent;
   background: transparent;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+  font-size: var(--bf-appearance-token-font-size-xs);
+  color: var(--bf-appearance-token-color-text-secondary);
   cursor: pointer;
   transition:
     background $motion-fast $easing-standard,
@@ -223,14 +223,14 @@
     color $motion-fast $easing-standard;
 
   &:hover:not(.is-on) {
-    border-color: var(--border-medium);
-    color: var(--color-text-primary);
+    border-color: var(--bf-appearance-token-border-medium);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &.is-on {
-    border: 1px solid var(--color-accent-500);
-    background: rgba(var(--color-accent-500-rgb) / 0.08);
-    color: var(--color-text-primary);
+    border: 1px solid var(--bf-appearance-token-color-accent-500);
+    background: rgba(var(--bf-appearance-token-color-accent-500-rgb) / 0.08);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 }
 
@@ -262,7 +262,7 @@
     padding-right: 0;
     padding-bottom: $size-gap-4;
     border-right: 0;
-    border-bottom: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
   }
 
   .th-create-page__column--capabilities {

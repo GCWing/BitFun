@@ -147,7 +147,7 @@ describe('Remote Connect safety contracts', () => {
     expect(dialogSource).toContain('setAccountUsername(hint?.username.trim() || null)');
     expect(connectedView).toContain("t('accountLogin.username')");
     expect(connectedView).not.toContain('connectedUserId');
-    expect(dialogSource).toContain('handleDisconnectRelay,\n            accountUsername,');
+    expect(dialogSource).toMatch(/handleDisconnectRelay,\s+accountUsername,/);
     expect(performLogin).toContain("loginSuccess', { user_id: user }");
     expect(performLogin).not.toContain("loginSuccess', { user_id: result.user_id }");
   });
@@ -237,6 +237,18 @@ describe('Remote Connect safety contracts', () => {
     expect(rejectionCleanup).toContain('setWeixinQrSessionKey(null)');
     expect(rejectionCleanup).toContain('setWeixinQrImageUrl(null)');
     expect(rejectionCleanup).toContain('setWeixinAwaitingPhoneConfirm(false)');
+  });
+
+  it('auto-starts Weixin after QR login without exposing a redundant Connect action', () => {
+    const botContent = dialogSource.slice(
+      dialogSource.indexOf('const renderBotContent'),
+      dialogSource.indexOf('// ── Layout'),
+    );
+
+    expect(botContent).toContain("botTab !== 'weixin'");
+    expect(botContent).not.toContain('botWeixinLinked');
+    expect(dialogSource).toContain("t('remoteConnect.botWeixinRestriction')");
+    expect(dialogSource).toContain('prepareAndStartWeixinBotFromQr');
   });
 
   it('restores an existing relay pairing as cancellable in-progress UI', () => {

@@ -78,8 +78,33 @@ function buildFormatsPatch(formats) {
   };
 }
 
+/** Hardcoded installer-only strings that have no web-ui source key. */
+const LITERALS = {
+  en: {
+    modelNoResults: 'No matching models',
+    baseUrlPlaceholder: 'e.g., https://open.bigmodel.cn/api/paas/v4/chat/completions',
+    testing: 'Testing...',
+    advancedShow: 'Show advanced settings',
+    advancedHide: 'Hide advanced settings',
+  },
+  zh: {
+    modelNoResults: '没有匹配的模型',
+    baseUrlPlaceholder: '示例：https://open.bigmodel.cn/api/paas/v4/chat/completions',
+    testing: '测试中...',
+    advancedShow: '显示高级设置',
+    advancedHide: '隐藏高级设置',
+  },
+  'zh-TW': {
+    modelNoResults: '沒有匹配的模型',
+    baseUrlPlaceholder: '範例：https://open.bigmodel.cn/api/paas/v4/chat/completions',
+    testing: '測試中...',
+    advancedShow: '顯示高級設定',
+    advancedHide: '隱藏高級設定',
+  },
+};
+
 function buildModelPatch(settingsAiModel, languageTag, components) {
-  const isZh = languageTag === 'zh';
+  const literals = LITERALS[languageTag] || LITERALS.en;
   const form = get(settingsAiModel, 'form', {});
   const formats = get(settingsAiModel, 'formats', {});
   const input = get(components, 'input', {});
@@ -120,16 +145,14 @@ function buildModelPatch(settingsAiModel, languageTag, components) {
       get(settingsAiModel, 'form.modelName', 'Enter model name...')
     ),
     modelNameSelectPlaceholder: get(settingsAiModel, 'providerSelection.selectModel', 'Select a model...'),
-    modelNoResults: isZh ? '没有匹配的模型' : 'No matching models',
+    modelNoResults: literals.modelNoResults,
     /** Installer: use addCustomModel (not useCustomModel / "Press Enter") for the extra dropdown option */
     addCustomModel: get(settingsAiModel, 'providerSelection.addCustomModel', 'Add Custom Model'),
     form: buildFormPatch(form),
     formats: buildFormatsPatch(formats),
     showSecret: get(input, 'show', 'Show'),
     hideSecret: get(input, 'hide', 'Hide'),
-    baseUrlPlaceholder: isZh
-      ? '示例：https://open.bigmodel.cn/api/paas/v4/chat/completions'
-      : 'e.g., https://open.bigmodel.cn/api/paas/v4/chat/completions',
+    baseUrlPlaceholder: literals.baseUrlPlaceholder,
     customRequestBodyPlaceholder: get(
       settingsAiModel,
       'advancedSettings.customRequestBody.placeholder',
@@ -160,18 +183,23 @@ function buildModelPatch(settingsAiModel, languageTag, components) {
     headerKey: get(settingsAiModel, 'advancedSettings.customHeaders.keyPlaceholder', 'key'),
     headerValue: get(settingsAiModel, 'advancedSettings.customHeaders.valuePlaceholder', 'value'),
     testConnection: get(settingsAiModel, 'actions.test', 'Test Connection'),
-    testing: isZh ? '测试中...' : 'Testing...',
+    testing: literals.testing,
     testSuccess: get(settingsAiModel, 'messages.testSuccess', 'Connection successful'),
     testFailed: get(settingsAiModel, 'messages.testFailed', 'Connection failed'),
-    advancedShow: 'Show advanced settings',
-    advancedHide: 'Hide advanced settings',
+    advancedShow: literals.advancedShow,
+    advancedHide: literals.advancedHide,
     providers: buildProviderPatch(settingsAiModel),
   };
 }
 
+const LOCALE_MAP = {
+  en: { localeDir: 'en-US', installerLocale: 'en.json' },
+  zh: { localeDir: 'zh-CN', installerLocale: 'zh.json' },
+  'zh-TW': { localeDir: 'zh-TW', installerLocale: 'zh-TW.json' },
+};
+
 function syncOne(languageTag) {
-  const localeDir = languageTag === 'zh' ? 'zh-CN' : 'en-US';
-  const installerLocale = languageTag === 'zh' ? 'zh.json' : 'en.json';
+  const { localeDir, installerLocale } = LOCALE_MAP[languageTag];
 
   const sourceAiModelPath = path.join(
     PROJECT_ROOT,
@@ -213,6 +241,7 @@ function syncOne(languageTag) {
 function main() {
   syncOne('en');
   syncOne('zh');
+  syncOne('zh-TW');
   console.log('[sync-model-i18n] Synced installer model i18n from web-ui locales.');
 }
 

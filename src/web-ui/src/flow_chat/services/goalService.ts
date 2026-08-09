@@ -4,6 +4,7 @@ import type { Session } from '../types/flow-chat';
 import { flowChatStore } from '../store/FlowChatStore';
 import { pendingQueueManager } from './flow-chat-manager/PendingQueueModule';
 import type { GoalCommandAction } from './goalCommandParser';
+import { sessionProjectWorkspacePath } from '../utils/sessionWorkspace';
 
 export { isGoalSlashCommand, parseGoalCommand } from './goalCommandParser';
 export type { GoalCommandAction } from './goalCommandParser';
@@ -106,7 +107,7 @@ function syncGoalToStore(sessionId: string, goal: ThreadGoalSnapshot | null): vo
 async function sessionRequestBase(session: Session) {
   return {
     sessionId: session.sessionId,
-    workspacePath: session.workspacePath,
+    workspacePath: sessionProjectWorkspacePath(session),
     remoteConnectionId: session.remoteConnectionId,
     remoteSshHost: session.remoteSshHost,
   };

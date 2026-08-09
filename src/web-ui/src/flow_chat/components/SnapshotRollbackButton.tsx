@@ -75,33 +75,33 @@ export const SnapshotRollbackButton: React.FC<SnapshotRollbackButtonProps> = ({
 
   if (isCurrentTurn) {
     return (
-      <div className="snapshot-rollback-button snapshot-rollback-button--current">
+      <div data-bf-component="snapshot-rollback-button" data-bf-part="root" data-bf-outcome="current" className="snapshot-rollback-button snapshot-rollback-button--current">
         <Check size={14} />
-        <span>Current code state</span>
+        <span data-bf-component="snapshot-rollback-button" data-bf-part="label">Current code state</span>
       </div>
     );
   }
 
   if (rollbackStatus === 'success') {
     return (
-      <div className="snapshot-rollback-button snapshot-rollback-button--success">
+      <div data-bf-component="snapshot-rollback-button" data-bf-part="root" data-bf-outcome="success" className="snapshot-rollback-button snapshot-rollback-button--success">
         <Check size={14} />
-        <span>Rolled back to this turn</span>
+        <span data-bf-component="snapshot-rollback-button" data-bf-part="label">Rolled back to this turn</span>
       </div>
     );
   }
 
   if (rollbackStatus === 'error') {
     return (
-      <div className="snapshot-rollback-button snapshot-rollback-button--error" title={errorMessage}>
+      <div data-bf-component="snapshot-rollback-button" data-bf-part="root" data-bf-outcome="error" className="snapshot-rollback-button snapshot-rollback-button--error" title={errorMessage}>
         <AlertCircle size={14} />
-        <span>Rollback failed</span>
+        <span data-bf-component="snapshot-rollback-button" data-bf-part="label">Rollback failed</span>
       </div>
     );
   }
 
   return (
-    <button
+    <button data-bf-component="snapshot-rollback-button" data-bf-part="root" data-bf-outcome="idle" data-bf-state={isRollingBack ? 'loading' : ''}
       className={`snapshot-rollback-button ${isRollingBack ? 'snapshot-rollback-button--loading' : ''}`}
       onClick={handleRollback}
       disabled={isRollingBack}
@@ -110,12 +110,12 @@ export const SnapshotRollbackButton: React.FC<SnapshotRollbackButtonProps> = ({
       {isRollingBack ? (
         <>
           <Loader2 size={14} className="snapshot-rollback-button__spinner" />
-          <span>Rolling back...</span>
+          <span data-bf-component="snapshot-rollback-button" data-bf-part="label">Rolling back...</span>
         </>
       ) : (
         <>
           <RotateCcw size={14} />
-          <span>Rollback to this turn</span>
+          <span data-bf-component="snapshot-rollback-button" data-bf-part="label">Rollback to this turn</span>
         </>
       )}
     </button>

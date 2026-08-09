@@ -13,7 +13,7 @@ import {
   SessionStateMachine,
   SessionDerivedState,
 } from './types';
-import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
+import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 
 /** Optional live chat input draft while PROCESSING (mirrors input box); used so send mode stays `split` when user has typed a follow-up. */
 export type DeriveSessionOptions = {
@@ -217,25 +217,25 @@ function getProgressBarLabel(
 function getProgressBarColor(phase: ProcessingPhase | null): string {
   switch (phase) {
     case ProcessingPhase.COMPACTING:
-      return UI_EXCEPTION_ACCENTS.progress.compacting;
+      return APPEARANCE_DOMAIN_TOKENS.progress.compacting;
 
     case ProcessingPhase.STARTING:
-      return 'var(--color-accent-600)';
+      return 'var(--bf-appearance-token-color-accent-600)';
     
     case ProcessingPhase.THINKING:
-      return 'var(--color-accent-600)';
+      return 'var(--bf-appearance-token-color-accent-600)';
     
     case ProcessingPhase.STREAMING:
-      return 'linear-gradient(90deg, var(--color-accent-600), var(--color-purple-500))';
+      return 'linear-gradient(90deg, var(--bf-appearance-token-color-accent-600), var(--bf-appearance-token-color-purple-500))';
     
     case ProcessingPhase.TOOL_CALLING:
-      return 'var(--color-purple-500)';
+      return 'var(--bf-appearance-token-color-purple-500)';
     
     case ProcessingPhase.TOOL_CONFIRMING:
-      return 'var(--color-warning)';
+      return 'var(--bf-appearance-token-color-warning)';
     
     default:
-      return 'var(--color-accent-600)';
+      return 'var(--bf-appearance-token-color-accent-600)';
   }
 }
 

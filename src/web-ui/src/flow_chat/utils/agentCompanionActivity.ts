@@ -29,6 +29,12 @@ export interface AgentCompanionTaskStatus {
   latestOutput?: string;
   startedAt: number;
   updatedAt: number;
+  /**
+   * Whether the desktop pet may send a plain message straight into this
+   * session. Only normal sessions qualify; /btw and review threads need the
+   * parent turn context that only the main window composer can supply.
+   */
+  canReply?: boolean;
 }
 
 export interface AgentCompanionActivityPayload {
@@ -106,10 +112,6 @@ function latestAssistantSnippet(turn: DialogTurn | undefined): string | undefine
     const round = turn.modelRounds[roundIndex];
     for (let itemIndex = round.items.length - 1; itemIndex >= 0; itemIndex -= 1) {
       const item = round.items[itemIndex];
-      if (item.type === 'text' && item.runtimeStatus) {
-        continue;
-      }
-
       const plainText = item.type === 'thinking'
         ? markdownToPlainText((item as FlowThinkingItem).content)
         : item.type === 'text'
@@ -368,10 +370,11 @@ export function buildAgentCompanionActivity(): AgentCompanionActivityPayload {
     const mood = hasActiveTrackedTurn(session, snapshot)
       ? deriveChatInputPetMood(snapshot)
       : 'rest';
+    const canReply = resolveSessionRelationship(session).kind === 'normal';
 
     const attention = resolveAttentionTask(session, snapshot);
     if (attention) {
-      tasks.push(attention);
+      tasks.push({ ...attention, canReply });
       return;
     }
 
@@ -388,13 +391,14 @@ export function buildAgentCompanionActivity(): AgentCompanionActivityPayload {
         latestOutput: latestAssistantSnippet(turn),
         startedAt: snapshot?.context.stats.startTime || session.lastActiveAt || session.updatedAt || session.createdAt,
         updatedAt: snapshot?.context.lastUpdateTime || session.updatedAt || session.lastActiveAt || session.createdAt,
+        canReply,
       });
       return;
     }
 
     const completion = completionTask(session);
     if (completion) {
-      tasks.push(completion);
+      tasks.push({ ...completion, canReply });
     }
   });
 

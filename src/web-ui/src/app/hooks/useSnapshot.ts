@@ -2,9 +2,10 @@
  * Snapshot system data hook.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { snapshotAPI } from '../../infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
+import { isRemoteWorkspace } from '@/shared/types';
 import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 
@@ -76,7 +77,16 @@ export interface UseSnapshotReturn {
 
 export const useSnapshot = (): UseSnapshotReturn => {
   const { t } = useI18n('errors');
-  const { workspacePath } = useCurrentWorkspace();
+  const { workspace, workspacePath } = useCurrentWorkspace();
+  const workspaceRemoteScope = useMemo(() => {
+    if (!workspace || !isRemoteWorkspace(workspace)) {
+      return {};
+    }
+    return {
+      ...(workspace.connectionId ? { remoteConnectionId: workspace.connectionId } : {}),
+      ...(workspace.sshHost ? { remoteSshHost: workspace.sshHost } : {}),
+    };
+  }, [workspace]);
   const [sessions, setSessions] = useState<SnapshotSession[]>([]);
   const [operations, setOperations] = useState<FileOperation[]>([]);
   const [stats, setStats] = useState<SnapshotStats | null>(null);
@@ -87,27 +97,33 @@ export const useSnapshot = (): UseSnapshotReturn => {
   const loadStats = useCallback(async () => {
     try {
       setError(null);
-      const statsData = await snapshotAPI.getSnapshotStats(workspacePath || undefined);
+      const statsData = await snapshotAPI.getSnapshotStats(
+        workspacePath || undefined,
+        workspaceRemoteScope,
+      );
       setStats(statsData);
     } catch (err) {
       log.error('Failed to load snapshot stats', err);
       setError(t('snapshot.loadStatsFailed'));
       setStats(null);
     }
-  }, [t, workspacePath]);
+  }, [t, workspacePath, workspaceRemoteScope]);
 
   // Load snapshot sessions
   const loadSessions = useCallback(async () => {
     try {
       setError(null);
-      const sessionsData = await snapshotAPI.getSnapshotSessions(workspacePath || undefined);
+      const sessionsData = await snapshotAPI.getSnapshotSessions(
+        workspacePath || undefined,
+        workspaceRemoteScope,
+      );
       setSessions(sessionsData || []);
     } catch (err) {
       log.error('Failed to load snapshot sessions', err);
       setError(t('snapshot.loadSessionsFailed'));
       setSessions([]);
     }
-  }, [t, workspacePath]);
+  }, [t, workspacePath, workspaceRemoteScope]);
 
   // Load session operations
   const loadSessionOperations = useCallback(async (sessionId: string) => {

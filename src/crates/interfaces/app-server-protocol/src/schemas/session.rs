@@ -1,0 +1,187 @@
+//! Session-domain App Server wire schemas.
+
+use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
+use bitfun_core_types::SessionUsageReport;
+use bitfun_product_domains::tool_permissions::PermissionRequest;
+use bitfun_runtime_ports::{
+    AgentContextReloadRequest, AgentLocalCommandTurnRecordRequest,
+    AgentLocalCommandTurnRecordResult, AgentSessionCompactionRequest, AgentSessionCompactionResult,
+    AgentSessionForkBeforeTurnRequest, AgentSessionForkRequest, AgentSessionForkResult,
+    AgentSessionLineageCancellationRequest, AgentSessionLineageInspection,
+    AgentSessionLineageRequest, AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest,
+    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
+    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionSummary,
+    AgentSessionUsageRequest, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
+    AgentTurnCancellationResult, AgentTurnSettlementRequest, SessionTranscript,
+    SessionTranscriptRequest,
+};
+use serde::{Deserialize, Serialize};
+
+macro_rules! unit_response {
+    ($name:ident) => {
+        #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+        pub struct $name {}
+    };
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "session/sync", response = SyncSessionResponse)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncSessionRequest {
+    pub workspace_path: String,
+    pub session_id: String,
+    #[serde(default)]
+    pub include_internal: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncSessionResponse {
+    pub session: AgentSessionSummary,
+    pub state: SessionRuntimeState,
+    pub transcript: SessionTranscript,
+    pub workspace_binding: AgentSessionWorkspaceBinding,
+    #[serde(default)]
+    pub pending_permissions: Vec<PermissionRequest>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum SessionRuntimeState {
+    Idle,
+    Processing {
+        current_turn_id: String,
+        phase: SessionProcessingPhase,
+    },
+    Error {
+        error: String,
+        recoverable: bool,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SessionProcessingPhase {
+    Starting,
+    Compacting,
+    Thinking,
+    Streaming,
+    ToolCalling,
+    ToolConfirming,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "session/readTranscript", response = ReadTranscriptResponse)]
+pub struct ReadTranscriptRequest(pub SessionTranscriptRequest);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+pub struct ReadTranscriptResponse(pub SessionTranscript);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "session/resolveWorkspace", response = ResolveWorkspaceResponse)]
+pub struct ResolveWorkspaceRequest(pub AgentSessionWorkspaceRequest);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+pub struct ResolveWorkspaceResponse(pub Option<AgentSessionWorkspaceBinding>);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "session/recordLocalCommandTurn", response = RecordLocalCommandTurnResponse)]
+pub struct RecordLocalCommandTurnRequest(pub AgentLocalCommandTurnRecordRequest);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+pub struct RecordLocalCommandTurnResponse(pub AgentLocalCommandTurnRecordResult);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "session/rename", response = RenameSessionResponse)]
+pub struct RenameSessionRequest(pub AgentSessionRenameRequest);
+
+unit_response!(RenameSessionResponse);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "session/compact", response = CompactSessionResponse)]
+pub struct CompactSessionRequest(pub AgentSessionCompactionRequest);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+pub struct CompactSessionResponse(pub AgentSessionCompactionResult);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "session/undo", response = RevertSessionResponse)]
+pub struct UndoSessionRequest(pub AgentSessionRevertRequest);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "session/redo", response = RevertSessionResponse)]
+pub struct RedoSessionRequest(pub AgentSessionRevertRequest);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+pub struct RevertSessionResponse(pub AgentSessionRevertResult);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "session/reloadContext", response = ReloadContextResponse)]
+pub struct ReloadContextRequest(pub AgentContextReloadRequest);
+
+unit_response!(ReloadContextResponse);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "session/usage", response = SessionUsageResponse)]
+pub struct SessionUsageRequest(pub AgentSessionUsageRequest);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+pub struct SessionUsageResponse(pub SessionUsageReport);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "session/waitForSettlement", response = WaitForSettlementResponse)]
+pub struct WaitForSettlementRequest(pub AgentTurnSettlementRequest);
+
+unit_response!(WaitForSettlementResponse);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "session/lineage", response = SessionLineageResponse)]
+pub struct SessionLineageRequest(pub AgentSessionLineageRequest);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+pub struct SessionLineageResponse(pub Option<AgentSessionLineageSnapshot>);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "session/inspectLineage", response = InspectLineageResponse)]
+pub struct InspectLineageRequest(pub AgentSessionLineageTranscriptRequest);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+pub struct InspectLineageResponse(pub AgentSessionLineageInspection);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "session/cancelLineage", response = CancelLineageResponse)]
+pub struct CancelLineageRequest(pub AgentSessionLineageCancellationRequest);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+pub struct CancelLineageResponse(pub AgentTurnCancellationResult);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "session/fork", response = ForkSessionResponse)]
+pub struct ForkSessionRequest(pub AgentSessionForkRequest);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "session/forkBeforeTurn", response = ForkSessionResponse)]
+pub struct ForkSessionBeforeTurnRequest(pub AgentSessionForkBeforeTurnRequest);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+pub struct ForkSessionResponse(pub AgentSessionForkResult);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "session/updateModel", response = UpdateSessionModelResponse)]
+pub struct UpdateSessionModelRequest(pub AgentSessionModelUpdateRequest);
+
+unit_response!(UpdateSessionModelResponse);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "session/updateMode", response = UpdateSessionModeResponse)]
+pub struct UpdateSessionModeRequest(pub AgentSessionModeUpdateRequest);
+
+unit_response!(UpdateSessionModeResponse);

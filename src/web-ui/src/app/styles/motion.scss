@@ -104,14 +104,14 @@
   ) {
     transform-origin: center;
     transition:
-      translate var(--motion-fast) var(--easing-standard),
-      scale var(--motion-fast) var(--easing-standard),
-      transform var(--motion-fast) var(--easing-standard),
-      background-color var(--motion-fast) var(--easing-standard),
-      border-color var(--motion-fast) var(--easing-standard),
-      color var(--motion-fast) var(--easing-standard),
-      box-shadow var(--motion-fast) var(--easing-standard),
-      opacity var(--motion-fast) var(--easing-standard);
+      translate var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      scale var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      box-shadow var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      opacity var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -238,12 +238,12 @@
   ):where(:not([data-motion='none'])) {
     transform-origin: center;
     transition:
-      translate var(--motion-fast) var(--easing-standard),
-      scale var(--motion-fast) var(--easing-standard),
-      transform var(--motion-fast) var(--easing-standard),
-      background-color var(--motion-fast) var(--easing-standard),
-      border-color var(--motion-fast) var(--easing-standard),
-      box-shadow var(--motion-fast) var(--easing-standard);
+      translate var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      scale var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      box-shadow var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
     transition-property:
       translate,
       scale,

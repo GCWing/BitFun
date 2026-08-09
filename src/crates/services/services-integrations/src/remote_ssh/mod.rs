@@ -17,11 +17,15 @@ mod workspace_services;
 #[cfg(not(feature = "remote-ssh-concrete"))]
 mod disabled;
 #[cfg(feature = "remote-ssh-concrete")]
+pub mod dispatch_ssh;
+#[cfg(feature = "remote-ssh-concrete")]
 pub mod manager;
 #[cfg(feature = "remote-ssh-concrete")]
 mod password_vault;
 #[cfg(feature = "remote-ssh-concrete")]
 pub mod relay_deploy;
+#[cfg(feature = "remote-ssh-concrete")]
+mod release_verify;
 #[cfg(feature = "remote-ssh-concrete")]
 mod remote_exec;
 #[cfg(feature = "remote-ssh-concrete")]
@@ -44,7 +48,7 @@ pub use workspace_services::{remote_workspace_services, RemoteWorkspaceFs, Remot
 
 #[cfg(not(feature = "remote-ssh-concrete"))]
 pub use disabled::{
-    get_global_remote_exec_process_manager, KnownHostEntry, PTYSession, PortForward,
+    dispatch_ssh, get_global_remote_exec_process_manager, KnownHostEntry, PTYSession, PortForward,
     PortForwardDirection, PortForwardManager, RemoteExecCommandRequest, RemoteExecCommandResponse,
     RemoteExecControlAction, RemoteExecControlOrigin, RemoteExecControlRequest, RemoteExecError,
     RemoteExecProcessLifecycleEvent, RemoteExecProcessLifecycleStatus, RemoteExecProcessManager,

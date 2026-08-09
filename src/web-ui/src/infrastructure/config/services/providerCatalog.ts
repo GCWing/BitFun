@@ -1,77 +1,18 @@
+import { BUILTIN_PROVIDER_TEMPLATES } from './builtinProviderCatalog';
+
 export interface ProviderUrlCatalogItem {
   id: string;
   baseUrl: string;
   baseUrlOptions?: string[];
 }
 
-export const PROVIDER_URL_CATALOG: ProviderUrlCatalogItem[] = [
-  {
-    id: 'openbitfun',
-    baseUrl: 'https://api.openbitfun.com',
-  },
-  {
-    id: 'gemini',
-    baseUrl: 'https://generativelanguage.googleapis.com',
-  },
-  {
-    id: 'anthropic',
-    baseUrl: 'https://api.anthropic.com',
-  },
-  {
-    id: 'minimax',
-    baseUrl: 'https://api.minimaxi.com/anthropic',
-    baseUrlOptions: [
-      'https://api.minimaxi.com/anthropic',
-      'https://api.minimaxi.com/v1',
-    ],
-  },
-  {
-    id: 'moonshot',
-    baseUrl: 'https://api.moonshot.cn/v1',
-  },
-  {
-    id: 'deepseek',
-    baseUrl: 'https://api.deepseek.com/v1',
-  },
-  {
-    id: 'zhipu',
-    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-    baseUrlOptions: [
-      'https://open.bigmodel.cn/api/paas/v4',
-      'https://open.bigmodel.cn/api/anthropic',
-      'https://open.bigmodel.cn/api/coding/paas/v4',
-    ],
-  },
-  {
-    id: 'qwen',
-    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    baseUrlOptions: [
-      'https://dashscope.aliyuncs.com/compatible-mode/v1',
-      'https://coding.dashscope.aliyuncs.com/v1',
-      'https://coding.dashscope.aliyuncs.com/apps/anthropic',
-    ],
-  },
-  {
-    id: 'volcengine',
-    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
-  },
-  {
-    id: 'siliconflow',
-    baseUrl: 'https://api.siliconflow.cn/v1',
-    baseUrlOptions: [
-      'https://api.siliconflow.cn/v1',
-      'https://api.siliconflow.cn/v1/messages',
-    ],
-  },
-  {
-    id: 'nvidia',
-    baseUrl: 'https://integrate.api.nvidia.com/v1',
-  },
-  {
-    id: 'openrouter',
-    baseUrl: 'https://openrouter.ai/api/v1',
-  },
-];
+export const PROVIDER_URL_CATALOG: ProviderUrlCatalogItem[] = Object.values(
+  BUILTIN_PROVIDER_TEMPLATES,
+).map(template => ({
+  id: template.id,
+  baseUrl: template.baseUrl,
+  baseUrlOptions: template.baseUrlOptions?.map(option => option.url),
+}));
 
 export function normalizeProviderBaseUrl(url: string): string {
   let normalized = url.trim().replace(/#$/, '').replace(/\/+$/, '');

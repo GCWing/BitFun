@@ -85,9 +85,13 @@ pub struct DeepReviewExecutionPolicy {
     /// Maximum retry launches allowed per reviewer role in one DeepReview turn.
     /// Set to 0 to disable automatic reviewer retries.
     pub max_retries_per_role: usize,
-    /// Maximum initial specialist launches in one DeepReview turn. New strict
-    /// manifests set this to one; legacy policy keeps its historical budget.
+    /// Maximum initial spawned review calls in one DeepReview turn. Adaptive
+    /// strict manifests share this allowance between ReviewWorker and Judge;
+    /// legacy manifests keep their historical reviewer-only budget.
     pub max_reviewer_calls: usize,
+    /// Adaptive manifests share `max_reviewer_calls` across ReviewWorker and
+    /// ReviewJudge so the visible review has one bounded spawned-call budget.
+    pub shared_spawned_review_budget: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -125,6 +129,7 @@ impl Default for DeepReviewExecutionPolicy {
             max_same_role_instances: DEFAULT_MAX_SAME_ROLE_INSTANCES,
             max_retries_per_role: DEFAULT_MAX_RETRIES_PER_ROLE,
             max_reviewer_calls: DEFAULT_MAX_SAME_ROLE_INSTANCES * reviewer_agent_type_count(),
+            shared_spawned_review_budget: false,
         }
     }
 }
@@ -183,6 +188,7 @@ impl DeepReviewExecutionPolicy {
                 usize::MAX,
                 legacy_max_reviewer_calls,
             ),
+            shared_spawned_review_budget: false,
         }
     }
 
@@ -283,6 +289,7 @@ impl DeepReviewExecutionPolicy {
         }
 
         let mut policy = self.clone();
+        policy.shared_spawned_review_budget = super::is_adaptive_review_manifest(raw_manifest);
         let mut has_explicit_specialist_ceiling = false;
         let managed_reviewer_call_ceiling = manifest
             .get("managedReviewPlan")
@@ -294,6 +301,7 @@ impl DeepReviewExecutionPolicy {
             })
             .and_then(|value| usize::try_from(value).ok())
             .map(|value| value.clamp(1, MANAGED_REVIEW_MAX_BATCHES));
+        let adaptive_reviewer_call_ceiling = super::adaptive_review_max_focused_calls(raw_manifest);
         if let Some(strategy_level) =
             DeepReviewStrategyLevel::from_value(manifest.get("strategyLevel"))
         {
@@ -333,12 +341,19 @@ impl DeepReviewExecutionPolicy {
             );
             policy.max_reviewer_calls = if execution_policy.contains_key("maxReviewerCalls") {
                 has_explicit_specialist_ceiling = true;
-                clamp_usize(
-                    execution_policy.get("maxReviewerCalls"),
-                    1,
-                    managed_reviewer_call_ceiling.unwrap_or(MAX_STRICT_SPECIALIST_CALLS),
-                    managed_reviewer_call_ceiling.unwrap_or(MAX_STRICT_SPECIALIST_CALLS),
-                )
+                let reviewer_call_ceiling = managed_reviewer_call_ceiling
+                    .or(adaptive_reviewer_call_ceiling)
+                    .unwrap_or(MAX_STRICT_SPECIALIST_CALLS);
+                if reviewer_call_ceiling == 0 {
+                    0
+                } else {
+                    clamp_usize(
+                        execution_policy.get("maxReviewerCalls"),
+                        1,
+                        reviewer_call_ceiling,
+                        reviewer_call_ceiling,
+                    )
+                }
             } else {
                 policy.max_reviewer_calls
             };
@@ -355,12 +370,20 @@ impl DeepReviewExecutionPolicy {
                     .map_or(1, |packets| packets.len().clamp(1, managed_ceiling));
                 return policy;
             }
+            if let Some(adaptive_ceiling) = adaptive_reviewer_call_ceiling {
+                policy.max_reviewer_calls = adaptive_ceiling;
+                return policy;
+            }
             // Historical manifests predate the explicit specialist-call
             // ceiling. Preserve their effective same-role/extra-member budget
             // after all manifest and strategy bounds have been applied.
             policy.max_reviewer_calls = policy.max_same_role_instances.saturating_mul(
                 reviewer_agent_type_count().saturating_add(policy.extra_subagent_ids.len()),
             );
+        } else if managed_reviewer_call_ceiling.is_none() {
+            if let Some(adaptive_ceiling) = adaptive_reviewer_call_ceiling {
+                policy.max_reviewer_calls = policy.max_reviewer_calls.min(adaptive_ceiling);
+            }
         }
 
         policy
@@ -717,7 +740,27 @@ mod tests {
     }
 
     #[test]
-    fn strict_manifest_hard_caps_explicit_specialist_budget_to_one() {
+    fn adaptive_strict_manifest_caps_total_spawned_review_budget_to_three() {
+        let policy = DeepReviewExecutionPolicy::default();
+        let manifest = json!({
+            "reviewMode": "deep",
+            "strategyLevel": "deep",
+            "adaptiveReview": {
+                "version": 1,
+                "maxFocusedCalls": 3
+            },
+            "executionPolicy": {
+                "maxReviewerCalls": 999
+            }
+        });
+
+        let effective = policy.with_run_manifest_execution_policy(&manifest);
+
+        assert_eq!(effective.max_reviewer_calls, 3);
+    }
+
+    #[test]
+    fn historical_strict_manifest_keeps_its_single_explicit_reviewer_cap() {
         let policy = DeepReviewExecutionPolicy::default();
         let manifest = json!({
             "reviewMode": "deep",
@@ -730,6 +773,48 @@ mod tests {
         let effective = policy.with_run_manifest_execution_policy(&manifest);
 
         assert_eq!(effective.max_reviewer_calls, 1);
+        assert!(!effective.shared_spawned_review_budget);
+    }
+
+    #[test]
+    fn adaptive_manifest_derives_budget_when_execution_policy_omits_the_ceiling() {
+        let policy = DeepReviewExecutionPolicy::from_config_value(Some(&json!({
+            "max_same_role_instances": 3,
+            "extra_subagent_ids": ["CustomReview"]
+        })));
+        let manifest = json!({
+            "reviewMode": "deep",
+            "strategyLevel": "deep",
+            "adaptiveReview": {
+                "version": 1,
+                "maxFocusedCalls": 2
+            }
+        });
+
+        let effective = policy.with_run_manifest_execution_policy(&manifest);
+
+        assert_eq!(effective.max_reviewer_calls, 2);
+        assert!(effective.shared_spawned_review_budget);
+    }
+
+    #[test]
+    fn adaptive_manifest_can_disable_focused_checks_without_panicking() {
+        let policy = DeepReviewExecutionPolicy::default();
+        let manifest = json!({
+            "reviewMode": "deep",
+            "adaptiveReview": {
+                "version": 1,
+                "maxFocusedCalls": 0
+            },
+            "executionPolicy": {
+                "maxReviewerCalls": 99
+            }
+        });
+
+        let effective = policy.with_run_manifest_execution_policy(&manifest);
+
+        assert_eq!(effective.max_reviewer_calls, 0);
+        assert!(effective.shared_spawned_review_budget);
     }
 
     #[test]

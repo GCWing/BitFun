@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { Session, TokenUsage } from '../types/flow-chat';
+import type { DialogTurn, Session, TokenUsage } from '../types/flow-chat';
 import {
   buildContextUsageTooltip,
   buildModelRoundUsageMeta,
+  deriveContextUsageFromTurns,
   formatCompactTokenCount,
   getSessionContextUsageDisplay,
 } from './tokenUsageDisplay';
@@ -142,5 +143,133 @@ describe('tokenUsageDisplay', () => {
     expect(formatCompactTokenCount(950)).toBe('950');
     expect(formatCompactTokenCount(1200)).toBe('1.2K');
     expect(formatCompactTokenCount(4000)).toBe('4K');
+  });
+});
+
+describe('deriveContextUsageFromTurns', () => {
+  const makeTurn = (
+    overrides: Partial<DialogTurn> & {
+      status: DialogTurn['status'];
+      tokenUsage?: TokenUsage;
+    },
+  ): DialogTurn => ({
+    id: 'turn-1',
+    sessionId: 'session-1',
+    userMessage: {
+      id: 'user-1',
+      content: 'hello',
+      timestamp: 1000,
+    },
+    modelRounds: [{ id: 'round-1' }],
+    status: 'completed',
+    startTime: 1000,
+    ...overrides,
+  });
+
+  const usage = (inputTokens: number): TokenUsage => ({
+    inputTokens,
+    outputTokens: 100,
+    totalTokens: inputTokens + 100,
+    timestamp: 2000,
+  });
+
+  it('returns the last completed turn usage', () => {
+    const turns = [
+      makeTurn({ id: 'turn-1', status: 'completed', tokenUsage: usage(1000) }),
+      makeTurn({ id: 'turn-2', status: 'completed', tokenUsage: usage(2000) }),
+    ];
+
+    expect(deriveContextUsageFromTurns(turns)).toEqual({
+      ...usage(2000),
+      turnId: 'turn-2',
+    });
+  });
+
+  it('skips unfinished turns and falls back to the last completed turn', () => {
+    const turns = [
+      makeTurn({ id: 'turn-1', status: 'completed', tokenUsage: usage(1000) }),
+      makeTurn({ id: 'turn-2', status: 'processing', tokenUsage: usage(500) }),
+      makeTurn({ id: 'turn-3', status: 'pending', tokenUsage: usage(300) }),
+    ];
+
+    expect(deriveContextUsageFromTurns(turns)).toEqual({
+      ...usage(1000),
+      turnId: 'turn-1',
+    });
+  });
+
+  it('skips turns without usage and returns the last completed one that has it', () => {
+    const turns = [
+      makeTurn({ id: 'turn-1', status: 'completed' }),
+      makeTurn({ id: 'turn-2', status: 'error', tokenUsage: usage(2500) }),
+    ];
+
+    expect(deriveContextUsageFromTurns(turns)).toEqual({
+      ...usage(2500),
+      turnId: 'turn-2',
+    });
+  });
+
+  it('uses the latest valid terminal usage even when an older turn is invalid', () => {
+    const turns = [
+      makeTurn({
+        id: 'turn-1',
+        status: 'completed',
+        tokenUsage: { inputTokens: 0, totalTokens: 0, timestamp: 2000 },
+      }),
+      makeTurn({
+        id: 'turn-2',
+        status: 'cancelled',
+        tokenUsage: { inputTokens: 420, totalTokens: 500, timestamp: 3000 },
+      }),
+    ];
+
+    expect(deriveContextUsageFromTurns(turns)).toMatchObject({
+      inputTokens: 420,
+      turnId: 'turn-2',
+    });
+  });
+
+  it('does not scan past the latest terminal turn when its usage is invalid', () => {
+    const turns = [
+      makeTurn({ id: 'turn-1', status: 'completed', tokenUsage: usage(1000) }),
+      makeTurn({
+        id: 'turn-2',
+        status: 'completed',
+        tokenUsage: { inputTokens: 0, totalTokens: 0, timestamp: 3000 },
+      }),
+    ];
+
+    expect(deriveContextUsageFromTurns(turns)).toBeUndefined();
+  });
+
+  it('does not scan past the latest terminal turn when its multi-round usage is accumulated', () => {
+    const turns = [
+      makeTurn({ id: 'turn-1', status: 'completed', tokenUsage: usage(1000) }),
+      makeTurn({
+        id: 'turn-2',
+        status: 'completed',
+        modelRounds: [{ id: 'round-1' }, { id: 'round-2' }],
+        tokenUsage: usage(8_900_000),
+      }),
+    ];
+
+    expect(deriveContextUsageFromTurns(turns)).toBeUndefined();
+  });
+
+  it('returns undefined for empty input or when no completed single-round turn has usage', () => {
+    expect(deriveContextUsageFromTurns([])).toBeUndefined();
+    expect(deriveContextUsageFromTurns(undefined)).toBeUndefined();
+    expect(deriveContextUsageFromTurns([
+      makeTurn({ id: 'turn-1', status: 'processing' }),
+    ])).toBeUndefined();
+    expect(deriveContextUsageFromTurns([
+      makeTurn({
+        id: 'turn-1',
+        status: 'completed',
+        modelRounds: [{ id: 'round-1' }, { id: 'round-2' }],
+        tokenUsage: usage(9000),
+      }),
+    ])).toBeUndefined();
   });
 });

@@ -2,12 +2,39 @@ import { describe, expect, it } from 'vitest';
 
 import {
   getSlashCommandPickerQuery,
+  getInlineSkillPickerQuery,
   getInlineSlashCommandPickerQuery,
   isSlashCommandPickerQuery,
   isSlashCommand,
   matchesSlashCommand,
   stripSlashCommand,
 } from './slashCommand';
+
+describe('getInlineSkillPickerQuery', () => {
+  it('uses dollar and non-leading slash triggers for inline skills', () => {
+    expect(getInlineSkillPickerQuery({
+      isActive: true,
+      trigger: '$',
+      query: 'PDF',
+      startOffset: 0,
+    })).toBe('pdf');
+    expect(getInlineSkillPickerQuery({
+      isActive: true,
+      trigger: '/',
+      query: 'PDF',
+      startOffset: 12,
+    })).toBe('pdf');
+  });
+
+  it('does not let a leading slash trigger reopen the inline skill picker', () => {
+    expect(getInlineSkillPickerQuery({
+      isActive: true,
+      trigger: '/',
+      query: '',
+      startOffset: 0,
+    })).toBeNull();
+  });
+});
 
 describe('getInlineSlashCommandPickerQuery', () => {
   it('uses the active leading token even when text already follows the caret', () => {

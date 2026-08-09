@@ -110,28 +110,7 @@ export interface MenuGroup {
 }
 
  
-export interface MenuTheme {
-   
-  background?: string;
-   
-  color?: string;
-   
-  hoverBackground?: string;
-   
-  disabledColor?: string;
-   
-  borderColor?: string;
-   
-  boxShadow?: string;
-   
-  borderRadius?: string;
-}
-
- 
 export interface MenuOptions {
-   
-  theme?: MenuTheme;
-   
   showIcons?: boolean;
    
   showShortcuts?: boolean;

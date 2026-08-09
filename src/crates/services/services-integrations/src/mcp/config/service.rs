@@ -19,10 +19,16 @@ use super::{
 pub trait MCPConfigStore: Send + Sync {
     async fn get_config_value(&self, key: &str) -> MCPRuntimeResult<Option<Value>>;
     async fn set_config_value(&self, key: &str, value: Value) -> MCPRuntimeResult<()>;
+    async fn compare_and_set_config_value(
+        &self,
+        key: &str,
+        expected: Option<Value>,
+        replacement: Value,
+    ) -> MCPRuntimeResult<bool>;
 }
 
 pub struct MCPConfigService {
-    config_store: Arc<dyn MCPConfigStore>,
+    pub(super) config_store: Arc<dyn MCPConfigStore>,
 }
 
 impl MCPConfigService {
@@ -207,29 +213,22 @@ impl MCPConfigService {
     }
 
     async fn save_user_config(&self, config: &MCPServerConfig) -> MCPRuntimeResult<()> {
-        let current_value = self
-            .config_store
-            .get_config_value("mcp_servers")
-            .await?
-            .unwrap_or_else(|| serde_json::json!({ "mcpServers": {} }));
-
-        let mut mcp_servers =
-            if let Some(obj) = current_value.get("mcpServers").and_then(|v| v.as_object()) {
-                obj.clone()
-            } else {
-                serde_json::Map::new()
-            };
-
-        mcp_servers.insert(config.id.clone(), config_to_cursor_format(config));
-
-        self.config_store
-            .set_config_value(
-                "mcp_servers",
-                serde_json::json!({
-                    "mcpServers": mcp_servers
-                }),
-            )
-            .await?;
+        self.mutate_user_config(|servers| {
+            let import_metadata = servers
+                .get(&config.id)
+                .and_then(Value::as_object)
+                .and_then(|server| server.get("_bitfunImport"))
+                .cloned();
+            let mut replacement = config_to_cursor_format(config);
+            if let (Some(metadata), Some(replacement)) =
+                (import_metadata, replacement.as_object_mut())
+            {
+                replacement.insert("_bitfunImport".to_string(), metadata);
+            }
+            servers.insert(config.id.clone(), replacement);
+            Ok(())
+        })
+        .await?;
         info!(
             "Saved user-level MCP server config (Cursor format): {}",
             config.id
@@ -257,37 +256,15 @@ impl MCPConfigService {
     }
 
     pub async fn delete_server_config(&self, server_id: &str) -> MCPRuntimeResult<()> {
-        let current_value = self
-            .config_store
-            .get_config_value("mcp_servers")
-            .await?
-            .unwrap_or_else(|| serde_json::json!({ "mcpServers": {} }));
-
-        let mut mcp_servers =
-            if let Some(obj) = current_value.get("mcpServers").and_then(|v| v.as_object()) {
-                obj.clone()
-            } else {
+        self.mutate_user_config(|servers| {
+            if servers.remove(server_id).is_none() {
                 return Err(MCPRuntimeError::not_found(format!(
-                    "MCP server config not found: {}",
-                    server_id
+                    "MCP server config not found: {server_id}"
                 )));
-            };
-
-        if mcp_servers.remove(server_id).is_none() {
-            return Err(MCPRuntimeError::not_found(format!(
-                "MCP server config not found: {}",
-                server_id
-            )));
-        }
-
-        self.config_store
-            .set_config_value(
-                "mcp_servers",
-                serde_json::json!({
-                    "mcpServers": mcp_servers
-                }),
-            )
-            .await?;
+            }
+            Ok(())
+        })
+        .await?;
         info!("Deleted MCP server config: {}", server_id);
         Ok(())
     }

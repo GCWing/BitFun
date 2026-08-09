@@ -546,9 +546,10 @@ pub fn custom_agent_read_markdown_str(
     contents: &str,
     level: CustomAgentLevel,
 ) -> Result<ParsedCustomAgentDefinition, String> {
-    let regex = Regex::new(r"(?s)^---\r?\n(.*?)\r?\n---")
-        .map_err(|error| format!("Failed to create regex: {error}"))?;
-    let captures = regex
+    static FRONT_MATTER_REGEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
+        Regex::new(r"(?s)^---\r?\n(.*?)\r?\n---").expect("front matter regex pattern is valid")
+    });
+    let captures = FRONT_MATTER_REGEX
         .captures(contents)
         .ok_or_else(|| "Failed to capture content".to_string())?;
     let yaml = captures

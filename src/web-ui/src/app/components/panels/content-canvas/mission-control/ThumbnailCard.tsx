@@ -139,7 +139,14 @@ export const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
   const stateClass = tab.state === 'pinned' ? 'is-pinned' : tab.state === 'preview' ? 'is-preview' : '';
 
   return (
-    <div
+    <div data-bf-component="canvas-thumbnail" data-bf-part="root" data-bf-group={groupId}
+      data-bf-state={[
+        isActive && 'active',
+        tab.isDirty && 'dirty',
+        tab.fileDeletedFromDisk && 'deleted',
+        tab.state === 'pinned' && 'pinned',
+        tab.state === 'preview' && 'preview',
+      ].filter(Boolean).join(' ')}
       className={`canvas-thumbnail-card ${isActive ? 'is-active' : ''} ${stateClass} ${tab.isDirty ? 'is-dirty' : ''} ${tab.fileDeletedFromDisk ? 'is-file-deleted' : ''}`}
       onClick={onClick}
       onContextMenu={handleContextMenu}
@@ -148,20 +155,22 @@ export const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
       onDragEnd={onDragEnd}
     >
       {/* Header */}
-      <div className="canvas-thumbnail-card__header">
-        <div className="canvas-thumbnail-card__icon">
+      <div data-bf-component="canvas-thumbnail" data-bf-part="header" className="canvas-thumbnail-card__header">
+        <div data-bf-component="canvas-thumbnail" data-bf-part="icon" className="canvas-thumbnail-card__icon">
           {getContentIcon(tab.content.type)}
         </div>
-        <div className="canvas-thumbnail-card__title">
+        <div data-bf-component="canvas-thumbnail" data-bf-part="title" className="canvas-thumbnail-card__title">
           {tab.state === 'pinned' && <Pin size={10} className="canvas-thumbnail-card__pin-icon" />}
           <span className={tab.state === 'preview' ? 'is-preview' : ''}>
             {titleWithDeleted}
           </span>
           {tab.isDirty && <span className="canvas-thumbnail-card__dirty">●</span>}
         </div>
-        <div className="canvas-thumbnail-card__actions">
+        <div data-bf-component="canvas-thumbnail" data-bf-part="actions" className="canvas-thumbnail-card__actions">
           <Tooltip content={tab.state === 'pinned' ? t('tabs.unpin') : t('tabs.pin')}>
             <button
+              data-bf-component="canvas-thumbnail"
+              data-bf-part="action"
               className={`canvas-thumbnail-card__action-btn ${tab.state === 'pinned' ? 'is-active' : ''}`}
               onClick={handlePin}
             >
@@ -170,6 +179,8 @@ export const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
           </Tooltip>
           <Tooltip content={t('tabs.close')}>
             <button
+              data-bf-component="canvas-thumbnail"
+              data-bf-part="action"
               className="canvas-thumbnail-card__action-btn canvas-thumbnail-card__close-btn"
               onClick={handleClose}
             >
@@ -180,9 +191,9 @@ export const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
       </div>
 
       {/* Preview area */}
-      <div className="canvas-thumbnail-card__preview">
+      <div data-bf-component="canvas-thumbnail" data-bf-part="preview" className="canvas-thumbnail-card__preview">
         {isFileType ? (
-          <pre className="canvas-thumbnail-card__code">
+          <pre data-bf-component="canvas-thumbnail" data-bf-part="code" className="canvas-thumbnail-card__code">
             {previewLines.map((line, index) => (
               <div key={index} className="canvas-thumbnail-card__code-line">
                 {line || ' '}
@@ -190,7 +201,7 @@ export const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
             ))}
           </pre>
         ) : (
-          <div className="canvas-thumbnail-card__placeholder">
+          <div data-bf-component="canvas-thumbnail" data-bf-part="placeholder" className="canvas-thumbnail-card__placeholder">
             {getContentIcon(tab.content.type)}
             <span>{tab.content.type}</span>
           </div>
@@ -199,6 +210,8 @@ export const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
 
       {/* Group badge */}
       <div 
+        data-bf-component="canvas-thumbnail"
+        data-bf-part="groupBadge"
         className={`canvas-thumbnail-card__group-badge canvas-thumbnail-card__group-badge--${groupId}`}
       >
         {groupLabel}

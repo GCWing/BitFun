@@ -34,7 +34,7 @@ export const SearchFilter: React.FC<SearchFilterProps> = ({
     : t('canvas.filesCount', { count: totalCount });
 
   return (
-    <div className="canvas-search-filter">
+    <div data-bf-component="content-canvas" data-bf-part="searchFilter" className="canvas-search-filter">
       <Search
         value={value}
         onChange={onChange}

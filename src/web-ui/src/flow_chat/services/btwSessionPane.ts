@@ -5,13 +5,18 @@ import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stor
 import type { CanvasTab } from '@/app/components/panels/content-canvas/types';
 import { flowChatStore } from '../store/FlowChatStore';
 import { resolveSessionTitle } from '../utils/sessionTitle';
+import { flowChatManager } from './FlowChatManager';
 
 export const BTW_SESSION_PANEL_TYPE = 'btw-session' as const;
+
+export type BtwSessionViewKind = 'review-check';
 
 export interface BtwSessionPanelData {
   childSessionId: string;
   parentSessionId: string;
   workspacePath?: string;
+  viewKind?: BtwSessionViewKind;
+  displayTitle?: string;
 }
 
 export interface BtwSessionPanelMetadata {
@@ -33,6 +38,13 @@ export interface EnsureBtwSessionAvailableParams {
   remoteConnectionId?: string;
   remoteSshHost?: string;
   includeInternal?: boolean;
+}
+
+export interface LoadBtwSessionHistoryParams {
+  childSessionId: string;
+  workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
 }
 
 type AgentCanvasState = ReturnType<typeof useAgentCanvasStore.getState>;
@@ -90,14 +102,18 @@ const requestRightPanelExpansion = (): void => {
 export const buildBtwSessionPanelContent = (
   childSessionId: string,
   parentSessionId: string,
-  workspacePath?: string
+  workspacePath?: string,
+  viewKind?: BtwSessionViewKind,
+  displayTitle?: string,
 ): PanelContent => ({
   type: BTW_SESSION_PANEL_TYPE,
-  title: resolveBtwSessionTitle(childSessionId),
+  title: displayTitle?.trim() || resolveBtwSessionTitle(childSessionId),
   data: {
     childSessionId,
     parentSessionId,
     workspacePath,
+    ...(viewKind ? { viewKind } : {}),
+    ...(displayTitle?.trim() ? { displayTitle: displayTitle.trim() } : {}),
   } satisfies BtwSessionPanelData,
   metadata: {
     duplicateCheckKey: getBtwSessionDuplicateKey(childSessionId),
@@ -131,6 +147,21 @@ export const selectActiveBtwSessionTab = (state: AgentCanvasState): CanvasTab | 
 
   return activeTab;
 };
+
+export async function loadBtwSessionHistory(params: LoadBtwSessionHistoryParams): Promise<void> {
+  const location = params.workspacePath
+    ? {
+        workspacePath: params.workspacePath,
+        remoteConnectionId: params.remoteConnectionId,
+        remoteSshHost: params.remoteSshHost,
+      }
+    : undefined;
+  if (location) {
+    await flowChatManager.hydrateSessionHistoryForDetail(params.childSessionId, location);
+  } else {
+    await flowChatManager.hydrateSessionHistoryForDetail(params.childSessionId);
+  }
+}
 
 export function ensureBtwSessionAvailable(params: EnsureBtwSessionAvailableParams): void {
   const existingSession = flowChatStore.getState().sessions.get(params.childSessionId);
@@ -192,14 +223,16 @@ export function ensureBtwSessionAvailable(params: EnsureBtwSessionAvailableParam
     return;
   }
 
-  void flowChatStore.loadSessionHistory(
-    params.childSessionId,
-    workspacePath,
-    undefined,
-    resolvedRemoteConnectionId,
-    resolvedRemoteSshHost,
-    { includeInternal: params.includeInternal },
-  );
+  void loadBtwSessionHistory({
+    childSessionId: params.childSessionId,
+    ...(!sessionToHydrate?.workspacePath
+      ? {
+          workspacePath,
+          remoteConnectionId: resolvedRemoteConnectionId,
+          remoteSshHost: resolvedRemoteSshHost,
+        }
+      : {}),
+  }).catch(() => undefined);
 }
 
 export function openBtwSessionInAuxPane(params: {
@@ -215,13 +248,16 @@ export function openBtwSessionInAuxPane(params: {
   remoteConnectionId?: string;
   remoteSshHost?: string;
   includeInternal?: boolean;
+  viewKind?: BtwSessionViewKind;
 }): void {
   ensureBtwSessionAvailable(params);
 
   const content = buildBtwSessionPanelContent(
     params.childSessionId,
     params.parentSessionId,
-    params.workspacePath
+    params.workspacePath,
+    params.viewKind,
+    params.sessionTitle,
   );
 
   const duplicateCheckKey = content.metadata?.duplicateCheckKey;
@@ -232,6 +268,7 @@ export function openBtwSessionInAuxPane(params: {
       if (params.expand !== false && isRightPanelCollapsed()) {
         requestRightPanelExpansion();
       }
+      canvasStore.updateTabContent(existing.tab.id, existing.groupId, content);
       canvasStore.switchToTab(existing.tab.id, existing.groupId);
       clearSessionUnreadCompletionAfterRender(params.childSessionId);
       return;

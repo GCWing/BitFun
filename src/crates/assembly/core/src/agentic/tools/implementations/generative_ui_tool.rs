@@ -14,23 +14,24 @@ pub struct GenerativeUITool;
 
 const LARGE_WIDGET_CODE_SOFT_LINE_LIMIT: usize = 260;
 const LARGE_WIDGET_CODE_SOFT_BYTE_LIMIT: usize = 28 * 1024;
-const THEME_PROMPT_SNAPSHOT_VERSION: u8 = 1;
-const THEME_PROMPT_SNAPSHOTS_JSON: &str = include_str!("generated/theme_prompt_snapshots.json");
+const APPEARANCE_PROMPT_SNAPSHOT_SCHEMA_VERSION: u8 = 1;
+const APPEARANCE_PROMPT_SNAPSHOTS_JSON: &str =
+    include_str!("generated/appearance_prompt_snapshots.json");
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct ThemePromptSnapshotManifest {
-    version: u8,
-    default_light_theme_id: String,
-    default_dark_theme_id: String,
-    themes: Vec<ThemePromptSnapshot>,
+struct AppearancePromptSnapshotManifest {
+    schema_version: u8,
+    default_light_appearance_id: String,
+    default_dark_appearance_id: String,
+    appearances: Vec<AppearancePromptSnapshot>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct ThemePromptSnapshot {
+struct AppearancePromptSnapshot {
     id: String,
-    theme_type: String,
+    mode: String,
     bg_primary: String,
     bg_secondary: String,
     bg_scene: String,
@@ -54,7 +55,7 @@ impl GenerativeUITool {
     }
 
     fn bitfun_design_system_reminder() -> &'static str {
-        "BitFun design-system reminder: when the widget should feel native to the host BitFun app, compose the provided `bf-*` scaffold classes first and use host-projected theme tokens instead of hard-coded design values. Prefer CSS variables such as `var(--color-bg-primary)`, `var(--color-bg-secondary)`, `var(--color-bg-scene)`, `var(--color-bg-elevated)`, `var(--color-text-primary)`, `var(--color-text-secondary)`, `var(--color-text-muted)`, `var(--color-accent-500)`, `var(--color-accent-600)`, `var(--border-subtle)`, `var(--border-base)`, `var(--border-medium)`, `var(--element-bg-subtle)`, `var(--element-bg-soft)`, `var(--element-bg-base)`, `var(--element-bg-medium)`, `var(--shadow-*)`, `var(--motion-*)`, `var(--easing-*)`, `var(--font-sans)`, and `var(--font-mono)`. Legacy radius, spacing, font-size, and font-weight variables exist as iframe-local compatibility fallbacks, not as host theme extension points; avoid depending on them for custom-theme adaptation. Support both `bitfun-dark` and `bitfun-light`; do not assume dark-only, purple-only, or landing-page styling. Favor compact desktop workbench layouts, panel/card surfaces, strong information hierarchy, and reusable BitFun component patterns. Avoid hard-coded colors, arbitrary spacing, giant hero sections, fake mobile chrome, and full marketing-page shells; prefer understated, premium UI with layered surfaces, restrained contrast, subtle borders, and do not use thick left-accent emphasis blocks."
+        "BitFun design-system reminder: when the widget should feel native to the host BitFun app, compose the provided `bf-*` scaffold classes first and use host-projected appearance tokens instead of hard-coded design values. Prefer CSS variables such as `var(--color-bg-primary)`, `var(--color-bg-secondary)`, `var(--color-bg-scene)`, `var(--color-bg-elevated)`, `var(--color-text-primary)`, `var(--color-text-secondary)`, `var(--color-text-muted)`, `var(--color-accent-500)`, `var(--color-accent-600)`, `var(--border-subtle)`, `var(--border-base)`, `var(--border-medium)`, `var(--element-bg-subtle)`, `var(--element-bg-soft)`, `var(--element-bg-base)`, `var(--element-bg-medium)`, `var(--shadow-*)`, `var(--motion-*)`, `var(--easing-*)`, `var(--font-sans)`, and `var(--font-mono)`. Radius, spacing, font-size, and font-weight variables are iframe-local scaffold values rather than host appearance extension points. Support both `bitfun-dark` and `bitfun-light`; do not assume dark-only, purple-only, or landing-page styling. Favor compact desktop workbench layouts, panel/card surfaces, strong information hierarchy, and reusable BitFun component patterns. Avoid hard-coded colors, arbitrary spacing, giant hero sections, fake mobile chrome, and full marketing-page shells; prefer understated, premium UI with layered surfaces, restrained contrast, subtle borders, and do not use thick left-accent emphasis blocks."
     }
 
     fn bitfun_widget_scaffold_reminder() -> &'static str {
@@ -70,32 +71,34 @@ impl GenerativeUITool {
         )
     }
 
-    fn theme_prompt_snapshot_manifest() -> &'static ThemePromptSnapshotManifest {
-        static MANIFEST: OnceLock<ThemePromptSnapshotManifest> = OnceLock::new();
+    fn appearance_prompt_snapshot_manifest() -> &'static AppearancePromptSnapshotManifest {
+        static MANIFEST: OnceLock<AppearancePromptSnapshotManifest> = OnceLock::new();
         MANIFEST.get_or_init(|| {
-            let manifest: ThemePromptSnapshotManifest =
-                serde_json::from_str(THEME_PROMPT_SNAPSHOTS_JSON)
-                    .expect("generated theme prompt snapshot manifest must be valid JSON");
+            let manifest: AppearancePromptSnapshotManifest =
+                serde_json::from_str(APPEARANCE_PROMPT_SNAPSHOTS_JSON)
+                    .expect("generated appearance prompt snapshot manifest must be valid JSON");
             assert_eq!(
-                manifest.version, THEME_PROMPT_SNAPSHOT_VERSION,
-                "generated theme prompt snapshot manifest version mismatch"
+                manifest.schema_version, APPEARANCE_PROMPT_SNAPSHOT_SCHEMA_VERSION,
+                "generated appearance prompt snapshot manifest version mismatch"
             );
             manifest
         })
     }
 
-    fn builtin_theme_snapshot(theme_id: &str) -> Option<&'static ThemePromptSnapshot> {
-        Self::theme_prompt_snapshot_manifest()
-            .themes
+    fn builtin_appearance_snapshot(
+        appearance_id: &str,
+    ) -> Option<&'static AppearancePromptSnapshot> {
+        Self::appearance_prompt_snapshot_manifest()
+            .appearances
             .iter()
-            .find(|snapshot| snapshot.id == theme_id)
+            .find(|snapshot| snapshot.id == appearance_id)
     }
 
-    fn format_theme_snapshot(snapshot: &ThemePromptSnapshot) -> String {
+    fn format_appearance_snapshot(snapshot: &AppearancePromptSnapshot) -> String {
         format!(
             "{} ({}) => bg.primary={}, bg.secondary={}, bg.scene={}, text.primary={}, text.muted={}, accent.500={}, accent.600={}, border.base={}, element.base={}, shadow.base={}, style={}",
             snapshot.id,
-            snapshot.theme_type,
+            snapshot.mode,
             snapshot.bg_primary,
             snapshot.bg_secondary,
             snapshot.bg_scene,
@@ -110,48 +113,48 @@ impl GenerativeUITool {
         )
     }
 
-    fn baseline_theme_context() -> String {
-        let manifest = Self::theme_prompt_snapshot_manifest();
-        let dark = Self::builtin_theme_snapshot(&manifest.default_dark_theme_id)
-            .map(Self::format_theme_snapshot)
+    fn baseline_appearance_context() -> String {
+        let manifest = Self::appearance_prompt_snapshot_manifest();
+        let dark = Self::builtin_appearance_snapshot(&manifest.default_dark_appearance_id)
+            .map(Self::format_appearance_snapshot)
             .unwrap_or_default();
-        let light = Self::builtin_theme_snapshot(&manifest.default_light_theme_id)
-            .map(Self::format_theme_snapshot)
+        let light = Self::builtin_appearance_snapshot(&manifest.default_light_appearance_id)
+            .map(Self::format_appearance_snapshot)
             .unwrap_or_default();
         format!(
-            "Cross-theme baseline: {}. {}. Widgets must remain correct in both themes by default.",
+            "Cross-appearance baseline: {}. {}. Widgets must remain correct in both appearances by default.",
             dark, light
         )
     }
 
-    async fn build_theme_prompt_context(&self) -> Option<String> {
+    async fn build_appearance_prompt_context(&self) -> Option<String> {
         let config_service = get_global_config_service().await.ok()?;
-        let selected_theme_id = config_service
-            .get_config::<String>(Some("themes.current"))
+        let selected_appearance_id = config_service
+            .get_config::<String>(Some("appearance.selection"))
             .await
             .ok()
             .filter(|value| !value.trim().is_empty())
-            .unwrap_or_else(|| "bitfun-light".to_string());
+            .unwrap_or_else(|| "system".to_string());
 
-        if selected_theme_id == "system" {
+        if selected_appearance_id == "system" {
             return Some(format!(
-                "BitFun active theme selection: system. Exact runtime resolution is host-dependent, so do not assume one palette. {}",
-                Self::baseline_theme_context()
+                "BitFun active appearance selection: system. Exact runtime resolution is host-dependent, so do not assume one palette. {}",
+                Self::baseline_appearance_context()
             ));
         }
 
-        if let Some(snapshot) = Self::builtin_theme_snapshot(&selected_theme_id) {
+        if let Some(snapshot) = Self::builtin_appearance_snapshot(&selected_appearance_id) {
             return Some(format!(
-                "BitFun active theme snapshot: {}. {}",
-                Self::format_theme_snapshot(snapshot),
-                Self::baseline_theme_context()
+                "BitFun active appearance snapshot: {}. {}",
+                Self::format_appearance_snapshot(snapshot),
+                Self::baseline_appearance_context()
             ));
         }
 
         Some(format!(
-            "BitFun active theme selection: {}. Backend does not have an exact built-in snapshot for this theme, so use BitFun CSS variables strictly and avoid hard-coded fallback palettes. {}",
-            selected_theme_id,
-            Self::baseline_theme_context()
+            "BitFun active appearance selection: {}. Backend does not have an exact built-in snapshot for this appearance, so use BitFun CSS variables strictly and avoid hard-coded fallback palettes. {}",
+            selected_appearance_id,
+            Self::baseline_appearance_context()
         ))
     }
 }
@@ -218,9 +221,9 @@ Input rules:
         _context: Option<&ToolUseContext>,
     ) -> BitFunResult<String> {
         let mut description = self.description().await?;
-        if let Some(theme_context) = self.build_theme_prompt_context().await {
+        if let Some(appearance_context) = self.build_appearance_prompt_context().await {
             description.push_str("\n\n");
-            description.push_str(&theme_context);
+            description.push_str(&appearance_context);
         }
         Ok(description)
     }
@@ -250,7 +253,7 @@ Input rules:
                 "widget_code": {
                     "type": "string",
                     "description": format!(
-                        "Raw HTML fragment or raw SVG. No Markdown code fences. For HTML: no <!DOCTYPE>, <html>, <head>, or <body>. The 260-line / 28KB guideline is a soft reliability threshold. For larger widgets, use data-driven loops, shared CSS classes, and simpler markup rather than truncating required behavior. {} If the widget should match BitFun, rely on `bf-*` scaffold classes plus host-projected color, surface, status, border, shadow, motion, and font-family variables instead of hard-coded colors or custom chrome. Treat radius, spacing, font-size, and font-weight variables as iframe-local compatibility fallbacks, not host theme extension points. If the user asked for file navigation, do not finish this field until each clickable node has verified file metadata or is intentionally non-clickable.",
+                        "Raw HTML fragment or raw SVG. No Markdown code fences. For HTML: no <!DOCTYPE>, <html>, <head>, or <body>. The 260-line / 28KB guideline is a soft reliability threshold. For larger widgets, use data-driven loops, shared CSS classes, and simpler markup rather than truncating required behavior. {} If the widget should match BitFun, rely on `bf-*` scaffold classes plus host-projected color, surface, status, border, shadow, motion, and font-family variables instead of hard-coded colors or custom chrome. Treat radius, spacing, font-size, and font-weight variables as iframe-local scaffold values, not host appearance extension points. If the user asked for file navigation, do not finish this field until each clickable node has verified file metadata or is intentionally non-clickable.",
                         Self::combined_reminder()
                     )
                 },
@@ -282,7 +285,7 @@ Input rules:
         _context: Option<&ToolUseContext>,
     ) -> Value {
         let mut schema = self.input_schema();
-        let theme_context = self.build_theme_prompt_context().await;
+        let appearance_context = self.build_appearance_prompt_context().await;
         if let Some(obj) = schema.as_object_mut() {
             obj.insert(
                 "x-bitfun-reminder".to_string(),
@@ -292,10 +295,10 @@ Input rules:
                 "x-bitfun-design-system".to_string(),
                 Value::String(Self::bitfun_design_system_reminder().to_string()),
             );
-            if let Some(theme_context) = theme_context {
+            if let Some(appearance_context) = appearance_context {
                 obj.insert(
-                    "x-bitfun-theme-context".to_string(),
-                    Value::String(theme_context.clone()),
+                    "x-bitfun-appearance-context".to_string(),
+                    Value::String(appearance_context.clone()),
                 );
                 if let Some(description) = obj
                     .get_mut("description")
@@ -303,7 +306,7 @@ Input rules:
                 {
                     obj.insert(
                         "description".to_string(),
-                        Value::String(format!("{} {}", description, theme_context)),
+                        Value::String(format!("{} {}", description, appearance_context)),
                     );
                 }
             }
@@ -471,27 +474,30 @@ mod tests {
     use std::collections::HashSet;
 
     #[test]
-    fn generated_theme_prompt_manifest_covers_default_themes() {
-        let manifest = GenerativeUITool::theme_prompt_snapshot_manifest();
+    fn generated_appearance_prompt_manifest_covers_defaults() {
+        let manifest = GenerativeUITool::appearance_prompt_snapshot_manifest();
 
-        assert_eq!(manifest.version, THEME_PROMPT_SNAPSHOT_VERSION);
-        assert!(manifest.themes.len() >= 2);
+        assert_eq!(
+            manifest.schema_version,
+            APPEARANCE_PROMPT_SNAPSHOT_SCHEMA_VERSION
+        );
+        assert!(manifest.appearances.len() >= 2);
 
         let unique_ids = manifest
-            .themes
+            .appearances
             .iter()
-            .map(|theme| theme.id.as_str())
+            .map(|appearance| appearance.id.as_str())
             .collect::<HashSet<_>>();
-        assert_eq!(unique_ids.len(), manifest.themes.len());
-        assert!(unique_ids.contains(manifest.default_light_theme_id.as_str()));
-        assert!(unique_ids.contains(manifest.default_dark_theme_id.as_str()));
+        assert_eq!(unique_ids.len(), manifest.appearances.len());
+        assert!(unique_ids.contains(manifest.default_light_appearance_id.as_str()));
+        assert!(unique_ids.contains(manifest.default_dark_appearance_id.as_str()));
     }
 
     #[test]
-    fn generated_theme_prompt_snapshots_have_required_prompt_fields() {
-        for snapshot in &GenerativeUITool::theme_prompt_snapshot_manifest().themes {
+    fn generated_appearance_prompt_snapshots_have_required_prompt_fields() {
+        for snapshot in &GenerativeUITool::appearance_prompt_snapshot_manifest().appearances {
             assert!(!snapshot.id.trim().is_empty());
-            assert!(!snapshot.theme_type.trim().is_empty());
+            assert!(!snapshot.mode.trim().is_empty());
             assert!(!snapshot.bg_primary.trim().is_empty());
             assert!(!snapshot.bg_secondary.trim().is_empty());
             assert!(!snapshot.bg_scene.trim().is_empty());
@@ -507,14 +513,14 @@ mod tests {
     }
 
     #[test]
-    fn theme_prompt_snapshot_does_not_surface_iframe_fallback_dimensions() {
-        for snapshot in &GenerativeUITool::theme_prompt_snapshot_manifest().themes {
-            let formatted = GenerativeUITool::format_theme_snapshot(snapshot);
+    fn appearance_prompt_snapshot_does_not_surface_iframe_fallback_dimensions() {
+        for snapshot in &GenerativeUITool::appearance_prompt_snapshot_manifest().appearances {
+            let formatted = GenerativeUITool::format_appearance_snapshot(snapshot);
             assert!(!formatted.contains("radius.base="));
             assert!(!formatted.contains("spacing.4="));
         }
 
-        let context = GenerativeUITool::baseline_theme_context();
+        let context = GenerativeUITool::baseline_appearance_context();
         assert!(!context.contains("radius.base="));
         assert!(!context.contains("spacing.4="));
     }

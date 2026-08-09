@@ -161,7 +161,7 @@ fn permission_prompt() -> PermissionPromptDescriptor {
 }
 
 #[test]
-fn dispatch_envelope_serializes_typed_host_boundary_without_raw_payload() {
+fn dispatch_envelope_serializes_typed_runtime_boundary_without_raw_payload() {
     let json = serde_json::to_value(envelope("event-1")).expect("serialize dispatch envelope");
 
     assert_eq!(json["envelopeVersion"], 1);
@@ -180,7 +180,7 @@ fn dispatch_envelope_serializes_typed_host_boundary_without_raw_payload() {
     );
     assert_eq!(
         json["payloadRef"]["dataClassification"], "workspace",
-        "payloads crossing the host boundary must carry classification"
+        "payloads crossing the plugin runtime boundary must carry classification"
     );
 
     let roundtrip: PluginDispatchEnvelope =
@@ -741,7 +741,7 @@ async fn disabled_plugin_runtime_binding_reports_not_available() {
 }
 
 #[tokio::test]
-async fn projection_only_plugin_runtime_rejects_dispatch_without_host() {
+async fn projection_only_plugin_runtime_rejects_dispatch_when_unavailable() {
     let binding =
         PluginRuntimeBinding::projection_only(PluginRuntimeUnavailableReason::UnsupportedProfile);
 

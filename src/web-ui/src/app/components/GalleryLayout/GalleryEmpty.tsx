@@ -1,6 +1,6 @@
 import React from 'react';
 
-interface GalleryEmptyProps {
+interface GalleryEmptyProps extends React.HTMLAttributes<HTMLDivElement> {
   icon: React.ReactNode;
   message: React.ReactNode;
   isError?: boolean;
@@ -16,8 +16,13 @@ const GalleryEmpty: React.FC<GalleryEmptyProps> = ({
   action,
   className,
   testId,
+  ...rootProps
 }) => (
-  <div className={['gallery-empty', isError && 'gallery-empty--error', className].filter(Boolean).join(' ')} data-testid={testId}>
+  <div
+    {...rootProps}
+    className={['gallery-empty', isError && 'gallery-empty--error', className].filter(Boolean).join(' ')}
+    data-testid={testId}
+  >
     {icon}
     <span>{message}</span>
     {action}

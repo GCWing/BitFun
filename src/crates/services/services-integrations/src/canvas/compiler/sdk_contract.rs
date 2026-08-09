@@ -29,7 +29,7 @@ pub(super) fn validate_canvas_sdk_contracts(
         source,
         import_bindings,
         diagnostics: Vec::new(),
-        host_theme_locals: BTreeSet::new(),
+        host_appearance_locals: BTreeSet::new(),
     };
     visitor.visit_program(program);
     visitor.diagnostics
@@ -40,7 +40,7 @@ struct CanvasSdkContractVisitor<'a> {
     source: &'a str,
     import_bindings: &'a CanvasSdkImportBindings,
     diagnostics: Vec<CanvasDiagnostic>,
-    host_theme_locals: BTreeSet<String>,
+    host_appearance_locals: BTreeSet<String>,
 }
 
 #[cfg(feature = "canvas-runtime")]
@@ -51,12 +51,12 @@ impl<'a> Visit<'a> for CanvasSdkContractVisitor<'_> {
     }
 
     fn visit_variable_declarator(&mut self, declarator: &VariableDeclarator<'a>) {
-        self.collect_host_theme_local(declarator);
+        self.collect_host_appearance_local(declarator);
         walk_variable_declarator(self, declarator);
     }
 
     fn visit_static_member_expression(&mut self, expression: &StaticMemberExpression<'a>) {
-        self.validate_host_theme_member(expression);
+        self.validate_host_appearance_member(expression);
         walk_static_member_expression(self, expression);
     }
 }
@@ -117,31 +117,32 @@ impl CanvasSdkContractVisitor<'_> {
         }
     }
 
-    fn collect_host_theme_local(&mut self, declarator: &VariableDeclarator<'_>) {
+    fn collect_host_appearance_local(&mut self, declarator: &VariableDeclarator<'_>) {
         let BindingPattern::BindingIdentifier(identifier) = &declarator.id else {
             return;
         };
         let Some(Expression::CallExpression(call)) = declarator.init.as_ref() else {
             return;
         };
-        if self.is_use_host_theme_call(call) {
-            self.host_theme_locals.insert(identifier.name.to_string());
+        if self.is_use_host_appearance_call(call) {
+            self.host_appearance_locals
+                .insert(identifier.name.to_string());
         }
     }
 
-    fn is_use_host_theme_call(&self, call: &CallExpression<'_>) -> bool {
+    fn is_use_host_appearance_call(&self, call: &CallExpression<'_>) -> bool {
         match &call.callee {
             Expression::Identifier(identifier) => {
                 self.import_bindings
                     .canonical_for_local(identifier.name.as_str())
                     .unwrap_or(identifier.name.as_str())
-                    == "useHostTheme"
+                    == "useHostAppearance"
             }
             Expression::StaticMemberExpression(member) => {
                 let Expression::Identifier(namespace) = &member.object else {
                     return false;
                 };
-                member.property.name.as_str() == "useHostTheme"
+                member.property.name.as_str() == "useHostAppearance"
                     && self.import_bindings.namespaces.iter().any(|binding| {
                         binding.source == CanvasSdkImportSource::Canvas
                             && binding.local == namespace.name.as_str()
@@ -151,7 +152,7 @@ impl CanvasSdkContractVisitor<'_> {
         }
     }
 
-    fn validate_host_theme_member(&mut self, expression: &StaticMemberExpression<'_>) {
+    fn validate_host_appearance_member(&mut self, expression: &StaticMemberExpression<'_>) {
         let token = expression.property.name.as_str();
         let Expression::StaticMemberExpression(group_expression) = &expression.object else {
             return;
@@ -160,10 +161,10 @@ impl CanvasSdkContractVisitor<'_> {
         let Expression::Identifier(root) = &group_expression.object else {
             return;
         };
-        if !self.host_theme_locals.contains(root.name.as_str()) {
+        if !self.host_appearance_locals.contains(root.name.as_str()) {
             return;
         }
-        if canvas_theme_token_group_allows(group, token) {
+        if canvas_appearance_token_group_allows(group, token) {
             return;
         }
 
@@ -172,13 +173,13 @@ impl CanvasSdkContractVisitor<'_> {
             severity: CanvasDiagnosticSeverity::Error,
             category: CanvasDiagnosticCategory::TypeScript,
             message: format!(
-                "`{}.{}.{}` is not a valid Canvas host theme token",
+                "`{}.{}.{}` is not a valid Canvas host appearance token",
                 root.name, group, token
             ),
-            code: Some("canvas.sdk.invalid_theme_token".to_string()),
+            code: Some("canvas.sdk.invalid_appearance_token".to_string()),
             line: Some(line),
             column: Some(column),
-            suggested_fix: Some(canvas_theme_token_fix(group, token).to_string()),
+            suggested_fix: Some(canvas_appearance_token_fix(group, token).to_string()),
         });
     }
 }
@@ -435,7 +436,7 @@ fn common_canvas_style_prop(prop: &str) -> bool {
 }
 
 #[cfg(feature = "canvas-runtime")]
-fn canvas_theme_token_group_allows(group: &str, token: &str) -> bool {
+fn canvas_appearance_token_group_allows(group: &str, token: &str) -> bool {
     match group {
         "bg" => matches!(token, "editor" | "chrome" | "elevated" | "canvas"),
         "text" => matches!(
@@ -463,21 +464,21 @@ fn canvas_theme_token_group_allows(group: &str, token: &str) -> bool {
 }
 
 #[cfg(feature = "canvas-runtime")]
-fn canvas_theme_token_fix(group: &str, token: &str) -> &'static str {
+fn canvas_appearance_token_fix(group: &str, token: &str) -> &'static str {
     match (group, token) {
         ("surface", "primary") => {
-            "Use theme.bg.editor for the main background or theme.fill.primary for a filled surface."
+            "Use appearance.bg.editor for the main background or appearance.fill.primary for a filled surface."
         }
         ("surface", "secondary") => {
-            "Use theme.bg.elevated for raised panels or theme.fill.secondary for tinted fills."
+            "Use appearance.bg.elevated for raised panels or appearance.fill.secondary for tinted fills."
         }
         ("surface", _) => {
-            "Canvas theme has no `surface` group. Use theme.bg.* for backgrounds or theme.fill.* for tinted fills."
+            "Canvas appearance has no `surface` group. Use appearance.bg.* for backgrounds or appearance.fill.* for tinted fills."
         }
-        ("interactive", "accent") => "Use theme.accent.primary.",
-        ("interactive", _) => "Canvas theme has no `interactive` group. Use theme.accent.* tokens.",
+        ("interactive", "accent") => "Use appearance.accent.primary.",
+        ("interactive", _) => "Canvas appearance has no `interactive` group. Use appearance.accent.* tokens.",
         (_, _) => {
-            "Use one of the declared useHostTheme() token paths: bg, text, fill, stroke, accent, diff, category, or status."
+            "Use one of the declared useHostAppearance() token paths: bg, text, fill, stroke, accent, diff, category, or status."
         }
     }
 }

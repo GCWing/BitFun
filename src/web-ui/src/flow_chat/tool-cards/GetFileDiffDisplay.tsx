@@ -146,17 +146,17 @@ export const GetFileDiffDisplay: React.FC<ToolCardProps> = React.memo(({
       iconClassName="diff-icon"
       action={`${getActionText()}:`}
       content={
-        <span className="diff-tool-info">
-          <span className="diff-file-name">{fileName}</span>
+        <span data-bf-component="get-file-diff-display" data-bf-part="info" className="diff-tool-info">
+          <span data-bf-component="get-file-diff-display" data-bf-part="fileName" className="diff-file-name">{fileName}</span>
           {diffTypeLabel && status === 'completed' && (
-            <span className="diff-type-tag">{diffTypeLabel}</span>
+            <span data-bf-component="get-file-diff-display" data-bf-part="diffType" className="diff-type-tag">{diffTypeLabel}</span>
           )}
         </span>
       }
       extra={
         <>
           {!isFailed && status === 'completed' && stats && (stats.additions !== undefined || stats.deletions !== undefined) && (
-            <span className="diff-stats">
+            <span data-bf-component="get-file-diff-display" data-bf-part="stats" className="diff-stats">
               {stats.additions !== undefined && stats.additions > 0 && (
                 <span className="additions">+{stats.additions}</span>
               )}
@@ -178,18 +178,18 @@ export const GetFileDiffDisplay: React.FC<ToolCardProps> = React.memo(({
 
     if (diff_type === 'full' && modified_content) {
       return (
-        <div className="diff-expanded-content">
-          <div className="diff-message">{resultData.message}</div>
-          <pre className="diff-content-preview">{modified_content}</pre>
+        <div data-bf-component="get-file-diff-display" data-bf-part="expanded" className="diff-expanded-content">
+          <div data-bf-component="get-file-diff-display" data-bf-part="message" className="diff-message">{resultData.message}</div>
+          <pre data-bf-component="get-file-diff-display" data-bf-part="preview" className="diff-content-preview">{modified_content}</pre>
         </div>
       );
     }
 
     if (original_content !== undefined && modified_content !== undefined) {
       return (
-        <div className="diff-expanded-content">
+        <div data-bf-component="get-file-diff-display" data-bf-part="expanded" className="diff-expanded-content">
           {resultData.message && (
-            <div className="diff-message">{resultData.message}</div>
+            <div data-bf-component="get-file-diff-display" data-bf-part="message" className="diff-message">{resultData.message}</div>
           )}
           <InlineDiffPreview
             originalContent={original_content}
@@ -207,11 +207,11 @@ export const GetFileDiffDisplay: React.FC<ToolCardProps> = React.memo(({
 
     if (diff_content) {
       return (
-        <div className="diff-expanded-content">
+        <div data-bf-component="get-file-diff-display" data-bf-part="expanded" className="diff-expanded-content">
           {resultData.message && (
-            <div className="diff-message">{resultData.message}</div>
+            <div data-bf-component="get-file-diff-display" data-bf-part="message" className="diff-message">{resultData.message}</div>
           )}
-          <pre className="diff-content-preview">{diff_content}</pre>
+          <pre data-bf-component="get-file-diff-display" data-bf-part="preview" className="diff-content-preview">{diff_content}</pre>
         </div>
       );
     }
@@ -220,7 +220,7 @@ export const GetFileDiffDisplay: React.FC<ToolCardProps> = React.memo(({
   };
 
   const renderErrorContent = () => (
-    <div className="error-content">
+    <div data-bf-component="get-file-diff-display" data-bf-part="error" className="error-content">
       <div className="error-message">
         {t('toolCards.getFileDiff.failed')}
       </div>
@@ -228,7 +228,7 @@ export const GetFileDiffDisplay: React.FC<ToolCardProps> = React.memo(({
   );
 
   return (
-    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
+    <div data-bf-component="get-file-diff-display" data-bf-part="root" data-bf-state={[isExpanded && 'expanded', isFailed && 'failed'].filter(Boolean).join(' ')} ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
       <BaseToolCard
         status={status}
         isExpanded={isExpanded}

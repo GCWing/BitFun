@@ -15,6 +15,7 @@ export class RelayHttpClient {
   private readonly deviceName: string = 'HarmonyOS Phone';
   delegatedToken: string = '';
   delegatedMasterKey: string = '';
+  delegatedUserId: string = '';
   pairedDeviceId: string = '';
   homeDeviceId: string = '';
 
@@ -34,6 +35,8 @@ export class RelayHttpClient {
   async pair(deviceId: string, identity: PairIdentity): Promise<InitialSyncResponse> {
     const descriptor = this.requireDescriptor();
     const crypto = this.requireCrypto();
+    const startedAt = Date.now();
+    RemoteLogger.info(`pair start room=${RelayHttpClient.shortRoomId(descriptor.roomId)}`);
     crypto.deriveSharedKey(descriptor.publicKey);
     const userId = identity.userId.trim();
 
@@ -43,6 +46,7 @@ export class RelayHttpClient {
       device_name: this.deviceName
     };
     const pairResponse = await this.postJson<EncryptedPayload>(`/api/rooms/${descriptor.roomId}/pair`, pairRequest);
+    RemoteLogger.info(`pair challenge received ms=${Date.now() - startedAt}`);
     const challenge = await crypto.decryptJson<PairChallengeResponse>(pairResponse);
     const challengeCommand: ChallengeCommand = {
       challenge_echo: challenge.challenge,
@@ -60,6 +64,7 @@ export class RelayHttpClient {
     if (initialSync.resp === 'error') {
       throw new Error(initialSync.message || 'Desktop rejected the pairing request.');
     }
+    RemoteLogger.info(`pair complete ms=${Date.now() - startedAt}`);
     return initialSync;
   }
 
@@ -75,6 +80,7 @@ export class RelayHttpClient {
       if (response.resp === 'delegate_identity' && response.token && response.master_key) {
         this.delegatedToken = response.token;
         this.delegatedMasterKey = response.master_key;
+        this.delegatedUserId = response.user_id || '';
         if (response.device_id) {
           this.homeDeviceId = response.device_id;
           if (!this.pairedDeviceId) {
@@ -92,6 +98,7 @@ export class RelayHttpClient {
   clearDelegatedIdentity(): void {
     this.delegatedToken = '';
     this.delegatedMasterKey = '';
+    this.delegatedUserId = '';
   }
 
   hasDelegatedIdentity(): boolean {
@@ -228,5 +235,9 @@ export class RelayHttpClient {
       return 'none';
     }
     return requestId.length <= 12 ? requestId : requestId.slice(requestId.length - 12);
+  }
+
+  private static shortRoomId(roomId: string): string {
+    return roomId.length <= 8 ? roomId : roomId.slice(0, 8);
   }
 }

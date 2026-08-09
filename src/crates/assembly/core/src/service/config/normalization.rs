@@ -1,0 +1,514 @@
+use super::manager::{
+    normalize_legacy_agent_model_defaults_config_value,
+    normalize_legacy_tool_permissions_config_value, strip_removed_model_reasoning_fields,
+};
+use super::providers::AIConfigProvider;
+use super::types::{
+    ConfigDiagnostic, ConfigDiagnosticRecoverability, ConfigDiagnosticSeverity, ConfigProvider,
+    GlobalConfig, ModelCapability, SubagentModelSelection, CURRENT_CONFIG_SCHEMA_VERSION,
+};
+use crate::util::errors::{BitFunError, BitFunResult};
+use serde_json::Value;
+use std::collections::HashSet;
+
+#[derive(Debug, Clone)]
+pub struct ConfigNormalizationResult {
+    pub value: Value,
+    pub diagnostics: Vec<ConfigDiagnostic>,
+    pub changed: bool,
+}
+
+/// Applies deterministic, credential-preserving compatibility normalization
+/// before typed deserialization and strict semantic validation.
+pub fn normalize_config_value(config: Value) -> ConfigNormalizationResult {
+    let original = config.clone();
+    let mut diagnostics = Vec::new();
+    let mut value =
+        strip_removed_model_reasoning_fields(normalize_legacy_tool_permissions_config_value(
+            normalize_legacy_agent_model_defaults_config_value(config),
+        ));
+
+    let previous_schema = value
+        .get("schema_version")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    if previous_schema > u64::from(CURRENT_CONFIG_SCHEMA_VERSION) {
+        diagnostics.push(ConfigDiagnostic {
+            path: "schema_version".to_string(),
+            message: format!(
+                "Configuration schema {previous_schema} is newer than supported schema {CURRENT_CONFIG_SCHEMA_VERSION}"
+            ),
+            code: "CONFIG_SCHEMA_TOO_NEW".to_string(),
+            severity: ConfigDiagnosticSeverity::Error,
+            recoverability: ConfigDiagnosticRecoverability::None,
+        });
+        return ConfigNormalizationResult {
+            changed: value != original,
+            value,
+            diagnostics,
+        };
+    }
+    if previous_schema < u64::from(CURRENT_CONFIG_SCHEMA_VERSION) {
+        if let Some(root) = value.as_object_mut() {
+            root.insert(
+                "schema_version".to_string(),
+                Value::from(CURRENT_CONFIG_SCHEMA_VERSION),
+            );
+        }
+        diagnostics.push(ConfigDiagnostic {
+            path: "schema_version".to_string(),
+            message: format!(
+                "Configuration schema upgraded from {previous_schema} to {CURRENT_CONFIG_SCHEMA_VERSION}"
+            ),
+            code: "CONFIG_SCHEMA_UPGRADED".to_string(),
+            severity: ConfigDiagnosticSeverity::Warning,
+            recoverability: ConfigDiagnosticRecoverability::AutoFix,
+        });
+    }
+
+    ConfigNormalizationResult {
+        changed: value != original,
+        value,
+        diagnostics,
+    }
+}
+
+pub fn reject_unsupported_schema(diagnostics: &[ConfigDiagnostic]) -> BitFunResult<()> {
+    if let Some(diagnostic) = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "CONFIG_SCHEMA_TOO_NEW")
+    {
+        return Err(BitFunError::validation(diagnostic.message.clone()));
+    }
+    Ok(())
+}
+
+/// Canonicalizes typed model fields whose meaning is capability-dependent.
+pub fn normalize_typed_config(config: &mut GlobalConfig) -> Vec<ConfigDiagnostic> {
+    let mut diagnostics = Vec::new();
+    config.schema_version = CURRENT_CONFIG_SCHEMA_VERSION;
+
+    for (index, model) in config.ai.models.iter_mut().enumerate() {
+        model.ensure_category_and_capabilities();
+        let model_id = model.id.clone();
+        for field in model.normalize_inapplicable_generation_fields() {
+            diagnostics.push(ConfigDiagnostic {
+                path: format!("ai.models[{index}].{field}"),
+                message: format!(
+                    "Cleared text-generation-only field from model '{}' because it does not support text_chat",
+                    model_id
+                ),
+                code: "MODEL_FIELD_NOT_APPLICABLE".to_string(),
+                severity: ConfigDiagnosticSeverity::Warning,
+                recoverability: ConfigDiagnosticRecoverability::AutoFix,
+            });
+        }
+    }
+
+    diagnostics
+}
+
+/// Disables only individually invalid model entries so a local model mistake
+/// cannot prevent the rest of the product from starting. Cross-model/default
+/// integrity is repaired separately by the model reconciliation pass.
+pub async fn isolate_invalid_ai_models(
+    config: &mut GlobalConfig,
+) -> BitFunResult<Vec<ConfigDiagnostic>> {
+    let mut diagnostics = Vec::new();
+
+    for index in 0..config.ai.models.len() {
+        if !config.ai.models[index].enabled {
+            continue;
+        }
+
+        let mut isolated_ai = super::types::AIConfig::default();
+        isolated_ai.models = vec![config.ai.models[index].clone()];
+
+        let validation = AIConfigProvider
+            .validate_config(&serde_json::to_value(isolated_ai)?)
+            .await;
+        if let Err(error) = validation {
+            let error_message = error.to_string();
+            // Reasoning schemas are cross-cutting runtime contracts. Keep these
+            // as hard failures so a malformed preset is not silently hidden.
+            if error_message.to_ascii_lowercase().contains("reasoning") {
+                return Err(error);
+            }
+            let model_id = config.ai.models[index].id.clone();
+            config.ai.models[index].enabled = false;
+            diagnostics.push(ConfigDiagnostic {
+                path: format!("ai.models[{index}]"),
+                message: format!(
+                    "Disabled invalid model '{}' during configuration recovery",
+                    model_id
+                ),
+                code: "INVALID_MODEL_DISABLED".to_string(),
+                severity: ConfigDiagnosticSeverity::Warning,
+                recoverability: ConfigDiagnosticRecoverability::ModelDisabled,
+            });
+            log::warn!(
+                "Disabled invalid model during configuration recovery: model_id={}, error={}",
+                model_id,
+                error_message
+            );
+        }
+    }
+
+    Ok(diagnostics)
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ModelReferenceReconcileResult {
+    pub invalidated_model_ids: Vec<String>,
+    pub default_models_changed: bool,
+    pub func_agent_models_changed: bool,
+    pub agent_model_defaults_changed: bool,
+    pub diagnostics: Vec<ConfigDiagnostic>,
+}
+
+impl ModelReferenceReconcileResult {
+    pub fn is_noop(&self) -> bool {
+        !self.default_models_changed
+            && !self.func_agent_models_changed
+            && !self.agent_model_defaults_changed
+    }
+}
+
+fn enabled_model_with_capability(
+    config: &GlobalConfig,
+    model_id: &str,
+    capability: ModelCapability,
+) -> bool {
+    config.ai.models.iter().any(|model| {
+        model.enabled && model.id == model_id && model.supports_capability(capability.clone())
+    })
+}
+
+fn first_enabled_model_with_capability(
+    config: &GlobalConfig,
+    capability: ModelCapability,
+) -> Option<String> {
+    config
+        .ai
+        .models
+        .iter()
+        .find(|model| model.enabled && model.supports_capability(capability.clone()))
+        .map(|model| model.id.clone())
+}
+
+fn diagnose_reference_repair(
+    diagnostics: &mut Vec<ConfigDiagnostic>,
+    path: &str,
+    previous: Option<&str>,
+    replacement: Option<&str>,
+) {
+    diagnostics.push(ConfigDiagnostic {
+        path: path.to_string(),
+        message: format!(
+            "Repaired model reference from {:?} to {:?} to match the slot capability",
+            previous, replacement
+        ),
+        code: "MODEL_REFERENCE_REPAIRED".to_string(),
+        severity: ConfigDiagnosticSeverity::Warning,
+        recoverability: ConfigDiagnosticRecoverability::AutoFix,
+    });
+}
+
+/// Reconciles every product model reference against both enablement and the
+/// capability required by its consumer.
+pub fn reconcile_model_references(config: &mut GlobalConfig) -> ModelReferenceReconcileResult {
+    let snapshot = config.clone();
+    let mut result = ModelReferenceReconcileResult::default();
+    let mut invalidated = HashSet::new();
+
+    let direct_text_reference_is_valid = |reference: &str| {
+        matches!(reference, "auto" | "primary" | "fast")
+            || enabled_model_with_capability(&snapshot, reference, ModelCapability::TextChat)
+    };
+
+    config.ai.func_agent_models.retain(|agent, model_ref| {
+        let valid = direct_text_reference_is_valid(model_ref);
+        if !valid {
+            invalidated.insert(model_ref.clone());
+            result.func_agent_models_changed = true;
+            diagnose_reference_repair(
+                &mut result.diagnostics,
+                &format!("ai.func_agent_models.{agent}"),
+                Some(model_ref),
+                None,
+            );
+        }
+        valid
+    });
+
+    if !direct_text_reference_is_valid(&config.ai.agent_model_defaults.mode) {
+        invalidated.insert(config.ai.agent_model_defaults.mode.clone());
+        let previous =
+            std::mem::replace(&mut config.ai.agent_model_defaults.mode, "auto".to_string());
+        result.agent_model_defaults_changed = true;
+        diagnose_reference_repair(
+            &mut result.diagnostics,
+            "ai.agent_model_defaults.mode",
+            Some(&previous),
+            Some("auto"),
+        );
+    }
+
+    if config
+        .ai
+        .agent_model_defaults
+        .subagents
+        .default_selection
+        .fixed_model_id()
+        .is_some_and(|model_id| !direct_text_reference_is_valid(model_id))
+    {
+        let previous = config
+            .ai
+            .agent_model_defaults
+            .subagents
+            .default_selection
+            .fixed_model_id()
+            .map(str::to_string);
+        if let Some(previous) = previous.as_ref() {
+            invalidated.insert(previous.clone());
+        }
+        config.ai.agent_model_defaults.subagents.default_selection =
+            SubagentModelSelection::fixed("fast");
+        result.agent_model_defaults_changed = true;
+        diagnose_reference_repair(
+            &mut result.diagnostics,
+            "ai.agent_model_defaults.subagents.default",
+            previous.as_deref(),
+            Some("fast"),
+        );
+    }
+
+    config
+        .ai
+        .agent_model_defaults
+        .subagents
+        .builtin
+        .retain(|subagent_id, selection| {
+            let invalid = selection
+                .fixed_model_id()
+                .is_some_and(|model_id| !direct_text_reference_is_valid(model_id));
+            if invalid {
+                if let Some(model_id) = selection.fixed_model_id() {
+                    invalidated.insert(model_id.to_string());
+                    diagnose_reference_repair(
+                        &mut result.diagnostics,
+                        &format!("ai.agent_model_defaults.subagents.builtin.{subagent_id}"),
+                        Some(model_id),
+                        None,
+                    );
+                }
+                result.agent_model_defaults_changed = true;
+            }
+            !invalid
+        });
+
+    if config
+        .ai
+        .agent_model_defaults
+        .subagents
+        .fork
+        .fixed_model_id()
+        .is_some_and(|model_id| !direct_text_reference_is_valid(model_id))
+    {
+        let previous = config
+            .ai
+            .agent_model_defaults
+            .subagents
+            .fork
+            .fixed_model_id()
+            .map(str::to_string);
+        if let Some(previous) = previous.as_ref() {
+            invalidated.insert(previous.clone());
+        }
+        config.ai.agent_model_defaults.subagents.fork = SubagentModelSelection::Inherit;
+        result.agent_model_defaults_changed = true;
+        diagnose_reference_repair(
+            &mut result.diagnostics,
+            "ai.agent_model_defaults.subagents.fork",
+            previous.as_deref(),
+            Some("inherit"),
+        );
+    }
+
+    let mut reconcile_slot = |slot: &mut Option<String>,
+                              path: &str,
+                              capability: ModelCapability,
+                              fill_when_missing: bool| {
+        let previous = slot.clone();
+        let valid = previous
+            .as_deref()
+            .is_some_and(|id| enabled_model_with_capability(&snapshot, id, capability.clone()));
+        if valid || (previous.is_none() && !fill_when_missing) {
+            return;
+        }
+        let replacement = first_enabled_model_with_capability(&snapshot, capability);
+        if replacement == previous {
+            return;
+        }
+        if let Some(previous) = previous.as_ref().filter(|id| !id.is_empty()) {
+            invalidated.insert(previous.clone());
+        }
+        *slot = replacement;
+        result.default_models_changed = true;
+        diagnose_reference_repair(
+            &mut result.diagnostics,
+            path,
+            previous.as_deref(),
+            slot.as_deref(),
+        );
+    };
+
+    reconcile_slot(
+        &mut config.ai.default_models.primary,
+        "ai.default_models.primary",
+        ModelCapability::TextChat,
+        true,
+    );
+    reconcile_slot(
+        &mut config.ai.default_models.fast,
+        "ai.default_models.fast",
+        ModelCapability::TextChat,
+        true,
+    );
+    reconcile_slot(
+        &mut config.ai.default_models.image_understanding,
+        "ai.default_models.image_understanding",
+        ModelCapability::ImageUnderstanding,
+        false,
+    );
+    reconcile_slot(
+        &mut config.ai.default_models.image_generation,
+        "ai.default_models.image_generation",
+        ModelCapability::ImageGeneration,
+        false,
+    );
+    reconcile_slot(
+        &mut config.ai.default_models.search,
+        "ai.default_models.search",
+        ModelCapability::Search,
+        false,
+    );
+    reconcile_slot(
+        &mut config.ai.default_models.speech_recognition,
+        "ai.default_models.speech_recognition",
+        ModelCapability::SpeechRecognition,
+        false,
+    );
+
+    result.invalidated_model_ids = invalidated.into_iter().collect();
+    result.invalidated_model_ids.sort();
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::service::config::types::{AIModelConfig, ModelCapability, ModelCategory};
+
+    #[test]
+    fn pure_speech_models_drop_text_generation_sentinels() {
+        let mut config = GlobalConfig::default();
+        config.ai.models.push(AIModelConfig {
+            id: "speech-cloud".to_string(),
+            name: "Qwen ASR".to_string(),
+            category: ModelCategory::SpeechRecognition,
+            capabilities: vec![ModelCapability::SpeechRecognition],
+            context_window: Some(0),
+            max_tokens: Some(0),
+            enabled: true,
+            ..AIModelConfig::default()
+        });
+
+        let diagnostics = normalize_typed_config(&mut config);
+
+        assert_eq!(config.ai.models[0].context_window, None);
+        assert_eq!(config.ai.models[0].max_tokens, None);
+        assert_eq!(diagnostics.len(), 2);
+        assert!(diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code == "MODEL_FIELD_NOT_APPLICABLE"));
+    }
+
+    #[test]
+    fn mixed_text_and_speech_models_keep_generation_fields() {
+        let mut config = GlobalConfig::default();
+        config.ai.models.push(AIModelConfig {
+            id: "mixed".to_string(),
+            category: ModelCategory::GeneralChat,
+            capabilities: vec![
+                ModelCapability::TextChat,
+                ModelCapability::SpeechRecognition,
+            ],
+            context_window: Some(64_000),
+            max_tokens: Some(8_000),
+            ..AIModelConfig::default()
+        });
+
+        assert!(normalize_typed_config(&mut config).is_empty());
+        assert_eq!(config.ai.models[0].context_window, Some(64_000));
+        assert_eq!(config.ai.models[0].max_tokens, Some(8_000));
+    }
+
+    #[test]
+    fn default_slots_reconcile_by_capability() {
+        let mut config = GlobalConfig::default();
+        config.ai.models = vec![
+            AIModelConfig {
+                id: "speech".to_string(),
+                enabled: true,
+                category: ModelCategory::SpeechRecognition,
+                capabilities: vec![ModelCapability::SpeechRecognition],
+                ..AIModelConfig::default()
+            },
+            AIModelConfig {
+                id: "text".to_string(),
+                enabled: true,
+                category: ModelCategory::GeneralChat,
+                capabilities: vec![ModelCapability::TextChat],
+                ..AIModelConfig::default()
+            },
+        ];
+        config.ai.default_models.primary = Some("speech".to_string());
+        config.ai.default_models.fast = Some("speech".to_string());
+        config.ai.default_models.speech_recognition = Some("text".to_string());
+
+        let result = reconcile_model_references(&mut config);
+
+        assert_eq!(config.ai.default_models.primary.as_deref(), Some("text"));
+        assert_eq!(config.ai.default_models.fast.as_deref(), Some("text"));
+        assert_eq!(
+            config.ai.default_models.speech_recognition.as_deref(),
+            Some("speech")
+        );
+        assert!(result.default_models_changed);
+    }
+
+    #[tokio::test]
+    async fn global_ai_errors_do_not_disable_individually_valid_models() {
+        let mut config = GlobalConfig::default();
+        config.ai.stream_idle_timeout_secs = Some(0);
+        config.ai.models.push(AIModelConfig {
+            id: "valid-text".to_string(),
+            name: "Valid text model".to_string(),
+            provider: "openai".to_string(),
+            model_name: "text-model".to_string(),
+            base_url: "https://example.com/v1".to_string(),
+            enabled: true,
+            capabilities: vec![ModelCapability::TextChat],
+            context_window: Some(64_000),
+            ..AIModelConfig::default()
+        });
+
+        let diagnostics = isolate_invalid_ai_models(&mut config)
+            .await
+            .expect("model isolation should succeed");
+
+        assert!(diagnostics.is_empty());
+        assert!(config.ai.models[0].enabled);
+    }
+}

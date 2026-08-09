@@ -5,7 +5,8 @@
  * `WorkspaceLspManager`. Instances are model-scoped and managed externally.
  */
 
-import * as monaco from 'monaco-editor';
+import type * as monaco from 'monaco-editor';
+import { monacoApi } from '@/tools/editor/services/monacoRuntime';
 import { WorkspaceLspManager } from './WorkspaceLspManager';
 import { getMonacoLanguage } from '@/infrastructure/language-detection';
 import { createLogger } from '@/shared/utils/logger';
@@ -237,7 +238,7 @@ export class MonacoLspAdapter {
 
   
   private registerCompletionProvider() {
-    const provider = monaco.languages.registerCompletionItemProvider(this.language, {
+    const provider = monacoApi.languages.registerCompletionItemProvider(this.language, {
       triggerCharacters: ['.', ':', '<', '"', "'", '/', '@', '#'],
       
       provideCompletionItems: async (model, position) => {
@@ -300,7 +301,7 @@ export class MonacoLspAdapter {
 
   
   private registerHoverProvider() {
-    const provider = monaco.languages.registerHoverProvider(this.language, {
+    const provider = monacoApi.languages.registerHoverProvider(this.language, {
       provideHover: async (model, position) => {
         const modelUri = model.uri.toString();
         const adapter = GlobalAdapterRegistry.get(modelUri);
@@ -366,7 +367,7 @@ export class MonacoLspAdapter {
 
       const result: monaco.languages.Hover = {
         contents,
-        range: hover.range ? new monaco.Range(
+        range: hover.range ? new monacoApi.Range(
           hover.range.start.line + 1,
           hover.range.start.character + 1,
           hover.range.end.line + 1,
@@ -383,7 +384,7 @@ export class MonacoLspAdapter {
 
   
   private registerDefinitionProvider() {
-    const provider = monaco.languages.registerDefinitionProvider(this.language, {
+    const provider = monacoApi.languages.registerDefinitionProvider(this.language, {
       provideDefinition: async (model, position) => {
         const modelUri = model.uri.toString();
         const adapter = GlobalAdapterRegistry.get(modelUri);
@@ -461,10 +462,10 @@ export class MonacoLspAdapter {
       }
       
 
-      const targetMonacoUri = monaco.Uri.parse(definitionUri);
+      const targetMonacoUri = monacoApi.Uri.parse(definitionUri);
       const location: monaco.languages.Location = {
         uri: targetMonacoUri,
-        range: new monaco.Range(
+        range: new monacoApi.Range(
           range.start.line + 1,
           range.start.character + 1,
           range.end.line + 1,
@@ -507,7 +508,7 @@ export class MonacoLspAdapter {
 
   
   private registerReferencesProvider() {
-    const provider = monaco.languages.registerReferenceProvider(this.language, {
+    const provider = monacoApi.languages.registerReferenceProvider(this.language, {
       provideReferences: async (model, position) => {
         const modelUri = model.uri.toString();
         const adapter = GlobalAdapterRegistry.get(modelUri);
@@ -533,8 +534,8 @@ export class MonacoLspAdapter {
       await this.ensureModelsForReferences(references);
 
       return references.map((ref: any) => ({
-        uri: monaco.Uri.parse(ref.uri),
-        range: new monaco.Range(
+        uri: monacoApi.Uri.parse(ref.uri),
+        range: new monacoApi.Range(
           ref.range.start.line + 1,
           ref.range.start.character + 1,
           ref.range.end.line + 1,
@@ -565,8 +566,8 @@ export class MonacoLspAdapter {
     const loadPromises = Array.from(uniqueUris).map(async (uriString) => {
       try {
 
-        const uri = monaco.Uri.parse(uriString);
-        const existingModel = monaco.editor.getModel(uri);
+        const uri = monacoApi.Uri.parse(uriString);
+        const existingModel = monacoApi.editor.getModel(uri);
         if (existingModel) {
           return;
         }
@@ -602,7 +603,7 @@ export class MonacoLspAdapter {
 
   
   private registerFormattingProvider() {
-    const provider = monaco.languages.registerDocumentFormattingEditProvider(this.language, {
+    const provider = monacoApi.languages.registerDocumentFormattingEditProvider(this.language, {
       provideDocumentFormattingEdits: async (model) => {
         const modelUri = model.uri.toString();
         const adapter = GlobalAdapterRegistry.get(modelUri);
@@ -625,7 +626,7 @@ export class MonacoLspAdapter {
       if (!edits || !Array.isArray(edits)) return [];
 
       return edits.map((edit: any) => ({
-        range: new monaco.Range(
+        range: new monacoApi.Range(
           edit.range.start.line + 1,
           edit.range.start.character + 1,
           edit.range.end.line + 1,
@@ -641,7 +642,7 @@ export class MonacoLspAdapter {
 
   
   private registerSignatureHelpProvider() {
-    const provider = monaco.languages.registerSignatureHelpProvider(this.language, {
+    const provider = monacoApi.languages.registerSignatureHelpProvider(this.language, {
       signatureHelpTriggerCharacters: ['(', ','],
       signatureHelpRetriggerCharacters: [')'],
       
@@ -657,7 +658,7 @@ export class MonacoLspAdapter {
 
   
   private registerRenameProvider() {
-    const provider = monaco.languages.registerRenameProvider(this.language, {
+    const provider = monacoApi.languages.registerRenameProvider(this.language, {
       provideRenameEdits: async (model, position, newName) => {
         const modelUri = model.uri.toString();
         const adapter = GlobalAdapterRegistry.get(modelUri);
@@ -676,7 +677,7 @@ export class MonacoLspAdapter {
 
   
   private registerCodeActionProvider() {
-    const provider = monaco.languages.registerCodeActionProvider(this.language, {
+    const provider = monacoApi.languages.registerCodeActionProvider(this.language, {
       provideCodeActions: async (model, range, context) => {
         const modelUri = model.uri.toString();
         const adapter = GlobalAdapterRegistry.get(modelUri);
@@ -689,7 +690,7 @@ export class MonacoLspAdapter {
 
   
   private registerDocumentSymbolProvider() {
-    const provider = monaco.languages.registerDocumentSymbolProvider(this.language, {
+    const provider = monacoApi.languages.registerDocumentSymbolProvider(this.language, {
       provideDocumentSymbols: async (model) => {
         const modelUri = model.uri.toString();
         const adapter = GlobalAdapterRegistry.get(modelUri);
@@ -709,7 +710,7 @@ export class MonacoLspAdapter {
 
   
   private registerDocumentHighlightProvider() {
-    const provider = monaco.languages.registerDocumentHighlightProvider(this.language, {
+    const provider = monacoApi.languages.registerDocumentHighlightProvider(this.language, {
       provideDocumentHighlights: async (model, position) => {
         const modelUri = model.uri.toString();
         const adapter = GlobalAdapterRegistry.get(modelUri);
@@ -722,7 +723,7 @@ export class MonacoLspAdapter {
 
   
   private registerInlayHintsProvider() {
-    const provider = monaco.languages.registerInlayHintsProvider(this.language, {
+    const provider = monacoApi.languages.registerInlayHintsProvider(this.language, {
       provideInlayHints: async (model, range) => {
         const modelUri = model.uri.toString();
         const adapter = GlobalAdapterRegistry.get(modelUri);
@@ -770,11 +771,11 @@ export class MonacoLspAdapter {
 
         return {
           label,
-          position: new monaco.Position(
+          position: new monacoApi.Position(
             hint.position.line + 1,
             hint.position.character + 1
           ),
-          kind: hint.kind || monaco.languages.InlayHintKind.Type,
+          kind: hint.kind || monacoApi.languages.InlayHintKind.Type,
           tooltip: hint.tooltip,
           paddingLeft: hint.padding_left || false,
           paddingRight: hint.padding_right || false,
@@ -853,9 +854,9 @@ export class MonacoLspAdapter {
         for (const [uri, textEdits] of Object.entries(edits.changes)) {
           for (const edit of textEdits as any[]) {
             monacoEdits.edits.push({
-              resource: monaco.Uri.parse(uri),
+              resource: monacoApi.Uri.parse(uri),
               textEdit: {
-                range: new monaco.Range(
+                range: new monacoApi.Range(
                   edit.range.start.line + 1,
                   edit.range.start.character + 1,
                   edit.range.end.line + 1,
@@ -876,9 +877,9 @@ export class MonacoLspAdapter {
             // TextDocumentEdit
             for (const edit of docChange.edits) {
               monacoEdits.edits.push({
-                resource: monaco.Uri.parse(docChange.textDocument.uri),
+                resource: monacoApi.Uri.parse(docChange.textDocument.uri),
                 textEdit: {
-                  range: new monaco.Range(
+                  range: new monacoApi.Range(
                     edit.range.start.line + 1,
                     edit.range.start.character + 1,
                     edit.range.end.line + 1,
@@ -910,7 +911,7 @@ export class MonacoLspAdapter {
       }
 
       return {
-        range: new monaco.Range(
+        range: new monacoApi.Range(
           position.lineNumber,
           word.startColumn,
           position.lineNumber,
@@ -962,9 +963,9 @@ export class MonacoLspAdapter {
         edit: action.edit ? {
           edits: Object.entries(action.edit.changes || {}).flatMap(([uri, textEdits]: [string, any]) =>
             textEdits.map((edit: any) => ({
-              resource: monaco.Uri.parse(uri),
+              resource: monacoApi.Uri.parse(uri),
               textEdit: {
-                range: new monaco.Range(
+                range: new monacoApi.Range(
                   edit.range.start.line + 1,
                   edit.range.start.character + 1,
                   edit.range.end.line + 1,
@@ -1008,13 +1009,13 @@ export class MonacoLspAdapter {
           name: symbol.name,
           detail: symbol.detail || '',
           kind: symbol.kind,
-          range: new monaco.Range(
+          range: new monacoApi.Range(
             symbol.range.start.line + 1,
             symbol.range.start.character + 1,
             symbol.range.end.line + 1,
             symbol.range.end.character + 1
           ),
-          selectionRange: new monaco.Range(
+          selectionRange: new monacoApi.Range(
             symbol.selectionRange.start.line + 1,
             symbol.selectionRange.start.character + 1,
             symbol.selectionRange.end.line + 1,
@@ -1053,8 +1054,8 @@ export class MonacoLspAdapter {
         kind: symbol.kind,
         containerName: symbol.containerName,
         location: {
-          uri: monaco.Uri.parse(symbol.location.uri),
-          range: new monaco.Range(
+          uri: monacoApi.Uri.parse(symbol.location.uri),
+          range: new monacoApi.Range(
             symbol.location.range.start.line + 1,
             symbol.location.range.start.character + 1,
             symbol.location.range.end.line + 1,
@@ -1086,13 +1087,13 @@ export class MonacoLspAdapter {
 
 
       const monacoHighlights = highlights.map((highlight: any) => ({
-        range: new monaco.Range(
+        range: new monacoApi.Range(
           highlight.range.start.line + 1,
           highlight.range.start.character + 1,
           highlight.range.end.line + 1,
           highlight.range.end.character + 1
         ),
-        kind: highlight.kind || monaco.languages.DocumentHighlightKind.Text
+        kind: highlight.kind || monacoApi.languages.DocumentHighlightKind.Text
       }));
 
       return monacoHighlights;
@@ -1181,7 +1182,7 @@ export class MonacoLspAdapter {
       'defaultLibrary', // 9
     ];
     
-    const disposable = monaco.languages.registerDocumentSemanticTokensProvider(
+    const disposable = monacoApi.languages.registerDocumentSemanticTokensProvider(
       this.language,
       {
         getLegend: () => {
@@ -1271,7 +1272,7 @@ export class MonacoLspAdapter {
         code: diag.code
       }));
 
-      monaco.editor.setModelMarkers(this.model, 'lsp', markers);
+      monacoApi.editor.setModelMarkers(this.model, 'lsp', markers);
     } catch (error) {
       log.error('Failed to update diagnostics', { uri: this.uri, count: diagnostics.length, error });
     }
@@ -1281,15 +1282,15 @@ export class MonacoLspAdapter {
 
     switch (severity) {
       case 1:
-        return monaco.MarkerSeverity.Error;
+        return monacoApi.MarkerSeverity.Error;
       case 2:
-        return monaco.MarkerSeverity.Warning;
+        return monacoApi.MarkerSeverity.Warning;
       case 3:
-        return monaco.MarkerSeverity.Info;
+        return monacoApi.MarkerSeverity.Info;
       case 4:
-        return monaco.MarkerSeverity.Hint;
+        return monacoApi.MarkerSeverity.Hint;
       default:
-        return monaco.MarkerSeverity.Info;
+        return monacoApi.MarkerSeverity.Info;
     }
   }
 
@@ -1308,34 +1309,34 @@ export class MonacoLspAdapter {
   
   private convertCompletionKind(kind?: number): monaco.languages.CompletionItemKind {
     const map: Record<number, monaco.languages.CompletionItemKind> = {
-      1: monaco.languages.CompletionItemKind.Text,
-      2: monaco.languages.CompletionItemKind.Method,
-      3: monaco.languages.CompletionItemKind.Function,
-      4: monaco.languages.CompletionItemKind.Constructor,
-      5: monaco.languages.CompletionItemKind.Field,
-      6: monaco.languages.CompletionItemKind.Variable,
-      7: monaco.languages.CompletionItemKind.Class,
-      8: monaco.languages.CompletionItemKind.Interface,
-      9: monaco.languages.CompletionItemKind.Module,
-      10: monaco.languages.CompletionItemKind.Property,
-      11: monaco.languages.CompletionItemKind.Unit,
-      12: monaco.languages.CompletionItemKind.Value,
-      13: monaco.languages.CompletionItemKind.Enum,
-      14: monaco.languages.CompletionItemKind.Keyword,
-      15: monaco.languages.CompletionItemKind.Snippet,
-      16: monaco.languages.CompletionItemKind.Color,
-      17: monaco.languages.CompletionItemKind.File,
-      18: monaco.languages.CompletionItemKind.Reference,
-      19: monaco.languages.CompletionItemKind.Folder,
-      20: monaco.languages.CompletionItemKind.EnumMember,
-      21: monaco.languages.CompletionItemKind.Constant,
-      22: monaco.languages.CompletionItemKind.Struct,
-      23: monaco.languages.CompletionItemKind.Event,
-      24: monaco.languages.CompletionItemKind.Operator,
-      25: monaco.languages.CompletionItemKind.TypeParameter,
+      1: monacoApi.languages.CompletionItemKind.Text,
+      2: monacoApi.languages.CompletionItemKind.Method,
+      3: monacoApi.languages.CompletionItemKind.Function,
+      4: monacoApi.languages.CompletionItemKind.Constructor,
+      5: monacoApi.languages.CompletionItemKind.Field,
+      6: monacoApi.languages.CompletionItemKind.Variable,
+      7: monacoApi.languages.CompletionItemKind.Class,
+      8: monacoApi.languages.CompletionItemKind.Interface,
+      9: monacoApi.languages.CompletionItemKind.Module,
+      10: monacoApi.languages.CompletionItemKind.Property,
+      11: monacoApi.languages.CompletionItemKind.Unit,
+      12: monacoApi.languages.CompletionItemKind.Value,
+      13: monacoApi.languages.CompletionItemKind.Enum,
+      14: monacoApi.languages.CompletionItemKind.Keyword,
+      15: monacoApi.languages.CompletionItemKind.Snippet,
+      16: monacoApi.languages.CompletionItemKind.Color,
+      17: monacoApi.languages.CompletionItemKind.File,
+      18: monacoApi.languages.CompletionItemKind.Reference,
+      19: monacoApi.languages.CompletionItemKind.Folder,
+      20: monacoApi.languages.CompletionItemKind.EnumMember,
+      21: monacoApi.languages.CompletionItemKind.Constant,
+      22: monacoApi.languages.CompletionItemKind.Struct,
+      23: monacoApi.languages.CompletionItemKind.Event,
+      24: monacoApi.languages.CompletionItemKind.Operator,
+      25: monacoApi.languages.CompletionItemKind.TypeParameter,
     };
 
-    return kind ? map[kind] || monaco.languages.CompletionItemKind.Text : monaco.languages.CompletionItemKind.Text;
+    return kind ? map[kind] || monacoApi.languages.CompletionItemKind.Text : monacoApi.languages.CompletionItemKind.Text;
   }
 
   
@@ -1461,7 +1462,7 @@ export class MonacoLspAdapter {
     const gotoDefinitionAction = editor.addAction({
       id: 'editor.action.revealDefinition',
       label: i18nService.t('settings/lsp:editor.goToDefinition'),
-      keybindings: [monaco.KeyCode.F12],
+      keybindings: [monacoApi.KeyCode.F12],
       contextMenuGroupId: 'navigation',
       contextMenuOrder: 1.0,
       run: async (editor) => {
@@ -1496,7 +1497,7 @@ export class MonacoLspAdapter {
       id: 'lsp.findReferences',
       label: i18nService.t('settings/lsp:editor.findAllReferences'),
       keybindings: [
-        monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.F12
+        monacoApi.KeyMod.Shift | monacoApi.KeyMod.Alt | monacoApi.KeyCode.F12
       ],
       contextMenuGroupId: 'navigation',
       contextMenuOrder: 1.5,
@@ -1598,7 +1599,7 @@ export class MonacoLspAdapter {
           
 
           const newDecorations: monaco.editor.IModelDeltaDecoration[] = [{
-            range: new monaco.Range(position.lineNumber, startColumn, position.lineNumber, endColumn),
+            range: new monacoApi.Range(position.lineNumber, startColumn, position.lineNumber, endColumn),
             options: {
               inlineClassName: 'monaco-cross-file-link',  // CSS class for styling
               hoverMessage: { value: i18nService.t('settings/lsp:editor.goToFile', { fileName: this.pendingCrossFileJump.fileName }) }
@@ -1695,7 +1696,7 @@ export class MonacoLspAdapter {
       modelLanguage: this.model.getLanguageId(),
       lineCount: this.model.getLineCount(),
       isDisposed: this.disposables.length === 0,
-      currentMarkers: monaco.editor.getModelMarkers({ resource: this.model.uri }),
+      currentMarkers: monacoApi.editor.getModelMarkers({ resource: this.model.uri }),
       workspacePath: this.workspaceManager.getWorkspacePath(),
     };
     

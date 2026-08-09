@@ -16,7 +16,7 @@ export function H1({ children, style, ...props }: CanvasHeadingProps) {
         margin: 0,
         fontWeight: 720,
         letterSpacing: 0,
-        color: 'var(--color-text-primary)',
+        color: 'var(--bf-appearance-token-color-text-primary)',
         ...style,
       }}
     >
@@ -35,7 +35,7 @@ export function H2({ children, style, ...props }: CanvasHeadingProps) {
         margin: 0,
         fontWeight: 680,
         letterSpacing: 0,
-        color: 'var(--color-text-primary)',
+        color: 'var(--bf-appearance-token-color-text-primary)',
         ...style,
       }}
     >
@@ -54,7 +54,7 @@ export function H3({ children, style, ...props }: CanvasHeadingProps) {
         margin: 0,
         fontWeight: 680,
         letterSpacing: 0,
-        color: 'var(--color-text-primary)',
+        color: 'var(--bf-appearance-token-color-text-primary)',
         ...style,
       }}
     >
@@ -112,7 +112,7 @@ export function Link({ children, style, ...props }: CanvasLinkProps) {
       target={props.target ?? '_blank'}
       rel={props.rel ?? 'noreferrer'}
       style={{
-        color: 'var(--color-accent-500)',
+        color: 'var(--bf-appearance-token-color-accent-500)',
         textDecoration: 'none',
         ...style,
       }}

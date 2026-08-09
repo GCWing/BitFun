@@ -11,6 +11,22 @@
   background: transparent; // Transparent background for glass effect.
   overflow: hidden; /* Prevent overflow. */
   overflow-x: hidden; /* Explicitly disable horizontal scrolling. */
+
+  /*
+   * FlowChat collapse contract: revealing a body may change height, never its
+   * outer leading edge. Internal card padding belongs to each projection
+   * owner, so text keeps breathing room without shifting the card itself.
+   */
+  .explore-region__content,
+  .thinking-content,
+  .base-tool-card-expanded,
+  .base-tool-card-error,
+  .compact-tool-card-expanded,
+  .view-image-tool-card__content,
+  .subagent-items-container,
+  .subagent-projection-container--expanded {
+    margin-inline-start: 0;
+  }
   
   
   // Ensure the Virtuoso container has correct sizing.
@@ -20,13 +36,6 @@
     position: relative;
     z-index: 1; // Keep scroll content below overlays.
     overflow-x: hidden; // Disable horizontal scrolling.
-    
-    // Show scrollbar thumb when the anchor track is hovered.
-    &.anchor-hovering {
-      &::-webkit-scrollbar-thumb {
-        background: var(--scrollbar-thumb) !important;
-      }
-    }
   }
 
   // Ensure the real scroller always spans the full panel width,
@@ -44,12 +53,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--color-bg-scene); /* FlowChat background. */
+    background: var(--bf-appearance-token-color-bg-scene); /* FlowChat background. */
   }
   
   .empty-state {
     text-align: center;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     padding: 2rem;
   }
   
@@ -66,15 +75,40 @@
     max-width: calc(100% - 32px);
     margin: 0 auto 8px;
     padding: 4px 10px;
-    border: 1px solid var(--border-subtle);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: 6px;
-    background: var(--element-bg-subtle);
-    color: var(--color-text-muted);
+    background: var(--bf-appearance-token-element-bg-subtle);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: 12px;
     line-height: 18px;
     text-align: center;
     overflow-wrap: anywhere;
     pointer-events: none;
+  }
+
+  &__history-paging-sentinel {
+    width: 100%;
+    height: 28px;
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: 12px;
+    line-height: 18px;
+    pointer-events: none;
+    overflow-anchor: none;
+    visibility: hidden;
+
+    &[data-history-paging-sentinel='loading'],
+    &[data-history-paging-sentinel='error'] {
+      visibility: visible;
+    }
+  }
+
+  &__history-paging-spinner {
+    animation: history-paging-spin 0.9s linear infinite;
   }
   
   .message-list-footer {
@@ -84,26 +118,8 @@
     overflow-anchor: none;
   }
 
-  &__static-scroller {
+  &__projection-handoff-items {
     width: 100%;
-    height: 100%;
-    position: relative;
-    z-index: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-    overflow-anchor: none;
-    scrollbar-gutter: stable;
-  }
-
-  &__static-items {
-    width: 100%;
-  }
-
-  &__initial-history-spacer {
-    width: 100%;
-    flex: 0 0 auto;
-    pointer-events: none;
-    overflow-anchor: none;
   }
 
   &__projection-handoff-overlay {
@@ -111,8 +127,9 @@
     inset: 0;
     z-index: 2;
     overflow: hidden;
+    scrollbar-gutter: stable;
     pointer-events: none;
-    background: var(--color-bg-scene);
+    background: var(--bf-appearance-token-color-bg-scene);
     contain: paint;
   }
 
@@ -133,4 +150,9 @@
     }
   }
 
+}
+
+@keyframes history-paging-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }

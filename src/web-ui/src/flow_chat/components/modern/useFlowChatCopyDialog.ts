@@ -7,107 +7,44 @@ import { globalEventBus } from '@/infrastructure/event-bus';
 import { notificationService } from '@/shared/notification-system';
 import { getElementText, copyTextToClipboard } from '@/shared/utils/textSelection';
 import { createLogger } from '@/shared/utils/logger';
-import { FlowChatStore } from '../../store/FlowChatStore';
 import { i18nService } from '@/infrastructure/i18n';
-import { formatSessionViewPreviewText } from '../../utils/sessionViewPreview';
-import { projectEffectiveToolItem } from '../../utils/toolInvocationIdentity';
+import { buildDialogTurnCopyText } from '../../utils/dialogTurnCopy';
+import type { TranscriptExportScope } from '../../utils/dialogTranscriptExport';
+import { buildTranscriptExportLabels } from '../../utils/transcriptExportLabels';
 
 const log = createLogger('useFlowChatCopyDialog');
 
-function extractDialogTurnContent(turnId: string): string {
-  const flowChatStore = FlowChatStore.getInstance();
-  const state = flowChatStore.getState();
-  
-  let targetSession = null;
-  for (const [, session] of state.sessions) {
-    if (session.dialogTurns.some((turn: any) => turn.id === turnId)) {
-      targetSession = session;
-      break;
-    }
-  }
-  
-  if (!targetSession) return '';
-  
-  const dialogTurn = targetSession.dialogTurns.find((turn: any) => turn.id === turnId);
-  if (!dialogTurn) return '';
-  
-  const contentParts: string[] = [];
-  
-  if (dialogTurn.userMessage?.content) {
-    contentParts.push(`${i18nService.t('flow-chat:modelRound.userLabel')}\n${dialogTurn.userMessage.content}`);
-  }
-  
-  dialogTurn.modelRounds.forEach((modelRound: any) => {
-    const roundContent: string[] = [];
-    
-    modelRound.items.forEach((item: any) => {
-      if (item.type === 'text' && item.content?.trim()) {
-        roundContent.push(item.content.trim());
-      } else if (item.type === 'thinking' && item.content?.trim()) {
-        roundContent.push(`[Thinking]\n${item.content.trim()}`);
-      } else if (item.type === 'tool' && item.toolCall) {
-        const effectiveItem = projectEffectiveToolItem(item);
-        const toolName = effectiveItem.toolName || i18nService.t('flow-chat:copyOutput.unknownTool');
-        let toolContent = i18nService.t('flow-chat:modelRound.toolCallLabel', { name: toolName }) + '\n';
-        
-        if (effectiveItem.toolCall.input) {
-          const inputStr = typeof effectiveItem.toolCall.input === 'string'
-            ? effectiveItem.toolCall.input
-            : JSON.stringify(effectiveItem.toolCall.input, null, 2);
-          toolContent += `\n[Input]\n\`\`\`json\n${inputStr}\n\`\`\`\n`;
-        }
-        
-        if (item.toolResult) {
-          if (item.toolResult.error) {
-            toolContent += `\n[Error]\n${item.toolResult.error}\n`;
-          } else if (item.toolResult.result !== undefined) {
-            const resultStr = typeof item.toolResult.result === 'string'
-              ? item.toolResult.result
-              : JSON.stringify(item.toolResult.result, null, 2);
-            toolContent += `\n[Result]\n\`\`\`\n${formatSessionViewPreviewText(resultStr)}\n\`\`\`\n`;
-          }
-        }
-        
-        roundContent.push(toolContent.trim());
-      }
-    });
-    
-    if (roundContent.length > 0) {
-      contentParts.push(roundContent.join('\n\n'));
-    }
-  });
-  
-  return contentParts.join('\n\n---\n\n');
-}
-
 export function useFlowChatCopyDialog(): void {
   useEffect(() => {
-    const unsubscribe = globalEventBus.on('flowchat:copy-dialog', ({ dialogTurn }) => {
+    const unsubscribe = globalEventBus.on('flowchat:copy-dialog', ({ dialogTurn, scope }) => {
       if (!dialogTurn) {
         log.warn('Copy failed: dialog element not provided');
         return;
       }
 
+      const exportScope: TranscriptExportScope = scope === 'result' ? 'result' : 'full';
       const dialogElement = dialogTurn as HTMLElement;
       let fullText = '';
-      
+
       const turnId = dialogElement.getAttribute('data-turn-id');
       if (turnId) {
-        fullText = extractDialogTurnContent(turnId);
+        fullText = buildDialogTurnCopyText(turnId, exportScope, buildTranscriptExportLabels());
       }
-      
-      if (!fullText) {
+
+      // The DOM fallback cannot distinguish thinking / tool output, so it only
+      // stands in for a full-process copy.
+      if (!fullText && exportScope === 'full') {
         fullText = getElementText(dialogElement);
       }
 
       if (!fullText || fullText.trim().length === 0) {
-        notificationService.warning('Dialog is empty, nothing to copy');
+        notificationService.warning(i18nService.t('flow-chat:transcriptExport.copyEmpty'));
         return;
       }
 
       copyTextToClipboard(fullText).then(success => {
         if (!success) {
-          notificationService.error('Copy failed. Please try again.');
+          notificationService.error(i18nService.t('errors:general.copyFailed'));
         }
       });
     });

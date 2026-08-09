@@ -1,31 +1,38 @@
-use bitfun_services_integrations::mcp::config::{
-    format_mcp_json_config_value, validate_mcp_json_config,
-};
+use bitfun_services_integrations::mcp::config::{validate_mcp_json_config, MCPImportError};
 use log::{debug, error, info};
+use serde::Serialize;
 
 use crate::util::errors::{BitFunError, BitFunResult};
 
 use super::service::MCPConfigService;
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPJsonConfigSnapshot {
+    pub json_config: String,
+    pub fingerprint: String,
+}
+
 impl MCPConfigService {
     /// Loads MCP JSON config (Cursor format).
-    pub async fn load_mcp_json_config(&self) -> BitFunResult<String> {
-        match self
-            .config_service
-            .get_config::<serde_json::Value>(Some("mcp_servers"))
+    pub async fn load_mcp_json_config(&self) -> BitFunResult<MCPJsonConfigSnapshot> {
+        let snapshot = self
+            .inner
+            .user_json_config_snapshot()
             .await
-        {
-            Ok(value) => format_mcp_json_config_value(Some(&value)).map_err(|e| {
-                BitFunError::serialization(format!("Failed to serialize MCP config: {}", e))
-            }),
-            Err(_) => format_mcp_json_config_value(None).map_err(|e| {
-                BitFunError::serialization(format!("Failed to serialize MCP config: {}", e))
-            }),
-        }
+            .map_err(|error| BitFunError::config(format!("Failed to load MCP config: {error}")))?;
+        Ok(MCPJsonConfigSnapshot {
+            json_config: snapshot.json_config,
+            fingerprint: snapshot.fingerprint,
+        })
     }
 
     /// Saves MCP JSON config (Cursor format).
-    pub async fn save_mcp_json_config(&self, json_config: &str) -> BitFunResult<()> {
+    pub async fn save_mcp_json_config(
+        &self,
+        json_config: &str,
+        expected_fingerprint: &str,
+    ) -> BitFunResult<()> {
         debug!("Saving MCP JSON config to app.json");
 
         let config_value: serde_json::Value = serde_json::from_str(json_config).map_err(|e| {
@@ -40,18 +47,15 @@ impl MCPConfigService {
             BitFunError::validation(error_msg)
         })?;
 
-        self.config_service
-            .set_config("mcp_servers", config_value)
+        self.inner
+            .replace_user_json_config(expected_fingerprint, config_value)
             .await
             .map_err(|e| {
                 let error_msg = match e {
-                    BitFunError::Io(ref io_err) => {
-                        format!("Failed to write config file: {}", io_err)
+                    MCPImportError::StaleConfiguration => {
+                        "MCP configuration changed; reload before saving".to_string()
                     }
-                    BitFunError::Serialization(ref ser_err) => {
-                        format!("Failed to serialize config: {}", ser_err)
-                    }
-                    _ => format!("Failed to save config: {}", e),
+                    _ => format!("Failed to save config: {e}"),
                 };
                 error!("{}", error_msg);
                 BitFunError::config(error_msg)

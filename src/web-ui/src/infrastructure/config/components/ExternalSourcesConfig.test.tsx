@@ -5,14 +5,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import ExternalSourcesConfig from './ExternalSourcesConfig';
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
 const getSnapshotMock = vi.hoisted(() => vi.fn());
-const getHookCatalogMock = vi.hoisted(() => vi.fn());
+const getApplicationSurfaceMock = vi.hoisted(() => vi.fn());
+const getApplicationReviewPageMock = vi.hoisted(() => vi.fn());
+const applyApplicationActionMock = vi.hoisted(() => vi.fn());
+const hookPanelMountedMock = vi.hoisted(() => vi.fn());
 const setSourceEnabledMock = vi.hoisted(() => vi.fn());
 const setSafeModeMock = vi.hoisted(() => vi.fn());
 const setConflictChoiceMock = vi.hoisted(() => vi.fn());
 const setToolTargetDecisionMock = vi.hoisted(() => vi.fn());
 const setToolConflictChoiceMock = vi.hoisted(() => vi.fn());
 const setSubagentActivationMock = vi.hoisted(() => vi.fn());
+const setSubagentModelBindingMock = vi.hoisted(() => vi.fn());
 const chooseSubagentConflictMock = vi.hoisted(() => vi.fn());
 const setMcpServerDecisionMock = vi.hoisted(() => vi.fn());
 const chooseMcpConflictMock = vi.hoisted(() => vi.fn());
@@ -68,12 +74,16 @@ vi.mock('@/shared/types', () => ({
 vi.mock('@/infrastructure/api/service-api/ExternalSourcesAPI', () => ({
   externalSourcesAPI: {
     getSnapshot: getSnapshotMock,
+    getApplicationSurface: getApplicationSurfaceMock,
+    getApplicationReviewPage: getApplicationReviewPageMock,
+    applyApplicationAction: applyApplicationActionMock,
     setSourceEnabled: setSourceEnabledMock,
     setSafeMode: setSafeModeMock,
     setConflictChoice: setConflictChoiceMock,
     setToolTargetDecision: setToolTargetDecisionMock,
     setToolConflictChoice: setToolConflictChoiceMock,
     setSubagentActivation: setSubagentActivationMock,
+    setSubagentModelBinding: setSubagentModelBindingMock,
     chooseSubagentConflict: chooseSubagentConflictMock,
     setMcpServerDecision: setMcpServerDecisionMock,
     chooseMcpConflict: chooseMcpConflictMock,
@@ -81,8 +91,11 @@ vi.mock('@/infrastructure/api/service-api/ExternalSourcesAPI', () => ({
     revealSourceLocation: revealSourceLocationMock,
   },
 }));
-vi.mock('@/infrastructure/api/service-api/ExternalHooksAPI', () => ({
-  externalHooksAPI: { getCatalog: getHookCatalogMock },
+vi.mock('./HooksConfig', () => ({
+  default: (props: { embedded?: boolean }) => {
+    hookPanelMountedMock(props.embedded);
+    return null;
+  },
 }));
 
 const snapshot = {
@@ -235,6 +248,45 @@ const integrationPolicy = {
   }],
 };
 
+const applicationSnapshotV2 = {
+  schemaVersion: 2 as const,
+  executionDomainId: 'host-a',
+  workspaceScopeId: 'workspace:0123456789abcdef',
+  effectiveConnectionScope: 'workspace_override' as const,
+  refreshGeneration: 7,
+  preferenceRevision: 11,
+  safeMode: false,
+  hostCapabilities: {
+    canReadSnapshot: true,
+    canReadReview: true,
+    canMutate: true,
+    canManageUserDefault: true,
+    canManageWorkspaceOverride: true,
+    canRefresh: true,
+    canSetSafeMode: true,
+  },
+  applications: [{
+    applicationId: 'opencode',
+    ecosystemId: 'opencode',
+    displayName: 'OpenCode',
+    discovery: 'discovered' as const,
+    connection: 'disconnected' as const,
+    desiredConnection: 'unspecified' as const,
+    health: 'healthy' as const,
+    effectiveStatus: 'configuration_available' as const,
+    primaryAction: 'connect' as const,
+    defaultConnectionPolicy: 'connect' as const,
+    defaultConnectionReason: 'supported_by_product',
+    enabledCount: 0,
+    pendingReviewCount: 0,
+    blockedCount: 0,
+    conflictCount: 0,
+    riskSummary: { reasonCodes: [] },
+    userDecision: 'none' as const,
+    recoveryActions: [],
+  }],
+};
+
 describe('ExternalSourcesConfig', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -244,17 +296,18 @@ describe('ExternalSourcesConfig', () => {
     workspaceState.path = 'D:/workspace/project';
     workspaceState.kind = 'normal';
     peerState.deviceId = '';
-    getHookCatalogMock.mockResolvedValue({
-      schemaVersion: 1,
-      discoveryPending: false,
-      providers: [],
-      sources: [],
-      entries: [],
-      staleProviderIds: [],
-      failedProviderIds: [],
-      diagnostics: [],
-    });
     getSnapshotMock.mockResolvedValue(snapshot);
+    getApplicationSurfaceMock.mockImplementation(async (...args: unknown[]) => ({
+      protocol: 'v1',
+      snapshot: await getSnapshotMock(...args),
+    }));
+    applyApplicationActionMock.mockResolvedValue({
+      schemaVersion: 2,
+      operationId: 'operation-result',
+      preferenceRevision: 12,
+      outcome: 'applied',
+      itemResults: [],
+    });
     setSourceEnabledMock.mockResolvedValue(snapshot);
     setSafeModeMock.mockResolvedValue(snapshot);
     setConflictChoiceMock.mockResolvedValue({
@@ -267,6 +320,7 @@ describe('ExternalSourcesConfig', () => {
     setToolTargetDecisionMock.mockResolvedValue(snapshot);
     setToolConflictChoiceMock.mockResolvedValue(snapshot);
     setSubagentActivationMock.mockResolvedValue(snapshot);
+    setSubagentModelBindingMock.mockResolvedValue(snapshot);
     chooseSubagentConflictMock.mockResolvedValue(snapshot);
     setMcpServerDecisionMock.mockResolvedValue(snapshot);
     chooseMcpConflictMock.mockResolvedValue(snapshot);
@@ -301,6 +355,12 @@ describe('ExternalSourcesConfig', () => {
       '.bitfun-config-page-layout.bitfun-external-sources-config',
     );
     expect(page?.querySelector('.bitfun-config-page-header__title')?.textContent).toBe('title');
+
+    /**
+     * ConfigPageLoading waits out a grace period before admitting it is loading, so
+     * reads served from the ConfigManager cache never flash a placeholder.
+     */
+    await act(async () => vi.advanceTimersByTimeAsync(260));
     expect(page?.querySelector(
       '.bitfun-config-page-content .bitfun-config-page-loading',
     )?.textContent).toBe('loading');
@@ -309,6 +369,1129 @@ describe('ExternalSourcesConfig', () => {
       resolveSnapshot?.(snapshot);
       await Promise.resolve();
     });
+  });
+
+  it('shows one review entry and keeps advanced capability controls collapsed by default', async () => {
+    const policySnapshot = {
+      ...snapshot,
+      preferenceRevision: 4,
+      integrationPolicy,
+      sources: [{
+        ...snapshot.sources[0],
+        record: {
+          ...snapshot.sources[0].record,
+          ecosystemId: 'opencode',
+        },
+      }],
+      commandConflicts: [],
+      toolApprovalRequests: [{
+        approvalKey: 'approval-1',
+        decisionKey: 'decision-1',
+        targetId: {
+          source: { providerId: 'opencode.commands', sourceId: 'project' },
+          localId: 'tool-a',
+        },
+        sourceDisplayName: 'OpenCode',
+        sourceLocation: '<workspace>/.opencode',
+        sourceScope: 'project',
+        toolNames: ['tool-a'],
+        runtimeKind: 'node',
+        workingDirectory: '<workspace>',
+        capabilities: ['file_system'],
+        contentVersion: 'v1',
+      }],
+    };
+    getSnapshotMock.mockResolvedValue(policySnapshot);
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    expect(container.querySelectorAll('[data-bf-part="attentionSummary"]')).toHaveLength(1);
+    expect(container.textContent).toContain('applications.review.title');
+    const advanced = container.querySelector<HTMLDetailsElement>(
+      '.bitfun-external-sources-config__advanced',
+    );
+    expect(advanced?.open).toBe(false);
+
+    const openReview = container.querySelector<HTMLButtonElement>('[data-bf-part="attentionSummary"]');
+    await act(async () => openReview?.click());
+    expect(advanced?.open).toBe(true);
+  });
+
+  it('uses each application switch as the recommended connection control without a dialog', async () => {
+    const policySnapshot = {
+      ...snapshot,
+      preferenceRevision: 4,
+      integrationPolicy: {
+        ...integrationPolicy,
+        userDefaults: {
+          ...integrationPolicy.userDefaults,
+          ecosystems: { opencode: { mode: 'discover_only', capabilityOverrides: {} } },
+        },
+        globalEffective: {
+          ...integrationPolicy.globalEffective,
+          ecosystems: {
+            opencode: {
+              ...integrationPolicy.globalEffective.ecosystems.opencode,
+              mode: 'discover_only',
+            },
+          },
+        },
+        effective: {
+          ...integrationPolicy.effective,
+          ecosystems: {
+            opencode: {
+              ...integrationPolicy.effective.ecosystems.opencode,
+              mode: 'discover_only',
+            },
+          },
+        },
+      },
+      sources: [{
+        ...snapshot.sources[0],
+        record: { ...snapshot.sources[0].record, ecosystemId: 'opencode' },
+      }],
+      commandConflicts: [],
+      diagnostics: [],
+    };
+    getSnapshotMock.mockResolvedValue(policySnapshot);
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    const applicationToggle = container.querySelector<HTMLInputElement>(
+      '[data-bf-part="applicationToggle"] input[type="checkbox"]',
+    );
+    expect(applicationToggle?.checked).toBe(false);
+    await act(async () => applicationToggle?.click());
+
+    expect(container.textContent).not.toContain('applications.connectTitle');
+    expect(updateIntegrationPolicyMock).toHaveBeenCalledWith('D:/workspace/project', {
+      expectedPreferenceRevision: 4,
+      scope: 'workspace',
+      change: {
+        operation: 'set_ecosystem_mode',
+        ecosystemId: 'opencode',
+        mode: 'recommended',
+      },
+    });
+  });
+
+  it('renders V2 Host application state and uses only the Host connect action', async () => {
+    getApplicationSurfaceMock.mockResolvedValue({
+      protocol: 'v2',
+      snapshot: { ...applicationSnapshotV2, effectiveConnectionScope: 'user_default' },
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('applications.status.configuration_available');
+    expect(container.textContent).not.toContain('applications.summary.enabledCount');
+    expect(container.textContent).not.toContain('hooksManagement.description');
+    expect(container.textContent).not.toContain('applications.advanced.description');
+    const hooksSummary = container.querySelector<HTMLElement>(
+      '.bitfun-external-sources-config__hooks-summary',
+    );
+    expect(hooksSummary?.getAttribute('aria-expanded')).toBe('false');
+    expect(
+      hooksSummary?.querySelector('.bitfun-external-sources-config__disclosure-icon'),
+    ).not.toBeNull();
+    const advanced = container.querySelector<HTMLDetailsElement>(
+      '.bitfun-external-sources-config__advanced',
+    );
+    const advancedSummary = advanced?.querySelector<HTMLElement>('summary');
+    expect(advanced?.open).toBe(false);
+    expect(advancedSummary?.getAttribute('aria-expanded')).toBe('false');
+    expect(
+      advancedSummary?.querySelector('.bitfun-external-sources-config__disclosure-icon'),
+    ).not.toBeNull();
+    expect(advanced?.textContent).toContain('safeMode.title');
+    await act(async () => {
+      advancedSummary?.click();
+      advanced?.dispatchEvent(new Event('toggle'));
+      await Promise.resolve();
+    });
+    expect(advanced?.open).toBe(true);
+    expect(advancedSummary?.getAttribute('aria-expanded')).toBe('true');
+    expect(container.textContent).toContain('safeMode.title');
+    const applicationToggle = container.querySelector<HTMLInputElement>(
+      '[data-bf-part="applicationToggle"] input[type="checkbox"]',
+    );
+    expect(applicationToggle?.checked).toBe(false);
+
+    await act(async () => {
+      applicationToggle?.click();
+      await Promise.resolve();
+    });
+
+    expect(applyApplicationActionMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      expect.objectContaining({
+        schemaVersion: 2,
+        executionDomainId: 'host-a',
+        workspaceScopeId: 'workspace:0123456789abcdef',
+        targetScope: 'workspace_override',
+        expectedPreferenceRevision: 11,
+        action: { type: 'connect_application', applicationId: 'opencode' },
+      }),
+    );
+    expect(updateIntegrationPolicyMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps the refreshed V2 review current while loading the V1 compatibility catalog', async () => {
+    let generation = 7;
+    const reviewSnapshot = () => ({
+      ...applicationSnapshotV2,
+      refreshGeneration: generation,
+      applications: [{
+        ...applicationSnapshotV2.applications[0],
+        effectiveStatus: 'needs_attention' as const,
+        primaryAction: 'review' as const,
+        pendingReviewCount: 1,
+      }],
+      reviewSummary: {
+        reviewId: `review-${generation}`,
+        totalCount: 1,
+        categoryCounts: [{ kind: 'tool' as const, count: 1 }],
+        maxSelectionCount: 1,
+        riskSummary: { reasonCodes: [] },
+        recommendationSummary: { recommendedCount: 1, optionalCount: 0, blockedCount: 0 },
+        safetyCeiling: 'automatic' as const,
+      },
+    });
+    getApplicationSurfaceMock.mockImplementation(async (
+      _workspacePath: string,
+      forceRefresh: boolean,
+    ) => {
+      if (forceRefresh) generation += 1;
+      return { protocol: 'v2', snapshot: reviewSnapshot() };
+    });
+    getSnapshotMock.mockImplementation(async (
+      _workspacePath: string,
+      forceRefresh: boolean,
+    ) => {
+      if (forceRefresh) generation += 1;
+      return { ...snapshot, generation };
+    });
+    getApplicationReviewPageMock.mockImplementation(async (
+      _workspacePath: string,
+      request: { reviewId: string },
+    ) => {
+      if (request.reviewId !== `review-${generation}`) {
+        throw new Error('stale review');
+      }
+      return {
+        schemaVersion: 2,
+        executionDomainId: 'host-a',
+        workspaceScopeId: 'workspace:0123456789abcdef',
+        targetScope: 'workspace_override',
+        reviewId: request.reviewId,
+        preferenceRevision: 11,
+        expectedGenerations: [{ owner: 'tool', generation }],
+        totalCount: 1,
+        items: [{
+          itemRef: { kind: 'tool', stableId: 'tool-current' },
+          displayName: 'Current Tool',
+          displaySummary: 'Current review item',
+          riskLevel: 'low',
+          riskReasonCodes: [],
+          recommended: true,
+          safetyCeiling: 'automatic',
+        }],
+      };
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="actions.refresh"]')?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-bf-part="attentionSummary"]')?.click();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('Current Tool');
+    expect(getSnapshotMock).toHaveBeenLastCalledWith('D:/workspace/project', false);
+  });
+
+  it('opens the authoritative first review page when discovery settles after the snapshot', async () => {
+    const currentSnapshot = {
+      ...applicationSnapshotV2,
+      applications: [{
+        ...applicationSnapshotV2.applications[0],
+        effectiveStatus: 'needs_attention' as const,
+        primaryAction: 'review' as const,
+        pendingReviewCount: 2,
+      }],
+      reviewSummary: {
+        reviewId: 'review-current',
+        totalCount: 2,
+        categoryCounts: [{ kind: 'tool' as const, count: 2 }],
+        maxSelectionCount: 2,
+        riskSummary: { reasonCodes: [] },
+        recommendationSummary: { recommendedCount: 0, optionalCount: 2, blockedCount: 0 },
+        safetyCeiling: 'automatic' as const,
+      },
+    };
+    getApplicationSurfaceMock.mockResolvedValueOnce({
+      protocol: 'v2',
+      snapshot: {
+        ...applicationSnapshotV2,
+        applications: [{
+          ...applicationSnapshotV2.applications[0],
+          effectiveStatus: 'needs_attention',
+          primaryAction: 'review',
+          pendingReviewCount: 1,
+        }],
+        reviewSummary: {
+          reviewId: 'review-stale',
+          totalCount: 1,
+          categoryCounts: [{ kind: 'conflict', count: 1 }],
+          maxSelectionCount: 0,
+          riskSummary: { reasonCodes: [] },
+          recommendationSummary: { recommendedCount: 0, optionalCount: 0, blockedCount: 1 },
+          safetyCeiling: 'blocked',
+        },
+      },
+    }).mockResolvedValue({ protocol: 'v2', snapshot: currentSnapshot });
+    getApplicationReviewPageMock.mockResolvedValueOnce({
+      schemaVersion: 2,
+      executionDomainId: 'host-a',
+      workspaceScopeId: 'workspace:0123456789abcdef',
+      targetScope: 'workspace_override',
+      reviewId: 'review-current',
+      preferenceRevision: 11,
+      expectedGenerations: [{ owner: 'tool', generation: 8 }],
+      nextCursor: 'page-2',
+      totalCount: 2,
+      items: [{
+        itemRef: { kind: 'tool', stableId: 'tool-current' },
+        displayName: 'Current Tool',
+        displaySummary: 'Current review item',
+        riskLevel: 'low',
+        riskReasonCodes: [],
+        recommended: false,
+        safetyCeiling: 'automatic',
+      }],
+    }).mockResolvedValueOnce({
+      schemaVersion: 2,
+      executionDomainId: 'host-a',
+      workspaceScopeId: 'workspace:0123456789abcdef',
+      targetScope: 'workspace_override',
+      reviewId: 'review-current',
+      preferenceRevision: 11,
+      expectedGenerations: [{ owner: 'tool', generation: 8 }],
+      cursor: 'page-2',
+      totalCount: 2,
+      items: [{
+        itemRef: { kind: 'tool', stableId: 'tool-next' },
+        displayName: 'Next Tool',
+        displaySummary: 'Next review item',
+        riskLevel: 'moderate',
+        riskReasonCodes: [],
+        recommended: false,
+        safetyCeiling: 'review_required',
+      }],
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-bf-part="attentionSummary"]')?.click();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('Current Tool');
+    expect(container.querySelector<HTMLInputElement>('input[type="checkbox"]')?.disabled).toBe(false);
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-bf-part="loadMoreReview"]')?.click();
+      await Promise.resolve();
+    });
+    expect(container.textContent).toContain('Next Tool');
+    expect(getApplicationReviewPageMock).toHaveBeenLastCalledWith(
+      'D:/workspace/project',
+      expect.objectContaining({
+        reviewId: 'review-current',
+        expectedGenerations: [{ owner: 'tool', generation: 8 }],
+        cursor: 'page-2',
+      }),
+    );
+  });
+
+  it('returns to the application list when the first review page cannot be loaded', async () => {
+    getApplicationSurfaceMock.mockResolvedValue({
+      protocol: 'v2',
+      snapshot: {
+        ...applicationSnapshotV2,
+        applications: [{
+          ...applicationSnapshotV2.applications[0],
+          effectiveStatus: 'needs_attention',
+          primaryAction: 'review',
+          pendingReviewCount: 1,
+        }],
+        reviewSummary: {
+          reviewId: 'review-a',
+          totalCount: 1,
+          categoryCounts: [{ kind: 'tool', count: 1 }],
+          maxSelectionCount: 1,
+          riskSummary: { reasonCodes: [] },
+          recommendationSummary: { recommendedCount: 1, optionalCount: 0, blockedCount: 0 },
+          safetyCeiling: 'automatic',
+        },
+      },
+    });
+    getApplicationReviewPageMock.mockRejectedValue(Object.assign(new Error('stale review'), {
+      code: 'stale_revision',
+      recoveryActions: [{ type: 'refresh' }],
+    }));
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-bf-part="attentionSummary"]')?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-bf-part="application"]')).not.toBeNull();
+    expect(container.querySelector('.bitfun-external-sources-config__review')).toBeNull();
+    expect(container.textContent).toContain('operationErrors.refreshRequired');
+    expect(container.textContent).toContain('recoveryActions.refresh');
+  });
+
+  it('does not regress a V2 Host generation on a later refresh response', async () => {
+    const connected = {
+      ...applicationSnapshotV2,
+      refreshGeneration: 8,
+      applications: [{
+        ...applicationSnapshotV2.applications[0],
+        connection: 'connected' as const,
+        effectiveStatus: 'connected' as const,
+        primaryAction: 'view' as const,
+      }],
+    };
+    const regressed = {
+      ...applicationSnapshotV2,
+      refreshGeneration: 7,
+      applications: [{
+        ...applicationSnapshotV2.applications[0],
+        discovery: 'not_discovered' as const,
+        effectiveStatus: 'no_configuration' as const,
+        primaryAction: 'none' as const,
+      }],
+    };
+    getApplicationSurfaceMock
+      .mockResolvedValueOnce({ protocol: 'v2', snapshot: connected })
+      .mockResolvedValueOnce({ protocol: 'v2', snapshot: regressed });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('applications.status.connected');
+    expect(container.textContent).not.toContain('applications.status.no_configuration');
+  });
+
+  it('does not admit a review page after its Host review identity is replaced', async () => {
+    const summary = {
+      reviewId: 'review-a',
+      totalCount: 1,
+      categoryCounts: [{ kind: 'tool' as const, count: 1 }],
+      maxSelectionCount: 1,
+      riskSummary: { reasonCodes: [] },
+      recommendationSummary: { recommendedCount: 1, optionalCount: 0, blockedCount: 0 },
+      safetyCeiling: 'automatic' as const,
+    };
+    getApplicationSurfaceMock
+      .mockResolvedValueOnce({
+        protocol: 'v2',
+        snapshot: { ...applicationSnapshotV2, reviewSummary: summary },
+      })
+      .mockResolvedValueOnce({
+        protocol: 'v2',
+        snapshot: {
+          ...applicationSnapshotV2,
+          refreshGeneration: 8,
+          preferenceRevision: 12,
+          reviewSummary: { ...summary, reviewId: 'review-b', totalCount: 0 },
+        },
+      });
+    let resolveReviewPage: ((value: Record<string, unknown>) => void) | undefined;
+    getApplicationReviewPageMock.mockReturnValue(new Promise((resolve) => {
+      resolveReviewPage = resolve;
+    }));
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-bf-part="attentionSummary"]')?.click();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      resolveReviewPage?.({
+        schemaVersion: 2,
+        executionDomainId: 'host-a',
+        workspaceScopeId: 'workspace:0123456789abcdef',
+        targetScope: 'workspace_override',
+        reviewId: 'review-a',
+        preferenceRevision: 11,
+        expectedGenerations: [{ owner: 'tool', generation: 7 }],
+        totalCount: 1,
+        items: [{
+          itemRef: { kind: 'tool', stableId: 'old-tool' },
+          displayName: 'Old Tool',
+          displaySummary: 'Stale page',
+          riskLevel: 'low',
+          riskReasonCodes: [],
+          recommended: true,
+          safetyCeiling: 'automatic',
+        }],
+      });
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).not.toContain('Old Tool');
+  });
+
+  it('uses the V2 Host safe-mode state and mutation instead of the legacy projection', async () => {
+    getApplicationSurfaceMock.mockResolvedValue({
+      protocol: 'v2',
+      snapshot: { ...applicationSnapshotV2, safeMode: true },
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('safeMode.activeNotice');
+    const safeModeToggle = container.querySelector<HTMLInputElement>(
+      'input[aria-label="safeMode.toggleLabel"]',
+    );
+    expect(safeModeToggle?.checked).toBe(true);
+    await act(async () => {
+      safeModeToggle?.click();
+      await Promise.resolve();
+    });
+    expect(applyApplicationActionMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      expect.objectContaining({ action: { type: 'set_safe_mode', enabled: false } }),
+    );
+    expect(setSafeModeMock).not.toHaveBeenCalled();
+  });
+
+  it('reviews V2 items with a recommended baseline and bounded advanced overrides', async () => {
+    const reviewSnapshot = {
+      ...applicationSnapshotV2,
+      applications: [{
+        ...applicationSnapshotV2.applications[0],
+        effectiveStatus: 'needs_attention' as const,
+        primaryAction: 'review' as const,
+        pendingReviewCount: 2,
+      }],
+      reviewSummary: {
+        reviewId: 'review-a',
+        totalCount: 2,
+        categoryCounts: [{ kind: 'tool' as const, count: 2 }],
+        maxSelectionCount: 2,
+        riskSummary: { highestLevel: 'moderate' as const, reasonCodes: [] },
+        recommendationSummary: {
+          recommendedCount: 1,
+          optionalCount: 1,
+          blockedCount: 0,
+        },
+        safetyCeiling: 'review_required' as const,
+      },
+    };
+    getApplicationSurfaceMock
+      .mockResolvedValueOnce({ protocol: 'v2', snapshot: reviewSnapshot })
+      .mockResolvedValue({
+        protocol: 'v2',
+        snapshot: {
+          ...reviewSnapshot,
+          preferenceRevision: 12,
+          refreshGeneration: 8,
+          reviewSummary: undefined,
+        },
+      });
+    getApplicationReviewPageMock.mockResolvedValueOnce({
+      schemaVersion: 2,
+      executionDomainId: 'host-a',
+      workspaceScopeId: 'workspace:0123456789abcdef',
+      targetScope: 'workspace_override',
+      reviewId: 'review-a',
+      preferenceRevision: 11,
+      expectedGenerations: [{ owner: 'tool', generation: 7 }],
+      nextCursor: 'page-2',
+      totalCount: 2,
+      items: [{
+        itemRef: { kind: 'tool', stableId: 'tool-a' },
+        displayName: 'Tool A',
+        displaySummary: 'Read repository files',
+        riskLevel: 'low',
+        riskReasonCodes: [],
+        recommended: true,
+        safetyCeiling: 'automatic',
+      }],
+    }).mockResolvedValueOnce({
+      schemaVersion: 2,
+      executionDomainId: 'host-a',
+      workspaceScopeId: 'workspace:0123456789abcdef',
+      targetScope: 'workspace_override',
+      reviewId: 'review-a',
+      preferenceRevision: 11,
+      expectedGenerations: [{ owner: 'tool', generation: 7 }],
+      cursor: 'page-2',
+      totalCount: 2,
+      items: [{
+        itemRef: { kind: 'tool', stableId: 'tool-b' },
+        displayName: 'Tool B',
+        displaySummary: 'Run a local process',
+        riskLevel: 'moderate',
+        riskReasonCodes: ['process_execution'],
+        recommended: false,
+        safetyCeiling: 'review_required',
+      }],
+    });
+    applyApplicationActionMock.mockResolvedValueOnce({
+      schemaVersion: 2,
+      operationId: 'operation-review',
+      preferenceRevision: 12,
+      outcome: 'applied',
+      itemResults: [{
+        itemRef: { kind: 'tool', stableId: 'tool-b' },
+        outcome: 'rejected',
+        reasonCode: 'runtime_unavailable',
+        recoveryActions: [{ type: 'install_runtime' }],
+      }],
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const reviewEntry = container.querySelector<HTMLButtonElement>(
+      '[data-bf-part="attentionSummary"]',
+    );
+    expect(container.querySelectorAll('[data-bf-part="attentionSummary"]')).toHaveLength(1);
+    await act(async () => {
+      reviewEntry?.click();
+      await Promise.resolve();
+    });
+
+    expect(getApplicationReviewPageMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      expect.objectContaining({
+        reviewId: 'review-a',
+        targetScope: 'workspace_override',
+        expectedGenerations: [],
+        pageSize: 64,
+      }),
+    );
+    await act(async () => {
+      container.querySelector<HTMLDetailsElement>(
+        '.bitfun-external-sources-config__review-adjustments',
+      )?.querySelector<HTMLElement>('summary')?.click();
+    });
+    const selections = container.querySelectorAll<HTMLInputElement>(
+      '[data-bf-part="reviewItem"] input[type="checkbox"]',
+    );
+    expect(selections).toHaveLength(1);
+    const loadMore = container.querySelector<HTMLButtonElement>('[data-bf-part="loadMoreReview"]');
+    await act(async () => {
+      loadMore?.click();
+      await Promise.resolve();
+    });
+    const pagedSelections = container.querySelectorAll<HTMLInputElement>(
+      '[data-bf-part="reviewItem"] input[type="checkbox"]',
+    );
+    expect(pagedSelections).toHaveLength(2);
+    expect(pagedSelections[0].checked).toBe(true);
+    expect(pagedSelections[1].checked).toBe(false);
+    expect(getApplicationReviewPageMock).toHaveBeenLastCalledWith(
+      'D:/workspace/project',
+      expect.objectContaining({
+        cursor: 'page-2',
+        expectedGenerations: [{ owner: 'tool', generation: 7 }],
+      }),
+    );
+    await act(async () => pagedSelections[1].click());
+
+    const submit = container.querySelector<HTMLButtonElement>(
+      '[data-bf-part="submitReview"][data-review-baseline="recommended"]',
+    );
+    await act(async () => {
+      submit?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(applyApplicationActionMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      expect.objectContaining({
+        action: {
+          type: 'submit_application_review',
+          reviewId: 'review-a',
+          expectedGenerations: [{ owner: 'tool', generation: 7 }],
+          selectionBaseline: 'recommended',
+          selectionOverrides: [{
+            itemRef: { kind: 'tool', stableId: 'tool-b' },
+            selected: true,
+          }],
+        },
+      }),
+    );
+    expect(container.textContent).toContain('applications.review.outcome.partial');
+    expect(container.textContent).toContain('applications.review.itemOutcome.rejected');
+    expect(container.textContent).toContain('"selected":2,"maximum":2');
+  });
+
+  it('lets the user decline every pending item without editing individual choices', async () => {
+    const reviewSnapshot = {
+      ...applicationSnapshotV2,
+      applications: [{
+        ...applicationSnapshotV2.applications[0],
+        effectiveStatus: 'needs_attention' as const,
+        primaryAction: 'review' as const,
+        pendingReviewCount: 1,
+      }],
+      reviewSummary: {
+        reviewId: 'review-decline',
+        totalCount: 1,
+        categoryCounts: [{ kind: 'tool' as const, count: 1 }],
+        maxSelectionCount: 1,
+        riskSummary: { reasonCodes: [] },
+        recommendationSummary: {
+          recommendedCount: 1,
+          optionalCount: 0,
+          blockedCount: 0,
+        },
+        safetyCeiling: 'automatic' as const,
+      },
+    };
+    getApplicationSurfaceMock.mockResolvedValue({ protocol: 'v2', snapshot: reviewSnapshot });
+    getApplicationReviewPageMock.mockResolvedValue({
+      schemaVersion: 2,
+      executionDomainId: 'host-a',
+      workspaceScopeId: 'workspace:0123456789abcdef',
+      targetScope: 'workspace_override',
+      reviewId: 'review-decline',
+      preferenceRevision: 11,
+      expectedGenerations: [{ owner: 'tool', generation: 7 }],
+      totalCount: 1,
+      items: [{
+        itemRef: { kind: 'tool', stableId: 'tool-a' },
+        displayName: 'Tool A',
+        displaySummary: 'Run a local process',
+        riskLevel: 'moderate',
+        riskReasonCodes: ['process_execution'],
+        recommended: true,
+        safetyCeiling: 'review_required',
+      }],
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-bf-part="attentionSummary"]')?.click();
+      await Promise.resolve();
+    });
+
+    const decline = container.querySelector<HTMLButtonElement>(
+      '[data-bf-part="submitReview"][data-review-baseline="none"]',
+    );
+    expect(decline?.textContent).toBe('applications.review.doNotEnable');
+    await act(async () => {
+      decline?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(applyApplicationActionMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      expect.objectContaining({
+        action: {
+          type: 'submit_application_review',
+          reviewId: 'review-decline',
+          expectedGenerations: [{ owner: 'tool', generation: 7 }],
+          selectionBaseline: 'none',
+          selectionOverrides: [],
+        },
+      }),
+    );
+  });
+
+  it('lets the user retry a review submission after a transport failure', async () => {
+    getApplicationSurfaceMock.mockResolvedValue({
+      protocol: 'v2',
+      snapshot: {
+        ...applicationSnapshotV2,
+        reviewSummary: {
+          reviewId: 'review-retry',
+          totalCount: 1,
+          categoryCounts: [{ kind: 'tool' as const, count: 1 }],
+          maxSelectionCount: 1,
+          riskSummary: { reasonCodes: [] },
+          recommendationSummary: { recommendedCount: 1, optionalCount: 0, blockedCount: 0 },
+          safetyCeiling: 'automatic' as const,
+        },
+      },
+    });
+    getApplicationReviewPageMock.mockResolvedValue({
+      schemaVersion: 2,
+      executionDomainId: 'host-a',
+      workspaceScopeId: 'workspace:0123456789abcdef',
+      targetScope: 'workspace_override',
+      reviewId: 'review-retry',
+      preferenceRevision: 11,
+      expectedGenerations: [{ owner: 'tool', generation: 7 }],
+      totalCount: 1,
+      items: [{
+        itemRef: { kind: 'tool', stableId: 'tool-a' },
+        displayName: 'Tool A',
+        displaySummary: 'Read repository files',
+        riskLevel: 'low',
+        riskReasonCodes: [],
+        recommended: true,
+        safetyCeiling: 'automatic',
+      }],
+    });
+    applyApplicationActionMock.mockRejectedValueOnce(new Error('connection lost'));
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-bf-part="attentionSummary"]')?.click();
+      await Promise.resolve();
+    });
+    const submit = container.querySelector<HTMLButtonElement>('[data-bf-part="submitReview"]');
+    await act(async () => {
+      submit?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(submit?.disabled).toBe(false);
+  });
+
+  it('drops stale review cursors and generations before the user can review again', async () => {
+    const staleSnapshot = {
+      ...applicationSnapshotV2,
+      applications: [{
+        ...applicationSnapshotV2.applications[0],
+        effectiveStatus: 'needs_attention' as const,
+        primaryAction: 'review' as const,
+        pendingReviewCount: 1,
+      }],
+      reviewSummary: {
+        reviewId: 'review-stale',
+        totalCount: 1,
+        categoryCounts: [{ kind: 'tool' as const, count: 1 }],
+        maxSelectionCount: 1,
+        riskSummary: { reasonCodes: [] },
+        recommendationSummary: { recommendedCount: 1, optionalCount: 0, blockedCount: 0 },
+        safetyCeiling: 'automatic' as const,
+      },
+    };
+    getApplicationSurfaceMock.mockResolvedValue({ protocol: 'v2', snapshot: staleSnapshot });
+    getApplicationReviewPageMock.mockResolvedValue({
+      schemaVersion: 2,
+      executionDomainId: 'host-a',
+      workspaceScopeId: 'workspace:0123456789abcdef',
+      targetScope: 'workspace_override',
+      reviewId: 'review-stale',
+      preferenceRevision: 11,
+      expectedGenerations: [{ owner: 'tool', generation: 7 }],
+      totalCount: 1,
+      items: [{
+        itemRef: { kind: 'tool', stableId: 'tool-a' },
+        displayName: 'Tool A',
+        displaySummary: 'Read repository files',
+        riskLevel: 'low',
+        riskReasonCodes: [],
+        recommended: true,
+        safetyCeiling: 'automatic',
+      }],
+    });
+    applyApplicationActionMock.mockResolvedValueOnce({
+      schemaVersion: 2,
+      operationId: 'operation-stale',
+      preferenceRevision: 12,
+      outcome: 'stale',
+      itemResults: [],
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-bf-part="attentionSummary"]')?.click();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-bf-part="submitReview"]')?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('applications.review.outcome.stale');
+    expect(container.querySelector('[data-bf-part="reviewItem"]')).toBeNull();
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-bf-part="attentionSummary"]')?.click();
+      await Promise.resolve();
+    });
+    expect(getApplicationReviewPageMock).toHaveBeenLastCalledWith(
+      'D:/workspace/project',
+      expect.objectContaining({ expectedGenerations: [] }),
+    );
+  });
+
+  it('defers Hook owner reads until the Hook disclosure opens', async () => {
+    await import('./HooksConfig');
+    getSnapshotMock.mockResolvedValue({
+      ...snapshot,
+      integrationPolicy,
+      sources: [{
+        ...snapshot.sources[0],
+        record: { ...snapshot.sources[0].record, ecosystemId: 'opencode' },
+      }],
+      commandConflicts: [],
+      diagnostics: [],
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    expect(hookPanelMountedMock).not.toHaveBeenCalled();
+    const hookSummary = Array.from(container.querySelectorAll('summary')).find(
+      (summary) => summary.textContent?.includes('hooksManagement.title'),
+    );
+    expect(hookSummary).toBeDefined();
+    const hookDisclosure = hookSummary?.closest('details');
+    await act(async () => {
+      if (hookDisclosure) {
+        hookDisclosure.open = true;
+        hookDisclosure.dispatchEvent(new Event('toggle'));
+      }
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(hookPanelMountedMock).toHaveBeenCalledWith(true);
+  });
+
+  it('opens and focuses Hook management after a legacy Hook deep link', async () => {
+    await import('./HooksConfig');
+    Element.prototype.scrollIntoView = vi.fn();
+    getSnapshotMock.mockResolvedValue({
+      ...snapshot,
+      integrationPolicy,
+      sources: [{
+        ...snapshot.sources[0],
+        record: { ...snapshot.sources[0].record, ecosystemId: 'opencode' },
+      }],
+      commandConflicts: [],
+      diagnostics: [],
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig initialFocus="hooks" focusRequestId={1} />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const hookDisclosure = container.querySelector<HTMLDetailsElement>(
+      '.bitfun-external-sources-config__hooks',
+    );
+    expect(hookDisclosure?.open).toBe(true);
+    expect(hookPanelMountedMock).toHaveBeenCalledWith(true);
+    expect(document.activeElement).toBe(hookDisclosure?.querySelector('summary'));
+
+    await act(async () => {
+      hookDisclosure!.open = false;
+      hookDisclosure!.dispatchEvent(new Event('toggle'));
+      await Promise.resolve();
+    });
+    expect(hookDisclosure?.open).toBe(false);
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig initialFocus="hooks" focusRequestId={2} />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(hookDisclosure?.open).toBe(true);
+    expect(document.activeElement).toBe(hookDisclosure?.querySelector('summary'));
+  });
+
+  it('keeps Hook management reachable when the external-source host is unavailable', async () => {
+    await import('./HooksConfig');
+    Element.prototype.scrollIntoView = vi.fn();
+    getSnapshotMock.mockRejectedValueOnce({
+      code: 'host_unavailable',
+      message: 'external sources unavailable',
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig initialFocus="hooks" focusRequestId={1} />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('unavailable.hostDescription');
+    const hookDisclosure = container.querySelector<HTMLDetailsElement>(
+      '.bitfun-external-sources-config__hooks',
+    );
+    expect(hookDisclosure?.open).toBe(true);
+    expect(hookPanelMountedMock).toHaveBeenCalledWith(true);
+    expect(document.activeElement).toBe(hookDisclosure?.querySelector('summary'));
+  });
+
+  it('restores custom application mode after an authoritative disabled round trip', async () => {
+    const scopedPolicy = {
+      ...integrationPolicy,
+      workspaceOverride: {
+        ecosystems: {
+          opencode: {
+            mode: 'custom',
+            capabilityOverrides: { command: 'disabled' },
+          },
+        },
+      },
+      effective: {
+        ...integrationPolicy.effective,
+        ecosystems: {
+          opencode: {
+            ...integrationPolicy.effective.ecosystems.opencode,
+            mode: 'custom',
+            capabilities: {
+              ...integrationPolicy.effective.ecosystems.opencode.capabilities,
+              command: 'disabled',
+            },
+          },
+        },
+      },
+    };
+    const customSnapshot = {
+      ...snapshot,
+      preferenceRevision: 4,
+      integrationPolicy: scopedPolicy,
+      sources: [{
+        ...snapshot.sources[0],
+        record: { ...snapshot.sources[0].record, ecosystemId: 'opencode' },
+      }],
+      commandConflicts: [],
+      diagnostics: [],
+    };
+    const disabledSnapshot = {
+      ...customSnapshot,
+      preferenceRevision: 5,
+      integrationPolicy: {
+        ...scopedPolicy,
+        workspaceOverride: {
+          ecosystems: {
+            opencode: {
+              mode: 'disabled',
+              capabilityOverrides: { command: 'disabled' },
+            },
+          },
+        },
+        effective: {
+          ...scopedPolicy.effective,
+          ecosystems: {
+            opencode: {
+              ...scopedPolicy.effective.ecosystems.opencode,
+              mode: 'disabled',
+              capabilities: { command: 'disabled' },
+            },
+          },
+        },
+      },
+    };
+    const restoredSnapshot = {
+      ...customSnapshot,
+      preferenceRevision: 6,
+    };
+    getSnapshotMock.mockResolvedValue(customSnapshot);
+    updateIntegrationPolicyMock
+      .mockResolvedValueOnce(disabledSnapshot)
+      .mockResolvedValueOnce(restoredSnapshot);
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    let applicationToggle = container.querySelector<HTMLInputElement>(
+      '[data-bf-part="applicationToggle"] input[type="checkbox"]',
+    );
+    expect(applicationToggle?.checked).toBe(true);
+    await act(async () => {
+      applicationToggle?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    applicationToggle = container.querySelector<HTMLInputElement>(
+      '[data-bf-part="applicationToggle"] input[type="checkbox"]',
+    );
+    expect(applicationToggle?.checked).toBe(false);
+    await act(async () => {
+      applicationToggle?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(updateIntegrationPolicyMock.mock.calls.map(([, request]) => request.change)).toEqual([
+      { operation: 'set_ecosystem_mode', ecosystemId: 'opencode', mode: 'disabled' },
+      { operation: 'set_ecosystem_mode', ecosystemId: 'opencode', mode: 'custom' },
+    ]);
   });
 
   it('keeps compatibility controls compact and applies the safe OpenCode defaults', async () => {
@@ -386,8 +1569,12 @@ describe('ExternalSourcesConfig', () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain('safeMode.title');
     expect(container.textContent).toContain('sources.commandCount:{"count":1}');
+    await act(async () => {
+      container.querySelector<HTMLDetailsElement>(
+        '.bitfun-external-sources-config__advanced',
+      )?.querySelector<HTMLElement>('summary')?.click();
+    });
     const toggle = container.querySelector(
       'input[aria-label="safeMode.toggleLabel"]',
     ) as HTMLInputElement;
@@ -430,6 +1617,11 @@ describe('ExternalSourcesConfig', () => {
       await Promise.resolve();
     });
 
+    await act(async () => {
+      container.querySelector<HTMLDetailsElement>(
+        '.bitfun-external-sources-config__advanced',
+      )?.querySelector<HTMLElement>('summary')?.click();
+    });
     const toggle = container.querySelector(
       'input[aria-label="safeMode.toggleLabel"]',
     ) as HTMLInputElement;
@@ -470,6 +1662,11 @@ describe('ExternalSourcesConfig', () => {
 
     expect(container.textContent).toContain('legacyHostNotice');
     expect(container.textContent).toContain('recoveryActions.reconnect_host');
+    await act(async () => {
+      container.querySelector<HTMLDetailsElement>(
+        '.bitfun-external-sources-config__advanced',
+      )?.querySelector<HTMLElement>('summary')?.click();
+    });
     const toggle = container.querySelector(
       'input[aria-label="safeMode.toggleLabel"]',
     ) as HTMLInputElement;
@@ -751,6 +1948,7 @@ describe('ExternalSourcesConfig', () => {
           environmentKeys: ['GITHUB_TOKEN'],
           environmentReferenceNames: ['OPENCODE_TOKEN'],
           headerNames: [],
+          timeouts: { startupMs: 1000, catalogMs: 2000, executionMs: 3000 },
           sourceEnabled: true,
           behaviorVersion: 'behavior-v1',
           staticStatus: { state: 'ready' },
@@ -775,6 +1973,7 @@ describe('ExternalSourcesConfig', () => {
           environmentKeys: ['GITHUB_TOKEN'],
           environmentReferenceNames: ['OPENCODE_TOKEN'],
           headerNames: [],
+          timeouts: { startupMs: 1000, catalogMs: 2000, executionMs: 3000 },
           sourceEnabled: true,
           behaviorVersion: 'behavior-v1',
           staticStatus: { state: 'ready' },
@@ -844,45 +2043,39 @@ describe('ExternalSourcesConfig', () => {
     expect(container.textContent).toContain('mcp.workingDirectory:{"location":"<workspace>"}');
     expect(container.textContent).toContain('GITHUB_TOKEN');
     expect(container.textContent).toContain('OPENCODE_TOKEN');
+    expect(container.textContent).toContain('mcp.timeoutSummary');
+    expect(container.textContent).toContain('mcp.timeoutStartup');
+    expect(container.textContent).toContain('mcp.timeoutCatalog');
+    expect(container.textContent).toContain('mcp.timeoutExecution');
 
-    const approvalDetails = container.querySelector(
-      '.bitfun-external-sources-config__review-details',
-    ) as HTMLDetailsElement;
-    const approvalCard = approvalDetails.closest(
+    const approvalCard = Array.from(container.querySelectorAll(
       '.bitfun-external-sources-config__tool-card',
+    )).find((candidate) => (
+      candidate.textContent?.includes('github')
+      && candidate.textContent?.includes('mcpApprovals.enable')
+    )) as HTMLElement;
+    const approvalDetail = approvalCard.querySelector(
+      '.bitfun-external-sources-config__tool-detail',
     ) as HTMLElement;
-    const alwaysVisibleSummary = approvalCard.querySelector(
-      '.bitfun-external-sources-config__review-summary',
+    const approvalRisk = approvalCard.querySelector(
+      '.bitfun-external-sources-config__tool-warning',
     ) as HTMLElement;
-    const alwaysVisibleRisk = approvalCard.querySelector(
-      '.bitfun-external-sources-config__review-risk',
-    ) as HTMLElement;
-    expect(approvalDetails.open).toBe(false);
-    expect(alwaysVisibleSummary.textContent).toContain('mcp.command:{"command":"npx"}');
-    expect(alwaysVisibleRisk.textContent).toContain('mcpApprovals.compactWarning');
-    expect(approvalDetails.contains(alwaysVisibleSummary)).toBe(false);
-    expect(approvalDetails.contains(alwaysVisibleRisk)).toBe(false);
+    expect(approvalDetail.textContent).toContain('mcp.command:{"command":"npx"}');
+    expect(approvalDetail.textContent).toContain('mcp.workingDirectory:{"location":"<workspace>"}');
+    expect(approvalDetail.textContent).toContain('GITHUB_TOKEN');
+    expect(approvalDetail.textContent).toContain('OPENCODE_TOKEN');
+    expect(approvalRisk.textContent).toContain('mcpApprovals.warning');
     const approvalEnable = Array.from(approvalCard.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('mcpApprovals.enable')) as HTMLButtonElement;
-    expect(alwaysVisibleRisk.id).toBe('mcp-review-risk-mcp-decision-v1');
-    expect(approvalEnable.getAttribute('aria-describedby')).toBe(alwaysVisibleRisk.id);
-    const remoteSummary = Array.from(approvalCard.parentElement?.querySelectorAll(
-      '.bitfun-external-sources-config__review-summary',
-    ) ?? []).find((candidate) => candidate.textContent?.includes('mcp.url')) as HTMLElement;
-    const remoteDetails = remoteSummary.closest(
+    expect(approvalRisk.id).toBe('mcp-review-risk-mcp-decision-v1');
+    expect(approvalEnable.getAttribute('aria-describedby')).toBe(approvalRisk.id);
+    const remoteCard = Array.from(container.querySelectorAll(
       '.bitfun-external-sources-config__tool-card',
-    )?.querySelector('.bitfun-external-sources-config__review-details') as HTMLDetailsElement;
-    expect(remoteSummary.textContent).toContain(
+    )).find((candidate) => candidate.textContent?.includes('mcp.url')) as HTMLElement;
+    expect(remoteCard.textContent).toContain(
       'mcp.url:{"url":"https://mcp.example.test"}',
     );
-    expect(remoteDetails.textContent).not.toContain(
-      'mcp.url:{"url":"https://mcp.example.test"}',
-    );
-    expect(approvalDetails.querySelector('summary')?.textContent)
-      .toContain('mcpApprovals.showDetails');
     expect(container.textContent).toContain('mcpApprovals.enable');
-    await act(async () => approvalDetails.querySelector('summary')?.click());
-    expect(approvalDetails.open).toBe(true);
 
     const externalConflictCandidate = Array.from(
       container.querySelectorAll('.bitfun-external-sources-config__candidate'),
@@ -1273,6 +2466,19 @@ describe('ExternalSourcesConfig', () => {
     expect(container.textContent).toContain('errors.loadFailed');
     expect(container.textContent).not.toContain('initial load failed');
     expect(container.textContent).not.toContain('sources.empty');
+    const initialNotice = container.querySelector('[data-bf-part="notice"]');
+    expect(initialNotice?.getAttribute('role')).toBe('alert');
+    expect(container.textContent).not.toContain('applications.advanced.title');
+    const retry = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'recoveryActions.retry',
+    );
+    expect(retry).toBeDefined();
+    await act(async () => {
+      retry?.click();
+      await Promise.resolve();
+    });
+    expect(getSnapshotMock).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain('OpenCode project commands');
 
     await act(async () => root.unmount());
     container.remove();
@@ -1459,7 +2665,7 @@ describe('ExternalSourcesConfig', () => {
     const details = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('common.details'));
     await act(async () => details?.click());
-    expect(container.textContent).toContain('agents.singleRun');
+    expect(container.textContent).toContain('agents.role.subagent');
     expect(container.textContent).toContain('fast');
     expect(container.textContent).toContain('Read, Grep');
     expect(container.textContent).toContain('agents.executionDomain');
@@ -1507,6 +2713,160 @@ describe('ExternalSourcesConfig', () => {
       true,
       4,
       7,
+    );
+  });
+
+  it('shows one model binding for matching agent requests and applies a typed target', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: vi.fn(),
+    });
+    const bindingSnapshot = {
+      ...snapshot,
+      subagentGeneration: 5,
+      preferenceRevision: 8,
+      subagents: [{
+        candidateId: 'opencode-review',
+        logicalId: 'review',
+        displayName: 'OpenCode Review',
+        description: 'Review changes',
+        providerLabel: 'OpenCode',
+        scope: 'project',
+        sourceKeys: [],
+        sourceLocationLabels: [],
+        sourceCount: 1,
+        requestedModel: {
+          kind: 'reference',
+          providerHint: 'anthropic',
+          modelName: 'claude-sonnet-4',
+        },
+        requestedModelProfile: { kind: 'named_variant', name: 'high' },
+        modelBindingMethod: 'binding_required',
+        modelBindingKey: 'external_subagent_model_binding:review',
+        effectiveToolLabels: ['Read'],
+        unavailableToolLabels: [],
+        supportsFollowUp: false,
+        compatibilityState: 'blocked',
+        diagnostics: [],
+        activationState: { state: 'unavailable' },
+        decisionKey: 'decision-v1',
+      }],
+      subagentModelBindingGroups: [{
+        bindingKey: 'external_subagent_model_binding:review',
+        request: {
+          kind: 'reference',
+          providerHint: 'anthropic',
+          modelName: 'claude-sonnet-4',
+        },
+        profileRequest: { kind: 'named_variant', name: 'high' },
+        scope: 'project',
+        method: 'binding_required',
+        affectedCandidateIds: ['opencode-review', 'claude-review'],
+      }],
+      subagentModelBindingOptions: [{
+        target: { kind: 'primary' },
+        effectiveModelLabel: 'GPT-5',
+        configuredReasoningEffort: 'high',
+      }, {
+        target: { kind: 'fast' },
+        effectiveModelLabel: 'GLM-4.5-Air',
+      }],
+      subagentConflicts: [],
+      pendingSubagentApprovals: [],
+    };
+    const updatedSnapshot = {
+      ...bindingSnapshot,
+      subagentGeneration: 6,
+      preferenceRevision: 9,
+      subagentModelBindingGroups: [{
+        ...bindingSnapshot.subagentModelBindingGroups[0],
+        method: 'explicit',
+        selectedTarget: { kind: 'fast' },
+        effectiveModelLabel: 'GLM-4.5-Air',
+      }],
+    };
+    getSnapshotMock
+      .mockResolvedValueOnce(bindingSnapshot)
+      .mockResolvedValue(updatedSnapshot);
+    setSubagentModelBindingMock.mockResolvedValue(updatedSnapshot);
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('agentModelBindings.title');
+    expect(container.textContent).toContain('anthropic/claude-sonnet-4');
+    expect(container.textContent).toContain(
+      'agentModelBindings.profile.namedVariant:{"name":"high"}',
+    );
+    expect(container.textContent).toContain('agentModelBindings.affectedAgents:{"count":2}');
+    expect(container.textContent).toContain('agentModelBindings.method.binding_required');
+    expect(container.textContent).toContain('agentModelBindings.target.unbound');
+
+    const trigger = container.querySelector<HTMLElement>(
+      '[aria-label^="agentModelBindings.selectLabel"]',
+    );
+    await act(async () => trigger?.click());
+    const fastOption = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'))
+      .find((option) => option.textContent?.includes('GLM-4.5-Air'));
+    await act(async () => fastOption?.click());
+
+    expect(setSubagentModelBindingMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      'external_subagent_model_binding:review',
+      { kind: 'fast' },
+      5,
+      8,
+    );
+    expect(container.textContent).toContain('agentModelBindings.method.explicit');
+  });
+
+  it('shows inherited models as resolved when the task starts instead of unavailable', async () => {
+    getSnapshotMock.mockResolvedValue({
+      ...snapshot,
+      commandConflicts: [],
+      subagentGeneration: 5,
+      preferenceRevision: 8,
+      subagents: [{
+        candidateId: 'claude-review',
+        logicalId: 'review',
+        displayName: 'Claude Review',
+        description: 'Review changes',
+        providerLabel: 'Claude Code',
+        scope: 'project',
+        sourceKeys: [],
+        sourceLocationLabels: [],
+        sourceCount: 1,
+        requestedModel: { kind: 'inherit' },
+        modelBindingMethod: 'inherit',
+        effectiveToolLabels: ['Read'],
+        unavailableToolLabels: [],
+        supportsFollowUp: false,
+        compatibilityState: 'ready',
+        diagnostics: [],
+        activationState: { state: 'approval_required' },
+        decisionKey: 'decision-inherit-v1',
+      }],
+      subagentModelBindingGroups: [],
+      subagentModelBindingOptions: [],
+      subagentConflicts: [],
+      pendingSubagentApprovals: ['claude-review'],
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+    const details = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('common.details'));
+    await act(async () => details?.click());
+
+    expect(container.textContent).toContain(
+      'agents.model:{"model":"agents.modelResolvedFromParentAtTaskStart"}',
+    );
+    expect(container.textContent).not.toContain(
+      'agents.model:{"model":"agents.modelUnavailable"}',
     );
   });
 
@@ -1917,7 +3277,8 @@ describe('ExternalSourcesConfig', () => {
     });
 
     expect(container.textContent).toContain('policy.attentionSummary:{"count":1}');
-    expect(container.textContent?.match(/opencode\.configuration\.invalid/g)).toHaveLength(1);
+    expect(container.textContent?.match(/diagnostics\.category\.invalidSettings/g)).toHaveLength(1);
+    expect(container.textContent).not.toContain('opencode.configuration.invalid');
   });
 
   it('keeps grouped OpenCode diagnostics and lifecycle states visible', async () => {
@@ -1950,11 +3311,12 @@ describe('ExternalSourcesConfig', () => {
     });
 
     expect(container.textContent).toContain('lifecycle.degraded');
-    expect(container.textContent).toContain('opencode.configuration.invalid');
+    expect(container.textContent).toContain('diagnostics.category.invalidSettings');
+    expect(container.textContent).not.toContain('opencode.configuration.invalid');
     expect(container.querySelector(
       '.bitfun-external-sources-config__opencode-card [data-external-attention="true"]',
     )).not.toBeNull();
-    expect(container.textContent?.match(/opencode\.configuration\.invalid/g)).toHaveLength(1);
+    expect(container.textContent?.match(/diagnostics\.category\.invalidSettings/g)).toHaveLength(1);
     const sourceToggle = container.querySelector(
       '.bitfun-external-sources-config__opencode-card input[aria-label^="sources.toggleLabel"]',
     ) as HTMLInputElement;
@@ -2187,6 +3549,9 @@ describe('ExternalSourcesConfig', () => {
 
     expect(container.textContent).toContain('unavailable.remoteDescription');
     expect(container.textContent).not.toContain('unavailable.hostDescription');
+    expect(Array.from(container.querySelectorAll('button')).some(
+      (button) => button.textContent === 'recoveryActions.retry',
+    )).toBe(false);
   });
 
   it('gives a failed remote connection a useful next step', async () => {
@@ -2204,6 +3569,10 @@ describe('ExternalSourcesConfig', () => {
     expect(container.textContent).toContain('unavailable.remoteConnectionDescription');
     expect(container.textContent).not.toContain('unavailable.hostDescription');
     expect(container.textContent).not.toContain('unavailable.remoteDescription');
+    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    expect(Array.from(container.querySelectorAll('button')).some(
+      (button) => button.textContent === 'recoveryActions.retry',
+    )).toBe(true);
   });
 
   it('fails closed for a legacy read-only host and never sends a mutation', async () => {
@@ -2280,8 +3649,9 @@ describe('ExternalSourcesConfig', () => {
     expect(updateIntegrationPolicyMock).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain('policy.resetConfirmTitle');
 
-    const confirm = Array.from(document.body.querySelectorAll('button')).filter((button) =>
-      button.textContent === 'policy.backupAndReset').at(-1);
+    const dialog = document.body.querySelector('[role="dialog"]');
+    const confirm = Array.from(dialog?.querySelectorAll('button') ?? []).find((button) =>
+      button.textContent === 'policy.backupAndReset');
     await act(async () => confirm?.click());
     expect(updateIntegrationPolicyMock).toHaveBeenCalledWith('D:/workspace/project', {
       expectedPreferenceRevision: 9,
@@ -2327,7 +3697,9 @@ describe('ExternalSourcesConfig', () => {
     expect(firstDiagnostic.open).toBe(true);
     expect(document.activeElement).toBe(firstDiagnostic.querySelector('summary'));
     expect(scrollIntoView).toHaveBeenCalled();
-    expect(container.textContent).toContain('opencode.command.source_warning');
+    expect(container.textContent).toContain('diagnostics.category.sourceIssue');
+    expect(container.textContent).not.toContain('opencode.command.source_warning');
+    expect(container.textContent).not.toContain('common.technicalDetails');
   });
 
   it('shows a stable reference without exposing an internal mutation message', async () => {
@@ -2355,8 +3727,10 @@ describe('ExternalSourcesConfig', () => {
 
     expect(container.textContent).toContain('operationErrors.internal');
     expect(container.textContent).toContain('external-source-ref-7');
-    expect(container.textContent).toContain('operationErrors.stage:{"stage":"activate_runtime"}');
-    expect(container.textContent).toContain('operationErrors.causationId:{"id":"refresh-generation-6"}');
+    expect(container.textContent).not.toContain('common.technicalDetails');
+    expect(container.textContent).not.toContain('operationErrors.errorCode');
+    expect(container.textContent).not.toContain('activate_runtime');
+    expect(container.textContent).not.toContain('refresh-generation-6');
     expect(container.textContent).toContain('recoveryActions.retry');
     expect(container.textContent).toContain('recoveryActions.reconnect_host');
     expect(container.textContent).not.toContain('database connection string');

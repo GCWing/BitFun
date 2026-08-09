@@ -1,15 +1,22 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { MarkdownParser, ParsedMarkdownBlock, ParsedMarkdownInline, ParsedMarkdownListItem } from '../../services/MarkdownParser';
-import { CARD, INK, LINE, MUTED } from './Theme';
+import {
+  MarkdownParseCache,
+  ParsedMarkdownBlock,
+  ParsedMarkdownInline,
+  ParsedMarkdownListItem
+} from '../../services/MarkdownParser';
+import { CARD, FILE_LINK, INK, LINE, MUTED, SOFT } from './Theme';
 
 @Component
 export struct MarkdownContent {
+  private readonly parseCache: MarkdownParseCache = new MarkdownParseCache();
   @Prop text: string = '';
   onCopyText: (text: string) => void = (_text: string) => {};
+  onOpenLink: (reference: string, label: string) => void = (_reference: string, _label: string) => {};
 
   build() {
     Column({ space: 5 }) {
-      ForEach(MarkdownParser.parse(this.text), (block: ParsedMarkdownBlock) => {
+      ForEach(this.parseCache.blocksFor(this.text), (block: ParsedMarkdownBlock) => {
         this.MarkdownBlockView(block)
       }, (block: ParsedMarkdownBlock) => block.id)
     }
@@ -44,7 +51,7 @@ export struct MarkdownContent {
   }
 
   @Builder
-  InlineText(inlines: ParsedMarkdownInline[], fontSize: number, lineHeight: number, color: string, bold: boolean) {
+  InlineText(inlines: ParsedMarkdownInline[], fontSize: number, lineHeight: number, color: ResourceColor, bold: boolean) {
     Text() {
       ForEach(inlines, (inline: ParsedMarkdownInline) => {
         this.InlineSpan(inline, color, bold)
@@ -57,7 +64,7 @@ export struct MarkdownContent {
   }
 
   @Builder
-  InlineSpan(inline: ParsedMarkdownInline, color: string, bold: boolean) {
+  InlineSpan(inline: ParsedMarkdownInline, color: ResourceColor, bold: boolean) {
     if (inline.type === 'strong') {
       Span(inline.text)
         .fontWeight(FontWeight.Bold)
@@ -75,7 +82,11 @@ export struct MarkdownContent {
     } else if (inline.type === 'link') {
       Span(inline.text)
         .fontWeight(bold ? FontWeight.Bold : FontWeight.Regular)
-        .fontColor('#1D64C8')
+        .fontColor(FILE_LINK)
+        .decoration({ type: TextDecorationType.Underline, color: FILE_LINK })
+        .onClick(() => {
+          this.onOpenLink(inline.url, inline.text);
+        })
     } else {
       Span(inline.text)
         .fontWeight(bold ? FontWeight.Bold : FontWeight.Regular)
@@ -120,7 +131,7 @@ export struct MarkdownContent {
     .scrollBar(BarState.Off)
     .width('100%')
     .padding({ left: 9, right: 9, top: 8, bottom: 8 })
-    .backgroundColor('#F3F2EE')
+    .backgroundColor(SOFT)
     .borderRadius(12)
     .border({ width: 1, color: LINE })
   }
@@ -155,7 +166,7 @@ export struct MarkdownContent {
     }
     .width('100%')
     .padding({ left: 9, right: 9, top: 8, bottom: 8 })
-    .backgroundColor('#F3F2EE')
+    .backgroundColor(SOFT)
     .borderRadius(12)
     .border({ width: 1, color: LINE })
   }

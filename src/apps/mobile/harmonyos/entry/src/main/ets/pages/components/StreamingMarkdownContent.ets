@@ -8,6 +8,7 @@ export struct StreamingMarkdownContent {
   @Prop @Watch('handleTextChanged') active: boolean = false;
   @Prop @Watch('handleTextChanged') streamKey: string = '';
   onCopyText: (text: string) => void = (_text: string) => {};
+  onOpenLink: (reference: string, label: string) => void = (_reference: string, _label: string) => {};
   @State renderedText: string = '';
   private targetText: string = '';
   private timerId: number = 0;
@@ -34,6 +35,9 @@ export struct StreamingMarkdownContent {
       text: this.renderedText,
       onCopyText: (_body: string) => {
         this.onCopyText(this.text);
+      },
+      onOpenLink: (reference: string, label: string) => {
+        this.onOpenLink(reference, label);
       }
     })
   }

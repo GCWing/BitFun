@@ -56,6 +56,17 @@ describe('useComposerDefaultFocus', () => {
     return container.querySelector('[data-testid="composer"]') as HTMLDivElement;
   }
 
+  function pressKey(key: string, init: KeyboardEventInit = {}): KeyboardEvent {
+    const event = new KeyboardEvent('keydown', {
+      key,
+      bubbles: true,
+      cancelable: true,
+      ...init,
+    });
+    act(() => document.body.dispatchEvent(event));
+    return event;
+  }
+
   it('focuses the composer when the active session has no input owner', () => {
     const composer = renderProbe({ sessionId: 'session-a', isSceneActive: true });
 
@@ -126,8 +137,84 @@ describe('useComposerDefaultFocus', () => {
     button.focus();
 
     const composer = renderProbe({ sessionId: 'session-a', isSceneActive: true });
+    pressKey('a');
 
     expect(document.activeElement).toBe(button);
+    expect(document.activeElement).not.toBe(composer);
+  });
+
+  it('moves focus to the composer for a printable character without consuming it', () => {
+    const composer = renderProbe({ sessionId: 'session-a', isSceneActive: true });
+    const button = document.createElement('button');
+    document.body.appendChild(button);
+    button.focus();
+
+    const event = pressKey('a');
+
+    expect(document.activeElement).toBe(composer);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('moves focus to the composer for Space without consuming it', () => {
+    const composer = renderProbe({ sessionId: 'session-a', isSceneActive: true });
+    const button = document.createElement('button');
+    document.body.appendChild(button);
+    button.focus();
+
+    const event = pressKey(' ');
+
+    expect(document.activeElement).toBe(composer);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it.each(['Dead', 'Process'])('focuses the composer for %s text entry', key => {
+    const composer = renderProbe({ sessionId: 'session-a', isSceneActive: true });
+    const button = document.createElement('button');
+    document.body.appendChild(button);
+    button.focus();
+
+    pressKey(key);
+
+    expect(document.activeElement).toBe(composer);
+  });
+
+  it('does not steal keyboard shortcuts or navigation keys', () => {
+    const composer = renderProbe({ sessionId: 'session-a', isSceneActive: true });
+    const button = document.createElement('button');
+    document.body.appendChild(button);
+
+    for (const [key, init] of [
+      ['k', { ctrlKey: true }],
+      ['k', { metaKey: true }],
+      ['k', { altKey: true }],
+      ['Enter', {}],
+      ['ArrowDown', {}],
+    ] satisfies Array<[string, KeyboardEventInit]>) {
+      button.focus();
+      pressKey(key, init);
+      expect(document.activeElement).toBe(button);
+      expect(document.activeElement).not.toBe(composer);
+    }
+  });
+
+  it('preserves another visible text input while typing', () => {
+    const alternateInput = document.createElement('textarea');
+    document.body.appendChild(alternateInput);
+    markRendered(alternateInput);
+    alternateInput.focus();
+
+    const composer = renderProbe({ sessionId: 'session-a', isSceneActive: true });
+    pressKey('a');
+
+    expect(document.activeElement).toBe(alternateInput);
+    expect(document.activeElement).not.toBe(composer);
+  });
+
+  it('does not focus an inactive scene while typing', () => {
+    const composer = renderProbe({ sessionId: 'session-a', isSceneActive: false });
+
+    pressKey('a');
+
     expect(document.activeElement).not.toBe(composer);
   });
 });

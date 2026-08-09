@@ -8,18 +8,18 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import GenerativeWidgetFrame, { GENERATIVE_WIDGET_SHELL_HTML } from './GenerativeWidgetFrame';
-
-vi.mock('@/infrastructure/theme', () => ({
-  themeService: {
-    on: vi.fn(() => vi.fn()),
-  },
-}));
+import { widgetAppearanceAdapter } from '@/infrastructure/appearance/adapters/WidgetAppearanceAdapter';
 
 describe('GenerativeWidgetFrame shell', () => {
   let container: HTMLDivElement;
   let root: Root;
 
   beforeEach(() => {
+    widgetAppearanceAdapter.apply(
+      { id: 'test.widget', mode: 'dark', vars: {} },
+      undefined,
+      { revision: 1, appearanceId: 'test', mode: 'dark', globals: {}, assets: {} },
+    );
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -34,7 +34,7 @@ describe('GenerativeWidgetFrame shell', () => {
   });
 
   it('keeps iframe-local small text aligned with the host default token', () => {
-    const values = [...GENERATIVE_WIDGET_SHELL_HTML.matchAll(/--font-size-sm:\s*([^;]+);/g)].map(
+    const values = [...GENERATIVE_WIDGET_SHELL_HTML.matchAll(/--bf-appearance-token-font-size-sm:\s*([^;]+);/g)].map(
       (match) => match[1]?.trim()
     );
 

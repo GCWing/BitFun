@@ -32,6 +32,12 @@ pub enum SessionControlAgentType {
     Plan,
     #[serde(rename = "Cowork", alias = "cowork", alias = "COWORK")]
     Cowork,
+    #[serde(
+        rename = "DeepResearch",
+        alias = "deepresearch",
+        alias = "DEEPRESEARCH"
+    )]
+    DeepResearch,
 }
 
 impl SessionControlAgentType {
@@ -40,6 +46,7 @@ impl SessionControlAgentType {
             Self::Agentic => "agentic",
             Self::Plan => "Plan",
             Self::Cowork => "Cowork",
+            Self::DeepResearch => "DeepResearch",
         }
     }
 }

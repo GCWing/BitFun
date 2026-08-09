@@ -7,8 +7,8 @@ import { CodePreview } from './CodePreview';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-vi.mock('@/infrastructure/theme', () => ({
-  useTheme: () => ({ isLight: false }),
+vi.mock('@/infrastructure/appearance', () => ({
+  useAppearance: () => ({ current: { mode: 'dark' } }),
 }));
 
 vi.mock('@/infrastructure/language-detection', () => ({

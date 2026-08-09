@@ -473,6 +473,14 @@ export interface ReviewTeamManifestMember {
 
 export interface ReviewTeamRunManifest {
   reviewMode: 'deep';
+  /** Runtime-admitted public metadata for one focused check. */
+  focusedAssignment?: {
+    displayLabel?: string;
+  };
+  adaptiveReview?: {
+    version: 1;
+    maxFocusedCalls: number;
+  };
   workspacePath?: string;
   policySource: 'default-review-team-config';
   target: ReviewTargetClassification;

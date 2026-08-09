@@ -5,18 +5,18 @@
   height: 24px;
   max-width: 96px;
   padding: 0 8px;
-  border: 1px solid color-mix(in srgb, var(--border-base) 52%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 52%, transparent);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--element-bg-soft) 58%, transparent);
-  color: var(--color-text-secondary);
-  font-size: var(--flowchat-font-size-xs);
+  background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 58%, transparent);
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
   line-height: 1;
   cursor: pointer;
   min-width: 0;
 
   &:hover {
-    background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
-    color: var(--color-text-primary);
+    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 82%, transparent);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   > svg {

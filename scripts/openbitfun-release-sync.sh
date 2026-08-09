@@ -4,17 +4,20 @@
 #
 # Flow:
 #   1. Fetch latest.json from GitHub (follows /releases/latest/download/ redirect)
-#   2. If present, mirror linux-binaries.json plus its CLI/Relay assets FIRST
-#      (small, and both the CLI updater and one-click Relay deploy fall back
-#      to them, so they must not queue behind ~700 MB of Desktop packages)
-#   3. Download every Desktop updater package into release/{version}/
-#   4. Rewrite all mirrored URLs to point at openbitfun.com
-#   5. Publish versioned and root manifests
+#   2. Mirror the signed Relay image descriptor and Linux binary manifest FIRST
+#      (small trust metadata must not queue behind ~700 MB of Desktop packages)
+#   3. Download every Desktop updater package plus the standalone Windows
+#      installer into release/{version}/
+#   4. Rewrite updater URLs and generate a separate website download manifest
+#   5. Atomically publish versioned and root manifests
 #   6. Remove old version dirs, keeping only the most recent KEEP_VERSIONS
 #
 # The published release/latest.json is the Tauri updater fallback endpoint.
 # When GitHub is unreachable, the desktop client automatically falls through
 # to https://openbitfun.com/release/latest.json and downloads from this mirror.
+# The published release/downloads.json is for the website. Its Windows URL uses
+# latest.json's manual_installers entry while the updater keeps the versioned
+# Tauri setup.exe URL.
 #
 # Cron (every 10 minutes):
 #   */10 * * * * /root/repos/BitFun-AutoUpdate/openbitfun-release-sync.sh \
@@ -41,13 +44,23 @@ set -euo pipefail
 # ── Configuration ──────────────────────────────────────────────
 GITHUB_LATEST_JSON_URL="https://github.com/GCWing/BitFun/releases/latest/download/latest.json"
 GITHUB_LINUX_BINARIES_URL="https://github.com/GCWing/BitFun/releases/latest/download/linux-binaries.json"
+GITHUB_RELAY_IMAGE_URL="https://github.com/GCWing/BitFun/releases/latest/download/relay-image.json"
 OPENBITFUN_BASE_URL="https://openbitfun.com/release"
-WEBSITE_RELEASE_DIR="/root/repos/BitFun-Website/dist/release"
+# The mirror deliberately lives outside the website checkout. It used to be
+# BitFun-Website/dist/release, but `npm run build` empties dist/, so every
+# website deploy silently deleted the mirrored installers and manifests —
+# breaking downloads and the updater fallback until someone noticed. nginx
+# serves this directory through a `location ^~ /release/` alias instead.
+WEBSITE_RELEASE_DIR="${WEBSITE_RELEASE_DIR:-/srv/bitfun-release}"
 LOCK_FILE="/root/repos/BitFun-AutoUpdate/sync.lock"
+LEGACY_WINDOWS_INSTALLER_FILENAME="bitfun-installer.exe"
+WINDOWS_INSTALLER_FILENAME="$LEGACY_WINDOWS_INSTALLER_FILENAME"
+WINDOWS_INSTALLER_URL=""
+WINDOWS_INSTALLER_SIGNATURE_URL=""
+WEBSITE_DOWNLOADS_MANIFEST="downloads.json"
 # Keep enough releases that the mirror still serves a Desktop build a few
-# versions behind. One-click Relay deploy asks the mirror for the version baked
-# into the running Desktop binary, so retaining too few sends older installs
-# into a 20-minute source rebuild.
+# versions behind and SSH Dispatch can finish an already-confirmed install even
+# after a newer release becomes current.
 KEEP_VERSIONS=6
 CONNECT_TIMEOUT=30
 MAX_TIME=1800          # per-request ceiling (30 min; installer packages can be large)
@@ -87,6 +100,115 @@ download_asset() {
     log "ERROR: Failed to download $filename after $MAX_RETRIES attempts"
     return 1
   fi
+}
+
+# Publish a root manifest without exposing a partially copied JSON file to
+# Nginx. The flock around the full sync guarantees one writer, and rename is
+# atomic because the temporary file lives beside its destination.
+publish_file_atomically() {
+  local source="$1"
+  local dest="$2"
+  local tmp="${dest}.part"
+  cp "$source" "$tmp"
+  mv "$tmp" "$dest"
+}
+
+# Mirror the custom Windows installer used for interactive website installs.
+# RELEASE_ASSET_BASE_URL is derived from latest.json rather than from
+# /releases/latest/download so the installer and setup package cannot come from
+# different releases while GitHub is advancing the latest-release pointer.
+mirror_windows_installer() {
+  local installer_url signature_url metadata
+  installer_url="${WINDOWS_INSTALLER_URL:-${RELEASE_ASSET_BASE_URL}/${WINDOWS_INSTALLER_FILENAME}}"
+  signature_url="${WINDOWS_INSTALLER_SIGNATURE_URL:-${installer_url}.sig}"
+
+  if [ -n "${LATEST_JSON:-}" ]; then
+    metadata=$(printf '%s' "$LATEST_JSON" | "$PYTHON" -c "
+import json, sys
+data = json.load(sys.stdin)
+entry = data.get('manual_installers', {}).get('windows-x86_64')
+if entry:
+    print(entry['url'])
+    print(entry.get('signature_url', entry['url'] + '.sig'))
+")
+    if [ -n "$metadata" ]; then
+      installer_url=$(printf '%s\n' "$metadata" | sed -n '1p')
+      signature_url=$(printf '%s\n' "$metadata" | sed -n '2p')
+      if [ "${installer_url%/*}" != "$RELEASE_ASSET_BASE_URL" ]; then
+        log "ERROR: Manual installer URL does not belong to the updater release: $installer_url"
+        return 1
+      fi
+      if [ "$signature_url" != "${installer_url}.sig" ]; then
+        log "ERROR: Manual installer signature URL does not match the installer URL"
+        return 1
+      fi
+      WINDOWS_INSTALLER_FILENAME="${installer_url##*/}"
+    fi
+  fi
+
+  log "  Mirroring website Windows installer: ${WINDOWS_INSTALLER_FILENAME}"
+  download_asset \
+    "$installer_url" \
+    "${VERSION_DIR}/${WINDOWS_INSTALLER_FILENAME}" || exit 1
+  download_asset \
+    "$signature_url" \
+    "${VERSION_DIR}/${WINDOWS_INSTALLER_FILENAME}.sig" || exit 1
+}
+
+# Build a website-only manifest from the already rewritten updater manifest.
+# All non-Windows targets continue to use their mirrored updater packages. The
+# Windows target alone is replaced with the custom installer URL. The updater
+# URL remains untouched; manual_installers is a mirror/website extension only.
+write_website_download_manifest() {
+  local output="${VERSION_DIR}/${WEBSITE_DOWNLOADS_MANIFEST}"
+  local output_tmp="${output}.part"
+
+  "$PYTHON" - \
+    "${VERSION_DIR}/latest.json" \
+    "$output_tmp" \
+    "$OPENBITFUN_BASE_URL" \
+    "$WINDOWS_INSTALLER_FILENAME" <<'PY'
+import json, sys
+
+source, dest, base, windows_installer = sys.argv[1:]
+with open(source, encoding="utf-8") as f:
+    updater = json.load(f)
+
+version = updater["version"]
+platforms = {}
+for target, entry in updater.get("platforms", {}).items():
+    url = entry.get("url")
+    if url:
+        platforms[target] = {"url": url}
+
+windows = platforms.get("windows-x86_64")
+if windows is None:
+    raise SystemExit("latest.json is missing windows-x86_64")
+
+manual = updater.get("manual_installers", {}).get("windows-x86_64")
+if manual:
+    windows["url"] = manual["url"]
+    windows["signatureUrl"] = manual.get("signature_url", manual["url"] + ".sig")
+else:
+    version_base = f"{base}/{version}"
+    windows["url"] = f"{version_base}/{windows_installer}"
+    windows["signatureUrl"] = f"{version_base}/{windows_installer}.sig"
+
+website = {
+    "schemaVersion": 1,
+    "version": version,
+    "platforms": platforms,
+}
+for optional_key in ("notes", "pub_date"):
+    if optional_key in updater:
+        website[optional_key] = updater[optional_key]
+
+with open(dest, "w", encoding="utf-8") as f:
+    json.dump(website, f, indent=2)
+    f.write("\n")
+PY
+  mv "$output_tmp" "$output"
+  log "Saved ${output}"
 }
 
 # Check the mirrored Linux archives against the `.sha256` sidecars mirrored with
@@ -188,9 +310,9 @@ seen = set()
 for platform in data.get("platforms", {}).values():
     for product in ("cli", "relay"):
         entry = platform.get(product, {})
-        # sigUrl too: without the signature the mirrored copy cannot be verified
-        # as anything stronger than "not corrupted in transit".
-        for key in ("url", "sha256Url", "sigUrl"):
+        # Signatures too: without them the mirrored copy cannot be verified as
+        # anything stronger than "not corrupted in transit".
+        for key in ("url", "sha256Url", "sha256SigUrl", "sigUrl"):
             url = entry.get(key)
             if not url:
                 continue
@@ -226,7 +348,7 @@ version_base = f"{base}/{data['version']}"
 for platform in data.get("platforms", {}).values():
     for product in ("cli", "relay"):
         entry = platform.get(product, {})
-        for key in ("url", "sha256Url", "sigUrl"):
+        for key in ("url", "sha256Url", "sha256SigUrl", "sigUrl"):
             if entry.get(key):
                 entry[key] = f"{version_base}/{entry[key].rsplit('/', 1)[-1]}"
 with open(dest, "w", encoding="utf-8") as f:
@@ -234,7 +356,9 @@ with open(dest, "w", encoding="utf-8") as f:
     f.write("\n")
 PY
     rm -f "$LINUX_MANIFEST_TMP"
-    cp "${VERSION_DIR}/linux-binaries.json" "${WEBSITE_RELEASE_DIR}/linux-binaries.json"
+    publish_file_atomically \
+      "${VERSION_DIR}/linux-binaries.json" \
+      "${WEBSITE_RELEASE_DIR}/linux-binaries.json"
     log "Updated ${WEBSITE_RELEASE_DIR}/linux-binaries.json"
   elif [ "$LINUX_MANIFEST_STATE" = "missing" ]; then
     rm -f "${WEBSITE_RELEASE_DIR}/linux-binaries.json"
@@ -245,6 +369,121 @@ PY
     # must not take it offline for the next 10 minutes.
     log "WARN: Linux binaries manifest unreachable this run; keeping the published mirror."
   fi
+}
+
+# macOS SSH Dispatch uses the standalone CLI archives published by the CLI
+# workflow after the Desktop release exists. They are not represented by
+# linux-binaries.json, so mirror the deterministic names separately. Missing
+# files are normal while that second workflow is still publishing; a later cron
+# run completes the set atomically enough for clients (every install verifies
+# the signed checksum before using an archive).
+mirror_dispatch_macos_cli_archives() {
+  local target filename base_url suffix ready failed checksum_list
+  checksum_list=""
+  for target in x86_64-apple-darwin aarch64-apple-darwin; do
+    filename="bitfun-cli-${VERSION}-${target}.tar.gz"
+    base_url="${RELEASE_ASSET_BASE_URL}/${filename}"
+    ready=1
+    for suffix in "" .sha256 .sha256.sig .sig; do
+      if ! curl -fsSIL \
+        --connect-timeout "$CONNECT_TIMEOUT" \
+        --max-time "$MAX_TIME" \
+        "${base_url}${suffix}" >/dev/null; then
+        ready=0
+        break
+      fi
+    done
+    if [ "$ready" -ne 1 ]; then
+      log "  macOS Dispatch CLI set is not complete yet: $filename"
+      continue
+    fi
+
+    failed=0
+    for suffix in "" .sha256 .sha256.sig .sig; do
+      log "  Mirroring macOS Dispatch CLI asset: ${filename}${suffix}"
+      if ! download_asset \
+        "${base_url}${suffix}" \
+        "${VERSION_DIR}/${filename}${suffix}"; then
+        failed=1
+        break
+      fi
+    done
+    if [ "$failed" -ne 0 ]; then
+      rm -f \
+        "${VERSION_DIR}/${filename}" \
+        "${VERSION_DIR}/${filename}.sha256" \
+        "${VERSION_DIR}/${filename}.sha256.sig" \
+        "${VERSION_DIR}/${filename}.sig"
+      log "WARN: incomplete macOS Dispatch CLI set removed; retrying next sync."
+      continue
+    fi
+    checksum_list="${checksum_list}${filename}.sha256"$'\n'
+  done
+
+  if [ -n "$checksum_list" ]; then
+    printf '%s' "$checksum_list" | verify_mirrored_checksums || exit 1
+  fi
+}
+
+# Mirror the signed, digest-pinned container descriptor before large Desktop
+# assets. The mirror is not trusted: Desktop verifies relay-image.json.sig with
+# its compiled-in minisign key before sending the digest to a customer server.
+mirror_relay_image_descriptor() {
+  local descriptor_tmp signature_tmp status descriptor_version
+  descriptor_tmp="${VERSION_DIR}/relay-image.json.part"
+  signature_tmp="${VERSION_DIR}/relay-image.json.sig.part"
+  rm -f "$descriptor_tmp" "$signature_tmp"
+
+  status="$(curl -sSL \
+    --connect-timeout "$CONNECT_TIMEOUT" --max-time "$MAX_TIME" \
+    -o "$descriptor_tmp" -w '%{http_code}' "$GITHUB_RELAY_IMAGE_URL" || echo 000)"
+  if [ "$status" = "404" ]; then
+    log "Relay image descriptor is not present in the latest release yet."
+    rm -f "$descriptor_tmp"
+    return 0
+  fi
+  if [ "$status" != "200" ]; then
+    log "WARN: relay-image.json unreachable (HTTP $status); keeping any existing versioned copy."
+    rm -f "$descriptor_tmp"
+    return 0
+  fi
+  if ! curl -fsSL --retry "$MAX_RETRIES" --retry-delay "$RETRY_DELAY" \
+    --connect-timeout "$CONNECT_TIMEOUT" --max-time "$MAX_TIME" \
+    -o "$signature_tmp" "${GITHUB_RELAY_IMAGE_URL}.sig"; then
+    log "WARN: relay-image.json.sig unreachable; refusing to publish an unsigned descriptor."
+    rm -f "$descriptor_tmp" "$signature_tmp"
+    return 0
+  fi
+
+  descriptor_version="$("$PYTHON" - "$descriptor_tmp" <<'PY'
+import json, re, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    data = json.load(f)
+assert data.get("schema_version") == 1
+assert data.get("image") == "ghcr.io/gcwing/bitfun-relay-server"
+assert re.fullmatch(r"sha256:[0-9a-f]{64}", data.get("digest", ""))
+print(data["version"])
+PY
+)" || {
+    log "ERROR: relay-image.json failed its schema/repository/digest checks"
+    rm -f "$descriptor_tmp" "$signature_tmp"
+    return 1
+  }
+  if [ "$descriptor_version" != "$VERSION" ]; then
+    log "ERROR: Relay image descriptor version $descriptor_version does not match Desktop version $VERSION"
+    rm -f "$descriptor_tmp" "$signature_tmp"
+    return 1
+  fi
+
+  mv "$descriptor_tmp" "${VERSION_DIR}/relay-image.json"
+  mv "$signature_tmp" "${VERSION_DIR}/relay-image.json.sig"
+  publish_file_atomically \
+    "${VERSION_DIR}/relay-image.json" \
+    "${WEBSITE_RELEASE_DIR}/relay-image.json"
+  publish_file_atomically \
+    "${VERSION_DIR}/relay-image.json.sig" \
+    "${WEBSITE_RELEASE_DIR}/relay-image.json.sig"
+  log "Published signed Relay image descriptor for $VERSION"
 }
 
 # ── Main ───────────────────────────────────────────────────────
@@ -278,12 +517,59 @@ main() {
   }
   log "Latest version: $VERSION"
 
+  # Resolve the exact tagged release directory from the updater URLs. Using
+# this base for the standalone installer avoids a latest-release race where
+# latest.json and the manual installer could otherwise resolve to different
+  # versions during publication.
+  RELEASE_ASSET_BASE_URL=$(printf '%s' "$LATEST_JSON" | "$PYTHON" -c "
+import json, sys
+data = json.load(sys.stdin)
+bases = {entry['url'].rsplit('/', 1)[0] for entry in data.get('platforms', {}).values() if entry.get('url')}
+if len(bases) != 1:
+    raise SystemExit(f'expected one release asset base, got {sorted(bases)}')
+print(bases.pop())
+") || {
+    log "ERROR: Failed to resolve the release asset base from latest.json"
+    exit 1
+  }
+
+  INSTALLER_METADATA=$(printf '%s' "$LATEST_JSON" | "$PYTHON" -c "
+import json, sys
+data = json.load(sys.stdin)
+entry = data.get('manual_installers', {}).get('windows-x86_64')
+if entry:
+    print(entry['url'])
+    print(entry.get('signature_url', entry['url'] + '.sig'))
+") || {
+    log "ERROR: Failed to resolve the manual Windows installer from latest.json"
+    exit 1
+  }
+  if [ -n "$INSTALLER_METADATA" ]; then
+    WINDOWS_INSTALLER_URL=$(printf '%s\n' "$INSTALLER_METADATA" | sed -n '1p')
+    WINDOWS_INSTALLER_SIGNATURE_URL=$(printf '%s\n' "$INSTALLER_METADATA" | sed -n '2p')
+    if [ "${WINDOWS_INSTALLER_URL%/*}" != "$RELEASE_ASSET_BASE_URL" ]; then
+      log "ERROR: Manual installer URL does not belong to release $VERSION"
+      exit 1
+    fi
+    if [ "$WINDOWS_INSTALLER_SIGNATURE_URL" != "${WINDOWS_INSTALLER_URL}.sig" ]; then
+      log "ERROR: Manual installer signature URL does not match the installer URL"
+      exit 1
+    fi
+    WINDOWS_INSTALLER_FILENAME="${WINDOWS_INSTALLER_URL##*/}"
+  else
+    WINDOWS_INSTALLER_URL="${RELEASE_ASSET_BASE_URL}/${LEGACY_WINDOWS_INSTALLER_FILENAME}"
+    WINDOWS_INSTALLER_SIGNATURE_URL="${WINDOWS_INSTALLER_URL}.sig"
+    WINDOWS_INSTALLER_FILENAME="$LEGACY_WINDOWS_INSTALLER_FILENAME"
+  fi
+
   # 3. Create version directory
   VERSION_DIR="${WEBSITE_RELEASE_DIR}/${VERSION}"
   mkdir -p "$VERSION_DIR"
 
-  # 4. Mirror the small Linux CLI/Relay archives first (see function comment).
+  # 4. Mirror small trust metadata and Linux archives first.
+  mirror_relay_image_descriptor
   mirror_linux_binaries
+  mirror_dispatch_macos_cli_archives
 
   # 5. Download all platform installer packages
   #    Extract "<url>\t<filename>" pairs, then curl each one.
@@ -305,7 +591,11 @@ for p, info in data.get('platforms', {}).items():
     download_asset "$url" "${VERSION_DIR}/${filename}" || exit 1
   done <<< "$ASSET_LIST"
 
+  # Mirror the manual installer separately while preserving the updater URL.
+  mirror_windows_installer
+
   # 6. Rewrite URLs in latest.json to point at openbitfun.com
+  LATEST_MANIFEST_TMP="${VERSION_DIR}/latest.json.part"
   printf '%s' "$LATEST_JSON" | "$PYTHON" -c "
 import sys, json
 data = json.load(sys.stdin)
@@ -314,13 +604,25 @@ base = '${OPENBITFUN_BASE_URL}/' + version
 for p, info in data.get('platforms', {}).items():
     fname = info['url'].split('/')[-1]
     info['url'] = base + '/' + fname
+for p, info in data.get('manual_installers', {}).items():
+    for key in ('url', 'signature_url'):
+        if info.get(key):
+            info[key] = base + '/' + info[key].split('/')[-1]
 print(json.dumps(data, indent=2))
-" > "${VERSION_DIR}/latest.json"
+" > "$LATEST_MANIFEST_TMP"
+  mv "$LATEST_MANIFEST_TMP" "${VERSION_DIR}/latest.json"
   log "Saved ${VERSION_DIR}/latest.json"
 
-  # 7. Publish root latest.json (Tauri fallback endpoint)
-  cp "${VERSION_DIR}/latest.json" "${WEBSITE_RELEASE_DIR}/latest.json"
+  # 7. Generate the website manifest, then atomically publish both root files.
+  write_website_download_manifest
+  publish_file_atomically \
+    "${VERSION_DIR}/latest.json" \
+    "${WEBSITE_RELEASE_DIR}/latest.json"
   log "Updated ${WEBSITE_RELEASE_DIR}/latest.json"
+  publish_file_atomically \
+    "${VERSION_DIR}/${WEBSITE_DOWNLOADS_MANIFEST}" \
+    "${WEBSITE_RELEASE_DIR}/${WEBSITE_DOWNLOADS_MANIFEST}"
+  log "Updated ${WEBSITE_RELEASE_DIR}/${WEBSITE_DOWNLOADS_MANIFEST}"
 
   # 8. Clean up old versions — keep only the latest KEEP_VERSIONS dirs
   ALL_DIRS=()
@@ -339,4 +641,6 @@ print(json.dumps(data, indent=2))
   log "=== Sync complete: version $VERSION ==="
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

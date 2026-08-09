@@ -55,6 +55,10 @@ function asset(filename) {
     url: `${releaseBase}/${filename}`,
     sha256Url: `${releaseBase}/${checksum}`,
   };
+  const checksumSignature = `${checksum}.sig`;
+  if (fs.existsSync(path.join(assetsDir, checksumSignature))) {
+    entry.sha256SigUrl = `${releaseBase}/${checksumSignature}`;
+  }
   // Signature is optional: forks build without the release key. A checksum
   // proves only that the transfer was intact, since whoever serves the archive
   // serves the checksum too; the signature is what a mirror cannot forge.

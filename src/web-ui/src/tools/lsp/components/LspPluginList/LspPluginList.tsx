@@ -89,8 +89,8 @@ export const LspPluginList: React.FC<LspPluginListProps> = ({
 
   if (plugins.length === 0) {
     return (
-      <div className={`lsp-plugin-list ${className || ''}`}>
-        <div className="lsp-plugin-list__empty">
+      <div className={`lsp-plugin-list ${className || ''}`} data-bf-component="lsp" data-bf-part="pluginList" data-bf-state="empty">
+        <div className="lsp-plugin-list__empty" data-bf-component="lsp" data-bf-part="empty">
           <Package size={64} />
           {onInstallPlugin && (
             <Button
@@ -109,8 +109,8 @@ export const LspPluginList: React.FC<LspPluginListProps> = ({
   }
 
   return (
-    <div className={`lsp-plugin-list ${className || ''}`}>
-      <div className="lsp-plugin-list__items">
+    <div className={`lsp-plugin-list ${className || ''}`} data-bf-component="lsp" data-bf-part="pluginList">
+      <div className="lsp-plugin-list__items" data-bf-component="lsp" data-bf-part="items">
         {plugins.map(plugin => (
           <PluginItem
             key={plugin.id}
@@ -135,8 +135,8 @@ interface PluginItemProps {
 
 const PluginItem: React.FC<PluginItemProps> = ({ plugin, isExpanded, onToggle, onUninstall, t }) => {
   return (
-    <Card variant="default" padding="none" className={`lsp-plugin-item ${isExpanded ? 'is-expanded' : ''}`}>
-      <div className="lsp-plugin-item__header" onClick={onToggle}>
+    <Card variant="default" padding="none" className={`lsp-plugin-item ${isExpanded ? 'is-expanded' : ''}`} data-bf-component="lsp" data-bf-part="plugin" data-bf-state={isExpanded ? 'expanded' : undefined}>
+      <div className="lsp-plugin-item__header" onClick={onToggle} data-bf-component="lsp" data-bf-part="pluginHeader">
         <div className="lsp-plugin-item__toggle">
           {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </div>
@@ -161,7 +161,7 @@ const PluginItem: React.FC<PluginItemProps> = ({ plugin, isExpanded, onToggle, o
       </div>
 
       {isExpanded && (
-        <CardBody className="lsp-plugin-item__details">
+        <CardBody className="lsp-plugin-item__details" data-bf-component="lsp" data-bf-part="pluginDetails">
           <div className="lsp-plugin-item__section">
             <p className="lsp-plugin-item__description">{plugin.description}</p>
           </div>

@@ -20,7 +20,7 @@
   height: min(76vh, 820px);
   max-height: 100%;
   padding-block: 2px 4px;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 
   &__content-shell {
     overflow: hidden;
@@ -35,11 +35,11 @@
     gap: 12px;
     padding: 12px 14px;
     overflow: hidden;
-    border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 80%, transparent);
     border-radius: 14px;
     background:
-      radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--color-accent-500) 16%, transparent), transparent 34%),
-      linear-gradient(180deg, color-mix(in srgb, var(--element-bg-soft) 78%, transparent), color-mix(in srgb, var(--element-bg-subtle) 72%, transparent));
+      radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 16%, transparent), transparent 34%),
+      linear-gradient(180deg, color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 78%, transparent), color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 72%, transparent));
 
     &::after {
       content: '';
@@ -47,7 +47,7 @@
       inset: 0;
       pointer-events: none;
       border-radius: inherit;
-      box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+      box-shadow: inset 0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 8%, transparent);
     }
   }
 
@@ -59,10 +59,10 @@
     justify-content: center;
     width: 36px;
     height: 36px;
-    border: 1px solid color-mix(in srgb, var(--color-accent-500) 24%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 24%, transparent);
     border-radius: 11px;
-    background: color-mix(in srgb, var(--color-accent-500) 10%, var(--element-bg-subtle));
-    color: var(--color-accent-500);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, var(--bf-appearance-token-element-bg-subtle));
+    color: var(--bf-appearance-token-color-accent-500);
   }
 
   &__hero-copy {
@@ -78,13 +78,13 @@
     font-size: 13px;
     font-weight: 700;
     line-height: 1.25;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__description {
     font-size: 11px;
     line-height: 1.45;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     max-width: 56ch;
   }
 
@@ -95,9 +95,9 @@
     justify-content: flex-start;
     gap: 10px;
     padding: 8px 12px;
-    border: 1px solid color-mix(in srgb, var(--border-subtle) 86%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 86%, transparent);
     border-radius: 12px;
-    background: color-mix(in srgb, var(--element-bg-subtle) 80%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 80%, transparent);
   }
 
   &__toolbar-main {
@@ -120,7 +120,7 @@
     min-width: 0;
     flex: 1 1 180px;
     font-size: 11px;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -132,10 +132,10 @@
     overflow: auto;
     padding: 6px;
     padding-bottom: 10px;
-    border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 84%, transparent);
     border-radius: 14px;
     background:
-      linear-gradient(180deg, color-mix(in srgb, var(--element-bg-soft) 78%, transparent), color-mix(in srgb, var(--element-bg-subtle) 74%, transparent));
+      linear-gradient(180deg, color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 78%, transparent), color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 74%, transparent));
   }
 
   &__state {
@@ -146,7 +146,7 @@
     justify-content: center;
     gap: 12px;
     padding: 16px;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     text-align: center;
 
     &.is-error {
@@ -165,9 +165,9 @@
     gap: 10px;
     width: 100%;
     padding: 10px 12px;
-    border: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 72%, transparent);
     border-radius: 12px;
-    background: color-mix(in srgb, var(--element-bg-base) 72%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-base) 72%, transparent);
     cursor: pointer;
     transition:
       transform 0.16s ease,
@@ -181,16 +181,16 @@
 
     &:hover {
       transform: translateY(-1px);
-      border-color: color-mix(in srgb, var(--border-medium) 74%, transparent);
-      background: color-mix(in srgb, var(--element-bg-soft) 74%, transparent);
-      box-shadow: 0 10px 18px color-mix(in srgb, var(--color-static-black) 6%, transparent);
+      border-color: color-mix(in srgb, var(--bf-appearance-token-border-medium) 74%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 74%, transparent);
+      box-shadow: 0 10px 18px color-mix(in srgb, var(--bf-appearance-token-color-static-black) 6%, transparent);
     }
 
     &.is-selected {
-      border-color: color-mix(in srgb, var(--color-accent-500) 34%, transparent);
+      border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 34%, transparent);
       background:
-        linear-gradient(180deg, color-mix(in srgb, var(--color-accent-500) 9%, var(--element-bg-base)), color-mix(in srgb, var(--color-accent-500) 5%, var(--element-bg-soft)));
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent-500) 12%, transparent);
+        linear-gradient(180deg, color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 9%, var(--bf-appearance-token-element-bg-base)), color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 5%, var(--bf-appearance-token-element-bg-soft)));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
     }
 
     &.is-child {
@@ -211,21 +211,21 @@
     width: 30px;
     height: 30px;
     border-radius: 10px;
-    border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
-    background: color-mix(in srgb, var(--element-bg-subtle) 76%, transparent);
-    color: var(--color-text-secondary);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 84%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 76%, transparent);
+    color: var(--bf-appearance-token-color-text-secondary);
     flex-shrink: 0;
 
     &.is-code {
-      color: color-mix(in srgb, var(--color-accent-500) 76%, var(--color-text-primary));
+      color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 76%, var(--bf-appearance-token-color-text-primary));
     }
 
     &.is-cowork {
-      color: color-mix(in srgb, rgb(var(--private-workspace-batch-cowork-rgb)) 80%, var(--color-text-primary));
+      color: color-mix(in srgb, rgb(var(--private-workspace-batch-cowork-rgb)) 80%, var(--bf-appearance-token-color-text-primary));
     }
 
     &.is-claw {
-      color: color-mix(in srgb, rgb(var(--private-workspace-batch-claw-rgb)) 80%, var(--color-text-primary));
+      color: color-mix(in srgb, rgb(var(--private-workspace-batch-claw-rgb)) 80%, var(--bf-appearance-token-color-text-primary));
     }
   }
 
@@ -247,7 +247,7 @@
     min-width: 0;
     font-size: 13px;
     font-weight: 650;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -257,7 +257,7 @@
   &__row-updated {
     flex-shrink: 0;
     font-size: 10px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     white-space: nowrap;
   }
 
@@ -273,25 +273,25 @@
     min-height: 18px;
     padding: 0 7px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--element-bg-subtle) 78%, transparent);
-    color: var(--color-text-secondary);
+    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 78%, transparent);
+    color: var(--bf-appearance-token-color-text-secondary);
     font-size: 10px;
     font-weight: 600;
     line-height: 1;
 
     &.is-code {
-      background: color-mix(in srgb, var(--color-accent-500) 10%, transparent);
-      color: color-mix(in srgb, var(--color-accent-500) 78%, var(--color-text-primary));
+      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, transparent);
+      color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 78%, var(--bf-appearance-token-color-text-primary));
     }
 
     &.is-cowork {
       background: color-mix(in srgb, rgb(var(--private-workspace-batch-cowork-rgb)) 11%, transparent);
-      color: color-mix(in srgb, rgb(var(--private-workspace-batch-cowork-rgb)) 82%, var(--color-text-primary));
+      color: color-mix(in srgb, rgb(var(--private-workspace-batch-cowork-rgb)) 82%, var(--bf-appearance-token-color-text-primary));
     }
 
     &.is-claw {
       background: color-mix(in srgb, rgb(var(--private-workspace-batch-claw-rgb)) 11%, transparent);
-      color: color-mix(in srgb, rgb(var(--private-workspace-batch-claw-rgb)) 82%, var(--color-text-primary));
+      color: color-mix(in srgb, rgb(var(--private-workspace-batch-claw-rgb)) 82%, var(--bf-appearance-token-color-text-primary));
     }
   }
 
@@ -303,7 +303,7 @@
     justify-content: flex-end;
     gap: 8px;
     padding: 8px 0 0;
-    background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--color-bg-primary) 92%, transparent) 36%);
+    background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 92%, transparent) 36%);
   }
 
   .btn {

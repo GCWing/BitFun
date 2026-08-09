@@ -32,7 +32,7 @@ export interface StreamTextProps {
   autoStart?: boolean;
   paused?: boolean;
   charAnimation?: boolean;
-  colorTheme?: 'blue' | 'purple' | 'green' | 'rainbow' | 'fire' | 'ocean' | 'sunset';
+  colorPalette?: 'blue' | 'purple' | 'green' | 'rainbow' | 'fire' | 'ocean' | 'sunset';
 }
 
 const StreamTextComponent: React.FC<StreamTextProps> = ({
@@ -48,7 +48,7 @@ const StreamTextComponent: React.FC<StreamTextProps> = ({
   autoStart = true,
   paused = false,
   charAnimation = false,
-  colorTheme = 'blue',
+  colorPalette = 'blue',
 }) => {
   const [displayedText, setDisplayedText] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -148,7 +148,7 @@ const StreamTextComponent: React.FC<StreamTextProps> = ({
 
   const renderText = () => {
     if (!charAnimation) {
-      return <span className={`stream-text__content stream-text__content--${effect}`}>{displayedText}</span>;
+      return <span className={`stream-text__content stream-text__content--${effect}`} data-bf-component="stream-text" data-bf-part="content">{displayedText}</span>;
     }
 
     return displayedText.split('').map((char, index) => {
@@ -159,6 +159,8 @@ const StreamTextComponent: React.FC<StreamTextProps> = ({
         <span
           key={`char-${index}`}
           className={`stream-text__char stream-text__char--${effect} ${isNewChar ? 'stream-text__char--new' : ''}`}
+          data-bf-component="stream-text"
+          data-bf-part="character"
           style={{
             animationDelay,
             '--char-index': index,
@@ -174,7 +176,7 @@ const StreamTextComponent: React.FC<StreamTextProps> = ({
     return [
       'stream-text',
       `stream-text--${effect}`,
-      `stream-text--theme-${colorTheme}`,
+      `stream-text--palette-${colorPalette}`,
       isStreaming ? 'stream-text--streaming' : '',
       isComplete ? 'stream-text--complete' : '',
       className,
@@ -182,10 +184,10 @@ const StreamTextComponent: React.FC<StreamTextProps> = ({
   };
 
   return (
-    <span className={getContainerClassName()}>
+    <span className={getContainerClassName()} data-bf-component="stream-text" data-bf-part="root" data-bf-effect={effect} data-bf-color={colorPalette} data-bf-state={[isStreaming && 'streaming', isComplete && 'complete'].filter(Boolean).join(' ') || undefined}>
       {renderText()}
       {showCursor && !isComplete && (
-        <span className={`stream-cursor stream-cursor--${cursorStyle} ${isStreaming ? 'stream-cursor--active' : ''}`} />
+        <span className={`stream-cursor stream-cursor--${cursorStyle} ${isStreaming ? 'stream-cursor--active' : ''}`} data-bf-component="stream-text" data-bf-part="cursor" />
       )}
     </span>
   );

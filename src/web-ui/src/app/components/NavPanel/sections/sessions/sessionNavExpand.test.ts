@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   getEffectiveTopLevelSessionCount,
+  getSessionBufferPrefetchLimit,
   getSessionExpandToggleState,
 } from './sessionNavExpand';
 
@@ -59,5 +60,67 @@ describe('getEffectiveTopLevelSessionCount', () => {
 
   it('avoids overcorrecting while a metadata refresh is still loading', () => {
     expect(getEffectiveTopLevelSessionCount(12, 5, 10, true)).toBe(12);
+  });
+});
+
+describe('getSessionBufferPrefetchLimit', () => {
+  it('tops the collapsed view up to a few rows past what it renders', () => {
+    expect(getSessionBufferPrefetchLimit({
+      expandLevel: 0,
+      loadedTopLevelCount: 5,
+      totalTopLevelCount: 40,
+      hasMore: true,
+    })).toBe(3);
+  });
+
+  it('refills only the rows a delete consumed', () => {
+    expect(getSessionBufferPrefetchLimit({
+      expandLevel: 0,
+      loadedTopLevelCount: 7,
+      totalTopLevelCount: 40,
+      hasMore: true,
+    })).toBe(1);
+  });
+
+  it('stops once the buffer is full', () => {
+    expect(getSessionBufferPrefetchLimit({
+      expandLevel: 0,
+      loadedTopLevelCount: 8,
+      totalTopLevelCount: 40,
+      hasMore: true,
+    })).toBe(0);
+  });
+
+  it('never asks for more sessions than the workspace has', () => {
+    expect(getSessionBufferPrefetchLimit({
+      expandLevel: 0,
+      loadedTopLevelCount: 5,
+      totalTopLevelCount: 6,
+      hasMore: true,
+    })).toBe(1);
+  });
+
+  it('buffers past the first expand step as well', () => {
+    expect(getSessionBufferPrefetchLimit({
+      expandLevel: 1,
+      loadedTopLevelCount: 10,
+      totalTopLevelCount: 40,
+      hasMore: true,
+    })).toBe(3);
+  });
+
+  it('skips prefetching when everything is loaded or fully expanded', () => {
+    expect(getSessionBufferPrefetchLimit({
+      expandLevel: 0,
+      loadedTopLevelCount: 5,
+      totalTopLevelCount: 5,
+      hasMore: false,
+    })).toBe(0);
+    expect(getSessionBufferPrefetchLimit({
+      expandLevel: 2,
+      loadedTopLevelCount: 40,
+      totalTopLevelCount: 400,
+      hasMore: true,
+    })).toBe(0);
   });
 });

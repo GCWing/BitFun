@@ -133,4 +133,29 @@ mod tests {
         );
         assert_eq!(snapshot.last_submitted_agent_type.as_deref(), Some("Plan"));
     }
+
+    #[test]
+    fn forked_session_inherits_the_parent_permission_mode_selection() {
+        use bitfun_runtime_ports::PermissionMode;
+
+        let mut parent = parent_session();
+        parent.config.permission_mode = Some(PermissionMode::FullAccess);
+        let snapshot =
+            ForkAgentContextSnapshot::from_parent_session(&parent, Vec::new()).expect("snapshot");
+
+        assert_eq!(
+            snapshot.build_child_session_config(None).permission_mode,
+            Some(PermissionMode::FullAccess)
+        );
+
+        // A parent that never chose a mode leaves the child following the
+        // user-level default instead of freezing a copy of it.
+        parent.config.permission_mode = None;
+        let snapshot =
+            ForkAgentContextSnapshot::from_parent_session(&parent, Vec::new()).expect("snapshot");
+        assert_eq!(
+            snapshot.build_child_session_config(None).permission_mode,
+            None
+        );
+    }
 }

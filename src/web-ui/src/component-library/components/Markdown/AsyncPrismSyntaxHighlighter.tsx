@@ -34,6 +34,18 @@ interface PrismRenderTraceProps {
   traceContext?: MarkdownTraceContext;
 }
 
+const AppearanceCodePre = React.forwardRef<HTMLPreElement, React.HTMLAttributes<HTMLPreElement>>(
+  (props, ref) => (
+    <pre
+      {...props}
+      ref={ref}
+      data-bf-component="markdown"
+      data-bf-part="codePre"
+    />
+  ),
+);
+AppearanceCodePre.displayName = 'AppearanceCodePre';
+
 const PrismRenderTrace: React.FC<PrismRenderTraceProps> = ({
   startedAtMs,
   renderPhase,
@@ -163,8 +175,17 @@ export const AsyncPrismSyntaxHighlighter: React.FC<AsyncPrismSyntaxHighlighterPr
         <pre
           className={`language-${language} code-block-fallback`}
           style={customStyle}
+          data-bf-component="markdown"
+          data-bf-part="codePre"
         >
-          <code style={codeTagProps?.style}>{children}</code>
+          <code
+            {...codeTagProps}
+            style={codeTagProps?.style}
+            data-bf-component="markdown"
+            data-bf-part="codeContent"
+          >
+            {children}
+          </code>
         </pre>
       </>
     );
@@ -178,7 +199,12 @@ export const AsyncPrismSyntaxHighlighter: React.FC<AsyncPrismSyntaxHighlighterPr
         style={style}
         showLineNumbers={showLineNumbers}
         customStyle={customStyle}
-        codeTagProps={codeTagProps}
+        PreTag={AppearanceCodePre}
+        codeTagProps={{
+          ...codeTagProps,
+          'data-bf-component': 'markdown',
+          'data-bf-part': 'codeContent',
+        }}
         lineNumberStyle={lineNumberStyle}
       >
         {children}

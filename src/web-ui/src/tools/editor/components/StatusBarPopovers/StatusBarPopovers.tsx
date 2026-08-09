@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import {
   FileCode,
   FileText,
@@ -82,13 +83,18 @@ export const GoToLinePopover: React.FC<GoToLinePopoverProps> = ({
   return createPortal(
     <div
       className="status-bar-popover"
+      data-bf-component="status-bar-popover"
+      data-bf-part="root"
+      data-bf-popover="line"
       style={{ top, left }}
       role="dialog"
       aria-label={t('editor.statusBar.goToLine')}
     >
-      <div className="status-bar-popover__hint">{t('editor.statusBar.goToLineHint')}</div>
-      <div className="status-bar-popover__input-wrap">
+      <div data-bf-component="status-bar-popover" data-bf-part="hint" className="status-bar-popover__hint">{t('editor.statusBar.goToLineHint')}</div>
+      <div data-bf-component="status-bar-popover" data-bf-part="inputWrap" className="status-bar-popover__input-wrap">
         <Input
+          data-bf-component="status-bar-popover"
+          data-bf-part="input"
           ref={inputRef}
           type="text"
           className="status-bar-popover__input"
@@ -101,7 +107,7 @@ export const GoToLinePopover: React.FC<GoToLinePopoverProps> = ({
         />
       </div>
     </div>,
-    document.body
+    getAppearanceOverlayHost()
   );
 };
 
@@ -152,18 +158,24 @@ export const IndentPopover: React.FC<IndentPopoverProps> = ({
   return createPortal(
     <div
       className="status-bar-popover"
+      data-bf-component="status-bar-popover"
+      data-bf-part="root"
+      data-bf-popover="indent"
       style={{ top, left }}
       role="dialog"
       aria-label={t('editor.statusBar.indentSettings')}
     >
-      <div className="status-bar-popover__hint">{t('editor.statusBar.selectIndent')}</div>
-      <div className="status-bar-popover__list">
+      <div data-bf-component="status-bar-popover" data-bf-part="hint" className="status-bar-popover__hint">{t('editor.statusBar.selectIndent')}</div>
+      <div data-bf-component="status-bar-popover" data-bf-part="list" className="status-bar-popover__list">
         {INDENT_OPTIONS.map((opt) => {
           const label = opt.insertSpaces
             ? t('editor.statusBar.indentOptionSpaces', { n: opt.tabSize })
             : t('editor.statusBar.indentOptionTab', { n: opt.tabSize });
           return (
             <Button
+              data-bf-component="status-bar-popover"
+              data-bf-part="item"
+              data-bf-state={opt.tabSize === currentTabSize && opt.insertSpaces === currentInsertSpaces ? 'selected' : undefined}
               key={`${opt.insertSpaces ? 's' : 't'}-${opt.tabSize}`}
               className={`status-bar-popover__item ${
                 opt.tabSize === currentTabSize && opt.insertSpaces === currentInsertSpaces
@@ -194,7 +206,7 @@ export const IndentPopover: React.FC<IndentPopoverProps> = ({
         })}
       </div>
     </div>,
-    document.body
+    getAppearanceOverlayHost()
   );
 };
 
@@ -220,14 +232,20 @@ export const EncodingPopover: React.FC<EncodingPopoverProps> = ({
   return createPortal(
     <div
       className="status-bar-popover"
+      data-bf-component="status-bar-popover"
+      data-bf-part="root"
+      data-bf-popover="encoding"
       style={{ top, left }}
       role="dialog"
       aria-label={t('editor.statusBar.fileEncoding')}
     >
-      <div className="status-bar-popover__hint">{t('editor.statusBar.selectEncoding')}</div>
-      <div className="status-bar-popover__list">
+      <div data-bf-component="status-bar-popover" data-bf-part="hint" className="status-bar-popover__hint">{t('editor.statusBar.selectEncoding')}</div>
+      <div data-bf-component="status-bar-popover" data-bf-part="list" className="status-bar-popover__list">
         {ENCODING_OPTIONS.map((enc) => (
           <Button
+            data-bf-component="status-bar-popover"
+            data-bf-part="item"
+            data-bf-state={enc === currentEncoding ? 'selected' : undefined}
             key={enc}
             className={`status-bar-popover__item ${
               enc === currentEncoding ? 'status-bar-popover__item--active' : ''
@@ -250,7 +268,7 @@ export const EncodingPopover: React.FC<EncodingPopoverProps> = ({
         ))}
       </div>
     </div>,
-    document.body
+    getAppearanceOverlayHost()
   );
 };
 
@@ -330,16 +348,22 @@ export const LanguagePopover: React.FC<LanguagePopoverProps> = ({
   return createPortal(
     <div
       className="status-bar-popover"
+      data-bf-component="status-bar-popover"
+      data-bf-part="root"
+      data-bf-popover="language"
       style={{ top, left, maxHeight: 320 }}
       role="dialog"
       aria-label={t('editor.statusBar.selectLanguageMode')}
     >
-      <div className="status-bar-popover__hint">{t('editor.statusBar.selectLanguageModeHint')}</div>
-      <div className="status-bar-popover__list">
+      <div data-bf-component="status-bar-popover" data-bf-part="hint" className="status-bar-popover__hint">{t('editor.statusBar.selectLanguageModeHint')}</div>
+      <div data-bf-component="status-bar-popover" data-bf-part="list" className="status-bar-popover__list">
         {languages.map((lang) => {
           const Icon = getLanguageIcon(lang.id);
           return (
             <Button
+              data-bf-component="status-bar-popover"
+              data-bf-part="item"
+              data-bf-state={lang.id === currentLanguageId ? 'selected' : undefined}
               key={lang.id}
               className={`status-bar-popover__item ${
                 lang.id === currentLanguageId ? 'status-bar-popover__item--active' : ''
@@ -357,7 +381,7 @@ export const LanguagePopover: React.FC<LanguagePopoverProps> = ({
               role="option"
               tabIndex={0}
             >
-              <span className="status-bar-popover__item-icon" aria-hidden>
+              <span data-bf-component="status-bar-popover" data-bf-part="itemIcon" className="status-bar-popover__item-icon" aria-hidden>
                 <Icon size={14} strokeWidth={2} />
               </span>
               {getLanguageDisplayName(lang.id, lang.aliases)}
@@ -366,6 +390,6 @@ export const LanguagePopover: React.FC<LanguagePopoverProps> = ({
         })}
       </div>
     </div>,
-    document.body
+    getAppearanceOverlayHost()
   );
 };

@@ -174,6 +174,8 @@ const MatchItem = memo<MatchItemProps>(({ match, target, searchQuery, onLineClic
       type="button"
       className="bitfun-search-results__match"
       onClick={() => onLineClick(target, match.lineNumber)}
+      data-bf-component="file-system"
+      data-bf-part="match"
     >
       <span 
         className="bitfun-search-results__match-content"
@@ -491,8 +493,8 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
 
   if (results.length === 0) {
     return (
-      <div className={`bitfun-search-results bitfun-search-results--empty ${className}`}>
-        <div className="bitfun-search-results__empty">
+      <div className={`bitfun-search-results bitfun-search-results--empty ${className}`} data-bf-component="file-system" data-bf-part="searchResults" data-bf-state="empty">
+        <div className="bitfun-search-results__empty" data-bf-component="file-system" data-bf-part="empty">
           <div className="bitfun-search-results__empty-icon">
             <FileText size={48} />
           </div>
@@ -506,8 +508,8 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
   }
 
   return (
-    <div className={`bitfun-search-results ${className}`}>
-      <div className="bitfun-search-results__header">
+    <div className={`bitfun-search-results ${className}`} data-bf-component="file-system" data-bf-part="searchResults">
+      <div className="bitfun-search-results__header" data-bf-component="file-system" data-bf-part="header">
         <span className="bitfun-search-results__count">
           {t('search.resultsSummary', { files: results.length, matches: totalMatches })}
           {hasMore && <span className="bitfun-search-results__showing">{t('search.resultsShowing', { count: displayCount })}</span>}
@@ -518,6 +520,8 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
         ref={listRef}
         className="bitfun-search-results__list"
         onScroll={maybeAutoLoadMore}
+        data-bf-component="file-system"
+        data-bf-part="list"
       >
         {visibleGroups.map((group, index) => (
           <FileGroup

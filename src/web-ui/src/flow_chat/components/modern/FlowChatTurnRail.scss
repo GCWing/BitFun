@@ -1,0 +1,121 @@
+.flowchat-turn-rail {
+  position: absolute;
+  left: 4px;
+  top: 20%;
+  bottom: 20%;
+  z-index: 8;
+  width: 30px;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+
+  &__list {
+    width: 100%;
+    max-height: 100%;
+    padding: 0 1px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    pointer-events: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  &__track {
+    position: relative;
+    width: 100%;
+    min-height: 100%;
+  }
+
+  &__item {
+    position: absolute;
+    left: 0;
+    width: 26px;
+    height: 12px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    cursor: pointer;
+    outline: none;
+  }
+
+  &__bar {
+    position: absolute;
+    left: 2px;
+    top: 50%;
+    width: 10px;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--bf-appearance-token-color-text-muted);
+    opacity: 0.7;
+    transform: translateY(-50%);
+    transform-origin: left center;
+    transition:
+      width 140ms ease,
+      height 140ms ease,
+      background-color 140ms ease,
+      opacity 140ms ease,
+      transform 100ms ease;
+  }
+
+  &__item--visible &__bar {
+    width: 16px;
+    height: 2px;
+    background: var(--bf-appearance-token-color-text-primary);
+    opacity: 1;
+  }
+
+  &__item:hover &__bar,
+  &__item:focus-visible &__bar {
+    width: 22px;
+    background: var(--bf-appearance-token-color-text-primary);
+    opacity: 1;
+  }
+
+  &__item:focus-visible &__bar {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 35%, transparent);
+  }
+
+  &__item:active &__bar {
+    transform: translateY(-50%) scaleX(0.92);
+  }
+
+  &__tooltip-content {
+    min-width: 160px;
+    max-width: 260px;
+    display: grid;
+    gap: 4px;
+  }
+
+  &__tooltip-turn {
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-weight: 600;
+    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+    letter-spacing: 0;
+  }
+
+  &__tooltip-message {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    letter-spacing: 0;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flowchat-turn-rail__bar {
+    transition: none;
+  }
+}

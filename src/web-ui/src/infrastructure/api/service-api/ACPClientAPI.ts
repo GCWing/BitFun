@@ -108,6 +108,7 @@ export interface SetAcpSessionConfigOptionRequest {
 export interface AcpSessionModelOption {
   id: string;
   name: string;
+  providerName?: string;
   description?: string;
 }
 
@@ -121,6 +122,7 @@ interface AcpSessionConfigOptionBase {
   id: string;
   name: string;
   description?: string;
+  category?: 'mode' | 'model' | 'thought_level' | string;
 }
 
 export type AcpSessionConfigOption = AcpSessionConfigOptionBase & (

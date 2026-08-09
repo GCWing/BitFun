@@ -30,14 +30,12 @@ export class RemoteToolActionController {
   async approve(
     toolId: string,
     sessionId: string,
-    isBusy: boolean,
     remoteAvailable: boolean,
     updatedInput?: Object
   ): Promise<void> {
     await this.runToolAction(
       toolId,
       sessionId,
-      isBusy,
       remoteAvailable,
       RemoteI18n.t('status.approvingTool'),
       RemoteI18n.t('status.toolApproved'),
@@ -47,11 +45,10 @@ export class RemoteToolActionController {
     );
   }
 
-  async reject(toolId: string, sessionId: string, isBusy: boolean, remoteAvailable: boolean): Promise<void> {
+  async reject(toolId: string, sessionId: string, remoteAvailable: boolean): Promise<void> {
     await this.runToolAction(
       toolId,
       sessionId,
-      isBusy,
       remoteAvailable,
       RemoteI18n.t('status.rejectingTool'),
       RemoteI18n.t('status.toolRejected'),
@@ -61,11 +58,10 @@ export class RemoteToolActionController {
     );
   }
 
-  async cancel(toolId: string, sessionId: string, isBusy: boolean, remoteAvailable: boolean): Promise<void> {
+  async cancel(toolId: string, sessionId: string, remoteAvailable: boolean): Promise<void> {
     await this.runToolAction(
       toolId,
       sessionId,
-      isBusy,
       remoteAvailable,
       RemoteI18n.t('status.cancellingTool'),
       RemoteI18n.t('status.toolCancelRequested'),
@@ -78,14 +74,12 @@ export class RemoteToolActionController {
   async answer(
     toolId: string,
     sessionId: string,
-    isBusy: boolean,
     remoteAvailable: boolean,
     answers: RemoteQuestionAnswerPayload
   ): Promise<void> {
     await this.runToolAction(
       toolId,
       sessionId,
-      isBusy,
       remoteAvailable,
       RemoteI18n.t('status.submittingAnswer'),
       RemoteI18n.t('status.answerSubmitted'),
@@ -98,13 +92,12 @@ export class RemoteToolActionController {
   private async runToolAction(
     toolId: string,
     sessionId: string,
-    isBusy: boolean,
     remoteAvailable: boolean,
     pendingText: string,
     successText: string,
     action: () => Promise<void>
   ): Promise<void> {
-    if (sessionId.length === 0 || toolId.length === 0 || isBusy || !remoteAvailable) {
+    if (sessionId.length === 0 || toolId.length === 0 || !remoteAvailable) {
       return;
     }
     try {

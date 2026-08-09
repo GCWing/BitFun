@@ -4,7 +4,7 @@
  * Renders merged explore-only rounds as a collapsible region.
  */
 
-import React, { useRef, useMemo, useCallback, useEffect, useState } from 'react';
+import React, { useRef, useMemo, useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { FlowItem, FlowToolItem, FlowTextItem, FlowThinkingItem, ToolRejectOptions } from '../../types/flow-chat';
@@ -16,8 +16,9 @@ import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
 import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
 import { useToolCardHeightContract } from '../../tool-cards/useToolCardHeightContract';
-import { useFlowChatContext } from './FlowChatContext';
+import { useFlowChatContext, useFlowChatVolatileContext } from './FlowChatContext';
 import { SmoothHeightCollapse } from './SmoothHeightCollapse';
+import { FLOWCHAT_COLLAPSE_DURATION_MS } from './flowChatCollapseMotion';
 import './ExploreRegion.scss';
 
 export interface ExploreGroupRendererProps {
@@ -54,11 +55,11 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollState, setScrollState] = useState({ hasScroll: false, atTop: true, atBottom: true });
   
-  const { 
-    exploreGroupStates, 
-    onExploreGroupToggle, 
-    onCollapseGroup 
+  const {
+    onExploreGroupToggle,
+    onCollapseGroup,
   } = useFlowChatContext();
+  const { exploreGroupStates } = useFlowChatVolatileContext();
   
   const { 
     groupId, 
@@ -75,11 +76,6 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
   } = useToolCardHeightContract({
     toolId: groupId,
     toolName: 'explore-group',
-    getCardHeight: () => (
-      containerRef.current?.scrollHeight
-      ?? containerRef.current?.getBoundingClientRect().height
-      ?? null
-    ),
   });
   
   const hasExplicitState = exploreGroupStates?.has(groupId) ?? false;
@@ -98,11 +94,36 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
       return;
     }
 
-    setScrollState({
+    const next = {
       hasScroll: el.scrollHeight > el.clientHeight + 1,
       atTop: el.scrollTop <= 5,
       atBottom: el.scrollTop + el.clientHeight >= el.scrollHeight - 5,
+    };
+    // Shallow-compare so unchanged scroll edges do not trigger a re-render.
+    setScrollState(prev => (
+      prev.hasScroll === next.hasScroll &&
+      prev.atTop === next.atTop &&
+      prev.atBottom === next.atBottom
+        ? prev
+        : next
+    ));
+  }, []);
+
+  // rAF-merge the raw scroll events; only one state check per frame.
+  const scrollFrameRef = useRef<number | null>(null);
+  const handleContentScroll = useCallback(() => {
+    if (scrollFrameRef.current !== null) {
+      return;
+    }
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      checkScrollState();
     });
+  }, [checkScrollState]);
+  useEffect(() => () => {
+    if (scrollFrameRef.current !== null) {
+      cancelAnimationFrame(scrollFrameRef.current);
+    }
   }, []);
 
   // One-shot auto-collapse: fires exactly once when the group transitions from
@@ -113,30 +134,24 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
   // defaultExpanded = !wasCutByCritical). So `justGotCut && isExpanded` would
   // always be false and the collapse-intent would never fire.
   //
-  // Instead, reason about the state *before* the cut:
-  //   - No explicit state → group was expanded by default (it was tail).
-  //   - Explicit state = true → user had it open.
-  // Both cases mean the group WAS visually expanded before this render; we need
-  // to dispatch the height-contract event so Virtuoso can anchor-lock.
-  useEffect(() => {
+  // No explicit state means the group was expanded by the live-tail default,
+  // so dispatch the height-contract event before compacting it. An explicit
+  // state is user intent and must not be overwritten by a later auto event.
+  useLayoutEffect(() => {
     const justGotCut = wasCutByCritical && !prevWasCutRef.current;
     prevWasCutRef.current = wasCutByCritical;
 
-    if (!justGotCut) return;
+    if (!justGotCut || hasExplicitState) return;
 
-    const wasExpanded = !hasExplicitState || explicitExpanded;
-    log.debug('explore group cut by critical', { groupId, wasExpanded, hasExplicitState });
+    log.debug('explore group cut by critical', { groupId });
 
-    if (wasExpanded) {
-      applyExpandedState(true, false, () => {
-        onCollapseGroup?.(groupId);
-      }, {
-        reason: 'auto',
-      });
-    }
+    applyExpandedState(true, false, () => {
+      onCollapseGroup?.(groupId);
+    }, {
+      reason: 'auto',
+    });
   }, [
     applyExpandedState,
-    explicitExpanded,
     groupId,
     hasExplicitState,
     wasCutByCritical,
@@ -236,7 +251,7 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
     scrollState.atBottom ? 'explore-region--at-bottom' : null,
   ].filter(Boolean).join(' ');
   return (
-    <div
+    <div data-bf-component="explore-group" data-bf-part="root" data-bf-state={isExpanded ? 'expanded' : undefined}
       ref={cardRootRef}
       data-testid="chat-explore-group"
       data-tool-card-id={groupId}
@@ -249,6 +264,8 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
     >
       {allowManualToggle && (
         <div
+          data-bf-component="explore-group"
+          data-bf-part="header"
           className="explore-region__header"
           onClick={handleToggle}
           data-testid="chat-explore-group-toggle"
@@ -256,20 +273,23 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
           data-expanded={isExpanded ? 'true' : 'false'}
         >
           <ChevronRight size={14} className="explore-region__icon" />
-          <span className="explore-region__summary">{displaySummary}</span>
+          <span data-bf-component="explore-group" data-bf-part="summary" className="explore-region__summary">{displaySummary}</span>
         </div>
       )}
       <SmoothHeightCollapse
         isOpen={isExpanded}
+        data-bf-component="explore-group"
+        data-bf-part="contentWrapper"
         className="explore-region__content-wrapper"
         innerClassName="explore-region__content-inner"
-        durationMs={320}
-        disableAnimation={isGroupStreaming}
+        durationMs={FLOWCHAT_COLLAPSE_DURATION_MS}
       >
         <div
           ref={containerRef}
+          data-bf-component="explore-group"
+          data-bf-part="content"
           className="explore-region__content"
-          onScroll={checkScrollState}
+          onScroll={handleContentScroll}
           data-testid="chat-explore-group-content"
           data-group-kind={groupKind}
           data-expanded={isExpanded ? 'true' : 'false'}
@@ -348,9 +368,10 @@ const ExploreItemRenderer = React.memo<ExploreItemRendererProps>(({ item, turnId
     
     case 'tool':
       return (
-        <div className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool">
+        <div data-bf-component="explore-group" data-bf-part="item" className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool">
           <FlowToolCard
             toolItem={item as FlowToolItem}
+            isLastItem={isLastItem}
             onConfirm={handleConfirm}
             onReject={handleReject}
             onOpenInEditor={handleOpenInEditor}

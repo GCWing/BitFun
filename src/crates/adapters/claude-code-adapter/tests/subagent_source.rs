@@ -3,8 +3,9 @@ use bitfun_product_domains::external_sources::{
     ExecutionDomainId, ExternalSourceContext, ExternalSourceScope,
 };
 use bitfun_product_domains::external_subagents::{
-    ExternalSubagentCompatibilityState, ExternalSubagentDiscoveryInput,
-    ExternalSubagentModelRequest, ExternalSubagentSourceProvider,
+    ExternalSubagentCompatibilityState, ExternalSubagentDiscoveryInput, ExternalSubagentMode,
+    ExternalSubagentModelProfileRequest, ExternalSubagentModelRequest,
+    ExternalSubagentSourceProvider,
 };
 use std::collections::BTreeSet;
 use std::fs;
@@ -91,8 +92,13 @@ fn nearest_project_agent_overrides_user_agent_without_field_merge() {
     assert_eq!(definition.prompt.expose(), "Nearest prompt");
     assert_eq!(definition.provenance.len(), 3);
     assert_eq!(
+        definition.mode,
+        ExternalSubagentMode::All,
+        "Claude Code agent files can be selected for a main session or delegated as a subagent"
+    );
+    assert_eq!(
         definition.requested_model,
-        ExternalSubagentModelRequest::Exact {
+        ExternalSubagentModelRequest::Reference {
             provider_hint: None,
             model_name: "claude-opus-4".to_string(),
         }
@@ -106,6 +112,66 @@ fn nearest_project_agent_overrides_user_agent_without_field_merge() {
             .collect::<Vec<_>>(),
         vec!["Glob", "Read"]
     );
+}
+
+#[test]
+fn explicit_inherit_is_distinct_from_an_opaque_model_reference() {
+    let fixture = Fixture::new();
+    write(
+        fixture.user_claude.join("agents/inherited.md"),
+        "---\nname: inherited\ndescription: Inherited\nmodel: inherit\ntools: [Read]\n---\nInherited prompt",
+    );
+    write(
+        fixture.user_claude.join("agents/named-inherit.md"),
+        "---\nname: named-inherit\ndescription: Named\nmodel: vendor/inherit\ntools: [Read]\n---\nNamed prompt",
+    );
+
+    let snapshot = fixture.discover(BTreeSet::new());
+    let inherited = snapshot
+        .definitions
+        .iter()
+        .find(|definition| definition.logical_id == "inherited")
+        .unwrap();
+    assert_eq!(
+        inherited.requested_model,
+        ExternalSubagentModelRequest::Inherit
+    );
+    let named = snapshot
+        .definitions
+        .iter()
+        .find(|definition| definition.logical_id == "named-inherit")
+        .unwrap();
+    assert_eq!(
+        named.requested_model,
+        ExternalSubagentModelRequest::Reference {
+            provider_hint: None,
+            model_name: "vendor/inherit".to_string(),
+        }
+    );
+}
+
+#[test]
+fn effort_is_preserved_as_a_reasoning_profile() {
+    let fixture = Fixture::new();
+    write(
+        fixture.user_claude.join("agents/reviewer.md"),
+        "---\nname: reviewer\ndescription: Reviewer\nmodel: inherit\neffort: xhigh\ntools: [Read]\n---\nReview carefully",
+    );
+
+    let definition = &fixture.discover(BTreeSet::new()).definitions[0];
+    assert_eq!(
+        definition.requested_model_profile,
+        Some(ExternalSubagentModelProfileRequest::ReasoningEffort {
+            value: "xhigh".to_string(),
+        })
+    );
+    assert_eq!(
+        definition.compatibility,
+        ExternalSubagentCompatibilityState::Ready
+    );
+    assert!(!definition
+        .diagnostic_codes
+        .contains(&"claude_agent_effort_not_imported".to_string()));
 }
 
 #[test]

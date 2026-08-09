@@ -9,9 +9,17 @@ Repository rule: **keep product logic platform-agnostic, then expose it through 
 ## Quick start
 
 1. Read `README.md` and `CONTRIBUTING.md` before architecture-sensitive changes.
-2. For desktop development, prefer `pnpm run desktop:dev` — it provides full hot-reload (Vite HMR + Rust auto-rebuild & restart). Use `pnpm run desktop:preview:debug` only when you need a faster cold-start for frontend-only iteration (Rust changes are not auto-rebuilt).
+2. Use the primary product loop below for normal development. Surface-specific
+   alternatives belong in the nearest app guide.
 3. After Rust file changes, prefer `pnpm run fmt:rs` to format only changed or staged `.rs` files. Use `cargo fmt` only when you intentionally want broader formatting coverage.
-4. After changes, run the smallest matching verification from the table below.
+4. After changes, use the nearest local `AGENTS.md` for the focused verification
+   command. The repository-level verification section below only covers
+   cross-cutting checks.
+5. Workspace Rust dependencies own compatible versions, not broad capability
+   unions. Each crate must select the dependency features it actually uses;
+   keep test-only features in dev-dependencies and attach feature-gated service
+   capabilities to the owning crate feature. `tokio/full` is forbidden in the
+   root workspace and workspace members.
 
 ## Layered Module Index
 
@@ -24,11 +32,11 @@ Keep crate dependencies inside each layer to the smallest set needed.
 
 | # | Layer | Path | Owns | Modules / entries | Layer doc |
 |---|---|---|---|---|---|
-| 1 | Interfaces and entrypoints | `src/apps/*`, `src/web-ui`, `src/mobile-web`, `BitFun-Installer`, `tests/e2e`, `src/crates/interfaces` | Product hosts, commands, UI entrypoints, protocol interfaces, and cross-surface tests | desktop, CLI, server, relay, Web UI, mobile web, installer, E2E, `acp` | nearest local `AGENTS.md`; [interfaces](src/crates/interfaces/AGENTS.md) |
-| 2 | Product assembly | `src/crates/assembly` | Compatibility exports, product capability selection, product-full wiring, adapter/service registration, and ecosystem-neutral source coordination | `core`, `external-sources`, `product-capabilities` | [AGENTS.md](src/crates/assembly/AGENTS.md) |
-| 3 | Adapters | `src/crates/adapters` | AI/transport/WebDriver/OpenCode protocol adapters and external-provider translation | `ai-adapters`, `opencode-adapter`, `transport`, `webdriver` | [AGENTS.md](src/crates/adapters/AGENTS.md) |
-| 4 | Services | `src/crates/services` | Reusable OS, filesystem, terminal, MCP, remote, git, watch, process, LSP plugin registry, session persistence primitives, MiniApp runtime IO, and network implementations | `services-core`, `services-integrations`, `relay-service`, `page-function-runtime`, `terminal` | [AGENTS.md](src/crates/services/AGENTS.md) |
-| 5 | Execution primitives | `src/crates/execution` | Portable agent, harness, stream, DeepReview policy/report, plugin host boundary, typed-service, tool-contract, tool-group, and tool-execution building blocks | `agent-runtime`, `agent-stream`, `tool-contracts`, `harness`, `plugin-runtime-host`, `runtime-services`, `tool-provider-groups`, `tool-execution` | [AGENTS.md](src/crates/execution/AGENTS.md) |
+| 1 | Interfaces and entrypoints | `src/apps/*`, `src/web-ui`, `src/mobile-web`, `BitFun-Installer`, `tests/e2e`, `src/crates/interfaces` | Product hosts, commands, UI entrypoints, protocol interfaces, and cross-surface tests | desktop, CLI, server, relay, Web UI, mobile web, installer, E2E, `acp`, `sdk-host` | nearest local `AGENTS.md`; [interfaces](src/crates/interfaces/AGENTS.md) |
+| 2 | Product assembly | `src/crates/assembly` | Compatibility exports, product capability selection, product-full wiring, immutable built-in Agent content, adapter/service registration, and ecosystem-neutral source coordination | `agent-content`, `core`, `external-sources`, `product-capabilities` | [AGENTS.md](src/crates/assembly/AGENTS.md) |
+| 3 | Adapters | `src/crates/adapters` | AI/transport/WebDriver protocol adapters, external AI work source adapters (OpenCode/Claude Code/Codex), and external-provider translation | `agent-runtime-ipc`, `ai-adapters`, `opencode-adapter`, `claude-code-adapter`, `codex-adapter`, `static-hook-support`, `transport`, `webdriver` | [AGENTS.md](src/crates/adapters/AGENTS.md) |
+| 4 | Services | `src/crates/services` | Reusable OS, filesystem, terminal, MCP, remote, git, watch, process, LSP plugin registry, session persistence primitives, MiniApp runtime IO, and network implementations | `services-core`, `services-integrations`, `miniapp-market-service`, `relay-service`, `page-function-runtime`, `terminal` | [AGENTS.md](src/crates/services/AGENTS.md) |
+| 5 | Execution primitives | `src/crates/execution` | Portable agent, harness, stream, DeepReview policy/report, plugin runtime client, typed-service, tool-contract, tool-group, and tool-execution building blocks | `agent-runtime`, `agent-stream`, `tool-contracts`, `harness`, `plugin-runtime-client`, `runtime-services`, `tool-provider-groups`, `tool-execution`, `tool-call-jsonrepair` | [AGENTS.md](src/crates/execution/AGENTS.md) |
 | 6 | Stable contracts and product domains | `src/crates/contracts` | Shared DTOs, event shapes, runtime ports, LSP protocol/plugin DTOs, and product domain contracts/policies | `core-types`, `events`, `runtime-ports`, `product-domains` | [AGENTS.md](src/crates/contracts/AGENTS.md) |
 
 Boundary rules:
@@ -45,50 +53,33 @@ Boundary rules:
 
 ## Common commands
 
-These are command references, not a pre-PR checklist. Use the Verification table
-to choose the smallest local precheck; broad suites and builds are mainly for CI
-reproduction or build-impacting changes.
+Keep this list to stable repository entry points. Surface- and crate-specific
+test commands belong in the nearest local `AGENTS.md` and must not be copied here.
 
 ```bash
-# Install
+# Setup and primary product loop
 pnpm install
-
-# Dev
 pnpm run desktop:dev               # full hot-reload: Vite HMR + Rust auto-rebuild & restart
-pnpm run desktop:preview:debug     # reuse pre-built binary + Vite HMR; no Rust auto-rebuild
-pnpm run dev:web                   # browser-only frontend
-pnpm run cli:dev                   # CLI runtime
-pnpm run cli:install               # build release + install bitfun (Windows/macOS/Linux; deprecated bitfun-cli included)
 
-# Check
-pnpm run fmt:rs                     # format only changed / staged Rust files
-pnpm run lint:web
-pnpm run type-check:web
-pnpm --dir src/mobile-web run type-check
-pnpm run i18n:contract:test          # i18n contract / resources only
-pnpm run i18n:audit                  # i18n contract / resources only
-pnpm run check:repo-hygiene
-pnpm run check:github-config
-cargo check --workspace
-
-# Test (prefer focused paths locally; broad suites are CI-backed)
-pnpm --dir src/web-ui run test:run      # broad suite; prefer focused paths locally
-cargo test --workspace                  # broad suite; CI-backed
-
-# Build (only for build-impacting changes or CI reproduction)
-cargo build -p bitfun-desktop           # build-impacting changes / CI reproduction
-pnpm run build:web                      # build-impacting changes / CI reproduction
-pnpm run build:mobile-web               # build-impacting changes / CI reproduction
-
-# Fast builds (manual build/debug flows)
-pnpm run desktop:build:fast           # debug build, no bundling
-pnpm run desktop:build:release-fast   # release with reduced LTO
-pnpm run desktop:build:nsis:fast      # Windows installer, release-fast profile
+# Repository checks
+pnpm run fmt:rs                    # format only changed / staged Rust files
+pnpm run check:repo-hygiene        # repository content and filename rules
+pnpm run check:github-config       # GitHub workflow/configuration rules
+pnpm run check:core-boundaries     # Cargo/module ownership boundaries
 ```
 
-For the full script list, see [`package.json`](package.json).
+For Web UI, mobile, CLI, Desktop, Installer, packaging, and focused test
+commands, use the nearest local guide. The full script registry remains in
+[`package.json`](package.json).
 
 ## Global rules
+
+### Process artifacts
+
+- Do not add or update files under `docs/superpowers/**`. Keep temporary
+  planning, design, and implementation-process artifacts local. Move durable
+  architecture or feature facts into the existing document for that area, and
+  put user-facing guidance in the owning app README.
 
 ### Internationalization
 
@@ -168,14 +159,22 @@ await api.invoke('your_command', { request: { ... } });
 - Do not add hard-coded limits or pattern checks to the agent loop as a first response to looping behavior, such as blocking repeated tool calls by string or count alone.
 - Excessive hard-coding turns the agent loop into a brittle workflow engine. Investigate the root cause first: tool behavior, model interaction, session context packaging, prompt/tool schema design, or state synchronization issues.
 
+### Agent hooks
+
+- BitFun implements the Codex hook contract, so <https://learn.chatgpt.com/docs/hooks> is the reference for events, payload fields, and the decision schema. Do not fork that contract. [`docs/features/agent-hooks.md`](docs/features/agent-hooks.md) ([中文](docs/features/agent-hooks.zh-CN.md)) covers only the BitFun-specific parts — file locations, the `app.hooks` gates, and the deviations table — and must be updated whenever a deviation is added or closed.
+- The portable engine (settings parsing, payload construction, process execution, decision merging) lives in `bitfun-agent-runtime::native_hooks`. `bitfun-core::native_hooks` owns config discovery, gating, and per-event dispatch helpers; dispatch sites call those helpers instead of executing hooks inline.
+- Three separate things share the word "hook": these native user hooks, the internal compiled-in `post_call_hooks`, and the read-only external hook catalog of other AI applications (`external_hooks`). Keep them separate.
+
 ## Architecture
 
 ### Product architecture guardrails
 
 For any `bitfun-core` decomposition, feature-boundary, dependency-boundary, or
-Rust build-speed refactor, read
+Rust build-speed refactor, read both
 [`docs/architecture/product-architecture.md`](docs/architecture/product-architecture.md)
-before editing. Keep this file as an entry point; put module-specific ownership
+and
+[`docs/architecture/rust-build-dependency-boundaries.md`](docs/architecture/rust-build-dependency-boundaries.md)
+before editing. Keep these files as entry points; put module-specific ownership
 details in the nearest module `AGENTS.md`.
 
 Repository-level decomposition rules:
@@ -186,6 +185,13 @@ Repository-level decomposition rules:
 - Moving runtime ownership requires a reviewed port/provider design, old-path
   compatibility, behavior equivalence tests, and explicit confirmation when a
   behavior boundary could change.
+
+For Agent Runtime deployment, multi-GUI/TUI/Remote instances, shared Session
+control, or process-topology changes, also read
+[`docs/architecture/agent-runtime-deployment-design.md`](docs/architecture/agent-runtime-deployment-design.md).
+Do not key Rust Runtime or Node/Bun Plugin Host processes by client, workspace,
+session, or plugin by default; use the responsible state module, execution and
+security conditions, and measured capacity.
 
 ### CLI product-line guardrails
 
@@ -243,24 +249,22 @@ cost-aware, and auditable.
 
 ## Verification
 
-Run the smallest local precheck that matches the touched files. CI is expected to
-cover full builds and broad test suites; run heavier local commands only when the
-change directly affects build, packaging, or CI cannot protect the path.
+Choose verification at the owner, not from a repository-wide test matrix:
 
-| Change type | Minimum verification |
-|---|---|
-| Frontend UI, state, or adapters without i18n resource/contract changes | `pnpm run type-check:web`, plus the nearest focused test when behavior changed |
-| Locale resource-only changes | `pnpm run i18n:audit` |
-| Locale contract or shared terms | `pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit` |
-| Web UI i18n runtime, namespace loading, or direct `i18nService.t(...)` usage | `pnpm run i18n:contract:test && pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts` |
-| Mobile web UI, state, pairing, disconnect, or reconnect behavior | `pnpm --dir src/mobile-web run type-check`; include manual pairing / reconnect notes when behavior changes |
-| Shared Rust logic in `core`, `transport`, adapters, or services | `cargo check --workspace`, plus the nearest focused `cargo test` when behavior changed |
-| Desktop integration, Tauri APIs, browser/computer-use, or desktop-only behavior | `cargo check -p bitfun-desktop`, plus focused desktop tests when behavior changed |
-| Behavior covered by desktop smoke/functional flows | Prefer the nearest focused E2E/smoke check; rely on CI for broad build/test coverage unless build behavior changed |
-| `src/crates/adapters/ai-adapters` | Relevant Rust checks above; add `cargo test -p bitfun-agent-stream` only when stream contracts changed |
-| Installer frontend or i18n runtime without packaging changes | `pnpm --dir BitFun-Installer run type-check` |
-| Installer Tauri/Rust changes | `cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml` |
-| Installer packaging, payload, install/uninstall flow, or native bundling | `pnpm run installer:build` |
+1. Read the nearest local `AGENTS.md` and run its narrowest command that covers
+   the changed behavior.
+2. Prefer one package, one test target or module filter, and the minimum feature
+   set. Do not use `product-full`, `all-features`, or a workspace-wide suite as a
+   shortcut.
+3. Run a repository check only when its contract changed: repository hygiene for
+   layout/content rules, GitHub config for workflow changes, and core boundaries
+   for Cargo features, dependency direction, or test-target layout.
+4. Leave broad builds, workspace suites, packaging, and platform matrices to
+   existing CI unless the change affects those paths or reproduces a CI failure.
+
+If a module lacks a useful focused command, add it to that module's guide rather
+than expanding this file. Do not pre-emptively align every module's test list;
+document a command only when a real workflow needs it.
 
 ## Agent-doc priority
 

@@ -1,9 +1,9 @@
 use bitfun_external_sources::ExternalSourceCoordinator;
 use bitfun_product_domains::external_sources::{
-    EcosystemId, ExecutionDomainId, ExpandedPromptCommand, ExternalSourceContext,
-    ExternalSourceHealth, ExternalSourceLifecycleState, ExternalSourceProviderError,
-    ExternalSourceRecord, ExternalSourceScope, ExternalWatchRoot, PromptCommandAvailability,
-    PromptCommandDefinition, PromptCommandProviderIdentity, PromptCommandProviderSnapshot,
+    EcosystemId, ExecutionDomainId, ExternalSourceContext, ExternalSourceHealth,
+    ExternalSourceLifecycleState, ExternalSourceProviderError, ExternalSourceRecord,
+    ExternalSourceScope, ExternalWatchRoot, PromptCommandAvailability, PromptCommandDefinition,
+    PromptCommandExpansion, PromptCommandProviderIdentity, PromptCommandProviderSnapshot,
     PromptCommandSourceProvider, SourceKey, SourceQualifiedCommandId,
 };
 use std::path::PathBuf;
@@ -40,6 +40,8 @@ fn command_named(
         name: name.to_string(),
         description: format!("Review from {provider_id}"),
         template: format!("{provider_id}: $ARGUMENTS"),
+        shell_preference: None,
+        execution_target: Default::default(),
         availability: PromptCommandAvailability::Available,
         content_version: format!("command-v{version}"),
     }
@@ -111,11 +113,14 @@ impl PromptCommandSourceProvider for FakeProvider {
 
     fn expand(
         &self,
+        _context: &ExternalSourceContext,
         command: &PromptCommandDefinition,
         arguments: &str,
-    ) -> Result<ExpandedPromptCommand, ExternalSourceProviderError> {
-        Ok(ExpandedPromptCommand {
+    ) -> Result<PromptCommandExpansion, ExternalSourceProviderError> {
+        Ok(PromptCommandExpansion {
             content: command.template.replace("$ARGUMENTS", arguments),
+            workspace_file_references: vec!["src/lib.rs".to_string()],
+            shell: None,
         })
     }
 
@@ -394,6 +399,7 @@ fn suppression_survives_refresh_and_expansion_dispatches_by_provider_identity() 
         .expand_command("review", "this change")
         .expect("expand active command");
     assert_eq!(expanded.content, "first: this change");
+    assert_eq!(expanded.workspace_file_references, ["src/lib.rs"]);
 
     coordinator
         .set_source_enabled(&second_key, true)

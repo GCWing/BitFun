@@ -11,6 +11,7 @@ integration, or stable product-domain contracts.
 
 | Crate | Responsibility | Local doc |
 |---|---|---|
+| `agent-content` | Dependency-free owner of immutable, release-bound built-in Agent prompt bytes and stable legacy prompt keys | [AGENTS.md](agent-content/AGENTS.md) |
 | `core` | `bitfun-core` compatibility facade and product-full assembly | [AGENTS.md](core/AGENTS.md) |
 | `external-sources` | Ecosystem-neutral lifecycle owner: capability-specific coordinators plus shared bounded discovery lanes | inherited |
 | `product-capabilities` | Product capability profiles, tool group facts, service requirements, and harness selections | [AGENTS.md](product-capabilities/AGENTS.md) |
@@ -32,6 +33,10 @@ integration, or stable product-domain contracts.
   `ExternalSourceControlPlane` may share scheduling, generation fencing, and
   provider isolation, but must not become a generic asset registry or a second
   product-state owner.
+- Keep immutable built-in Agent content separate from selection, rendering,
+  runtime state, user/project prompts, customization, and plugin discovery.
+  Content lookup is a product-full implementation detail; it must not become a
+  generic runtime registry or a new extension API.
 
 ## Dependency Boundaries
 

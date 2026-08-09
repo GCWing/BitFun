@@ -83,7 +83,10 @@ export interface CreateSessionOptions {
   agentType: string;
   title: string;
   instruction: string;
+  modelId?: string;
 }
+
+export type RemotePermissionMode = 'ask' | 'auto' | 'full_access';
 
 export interface PairRequest {
   public_key: string;
@@ -121,6 +124,7 @@ export interface RemoteCommand {
   tool_id?: string;
   model_id?: string;
   reason?: string;
+  mode?: RemotePermissionMode;
   answers?: Object;
   image_contexts?: RemoteImageContext[];
   images?: ImageAttachment[];
@@ -133,6 +137,10 @@ export interface PairChallengeResponse {
 export interface CommandStatusResponse {
   resp?: string;
   message?: string;
+}
+
+export interface PermissionModeResponse extends CommandStatusResponse {
+  mode?: RemotePermissionMode;
 }
 
 export interface WorkspaceInfoResponse extends CommandStatusResponse {
@@ -266,9 +274,28 @@ export interface RemoteModelConfig {
   context_window?: number;
   enabled: boolean;
   capabilities: string[];
-  enable_thinking_process?: boolean;
-  reasoning_mode?: string;
-  reasoning_effort?: string;
+  reasoning?: RemoteReasoningCatalogProjection;
+}
+
+export interface RemoteReasoningPresetDescriptor {
+  id: string;
+  label: string;
+  order: number;
+  actions: RemoteReasoningPresetAction[];
+  source: string;
+}
+
+export interface RemoteReasoningPresetAction {
+  type: string;
+  value?: string | number;
+  enabled?: boolean;
+  body?: Record<string, Object>;
+}
+
+export interface RemoteReasoningCatalogProjection {
+  status: string;
+  default_preset?: string;
+  presets?: RemoteReasoningPresetDescriptor[];
 }
 
 export interface RemoteDefaultModels {
@@ -426,4 +453,13 @@ export interface ReadFileResult {
   contentBase64: string;
   mimeType: string;
   size: number;
+}
+
+export interface ReadFileChunkResult {
+  name: string;
+  contentBase64: string;
+  offset: number;
+  chunkSize: number;
+  totalSize: number;
+  mimeType: string;
 }

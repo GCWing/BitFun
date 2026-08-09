@@ -447,6 +447,7 @@ impl SdkHostConnection {
                             requester_session_id: None,
                             reason: Some("sdk_host_connection_shutdown".to_string()),
                             wait_timeout_ms: Some(2_000),
+                            cancel_descendants: true,
                         }),
                     )
                     .await
@@ -753,6 +754,8 @@ impl SdkHostConnection {
                         .unwrap_or_else(|| DEFAULT_SESSION_NAME.to_string()),
                     agent_type: params.agent.unwrap_or_else(|| DEFAULT_AGENT.to_string()),
                     workspace_path: Some(workspace_path.clone()),
+                    project_workspace_path: None,
+                    execution_target: None,
                     workspace_id: None,
                     remote_connection_id: None,
                     remote_ssh_host: None,
@@ -877,6 +880,8 @@ impl SdkHostConnection {
                                 .clone()
                                 .unwrap_or_else(|| DEFAULT_AGENT.to_string()),
                             workspace_path: Some(workspace_path.clone()),
+                            project_workspace_path: None,
+                            execution_target: None,
                             workspace_id: None,
                             remote_connection_id: None,
                             remote_ssh_host: None,
@@ -980,6 +985,7 @@ impl SdkHostConnection {
                 message: params.prompt,
                 original_message: None,
                 turn_id: None,
+                execution: Default::default(),
                 agent_type,
                 workspace_path: Some(session.workspace_path.clone()),
                 remote_connection_id: session.remote_connection_id.clone(),
@@ -1247,6 +1253,7 @@ impl SdkHostConnection {
                     requester_session_id: None,
                     reason: Some("sdk_query_cancel".to_string()),
                     wait_timeout_ms: Some(2_000),
+                    cancel_descendants: true,
                 }),
         )
         .await
@@ -1527,12 +1534,7 @@ impl SdkHostConnection {
             let delivered = connection
                 .send_success(
                     request_id,
-                    SessionCreateResult {
-                        session_id: created.session_id,
-                        session_name: created.session_name,
-                        agent: created.agent_type,
-                        lifetime: SessionLifetime::Connection,
-                    },
+                    SessionCreateResult::from_runtime(created, SessionLifetime::Connection),
                 )
                 .await;
             if delivered {
@@ -1812,6 +1814,7 @@ impl SdkHostConnection {
                     requester_session_id: None,
                     reason: Some("sdk_host_fail_closed".to_string()),
                     wait_timeout_ms: Some(2_000),
+                    cancel_descendants: true,
                 }),
         )
         .await;
@@ -2154,11 +2157,15 @@ fn runtime_error_facts(error: &RuntimeError) -> (ErrorCode, bool, Option<Recover
             PortErrorKind::PermissionDenied => (ErrorCode::PermissionDenied, false, None),
             PortErrorKind::Cancelled => (ErrorCode::Cancelled, false, None),
             PortErrorKind::Timeout => (ErrorCode::Timeout, true, Some(RecoveryAction::Retry)),
+            PortErrorKind::SessionInUse => {
+                (ErrorCode::ActionRequired, true, Some(RecoveryAction::Retry))
+            }
             PortErrorKind::CleanupRequired => (
                 ErrorCode::CleanupRequired,
                 false,
                 Some(RecoveryAction::RestartHost),
             ),
+            PortErrorKind::OutcomeUnknown => (ErrorCode::ActionRequired, false, None),
             PortErrorKind::Backend => {
                 (ErrorCode::Internal, true, Some(RecoveryAction::RestartHost))
             }
@@ -2189,15 +2196,19 @@ fn runtime_error_kind(error: &RuntimeError) -> &'static str {
             PortErrorKind::PermissionDenied => "permission_denied",
             PortErrorKind::Cancelled => "cancelled",
             PortErrorKind::Timeout => "timeout",
+            PortErrorKind::SessionInUse => "session_in_use",
             PortErrorKind::CleanupRequired => "cleanup_required",
+            PortErrorKind::OutcomeUnknown => "outcome_unknown",
             PortErrorKind::Backend => "backend",
         },
         RuntimeError::MissingDialogTurnPort
         | RuntimeError::MissingLifecycleDeliveryPort
         | RuntimeError::MissingCancellationPort
+        | RuntimeError::MissingSessionLineagePort
         | RuntimeError::MissingSessionManagementPort
         | RuntimeError::MissingSessionRestorePort
         | RuntimeError::MissingLocalCommandTurnPort
+        | RuntimeError::MissingWorkspaceReferencePort
         | RuntimeError::MissingSessionTranscriptReader
         | RuntimeError::MissingThreadGoalManagementPort
         | RuntimeError::MissingInteractionResponsePort
@@ -2205,5 +2216,51 @@ fn runtime_error_kind(error: &RuntimeError) -> &'static str {
         | RuntimeError::MissingEventSource
         | RuntimeError::MissingPermissionRequestManager => "capability_unavailable",
         RuntimeError::PermissionRequest(_) => "permission_request",
+    }
+}
+
+#[cfg(test)]
+mod runtime_error_tests {
+    use super::{runtime_error_facts, runtime_error_kind};
+    use crate::protocol::{ErrorCode, RecoveryAction};
+    use bitfun_agent_runtime::sdk::{PortError, PortErrorKind, RuntimeError};
+
+    #[test]
+    fn session_writer_conflict_uses_existing_action_required_response() {
+        let error = RuntimeError::Port(PortError::new(
+            PortErrorKind::SessionInUse,
+            "Session is already open for writing: session-1",
+        ));
+
+        assert_eq!(
+            runtime_error_facts(&error),
+            (ErrorCode::ActionRequired, true, Some(RecoveryAction::Retry))
+        );
+        assert_eq!(runtime_error_kind(&error), "session_in_use");
+    }
+
+    #[test]
+    fn unknown_outcome_requires_an_authoritative_read_before_retry() {
+        let error = RuntimeError::Port(PortError::new(
+            PortErrorKind::OutcomeUnknown,
+            "inspect authoritative state",
+        ));
+
+        assert_eq!(
+            runtime_error_facts(&error),
+            (ErrorCode::ActionRequired, false, None)
+        );
+        assert_eq!(runtime_error_kind(&error), "outcome_unknown");
+    }
+
+    #[test]
+    fn missing_workspace_reference_port_uses_capability_unavailable_contract() {
+        let error = RuntimeError::MissingWorkspaceReferencePort;
+
+        assert_eq!(
+            runtime_error_facts(&error),
+            (ErrorCode::CapabilityUnavailable, false, None)
+        );
+        assert_eq!(runtime_error_kind(&error), "capability_unavailable");
     }
 }

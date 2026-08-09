@@ -5,6 +5,7 @@
 //! are not part of this contract and must remain inside the source adapter.
 
 use crate::external_hook_contributions::ExternalHookPoint;
+use crate::external_hook_import::PreparedExternalHookImport;
 use crate::external_sources::{
     validate_id, EcosystemId, ExternalSourceAssetKind, ExternalSourceContext,
     ExternalSourceContractError, ExternalSourceDiagnostic, ExternalSourceHealth,
@@ -266,6 +267,19 @@ pub trait ExternalHookSourceProvider: Send + Sync {
         &self,
         context: &ExternalSourceContext,
     ) -> Result<ExternalHookProviderSnapshot, ExternalSourceProviderError>;
+
+    fn prepare_import(
+        &self,
+        _context: &ExternalSourceContext,
+        _source: &SourceKey,
+        _expected_catalog_content_version: &str,
+    ) -> Result<PreparedExternalHookImport, ExternalSourceProviderError> {
+        Err(ExternalSourceProviderError::new(
+            "external_hook.import_unsupported",
+            "This Hook provider does not support command import",
+            false,
+        ))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -26,6 +26,7 @@ import {
   isStartupOverlayPresent,
 } from './startup/startupOverlay';
 import { ToolbarModeProvider } from '../flow_chat/components/toolbar-mode/ToolbarModeProvider';
+import type { AgentCompanionPetCommand } from './services/agentCompanionPetCommands';
 import AskUserAnnouncer from './components/NavPanel/AskUserAnnouncer';
 
 const log = createLogger('App');
@@ -647,11 +648,13 @@ function App() {
   }, []);
 
   useEffect(() => {
+    let disposed = false;
     let unlisten: (() => void) | null = null;
     void import('@tauri-apps/api/event')
       .then(({ listen }) => listen<{ sessionId?: string }>(
         'agent-companion://open-session',
         async event => {
+          if (disposed) return;
           const sessionId = event.payload?.sessionId;
           if (!sessionId) return;
 
@@ -670,13 +673,58 @@ function App() {
         },
       ))
       .then(removeListener => {
+        if (disposed) {
+          removeListener();
+          return;
+        }
         unlisten = removeListener;
       })
       .catch(error => {
-        log.warn('Failed to listen for Agent companion session open events', error);
+        if (!disposed) {
+          log.warn('Failed to listen for Agent companion session open events', error);
+        }
       });
 
     return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | null = null;
+    void import('@tauri-apps/api/event')
+      .then(({ listen }) => listen<AgentCompanionPetCommand>(
+        'agent-companion://pet-command',
+        async event => {
+          if (disposed) return;
+          try {
+            const { handleAgentCompanionPetCommand } = await import('./services/agentCompanionPetCommands');
+            await handleAgentCompanionPetCommand(event.payload);
+          } catch (error) {
+            log.warn('Failed to handle Agent companion pet command', {
+              commandType: event.payload?.type,
+              error,
+            });
+          }
+        },
+      ))
+      .then(removeListener => {
+        if (disposed) {
+          removeListener();
+          return;
+        }
+        unlisten = removeListener;
+      })
+      .catch(error => {
+        if (!disposed) {
+          log.warn('Failed to listen for Agent companion pet commands', error);
+        }
+      });
+
+    return () => {
+      disposed = true;
       unlisten?.();
     };
   }, []);
@@ -773,6 +821,54 @@ function App() {
         });
       } catch (error) {
         log.warn('Failed to check previous unexpected exit status', error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [interactiveShellReady, t]);
+
+  useEffect(() => {
+    if (!interactiveShellReady) {
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { configAPI } = await import('@/infrastructure/api');
+        const validation = await configAPI.validateConfig();
+        const recoveryDiagnostics = (validation.diagnostics || []).filter(diagnostic =>
+          diagnostic.code === 'CONFIG_DEFAULT_RECOVERY' ||
+          diagnostic.code === 'CONFIG_SHAPE_REPAIRED' ||
+          diagnostic.code === 'INVALID_MODEL_DISABLED' ||
+          diagnostic.code === 'MODEL_FIELD_NOT_APPLICABLE' ||
+          diagnostic.code === 'MODEL_REFERENCE_REPAIRED'
+        );
+        if (cancelled || recoveryDiagnostics.length === 0) {
+          return;
+        }
+        const recoveryKey = `bitfun:config-recovery-notice:${recoveryDiagnostics
+          .map(diagnostic => `${diagnostic.code}:${diagnostic.path}`)
+          .join('|')}`;
+        if (sessionStorage.getItem(recoveryKey) === 'shown') {
+          return;
+        }
+        sessionStorage.setItem(recoveryKey, 'shown');
+        notificationService.warning(t('logging.configRecovery.message', {
+          count: recoveryDiagnostics.length,
+        }), {
+          title: t('logging.configRecovery.title'),
+          duration: 0,
+          metadata: {
+            source: 'config-startup-recovery',
+            diagnosticCodes: recoveryDiagnostics.map(diagnostic => diagnostic.code),
+            diagnosticPaths: recoveryDiagnostics.map(diagnostic => diagnostic.path),
+          },
+        });
+      } catch (error) {
+        log.warn('Failed to check configuration recovery status', error);
       }
     })();
 

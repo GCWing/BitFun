@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
+import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 import { FALLBACK_REVIEW_TEAM_DEFINITION } from './reviewTeamService';
 import { EXTRA_MEMBER_DEFAULTS } from './review-team/defaults';
 
@@ -40,7 +40,6 @@ const REVIEW_TEAM_FLOW_CHAT_KEYS = [
   'deepReviewConsent.strategyLabels.quick',
   'deepReviewConsent.strategyLabels.normal',
   'deepReviewConsent.strategyLabels.deep',
-  'deepReviewConsent.callLimit',
   'toolCards.taskTool.reviewCoverageLabel',
   'toolCards.taskTool.reviewCoverageDescription',
   'toolCards.codeReview.runManifest.recommendedStrategy',
@@ -60,36 +59,44 @@ const REVIEW_COPY_EXPECTATIONS: Record<
   Locale,
   {
     conditionalJudgeMarker: string;
+    additionalCheckLabel: string;
     dynamicConsentMarkers: string[];
     extraReviewRole: string;
     forbiddenConsentPhrases: string[];
+    forbiddenVisiblePhrases: string[];
     reviewConsentTitle: string;
-    reviewBudgetLabel: string;
+    reviewDepthLabel: string;
   }
 > = {
   'en-US': {
     conditionalJudgeMarker: 'only when',
-    dynamicConsentMarkers: ['may add', 'review budget'],
-    extraReviewRole: 'Additional Review Check',
-    forbiddenConsentPhrases: ['selected additional independent checks', 'review agent run'],
+    additionalCheckLabel: 'Additional check',
+    dynamicConsentMarkers: ['additional checks', 'evidence'],
+    extraReviewRole: 'User-requested check',
+    forbiddenConsentPhrases: ['focused check', 'review agent run'],
+    forbiddenVisiblePhrases: ['Focused check', 'Review check', 'focused independent'],
     reviewConsentTitle: 'Start this review?',
-    reviewBudgetLabel: 'Review budget',
+    reviewDepthLabel: 'Review depth',
   },
   'zh-CN': {
     conditionalJudgeMarker: '只在',
-    dynamicConsentMarkers: ['按需', '审核预算'],
-    extraReviewRole: '额外审核检查',
-    forbiddenConsentPhrases: ['选择了额外的独立检查', '审查代理'],
+    additionalCheckLabel: '补充检查',
+    dynamicConsentMarkers: ['补充检查', '证据'],
+    extraReviewRole: '用户指定的检查',
+    forbiddenConsentPhrases: ['专项检查', '审查代理'],
+    forbiddenVisiblePhrases: ['专项检查', '专项复核', '审核检查'],
     reviewConsentTitle: '开始本次审核？',
-    reviewBudgetLabel: '审核预算',
+    reviewDepthLabel: '审核深度',
   },
   'zh-TW': {
     conditionalJudgeMarker: '只在',
-    dynamicConsentMarkers: ['視需要', '審核預算'],
-    extraReviewRole: '額外審核檢查',
-    forbiddenConsentPhrases: ['選擇了額外的獨立檢查', '審查代理'],
+    additionalCheckLabel: '補充檢查',
+    dynamicConsentMarkers: ['補充檢查', '證據'],
+    extraReviewRole: '使用者指定的檢查',
+    forbiddenConsentPhrases: ['專項檢查', '審查代理'],
+    forbiddenVisiblePhrases: ['專項檢查', '專項複核', '審核檢查'],
     reviewConsentTitle: '開始本次審核？',
-    reviewBudgetLabel: '審核預算',
+    reviewDepthLabel: '審核深度',
   },
 };
 
@@ -153,6 +160,9 @@ describe('review team locale completeness', () => {
       expect(getPathValue(scenesAgents, 'reviewTeams.extraReviewer.role')).toBe(
         REVIEW_COPY_EXPECTATIONS[locale].extraReviewRole,
       );
+      expect(getPathValue(scenesAgents, 'reviewTeams.members.worker.funName')).toBe(
+        REVIEW_COPY_EXPECTATIONS[locale].additionalCheckLabel,
+      );
       expectNonEmptyLocaleString(
         scenesAgents,
         'reviewTeams.extraReviewer.description',
@@ -187,7 +197,6 @@ describe('review team locale completeness', () => {
       const consentCopy = [
         'deepReviewConsent.body',
         'deepReviewConsent.cost',
-        'deepReviewConsent.callLimit',
         'deepReviewConsent.strategySummaries.normal',
         'deepReviewConsent.strategySummaries.deep',
       ].map((path) => String(getPathValue(flowChat, path) ?? '')).join('\n');
@@ -197,7 +206,13 @@ describe('review team locale completeness', () => {
         expectation.reviewConsentTitle,
       );
       expect(getPathValue(flowChat, 'deepReviewConsent.costLabel')).toBe(
-        expectation.reviewBudgetLabel,
+        expectation.reviewDepthLabel,
+      );
+      expect(getPathValue(flowChat, 'toolCards.taskTool.reviewCoverageLabel')).toBe(
+        expectation.additionalCheckLabel,
+      );
+      expect(getPathValue(flowChat, 'toolCards.codeReview.coverageSources.focusedCheck')).toBe(
+        expectation.additionalCheckLabel,
       );
       for (const marker of expectation.dynamicConsentMarkers) {
         expect(consentCopy).toContain(marker);
@@ -208,8 +223,54 @@ describe('review team locale completeness', () => {
     },
   );
 
+  it.each(REVIEW_TEAM_LOCALES)(
+    'keeps additional-check terminology consistent across user-visible review copy in %s',
+    (locale) => {
+      const flowChat = readLocaleJson(locale, 'flow-chat.json');
+      const scenesAgents = readLocaleJson(locale, 'scenes/agents.json');
+      const settings = readLocaleJson(locale, 'settings/review.json');
+      const visibleCopy = [
+        'deepReviewConsent.body',
+        'deepReviewConsent.cost',
+        'deepReviewConsent.readonly',
+        'deepReviewConsent.strategySummaries.normal',
+        'deepReviewConsent.strategySummaries.deep',
+        'deepReviewConsent.skippedSummary',
+        'deepReviewConsent.skippedGroupTitle',
+        'toolCards.taskTool.reviewCoverageLabel',
+        'toolCards.taskTool.reviewCoverageDescription',
+        'toolCards.taskTool.reviewCheckUnavailable',
+        'toolCards.codeReview.runManifest.estimatedCalls',
+        'toolCards.codeReview.runManifest.reducedCoverageSummary',
+        'toolCards.codeReview.reliabilityStatus.context_pressure.detail',
+        'toolCards.codeReview.coverageSources.focusedCheck',
+      ].map((path) => String(getPathValue(flowChat, path) ?? ''));
+      visibleCopy.push(
+        ...[
+          'agentsOverview.form.reviewToolsHint',
+          'reviewTeams.members.worker.funName',
+          'reviewTeams.members.worker.role',
+          'reviewTeams.members.worker.description',
+          'reviewTeams.extraReviewer.role',
+          'reviewTeams.extraReviewer.description',
+        ].map((path) => String(getPathValue(scenesAgents, path) ?? '')),
+        ...[
+          'capacity.description',
+          'capacity.maxParallelReviewers.label',
+          'capacity.maxParallelReviewers.description',
+        ].map((path) => String(getPathValue(settings, path) ?? '')),
+      );
+
+      const joined = visibleCopy.join('\n');
+      expect(joined).toContain(REVIEW_COPY_EXPECTATIONS[locale].additionalCheckLabel);
+      for (const phrase of REVIEW_COPY_EXPECTATIONS[locale].forbiddenVisiblePhrases) {
+        expect(joined.toLowerCase()).not.toContain(phrase.toLowerCase());
+      }
+    },
+  );
+
   it('keeps review accent semantics limited to active generic roles', () => {
-    expect(Object.keys(UI_EXCEPTION_ACCENTS.reviewTeam).sort()).toEqual([
+    expect(Object.keys(APPEARANCE_DOMAIN_TOKENS.reviewTeam).sort()).toEqual([
       'judge',
       'memberDefault',
       'worker',
@@ -243,17 +304,17 @@ describe('review team locale completeness', () => {
     );
 
     expect(worker).toMatchObject({
-      funName: 'Focused Review',
-      roleName: 'On-demand Review Check',
+      funName: 'Additional check',
+      roleName: 'On-demand check',
     });
     expect(judge).toMatchObject({
-      funName: 'Independent Review Check',
-      roleName: 'Review Quality Check',
+      funName: 'Independent validation',
+      roleName: 'Quality check',
     });
     expect(FALLBACK_REVIEW_TEAM_DEFINITION.description).toBe(
-      'One main review that can request focused independent checks when more evidence is needed.',
+      'One review that can add checks when a specific concern needs more evidence.',
     );
-    expect(EXTRA_MEMBER_DEFAULTS.roleName).toBe('Additional Review Check');
+    expect(EXTRA_MEMBER_DEFAULTS.roleName).toBe('User-requested check');
 
     const userFacingCopy = [
       worker?.description,
@@ -262,7 +323,7 @@ describe('review team locale completeness', () => {
       ...Object.values(FALLBACK_REVIEW_TEAM_DEFINITION.strategyProfiles)
         .map((profile) => profile.summary),
     ].join('\n');
-    expect(userFacingCopy).not.toMatch(/\b(worker|lens|specialist|inspector)\b/i);
+    expect(userFacingCopy).not.toMatch(/\b(worker|lens|specialist|inspector|focused)\b/i);
     expect(userFacingCopy).not.toMatch(/\bone (optional|justified|narrowly focused)\b/i);
   });
 });

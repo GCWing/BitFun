@@ -101,3 +101,46 @@ export function createTauriCommandError(
 export function isTauriCommandError(error: any): error is TauriCommandError {
   return error && error.isTauriCommandError === true;
 }
+
+const SESSION_IN_USE_PREFIX = 'session_in_use:';
+const OUTCOME_UNKNOWN_PREFIX = 'outcome_unknown:';
+
+function hasStableErrorPrefix(error: unknown, prefix: string): boolean {
+  const pending: unknown[] = [error];
+  const seen = new Set<object>();
+
+  for (let inspected = 0; pending.length > 0 && inspected < 12; inspected += 1) {
+    const current = pending.shift();
+    if (typeof current === 'string') {
+      if (current.trimStart().startsWith(prefix)) return true;
+      continue;
+    }
+    if (!current || typeof current !== 'object' || seen.has(current)) continue;
+    seen.add(current);
+
+    const candidate = current as {
+      message?: unknown;
+      originalError?: unknown;
+      context?: { originalError?: unknown };
+      details?: { originalError?: unknown };
+    };
+    pending.push(
+      candidate.message,
+      candidate.originalError,
+      candidate.context?.originalError,
+      candidate.details?.originalError,
+    );
+  }
+
+  return false;
+}
+
+/** Recognizes the stable Desktop/Peer error code without parsing localized prose. */
+export function isSessionInUseError(error: unknown): boolean {
+  return hasStableErrorPrefix(error, SESSION_IN_USE_PREFIX);
+}
+
+/** Identifies a mutation that must be read back before the user retries it. */
+export function isOutcomeUnknownError(error: unknown): boolean {
+  return hasStableErrorPrefix(error, OUTCOME_UNKNOWN_PREFIX);
+}

@@ -1,7 +1,7 @@
 # BitFun HarmonyOS
 
-Native HarmonyOS phone client for BitFun. The application provides general
-chat and remote control of BitFun desktop sessions.
+Native HarmonyOS client for BitFun. The application provides general chat and
+remote control of BitFun desktop sessions on phone and tablet devices.
 
 ## Project Layout
 
@@ -29,4 +29,4 @@ Signing configuration is intentionally not stored in the repository. Configure
 a local signing identity in DevEco Studio when installing the app on a device.
 
 The current project targets HarmonyOS `6.1.1(24)` and supports
-`6.0.1(21)` or newer on phone devices.
+`6.0.1(21)` or newer on phone and tablet devices.

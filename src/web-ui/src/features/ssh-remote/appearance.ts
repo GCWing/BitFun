@@ -1,0 +1,30 @@
+import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
+
+export const sshRemoteAppearanceDescriptor: AppearanceSurfaceDescriptor = {
+  id: 'ssh-remote',
+  parts: [
+    { id: 'connection' },
+    { id: 'connectionError' },
+    { id: 'connectionContent' },
+    { id: 'connectionSection' },
+    { id: 'connectionList' },
+    { id: 'connectionItem' },
+    { id: 'connectionForm' },
+    { id: 'connectionActions' },
+    { id: 'browserOverlay' },
+    { id: 'browser' },
+    { id: 'browserHeader' },
+    { id: 'breadcrumb' },
+    { id: 'toolbar' },
+    { id: 'content' },
+    { id: 'footer' },
+    { id: 'authDialog' },
+    { id: 'authDescription' },
+    { id: 'authField' },
+    { id: 'authActions' },
+    { id: 'confirmDialog' },
+    { id: 'confirmWarning' },
+    { id: 'confirmMessage' },
+    { id: 'confirmActions' },
+  ],
+};

@@ -5,14 +5,14 @@
 @use '../../styles/flowchat-markdown-table-vars' as markdownTable;
 
 .markdown-renderer {
-  --markdown-font-sans: var(--font-family-sans);
+  --markdown-font-sans: var(--bf-appearance-token-font-family-sans);
   --markdown-font-heading: var(--markdown-font-sans);
-  --markdown-font-size: var(--flowchat-font-size-base);
-  --markdown-font-size-sm: var(--flowchat-font-size-sm);
-  --markdown-code-font-size: var(--flowchat-code-font-size);
-  --markdown-line-height: var(--flowchat-text-line-height);
-  --markdown-support-line-height: var(--flowchat-support-line-height);
-  --markdown-code-line-height: var(--flowchat-code-line-height);
+  --markdown-font-size: var(--bf-appearance-token-flowchat-font-size-base);
+  --markdown-font-size-sm: var(--bf-appearance-token-flowchat-font-size-sm);
+  --markdown-code-font-size: var(--bf-appearance-token-flowchat-code-font-size);
+  --markdown-line-height: var(--bf-appearance-token-flowchat-text-line-height);
+  --markdown-support-line-height: var(--bf-appearance-token-flowchat-support-line-height);
+  --markdown-code-line-height: var(--bf-appearance-token-flowchat-code-line-height);
   --markdown-block-gap: #{markdown.$block-gap};
   --markdown-paragraph-gap: #{markdown.$paragraph-gap};
   --markdown-list-item-gap: #{markdown.$list-item-gap};
@@ -24,18 +24,18 @@
   --markdown-code-block-pad-x: #{markdown.$code-block-pad-x};
   --markdown-table-cell-pad-y: #{markdown.$table-cell-pad-y};
   --markdown-table-cell-pad-x: #{markdown.$table-cell-pad-x};
-  --markdown-primary-color: var(--color-accent-600);
+  --markdown-primary-color: var(--bf-appearance-token-color-accent-600);
   --private-markdown-inline-code-tint-rgb: 168, 180, 200;
   --private-markdown-inline-code-hover-tint-rgb: 197, 208, 226;
-  --private-markdown-inline-code-text-light: var(--color-text-primary);
-  --private-markdown-inline-code-hover-text-light: var(--color-text-primary);
-  --private-markdown-code-bg-light: color-mix(in srgb, var(--color-static-white) 92%, var(--color-bg-primary));
-  --private-markdown-code-toolbar-bg-light: color-mix(in srgb, var(--color-static-white) 86%, var(--color-bg-primary));
-  --markdown-code-bg-elevated: color-mix(in srgb, var(--color-bg-primary) 92%, var(--color-static-white) 8%);
-  --markdown-inline-code-bg: rgba(var(--color-static-white-rgb), 0.045);
-  --markdown-inline-code-border: var(--color-overlay-white-08);
-  --markdown-pre-bg: var(--color-bg-primary);
-  --markdown-pre-border: var(--border-subtle);
+  --private-markdown-inline-code-text-light: var(--bf-appearance-token-color-text-primary);
+  --private-markdown-inline-code-hover-text-light: var(--bf-appearance-token-color-text-primary);
+  --private-markdown-code-bg-light: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 92%, var(--bf-appearance-token-color-bg-primary));
+  --private-markdown-code-toolbar-bg-light: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 86%, var(--bf-appearance-token-color-bg-primary));
+  --markdown-code-bg-elevated: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 92%, var(--bf-appearance-token-color-static-white) 8%);
+  --markdown-inline-code-bg: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.045);
+  --markdown-inline-code-border: var(--bf-appearance-token-color-overlay-white-08);
+  --markdown-pre-bg: var(--bf-appearance-token-color-bg-primary);
+  --markdown-pre-border: var(--bf-appearance-token-border-subtle);
   --markdown-blockquote-bg: #{markdownCode.$bq-bg};
   --markdown-blockquote-border: #{markdownCode.$bq-border};
   --markdown-table-border: #{markdownTable.$border};
@@ -53,7 +53,7 @@
   max-width: 100%;
   margin: 0;
   padding: 0;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   font-family: var(--markdown-font-sans);
   font-size: var(--markdown-font-size);
   line-height: var(--markdown-line-height);
@@ -62,7 +62,7 @@
   word-wrap: break-word;
   cursor: text;
   user-select: text;
-  animation: fadeIn var(--motion-base) ease-out;
+  animation: fadeIn var(--bf-appearance-token-motion-base) ease-out;
 }
 
 .markdown-renderer > * {
@@ -83,7 +83,7 @@
 
 .markdown-renderer p {
   display: block;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   font-size: inherit;
   line-height: inherit;
 }
@@ -101,9 +101,9 @@
   margin: var(--markdown-heading-gap-before) 0 var(--markdown-heading-gap-after);
   padding: 0;
   border: 0;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   font-family: var(--markdown-font-heading);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--bf-appearance-token-font-weight-semibold);
   letter-spacing: 0;
   line-height: var(--markdown-support-line-height);
 }
@@ -128,11 +128,11 @@
 
 .markdown-renderer h4,
 .markdown-renderer h5 {
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
 }
 
 .markdown-renderer h6 {
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 .markdown-renderer p + h1,
@@ -154,7 +154,7 @@
 .markdown-renderer ol {
   margin: 0;
   padding-left: 1.35rem;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   font-size: inherit;
   line-height: inherit;
 }
@@ -195,14 +195,14 @@
 
 .markdown-renderer ul > li::marker,
 .markdown-renderer ol > li::marker {
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   font-size: 1em;
   font-weight: 400;
 }
 
 .markdown-renderer code {
   display: inline;
-  font-family: var(--font-family-mono);
+  font-family: var(--bf-appearance-token-font-family-mono);
 }
 
 .markdown-renderer .inline-code {
@@ -211,8 +211,8 @@
   border: 1px solid var(--markdown-inline-code-border);
   border-radius: 5px;
   background: var(--markdown-inline-code-bg);
-  color: color-mix(in srgb, var(--color-text-primary) 88%, rgb(var(--private-markdown-inline-code-tint-rgb)) 12%);
-  font-family: var(--font-family-mono);
+  color: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 88%, rgb(var(--private-markdown-inline-code-tint-rgb)) 12%);
+  font-family: var(--bf-appearance-token-font-family-mono);
   font-size: 0.88em;
   font-weight: 500;
   line-height: var(--markdown-support-line-height);
@@ -225,9 +225,9 @@
 }
 
 .markdown-renderer .inline-code:hover {
-  background: rgba(var(--color-static-white-rgb), 0.075);
-  border-color: rgba(var(--color-static-white-rgb), 0.14);
-  color: color-mix(in srgb, var(--color-text-primary) 92%, rgb(var(--private-markdown-inline-code-hover-tint-rgb)) 8%);
+  background: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.075);
+  border-color: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.14);
+  color: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 92%, rgb(var(--private-markdown-inline-code-hover-tint-rgb)) 8%);
 }
 
 .markdown-renderer pre {
@@ -235,10 +235,10 @@
   padding: var(--markdown-code-block-pad-y) var(--markdown-code-block-pad-x);
   overflow: auto;
   border: 1px solid var(--markdown-pre-border);
-  border-radius: var(--flowchat-card-radius);
+  border-radius: var(--bf-appearance-token-flowchat-card-radius);
   background: var(--markdown-pre-bg);
   box-shadow: none;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   font-size: var(--markdown-code-font-size);
   line-height: var(--markdown-code-line-height);
   transition: border-color 0.2s ease;
@@ -259,7 +259,7 @@
   background: transparent;
   box-shadow: none;
   color: inherit;
-  font-family: var(--font-family-mono);
+  font-family: var(--bf-appearance-token-font-family-mono);
   font-size: inherit !important;
   font-weight: inherit;
   line-height: inherit;
@@ -278,7 +278,7 @@
   margin: var(--markdown-code-block-gap) 0;
   overflow: hidden;
   border: 1px solid var(--markdown-pre-border);
-  border-radius: var(--flowchat-card-radius);
+  border-radius: var(--bf-appearance-token-flowchat-card-radius);
   background: var(--markdown-code-bg-elevated);
   box-shadow: none;
   transition: border-color 0.2s ease;
@@ -292,21 +292,21 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--flowchat-control-gap);
+  gap: var(--bf-appearance-token-flowchat-control-gap);
   min-height: 1.86rem;
   padding: 0.26rem 0.45rem 0.26rem 0.62rem;
   flex-shrink: 0;
   border-bottom: 1px solid var(--markdown-pre-border);
-  background: color-mix(in srgb, var(--color-bg-primary) 94%, var(--color-static-white) 6%);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 94%, var(--bf-appearance-token-color-static-white) 6%);
 }
 
 .markdown-renderer .code-block-lang {
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   font-family: var(--markdown-font-sans);
-  font-size: var(--flowchat-font-size-xxs);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
   font-weight: 600;
   letter-spacing: 0.04em;
-  line-height: var(--flowchat-compact-line-height);
+  line-height: var(--bf-appearance-token-flowchat-compact-line-height);
   text-transform: uppercase;
   user-select: none;
 }
@@ -314,6 +314,7 @@
 .markdown-renderer .code-block-body {
   min-width: 0;
   overflow-x: auto;
+  background: var(--markdown-pre-bg);
 }
 
 .markdown-renderer .code-block-wrapper pre[class*="language-"],
@@ -322,7 +323,7 @@
   padding: var(--markdown-code-block-pad-y) var(--markdown-code-block-pad-x) !important;
   border: none !important;
   border-radius: 0 !important;
-  background: var(--markdown-pre-bg) !important;
+  background: transparent !important;
   box-shadow: none !important;
   font-size: var(--markdown-code-font-size) !important;
   line-height: var(--markdown-code-line-height) !important;
@@ -330,9 +331,9 @@
 
 .markdown-renderer .code-block-wrapper pre code,
 .markdown-renderer .code-block-wrapper code[style] {
-  background: var(--markdown-pre-bg) !important;
+  background: transparent !important;
   border: none !important;
-  font-family: var(--font-family-mono) !important;
+  font-family: var(--bf-appearance-token-font-family-mono) !important;
   font-size: var(--markdown-code-font-size) !important;
   line-height: var(--markdown-code-line-height) !important;
 }
@@ -350,7 +351,7 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   cursor: pointer;
   opacity: 0.9;
   transition: color 0.2s ease, background-color 0.2s ease, opacity 0.2s ease;
@@ -361,7 +362,7 @@
 }
 
 .markdown-renderer .copy-button:hover {
-  background: var(--color-overlay-white-08);
+  background: var(--bf-appearance-token-color-overlay-white-08);
   color: var(--markdown-primary-color);
 }
 
@@ -370,7 +371,7 @@
 }
 
 .markdown-renderer .copy-button.copy-success {
-  color: var(--color-success);
+  color: var(--bf-appearance-token-color-success);
 }
 
 .markdown-renderer pre:has(.code-block-wrapper),
@@ -397,7 +398,7 @@
   border-left: 3px solid var(--markdown-blockquote-border);
   border-radius: 0 6px 6px 0;
   background: var(--markdown-blockquote-bg);
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   font-style: normal;
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
@@ -415,13 +416,13 @@
 .markdown-renderer details {
   margin: calc(var(--markdown-block-gap) * 1.2) 0;
   padding: 0.62rem 0.72rem;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--flowchat-card-radius);
-  background: var(--color-overlay-white-04);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: var(--bf-appearance-token-flowchat-card-radius);
+  background: var(--bf-appearance-token-color-overlay-white-04);
 }
 
 .markdown-renderer summary {
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   cursor: pointer;
   font-weight: 600;
   line-height: var(--markdown-support-line-height);
@@ -437,7 +438,7 @@
   padding: 0;
   border: 0;
   border-radius: 1px;
-  background: color-mix(in srgb, var(--color-text-muted) 26%, transparent);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 26%, transparent);
 }
 
 /* inline-block so multiple badges / linked images can sit on one row (shields, etc.) */
@@ -448,7 +449,7 @@
   height: auto;
   margin: 0.35rem 0.25rem;
   vertical-align: middle;
-  border-radius: var(--flowchat-card-radius);
+  border-radius: var(--bf-appearance-token-flowchat-card-radius);
 }
 
 /* README-style centered badge rows: each badge is often its own <p> inside a div */
@@ -476,7 +477,7 @@
 }
 
 .markdown-renderer .markdown-image--error {
-  outline: 1px dashed color-mix(in srgb, var(--color-error) 35%, transparent);
+  outline: 1px dashed color-mix(in srgb, var(--bf-appearance-token-color-error) 35%, transparent);
 }
 
 .markdown-renderer .katex-display {
@@ -489,7 +490,7 @@
   margin: calc(var(--markdown-block-gap) * 1.2) 0;
   overflow: auto;
   border: 1px solid var(--markdown-table-border);
-  border-radius: var(--flowchat-card-radius);
+  border-radius: var(--bf-appearance-token-flowchat-card-radius);
   background: var(--markdown-table-surface);
   box-shadow: var(--markdown-table-shadow);
 }
@@ -506,7 +507,7 @@
 .markdown-renderer .table-wrapper td {
   padding: var(--markdown-table-cell-pad-y) var(--markdown-table-cell-pad-x);
   border-bottom: 1px solid var(--markdown-table-cell-border);
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   text-align: left;
   vertical-align: top;
 }
@@ -547,7 +548,7 @@
   padding: 0;
   border: none;
   background: none;
-  color: var(--flowchat-link-color);
+  color: var(--bf-appearance-token-flowchat-link-color);
   cursor: pointer;
   font: inherit;
   text-decoration: underline;
@@ -559,7 +560,7 @@
 .markdown-renderer .file-link:hover,
 .markdown-renderer .visualization-link:hover,
 .markdown-renderer .tab-link:hover {
-  color: var(--flowchat-link-hover-color);
+  color: var(--bf-appearance-token-flowchat-link-hover-color);
   text-decoration-thickness: 1.5px;
 }
 
@@ -575,18 +576,18 @@
   max-width: min(520px, 80vw);
   overflow-wrap: anywhere;
   text-align: left;
-  font-family: var(--font-family-mono);
+  font-family: var(--bf-appearance-token-font-family-mono);
   font-size: 0.78rem;
-  line-height: var(--flowchat-support-line-height);
+  line-height: var(--bf-appearance-token-flowchat-support-line-height);
 }
 
 .markdown-renderer strong {
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   font-weight: 650;
 }
 
 .markdown-renderer em {
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   font-style: italic;
 }
 
@@ -605,15 +606,15 @@
   will-change: auto;
 }
 
-:root[data-theme="light"] .markdown-renderer,
-:root[data-theme-type="light"] .markdown-renderer,
-[data-theme-type="light"] .markdown-renderer,
+:root[data-bf-appearance-mode="light"] .markdown-renderer,
+:root[data-bf-appearance-mode="light"] .markdown-renderer,
+[data-bf-appearance-mode="light"] .markdown-renderer,
 .light .markdown-renderer {
   --markdown-code-bg-elevated: var(--private-markdown-code-bg-light);
-  --markdown-inline-code-bg: rgba(var(--color-static-black-rgb), 0.05);
-  --markdown-inline-code-border: var(--color-overlay-black-12);
+  --markdown-inline-code-bg: rgba(var(--bf-appearance-token-color-static-black-rgb), 0.05);
+  --markdown-inline-code-border: var(--bf-appearance-token-color-overlay-black-12);
   --markdown-pre-bg: var(--private-markdown-code-bg-light);
-  --markdown-pre-border: var(--color-overlay-slate-12);
+  --markdown-pre-border: var(--bf-appearance-token-color-overlay-slate-12);
   --markdown-blockquote-bg: #{markdownCode.$bq-bg-light};
   --markdown-blockquote-border: #{markdownCode.$bq-border-light};
   --markdown-table-border: #{markdownTable.$border-light};
@@ -632,27 +633,27 @@
   }
 
   .inline-code:hover {
-    background: var(--color-overlay-black-08);
-    border-color: rgba(var(--color-static-black-rgb), 0.18);
+    background: var(--bf-appearance-token-color-overlay-black-08);
+    border-color: rgba(var(--bf-appearance-token-color-static-black-rgb), 0.18);
     color: var(--private-markdown-inline-code-hover-text-light);
   }
 
   .code-block-toolbar {
     background: var(--private-markdown-code-toolbar-bg-light);
-    border-bottom-color: var(--color-overlay-slate-12);
+    border-bottom-color: var(--bf-appearance-token-color-overlay-slate-12);
   }
 
   .copy-button {
-    color: var(--color-overlay-black-50);
+    color: var(--bf-appearance-token-color-overlay-black-50);
   }
 
   .copy-button:hover {
-    background: var(--color-overlay-slate-08);
-    color: var(--flowchat-link-color);
+    background: var(--bf-appearance-token-color-overlay-slate-08);
+    color: var(--bf-appearance-token-flowchat-link-color);
   }
 
   .copy-button.copy-success {
-    color: var(--color-success);
+    color: var(--bf-appearance-token-color-success);
   }
 
   blockquote,
@@ -661,11 +662,9 @@
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  .markdown-renderer {
-    --markdown-code-bg-elevated: color-mix(in srgb, var(--color-bg-primary) 94%, var(--color-static-white) 6%);
-    --markdown-pre-border: rgba(var(--color-static-white-rgb), 0.09);
-  }
+:root[data-bf-appearance-mode='dark'] .markdown-renderer {
+  --markdown-code-bg-elevated: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 94%, var(--bf-appearance-token-color-static-white) 6%);
+  --markdown-pre-border: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.09);
 }
 
 @keyframes fadeIn {

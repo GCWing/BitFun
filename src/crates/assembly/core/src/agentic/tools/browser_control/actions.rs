@@ -1,6 +1,7 @@
 //! Atomic browser actions implemented via CDP commands.
 
 use super::cdp_client::{CdpClient, CdpEvent};
+use crate::agentic::tools::implementations::control_hub::{coded_tool_error, ErrorCode};
 use crate::util::errors::{BitFunError, BitFunResult};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -66,6 +67,274 @@ async fn wait_for_lifecycle(
         return LifecycleOutcome::Reached(name.to_string());
     }
 }
+
+// ── Structured errors ──────────────────────────────────────────────────
+//
+// High-frequency failure points build the `[CODE] message\nHints: a | b`
+// wire format at the source, so ControlHub's `map_dispatch_error` recovers a
+// stable `error.code` plus recovery hints through structured parsing instead
+// of the fragile phrase-matching fallback.
+
+/// Build a structured error in the `[CODE] message\nHints: a | b` shape.
+fn structured_error(
+    code: ErrorCode,
+    message: impl std::fmt::Display,
+    hints: &[&str],
+) -> BitFunError {
+    if hints.is_empty() {
+        coded_tool_error(code, message)
+    } else {
+        coded_tool_error(code, format!("{}\nHints: {}", message, hints.join(" | ")))
+    }
+}
+
+/// Classify a JS exception reported by `Runtime.evaluate` into a structured
+/// error. `Element not found` originates from `resolve_element_js` and is by
+/// far the most common interaction failure, so it gets a dedicated
+/// `NOT_FOUND` code with a snapshot-recovery instruction for the model.
+pub(crate) fn classify_evaluate_exception(message: &str) -> BitFunError {
+    if message.contains("Element not found") {
+        // `resolve_element_js` appends the cross-origin iframe count to its
+        // throw message: those frames are invisible to both `snapshot` and
+        // the resolver, so without saying so the model reads "not found" as
+        // "not on the page" and retries forever.
+        let mut hints = vec!["Element not found — take a new snapshot and use a fresh @eN ref"];
+        if message.contains("cross-origin iframe") {
+            hints.push("The page contains cross-origin iframes whose contents cannot be inspected or clicked — an element inside one is unreachable; work with the top-level document instead");
+        }
+        structured_error(ErrorCode::NotFound, format!("JS error: {}", message), &hints)
+    } else {
+        structured_error(
+            ErrorCode::Internal,
+            format!("JS error: {}", message),
+            &["JavaScript threw during evaluation — fix the expression, or take a fresh snapshot to re-check page state"],
+        )
+    }
+}
+
+/// Classify a CDP transport failure (send/receive level). A dead WebSocket or
+/// closed target means the session is unusable and must be re-attached; a CDP
+/// timeout means the page did not answer. Anything else passes through so the
+/// heuristic fallback in `map_dispatch_error` still applies.
+pub(crate) fn classify_transport_error(err: BitFunError) -> BitFunError {
+    let raw = err.to_string();
+    let message = raw.strip_prefix("Tool error: ").unwrap_or(raw.as_str());
+    if message.contains("CDP send failed")
+        || message.contains("CDP response channel closed")
+        || message.contains("Target closed")
+    {
+        structured_error(
+            ErrorCode::WrongTab,
+            message,
+            &["The browser session is dead (tab closed or browser quit) — call browser.connect or switch_page to attach a live tab, then retry"],
+        )
+    } else if message.contains("CDP timeout") {
+        structured_error(
+            ErrorCode::Timeout,
+            message,
+            &["The page did not answer in time — take a snapshot to check its state, or reload and retry"],
+        )
+    } else {
+        err
+    }
+}
+
+/// Error for a click/hover target whose center point is covered by another
+/// element. Dispatching the mouse event anyway would act on the overlay while
+/// reporting success for the intended element — the worst possible outcome,
+/// so the action is refused instead.
+pub(crate) fn occluded_element_error(selector: &str, blocker: &str) -> BitFunError {
+    structured_error(
+        ErrorCode::GuardRejected,
+        format!(
+            "Element '{}' is not clickable at its center point: it is covered by {}.",
+            selector, blocker
+        ),
+        &["Clear what covers it (close the modal / cookie banner, or press Escape), or scroll it fully into view, then take a fresh snapshot and retry"],
+    )
+}
+
+/// Error for an element that resolved inside a cross-origin iframe: its
+/// coordinates cannot be translated to the top-level viewport, so
+/// coordinate-based actions (click/hover) cannot reach it.
+pub(crate) fn cross_origin_frame_error(selector: &str) -> BitFunError {
+    structured_error(
+        ErrorCode::NotAvailable,
+        format!(
+            "Element '{}' sits inside a cross-origin iframe; its coordinates cannot be mapped to the top-level viewport, so coordinate-based actions (click/hover) cannot reach it.",
+            selector
+        ),
+        &["Take a snapshot and target an element in the top document or a same-origin frame instead"],
+    )
+}
+
+/// CDP fields that make `Input.dispatchKeyEvent` behave like a real key press.
+///
+/// Chrome only runs a key's **default action** — Enter submitting a form, Tab
+/// moving focus, a character being inserted — when the event carries
+/// `windowsVirtualKeyCode` and, for text-producing keys, `text`. A bare
+/// `{ type, key }` event still reaches JS listeners, which is why the omission
+/// looks like it works right up until the page relies on the default action.
+/// Mapping follows the US layout table used by Chrome's own automation
+/// clients: only Enter and single-character keys carry `text`.
+fn key_event_fields(key: &str) -> Value {
+    let (name, code, virtual_key, text): (&str, &str, i64, Option<&str>) = match key {
+        "Enter" | "Return" => ("Enter", "Enter", 13, Some("\r")),
+        "Tab" => ("Tab", "Tab", 9, None),
+        "Escape" | "Esc" => ("Escape", "Escape", 27, None),
+        "Backspace" => ("Backspace", "Backspace", 8, None),
+        "Delete" => ("Delete", "Delete", 46, None),
+        "ArrowUp" => ("ArrowUp", "ArrowUp", 38, None),
+        "ArrowDown" => ("ArrowDown", "ArrowDown", 40, None),
+        "ArrowLeft" => ("ArrowLeft", "ArrowLeft", 37, None),
+        "ArrowRight" => ("ArrowRight", "ArrowRight", 39, None),
+        "Home" => ("Home", "Home", 36, None),
+        "End" => ("End", "End", 35, None),
+        "PageUp" => ("PageUp", "PageUp", 33, None),
+        "PageDown" => ("PageDown", "PageDown", 34, None),
+        "Space" | " " => (" ", "Space", 32, Some(" ")),
+        other => {
+            let mut chars = other.chars();
+            return match (chars.next(), chars.next()) {
+                (Some(ch), None) => {
+                    let virtual_key = ch.to_ascii_uppercase() as i64;
+                    json!({
+                        "key": other,
+                        "text": other,
+                        "windowsVirtualKeyCode": virtual_key,
+                        "nativeVirtualKeyCode": virtual_key,
+                    })
+                }
+                // Unknown named key: pass it through so the page still sees a
+                // keydown, rather than guessing a wrong virtual key code.
+                _ => json!({ "key": other }),
+            };
+        }
+    };
+    let mut fields = json!({
+        "key": name,
+        "code": code,
+        "windowsVirtualKeyCode": virtual_key,
+        "nativeVirtualKeyCode": virtual_key,
+    });
+    if let Some(text) = text {
+        fields["text"] = json!(text);
+    }
+    fields
+}
+
+/// Snapshot walker. Kept as a module const so the ordering guarantees it
+/// encodes (stale refs cleared **before** renumbering) are unit-testable.
+const SNAPSHOT_SCRIPT: &str = r#"
+        (function() {
+            const SEL = 'a, button, input, textarea, select, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="combobox"], [role="option"], [tabindex="0"], [contenteditable="true"]';
+            const items = [];
+            let idx = 1;
+            let offscreen = 0;
+            let crossOriginFrames = 0;
+
+            function visible(el, win) {
+                const rect = el.getBoundingClientRect();
+                if (rect.width < 2 || rect.height < 2) return null;
+                if (rect.right < 0 || rect.bottom < 0 || rect.left > win.innerWidth || rect.top > win.innerHeight) {
+                    offscreen++;
+                    return null;
+                }
+                const style = win.getComputedStyle(el);
+                if (style.display === 'none' || style.visibility === 'hidden') return null;
+                return rect;
+            }
+
+            function record(el, rect, scope, framePath) {
+                const text = (el.textContent || '').trim().slice(0, 100);
+                items.push({
+                    ref: '@e' + idx,
+                    tag: el.tagName.toLowerCase(),
+                    type: el.getAttribute('type') || '',
+                    name: el.getAttribute('name') || '',
+                    text,
+                    ariaLabel: el.getAttribute('aria-label') || '',
+                    placeholder: el.placeholder || '',
+                    role: el.getAttribute('role') || '',
+                    href: el.href || '',
+                    id: el.id || '',
+                    scope,
+                    frame_path: framePath,
+                    rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) }
+                });
+                try { el.setAttribute('data-cdp-ref', '@e' + idx); } catch (_) {}
+                idx++;
+            }
+
+            // Every snapshot renumbers refs from @e1, so refs left behind by
+            // the previous snapshot MUST be dropped first: an element that
+            // dropped out of this snapshot would otherwise keep an @eN that
+            // the new numbering hands to a different element, and
+            // `click @eN` — which resolves by attribute — would silently hit
+            // the stale one.
+            function clearRefs(root) {
+                try {
+                    root.querySelectorAll('[data-cdp-ref]').forEach(el => el.removeAttribute('data-cdp-ref'));
+                } catch (_) {}
+                try {
+                    root.querySelectorAll('*').forEach(host => {
+                        if (host.shadowRoot) clearRefs(host.shadowRoot);
+                    });
+                } catch (_) {}
+            }
+
+            // Recursive walk: collects from `root` (Document or ShadowRoot)
+            // and recurses into open shadow roots of every descendant. Iframes
+            // are handled by the caller because we need the iframe's own
+            // window for visibility checks.
+            function walk(root, win, scope, framePath) {
+                const els = root.querySelectorAll(SEL);
+                els.forEach(el => {
+                    const rect = visible(el, win);
+                    if (rect) record(el, rect, scope, framePath);
+                });
+                // Open shadow roots
+                const allHosts = root.querySelectorAll('*');
+                allHosts.forEach(h => {
+                    if (h.shadowRoot) {
+                        try { walk(h.shadowRoot, win, 'shadow', framePath); } catch (_) {}
+                    }
+                });
+            }
+
+            // Same-origin iframes only; cross-origin ones are counted so the
+            // report can state what it could not see.
+            const frames = [];
+            document.querySelectorAll('iframe, frame').forEach((frame, fi) => {
+                let doc = null;
+                try { doc = frame.contentDocument; } catch (_) {}
+                if (doc) {
+                    frames.push({ frame, doc, fi });
+                } else {
+                    crossOriginFrames++;
+                }
+            });
+
+            clearRefs(document);
+            frames.forEach(f => clearRefs(f.doc));
+
+            walk(document, window, 'document', '');
+            frames.forEach(({ frame, doc, fi }) => {
+                const subWin = frame.contentWindow;
+                const path = `iframe[${fi}]${frame.src ? `[src="${frame.src.slice(0, 80)}"]` : ''}`;
+                try { walk(doc, subWin, 'iframe', path); } catch (_) {}
+            });
+
+            return JSON.stringify({
+                url: location.href,
+                title: document.title,
+                elements: items,
+                offscreen_count: offscreen,
+                cross_origin_frames: crossOriginFrames,
+                features: { shadow_dom_traversed: true, same_origin_iframes_traversed: true, viewport_only: true },
+            });
+        })()
+        "#;
 
 /// High-level browser actions backed by CDP method calls.
 pub struct BrowserActions<'a> {
@@ -195,6 +464,12 @@ impl<'a> BrowserActions<'a> {
     /// `"document" | "shadow" | "iframe"`. The synthetic `data-cdp-ref`
     /// attribute is set in the host scope so subsequent `click` / `fill`
     /// can locate it via the same recursive walk.
+    ///
+    /// The listing covers the **current viewport only**; elements scrolled
+    /// out of view and cross-origin iframe contents are excluded but
+    /// reported (`offscreen_count`, `cross_origin_frames`, plus trailing
+    /// note lines in `snapshot`) so their absence is never read as "the
+    /// element does not exist".
     pub async fn snapshot(&self) -> BitFunResult<Value> {
         self.snapshot_with_options(false).await
     }
@@ -211,83 +486,7 @@ impl<'a> BrowserActions<'a> {
     /// `backend_node_id` field; pages where `DOM.getDocument` errors out
     /// (very rare — e.g. about:blank) silently fall back to no ids.
     pub async fn snapshot_with_options(&self, with_backend_node_ids: bool) -> BitFunResult<Value> {
-        let script = r#"
-        (function() {
-            const SEL = 'a, button, input, textarea, select, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="combobox"], [role="option"], [tabindex="0"], [contenteditable="true"]';
-            const items = [];
-            let idx = 1;
-
-            function visible(el, win) {
-                const rect = el.getBoundingClientRect();
-                if (rect.width < 2 || rect.height < 2) return null;
-                if (rect.right < 0 || rect.bottom < 0 || rect.left > win.innerWidth || rect.top > win.innerHeight) return null;
-                const style = win.getComputedStyle(el);
-                if (style.display === 'none' || style.visibility === 'hidden') return null;
-                return rect;
-            }
-
-            function record(el, rect, scope, framePath) {
-                const text = (el.textContent || '').trim().slice(0, 100);
-                items.push({
-                    ref: '@e' + idx,
-                    tag: el.tagName.toLowerCase(),
-                    type: el.getAttribute('type') || '',
-                    name: el.getAttribute('name') || '',
-                    text,
-                    ariaLabel: el.getAttribute('aria-label') || '',
-                    placeholder: el.placeholder || '',
-                    role: el.getAttribute('role') || '',
-                    href: el.href || '',
-                    id: el.id || '',
-                    scope,
-                    frame_path: framePath,
-                    rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) }
-                });
-                try { el.setAttribute('data-cdp-ref', '@e' + idx); } catch (_) {}
-                idx++;
-            }
-
-            // Recursive walk: collects from `root` (Document or ShadowRoot)
-            // and recurses into open shadow roots of every descendant. Iframes
-            // are handled by the caller because we need the iframe's own
-            // window for visibility checks.
-            function walk(root, win, scope, framePath) {
-                const els = root.querySelectorAll(SEL);
-                els.forEach(el => {
-                    const rect = visible(el, win);
-                    if (rect) record(el, rect, scope, framePath);
-                });
-                // Open shadow roots
-                const allHosts = root.querySelectorAll('*');
-                allHosts.forEach(h => {
-                    if (h.shadowRoot) {
-                        try { walk(h.shadowRoot, win, 'shadow', framePath); } catch (_) {}
-                    }
-                });
-            }
-
-            walk(document, window, 'document', '');
-
-            // Same-origin iframes
-            const frames = document.querySelectorAll('iframe, frame');
-            frames.forEach((frame, fi) => {
-                let doc = null;
-                try { doc = frame.contentDocument; } catch (_) {}
-                if (!doc) return; // cross-origin: skip silently
-                const subWin = frame.contentWindow;
-                const path = `iframe[${fi}]${frame.src ? `[src="${frame.src.slice(0, 80)}"]` : ''}`;
-                try { walk(doc, subWin, 'iframe', path); } catch (_) {}
-            });
-
-            return JSON.stringify({
-                url: location.href,
-                title: document.title,
-                elements: items,
-                features: { shadow_dom_traversed: true, same_origin_iframes_traversed: true },
-            });
-        })()
-        "#;
-        let result = self.evaluate(script).await?;
+        let result = self.evaluate(SNAPSHOT_SCRIPT).await?;
         let text = result
             .get("result")
             .and_then(|r| r.get("value"))
@@ -381,6 +580,26 @@ impl<'a> BrowserActions<'a> {
             if !reference.is_empty() {
                 refs.insert(reference.to_string(), element.clone());
             }
+        }
+        let offscreen = parsed
+            .get("offscreen_count")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        if offscreen > 0 {
+            lines.push(format!(
+                "- note: {} more interactive element(s) exist outside the current viewport and are NOT listed above; scroll toward them and snapshot again to get refs for them",
+                offscreen
+            ));
+        }
+        let cross_origin_frames = parsed
+            .get("cross_origin_frames")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        if cross_origin_frames > 0 {
+            lines.push(format!(
+                "- note: this page contains {} cross-origin iframe(s) whose contents cannot be inspected; elements inside them are absent here and cannot be targeted by @eN refs",
+                cross_origin_frames
+            ));
         }
         if let Some(obj) = parsed.as_object_mut() {
             obj.insert("snapshot".to_string(), json!(lines.join("\n")));
@@ -549,12 +768,23 @@ impl<'a> BrowserActions<'a> {
         }))
     }
 
+    /// Resolve the element's center in **top-level viewport** coordinates.
+    ///
+    /// `getBoundingClientRect` is relative to the element's own document's
+    /// viewport. For an element inside a same-origin iframe (which
+    /// `resolve_element_js` can reach) that is the *iframe's* viewport, while
+    /// `Input.dispatchMouseEvent` expects top-level viewport coordinates — so
+    /// walk the `window.frameElement` chain upward and add each frame's own
+    /// bounding rect (plus its border via `clientLeft`/`clientTop`). A
+    /// cross-origin ancestor throws on `frameElement` access; that case is
+    /// surfaced as a structured error instead of clicking at a wrong spot.
+    ///
+    /// The point is also hit-tested with `elementFromPoint` in the element's
+    /// own document: a mouse event dispatched at coordinates covered by an
+    /// overlay lands on the overlay, and reporting that as a successful click
+    /// on the intended element is the worst failure mode available.
     async fn element_center(&self, selector: &str) -> BitFunResult<(f64, f64)> {
-        let js = Self::resolve_element_js(selector);
-        let center_js = format!(
-            r#"(function(){{ {} el.scrollIntoView({{ block: 'center', inline: 'center', behavior: 'instant' }}); const rect = el.getBoundingClientRect(); return JSON.stringify({{ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }}); }})()"#,
-            js
-        );
+        let center_js = Self::element_center_js(selector);
         let result = self.evaluate(&center_js).await?;
         let coords_str = result
             .get("result")
@@ -562,9 +792,76 @@ impl<'a> BrowserActions<'a> {
             .and_then(|v| v.as_str())
             .unwrap_or("{}");
         let coords: Value = serde_json::from_str(coords_str).unwrap_or(json!({}));
-        let x = coords.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let y = coords.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        Ok((x, y))
+        if coords.get("error").and_then(|v| v.as_str()) == Some("cross_origin_frame") {
+            return Err(cross_origin_frame_error(selector));
+        }
+        if let Some(blocker) = coords.get("blocked_by").and_then(|v| v.as_str()) {
+            return Err(occluded_element_error(selector, blocker));
+        }
+        match (
+            coords.get("x").and_then(|v| v.as_f64()),
+            coords.get("y").and_then(|v| v.as_f64()),
+        ) {
+            (Some(x), Some(y)) => Ok((x, y)),
+            _ => Err(structured_error(
+                ErrorCode::Internal,
+                format!("Failed to compute viewport center for '{}'", selector),
+                &["Take a fresh snapshot and retry with a new @eN ref"],
+            )),
+        }
+    }
+
+    fn element_center_js(selector: &str) -> String {
+        format!(
+            r#"(function(){{
+                {js}
+                el.scrollIntoView({{ block: 'center', inline: 'center', behavior: 'instant' }});
+                const rect = el.getBoundingClientRect();
+                const localX = rect.x + rect.width / 2;
+                const localY = rect.y + rect.height / 2;
+                let x = localX;
+                let y = localY;
+                try {{
+                    let win = el.ownerDocument.defaultView;
+                    while (win && win !== win.top) {{
+                        const fe = win.frameElement;
+                        if (!fe) break;
+                        const fr = fe.getBoundingClientRect();
+                        x += fr.x + fe.clientLeft;
+                        y += fr.y + fe.clientTop;
+                        win = win.parent;
+                    }}
+                }} catch (e) {{
+                    return JSON.stringify({{ error: 'cross_origin_frame' }});
+                }}
+                let blockedBy = null;
+                try {{
+                    let hit = el.ownerDocument.elementFromPoint(localX, localY);
+                    // Document-level elementFromPoint stops at a shadow host,
+                    // and host.contains(shadowChild) is false — without
+                    // descending, every element inside an open shadow root
+                    // (which resolve/snapshot deliberately support) would be
+                    // misreported as occluded by its own host.
+                    while (hit && hit.shadowRoot) {{
+                        const inner = hit.shadowRoot.elementFromPoint(localX, localY);
+                        if (!inner || inner === hit) break;
+                        hit = inner;
+                    }}
+                    if (!hit) {{
+                        blockedBy = 'nothing (the point is outside the viewport)';
+                    }} else if (hit !== el && !el.contains(hit) && !hit.contains(el)) {{
+                        const hid = hit.id ? '#' + hit.id : '';
+                        const hcls = (typeof hit.className === 'string' && hit.className.trim())
+                            ? '.' + hit.className.trim().split(/\s+/).slice(0, 2).join('.')
+                            : '';
+                        const label = (hit.textContent || '').trim().slice(0, 40);
+                        blockedBy = '<' + hit.tagName.toLowerCase() + hid + hcls + '>' + (label ? ' "' + label + '"' : '');
+                    }}
+                }} catch (_) {{}}
+                return JSON.stringify({{ x: x, y: y, blocked_by: blockedBy }});
+            }})()"#,
+            js = Self::resolve_element_js(selector)
+        )
     }
 
     pub async fn hover(&self, selector: &str) -> BitFunResult<Value> {
@@ -645,20 +942,7 @@ impl<'a> BrowserActions<'a> {
 
     /// Select a dropdown option by visible text.
     pub async fn select(&self, selector: &str, option_text: &str) -> BitFunResult<Value> {
-        let js = format!(
-            r#"(function(){{
-                const sel = document.querySelector('{}');
-                if (!sel) return JSON.stringify({{ error: 'Select not found' }});
-                const opts = Array.from(sel.options);
-                const opt = opts.find(o => o.text.includes('{}'));
-                if (!opt) return JSON.stringify({{ error: 'Option not found', available: opts.map(o => o.text) }});
-                sel.value = opt.value;
-                sel.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                return JSON.stringify({{ success: true, value: opt.value, text: opt.text }});
-            }})()"#,
-            selector.replace('\'', "\\'"),
-            option_text.replace('\'', "\\'")
-        );
+        let js = Self::select_option_js(selector, option_text);
         let result = self.evaluate(&js).await?;
         let text = result
             .get("result")
@@ -671,36 +955,29 @@ impl<'a> BrowserActions<'a> {
 
     /// Press a key (Enter, Escape, Tab, etc.).
     pub async fn press_key(&self, key: &str) -> BitFunResult<Value> {
-        self.client
-            .send(
-                "Input.dispatchKeyEvent",
-                Some(json!({
-                    "type": "keyDown",
-                    "key": key,
-                })),
-            )
-            .await?;
-        if key.chars().count() == 1 {
-            self.client
-                .send(
-                    "Input.dispatchKeyEvent",
-                    Some(json!({
-                        "type": "char",
-                        "key": key,
-                        "text": key,
-                    })),
-                )
-                .await?;
+        let fields = key_event_fields(key);
+        // `keyDown` with `text` is what makes Chrome perform the key's default
+        // action; keys that produce no text must go out as `rawKeyDown` or the
+        // renderer drops them.
+        let event_type = if fields.get("text").is_some() {
+            "keyDown"
+        } else {
+            "rawKeyDown"
+        };
+        let mut down = fields.clone();
+        if let Some(obj) = down.as_object_mut() {
+            obj.insert("type".to_string(), json!(event_type));
         }
         self.client
-            .send(
-                "Input.dispatchKeyEvent",
-                Some(json!({
-                    "type": "keyUp",
-                    "key": key,
-                })),
-            )
+            .send("Input.dispatchKeyEvent", Some(down))
             .await?;
+
+        let mut up = fields;
+        if let Some(obj) = up.as_object_mut() {
+            obj.remove("text");
+            obj.insert("type".to_string(), json!("keyUp"));
+        }
+        self.client.send("Input.dispatchKeyEvent", Some(up)).await?;
         Ok(json!({ "success": true, "action": "press_key", "key": key }))
     }
 
@@ -823,11 +1100,8 @@ impl<'a> BrowserActions<'a> {
                     }));
                 }
                 selector => {
+                    let js = Self::element_exists_js(selector);
                     for _ in 0..30 {
-                        let js = format!(
-                            "!!document.querySelector('{}')",
-                            selector.replace('\'', "\\'")
-                        );
                         let result = self.evaluate(&js).await?;
                         let found = result
                             .get("result")
@@ -841,10 +1115,11 @@ impl<'a> BrowserActions<'a> {
                         }
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     }
-                    return Err(BitFunError::tool(format!(
-                        "Timeout waiting for element: {}",
-                        cond
-                    )));
+                    return Err(structured_error(
+                        ErrorCode::Timeout,
+                        format!("Timeout waiting for element: {}", cond),
+                        &["Wait timed out — take a snapshot to check the current page state, or wait on 'load' / 'networkidle' instead of a selector"],
+                    ));
                 }
             }
         }
@@ -979,7 +1254,7 @@ impl<'a> BrowserActions<'a> {
                             .and_then(|v| v.as_str())
                             .or_else(|| details.get("text").and_then(|v| v.as_str()))
                             .unwrap_or("Runtime.evaluate failed");
-                        return Err(BitFunError::tool(format!("JS error: {}", message)));
+                        return Err(classify_evaluate_exception(message));
                     }
                     return Ok(value);
                 }
@@ -997,7 +1272,9 @@ impl<'a> BrowserActions<'a> {
                 }
             }
         }
-        Err(last_error.unwrap_or_else(|| BitFunError::tool("Runtime.evaluate failed".to_string())))
+        Err(classify_transport_error(last_error.unwrap_or_else(|| {
+            BitFunError::tool("Runtime.evaluate failed".to_string())
+        })))
     }
 
     pub async fn get_cookies(&self, urls: Option<Vec<String>>) -> BitFunResult<Value> {
@@ -1236,10 +1513,375 @@ impl<'a> BrowserActions<'a> {
                 }}
                 return null;
             }}
+            function __crossOriginFrames() {{
+                let n = 0;
+                document.querySelectorAll('iframe, frame').forEach(f => {{
+                    let doc = null;
+                    try {{ doc = f.contentDocument; }} catch (_) {{}}
+                    if (!doc) n++;
+                }});
+                return n;
+            }}
             const el = __findAnywhere();
-            if (!el) throw new Error('Element not found: ' + __sel + ' — take a fresh snapshot or check shadow/iframe scope');
+            if (!el) {{
+                const __xo = __crossOriginFrames();
+                throw new Error('Element not found: ' + __sel + ' — take a fresh snapshot or check shadow/iframe scope'
+                    + (__xo ? ' (page contains ' + __xo + ' cross-origin iframe(s) whose contents cannot be inspected)' : ''));
+            }}
             "#,
             escaped = escaped
         )
+    }
+
+    /// JS that reports whether `selector` (CSS **or** `@eN` ref) currently
+    /// resolves, without throwing. `wait { condition: <selector> }` polls it;
+    /// the raw `document.querySelector` it replaced threw a `SyntaxError` on
+    /// every `@eN` ref because `@e3` is not valid CSS.
+    fn element_exists_js(selector: &str) -> String {
+        format!(
+            r#"(function(){{
+                try {{
+                    {resolve}
+                    return !!el;
+                }} catch (_) {{
+                    return false;
+                }}
+            }})()"#,
+            resolve = Self::resolve_element_js(selector)
+        )
+    }
+
+    /// JS that picks a `<select>` option by visible substring.
+    ///
+    /// The `{ error: 'Select not found' | 'Option not found', available }`
+    /// result shape is a contract with ControlHub's `select` arm, which lifts
+    /// it into the structured error envelope — keep the strings in sync.
+    fn select_option_js(selector: &str, option_text: &str) -> String {
+        format!(
+            r#"(function(){{
+                let sel = null;
+                try {{
+                    {resolve}
+                    sel = el;
+                }} catch (_) {{}}
+                if (!sel || !sel.options) return JSON.stringify({{ error: 'Select not found' }});
+                const needle = {needle};
+                const opts = Array.from(sel.options);
+                const opt = opts.find(o => o.text.includes(needle));
+                if (!opt) return JSON.stringify({{ error: 'Option not found', available: opts.map(o => o.text) }});
+                sel.value = opt.value;
+                sel.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                return JSON.stringify({{ success: true, value: opt.value, text: opt.text }});
+            }})()"#,
+            resolve = Self::resolve_element_js(selector),
+            needle = serde_json::to_string(option_text).unwrap_or_else(|_| "\"\"".to_string()),
+        )
+    }
+}
+
+#[cfg(test)]
+mod structured_error_tests {
+    use super::*;
+
+    // These errors are produced at the failure source in the `[CODE]
+    // message\nHints: …` wire format so ControlHub's `map_dispatch_error`
+    // recovers a stable `error.code` via structured parsing. The round-trip
+    // through `map_dispatch_error` itself is asserted in
+    // `control_hub_tool.rs` tests.
+
+    #[test]
+    fn classify_evaluate_exception_maps_element_not_found_to_not_found_code() {
+        let msg = classify_evaluate_exception(
+            "Error: Element not found: @e7 — take a fresh snapshot or check shadow/iframe scope",
+        )
+        .to_string();
+        assert!(msg.contains("[NOT_FOUND]"), "got: {msg}");
+        assert!(
+            msg.contains("take a new snapshot") && msg.contains("@eN"),
+            "recovery hint missing: {msg}"
+        );
+    }
+
+    #[test]
+    fn classify_evaluate_exception_defaults_to_internal() {
+        let msg = classify_evaluate_exception("TypeError: x is undefined").to_string();
+        assert!(msg.contains("[INTERNAL]"), "got: {msg}");
+        assert!(msg.contains("TypeError: x is undefined"), "got: {msg}");
+    }
+
+    #[test]
+    fn classify_transport_error_maps_dead_socket_to_wrong_tab() {
+        let msg =
+            classify_transport_error(BitFunError::tool("CDP send failed: broken pipe".to_string()))
+                .to_string();
+        assert!(msg.contains("[WRONG_TAB]"), "got: {msg}");
+        assert!(msg.contains("browser.connect"), "got: {msg}");
+    }
+
+    #[test]
+    fn classify_transport_error_maps_cdp_timeout_to_timeout() {
+        let msg = classify_transport_error(BitFunError::tool(
+            "CDP timeout for method Runtime.evaluate".to_string(),
+        ))
+        .to_string();
+        assert!(msg.contains("[TIMEOUT]"), "got: {msg}");
+    }
+
+    #[test]
+    fn classify_transport_error_passes_through_other_errors() {
+        let msg = classify_transport_error(BitFunError::tool("CDP error: some detail".to_string()))
+            .to_string();
+        assert!(msg.contains("CDP error: some detail"), "got: {msg}");
+        assert!(
+            !msg.contains("[WRONG_TAB]") && !msg.contains("[TIMEOUT]"),
+            "must not be re-coded: {msg}"
+        );
+    }
+
+    #[test]
+    fn cross_origin_frame_error_is_structured_and_actionable() {
+        let msg = cross_origin_frame_error("@e3").to_string();
+        assert!(msg.contains("[NOT_AVAILABLE]"), "got: {msg}");
+        assert!(msg.contains("cross-origin iframe"), "got: {msg}");
+        assert!(
+            msg.contains("Take a snapshot") && msg.contains("same-origin"),
+            "recovery hint missing: {msg}"
+        );
+    }
+
+    #[test]
+    fn classify_evaluate_exception_declares_cross_origin_iframes_when_present() {
+        // A page whose target lives in a cross-origin iframe can only ever
+        // answer "not found"; without the added hint the model reads that as
+        // "the element does not exist" and retries forever.
+        let msg = classify_evaluate_exception(
+            "Error: Element not found: @e7 — take a fresh snapshot or check shadow/iframe scope (page contains 2 cross-origin iframe(s) whose contents cannot be inspected)",
+        )
+        .to_string();
+        assert!(msg.contains("[NOT_FOUND]"), "got: {msg}");
+        assert!(
+            msg.contains("cross-origin iframes whose contents cannot be inspected"),
+            "cross-origin limitation not surfaced: {msg}"
+        );
+    }
+
+    #[test]
+    fn classify_evaluate_exception_omits_cross_origin_hint_without_frames() {
+        let msg = classify_evaluate_exception("Error: Element not found: @e7").to_string();
+        assert!(
+            !msg.contains("cross-origin"),
+            "must not claim cross-origin frames that do not exist: {msg}"
+        );
+    }
+
+    #[test]
+    fn occluded_element_error_refuses_instead_of_reporting_success() {
+        let msg = occluded_element_error("@e4", "<div#cookie-banner> \"Accept all\"").to_string();
+        assert!(msg.contains("[GUARD_REJECTED]"), "got: {msg}");
+        assert!(msg.contains("cookie-banner"), "blocker missing: {msg}");
+        assert!(
+            msg.contains("press Escape") && msg.contains("fresh snapshot"),
+            "recovery hint missing: {msg}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod script_tests {
+    use super::*;
+
+    #[test]
+    fn snapshot_clears_stale_refs_before_renumbering() {
+        // Refs restart at @e1 every snapshot, so a leftover `data-cdp-ref`
+        // would make a stale element answer to a ref that now belongs to a
+        // different one — `click @eN` would then silently hit the wrong
+        // element while reporting success.
+        let clear = SNAPSHOT_SCRIPT
+            .find("clearRefs(document);")
+            .expect("top document refs must be cleared");
+        let clear_frames = SNAPSHOT_SCRIPT
+            .find("frames.forEach(f => clearRefs(f.doc));")
+            .expect("same-origin iframe refs must be cleared");
+        let walk = SNAPSHOT_SCRIPT
+            .find("walk(document, window, 'document', '');")
+            .expect("snapshot must walk the top document");
+        assert!(clear < walk, "clearRefs(document) must precede renumbering");
+        assert!(clear_frames < walk, "iframe refs must be cleared too");
+        assert!(
+            SNAPSHOT_SCRIPT.contains("if (host.shadowRoot) clearRefs(host.shadowRoot)"),
+            "clearRefs must descend into open shadow roots"
+        );
+    }
+
+    #[test]
+    fn snapshot_reports_what_it_could_not_see() {
+        assert!(
+            SNAPSHOT_SCRIPT.contains("offscreen++"),
+            "elements outside the viewport must be counted"
+        );
+        assert!(
+            SNAPSHOT_SCRIPT.contains("offscreen_count: offscreen"),
+            "offscreen count must be reported"
+        );
+        assert!(
+            SNAPSHOT_SCRIPT.contains("crossOriginFrames++")
+                && SNAPSHOT_SCRIPT.contains("cross_origin_frames: crossOriginFrames"),
+            "cross-origin iframes must be counted and reported"
+        );
+        assert!(
+            SNAPSHOT_SCRIPT.contains("viewport_only: true"),
+            "the viewport-only limitation must be declared"
+        );
+    }
+
+    #[test]
+    fn snapshot_text_notes_elements_the_listing_omits() {
+        let mut parsed = json!({
+            "elements": [{ "ref": "@e1", "tag": "button", "text": "Buy" }],
+            "offscreen_count": 3,
+            "cross_origin_frames": 1,
+        });
+        BrowserActions::attach_snapshot_text(&mut parsed);
+        let text = parsed
+            .get("snapshot")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+        assert!(text.contains("- button [@e1]"), "got: {text}");
+        assert!(
+            text.contains("3 more interactive element(s) exist outside the current viewport"),
+            "offscreen note missing: {text}"
+        );
+        assert!(
+            text.contains("1 cross-origin iframe(s)"),
+            "cross-origin note missing: {text}"
+        );
+    }
+
+    #[test]
+    fn snapshot_text_stays_quiet_when_nothing_was_omitted() {
+        let mut parsed = json!({
+            "elements": [{ "ref": "@e1", "tag": "button", "text": "Buy" }],
+            "offscreen_count": 0,
+            "cross_origin_frames": 0,
+        });
+        BrowserActions::attach_snapshot_text(&mut parsed);
+        let text = parsed
+            .get("snapshot")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+        assert!(!text.contains("note:"), "unexpected note: {text}");
+    }
+
+    #[test]
+    fn element_center_hit_tests_the_click_point() {
+        let js = BrowserActions::element_center_js("@e2");
+        assert!(
+            js.contains("elementFromPoint(localX, localY)"),
+            "click point must be hit-tested: {js}"
+        );
+        assert!(
+            js.contains("hit !== el && !el.contains(hit) && !hit.contains(el)"),
+            "hit test must accept the element and its own subtree only: {js}"
+        );
+        assert!(
+            js.contains("blocked_by: blockedBy"),
+            "the blocker must be reported back: {js}"
+        );
+    }
+
+    #[test]
+    fn select_and_wait_accept_element_refs() {
+        // `document.querySelector('@e3')` throws a SyntaxError — both call
+        // sites must go through the ref-aware resolver instead.
+        let select_js = BrowserActions::select_option_js("@e3", "Standard shipping");
+        assert!(
+            select_js.contains(r#"[data-cdp-ref="@e3"]"#),
+            "select must resolve @eN refs: {select_js}"
+        );
+        assert!(
+            select_js.contains("'Select not found'") && select_js.contains("'Option not found'"),
+            "ControlHub's error contract must be preserved: {select_js}"
+        );
+        assert!(
+            select_js.contains(r#""Standard shipping""#),
+            "option text must be embedded as a JS string literal: {select_js}"
+        );
+
+        let wait_js = BrowserActions::element_exists_js("@e3");
+        assert!(
+            wait_js.contains(r#"[data-cdp-ref="@e3"]"#),
+            "wait must resolve @eN refs: {wait_js}"
+        );
+        assert!(
+            wait_js.contains("return false;"),
+            "a missing element must be falsy, not an exception: {wait_js}"
+        );
+    }
+
+    #[test]
+    fn select_js_escapes_option_text() {
+        let js = BrowserActions::select_option_js("select#ship", "O'Brien \"fast\"");
+        assert!(
+            js.contains(r#""O'Brien \"fast\"""#),
+            "quotes in the option text must not break the script: {js}"
+        );
+    }
+
+    #[test]
+    fn resolve_element_js_reports_cross_origin_frames_when_lookup_fails() {
+        let js = BrowserActions::resolve_element_js("@e1");
+        assert!(
+            js.contains("__crossOriginFrames()"),
+            "not-found path must count cross-origin frames: {js}"
+        );
+        assert!(
+            js.contains("cross-origin iframe(s) whose contents cannot be inspected"),
+            "the limitation must reach the thrown message: {js}"
+        );
+    }
+
+    #[test]
+    fn press_key_enter_carries_text_and_virtual_key_code() {
+        // Without these fields Chrome delivers a keydown to listeners but
+        // performs no default action, so Enter never submits a form.
+        let fields = key_event_fields("Enter");
+        assert_eq!(fields.get("text").and_then(|v| v.as_str()), Some("\r"));
+        assert_eq!(
+            fields.get("windowsVirtualKeyCode").and_then(|v| v.as_i64()),
+            Some(13)
+        );
+        assert_eq!(fields.get("code").and_then(|v| v.as_str()), Some("Enter"));
+        assert_eq!(fields.get("key").and_then(|v| v.as_str()), Some("Enter"));
+    }
+
+    #[test]
+    fn press_key_maps_named_keys_and_single_characters() {
+        let tab = key_event_fields("Tab");
+        assert_eq!(
+            tab.get("windowsVirtualKeyCode").and_then(|v| v.as_i64()),
+            Some(9)
+        );
+        assert!(tab.get("text").is_none(), "Tab produces no text: {tab}");
+
+        let arrow = key_event_fields("ArrowDown");
+        assert_eq!(
+            arrow.get("windowsVirtualKeyCode").and_then(|v| v.as_i64()),
+            Some(40)
+        );
+
+        let letter = key_event_fields("a");
+        assert_eq!(letter.get("text").and_then(|v| v.as_str()), Some("a"));
+        assert_eq!(
+            letter.get("windowsVirtualKeyCode").and_then(|v| v.as_i64()),
+            Some(65),
+            "virtual key codes are for the uppercased character: {letter}"
+        );
+
+        let unknown = key_event_fields("F13");
+        assert_eq!(unknown.get("key").and_then(|v| v.as_str()), Some("F13"));
+        assert!(
+            unknown.get("windowsVirtualKeyCode").is_none(),
+            "unknown keys must not guess a virtual key code: {unknown}"
+        );
     }
 }

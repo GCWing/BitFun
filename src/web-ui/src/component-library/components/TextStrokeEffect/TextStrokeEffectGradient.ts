@@ -1,6 +1,6 @@
-import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
+import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 
-export const TEXT_STROKE_GRADIENT_COLORS = UI_EXCEPTION_ACCENTS.textStroke;
+export const TEXT_STROKE_GRADIENT_COLORS = APPEARANCE_DOMAIN_TOKENS.textStroke;
 
 export const TEXT_STROKE_GRADIENT_OFFSETS = ['0%', '25%', '50%', '75%', '100%'] as const;
 

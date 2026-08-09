@@ -26,10 +26,13 @@ export const CubeLoading: React.FC<CubeLoadingProps> = ({
   return (
     <div
       className={`cube-loading cube-loading--${size} ${className}`}
+      data-bf-component="cube-loading"
+      data-bf-part="root"
+      data-bf-size={size}
       style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}
     >
       <DotMatrixLoader size={cubeToMatrix[size]} />
-      {text && <div className="cube-loading__text">{text}</div>}
+      {text && <div className="cube-loading__text" data-bf-component="cube-loading" data-bf-part="text">{text}</div>}
     </div>
   );
 };

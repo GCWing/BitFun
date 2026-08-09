@@ -119,11 +119,13 @@ export const SmartRecommendations: React.FC<SmartRecommendationsProps> = ({
   }
 
   return (
-    <div className={`bitfun-smart-recommendations ${className}`}>
-      <div className="bitfun-smart-recommendations__header">
-        <span className="bitfun-smart-recommendations__title">{t('smartRecommendations.title')}</span>
+    <div data-bf-component="smart-recommendations" data-bf-part="root" className={`bitfun-smart-recommendations ${className}`}>
+      <div data-bf-component="smart-recommendations" data-bf-part="header" className="bitfun-smart-recommendations__header">
+        <span data-bf-component="smart-recommendations" data-bf-part="title" className="bitfun-smart-recommendations__title">{t('smartRecommendations.title')}</span>
         <Tooltip content={t('smartRecommendations.close')}>
           <button
+            data-bf-component="smart-recommendations"
+            data-bf-part="close"
             className="bitfun-smart-recommendations__close"
             onClick={handleClose}
           >
@@ -132,7 +134,7 @@ export const SmartRecommendations: React.FC<SmartRecommendationsProps> = ({
         </Tooltip>
       </div>
 
-      <div className="bitfun-smart-recommendations__actions">
+      <div data-bf-component="smart-recommendations" data-bf-part="actions" className="bitfun-smart-recommendations__actions">
         {actions.map(action => {
           const IconComponent = action.icon
             ? RECOMMENDATION_ICONS[action.icon as keyof typeof RECOMMENDATION_ICONS]
@@ -141,7 +143,7 @@ export const SmartRecommendations: React.FC<SmartRecommendationsProps> = ({
           const isLoading = actionLoading[action.id] || action.loading;
           
           return (
-            <button
+            <button data-bf-component="smart-recommendations" data-bf-part="action" data-bf-state={isLoading ? 'loading' : ''}
               key={action.id}
               className={`bitfun-smart-recommendations__action bitfun-smart-recommendations__action--${action.type || 'secondary'}`}
               onClick={() => handleActionClick(action)}
@@ -149,8 +151,8 @@ export const SmartRecommendations: React.FC<SmartRecommendationsProps> = ({
               title={action.description}
             >
               {IconComponent && <IconComponent size={16} />}
-              <span>{action.label}</span>
-              {isLoading && <span className="bitfun-smart-recommendations__loading">...</span>}
+              <span data-bf-component="smart-recommendations" data-bf-part="label">{action.label}</span>
+              {isLoading && <span data-bf-component="smart-recommendations" data-bf-part="loading" className="bitfun-smart-recommendations__loading">...</span>}
             </button>
           );
         })}

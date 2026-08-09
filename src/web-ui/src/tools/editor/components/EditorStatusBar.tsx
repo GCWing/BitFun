@@ -1,7 +1,7 @@
 /** Status bar for cursor position, language, encoding, and LSP status. */
 
 import React from 'react';
-import {
+import { 
   AlertCircle,
   Loader2,
   Zap
@@ -23,6 +23,10 @@ export interface EditorStatusBarProps {
   language: string;
   /** File encoding */
   encoding?: string;
+  /** Tab size */
+  tabSize?: number;
+  /** Whether to use spaces instead of tabs */
+  insertSpaces?: boolean;
   /** Whether file has unsaved changes (reserved for extension) */
   hasChanges?: boolean;
   /** Whether file is being saved (reserved for extension) */
@@ -35,6 +39,8 @@ export interface EditorStatusBarProps {
   onLanguageClick?: (e: React.MouseEvent) => void;
   /** Encoding click callback */
   onEncodingClick?: (e: React.MouseEvent) => void;
+  /** Indent click callback */
+  onIndentClick?: (e: React.MouseEvent) => void;
   /** Position click callback */
   onPositionClick?: (e: React.MouseEvent) => void;
 }
@@ -90,21 +96,21 @@ const getLspStatusInfo = (
 ) => {
   switch (status) {
     case 'connected':
-      return {
-        icon: <Zap size={12} />,
+      return { 
+        icon: <Zap size={12} />, 
         className: 'editor-status-bar__lsp--connected',
         title: t('editor.statusBar.lspConnected')
       };
     case 'connecting':
-      return {
-        icon: <Loader2 size={12} className="editor-status-bar__lsp-spinner" />,
+      return { 
+        icon: <Loader2 size={12} className="editor-status-bar__lsp-spinner" />, 
         className: 'editor-status-bar__lsp--connecting',
         title: t('editor.statusBar.lspConnecting')
       };
     case 'disconnected':
     default:
-      return {
-        icon: <AlertCircle size={12} />,
+      return { 
+        icon: <AlertCircle size={12} />, 
         className: 'editor-status-bar__lsp--disconnected',
         title: t('editor.statusBar.lspDisconnected')
       };
@@ -118,10 +124,13 @@ export const EditorStatusBar: React.FC<EditorStatusBarProps> = ({
   selectedLines = 0,
   language,
   encoding = 'UTF-8',
+  tabSize = 2,
+  insertSpaces = true,
   isReadOnly = false,
   lspStatus,
   onLanguageClick,
   onEncodingClick,
+  onIndentClick,
   onPositionClick,
 }) => {
   const { t } = useI18n('tools');
@@ -139,30 +148,49 @@ export const EditorStatusBar: React.FC<EditorStatusBarProps> = ({
   };
 
   return (
-    <div className="editor-status-bar">
-      <div className="editor-status-bar__left">
+    <div className="editor-status-bar" data-bf-component="editor-status-bar" data-bf-part="root">
+      <div data-bf-component="editor-status-bar" data-bf-part="left" className="editor-status-bar__left">
         {isReadOnly && (
-          <div className="editor-status-bar__item editor-status-bar__readonly">
+          <div data-bf-component="editor-status-bar" data-bf-part="item" className="editor-status-bar__item editor-status-bar__readonly">
             {t('editor.statusBar.readOnly')}
           </div>
         )}
       </div>
 
-      <div className="editor-status-bar__right">
+      <div data-bf-component="editor-status-bar" data-bf-part="right" className="editor-status-bar__right">
         <Tooltip content={t('editor.statusBar.goToLine')} placement="top">
-          <div
+          <div 
+            data-bf-component="editor-status-bar"
+            data-bf-part="item"
             className={`editor-status-bar__item ${onPositionClick ? 'editor-status-bar__item--clickable' : ''}`}
             onClick={onPositionClick}
           >
             <span>{t('editor.statusBar.ln')} {line}, {t('editor.statusBar.col')} {column}</span>
             {getSelectionText() && (
-              <span className="editor-status-bar__selection">{getSelectionText()}</span>
+              <span data-bf-component="editor-status-bar" data-bf-part="selection" className="editor-status-bar__selection">{getSelectionText()}</span>
             )}
           </div>
         </Tooltip>
 
+        <div data-bf-component="editor-status-bar" data-bf-part="separator" className="editor-status-bar__separator" />
+
+        <Tooltip content={t('editor.statusBar.indentSettings')} placement="top">
+          <div 
+            data-bf-component="editor-status-bar"
+            data-bf-part="item"
+            className={`editor-status-bar__item ${onIndentClick ? 'editor-status-bar__item--clickable' : ''}`}
+            onClick={onIndentClick}
+          >
+            {insertSpaces ? t('editor.statusBar.indentSpaces', { n: tabSize }) : t('editor.statusBar.indentTab', { n: tabSize })}
+          </div>
+        </Tooltip>
+
+        <div data-bf-component="editor-status-bar" data-bf-part="separator" className="editor-status-bar__separator" />
+
         <Tooltip content={t('editor.statusBar.fileEncoding')} placement="top">
-          <div
+          <div 
+            data-bf-component="editor-status-bar"
+            data-bf-part="item"
             className={`editor-status-bar__item ${onEncodingClick ? 'editor-status-bar__item--clickable' : ''}`}
             onClick={onEncodingClick}
           >
@@ -170,10 +198,12 @@ export const EditorStatusBar: React.FC<EditorStatusBarProps> = ({
           </div>
         </Tooltip>
 
-        <div className="editor-status-bar__separator" />
+        <div data-bf-component="editor-status-bar" data-bf-part="separator" className="editor-status-bar__separator" />
 
         <Tooltip content={t('editor.statusBar.selectLanguageMode')} placement="top">
-          <div
+          <div 
+            data-bf-component="editor-status-bar"
+            data-bf-part="item"
             className={`editor-status-bar__item ${onLanguageClick ? 'editor-status-bar__item--clickable' : ''}`}
             onClick={onLanguageClick}
           >
@@ -183,8 +213,10 @@ export const EditorStatusBar: React.FC<EditorStatusBarProps> = ({
 
         {lspStatus && (
           <>
-            <div className="editor-status-bar__separator" />
-            <div
+            <div data-bf-component="editor-status-bar" data-bf-part="separator" className="editor-status-bar__separator" />
+            <div 
+              data-bf-component="editor-status-bar"
+              data-bf-part="lsp"
               className={`editor-status-bar__item editor-status-bar__lsp ${lspInfo.className}`}
               title={lspInfo.title}
             >

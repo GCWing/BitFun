@@ -3,7 +3,8 @@
 //! Provide unified error types and handling for the whole application
 
 use bitfun_core_types::errors::{
-    ai_error_detail_from_message, classify_ai_error_message, AiErrorDetail, ErrorCategory,
+    ai_error_detail_from_message, classify_ai_error_message, AiErrorDetail, AiProviderError,
+    ErrorCategory,
 };
 use serde::Serialize;
 use thiserror::Error;
@@ -23,8 +24,23 @@ pub enum BitFunError {
     #[error("AI client error: {0}")]
     AIClient(String),
 
+    #[error("AI provider error: {0}")]
+    AIProvider(AiProviderError),
+
+    /// A provider rejected the request before any effective model output because
+    /// the input exceeded its context window. The execution engine may compact
+    /// the session and retry the same logical model round.
+    #[error("AI client error: {0}")]
+    RecoverableContextOverflow(AiProviderError),
+
     #[error("Session error: {0}")]
     Session(String),
+
+    #[error("Session is already open for writing: {session_id}")]
+    SessionInUse { session_id: String },
+
+    #[error("Operation outcome is unknown: {0}")]
+    OutcomeUnknown(String),
 
     #[error(
         "Session creation persistence failed and rollback did not complete: session_id={session_id}, error={error}, cleanup_error={cleanup_error}"
@@ -165,6 +181,8 @@ impl BitFunError {
     pub fn error_category(&self) -> ErrorCategory {
         match self {
             BitFunError::AIClient(msg) => classify_ai_error_message(msg),
+            BitFunError::AIProvider(error) => error.category.clone(),
+            BitFunError::RecoverableContextOverflow(_) => ErrorCategory::ContextOverflow,
             BitFunError::Timeout(_) => ErrorCategory::Timeout,
             BitFunError::Cancelled(_) => ErrorCategory::Unknown,
             _ => ErrorCategory::Unknown,
@@ -173,21 +191,33 @@ impl BitFunError {
 
     /// Build a structured, provider-agnostic AI error detail for UI recovery.
     pub fn error_detail(&self) -> AiErrorDetail {
+        if let BitFunError::AIProvider(error) | BitFunError::RecoverableContextOverflow(error) =
+            self
+        {
+            return error.detail();
+        }
         let category = self.error_category();
         let message = self.to_string();
         ai_error_detail_from_message(&message, category)
     }
+
+    pub fn is_recoverable_context_overflow(&self) -> bool {
+        matches!(self, Self::RecoverableContextOverflow(_))
+    }
 }
 
+#[cfg(feature = "agent-runtime")]
 impl From<bitfun_agent_stream::StreamProcessorError> for BitFunError {
     fn from(error: bitfun_agent_stream::StreamProcessorError) -> Self {
         match error {
             bitfun_agent_stream::StreamProcessorError::AiClient(msg) => Self::AIClient(msg),
+            bitfun_agent_stream::StreamProcessorError::AiProvider(error) => Self::AIProvider(error),
             bitfun_agent_stream::StreamProcessorError::Cancelled(msg) => Self::Cancelled(msg),
         }
     }
 }
 
+#[cfg(feature = "agent-runtime")]
 impl From<bitfun_agent_runtime::event_bus::EventBusError> for BitFunError {
     fn from(error: bitfun_agent_runtime::event_bus::EventBusError) -> Self {
         Self::Agent(error.to_string())
@@ -200,7 +230,7 @@ impl From<bitfun_agent_tools::computer_use::ComputerUseContractError> for BitFun
     }
 }
 
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "agent-runtime")]
 impl From<bitfun_services_integrations::mcp::MCPRuntimeError> for BitFunError {
     fn from(error: bitfun_services_integrations::mcp::MCPRuntimeError) -> Self {
         use bitfun_services_integrations::mcp::MCPRuntimeErrorKind;

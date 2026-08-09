@@ -269,19 +269,19 @@
           "label": "停用狀態: ",
           "text": "使用 disabled 屬性，opacity 降低為 0.5"
         },
-        "theme": {
-          "label": "主題支持: ",
-          "text": "primary 變體通過 CSS 變量支持主題定製"
+        "appearance": {
+          "label": "外觀支持: ",
+          "text": "primary 變體遵循 Appearance 變量"
         }
       }
     },
     "previewApp": {
       "title": "BitFun 組件庫",
-      "themeLabel": "主題",
-      "themeTypeLight": "淺色",
-      "themeTypeDark": "深色",
-      "themeDescriptionLight": "淺色主題",
-      "themeDescriptionDark": "深色主題",
+      "appearanceLabel": "外觀",
+      "appearanceModeLight": "淺色",
+      "appearanceModeDark": "深色",
+      "appearanceDescriptionLight": "淺色外觀",
+      "appearanceDescriptionDark": "深色外觀",
       "sidebarTitle": "組件導覽",
       "expandSidebar": "展開導覽",
       "collapseSidebar": "收起導覽",

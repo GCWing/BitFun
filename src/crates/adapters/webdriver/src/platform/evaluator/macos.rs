@@ -25,6 +25,10 @@ pub(super) async fn evaluate_script<R: tauri::Runtime>(
     let wrapped = script::build_native_eval_script(script, args, async_mode, frame_context);
     let (sender, receiver) = oneshot::channel::<Result<String, String>>();
 
+    // SAFETY: Tauri runs this callback on the main thread with a live platform
+    // webview, so the pointer is valid for the call and
+    // `MainThreadMarker::new_unchecked` states a fact the runtime upholds. On
+    // macOS that webview is always WKWebView-backed, making the cast sound.
     let result = webview.with_webview(move |platform_webview| unsafe {
         let wk_webview: &WKWebView = &*platform_webview.inner().cast();
         let ns_script = NSString::from_str(&wrapped);
@@ -102,6 +106,9 @@ unsafe fn ns_object_to_string(obj: &AnyObject) -> Option<String> {
         return None;
     }
 
+    // SAFETY: the class-name check above established that `obj` is an NSString,
+    // and `NSString` is a transparent wrapper over `AnyObject`, so the reborrow
+    // keeps `obj`'s lifetime and points at a live object.
     let ns_string: &NSString = unsafe { &*std::ptr::from_ref::<AnyObject>(obj).cast::<NSString>() };
     Some(ns_string.to_string())
 }

@@ -15,7 +15,7 @@
 
     .tool-name {
       font-weight: 600;
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -23,8 +23,8 @@
   }
 
   .content-summary {
-    font-size: var(--tool-card-action-font-size);
-    color: var(--color-text-secondary);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
   }
 
@@ -36,11 +36,11 @@
     border: none;
     background: transparent;
     cursor: pointer;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     transition: color 0.2s ease;
 
     &:hover {
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
     }
 
     svg {
@@ -53,8 +53,8 @@
     align-items: center;
     
     .error-text {
-      font-size: var(--tool-card-action-font-size);
-      color: color-mix(in srgb, var(--color-error) 90%, transparent);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
+      color: color-mix(in srgb, var(--bf-appearance-token-color-error) 90%, transparent);
       font-weight: 600;
     }
   }
@@ -62,21 +62,21 @@
   .mcp-expanded-content {
     .content-item {
       &:not(:last-child) {
-        margin-bottom: var(--flowchat-card-gap);
-        padding-bottom: var(--flowchat-card-gap);
-        border-bottom: 1px solid var(--color-overlay-white-08);
+        margin-bottom: var(--bf-appearance-token-flowchat-card-gap);
+        padding-bottom: var(--bf-appearance-token-flowchat-card-gap);
+        border-bottom: 1px solid var(--bf-appearance-token-color-overlay-white-08);
       }
     }
 
     .text-content {
       pre {
         margin: 0;
-        padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
-        background: var(--color-overlay-black-20);
+        padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
+        background: var(--bf-appearance-token-color-overlay-black-20);
         border-radius: 4px;
-        font-size: var(--flowchat-font-size-sm);
-        line-height: var(--flowchat-support-line-height);
-        color: var(--color-text-primary);
+        font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+        line-height: var(--bf-appearance-token-flowchat-support-line-height);
+        color: var(--bf-appearance-token-color-text-primary);
         white-space: pre-wrap;
         word-wrap: break-word;
       }
@@ -91,68 +91,68 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: var(--flowchat-control-gap);
-      padding: var(--size-gap-6);
-      color: var(--color-text-secondary);
-      font-size: var(--flowchat-font-size-sm);
+      gap: var(--bf-appearance-token-flowchat-control-gap);
+      padding: var(--bf-appearance-token-size-gap-6);
+      color: var(--bf-appearance-token-color-text-secondary);
+      font-size: var(--bf-appearance-token-flowchat-font-size-sm);
     }
 
     .mcp-app-error {
-      color: color-mix(in srgb, var(--color-error) 90%, transparent);
+      color: color-mix(in srgb, var(--bf-appearance-token-color-error) 90%, transparent);
     }
 
     .mcp-app-iframe {
       width: 100%;
       min-height: 320px;
-      border: 1px solid color-mix(in srgb, var(--color-purple-500) 20%, transparent);
+      border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 20%, transparent);
       border-radius: 6px;
-      background: var(--element-bg-base);
+      background: var(--bf-appearance-token-element-bg-base);
     }
 
     .resource-content {
-      padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
-      background: color-mix(in srgb, var(--color-purple-500) 5%, transparent);
-      border-left: 3px solid color-mix(in srgb, var(--color-purple-500) 50%, transparent);
+      padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 5%, transparent);
+      border-left: 3px solid color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 50%, transparent);
       border-radius: 4px;
 
       .resource-name {
         font-weight: 600;
-        color: var(--color-text-primary);
-        margin-bottom: var(--flowchat-inline-gap);
+        color: var(--bf-appearance-token-color-text-primary);
+        margin-bottom: var(--bf-appearance-token-flowchat-inline-gap);
       }
 
       .resource-uri {
-        font-size: var(--flowchat-font-size-xs);
-        color: color-mix(in srgb, var(--color-purple-500) 70%, transparent);
+        font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+        color: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 70%, transparent);
         font-family: monospace;
-        margin-bottom: var(--flowchat-inline-gap);
+        margin-bottom: var(--bf-appearance-token-flowchat-inline-gap);
       }
 
       .resource-description {
-        font-size: var(--flowchat-font-size-sm);
-        color: var(--color-text-secondary);
+        font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+        color: var(--bf-appearance-token-color-text-secondary);
       }
     }
   }
 
   .error-content {
-    background: var(--glass-red-subtle);
+    background: var(--bf-appearance-token-glass-red-subtle);
     border-radius: 4px;
 
     .error-message {
-      color: color-mix(in srgb, var(--color-error) 90%, transparent);
-      font-size: var(--flowchat-font-size-sm);
+      color: color-mix(in srgb, var(--bf-appearance-token-color-error) 90%, transparent);
+      font-size: var(--bf-appearance-token-flowchat-font-size-sm);
     }
   }
 
   .icon-completed {
-    color: color-mix(in srgb, var(--color-success) 90%, transparent);
+    color: color-mix(in srgb, var(--bf-appearance-token-color-success) 90%, transparent);
   }
 
   .mcp-action-buttons {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap);
+    gap: var(--bf-appearance-token-flowchat-inline-gap);
   }
 
   .mcp-icon-button {
@@ -177,28 +177,28 @@
   }
 
   .mcp-confirm-btn {
-    color: color-mix(in srgb, var(--color-success) 80%, transparent);
+    color: color-mix(in srgb, var(--bf-appearance-token-color-success) 80%, transparent);
     
     &:hover:not(:disabled) {
-      background: var(--color-success-bg);
-      color: var(--color-success);
+      background: var(--bf-appearance-token-color-success-bg);
+      color: var(--bf-appearance-token-color-success);
     }
 
     &:active:not(:disabled) {
-      background: color-mix(in srgb, var(--color-success) 25%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 25%, transparent);
     }
   }
 
   .mcp-reject-btn {
-    color: color-mix(in srgb, var(--color-error) 80%, transparent);
+    color: color-mix(in srgb, var(--bf-appearance-token-color-error) 80%, transparent);
     
     &:hover:not(:disabled) {
-      background: var(--glass-red-hover);
-      color: var(--color-error);
+      background: var(--bf-appearance-token-glass-red-hover);
+      color: var(--bf-appearance-token-color-error);
     }
 
     &:active:not(:disabled) {
-      background: color-mix(in srgb, var(--color-error) 25%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 25%, transparent);
     }
   }
 }

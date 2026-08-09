@@ -39,7 +39,7 @@ export const RELIABILITY_NOTICE_FALLBACK_LABELS: Record<ReviewReliabilityNoticeK
   concurrency_limited: 'Review launch was concurrency-limited',
   partial_reviewer: 'Review returned partial result',
   target_evidence_limited: 'Target evidence limited',
-  reduced_scope: 'Focused review scope',
+  reduced_scope: 'Limited review scope',
   retry_guidance: 'Retry guidance emitted',
   skipped_reviewers: 'Review scope tailored',
   token_budget_limited: 'Token budget limited review coverage',

@@ -1,12 +1,12 @@
-import { RemoteQuestionAnswerPayload, RemoteToolStatusResponse } from '../../model/RemoteModels';
+import { ConversationUiQuestionAnswer, ConversationUiToolStatus } from './ConversationUiModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { ACCENT, CARD, INK, LINE, MUTED, RED } from './Theme';
+import { ToolFileReference, ToolFileReferenceResolver } from '../../services/ToolFileReferenceResolver';
+import { ACCENT, CARD, FILE_LINK, GREEN, INK, LINE, MUTED, PRIMARY_ACTION_TEXT, RED, SOFT } from './Theme';
 
 interface QuestionPreview {
   header?: string;
   question?: string;
 }
-
 interface QuestionPreviewPayload {
   question?: string;
   prompt?: string;
@@ -41,31 +41,33 @@ interface ToolInputSummaryPayload {
 interface ToolRenderEntry {
   type: string;
   key: string;
-  tool?: RemoteToolStatusResponse;
-  tools: RemoteToolStatusResponse[];
+  tool?: ConversationUiToolStatus;
+  tools: ConversationUiToolStatus[];
   readCount: number;
   searchCount: number;
   commandCount: number;
   otherCount: number;
 }
 
-@Component
+@ComponentV2
 export struct ToolStatusList {
-  @Prop tools: RemoteToolStatusResponse[] = [];
-  @Prop isBusy: boolean = false;
-  onApproveTool: (toolId: string, updatedInput?: Object) => void =
+  @Param tools: ConversationUiToolStatus[] = [];
+  @Param isBusy: boolean = false;
+  @Event onApproveTool: (toolId: string, updatedInput?: Object) => void =
     (_toolId: string, _updatedInput?: Object) => {};
-  onRejectTool: (toolId: string) => void = (_toolId: string) => {};
-  onCancelTool: (toolId: string) => void = (_toolId: string) => {};
-  onAnswerQuestion: (toolId: string, answers: RemoteQuestionAnswerPayload) => void =
-    (_toolId: string, _answers: RemoteQuestionAnswerPayload) => {};
-  @State questionAnswerToolId: string = '';
-  @State questionAnswerText: string = '';
-  @State toolInputEditToolId: string = '';
-  @State toolInputEditText: string = '';
-  @State toolInputEditError: string = '';
-  @State expanded: boolean = false;
-  @State expandedToolKey: string = '';
+  @Event onRejectTool: (toolId: string) => void = (_toolId: string) => {};
+  @Event onCancelTool: (toolId: string) => void = (_toolId: string) => {};
+  @Event onAnswerQuestion: (toolId: string, answers: ConversationUiQuestionAnswer) => void =
+    (_toolId: string, _answers: ConversationUiQuestionAnswer) => {};
+  @Event onOpenFilePreview: (path: string, label: string) => void =
+    (_path: string, _label: string) => {};
+  @Local questionAnswerToolId: string = '';
+  @Local questionAnswerText: string = '';
+  @Local toolInputEditToolId: string = '';
+  @Local toolInputEditText: string = '';
+  @Local toolInputEditError: string = '';
+  @Local expanded: boolean = false;
+  @Local expandedToolKey: string = '';
 
   build() {
     Column({ space: 4 }) {
@@ -102,27 +104,29 @@ export struct ToolStatusList {
   }
 
   @Builder
-  ToolRow(tool: RemoteToolStatusResponse, index: number) {
+  ToolRow(tool: ConversationUiToolStatus, index: number) {
     Column({ space: 4 }) {
       Row({ space: 8 }) {
         this.ToolStatusIcon(tool)
         Text(this.toolLineLabel(tool))
           .fontSize(13)
-          .fontColor(this.hasToolError(tool) ? RED : MUTED)
+          .fontColor(this.hasToolError(tool) ? RED :
+            (this.toolFilePath(tool).length > 0 ? FILE_LINK : MUTED))
           .layoutWeight(1)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .onClick(() => {
+            if (this.toolFilePath(tool).length > 0) {
+              this.openToolFile(tool);
+            } else {
+              this.toggleToolExpanded(tool, index);
+            }
+          })
         this.TrailingChevron(tool, index)
       }
       .width('100%')
       .height(28)
       .alignItems(VerticalAlign.Center)
-      .onClick(() => {
-        if (this.canExpandTool(tool)) {
-          const key = this.toolKey(tool, index);
-          this.expandedToolKey = this.expandedToolKey === key ? '' : key;
-        }
-      })
 
       if (this.canExpandTool(tool) && this.expandedToolKey === this.toolKey(tool, index)) {
         if (this.toolInputPreview(tool).length > 0) {
@@ -140,30 +144,26 @@ export struct ToolStatusList {
         Row({ space: 8 }) {
           Text(RemoteI18n.t('chat.approve'))
             .fontSize(12)
-            .fontColor(this.isBusy ? MUTED : CARD)
+            .fontColor(PRIMARY_ACTION_TEXT)
             .textAlign(TextAlign.Center)
             .height(32)
             .layoutWeight(1)
-            .backgroundColor(this.isBusy ? '#EDEBE6' : ACCENT)
+            .backgroundColor(ACCENT)
             .borderRadius(16)
             .onClick(() => {
-              if (!this.isBusy) {
-                this.approveToolWithInput(tool);
-              }
+              this.approveToolWithInput(tool);
             })
           Text(RemoteI18n.t('chat.reject'))
             .fontSize(12)
-            .fontColor(this.isBusy ? MUTED : INK)
+            .fontColor(INK)
             .textAlign(TextAlign.Center)
             .height(32)
             .layoutWeight(1)
-            .backgroundColor('#F0EFEB')
+            .backgroundColor(SOFT)
             .borderRadius(16)
             .border({ width: 1, color: LINE })
             .onClick(() => {
-              if (!this.isBusy) {
-                this.onRejectTool(tool.id || '');
-              }
+              this.onRejectTool(tool.id || '');
             })
         }
         .width('100%')
@@ -177,17 +177,15 @@ export struct ToolStatusList {
           Blank()
           Text(RemoteI18n.t('chat.cancelTool'))
             .fontSize(12)
-            .fontColor(this.isBusy ? MUTED : INK)
+            .fontColor(INK)
             .textAlign(TextAlign.Center)
             .height(32)
             .padding({ left: 14, right: 14 })
-            .backgroundColor('#F0EFEB')
+            .backgroundColor(SOFT)
             .borderRadius(16)
             .border({ width: 1, color: LINE })
             .onClick(() => {
-              if (!this.isBusy) {
-                this.onCancelTool(tool.id || '');
-              }
+              this.onCancelTool(tool.id || '');
             })
         }
         .width('100%')
@@ -207,7 +205,7 @@ export struct ToolStatusList {
   }
 
   @Builder
-  ToolStatusIcon(tool: RemoteToolStatusResponse) {
+  ToolStatusIcon(tool: ConversationUiToolStatus) {
     Stack({ alignContent: Alignment.BottomEnd }) {
       this.ToolTypeBadge(tool)
       if (this.shouldShowStatusBadge(tool)) {
@@ -219,9 +217,16 @@ export struct ToolStatusList {
   }
 
   @Builder
-  TrailingChevron(tool: RemoteToolStatusResponse, index: number) {
+  TrailingChevron(tool: ConversationUiToolStatus, index: number) {
     if (this.canExpandTool(tool)) {
-      this.ChevronIcon(this.expandedToolKey === this.toolKey(tool, index) ? 'down' : 'right')
+      Stack({ alignContent: Alignment.Center }) {
+        this.ChevronIcon(this.expandedToolKey === this.toolKey(tool, index) ? 'down' : 'right')
+      }
+      .width(32)
+      .height(28)
+      .onClick(() => {
+        this.toggleToolExpanded(tool, index);
+      })
     } else {
       Text('')
         .width(14)
@@ -242,7 +247,7 @@ export struct ToolStatusList {
   }
 
   @Builder
-  ToolTypeBadge(tool: RemoteToolStatusResponse) {
+  ToolTypeBadge(tool: ConversationUiToolStatus) {
     Stack({ alignContent: Alignment.Center }) {
       this.ToolTypeSymbol(tool)
     }
@@ -277,7 +282,7 @@ export struct ToolStatusList {
   }
 
   @Builder
-  ToolTypeSymbol(tool: RemoteToolStatusResponse) {
+  ToolTypeSymbol(tool: ConversationUiToolStatus) {
     if (this.isQuestionLikeTool(tool)) {
       SymbolGlyph($r('sys.symbol.questionmark_circle'))
         .fontSize(14)
@@ -374,7 +379,7 @@ export struct ToolStatusList {
   }
 
   @Builder
-  ToolStatusBadge(tool: RemoteToolStatusResponse) {
+  ToolStatusBadge(tool: ConversationUiToolStatus) {
     Text(this.toolStatusIcon(tool))
       .width(10)
       .height(10)
@@ -394,17 +399,17 @@ export struct ToolStatusList {
         .width(3.5)
         .height(3.5)
         .borderRadius(2)
-        .backgroundColor('#2F80ED')
+        .backgroundColor(ACCENT)
       Text('')
         .width(3.5)
         .height(3.5)
         .borderRadius(2)
-        .backgroundColor('#2F80ED')
+        .backgroundColor(ACCENT)
       Text('')
         .width(3.5)
         .height(3.5)
         .borderRadius(2)
-        .backgroundColor('#2F80ED')
+        .backgroundColor(ACCENT)
     }
     .width(16)
     .height(16)
@@ -479,7 +484,7 @@ export struct ToolStatusList {
   }
 
   @Builder
-  ToolInputEditor(tool: RemoteToolStatusResponse) {
+  ToolInputEditor(tool: ConversationUiToolStatus) {
     Column({ space: 6 }) {
       Row() {
         Text(RemoteI18n.t('chat.toolInput'))
@@ -490,11 +495,9 @@ export struct ToolStatusList {
           .fontSize(11)
           .fontColor(MUTED)
           .onClick(() => {
-            if (!this.isBusy) {
-              this.toolInputEditToolId = tool.id || '';
-              this.toolInputEditText = this.defaultToolInputText(tool);
-              this.toolInputEditError = '';
-            }
+            this.toolInputEditToolId = tool.id || '';
+            this.toolInputEditText = this.defaultToolInputText(tool);
+            this.toolInputEditError = '';
           })
       }
       .width('100%')
@@ -503,18 +506,16 @@ export struct ToolStatusList {
         .fontSize(12)
         .fontColor(INK)
         .lineHeight(17)
-        .backgroundColor('#FBFAF7')
+        .backgroundColor(SOFT)
         .borderRadius(14)
         .padding(10)
         .border({ width: 1, color: this.toolInputErrorForTool(tool.id || '').length > 0 ? RED : LINE })
         .defaultFocus(false)
-        .enabled(!this.isBusy)
+        .enabled(true)
         .onChange((value: string) => {
-          if (!this.isBusy) {
-            this.toolInputEditToolId = tool.id || '';
-            this.toolInputEditText = value;
-            this.toolInputEditError = '';
-          }
+          this.toolInputEditToolId = tool.id || '';
+          this.toolInputEditText = value;
+          this.toolInputEditError = '';
         })
       if (this.toolInputErrorForTool(tool.id || '').length > 0) {
         Text(this.toolInputErrorForTool(tool.id || ''))
@@ -527,7 +528,7 @@ export struct ToolStatusList {
   }
 
   @Builder
-  QuestionAnswer(tool: RemoteToolStatusResponse) {
+  QuestionAnswer(tool: ConversationUiToolStatus) {
     Column({ space: 8 }) {
       Text(this.questionPrompt(tool))
         .fontSize(12)
@@ -542,26 +543,24 @@ export struct ToolStatusList {
         .padding(12)
         .border({ width: 1, color: LINE })
         .defaultFocus(false)
-        .enabled(!this.isBusy)
+        .enabled(true)
         .onChange((value: string) => {
-          if (!this.isBusy) {
-            this.questionAnswerToolId = tool.id || '';
-            this.questionAnswerText = value;
-          }
+          this.questionAnswerToolId = tool.id || '';
+          this.questionAnswerText = value;
         })
       Row({ space: 8 }) {
         Text(RemoteI18n.t('chat.submitAnswer'))
           .fontSize(12)
-          .fontColor(this.canSubmitQuestion(tool.id || '') ? CARD : MUTED)
+          .fontColor(this.canSubmitQuestion(tool.id || '') ? PRIMARY_ACTION_TEXT : MUTED)
           .textAlign(TextAlign.Center)
           .height(32)
           .layoutWeight(1)
-          .backgroundColor(this.canSubmitQuestion(tool.id || '') ? ACCENT : '#EDEBE6')
+          .backgroundColor(this.canSubmitQuestion(tool.id || '') ? ACCENT : SOFT)
           .borderRadius(16)
           .onClick(() => {
             if (this.canSubmitQuestion(tool.id || '')) {
               const answer = this.questionAnswerText.trim();
-              const answers: RemoteQuestionAnswerPayload = {
+              const answers: ConversationUiQuestionAnswer = {
                 answer,
                 '0': answer
               };
@@ -597,7 +596,7 @@ export struct ToolStatusList {
     return status || RemoteI18n.t('common.waiting');
   }
 
-  private isEmphasizedToolRow(tool: RemoteToolStatusResponse, index: number): boolean {
+  private isEmphasizedToolRow(tool: ConversationUiToolStatus, index: number): boolean {
     return this.expandedToolKey === this.toolKey(tool, index) ||
       this.hasToolError(tool) ||
       this.isPendingConfirmation(tool) ||
@@ -605,26 +604,26 @@ export struct ToolStatusList {
       this.isRunningTool(tool);
   }
 
-  private toolRowBg(tool: RemoteToolStatusResponse, index: number): string {
+  private toolRowBg(tool: ConversationUiToolStatus, index: number): ResourceColor {
     if (this.isEmphasizedToolRow(tool, index)) {
-      return '#FBFAF7';
+      return SOFT;
     }
     return '#00000000';
   }
 
-  private toolRowBorderWidth(tool: RemoteToolStatusResponse, index: number): number {
+  private toolRowBorderWidth(tool: ConversationUiToolStatus, index: number): number {
     return this.isEmphasizedToolRow(tool, index) ? 1 : 0;
   }
 
-  private toolRowRadius(tool: RemoteToolStatusResponse, index: number): number {
+  private toolRowRadius(tool: ConversationUiToolStatus, index: number): number {
     return this.isEmphasizedToolRow(tool, index) ? 14 : 8;
   }
 
-  private toolRowVerticalPadding(tool: RemoteToolStatusResponse, index: number): number {
+  private toolRowVerticalPadding(tool: ConversationUiToolStatus, index: number): number {
     return this.isEmphasizedToolRow(tool, index) ? 6 : 0;
   }
 
-  private toolRowHorizontalPadding(tool: RemoteToolStatusResponse, index: number): number {
+  private toolRowHorizontalPadding(tool: ConversationUiToolStatus, index: number): number {
     return this.isEmphasizedToolRow(tool, index) ? 10 : 0;
   }
 
@@ -634,9 +633,9 @@ export struct ToolStatusList {
     }
 
     const entries: ToolRenderEntry[] = [];
-    let collapsed: RemoteToolStatusResponse[] = [];
+    let collapsed: ConversationUiToolStatus[] = [];
     let collapsedStart = 0;
-    this.tools.forEach((tool: RemoteToolStatusResponse, index: number) => {
+    this.tools.forEach((tool: ConversationUiToolStatus, index: number) => {
       if (this.shouldCollapseExploreTool(tool)) {
         if (collapsed.length === 0) {
           collapsedStart = index;
@@ -654,9 +653,9 @@ export struct ToolStatusList {
 
   private expandedToolRenderEntries(): ToolRenderEntry[] {
     const entries: ToolRenderEntry[] = [];
-    let collapsed: RemoteToolStatusResponse[] = [];
+    let collapsed: ConversationUiToolStatus[] = [];
     let collapsedStart = 0;
-    this.tools.forEach((tool: RemoteToolStatusResponse, index: number) => {
+    this.tools.forEach((tool: ConversationUiToolStatus, index: number) => {
       if (this.shouldCollapseExploreTool(tool)) {
         if (collapsed.length === 0) {
           collapsedStart = index;
@@ -672,7 +671,7 @@ export struct ToolStatusList {
     return entries;
   }
 
-  private toolEntry(tool: RemoteToolStatusResponse, index: number): ToolRenderEntry {
+  private toolEntry(tool: ConversationUiToolStatus, index: number): ToolRenderEntry {
     return {
       type: 'tool',
       key: this.toolKey(tool, index),
@@ -687,14 +686,14 @@ export struct ToolStatusList {
 
   private flushCollapsedTools(
     entries: ToolRenderEntry[],
-    tools: RemoteToolStatusResponse[],
+    tools: ConversationUiToolStatus[],
     startIndex: number
   ): void {
     if (tools.length === 0) {
       return;
     }
     if (tools.length < 2) {
-      tools.forEach((tool: RemoteToolStatusResponse, index: number) => {
+      tools.forEach((tool: ConversationUiToolStatus, index: number) => {
         entries.push(this.toolEntry(tool, startIndex + index));
       });
       return;
@@ -713,30 +712,30 @@ export struct ToolStatusList {
 
   private flushExpandedCollapsedTools(
     entries: ToolRenderEntry[],
-    tools: RemoteToolStatusResponse[],
+    tools: ConversationUiToolStatus[],
     startIndex: number
   ): void {
     if (tools.length === 0) {
       return;
     }
     if (tools.length < 2) {
-      tools.forEach((tool: RemoteToolStatusResponse, index: number) => {
+      tools.forEach((tool: ConversationUiToolStatus, index: number) => {
         entries.push(this.toolEntry(tool, startIndex + index));
       });
       return;
     }
     this.flushCollapsedTools(entries, tools, startIndex);
-    tools.forEach((tool: RemoteToolStatusResponse, index: number) => {
+    tools.forEach((tool: ConversationUiToolStatus, index: number) => {
       entries.push(this.toolEntry(tool, startIndex + index));
     });
   }
 
-  private collapsedToolStats(tools: RemoteToolStatusResponse[]): ToolRenderEntry {
+  private collapsedToolStats(tools: ConversationUiToolStatus[]): ToolRenderEntry {
     let readCount = 0;
     let searchCount = 0;
     let commandCount = 0;
     let otherCount = 0;
-    tools.forEach((tool: RemoteToolStatusResponse) => {
+    tools.forEach((tool: ConversationUiToolStatus) => {
       const kind = this.exploreToolKind(tool);
       if (kind === 'read') {
         readCount += 1;
@@ -761,7 +760,7 @@ export struct ToolStatusList {
 
   private hasCollapsibleTools(): boolean {
     let runLength = 0;
-    return this.tools.some((tool: RemoteToolStatusResponse) => {
+    return this.tools.some((tool: ConversationUiToolStatus) => {
       if (this.shouldCollapseExploreTool(tool)) {
         runLength += 1;
         return runLength >= 2;
@@ -771,7 +770,7 @@ export struct ToolStatusList {
     });
   }
 
-  private shouldCollapseExploreTool(tool: RemoteToolStatusResponse): boolean {
+  private shouldCollapseExploreTool(tool: ConversationUiToolStatus): boolean {
     if (this.hasToolError(tool) || this.isPendingConfirmation(tool) || this.isQuestionTool(tool) ||
       this.isRunningTool(tool)) {
       return false;
@@ -779,12 +778,12 @@ export struct ToolStatusList {
     return this.isCollapsibleExploreTool(tool) && (this.isCompletedTool(tool) || this.isCancelledTool(tool));
   }
 
-  private isCollapsibleExploreTool(tool: RemoteToolStatusResponse): boolean {
+  private isCollapsibleExploreTool(tool: ConversationUiToolStatus): boolean {
     const kind = this.exploreToolKind(tool);
     return kind === 'read' || kind === 'search';
   }
 
-  private exploreToolKind(tool: RemoteToolStatusResponse): string {
+  private exploreToolKind(tool: ConversationUiToolStatus): string {
     const raw = tool.name || '';
     const normalized = this.normalizedToolName(tool);
     if (raw === 'Read' || normalized === 'read' || normalized === 'read_file' ||
@@ -820,30 +819,30 @@ export struct ToolStatusList {
     return parts.join(' · ');
   }
 
-  private normalizedToolName(tool: RemoteToolStatusResponse): string {
+  private normalizedToolName(tool: ConversationUiToolStatus): string {
     return (tool.name || 'Tool').replace(/[\s-]/g, '_').toLowerCase();
   }
 
-  private isQuestionLikeTool(tool: RemoteToolStatusResponse): boolean {
+  private isQuestionLikeTool(tool: ConversationUiToolStatus): boolean {
     const normalized = this.normalizedToolName(tool);
     return this.isQuestionTool(tool) || normalized === 'askuserquestion' || normalized === 'ask_user_question';
   }
 
-  private isTodoTool(tool: RemoteToolStatusResponse): boolean {
+  private isTodoTool(tool: ConversationUiToolStatus): boolean {
     return this.normalizedToolName(tool).indexOf('todo') >= 0;
   }
 
-  private isTaskTool(tool: RemoteToolStatusResponse): boolean {
+  private isTaskTool(tool: ConversationUiToolStatus): boolean {
     return this.normalizedToolName(tool) === 'task';
   }
 
-  private isDirectoryListTool(tool: RemoteToolStatusResponse): boolean {
+  private isDirectoryListTool(tool: ConversationUiToolStatus): boolean {
     const raw = tool.name || '';
     const normalized = this.normalizedToolName(tool);
     return raw === 'LS' || normalized === 'ls' || normalized === 'list_directory';
   }
 
-  private isFileReadTool(tool: RemoteToolStatusResponse): boolean {
+  private isFileReadTool(tool: ConversationUiToolStatus): boolean {
     const raw = tool.name || '';
     const normalized = this.normalizedToolName(tool);
     return raw === 'Read' || raw === 'LS' ||
@@ -853,7 +852,7 @@ export struct ToolStatusList {
       normalized === 'list_directory';
   }
 
-  private isFileMutationTool(tool: RemoteToolStatusResponse): boolean {
+  private isFileMutationTool(tool: ConversationUiToolStatus): boolean {
     const raw = tool.name || '';
     const normalized = this.normalizedToolName(tool);
     return raw === 'Write' ||
@@ -889,7 +888,7 @@ export struct ToolStatusList {
       normalized === 'patch';
   }
 
-  private isCommandTool(tool: RemoteToolStatusResponse): boolean {
+  private isCommandTool(tool: ConversationUiToolStatus): boolean {
     const raw = tool.name || '';
     const normalized = this.normalizedToolName(tool);
     return raw === 'Bash' ||
@@ -914,13 +913,13 @@ export struct ToolStatusList {
       normalized.indexOf('exec_command') >= 0;
   }
 
-  private isGitTool(tool: RemoteToolStatusResponse): boolean {
+  private isGitTool(tool: ConversationUiToolStatus): boolean {
     const raw = tool.name || '';
     const normalized = this.normalizedToolName(tool);
     return raw === 'Git' || normalized === 'git' || normalized.indexOf('git_') === 0;
   }
 
-  private isWebTool(tool: RemoteToolStatusResponse): boolean {
+  private isWebTool(tool: ConversationUiToolStatus): boolean {
     const raw = tool.name || '';
     const normalized = this.normalizedToolName(tool);
     return raw === 'WebFetch' ||
@@ -928,20 +927,20 @@ export struct ToolStatusList {
       normalized === 'web_fetch';
   }
 
-  private isDiffTool(tool: RemoteToolStatusResponse): boolean {
+  private isDiffTool(tool: ConversationUiToolStatus): boolean {
     const raw = tool.name || '';
     const normalized = this.normalizedToolName(tool);
     return raw === 'GetFileDiff' || normalized === 'get_file_diff' || normalized === 'getfilediff';
   }
 
-  private isDeleteTool(tool: RemoteToolStatusResponse): boolean {
+  private isDeleteTool(tool: ConversationUiToolStatus): boolean {
     const raw = tool.name || '';
     const normalized = this.normalizedToolName(tool);
     return raw === 'Delete' || normalized === 'delete' ||
       normalized === 'delete_file' || normalized === 'remove_file';
   }
 
-  private isFileCreateTool(tool: RemoteToolStatusResponse): boolean {
+  private isFileCreateTool(tool: ConversationUiToolStatus): boolean {
     const raw = tool.name || '';
     const normalized = this.normalizedToolName(tool);
     return raw === 'Write' || raw === 'Create' ||
@@ -951,7 +950,7 @@ export struct ToolStatusList {
       normalized === 'create_file';
   }
 
-  private isPatchTool(tool: RemoteToolStatusResponse): boolean {
+  private isPatchTool(tool: ConversationUiToolStatus): boolean {
     const raw = tool.name || '';
     const normalized = this.normalizedToolName(tool);
     return raw === 'ApplyPatch' ||
@@ -961,7 +960,7 @@ export struct ToolStatusList {
       normalized === 'patch';
   }
 
-  private isSearchTool(tool: RemoteToolStatusResponse): boolean {
+  private isSearchTool(tool: ConversationUiToolStatus): boolean {
     const raw = tool.name || '';
     const normalized = this.normalizedToolName(tool);
     return raw === 'Grep' ||
@@ -974,7 +973,7 @@ export struct ToolStatusList {
       normalized.indexOf('search') >= 0;
   }
 
-  private operationLabel(tool: RemoteToolStatusResponse): string {
+  private operationLabel(tool: ConversationUiToolStatus): string {
     const raw = tool.name || 'Tool';
     const normalized = this.normalizedToolName(tool);
     if (raw === 'TodoWrite' || normalized === 'todo_write' || normalized === 'todowrite') {
@@ -1017,7 +1016,7 @@ export struct ToolStatusList {
     return raw;
   }
 
-  private summaryLabel(tool: RemoteToolStatusResponse): string {
+  private summaryLabel(tool: ConversationUiToolStatus): string {
     const parsed = this.toolInputPayload(tool);
     const fromPayload = this.summaryFromPayload(tool, parsed);
     if (fromPayload.length > 0) {
@@ -1031,7 +1030,7 @@ export struct ToolStatusList {
     return tool.name || 'Tool';
   }
 
-  private toolInputPayload(tool: RemoteToolStatusResponse): ToolInputSummaryPayload {
+  private toolInputPayload(tool: ConversationUiToolStatus): ToolInputSummaryPayload {
     if (tool.tool_input) {
       try {
         return JSON.parse(JSON.stringify(tool.tool_input)) as ToolInputSummaryPayload;
@@ -1048,7 +1047,7 @@ export struct ToolStatusList {
     return {};
   }
 
-  private summaryFromPayload(tool: RemoteToolStatusResponse, payload: ToolInputSummaryPayload): string {
+  private summaryFromPayload(tool: ConversationUiToolStatus, payload: ToolInputSummaryPayload): string {
     const name = tool.name || '';
     if ((name === 'TodoWrite' || this.normalizedToolName(tool) === 'todowrite') &&
       payload.todos && payload.todos.length > 0) {
@@ -1099,7 +1098,7 @@ export struct ToolStatusList {
     return `${text.slice(0, limit)}...`;
   }
 
-  private toolLineLabel(tool: RemoteToolStatusResponse): string {
+  private toolLineLabel(tool: ConversationUiToolStatus): string {
     if (this.isRunningTool(tool)) {
       return `${RemoteI18n.t('chat.toolRunning')} “${this.compactText(this.operationTarget(tool), 24)}”`;
     }
@@ -1115,7 +1114,7 @@ export struct ToolStatusList {
     return `${this.displayStatus(tool.status || 'pending')} · ${this.operationLabel(tool)}`;
   }
 
-  private operationTarget(tool: RemoteToolStatusResponse): string {
+  private operationTarget(tool: ConversationUiToolStatus): string {
     const summary = this.summaryLabel(tool);
     if (summary.length > 0 && summary !== tool.name) {
       return summary;
@@ -1123,111 +1122,56 @@ export struct ToolStatusList {
     return this.operationLabel(tool);
   }
 
-  private canExpandTool(tool: RemoteToolStatusResponse): boolean {
+  private toolFileReference(tool: ConversationUiToolStatus): ToolFileReference | undefined {
+    return ToolFileReferenceResolver.resolve(tool.name || '', tool.tool_input, tool.input_preview || '');
+  }
+
+  private toolFilePath(tool: ConversationUiToolStatus): string {
+    return this.toolFileReference(tool)?.path || '';
+  }
+
+  private openToolFile(tool: ConversationUiToolStatus): void {
+    const reference = this.toolFileReference(tool);
+    if (reference) {
+      this.onOpenFilePreview(reference.path, reference.label);
+    }
+  }
+
+  private toggleToolExpanded(tool: ConversationUiToolStatus, index: number): void {
+    if (!this.canExpandTool(tool)) {
+      return;
+    }
+    const key = this.toolKey(tool, index);
+    this.expandedToolKey = this.expandedToolKey === key ? '' : key;
+  }
+
+  private canExpandTool(tool: ConversationUiToolStatus): boolean {
     return this.hasToolError(tool) || this.isPendingConfirmation(tool) || this.isQuestionTool(tool) ||
       this.isRunningTool(tool) || this.isCompletedTool(tool) || this.isCancelledTool(tool);
   }
 
-  private toolTypeColor(tool: RemoteToolStatusResponse): string {
-    if (this.isQuestionLikeTool(tool)) {
-      return '#A15C00';
-    }
-    if (this.isTodoTool(tool)) {
-      return '#21A85A';
-    }
-    if (this.isTaskTool(tool)) {
-      return '#2D7DDF';
-    }
-    if (this.isGitTool(tool)) {
-      return '#6C5CE7';
-    }
+  private toolTypeColor(tool: ConversationUiToolStatus): ResourceColor {
     if (this.isDeleteTool(tool)) {
       return RED;
     }
-    if (this.isDiffTool(tool)) {
-      return '#7E62D9';
-    }
-    if (this.isPatchTool(tool)) {
-      return '#C2542D';
-    }
-    if (this.isFileCreateTool(tool)) {
-      return '#21A85A';
-    }
-    if (this.isFileMutationTool(tool)) {
-      return '#C2542D';
-    }
-    if (this.isFileReadTool(tool)) {
-      return '#7E62D9';
-    }
-    if (this.isSearchTool(tool)) {
-      return '#D28A16';
-    }
-    if (this.isWebTool(tool)) {
-      return '#2D7DDF';
-    }
-    if (this.isCommandTool(tool)) {
-      return '#1E7A70';
+    if (this.isTodoTool(tool) || this.isFileCreateTool(tool)) {
+      return GREEN;
     }
     return MUTED;
   }
 
-  private toolTypeBg(tool: RemoteToolStatusResponse): string {
-    if (this.isQuestionLikeTool(tool)) {
-      return '#FFF4DE';
-    }
-    if (this.isTodoTool(tool)) {
-      return '#EAF7EF';
-    }
-    if (this.isTaskTool(tool)) {
-      return '#EAF3FF';
-    }
-    if (this.isGitTool(tool)) {
-      return '#F0EDFF';
-    }
-    if (this.isDeleteTool(tool)) {
-      return '#FFECEA';
-    }
-    if (this.isDiffTool(tool)) {
-      return '#F0EDFF';
-    }
-    if (this.isPatchTool(tool)) {
-      return '#FFF0EA';
-    }
-    if (this.isFileCreateTool(tool)) {
-      return '#EAF7EF';
-    }
-    if (this.isFileMutationTool(tool)) {
-      return '#FFF0EA';
-    }
-    if (this.isFileReadTool(tool)) {
-      return '#F0EDFF';
-    }
-    if (this.isSearchTool(tool)) {
-      return '#FFF4DE';
-    }
-    if (this.isWebTool(tool)) {
-      return '#EAF3FF';
-    }
-    if (this.isCommandTool(tool)) {
-      return '#E8F6F4';
-    }
-    return '#F5F4F0';
+  private toolTypeBg(_tool: ConversationUiToolStatus): ResourceColor {
+    return SOFT;
   }
 
-  private toolTypeBorderColor(tool: RemoteToolStatusResponse): string {
+  private toolTypeBorderColor(tool: ConversationUiToolStatus): ResourceColor {
     if (this.hasToolError(tool)) {
-      return '#F0B3AA';
+      return RED;
     }
-    if (this.isPendingConfirmation(tool) || this.isQuestionTool(tool)) {
-      return '#E5C98E';
-    }
-    if (this.isRunningTool(tool)) {
-      return '#9FC5F8';
-    }
-    return '#00000000';
+    return LINE;
   }
 
-  private toolStatusIcon(tool: RemoteToolStatusResponse): string {
+  private toolStatusIcon(tool: ConversationUiToolStatus): string {
     if (this.hasToolError(tool)) {
       return '!';
     }
@@ -1244,24 +1188,14 @@ export struct ToolStatusList {
     return '•';
   }
 
-  private toolStatusColor(tool: RemoteToolStatusResponse): string {
+  private toolStatusColor(tool: ConversationUiToolStatus): ResourceColor {
     if (this.hasToolError(tool)) {
       return RED;
-    }
-    const normalized = (tool.status || '').toLowerCase();
-    if (normalized === 'running' || normalized === 'active') {
-      return '#A15C00';
-    }
-    if (normalized === 'pending_confirmation' || normalized === 'needs_confirmation') {
-      return '#A15C00';
-    }
-    if (normalized === 'cancelled' || normalized === 'canceled' || normalized === 'rejected') {
-      return MUTED;
     }
     return MUTED;
   }
 
-  private shouldShowStatusBadge(tool: RemoteToolStatusResponse): boolean {
+  private shouldShowStatusBadge(tool: ConversationUiToolStatus): boolean {
     return this.hasToolError(tool) ||
       this.isPendingConfirmation(tool) ||
       this.isQuestionTool(tool) ||
@@ -1269,24 +1203,12 @@ export struct ToolStatusList {
       this.isCancelledTool(tool);
   }
 
-  private summaryTypeColor(entry: ToolRenderEntry): string {
-    if (entry.searchCount > 0 && entry.readCount === 0) {
-      return '#D28A16';
-    }
-    if (entry.readCount > 0 && entry.searchCount === 0) {
-      return '#7E62D9';
-    }
+  private summaryTypeColor(_entry: ToolRenderEntry): ResourceColor {
     return MUTED;
   }
 
-  private summaryTypeBg(entry: ToolRenderEntry): string {
-    if (entry.searchCount > 0 && entry.readCount === 0) {
-      return '#FFF4DE';
-    }
-    if (entry.readCount > 0 && entry.searchCount === 0) {
-      return '#F0EDFF';
-    }
-    return '#F5F4F0';
+  private summaryTypeBg(_entry: ToolRenderEntry): ResourceColor {
+    return SOFT;
   }
 
   private toolPreview(preview: string): string {
@@ -1294,7 +1216,7 @@ export struct ToolStatusList {
     return text.length <= 80 ? text : `${text.slice(0, 80)}...`;
   }
 
-  private toolInputPreview(tool: RemoteToolStatusResponse): string {
+  private toolInputPreview(tool: ConversationUiToolStatus): string {
     if (tool.input_preview && tool.input_preview.length > 0) {
       return tool.input_preview;
     }
@@ -1308,7 +1230,7 @@ export struct ToolStatusList {
     return '';
   }
 
-  private toolResultPreview(tool: RemoteToolStatusResponse): string {
+  private toolResultPreview(tool: ConversationUiToolStatus): string {
     const parts: string[] = [];
     if (tool.result_preview && tool.result_preview.length > 0) {
       parts.push(tool.result_preview);
@@ -1332,22 +1254,22 @@ export struct ToolStatusList {
     return text.length <= 480 ? text : `${text.slice(0, 480)}...`;
   }
 
-  private hasToolError(tool: RemoteToolStatusResponse): boolean {
+  private hasToolError(tool: ConversationUiToolStatus): boolean {
     const status = (tool.status || '').toLowerCase();
     return status === 'failed' || status === 'error' || (tool.error_preview || '').length > 0 ||
       (tool.stderr || '').length > 0;
   }
 
-  private isPendingConfirmation(tool: RemoteToolStatusResponse): boolean {
+  private isPendingConfirmation(tool: ConversationUiToolStatus): boolean {
     const status = (tool.status || '').toLowerCase();
     return (status === 'pending_confirmation' || status === 'needs_confirmation') && (tool.id || '').length > 0;
   }
 
-  private hasEditableToolInput(tool: RemoteToolStatusResponse): boolean {
+  private hasEditableToolInput(tool: ConversationUiToolStatus): boolean {
     return !!tool.tool_input;
   }
 
-  private defaultToolInputText(tool: RemoteToolStatusResponse): string {
+  private defaultToolInputText(tool: ConversationUiToolStatus): string {
     if (!tool.tool_input) {
       return '';
     }
@@ -1358,7 +1280,7 @@ export struct ToolStatusList {
     }
   }
 
-  private toolInputTextForTool(tool: RemoteToolStatusResponse): string {
+  private toolInputTextForTool(tool: ConversationUiToolStatus): string {
     const toolId = tool.id || '';
     if (this.toolInputEditToolId === toolId) {
       return this.toolInputEditText;
@@ -1370,10 +1292,7 @@ export struct ToolStatusList {
     return this.toolInputEditToolId === toolId ? this.toolInputEditError : '';
   }
 
-  private approveToolWithInput(tool: RemoteToolStatusResponse): void {
-    if (this.isBusy) {
-      return;
-    }
+  private approveToolWithInput(tool: ConversationUiToolStatus): void {
     const toolId = tool.id || '';
     if (toolId.length === 0) {
       return;
@@ -1405,22 +1324,22 @@ export struct ToolStatusList {
     }
   }
 
-  private isRunningTool(tool: RemoteToolStatusResponse): boolean {
+  private isRunningTool(tool: ConversationUiToolStatus): boolean {
     const status = (tool.status || '').toLowerCase();
     return (status === 'running' || status === 'active') && (tool.id || '').length > 0;
   }
 
-  private isCompletedTool(tool: RemoteToolStatusResponse): boolean {
+  private isCompletedTool(tool: ConversationUiToolStatus): boolean {
     const status = (tool.status || '').toLowerCase();
     return status === 'completed' || status === 'done' || status === 'sent';
   }
 
-  private isCancelledTool(tool: RemoteToolStatusResponse): boolean {
+  private isCancelledTool(tool: ConversationUiToolStatus): boolean {
     const status = (tool.status || '').toLowerCase();
     return status === 'cancelled' || status === 'canceled' || status === 'rejected';
   }
 
-  private isQuestionTool(tool: RemoteToolStatusResponse): boolean {
+  private isQuestionTool(tool: ConversationUiToolStatus): boolean {
     const status = (tool.status || '').toLowerCase();
     const name = tool.name || '';
     return name === 'AskUserQuestion' &&
@@ -1434,7 +1353,7 @@ export struct ToolStatusList {
       (tool.id || '').length > 0;
   }
 
-  private questionPrompt(tool: RemoteToolStatusResponse): string {
+  private questionPrompt(tool: ConversationUiToolStatus): string {
     const preview = this.toolInputPreview(tool);
     const parsedQuestion = this.questionPromptFromJson(preview);
     if (parsedQuestion.length > 0) {
@@ -1475,11 +1394,10 @@ export struct ToolStatusList {
   private canSubmitQuestion(toolId: string): boolean {
     return toolId.length > 0 &&
       this.questionAnswerToolId === toolId &&
-      this.questionAnswerText.trim().length > 0 &&
-      !this.isBusy;
+      this.questionAnswerText.trim().length > 0;
   }
 
-  private toolKey(tool: RemoteToolStatusResponse, index: number): string {
+  private toolKey(tool: ConversationUiToolStatus, index: number): string {
     const signature = this.toolSignature(tool);
     if (tool.id && tool.id.length > 0) {
       return `${index}-${tool.id}-${signature}`;
@@ -1487,7 +1405,7 @@ export struct ToolStatusList {
     return `${index}-${tool.name || 'tool'}-${signature}`;
   }
 
-  private toolSignature(tool: RemoteToolStatusResponse): string {
+  private toolSignature(tool: ConversationUiToolStatus): string {
     const parts: string[] = [
       tool.status || 'pending',
       `${tool.duration_ms || 0}`,

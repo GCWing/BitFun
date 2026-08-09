@@ -92,9 +92,22 @@ export interface RemoteModelConfig {
   context_window?: number;
   enabled: boolean;
   capabilities: string[];
-  enable_thinking_process?: boolean;
-  reasoning_mode?: 'default' | 'enabled' | 'disabled' | 'adaptive';
-  reasoning_effort?: string;
+  reasoning?: {
+    status: 'unsupported' | 'unknown' | 'known';
+    default_preset?: string;
+    presets?: Array<{
+      id: string;
+      label: string;
+      order: number;
+      actions: Array<
+        | { type: 'effort'; value: string }
+        | { type: 'toggle'; enabled: boolean }
+        | { type: 'budget_tokens'; value: number }
+        | { type: 'request_patch'; body: Record<string, unknown> }
+      >;
+      source: 'models_dev' | 'adapter_fallback' | 'model_config';
+    }>;
+  };
 }
 
 export interface RemoteDefaultModels {
@@ -106,7 +119,14 @@ export interface RemoteModelCatalog {
   version: number;
   models: RemoteModelConfig[];
   default_models: RemoteDefaultModels;
+  reasoning_preset_selection_supported?: boolean;
   session_model_id?: string | null;
+  session_reasoning_preset?: string | null;
+}
+
+export interface RemoteSessionModelSelection {
+  model_id: string;
+  reasoning_preset: string | null;
 }
 
 export interface ChatMessageItem {
@@ -398,6 +418,28 @@ export class RemoteSessionManager {
       model_id: modelId,
     });
     return resp.model_id;
+  }
+
+  async setSessionModelSelection(
+    sessionId: string,
+    modelId: string,
+    reasoningPreset: string | null,
+  ): Promise<RemoteSessionModelSelection> {
+    const resp = await this.request<{
+      resp: string;
+      session_id: string;
+      model_id: string;
+      reasoning_preset: string | null;
+    }>({
+      cmd: 'set_session_model',
+      session_id: sessionId,
+      model_id: modelId,
+      reasoning_preset: reasoningPreset,
+    });
+    return {
+      model_id: resp.model_id,
+      reasoning_preset: resp.reasoning_preset ?? null,
+    };
   }
 
   async sendMessage(

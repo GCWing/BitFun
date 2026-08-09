@@ -8041,10 +8041,14 @@ mod tests {
         .await
         .expect("git init should succeed for repository root test");
 
-        let expected = normalize_repository_root(
-            root.to_str()
-                .expect("temporary repository path should be valid UTF-8"),
-        );
+        let root_text = root
+            .to_str()
+            .expect("temporary repository path should be valid UTF-8");
+        // Git for Windows reports a normal drive path, while
+        // std::fs::canonicalize uses the equivalent verbatim path form.
+        #[cfg(windows)]
+        let root_text = root_text.strip_prefix(r"\\?\").unwrap_or(root_text);
+        let expected = normalize_repository_root(root_text);
         let nested_root = get_repository_root(
             nested
                 .to_str()

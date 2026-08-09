@@ -105,8 +105,8 @@
    SVG outline filter (defined inline in the markup) so the silhouette is
    surrounded by a single continuous light contour rather than per-shape
    outlines on every internal element. */
-:root[data-theme-type='dark'] .bitfun-chat-input-pixel-pet,
-[data-theme-type='dark'] .bitfun-chat-input-pixel-pet {
+:root[data-bf-appearance-mode='dark'] .bitfun-chat-input-pixel-pet,
+[data-bf-appearance-mode='dark'] .bitfun-chat-input-pixel-pet {
   --bitfun-pet-decor: rgb(var(--bitfun-pet-cream-rgb));
   --bitfun-pet-decor-soft: rgba(var(--bitfun-pet-cream-rgb), 0.6);
 

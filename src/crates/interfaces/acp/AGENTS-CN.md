@@ -8,9 +8,10 @@
 
 CLI 托管的 ACP 服务端已通过 `ProductAssembler` 消费 `DeliveryProfile::Acp`，并使用 Agent Runtime SDK
 完成会话创建/列举、活动会话模型/模式更新、轮次提交/取消、交互响应和 Agent 事件订阅。`bitfun-acp` 仍直接依赖
-`bitfun-core/product-full`，用于一次性恢复完整持久化历史、模型/模式目录与提供方配置读取、MCP 配置，
-以及本 crate 的 ACP 客户端路径。在这些生产路径分别获得可移植替代并证明等价前，不得宣称整个 crate
-已与 Core 解耦。
+`bitfun-core` 的 `agent-runtime`、`canvas-runtime`、`external-sources` 与 `ssh-remote` owner feature，
+用于一次性恢复完整持久化历史、模型/模式目录、Canvas 工具物化、提供方与兼容指令来源读取、MCP 配置、
+远程工作区，以及本 crate 的 ACP 客户端路径。
+在这些生产路径分别获得可移植替代并证明等价前，不得宣称整个 crate 已与 Core 解耦。
 
 ## 护栏
 

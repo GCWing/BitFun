@@ -9,16 +9,20 @@ export type ConfigTab =
   | 'basics'
   | 'appearance'
   | 'models'
+  | 'worktrees'
   | 'archived-sessions'
   // | 'session-personalization' // temporarily hidden from config center
   | 'session-permissions'
   | 'quick-actions'
-  // | 'voice-input' // temporarily hidden from config center
+  | 'voice-input'
   | 'review'
   | 'memories'
   | 'mcp-tools'
-  // | 'external-sources' // temporarily hidden from config center
-  // | 'acp-agents' // temporarily hidden from config center
+  | 'external-sources'
+  | 'hooks'
+  | 'acp-agents'
+  | 'external-sources' // temporarily hidden from config center
+  | 'acp-agents' // temporarily hidden from config center
   // | 'lsp' // temporarily hidden from config center
   | 'editor'
   | 'keyboard';
@@ -73,7 +77,6 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'language',
           'locale',
           'i18n',
-          'theme',
           'appearance',
           'font',
           'fonts',
@@ -113,6 +116,19 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'sessions',
           'restore',
           'unarchive',
+        ],
+      },
+      {
+        id: 'worktrees',
+        labelKey: 'configCenter.tabs.worktrees',
+        descriptionKey: 'configCenter.tabDescriptions.worktrees',
+        keywords: [
+          'git',
+          'worktree',
+          'isolation',
+          'parallel',
+          'branch',
+          'session',
         ],
       },
       {
@@ -185,13 +201,12 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'shortcut',
         ],
       },
-      // voice-input temporarily hidden from config center
-      // {
-      //   id: 'voice-input',
-      //   labelKey: 'configCenter.tabs.voiceInput',
-      //   descriptionKey: 'configCenter.tabDescriptions.voiceInput',
-      //   keywords: ['voice', 'speech', 'microphone', 'dictation', 'transcription', 'audio'],
-      // },
+      {
+        id: 'voice-input',
+        labelKey: 'configCenter.tabs.voiceInput',
+        descriptionKey: 'configCenter.tabDescriptions.voiceInput',
+        keywords: ['voice', 'speech', 'microphone', 'dictation', 'transcription', 'audio'],
+      },
       {
         id: 'review',
         labelKey: 'configCenter.tabs.review',
@@ -223,44 +238,45 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'knowledge',
         ],
       },
-      // external-sources temporarily hidden from config center
-      // {
-      //   id: 'external-sources',
-      //   labelKey: 'configCenter.tabs.externalSources',
-      //   descriptionKey: 'configCenter.tabDescriptions.externalSources',
-      //   beta: true,
-      //   keywords: [
-      //     'external ai applications',
-      //     'import work',
-      //     'extensions',
-      //     'commands',
-      //     'opencode',
-      //     'claude code',
-      //     'codex',
-      //     'compatibility',
-      //   ],
-      // },
+      {
+        id: 'external-sources',
+        labelKey: 'configCenter.tabs.externalSources',
+        descriptionKey: 'configCenter.tabDescriptions.externalSources',
+        beta: true,
+        keywords: [
+          'external ai applications',
+          'import work',
+          'extensions',
+          'commands',
+          'opencode',
+          'claude code',
+          'codex',
+          'hook',
+          'hooks',
+          'agent hooks',
+          'compatibility',
+        ],
+      },
       {
         id: 'mcp-tools',
         labelKey: 'configCenter.tabs.mcpTools',
         descriptionKey: 'configCenter.tabDescriptions.mcpTools',
         keywords: ['mcp', 'server', 'plugin', 'stdio', 'sse', 'tools'],
       },
-      // ACP Agent settings — temporarily hidden from nav
-      // {
-      //   id: 'acp-agents',
-      //   labelKey: 'configCenter.tabs.acpAgents',
-      //   descriptionKey: 'configCenter.tabDescriptions.acpAgents',
-      //   keywords: [
-      //     'acp',
-      //     'agent client protocol',
-      //     'external agent',
-      //     'opencode',
-      //     'claude code',
-      //     'codex',
-      //     'stdio',
-      //   ],
-      // },
+      {
+        id: 'acp-agents',
+        labelKey: 'configCenter.tabs.acpAgents',
+        descriptionKey: 'configCenter.tabDescriptions.acpAgents',
+        keywords: [
+          'acp',
+          'agent client protocol',
+          'external agent',
+          'opencode',
+          'claude code',
+          'codex',
+          'stdio',
+        ],
+      },
     ],
   },
   {
@@ -295,16 +311,31 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
 
 export const DEFAULT_SETTINGS_TAB: ConfigTab = 'basics';
 
+export type SettingsContentFocus = 'hooks';
+
+export interface NormalizedSettingsTarget {
+  tab: ConfigTab;
+  focus?: SettingsContentFocus;
+}
+
 const KNOWN_TABS: ConfigTab[] = SETTINGS_CATEGORIES.flatMap((c) => c.tabs.map((t) => t.id));
 
-/** Map removed or renamed tabs; used by deep links and IDE actions. */
+/** Normalize supported settings deep links and IDE actions. */
 export function normalizeSettingsTab(section: string): ConfigTab {
-  if (section === 'theme' || section === 'font' || section === 'fonts') return 'appearance';
+  if (section === 'font' || section === 'fonts') return 'appearance';
   if (section === 'logging' || section === 'terminal') return 'basics';
   if (section === 'lsp') return DEFAULT_SETTINGS_TAB;
   if (section === 'session-config') return 'session-permissions';
   if (section === 'deep-review' || section === 'code-review' || section === 'review-team') return 'review';
   if (section === 'shortcuts' || section === 'keybindings' || section === 'hotkeys') return 'keyboard';
+  // Hooks are part of the external AI applications surface, not a standalone page.
+  if (section === 'hooks') return 'external-sources';
   if ((KNOWN_TABS as readonly string[]).includes(section)) return section as ConfigTab;
   return DEFAULT_SETTINGS_TAB;
+}
+
+/** Preserve an optional in-page target while normalizing the owning Settings tab. */
+export function normalizeSettingsTarget(section: string): NormalizedSettingsTarget {
+  if (section === 'hooks') return { tab: 'external-sources', focus: 'hooks' };
+  return { tab: normalizeSettingsTab(section) };
 }

@@ -1,17 +1,6 @@
 import type React from 'react';
 import type { CanvasColor, CanvasCommonStyleProps, CanvasTone } from './types';
 
-export const colorPalette = [
-  'gray',
-  'purple',
-  'green',
-  'yellow',
-  'cyan',
-  'pink',
-  'blue',
-  'orange',
-] as const satisfies readonly CanvasColor[];
-
 export const usageColorSequence = [
   'gray',
   'purple',
@@ -23,31 +12,31 @@ export const usageColorSequence = [
 ] as const satisfies readonly CanvasColor[];
 
 export const categoryPaletteLight: Record<CanvasColor, string> = {
-  gray: 'var(--color-text-muted)',
-  purple: 'var(--color-accent-500)',
-  green: 'var(--color-success)',
-  yellow: 'var(--color-warning)',
-  cyan: 'var(--color-info)',
+  gray: 'var(--bf-appearance-token-color-text-muted)',
+  purple: 'var(--bf-appearance-token-color-accent-500)',
+  green: 'var(--bf-appearance-token-color-success)',
+  yellow: 'var(--bf-appearance-token-color-warning)',
+  cyan: 'var(--bf-appearance-token-color-info)',
   pink: 'var(--bitfun-canvas-danger)',
-  blue: 'var(--color-accent-500)',
-  orange: 'var(--color-warning)',
+  blue: 'var(--bf-appearance-token-color-accent-500)',
+  orange: 'var(--bf-appearance-token-color-warning)',
 };
 
 export const categoryPaletteDark = categoryPaletteLight;
 
 export const canvasTokensLight = {
-  bg: 'var(--color-bg-primary)',
-  panel: 'var(--color-bg-secondary)',
-  elevated: 'var(--color-bg-elevated)',
-  chrome: 'var(--color-bg-chrome)',
-  text: 'var(--color-text-primary)',
-  textSecondary: 'var(--color-text-secondary)',
-  textMuted: 'var(--color-text-muted)',
-  border: 'var(--border-subtle)',
-  accent: 'var(--color-accent-500)',
-  success: 'var(--color-success)',
-  warning: 'var(--color-warning)',
-  danger: 'var(--color-error)',
+  bg: 'var(--bf-appearance-token-color-bg-primary)',
+  panel: 'var(--bf-appearance-token-color-bg-secondary)',
+  elevated: 'var(--bf-appearance-token-color-bg-elevated)',
+  chrome: 'var(--bf-appearance-token-color-bg-chrome)',
+  text: 'var(--bf-appearance-token-color-text-primary)',
+  textSecondary: 'var(--bf-appearance-token-color-text-secondary)',
+  textMuted: 'var(--bf-appearance-token-color-text-muted)',
+  border: 'var(--bf-appearance-token-border-subtle)',
+  accent: 'var(--bf-appearance-token-color-accent-500)',
+  success: 'var(--bf-appearance-token-color-success)',
+  warning: 'var(--bf-appearance-token-color-warning)',
+  danger: 'var(--bf-appearance-token-color-error)',
   info: 'var(--bitfun-canvas-info)',
 };
 
@@ -167,7 +156,7 @@ export function toneColor(tone: CanvasTone | undefined): string {
     tone === 'muted' ||
     tone === 'neutral'
   ) {
-    return 'var(--color-text-muted)';
+    return 'var(--bf-appearance-token-color-text-muted)';
   }
-  return 'var(--color-text-primary)';
+  return 'var(--bf-appearance-token-color-text-primary)';
 }

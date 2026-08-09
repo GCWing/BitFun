@@ -91,8 +91,8 @@ impl PathManager {
 
     /// Get user config root directory
     ///
-    /// - Windows: %APPDATA%\BitFun\
-    /// - macOS: ~/Library/Application Support/BitFun/
+    /// - Windows: %APPDATA%\bitfun\
+    /// - macOS: ~/Library/Application Support/bitfun/
     /// - Linux: ~/.config/bitfun/
     fn get_user_config_root() -> BitFunResult<PathBuf> {
         Ok(PathBuf::from("/data/storage/el2/base/files/bitfun"))
@@ -222,6 +222,11 @@ impl PathManager {
         self.user_config_dir().join("app.json")
     }
 
+    /// Get user agent hooks file: ~/.config/bitfun/config/hooks.json
+    pub fn user_hooks_file(&self) -> PathBuf {
+        self.user_config_dir().join("hooks.json")
+    }
+
     /// Get user agent directory: ~/.config/bitfun/agents/
     pub fn user_agents_dir(&self) -> PathBuf {
         self.user_root.join("agents")
@@ -315,6 +320,11 @@ impl PathManager {
             .join("coordination.sqlite")
     }
 
+    /// Process-level ownership locks for local Agent Runtime deployments.
+    pub fn agent_runtime_ownership_dir(&self) -> PathBuf {
+        self.user_data_dir().join("agent-runtime").join("ownership")
+    }
+
     /// Get user memory workspace root directory: ~/.bitfun/memories/
     pub fn memories_root_dir(&self) -> PathBuf {
         self.bitfun_home_dir().join("memories")
@@ -391,6 +401,11 @@ impl PathManager {
         self.bitfun_home_dir().join("projects")
     }
 
+    /// Default root for opt-in managed Git worktrees.
+    pub fn worktrees_root(&self) -> PathBuf {
+        self.bitfun_home_dir().join("worktrees")
+    }
+
     /// Get the runtime root for a workspace: ~/.bitfun/projects/<workspace-slug>/
     pub fn project_runtime_root(&self, workspace_path: &Path) -> PathBuf {
         self.projects_root()
@@ -424,6 +439,12 @@ impl PathManager {
     pub fn project_agent_subagents_file(&self, workspace_path: &Path) -> PathBuf {
         self.project_internal_config_dir(workspace_path)
             .join("agent_subagents.json")
+    }
+
+    /// Get project agent hooks file: {project}/.bitfun/config/hooks.json
+    pub fn project_hooks_file(&self, workspace_path: &Path) -> PathBuf {
+        self.project_internal_config_dir(workspace_path)
+            .join("hooks.json")
     }
 
     /// Get project agent directory: {project}/.bitfun/agents/
@@ -534,14 +555,14 @@ impl PathManager {
     }
 
     #[cfg(unix)]
-    fn native_path_digest(path: &Path) -> String {
+    pub(crate) fn native_path_digest(path: &Path) -> String {
         use std::os::unix::ffi::OsStrExt;
 
         hex::encode(Sha256::digest(path.as_os_str().as_bytes()))
     }
 
     #[cfg(windows)]
-    fn native_path_digest(path: &Path) -> String {
+    pub(crate) fn native_path_digest(path: &Path) -> String {
         use std::os::windows::ffi::OsStrExt;
 
         let mut hasher = Sha256::new();
@@ -552,7 +573,7 @@ impl PathManager {
     }
 
     #[cfg(not(any(unix, windows)))]
-    fn native_path_digest(path: &Path) -> String {
+    pub(crate) fn native_path_digest(path: &Path) -> String {
         hex::encode(Sha256::digest(path.to_string_lossy().as_bytes()))
     }
 
@@ -714,6 +735,20 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn runtime_ownership_lives_under_the_agent_runtime_data_root() {
+        let user_root = std::env::temp_dir().join("bitfun-runtime-ownership-path-test");
+        let path_manager = PathManager::with_user_root_for_tests(user_root);
+
+        assert_eq!(
+            path_manager.agent_runtime_ownership_dir(),
+            path_manager
+                .user_data_dir()
+                .join("agent-runtime")
+                .join("ownership")
+        );
+    }
 
     #[test]
     fn strict_path_access_rejects_a_cached_temporary_fallback() {

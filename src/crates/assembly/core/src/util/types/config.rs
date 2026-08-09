@@ -74,7 +74,12 @@ impl TryFrom<AIModelConfig> for AIConfig {
     type Error = String;
 
     fn try_from(other: AIModelConfig) -> Result<Self, Self::Error> {
-        let reasoning_mode = other.effective_reasoning_mode();
+        if !other.supports_text_generation() {
+            return Err(format!(
+                "Model '{}' does not support text_chat and cannot be used for text generation",
+                other.name
+            ));
+        }
 
         let custom_request_body = if let Some(body_str) = &other.custom_request_body {
             match serde_json::from_str::<serde_json::Value>(body_str) {
@@ -145,13 +150,10 @@ impl TryFrom<AIModelConfig> for AIConfig {
             max_tokens: Some(max_tokens),
             temperature: other.temperature,
             top_p: other.top_p,
-            reasoning_mode,
             inline_think_in_text: other.inline_think_in_text,
             custom_headers: other.custom_headers,
             custom_headers_mode: other.custom_headers_mode,
             skip_ssl_verify: other.skip_ssl_verify,
-            reasoning_effort: other.reasoning_effort,
-            thinking_budget_tokens: other.thinking_budget_tokens,
             custom_request_body,
             custom_request_body_mode: other.custom_request_body_mode,
         })
@@ -161,7 +163,7 @@ impl TryFrom<AIModelConfig> for AIConfig {
 #[cfg(test)]
 mod tests {
     use super::{resolve_request_url, AIConfig};
-    use crate::service::config::types::{AIModelConfig, ModelCategory, ReasoningMode};
+    use crate::service::config::types::{AIModelConfig, ModelCapability, ModelCategory};
 
     #[test]
     fn resolves_openai_request_url() {
@@ -249,14 +251,11 @@ mod tests {
             capabilities: vec![],
             recommended_for: vec![],
             metadata: None,
-            enable_thinking_process: false,
-            reasoning_mode: None,
+            reasoning: None,
             inline_think_in_text: false,
             custom_headers: None,
             custom_headers_mode: None,
             skip_ssl_verify: false,
-            reasoning_effort: None,
-            thinking_budget_tokens: None,
             custom_request_body: None,
             custom_request_body_mode: None,
             auth: Default::default(),
@@ -264,18 +263,9 @@ mod tests {
     }
 
     #[test]
-    fn compatibility_false_thinking_maps_to_default_mode() {
+    fn missing_reasoning_default_does_not_change_runtime_config() {
         let config = AIConfig::try_from(base_model_config()).expect("conversion should succeed");
-        assert_eq!(config.reasoning_mode, ReasoningMode::Default);
-    }
-
-    #[test]
-    fn compatibility_true_thinking_maps_to_enabled_mode() {
-        let mut model = base_model_config();
-        model.enable_thinking_process = true;
-
-        let config = AIConfig::try_from(model).expect("conversion should succeed");
-        assert_eq!(config.reasoning_mode, ReasoningMode::Enabled);
+        assert_eq!(config.model, "test-model");
     }
 
     #[test]
@@ -329,5 +319,18 @@ mod tests {
         let error = AIConfig::try_from(model).expect_err("conversion should reject small context");
 
         assert!(error.contains("at least 32000"));
+    }
+
+    #[test]
+    fn rejects_pure_speech_models_at_the_text_generation_boundary() {
+        let mut model = base_model_config();
+        model.category = ModelCategory::SpeechRecognition;
+        model.capabilities = vec![ModelCapability::SpeechRecognition];
+        model.context_window = None;
+        model.max_tokens = None;
+
+        let error = AIConfig::try_from(model).expect_err("speech model is not a chat model");
+
+        assert!(error.contains("does not support text_chat"));
     }
 }

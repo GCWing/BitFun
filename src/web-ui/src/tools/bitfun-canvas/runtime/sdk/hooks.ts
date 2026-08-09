@@ -1,7 +1,7 @@
 import React from 'react';
 
 type CanvasRuntimeHooks = {
-  useHostTheme?: () => unknown;
+  useHostAppearance?: () => unknown;
   useCanvasState?: <T>(key: string, defaultValue: T) => [T, (value: T | ((previous: T) => T)) => void];
   useCanvasAction?: () => (action: unknown) => Promise<unknown>;
 };
@@ -17,8 +17,8 @@ function runtimeHooks(): CanvasRuntimeHooks {
   return window.BitfunCanvasRuntimeHooks || {};
 }
 
-export function useHostTheme() {
-  const hook = runtimeHooks().useHostTheme;
+export function useHostAppearance() {
+  const hook = runtimeHooks().useHostAppearance;
   return hook ? hook() : {};
 }
 

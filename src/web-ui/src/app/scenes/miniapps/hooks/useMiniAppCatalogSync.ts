@@ -7,6 +7,7 @@ import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { BackgroundTaskCancelledError } from '@/shared/utils/backgroundTaskScheduler';
 import { createLogger } from '@/shared/utils/logger';
 import { useMiniAppStore } from '../miniAppStore';
+import { loadInstalledMarketOrigins } from '../utils/loadInstalledMarketOrigins';
 import { scheduleMiniAppCatalogStartupRefresh } from './miniAppCatalogStartupRefresh';
 
 const log = createLogger('useMiniAppCatalogSync');
@@ -20,6 +21,7 @@ export function useMiniAppCatalogSync(options: UseMiniAppCatalogSyncOptions = {}
   const { enabled = true, initialLoad = 'immediate' } = options;
   const setApps = useMiniAppStore((state) => state.setApps);
   const setLoading = useMiniAppStore((state) => state.setLoading);
+  const setMarketOrigins = useMiniAppStore((state) => state.setMarketOrigins);
   const setRunningWorkerIds = useMiniAppStore((state) => state.setRunningWorkerIds);
   const markWorkerRunning = useMiniAppStore((state) => state.markWorkerRunning);
   const markWorkerStopped = useMiniAppStore((state) => state.markWorkerStopped);
@@ -27,14 +29,18 @@ export function useMiniAppCatalogSync(options: UseMiniAppCatalogSyncOptions = {}
   const refreshApps = useCallback(async () => {
     setLoading(true);
     try {
-      const apps = await miniAppAPI.listMiniApps();
+      const [apps, origins] = await Promise.all([
+        miniAppAPI.listMiniApps(),
+        loadInstalledMarketOrigins(),
+      ]);
       setApps(apps);
+      setMarketOrigins(origins);
     } catch (error) {
       log.error('Failed to load miniapps', error);
     } finally {
       setLoading(false);
     }
-  }, [setApps, setLoading]);
+  }, [setApps, setLoading, setMarketOrigins]);
 
   const refreshRunningWorkers = useCallback(async () => {
     try {

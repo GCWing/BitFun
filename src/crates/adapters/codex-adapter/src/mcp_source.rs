@@ -1,11 +1,12 @@
 use bitfun_product_domains::external_sources::{
     EcosystemId, ExternalMcpDiscoveryInput, ExternalMcpProviderIdentity,
     ExternalMcpProviderSnapshot, ExternalMcpServerDefinition, ExternalMcpSourceProvider,
-    ExternalMcpStaticStatus, ExternalMcpTransportKind, ExternalSourceAssetKind,
-    ExternalSourceContext, ExternalSourceDiagnostic, ExternalSourceHealth,
+    ExternalMcpStaticStatus, ExternalMcpTimeouts, ExternalMcpTransportKind,
+    ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic, ExternalSourceHealth,
     ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope, ExternalWatchRoot,
-    PreparedExternalMcpServer, PreparedExternalMcpTransport, SecretValue, SourceKey,
-    SourceQualifiedMcpServerId,
+    PreparedExternalMcpImportServer, PreparedExternalMcpImportTransport, PreparedExternalMcpServer,
+    PreparedExternalMcpTransport, SecretValue, SourceKey, SourceQualifiedMcpServerId,
+    MAX_EXTERNAL_MCP_TIMEOUT_MS,
 };
 use bitfun_static_hook_support::{
     read_bounded_text, redacted_executable_preview, resolve_bounded_regular_file,
@@ -26,6 +27,7 @@ const MAX_MAP_ENTRIES: usize = 128;
 const MAX_RUNTIME_TEXT_BYTES: usize = 64 * 1024;
 
 const SUPPORTED_FIELDS: &[&str] = &[
+    "name",
     "command",
     "args",
     "env",
@@ -38,6 +40,9 @@ const SUPPORTED_FIELDS: &[&str] = &[
     "enabled",
     "required",
     "auth",
+    "startup_timeout_sec",
+    "startup_timeout_ms",
+    "tool_timeout_sec",
 ];
 
 #[derive(Debug, Clone)]
@@ -134,7 +139,7 @@ impl CodexMcpProvider {
             let key = source_key(&layer.path);
             let allowed_root = layer.path.parent().unwrap_or(Path::new("."));
             let resolved_path = resolve_bounded_regular_file(&layer.path, allowed_root)
-                .map_err(|error| bounded_file_error(error))?;
+                .map_err(bounded_file_error)?;
             let parsed = parse_layer(&resolved_path);
             let mut layer_diagnostics = parsed
                 .diagnostics
@@ -236,6 +241,64 @@ impl CodexMcpProvider {
             .map_err(|error| provider_error("snapshot_invalid", &error.to_string(), false))?;
         Ok(MaterializedSnapshot { snapshot, prepared })
     }
+
+    fn current_preparation(
+        &self,
+        input: &ExternalMcpDiscoveryInput,
+        server_id: &SourceQualifiedMcpServerId,
+        expected_behavior_version: &str,
+    ) -> Result<(ExternalMcpServerDefinition, PreparedTransportTemplate), ExternalSourceProviderError>
+    {
+        if server_id.source.provider_id.as_str() != PROVIDER_ID {
+            return Err(provider_error(
+                "identity_mismatch",
+                "MCP server is not owned by the Codex MCP provider",
+                false,
+            ));
+        }
+        let materialized = self.materialize(input)?;
+        let definition = materialized
+            .snapshot
+            .servers
+            .iter()
+            .find(|definition| &definition.id == server_id)
+            .cloned()
+            .ok_or_else(|| {
+                provider_error(
+                    "stale_revision",
+                    "MCP server is no longer available at the requested revision",
+                    true,
+                )
+            })?;
+        if definition.behavior_version != expected_behavior_version {
+            return Err(provider_error(
+                "stale_revision",
+                "MCP server behavior changed before preparation",
+                true,
+            ));
+        }
+        if !definition.source_enabled
+            || !matches!(definition.static_status, ExternalMcpStaticStatus::Ready)
+        {
+            return Err(provider_error(
+                "not_activatable",
+                "MCP server is disabled or unsupported",
+                false,
+            ));
+        }
+        let template = materialized
+            .prepared
+            .get(&server_id.stable_key())
+            .cloned()
+            .ok_or_else(|| {
+                provider_error(
+                    "preparation_missing",
+                    "MCP preparation is unavailable",
+                    false,
+                )
+            })?;
+        Ok((definition, template))
+    }
 }
 
 impl Default for CodexMcpProvider {
@@ -263,52 +326,25 @@ impl ExternalMcpSourceProvider for CodexMcpProvider {
         server_id: &SourceQualifiedMcpServerId,
         expected_behavior_version: &str,
     ) -> Result<PreparedExternalMcpServer, ExternalSourceProviderError> {
-        if server_id.source.provider_id.as_str() != PROVIDER_ID {
-            return Err(provider_error(
-                "identity_mismatch",
-                "MCP server is not owned by the Codex MCP provider",
-                false,
-            ));
-        }
-        let materialized = self.materialize(input)?;
-        let definition = materialized
-            .snapshot
-            .servers
-            .iter()
-            .find(|definition| &definition.id == server_id)
-            .ok_or_else(|| {
-                provider_error(
-                    "stale_revision",
-                    "MCP server is no longer available at the requested revision",
-                    true,
-                )
-            })?;
-        if definition.behavior_version != expected_behavior_version {
-            return Err(provider_error(
-                "stale_revision",
-                "MCP server behavior changed before activation",
-                true,
-            ));
-        }
-        if !matches!(definition.static_status, ExternalMcpStaticStatus::Ready) {
-            return Err(provider_error(
-                "not_activatable",
-                "MCP server is disabled, unsupported, or invalid",
-                false,
-            ));
-        }
-        let template = materialized
-            .prepared
-            .get(&server_id.stable_key())
-            .cloned()
-            .ok_or_else(|| {
-                provider_error(
-                    "preparation_missing",
-                    "MCP runtime preparation is unavailable",
-                    false,
-                )
-            })?;
-        prepare_transport(template, server_id.clone(), expected_behavior_version)
+        let (definition, template) =
+            self.current_preparation(input, server_id, expected_behavior_version)?;
+        prepare_transport(
+            template,
+            server_id.clone(),
+            expected_behavior_version,
+            definition.timeouts,
+        )
+    }
+
+    fn prepare_import(
+        &self,
+        input: &ExternalMcpDiscoveryInput,
+        server_id: &SourceQualifiedMcpServerId,
+        expected_behavior_version: &str,
+    ) -> Result<PreparedExternalMcpImportServer, ExternalSourceProviderError> {
+        let (definition, template) =
+            self.current_preparation(input, server_id, expected_behavior_version)?;
+        prepare_import_projection(definition, template)
     }
 
     fn watch_roots(&self, context: &ExternalSourceContext) -> Vec<ExternalWatchRoot> {
@@ -353,6 +389,7 @@ enum PreparedTransportTemplate {
         environment: BTreeMap<String, String>,
         environment_refs: BTreeMap<String, String>,
         working_directory: Option<PathBuf>,
+        working_directory_explicit: bool,
     },
     Remote {
         url: String,
@@ -495,6 +532,9 @@ fn materialize_server(
         .filter(|field| !SUPPORTED_FIELDS.contains(&field.as_str()))
         .map(|field| format!("Codex MCP field '{field}' is not supported"))
         .collect::<Vec<_>>();
+    if object.get("name").is_some_and(|value| !value.is_str()) {
+        reasons.push("Codex MCP name must be a string".to_string());
+    }
     let enabled = match object.get("enabled") {
         None => true,
         Some(Value::Boolean(value)) => *value,
@@ -589,6 +629,8 @@ fn materialize_local(
     }
     let environment = string_map(object.get("env"), "env", &mut reasons);
     let environment_refs = environment_refs(object.get("env_vars"), &mut reasons);
+    let timeouts = timeout_overrides(object, &mut reasons);
+    let working_directory_explicit = object.contains_key("cwd");
     let cwd = string_value_optional(object.get("cwd"), "cwd", &mut reasons).map(PathBuf::from);
     let cwd = cwd.or_else(|| context.workspace_root.clone());
     enforce_size(
@@ -627,6 +669,7 @@ fn materialize_local(
             environment_reference_names,
             remote_url_preview: None,
             header_names: Vec::new(),
+            timeouts,
             source_enabled: enabled,
             behavior_version,
             static_status: status,
@@ -637,6 +680,7 @@ fn materialize_local(
             environment,
             environment_refs,
             working_directory: cwd,
+            working_directory_explicit,
         },
         diagnostics,
     })
@@ -674,6 +718,7 @@ fn materialize_remote(
         "bearer_token_env_var",
         &mut reasons,
     );
+    let timeouts = timeout_overrides(object, &mut reasons);
     if bearer_token_env_var
         .as_deref()
         .is_some_and(|name| !valid_environment_name(name))
@@ -736,6 +781,7 @@ fn materialize_remote(
             environment_reference_names,
             remote_url_preview: Some(preview),
             header_names: header_names.into_iter().collect(),
+            timeouts,
             source_enabled: enabled,
             behavior_version,
             static_status: status,
@@ -771,6 +817,7 @@ fn unsupported_local(
             environment_reference_names: Vec::new(),
             remote_url_preview: None,
             header_names: Vec::new(),
+            timeouts: ExternalMcpTimeouts::default(),
             source_enabled: true,
             behavior_version,
             static_status: ExternalMcpStaticStatus::Unsupported {
@@ -783,6 +830,7 @@ fn unsupported_local(
             environment: BTreeMap::new(),
             environment_refs: BTreeMap::new(),
             working_directory: None,
+            working_directory_explicit: false,
         },
         diagnostics: Vec::new(),
     }
@@ -792,6 +840,7 @@ fn prepare_transport(
     template: PreparedTransportTemplate,
     id: SourceQualifiedMcpServerId,
     behavior_version: &str,
+    timeouts: ExternalMcpTimeouts,
 ) -> Result<PreparedExternalMcpServer, ExternalSourceProviderError> {
     let transport = match template {
         PreparedTransportTemplate::Local {
@@ -800,6 +849,7 @@ fn prepare_transport(
             mut environment,
             environment_refs,
             working_directory,
+            working_directory_explicit: _,
         } => {
             for (key, reference) in environment_refs {
                 environment.insert(key, resolve_environment(&reference)?);
@@ -860,8 +910,71 @@ fn prepare_transport(
     Ok(PreparedExternalMcpServer {
         id,
         behavior_version: behavior_version.to_string(),
+        timeouts,
         transport,
     })
+}
+
+fn prepare_import_projection(
+    definition: ExternalMcpServerDefinition,
+    template: PreparedTransportTemplate,
+) -> Result<PreparedExternalMcpImportServer, ExternalSourceProviderError> {
+    if !definition.timeouts.is_empty() {
+        return Err(ExternalSourceProviderError::new(
+            "external_mcp.import_setup_required",
+            "MCP timeout overrides cannot be imported into native configuration",
+            false,
+        ));
+    }
+    let transport = match template {
+        PreparedTransportTemplate::Local {
+            command,
+            args,
+            environment,
+            environment_refs,
+            working_directory,
+            working_directory_explicit,
+        } if environment.is_empty()
+            && environment_refs.is_empty()
+            && working_directory.is_none()
+            && !working_directory_explicit =>
+        {
+            PreparedExternalMcpImportTransport::Local { command, args }
+        }
+        PreparedTransportTemplate::Remote {
+            url,
+            headers,
+            header_refs,
+            bearer_token_env_var,
+            oauth_enabled,
+        } if headers.is_empty()
+            && header_refs.is_empty()
+            && bearer_token_env_var.is_none()
+            && oauth_enabled =>
+        {
+            PreparedExternalMcpImportTransport::Remote { url }
+        }
+        _ => {
+            return Err(ExternalSourceProviderError::new(
+                "external_mcp.import_setup_required",
+                "MCP declaration contains fields that cannot be imported safely",
+                false,
+            ));
+        }
+    };
+    let prepared = PreparedExternalMcpImportServer {
+        id: definition.id,
+        behavior_version: definition.behavior_version,
+        transport,
+    };
+    prepared.validate().map_err(|_| {
+        ExternalSourceProviderError::new(
+            "external_mcp.import_setup_required",
+            "MCP declaration contains fields that cannot be imported safely",
+            false,
+        )
+    })?;
+    Ok(prepared)
 }
 
 fn string_value(value: Option<&Value>, field: &str, reasons: &mut Vec<String>) -> String {
@@ -966,6 +1079,64 @@ fn environment_refs(value: Option<&Value>, reasons: &mut Vec<String>) -> BTreeMa
         result.insert(name.to_string(), name.to_string());
     }
     result
+}
+
+fn timeout_overrides(
+    object: &toml::map::Map<String, Value>,
+    reasons: &mut Vec<String>,
+) -> ExternalMcpTimeouts {
+    let startup_ms = if let Some(value) = object.get("startup_timeout_sec") {
+        duration_seconds_millis(value, "startup_timeout_sec", reasons)
+    } else {
+        match object.get("startup_timeout_ms") {
+            None => None,
+            Some(Value::Integer(value))
+                if (1..=MAX_EXTERNAL_MCP_TIMEOUT_MS as i64).contains(value) =>
+            {
+                Some(*value as u64)
+            }
+            Some(_) => {
+                reasons.push(format!(
+                    "Codex MCP startup_timeout_ms must be an integer from 1 to {MAX_EXTERNAL_MCP_TIMEOUT_MS}"
+                ));
+                None
+            }
+        }
+    };
+    let execution_ms = object
+        .get("tool_timeout_sec")
+        .and_then(|value| duration_seconds_millis(value, "tool_timeout_sec", reasons));
+    ExternalMcpTimeouts {
+        startup_ms,
+        catalog_ms: startup_ms,
+        execution_ms,
+    }
+}
+
+fn duration_seconds_millis(value: &Value, field: &str, reasons: &mut Vec<String>) -> Option<u64> {
+    let seconds = match value {
+        Value::Integer(value) => *value as f64,
+        Value::Float(value) => *value,
+        _ => {
+            reasons.push(format!("Codex MCP {field} must be a positive number"));
+            return None;
+        }
+    };
+    let millis = std::time::Duration::try_from_secs_f64(seconds)
+        .ok()
+        .and_then(|duration| {
+            let nanos = duration.as_nanos();
+            u64::try_from(nanos.div_ceil(1_000_000)).ok()
+        });
+    match millis.filter(|millis| (1..=MAX_EXTERNAL_MCP_TIMEOUT_MS).contains(millis)) {
+        Some(millis) => Some(millis),
+        None => {
+            reasons.push(format!(
+                "Codex MCP {field} must resolve to 1..={MAX_EXTERNAL_MCP_TIMEOUT_MS} milliseconds"
+            ));
+            None
+        }
+    }
 }
 
 fn static_status(enabled: bool, reasons: Vec<String>) -> ExternalMcpStaticStatus {
@@ -1085,6 +1256,9 @@ fn behavior_version(
     if let Some(table) = behavior.as_table_mut() {
         if table.get("required").is_some_and(Value::is_bool) {
             table.remove("required");
+        }
+        if table.get("name").is_some_and(Value::is_str) {
+            table.remove("name");
         }
     }
     let encoded = toml::to_string(&behavior).unwrap_or_default();

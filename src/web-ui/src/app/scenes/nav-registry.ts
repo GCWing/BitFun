@@ -14,7 +14,18 @@ import type { SceneTabId } from '../components/SceneBar/types';
 
 type LazyNavComponent = ReturnType<typeof lazy<ComponentType>>;
 
-const loadSettingsNav = () => import('./settings/SettingsNav');
+/**
+ * The settings nav renders every label from the lazy `settings` namespace, so the
+ * chunk and that namespace are loaded together — mounting before it resolves
+ * paints raw i18n keys for a frame.
+ */
+const loadSettingsNav = async () => {
+  const [navModule] = await Promise.all([
+    import('./settings/SettingsNav'),
+    import('./settings/settingsTabI18n').then((m) => m.preloadSettingsShellI18n()),
+  ]);
+  return navModule;
+};
 const loadFileViewerNav = () => import('./file-viewer/FileViewerNav');
 const loadShellNav = () => import('./shell/ShellNav');
 

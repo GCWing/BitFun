@@ -13,6 +13,7 @@ const loggerMocks = vi.hoisted(() => ({
   warn: vi.fn(),
   error: vi.fn(),
   setIncludeSensitiveDiagnostics: vi.fn(),
+  setFlowChatDiagnosticsEnabled: vi.fn(),
 }));
 
 vi.mock('@/infrastructure/api/service-api/ConfigAPI', () => ({
@@ -40,8 +41,13 @@ vi.mock('@/shared/utils/logger', () => ({
   setIncludeSensitiveDiagnostics: loggerMocks.setIncludeSensitiveDiagnostics,
 }));
 
+vi.mock('@/infrastructure/diagnostics/flowChatDiagnostics', () => ({
+  setFlowChatDiagnosticsEnabled: loggerMocks.setFlowChatDiagnosticsEnabled,
+}));
+
 const LOGGING_LEVEL_PATH = 'app.logging.level';
 const LOGGING_INCLUDE_SENSITIVE_PATH = 'app.logging.include_sensitive_diagnostics';
+const FLOW_CHAT_DIAGNOSTICS_PATH = 'app.logging.flow_chat_diagnostics';
 
 async function importSyncModule() {
   vi.resetModules();
@@ -59,6 +65,7 @@ describe('FrontendLogLevelSync startup reads', () => {
     configApiMocks.getConfigs.mockResolvedValueOnce({
       [LOGGING_LEVEL_PATH]: 'debug',
       [LOGGING_INCLUDE_SENSITIVE_PATH]: false,
+      [FLOW_CHAT_DIAGNOSTICS_PATH]: true,
     });
 
     const { initializeFrontendLogLevelSync } = await importSyncModule();
@@ -68,17 +75,20 @@ describe('FrontendLogLevelSync startup reads', () => {
     expect(configApiMocks.getConfigs).toHaveBeenCalledWith([
       LOGGING_LEVEL_PATH,
       LOGGING_INCLUDE_SENSITIVE_PATH,
+      FLOW_CHAT_DIAGNOSTICS_PATH,
     ]);
     expect(configApiMocks.getConfig).not.toHaveBeenCalled();
     expect(configApiMocks.getRuntimeLoggingInfo).toHaveBeenCalledTimes(1);
     expect(loggerMocks.setLevel).toHaveBeenCalledWith(1);
     expect(loggerMocks.setIncludeSensitiveDiagnostics).toHaveBeenCalledWith(false);
+    expect(loggerMocks.setFlowChatDiagnosticsEnabled).toHaveBeenCalledWith(true);
   });
 
   it('falls back to the runtime log level when the saved frontend level is invalid', async () => {
     configApiMocks.getConfigs.mockResolvedValueOnce({
       [LOGGING_LEVEL_PATH]: 'verbose',
       [LOGGING_INCLUDE_SENSITIVE_PATH]: true,
+      [FLOW_CHAT_DIAGNOSTICS_PATH]: false,
     });
     configApiMocks.getRuntimeLoggingInfo.mockResolvedValueOnce({ effectiveLevel: 'error' });
 
@@ -87,5 +97,6 @@ describe('FrontendLogLevelSync startup reads', () => {
 
     expect(loggerMocks.setLevel).toHaveBeenCalledWith(4);
     expect(loggerMocks.setIncludeSensitiveDiagnostics).toHaveBeenCalledWith(true);
+    expect(loggerMocks.setFlowChatDiagnosticsEnabled).toHaveBeenCalledWith(false);
   });
 });

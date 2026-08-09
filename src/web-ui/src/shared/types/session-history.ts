@@ -6,6 +6,7 @@
 
 import type { ReviewTargetEvidence, ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 import type { AiErrorDetail } from '@/shared/ai-errors/aiErrorPresenter';
+import type { SessionExecutionTarget } from '@/infrastructure/api/service-api/WorktreeAPI';
 
 export type SessionKind = 'normal' | 'btw' | 'review' | 'deep_review' | 'miniapp' | 'subagent';
 export type PersistedSessionKind = 'standard' | 'subagent';
@@ -42,6 +43,18 @@ export interface SessionCustomMetadata extends Record<string, unknown> {
   titleParams?: Record<string, unknown> | null;
 }
 
+export type SessionContextUsageSource = 'model_request' | 'context_compression';
+
+/** Exact session-level context usage persisted by the Agent Session runtime. */
+export interface SessionContextUsage {
+  turnId: string;
+  inputTokens: number;
+  outputTokens?: number;
+  totalTokens: number;
+  timestamp: number;
+  source: SessionContextUsageSource;
+}
+
 export interface SessionMetadata {
   sessionId: string;
   sessionName: string;
@@ -74,9 +87,12 @@ export interface SessionMetadata {
   snapshotSessionId?: string;
   tags: string[];
   customMetadata?: SessionCustomMetadata;
+  currentContextUsage?: SessionContextUsage;
   relationship?: SessionRelationship;
   todos?: any[];
   workspacePath?: string;
+  projectWorkspacePath?: string;
+  executionTarget?: SessionExecutionTarget;
   remoteConnectionId?: string;
   remoteSshHost?: string;
   /** Backend unified workspace identity field: localhost for local, SSH host for remote. */
@@ -134,6 +150,8 @@ export interface LocalCommandMetadata {
   modelVisible: false;
   usageReport?: Record<string, any>;
   usageReportStatus?: 'loading' | 'completed';
+  /** Frontend-only until the backend returns its authoritative turn catalog entry. */
+  usageReportProvisional?: boolean;
   threadGoalKickoff?: boolean;
   threadGoalObjectiveUpdated?: boolean;
   threadGoalContinuation?: boolean;
@@ -148,6 +166,23 @@ export interface SessionList {
   sessions: SessionMetadata[];
   lastUpdated: number;
   version: string;
+}
+
+export interface SessionTurnCatalogEntry {
+  ordinal: number;
+  storageTurnIndex: number;
+  turnId?: string;
+  preview?: string;
+  previewTruncated: boolean;
+}
+
+export interface SessionTurnCatalog {
+  schemaVersion: number;
+  sessionId: string;
+  revision: string;
+  totalTurnCount: number;
+  complete: boolean;
+  entries: SessionTurnCatalogEntry[];
 }
 
 export interface DialogTurnData {

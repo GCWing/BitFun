@@ -53,13 +53,13 @@ const GitNav: React.FC = () => {
   );
 
   return (
-    <div className="bitfun-git-scene-nav">
-      <div className="bitfun-git-scene-nav__header">
-        <span className="bitfun-git-scene-nav__title">{t('title')}</span>
+    <div data-bf-component="git-nav" data-bf-part="root" className="bitfun-git-scene-nav">
+      <div className="bitfun-git-scene-nav__header" data-bf-component="git-nav" data-bf-part="header">
+        <span className="bitfun-git-scene-nav__title" data-bf-component="git-nav" data-bf-part="title">{t('title')}</span>
       </div>
 
       {isRepository && (
-        <div className="bitfun-git-scene-nav__status">
+      <div className="bitfun-git-scene-nav__status" data-bf-component="git-nav" data-bf-part="status">
           <div className="bitfun-git-scene-nav__branch-row">
             <GitBranch size={12} aria-hidden />
             <span className="bitfun-git-scene-nav__branch-name" title={currentBranch ?? undefined}>
@@ -80,7 +80,7 @@ const GitNav: React.FC = () => {
               )}
             </div>
           )}
-          <div className="bitfun-git-scene-nav__actions-row">
+        <div className="bitfun-git-scene-nav__actions-row" data-bf-component="git-nav" data-bf-part="actions">
             <IconButton size="xs" variant="ghost" onClick={() => refresh({ force: true })} tooltip={t('actions.refresh')}>
               <RefreshCw size={14} />
             </IconButton>
@@ -88,7 +88,7 @@ const GitNav: React.FC = () => {
         </div>
       )}
 
-      <div className="bitfun-git-scene-nav__sections">
+      <div className="bitfun-git-scene-nav__sections" data-bf-component="git-nav" data-bf-part="sections">
         {NAV_ITEMS.map(({ id, icon: Icon, labelKey }) => (
           <button
             key={id}

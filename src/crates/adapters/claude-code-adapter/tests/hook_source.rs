@@ -16,6 +16,209 @@ fn context(workspace: &std::path::Path) -> ExternalSourceContext {
 }
 
 #[test]
+fn prepares_only_the_supported_synchronous_claude_command_subset() {
+    let root = tempdir().unwrap();
+    let user_settings = root.path().join("home/.claude/settings.json");
+    let workspace = root.path().join("workspace");
+    fs::create_dir_all(user_settings.parent().unwrap()).unwrap();
+    fs::create_dir_all(&workspace).unwrap();
+    fs::create_dir_all(user_settings.parent().unwrap().join("hooks")).unwrap();
+    fs::write(
+        user_settings.parent().unwrap().join("hooks/check.py"),
+        b"print('claude')",
+    )
+    .unwrap();
+    fs::write(
+        &user_settings,
+        r#"{"hooks":{"PreToolUse":[
+          {"matcher":"Bash","hooks":[{"command":"python .claude/hooks/check.py","timeoutSec":12,"statusMessage":"Checking"}]},
+          {"if":"private","hooks":[{"type":"command","command":"conditional"}]},
+          {"hooks":[{"type":"command","command":"later","asyncRewake":true},{"type":"http","url":"https://private"}]}
+        ],"Notification":[{"hooks":[{"type":"command","command":"notify"}]}]}}"#,
+    )
+    .unwrap();
+    let provider = ClaudeCodeHookProvider::new(ClaudeCodeHookProviderOptions {
+        user_settings_file: user_settings,
+        project_root_override: Some(workspace.clone()),
+        project_settings_enabled: true,
+    });
+    let ctx = context(&workspace);
+    let catalog = provider.discover(&ctx).unwrap();
+    let source = catalog.sources[0].clone();
+    let prepared = provider
+        .prepare_import(&ctx, &source.key, &source.content_version)
+        .unwrap();
+
+    assert_eq!(prepared.handlers.len(), 1);
+    assert!(prepared.handlers[0]
+        .command
+        .contains("__BITFUN_MANAGED_HOOK_ROOT__/hooks/check.py"));
+    assert_eq!(prepared.handlers[0].timeout_seconds, Some(12));
+    assert_eq!(
+        prepared.handlers[0].status_message.as_deref(),
+        Some("Checking")
+    );
+    assert_eq!(prepared.assets.len(), 1);
+    assert!(prepared
+        .skipped
+        .iter()
+        .any(|item| item.reason_code == "unsupported_group_field" && item.count == 1));
+    assert!(prepared
+        .skipped
+        .iter()
+        .any(|item| item.reason_code == "unsupported_behavior_field" && item.count == 1));
+    assert!(prepared
+        .skipped
+        .iter()
+        .any(|item| item.reason_code == "unsupported_handler_type" && item.count == 1));
+    assert!(prepared
+        .skipped
+        .iter()
+        .any(|item| item.reason_code == "unsupported_event" && item.count == 1));
+}
+
+#[test]
+fn disable_all_hooks_yields_a_skipped_only_preview() {
+    let root = tempdir().unwrap();
+    let user_settings = root.path().join("settings.json");
+    let workspace = root.path().join("workspace");
+    fs::create_dir_all(&workspace).unwrap();
+    fs::write(
+        &user_settings,
+        r#"{"disableAllHooks":true,"hooks":{"PreToolUse":[{"hooks":[{"command":"private"}]}]}}"#,
+    )
+    .unwrap();
+    let provider = ClaudeCodeHookProvider::new(ClaudeCodeHookProviderOptions {
+        user_settings_file: user_settings,
+        project_root_override: Some(workspace.clone()),
+        project_settings_enabled: false,
+    });
+    let ctx = context(&workspace);
+    let catalog = provider.discover(&ctx).unwrap();
+    let source = &catalog.sources[0];
+    let prepared = provider
+        .prepare_import(&ctx, &source.key, &source.content_version)
+        .unwrap();
+
+    assert!(prepared.handlers.is_empty());
+    assert_eq!(prepared.skipped[0].reason_code, "all_disabled");
+    assert_eq!(prepared.skipped[0].count, 1);
+}
+
+#[test]
+fn layered_disable_is_respected_when_preparing_a_project_source() {
+    let root = tempdir().unwrap();
+    let user_settings = root.path().join("home/.claude/settings.json");
+    let workspace = root.path().join("workspace");
+    fs::create_dir_all(user_settings.parent().unwrap()).unwrap();
+    fs::create_dir_all(workspace.join(".claude")).unwrap();
+    fs::write(&user_settings, r#"{"disableAllHooks":true}"#).unwrap();
+    fs::write(
+        workspace.join(".claude/settings.json"),
+        r#"{"hooks":{"PreToolUse":[{"hooks":[{"command":"private"}]}]}}"#,
+    )
+    .unwrap();
+    let provider = ClaudeCodeHookProvider::new(ClaudeCodeHookProviderOptions {
+        user_settings_file: user_settings,
+        project_root_override: Some(workspace.clone()),
+        project_settings_enabled: true,
+    });
+    let ctx = context(&workspace);
+    let catalog = provider.discover(&ctx).unwrap();
+    let source = catalog
+        .sources
+        .iter()
+        .find(|source| source.location_hint.replace('\\', "/") == ".claude/settings.json")
+        .unwrap();
+    let prepared = provider
+        .prepare_import(&ctx, &source.key, &source.content_version)
+        .unwrap();
+
+    assert!(prepared.handlers.is_empty());
+    assert_eq!(prepared.skipped[0].reason_code, "all_disabled");
+}
+
+#[test]
+fn narrower_project_activation_cannot_enable_a_disabled_user_import() {
+    let root = tempdir().unwrap();
+    let user_settings = root.path().join("home/.claude/settings.json");
+    let workspace = root.path().join("workspace");
+    fs::create_dir_all(user_settings.parent().unwrap()).unwrap();
+    fs::create_dir_all(workspace.join(".claude")).unwrap();
+    fs::write(
+        &user_settings,
+        r#"{"disableAllHooks":true,"hooks":{"PreToolUse":[{"hooks":[{"command":"user-command"}]}]}}"#,
+    )
+    .unwrap();
+    fs::write(
+        workspace.join(".claude/settings.local.json"),
+        r#"{"disableAllHooks":false}"#,
+    )
+    .unwrap();
+    let provider = ClaudeCodeHookProvider::new(ClaudeCodeHookProviderOptions {
+        user_settings_file: user_settings,
+        project_root_override: Some(workspace.clone()),
+        project_settings_enabled: true,
+    });
+    let ctx = context(&workspace);
+    let catalog = provider.discover(&ctx).unwrap();
+    let source = catalog
+        .sources
+        .iter()
+        .find(|source| {
+            source.scope
+                == bitfun_product_domains::external_sources::ExternalSourceScope::UserGlobal
+        })
+        .unwrap();
+
+    let prepared = provider
+        .prepare_import(&ctx, &source.key, &source.content_version)
+        .unwrap();
+
+    assert!(prepared.handlers.is_empty());
+    assert_eq!(prepared.skipped[0].reason_code, "all_disabled");
+}
+
+#[test]
+fn skipped_handlers_do_not_leave_assets_in_another_valid_handler_plan() {
+    let root = tempdir().unwrap();
+    let user_settings = root.path().join("home/.claude/settings.json");
+    let workspace = root.path().join("workspace");
+    let hooks = user_settings.parent().unwrap().join("hooks");
+    fs::create_dir_all(&hooks).unwrap();
+    fs::create_dir_all(&workspace).unwrap();
+    fs::write(hooks.join("valid.py"), b"print('valid')").unwrap();
+    fs::write(hooks.join("skipped.py"), b"print('must not copy')").unwrap();
+    fs::write(
+        &user_settings,
+        r#"{"hooks":{"PreToolUse":[{"hooks":[
+          {"command":"python .claude/hooks/valid.py"},
+          {"command":"python .claude/hooks/skipped.py","timeoutSec":0}
+        ]}]}}"#,
+    )
+    .unwrap();
+    let provider = ClaudeCodeHookProvider::new(ClaudeCodeHookProviderOptions {
+        user_settings_file: user_settings,
+        project_root_override: Some(workspace.clone()),
+        project_settings_enabled: false,
+    });
+    let ctx = context(&workspace);
+    let catalog = provider.discover(&ctx).unwrap();
+    let source = &catalog.sources[0];
+
+    let prepared = provider
+        .prepare_import(&ctx, &source.key, &source.content_version)
+        .unwrap();
+
+    assert_eq!(prepared.handlers.len(), 1);
+    assert_eq!(prepared.assets.len(), 1);
+    assert_eq!(
+        prepared.assets[0].relative_path,
+        std::path::PathBuf::from("hooks/valid.py")
+    );
+}
+
+#[test]
 fn discovers_user_project_and_local_settings_with_native_handler_kinds() {
     let root = tempdir().unwrap();
     let user_settings = root.path().join("home/.claude/settings.json");

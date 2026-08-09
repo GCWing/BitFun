@@ -15,7 +15,7 @@
 
 本治理覆盖：
 
-- `src/web-ui` 的主题预设、`ThemeConfig`、CSS 变量、组件样式和专用渲染色板。
+- `src/web-ui` 的 Appearance 包、CSS 变量投影、组件样式和专用渲染色板。
 - `src/mobile-web` 的移动端主题与运行时变量。
 - `BitFun-Installer/src` 的安装器主题、首屏静态变量和流程组件。
 - `src/apps/cli` 的 TUI preset、终端颜色映射和降级行为。
@@ -29,13 +29,13 @@
 
 | 范围 | 权威 owner | 消费或产物路径 | 约束 |
 |---|---|---|---|
-| Web UI 完整主题 | `src/web-ui/src/infrastructure/theme` 与组件库 Token | 运行时 CSS 变量与组件样式 | 拥有 `ThemeConfig`、预设、校验和导入导出；Rust 不复制 |
-| Desktop 首屏 | Web UI theme presets 与 `scripts/generate-startup-theme-bootstrap.mjs` | `src/apps/desktop/src/generated/startup_theme_bootstrap.json` | 只保存 JS 加载前必要字段；生成产物不能反向定义主题 |
-| 生成式 UI 提示 | Web UI theme presets 与 `scripts/generate-startup-theme-bootstrap.mjs` | `src/crates/assembly/core/src/agentic/tools/implementations/generated/theme_prompt_snapshots.json` | 只读生成产物；Rust 不手写第二套内置 palette |
+| Web UI Appearance | `src/web-ui/src/infrastructure/appearance` | 运行时 CSS、组件/Scene 契约与 renderer adapter | 拥有包 schema、内置包、校验、编译、导入导出和唯一运行时；Rust 不复制 |
+| Desktop 首屏 | Web UI builtin Appearance 与 `scripts/generate-startup-appearance-bootstrap.mjs` | `src/apps/desktop/src/generated/startup_appearance_bootstrap.json` | 只保存 JS 加载前必要字段；生成产物不能反向定义 Appearance |
+| 生成式 UI 提示 | Web UI builtin Appearance 与 `scripts/generate-startup-appearance-bootstrap.mjs` | `src/crates/assembly/core/src/agentic/tools/implementations/generated/appearance_prompt_snapshots.json` | 只读生成产物；Rust 不手写第二套内置 palette |
 | Mobile Web | `src/mobile-web/src/theme` | Mobile 运行时变量与组件 | 不从 Desktop 或 Web UI 运行时偷读内部变量 |
 | Installer | `BitFun-Installer/src/theme` | `BitFun-Installer/src/styles/variables.css` 与流程组件 | Rust 壳不复制完整 palette |
 | CLI/TUI | `src/apps/cli/themes/presets` 与 `src/apps/cli/src/ui/theme.rs` | 终端样式 | 拥有 preset、ANSI/monochrome 降级；不实现 Web `ThemeConfig` |
-| BitFun GUI 插件 | Web UI theme owner | `src/web-ui/src/infrastructure/theme/pluginThemeProjection.ts` | 只投影七个语义色，不暴露全部 CSS 变量 |
+| BitFun GUI 插件 | Web UI Appearance owner | `src/web-ui/src/infrastructure/appearance/adapters/PluginAppearanceProjection.ts` | 只投影约定的语义色，不暴露包或内部变量全集 |
 | OpenCode TUI 主题 | CLI/TUI 兼容适配器 | OpenCode 主题来源与终端投影 | 保留来源顺序、稳定字段、引用和 light/dark 变体；不由 GUI 七色投影替代 |
 | 专用渲染域 | 对应 editor、terminal、syntax、diff、Mermaid 等模块 | 各自 namespace | 不得泄漏为普通组件随手可用的色板 |
 
@@ -43,15 +43,15 @@
 
 ```mermaid
 flowchart LR
-  Source["TS 主题预设与契约"] --> Runtime["Web UI 运行时主题"]
-  Source --> Generator["主题生成器"]
+  Source["TS builtin Appearance 与契约"] --> Runtime["AppearanceRuntime"]
+  Source --> Generator["Appearance 生成器"]
   Generator --> Bootstrap["Desktop 首屏 bootstrap"]
   Generator --> Prompt["生成式 UI 提示快照"]
-  Runtime --> Projection["GUI 插件七色投影"]
+  Runtime --> Projection["GUI 插件语义色投影"]
 ```
 
-生成产物、Rust bootstrap、插件投影和消费组件均不能反向定义主题。Desktop 只持久化并解析
-`themes.current`；历史 `theme.id` 只允许在配置加载或导入边界归一化，不得成为新的主题扩展入口。
+生成产物、Rust bootstrap、插件投影和消费组件均不能反向定义 Appearance。Desktop 和 Web UI
+只持久化并解析 `appearance.selection`。旧 `theme`、`themes` 和 Skin 数据不兼容、不迁移。
 
 ## Token 分层
 
@@ -83,7 +83,7 @@ Token 只按职责分四层：
 - fallback 只允许存在于明确的启动、第三方或兼容边界；普通组件不得用 fallback 隐藏缺失 Token。
 - 未解析变量、未登记 key、跨 root 借用和运行时/静态定义漂移必须由审计失败暴露。
 - iframe、MiniApp 或生成式 UI 只接收显式 allowlist 的主题 payload，不接收 Web UI 内部变量全集。
-- custom theme 由 Web UI 加载和校验。Rust 首屏无法解析时使用系统或默认回退，JS 启动后再应用完整主题。
+- 导入 Appearance 由 Web UI 加载和校验。Rust 首屏无法解析导入包时使用系统默认启动色，JS 启动后再原子应用完整包。
 
 ## 防回退契约
 
@@ -108,8 +108,8 @@ baseline 只允许两类变更：
 
 ## 产品定制与扩展
 
-产品定制只引用宿主已注册的 theme/preset ID，或对应边界明确允许的少量语义色；不得携带任意 CSS 变量、完整
-`ThemeConfig`、renderer、动态代码或源码替换。详细边界见
+产品定制只引用宿主已注册的 Appearance ID，或对应边界明确允许的少量语义色；不得携带任意 CSS、完整
+Appearance 包、renderer 配置、动态代码或源码替换。详细边界见
 [`product-customization-blueprint.md`](product-customization-blueprint.md)。
 
 GUI、Mobile、Installer 和 CLI/TUI 可以选择不同主题集合，但共享规则而不是共享全部数据结构：
@@ -123,8 +123,8 @@ GUI、Mobile、Installer 和 CLI/TUI 可以选择不同主题集合，但共享�
 
 1. 确认变更所属 surface、主题 owner、用户语义和相邻视觉状态。
 2. 优先复用现有 semantic token；新增 Token 时选择最窄层级和 namespace。
-3. 更新 TS 主题源、校验器、运行时注入和真实消费方。
-4. 仅在 JS 加载前确有需要时重新生成 Desktop bootstrap；生成式 UI 提示按同一主题源更新。
+3. 更新 TS Appearance 源、校验器、compiler、运行时和真实消费方。
+4. 仅在 JS 加载前确有需要时重新生成 Desktop bootstrap；生成式 UI 提示按同一 Appearance 源更新。
 5. 涉及动态变量、别名、专用域或跨 root 时，同步更新对应可执行 contract。
 6. 运行自动检查，并对受影响 surface、light/dark/system、交互状态和无障碍对比做 focused review。
 
@@ -134,10 +134,11 @@ GUI、Mobile、Installer 和 CLI/TUI 可以选择不同主题集合，但共享�
 pnpm run theme:color-audit:all
 pnpm run theme:color-audit:test
 pnpm run theme:visual-contract
-node --test scripts/generate-startup-theme-bootstrap.test.mjs
+pnpm run appearance:contract-audit
+pnpm run generate-startup-appearance-bootstrap
 ```
 
-若主题源影响生成产物，先运行 `pnpm run generate-startup-theme-bootstrap`，再确认只有预期的只读产物发生变化。
+若 Appearance 源影响生成产物，先运行 `pnpm run generate-startup-appearance-bootstrap`，再确认只有预期的只读产物发生变化。
 跨 surface 视觉变化还应按 `theme-visual-governance-contract.json` 的覆盖项完成 focused review；自动审计不等于视觉
 或对比度已经通过。
 

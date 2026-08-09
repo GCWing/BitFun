@@ -15,6 +15,7 @@
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { X, Pin, ExternalLink } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@/component-library';
@@ -150,6 +151,9 @@ export const QuickLook: React.FC<QuickLookProps> = ({
       ref={containerRef}
       className="canvas-quick-look"
       data-shortcut-scope="canvas"
+      data-bf-component="content-canvas"
+      data-bf-part="quickLook"
+      data-bf-state="open"
       tabIndex={-1}
       style={{
         left: `${adjustedPosition.x}px`,
@@ -157,8 +161,8 @@ export const QuickLook: React.FC<QuickLookProps> = ({
       }}
     >
       {/* Header */}
-      <div className="canvas-quick-look__header">
-        <div className="canvas-quick-look__title">
+      <div className="canvas-quick-look__header" data-bf-component="content-canvas" data-bf-part="quickLookHeader">
+        <div className="canvas-quick-look__title" data-bf-component="content-canvas" data-bf-part="quickLookTitle">
           <span>{content.title}</span>
           {content.data?.filePath && (
             <Tooltip content={t('canvas.openFileLocation')}>
@@ -169,7 +173,7 @@ export const QuickLook: React.FC<QuickLookProps> = ({
           )}
         </div>
         
-        <div className="canvas-quick-look__actions">
+        <div className="canvas-quick-look__actions" data-bf-component="content-canvas" data-bf-part="quickLookActions">
           <Tooltip content={t('canvas.pinAsTab')}>
             <button
               className="canvas-quick-look__action-btn canvas-quick-look__pin-btn"
@@ -191,7 +195,7 @@ export const QuickLook: React.FC<QuickLookProps> = ({
       </div>
 
       {/* Content */}
-      <div className="canvas-quick-look__content">
+      <div className="canvas-quick-look__content" data-bf-component="content-canvas" data-bf-part="quickLookContent">
         <FlexiblePanel
           content={content}
           onContentChange={handleContentChange}
@@ -200,13 +204,13 @@ export const QuickLook: React.FC<QuickLookProps> = ({
       </div>
 
       {/* Footer hint */}
-      <div className="canvas-quick-look__footer">
+      <div className="canvas-quick-look__footer" data-bf-component="content-canvas" data-bf-part="quickLookFooter">
         <span>{t('canvas.enterToPin')}</span>
         <span className="canvas-quick-look__separator">|</span>
         <span>{t('canvas.escToClose')}</span>
       </div>
     </div>,
-    document.body
+    getAppearanceOverlayHost()
   );
 };
 

@@ -21,7 +21,7 @@ interface SchedulerLike {
 interface MonacoStartupWarmupOptions {
   scheduler?: SchedulerLike;
   initializeMonaco?: () => Promise<void>;
-  initializeThemeSync?: () => Promise<void>;
+  initializeAppearanceSync?: () => Promise<void>;
   preloadEditorSurfaceStages?: EditorWarmupStage[];
   waitForIdle?: (signal: AbortSignal) => Promise<void>;
   trace?: {
@@ -39,9 +39,9 @@ async function defaultInitializeMonaco(): Promise<void> {
   await MonacoManager.initialize();
 }
 
-async function defaultInitializeThemeSync(): Promise<void> {
-  const { monacoThemeSync } = await import('@/infrastructure/theme/integrations/MonacoThemeSync');
-  await monacoThemeSync.initialize();
+async function defaultInitializeAppearanceSync(): Promise<void> {
+  const { monacoAppearanceAdapter } = await import('@/infrastructure/appearance');
+  monacoAppearanceAdapter.initialize();
 }
 
 const defaultEditorSurfaceStages: EditorWarmupStage[] = [
@@ -109,7 +109,7 @@ export function scheduleMonacoStartupWarmup(
 ): BackgroundTaskHandle<void> {
   const scheduler = options.scheduler ?? backgroundTaskScheduler;
   const initializeMonaco = options.initializeMonaco ?? defaultInitializeMonaco;
-  const initializeThemeSync = options.initializeThemeSync ?? defaultInitializeThemeSync;
+  const initializeAppearanceSync = options.initializeAppearanceSync ?? defaultInitializeAppearanceSync;
   const preloadEditorSurfaceStages = options.preloadEditorSurfaceStages ?? defaultEditorSurfaceStages;
   const waitForIdle = options.waitForIdle ?? defaultWaitForIdle;
   const trace = options.trace ?? startupTrace;
@@ -150,7 +150,7 @@ export function scheduleMonacoStartupWarmup(
       if (signal.aborted) {
         return;
       }
-      await initializeThemeSync();
+      await initializeAppearanceSync();
       if (signal.aborted) {
         return;
       }

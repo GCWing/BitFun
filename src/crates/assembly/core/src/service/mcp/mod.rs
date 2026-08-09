@@ -28,7 +28,7 @@ pub use protocol::{
 
 pub use server::{
     MCPConnection, MCPConnectionPool, MCPServerConfig, MCPServerManager, MCPServerStatus,
-    MCPServerTransport, MCPServerType,
+    MCPServerTimeouts, MCPServerTransport, MCPServerType,
 };
 
 pub use adapter::{
@@ -54,7 +54,15 @@ impl MCPService {
         config_service: Arc<crate::service::config::ConfigService>,
     ) -> crate::util::errors::BitFunResult<Self> {
         let mcp_config_service = Arc::new(MCPConfigService::new(config_service)?);
-        let server_manager = Arc::new(MCPServerManager::new(mcp_config_service.clone()));
+        // Keep service startup compatible when strict path initialization is
+        // unavailable; OAuth operations retain the existing lazy error path.
+        let oauth_data_dir = crate::infrastructure::try_get_path_manager_arc()
+            .ok()
+            .map(|manager| manager.user_data_dir());
+        let server_manager = Arc::new(MCPServerManager::assemble(
+            mcp_config_service.clone(),
+            oauth_data_dir,
+        ));
         let context_provider = Arc::new(MCPContextProvider::new(server_manager.clone()));
 
         Ok(Self {

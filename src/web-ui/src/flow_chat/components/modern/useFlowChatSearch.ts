@@ -1,6 +1,7 @@
 /**
  * FlowChat message search hook.
- * Searches user + model text, deduplicated by dialog turn: one match per turn.
+ * Searches user + model text and reports every occurrence of the query, so a
+ * turn containing several hits contributes several navigable matches.
  * Each match also keeps the concrete rendered source so navigation can land on
  * the matching text instead of only centering a potentially very tall turn.
  */
@@ -15,12 +16,14 @@ interface SearchableFlowItem {
 }
 
 export interface SearchMatch {
-  /** Smallest virtual index in this turn where text matched. */
+  /** Virtual index of the item containing this occurrence. */
   virtualItemIndex: number;
   turnId: string;
   type: VirtualItem['type'];
-  /** Rendered FlowItem containing the first match in this turn, when applicable. */
+  /** Rendered FlowItem containing this occurrence, when applicable. */
   flowItemId?: string;
+  /** Zero-based occurrence of the query within this source's text. */
+  occurrenceIndex: number;
   /** Collapsible containers that must be opened, from outermost to innermost. */
   expandableIds?: readonly string[];
 }
@@ -92,6 +95,20 @@ function getVirtualItemSearchSources(item: VirtualItem): SearchableSource[] {
   return [];
 }
 
+function countQueryOccurrences(content: string, foldedQuery: string): number {
+  const haystack = content.toLowerCase();
+  let count = 0;
+  let from = 0;
+  for (;;) {
+    const index = haystack.indexOf(foldedQuery, from);
+    if (index < 0) {
+      return count;
+    }
+    count += 1;
+    from = index + foldedQuery.length;
+  }
+}
+
 export function buildFlowChatSearchMatches(
   virtualItems: readonly VirtualItem[],
   searchQuery: string,
@@ -99,31 +116,25 @@ export function buildFlowChatSearchMatches(
   const trimmed = searchQuery.trim();
   if (!trimmed) return [];
   const query = trimmed.toLowerCase();
-  const firstMatchByTurn = new Map<string, SearchMatch>();
+  const matches: SearchMatch[] = [];
 
   virtualItems.forEach((item, virtualItemIndex) => {
-    if (firstMatchByTurn.has(item.turnId)) {
-      return;
+    for (const source of getVirtualItemSearchSources(item)) {
+      const occurrenceCount = countQueryOccurrences(source.content, query);
+      for (let occurrenceIndex = 0; occurrenceIndex < occurrenceCount; occurrenceIndex += 1) {
+        matches.push({
+          virtualItemIndex,
+          turnId: item.turnId,
+          type: item.type,
+          flowItemId: source.flowItemId,
+          occurrenceIndex,
+          expandableIds: source.expandableIds,
+        });
+      }
     }
-
-    const source = getVirtualItemSearchSources(item).find(candidate => (
-      candidate.content.toLowerCase().includes(query)
-    ));
-    if (!source) {
-      return;
-    }
-
-    firstMatchByTurn.set(item.turnId, {
-      virtualItemIndex,
-      turnId: item.turnId,
-      type: item.type,
-      flowItemId: source.flowItemId,
-      expandableIds: source.expandableIds,
-    });
   });
 
-  return [...firstMatchByTurn.values()]
-    .sort((left, right) => left.virtualItemIndex - right.virtualItemIndex);
+  return matches;
 }
 
 export function useFlowChatSearch(virtualItems: VirtualItem[]): UseFlowChatSearchReturn {

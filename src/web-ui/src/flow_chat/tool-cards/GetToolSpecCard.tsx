@@ -96,29 +96,29 @@ export const GetToolSpecCard: React.FC<ToolCardProps> = ({
   const renderExpandedContent = () => {
     if (status === 'error') {
       return (
-        <div className="compact-result-content get-tool-spec-card__content">
+        <div data-bf-component="get-tool-spec-card" data-bf-part="content" className="compact-result-content get-tool-spec-card__content">
           <pre>{errorMessage}</pre>
         </div>
       );
     }
 
     return (
-      <div className="get-tool-spec-card__expanded">
+      <div data-bf-component="get-tool-spec-card" data-bf-part="expanded" className="get-tool-spec-card__expanded">
         {parsedResult?.description && (
-          <section className="get-tool-spec-card__section">
-            <div className="get-tool-spec-card__label">
+          <section data-bf-component="get-tool-spec-card" data-bf-part="section" className="get-tool-spec-card__section">
+            <div data-bf-component="get-tool-spec-card" data-bf-part="label" className="get-tool-spec-card__label">
               {t('toolCards.getToolSpec.descriptionLabel')}
             </div>
-            <div className="get-tool-spec-card__description">{parsedResult.description}</div>
+            <div data-bf-component="get-tool-spec-card" data-bf-part="description" className="get-tool-spec-card__description">{parsedResult.description}</div>
           </section>
         )}
 
         {schemaText && (
-          <section className="get-tool-spec-card__section">
-            <div className="get-tool-spec-card__label">
+          <section data-bf-component="get-tool-spec-card" data-bf-part="section" className="get-tool-spec-card__section">
+            <div data-bf-component="get-tool-spec-card" data-bf-part="label" className="get-tool-spec-card__label">
               {t('toolCards.getToolSpec.schemaLabel')}
             </div>
-            <div className="compact-result-content get-tool-spec-card__content">
+            <div data-bf-component="get-tool-spec-card" data-bf-part="content" className="compact-result-content get-tool-spec-card__content">
               <pre>{schemaText}</pre>
             </div>
           </section>
@@ -128,7 +128,7 @@ export const GetToolSpecCard: React.FC<ToolCardProps> = ({
   };
 
   return (
-    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
+    <div data-bf-component="get-tool-spec-card" data-bf-part="root" data-bf-state={[isExpanded && 'expanded', status === 'error' && 'failed'].filter(Boolean).join(' ')} ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
       <CompactToolCard
         status={status}
         isExpanded={isExpanded}

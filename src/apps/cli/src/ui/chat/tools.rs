@@ -10,11 +10,7 @@ impl ChatView {
 
         if let Some(ref tool_id) = self.focused_block_tool {
             let tool_id = tool_id.clone();
-            if self.collapsed_tools.contains(&tool_id) {
-                self.collapsed_tools.remove(&tool_id);
-            } else {
-                self.collapsed_tools.insert(tool_id);
-            }
+            self.tool_disclosures.toggle(&tool_id);
             self.invalidate_render_cache();
         }
     }
@@ -116,4 +112,3 @@ impl ChatView {
         ids
     }
 }
-

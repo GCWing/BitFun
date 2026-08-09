@@ -22,9 +22,9 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ onClose }) => {
   }, [onClose]);
 
   return (
-    <div className="canvas-empty-state">
+    <div data-bf-component="content-canvas" data-bf-part="empty" data-bf-state="empty" className="canvas-empty-state">
       {onClose && (
-        <div className="canvas-empty-state__toolbar">
+        <div className="canvas-empty-state__toolbar" data-bf-component="content-canvas" data-bf-part="emptyToolbar">
           <Tooltip content={t('tabs.close')}>
             <button
               className="canvas-empty-state__close-btn"
@@ -35,7 +35,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ onClose }) => {
           </Tooltip>
         </div>
       )}
-      <div className="canvas-empty-state__content">
+      <div className="canvas-empty-state__content" data-bf-component="content-canvas" data-bf-part="emptyContent">
         {/* Message */}
         <div className="canvas-empty-state__message">
           <p>{t('canvas.noContentOpen')}</p>

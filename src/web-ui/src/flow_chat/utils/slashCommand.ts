@@ -18,6 +18,19 @@ export function getInlineSlashCommandPickerQuery(
     : null;
 }
 
+export function getInlineSkillPickerQuery(
+  trigger: InlineSlashCommandTrigger,
+): string | null {
+  if (
+    !trigger.isActive ||
+    (trigger.trigger !== '$' && (trigger.trigger !== '/' || trigger.startOffset === 0))
+  ) {
+    return null;
+  }
+
+  return trigger.query.toLowerCase();
+}
+
 export function isSlashCommandPickerQuery(query: string): boolean {
   return typeof query === 'string' && !query.includes('/');
 }

@@ -10,8 +10,6 @@ use bitfun_core::service::filesystem::FileSystemService;
 use bitfun_core::service::workspace::WorkspaceService;
 use bitfun_runtime_ports::{AgentSubmissionSource, AgentTurnCancellationRequest};
 
-use crate::runtime::events::CliAgentEventSource;
-
 const MAX_TRACKED_PEER_TURNS: usize = i32::MAX as usize;
 const MAX_BACKGROUND_PEER_AUTHORIZATIONS: usize = i32::MAX as usize;
 const MAX_PENDING_PEER_TASK_CANCELLATIONS: usize = i32::MAX as usize;
@@ -903,7 +901,6 @@ pub(crate) struct PeerHostState {
     pub(crate) agent_runtime: AgentRuntime,
     pub(crate) local_workspace_snapshot: Arc<dyn bitfun_runtime_ports::LocalWorkspaceSnapshotPort>,
     pub(crate) compatibility: CoreAgentRuntimeCompatibility,
-    pub(crate) agent_events: CliAgentEventSource,
     pub(crate) turns: PeerTurnTracker,
     pub(crate) workspace_service: Arc<WorkspaceService>,
     pub(crate) filesystem_service: Arc<FileSystemService>,
@@ -1066,10 +1063,25 @@ fn spawn_turn_cancellation(
                 requester_session_id: None,
                 reason: Some(reason.to_string()),
                 wait_timeout_ms: Some(1_500),
+                cancel_descendants: true,
             })
             .await;
         (turn, result.map(|_| ()).map_err(|error| error.to_string()))
     });
+}
+
+static PEER_HOST_STATE: OnceLock<PeerHostState> = OnceLock::new();
+
+pub(crate) fn set_peer_host_state(state: PeerHostState) -> Result<(), PeerHostState> {
+    PEER_HOST_STATE.set(state)
+}
+
+pub(crate) fn try_peer_host_state() -> Option<&'static PeerHostState> {
+    PEER_HOST_STATE.get()
+}
+
+pub(crate) fn peer_host_state() -> Result<&'static PeerHostState, String> {
+    try_peer_host_state().ok_or_else(|| "CLI peer host is not initialized".to_string())
 }
 
 #[cfg(test)]
@@ -1833,18 +1845,4 @@ mod tests {
         tracker.drain_peer_turns();
         assert!(tracker.register_root(root).is_err());
     }
-}
-
-static PEER_HOST_STATE: OnceLock<PeerHostState> = OnceLock::new();
-
-pub(crate) fn set_peer_host_state(state: PeerHostState) -> Result<(), PeerHostState> {
-    PEER_HOST_STATE.set(state)
-}
-
-pub(crate) fn try_peer_host_state() -> Option<&'static PeerHostState> {
-    PEER_HOST_STATE.get()
-}
-
-pub(crate) fn peer_host_state() -> Result<&'static PeerHostState, String> {
-    try_peer_host_state().ok_or_else(|| "CLI peer host is not initialized".to_string())
 }

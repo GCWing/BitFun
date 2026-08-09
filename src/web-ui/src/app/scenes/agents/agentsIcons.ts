@@ -20,7 +20,7 @@ import {
   type LucideProps,
 } from 'lucide-react';
 import type React from 'react';
-export { CAPABILITY_ACCENT } from './agentTheme';
+export { CAPABILITY_ACCENT } from './agentAppearance';
 
 export type AgentIconKey =
   | 'code2' | 'eye' | 'flask' | 'bug' | 'filetext'

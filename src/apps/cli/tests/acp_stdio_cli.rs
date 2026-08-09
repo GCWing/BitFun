@@ -333,7 +333,7 @@ async fn acp_stdio_preserves_mode_and_history_across_restart_then_closes_active_
         .find(|response| response.get("error").is_some())
         .expect("one concurrent session/load must be rejected");
     assert!(loaded.get("error").is_none(), "{loaded}");
-    assert_eq!(current_config_value(&loaded, "mode"), Some(&json!("Plan")));
+    assert_eq!(current_config_value(loaded, "mode"), Some(&json!("Plan")));
     assert!(
         !replay_updates.is_empty(),
         "session/load must replay persisted history before its success response"

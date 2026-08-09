@@ -5,6 +5,7 @@
 import React, { ReactNode } from 'react';
 import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
 import { SmoothHeightCollapse } from '../components/modern/SmoothHeightCollapse';
+import { FLOWCHAT_COLLAPSE_DURATION_MS } from '../components/modern/flowChatCollapseMotion';
 import {
   ToolCardHeaderLayoutContext,
   useToolCardHeaderLayout,
@@ -58,6 +59,13 @@ export interface BaseToolCardProps {
   headerExpandAffordance?: boolean;
   /** Hover icon: chevron-down (inline expand) vs chevron-right (open right). Default `expand`. */
   headerAffordanceKind?: ToolCardHeaderAffordanceKind;
+  /**
+   * Set for expand/collapse changes the user did not initiate. An automatic
+   * height change must land in a single frame: animating it drags the reflow
+   * across many frames that the message list's scroll anchor has to chase,
+   * which the user sees as the conversation jumping on its own.
+   */
+  disableExpandAnimation?: boolean;
 }
 
 /**
@@ -76,6 +84,7 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
   toggleTestId,
   headerExpandAffordance: headerExpandAffordanceProp,
   headerAffordanceKind: headerAffordanceKindProp = 'expand',
+  disableExpandAnimation = false,
 }) => {
   const handleCardClick = (event: React.MouseEvent) => {
     if (!onClick || shouldIgnoreCardToggleClick(event)) {
@@ -105,31 +114,50 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
   };
 
   const loadingShimmer = statusUsesLoadingShimmer(status);
+  const appearanceState = [
+    isExpanded && 'expanded',
+    isFailed && 'failed',
+    loadingShimmer && 'loading',
+    showConfirmationHighlight && 'confirmation',
+  ].filter(Boolean).join(' ');
   
   return (
-    <div
+    <div data-bf-component="tool-card" data-bf-part="root" data-bf-status={status} data-bf-state={appearanceState}
       className={`base-tool-card-wrapper ${showConfirmationHighlight ? 'requires-confirmation' : ''} ${loadingShimmer ? 'base-tool-card-wrapper--loading-shimmer' : ''} ${className}`.trim()}
     >
       <div 
         className={`base-tool-card status-${status} ${isExpanded ? 'expanded' : ''} ${resolvedHeaderExpandAffordance ? 'base-tool-card--header-expandable' : ''}`.trim()}
+        data-bf-component="tool-card"
+        data-bf-part="surface"
+        data-bf-status={status}
+        data-bf-state={appearanceState}
         data-testid={onClick ? toggleTestId : undefined}
         onClick={handleCardClick}
       >
         <ToolCardHeaderLayoutContext.Provider value={headerLayoutValue}>
-          <div className="base-tool-card-header">
+          <div className="base-tool-card-header" data-bf-component="tool-card" data-bf-part="header" data-bf-status={status}>
             {header}
           </div>
         </ToolCardHeaderLayoutContext.Provider>
       </div>
       
-      <SmoothHeightCollapse isOpen={Boolean(hasExpandedContent)} className="base-tool-card-expanded-collapse">
-        <div className="base-tool-card-expanded">
+      <SmoothHeightCollapse
+        isOpen={Boolean(hasExpandedContent)}
+        className="base-tool-card-expanded-collapse"
+        durationMs={FLOWCHAT_COLLAPSE_DURATION_MS}
+        disableAnimation={disableExpandAnimation}
+      >
+        <div className="base-tool-card-expanded" data-bf-component="tool-card" data-bf-part="expanded" data-bf-status={status} data-bf-state="expanded">
           {expandedContent}
         </div>
       </SmoothHeightCollapse>
       
-      <SmoothHeightCollapse isOpen={Boolean(isFailed && errorContent)} className="base-tool-card-error-collapse">
-        <div className="base-tool-card-error">
+      <SmoothHeightCollapse
+        isOpen={Boolean(isFailed && errorContent)}
+        className="base-tool-card-error-collapse"
+        durationMs={FLOWCHAT_COLLAPSE_DURATION_MS}
+      >
+        <div className="base-tool-card-error" data-bf-component="tool-card" data-bf-part="error" data-bf-status={status} data-bf-state="failed">
           {errorContent}
         </div>
       </SmoothHeightCollapse>
@@ -189,7 +217,6 @@ export const ToolCardHeader: React.FC<ToolCardHeaderProps> = ({
     affordanceKind !== undefined ? affordanceKind : layout.headerAffordanceKind;
   const expandedForChevron =
     headerExpanded !== undefined ? headerExpanded : layout.isExpanded;
-
   return (
     <>
       {icon != null && icon !== false && icon !== '' && (
@@ -203,12 +230,12 @@ export const ToolCardHeader: React.FC<ToolCardHeaderProps> = ({
         />
       )}
       {action && (
-        <span className="tool-card-action" data-testid={actionTestId} {...actionDataAttributes}>
+        <span className="tool-card-action" data-bf-component="tool-card" data-bf-part="action" data-testid={actionTestId} {...actionDataAttributes}>
           {action}
         </span>
       )}
-      {content && <div className="tool-card-content">{content}</div>}
-      {extra && <div className="tool-card-extra">{extra}</div>}
+      {content && <div className="tool-card-content" data-bf-component="tool-card" data-bf-part="content">{content}</div>}
+      {extra && <div className="tool-card-extra" data-bf-component="tool-card" data-bf-part="extra">{extra}</div>}
       {statusIcon && (
         <ToolCardStatusIcon
           icon={statusIcon}

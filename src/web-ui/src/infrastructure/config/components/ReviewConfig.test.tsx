@@ -21,7 +21,7 @@ const translateMock = vi.hoisted(() => (key: string, params?: Record<string, unk
     'capacity.title': 'Capacity',
     'capacity.description': 'Limit parallel Review work so cost and latency stay predictable.',
     'capacity.maxParallelReviewers.label': 'Parallel checks',
-    'capacity.maxParallelReviewers.description': 'Higher values may start more model requests in parallel.',
+    'capacity.maxParallelReviewers.description': 'Choose whether checks and large-review batches run one or two at a time.',
     'capacity.maxQueueWaitSeconds.label': 'Queue wait',
     'capacity.maxQueueWaitSeconds.description': 'Maximum time Review waits for capacity.',
     'shared:features.deepReview': 'Review',
@@ -305,12 +305,12 @@ describe('ReviewConfig', () => {
     expect(numberInputs).toHaveLength(2);
     await act(async () => {
       const valueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-      valueSetter?.call(numberInputs[0], '4');
+      valueSetter?.call(numberInputs[0], '1');
       numberInputs[0].dispatchEvent(new Event('input', { bubbles: true }));
       await Promise.resolve();
     });
     expect(saveDefaultReviewTeamConcurrencyPolicyMock).toHaveBeenCalledWith(
-      expect.objectContaining({ maxParallelInstances: 4 }),
+      expect.objectContaining({ maxParallelInstances: 1 }),
     );
   });
 

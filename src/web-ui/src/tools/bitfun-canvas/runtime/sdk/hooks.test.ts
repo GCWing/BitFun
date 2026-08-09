@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   useCanvasAction,
-  useHostTheme,
+  useHostAppearance,
 } from './hooks';
 
 function withWindow<T>(run: () => T): T {
@@ -16,13 +16,13 @@ function withWindow<T>(run: () => T): T {
 }
 
 describe('BitFun Canvas hook adapters', () => {
-  it('delegates host theme access to runtime hooks', () => {
+  it('delegates host appearance access to runtime hooks', () => {
     withWindow(() => {
       window.BitfunCanvasRuntimeHooks = {
-        useHostTheme: () => ({ type: 'dark' }),
+        useHostAppearance: () => ({ type: 'dark' }),
       };
 
-      expect(useHostTheme()).toEqual({ type: 'dark' });
+      expect(useHostAppearance()).toEqual({ type: 'dark' });
     });
   });
 

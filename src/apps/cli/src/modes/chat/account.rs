@@ -8,70 +8,65 @@ impl ChatMode {
         self.external_source_conflicted_candidate_ids = preferences.conflicted_candidate_ids;
     }
 
-    fn workspace_path_for_sync(&self, chat_state: &ChatState) -> std::path::PathBuf {
-        chat_state
-            .workspace
-            .as_ref()
-            .map(std::path::PathBuf::from)
-            .or_else(|| self.workspace.clone().map(std::path::PathBuf::from))
-            .or_else(|| std::env::current_dir().ok())
-            .unwrap_or_else(|| std::path::PathBuf::from("."))
-    }
-
     fn open_login_or_account_panel(
         &self,
         chat_view: &mut ChatView,
         chat_state: &ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        let logged_in =
-            tokio::task::block_in_place(|| rt_handle.block_on(crate::account::is_logged_in()));
-        if logged_in {
-            self.open_account_panel(chat_view, rt_handle);
-        } else {
-            chat_view.show_login_form();
+        let snapshot =
+            tokio::task::block_in_place(|| rt_handle.block_on(self.agent.account_snapshot()));
+        match snapshot {
+            Ok(snapshot) if snapshot.logged_in => self.open_account_panel(chat_view, snapshot),
+            Ok(_) => chat_view.show_login_form(),
+            Err(error) => {
+                chat_view.show_login_form();
+                chat_view.login_form_set_error(format!("Failed to load account: {error}"));
+            }
         }
         let _ = chat_state;
     }
 
-    fn open_account_panel(&self, chat_view: &mut ChatView, rt_handle: &tokio::runtime::Handle) {
-        let (info, devices, progress) = tokio::task::block_in_place(|| {
-            rt_handle.block_on(async {
-                let info = crate::account::account_info().await;
-                let devices = crate::account::list_devices().await.unwrap_or_default();
-                let progress = crate::account_sync::current_sync_progress().await;
-                (info, devices, progress)
-            })
-        });
-        match info {
-            Ok(info) => chat_view.show_account_panel(info, devices, progress),
-            Err(e) => {
-                chat_view.set_status(Some(format!("Failed to load account: {e}")));
-                chat_view.show_login_form();
-            }
-        }
+    fn open_account_panel(
+        &self,
+        chat_view: &mut ChatView,
+        snapshot: bitfun_app_server_protocol::account::AccountSnapshotResponse,
+    ) {
+        let Some(info) = snapshot.info else {
+            chat_view.show_login_form();
+            return;
+        };
+        chat_view.show_account_panel(info, snapshot.devices, snapshot.sync);
     }
 
-    fn refresh_account_panel_live(&self, chat_view: &mut ChatView) {
+    fn refresh_account_panel_live(&self, chat_view: &mut ChatView) -> bool {
         if !chat_view.login_form_visible() {
-            return;
+            return false;
         }
-        let progress = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(crate::account_sync::current_sync_progress())
-        });
+        let Ok(progress) = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(self.agent.settings_sync_snapshot())
+        }) else {
+            return false;
+        };
+        let progress = progress.progress;
         let devices = if matches!(
             progress.status,
-            crate::account_sync::SyncStatus::Syncing | crate::account_sync::SyncStatus::Done
+            bitfun_app_server_protocol::account::SettingsSyncStatus::Syncing
+                | bitfun_app_server_protocol::account::SettingsSyncStatus::Done
         ) {
             tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current()
-                    .block_on(crate::account::list_devices())
+                    .block_on(self.agent.account_snapshot())
                     .ok()
+                    .map(|snapshot| snapshot.devices)
             })
         } else {
             None
         };
+        let syncing =
+            progress.status == bitfun_app_server_protocol::account::SettingsSyncStatus::Syncing;
         chat_view.update_account_panel_progress(devices, progress);
+        syncing
     }
 
     fn start_sync_and_show_account(
@@ -81,13 +76,18 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        let workspace = self.workspace_path_for_sync(chat_state);
-        crate::account_sync::start_auto_sync_background(
-            self.runtime.compatibility().clone(),
-            is_first_login,
-            workspace,
-        );
-        self.open_account_panel(chat_view, rt_handle);
+        let result = tokio::task::block_in_place(|| {
+            rt_handle.block_on(self.agent.settings_sync_start(is_first_login))
+        });
+        if let Err(error) = result {
+            chat_state.add_system_message(format!("Account settings sync failed: {error}"));
+            return;
+        }
+        if let Ok(snapshot) =
+            tokio::task::block_in_place(|| rt_handle.block_on(self.agent.account_snapshot()))
+        {
+            self.open_account_panel(chat_view, snapshot);
+        }
         chat_state.add_system_message(if is_first_login {
             "Sync started (use local / upload settings).".to_string()
         } else {
@@ -105,10 +105,10 @@ impl ChatMode {
         match action {
             LoginFormAction::Submit(creds) => {
                 let result = tokio::task::block_in_place(|| {
-                    rt_handle.block_on(crate::account::login_with_credentials(
-                        &creds.relay_url,
-                        &creds.username,
-                        &creds.password,
+                    rt_handle.block_on(self.agent.account_login(
+                        creds.relay_url,
+                        creds.username,
+                        creds.password,
                     ))
                 });
                 match result {
@@ -128,40 +128,60 @@ impl ChatMode {
                 }
             }
             LoginFormAction::SyncUseLocal => {
-                if let Err(e) = tokio::task::block_in_place(|| {
-                    rt_handle.block_on(crate::account::finalize_login_after_sync_choice())
-                }) {
-                    chat_view.login_form_set_error(format!("Finalize login failed: {e}"));
-                    let _ = tokio::task::block_in_place(|| {
-                        rt_handle.block_on(crate::account::logout())
-                    });
-                    chat_view.show_login_form();
-                    return Ok(None);
-                }
-                self.start_sync_and_show_account(true, chat_view, chat_state, rt_handle);
+                let result = tokio::task::block_in_place(|| {
+                    rt_handle.block_on(self.agent.account_finalize_login(
+                        bitfun_app_server_protocol::account::AccountSyncChoice::Local,
+                    ))
+                });
+                let snapshot = match result {
+                    Ok(snapshot) => snapshot,
+                    Err(error) => {
+                        chat_view.login_form_set_error(format!("Finalize login failed: {error}"));
+                        let _ = tokio::task::block_in_place(|| {
+                            rt_handle.block_on(self.agent.account_logout())
+                        });
+                        chat_view.show_login_form();
+                        return Ok(None);
+                    }
+                };
+                self.open_account_panel(chat_view, snapshot);
+                chat_state
+                    .add_system_message("Sync started (use local / upload settings).".to_string());
             }
             LoginFormAction::SyncUseCloud => {
-                if let Err(e) = tokio::task::block_in_place(|| {
-                    rt_handle.block_on(crate::account::finalize_login_after_sync_choice())
-                }) {
-                    chat_view.login_form_set_error(format!("Finalize login failed: {e}"));
-                    let _ = tokio::task::block_in_place(|| {
-                        rt_handle.block_on(crate::account::logout())
-                    });
-                    chat_view.show_login_form();
-                    return Ok(None);
-                }
-                self.start_sync_and_show_account(false, chat_view, chat_state, rt_handle);
+                let result = tokio::task::block_in_place(|| {
+                    rt_handle.block_on(self.agent.account_finalize_login(
+                        bitfun_app_server_protocol::account::AccountSyncChoice::Cloud,
+                    ))
+                });
+                let snapshot = match result {
+                    Ok(snapshot) => snapshot,
+                    Err(error) => {
+                        chat_view.login_form_set_error(format!("Finalize login failed: {error}"));
+                        let _ = tokio::task::block_in_place(|| {
+                            rt_handle.block_on(self.agent.account_logout())
+                        });
+                        chat_view.show_login_form();
+                        return Ok(None);
+                    }
+                };
+                self.open_account_panel(chat_view, snapshot);
+                chat_state.add_system_message(
+                    "Sync started (use cloud / download settings).".to_string(),
+                );
             }
             LoginFormAction::SyncCancel => {
-                let _ =
-                    tokio::task::block_in_place(|| rt_handle.block_on(crate::account::logout()));
+                let _ = tokio::task::block_in_place(|| {
+                    rt_handle.block_on(self.agent.settings_sync_cancel())
+                });
                 chat_view.show_login_form();
                 chat_state.add_system_message("Sync cancelled; logged out.".to_string());
             }
             LoginFormAction::Logout => {
-                match tokio::task::block_in_place(|| rt_handle.block_on(crate::account::logout())) {
-                    Ok(()) => {
+                match tokio::task::block_in_place(|| {
+                    rt_handle.block_on(self.agent.account_logout())
+                }) {
+                    Ok(_) => {
                         chat_view.show_login_form();
                         chat_state.add_system_message("Logged out.".to_string());
                     }
@@ -184,6 +204,11 @@ impl ChatMode {
             || chat_view.model_selector_visible()
             || chat_view.agent_selector_visible()
             || chat_view.session_selector_visible()
+            || chat_view.session_lineage_selector_visible()
+            || chat_view.fork_selector_visible()
+            || chat_view.timeline_selector_visible()
+            || chat_view.prompt_stash_selector_visible()
+            || chat_view.export_dialog_visible()
             || chat_view.skill_selector_visible()
             || chat_view.subagent_selector_visible()
             || chat_view.mcp_selector_visible()
@@ -193,10 +218,12 @@ impl ChatMode {
             || chat_view.login_form_visible()
             || chat_view.theme_selector_visible()
             || chat_view.info_popup_visible()
+            || chat_view.prompt_command_shell_review_visible()
+            || chat_view.workspace_diff_visible()
     }
 
     /// Close all popups and clear the navigation stack
-    fn close_all_popups(&self, chat_view: &mut ChatView) {
+    fn close_all_popups(&mut self, chat_view: &mut ChatView) {
         // Cancel theme preview if active
         if chat_view.theme_selector_visible() {
             chat_view.cancel_theme_preview();
@@ -205,6 +232,11 @@ impl ChatMode {
         chat_view.hide_model_selector();
         chat_view.hide_agent_selector();
         chat_view.hide_session_selector();
+        chat_view.hide_session_lineage_selector();
+        chat_view.hide_fork_selector();
+        chat_view.hide_timeline_selector();
+        chat_view.hide_prompt_stash_selector();
+        chat_view.hide_export_dialog();
         chat_view.hide_skill_selector();
         chat_view.hide_subagent_selector();
         chat_view.hide_mcp_selector();
@@ -214,6 +246,9 @@ impl ChatMode {
         chat_view.hide_login_form();
         chat_view.hide_theme_selector();
         chat_view.dismiss_info_popup();
+        chat_view.hide_prompt_command_shell_review();
+        self.pending_prompt_command_shell_invocation = None;
+        chat_view.hide_workspace_diff();
         chat_view.popup_stack.clear();
     }
 
@@ -227,6 +262,15 @@ impl ChatMode {
                 crate::ui::chat::PopupType::ModelSelector => chat_view.hide_model_selector(),
                 crate::ui::chat::PopupType::AgentSelector => chat_view.hide_agent_selector(),
                 crate::ui::chat::PopupType::SessionSelector => chat_view.hide_session_selector(),
+                crate::ui::chat::PopupType::SessionLineageSelector => {
+                    chat_view.hide_session_lineage_selector()
+                }
+                crate::ui::chat::PopupType::ForkSelector => chat_view.hide_fork_selector(),
+                crate::ui::chat::PopupType::TimelineSelector => chat_view.hide_timeline_selector(),
+                crate::ui::chat::PopupType::PromptStashSelector => {
+                    chat_view.hide_prompt_stash_selector()
+                }
+                crate::ui::chat::PopupType::ExportDialog => chat_view.hide_export_dialog(),
                 crate::ui::chat::PopupType::SkillSelector => chat_view.hide_skill_selector(),
                 crate::ui::chat::PopupType::SubagentSelector => chat_view.hide_subagent_selector(),
                 crate::ui::chat::PopupType::McpSelector => chat_view.hide_mcp_selector(),
@@ -239,6 +283,7 @@ impl ChatMode {
                     chat_view.cancel_theme_preview();
                 }
                 crate::ui::chat::PopupType::InfoPopup => chat_view.dismiss_info_popup(),
+                crate::ui::chat::PopupType::WorkspaceDiff => chat_view.hide_workspace_diff(),
             }
 
             // If there's a previous popup in the stack, re-show it
@@ -252,6 +297,17 @@ impl ChatMode {
                     crate::ui::chat::PopupType::SessionSelector => {
                         chat_view.reshow_session_selector()
                     }
+                    crate::ui::chat::PopupType::SessionLineageSelector => {
+                        chat_view.reshow_session_lineage_selector()
+                    }
+                    crate::ui::chat::PopupType::ForkSelector => chat_view.reshow_fork_selector(),
+                    crate::ui::chat::PopupType::TimelineSelector => {
+                        chat_view.reshow_timeline_selector()
+                    }
+                    crate::ui::chat::PopupType::PromptStashSelector => {
+                        chat_view.reshow_prompt_stash_selector()
+                    }
+                    crate::ui::chat::PopupType::ExportDialog => {}
                     crate::ui::chat::PopupType::SkillSelector => chat_view.reshow_skill_selector(),
                     crate::ui::chat::PopupType::SubagentSelector => {
                         chat_view.reshow_subagent_selector()
@@ -267,6 +323,7 @@ impl ChatMode {
                     crate::ui::chat::PopupType::LoginForm => chat_view.reshow_login_form(),
                     crate::ui::chat::PopupType::ThemeSelector => chat_view.reshow_theme_selector(),
                     crate::ui::chat::PopupType::InfoPopup => {}
+                    crate::ui::chat::PopupType::WorkspaceDiff => chat_view.reshow_workspace_diff(),
                 }
             }
         }

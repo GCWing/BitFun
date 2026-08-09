@@ -2,6 +2,7 @@
 
 pub mod agent_wait_tool;
 pub mod analyze_image_tool;
+pub mod appearance_publish_tool;
 pub mod arkts_knowledge_search_tool;
 pub mod ask_user_question_tool;
 pub mod bash_tool;
@@ -13,9 +14,7 @@ pub mod switch_cwd_tool;
 pub mod canvas_tools;
 pub mod code_review_tool;
 pub mod computer_use_actions;
-pub mod computer_use_input;
 pub mod computer_use_locate;
-pub mod computer_use_result;
 pub mod computer_use_tool;
 pub mod control_hub;
 pub mod control_hub_tool;
@@ -41,7 +40,9 @@ pub mod hdc_log_tool;
 pub mod list_models_tool;
 pub mod ls_tool;
 pub mod mcp_tools;
+pub mod miniapp_finalize_tool;
 pub mod miniapp_init_tool;
+pub mod miniapp_publish_tool;
 pub mod page_deploy_tool;
 pub mod page_publish_tool;
 pub mod playbook_tool;
@@ -63,11 +64,13 @@ pub mod util;
 pub mod verify_ui_tool;
 pub mod view_image_tool;
 pub mod web;
+pub mod worktree_tool;
 
 #[deprecated(note = "GetToolSpecTool is owned by the product tool runtime boundary")]
 pub use crate::agentic::tools::product_runtime::GetToolSpecTool;
 pub use agent_wait_tool::AgentWaitTool;
 pub use analyze_image_tool::AnalyzeImageTool;
+pub use appearance_publish_tool::PublishAppearanceTool;
 pub use ask_user_question_tool::AskUserQuestionTool;
 pub use bash_tool::BashTool;
 pub use check_arkts_files_tool::CheckArktsFilesTool;
@@ -101,7 +104,9 @@ pub use ls_tool::LSTool;
 pub use mcp_tools::{
     GetMCPPromptTool, ListMCPPromptsTool, ListMCPResourcesTool, ReadMCPResourceTool,
 };
+pub use miniapp_finalize_tool::FinalizeMiniAppTool;
 pub use miniapp_init_tool::InitMiniAppTool;
+pub use miniapp_publish_tool::PublishMiniAppTool;
 pub use page_deploy_tool::PageDeployTool;
 pub use page_publish_tool::PagePublishTool;
 pub use playbook_tool::PlaybookTool;
@@ -118,3 +123,4 @@ pub use todo_write_tool::TodoWriteTool;
 pub use verify_ui_tool::VerifyUiTool;
 pub use view_image_tool::ViewImageTool;
 pub use web::{WebFetchTool, WebSearchTool};
+pub use worktree_tool::WorktreeTool;

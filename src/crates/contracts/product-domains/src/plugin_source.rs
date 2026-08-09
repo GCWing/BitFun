@@ -1,7 +1,7 @@
 //! Product-owned plugin package and trust contracts.
 //!
 //! These contracts identify BitFun-managed packages before an ecosystem
-//! adapter or Plugin Runtime Host is selected. Filesystem discovery and trust
+//! adapter or PluginRuntimeClient implementation is selected. Filesystem discovery and trust
 //! persistence are concrete service integration responsibilities.
 
 use serde::{Deserialize, Deserializer, Serialize};

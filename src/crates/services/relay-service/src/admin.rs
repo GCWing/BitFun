@@ -34,7 +34,8 @@ pub struct AdminKdfParams {
 impl Default for AdminKdfParams {
     fn default() -> Self {
         Self {
-            m: 65536,
+            // Resource-aware baseline: 16 MiB, 3 iterations, 4 lanes.
+            m: 16 * 1024,
             t: 3,
             p: 4,
         }
@@ -117,7 +118,7 @@ pub fn provision(_username: &str, password: &str) -> Result<ProvisionedAccount> 
     let wrapped_master_key = format!(
         "{}.{}",
         BASE64.encode(&wrapped_ct),
-        BASE64.encode(&nonce_bytes)
+        BASE64.encode(nonce_bytes)
     );
 
     // 3. Derive the server-verifiable password hash (separate salt).

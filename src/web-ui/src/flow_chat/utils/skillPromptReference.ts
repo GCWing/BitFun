@@ -76,3 +76,10 @@ export function replaceLeadingSlashCommandWithSkillToken(
 export function isSlashAddressableSkillName(skillName: string): boolean {
   return SLASH_ADDRESSABLE_SKILL_NAME_PATTERN.test(skillName.trim());
 }
+
+export function isSkillAvailableForUserInvocation(skill: {
+  selectedForRuntime: boolean;
+  allowUserInvocation?: boolean;
+}): boolean {
+  return skill.selectedForRuntime && skill.allowUserInvocation !== false;
+}

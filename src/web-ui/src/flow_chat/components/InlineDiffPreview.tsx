@@ -16,7 +16,7 @@ import Prism from 'prismjs';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { diffLines, Change } from 'diff';
 import { getPrismLanguage } from '@/infrastructure/language-detection';
-import { useTheme } from '@/infrastructure/theme';
+import { useAppearance } from '@/infrastructure/appearance';
 import { createLogger } from '@/shared/utils/logger';
 import { buildCodePreviewPrismStyle, CODE_PREVIEW_FONT_FAMILY } from './codePreviewPrismTheme';
 import './InlineDiffPreview.scss';
@@ -220,7 +220,7 @@ function renderToken(
     : null;
 
   return (
-    <span key={key} className={classNames.join(' ')} style={style}>
+    <span data-bf-component="inline-diff-preview" data-bf-part="lineContent" key={key} className={classNames.join(' ')} style={style}>
       {children}
     </span>
   );
@@ -345,7 +345,8 @@ export const InlineDiffPreview: React.FC<InlineDiffPreviewProps> = memo(({
   contextLines = 3,
   onLineClick,
 }) => {
-  const { isLight } = useTheme();
+  const { current: appearance } = useAppearance();
+  const isLight = appearance?.mode === 'light';
   const prismStyle = useMemo(() => buildCodePreviewPrismStyle(isLight), [isLight]);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -465,8 +466,8 @@ export const InlineDiffPreview: React.FC<InlineDiffPreviewProps> = memo(({
 
   if (!originalContent && !modifiedContent) {
     return (
-      <div className={`inline-diff-preview inline-diff-preview--empty ${className}`}>
-        <span className="inline-diff-preview__placeholder">No content</span>
+      <div data-bf-component="inline-diff-preview" data-bf-part="root" data-bf-state="empty" className={`inline-diff-preview inline-diff-preview--empty ${className}`}>
+        <span className="inline-diff-preview__placeholder" data-bf-component="inline-diff-preview" data-bf-part="placeholder">No content</span>
       </div>
     );
   }
@@ -482,15 +483,17 @@ export const InlineDiffPreview: React.FC<InlineDiffPreviewProps> = memo(({
   void measureGeneration;
 
   return (
-    <div className={`inline-diff-preview ${className}`}>
+    <div data-bf-component="inline-diff-preview" data-bf-part="root" className={`inline-diff-preview ${className}`}>
       {truncated.truncated && (
-        <div className="inline-diff-preview__truncation-notice">
+        <div className="inline-diff-preview__truncation-notice" data-bf-component="inline-diff-preview" data-bf-part="notice">
           Content too large; showing first and last portions ({truncated.omittedLines} lines omitted).
         </div>
       )}
       <div
         ref={containerRef}
         className="inline-diff-preview__content"
+        data-bf-component="inline-diff-preview"
+        data-bf-part="content"
         style={{ maxHeight: `${maxHeight}px`, overflow: 'auto' }}
       >
         {/* Spacer div that gives the scrollable area its full virtual height */}
@@ -501,7 +504,7 @@ export const InlineDiffPreview: React.FC<InlineDiffPreviewProps> = memo(({
 
             if (line.type === 'context-separator') {
               return (
-                <div
+                <div data-bf-component="inline-diff-preview" data-bf-part="line"
                   key={virtualRow.key}
                   ref={virtualizer.measureElement}
                   className="diff-line diff-line--separator"
@@ -534,7 +537,7 @@ export const InlineDiffPreview: React.FC<InlineDiffPreviewProps> = memo(({
             const lineTokens = getTokensForLine(line);
 
             return (
-              <div
+              <div data-bf-component="inline-diff-preview" data-bf-part="line"
                 key={virtualRow.key}
                 ref={virtualizer.measureElement}
                 className={lineClass}
@@ -550,18 +553,20 @@ export const InlineDiffPreview: React.FC<InlineDiffPreviewProps> = memo(({
               >
                 {showLineNumbers &&
                   (lineNumberMode === 'single' ? (
-                    <span className="diff-line__gutter diff-line__gutter--single">
+                    <span className="diff-line__gutter diff-line__gutter--single" data-bf-component="inline-diff-preview" data-bf-part="gutter">
                       <span className="diff-line__num">{virtualRow.index + 1}</span>
                     </span>
                   ) : (
-                    <span className="diff-line__gutter">
+                    <span className="diff-line__gutter" data-bf-component="inline-diff-preview" data-bf-part="gutter">
                       <span className="diff-line__num diff-line__num--original">{origNum}</span>
                       <span className="diff-line__num diff-line__num--modified">{modNum}</span>
                     </span>
                   ))}
-                {showPrefix && <span className="diff-line__prefix">{prefix}</span>}
+                {showPrefix && <span className="diff-line__prefix" data-bf-component="inline-diff-preview" data-bf-part="prefix">{prefix}</span>}
                 <span
                   className="diff-line__content"
+                  data-bf-component="inline-diff-preview"
+                  data-bf-part="lineContent"
                   style={{ fontFamily: CODE_PREVIEW_FONT_FAMILY, fontSize: '12px', fontWeight: 400 }}
                 >
                   {renderTokenLine(lineTokens, stylesheet)}

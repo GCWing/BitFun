@@ -1,8 +1,12 @@
 //! Agentic Events Definition
 pub use bitfun_core_types::errors::{AiErrorDetail, ErrorCategory};
-use bitfun_core_types::ToolImageAttachment;
+use bitfun_core_types::{SessionExecutionTarget, ToolImageAttachment};
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
+
+fn context_compression_applied_by_default() -> bool {
+    true
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum AgenticEventPriority {
@@ -76,6 +80,15 @@ pub enum AgenticEvent {
         /// Workspace path this session belongs to. None for locally-created sessions.
         #[serde(skip_serializing_if = "Option::is_none")]
         workspace_path: Option<String>,
+        /// Main project root that owns persistence for this session.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        project_workspace_path: Option<String>,
+        /// Resolved local/worktree execution target.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        execution_target: Option<SessionExecutionTarget>,
+        /// Stable workspace registration associated with the execution root.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        workspace_id: Option<String>,
         /// Remote SSH connection identity for sessions bound to remote workspaces.
         #[serde(skip_serializing_if = "Option::is_none")]
         remote_connection_id: Option<String>,
@@ -87,6 +100,14 @@ pub enum AgenticEvent {
     SessionStateChanged {
         session_id: String,
         new_state: String,
+    },
+
+    /// The authoritative visible history for a session changed outside the
+    /// append-only turn lifecycle (for example, after restoring a checkpoint).
+    /// Consumers should invalidate cached transcript projections for this
+    /// session and reload them from the owning runtime.
+    SessionHistoryChanged {
+        session_id: String,
     },
 
     SessionDeleted {
@@ -136,6 +157,9 @@ pub enum AgenticEvent {
         /// Resolved model selector stored on the child session.
         #[serde(skip_serializing_if = "Option::is_none")]
         model_id: Option<String>,
+        /// Runtime-admitted public label for a focused Review child.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        focused_review_display_label: Option<String>,
     },
 
     DialogTurnCompleted {
@@ -212,6 +236,8 @@ pub enum AgenticEvent {
         duration_ms: u64,
         has_summary: bool,
         summary_source: String,
+        #[serde(default = "context_compression_applied_by_default")]
+        applied: bool,
     },
 
     ContextCompressionFailed {
@@ -349,6 +375,14 @@ pub enum AgenticEvent {
         new_model_id: String,
         /// Why the migration happened, e.g. `"model_disabled"` or
         /// `"model_deleted"`.
+        reason: String,
+    },
+
+    /// A persisted reasoning preset became unavailable for the session's
+    /// concrete model and was canonically cleared to Auto.
+    SessionReasoningPresetAutoCleared {
+        session_id: String,
+        previous_preset_id: String,
         reason: String,
     },
 }
@@ -581,6 +615,7 @@ impl AgenticEvent {
         match self {
             Self::SessionCreated { session_id, .. }
             | Self::SessionStateChanged { session_id, .. }
+            | Self::SessionHistoryChanged { session_id }
             | Self::SessionDeleted { session_id }
             | Self::SessionTitleGenerated { session_id, .. }
             | Self::ImageAnalysisStarted { session_id, .. }
@@ -603,8 +638,32 @@ impl AgenticEvent {
             | Self::ToolEvent { session_id, .. }
             | Self::UserSteeringInjected { session_id, .. }
             | Self::DeepReviewQueueStateChanged { session_id, .. }
-            | Self::SessionModelAutoMigrated { session_id, .. } => Some(session_id),
+            | Self::SessionModelAutoMigrated { session_id, .. }
+            | Self::SessionReasoningPresetAutoCleared { session_id, .. } => Some(session_id),
             Self::SystemError { session_id, .. } => session_id.as_deref(),
+        }
+    }
+
+    /// Get the dialog Turn identity carried by a Turn-scoped event.
+    pub fn turn_id(&self) -> Option<&str> {
+        match self {
+            Self::DialogTurnStarted { turn_id, .. }
+            | Self::DialogTurnCompleted { turn_id, .. }
+            | Self::DialogTurnCancelled { turn_id, .. }
+            | Self::DialogTurnFailed { turn_id, .. }
+            | Self::TokenUsageUpdated { turn_id, .. }
+            | Self::ContextCompressionStarted { turn_id, .. }
+            | Self::ContextCompressionCompleted { turn_id, .. }
+            | Self::ContextCompressionFailed { turn_id, .. }
+            | Self::ModelRoundStarted { turn_id, .. }
+            | Self::ModelRoundAttemptSuperseded { turn_id, .. }
+            | Self::ModelRoundCompleted { turn_id, .. }
+            | Self::TextChunk { turn_id, .. }
+            | Self::ThinkingChunk { turn_id, .. }
+            | Self::ToolEvent { turn_id, .. }
+            | Self::DeepReviewQueueStateChanged { turn_id, .. }
+            | Self::UserSteeringInjected { turn_id, .. } => Some(turn_id),
+            _ => None,
         }
     }
 
@@ -616,8 +675,10 @@ impl AgenticEvent {
             | Self::DialogTurnCancelled { .. } => AgenticEventPriority::Critical,
 
             Self::SessionStateChanged { .. }
+            | Self::SessionHistoryChanged { .. }
             | Self::SessionTitleGenerated { .. }
             | Self::SessionModelAutoMigrated { .. }
+            | Self::SessionReasoningPresetAutoCleared { .. }
             | Self::SubagentSessionLinked { .. }
             | Self::DeepReviewQueueStateChanged { .. }
             | Self::ContextCompressionFailed { .. } => AgenticEventPriority::High,
@@ -751,6 +812,29 @@ mod tests {
             }
             _ => panic!("unexpected event"),
         }
+    }
+
+    #[test]
+    fn legacy_context_compression_completion_defaults_to_applied() {
+        let event: AgenticEvent = serde_json::from_value(json!({
+            "type": "ContextCompressionCompleted",
+            "session_id": "session-1",
+            "turn_id": "turn-1",
+            "compression_id": "compression-1",
+            "compression_count": 1,
+            "tokens_before": 100,
+            "tokens_after": 20,
+            "compression_ratio": 0.2,
+            "duration_ms": 5,
+            "has_summary": true,
+            "summary_source": "model"
+        }))
+        .expect("legacy completion event");
+
+        assert!(matches!(
+            event,
+            AgenticEvent::ContextCompressionCompleted { applied: true, .. }
+        ));
     }
 
     #[test]
@@ -930,6 +1014,7 @@ mod tests {
             parent_tool_call_id: "tool-1".to_string(),
             agent_type: Some("GeneralPurpose".to_string()),
             model_id: Some("fast".to_string()),
+            focused_review_display_label: Some("Authentication boundary".to_string()),
         };
 
         assert_eq!(event.session_id(), Some("child-session"));
@@ -944,5 +1029,24 @@ mod tests {
         assert_eq!(serialized["parent_tool_call_id"], "tool-1");
         assert_eq!(serialized["agent_type"], "GeneralPurpose");
         assert_eq!(serialized["model_id"], "fast");
+        assert_eq!(
+            serialized["focused_review_display_label"],
+            "Authentication boundary"
+        );
+    }
+
+    #[test]
+    fn reasoning_preset_auto_clear_is_a_high_priority_session_event() {
+        let event = AgenticEvent::SessionReasoningPresetAutoCleared {
+            session_id: "session-1".to_string(),
+            previous_preset_id: "high".to_string(),
+            reason: "reasoning_catalog_updated".to_string(),
+        };
+
+        assert_eq!(event.session_id(), Some("session-1"));
+        assert_eq!(event.default_priority(), AgenticEventPriority::High);
+        let serialized = serde_json::to_value(event).expect("serialize event");
+        assert_eq!(serialized["type"], "SessionReasoningPresetAutoCleared");
+        assert_eq!(serialized["previous_preset_id"], "high");
     }
 }

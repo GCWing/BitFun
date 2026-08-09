@@ -438,7 +438,10 @@
     "switchSession": "切换会话",
     "create": "创建新会话",
     "more": "更多会话",
-    "restoreMain": "恢复主窗口"
+    "restoreMain": "恢复主窗口",
+    "inUseTitle": "会话已在其他实例中打开",
+    "inUseMessage": "该会话已在另一个 BitFun 实例中打开。请先在那里关闭，然后重试。",
+    "retry": "重试"
   },
   "scroll": {
     "toBottom": "回到底部",
@@ -464,6 +467,7 @@
     "clickToCollapse": "点击收起",
     "fillToInput": "填充到输入框",
     "cannotRollback": "无法回滚",
+    "rollbackDisabledRemote": "远程工作区未记录文件快照，暂不支持文件与消息一致回滚；不会更改任何文件或消息。",
     "rollbackTo": "回滚到第 {{index}} 轮之前（删除该轮及之后）",
     "rollbackDialogTitle": "确定回滚到第 {{index}} 轮之前？",
     "rollbackDialogIntro": "将执行：",
@@ -481,7 +485,7 @@
     "editPlaceholder": "编辑你的消息...",
     "cannotEdit": "无法编辑该消息",
     "editDisabledImages": "暂不支持编辑图片消息",
-    "editDisabledRemote": "远程会话暂不支持消息编辑",
+    "editDisabledRemote": "编辑并重跑需要完整回滚；远程工作区未记录文件快照，因此暂不支持。",
     "editDisabledLocalCommand": "无法编辑本地命令消息",
     "editDisabledHistoryNotReady": "会话历史尚未就绪",
     "editDialogTitle": "从第 {{index}} 轮编辑并重跑？",
@@ -497,9 +501,10 @@
     "copySelection": "复制选中内容",
     "copyFullContent": "复制完整内容",
     "copyContent": "复制内容",
-    "copyDialog": "复制整个对话",
     "copyToolInput": "复制工具输入",
-    "copyToolOutput": "复制工具输出"
+    "copyToolOutput": "复制工具输出",
+    "copyDialogFull": "复制整个对话（完整过程）",
+    "copyDialogResult": "复制整个对话（仅结果）"
   },
   "widgetContextMenu": {
     "addToInput": "把选中元素加入输入框",
@@ -535,7 +540,23 @@
     "spaceToActivate": "按<space>空格键</space>快速键入",
     "assistantPlaceholder": "给 {{name}} 发送消息...",
     "sendHint": "Enter 发送 / Ctrl+Enter 或 Shift+Enter 换行",
-    "voiceInput": { "start": "开始语音输入", "stop": "停止录音", "preparing": "正在准备麦克风", "transcribing": "正在转写", "disabled": "语音输入已关闭", "unsupported": "当前无法使用麦克风", "modelMissing": "请先下载本地语音模型", "cloudPending": "云端转写已配置，但转写通路尚未接入", "permissionDenied": "麦克风权限被拒绝", "deviceDisconnected": "所选麦克风已断开连接", "lowVolume": "没有检测到声音，请检查所选麦克风。", "failed": "语音输入失败", "empty": "没有识别到语音", "transcribeOnly": "插入转写文本", "transcribeAndSend": "转写并发送" }
+    "voiceInput": {
+      "start": "开始语音输入",
+      "stop": "停止录音",
+      "preparing": "正在准备麦克风",
+      "transcribing": "正在转写",
+      "disabled": "语音输入已关闭",
+      "unsupported": "当前无法使用麦克风",
+      "modelMissing": "请先下载本地语音模型",
+      "cloudPending": "云端转写已配置，但转写通路尚未接入",
+      "permissionDenied": "麦克风权限被拒绝",
+      "deviceDisconnected": "所选麦克风已断开连接",
+      "lowVolume": "没有检测到声音，请检查所选麦克风。",
+      "failed": "语音输入失败",
+      "empty": "没有识别到语音",
+      "transcribeOnly": "插入转写文本",
+      "transcribeAndSend": "转写并发送"
+    }
   },
   "workspaceStrip": {
     "branchTooltipUnavailable": "非 Git 仓库或当前无分支"
@@ -598,12 +619,64 @@
     "processingFailed": "处理失败"
   },
   "chatInput": {
+    "promptCommandShellReview": {
+      "title": "运行提示命令上下文？",
+      "message": "{{source}} 将在 {{directory}} 中使用 {{shell}} 运行 {{count}} 条命令。请先检查完整命令；只有标准输出会加入提示词。",
+      "runOnce": "仅运行一次",
+      "remember": "始终允许此精确计划",
+      "cancel": "取消"
+    },
+    "dispatch": {
+      "local": "本机",
+      "locked": "运行在 {{target}}（此任务不可更改）",
+      "current": "将此任务运行在 {{target}}",
+      "menuLabel": "这个任务在哪运行",
+      "sessionScope": "仅当前任务",
+      "localSection": "本机",
+      "localDescription": "在当前 BitFun 应用中运行",
+      "sshSection": "SSH",
+      "loading": "正在加载目标…",
+      "noSshTargets": "没有已保存的 SSH 目标",
+      "targetLoadFailed": "无法加载 SSH 目标，重试",
+      "sshDescription": "通过已保存的 SSH 连接运行",
+      "addSsh": "添加 SSH 连接…",
+      "deviceSection": "账号设备",
+      "signInDevices": "登录以使用其他设备…",
+      "noDeviceTargets": "没有其他账号设备",
+      "deviceDescription": "在已登录的另一台设备上运行",
+      "deviceOffline": "离线",
+      "createFailed": "无法创建远程任务。请重新检查目标后再试。",
+      "remoteTarget": "远程设备",
+      "transferInProgress": "正在准备目标并传输项目…",
+      "cliInstallStarted": "正在远程设备上准备 BitFun {{version}}…",
+      "cliInstallSucceeded": "BitFun {{version}} 已在远程设备上就绪。",
+      "cliInstallFailed": "无法准备远程运行环境。请检查 SSH 连接后重试。",
+      "cliInstallInProgress": "正在准备远程运行环境…",
+      "cliInstallUnknownVersion": "所需版本",
+      "errors": {
+        "attachmentUnavailable": "这张图片无法发送到远程设备。请重新添加后再试。",
+        "deviceAttachmentTooLarge": "通过账号设备发送的图片总大小不能超过 192 KB。请压缩图片，或改用 SSH 目标。",
+        "appendRejected": "目标设备未接收这条消息，请稍后重试。",
+        "followUpRejected": "目标设备未开始下一轮任务，请稍后重试。",
+        "targetInvalid": "远程目标已失效，请重新选择。",
+        "approvalRequired": "请先选择权限请求的处理方式。",
+        "sessionUnavailable": "远程任务信息不完整。请重新打开任务，或新建一个任务。",
+        "compactWhileRunning": "请等待当前远程任务完成后再压缩上下文。",
+        "compactRejected": "目标设备未能开始压缩，请稍后重试。",
+        "imagesWhileRunning": "图片会随下一轮消息发送。请等待当前远程任务完成后再试。",
+        "sessionNotReady": "远程任务仍在准备中，请稍后再发送。",
+        "submissionUnconfirmed": "暂时无法确认目标是否已接收任务。请稍后检查任务状态。"
+      }
+    },
     "addBoostTooltip": "智能体模式、图片或 Skill",
+    "modeChangeFailed": "切换智能体模式失败，请重试。",
     "permissionMode": {
       "menuLabel": "权限模式",
       "globalScope": "全局",
       "current": "权限：{{mode}}",
       "changeFailed": "切换权限模式失败。",
+      "hideControl": "隐藏权限模式选择器",
+      "hideControlFailed": "隐藏权限模式选择器失败。",
       "ask": {
         "label": "需要确认",
         "description": "外部访问，修改文件和执行命令需要确认。"
@@ -616,14 +689,28 @@
         "label": "完全访问",
         "description": "默认允许工具执行，无需确认。"
       },
+      "reject": {
+        "label": "拒绝请求",
+        "description": "任务需要确认时停止并报告。"
+      },
       "acp": {
         "label": "ACP 控制",
         "tooltip": "此会话的权限由 ACP 客户端控制。"
       },
       "fullAccessWarningTitle": "启用完全访问？",
-      "fullAccessWarningMessage": "完全访问会默认允许工具执行，不再逐次确认。",
+      "fullAccessWarningMessage": "完全访问会默认放行工具调用，不再逐次确认。该设置仅作用于当前会话，项目规则与强制规则仍然生效。",
       "fullAccessConfirm": "启用完全访问",
-      "cancel": "取消"
+      "cancel": "取消",
+      "sessionScope": "当前会话",
+      "currentSessionOverride": "权限：{{mode}}（仅当前会话）",
+      "resetToDefault": "跟随默认模式",
+      "noSession": "请先打开或新建会话，再修改其权限模式。",
+      "turnScope": "仅下一条消息",
+      "currentTurnOverride": "权限：{{mode}}（仅下一条消息）",
+      "nextTurnOnly": "仅下一条消息使用「{{mode}}」",
+      "nextTurnOnlyShort": "仅一次",
+      "fullAccessWarningMessageNextTurn": "完全访问会默认放行工具调用，不再逐次确认。该设置仅作用于下一条消息，项目规则与强制规则仍然生效。",
+      "openDefaultSettings": "打开权限设置"
     },
     "addModeTooltip": "附加 Plan 或 Debug",
     "boostSectionAgent": "智能体",
@@ -692,17 +779,26 @@
     "deepreviewBusy": "当前会话已有审核正在进行，请停止或等待完成后再开始严格审核。",
     "deepreviewNestedDisabled": "严格审核只能从主会话启动。",
     "deepreviewThreadTitle": "严格审核",
-    "reloadSkillsAction": "重新加载技能",
-    "reloadSkillsUsage": "使用 /reload-skills 时不要带额外参数。",
-    "reloadSkillsDone": "技能已重新加载（当前可用 {{count}} 个）",
-    "reloadSkillsFailed": "技能重新加载失败",
+    "reloadAction": "重新加载",
+    "reloadUsage": "使用 /reload，或通过 /reload skills 和 /reload instructions 只重新加载一类内容。",
+    "reloadNoSession": "当前没有可重新加载的会话。",
+    "reloadDesktopOnly": "重新加载仅适用于桌面端本地会话和 CLI。",
+    "reloadAllDone": "技能已重新加载；指令将在下一条消息时重新读取。",
+    "reloadSkillsDone": "技能已重新加载。",
+    "reloadInstructionsDone": "指令将在下一条消息时重新读取。",
+    "reloadFailed": "重新加载失败",
     "currentMode": "当前模式: {{mode}}",
     "noMatchingMode": "没有匹配的模式",
     "noMatchingCommand": "没有匹配的命令",
+    "externalCommandContextUnsupported": "运行此委派命令前，请先移除输入框中的附件和引用。",
     "nativeCommandChoiceNotSaved": "本次仍会执行该命令，但未能保存这次冲突选择。",
     "nativeCommandReconfirmationRequired": "之前选择的外部命令已不可用。请从斜杠菜单中选择 BitFun 命令后再执行。",
     "selectHint": "↑↓ 选择 · Enter 确认 · Esc 取消",
     "current": "当前",
+    "commandStatus": {
+      "restricted": "受限",
+      "chooseSource": "选择来源"
+    },
     "computerUseDisabled": "已在「设置 → 会话权限」中禁用 Computer Use",
     "professionalMode": "专业模式",
     "designMode": "设计模式",
@@ -791,6 +887,30 @@
     "toolCall": "🔧 工具调用: {{name}}",
     "unknownTool": "未知工具"
   },
+  "transcriptExport": {
+    "copyFull": "复制完整过程",
+    "copyResult": "复制结果",
+    "copyEmpty": "该对话没有可复制的内容",
+    "exportEmpty": "该会话没有可导出的内容",
+    "exportSuccess": "会话已导出：{{filePath}}",
+    "exportFailed": "导出会话失败",
+    "saveDialogTitle": "导出会话为 Markdown",
+    "scopeFull": "完整过程",
+    "scopeResult": "仅结果",
+    "metaSessionId": "会话 ID",
+    "metaExportedAt": "导出时间",
+    "metaTurnCount": "对话轮数",
+    "metaScope": "导出范围",
+    "turnHeading": "第 {{index}} 轮",
+    "userHeading": "👤 用户",
+    "assistantHeading": "🤖 助手",
+    "toolHeading": "工具 · {{name}}",
+    "thinking": "思考",
+    "toolInput": "输入",
+    "toolResult": "结果",
+    "toolError": "错误",
+    "empty": "（空）"
+  },
   "smartRecommendations": {
     "title": "💡 智能推荐",
     "close": "关闭"
@@ -820,7 +940,8 @@
   "childSession": {
     "stopReview": "中止审核",
     "stoppingReview": "正在中止审核...",
-    "stopReviewFailed": "中止审核会话失败。",
+    "stopReviewFailed": "无法确认审核是否已停止，它可能仍在运行。",
+    "backToReview": "返回审核",
     "kinds": {
       "btw": {
         "short": "侧问",
@@ -847,6 +968,19 @@
         "title": "子智能体会话",
         "origin": "子智能体"
       }
+    },
+    "reviewDetail": {
+      "loading": "正在加载已保存的详情...",
+      "loadFailed": "无法加载详情。",
+      "unavailable": "没有可用于这项检查的已保存详情。",
+      "retryLoad": "重新加载",
+      "preparing": "{{label}}正在准备...",
+      "completedEmpty": "{{label}}已结束，没有更多详情。",
+      "partialTimedOut": "这项检查已超时，但返回了部分详情。",
+      "stopped": "{{label}}已停止，尚未产生可查看的详情。",
+      "interrupted": "{{label}}已中断。可返回审核继续。",
+      "timedOut": "{{label}}已超时，尚未产生可查看的详情。",
+      "failed": "{{label}}未能完成。"
     }
   },
   "deepReviewActionBar": {
@@ -1048,37 +1182,36 @@
     "windowTitle": "审核方案",
     "eyebrow": "审核方案",
     "title": "开始本次审核？",
-    "body": "BitFun 会先直接审核本次变更，仅在证据确实需要时按需增加独立检查。继续前可确认目标范围、审核预算、预计耗时和只读边界。",
+    "body": "BitFun 会先直接审核本次变更，仅在证据确实需要时增加补充检查。继续前可确认目标范围、预计耗时和只读边界。",
     "readonlyLabel": "只读",
-    "readonly": "审核者不会修改文件。",
+    "readonly": "审核不会修改文件。",
     "sessionConcurrencyTitle": "当前会话较忙",
     "sessionConcurrencyBody": "目标会话已有 {{count}} 个审核工作在运行，继续后将共享当前可用的审核容量。",
-    "costLabel": "审核预算",
-    "cost": "审核预算用于按需的独立检查；实际调用次数和模型用量取决于审核中发现的证据。",
+    "costLabel": "审核深度",
+    "cost": "本次审核会更深入地调查目标，只在确有帮助时增加补充检查。",
     "timeLabel": "耗时",
     "time": "后台运行，可能需要更久。",
     "cancel": "取消",
     "confirm": "开始审核",
-    "callLimit": "检查上限：{{count}}。实际工作量取决于审核目标和发现的证据。",
     "runStrategy": "运行策略：{{strategy}}",
     "strategyLabels": {
-      "quick": "聚焦",
+      "quick": "快速",
       "normal": "标准",
       "deep": "全面"
     },
     "strategySummaries": {
-      "quick": "聚焦审核会检查当前目标最相关的风险。",
-      "normal": "标准审核会更深入地检查当前目标，并在确有帮助时按需增加独立检查。",
-      "deep": "全面审核会检查所有适用的高风险领域，并在证据需要验证时按需增加检查。"
+      "quick": "快速审核会检查当前目标最相关的风险。",
+      "normal": "标准审核会更深入地检查当前目标，只在确有帮助时增加补充检查。",
+      "deep": "全面审核会检查所有适用的高风险领域，只在证据需要时增加独立验证。"
     },
     "summaryTitle": "审核方案",
     "targetFiles": "{{count}} 个文件",
     "targetFiles_one": "{{count}} 个文件",
     "targetFiles_other": "{{count}} 个文件",
-    "skippedReviewers": "{{count}} 个可选检查未纳入",
-    "skippedReviewers_one": "{{count}} 个可选检查未纳入",
-    "skippedReviewers_other": "{{count}} 个可选检查未纳入",
-    "skippedGroupTitle": "已选择审核范围",
+    "skippedReviewers": "{{count}} 项可选审核工作未运行",
+    "skippedReviewers_one": "{{count}} 项可选审核工作未运行",
+    "skippedReviewers_other": "{{count}} 项可选审核工作未运行",
+    "skippedGroupTitle": "未运行的审核工作",
     "targetSource": {
       "manualPrompt": "给定内容",
       "workspaceDiff": "工作区改动",
@@ -1086,15 +1219,15 @@
       "selectedContext": "已选上下文",
       "reviewTarget": "审核目标"
     },
-    "skippedSummary": "BitFun 已为此目标选择最相关的检查。{{count}} 个可选检查因适用性、配置或预算未纳入本次运行。",
-    "skippedSummary_one": "BitFun 已为此目标选择最相关的检查。{{count}} 个可选检查因适用性、配置或预算未纳入本次运行。",
-    "skippedSummary_other": "BitFun 已为此目标选择最相关的检查。{{count}} 个可选检查因适用性、配置或预算未纳入本次运行。"
+    "skippedSummary": "{{count}} 项可选审核工作未运行；本次结果仅反映已完成的审核范围。",
+    "skippedSummary_one": "{{count}} 项可选审核工作未运行；本次结果仅反映已完成的审核范围。",
+    "skippedSummary_other": "{{count}} 项可选审核工作未运行；本次结果仅反映已完成的审核范围。"
+  },
+  "flowChatTurnRail": {
+    "label": "轮次列表",
+    "untitledTurn": "未命名轮次"
   },
   "flowChatHeader": {
-    "turnList": "轮次列表",
-    "untitledTurn": "未命名轮次",
-    "previousTurn": "上一轮对话",
-    "nextTurn": "下一轮对话",
     "turnBadge": "第 {{current}} 轮",
     "btwBackTooltipWithTurn": "返回到来源会话：{{title}}（第 {{turn}} 轮）",
     "btwBackTooltipWithoutTurn": "返回到来源会话：{{title}}",
@@ -1107,19 +1240,30 @@
     "searchClose": "关闭搜索",
     "searchOpen": "搜索消息",
     "jumpToCurrentTurn": "跳转到第 {{turn}} 轮",
-    "backgroundActivities": "后台活动（{{count}}）",
-    "backgroundSubagentUntitled": "后台子 Agent",
-    "backgroundSubagentSection": "后台子 Agent（{{count}}）",
-    "backgroundSubagentActions": "子 Agent 操作",
-    "backgroundSubagentStop": "取消",
-    "backgroundSubagentStopping": "正在取消",
-    "backgroundSubagentStopAll": "全部取消",
-    "backgroundSubagentStopFailed": "取消后台子 Agent 失败。",
-    "backgroundCommandSection": "后台命令（{{count}}）",
+    "agentTree": "Agents",
+    "agentTreeLoading": "正在加载 Agent 会话树...",
+    "agentTreeEmpty": "当前会话没有子 Agent",
+    "agentTreeLoadFailed": "无法加载 Agent 会话树。",
+    "agentTreeRetry": "重试",
+    "agentTreeExpand": "展开分支",
+    "agentTreeCollapse": "收起分支",
+    "agentTreeActions": "Agent 会话操作",
+    "agentTreeCancel": "取消会话",
+    "agentTreeCancelling": "正在取消会话",
+    "agentTreeCancelFailed": "取消 Agent 会话失败。",
+    "agentTreeStatus": {
+      "running": "$t(shared:statuses.running)",
+      "finishing": "收尾中",
+      "waiting": "等待输入",
+      "completed": "$t(shared:statuses.done)",
+      "cancelled": "$t(shared:statuses.cancelled)",
+      "error": "$t(shared:statuses.failed)",
+      "idle": "空闲"
+    },
+    "backgroundCommands": "后台命令（{{count}}）",
+    "backgroundCommandEmpty": "暂无后台命令",
     "backgroundCommandUntitled": "后台命令",
     "backgroundCommandSession": "会话 #{{id}}",
-    "subagentStatusProcessing": "运行中",
-    "subagentStatusFinishing": "收尾中",
     "backgroundCommandStatusRunning": "进行中",
     "backgroundCommandStatusFinished": "已结束",
     "backgroundCommandActions": "命令操作",
@@ -1264,7 +1408,6 @@
     "feedbackDevVersion": "开发版本暂不提供反馈功能",
     "userLabel": "👤 用户:",
     "toolCallLabel": "🔧 工具调用: {{name}}",
-    "loadingMoreHistory": "正在加载更多历史...",
     "roundHistoryShow": "显示 {{count}} 次历史重试轮次",
     "roundHistoryHide": "隐藏历史重试轮次",
     "roundRetryLabel": "重试轮次 {{index}}",
@@ -1560,6 +1703,9 @@
       "success": "成功",
       "failed": "失败",
       "error": "错误",
+      "copy": "复制",
+      "copied": "已复制",
+      "copyFailed": "复制失败",
       "expand": "展开",
       "collapse": "收起",
       "collapseContent": "收起内容",
@@ -1693,8 +1839,13 @@
       "collapseDetails": "收起详情",
       "expandDetails": "展开详情",
       "openInPanel": "在面板中打开详情",
-      "reviewCoverageLabel": "审核检查",
-      "reviewCoverageDescription": "正在补充审核证据"
+      "reviewCoverageLabel": "补充检查",
+      "reviewCoverageDescription": "正在补充审核证据",
+      "reviewFocusedDescription": "正在核查一个具体问题",
+      "reviewCheckUnavailable": "这项补充检查未能完成，主审核仍可继续。",
+      "reviewPartialTimeout": "已超时，但返回了部分详情",
+      "reviewTimedOut": "已超时",
+      "reviewStopped": "已停止"
     },
     "taskDetailPanel": {
       "untitled": "未命名任务",
@@ -1720,6 +1871,8 @@
       "loadingMore": "正在加载更多输出...",
       "loading": "正在加载任务详情...",
       "stopReviewWork": "停止此检查",
+      "stoppingReviewWork": "正在停止此检查...",
+      "stopReviewWorkFailed": "无法确认这项检查是否已停止，它可能仍在运行。",
       "stopReviewWorkHint": "仅取消这个检查项，整体审核仍可继续并生成摘要。"
     },
     "timeout": {
@@ -1988,12 +2141,12 @@
         },
         "target": "目标",
         "budget": "预算",
-        "estimatedCalls": "预计审核检查",
-        "activeGroupTitle": "已覆盖",
-        "skippedGroupTitle": "已选择审核范围",
-        "reducedCoverageSummary": "BitFun 已为此目标选择最相关的检查。{{count}} 个可选检查因适用性、配置或预算未纳入本次运行。",
-        "reducedCoverageSummary_one": "BitFun 已为此目标选择最相关的检查。{{count}} 个可选检查因适用性、配置或预算未纳入本次运行。",
-        "reducedCoverageSummary_other": "BitFun 已为此目标选择最相关的检查。{{count}} 个可选检查因适用性、配置或预算未纳入本次运行。"
+        "estimatedCalls": "预计审核工作项",
+        "activeGroupTitle": "已完成的审核工作",
+        "skippedGroupTitle": "未运行的审核工作",
+        "reducedCoverageSummary": "{{count}} 项可选审核工作未运行；本次结果仅反映已完成的审核范围。",
+        "reducedCoverageSummary_one": "{{count}} 项可选审核工作未运行；本次结果仅反映已完成的审核范围。",
+        "reducedCoverageSummary_other": "{{count}} 项可选审核工作未运行；本次结果仅反映已完成的审核范围。"
       },
       "sectionItemCount": "{{count}} 项",
       "remediationPlan": "修复计划",
@@ -2001,7 +2154,7 @@
         "title": "审核状态",
         "context_pressure": {
           "label": "上下文压力上升",
-          "detail": "大型或受限目标预计需要 {{count}} 项审核检查。"
+          "detail": "大型或受限目标已规划 {{count}} 项审核工作。"
         },
         "compression_preserved": {
           "label": "压缩已保留关键事实",
@@ -2024,8 +2177,8 @@
           "detail": "{{count}} 个审核结果是部分结果，可信度有限。"
         },
         "reduced_scope": {
-          "label": "聚焦审核范围",
-          "detail": "本次审核使用了聚焦范围配置。"
+          "label": "审核范围受限",
+          "detail": "本次审核只覆盖有限范围。"
         },
         "target_evidence_limited": {
           "label": "目标证据受限",
@@ -2037,11 +2190,11 @@
         },
         "skipped_reviewers": {
           "label": "审核范围已匹配",
-          "detail": "{{count}} 个可选检查因适用性、配置或预算未纳入本次运行。"
+          "detail": "未运行的可选审核工作：{{count}} 项（适用性、配置或预算限制）。"
         },
         "token_budget_limited": {
           "label": "Token 预算限制了审核覆盖",
-          "detail": "Token 预算模式将 {{count}} 个可选检查保留在本次范围之外。"
+          "detail": "因 Token 预算未运行的可选审核工作：{{count}} 项。"
         },
         "user_decision": {
           "label": "需要用户决策",
@@ -2075,6 +2228,7 @@
         "security": "安全覆盖",
         "architecture": "架构覆盖",
         "frontend": "前端覆盖",
+        "focusedCheck": "补充检查",
         "qualityGate": "质量检查"
       },
       "report": {
@@ -2219,6 +2373,7 @@
     "fastModel": "Fast 模型",
     "fastMode": "Fast 模式",
     "fastModeDescription": "1.5 倍速度，消耗更多额度",
+    "switchFailed": "切换模型失败",
     "modelNotConfigured": "未配置",
     "contextUsage": {
       "agentPrompt": "上次请求输入上下文: {{usage}}",
@@ -2238,6 +2393,24 @@
     "highDesc": "深度推理",
     "xhigh": "Extra High",
     "xhighDesc": "最大推理深度（较慢）"
+  },
+  "reasoningSelector": {
+    "title": "思考强度",
+    "auto": "自动",
+    "modelDefault": "模型默认值",
+    "current": "思考强度：{{preset}}",
+    "currentAuto": "思考强度：自动（{{preset}}）",
+    "updateFailed": "更新思考预设失败",
+    "source": {
+      "models_dev": "models.dev",
+      "adapter_fallback": "内置",
+      "model_config": "自定义"
+    },
+    "sourceTooltip": {
+      "models_dev": "根据 models.dev 的模型元数据自动生成",
+      "adapter_fallback": "BitFun 为此模型适配器内置的预设",
+      "model_config": "在此模型的自定义配置中定义"
+    }
   },
   "coworkScope": {
     "title": "选择 Cowork 工作区",
@@ -2327,6 +2500,7 @@
     },
     "errors": {
       "emptyContent": "消息内容不能为空",
+      "richContentUnsupported": "包含附件或结构化信息的消息需要等待当前对话完成后发送",
       "sendNowFailed": "立即发送失败，请稍后重试"
     }
   },
@@ -2362,5 +2536,10 @@
   },
   "actions": {
     "send": "发送"
+  },
+  "miniAppComposer": {
+    "placeholder": "把需求发给 {{app}}…",
+    "send": "发送",
+    "hint": "消息将由 {{app}} 处理"
   }
 }

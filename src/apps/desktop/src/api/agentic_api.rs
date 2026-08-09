@@ -14,10 +14,14 @@ use crate::runtime::{
     DesktopRuntimeContext, DesktopSessionApplicationError, DesktopSessionScopeRequest,
 };
 use crate::startup_trace::DesktopStartupTrace;
+use bitfun_agent_runtime::deep_review::sanitize_focused_review_public_metadata;
 use bitfun_agent_runtime::sdk::{
-    AgentDialogTurnRequest, AgentInputAttachment, AgentSessionModelUpdateRequest,
-    AgentSubmissionSource, AgentTurnCancellationRequest, PermissionAuditRecord, PermissionGrant,
-    PermissionGrantKey, PermissionReply, PermissionRequest,
+    AgentDialogSteerRequest, AgentDialogTurnExecution, AgentDialogTurnRequest,
+    AgentInputAttachment, AgentSessionCreateResult, AgentSessionModeUpdateRequest,
+    AgentSessionModelSelection, AgentSessionModelSelectionUpdateRequest,
+    AgentSessionModelUpdateRequest, AgentSubmissionSource, AgentTurnCancellationRequest,
+    DialogSteerOutcome, PermissionAuditRecord, PermissionGrant, PermissionGrantKey,
+    PermissionReply, PermissionRequest,
 };
 use bitfun_core::agentic::agents::AgentSource;
 use bitfun_core::agentic::coordination::{
@@ -47,18 +51,44 @@ use bitfun_core::service::config::project_permission_store::{
     deserialize_project_permission_config, project_permission_file_path,
     project_permission_file_path_for_remote, ProjectPermissionConfig,
 };
+use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use bitfun_core::service::remote_ssh::workspace_state::resolve_workspace_session_identity;
 use bitfun_core::service::session::{
-    DialogTurnData, SessionMemoryMode, SessionMetadata, SessionRelationship,
-    SessionRelationshipKind,
+    DialogTurnData, SessionContextUsage, SessionMemoryMode, SessionMetadata, SessionRelationship,
+    SessionRelationshipKind, SessionTurnCatalog, SessionTurnWindowResponse,
 };
 use bitfun_core::service::workspace::WorkspaceKind;
+use bitfun_core::service::workspace::{WorkspaceActivityMode, WorkspaceCreateOptions};
+use bitfun_core::service::worktree::{WorktreeCreateRequest, WorktreeListRequest, WorktreeService};
+use bitfun_core_types::{
+    SessionExecutionTarget, SessionExecutionTargetKind, SessionExecutionTargetRequest,
+    WorktreeError, WorktreeErrorCode,
+};
 use bitfun_product_domains::tool_permissions::PermissionRule;
+use bitfun_runtime_ports::{PermissionMode, SessionTurnWindowRequest};
 
 const SESSION_VIEW_TOOL_RESULT_TOTAL_CHAR_BUDGET: usize = 512 * 1024;
 const SESSION_VIEW_TOOL_RESULT_STRING_CHAR_LIMIT: usize = 16 * 1024;
+const SESSION_TURN_WINDOW_DEFAULT_BEFORE: usize = 4;
+const SESSION_TURN_WINDOW_DEFAULT_AFTER: usize = 12;
 const SESSION_VIEW_TRUNCATED_MARKER: &str = "\n... Output truncated for session preview";
 const SESSION_VIEW_OMITTED_MARKER: &str = "Output omitted from session preview";
+
+fn encode_worktree_error(error: WorktreeError) -> String {
+    serde_json::to_string(&error).unwrap_or_else(|_| error.to_string())
+}
+
+fn worktree_error(
+    code: WorktreeErrorCode,
+    message: impl Into<String>,
+    recovery_path: Option<String>,
+) -> String {
+    encode_worktree_error(WorktreeError {
+        code,
+        message: message.into(),
+        recovery_path,
+    })
+}
 
 fn desktop_session_scope(
     workspace_path: String,
@@ -79,6 +109,16 @@ pub struct CreateSessionRequest {
     pub session_name: String,
     pub agent_type: String,
     pub workspace_path: String,
+    /// Main project scope for persistence. Legacy clients omit this and use
+    /// `workspacePath`.
+    #[serde(default)]
+    pub project_workspace_path: Option<String>,
+    /// Optional opt-in execution isolation.
+    #[serde(default)]
+    pub execution_target: Option<SessionExecutionTargetRequest>,
+    /// Idempotency key used when `executionTarget` creates a managed worktree.
+    #[serde(default)]
+    pub request_id: Option<String>,
     #[serde(default)]
     pub workspace_id: Option<String>,
     #[serde(default)]
@@ -107,18 +147,14 @@ pub struct SessionConfigDTO {
     pub enable_context_compression: Option<bool>,
     pub model_name: Option<String>,
     #[serde(default)]
+    pub reasoning_preset: Option<String>,
+    #[serde(default)]
     pub remote_connection_id: Option<String>,
     #[serde(default)]
     pub remote_ssh_host: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateSessionResponse {
-    pub session_id: String,
-    pub session_name: String,
-    pub agent_type: String,
-}
+pub type CreateSessionResponse = AgentSessionCreateResult;
 
 fn existing_session_create_response(
     request: &CreateSessionRequest,
@@ -163,11 +199,18 @@ fn existing_session_create_response(
         ));
     }
 
-    Ok(CreateSessionResponse {
-        session_id: metadata.session_id.clone(),
-        session_name: metadata.session_name.clone(),
-        agent_type: metadata.agent_type.clone(),
-    })
+    let mut response = AgentSessionCreateResult::new(
+        metadata.session_id.clone(),
+        metadata.session_name.clone(),
+        metadata.agent_type.clone(),
+    );
+    response.workspace_path = metadata.workspace_path.clone();
+    response.model_id =
+        (!metadata.model_name.trim().is_empty()).then(|| metadata.model_name.clone());
+    response.workspace_id = request.workspace_id.clone();
+    response.project_workspace_path = metadata.project_workspace_path.clone();
+    response.execution_target = metadata.execution_target.clone();
+    Ok(response)
 }
 
 fn is_idempotent_review_create(request: &CreateSessionRequest) -> bool {
@@ -188,6 +231,64 @@ fn is_idempotent_review_create(request: &CreateSessionRequest) -> bool {
 pub struct UpdateSessionModelRequest {
     pub session_id: String,
     pub model_name: String,
+    #[serde(default, deserialize_with = "deserialize_present_nullable")]
+    pub reasoning_preset: Option<Option<String>>,
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub include_internal: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateSessionPermissionModeRequest {
+    pub session_id: String,
+    /// `None` clears the session override so the session follows the
+    /// user-level default again, including later changes to that default.
+    #[serde(default)]
+    pub mode: Option<String>,
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub include_internal: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionPermissionModeResponse {
+    /// The session's own selection, or `null` when it follows the default.
+    pub mode: Option<PermissionMode>,
+}
+
+fn deserialize_present_nullable<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateSessionModeRequest {
+    pub session_id: String,
+    pub mode_id: String,
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub include_internal: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -209,10 +310,18 @@ pub struct StartDialogTurnRequest {
     pub user_input: String,
     pub original_user_input: Option<String>,
     pub agent_type: String,
+    /// Concrete execution root retained for backward compatibility and
+    /// non-native transports.
     pub workspace_path: Option<String>,
+    /// Stable project root used to locate the session transcript when
+    /// execution happens in a managed worktree.
+    #[serde(default)]
+    pub project_workspace_path: Option<String>,
     pub remote_connection_id: Option<String>,
     pub remote_ssh_host: Option<String>,
     pub turn_id: Option<String>,
+    #[serde(default)]
+    pub execution: AgentDialogTurnExecution,
     #[serde(default)]
     pub image_contexts: Option<Vec<ImageContextData>>,
     #[serde(default)]
@@ -396,6 +505,7 @@ pub struct SessionResponse {
     pub agent_type: String,
     /// Current/default model selection for the next dialog turn.
     pub model_name: Option<String>,
+    pub reasoning_preset: Option<String>,
     /// Mode of the last surviving user dialog turn in session history.
     pub last_user_dialog_agent_type: Option<String>,
     /// Mode of the most recent user submission accepted by the scheduler.
@@ -417,6 +527,8 @@ pub struct RestoreSessionWithTurnsResponse {
 pub struct RestoreSessionViewResponse {
     pub session: SessionResponse,
     pub turns: Vec<DialogTurnData>,
+    pub current_context_usage: Option<SessionContextUsage>,
+    pub turn_catalog: SessionTurnCatalog,
     pub context_restore_state: String,
     pub is_partial: bool,
     pub loaded_turn_count: usize,
@@ -683,6 +795,26 @@ impl From<ControlDeepReviewQueueActionDTO> for DeepReviewQueueControlAction {
 #[serde(rename_all = "camelCase")]
 pub struct CancelSessionRequest {
     pub session_id: String,
+    /// Tree cancellation opts out so a parent session does not stop its children.
+    #[serde(default = "default_cancel_descendants")]
+    pub cancel_descendants: bool,
+}
+
+fn default_cancel_descendants() -> bool {
+    true
+}
+
+fn sanitize_create_session_review_metadata(request: &mut CreateSessionRequest) {
+    if let Some(manifest) = request.deep_review_run_manifest.as_mut() {
+        sanitize_focused_review_public_metadata(manifest);
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelSessionResponse {
+    pub cancelled: bool,
+    pub dialog_turn_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -718,6 +850,28 @@ pub struct RestoreSessionRequest {
     pub trace_id: Option<String>,
     #[serde(default)]
     pub tail_turn_count: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoadSessionTurnWindowRequest {
+    pub session_id: String,
+    pub workspace_path: String,
+    #[serde(default)]
+    pub include_internal: bool,
+    pub target_storage_turn_index: usize,
+    #[serde(default)]
+    pub expected_turn_id: Option<String>,
+    #[serde(default)]
+    pub expected_catalog_revision: Option<String>,
+    #[serde(default)]
+    pub before: Option<usize>,
+    #[serde(default)]
+    pub after: Option<usize>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1184,12 +1338,13 @@ pub struct GenerateSessionTitleRequest {
 pub async fn create_session(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
     app_state: State<'_, AppState>,
-    request: CreateSessionRequest,
+    runtime: State<'_, DesktopRuntimeContext>,
+    mut request: CreateSessionRequest,
 ) -> Result<CreateSessionResponse, String> {
     fn norm_conn(s: Option<String>) -> Option<String> {
         s.map(|x| x.trim().to_string()).filter(|x| !x.is_empty())
     }
-    let wp = request.workspace_path.clone();
+    sanitize_create_session_review_metadata(&mut request);
     let remote_conn = norm_conn(request.remote_connection_id.clone()).or_else(|| {
         request
             .config
@@ -1203,6 +1358,200 @@ pub async fn create_session(
             .and_then(|c| norm_conn(c.remote_ssh_host.clone()))
     });
 
+    if remote_conn.is_some() {
+        runtime
+            .session_application()
+            .ensure_workspace_runtime_ownership(desktop_session_scope(
+                request.workspace_path.clone(),
+                remote_conn.clone(),
+                remote_ssh_host.clone(),
+            ))
+            .await
+            .map_err(|error| error.to_string())?;
+    }
+
+    let source_workspace_path = request.workspace_path.clone();
+    let is_idempotent_managed_create = matches!(
+        request.execution_target.as_ref(),
+        Some(SessionExecutionTargetRequest::NewManagedWorktree { .. })
+    );
+    if is_idempotent_managed_create {
+        let request_id = request
+            .request_id
+            .clone()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        if request.session_id.is_none() {
+            request.session_id = Some(
+                WorktreeService::session_id_for_request(&request_id)
+                    .map_err(|error| error.to_string())?,
+            );
+        }
+        request.request_id = Some(request_id);
+    }
+    let mut project_workspace_path = request
+        .project_workspace_path
+        .clone()
+        .unwrap_or_else(|| source_workspace_path.clone());
+    let requested_execution_target = request.execution_target.clone().unwrap_or_default();
+    let mut created_worktree_id = None;
+    let resolved_execution_target = match requested_execution_target {
+        SessionExecutionTargetRequest::Local => {
+            SessionExecutionTarget::local(source_workspace_path.clone())
+        }
+        SessionExecutionTargetRequest::NewManagedWorktree {
+            base_ref,
+            copy_local_changes,
+        } => {
+            if remote_conn.is_some() {
+                return Err(worktree_error(
+                    WorktreeErrorCode::RemoteUnsupported,
+                    "Managed worktrees are not supported for remote SSH workspaces yet",
+                    None,
+                ));
+            }
+            let result = WorktreeService::create(WorktreeCreateRequest {
+                request_id: request
+                    .request_id
+                    .clone()
+                    .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+                project_workspace_path: project_workspace_path.clone(),
+                source_workspace_path: Some(source_workspace_path.clone()),
+                base_ref,
+                copy_local_changes,
+                // A user-created worktree is claimed by the sessions bound to
+                // it, which already block automatic removal.
+                claimed_by: None,
+            })
+            .await
+            .map_err(|error| serde_json::to_string(&error).unwrap_or_else(|_| error.to_string()))?;
+            project_workspace_path = result.worktree.project_workspace_path.clone();
+            request.workspace_path = result.execution_target.root_path.clone();
+            if result.created {
+                created_worktree_id = result.execution_target.worktree_id.clone();
+            }
+            result.execution_target
+        }
+        SessionExecutionTargetRequest::ExistingWorktree { worktree_id } => {
+            if remote_conn.is_some() {
+                return Err(worktree_error(
+                    WorktreeErrorCode::RemoteUnsupported,
+                    "Managed worktrees are not supported for remote SSH workspaces yet",
+                    None,
+                ));
+            }
+            let worktree = WorktreeService::list(WorktreeListRequest {
+                project_workspace_path: project_workspace_path.clone(),
+            })
+            .await
+            .map_err(|error| serde_json::to_string(&error).unwrap_or_else(|_| error.to_string()))?
+            .into_iter()
+            .find(|worktree| worktree.worktree_id == worktree_id)
+            .ok_or_else(|| {
+                worktree_error(
+                    WorktreeErrorCode::WorktreeNotFound,
+                    "The selected worktree no longer exists",
+                    None,
+                )
+            })?;
+            if worktree.missing {
+                return Err(worktree_error(
+                    WorktreeErrorCode::WorktreeNotFound,
+                    "The selected worktree directory is missing; recreate it first",
+                    Some(worktree.path),
+                ));
+            }
+            project_workspace_path = worktree.project_workspace_path.clone();
+            request.workspace_path = worktree.path.clone();
+            SessionExecutionTarget {
+                kind: SessionExecutionTargetKind::ExistingWorktree,
+                worktree_id: Some(worktree.worktree_id),
+                root_path: worktree.path,
+                base_ref: worktree.branch.clone(),
+                base_commit: Some(worktree.head),
+                branch: worktree.branch,
+                lifecycle: Some(worktree.lifecycle),
+            }
+        }
+    };
+    request.project_workspace_path = Some(project_workspace_path.clone());
+    let wp = project_workspace_path.clone();
+
+    let tracked_worktree_workspace_id = if resolved_execution_target.kind
+        != SessionExecutionTargetKind::Local
+    {
+        match app_state
+            .workspace_service
+            .track_workspace_activity(
+                PathBuf::from(&request.workspace_path),
+                WorkspaceCreateOptions::default(),
+                WorkspaceActivityMode::RefreshMetadata,
+            )
+            .await
+        {
+            Ok(workspace) => {
+                request.workspace_id = Some(workspace.id.clone());
+                Some(workspace.id)
+            }
+            Err(track_error) => {
+                if let Some(worktree_id) = created_worktree_id.as_deref() {
+                    if let Err(rollback_error) =
+                        WorktreeService::rollback_created(&project_workspace_path, worktree_id)
+                            .await
+                    {
+                        return Err(worktree_error(
+                                WorktreeErrorCode::RollbackIncomplete,
+                                format!(
+                                    "Failed to register worktree workspace: {track_error}; rollback failed: {rollback_error}"
+                                ),
+                                Some(resolved_execution_target.root_path.clone()),
+                            ));
+                    }
+                }
+                return Err(worktree_error(
+                    WorktreeErrorCode::IoFailed,
+                    format!("Failed to register worktree workspace: {track_error}"),
+                    None,
+                ));
+            }
+        }
+    } else {
+        None
+    };
+
+    if is_idempotent_managed_create {
+        let session_id = request
+            .session_id
+            .as_deref()
+            .ok_or_else(|| "Idempotent worktree session requires a session ID".to_string())?;
+        let effective_path = desktop_effective_session_storage_path(
+            &app_state,
+            &project_workspace_path,
+            remote_conn.as_deref(),
+            remote_ssh_host.as_deref(),
+        )
+        .await;
+        let existing = coordinator
+            .get_session_manager()
+            .load_session_metadata(&effective_path, session_id)
+            .await
+            .map_err(|error| format!("Failed to check existing worktree session: {error}"))?;
+        if let Some(metadata) = existing {
+            let target_matches = metadata.workspace_path.as_deref()
+                == Some(request.workspace_path.as_str())
+                && metadata
+                    .execution_target
+                    .as_ref()
+                    .and_then(|target| target.worktree_id.as_deref())
+                    == resolved_execution_target.worktree_id.as_deref();
+            if !target_matches {
+                return Err(format!(
+                    "Session ID {session_id} already exists with a different worktree target"
+                ));
+            }
+            return existing_session_create_response(&request, &metadata);
+        }
+    }
+
     if is_idempotent_review_create(&request) {
         let session_id = request
             .session_id
@@ -1210,7 +1559,7 @@ pub async fn create_session(
             .ok_or_else(|| "Idempotent Review session requires a session ID".to_string())?;
         let effective_path = desktop_effective_session_storage_path(
             &app_state,
-            &request.workspace_path,
+            &project_workspace_path,
             remote_conn.as_deref(),
             remote_ssh_host.as_deref(),
         )
@@ -1239,6 +1588,13 @@ pub async fn create_session(
                 repaired = true;
             }
             if repaired {
+                coordinator
+                    .ensure_workspace_runtime_ownership(
+                        Path::new(&project_workspace_path),
+                        remote_conn.as_deref(),
+                        remote_ssh_host.as_deref(),
+                    )
+                    .map_err(|error| error.to_string())?;
                 let relationship = request.relationship.clone();
                 let deep_review_run_manifest = request.deep_review_run_manifest.clone();
                 let review_target_evidence = request.review_target_evidence.clone();
@@ -1274,14 +1630,19 @@ pub async fn create_session(
             max_turns: c.max_turns.unwrap_or(200),
             enable_context_compression: c.enable_context_compression.unwrap_or(true),
             workspace_path: Some(request.workspace_path.clone()),
+            project_workspace_path: Some(project_workspace_path.clone()),
+            execution_target: Some(resolved_execution_target.clone()),
             workspace_id: request.workspace_id.clone(),
             remote_connection_id: remote_conn.clone(),
             remote_ssh_host: remote_ssh_host.clone(),
             model_id: c.model_name,
+            reasoning_preset: c.reasoning_preset,
             ..Default::default()
         })
         .unwrap_or(SessionConfig {
             workspace_path: Some(request.workspace_path.clone()),
+            project_workspace_path: Some(project_workspace_path.clone()),
+            execution_target: Some(resolved_execution_target),
             workspace_id: request.workspace_id.clone(),
             remote_connection_id: remote_conn.clone(),
             remote_ssh_host: remote_ssh_host.clone(),
@@ -1289,14 +1650,16 @@ pub async fn create_session(
         });
 
     let session_kind = request.session_kind.unwrap_or_default();
-    let session = if matches!(session_kind, SessionKind::Subagent) {
+    let execution_workspace_path = request.workspace_path.clone();
+    let worktree_recovery_path = execution_workspace_path.clone();
+    let create_result = if matches!(session_kind, SessionKind::Subagent) {
         coordinator
             .create_hidden_subagent_session_with_workspace(
                 request.session_id,
                 request.session_name.clone(),
                 request.agent_type.clone(),
                 config,
-                request.workspace_path,
+                execution_workspace_path,
                 None,
             )
             .await
@@ -1307,11 +1670,50 @@ pub async fn create_session(
                 request.session_name.clone(),
                 request.agent_type.clone(),
                 config,
-                request.workspace_path,
+                execution_workspace_path,
             )
             .await
-    }
-    .map_err(|e| format!("Failed to create session: {}", e))?;
+    };
+    let session = match create_result {
+        Ok(session) => session,
+        Err(create_error) => {
+            let mut rollback_issues = Vec::new();
+            if let Some(workspace_id) = tracked_worktree_workspace_id.as_deref() {
+                if let Err(remove_error) = app_state
+                    .workspace_service
+                    .remove_workspace(workspace_id)
+                    .await
+                {
+                    warn!(
+                        "Failed to remove rolled back worktree workspace registration: {}",
+                        remove_error
+                    );
+                    rollback_issues.push(format!(
+                        "workspace registration could not be removed: {remove_error}"
+                    ));
+                }
+            }
+            if let Some(worktree_id) = created_worktree_id.as_deref() {
+                if let Err(rollback_error) =
+                    WorktreeService::rollback_created(&project_workspace_path, worktree_id).await
+                {
+                    rollback_issues
+                        .push(format!("worktree could not be removed: {rollback_error}"));
+                }
+            }
+            if !rollback_issues.is_empty() {
+                return Err(worktree_error(
+                    WorktreeErrorCode::RollbackIncomplete,
+                    format!(
+                        "Failed to create session: {create_error}; {}",
+                        rollback_issues.join("; ")
+                    ),
+                    Some(worktree_recovery_path),
+                ));
+            }
+            return Err(format!("Failed to create session: {create_error}"));
+        }
+    };
 
     if let Some(relationship) = request.relationship {
         coordinator
@@ -1341,11 +1743,35 @@ pub async fn create_session(
             .map_err(|e| format!("Failed to persist Review target evidence: {}", e))?;
     }
 
-    Ok(CreateSessionResponse {
-        session_id: session.session_id,
-        session_name: session.session_name,
-        agent_type: session.agent_type,
-    })
+    Ok(session.into())
+}
+
+#[tauri::command]
+pub async fn update_session_mode(
+    runtime: State<'_, DesktopRuntimeContext>,
+    request: UpdateSessionModeRequest,
+) -> Result<(), String> {
+    let session_id = request.session_id.trim().to_string();
+    if session_id.is_empty() {
+        return Err("session_id is required".to_string());
+    }
+    ensure_session_loaded_for_selector_update(
+        runtime.inner(),
+        &session_id,
+        request.workspace_path,
+        request.remote_connection_id,
+        request.remote_ssh_host,
+        request.include_internal,
+    )
+    .await?;
+    runtime
+        .agent_runtime()
+        .update_session_mode(AgentSessionModeUpdateRequest {
+            session_id,
+            mode_id: request.mode_id,
+        })
+        .await
+        .map_err(|error| format!("Failed to update session mode: {}", error.into_message()))
 }
 
 #[tauri::command]
@@ -1353,14 +1779,164 @@ pub async fn update_session_model(
     runtime: State<'_, DesktopRuntimeContext>,
     request: UpdateSessionModelRequest,
 ) -> Result<(), String> {
-    runtime
-        .agent_runtime()
-        .update_session_model(AgentSessionModelUpdateRequest {
-            session_id: request.session_id,
-            model_id: request.model_name,
-        })
-        .await
+    let session_id = request.session_id.trim().to_string();
+    if session_id.is_empty() {
+        return Err("session_id is required".to_string());
+    }
+    ensure_session_loaded_for_selector_update(
+        runtime.inner(),
+        &session_id,
+        request.workspace_path,
+        request.remote_connection_id,
+        request.remote_ssh_host,
+        request.include_internal,
+    )
+    .await?;
+    let update_result = match request.reasoning_preset {
+        Some(reasoning_preset) => {
+            let reasoning_preset = reasoning_preset
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToOwned::to_owned);
+            runtime
+                .agent_runtime()
+                .update_session_model_selection(AgentSessionModelSelectionUpdateRequest {
+                    session_id,
+                    selection: AgentSessionModelSelection {
+                        model_id: request.model_name,
+                        reasoning_preset,
+                    },
+                })
+                .await
+        }
+        None => {
+            runtime
+                .agent_runtime()
+                .update_session_model(AgentSessionModelUpdateRequest {
+                    session_id,
+                    model_id: request.model_name,
+                })
+                .await
+        }
+    };
+    update_result
         .map_err(|error| format!("Failed to update session model: {}", error.into_message()))
+}
+
+/// Sets the tool permission mode this session runs with.
+///
+/// The mode is a per-session selector, so switching it in one conversation
+/// leaves every other open session on its own selection. Passing no mode clears
+/// the override and returns the session to the user-level default.
+#[tauri::command]
+pub async fn update_session_permission_mode(
+    runtime: State<'_, DesktopRuntimeContext>,
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    request: UpdateSessionPermissionModeRequest,
+) -> Result<SessionPermissionModeResponse, String> {
+    let session_id = request.session_id.trim().to_string();
+    if session_id.is_empty() {
+        return Err("session_id is required".to_string());
+    }
+    let mode = match request.mode.as_deref().map(str::trim) {
+        None | Some("") => None,
+        Some(value) => Some(
+            PermissionMode::parse(value)
+                .ok_or_else(|| format!("unsupported permission mode: {value}"))?,
+        ),
+    };
+
+    ensure_session_loaded_for_selector_update(
+        runtime.inner(),
+        &session_id,
+        request.workspace_path,
+        request.remote_connection_id,
+        request.remote_ssh_host,
+        request.include_internal,
+    )
+    .await?;
+
+    coordinator
+        .get_session_manager()
+        .update_session_permission_mode(&session_id, mode)
+        .await
+        .map_err(|error| format!("Failed to update session permission mode: {error}"))?;
+
+    Ok(SessionPermissionModeResponse { mode })
+}
+
+/// Reads the session's own permission mode selection.
+///
+/// `null` means the session never chose one and follows the user-level default.
+#[tauri::command]
+pub async fn get_session_permission_mode(
+    runtime: State<'_, DesktopRuntimeContext>,
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    request: UpdateSessionPermissionModeRequest,
+) -> Result<SessionPermissionModeResponse, String> {
+    let session_id = request.session_id.trim().to_string();
+    if session_id.is_empty() {
+        return Err("session_id is required".to_string());
+    }
+    ensure_session_loaded_for_selector_update(
+        runtime.inner(),
+        &session_id,
+        request.workspace_path,
+        request.remote_connection_id,
+        request.remote_ssh_host,
+        request.include_internal,
+    )
+    .await?;
+
+    Ok(SessionPermissionModeResponse {
+        mode: coordinator
+            .get_session_manager()
+            .session_permission_mode(&session_id),
+    })
+}
+
+async fn ensure_session_loaded_for_selector_update(
+    runtime: &DesktopRuntimeContext,
+    session_id: &str,
+    workspace_path: Option<String>,
+    remote_connection_id: Option<String>,
+    remote_ssh_host: Option<String>,
+    include_internal: bool,
+) -> Result<(), String> {
+    let Some(workspace_path) = workspace_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+    else {
+        return Ok(());
+    };
+    runtime
+        .session_application()
+        .ensure_session_loaded(
+            desktop_session_scope(
+                workspace_path.to_string(),
+                remote_connection_id,
+                remote_ssh_host,
+            ),
+            session_id,
+            include_internal,
+        )
+        .await
+        .map_err(|error| format!("Failed to restore session before selector update: {error}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn reload_session_context(
+    runtime: State<'_, DesktopRuntimeContext>,
+    request: bitfun_runtime_ports::AgentContextReloadRequest,
+) -> Result<(), String> {
+    runtime
+        .session_application()
+        .reload_session_context(request)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -1387,13 +1963,20 @@ pub async fn update_session_title(
         .session_application()
         .rename_session(scope, session_id.to_string(), request.title)
         .await
-        .map_err(|error| match error {
-            DesktopSessionApplicationError::Validation(message) => message,
-            DesktopSessionApplicationError::RestoreBeforeRename(message) => {
-                format!("Failed to restore session before renaming: {message}")
-            }
-            error => format!("Failed to update session title: {error}"),
-        })
+        .map_err(desktop_update_session_title_error)
+}
+
+fn desktop_update_session_title_error(error: DesktopSessionApplicationError) -> String {
+    match error {
+        DesktopSessionApplicationError::Validation(message) => message,
+        DesktopSessionApplicationError::RestoreBeforeRename(message) => {
+            format!("Failed to restore session before renaming: {message}")
+        }
+        DesktopSessionApplicationError::OutcomeUnknown(message) => {
+            format!("outcome_unknown: {message}")
+        }
+        error => format!("Failed to update session title: {error}"),
+    }
 }
 
 /// Load the session into the coordinator process when it exists on disk but is not in memory.
@@ -1451,9 +2034,11 @@ fn desktop_dialog_turn_request(
         original_user_input,
         agent_type,
         workspace_path,
+        project_workspace_path,
         remote_connection_id,
         remote_ssh_host,
         turn_id,
+        execution,
         image_contexts,
         user_message_metadata,
     } = request;
@@ -1473,8 +2058,9 @@ fn desktop_dialog_turn_request(
         message: user_input,
         original_message: original_user_input,
         turn_id,
+        execution,
         agent_type,
-        workspace_path,
+        workspace_path: project_workspace_path.or(workspace_path),
         remote_connection_id,
         remote_ssh_host,
         policy,
@@ -1545,6 +2131,13 @@ pub async fn compact_session(
             .ok_or_else(|| {
                 "workspace_path is required when the session is not loaded".to_string()
             })?;
+        coordinator
+            .ensure_workspace_runtime_ownership(
+                Path::new(workspace_path),
+                request.remote_connection_id.as_deref(),
+                request.remote_ssh_host.as_deref(),
+            )
+            .map_err(|error| error.to_string())?;
         let effective = desktop_effective_session_storage_path(
             &app_state,
             workspace_path,
@@ -1593,6 +2186,13 @@ pub async fn activate_session_goal(
             .ok_or_else(|| {
                 "workspace_path is required when the session is not loaded".to_string()
             })?;
+        coordinator
+            .ensure_workspace_runtime_ownership(
+                Path::new(workspace_path),
+                request.remote_connection_id.as_deref(),
+                request.remote_ssh_host.as_deref(),
+            )
+            .map_err(|error| error.to_string())?;
         let effective = desktop_effective_session_storage_path(
             &app_state,
             workspace_path,
@@ -1643,6 +2243,13 @@ async fn ensure_session_for_thread_goal(
             .ok_or_else(|| {
                 "workspace_path is required when the session is not loaded".to_string()
             })?;
+        coordinator
+            .ensure_workspace_runtime_ownership(
+                Path::new(workspace_path),
+                remote_connection_id,
+                remote_ssh_host,
+            )
+            .map_err(|error| error.to_string())?;
         let effective = desktop_effective_session_storage_path(
             app_state,
             workspace_path,
@@ -1781,6 +2388,31 @@ pub async fn set_session_memory_mode(
         }
         other => return Err(format!("unsupported memory mode: {other}")),
     };
+    if coordinator
+        .get_session_manager()
+        .get_session(session_id)
+        .is_some()
+    {
+        coordinator
+            .ensure_session_runtime_ownership(session_id, None)
+            .map_err(|error| error.to_string())?;
+    } else {
+        let workspace_path = request
+            .workspace_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                "workspace_path is required when the session is not loaded".to_string()
+            })?;
+        coordinator
+            .ensure_workspace_runtime_ownership(
+                Path::new(workspace_path),
+                request.remote_connection_id.as_deref(),
+                request.remote_ssh_host.as_deref(),
+            )
+            .map_err(|error| error.to_string())?;
+    }
     let storage_path = resolve_thread_goal_storage_path(
         coordinator.inner(),
         app_state.inner(),
@@ -1929,6 +2561,13 @@ pub async fn run_init_agents_md(
             .ok_or_else(|| {
                 "workspace_path is required when the session is not loaded".to_string()
             })?;
+        coordinator
+            .ensure_workspace_runtime_ownership(
+                Path::new(workspace_path),
+                request.remote_connection_id.as_deref(),
+                request.remote_ssh_host.as_deref(),
+            )
+            .map_err(|error| error.to_string())?;
         let effective = desktop_effective_session_storage_path(
             &app_state,
             workspace_path,
@@ -2085,6 +2724,7 @@ pub async fn cancel_dialog_turn(
             requester_session_id: None,
             reason: None,
             wait_timeout_ms: None,
+            cancel_descendants: true,
         })
         .await
         .map_err(|e| {
@@ -2101,7 +2741,7 @@ pub async fn cancel_dialog_turn(
 
 #[tauri::command]
 pub async fn steer_dialog_turn(
-    scheduler: State<'_, Arc<DialogScheduler>>,
+    runtime: State<'_, DesktopRuntimeContext>,
     request: SteerDialogTurnRequest,
 ) -> Result<SteerDialogTurnResponse, String> {
     let SteerDialogTurnRequest {
@@ -2116,15 +2756,19 @@ pub async fn steer_dialog_turn(
         return Err("Steering content cannot be empty".to_string());
     }
 
-    let outcome = scheduler
-        .submit_steering(session_id, dialog_turn_id, content, display_content)
+    let outcome = runtime
+        .agent_runtime()
+        .steer_dialog_turn(AgentDialogSteerRequest {
+            session_id,
+            turn_id: dialog_turn_id,
+            content,
+            display_content,
+        })
         .await
-        .map_err(|e| format!("Failed to steer dialog turn: {}", e))?;
+        .map_err(|error| format!("Failed to steer dialog turn: {}", error.into_message()))?;
 
     let steering_id = match outcome {
-        bitfun_core::agentic::coordination::DialogSteerOutcome::Buffered {
-            steering_id, ..
-        } => steering_id,
+        DialogSteerOutcome::Buffered { steering_id, .. } => steering_id,
     };
 
     Ok(SteerDialogTurnResponse {
@@ -2157,11 +2801,20 @@ pub async fn control_deep_review_queue(
 
 #[tauri::command]
 pub async fn cancel_session(
-    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    runtime: State<'_, DesktopRuntimeContext>,
     request: CancelSessionRequest,
-) -> Result<(), String> {
-    coordinator
-        .cancel_active_turn_for_session(&request.session_id, std::time::Duration::from_secs(5))
+) -> Result<CancelSessionResponse, String> {
+    let result = runtime
+        .agent_runtime()
+        .cancel_turn(AgentTurnCancellationRequest {
+            session_id: request.session_id.clone(),
+            turn_id: None,
+            source: Some(AgentSubmissionSource::DesktopUi),
+            requester_session_id: None,
+            reason: Some("user_cancelled".to_string()),
+            wait_timeout_ms: Some(5_000),
+            cancel_descendants: request.cancel_descendants,
+        })
         .await
         .map_err(|e| {
             log::error!(
@@ -2169,10 +2822,13 @@ pub async fn cancel_session(
                 request.session_id,
                 e
             );
-            format!("Failed to cancel session: {}", e)
+            format!("Failed to cancel session: {}", e.into_message())
         })?;
 
-    Ok(())
+    Ok(CancelSessionResponse {
+        cancelled: result.requested,
+        dialog_turn_id: result.turn_id,
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -2514,10 +3170,18 @@ pub async fn restore_session_view(
             .map_err(|error| format!("Failed to restore session view: {error}"))?;
         let session = restored.session;
         let mut turns = restored.turns;
+        let current_context_usage = restored.current_context_usage;
         let total_turn_count = restored.total_turn_count;
+        let turn_catalog = restored.turn_catalog;
         let timings = restored.timings;
         let loaded_turn_count = turns.len();
         let is_partial = loaded_turn_count < total_turn_count;
+        let turn_catalog_preview_chars = turn_catalog
+            .entries
+            .iter()
+            .filter_map(|entry| entry.preview.as_deref())
+            .map(|preview| preview.chars().count())
+            .sum::<usize>();
 
         if log::log_enabled!(log::Level::Debug) {
             let payload_stats = restore_turn_payload_stats(&turns);
@@ -2544,18 +3208,23 @@ pub async fn restore_session_view(
         compact_tool_results_for_session_view(&mut turns);
 
         debug!(
-            "restore_session_view completed: trace_id={}, session_id={}, turn_count={}, total_turn_count={}, is_partial={}, context_restore_state=pending, duration_ms={}",
+            "restore_session_view completed: trace_id={}, session_id={}, turn_count={}, total_turn_count={}, is_partial={}, turn_catalog_complete={}, turn_catalog_entry_count={}, turn_catalog_preview_chars={}, context_restore_state=pending, duration_ms={}",
             trace_id,
             request.session_id,
             turns.len(),
             total_turn_count,
             is_partial,
+            turn_catalog.complete,
+            turn_catalog.entries.len(),
+            turn_catalog_preview_chars,
             started_at.elapsed().as_millis()
         );
 
         Ok(RestoreSessionViewResponse {
             session: session_to_response_with_turn_count(session, total_turn_count),
             turns,
+            current_context_usage,
+            turn_catalog,
             context_restore_state: "pending".to_string(),
             is_partial,
             loaded_turn_count,
@@ -2565,6 +3234,85 @@ pub async fn restore_session_view(
     }
     .await;
     startup_trace.record_tauri_command_elapsed("restore_session_view", None, started_at);
+    result
+}
+
+#[tauri::command]
+pub async fn load_session_turn_window(
+    runtime: State<'_, DesktopRuntimeContext>,
+    startup_trace: State<'_, DesktopStartupTrace>,
+    request: LoadSessionTurnWindowRequest,
+) -> Result<SessionTurnWindowResponse, String> {
+    let started_at = Instant::now();
+    let result = async {
+        debug!(
+            "load_session_turn_window request received: session_id={} target_storage_turn_index={} before={} after={}",
+            request.session_id,
+            request.target_storage_turn_index,
+            request.before.unwrap_or(SESSION_TURN_WINDOW_DEFAULT_BEFORE),
+            request.after.unwrap_or(SESSION_TURN_WINDOW_DEFAULT_AFTER)
+        );
+        let mut response = runtime
+            .session_application()
+            .load_session_turn_window(
+                desktop_session_scope(
+                    request.workspace_path.clone(),
+                    request.remote_connection_id.clone(),
+                    request.remote_ssh_host.clone(),
+                ),
+                SessionTurnWindowRequest {
+                    workspace_path: PathBuf::from(&request.workspace_path),
+                    session_id: request.session_id.clone(),
+                    include_internal: request.include_internal,
+                    target_storage_turn_index: request.target_storage_turn_index,
+                    expected_turn_id: request.expected_turn_id.clone(),
+                    expected_catalog_revision: request.expected_catalog_revision.clone(),
+                    before: request.before.unwrap_or(SESSION_TURN_WINDOW_DEFAULT_BEFORE),
+                    after: request.after.unwrap_or(SESSION_TURN_WINDOW_DEFAULT_AFTER),
+                },
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+
+        if let Some(turns) = response.ready_turns_mut() {
+            compact_tool_results_for_session_view(turns);
+        }
+        match &response {
+            SessionTurnWindowResponse::Ready {
+                total_turn_count,
+                start_ordinal,
+                end_ordinal_exclusive,
+                turns,
+                ..
+            } => debug!(
+                "load_session_turn_window completed: session_id={} status=ready target_storage_turn_index={} turn_count={} total_turn_count={} start_ordinal={} end_ordinal_exclusive={} duration_ms={}",
+                request.session_id,
+                request.target_storage_turn_index,
+                turns.len(),
+                total_turn_count,
+                start_ordinal,
+                end_ordinal_exclusive,
+                started_at.elapsed().as_millis()
+            ),
+            SessionTurnWindowResponse::Stale { catalog } => debug!(
+                "load_session_turn_window completed: session_id={} status=stale target_storage_turn_index={} total_turn_count={} duration_ms={}",
+                request.session_id,
+                request.target_storage_turn_index,
+                catalog.total_turn_count,
+                started_at.elapsed().as_millis()
+            ),
+            SessionTurnWindowResponse::NotFound { catalog } => debug!(
+                "load_session_turn_window completed: session_id={} status=not-found target_storage_turn_index={} total_turn_count={} duration_ms={}",
+                request.session_id,
+                request.target_storage_turn_index,
+                catalog.total_turn_count,
+                started_at.elapsed().as_millis()
+            ),
+        }
+        Ok(response)
+    }
+    .await;
+    startup_trace.record_tauri_command_elapsed("load_session_turn_window", None, started_at);
     result
 }
 
@@ -2662,6 +3410,7 @@ pub async fn list_sessions(
             session_name: summary.session_name,
             agent_type: summary.agent_type,
             model_name: None,
+            reasoning_preset: None,
             last_user_dialog_agent_type: summary.last_user_dialog_agent_type,
             last_submitted_agent_type: summary.last_submitted_agent_type,
             state: format!("{:?}", summary.state),
@@ -2692,9 +3441,31 @@ pub async fn generate_session_title(
 pub async fn get_available_modes(
     state: State<'_, AppState>,
     startup_trace: State<'_, DesktopStartupTrace>,
+    request: Option<GetAvailableModesRequest>,
 ) -> Result<Vec<ModeInfoDTO>, String> {
     let trace_started = Instant::now();
-    let mode_infos = state.agent_registry.get_modes_info().await;
+    let request = request.unwrap_or_default();
+    let workspace_path = request
+        .workspace_path
+        .as_deref()
+        .filter(|path| !path.trim().is_empty())
+        .map(PathBuf::from);
+    let external_sources_supported =
+        mode_catalog_supports_external_sources(&request, workspace_path.as_deref()).await;
+    if external_sources_supported {
+        if let Err(error) =
+            bitfun_core::external_sources::ensure_external_source_workspace_snapshot(
+                workspace_path.as_deref(),
+            )
+            .await
+        {
+            warn!("Failed to initialize external agent sources for mode selector: {error}");
+        }
+    }
+    let mode_infos = state
+        .agent_registry
+        .get_modes_info_for_workspace(workspace_path.as_deref(), external_sources_supported)
+        .await;
 
     let dtos: Vec<ModeInfoDTO> = mode_infos
         .into_iter()
@@ -2723,6 +3494,36 @@ pub async fn get_available_modes(
 
     startup_trace.record_tauri_command_elapsed("get_available_modes", None, trace_started);
     Ok(dtos)
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetAvailableModesRequest {
+    pub workspace_path: Option<String>,
+    pub remote_connection_id: Option<String>,
+    pub remote_ssh_host: Option<String>,
+}
+
+async fn mode_catalog_supports_external_sources(
+    request: &GetAvailableModesRequest,
+    workspace_path: Option<&Path>,
+) -> bool {
+    let has_remote_identity = request
+        .remote_connection_id
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty())
+        || request
+            .remote_ssh_host
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty());
+    if has_remote_identity {
+        return false;
+    }
+
+    match workspace_path {
+        Some(path) => path.is_absolute() && !is_remote_path(&path.to_string_lossy()).await,
+        None => false,
+    }
 }
 
 #[tauri::command]
@@ -2814,6 +3615,7 @@ fn session_to_response_with_turn_count(session: Session, turn_count: usize) -> S
         session_name: session.session_name,
         agent_type: session.agent_type,
         model_name: session.config.model_id,
+        reasoning_preset: session.config.reasoning_preset,
         last_user_dialog_agent_type: session.last_user_dialog_agent_type,
         last_submitted_agent_type: session.last_submitted_agent_type,
         state: format!("{:?}", session.state),
@@ -2840,6 +3642,73 @@ mod tests {
     };
     use bitfun_product_domains::tool_permissions::{PermissionEffect, PermissionRule};
     use serde_json::json;
+
+    #[tokio::test]
+    async fn remote_mode_catalog_never_scans_an_absolute_desktop_host_path() {
+        let desktop_host_path = std::env::current_dir().expect("desktop host working directory");
+        assert!(desktop_host_path.is_absolute());
+        let request = GetAvailableModesRequest {
+            workspace_path: Some(desktop_host_path.to_string_lossy().into_owned()),
+            remote_connection_id: Some("remote-1".to_string()),
+            remote_ssh_host: Some("build-host".to_string()),
+        };
+
+        assert!(!mode_catalog_supports_external_sources(&request, Some(&desktop_host_path)).await);
+    }
+
+    #[test]
+    fn update_session_model_distinguishes_omitted_null_and_explicit_reasoning_presets() {
+        let omitted: UpdateSessionModelRequest = serde_json::from_value(json!({
+            "sessionId": "session-1",
+            "modelName": "model-a"
+        }))
+        .expect("omitted reasoning preset");
+        assert_eq!(omitted.reasoning_preset, None);
+
+        let automatic: UpdateSessionModelRequest = serde_json::from_value(json!({
+            "sessionId": "session-1",
+            "modelName": "model-a",
+            "reasoningPreset": null
+        }))
+        .expect("null reasoning preset");
+        assert_eq!(automatic.reasoning_preset, Some(None));
+
+        let explicit: UpdateSessionModelRequest = serde_json::from_value(json!({
+            "sessionId": "session-1",
+            "modelName": "model-a",
+            "reasoningPreset": "high"
+        }))
+        .expect("explicit reasoning preset");
+        assert_eq!(explicit.reasoning_preset, Some(Some("high".to_string())));
+    }
+
+    #[test]
+    fn desktop_steering_uses_the_same_agent_runtime_port_as_other_surfaces() {
+        let source = include_str!("agentic_api.rs").replace("\r\n", "\n");
+        let steering = source
+            .split_once("pub async fn steer_dialog_turn(")
+            .expect("steering command")
+            .1
+            .split_once("pub async fn control_deep_review_queue(")
+            .expect("steering command boundary")
+            .0;
+
+        assert!(steering.contains("State<'_, DesktopRuntimeContext>"));
+        assert!(steering.contains(".agent_runtime()"));
+        assert!(steering.contains(".steer_dialog_turn(AgentDialogSteerRequest"));
+        assert!(!steering.contains("State<'_, Arc<DialogScheduler>>"));
+        assert!(!steering.contains(".submit_steering("));
+    }
+
+    #[test]
+    fn unknown_title_outcomes_reach_the_frontend_with_a_stable_code() {
+        assert_eq!(
+            desktop_update_session_title_error(DesktopSessionApplicationError::OutcomeUnknown(
+                "inspect authoritative state".to_string(),
+            ),),
+            "outcome_unknown: inspect authoritative state"
+        );
+    }
 
     #[test]
     fn project_permission_rule_revisions_distinguish_missing_and_present_files() {
@@ -2876,7 +3745,8 @@ mod tests {
             "userInput": "resolved input",
             "originalUserInput": "original input",
             "agentType": "agentic",
-            "workspacePath": "/workspace/project",
+            "workspacePath": "/worktrees/session-1",
+            "projectWorkspacePath": "/workspace/project",
             "remoteConnectionId": "connection-1",
             "remoteSshHost": "host-1",
             "turnId": "turn-1",
@@ -3026,6 +3896,9 @@ mod tests {
             session_name: "Review fixes".to_string(),
             agent_type: "CodeReview".to_string(),
             workspace_path: "/workspace".to_string(),
+            project_workspace_path: None,
+            execution_target: None,
+            request_id: None,
             workspace_id: None,
             session_kind: None,
             remote_connection_id: None,
@@ -3045,8 +3918,27 @@ mod tests {
     }
 
     #[test]
+    fn create_session_recovery_sanitizes_focused_review_public_metadata() {
+        let mut request = idempotent_create_request();
+        request.deep_review_run_manifest = Some(json!({
+            "reviewMode": "deep",
+            "focusedAssignment": {
+                "displayLabel": "Review Worker packet 7",
+                "question": "Could this contract break callers?"
+            }
+        }));
+
+        sanitize_create_session_review_metadata(&mut request);
+
+        let assignment = &request.deep_review_run_manifest.as_ref().unwrap()["focusedAssignment"];
+        assert!(assignment.get("displayLabel").is_none());
+        assert_eq!(assignment["question"], "Could this contract break callers?");
+    }
+
+    #[test]
     fn existing_create_session_retry_returns_the_matching_session() {
-        let request = idempotent_create_request();
+        let mut request = idempotent_create_request();
+        request.workspace_id = Some("workspace-1".to_string());
         let mut metadata = SessionMetadata::new(
             "review_child_request-1".to_string(),
             "Review fixes".to_string(),
@@ -3058,11 +3950,13 @@ mod tests {
         relationship.parent_dialog_turn_id = Some("turn-2".to_string());
         relationship.parent_turn_index = Some(2);
 
-        let response = existing_session_create_response(&request, &metadata)
-            .expect("matching retry should reuse the session");
+        let response: AgentSessionCreateResult =
+            existing_session_create_response(&request, &metadata)
+                .expect("matching retry should reuse the session");
 
         assert_eq!(response.session_id, "review_child_request-1");
         assert_eq!(response.agent_type, "CodeReview");
+        assert_eq!(response.workspace_id.as_deref(), Some("workspace-1"));
     }
 
     #[test]

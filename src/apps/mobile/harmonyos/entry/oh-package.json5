@@ -5,5 +5,7 @@
   "main": "",
   "author": "",
   "license": "",
-  "dependencies": {}
+  "dependencies": {},
+  "devDependencies": {},
+  "dynamicDependencies": {}
 }

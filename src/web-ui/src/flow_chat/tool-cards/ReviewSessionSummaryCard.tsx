@@ -112,7 +112,7 @@ export const ReviewSessionSummaryCard: React.FC<ToolCardProps> = React.memo(({
             </span>
           )}
           extra={changedFiles.length > 0 ? (
-            <span className="review-session-summary-card__file-count">
+            <span className="review-session-summary-card__file-count" data-bf-component="review-session-summary-card" data-bf-part="fileCount">
               <FileText size={14} />
               {t('toolCards.reviewSessionSummary.filesChanged', {
                 count: changedFiles.length,
@@ -123,18 +123,18 @@ export const ReviewSessionSummaryCard: React.FC<ToolCardProps> = React.memo(({
         />
       )}
       expandedContent={(
-        <div className="review-session-summary-card__details" onClick={(event) => event.stopPropagation()}>
+        <div className="review-session-summary-card__details" data-bf-component="review-session-summary-card" data-bf-part="details" onClick={(event) => event.stopPropagation()}>
           {summary.summaryText ? (
-            <p className="review-session-summary-card__summary">{summary.summaryText}</p>
+            <p className="review-session-summary-card__summary" data-bf-component="review-session-summary-card" data-bf-part="summary">{summary.summaryText}</p>
           ) : (
-            <p className="review-session-summary-card__summary">
+            <p className="review-session-summary-card__summary" data-bf-component="review-session-summary-card" data-bf-part="summary">
               {running
                 ? t('toolCards.reviewSessionSummary.waitingSummary')
                 : t('toolCards.reviewSessionSummary.emptySummary')}
             </p>
           )}
           {changedFiles.length > 0 ? (
-            <div className="review-session-summary-card__files">
+            <div className="review-session-summary-card__files" data-bf-component="review-session-summary-card" data-bf-part="files">
               <span className="review-session-summary-card__section-label">
                 {t('toolCards.reviewSessionSummary.changedFilesTitle')}
               </span>
@@ -148,6 +148,8 @@ export const ReviewSessionSummaryCard: React.FC<ToolCardProps> = React.memo(({
           <button
             type="button"
             className="review-session-summary-card__open"
+            data-bf-component="review-session-summary-card"
+            data-bf-part="open"
             onClick={async () => {
               if (!childSessionId || !parentSessionId) return;
               await openMainSession(parentSessionId);

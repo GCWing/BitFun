@@ -23,13 +23,15 @@ export const MarkdownMathRenderer: React.FC<MarkdownMathRendererProps> = ({
   sanitizeSchema,
   remarkAutolinkComputerFileLinks,
 }) => (
-  <ReactMarkdown
-    remarkPlugins={[remarkGfm, remarkMath, remarkAutolinkComputerFileLinks]}
-    rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeKatex]}
-    components={components}
-  >
-    {markdownContent}
-  </ReactMarkdown>
+  <div data-bf-component="markdown" data-bf-part="math">
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm, remarkMath, remarkAutolinkComputerFileLinks]}
+      rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeKatex]}
+      components={components}
+    >
+      {markdownContent}
+    </ReactMarkdown>
+  </div>
 );
 
 export default MarkdownMathRenderer;

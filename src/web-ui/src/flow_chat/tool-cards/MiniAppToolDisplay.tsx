@@ -90,8 +90,8 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
       iconClassName="miniapp-icon"
       action={`${t('toolCards.initMiniApp.title')}:`}
       content={
-        <span className="miniapp-tool-info">
-          <span className="operation-tag">
+        <span data-bf-component="mini-app-tool-display" data-bf-part="info" className="miniapp-tool-info">
+          <span data-bf-component="mini-app-tool-display" data-bf-part="operation" className="operation-tag">
             {isLoading
               ? t('toolCards.initMiniApp.operationInit')
               : isFailed
@@ -99,6 +99,8 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
                 : t('toolCards.initMiniApp.skeletonReady')}
           </span>
           <span
+            data-bf-component="mini-app-tool-display"
+            data-bf-part="command"
             className="command-text"
             data-testid="chat-miniapp-title"
             data-app-id={appId || ''}
@@ -110,12 +112,12 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
       extra={
         <>
           {success && appId && status === 'completed' && (
-            <span className="output-summary" title={appId}>
+            <span data-bf-component="mini-app-tool-display" data-bf-part="output" className="output-summary" title={appId}>
               {appId}
             </span>
           )}
           {isFailed && (
-            <div className="error-indicator">
+            <div data-bf-component="mini-app-tool-display" data-bf-part="errorIndicator" className="error-indicator">
               <span className="error-text">{t('toolCards.initMiniApp.failed')}</span>
             </div>
           )}
@@ -128,31 +130,35 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
   const renderExpandedSuccess = () => {
     if (!appId) return null;
     return (
-      <div className="miniapp-result-container">
-        <div className="miniapp-result-rows" data-testid="chat-miniapp-file-list">
-          <div className="miniapp-result-row">
-            <span className="miniapp-result-label">{t('toolCards.initMiniApp.labelAppId')}</span>
-            <span className="miniapp-result-value" title={appId}>
+      <div data-bf-component="mini-app-tool-display" data-bf-part="result" className="miniapp-result-container">
+        <div data-bf-component="mini-app-tool-display" data-bf-part="rows" className="miniapp-result-rows" data-testid="chat-miniapp-file-list">
+          <div data-bf-component="mini-app-tool-display" data-bf-part="row" className="miniapp-result-row">
+            <span data-bf-component="mini-app-tool-display" data-bf-part="label" className="miniapp-result-label">{t('toolCards.initMiniApp.labelAppId')}</span>
+            <span data-bf-component="mini-app-tool-display" data-bf-part="value" className="miniapp-result-value" title={appId}>
               {appId}
             </span>
           </div>
           {miniAppFiles.map(filePath => (
             <div
               key={filePath}
+              data-bf-component="mini-app-tool-display"
+              data-bf-part="row"
               className="miniapp-result-row"
               data-testid="chat-miniapp-file-row"
               data-path={filePath}
             >
-              <span className="miniapp-result-label">{t('toolCards.initMiniApp.labelPath')}</span>
-              <span className="miniapp-result-value" title={filePath}>
+              <span data-bf-component="mini-app-tool-display" data-bf-part="label" className="miniapp-result-label">{t('toolCards.initMiniApp.labelPath')}</span>
+              <span data-bf-component="mini-app-tool-display" data-bf-part="value" className="miniapp-result-value" title={filePath}>
                 {filePath}
               </span>
             </div>
           ))}
         </div>
-        <div className="miniapp-result-footer miniapp-action-buttons">
+        <div data-bf-component="mini-app-tool-display" data-bf-part="footer" className="miniapp-result-footer miniapp-action-buttons">
           <button
             type="button"
+            data-bf-component="mini-app-tool-display"
+            data-bf-part="open"
             className="miniapp-open-btn"
             data-testid="chat-miniapp-open-btn"
             data-app-id={appId}
@@ -168,7 +174,7 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
   };
 
   const renderExpandedError = () => (
-    <div className="error-content">
+    <div data-bf-component="mini-app-tool-display" data-bf-part="error" className="error-content">
       <div className="error-message">{getErrorMessage()}</div>
       {name ? (
         <div className="error-meta">
@@ -189,7 +195,8 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
   };
 
   return (
-    <div
+    <div data-bf-component="mini-app-tool-display" data-bf-part="root"
+      data-bf-state={[isExpanded && 'expanded', isFailed && 'failed', isLoading && 'loading'].filter(Boolean).join(' ')}
       ref={cardRootRef}
       data-testid="chat-miniapp-card"
       data-tool-card-id={toolId ?? ''}

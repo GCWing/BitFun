@@ -42,12 +42,15 @@ export const FilterPill: React.FC<FilterPillProps> = ({
     <button
       type="button"
       className={classNames}
+      data-bf-component="filter-pill"
+      data-bf-part="root"
+      data-bf-state={[active && 'active', disabled && 'disabled'].filter(Boolean).join(' ') || undefined}
       onClick={onClick}
       disabled={disabled}
     >
-      <span className="v-filter-pill__label">{label}</span>
+      <span className="v-filter-pill__label" data-bf-component="filter-pill" data-bf-part="label">{label}</span>
       {count !== undefined && (
-        <span className="v-filter-pill__count">{count}</span>
+        <span className="v-filter-pill__count" data-bf-component="filter-pill" data-bf-part="count">{count}</span>
       )}
     </button>
   );
@@ -65,7 +68,7 @@ export const FilterPillGroup: React.FC<FilterPillGroupProps> = ({
   className = '',
 }) => {
   return (
-    <div className={`v-filter-pill-group ${className}`}>
+    <div className={`v-filter-pill-group ${className}`} data-bf-component="filter-pill" data-bf-part="group">
       {children}
     </div>
   );

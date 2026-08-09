@@ -25,6 +25,7 @@ const SESSION_RESPONSE_ESTIMATE_MAX_BYTES = 2 * 1024 * 1024;
 function responseEstimateMaxBytes(command: string): number | undefined {
   return command === 'restore_session_view' ||
     command === 'restore_session_with_turns' ||
+    command === 'load_session_turn_window' ||
     command === 'load_session_turns'
     ? SESSION_RESPONSE_ESTIMATE_MAX_BYTES
     : undefined;
@@ -32,6 +33,30 @@ function responseEstimateMaxBytes(command: string): number | undefined {
 
 function shouldEstimateApiPayloadBytes(): boolean {
   return globalThis.__BITFUN_PERF_TRACE_ENABLED__ === true;
+}
+
+function transportErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>;
+    for (const key of ['message', 'detail', 'error']) {
+      const value = record[key];
+      if (typeof value === 'string' && value.trim()) {
+        return value;
+      }
+    }
+    try {
+      return JSON.stringify(error) || 'Unknown command error';
+    } catch {
+      return 'Unknown command error';
+    }
+  }
+  return String(error);
 }
 
 function apiErrorCause(error: unknown): unknown {
@@ -63,7 +88,7 @@ function isOptionalConfigNotFoundCommand(config: TauriCommandConfig, error: unkn
     return false;
   }
 
-  const errorMessage = error instanceof Error ? error.message : String(error);
+  const errorMessage = transportErrorMessage(error);
   const normalized = errorMessage.toLowerCase();
   return normalized.includes('not found') && normalized.includes('config path');
 }

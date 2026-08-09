@@ -44,6 +44,38 @@ const validSnapshot = {
   diagnostics: [],
 };
 
+const validImportPlan = {
+  schemaVersion: 1,
+  source: validSnapshot.sources[0],
+  disposition: 'import',
+  behaviorVersion: 'sha256:behavior',
+  handlers: [{
+    stableKey: 'pre-tool-use-0',
+    event: 'PreToolUse',
+    matcher: 'Bash',
+    command: 'python D:/managed/hooks/check.py',
+    commandWindows: 'py D:/managed/hooks/check.py',
+    timeoutSeconds: 30,
+    dependencies: [{ kind: 'managed', relativePath: 'hooks/check.py' }],
+  }],
+  skipped: [{ reasonCode: 'unsupported_event', count: 1 }],
+  planFingerprint: 'sha256:plan',
+};
+
+const validImportSnapshot = {
+  schemaVersion: 1,
+  revision: 'sha256:revision',
+  catalog: validSnapshot,
+  imports: [{
+    importId: 'sha256:source',
+    source: validSnapshot.sources[0],
+    enabled: true,
+    behaviorVersion: 'sha256:behavior',
+    state: 'current',
+  }],
+  diagnostics: [],
+};
+
 describe('ExternalHooksAPI', () => {
   beforeEach(() => invokeMock.mockReset());
 
@@ -176,6 +208,51 @@ describe('ExternalHooksAPI', () => {
     });
 
     await expect(externalHooksAPI.getCatalog()).rejects.toMatchObject<ExternalSourceApiError>({
+      code: 'invalid_response',
+    });
+  });
+
+  it('uses one shared plan for preview and explicit apply', async () => {
+    invokeMock.mockResolvedValueOnce(validImportPlan).mockResolvedValueOnce({
+      schemaVersion: 1,
+      outcome: { kind: 'applied', snapshot: validImportSnapshot },
+    });
+
+    const plan = await externalHooksAPI.planImport(
+      ' D:/workspace/project ',
+      validSnapshot.sources[0].key,
+    );
+    await expect(externalHooksAPI.applyImport('D:/workspace/project', plan)).resolves.toMatchObject({
+      outcome: { kind: 'applied' },
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(1, 'plan_external_hook_import_command', {
+      request: {
+        workspacePath: 'D:/workspace/project',
+        source: validSnapshot.sources[0].key,
+      },
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, 'apply_external_hook_import_command', {
+      request: {
+        workspacePath: 'D:/workspace/project',
+        importRequest: {
+          schemaVersion: 1,
+          source: validSnapshot.sources[0].key,
+          planFingerprint: 'sha256:plan',
+        },
+      },
+    });
+  });
+
+  it('normalizes import snapshots and fails closed on unreviewed executable fields', async () => {
+    invokeMock.mockResolvedValueOnce(validImportSnapshot);
+    await expect(externalHooksAPI.getImportSnapshot(undefined, true))
+      .resolves.toEqual(validImportSnapshot);
+
+    invokeMock.mockResolvedValueOnce({
+      ...validImportSnapshot,
+      imports: [{ ...validImportSnapshot.imports[0], command: 'not-reviewed' }],
+    });
+    await expect(externalHooksAPI.getImportSnapshot()).rejects.toMatchObject<ExternalSourceApiError>({
       code: 'invalid_response',
     });
   });

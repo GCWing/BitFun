@@ -25,7 +25,10 @@ pub struct LspManager {
     /// Per-language start/stop guards prevent duplicate process spawns.
     lifecycle_locks: Arc<Mutex<HashMap<String, Arc<Mutex<()>>>>>,
     /// Diagnostics cache (`uri -> diagnostics`).
-    diagnostics_cache: Arc<RwLock<HashMap<String, Vec<serde_json::Value>>>>,
+    ///
+    /// Values are shared via `Arc` so callers (cache + emitted events) can
+    /// reference the same allocation without deep-cloning diagnostic arrays.
+    diagnostics_cache: Arc<RwLock<HashMap<String, Arc<Vec<serde_json::Value>>>>>,
 }
 
 impl LspManager {
@@ -716,13 +719,28 @@ impl LspManager {
     /// Gets diagnostics for a file (from cache).
     pub async fn get_diagnostics(&self, uri: &str) -> Vec<serde_json::Value> {
         let cache = self.diagnostics_cache.read().await;
-        cache.get(uri).cloned().unwrap_or_default()
+        cache
+            .get(uri)
+            .map(|d| d.as_ref().clone())
+            .unwrap_or_default()
     }
 
     /// Updates the diagnostics cache (called by `diagnostics_callback`).
-    pub async fn update_diagnostics_cache(&self, uri: String, diagnostics: Vec<serde_json::Value>) {
+    pub async fn update_diagnostics_cache(
+        &self,
+        uri: String,
+        diagnostics: Arc<Vec<serde_json::Value>>,
+    ) {
         let mut cache = self.diagnostics_cache.write().await;
         cache.insert(uri, diagnostics);
+    }
+
+    /// Returns a handle to the diagnostics cache so hot paths can update it
+    /// without acquiring any lock on the `LspManager` itself.
+    pub fn diagnostics_cache_handle(
+        &self,
+    ) -> Arc<RwLock<HashMap<String, Arc<Vec<serde_json::Value>>>>> {
+        self.diagnostics_cache.clone()
     }
 }
 

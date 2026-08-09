@@ -8,7 +8,7 @@
  * - Adapters are disposed when the model is disposed.
  */
 
-import * as monaco from 'monaco-editor';
+import type * as monaco from 'monaco-editor';
 import { MonacoLspAdapter } from './MonacoLspAdapter';
 import { createLogger } from '@/shared/utils/logger';
 

@@ -13,6 +13,7 @@ export * from './service-api/PermissionAPI';
 export * from './service-api/PageAPI';
 export * from './service-api/SpeechAPI';
 export * from './service-api/FeedbackAPI';
+export * from './service-api/WorktreeAPI';
 
 // Import API modules
 import { workspaceAPI } from './service-api/WorkspaceAPI';
@@ -40,10 +41,11 @@ import { editorAiAPI } from './service-api/EditorAiAPI';
 import { reviewPlatformAPI } from './service-api/ReviewPlatformAPI';
 import { insightsApi } from './insightsApi';
 import { speechAPI } from './service-api/SpeechAPI';
+import { worktreeAPI } from './service-api/WorktreeAPI';
 import { feedbackAPI } from './service-api/FeedbackAPI';
 
 // Export API modules
-export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, cronAPI, permissionAPI, pageAPI, gitAPI, gitAgentAPI, gitRepoHistoryAPI, startchatAgentAPI, sessionAPI, i18nAPI, btwAPI, editorAiAPI, reviewPlatformAPI, insightsApi, speechAPI, feedbackAPI };
+export { feedbackAPI, workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, cronAPI, permissionAPI, pageAPI, gitAPI, gitAgentAPI, gitRepoHistoryAPI, startchatAgentAPI, sessionAPI, i18nAPI, btwAPI, editorAiAPI, reviewPlatformAPI, insightsApi, speechAPI, worktreeAPI };
 export * from './service-api/ReviewPlatformAPI';
 
 // Export types
@@ -77,6 +79,7 @@ export const bitfunAPI = {
   reviewPlatform: reviewPlatformAPI,
   insights: insightsApi,
   speech: speechAPI,
+  worktree: worktreeAPI,
   feedback: feedbackAPI,
 };
 

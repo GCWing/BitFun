@@ -1095,12 +1095,12 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 /* ── Light theme adaptation ─────────────────────────────────────────────
- * The host writes [data-theme-type="light"] on <html> via the bridge.
+ * The host writes [data-bf-appearance-mode="light"] on <html> via the bridge.
  * Aesthetic: deep tarot cards laid on warm parchment. Cards & their gold
  * filigree stay dark/luminous; only the surrounding "room" flips to ivory.
  * This keeps the ritual feeling while integrating with a light app shell.
  */
-[data-theme-type="light"] {
+[data-bf-appearance-mode="light"] {
   --d-bg:        #f3eada;
   --d-bg-deep:   #e8dcc0;
   --d-panel:     #fbf5e6;
@@ -1117,9 +1117,9 @@ button { font-family: inherit; cursor: pointer; }
   --d-good:        #15803d;
   --d-bad:         #9b1c3a;
 }
-[data-theme-type="light"] body { background: #e8dcc0; color: var(--d-text); }
+[data-bf-appearance-mode="light"] body { background: #e8dcc0; color: var(--d-text); }
 /* Page canvas: scene tone becomes a watercolor wash on parchment, not a flood. */
-[data-theme-type="light"] .div-app {
+[data-bf-appearance-mode="light"] .div-app {
   background:
     radial-gradient(1400px 700px at 50% -20%,
       color-mix(in srgb, var(--scene-tone) 14%, transparent),
@@ -1132,67 +1132,67 @@ button { font-family: inherit; cursor: pointer; }
       #e8dcc0 75%);
 }
 /* Hide the white-pinpoint starfield on light bg (it would look like dust). */
-[data-theme-type="light"] .div-app::before,
-[data-theme-type="light"] .div-app::after { opacity: 0; }
+[data-bf-appearance-mode="light"] .div-app::before,
+[data-bf-appearance-mode="light"] .div-app::after { opacity: 0; }
 /* Soften the auroras to faint watercolor pools on parchment. */
-[data-theme-type="light"] .aurora--1 { opacity: 0.16; mix-blend-mode: multiply; }
-[data-theme-type="light"] .aurora--2 { opacity: 0.12; mix-blend-mode: multiply; }
-[data-theme-type="light"] .aurora--3 { opacity: 0.10; mix-blend-mode: multiply; }
+[data-bf-appearance-mode="light"] .aurora--1 { opacity: 0.16; mix-blend-mode: multiply; }
+[data-bf-appearance-mode="light"] .aurora--2 { opacity: 0.12; mix-blend-mode: multiply; }
+[data-bf-appearance-mode="light"] .aurora--3 { opacity: 0.10; mix-blend-mode: multiply; }
 /* Header / footer: cream wash + slightly stronger gold rule. */
-[data-theme-type="light"] .header {
+[data-bf-appearance-mode="light"] .header {
   background: linear-gradient(180deg, rgba(243,234,218,0.94), rgba(243,234,218,0.55));
 }
-[data-theme-type="light"] .footer {
+[data-bf-appearance-mode="light"] .footer {
   background: linear-gradient(0deg, rgba(243,234,218,0.94), rgba(243,234,218,0.55));
 }
-[data-theme-type="light"] .header__title,
-[data-theme-type="light"] .header__date { text-shadow: none; }
-[data-theme-type="light"] .header__title svg {
+[data-bf-appearance-mode="light"] .header__title,
+[data-bf-appearance-mode="light"] .header__date { text-shadow: none; }
+[data-bf-appearance-mode="light"] .header__title svg {
   filter: drop-shadow(0 0 4px rgba(138,106,31,0.35));
 }
 /* Greetings + draw stage: dark gold ink instead of glowing gold. */
-[data-theme-type="light"] .draw-stage__greeting {
+[data-bf-appearance-mode="light"] .draw-stage__greeting {
   color: var(--d-gold);
   text-shadow: none;
 }
-[data-theme-type="light"] .draw-stage__subtitle { color: var(--d-text-soft); }
-[data-theme-type="light"] .draw-stage__tip       { color: var(--d-text-mute); }
+[data-bf-appearance-mode="light"] .draw-stage__subtitle { color: var(--d-text-soft); }
+[data-bf-appearance-mode="light"] .draw-stage__tip       { color: var(--d-text-mute); }
 /* Sigil ring: parchment-friendly opacity + subtle ink instead of glow. */
-[data-theme-type="light"] .sigil-ring {
+[data-bf-appearance-mode="light"] .sigil-ring {
   opacity: 0.45;
   filter: drop-shadow(0 0 6px rgba(138,106,31,0.18));
 }
 /* Result panels: panels themselves have no background, so on parchment the
  * gold rules + ink text just work. Fix the spots that were tuned for dark bg. */
-[data-theme-type="light"] .panel__title { color: var(--d-gold); }
-[data-theme-type="light"] .panel__title::after {
+[data-bf-appearance-mode="light"] .panel__title { color: var(--d-gold); }
+[data-bf-appearance-mode="light"] .panel__title::after {
   background: linear-gradient(90deg,
     rgba(120,90,28,0.45) 0%,
     rgba(120,90,28,0.10) 70%,
     transparent 100%);
 }
-[data-theme-type="light"] .fortune__label,
-[data-theme-type="light"] .lucky__label    { color: var(--d-text-soft); }
-[data-theme-type="light"] .lucky__value    { color: var(--d-text); }
-[data-theme-type="light"] .suit li         { color: var(--d-text); border-bottom-color: rgba(120,90,28,0.18); }
-[data-theme-type="light"] .panel--bad .suit li {
+[data-bf-appearance-mode="light"] .fortune__label,
+[data-bf-appearance-mode="light"] .lucky__label    { color: var(--d-text-soft); }
+[data-bf-appearance-mode="light"] .lucky__value    { color: var(--d-text); }
+[data-bf-appearance-mode="light"] .suit li         { color: var(--d-text); border-bottom-color: rgba(120,90,28,0.18); }
+[data-bf-appearance-mode="light"] .panel--bad .suit li {
   color: rgba(43,30,18,0.85);
   border-bottom-color: rgba(155,28,58,0.22);
 }
-[data-theme-type="light"] .lucky__cell + .lucky__cell:not(.lucky__cell--mantra) {
+[data-bf-appearance-mode="light"] .lucky__cell + .lucky__cell:not(.lucky__cell--mantra) {
   border-left-color: rgba(120,90,28,0.18);
 }
 /* Mantra: script-on-parchment look. */
-[data-theme-type="light"] .lucky__value--mantra { color: var(--d-text); }
-[data-theme-type="light"] .lucky__value--mantra::before,
-[data-theme-type="light"] .lucky__value--mantra::after { color: var(--d-gold); }
+[data-bf-appearance-mode="light"] .lucky__value--mantra { color: var(--d-text); }
+[data-bf-appearance-mode="light"] .lucky__value--mantra::before,
+[data-bf-appearance-mode="light"] .lucky__value--mantra::after { color: var(--d-gold); }
 /* Fortune bar: white-on-dark track + ghost stars need ink-on-cream. */
-[data-theme-type="light"] .fortune__bar       { background: rgba(120,90,28,0.18); }
-[data-theme-type="light"] .fortune__fill      { background: var(--d-gold); }
-[data-theme-type="light"] .fortune__stars     { color: var(--d-gold); }
-[data-theme-type="light"] .fortune__stars .ghost { color: rgba(120,90,28,0.22); }
+[data-bf-appearance-mode="light"] .fortune__bar       { background: rgba(120,90,28,0.18); }
+[data-bf-appearance-mode="light"] .fortune__fill      { background: var(--d-gold); }
+[data-bf-appearance-mode="light"] .fortune__stars     { color: var(--d-gold); }
+[data-bf-appearance-mode="light"] .fortune__stars .ghost { color: rgba(120,90,28,0.22); }
 /* Footer hint ink. */
-[data-theme-type="light"] .footer__hint { color: var(--d-text-soft); }
+[data-bf-appearance-mode="light"] .footer__hint { color: var(--d-text-soft); }
 
 /* ── Light theme — Card front ─────────────────────────────────────────
  * On parchment, a deep saturated card looks pasted-on. We re-skin the
@@ -1200,7 +1200,7 @@ button { font-family: inherit; cursor: pointer; }
  * watercolor wash; text becomes ink; gold filigree deepens to brass.
  * The card is still clearly a "card" (raised, framed) but breathes the
  * same warm air as the rest of the page. */
-[data-theme-type="light"] .card-front {
+[data-bf-appearance-mode="light"] .card-front {
   border-color: rgba(120,90,28,0.45);
   background:
     radial-gradient(140% 60% at 50% 0%, rgba(255,255,255,0.55), transparent 55%),
@@ -1216,17 +1216,17 @@ button { font-family: inherit; cursor: pointer; }
     0 0 30px rgba(120,90,28,0.10) inset;
   color: var(--d-text);
 }
-[data-theme-type="light"] .card-front::after {
+[data-bf-appearance-mode="light"] .card-front::after {
   border-color: rgba(120,90,28,0.30);
 }
-[data-theme-type="light"] .card-front__top    { color: var(--d-gold); }
-[data-theme-type="light"] .card-front__tag    {
+[data-bf-appearance-mode="light"] .card-front__top    { color: var(--d-gold); }
+[data-bf-appearance-mode="light"] .card-front__tag    {
   color: var(--d-gold-bright);
   background: rgba(255,255,255,0.55);
   border-color: rgba(120,90,28,0.45);
 }
 /* Glyph: take the day's primary tone instead of white→gold. */
-[data-theme-type="light"] .card-front__art {
+[data-bf-appearance-mode="light"] .card-front__art {
   background: linear-gradient(135deg,
     var(--card-tone-1, #5b21b6) 0%,
     color-mix(in srgb, var(--card-tone-2, #150a2a) 70%, var(--d-gold)) 100%);
@@ -1237,28 +1237,28 @@ button { font-family: inherit; cursor: pointer; }
     drop-shadow(0 2px 4px rgba(70,50,20,0.18))
     drop-shadow(0 0 18px color-mix(in srgb, var(--card-tone-1, #5b21b6) 35%, transparent));
 }
-[data-theme-type="light"] .card-front__art::before {
+[data-bf-appearance-mode="light"] .card-front__art::before {
   background: radial-gradient(circle,
     color-mix(in srgb, var(--card-tone-1, #5b21b6) 16%, transparent) 0%,
     rgba(120,90,28,0.06) 40%,
     transparent 70%);
 }
-[data-theme-type="light"] .card-front__art::after {
+[data-bf-appearance-mode="light"] .card-front__art::after {
   border-color: rgba(120,90,28,0.30);
 }
-[data-theme-type="light"] .card-front__name {
+[data-bf-appearance-mode="light"] .card-front__name {
   color: color-mix(in srgb, var(--card-tone-2, #150a2a) 70%, var(--d-gold));
 }
-[data-theme-type="light"] .card-front__keyword { color: var(--d-text-soft); }
-[data-theme-type="light"] .card-front__quote   { color: var(--d-text); }
-[data-theme-type="light"] .card-front__insight {
+[data-bf-appearance-mode="light"] .card-front__keyword { color: var(--d-text-soft); }
+[data-bf-appearance-mode="light"] .card-front__quote   { color: var(--d-text); }
+[data-bf-appearance-mode="light"] .card-front__insight {
   color: color-mix(in srgb, var(--card-tone-2, #150a2a) 60%, var(--d-text-soft));
   border-top-color: rgba(120,90,28,0.28);
 }
-[data-theme-type="light"] .card-front__insight-label { color: var(--d-gold); }
+[data-bf-appearance-mode="light"] .card-front__insight-label { color: var(--d-gold); }
 /* Card flip animation re-uses the glyph art-float drop-shadow which assumed
  * a dark background; soften so it doesn't feel like a hot spot on parchment. */
-[data-theme-type="light"] .card-front__art {
+[data-bf-appearance-mode="light"] .card-front__art {
   animation: artFloatLight 5s ease-in-out infinite alternate;
 }
 @keyframes artFloatLight {
@@ -1273,7 +1273,7 @@ button { font-family: inherit; cursor: pointer; }
 /* ── Light theme — Card backs (draw stage) ─────────────────────────────
  * Re-skin the fan of card backs as warm vellum cards with deep-gold
  * filigree, instead of deep purple slabs floating on parchment. */
-[data-theme-type="light"] .card-pick {
+[data-bf-appearance-mode="light"] .card-pick {
   border-color: rgba(120,90,28,0.55);
   background:
     radial-gradient(circle at 50% 35%, rgba(255,255,255,0.45), transparent 70%),
@@ -1283,15 +1283,15 @@ button { font-family: inherit; cursor: pointer; }
     0 0 0 1px rgba(120,90,28,0.22) inset,
     0 0 40px rgba(120,90,28,0.10) inset;
 }
-[data-theme-type="light"] .card-pick:hover,
-[data-theme-type="light"] .card-pick:focus-visible {
+[data-bf-appearance-mode="light"] .card-pick:hover,
+[data-bf-appearance-mode="light"] .card-pick:focus-visible {
   box-shadow:
     0 32px 60px -22px rgba(120,90,28,0.45),
     0 0 0 1px rgba(120,90,28,0.50) inset,
     0 0 40px rgba(181,138,42,0.30);
   filter: brightness(1.04);
 }
-[data-theme-type="light"] .card-pick__pattern {
+[data-bf-appearance-mode="light"] .card-pick__pattern {
   border-color: rgba(120,90,28,0.40);
   background-image:
     radial-gradient(circle at 50% 50%, rgba(120,90,28,0.10) 0, transparent 40%),
@@ -1299,13 +1299,13 @@ button { font-family: inherit; cursor: pointer; }
       rgba(120,90,28,0.08) 0 4px,
       transparent 4px 9px);
 }
-[data-theme-type="light"] .card-pick__pattern::before,
-[data-theme-type="light"] .card-pick__pattern::after {
+[data-bf-appearance-mode="light"] .card-pick__pattern::before,
+[data-bf-appearance-mode="light"] .card-pick__pattern::after {
   border-color: var(--d-gold);
   opacity: 0.85;
 }
 /* Symbol on the back: deeper gold gradient instead of gold→purple. */
-[data-theme-type="light"] .card-pick__symbol {
+[data-bf-appearance-mode="light"] .card-pick__symbol {
   background: linear-gradient(135deg,
     #b58a2a 0%, #8a6a1f 55%, #6b4f15 100%);
   -webkit-background-clip: text;
@@ -1316,7 +1316,7 @@ button { font-family: inherit; cursor: pointer; }
   opacity: 0.95;
 }
 /* Sheen across the back: keep but tone down (mix-blend looks weird on cream). */
-[data-theme-type="light"] .card-pick__shine {
+[data-bf-appearance-mode="light"] .card-pick__shine {
   background: linear-gradient(115deg,
     transparent 35%,
     rgba(255,250,235,0.55) 50%,
@@ -1324,7 +1324,7 @@ button { font-family: inherit; cursor: pointer; }
   mix-blend-mode: normal;
 }
 /* Chosen / pulse animation: replace purple/gold halos with warm amber halos. */
-[data-theme-type="light"] .card-pick.is-chosen {
+[data-bf-appearance-mode="light"] .card-pick.is-chosen {
   box-shadow:
     0 50px 100px -28px rgba(181,138,42,0.55),
     0 0 0 1px rgba(120,90,28,0.65) inset,
@@ -1345,22 +1345,22 @@ button { font-family: inherit; cursor: pointer; }
            0 0 170px rgba(181,138,42,0.45); }
 }
 /* Burst + reveal flash: shift from purple/gold cosmic flare to warm amber. */
-[data-theme-type="light"] .draw-burst {
+[data-bf-appearance-mode="light"] .draw-burst {
   background: radial-gradient(circle,
     rgba(255,250,235,0.95) 0%,
     rgba(240,200,120,0.85) 18%,
     rgba(181,138,42,0.55) 45%,
     transparent 70%);
 }
-[data-theme-type="light"] .draw-burst::before {
+[data-bf-appearance-mode="light"] .draw-burst::before {
   border-color: rgba(181,138,42,0.65);
   box-shadow: 0 0 24px rgba(181,138,42,0.45);
 }
-[data-theme-type="light"] .draw-burst::after {
+[data-bf-appearance-mode="light"] .draw-burst::after {
   border-color: rgba(120,90,28,0.55);
   box-shadow: 0 0 24px rgba(120,90,28,0.35);
 }
-[data-theme-type="light"] .draw-veil {
+[data-bf-appearance-mode="light"] .draw-veil {
   background: radial-gradient(circle at 50% 50%,
     rgba(240,200,120,0.30),
     rgba(181,138,42,0.10) 35%,

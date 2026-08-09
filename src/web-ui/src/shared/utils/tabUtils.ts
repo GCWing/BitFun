@@ -109,7 +109,6 @@ export function createCodeEditorTab(
     readOnly?: boolean;
     showLineNumbers?: boolean;
     showMinimap?: boolean;
-    theme?: 'vs-dark' | 'vs-light' | 'hc-black';
     jumpToLine?: number;
     jumpToColumn?: number;
   },
@@ -125,7 +124,6 @@ export function createCodeEditorTab(
       readOnly: options?.readOnly ?? false,
       showLineNumbers: options?.showLineNumbers ?? true,
       showMinimap: options?.showMinimap ?? true,
-      theme: options?.theme ?? 'vs-dark',
       jumpToLine: options?.jumpToLine,
       jumpToColumn: options?.jumpToColumn
     },
@@ -229,7 +227,6 @@ export function createGitCodeEditorTab(
       readOnly: options?.readOnly ?? false,
       showLineNumbers: options?.showLineNumbers ?? true,
       showMinimap: options?.showMinimap ?? true,
-      theme: options?.theme ?? 'vs-dark',
       jumpToLine: options?.jumpToLine,
       jumpToColumn: options?.jumpToColumn,
     },

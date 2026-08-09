@@ -2,6 +2,7 @@
 
 use crate::api::app_state::AppState;
 use crate::startup_trace::DesktopStartupTrace;
+use bitfun_core::service::config::{SaveCloudSpeechConfigRequest, SaveCloudSpeechConfigResult};
 use bitfun_core::util::errors::BitFunError;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
@@ -48,6 +49,12 @@ pub struct GetRuntimeLoggingInfoRequest {}
 
 #[derive(Debug, Deserialize, Default)]
 pub struct ExportDiagnosticsBundleRequest {}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppendFlowChatDiagnosticsRequest {
+    pub entries: Vec<Value>,
+}
 
 fn to_json_value<T: Serialize>(value: T, context: &str) -> Result<Value, String> {
     serde_json::to_value(value).map_err(|e| format!("Failed to serialize {}: {}", context, e))
@@ -219,6 +226,31 @@ pub async fn set_config(
 }
 
 #[tauri::command]
+pub async fn save_cloud_speech_config(
+    state: State<'_, AppState>,
+    request: SaveCloudSpeechConfigRequest,
+) -> Result<SaveCloudSpeechConfigResult, String> {
+    match state.config_service.save_cloud_speech_config(request).await {
+        Ok(result) => {
+            state.ai_client_factory.invalidate_cache();
+            crate::api::remote_connect_api::notify_settings_changed();
+            info!(
+                "Cloud speech configuration saved atomically: model_id={}, created={}",
+                result.model_id, result.created
+            );
+            Ok(result)
+        }
+        Err(error) => {
+            error!("Failed to save cloud speech configuration: {}", error);
+            Err(format!(
+                "Failed to save cloud speech configuration: {}",
+                error
+            ))
+        }
+    }
+}
+
+#[tauri::command]
 pub async fn reset_config(
     state: State<'_, AppState>,
     request: ResetConfigRequest,
@@ -371,6 +403,18 @@ pub async fn export_diagnostics_bundle(
 ) -> Result<Value, String> {
     let bundle_info = crate::crash_diagnostics::export_diagnostics_bundle()?;
     to_json_value(bundle_info, "diagnostics bundle info")
+}
+
+#[tauri::command]
+pub async fn append_flow_chat_diagnostics(
+    _state: State<'_, AppState>,
+    request: AppendFlowChatDiagnosticsRequest,
+) -> Result<usize, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::logging::append_flow_chat_diagnostics(&request.entries)
+    })
+    .await
+    .map_err(|error| format!("Flow Chat diagnostics writer task failed: {}", error))?
 }
 
 #[tauri::command]

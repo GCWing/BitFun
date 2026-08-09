@@ -3,6 +3,7 @@ use super::{next_stream_item, StreamTimeoutController, StreamTimeoutStage, Timed
 use crate::stream::types::gemini::GeminiSSEData;
 use crate::stream::types::unified::UnifiedResponse;
 use anyhow::{anyhow, Result};
+use bitfun_core_types::errors::AiProviderError;
 use eventsource_stream::Eventsource;
 use log::{error, trace};
 use reqwest::Response;
@@ -74,6 +75,24 @@ fn extract_api_error_message(event_json: &Value) -> Option<String> {
         return Some(message.to_string());
     }
     Some("Gemini streaming request failed".to_string())
+}
+
+fn extract_api_error(event_json: &Value) -> Option<AiProviderError> {
+    let error = event_json.get("error")?;
+    let code = error
+        .get("status")
+        .or_else(|| error.get("code"))
+        .and_then(|value| match value {
+            Value::String(value) => Some(value.clone()),
+            Value::Number(value) => Some(value.to_string()),
+            _ => None,
+        });
+    Some(AiProviderError::from_parts(
+        extract_api_error_message(event_json)?,
+        Some("gemini".to_string()),
+        code,
+        None,
+    ))
 }
 
 pub async fn handle_gemini_stream(
@@ -157,12 +176,15 @@ pub async fn handle_gemini_stream(
             }
         };
 
-        if let Some(message) = extract_api_error_message(&event_json) {
-            let error_msg = format!("Gemini SSE API error: {}, data: {}", message, raw);
+        if let Some(mut provider_error) = extract_api_error(&event_json) {
+            provider_error.message = format!(
+                "Gemini SSE API error: {}, data: {}",
+                provider_error.message, raw
+            );
             stats.increment("error:api");
             stats.log_summary("sse_api_error");
-            error!("{}", error_msg);
-            let _ = tx_event.send(Err(anyhow!(error_msg)));
+            error!("{}", provider_error);
+            let _ = tx_event.send(Err(anyhow!(provider_error)));
             return;
         }
 
@@ -211,8 +233,9 @@ pub async fn handle_gemini_stream(
 
 #[cfg(test)]
 mod tests {
-    use super::GeminiToolCallState;
+    use super::{extract_api_error, GeminiToolCallState};
     use crate::stream::types::unified::UnifiedToolCall;
+    use bitfun_core_types::errors::ErrorCategory;
 
     #[test]
     fn reuses_active_tool_id_by_omitting_follow_up_ids() {
@@ -324,5 +347,20 @@ mod tests {
         second_state.assign_id(&mut second);
 
         assert_ne!(first.id, second.id);
+    }
+
+    #[test]
+    fn classifies_context_overflow_from_gemini_error_message() {
+        let event = serde_json::json!({
+            "error": {
+                "code": 400,
+                "status": "INVALID_ARGUMENT",
+                "message": "The input token count exceeds the maximum number of tokens allowed"
+            }
+        });
+
+        let error = extract_api_error(&event).expect("provider error");
+        assert_eq!(error.category, ErrorCategory::ContextOverflow);
+        assert_eq!(error.provider_code.as_deref(), Some("INVALID_ARGUMENT"));
     }
 }

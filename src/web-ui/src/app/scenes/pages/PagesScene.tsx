@@ -705,8 +705,10 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
   );
 
   return (
-    <GalleryLayout className="pages-scene" data-testid="pages-scene">
+    <GalleryLayout className="pages-scene" data-testid="pages-scene" data-bf-scene="pages" data-bf-part="root">
       <GalleryPageHeader
+        data-bf-scene="pages"
+        data-bf-part="header"
         title={t('title')}
         subtitle={t('subtitle')}
         actions={refreshButton}
@@ -726,9 +728,9 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
         ) : null}
       />
 
-      <div className="pages-scene__content">
+      <div className="pages-scene__content" data-bf-scene="pages" data-bf-part="content">
         {loadError && pages.length > 0 && (
-          <div className="pages-scene__refresh-error" role="alert" data-testid="pages-refresh-error">
+          <div className="pages-scene__refresh-error" role="alert" data-testid="pages-refresh-error" data-bf-scene="pages" data-bf-part="error">
             <span>{t('loadFailed')}</span>
             <small>{loadError}</small>
             <Button variant="secondary" size="small" onClick={() => void loadPages()}>
@@ -740,6 +742,8 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
         {loading && pages.length === 0 ? (
           <div
             className="pages-scene__grid"
+            data-bf-scene="pages"
+            data-bf-part="loading"
             data-testid="pages-loading"
             role="status"
             aria-busy="true"
@@ -762,6 +766,8 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
           </div>
         ) : loginRequired ? (
           <GalleryEmpty
+            data-bf-scene="pages"
+            data-bf-part="empty"
             icon={<PanelsTopLeft size={36} />}
             message={<>{t('signInRequired')}<small>{t('signInHint')}</small></>}
             action={(
@@ -773,6 +779,8 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
           />
         ) : loadError && pages.length === 0 ? (
           <GalleryEmpty
+            data-bf-scene="pages"
+            data-bf-part="error"
             icon={<PanelsTopLeft size={36} />}
             message={<>{t('loadFailed')}<small>{loadError}</small></>}
             isError
@@ -781,12 +789,14 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
           />
         ) : pages.length === 0 ? (
           <GalleryEmpty
+            data-bf-scene="pages"
+            data-bf-part="empty"
             icon={<PanelsTopLeft size={36} />}
             message={<>{t('empty')}<small>{t('emptyHint')}</small></>}
             testId="pages-empty"
           />
         ) : (
-          <div className="pages-scene__grid" role="list">
+          <div className="pages-scene__grid" role="list" data-bf-scene="pages" data-bf-part="list">
             {pages.map((page) => {
               const versions = versionsBySlug[page.slug] ?? [];
               const expanded = expandedSlugs.has(page.slug);

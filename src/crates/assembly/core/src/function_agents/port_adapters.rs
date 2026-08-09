@@ -292,7 +292,6 @@ impl FunctionAgentAiPort for CoreFunctionAgentAiAdapter {
 
 #[cfg(test)]
 mod tests {
-    use bitfun_core_types::ReasoningMode;
     use bitfun_product_domains::function_agents::ports::FunctionAgentGitPort;
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -319,13 +318,10 @@ mod tests {
             max_tokens: None,
             temperature: None,
             top_p: None,
-            reasoning_mode: ReasoningMode::Default,
             inline_think_in_text: false,
             custom_headers: None,
             custom_headers_mode: None,
             skip_ssl_verify: false,
-            reasoning_effort: None,
-            thinking_budget_tokens: None,
             custom_request_body: None,
             custom_request_body_mode: None,
         }))

@@ -56,7 +56,7 @@ struct GrepSink {
     head_limit: Option<usize>,
     current_file: PathBuf,
     display_base: Option<String>,
-    output: Arc<Mutex<Vec<u8>>>,
+    output: Arc<Mutex<Vec<String>>>,
     line_count: Arc<Mutex<usize>>,
     match_count: Arc<Mutex<usize>>,
     /// Last output line number, used to detect discontinuity
@@ -98,9 +98,10 @@ impl GrepSink {
         }
     }
 
-    fn get_output(&self) -> String {
-        let output = lock_recover(&self.output, "output");
-        String::from_utf8_lossy(&output).to_string()
+    /// Takes the collected output lines, avoiding a split/realloc/join round
+    /// trip at the call site.
+    fn take_output_lines(&self) -> Vec<String> {
+        std::mem::take(&mut *lock_recover(&self.output, "output"))
     }
 
     fn get_match_count(&self) -> usize {
@@ -126,11 +127,10 @@ impl GrepSink {
         }
     }
 
-    fn write_line(&self, line: &[u8]) {
+    fn write_line(&self, line: String) {
         if self.increment_line_count() {
             let mut output = lock_recover(&self.output, "output");
-            output.extend_from_slice(line);
-            output.push(b'\n');
+            output.push(line);
         }
     }
 
@@ -147,14 +147,14 @@ impl GrepSink {
             // If current line number is not continuous with previous line (difference > 1), insert separator
             if current_line > last + 1 {
                 let mut output = lock_recover(&self.output, "output");
-                output.extend_from_slice(b"--\n");
+                output.push("--".to_string());
             }
         }
         *last_line = Some(current_line);
     }
 
     /// Format output line (rg style: only show line number and content, no path)
-    fn format_line(&self, line_number: u64, line: &[u8], is_match: bool) -> Vec<u8> {
+    fn format_line(&self, line_number: u64, line: &[u8], is_match: bool) -> String {
         let mut line_str = String::from_utf8_lossy(line).trim_end().to_string();
         if line_str.chars().count() > MAX_DISPLAY_COLUMNS {
             line_str = format!(
@@ -169,9 +169,9 @@ impl GrepSink {
         let path_prefix = relativize_display_path(&self.current_file, self.display_base.as_deref());
 
         if self.show_line_numbers {
-            format!("{}{}{}:{}", path_prefix, separator, line_number, line_str).into_bytes()
+            format!("{}{}{}:{}", path_prefix, separator, line_number, line_str)
         } else {
-            format!("{}{}{}", path_prefix, separator, line_str).into_bytes()
+            format!("{}{}{}", path_prefix, separator, line_str)
         }
     }
 }
@@ -192,7 +192,7 @@ impl Sink for GrepSink {
                 // Check if separator needs to be inserted
                 self.check_and_write_separator(line_number);
                 let formatted = self.format_line(line_number, mat.bytes(), true);
-                self.write_line(&formatted);
+                self.write_line(formatted);
             }
             OutputMode::FilesWithMatches => {
                 return Ok(false); // Only need first match, then stop
@@ -222,7 +222,7 @@ impl Sink for GrepSink {
             // Check if separator needs to be inserted
             self.check_and_write_separator(line_number);
             let formatted = self.format_line(line_number, ctx.bytes(), false);
-            self.write_line(&formatted);
+            self.write_line(formatted);
         }
 
         Ok(!self.should_stop())
@@ -275,6 +275,10 @@ pub struct GrepOptions {
     pub file_type: Option<String>,
     /// Prefer displaying paths relative to this base when possible
     pub display_base: Option<String>,
+    /// Exact files omitted from this search by the caller's scope policy.
+    pub excluded_paths: Vec<String>,
+    /// Reject linked file entries when the caller requires workspace identity.
+    pub reject_linked_files: bool,
 }
 
 impl Default for GrepOptions {
@@ -294,6 +298,8 @@ impl Default for GrepOptions {
             globs: Vec::new(),
             file_type: None,
             display_base: None,
+            excluded_paths: Vec::new(),
+            reject_linked_files: false,
         }
     }
 }
@@ -459,6 +465,16 @@ impl GrepOptions {
     /// Set whether to show line numbers
     pub fn show_line_numbers(mut self, value: bool) -> Self {
         self.show_line_numbers = value;
+        self
+    }
+
+    pub fn excluded_paths(mut self, paths: Vec<String>) -> Self {
+        self.excluded_paths = paths;
+        self
+    }
+
+    pub fn reject_linked_files(mut self, reject: bool) -> Self {
+        self.reject_linked_files = reject;
         self
     }
 
@@ -724,7 +740,8 @@ pub fn grep_search(
         .collect::<Result<Vec<GlobMatcher>, String>>()?;
 
     // Collect all results
-    let mut content_lines = Vec::new();
+    let mut content_lines: Vec<String> =
+        Vec::with_capacity(head_limit.map_or(256, |limit| limit.min(4096)));
     let mut total_matches = 0;
     let mut file_count = 0;
     let mut file_match_counts: Vec<(String, usize)> = Vec::new();
@@ -756,8 +773,34 @@ pub fn grep_search(
                     last_progress_time = std::time::Instant::now();
                 }
 
-                // Check if it's a file
-                if !path.is_file() {
+                // Check if it's a file. Use the walker-provided file type
+                // (free) and only fall back to a stat for symlinks.
+                let entry_file_type = entry.file_type();
+                let is_file = entry_file_type.is_some_and(|file_type| {
+                    file_type.is_file() || (file_type.is_symlink() && path.is_file())
+                });
+                if !is_file {
+                    continue;
+                }
+
+                // Focused Review supplies exclusions. In that mode, linked
+                // file entries are never valid unchanged dependencies because
+                // their target identity can escape or alias the assigned scope.
+                let path_is_symlink = entry
+                    .file_type()
+                    .is_some_and(|file_type| file_type.is_symlink());
+                let path_has_multiple_hard_links = options.reject_linked_files
+                    && crate::fs::path_has_multiple_hard_links(path).unwrap_or(true);
+                if options.reject_linked_files && (path_is_symlink || path_has_multiple_hard_links)
+                {
+                    continue;
+                }
+
+                if options
+                    .excluded_paths
+                    .iter()
+                    .any(|excluded| paths_equal_for_exclusion(path, excluded))
+                {
                     continue;
                 }
 
@@ -793,14 +836,20 @@ pub fn grep_search(
                     total_matches += file_matches;
                     match output_mode {
                         OutputMode::Content => {
-                            let output = sink.get_output();
-                            if !output.is_empty() {
-                                content_lines.extend(
-                                    output
-                                        .lines()
-                                        .filter(|line| !line.is_empty())
-                                        .map(|line| line.to_string()),
-                                );
+                            for line in sink.take_output_lines() {
+                                // In multi-line mode a single sink write can
+                                // span several physical lines; keep one entry
+                                // per physical line so head_limit/offset still
+                                // paginate by line.
+                                if line.contains('\n') {
+                                    content_lines.extend(
+                                        line.lines()
+                                            .filter(|part| !part.is_empty())
+                                            .map(str::to_string),
+                                    );
+                                } else if !line.is_empty() {
+                                    content_lines.push(line);
+                                }
                             }
                         }
                         OutputMode::FilesWithMatches => {
@@ -835,7 +884,8 @@ pub fn grep_search(
                 return Ok(GrepSearchResult {
                     file_count,
                     total_matches,
-                    result_text: lines.join("\n").trim_end_matches('\n').to_string(),
+                    // join() never yields a trailing newline, no trim needed.
+                    result_text: lines.join("\n"),
                     applied_limit,
                     applied_offset,
                 });
@@ -902,9 +952,28 @@ pub fn grep_search(
     })
 }
 
+fn paths_equal_for_exclusion(path: &Path, excluded: &str) -> bool {
+    let path = path.to_string_lossy().replace('\\', "/");
+    let excluded = excluded.replace('\\', "/");
+    if path == excluded {
+        return true;
+    }
+    let needs_identity_check = cfg!(windows) && path.eq_ignore_ascii_case(&excluded);
+    if !needs_identity_check {
+        return false;
+    }
+    let Ok(path) = std::fs::canonicalize(path) else {
+        return false;
+    };
+    let Ok(excluded) = std::fs::canonicalize(excluded) else {
+        return false;
+    };
+    path == excluded
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{grep_search, GrepOptions, OutputMode};
+    use super::{grep_search, paths_equal_for_exclusion, GrepOptions, OutputMode};
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -917,6 +986,17 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("bitfun-grep-search-{name}-{unique}"));
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[cfg(unix)]
+    fn create_file_symlink(target: &std::path::Path, alias: &std::path::Path) -> bool {
+        std::os::unix::fs::symlink(target, alias).expect("file symlink should be available");
+        true
+    }
+
+    #[cfg(windows)]
+    fn create_file_symlink(target: &std::path::Path, alias: &std::path::Path) -> bool {
+        std::os::windows::fs::symlink_file(target, alias).is_ok()
     }
 
     #[test]
@@ -939,5 +1019,146 @@ mod tests {
         assert!(result.result_text.contains("[truncated]"));
 
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn multiline_matches_paginate_by_physical_line() {
+        // A multiline match reaches the sink as one entry spanning several
+        // physical lines; head_limit/offset must still paginate by physical
+        // line, not by match block.
+        let root = make_temp_dir("multiline-head-limit");
+        let file_path = root.join("sample.txt");
+        fs::write(&file_path, "alpha\nbeta\nnoise\nalpha\nbeta\n").unwrap();
+
+        let result = grep_search(
+            GrepOptions::new("alpha\\nbeta", root.to_string_lossy().to_string())
+                .multiline(true)
+                .output_mode(OutputMode::Content)
+                .show_line_numbers(true)
+                .head_limit(3),
+            None,
+            None,
+        )
+        .unwrap();
+
+        let lines: Vec<&str> = result.result_text.lines().collect();
+        assert_eq!(
+            lines.len(),
+            3,
+            "head_limit must count physical lines, got {lines:?}"
+        );
+        assert!(lines[0].ends_with(":1:alpha"), "got {lines:?}");
+        assert_eq!(lines[1], "beta", "got {lines:?}");
+        assert!(lines[2].ends_with(":4:alpha"), "got {lines:?}");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn exact_exclusions_remove_unassigned_files_from_results() {
+        let root = make_temp_dir("excluded");
+        let included = root.join("included.txt");
+        let excluded = root.join("excluded.txt");
+        fs::write(&included, "review-token\n").unwrap();
+        fs::write(&excluded, "review-token\n").unwrap();
+
+        let result = grep_search(
+            GrepOptions::new("review-token", root.to_string_lossy().to_string())
+                .output_mode(OutputMode::FilesWithMatches)
+                .excluded_paths(vec![excluded.to_string_lossy().to_string()]),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(result.result_text.contains("included.txt"));
+        assert!(!result.result_text.contains("excluded.txt"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn exclusion_comparison_does_not_merge_distinct_path_spelling() {
+        assert!(!paths_equal_for_exclusion(
+            PathBuf::from("src/CaseSensitive.rs").as_path(),
+            "src/casesensitive.rs",
+        ));
+    }
+
+    #[test]
+    fn exact_exclusions_block_file_symlink_aliases() {
+        let root = make_temp_dir("excluded-symlink");
+        let excluded = root.join("excluded.txt");
+        let alias = root.join("alias.txt");
+        fs::write(&excluded, "linked-review-token\n").unwrap();
+
+        if !create_file_symlink(&excluded, &alias) {
+            let _ = fs::remove_dir_all(root);
+            return;
+        }
+
+        let result = grep_search(
+            GrepOptions::new("linked-review-token", root.to_string_lossy().to_string())
+                .output_mode(OutputMode::FilesWithMatches)
+                .excluded_paths(vec![excluded.to_string_lossy().to_string()])
+                .reject_linked_files(true),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(!result.result_text.contains("alias.txt"));
+        assert_eq!(result.file_count, 0);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn exact_exclusions_block_file_hard_link_aliases() {
+        let root = make_temp_dir("excluded-hard-link");
+        let excluded = root.join("excluded.txt");
+        let alias = root.join("alias.txt");
+        fs::write(&excluded, "linked-review-token\n").unwrap();
+        fs::hard_link(&excluded, &alias).unwrap();
+
+        let result = grep_search(
+            GrepOptions::new("linked-review-token", root.to_string_lossy().to_string())
+                .output_mode(OutputMode::FilesWithMatches)
+                .excluded_paths(vec![excluded.to_string_lossy().to_string()])
+                .reject_linked_files(true),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(!result.result_text.contains("alias.txt"));
+        assert_eq!(result.file_count, 0);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn exact_exclusions_block_file_symlinks_outside_the_search_root() {
+        let root = make_temp_dir("excluded-outside-link");
+        let outside = make_temp_dir("outside-link-target");
+        let alias = root.join("outside-alias.txt");
+        let secret = outside.join("secret.txt");
+        fs::write(&secret, "outside-review-token\n").unwrap();
+        if !create_file_symlink(&secret, &alias) {
+            let _ = fs::remove_dir_all(root);
+            let _ = fs::remove_dir_all(outside);
+            return;
+        }
+
+        let result = grep_search(
+            GrepOptions::new("outside-review-token", root.to_string_lossy().to_string())
+                .output_mode(OutputMode::FilesWithMatches)
+                .reject_linked_files(true),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(result.file_count, 0);
+        assert!(!result.result_text.contains("outside-alias.txt"));
+        let _ = fs::remove_dir_all(root);
+        let _ = fs::remove_dir_all(outside);
     }
 }

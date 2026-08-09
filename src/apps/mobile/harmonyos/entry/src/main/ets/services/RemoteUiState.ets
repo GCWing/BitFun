@@ -15,7 +15,7 @@ export class RemoteUiState {
   }
 
   static desktopNameFromRemoteUrl(value: string): string {
-    return RemoteUiState.queryValueFromRemoteUrl(value, 'dn') || 'MacBook Pro';
+    return RemoteUiState.queryValueFromRemoteUrl(value, 'dn');
   }
 
   static desktopIdFromRemoteUrl(value: string): string {

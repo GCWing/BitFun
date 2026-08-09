@@ -1816,6 +1816,21 @@ function resolveModelSelection(
   return catalog.models.find(model => model.id === modelId) || null;
 }
 
+function resolveConcreteModelSelection(
+  modelId: string,
+  catalog: RemoteModelCatalog | null,
+): RemoteModelConfig | null {
+  const normalizedModelId = normalizeSelectedModelId(modelId, catalog);
+  if (normalizedModelId === 'auto' || normalizedModelId === 'primary') {
+    return resolveModelSelection(catalog?.default_models?.primary || '', catalog);
+  }
+  if (normalizedModelId === 'fast') {
+    return resolveModelSelection(catalog?.default_models?.fast || '', catalog)
+      || resolveModelSelection(catalog?.default_models?.primary || '', catalog);
+  }
+  return resolveModelSelection(normalizedModelId, catalog);
+}
+
 function buildModelProviderMeta(model: RemoteModelConfig | null): string | null {
   if (!model) return null;
   const parts = [getModelProviderLabel(model)];
@@ -1829,12 +1844,14 @@ function getModelDisplayName(model: RemoteModelConfig | null): string {
   return model.model_name || model.name || '';
 }
 
-function isReasoningEnabled(model: RemoteModelConfig | null): boolean {
-  if (!model) return false;
-  if (model.reasoning_mode) {
-    return model.reasoning_mode === 'enabled' || model.reasoning_mode === 'adaptive';
-  }
-  return !!model.enable_thinking_process;
+function selectedReasoningLabel(
+  model: RemoteModelConfig | null,
+  catalog: RemoteModelCatalog | null,
+): string | undefined {
+  if (model?.reasoning?.status !== 'known') return undefined;
+  const selected = catalog?.session_reasoning_preset?.trim();
+  if (!selected) return undefined;
+  return model.reasoning.presets?.find(preset => preset.id === selected)?.label || selected;
 }
 
 function getSelectedModelInfo(
@@ -1848,25 +1865,24 @@ function getSelectedModelInfo(
   reasoningEffort?: string;
 } {
   if (selectedModelId === 'auto') {
+    const resolved = resolveConcreteModelSelection(selectedModelId, catalog);
     return {
       label: t('chat.modelAuto'),
       meta: t('chat.modelAutoDesc'),
-      enableThinking: false,
+      enableThinking: resolved?.reasoning?.status === 'known',
+      reasoningEffort: selectedReasoningLabel(resolved, catalog),
     };
   }
 
   if (selectedModelId === 'primary' || selectedModelId === 'fast') {
-    const defaultId = selectedModelId === 'primary'
-      ? catalog?.default_models?.primary
-      : catalog?.default_models?.fast;
-    const resolved = defaultId ? resolveModelSelection(defaultId, catalog) : null;
+    const resolved = resolveConcreteModelSelection(selectedModelId, catalog);
     return {
       label: resolved
         ? (selectedModelId === 'primary' ? t('chat.modelPrimary') : t('chat.modelFast'))
         : t('chat.modelAuto'),
       meta: buildModelProviderMeta(resolved) || t('chat.modelAutoDesc'),
-      enableThinking: isReasoningEnabled(resolved),
-      reasoningEffort: resolved?.reasoning_effort,
+      enableThinking: resolved?.reasoning?.status === 'known',
+      reasoningEffort: selectedReasoningLabel(resolved, catalog),
     };
   }
 
@@ -1882,8 +1898,8 @@ function getSelectedModelInfo(
   return {
     label: getModelDisplayName(resolved),
     meta: buildModelProviderMeta(resolved),
-    enableThinking: isReasoningEnabled(resolved),
-    reasoningEffort: resolved.reasoning_effort,
+    enableThinking: resolved.reasoning?.status === 'known',
+    reasoningEffort: selectedReasoningLabel(resolved, catalog),
   };
 }
 
@@ -2032,7 +2048,7 @@ const ModelSelectorPill: React.FC<{
                       <span className="chat-model-selector__option-name-text">
                         {getModelDisplayName(model)}
                       </span>
-                      {isReasoningEnabled(model) && (
+                      {model.reasoning?.status === 'known' && (
                         <SparklesIcon className="chat-model-selector__option-thinking" size={10} />
                       )}
                     </span>
@@ -2043,6 +2059,96 @@ const ModelSelectorPill: React.FC<{
                 </button>
               );
             })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ReasoningPresetPill: React.FC<{
+  catalog: RemoteModelCatalog | null;
+  selectedModelId: string;
+  disabled?: boolean;
+  onSelect: (presetId: string | null) => void | Promise<void>;
+}> = ({ catalog, selectedModelId, disabled, onSelect }) => {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const model = useMemo(
+    () => resolveConcreteModelSelection(selectedModelId, catalog),
+    [catalog, selectedModelId],
+  );
+  const presets = useMemo(
+    () => [...(model?.reasoning?.presets || [])].sort((a, b) => a.order - b.order),
+    [model],
+  );
+  const selectedPresetId = catalog?.session_reasoning_preset?.trim() || null;
+  const selectedLabel = selectedPresetId
+    ? presets.find(preset => preset.id === selectedPresetId)?.label || selectedPresetId
+    : t('chat.reasoningAuto');
+  const selectionSupported = catalog?.reasoning_preset_selection_supported === true;
+  const isDisabled = disabled || !selectionSupported;
+
+  useEffect(() => {
+    if (!open) return;
+    const handleOutside = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [open]);
+
+  if (model?.reasoning?.status !== 'known' || presets.length === 0) return null;
+
+  const handleSelect = async (presetId: string | null) => {
+    await onSelect(presetId);
+    setOpen(false);
+  };
+
+  return (
+    <div className="chat-model-selector chat-reasoning-selector" ref={rootRef}>
+      <button
+        className={`chat-model-selector__trigger chat-reasoning-selector__trigger${open ? ' chat-model-selector__trigger--open' : ''}`}
+        type="button"
+        onClick={() => setOpen(prev => !prev)}
+        disabled={isDisabled}
+        aria-label={t('chat.reasoningSelection')}
+      >
+        <SparklesIcon className="chat-model-selector__thinking" size={10} />
+        <span className="chat-model-selector__name chat-reasoning-selector__name">
+          <span className="chat-model-selector__name-text">{selectedLabel}</span>
+        </span>
+        <span className="chat-model-selector__chevron" aria-hidden="true">
+          <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+            <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+      </button>
+
+      {open && selectionSupported && (
+        <div className="chat-model-selector__dropdown chat-reasoning-selector__dropdown">
+          <div className="chat-model-selector__header">{t('chat.reasoningSelection')}</div>
+          <div className="chat-model-selector__list">
+            <button
+              className={`chat-model-selector__option${selectedPresetId === null ? ' is-selected' : ''}`}
+              type="button"
+              onClick={() => void handleSelect(null)}
+            >
+              <span className="chat-model-selector__option-name">{t('chat.reasoningAuto')}</span>
+            </button>
+            {presets.map(preset => (
+              <button
+                key={preset.id}
+                className={`chat-model-selector__option${selectedPresetId === preset.id ? ' is-selected' : ''}`}
+                type="button"
+                onClick={() => void handleSelect(preset.id)}
+              >
+                <span className="chat-model-selector__option-name">{preset.label}</span>
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -2296,12 +2402,23 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
         const nextModelId = preferredSelection.modelId || sessionModelId;
 
         if (preferredSelection.modelId && preferredSelection.modelId !== sessionModelId) {
-          const normalizedModelId = await sessionMgr.setSessionModel(sessionId, preferredSelection.modelId);
+          const selection = catalog.reasoning_preset_selection_supported === true
+            ? await sessionMgr.setSessionModelSelection(sessionId, preferredSelection.modelId, null)
+            : {
+                model_id: await sessionMgr.setSessionModel(sessionId, preferredSelection.modelId),
+                reasoning_preset: null,
+              };
           if (
             requestSeq !== modelCatalogRequestSeqRef.current
             || !isChatTargetCurrent(targetEpoch)
           ) return null;
+          const normalizedModelId = selection.model_id;
           setSelectedModelId(normalizedModelId || 'auto');
+          setModelCatalog(current => current ? {
+            ...current,
+            session_model_id: normalizedModelId,
+            session_reasoning_preset: selection.reasoning_preset,
+          } : current);
           if (preferredSelection.fellBackToAuto && (!normalizedModelId || normalizedModelId === 'auto')) {
             persistLastSelectedModelId('auto');
           }
@@ -2329,16 +2446,57 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
     if (targetEpoch === null) return;
     setModelUpdating(true);
     try {
-      const normalizedModelId = await sessionMgr.setSessionModel(sessionId, modelId);
+      const selection = modelCatalog?.reasoning_preset_selection_supported === true
+        ? await sessionMgr.setSessionModelSelection(sessionId, modelId, null)
+        : {
+            model_id: await sessionMgr.setSessionModel(sessionId, modelId),
+            reasoning_preset: null,
+          };
       if (!isChatTargetCurrent(targetEpoch)) return;
+      const normalizedModelId = selection.model_id;
       setSelectedModelId(normalizedModelId || 'auto');
+      setModelCatalog(current => current ? {
+        ...current,
+        session_model_id: normalizedModelId,
+        session_reasoning_preset: selection.reasoning_preset,
+      } : current);
       persistLastSelectedModelId(normalizedModelId || 'auto');
     } catch (err) {
       reportRemoteSessionError(err, setError);
     } finally {
       if (isChatTargetCurrent(targetEpoch)) setModelUpdating(false);
     }
-  }, [captureChatTargetEpoch, imageAnalyzing, isChatTargetCurrent, isStreaming, modelUpdating, sessionId, sessionMgr, setError]);
+  }, [captureChatTargetEpoch, imageAnalyzing, isChatTargetCurrent, isStreaming, modelCatalog?.reasoning_preset_selection_supported, modelUpdating, sessionId, sessionMgr, setError]);
+
+  const handleSelectReasoningPreset = useCallback(async (reasoningPreset: string | null) => {
+    if (
+      modelUpdating
+      || isStreaming
+      || imageAnalyzing
+      || modelCatalog?.reasoning_preset_selection_supported !== true
+    ) return;
+    const targetEpoch = captureChatTargetEpoch();
+    if (targetEpoch === null) return;
+    setModelUpdating(true);
+    try {
+      const selection = await sessionMgr.setSessionModelSelection(
+        sessionId,
+        selectedModelId,
+        reasoningPreset,
+      );
+      if (!isChatTargetCurrent(targetEpoch)) return;
+      setSelectedModelId(selection.model_id || 'auto');
+      setModelCatalog(current => current ? {
+        ...current,
+        session_model_id: selection.model_id,
+        session_reasoning_preset: selection.reasoning_preset,
+      } : current);
+    } catch (err) {
+      reportRemoteSessionError(err, setError);
+    } finally {
+      if (isChatTargetCurrent(targetEpoch)) setModelUpdating(false);
+    }
+  }, [captureChatTargetEpoch, imageAnalyzing, isChatTargetCurrent, isStreaming, modelCatalog?.reasoning_preset_selection_supported, modelUpdating, selectedModelId, sessionId, sessionMgr, setError]);
 
   useEffect(() => {
     if (!isStreaming) return;
@@ -2581,6 +2739,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
         }
         if (resp.model_catalog) {
           setModelCatalog(resp.model_catalog);
+          setSelectedModelId(normalizeSelectedModelId(
+            resp.model_catalog.session_model_id || 'auto',
+            resp.model_catalog,
+          ));
         }
         setActiveTurn(resp.active_turn ?? null);
       }, initialCatalog?.version || 0);
@@ -3241,14 +3403,22 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
           {/* Actions bar */}
           <div className="chat-page__input-actions">
             <div className="chat-page__input-actions-left">
-                {inputExpanded && (
+              {inputExpanded && (
+                <>
                   <ModelSelectorPill
                     catalog={modelCatalog}
                     selectedModelId={selectedModelId}
-                    disabled={imageAnalyzing || modelUpdating}
+                    disabled={imageAnalyzing || isStreaming || modelUpdating}
                     onSelect={handleSelectModel}
                   />
-                )}
+                  <ReasoningPresetPill
+                    catalog={modelCatalog}
+                    selectedModelId={selectedModelId}
+                    disabled={imageAnalyzing || isStreaming || modelUpdating}
+                    onSelect={handleSelectReasoningPreset}
+                  />
+                </>
+              )}
               {inputExpanded && pendingImages.length > 0 && (
                 <div className="chat-page__image-preview-row">
                   {pendingImages.map((img, idx) => (

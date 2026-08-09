@@ -1,6 +1,6 @@
 (() => {
   const root = document.getElementById('bitfun-canvas-root');
-  let theme = makeTheme({
+  let appearance = makeAppearance({
     type: 'auto',
     bg: 'var(--bitfun-canvas-bg)',
     panel: 'var(--bitfun-canvas-panel)',
@@ -13,7 +13,7 @@
     danger: 'var(--bitfun-canvas-danger)',
     info: 'var(--bitfun-canvas-info)',
   });
-  function makeTheme(tokens) {
+  function makeAppearance(tokens) {
     const readToken = (value, fallback) => value === undefined || value === null || value === '' ? fallback : String(value);
     const bg = readToken(tokens.bg, 'var(--bitfun-canvas-bg)');
     const panel = readToken(tokens.panel, 'var(--bitfun-canvas-panel)');
@@ -84,21 +84,21 @@
       status: { success, warning, danger, info },
     };
   }
-  function applyHostTheme(nextTheme) {
-    if (!nextTheme || typeof nextTheme !== 'object') return;
+  function applyHostAppearance(nextAppearance) {
+    if (!nextAppearance || typeof nextAppearance !== 'object') return;
     const allowed = ['bg', 'panel', 'fg', 'muted', 'border', 'accent', 'success', 'warning', 'danger', 'info'];
     const rootStyle = document.documentElement.style;
     for (const key of allowed) {
-      const value = nextTheme[key];
+      const value = nextAppearance[key];
       if (typeof value === 'string' && value.trim()) {
         rootStyle.setProperty(`--bitfun-canvas-${key}`, value.trim());
       }
     }
-    const type = nextTheme.type === 'dark' || nextTheme.type === 'light' ? nextTheme.type : 'auto';
+    const type = nextAppearance.type === 'dark' || nextAppearance.type === 'light' ? nextAppearance.type : 'auto';
     document.documentElement.style.colorScheme = type === 'auto' ? 'light dark' : type;
-    theme = makeTheme({
-      ...theme,
-      ...Object.fromEntries(allowed.map(key => [key, getComputedStyle(document.documentElement).getPropertyValue(`--bitfun-canvas-${key}`).trim() || theme[key]])),
+    appearance = makeAppearance({
+      ...appearance,
+      ...Object.fromEntries(allowed.map(key => [key, getComputedStyle(document.documentElement).getPropertyValue(`--bitfun-canvas-${key}`).trim() || appearance[key]])),
       type,
     });
   }
@@ -352,7 +352,6 @@
       ...style,
     };
   }
-  const colorPalette = ['gray', 'purple', 'green', 'yellow', 'cyan', 'pink', 'blue', 'orange'];
   const usageColorSequence = ['gray', 'purple', 'green', 'yellow', 'pink', 'blue', 'orange'];
   const categoryPaletteLight = {
     gray: 'var(--bitfun-canvas-muted)',
@@ -1149,7 +1148,7 @@
   }
   function weightValue(weight) { return weight === 'medium' ? 500 : weight === 'semibold' ? 650 : weight === 'bold' ? 700 : 400; }
   function cellStyle(head, align = 'left') { return { textAlign: align, padding: '7px 9px', borderBottom: '1px solid rgba(127,127,127,0.16)', fontWeight: head ? 650 : 400, color: head ? 'var(--bitfun-canvas-fg)' : undefined }; }
-  function useHostTheme() { return { ...theme, tokens: theme }; }
+  function useHostAppearance() { return { ...appearance, tokens: appearance }; }
   function depsChanged(previous, next) {
     if (!Array.isArray(next)) return true;
     if (!Array.isArray(previous)) return true;
@@ -1257,8 +1256,8 @@
       else pending.resolve(data.result ?? null);
       return;
     }
-    if (data.type === 'bitfun-canvas-theme') {
-      applyHostTheme(data.theme);
+    if (data.type === 'bitfun-canvas-appearance') {
+      applyHostAppearance(data.appearance);
       rerender();
       return;
     }
@@ -1277,6 +1276,6 @@
     rerender();
   });
   const Fragment = ({ children } = {}) => toArray(children);
-  window.BitfunCanvasSDK = { Stack, Row, Grid, Box, Divider, Spacer, H1, H2, H3, Text, Code, Link, Card, CardHeader, CardBody, Alert, Callout, CollapsibleSection, Empty, Tabs, Pill, Stat, Table, KeyValueList, Timeline, FileTree, ProgressBar, Swatch, UsageBar, TodoList, TodoListCard, DependencyGraph, FlowDiagram, BarChart, LineChart, PieChart, Button, Toggle, Checkbox, Select, Input, TextInput, TextArea, IconButton, DiffStats, DiffView, computeDAGLayout, mergeStyle, colorPalette, usageColorSequence, categoryPaletteLight, categoryPaletteDark, canvasPaletteLight, canvasPaletteDark, canvasTokensLight, canvasTokens, useHostTheme, useCanvasState, useCanvasAction, useState, useRef, useEffect, useCallback, useMemo };
+  window.BitfunCanvasSDK = { Stack, Row, Grid, Box, Divider, Spacer, H1, H2, H3, Text, Code, Link, Card, CardHeader, CardBody, Alert, Callout, CollapsibleSection, Empty, Tabs, Pill, Stat, Table, KeyValueList, Timeline, FileTree, ProgressBar, Swatch, UsageBar, TodoList, TodoListCard, DependencyGraph, FlowDiagram, BarChart, LineChart, PieChart, Button, Toggle, Checkbox, Select, Input, TextInput, TextArea, IconButton, DiffStats, DiffView, computeDAGLayout, mergeStyle, usageColorSequence, categoryPaletteLight, categoryPaletteDark, canvasPaletteLight, canvasPaletteDark, canvasTokensLight, canvasTokens, useHostAppearance, useCanvasState, useCanvasAction, useState, useRef, useEffect, useCallback, useMemo };
   window.BitfunCanvasRuntime = { h, Fragment, mount(component) { renderFn = component; rerender(); } };
 })();

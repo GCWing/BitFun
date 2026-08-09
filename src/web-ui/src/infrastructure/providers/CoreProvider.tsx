@@ -67,8 +67,8 @@ export const CoreProvider: React.FC<CoreProviderProps> = ({ children }) => {
         justifyContent: 'center', 
         alignItems: 'center', 
         height: '100vh',
-        background: 'var(--color-bg-primary)',
-        color: 'var(--color-text-primary)'
+        background: 'var(--bf-appearance-token-color-bg-primary)',
+        color: 'var(--bf-appearance-token-color-text-primary)'
       }}>
         <div>{tCommon('core.initializing')}</div>
       </div>
@@ -83,8 +83,8 @@ export const CoreProvider: React.FC<CoreProviderProps> = ({ children }) => {
         justifyContent: 'center', 
         alignItems: 'center', 
         height: '100vh',
-        background: 'var(--color-bg-primary)',
-        color: 'var(--color-text-primary)'
+        background: 'var(--bf-appearance-token-color-bg-primary)',
+        color: 'var(--bf-appearance-token-color-text-primary)'
       }}>
         <h2>{tErrors('core.initializationFailed')}</h2>
         <p>{error}</p>
@@ -92,8 +92,8 @@ export const CoreProvider: React.FC<CoreProviderProps> = ({ children }) => {
           onClick={() => window.location.reload()}
           style={{
             padding: '8px 16px',
-            background: 'var(--color-accent-500)',
-            color: 'var(--color-static-white)',
+            background: 'var(--bf-appearance-token-color-accent-500)',
+            color: 'var(--bf-appearance-token-color-static-white)',
             border: 'none',
             borderRadius: '4px',
             cursor: 'pointer'

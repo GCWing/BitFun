@@ -7,17 +7,32 @@ import { createLogger } from '@/shared/utils/logger';
 import type { FlowChatContext, DialogTurn } from './types';
 import { buildSessionMetadata } from '../../utils/sessionMetadata';
 import { settleInterruptedDialogTurn } from '../../utils/dialogTurnStability';
-import { isRuntimeStatusItem } from './RuntimeStatusModule';
 import {
   DEFERRED_TOOL_GATEWAY_NAME,
   effectiveToolInvocation,
 } from '../../utils/toolInvocationIdentity';
+import { requireSessionProjectWorkspacePath } from '../../utils/sessionWorkspace';
+import { resolveSessionDriverId } from '../../session-drivers/resolve';
+import { resolveStorageTurnIndex } from '../../utils/flowChatTurnIdentity';
 
 const log = createLogger('PersistenceModule');
 const COALESCED_IMMEDIATE_SAVE_DELAY_MS = 500;
 
 function isTransientSession(session: { isTransient?: boolean } | undefined): boolean {
   return session?.isTransient === true;
+}
+
+/**
+ * Observer projections are target-owned; the controller must never persist
+ * them as local sessions. Uses the driver resolver so a projection whose
+ * config is not bound yet (startup race) is still recognized via the
+ * observer-store membership signal.
+ */
+function isObserverOnlyDispatchSession(
+  sessionId: string,
+  session: Parameters<typeof resolveSessionDriverId>[1],
+): boolean {
+  return resolveSessionDriverId(sessionId, session) === 'dispatch';
 }
 
 function requireWorkspacePath(sessionId: string, workspacePath?: string): string {
@@ -87,7 +102,7 @@ export function calculateTurnHash(dialogTurn: DialogTurn): string {
     lastRoundData: dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1]
       ? {
           ...dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1],
-          items: dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1].items.filter(item => !isRuntimeStatusItem(item)),
+          items: dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1].items,
         }
       : null,
     error: dialogTurn.error,
@@ -208,6 +223,7 @@ export function cleanupSaveState(
     context.lastSaveTimestamps.delete(key);
     context.lastSaveHashes.delete(key);
     context.turnSavePending.delete(key);
+    context.deferredStorageIdentitySaves?.delete(key);
     context.turnSaveInFlight.delete(key);
   } else {
     const keysToDelete = new Set<string>();
@@ -240,12 +256,18 @@ export function cleanupSaveState(
         keysToDelete.add(key);
       }
     }
+    for (const key of context.deferredStorageIdentitySaves ?? []) {
+      if (key.startsWith(`${sessionId}:`)) {
+        keysToDelete.add(key);
+      }
+    }
 
     keysToDelete.forEach(key => {
       context.saveDebouncers.delete(key);
       context.lastSaveTimestamps.delete(key);
       context.lastSaveHashes.delete(key);
       context.turnSavePending.delete(key);
+      context.deferredStorageIdentitySaves?.delete(key);
       context.turnSaveInFlight.delete(key);
     });
   }
@@ -276,11 +298,11 @@ async function performSaveDialogTurnToDisk(
       log.debug('Session not found, skipping save', { sessionId, turnId });
       return;
     }
-    if (isTransientSession(session)) {
+    if (isTransientSession(session) || isObserverOnlyDispatchSession(sessionId, session)) {
       return;
     }
 
-    const workspacePath = requireWorkspacePath(sessionId, session.workspacePath);
+    const workspacePath = requireSessionProjectWorkspacePath(session, sessionId);
     
     const dialogTurn = session.dialogTurns.find(turn => turn.id === turnId);
     if (!dialogTurn) {
@@ -288,7 +310,12 @@ async function performSaveDialogTurnToDisk(
       return;
     }
 
-    const turnIndex = dialogTurn.backendTurnIndex ?? session.dialogTurns.indexOf(dialogTurn);
+    const turnIndex = resolveStorageTurnIndex(session, dialogTurn);
+    if (turnIndex === undefined) {
+      context.deferredStorageIdentitySaves?.add(`${sessionId}:${turnId}`);
+      log.debug('Dialog turn has no storage identity, deferring save', { sessionId, turnId });
+      return;
+    }
     const turnData = convertDialogTurnToBackendFormat(dialogTurn, turnIndex);
     await sessionAPI.saveSessionTurn(
       turnData,
@@ -314,7 +341,7 @@ export async function saveAllInProgressTurns(context: FlowChatContext): Promise<
   const savePromises: Promise<void>[] = [];
   
   for (const [sessionId, session] of state.sessions.entries()) {
-    if (isTransientSession(session)) {
+    if (isTransientSession(session) || isObserverOnlyDispatchSession(sessionId, session)) {
       continue;
     }
     const lastTurn = session.dialogTurns[session.dialogTurns.length - 1];
@@ -409,7 +436,7 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
         renderHints: round.renderHints,
         textItems: round.items
           .map((item, index) => ({ item, index }))
-          .filter(({ item }) => item.type === 'text' && !isRuntimeStatusItem(item))
+          .filter(({ item }) => item.type === 'text')
           .map(({ item, index }) => {
             return {
               id: item.id,
@@ -519,9 +546,9 @@ export async function updateSessionMetadata(
 
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (!session) return;
-    if (isTransientSession(session)) return;
+    if (isTransientSession(session) || isObserverOnlyDispatchSession(sessionId, session)) return;
 
-    const workspacePath = requireWorkspacePath(sessionId, session.workspacePath);
+    const workspacePath = requireSessionProjectWorkspacePath(session, sessionId);
 
     let existingMetadata: any = null;
     try {

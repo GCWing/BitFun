@@ -224,6 +224,7 @@ struct OutputInner {
     chunks: VecDeque<(u64, Vec<u8>)>,
     next_seq: u64,
     retained_bytes: usize,
+    total_output_chars: usize,
     closed: bool,
     exit_code: Option<i32>,
 }
@@ -231,6 +232,7 @@ struct OutputInner {
 #[derive(Clone)]
 struct OutputCursor {
     next_seq: u64,
+    observed_output_chars: usize,
 }
 
 struct HeadTailText {
@@ -238,11 +240,18 @@ struct HeadTailText {
     head_budget: usize,
     tail_budget: usize,
     head: String,
-    tail: VecDeque<char>,
+    /// UTF-8 bytes of the tail window; whole chars only (boundary-aligned).
+    tail: VecDeque<u8>,
     head_chars: usize,
     tail_chars: usize,
     omitted_chars: usize,
     total_chars: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExecOutputCapture {
+    Combined,
+    StdoutOnly,
 }
 
 impl ExecProcessManager {
@@ -250,7 +259,23 @@ impl ExecProcessManager {
         &self,
         request: ExecCommandRequest,
     ) -> TerminalResult<ExecCommandResponse> {
-        self.exec_command_inner(request, None).await
+        self.exec_command_inner(request, None, ExecOutputCapture::Combined)
+            .await
+    }
+
+    /// Runs a non-TTY command while draining stderr without adding it to the
+    /// returned model-facing output.
+    pub async fn exec_command_stdout(
+        &self,
+        request: ExecCommandRequest,
+    ) -> TerminalResult<ExecCommandResponse> {
+        if request.tty {
+            return Err(TerminalError::InvalidConfig(
+                "stdout-only capture does not support tty execution".to_string(),
+            ));
+        }
+        self.exec_command_inner(request, None, ExecOutputCapture::StdoutOnly)
+            .await
     }
 
     pub async fn exec_command_streaming(
@@ -258,16 +283,21 @@ impl ExecProcessManager {
         request: ExecCommandRequest,
         output_tx: mpsc::Sender<String>,
     ) -> TerminalResult<ExecCommandResponse> {
-        self.exec_command_inner(request, Some(output_tx)).await
+        self.exec_command_inner(request, Some(output_tx), ExecOutputCapture::Combined)
+            .await
     }
 
     async fn exec_command_inner(
         &self,
         request: ExecCommandRequest,
         output_tx: Option<mpsc::Sender<String>>,
+        capture: ExecOutputCapture,
     ) -> TerminalResult<ExecCommandResponse> {
-        let process = Arc::new(spawn_exec_process(&request).await?);
-        let cursor = OutputCursor { next_seq: 0 };
+        let process = Arc::new(spawn_exec_process(&request, capture).await?);
+        let cursor = OutputCursor {
+            next_seq: 0,
+            observed_output_chars: 0,
+        };
         let session_id = self
             .store_session(
                 Arc::clone(&process),
@@ -724,6 +754,7 @@ impl OutputState {
                 chunks: VecDeque::new(),
                 next_seq: 0,
                 retained_bytes: 0,
+                total_output_chars: 0,
                 closed: false,
                 exit_code: None,
             }),
@@ -736,15 +767,15 @@ impl OutputState {
         if chunk.is_empty() {
             return;
         }
-        let capture_text = self
-            .output_capture_tx
-            .as_ref()
-            .map(|_| bytes_to_string_smart(&chunk));
+        let decoded = bytes_to_string_smart(&chunk);
+        let decoded_chars = decoded.chars().count();
+        let capture_text = self.output_capture_tx.as_ref().map(|_| decoded);
         {
             let mut inner = self.inner.lock().await;
             let seq = inner.next_seq;
             inner.next_seq = inner.next_seq.saturating_add(1);
             inner.retained_bytes = inner.retained_bytes.saturating_add(chunk.len());
+            inner.total_output_chars = inner.total_output_chars.saturating_add(decoded_chars);
             inner.chunks.push_back((seq, chunk));
             while inner.retained_bytes > MAX_RETAINED_OUTPUT_BYTES {
                 if let Some((_, dropped)) = inner.chunks.pop_front() {
@@ -807,6 +838,7 @@ impl OutputState {
             }
         }
         cursor.next_seq = inner.next_seq;
+        cursor.observed_output_chars = inner.total_output_chars;
         inner.closed
     }
 
@@ -818,6 +850,7 @@ impl OutputState {
         output_tx: Option<&mpsc::Sender<String>>,
     ) -> CollectedOutput {
         let mut sink = HeadTailText::new(max_output_chars);
+        let initial_output_chars = cursor.observed_output_chars;
 
         loop {
             let closed = self
@@ -833,7 +866,9 @@ impl OutputState {
             }
         }
 
-        let original_output_chars = sink.total_chars;
+        let original_output_chars = cursor
+            .observed_output_chars
+            .saturating_sub(initial_output_chars);
         CollectedOutput {
             output: sink.render(),
             original_output_chars,
@@ -922,7 +957,7 @@ impl HeadTailText {
             max_chars,
             head_budget,
             tail_budget,
-            head: String::new(),
+            head: String::with_capacity(head_budget.min(64 * 1024)),
             tail: VecDeque::new(),
             head_chars: 0,
             tail_chars: 0,
@@ -932,48 +967,100 @@ impl HeadTailText {
     }
 
     fn push_str(&mut self, text: &str) {
-        for ch in text.chars() {
-            self.total_chars = self.total_chars.saturating_add(1);
-            if self.max_chars == 0 {
-                self.omitted_chars = self.omitted_chars.saturating_add(1);
-                continue;
-            }
-            if self.head_chars < self.head_budget {
-                self.head.push(ch);
-                self.head_chars += 1;
-                continue;
-            }
+        let incoming_chars = text.chars().count();
+        self.total_chars = self.total_chars.saturating_add(incoming_chars);
 
-            if self.tail_budget == 0 {
-                self.omitted_chars = self.omitted_chars.saturating_add(1);
-                continue;
-            }
+        if self.max_chars == 0 {
+            self.omitted_chars = self.omitted_chars.saturating_add(incoming_chars);
+            return;
+        }
 
-            self.tail.push_back(ch);
-            self.tail_chars += 1;
-            if self.tail_chars > self.tail_budget {
-                self.tail.pop_front();
-                self.tail_chars -= 1;
-                self.omitted_chars = self.omitted_chars.saturating_add(1);
+        let mut remainder = text;
+        let mut remainder_chars = incoming_chars;
+
+        // Fill the head budget with one bulk copy.
+        if self.head_chars < self.head_budget {
+            let head_room = self.head_budget - self.head_chars;
+            if remainder_chars <= head_room {
+                self.head.push_str(remainder);
+                self.head_chars += remainder_chars;
+                return;
             }
+            let split = remainder
+                .char_indices()
+                .nth(head_room)
+                .map(|(index, _)| index)
+                .unwrap_or(remainder.len());
+            self.head.push_str(&remainder[..split]);
+            self.head_chars += head_room;
+            remainder = &remainder[split..];
+            remainder_chars -= head_room;
+        }
+
+        if remainder.is_empty() {
+            return;
+        }
+
+        if self.tail_budget == 0 {
+            self.omitted_chars = self.omitted_chars.saturating_add(remainder_chars);
+            return;
+        }
+
+        if remainder_chars >= self.tail_budget {
+            // The new text alone fills the whole tail window: drop the current
+            // tail and keep only the last `tail_budget` chars.
+            self.omitted_chars = self
+                .omitted_chars
+                .saturating_add(self.tail_chars)
+                .saturating_add(remainder_chars - self.tail_budget);
+            self.tail.clear();
+            let skip = remainder_chars - self.tail_budget;
+            let start = remainder
+                .char_indices()
+                .nth(skip)
+                .map(|(index, _)| index)
+                .unwrap_or(0);
+            self.tail.extend(remainder[start..].bytes());
+            self.tail_chars = self.tail_budget;
+            return;
+        }
+
+        self.tail.extend(remainder.bytes());
+        self.tail_chars += remainder_chars;
+        while self.tail_chars > self.tail_budget {
+            self.pop_front_char();
+            self.tail_chars -= 1;
+            self.omitted_chars = self.omitted_chars.saturating_add(1);
+        }
+    }
+
+    /// Removes one whole UTF-8 char from the front of the tail ring buffer.
+    fn pop_front_char(&mut self) {
+        if self.tail.pop_front().is_none() {
+            return;
+        }
+        while matches!(self.tail.front(), Some(byte) if byte & 0b1100_0000 == 0b1000_0000) {
+            self.tail.pop_front();
         }
     }
 
     fn render(self) -> String {
-        if self.omitted_chars == 0 {
-            let mut output = self.head;
-            output.extend(self.tail);
-            return output;
-        }
+        let mut tail = self.tail;
+        let tail_text = String::from_utf8_lossy(tail.make_contiguous());
 
         let mut output = self.head;
-        output.push_str("\n... [truncated, middle omitted] ...\n");
-        output.extend(self.tail);
+        if self.omitted_chars != 0 {
+            output.push_str("\n... [truncated, middle omitted] ...\n");
+        }
+        output.push_str(&tail_text);
         output
     }
 }
 
-async fn spawn_exec_process(request: &ExecCommandRequest) -> TerminalResult<ExecProcess> {
+async fn spawn_exec_process(
+    request: &ExecCommandRequest,
+    capture: ExecOutputCapture,
+) -> TerminalResult<ExecProcess> {
     if request.argv.is_empty() || request.argv[0].is_empty() {
         return Err(TerminalError::InvalidConfig(
             "missing command executable".to_string(),
@@ -989,7 +1076,7 @@ async fn spawn_exec_process(request: &ExecCommandRequest) -> TerminalResult<Exec
     if request.tty {
         spawn_pty_process(request).await
     } else {
-        spawn_pipe_process(request).await
+        spawn_pipe_process(request, capture).await
     }
 }
 
@@ -1121,7 +1208,10 @@ async fn spawn_pty_process(request: &ExecCommandRequest) -> TerminalResult<ExecP
     })
 }
 
-async fn spawn_pipe_process(request: &ExecCommandRequest) -> TerminalResult<ExecProcess> {
+async fn spawn_pipe_process(
+    request: &ExecCommandRequest,
+    capture: ExecOutputCapture,
+) -> TerminalResult<ExecProcess> {
     let mut command = Command::new(&request.argv[0]);
     command.args(request.argv.iter().skip(1));
     command.current_dir(&request.cwd);
@@ -1168,13 +1258,19 @@ async fn spawn_pipe_process(request: &ExecCommandRequest) -> TerminalResult<Exec
     }
     if let Some(stderr) = stderr {
         #[cfg(unix)]
-        reader_tasks.push(spawn_pipe_reader_with_done(
-            stderr,
-            Arc::clone(&output),
-            reader_done_tx.clone(),
-        ));
+        reader_tasks.push(match capture {
+            ExecOutputCapture::Combined => {
+                spawn_pipe_reader_with_done(stderr, Arc::clone(&output), reader_done_tx.clone())
+            }
+            ExecOutputCapture::StdoutOnly => {
+                spawn_pipe_discard_reader_with_done(stderr, reader_done_tx.clone())
+            }
+        });
         #[cfg(not(unix))]
-        reader_tasks.push(spawn_pipe_reader(stderr, Arc::clone(&output)));
+        reader_tasks.push(match capture {
+            ExecOutputCapture::Combined => spawn_pipe_reader(stderr, Arc::clone(&output)),
+            ExecOutputCapture::StdoutOnly => spawn_pipe_discard_reader(stderr),
+        });
     }
 
     let (control_tx, mut control_rx) = mpsc::channel::<ExecControlAction>(1);
@@ -1183,7 +1279,7 @@ async fn spawn_pipe_process(request: &ExecCommandRequest) -> TerminalResult<Exec
     let (child_exit_tx, mut child_exit_rx) = mpsc::channel::<Option<i32>>(1);
     #[cfg(unix)]
     tokio::spawn(async move {
-        let code = child.wait().await.ok().and_then(|status| status.code());
+        let code = child.wait().await.ok().and_then(local_pipe_exit_code);
         let _ = child_exit_tx.send(code).await;
     });
     #[cfg(unix)]
@@ -1192,6 +1288,14 @@ async fn spawn_pipe_process(request: &ExecCommandRequest) -> TerminalResult<Exec
         let mut child_exited = false;
         let mut remaining_readers = reader_tasks.len();
         let mut control_state: Option<LocalPipeControlState> = None;
+        // `request_control` takes the terminator, so the control sender is
+        // dropped as soon as the first interrupt or kill is queued. Once that
+        // happens `recv()` resolves to `None` instantly and forever, so the
+        // branch has to be disarmed: leaving it armed starves the reader-done
+        // branch, the loop never reaches its exit condition, and the session is
+        // left open with no exit code (while re-signalling a dead process group
+        // in a hot loop).
+        let mut control_closed = false;
 
         loop {
             if let Some(state) = control_state {
@@ -1219,11 +1323,13 @@ async fn spawn_pipe_process(request: &ExecCommandRequest) -> TerminalResult<Exec
                     child_exited = true;
                 }
 
-                action = control_rx.recv() => {
-                    control_state = request_unix_pipe_control(
-                        pipe_pgid,
-                        action.unwrap_or(ExecControlAction::Kill),
-                    );
+                action = control_rx.recv(), if !control_closed => {
+                    match action {
+                        Some(action) => {
+                            control_state = request_unix_pipe_control(pipe_pgid, action);
+                        }
+                        None => control_closed = true,
+                    }
                 }
 
                 done = reader_done_rx.recv(), if remaining_readers > 0 => {
@@ -1282,8 +1388,24 @@ async fn spawn_pipe_process(request: &ExecCommandRequest) -> TerminalResult<Exec
     })
 }
 
+/// Map a waited child status to an exit code the model can act on.
+///
+/// `ExitStatus::code()` is `None` when a process dies from a signal, which is
+/// how every interrupt and kill ends a pipe-backed command. Reporting the
+/// conventional `128 + signal` status keeps that case distinguishable from
+/// "status unknown" and matches what a shell would report for the same death.
+#[cfg(unix)]
+fn local_pipe_exit_code(status: std::process::ExitStatus) -> Option<i32> {
+    use std::os::unix::process::ExitStatusExt;
+
+    status.code().or_else(|| status.signal().map(|s| 128 + s))
+}
+
 #[cfg(unix)]
 fn configure_pipe_process_group(command: &mut Command) {
+    // SAFETY: `pre_exec` runs between fork and exec, where only async-signal-safe
+    // work is allowed. The closure calls nothing but `setsid`/`setpgid` and reads
+    // `errno`; it allocates nothing and touches no shared state.
     unsafe {
         command.pre_exec(|| {
             if libc::setsid() == -1 {
@@ -1439,6 +1561,9 @@ fn request_unix_pipe_control(
 
 #[cfg(unix)]
 fn signal_pipe_process_group_id(pgid: libc::pid_t, signal: libc::c_int) {
+    // SAFETY: `killpg` is a plain syscall with no memory-safety contract. A
+    // stale or already-reaped group id fails with ESRCH, which is ignored here
+    // because a group that is already gone needs no signal.
     unsafe {
         libc::killpg(pgid, signal);
     }
@@ -1473,6 +1598,24 @@ where
     })
 }
 
+#[cfg(not(unix))]
+fn spawn_pipe_discard_reader<R>(mut reader: R) -> JoinHandle<()>
+where
+    R: AsyncRead + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        let mut buffer = vec![0u8; 8192];
+        loop {
+            match reader.read(&mut buffer).await {
+                Ok(0) => break,
+                Ok(_) => {}
+                Err(ref error) if error.kind() == ErrorKind::Interrupted => continue,
+                Err(_) => break,
+            }
+        }
+    })
+}
+
 #[cfg(unix)]
 fn spawn_pipe_reader_with_done<R>(
     mut reader: R,
@@ -1488,6 +1631,28 @@ where
             match reader.read(&mut buffer).await {
                 Ok(0) => break,
                 Ok(n) => output.push_chunk(buffer[..n].to_vec()).await,
+                Err(ref error) if error.kind() == ErrorKind::Interrupted => continue,
+                Err(_) => break,
+            }
+        }
+        let _ = done_tx.send(()).await;
+    })
+}
+
+#[cfg(unix)]
+fn spawn_pipe_discard_reader_with_done<R>(
+    mut reader: R,
+    done_tx: mpsc::Sender<()>,
+) -> JoinHandle<()>
+where
+    R: AsyncRead + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        let mut buffer = vec![0u8; 8192];
+        loop {
+            match reader.read(&mut buffer).await {
+                Ok(0) => break,
+                Ok(_) => {}
                 Err(ref error) if error.kind() == ErrorKind::Interrupted => continue,
                 Err(_) => break,
             }
@@ -1627,13 +1792,14 @@ mod tests {
     use super::{
         bytes_to_string_smart, input_bytes_for_write, ExecCommandRequest, ExecControlAction,
         ExecControlOrigin, ExecControlRequest, ExecProcessLifecycleStatus, ExecProcessManager,
-        ExecSessionCompletionSource, ExecSessionCompletionStatus, HeadTailText, SendStdinRequest,
-        WriteStdinRequest,
+        ExecSessionCompletionSource, ExecSessionCompletionStatus, HeadTailText, OutputCursor,
+        OutputState, SendStdinRequest, WriteStdinRequest,
     };
     #[cfg(windows)]
     use crate::shell::{ShellDetector, ShellType};
     use encoding_rs::GBK;
     use std::collections::HashMap;
+    #[cfg(windows)]
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -1697,6 +1863,84 @@ mod tests {
         assert_eq!(response.exit_code, Some(0));
         assert!(response.session_id.is_none());
         assert!(response.output.contains("bitfun_exec_test"));
+    }
+
+    #[tokio::test]
+    async fn pipe_exec_stdout_only_drains_but_does_not_return_stderr() {
+        let manager = ExecProcessManager::default();
+        #[cfg(windows)]
+        let script = "echo captured_stdout & echo ignored_stderr 1>&2";
+        #[cfg(not(windows))]
+        let script = "printf captured_stdout; printf ignored_stderr >&2";
+
+        let response = manager
+            .exec_command_stdout(ExecCommandRequest {
+                argv: shell_argv(script),
+                cwd: std::env::current_dir().expect("current dir"),
+                env: HashMap::new(),
+                tty: false,
+                yield_time_ms: Some(5_000),
+                max_output_chars: Some(10_000),
+                lifecycle_tx: None,
+                output_capture_tx: None,
+            })
+            .await
+            .expect("stdout-only command should run");
+
+        assert_eq!(response.exit_code, Some(0));
+        assert!(response.output.contains("captured_stdout"));
+        assert!(!response.output.contains("ignored_stderr"));
+    }
+
+    #[tokio::test]
+    async fn original_output_chars_survives_multibyte_retention_eviction() {
+        let output = OutputState::new(None);
+        let chunk = "🦀".repeat(32 * 1024).into_bytes();
+        for _ in 0..10 {
+            output.push_chunk(chunk.clone()).await;
+        }
+        output.close(Some(0)).await;
+
+        let collected = output
+            .collect_until(
+                OutputCursor {
+                    next_seq: 0,
+                    observed_output_chars: 0,
+                },
+                tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                256 * 1024,
+                None,
+            )
+            .await;
+
+        assert_eq!(collected.original_output_chars, 320 * 1024);
+        assert_eq!(collected.output.chars().count(), 256 * 1024);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn pipe_exec_reports_signal_death_as_a_conventional_status() {
+        let manager = ExecProcessManager::default();
+        let response = manager
+            .exec_command(ExecCommandRequest {
+                argv: shell_argv("kill -TERM $$"),
+                cwd: std::env::current_dir().expect("current dir"),
+                env: HashMap::new(),
+                tty: false,
+                yield_time_ms: Some(5_000),
+                max_output_chars: Some(10_000),
+                lifecycle_tx: None,
+                output_capture_tx: None,
+            })
+            .await
+            .expect("exec command should run");
+
+        assert!(response.session_id.is_none());
+        assert_eq!(
+            response.exit_code,
+            Some(143),
+            "a signal death is a known status, not an unknown one"
+        );
     }
 
     #[tokio::test]
@@ -2434,6 +2678,119 @@ print("parent_exit", flush=True)"#;
 
         assert_eq!(buffer.total_chars, 16);
         assert_eq!(buffer.render(), "abcdefghijklmnop");
+    }
+
+    /// Char-by-char reference implementation, mirroring the original
+    /// `VecDeque<char>` ring buffer. The byte-based ring buffer must stay
+    /// observationally identical to it.
+    fn head_tail_reference(max_chars: usize, chunks: &[&str]) -> (String, usize, usize) {
+        let head_budget = max_chars / 2;
+        let tail_budget = max_chars.saturating_sub(head_budget);
+        let mut head = String::new();
+        let mut tail: std::collections::VecDeque<char> = std::collections::VecDeque::new();
+        let mut head_chars = 0usize;
+        let mut tail_chars = 0usize;
+        let mut omitted_chars = 0usize;
+        let mut total_chars = 0usize;
+
+        for text in chunks {
+            for ch in text.chars() {
+                total_chars += 1;
+                if max_chars == 0 {
+                    omitted_chars += 1;
+                    continue;
+                }
+                if head_chars < head_budget {
+                    head.push(ch);
+                    head_chars += 1;
+                    continue;
+                }
+                if tail_budget == 0 {
+                    omitted_chars += 1;
+                    continue;
+                }
+                tail.push_back(ch);
+                tail_chars += 1;
+                if tail_chars > tail_budget {
+                    tail.pop_front();
+                    tail_chars -= 1;
+                    omitted_chars += 1;
+                }
+            }
+        }
+
+        let mut output = head;
+        if omitted_chars != 0 {
+            output.push_str("\n... [truncated, middle omitted] ...\n");
+        }
+        output.extend(tail);
+        (output, total_chars, omitted_chars)
+    }
+
+    #[test]
+    fn head_tail_text_matches_char_reference_for_multibyte_input() {
+        let chunk_sets: &[&[&str]] = &[
+            &["abcdefghijklmnop"],
+            &["小游戏平台推荐给所有人"],
+            &["ab", "小游戏", "cd", "平台推荐", "ef"],
+            &["🎮🎲🎯🎰🎳", "🚀🛰️🌌", "end"],
+            &["混合ascii与🎮emoji以及中文字符的长文本内容"],
+            &["a", "", "中", "🎮", "z"],
+        ];
+
+        for max_chars in [0usize, 1, 2, 3, 5, 8, 10, 17, 64, 1024] {
+            for chunks in chunk_sets {
+                let mut buffer = HeadTailText::new(max_chars);
+                for chunk in *chunks {
+                    buffer.push_str(chunk);
+                }
+                let total = buffer.total_chars;
+                let omitted = buffer.omitted_chars;
+                let rendered = buffer.render();
+
+                let (expected, expected_total, expected_omitted) =
+                    head_tail_reference(max_chars, chunks);
+
+                assert_eq!(
+                    rendered, expected,
+                    "render mismatch: max_chars={max_chars} chunks={chunks:?}"
+                );
+                assert_eq!(
+                    total, expected_total,
+                    "total_chars mismatch: max_chars={max_chars} chunks={chunks:?}"
+                );
+                assert_eq!(
+                    omitted, expected_omitted,
+                    "omitted_chars mismatch: max_chars={max_chars} chunks={chunks:?}"
+                );
+                assert!(
+                    !rendered.contains('\u{FFFD}'),
+                    "tail ring buffer split a multi-byte char: max_chars={max_chars} chunks={chunks:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn head_tail_text_keeps_multibyte_chars_intact_under_pressure() {
+        // Every char is 3 bytes; a byte-granular ring buffer would corrupt them.
+        let text: String = "中".repeat(500);
+        let mut buffer = HeadTailText::new(10);
+        for chunk in text.as_bytes().chunks(3) {
+            buffer.push_str(std::str::from_utf8(chunk).expect("aligned chunk"));
+        }
+
+        assert_eq!(buffer.total_chars, 500);
+        let rendered = buffer.render();
+        assert!(!rendered.contains('\u{FFFD}'));
+        assert!(rendered.starts_with("中中中中中"));
+        assert!(rendered.ends_with("中中中中中"));
+        assert!(rendered.contains("truncated"));
+        // 5 head + 5 tail chars plus the truncation marker.
+        assert_eq!(
+            rendered.chars().count(),
+            10 + "\n... [truncated, middle omitted] ...\n".chars().count()
+        );
     }
 
     #[test]

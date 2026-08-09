@@ -3,9 +3,9 @@
 //! Provides comprehensive workspace management functionality.
 
 use super::manager::{
-    RelatedPath, ScanOptions, WorkspaceIdentity, WorkspaceInfo, WorkspaceKind, WorkspaceManager,
-    WorkspaceManagerConfig, WorkspaceManagerStatistics, WorkspaceOpenOptions, WorkspaceStatus,
-    WorkspaceSummary, WorkspaceType,
+    PrimaryAssistantKey, RelatedPath, ScanOptions, WorkspaceIdentity, WorkspaceInfo, WorkspaceKind,
+    WorkspaceManager, WorkspaceManagerConfig, WorkspaceManagerStatistics, WorkspaceOpenOptions,
+    WorkspaceStatus, WorkspaceSummary, WorkspaceType,
 };
 use super::WorktreeTopologyFreshness;
 use crate::infrastructure::storage::{PersistenceService, StorageOptions};
@@ -13,16 +13,20 @@ use crate::infrastructure::{try_get_path_manager_arc, PathManager};
 use crate::service::bootstrap::{
     ensure_workspace_gitignore_ignores_bitfun, initialize_workspace_persona_files,
 };
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "git")]
 use crate::service::git::{GitError, GitWorktreeInfo};
+#[cfg(feature = "remote-workspace")]
 use crate::service::remote_ssh::workspace_state::{
-    canonicalize_local_workspace_root, get_remote_workspace_manager, init_remote_workspace_manager,
-    local_workspace_roots_equal, normalize_remote_workspace_path, remote_workspace_stable_id,
+    get_remote_workspace_manager, init_remote_workspace_manager,
 };
 use crate::service::workspace_runtime::{
     try_get_workspace_runtime_service_arc, WorkspaceRuntimeService,
 };
 use crate::util::errors::*;
+use bitfun_services_core::workspace_identity::{
+    canonicalize_local_workspace_root, local_workspace_roots_equal,
+    normalize_remote_workspace_path, remote_workspace_stable_id,
+};
 use log::{info, warn};
 
 use serde::{Deserialize, Serialize};
@@ -284,6 +288,28 @@ impl WorkspaceService {
         Ok(service)
     }
 
+    #[cfg(all(test, feature = "agent-runtime"))]
+    pub(crate) async fn new_for_test_path_manager(path_manager: Arc<PathManager>) -> Self {
+        path_manager
+            .initialize_user_directories()
+            .await
+            .expect("test user directories should initialize");
+        let config = WorkspaceManagerConfig::default();
+        let persistence = Arc::new(
+            PersistenceService::new_user_level(path_manager.clone())
+                .await
+                .expect("test persistence should initialize"),
+        );
+        let runtime_service = Arc::new(WorkspaceRuntimeService::new(path_manager.clone()));
+        Self {
+            manager: Arc::new(RwLock::new(WorkspaceManager::new(config.clone()))),
+            config,
+            persistence,
+            path_manager,
+            runtime_service,
+        }
+    }
+
     /// Returns the path manager.
     pub fn path_manager(&self) -> &Arc<PathManager> {
         &self.path_manager
@@ -318,17 +344,26 @@ impl WorkspaceService {
         preferred_ssh_host: Option<&str>,
     ) -> BitFunResult<WorkspaceInfo> {
         let path_str = path.to_string_lossy().to_string();
-        if let Some(known) = self
+        let known = self
             .find_known_remote_workspace_for_path(
                 &path_str,
                 preferred_connection_id,
                 preferred_ssh_host,
             )
+            .await;
+        self.open_workspace_after_known_resolution(path, known)
             .await
-        {
+    }
+
+    pub(crate) async fn open_workspace_after_known_resolution(
+        &self,
+        path: PathBuf,
+        known_remote: Option<WorkspaceInfo>,
+    ) -> BitFunResult<WorkspaceInfo> {
+        let path_str = path.to_string_lossy().to_string();
+        if let Some(known) = known_remote {
             return self.open_known_remote_workspace(&known).await;
         }
-
         match self.open_workspace(path).await {
             Ok(info) => Ok(info),
             Err(error) => {
@@ -353,6 +388,12 @@ impl WorkspaceService {
         options: WorkspaceCreateOptions,
     ) -> BitFunResult<WorkspaceInfo> {
         let options = self.normalize_workspace_options_for_path(&path, options);
+        #[cfg(not(feature = "remote-workspace"))]
+        if options.workspace_kind == WorkspaceKind::Remote {
+            return Err(BitFunError::service(
+                "Remote workspace support is not compiled into this product profile",
+            ));
+        }
         let worktree =
             WorkspaceInfo::resolve_worktree_info(&path, WorktreeTopologyFreshness::Cached).await;
         let result = {
@@ -371,6 +412,7 @@ impl WorkspaceService {
                 .await;
             self.ensure_workspace_runtime_best_effort(workspace, "opened")
                 .await;
+            #[cfg(feature = "remote-workspace")]
             if workspace.workspace_kind == WorkspaceKind::Remote {
                 self.register_remote_workspace_runtime(workspace).await;
             }
@@ -385,7 +427,7 @@ impl WorkspaceService {
         result
     }
 
-    async fn find_known_remote_workspace_for_path(
+    pub(crate) async fn find_known_remote_workspace_for_path(
         &self,
         path: &str,
         preferred_connection_id: Option<&str>,
@@ -497,6 +539,7 @@ impl WorkspaceService {
         Ok(opened)
     }
 
+    #[cfg(feature = "remote-workspace")]
     async fn register_remote_workspace_runtime(&self, workspace: &WorkspaceInfo) {
         let Some(connection_id) = workspace.remote_ssh_connection_id() else {
             warn!(
@@ -586,7 +629,7 @@ impl WorkspaceService {
         result
     }
 
-    #[cfg(feature = "service-integrations")]
+    #[cfg(feature = "git")]
     pub async fn list_worktrees(
         &self,
         path: &Path,
@@ -597,7 +640,18 @@ impl WorkspaceService {
             .await
     }
 
-    #[cfg(feature = "service-integrations")]
+    #[cfg(feature = "git")]
+    pub async fn is_live_worktree_root_in_same_repository(
+        &self,
+        registered_path: &Path,
+        candidate: &Path,
+    ) -> Result<bool, GitError> {
+        super::worktree_topology::global_worktree_topology_service()
+            .is_live_worktree_root_in_same_repository(registered_path, candidate)
+            .await
+    }
+
+    #[cfg(feature = "git")]
     pub async fn invalidate_worktree_topology(&self, path: &Path) {
         super::worktree_topology::global_worktree_topology_service()
             .invalidate(path)
@@ -679,7 +733,16 @@ impl WorkspaceService {
         // New assistant dirs get persona files at creation; coordinator also fills missing files when opening.
         initialize_workspace_persona_files(&path).await?;
 
-        self.create_workspace(path, options).await
+        let workspace = self.create_workspace(path, options).await?;
+        let selection_changed = {
+            let mut manager = self.manager.write().await;
+            manager.ensure_primary_assistant_selection()
+        };
+        if selection_changed {
+            self.save_workspace_data().await?;
+        }
+
+        Ok(workspace)
     }
 
     /// Closes the current workspace.
@@ -852,7 +915,6 @@ impl WorkspaceService {
         connection_id: &str,
         remote_workspace_path: &str,
     ) -> Option<String> {
-        use crate::service::remote_ssh::normalize_remote_workspace_path;
         let cid = connection_id.trim();
         if cid.is_empty() {
             return None;
@@ -891,6 +953,45 @@ impl WorkspaceService {
             .filter(|workspace| workspace.workspace_kind == WorkspaceKind::Assistant)
             .cloned()
             .collect()
+    }
+
+    /// Returns the assistant workspace currently assigned the primary role.
+    pub async fn get_primary_assistant_workspace(&self) -> Option<WorkspaceInfo> {
+        let manager = self.manager.read().await;
+        manager.get_primary_assistant_workspace().cloned()
+    }
+
+    /// Assigns the primary role to an existing assistant workspace.
+    pub async fn set_primary_assistant_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> BitFunResult<WorkspaceInfo> {
+        let (workspace, previous_key) = {
+            let mut manager = self.manager.write().await;
+            let workspace = manager
+                .get_workspace(workspace_id)
+                .cloned()
+                .ok_or_else(|| {
+                    BitFunError::service(format!("Workspace not found: {}", workspace_id))
+                })?;
+            let previous_key = manager.set_primary_assistant_workspace(workspace_id)?;
+            (workspace, previous_key)
+        };
+
+        if let Err(error) = self.save_workspace_data().await {
+            let mut manager = self.manager.write().await;
+            manager.set_primary_assistant_key(previous_key);
+            return Err(error);
+        }
+
+        Ok(workspace)
+    }
+
+    /// Returns whether the workspace currently owns the primary assistant role.
+    pub async fn is_primary_assistant_workspace(&self, workspace_id: &str) -> bool {
+        self.get_primary_assistant_workspace()
+            .await
+            .is_some_and(|workspace| workspace.id == workspace_id)
     }
 
     /// Lists all workspaces.
@@ -1235,6 +1336,7 @@ impl WorkspaceService {
         let mut seen_paths = HashSet::new();
 
         match workspace.workspace_kind {
+            #[cfg(feature = "remote-workspace")]
             WorkspaceKind::Remote => {
                 let connection_id = workspace
                     .remote_ssh_connection_id()
@@ -1305,6 +1407,12 @@ impl WorkspaceService {
 
                     normalized.push(RelatedPath { path, description });
                 }
+            }
+            #[cfg(not(feature = "remote-workspace"))]
+            WorkspaceKind::Remote => {
+                return Err(BitFunError::service(
+                    "Remote workspace related paths require the remote-workspace feature",
+                ));
             }
             _ => {
                 for related_path in related_paths {
@@ -1423,18 +1531,18 @@ impl WorkspaceService {
 
     /// Cleans up invalid workspaces.
     pub async fn cleanup_invalid_workspaces(&self) -> BitFunResult<usize> {
-        let result = {
+        let removed_count = {
             let mut manager = self.manager.write().await;
             manager.cleanup_invalid_workspaces().await
-        };
+        }?;
 
-        if result.is_ok() {
-            if let Err(e) = self.save_workspace_data().await {
-                warn!("Failed to save workspace data after cleanup: {}", e);
-            }
+        if removed_count > 0 {
+            self.ensure_assistant_workspaces().await?;
+        } else if let Err(e) = self.save_workspace_data().await {
+            warn!("Failed to save workspace data after cleanup: {}", e);
         }
 
-        result
+        Ok(removed_count)
     }
 
     /// Returns statistics.
@@ -1506,6 +1614,7 @@ impl WorkspaceService {
         Ok(WorkspaceExport {
             workspaces,
             current_workspace_id,
+            primary_assistant_key: manager.get_primary_assistant_key().cloned(),
             recent_workspaces: manager
                 .get_recent_workspace_infos()
                 .iter()
@@ -1527,6 +1636,7 @@ impl WorkspaceService {
         export: WorkspaceExport,
         overwrite: bool,
     ) -> BitFunResult<WorkspaceImportResult> {
+        let imported_primary_key = export.primary_assistant_key.clone();
         let mut result = WorkspaceImportResult {
             imported_workspaces: 0,
             skipped_workspaces: 0,
@@ -1558,6 +1668,8 @@ impl WorkspaceService {
 
         manager.set_recent_workspaces(export.recent_workspaces.clone());
         manager.set_recent_assistant_workspaces(export.recent_assistant_workspaces.clone());
+        manager.set_primary_assistant_key(imported_primary_key);
+        manager.ensure_primary_assistant_selection();
 
         if let Some(current_id) = export.current_workspace_id {
             if manager.get_workspaces().contains_key(&current_id) {
@@ -1574,6 +1686,8 @@ impl WorkspaceService {
         }
 
         drop(manager);
+
+        self.save_workspace_data().await?;
 
         Ok(result)
     }
@@ -1613,6 +1727,7 @@ impl WorkspaceService {
             current_workspace_id: manager.get_current_workspace().map(|w| w.id.clone()),
             recent_workspaces: manager.get_recent_workspaces().clone(),
             recent_assistant_workspaces: manager.get_recent_assistant_workspaces().clone(),
+            primary_assistant_key: manager.get_primary_assistant_key().cloned(),
             saved_at: chrono::Utc::now(),
         };
 
@@ -1640,6 +1755,7 @@ impl WorkspaceService {
             manager.set_opened_workspace_ids(data.opened_workspace_ids);
             manager.set_recent_workspaces(data.recent_workspaces);
             manager.set_recent_assistant_workspaces(data.recent_assistant_workspaces);
+            manager.set_primary_assistant_key(data.primary_assistant_key);
             let id_remap = manager.migrate_local_workspace_ids_to_stable_storage();
 
             if let Some(raw_current) = data.current_workspace_id {
@@ -1717,7 +1833,12 @@ impl WorkspaceService {
                 .recent_workspaces
                 .clone()
                 .into_iter()
-                .filter(|id| manager.get_workspaces().contains_key(id))
+                .filter(|id| {
+                    manager.get_workspaces().get(id).is_some_and(|workspace| {
+                        // Drop MiniApp-owned workspaces recorded before they were excluded.
+                        !self.is_miniapp_owned_path(&workspace.root_path)
+                    })
+                })
                 .collect();
             if filtered_recent != data.recent_workspaces {
                 should_persist_cleaned_history = true;
@@ -1734,6 +1855,7 @@ impl WorkspaceService {
                 should_persist_cleaned_history = true;
             }
             manager.set_recent_assistant_workspaces(filtered_recent_assistant);
+            manager.set_primary_assistant_key(data.primary_assistant_key);
 
             let id_remap = manager.migrate_local_workspace_ids_to_stable_storage();
             if !id_remap.is_empty() {
@@ -2080,7 +2202,18 @@ impl WorkspaceService {
             }
         }
 
+        if self.is_miniapp_owned_path(path) {
+            options.add_to_recent = false;
+        }
+
         options
+    }
+
+    /// MiniApp agent runs and customization drafts work inside directories the
+    /// MiniApp owns under `<userRoot>/data/miniapps/`. They are app storage, not
+    /// user projects, so they must stay out of recent workspace history.
+    fn is_miniapp_owned_path(&self, path: &Path) -> bool {
+        path.starts_with(self.path_manager.miniapps_dir())
     }
 
     async fn discover_assistant_workspaces(
@@ -2098,19 +2231,20 @@ impl WorkspaceService {
         })?;
 
         let default_workspace = self.path_manager.default_assistant_workspace_dir(None);
-        fs::create_dir_all(&default_workspace).await.map_err(|e| {
+        let mut descriptors = Vec::new();
+        if fs::try_exists(&default_workspace).await.map_err(|e| {
             BitFunError::service(format!(
-                "Failed to create default assistant workspace '{}': {}",
+                "Failed to inspect default assistant workspace '{}': {}",
                 default_workspace.display(),
                 e
             ))
-        })?;
-
-        let mut descriptors = vec![AssistantWorkspaceDescriptor {
-            path: default_workspace,
-            assistant_id: None,
-            display_name: Self::assistant_display_name(None),
-        }];
+        })? {
+            descriptors.push(AssistantWorkspaceDescriptor {
+                path: default_workspace.clone(),
+                assistant_id: None,
+                display_name: Self::assistant_display_name(None),
+            });
+        }
 
         let mut entries = fs::read_dir(&assistant_root).await.map_err(|e| {
             BitFunError::service(format!(
@@ -2153,6 +2287,24 @@ impl WorkspaceService {
             });
         }
 
+        // A fresh installation still gets the built-in assistant. Once the
+        // primary role has moved to a named assistant, deleting the built-in
+        // workspace must not cause it to reappear on the next launch.
+        if descriptors.is_empty() {
+            fs::create_dir_all(&default_workspace).await.map_err(|e| {
+                BitFunError::service(format!(
+                    "Failed to create default assistant workspace '{}': {}",
+                    default_workspace.display(),
+                    e
+                ))
+            })?;
+            descriptors.push(AssistantWorkspaceDescriptor {
+                path: default_workspace,
+                assistant_id: None,
+                display_name: Self::assistant_display_name(None),
+            });
+        }
+
         descriptors.sort_by(|left, right| {
             match (left.assistant_id.is_some(), right.assistant_id.is_some()) {
                 (false, true) => std::cmp::Ordering::Less,
@@ -2166,7 +2318,7 @@ impl WorkspaceService {
 
     async fn ensure_assistant_workspaces(&self) -> BitFunResult<()> {
         let descriptors = self.discover_assistant_workspaces().await?;
-        let mut has_current_workspace = self.get_current_workspace().await.is_some();
+        let has_current_workspace = self.get_current_workspace().await.is_some();
         let has_opened_remote = {
             let manager = self.manager.read().await;
             manager
@@ -2175,12 +2327,28 @@ impl WorkspaceService {
                 .any(|w| w.workspace_kind == WorkspaceKind::Remote)
         };
 
-        for descriptor in descriptors {
+        let persisted_primary = {
+            let manager = self.manager.read().await;
+            manager.get_primary_assistant_key().cloned()
+        };
+        let activation_index = persisted_primary
+            .as_ref()
+            .and_then(|key| {
+                descriptors.iter().position(|descriptor| match key {
+                    PrimaryAssistantKey::BuiltIn => descriptor.assistant_id.is_none(),
+                    PrimaryAssistantKey::Named { assistant_id } => {
+                        descriptor.assistant_id.as_deref() == Some(assistant_id.as_str())
+                    }
+                })
+            })
+            .unwrap_or(0);
+
+        for (index, descriptor) in descriptors.into_iter().enumerate() {
             // If a remote workspace tab exists but nothing is current yet (e.g. pending SSH
             // reconnect), do not auto-activate the default assistant workspace — that would look
             // like a spurious new local workspace.
             let should_activate =
-                !has_current_workspace && !has_opened_remote && descriptor.assistant_id.is_none();
+                !has_current_workspace && !has_opened_remote && index == activation_index;
             let options = WorkspaceCreateOptions {
                 auto_set_current: should_activate,
                 add_to_recent: false,
@@ -2192,10 +2360,14 @@ impl WorkspaceService {
 
             self.open_workspace_with_options(descriptor.path, options)
                 .await?;
-            has_current_workspace = true;
         }
 
-        Ok(())
+        {
+            let mut manager = self.manager.write().await;
+            manager.ensure_primary_assistant_selection();
+        }
+
+        self.save_workspace_data().await
     }
 
     /// Saves workspace data manually (public API).
@@ -2261,6 +2433,8 @@ pub struct WorkspaceHealthStatus {
 pub struct WorkspaceExport {
     pub workspaces: Vec<WorkspaceInfo>,
     pub current_workspace_id: Option<String>,
+    #[serde(default)]
+    pub primary_assistant_key: Option<PrimaryAssistantKey>,
     pub recent_workspaces: Vec<String>,
     #[serde(default)]
     pub recent_assistant_workspaces: Vec<String>,
@@ -2300,6 +2474,8 @@ struct WorkspacePersistenceData {
     pub recent_workspaces: Vec<String>,
     #[serde(default)]
     pub recent_assistant_workspaces: Vec<String>,
+    #[serde(default)]
+    pub primary_assistant_key: Option<PrimaryAssistantKey>,
     pub saved_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -2319,11 +2495,11 @@ pub fn get_global_workspace_service() -> Option<Arc<WorkspaceService>> {
     GLOBAL_WORKSPACE_SERVICE.get().cloned()
 }
 
-#[cfg(all(test, feature = "product-full"))]
+#[cfg(all(test, feature = "agent-runtime"))]
 mod tests {
     use super::*;
     use crate::agentic::persistence::PersistenceManager;
-    use crate::infrastructure::storage::{PersistenceService, StorageOptions};
+    use crate::infrastructure::storage::StorageOptions;
     use crate::service::session::SessionMetadata;
     use crate::service::workspace::WorkspaceWorktreeInfo;
     use std::collections::HashMap;
@@ -2361,26 +2537,7 @@ mod tests {
     }
 
     async fn build_test_workspace_service(path_manager: Arc<PathManager>) -> WorkspaceService {
-        path_manager
-            .initialize_user_directories()
-            .await
-            .expect("user directories should initialize");
-
-        let config = WorkspaceManagerConfig::default();
-        let persistence = Arc::new(
-            PersistenceService::new_user_level(path_manager.clone())
-                .await
-                .expect("persistence should initialize"),
-        );
-        let runtime_service = Arc::new(WorkspaceRuntimeService::new(path_manager.clone()));
-
-        WorkspaceService {
-            manager: Arc::new(RwLock::new(WorkspaceManager::new(config.clone()))),
-            config,
-            persistence,
-            path_manager,
-            runtime_service,
-        }
+        WorkspaceService::new_for_test_path_manager(path_manager).await
     }
 
     #[tokio::test]
@@ -2411,6 +2568,78 @@ mod tests {
         let gitignore = std::fs::read_to_string(remote_workspace_root.join(".gitignore"))
             .expect("gitignore should be readable");
         assert_eq!(gitignore, "target/\n");
+    }
+
+    #[tokio::test]
+    async fn primary_assistant_role_can_move_to_a_named_workspace() {
+        let env = TestEnvironment::new();
+        let service = build_test_workspace_service(env.path_manager.clone()).await;
+
+        service
+            .ensure_assistant_workspaces()
+            .await
+            .expect("built-in assistant should initialize");
+        let built_in = service
+            .get_primary_assistant_workspace()
+            .await
+            .expect("built-in assistant should be primary by default");
+        assert!(built_in.assistant_id.is_none());
+
+        let named = service
+            .create_assistant_workspace(Some("named-primary".to_string()))
+            .await
+            .expect("named assistant should initialize");
+        service
+            .set_primary_assistant_workspace(&named.id)
+            .await
+            .expect("primary assistant role should move");
+
+        let primary = service
+            .get_primary_assistant_workspace()
+            .await
+            .expect("named assistant should resolve as primary");
+        assert_eq!(primary.id, named.id);
+        assert!(service.is_primary_assistant_workspace(&named.id).await);
+        assert!(!service.is_primary_assistant_workspace(&built_in.id).await);
+    }
+
+    #[tokio::test]
+    async fn deleted_built_in_assistant_is_not_recreated_when_named_assistant_exists() {
+        let env = TestEnvironment::new();
+        let service = build_test_workspace_service(env.path_manager.clone()).await;
+
+        service
+            .ensure_assistant_workspaces()
+            .await
+            .expect("built-in assistant should initialize");
+        let built_in = service
+            .get_primary_assistant_workspace()
+            .await
+            .expect("built-in assistant should be primary by default");
+        let named = service
+            .create_assistant_workspace(Some("surviving-primary".to_string()))
+            .await
+            .expect("named assistant should initialize");
+        service
+            .set_primary_assistant_workspace(&named.id)
+            .await
+            .expect("primary assistant role should move");
+
+        std::fs::remove_dir_all(&built_in.root_path)
+            .expect("built-in assistant directory should be removed");
+        service
+            .remove_workspace(&built_in.id)
+            .await
+            .expect("built-in assistant record should be removed");
+        service
+            .ensure_assistant_workspaces()
+            .await
+            .expect("remaining assistant should initialize");
+
+        let assistants = service.get_assistant_workspaces().await;
+        assert_eq!(assistants.len(), 1);
+        assert_eq!(assistants[0].id, named.id);
+        assert!(assistants[0].assistant_id.is_some());
     }
 
     #[tokio::test]
@@ -2487,6 +2716,7 @@ mod tests {
             current_workspace_id: Some(first_workspace.id.clone()),
             recent_workspaces: vec![first_workspace.id.clone(), second_workspace.id.clone()],
             recent_assistant_workspaces: Vec::new(),
+            primary_assistant_key: None,
             saved_at: chrono::Utc::now(),
         };
 
@@ -2564,6 +2794,41 @@ mod tests {
         assert!(
             service.get_current_workspace().await.is_none(),
             "tracked workspace activity should not change the current workspace"
+        );
+    }
+
+    #[tokio::test]
+    async fn track_workspace_activity_keeps_miniapp_workspaces_out_of_recent_history() {
+        let env = TestEnvironment::new();
+        let service = build_test_workspace_service(env.path_manager.clone()).await;
+        let miniapp_workspace_root = env
+            .path_manager
+            .miniapp_dir("builtin-ppt-live")
+            .join("decks")
+            .join("deck-1785130332234");
+        std::fs::create_dir_all(&miniapp_workspace_root)
+            .expect("MiniApp workspace directory should be created");
+
+        let tracked = service
+            .track_workspace_activity(
+                miniapp_workspace_root.clone(),
+                WorkspaceCreateOptions::default(),
+                WorkspaceActivityMode::RefreshMetadata,
+            )
+            .await
+            .expect("MiniApp workspace tracking should succeed");
+
+        assert_eq!(
+            service
+                .get_workspace_by_path(&miniapp_workspace_root)
+                .await
+                .map(|workspace| workspace.id),
+            Some(tracked.id),
+            "MiniApp workspace should still be registered so its agent session can resolve it"
+        );
+        assert!(
+            service.get_recent_workspaces().await.is_empty(),
+            "MiniApp-owned workspaces should never enter recent workspace history"
         );
     }
 

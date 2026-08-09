@@ -114,9 +114,10 @@ applyExpandedState(isExpanded, nextExpanded, setIsExpanded, {
 });
 ```
 
-If the collapsing region's effective height is better estimated by an inner
-scroll container than the outer wrapper, pass `getCardHeight` to the helper.
-Current examples include `ModelThinkingDisplay` and `ExploreGroupRenderer`.
+Attach `cardRootRef` to the visible outer box that actually collapses. Do not
+use an inner scroll container's `scrollHeight`: bounded cards can contain much
+more hidden scroll content than the layout height removed by a collapse, which
+would over-reserve FlowChat footer space.
 
 Current examples:
 

@@ -6,7 +6,7 @@ import type {
   ReviewTokenBudgetMode,
 } from './types';
 import { REVIEW_STRATEGY_PROFILES } from './strategy';
-import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
+import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 
 export const DEFAULT_REVIEW_TEAM_ID = 'default-review-team';
 export const DEFAULT_REVIEW_TEAM_CONFIG_PATH = 'ai.review_teams.default';
@@ -69,7 +69,7 @@ export const REVIEW_STRATEGY_RUNTIME_BUDGETS: Record<
   },
 };
 export const DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY = {
-  maxParallelInstances: 4,
+  maxParallelInstances: 2,
   staggerSeconds: 0,
   maxQueueWaitSeconds: 1200,
   batchExtrasSeparately: true,
@@ -78,7 +78,7 @@ export const DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY = {
   autoRetryElapsedGuardSeconds: 180,
 } as const;
 export const MAX_PREDICTIVE_TIMEOUT_SECONDS = 3600;
-export const MAX_PARALLEL_REVIEWER_INSTANCES = 16;
+export const MAX_PARALLEL_REVIEWER_INSTANCES = 2;
 export const MAX_QUEUE_WAIT_SECONDS = 3600;
 export const MAX_AUTO_RETRY_ELAPSED_GUARD_SECONDS = 900;
 export const PREDICTIVE_TIMEOUT_PER_FILE_SECONDS = 15;
@@ -88,13 +88,13 @@ export const PREDICTIVE_TIMEOUT_BASE_SECONDS: Record<ReviewStrategyLevel, number
   normal: 300,
   deep: 600,
 };
-export const REVIEW_TEAM_MEMBER_ACCENT_DEFAULT = UI_EXCEPTION_ACCENTS.reviewTeam.memberDefault;
+export const REVIEW_TEAM_MEMBER_ACCENT_DEFAULT = APPEARANCE_DOMAIN_TOKENS.reviewTeam.memberDefault;
 
 export const EXTRA_MEMBER_DEFAULTS = {
-  roleName: 'Additional Review Check',
-  description: 'An optional independent check for a specific concern chosen by the user.',
+  roleName: 'User-requested check',
+  description: 'A read-only check for a specific concern chosen by the user.',
   responsibilities: [
-    'Add another independent view of the current change.',
+    'Check the concern requested by the user.',
     'Check only the requested changes and selected files.',
     'Return concrete findings with clear fixes or follow-up steps.',
   ],
@@ -113,22 +113,22 @@ export const DEFAULT_REVIEW_TEAM_CORE_ROLES: ReviewTeamCoreRoleDefinition[] = [
   {
     key: 'worker',
     subagentId: 'ReviewWorker',
-    funName: 'Focused Review',
-    roleName: 'On-demand Review Check',
+    funName: 'Additional check',
+    roleName: 'On-demand check',
     description:
-      'A read-only check whose focus and scope are chosen for the current change when more evidence would be useful.',
+      'A read-only check used when the main review needs more evidence for a specific concern.',
     responsibilities: [
       'Check only the question assigned by the main review.',
       'Stay within the selected scope and support conclusions with concrete evidence.',
       'Do not modify files or repeat work already completed by the main review.',
     ],
-    accentColor: UI_EXCEPTION_ACCENTS.reviewTeam.worker,
+    accentColor: APPEARANCE_DOMAIN_TOKENS.reviewTeam.worker,
   },
   {
     key: 'judge',
     subagentId: 'ReviewJudge',
-    funName: 'Independent Review Check',
-    roleName: 'Review Quality Check',
+    funName: 'Independent validation',
+    roleName: 'Quality check',
     description:
       'A read-only independent check used only when a serious finding, conflicting evidence, or an uncertain conclusion needs validation.',
     responsibilities: [
@@ -136,7 +136,7 @@ export const DEFAULT_REVIEW_TEAM_CORE_ROLES: ReviewTeamCoreRoleDefinition[] = [
       'Check only the claims that need independent validation.',
       'Make sure each retained issue has a safe, practical next step.',
     ],
-    accentColor: UI_EXCEPTION_ACCENTS.reviewTeam.judge,
+    accentColor: APPEARANCE_DOMAIN_TOKENS.reviewTeam.judge,
   },
 ];
 
@@ -162,7 +162,7 @@ export const FALLBACK_REVIEW_TEAM_DEFINITION: ReviewTeamDefinition = {
   id: DEFAULT_REVIEW_TEAM_ID,
   name: 'Code Review',
   description:
-    'One main review that can request focused independent checks when more evidence is needed.',
+    'One review that can add checks when a specific concern needs more evidence.',
   warning:
     'Strict review may take longer and usually consumes more tokens than a standard review.',
   defaultModel: DEFAULT_REVIEW_TEAM_MODEL,

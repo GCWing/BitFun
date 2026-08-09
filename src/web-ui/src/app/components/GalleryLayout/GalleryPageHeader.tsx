@@ -1,6 +1,6 @@
 import React from 'react';
 
-interface GalleryPageHeaderProps {
+interface GalleryPageHeaderProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
   title: React.ReactNode;
   subtitle?: React.ReactNode;
   actions?: React.ReactNode;
@@ -14,8 +14,9 @@ const GalleryPageHeader: React.FC<GalleryPageHeaderProps> = ({
   actions,
   extraContent,
   className,
+  ...rootProps
 }) => (
-  <div className={['gallery-page-header', className].filter(Boolean).join(' ')}>
+  <div {...rootProps} className={['gallery-page-header', className].filter(Boolean).join(' ')}>
     <div className="gallery-page-header__identity">
       <h2 className="gallery-page-header__title">{title}</h2>
       {subtitle ? <div className="gallery-page-header__subtitle">{subtitle}</div> : null}

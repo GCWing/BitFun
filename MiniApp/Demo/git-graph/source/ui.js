@@ -113,9 +113,9 @@
 })();
 
 
-/* ui/theme.js */
+/* ui/appearance.js */
 /**
- * Git Graph MiniApp — theme adapter: read --branch-* and node stroke from CSS for graph colors.
+ * Git Graph MiniApp — appearance adapter: read --branch-* and node stroke from CSS for graph colors.
  */
 (function () {
   window.__GG = window.__GG || {};
@@ -125,7 +125,7 @@
     return getComputedStyle(root).getPropertyValue(name).trim() || null;
   }
 
-  /** Returns array of 7 branch/lane colors from CSS variables (theme-aware). */
+  /** Returns array of 7 branch/lane colors from CSS variables (appearance-aware). */
   window.__GG.getGraphColors = function () {
     const colors = [];
     for (let i = 1; i <= 7; i++) {
@@ -434,7 +434,7 @@
 
 /* ui/graph/renderRowSvg.js */
 /**
- * Git Graph MiniApp — build SVG for one commit row (theme-aware colors).
+ * Git Graph MiniApp — build SVG for one commit row (appearance-aware colors).
  */
 (function () {
   window.__GG = window.__GG || {};
@@ -1787,7 +1787,7 @@
 
 /* ui/bootstrap.js */
 /**
- * Git Graph MiniApp — bootstrap: bind events, init resizer, restore last repo, theme subscription.
+ * Git Graph MiniApp — bootstrap: bind events, init resizer, restore last repo, appearance subscription.
  */
 (function () {
   window.__GG = window.__GG || {};
@@ -1843,8 +1843,8 @@
       });
     }
 
-    if (window.app && typeof window.app.onThemeChange === 'function') {
-      window.app.onThemeChange(function () {
+    if (window.app && typeof window.app.onAppearanceChange === 'function') {
+      window.app.onAppearanceChange(function () {
         if (state.cwd && $('commit-list').children.length) {
           window.__GG.renderCommitList();
         }

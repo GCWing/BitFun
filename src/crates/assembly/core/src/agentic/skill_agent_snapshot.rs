@@ -144,7 +144,7 @@ async fn load_skill_entries(
         Some(workspace) if workspace.is_remote() => {
             if let Some(services) = workspace_services {
                 registry
-                    .get_resolved_skills_for_remote_workspace(
+                    .get_implicitly_invocable_skills_for_remote_workspace(
                         services.fs.as_ref(),
                         &workspace.root_path_string(),
                         agent_type,
@@ -156,12 +156,15 @@ async fn load_skill_entries(
         }
         Some(workspace) => {
             registry
-                .get_resolved_skills_for_workspace(Some(workspace.root_path()), agent_type)
+                .get_implicitly_invocable_skills_for_workspace(
+                    Some(workspace.root_path()),
+                    agent_type,
+                )
                 .await
         }
         None => {
             registry
-                .get_resolved_skills_for_workspace(None, agent_type)
+                .get_implicitly_invocable_skills_for_workspace(None, agent_type)
                 .await
         }
     };

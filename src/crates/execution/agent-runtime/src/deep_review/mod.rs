@@ -9,6 +9,7 @@ pub mod concurrency_policy;
 pub mod constants;
 pub mod diagnostics;
 pub mod execution_policy;
+pub mod focused_assignment;
 pub mod incremental_cache;
 pub mod manifest;
 pub mod queue;
@@ -21,12 +22,13 @@ pub mod team_definition;
 pub mod tool_context;
 
 pub use budget::{
-    DeepReviewActiveReviewerGuard, DeepReviewBudgetTracker, ReviewDiffBudgetAdmission,
-    REVIEW_DIFF_MAX_CHARS_PER_TURN, REVIEW_PROVIDER_DIFF_MAX_ACQUISITIONS_PER_TURN,
+    DeepReviewActiveReviewerGuard, DeepReviewBudgetTracker, FocusedReviewBudgetClaim,
+    ReviewDiffBudgetAdmission, REVIEW_DIFF_MAX_CHARS_PER_TURN,
+    REVIEW_PROVIDER_DIFF_MAX_ACQUISITIONS_PER_TURN,
 };
 pub use concurrency_policy::{DeepReviewConcurrencyPolicy, DeepReviewEffectiveConcurrencySnapshot};
 pub use constants::{
-    canonical_review_worker_agent_type, is_review_worker_agent_type,
+    canonical_review_worker_agent_type, is_review_worker_agent_type, CODE_REVIEW_AGENT_TYPE,
     CONDITIONAL_REVIEWER_AGENT_TYPES, CORE_REVIEWER_AGENT_TYPES, DEEP_REVIEW_AGENT_TYPE,
     LEGACY_REVIEW_WORKER_AGENT_TYPES, REVIEW_FIXER_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
     REVIEW_WORKER_AGENT_TYPE,
@@ -35,6 +37,10 @@ pub use diagnostics::DeepReviewRuntimeDiagnostics;
 pub use execution_policy::{
     ChangeRiskFactors, DeepReviewExecutionPolicy, DeepReviewPolicyViolation,
     DeepReviewStrategyLevel, DeepReviewSubagentRole,
+};
+pub use focused_assignment::{
+    adaptive_review_max_focused_calls, is_adaptive_review_manifest,
+    sanitize_focused_review_public_metadata, FocusedReviewAssignment, FocusedReviewPathAccess,
 };
 pub use incremental_cache::DeepReviewIncrementalCache;
 pub use manifest::DeepReviewRunManifestGate;

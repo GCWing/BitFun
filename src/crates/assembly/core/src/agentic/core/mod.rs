@@ -21,7 +21,7 @@ pub use message::{
 pub use messages_helper::{MessageHelper, RequestReasoningTokenPolicy};
 pub use session::{
     sanitize_persisted_session_state, CompressionState, PersistedSessionStateFile, Session,
-    SessionConfig, SessionContinuationPolicy, SessionKind, SessionModelBindingPolicy,
-    SessionSummary,
+    SessionAgentRouteOwner, SessionConfig, SessionContinuationPolicy, SessionKind,
+    SessionModelBindingPolicy, SessionSummary,
 };
 pub use state::{ProcessingPhase, SessionState, ToolExecutionState};

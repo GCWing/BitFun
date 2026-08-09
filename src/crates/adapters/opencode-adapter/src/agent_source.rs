@@ -1,3 +1,8 @@
+use crate::local_source_paths::{
+    local_source_plan, local_source_watch_roots, LocalConfigDirectory, LocalConfigDirectoryKind,
+    LocalConfigDocument, LocalConfigDocumentKind, LocalConfigDocumentSource, LocalSourcePlanItem,
+    OpenCodeLocalConfigOptions,
+};
 use bitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
     ExternalSourceHealth, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
@@ -7,12 +12,16 @@ use bitfun_product_domains::external_subagents::{
     external_subagent_candidate_id, ExternalSubagentBehaviorVersion,
     ExternalSubagentCompatibilityState, ExternalSubagentContributionId,
     ExternalSubagentContributionRole, ExternalSubagentDefinition, ExternalSubagentDiscoveryInput,
-    ExternalSubagentLocalId, ExternalSubagentMode, ExternalSubagentModelRequest,
-    ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
+    ExternalSubagentLocalId, ExternalSubagentMode, ExternalSubagentModelProfileRequest,
+    ExternalSubagentModelRequest, ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
     ExternalSubagentProviderSnapshot, ExternalSubagentSourceProvider, ExternalSubagentToolRequest,
     ExternalSubagentToolSelector, SecretText,
 };
-use bitfun_services_core::markdown::FrontMatterMarkdown;
+use bitfun_product_domains::tool_permissions::{
+    wildcard_matches, PermissionConstraintLayer, PermissionEffect,
+    PermissionResourceCaseSensitivity, PermissionRule,
+};
+use bitfun_services_core::{jsonc::strip_jsonc, markdown::FrontMatterMarkdown};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -26,22 +35,60 @@ const MAX_AGENT_FILE_BYTES: u64 = 256 * 1024;
 const MAX_AGENT_FILES: usize = 2048;
 const MAX_TOTAL_PROMPT_BYTES: usize = 8 * 1024 * 1024;
 
+const V1_CONFIG_KEYS: &[&str] = &[
+    "logLevel",
+    "server",
+    "command",
+    "reference",
+    "snapshot",
+    "plugin",
+    "autoshare",
+    "disabled_providers",
+    "enabled_providers",
+    "small_model",
+    "mode",
+    "agent",
+    "provider",
+    "permission",
+    "tools",
+    "attachment",
+    "layout",
+];
+
 const KNOWN_AGENT_FIELDS: &[&str] = &[
     "description",
     "prompt",
+    "system",
     "model",
     "variant",
     "temperature",
     "top_p",
     "tools",
     "disable",
+    "disabled",
     "mode",
     "hidden",
     "color",
     "steps",
     "maxSteps",
     "permission",
+    "permissions",
+    "request",
     "options",
+];
+
+const CURRENT_MARKDOWN_AGENT_FIELDS: &[&str] = &[
+    "model",
+    "variant",
+    "request",
+    "system",
+    "description",
+    "mode",
+    "hidden",
+    "color",
+    "steps",
+    "disabled",
+    "permissions",
 ];
 
 const NATIVE_AGENT_IDS: &[&str] = &[
@@ -56,11 +103,7 @@ const NATIVE_AGENT_IDS: &[&str] = &[
 
 #[derive(Debug, Clone)]
 pub struct OpenCodeSubagentProviderOptions {
-    pub user_config_dir: PathBuf,
-    pub legacy_user_config_dir: Option<PathBuf>,
-    pub explicit_config_file: Option<PathBuf>,
-    pub explicit_config_dir: Option<PathBuf>,
-    pub project_config_enabled: bool,
+    pub config: OpenCodeLocalConfigOptions,
     /// A test/product-host override for workspaces whose project boundary is
     /// already known. Normal environment discovery leaves this unset.
     pub project_root_override: Option<PathBuf>,
@@ -68,18 +111,8 @@ pub struct OpenCodeSubagentProviderOptions {
 
 impl OpenCodeSubagentProviderOptions {
     pub fn from_environment() -> Self {
-        let home = dirs::home_dir();
-        let user_config_dir = std::env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .or_else(|| home.as_ref().map(|home| home.join(".config")))
-            .unwrap_or_else(|| PathBuf::from(".config"))
-            .join("opencode");
         Self {
-            user_config_dir,
-            legacy_user_config_dir: home.map(|home| home.join(".opencode")),
-            explicit_config_file: std::env::var_os("OPENCODE_CONFIG").map(PathBuf::from),
-            explicit_config_dir: std::env::var_os("OPENCODE_CONFIG_DIR").map(PathBuf::from),
-            project_config_enabled: !environment_truthy("OPENCODE_DISABLE_PROJECT_CONFIG"),
+            config: OpenCodeLocalConfigOptions::from_environment(),
             project_root_override: None,
         }
     }
@@ -100,11 +133,12 @@ impl OpenCodeSubagentProvider {
         Self { options }
     }
 
-    fn project_root(&self, workspace_root: &Path) -> PathBuf {
+    fn home_dir(&self) -> Option<&Path> {
         self.options
-            .project_root_override
-            .clone()
-            .unwrap_or_else(|| find_project_root(workspace_root))
+            .config
+            .legacy_user_config_dir
+            .as_deref()
+            .and_then(Path::parent)
     }
 
     fn discover_layers(
@@ -112,97 +146,35 @@ impl OpenCodeSubagentProvider {
         context: &ExternalSourceContext,
     ) -> Result<Vec<AgentLayer>, ExternalSourceProviderError> {
         let mut layers = Vec::new();
-        push_config_file(
-            &mut layers,
-            &self.options.user_config_dir.join("config.json"),
-            ExternalSourceScope::UserGlobal,
-            "OpenCode user configuration",
-        );
-        push_config_files(
-            &mut layers,
-            &self.options.user_config_dir,
-            ExternalSourceScope::UserGlobal,
-            "OpenCode user configuration",
-        );
-        if let Some(path) = &self.options.explicit_config_file {
-            push_config_file(
-                &mut layers,
-                path,
-                ExternalSourceScope::UserGlobal,
-                "OpenCode OPENCODE_CONFIG",
-            );
-        }
-        if self.options.project_config_enabled {
-            if let Some(workspace_root) = &context.workspace_root {
-                let project_root = self.project_root(workspace_root);
-                for directory in directories_between(&project_root, workspace_root) {
-                    push_config_files(
-                        &mut layers,
-                        &directory,
-                        ExternalSourceScope::Project,
-                        "OpenCode project configuration",
-                    );
+        for item in local_source_plan(
+            &self.options.config,
+            context.workspace_root.as_deref(),
+            self.options.project_root_override.as_deref(),
+        ) {
+            match item {
+                LocalSourcePlanItem::Config(document) => {
+                    push_config_document(&mut layers, document)
+                }
+                LocalSourcePlanItem::Directory(directory) => {
+                    push_agent_directory_layer(&mut layers, &directory)?
                 }
             }
-        }
-        push_agent_files(
-            &mut layers,
-            &self.options.user_config_dir,
-            ExternalSourceScope::UserGlobal,
-            "OpenCode user agents",
-        )?;
-        if self.options.project_config_enabled {
-            if let Some(workspace_root) = &context.workspace_root {
-                let project_root = self.project_root(workspace_root);
-                for directory in directories_between(&project_root, workspace_root) {
-                    let opencode = directory.join(".opencode");
-                    push_config_files(
-                        &mut layers,
-                        &opencode,
-                        ExternalSourceScope::Project,
-                        "OpenCode project agent configuration",
-                    );
-                    push_agent_files(
-                        &mut layers,
-                        &opencode,
-                        ExternalSourceScope::Project,
-                        "OpenCode project agents",
-                    )?;
-                }
-            }
-        }
-        if let Some(legacy) = &self.options.legacy_user_config_dir {
-            if legacy != &self.options.user_config_dir {
-                push_config_files(
-                    &mut layers,
-                    legacy,
-                    ExternalSourceScope::UserGlobal,
-                    "OpenCode legacy user configuration",
-                );
-                push_agent_files(
-                    &mut layers,
-                    legacy,
-                    ExternalSourceScope::UserGlobal,
-                    "OpenCode legacy user agents",
-                )?;
-            }
-        }
-        if let Some(directory) = &self.options.explicit_config_dir {
-            push_config_files(
-                &mut layers,
-                directory,
-                ExternalSourceScope::WorkspaceLocal,
-                "OpenCode OPENCODE_CONFIG_DIR",
-            );
-            push_agent_files(
-                &mut layers,
-                directory,
-                ExternalSourceScope::WorkspaceLocal,
-                "OpenCode explicit agents",
-            )?;
         }
         Ok(deduplicate_layers_keep_last(layers))
     }
+}
+
+fn push_agent_directory_layer(
+    layers: &mut Vec<AgentLayer>,
+    directory: &LocalConfigDirectory,
+) -> Result<(), ExternalSourceProviderError> {
+    let agent_name = match directory.kind {
+        LocalConfigDirectoryKind::User => "OpenCode user agents",
+        LocalConfigDirectoryKind::Project => "OpenCode project agents",
+        LocalConfigDirectoryKind::Legacy => "OpenCode legacy user agents",
+        LocalConfigDirectoryKind::Explicit => "OpenCode explicit agents",
+    };
+    push_agent_files(layers, &directory.path, directory.scope, agent_name)
 }
 
 impl Default for OpenCodeSubagentProvider {
@@ -315,6 +287,8 @@ impl ExternalSubagentSourceProvider for OpenCodeSubagentProvider {
                 logical_id,
                 contributions,
                 &ambient_permission_sources,
+                self.home_dir(),
+                input.context.workspace_root.as_deref(),
             )?);
         }
         sources.sort_by(|left, right| left.key.cmp(&right.key));
@@ -344,32 +318,11 @@ impl ExternalSubagentSourceProvider for OpenCodeSubagentProvider {
     }
 
     fn watch_roots(&self, context: &ExternalSourceContext) -> Vec<ExternalWatchRoot> {
-        let mut roots = BTreeMap::new();
-        add_directory_watch_roots(&mut roots, &self.options.user_config_dir);
-        if let Some(path) = &self.options.legacy_user_config_dir {
-            add_directory_watch_roots(&mut roots, path);
-        }
-        if let Some(path) = &self.options.explicit_config_file {
-            if let Some(parent) = path.parent() {
-                add_nearest_existing_watch_root(&mut roots, parent);
-            }
-        }
-        if let Some(path) = &self.options.explicit_config_dir {
-            add_directory_watch_roots(&mut roots, path);
-        }
-        if self.options.project_config_enabled {
-            if let Some(workspace_root) = &context.workspace_root {
-                let project_root = self.project_root(workspace_root);
-                for directory in directories_between(&project_root, workspace_root) {
-                    add_watch_root(&mut roots, directory.clone(), false);
-                    add_directory_watch_roots(&mut roots, &directory.join(".opencode"));
-                }
-            }
-        }
-        roots
-            .into_iter()
-            .map(|(path, recursive)| ExternalWatchRoot { path, recursive })
-            .collect()
+        local_source_watch_roots(
+            &self.options.config,
+            context.workspace_root.as_deref(),
+            self.options.project_root_override.as_deref(),
+        )
     }
 }
 
@@ -383,8 +336,8 @@ struct AgentLayer {
 
 impl AgentLayer {
     fn source_kind(&self) -> &'static str {
-        match self.kind {
-            AgentLayerKind::Config => "opencode_agent_config",
+        match &self.kind {
+            AgentLayerKind::Config(_) => "opencode_agent_config",
             AgentLayerKind::Markdown { legacy: false, .. } => "opencode_agent_markdown",
             AgentLayerKind::Markdown { legacy: true, .. } => "opencode_legacy_mode_markdown",
         }
@@ -393,7 +346,7 @@ impl AgentLayer {
 
 #[derive(Debug, Clone)]
 enum AgentLayerKind {
-    Config,
+    Config(LocalConfigDocument),
     Markdown { logical_id: String, legacy: bool },
 }
 
@@ -412,37 +365,67 @@ struct AgentPatch {
     logical_id: String,
     fields: Map<String, Value>,
     legacy: bool,
+    disabled_is_tombstone: bool,
 }
 
 fn parse_layer(layer: &AgentLayer) -> Result<ParsedAgentLayer, ExternalSourceProviderError> {
-    let metadata = fs::metadata(&layer.path).map_err(|error| {
-        ExternalSourceProviderError::new(
-            "opencode.agent.source_unreadable",
-            format!("Failed to inspect OpenCode agent source: {error}"),
-            true,
-        )
-    })?;
-    let limit = match layer.kind {
-        AgentLayerKind::Config => MAX_CONFIG_FILE_BYTES,
-        AgentLayerKind::Markdown { .. } => MAX_AGENT_FILE_BYTES,
+    let (content, identity) = match &layer.kind {
+        AgentLayerKind::Config(document) => {
+            let content = match document
+                .read_bounded(MAX_CONFIG_FILE_BYTES as usize)
+                .map_err(|error| {
+                    ExternalSourceProviderError::new(
+                        "opencode.agent.source_unreadable",
+                        format!("Failed to read OpenCode agent source: {error}"),
+                        true,
+                    )
+                })? {
+                bitfun_services_core::bounded_fs::BoundedTextRead::Content(content) => content,
+                bitfun_services_core::bounded_fs::BoundedTextRead::TooLarge => {
+                    return Err(ExternalSourceProviderError::new(
+                        "opencode.agent.source_too_large",
+                        "OpenCode agent source exceeds the compatibility size limit",
+                        false,
+                    ));
+                }
+                bitfun_services_core::bounded_fs::BoundedTextRead::InvalidUtf8 => {
+                    return Err(ExternalSourceProviderError::new(
+                        "opencode.agent.source_unreadable",
+                        "OpenCode agent source must be valid UTF-8",
+                        false,
+                    ));
+                }
+            };
+            (content, document.identity())
+        }
+        AgentLayerKind::Markdown { .. } => {
+            let metadata = fs::metadata(&layer.path).map_err(|error| {
+                ExternalSourceProviderError::new(
+                    "opencode.agent.source_unreadable",
+                    format!("Failed to inspect OpenCode agent source: {error}"),
+                    true,
+                )
+            })?;
+            if metadata.len() > MAX_AGENT_FILE_BYTES {
+                return Err(ExternalSourceProviderError::new(
+                    "opencode.agent.source_too_large",
+                    "OpenCode agent source exceeds the compatibility size limit",
+                    false,
+                ));
+            }
+            let content = fs::read_to_string(&layer.path).map_err(|error| {
+                ExternalSourceProviderError::new(
+                    "opencode.agent.source_unreadable",
+                    format!("Failed to read OpenCode agent source: {error}"),
+                    true,
+                )
+            })?;
+            (content, layer.path.to_string_lossy().into_owned())
+        }
     };
-    if metadata.len() > limit {
-        return Err(ExternalSourceProviderError::new(
-            "opencode.agent.source_too_large",
-            "OpenCode agent source exceeds the compatibility size limit",
-            false,
-        ));
-    }
-    let content = fs::read_to_string(&layer.path).map_err(|error| {
-        ExternalSourceProviderError::new(
-            "opencode.agent.source_unreadable",
-            format!("Failed to read OpenCode agent source: {error}"),
-            true,
-        )
-    })?;
-    let content_version = digest([layer.path.to_string_lossy().as_ref(), content.as_str()]);
+    let content_version = digest([identity.as_str(), content.as_str()]);
     match &layer.kind {
-        AgentLayerKind::Config => parse_config_layer(&content, content_version),
+        AgentLayerKind::Config(_) => parse_config_layer(&content, content_version),
         AgentLayerKind::Markdown { logical_id, legacy } => {
             parse_markdown_layer(logical_id, *legacy, &content, content_version)
         }
@@ -467,27 +450,50 @@ fn parse_config_layer(
             false,
         ));
     };
-    let ambient_permission = root.contains_key("permission");
+    let legacy_document = root
+        .keys()
+        .any(|key| V1_CONFIG_KEYS.contains(&key.as_str()));
+    let ambient_permission = if legacy_document {
+        root.contains_key("permission") || root.contains_key("tools")
+    } else {
+        root.contains_key("permissions")
+    };
     let mut patches = Vec::new();
     let mut diagnostics = Vec::new();
-    if let Some(agents) = root.get("agent") {
+    let collection_names: &[&str] = if legacy_document {
+        &["agent", "mode"]
+    } else {
+        &["agents"]
+    };
+    for &collection_name in collection_names {
+        let Some(agents) = root.get(collection_name) else {
+            continue;
+        };
         if let Some(agents) = agents.as_object() {
             for (logical_id, value) in agents {
+                let mut fields = value.as_object().cloned().unwrap_or_else(|| {
+                    let mut fields = Map::new();
+                    fields.insert("__invalid_definition_type".to_string(), value.clone());
+                    fields
+                });
+                if legacy_document {
+                    migrate_v1_agent_fields(&mut fields);
+                    if collection_name == "mode" {
+                        fields.insert("mode".to_string(), Value::String("primary".to_string()));
+                    }
+                }
                 patches.push(AgentPatch {
                     source: placeholder_source_key(),
                     logical_id: normalize_logical_id(logical_id),
-                    fields: value.as_object().cloned().unwrap_or_else(|| {
-                        let mut fields = Map::new();
-                        fields.insert("__invalid_definition_type".to_string(), value.clone());
-                        fields
-                    }),
+                    fields,
                     legacy: false,
+                    disabled_is_tombstone: !legacy_document,
                 });
             }
         } else {
             diagnostics.push(ExternalSourceDiagnostic::error(
                 "opencode.agent.map_invalid",
-                "OpenCode 'agent' configuration must be an object",
+                format!("OpenCode '{collection_name}' configuration must be an object"),
                 None,
             ));
         }
@@ -495,7 +501,13 @@ fn parse_config_layer(
     Ok(ParsedAgentLayer {
         prompt_bytes: patches
             .iter()
-            .filter_map(|patch| patch.fields.get("prompt")?.as_str())
+            .filter_map(|patch| {
+                patch
+                    .fields
+                    .get("system")
+                    .or_else(|| patch.fields.get("prompt"))?
+                    .as_str()
+            })
             .map(str::len)
             .sum(),
         patches,
@@ -503,6 +515,81 @@ fn parse_config_layer(
         diagnostics,
         content_version,
     })
+}
+
+fn migrate_v1_agent_fields(fields: &mut Map<String, Value>) {
+    if !fields.contains_key("system") {
+        if let Some(prompt) = fields.remove("prompt") {
+            fields.insert("system".to_string(), prompt);
+        }
+    }
+    if !fields.contains_key("disabled") {
+        if let Some(disabled) = fields.remove("disable") {
+            fields.insert("disabled".to_string(), disabled);
+        }
+    }
+    if !fields.contains_key("permissions") {
+        if let Some(permission) = fields
+            .get("permission")
+            .and_then(migrate_order_independent_v1_permissions)
+        {
+            fields.remove("permission");
+            fields.insert("permissions".to_string(), permission);
+        }
+    }
+}
+
+fn migrate_order_independent_v1_permissions(value: &Value) -> Option<Value> {
+    if let Value::String(effect) = value {
+        return permission_effect_is_valid(effect)
+            .then(|| Value::Array(vec![current_permission_rule("*", "*", effect)]));
+    }
+    let entries = value.as_object()?;
+    if entries.contains_key("*") && entries.len() > 1 {
+        return None;
+    }
+    let mut rules = Vec::<(String, String)>::new();
+    for (source_action, value) in entries {
+        if source_action != "*"
+            && source_action
+                .bytes()
+                .any(|byte| matches!(byte, b'*' | b'?' | b'[' | b']'))
+        {
+            return None;
+        }
+        let action = canonical_permission_action(source_action)?;
+        let effect = value
+            .as_str()
+            .filter(|effect| permission_effect_is_valid(effect))?;
+        if let Some((_, existing_effect)) = rules
+            .iter()
+            .find(|(existing_action, _)| existing_action == action)
+        {
+            if existing_effect != effect {
+                return None;
+            }
+            continue;
+        }
+        rules.push((action.to_string(), effect.to_string()));
+    }
+    Some(Value::Array(
+        rules
+            .into_iter()
+            .map(|(action, effect)| current_permission_rule(&action, "*", &effect))
+            .collect(),
+    ))
+}
+
+fn permission_effect_is_valid(effect: &str) -> bool {
+    matches!(effect, "allow" | "ask" | "deny")
+}
+
+fn current_permission_rule(action: &str, resource: &str, effect: &str) -> Value {
+    Value::Object(Map::from_iter([
+        ("action".to_string(), Value::String(action.to_string())),
+        ("resource".to_string(), Value::String(resource.to_string())),
+        ("effect".to_string(), Value::String(effect.to_string())),
+    ]))
 }
 
 fn parse_markdown_layer(
@@ -537,7 +624,17 @@ fn parse_markdown_layer(
     } else {
         (Map::new(), content.to_string())
     };
-    fields.insert("prompt".to_string(), Value::String(body.trim().to_string()));
+    let legacy_schema = fields
+        .keys()
+        .any(|key| !CURRENT_MARKDOWN_AGENT_FIELDS.contains(&key.as_str()));
+    let prompt_field = if legacy_schema { "prompt" } else { "system" };
+    fields.insert(
+        prompt_field.to_string(),
+        Value::String(body.trim().to_string()),
+    );
+    if legacy_schema {
+        migrate_v1_agent_fields(&mut fields);
+    }
     if legacy {
         fields.insert("mode".to_string(), Value::String("primary".to_string()));
     }
@@ -548,6 +645,7 @@ fn parse_markdown_layer(
             logical_id: normalize_logical_id(logical_id),
             fields,
             legacy,
+            disabled_is_tombstone: !legacy_schema,
         }],
         ambient_permission: false,
         diagnostics: Vec::new(),
@@ -560,6 +658,8 @@ fn materialize_definition(
     logical_id: String,
     contributions: Vec<AgentPatch>,
     ambient_permission_sources: &[SourceKey],
+    home_dir: Option<&Path>,
+    workspace_root: Option<&Path>,
 ) -> Result<ExternalSubagentDefinition, ExternalSourceProviderError> {
     let local_id = ExternalSubagentLocalId::new(logical_id.clone()).map_err(|error| {
         ExternalSourceProviderError::new("opencode.agent.id_invalid", error.to_string(), false)
@@ -567,8 +667,18 @@ fn materialize_definition(
     let mut effective = Value::Object(Map::new());
     let mut provenance = Vec::new();
     let mut legacy = false;
+    let mut removed = false;
     for (index, contribution) in contributions.iter().enumerate() {
+        let removes_agent = contribution.disabled_is_tombstone
+            && contribution
+                .fields
+                .get("disabled")
+                .is_some_and(|value| value == &Value::Bool(true));
+        if removes_agent || removed {
+            effective = Value::Object(Map::new());
+        }
         deep_merge(&mut effective, Value::Object(contribution.fields.clone()));
+        removed = removes_agent;
         provenance.push(ExternalSubagentProvenanceRef {
             contribution_id: ExternalSubagentContributionId::new(
                 contribution.source.clone(),
@@ -615,29 +725,28 @@ fn materialize_definition(
     if !ambient_permission_sources.is_empty() {
         blocked.push("opencode_ambient_permission_not_imported".to_string());
     }
-    if fields.contains_key("permission") {
-        blocked.push("opencode_agent_permission_not_imported".to_string());
-    }
     if fields
         .get("options")
         .is_some_and(|value| !value.as_object().is_some_and(Map::is_empty))
     {
         blocked.push("opencode_agent_options_not_imported".to_string());
     }
-    for field in [
-        "variant",
-        "temperature",
-        "top_p",
-        "steps",
-        "maxSteps",
-        "color",
-    ] {
+    if fields
+        .get("request")
+        .is_some_and(|value| !value.as_object().is_some_and(Map::is_empty))
+    {
+        blocked.push("opencode_agent_request_not_imported".to_string());
+    }
+    for field in ["temperature", "top_p", "steps", "maxSteps", "color"] {
         if fields.contains_key(field) {
             degraded.push(format!("opencode_agent_{field}_not_imported"));
         }
     }
 
-    let prompt = match fields.get("prompt") {
+    if fields.contains_key("prompt") && fields.contains_key("system") {
+        blocked.push("opencode_agent_prompt_versions_conflict".to_string());
+    }
+    let prompt = match fields.get("system").or_else(|| fields.get("prompt")) {
         Some(Value::String(value)) if !value.trim().is_empty() => value.clone(),
         Some(Value::String(_)) | None => {
             blocked.push("opencode_agent_prompt_not_imported".to_string());
@@ -662,20 +771,21 @@ fn materialize_definition(
     let display_name = logical_id.clone();
     let mode = match string_field(fields, "mode", &mut invalid).as_deref() {
         Some("subagent") => ExternalSubagentMode::Subagent,
-        Some("all") | None => {
-            degraded.push("opencode_primary_facet_not_imported".to_string());
-            ExternalSubagentMode::All
-        }
-        Some("primary") => {
-            blocked.push("opencode_primary_agent_not_imported".to_string());
-            ExternalSubagentMode::Primary
-        }
+        Some("all") | None => ExternalSubagentMode::All,
+        Some("primary") => ExternalSubagentMode::Primary,
         Some(_) => {
             invalid.push("opencode_agent_mode_invalid".to_string());
             ExternalSubagentMode::Subagent
         }
     };
-    let disabled = bool_field(fields, "disable", false, &mut invalid);
+    if fields.contains_key("disable") && fields.contains_key("disabled") {
+        blocked.push("opencode_agent_disabled_versions_conflict".to_string());
+    }
+    let disabled = if fields.contains_key("disabled") {
+        bool_field(fields, "disabled", false, &mut invalid)
+    } else {
+        bool_field(fields, "disable", false, &mut invalid)
+    };
     let hidden = bool_field(fields, "hidden", false, &mut invalid);
     let requested_model = match fields.get("model") {
         None => ExternalSubagentModelRequest::Default,
@@ -685,7 +795,7 @@ fn materialize_definition(
                 .split_once('/')
                 .map(|(provider, model_name)| (Some(provider.to_string()), model_name.to_string()))
                 .unwrap_or_else(|| (None, model.to_string()));
-            ExternalSubagentModelRequest::Exact {
+            ExternalSubagentModelRequest::Reference {
                 provider_hint,
                 model_name,
             }
@@ -695,7 +805,43 @@ fn materialize_definition(
             ExternalSubagentModelRequest::Default
         }
     };
+    let has_explicit_model = matches!(
+        &requested_model,
+        ExternalSubagentModelRequest::Reference { .. }
+    );
+    let requested_model_profile = match fields.get("variant") {
+        None => None,
+        Some(Value::String(_)) if !has_explicit_model => None,
+        Some(Value::String(value)) => {
+            let profile = ExternalSubagentModelProfileRequest::NamedVariant {
+                name: value.clone(),
+            };
+            if profile.validate().is_ok() {
+                Some(profile)
+            } else {
+                invalid.push("opencode_agent_variant_invalid".to_string());
+                None
+            }
+        }
+        Some(_) => {
+            invalid.push("opencode_agent_variant_type_invalid".to_string());
+            None
+        }
+    };
+    // OpenCode applies an agent variant only when that agent declares a model
+    // and the active model matches it. A variant on a default-model agent is
+    // inert, so importing it as an active profile would add behavior that the
+    // source does not have.
     let requested_tools = tool_request(fields, &mut invalid, &mut blocked, &mut degraded);
+    let permission_constraints = permission_constraints(
+        fields,
+        &requested_tools,
+        home_dir,
+        workspace_root,
+        &mut invalid,
+        &mut blocked,
+        &mut degraded,
+    );
     let compatibility = if !invalid.is_empty() {
         ExternalSubagentCompatibilityState::Invalid
     } else if !blocked.is_empty() {
@@ -725,7 +871,11 @@ fn materialize_definition(
             if disabled { "disabled" } else { "enabled" },
             if hidden { "hidden" } else { "visible" },
             &serde_json::to_string(&requested_model).expect("model request serializes"),
+            &serde_json::to_string(&requested_model_profile)
+                .expect("model profile request serializes"),
             &serde_json::to_string(&requested_tools).expect("tool request serializes"),
+            &serde_json::to_string(&permission_constraints)
+                .expect("permission constraints serialize"),
             &provenance
                 .iter()
                 .map(|item| item.contribution_id.stable_key())
@@ -748,7 +898,9 @@ fn materialize_definition(
         disabled,
         hidden,
         requested_model,
+        requested_model_profile,
         requested_tools,
+        permission_constraints,
         compatibility,
         diagnostic_codes,
         behavior_version,
@@ -801,9 +953,7 @@ fn tool_request(
     degraded: &mut Vec<String>,
 ) -> ExternalSubagentToolRequest {
     let Some(value) = fields.get("tools") else {
-        if !fields.contains_key("permission") {
-            degraded.push("opencode_default_permission_semantics_not_imported".to_string());
-        }
+        degraded.push("opencode_default_permission_semantics_not_imported".to_string());
         return ExternalSubagentToolRequest {
             selectors: [
                 ("list", "LS"),
@@ -843,6 +993,12 @@ fn tool_request(
             }
             continue;
         }
+        if name.eq_ignore_ascii_case("task") {
+            if allowed {
+                blocked.push("opencode_agent_task_tool_not_imported".to_string());
+            }
+            continue;
+        }
         let canonical = match name.to_ascii_lowercase().as_str() {
             "list" => Some("LS"),
             "read" => Some("Read"),
@@ -862,11 +1018,453 @@ fn tool_request(
     }
 }
 
+fn permission_constraints(
+    fields: &Map<String, Value>,
+    requested_tools: &ExternalSubagentToolRequest,
+    home_dir: Option<&Path>,
+    workspace_root: Option<&Path>,
+    invalid: &mut Vec<String>,
+    blocked: &mut Vec<String>,
+    degraded: &mut Vec<String>,
+) -> PermissionConstraintLayer {
+    if fields.contains_key("permission") && fields.contains_key("permissions") {
+        blocked.push("opencode_agent_permission_versions_conflict".to_string());
+        return PermissionConstraintLayer::default();
+    }
+    if let Some(value) = fields.get("permissions") {
+        return current_permission_constraints(
+            value,
+            requested_tools,
+            home_dir,
+            workspace_root,
+            invalid,
+            blocked,
+        );
+    }
+    let Some(value) = fields.get("permission") else {
+        return PermissionConstraintLayer::default();
+    };
+    let mut rules = Vec::new();
+    match value {
+        Value::String(_) => {
+            if let Some(effect) = permission_effect(value, invalid) {
+                validate_permission_action_enforcement(
+                    "*",
+                    effect,
+                    requested_tools,
+                    blocked,
+                    degraded,
+                );
+                rules.push(PermissionRule::new("*", "*", effect));
+            }
+        }
+        Value::Object(entries) => {
+            for (source_action, value) in entries {
+                if source_action
+                    .bytes()
+                    .any(|byte| matches!(byte, b'*' | b'?' | b'[' | b']'))
+                {
+                    blocked.push(
+                        "opencode_agent_legacy_permission_action_pattern_not_imported".to_string(),
+                    );
+                    continue;
+                }
+                let Some(effect) = permission_effect(value, invalid) else {
+                    if value.is_object() {
+                        blocked.push(
+                            "opencode_agent_permission_resource_patterns_not_imported".to_string(),
+                        );
+                    }
+                    continue;
+                };
+                let Some(action) = canonical_permission_action(source_action) else {
+                    validate_permission_action_enforcement(
+                        source_action,
+                        effect,
+                        requested_tools,
+                        blocked,
+                        degraded,
+                    );
+                    continue;
+                };
+                validate_permission_action_enforcement(
+                    source_action,
+                    effect,
+                    requested_tools,
+                    blocked,
+                    degraded,
+                );
+                let rule = PermissionRule::new(action, "*", effect);
+                if rules.iter().any(|existing| {
+                    existing.action == rule.action && existing.effect != rule.effect
+                }) {
+                    blocked.push("opencode_agent_permission_alias_effect_conflict".to_string());
+                    continue;
+                }
+                if !rules.contains(&rule) {
+                    rules.push(rule);
+                }
+            }
+        }
+        _ => invalid.push("opencode_agent_permission_type_invalid".to_string()),
+    }
+    PermissionConstraintLayer::new(rules)
+}
+
+fn current_permission_constraints(
+    value: &Value,
+    requested_tools: &ExternalSubagentToolRequest,
+    home_dir: Option<&Path>,
+    workspace_root: Option<&Path>,
+    invalid: &mut Vec<String>,
+    blocked: &mut Vec<String>,
+) -> PermissionConstraintLayer {
+    let Some(entries) = value.as_array() else {
+        invalid.push("opencode_agent_permissions_type_invalid".to_string());
+        return PermissionConstraintLayer::default();
+    };
+    let mut rules = Vec::new();
+    for entry in entries {
+        let Some(rule) = entry.as_object() else {
+            invalid.push("opencode_agent_permission_rule_type_invalid".to_string());
+            continue;
+        };
+        if rule
+            .keys()
+            .any(|key| !matches!(key.as_str(), "action" | "resource" | "effect"))
+        {
+            blocked.push("opencode_agent_permission_rule_field_not_imported".to_string());
+            continue;
+        }
+        let Some(source_action) = required_permission_rule_string(rule, "action", invalid) else {
+            continue;
+        };
+        let Some(resource) = required_permission_rule_string(rule, "resource", invalid) else {
+            continue;
+        };
+        let Some(effect_value) = rule.get("effect") else {
+            invalid.push("opencode_agent_permission_rule_effect_missing".to_string());
+            continue;
+        };
+        let Some(effect) = permission_effect(effect_value, invalid) else {
+            continue;
+        };
+        let action = imported_permission_action(source_action);
+        let resource = match translate_current_permission_resource(
+            source_action,
+            &action,
+            resource,
+            requested_tools,
+            home_dir,
+            workspace_root,
+        ) {
+            Ok(resource) => resource,
+            Err(code) => {
+                blocked.push(code.to_string());
+                resource.to_string()
+            }
+        };
+        validate_current_permission_action_enforcement(
+            source_action,
+            &action,
+            effect,
+            requested_tools,
+            blocked,
+        );
+        rules.push(PermissionRule::new(action, resource, effect));
+    }
+    PermissionConstraintLayer::new(rules)
+}
+
+fn translate_current_permission_resource(
+    source_action: &str,
+    action: &str,
+    resource: &str,
+    requested_tools: &ExternalSubagentToolRequest,
+    home_dir: Option<&Path>,
+    workspace_root: Option<&Path>,
+) -> Result<String, &'static str> {
+    let path_resource =
+        permission_action_uses_workspace_paths(source_action, action, requested_tools);
+    if !path_resource && source_action != "external_directory" {
+        return Ok(resource.to_string());
+    }
+
+    let translated = if let Some(home_suffix) = permission_home_suffix(resource) {
+        let Some(home_dir) = home_dir else {
+            return Err("opencode_agent_permission_home_unavailable");
+        };
+        let home_dir = canonical_permission_root(home_dir);
+        format!("{home_dir}{home_suffix}")
+    } else {
+        resource.to_string()
+    };
+
+    if !path_resource
+        || translated.chars().all(|character| character == '*')
+        || Path::new(&translated).is_absolute()
+    {
+        return Ok(translated);
+    }
+    if translated.starts_with('*') || translated.starts_with('?') {
+        return Err("opencode_agent_permission_resource_domain_ambiguous");
+    }
+    let Some(workspace_root) = workspace_root else {
+        return Err("opencode_agent_permission_workspace_unavailable");
+    };
+    let workspace_root = canonical_permission_root(workspace_root);
+    if translated == "." {
+        return Ok(workspace_root);
+    }
+    Ok(format!(
+        "{}/{}",
+        workspace_root.trim_end_matches('/'),
+        translated.replace('\\', "/")
+    ))
+}
+
+fn permission_action_uses_workspace_paths(
+    source_action: &str,
+    action: &str,
+    requested_tools: &ExternalSubagentToolRequest,
+) -> bool {
+    if matches!(action, "read" | "edit") {
+        return true;
+    }
+    let matched_actions = requested_tools
+        .selectors
+        .iter()
+        .filter(|selector| selector.allowed)
+        .filter_map(|selector| {
+            permission_action_for_host_tool(selector.canonical_host_name.as_deref())
+        })
+        .filter(|host_action| {
+            wildcard_matches(
+                host_action,
+                source_action,
+                PermissionResourceCaseSensitivity::Sensitive,
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    !matched_actions.is_empty()
+        && matched_actions
+            .iter()
+            .all(|action| matches!(*action, "read" | "edit"))
+}
+
+fn permission_home_suffix(resource: &str) -> Option<&str> {
+    if resource == "~" || resource == "$HOME" {
+        Some("")
+    } else if resource.starts_with("~/") {
+        Some(&resource[1..])
+    } else if resource.starts_with("$HOME/") || resource.starts_with("$HOME\\") {
+        Some(&resource[5..])
+    } else {
+        None
+    }
+}
+
+fn canonical_permission_root(path: &Path) -> String {
+    dunce::canonicalize(path)
+        .unwrap_or_else(|_| path.to_path_buf())
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+fn validate_current_permission_action_enforcement(
+    source_action: &str,
+    rule_action: &str,
+    effect: PermissionEffect,
+    requested_tools: &ExternalSubagentToolRequest,
+    blocked: &mut Vec<String>,
+) {
+    if effect == PermissionEffect::Allow {
+        return;
+    }
+    let reaches_unenforced_tool = requested_tools.selectors.iter().any(|selector| {
+        if !selector.allowed {
+            return false;
+        }
+        let host_action = permission_action_for_host_tool(selector.canonical_host_name.as_deref());
+        let rule_reaches_tool = wildcard_matches(
+            &selector.source_name,
+            source_action,
+            PermissionResourceCaseSensitivity::Sensitive,
+        ) || host_action.is_some_and(|action| {
+            wildcard_matches(
+                action,
+                rule_action,
+                PermissionResourceCaseSensitivity::Sensitive,
+            )
+        });
+        rule_reaches_tool
+            && match host_action {
+                Some(action) => !wildcard_matches(
+                    action,
+                    rule_action,
+                    PermissionResourceCaseSensitivity::Sensitive,
+                ),
+                None => true,
+            }
+    });
+    if reaches_unenforced_tool {
+        blocked.push("opencode_agent_permission_action_not_enforceable".to_string());
+    }
+}
+
+fn validate_permission_action_enforcement(
+    source_action: &str,
+    effect: PermissionEffect,
+    requested_tools: &ExternalSubagentToolRequest,
+    blocked: &mut Vec<String>,
+    degraded: &mut Vec<String>,
+) {
+    let canonical_action = canonical_permission_action(source_action);
+    let selected_unknown_tool = canonical_action.is_none()
+        && requested_tools
+            .selectors
+            .iter()
+            .any(|selector| selector.allowed && selector.canonical_host_name.is_none());
+    let selected_named_tool_is_unenforced = source_action != "*"
+        && requested_tools.selectors.iter().any(|selector| {
+            let host_action =
+                permission_action_for_host_tool(selector.canonical_host_name.as_deref());
+            let source_action_matches = wildcard_matches(
+                &selector.source_name,
+                source_action,
+                PermissionResourceCaseSensitivity::Sensitive,
+            ) || host_action.is_some_and(|action| {
+                wildcard_matches(
+                    action,
+                    source_action,
+                    PermissionResourceCaseSensitivity::Sensitive,
+                )
+            });
+            selector.allowed
+                && source_action_matches
+                && (canonical_action.is_none() || host_action != canonical_action)
+        });
+    let wildcard_reaches_unenforced_tool = source_action == "*"
+        && requested_tools.selectors.iter().any(|selector| {
+            selector.allowed
+                && permission_action_for_host_tool(selector.canonical_host_name.as_deref())
+                    .is_none()
+        });
+
+    if effect != PermissionEffect::Allow
+        && (selected_unknown_tool
+            || selected_named_tool_is_unenforced
+            || wildcard_reaches_unenforced_tool)
+    {
+        blocked.push("opencode_agent_permission_action_not_enforceable".to_string());
+    } else if canonical_action.is_none() {
+        degraded.push("opencode_agent_permission_action_not_imported".to_string());
+    }
+}
+
+fn permission_action_for_host_tool(host_tool: Option<&str>) -> Option<&'static str> {
+    match host_tool {
+        Some("Read") => Some("read"),
+        Some("Write" | "Edit" | "Delete") => Some("edit"),
+        Some("Bash" | "ExecCommand") => Some("bash"),
+        Some("Task") => Some("task"),
+        Some("Skill") => Some("skill"),
+        Some("WebFetch") => Some("webfetch"),
+        Some("WebSearch") => Some("websearch"),
+        Some("Git") => Some("git"),
+        _ => None,
+    }
+}
+
+fn required_permission_rule_string<'a>(
+    rule: &'a Map<String, Value>,
+    field: &str,
+    invalid: &mut Vec<String>,
+) -> Option<&'a str> {
+    match rule.get(field) {
+        Some(Value::String(value)) if !value.trim().is_empty() && value.trim() == value => {
+            Some(value)
+        }
+        Some(Value::String(_)) => {
+            invalid.push(format!("opencode_agent_permission_rule_{field}_invalid"));
+            None
+        }
+        Some(_) => {
+            invalid.push(format!(
+                "opencode_agent_permission_rule_{field}_type_invalid"
+            ));
+            None
+        }
+        None => {
+            invalid.push(format!("opencode_agent_permission_rule_{field}_missing"));
+            None
+        }
+    }
+}
+
+fn permission_effect(value: &Value, invalid: &mut Vec<String>) -> Option<PermissionEffect> {
+    match value.as_str() {
+        Some("allow") => Some(PermissionEffect::Allow),
+        Some("ask") => Some(PermissionEffect::Ask),
+        Some("deny") => Some(PermissionEffect::Deny),
+        Some(_) => {
+            invalid.push("opencode_agent_permission_effect_invalid".to_string());
+            None
+        }
+        None if value.is_object() => None,
+        None => {
+            invalid.push("opencode_agent_permission_effect_type_invalid".to_string());
+            None
+        }
+    }
+}
+
+fn canonical_permission_action(source_action: &str) -> Option<&'static str> {
+    let normalized;
+    let source_action = if cfg!(windows) {
+        normalized = source_action.to_ascii_lowercase();
+        normalized.as_str()
+    } else {
+        source_action
+    };
+    match source_action {
+        "*" => Some("*"),
+        "write" | "edit" | "patch" | "apply_patch" => Some("edit"),
+        "read" => Some("read"),
+        "bash" => Some("bash"),
+        "task" => Some("task"),
+        "skill" => Some("skill"),
+        "webfetch" => Some("webfetch"),
+        "websearch" => Some("websearch"),
+        "git" => Some("git"),
+        "external_directory" => Some("external_directory"),
+        _ => None,
+    }
+}
+
+fn imported_permission_action(source_action: &str) -> String {
+    canonical_permission_action(source_action)
+        .map(str::to_string)
+        .unwrap_or_else(|| {
+            if cfg!(windows) {
+                source_action.to_ascii_lowercase()
+            } else {
+                source_action.to_string()
+            }
+        })
+}
+
 fn deep_merge(target: &mut Value, incoming: Value) {
     match (target, incoming) {
         (Value::Object(target), Value::Object(incoming)) => {
             for (key, value) in incoming {
                 match target.get_mut(&key) {
+                    Some(existing) if key == "permissions" => match (existing, value) {
+                        (Value::Array(existing), Value::Array(mut incoming)) => {
+                            existing.append(&mut incoming);
+                        }
+                        (existing, incoming) => *existing = incoming,
+                    },
                     Some(existing) => deep_merge(existing, value),
                     None => {
                         target.insert(key, value);
@@ -886,31 +1484,35 @@ fn mode_label(mode: ExternalSubagentMode) -> &'static str {
     }
 }
 
-fn push_config_files(
-    layers: &mut Vec<AgentLayer>,
-    directory: &Path,
-    scope: ExternalSourceScope,
-    display_name: &str,
-) {
-    for name in ["opencode.json", "opencode.jsonc"] {
-        push_config_file(layers, &directory.join(name), scope, display_name);
-    }
-}
-
-fn push_config_file(
-    layers: &mut Vec<AgentLayer>,
-    path: &Path,
-    scope: ExternalSourceScope,
-    display_name: &str,
-) {
-    if path.is_file() {
-        layers.push(AgentLayer {
-            path: path.to_path_buf(),
-            scope,
-            display_name: display_name.to_string(),
-            kind: AgentLayerKind::Config,
-        });
-    }
+fn push_config_document(layers: &mut Vec<AgentLayer>, document: LocalConfigDocument) {
+    let display_name = match document.kind {
+        LocalConfigDocumentKind::User => "OpenCode user configuration",
+        LocalConfigDocumentKind::ExplicitFile => "OpenCode OPENCODE_CONFIG",
+        LocalConfigDocumentKind::Project
+        | LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::Project) => {
+            "OpenCode project agent configuration"
+        }
+        LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::Legacy) => {
+            "OpenCode legacy user configuration"
+        }
+        LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::Explicit) => {
+            "OpenCode OPENCODE_CONFIG_DIR"
+        }
+        LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::User) => {
+            "OpenCode user configuration"
+        }
+        LocalConfigDocumentKind::Inline => "OpenCode OPENCODE_CONFIG_CONTENT",
+    };
+    let path = match &document.source {
+        LocalConfigDocumentSource::File(path) => path.clone(),
+        LocalConfigDocumentSource::Inline(_) => PathBuf::from(document.location()),
+    };
+    layers.push(AgentLayer {
+        path,
+        scope: document.scope,
+        display_name: display_name.to_string(),
+        kind: AgentLayerKind::Config(document),
+    });
 }
 
 fn push_agent_files(
@@ -1031,15 +1633,17 @@ fn normalize_logical_id(value: &str) -> String {
 }
 
 fn source_key(layer: &AgentLayer) -> SourceKey {
-    let identity_path =
-        dunce::canonicalize(&layer.path).unwrap_or_else(|_| normalize_path_lexically(&layer.path));
+    let identity = match &layer.kind {
+        AgentLayerKind::Config(document) => document.identity(),
+        AgentLayerKind::Markdown { .. } => dunce::canonicalize(&layer.path)
+            .unwrap_or_else(|_| normalize_path_lexically(&layer.path))
+            .to_string_lossy()
+            .into_owned(),
+    };
     let source_id = format!(
         "{}-{}",
         layer.source_kind(),
-        &digest([
-            layer.source_kind(),
-            identity_path.to_string_lossy().as_ref()
-        ])[..24]
+        &digest([layer.source_kind(), identity.as_str()])[..24]
     );
     SourceKey::new(PROVIDER_ID, source_id).expect("hashed OpenCode agent source id must be valid")
 }
@@ -1074,49 +1678,6 @@ fn normalize_path_lexically(path: &Path) -> PathBuf {
     normalized
 }
 
-fn strip_jsonc(input: &str) -> String {
-    let mut output = String::with_capacity(input.len());
-    let chars = input.chars().collect::<Vec<_>>();
-    let mut index = 0;
-    let mut in_string = false;
-    let mut escaped = false;
-    while index < chars.len() {
-        let current = chars[index];
-        if in_string {
-            output.push(current);
-            if escaped {
-                escaped = false;
-            } else if current == '\\' {
-                escaped = true;
-            } else if current == '"' {
-                in_string = false;
-            }
-            index += 1;
-            continue;
-        }
-        if current == '"' {
-            in_string = true;
-            output.push(current);
-            index += 1;
-        } else if current == '/' && chars.get(index + 1) == Some(&'/') {
-            index += 2;
-            while index < chars.len() && chars[index] != '\n' {
-                index += 1;
-            }
-        } else if current == '/' && chars.get(index + 1) == Some(&'*') {
-            index += 2;
-            while index + 1 < chars.len() && !(chars[index] == '*' && chars[index + 1] == '/') {
-                index += 1;
-            }
-            index = (index + 2).min(chars.len());
-        } else {
-            output.push(current);
-            index += 1;
-        }
-    }
-    output
-}
-
 fn digest(parts: impl IntoIterator<Item = impl AsRef<str>>) -> String {
     let mut hasher = Sha256::new();
     for part in parts {
@@ -1125,70 +1686,4 @@ fn digest(parts: impl IntoIterator<Item = impl AsRef<str>>) -> String {
         hasher.update(value.as_bytes());
     }
     hex::encode(hasher.finalize())
-}
-
-fn environment_truthy(key: &str) -> bool {
-    std::env::var(key)
-        .ok()
-        .is_some_and(|value| matches!(value.to_ascii_lowercase().as_str(), "true" | "1"))
-}
-
-fn find_project_root(start: &Path) -> PathBuf {
-    let start = if start.is_file() {
-        start.parent().unwrap_or(start)
-    } else {
-        start
-    };
-    start
-        .ancestors()
-        .find(|path| path.join(".git").exists())
-        .unwrap_or(start)
-        .to_path_buf()
-}
-
-fn directories_between(root: &Path, opened: &Path) -> Vec<PathBuf> {
-    let opened = if opened.is_file() {
-        opened.parent().unwrap_or(opened)
-    } else {
-        opened
-    };
-    let mut directories = opened
-        .ancestors()
-        .take_while(|path| path.starts_with(root))
-        .map(Path::to_path_buf)
-        .collect::<Vec<_>>();
-    directories.reverse();
-    directories
-}
-
-fn nearest_existing_path(mut path: PathBuf) -> Option<PathBuf> {
-    loop {
-        if path.exists() {
-            return Some(path);
-        }
-        if !path.pop() {
-            return None;
-        }
-    }
-}
-
-fn add_watch_root(roots: &mut BTreeMap<PathBuf, bool>, path: PathBuf, recursive: bool) {
-    roots
-        .entry(path)
-        .and_modify(|existing| *existing |= recursive)
-        .or_insert(recursive);
-}
-
-fn add_nearest_existing_watch_root(roots: &mut BTreeMap<PathBuf, bool>, path: &Path) {
-    if let Some(path) = nearest_existing_path(path.to_path_buf()) {
-        add_watch_root(roots, path, false);
-    }
-}
-
-fn add_directory_watch_roots(roots: &mut BTreeMap<PathBuf, bool>, directory: &Path) {
-    if directory.exists() {
-        add_watch_root(roots, directory.to_path_buf(), true);
-    } else if let Some(parent) = directory.parent() {
-        add_nearest_existing_watch_root(roots, parent);
-    }
 }

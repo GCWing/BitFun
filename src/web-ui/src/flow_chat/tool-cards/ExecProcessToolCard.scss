@@ -24,20 +24,20 @@
   }
 
   .exec-process-copy-output-btn {
-    background: var(--color-bg-scene);
-    box-shadow: 0 1px 4px rgba(var(--color-static-black-rgb), 0.16);
+    background: var(--bf-appearance-token-color-bg-scene);
+    box-shadow: 0 1px 4px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.16);
 
     &:hover:not(:disabled) {
-      background: var(--element-bg-subtle);
+      background: var(--bf-appearance-token-element-bg-subtle);
     }
   }
 
   .exec-process-empty-output {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   .exec-process-result-notice {
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 
   .exec-process-result-footer {
@@ -48,7 +48,7 @@
   .exec-process-footer-group {
     display: inline-flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap);
+    gap: var(--bf-appearance-token-flowchat-inline-gap);
     min-width: 0;
   }
 

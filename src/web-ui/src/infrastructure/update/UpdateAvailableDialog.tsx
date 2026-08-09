@@ -43,33 +43,64 @@ export const UpdateAvailableDialog: React.FC<UpdateAvailableDialogProps> = ({
       size="medium"
       contentInset
     >
-      <div className="bitfun-update-available">
-        <div className="bitfun-update-available__lead">
-          <div className="bitfun-update-available__lead-icon" aria-hidden>
+      <div
+        className="bitfun-update-available"
+        data-bf-component="update"
+        data-bf-part="availableRoot"
+        data-bf-variant={variant}
+      >
+        <div
+          className="bitfun-update-available__lead"
+          data-bf-component="update"
+          data-bf-part="lead"
+        >
+          <div
+            className="bitfun-update-available__lead-icon"
+            aria-hidden
+            data-bf-component="update"
+            data-bf-part="leadIcon"
+          >
             <Download size={18} strokeWidth={2} />
           </div>
-          <p className="bitfun-update-available__subtitle">{t('update.availableSubtitle')}</p>
+          <p
+            className="bitfun-update-available__subtitle"
+            data-bf-component="update"
+            data-bf-part="subtitle"
+          >{t('update.availableSubtitle')}</p>
         </div>
 
-        <div className="bitfun-update-available__versions bitfun-update-available__versions--card">
-          <div className="bitfun-update-available__row">
-            <span className="bitfun-update-available__label">{t('update.currentVersion')}</span>
-            <span className="bitfun-update-available__value">{data.currentVersion}</span>
+        <div
+          className="bitfun-update-available__versions bitfun-update-available__versions--card"
+          data-bf-component="update"
+          data-bf-part="versions"
+        >
+          <div
+            className="bitfun-update-available__row"
+            data-bf-component="update"
+            data-bf-part="versionRow"
+          >
+            <span className="bitfun-update-available__label" data-bf-component="update" data-bf-part="versionLabel">{t('update.currentVersion')}</span>
+            <span className="bitfun-update-available__value" data-bf-component="update" data-bf-part="versionValue">{data.currentVersion}</span>
           </div>
-          <div className="bitfun-update-available__row bitfun-update-available__row--highlight">
-            <span className="bitfun-update-available__label">{t('update.latestVersion')}</span>
-            <span className="bitfun-update-available__value">{latest}</span>
+          <div
+            className="bitfun-update-available__row bitfun-update-available__row--highlight"
+            data-bf-component="update"
+            data-bf-part="versionRow"
+            data-bf-state="highlight"
+          >
+            <span className="bitfun-update-available__label" data-bf-component="update" data-bf-part="versionLabel">{t('update.latestVersion')}</span>
+            <span className="bitfun-update-available__value" data-bf-component="update" data-bf-part="versionValue">{latest}</span>
           </div>
         </div>
 
         {notes ? (
-          <div className="bitfun-update-available__notes">
-            <div className="bitfun-update-available__notes-label">{t('update.releaseNotes')}</div>
-            <pre className="bitfun-update-available__notes-body">{notes}</pre>
+          <div className="bitfun-update-available__notes" data-bf-component="update" data-bf-part="notes">
+            <div className="bitfun-update-available__notes-label" data-bf-component="update" data-bf-part="notesLabel">{t('update.releaseNotes')}</div>
+            <pre className="bitfun-update-available__notes-body" data-bf-component="update" data-bf-part="notesBody">{notes}</pre>
           </div>
         ) : null}
 
-        <div className="bitfun-update-available__actions">
+        <div className="bitfun-update-available__actions" data-bf-component="update" data-bf-part="actions">
           {variant === 'daily' ? (
             <>
               <Button variant="secondary" size="medium" onClick={onLater}>

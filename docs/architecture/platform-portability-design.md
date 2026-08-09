@@ -93,14 +93,14 @@ Cargo package `bitfun-cli` 的 `aarch64-unknown-linux-ohos` 目标依赖解析�
 
 | 问题域 | 当前识别结果 | 主要风险 | 后续专题需要回答 |
 |---|---|---|---|
-| 产品依赖闭包 | CLI 仍通过 `bitfun-core/product-full` 拉入 remote、browser、canvas、plugin、watch、Git、SQLite、PTY 等能力 | 无关平台依赖阻塞构建；为过编译而破坏共享 owner | CLI 真正需要哪些能力，哪些依赖应保留、隔离或移出目标闭包 |
+| 产品依赖闭包 | CLI 已显式选择 `agent-runtime`、`canvas-runtime`、`external-sources`、`plugin-runtime` 与 `ssh-remote` Core owner feature，不再继承 `product-full`；当前闭包仍主动保留 remote、browser、canvas、plugin、watch、Git、SQLite、PTY 等现有能力 | 无关平台依赖阻塞构建；为过编译而破坏共享 owner | 在不改变现有 CLI 规格的前提下，哪些 owner 还应继续拆分或针对目标平台隔离 |
 | Rust 与依赖解析 | 仓库无根 `Cargo.lock`；Rust 1.94.1 探针先被要求 Rust 1.95 的 `oxc-browserslist`、`oxc_sourcemap` 阻塞 | 把通用 MSRV/解析问题误判为 OHOS 问题；构建不可复现 | 仓库认可的 Rust、依赖解析和构建基线 |
 | TUI/TTY | `ratatui/crossterm` 依赖 `mio`、rustix、signal-hook 和终端系统调用 | 能编译但 raw mode、输入、resize、信号或恢复不可用 | 真实系统终端支持范围与 TUI 退化边界 |
 | 剪贴板与语法高亮 | `arboard -> x11rb` 带入 X11；`syntect-tui` 重新带入 `onig_sys` | 桌面 Linux/C 原生依赖进入 OHOS 产物 | 这些能力是否必需，以及各自可维护的鸿蒙化路线 |
 | 进程与交互终端 | `portable-pty -> termios` 依赖 openpty、shell、信号、进程组和 `/dev` 语义 | 交互 shell、取消和子进程回收不成立 | OHOS 公开进程/PTY 能力与产品可接受的能力范围 |
 | 文件监听 | `notify` 在目标解析中选择 `inotify` | `target_os=linux` 导致错误后端选择；替代实现可能增加延迟和资源消耗 | 真机 watch 语义、性能预算和不可用时的产品状态 |
 | Git 与原生库 | `git2 -> libgit2-sys -> openssl-sys` 带入 CMake、zlib、OpenSSL 等原生构建 | 交叉编译、证书、凭据和行为一致性风险 | Git 能力的支持范围和可维护实现路径 |
-| 网络与 TLS | 当前闭包同时存在 native-tls、rustls、OpenSSL、aws-lc/ring 等路径 | 产物膨胀、证书来源错误、代理或流式响应异常 | OHOS 网络、根证书、代理、流式响应和取消能力 |
+| 网络与 TLS | Reqwest 已收敛为 Rustls + 平台证书验证；Git/libgit2 与其他协议仍有独立原生 TLS/加密路径，aws-lc/ring 选择也尚未针对 OHOS 验证 | 不能把通用客户端单栈误当成 OHOS 网络、证书或代理已适配 | OHOS 网络、根证书、代理、流式响应、取消能力，以及非 Reqwest 协议的 TLS 来源 |
 | 存储与路径 | `rusqlite/libsqlite3-sys`、`dirs` 及多处路径探测依赖桌面/类 Unix 假设 | 会话损坏、凭据泄露、升级后路径漂移 | 配置、数据、缓存、日志、凭据与工作区边界 |
 | Tokio 与平台条件 | `tokio(full)` 打开 process、signal、net、fs；源码存在大量 `cfg(unix)`、`cfg(not(windows))` | 未使用能力扩大闭包；OHOS 错走 Linux 分支 | 实际可达能力、系统调用兼容性和取消/事件语义 |
 | 用户发行与支持 | 普通用户 native CLI 安装、系统终端入口和升级渠道尚未证明 | 开发探针被包装成产品；支持范围无法维护 | 支持的设备、系统、终端、渠道与生命周期 |

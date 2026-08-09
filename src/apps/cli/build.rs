@@ -76,7 +76,12 @@ fn generate_prompts_code(
     )?;
     writeln!(f, "    let mut m = HashMap::new();")?;
 
-    for (key, content) in prompts {
+    // Sort keys so the generated file is byte-identical across builds
+    // (HashMap iteration order is randomized; determinism keeps build caches
+    // effective and output reproducible).
+    let mut sorted: Vec<(&String, &String)> = prompts.iter().collect();
+    sorted.sort_by(|a, b| a.0.cmp(b.0));
+    for (key, content) in sorted {
         writeln!(
             f,
             "    m.insert(r###\"{}\"###, r###\"{}\"###);",

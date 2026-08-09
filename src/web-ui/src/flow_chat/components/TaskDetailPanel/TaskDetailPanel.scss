@@ -7,8 +7,8 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--color-bg-scene);
-  color: var(--color-text-primary);
+  background: var(--bf-appearance-token-color-bg-scene);
+  color: var(--bf-appearance-token-color-text-primary);
 
   &--empty {
     .task-detail-panel__empty-content {
@@ -16,8 +16,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      color: var(--color-text-muted);
-      font-size: var(--tool-card-action-font-size);
+      color: var(--bf-appearance-token-color-text-muted);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
     }
   }
 
@@ -28,20 +28,20 @@
     justify-content: center;
     gap: 6px;
     padding: 10px 16px;
-    background: var(--color-bg-secondary);
+    background: var(--bf-appearance-token-color-bg-secondary);
     flex-shrink: 0;
     min-height: 36px;
   }
 
   &__header-icon {
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     flex-shrink: 0;
   }
 
   &__header-title {
-    font-size: var(--tool-card-action-font-size);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
     font-weight: 500;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -52,10 +52,10 @@
   &__header-badge {
     padding: 2px 6px;
     border-radius: 4px;
-    font-size: var(--flowchat-font-size-xxs);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
     font-weight: 500;
-    color: var(--color-text-secondary);
-    background: var(--color-overlay-white-08);
+    color: var(--bf-appearance-token-color-text-secondary);
+    background: var(--bf-appearance-token-color-overlay-white-08);
     flex-shrink: 0;
   }
 
@@ -67,8 +67,8 @@
     display: flex;
     align-items: center;
     gap: 3px;
-    font-size: var(--flowchat-font-size-xs);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__header-loading {
@@ -85,7 +85,7 @@
     right: 16px;
     top: 50%;
     transform: translateY(-50%);
-    color: var(--color-error);
+    color: var(--bf-appearance-token-color-error);
   }
 
   &__error-banner {
@@ -93,21 +93,21 @@
     align-items: flex-start;
     gap: 8px;
     padding: 10px 16px;
-    background: color-mix(in srgb, var(--color-error) 10%, var(--color-bg-secondary));
-    border-bottom: 1px solid color-mix(in srgb, var(--color-error) 22%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-error) 10%, var(--bf-appearance-token-color-bg-secondary));
+    border-bottom: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 22%, transparent);
     flex-shrink: 0;
 
     &-icon {
       flex-shrink: 0;
       margin-top: 1px;
-      color: var(--color-error);
+      color: var(--bf-appearance-token-color-error);
     }
 
     &-text {
       flex: 1;
-      font-size: var(--tool-card-action-font-size);
-      line-height: var(--flowchat-support-line-height);
-      color: var(--color-error);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
+      line-height: var(--bf-appearance-token-flowchat-support-line-height);
+      color: var(--bf-appearance-token-color-error);
       word-break: break-word;
       user-select: text;
     }
@@ -130,21 +130,21 @@
 
     summary {
       padding: 8px 12px;
-      font-size: var(--tool-card-action-font-size);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
       font-weight: 500;
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
       cursor: pointer;
       user-select: none;
       transition: all 0.15s ease;
-      border: 1px dashed var(--border-base);
+      border: 1px dashed var(--bf-appearance-token-border-base);
       border-radius: 6px;
 
       &:hover {
-        color: var(--color-text-primary);
+        color: var(--bf-appearance-token-color-text-primary);
       }
 
       &::marker {
-        color: var(--color-text-muted);
+        color: var(--bf-appearance-token-color-text-muted);
       }
     }
 
@@ -158,16 +158,16 @@
     margin: 0;
     padding: 10px 12px;
     font-family: inherit;
-    font-size: var(--tool-card-action-font-size);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
     font-weight: 500;
-    line-height: var(--flowchat-support-line-height);
-    color: var(--color-text-secondary);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    color: var(--bf-appearance-token-color-text-secondary);
     background: transparent;
     white-space: pre-wrap;
     word-break: break-word;
     max-height: 300px;
     overflow-y: auto;
-    border: 1px dashed var(--border-base);
+    border: 1px dashed var(--bf-appearance-token-border-base);
     border-top: none;
     border-radius: 0 0 6px 6px;
 
@@ -179,11 +179,11 @@
       background: transparent;
     }
     &::-webkit-scrollbar-thumb {
-      background: var(--color-overlay-white-12);
+      background: var(--bf-appearance-token-color-overlay-white-12);
       border-radius: 2px;
       
       &:hover {
-        background: var(--color-overlay-white-20);
+        background: var(--bf-appearance-token-color-overlay-white-20);
       }
     }
   }
@@ -195,21 +195,21 @@
 
     summary {
       padding: 8px 12px;
-      font-size: var(--tool-card-action-font-size);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
       font-weight: 500;
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
       cursor: pointer;
       user-select: none;
       transition: all 0.15s ease;
-      border: 1px dashed var(--border-base);
+      border: 1px dashed var(--bf-appearance-token-border-base);
       border-radius: 6px;
 
       &:hover {
-        color: var(--color-text-primary);
+        color: var(--bf-appearance-token-color-text-primary);
       }
 
       &::marker {
-        color: var(--color-text-muted);
+        color: var(--bf-appearance-token-color-text-muted);
       }
     }
 
@@ -224,20 +224,20 @@
     flex-direction: column;
     gap: 6px;
     padding: 10px 12px;
-    border: 1px dashed var(--border-base);
+    border: 1px dashed var(--bf-appearance-token-border-base);
     border-top: none;
     border-radius: 0 0 6px 6px;
-    font-size: var(--tool-card-action-font-size);
-    line-height: var(--flowchat-support-line-height);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
   }
 
   &__reviewer-role {
     font-weight: 600;
-    font-size: var(--tool-card-action-font-size);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
   }
 
   &__reviewer-desc {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__reviewer-responsibilities {
@@ -246,7 +246,7 @@
     list-style: disc;
 
     li {
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
   }
 
@@ -272,15 +272,15 @@
     gap: 8px;
     padding: 12px;
     border-radius: 8px;
-    border: 1px solid var(--border-base);
-    background: var(--color-overlay-white-04);
+    border: 1px solid var(--bf-appearance-token-border-base);
+    background: var(--bf-appearance-token-color-overlay-white-04);
     flex-shrink: 0;
   }
 
   &__actions-hint {
-    font-size: var(--tool-card-action-font-size);
-    line-height: var(--flowchat-support-line-height);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__loading {
@@ -290,15 +290,15 @@
     justify-content: center;
     gap: 12px;
     padding: 40px 20px;
-    color: var(--color-text-muted);
-    font-size: var(--tool-card-action-font-size);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
   }
 
   &__loading--inline {
     flex-direction: row;
     justify-content: center;
     padding: 10px 12px 4px;
-    font-size: var(--tool-card-action-font-size);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
     flex-shrink: 0;
   }
 
@@ -308,10 +308,10 @@
     gap: 8px;
     padding: 10px 12px;
     border-radius: 6px;
-    font-size: var(--tool-card-action-font-size);
-    color: var(--color-error);
-    background: var(--glass-red-base);
-    border: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    color: var(--bf-appearance-token-color-error);
+    background: var(--bf-appearance-token-glass-red-base);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 20%, transparent);
     flex-shrink: 0;
 
     svg {

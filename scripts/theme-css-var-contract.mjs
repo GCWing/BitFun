@@ -7,7 +7,6 @@ export const TOKEN_PATH_PARTS = [
   'BitFun-Installer/src/styles/variables.css',
   'BitFun-Installer/src/theme',
   'component-library/styles',
-  'infrastructure/theme',
   'theme/presets',
 ];
 
@@ -19,10 +18,10 @@ export const CONTRACT_VAR_DEFINITION_PATH_PARTS = [
   'BitFun-Installer/src/styles/variables.css',
   'BitFun-Installer/src/theme/installerThemeRuntime.ts',
   'component-library/styles',
-  'infrastructure/theme',
+  'infrastructure/appearance',
   'src/mobile-web/src/theme/presets',
   'tools/bitfun-canvas/runtime/styles',
-  'tools/generative-widget/themePayload.ts',
+  'tools/generative-widget/appearancePayload.ts',
 ];
 
 export const STATIC_CONTRACT_VAR_DEFINITION_PATH_PARTS = [
@@ -32,32 +31,32 @@ export const STATIC_CONTRACT_VAR_DEFINITION_PATH_PARTS = [
 
 export const RUNTIME_CONTRACT_VAR_DEFINITION_PATH_PARTS = [
   'BitFun-Installer/src/theme/installerThemeRuntime.ts',
-  'infrastructure/theme',
+  'infrastructure/appearance',
 ];
 
 export const EXCEPTION_PATH_PARTS = [
-  'shared/theme/uiExceptionAccents',
-  'shared/theme/languageIdentityAccents',
-  'shared/theme/syntaxHighlightAccents',
-  'shared/theme/themeBoundaryFallbacks',
   'monaco',
   'terminal',
   'mermaid',
   'syntax',
   'CodeEditor',
-  'tools/editor/themes',
 ];
 
 export const COLOR_DOMAIN_RULES = [
   {
+    key: 'appearanceProjection',
+    label: 'Appearance projections',
+    pathParts: ['infrastructure/appearance/builtins/buildBuiltinAppearance'],
+  },
+  {
     key: 'themePreset',
-    label: 'Theme presets',
-    pathParts: ['BitFun-Installer/src/theme', 'infrastructure/theme/presets', 'theme/presets'],
+    label: 'Appearance palettes',
+    pathParts: ['BitFun-Installer/src/theme', 'infrastructure/appearance/builtins', 'theme/presets'],
   },
   {
     key: 'themeRuntime',
-    label: 'Theme runtime',
-    pathParts: ['infrastructure/theme/core'],
+    label: 'Appearance runtime',
+    pathParts: ['infrastructure/appearance/runtime', 'infrastructure/appearance/adapters'],
   },
   {
     key: 'tokenContract',
@@ -75,11 +74,6 @@ export const COLOR_DOMAIN_RULES = [
     pathParts: ['tools/bitfun-canvas'],
   },
   {
-    key: 'boundaryFallback',
-    label: 'Boundary fallback',
-    pathParts: ['shared/theme/themeBoundaryFallbacks'],
-  },
-  {
     key: 'mermaid',
     label: 'Mermaid',
     pathParts: ['tools/mermaid-editor'],
@@ -87,12 +81,12 @@ export const COLOR_DOMAIN_RULES = [
   {
     key: 'editor',
     label: 'Editor',
-    pathParts: ['tools/editor', 'component-library/components/CodeEditor', 'infrastructure/theme/integrations/MonacoThemeSync'],
+    pathParts: ['tools/editor', 'component-library/components/CodeEditor', 'infrastructure/appearance/adapters/MonacoAppearanceAdapter'],
   },
   {
     key: 'syntax',
     label: 'Syntax',
-    pathParts: ['shared/prism', 'shared/theme/syntaxHighlightAccents'],
+    pathParts: ['shared/prism'],
   },
   {
     key: 'terminal',
@@ -109,14 +103,14 @@ export const COLOR_DOMAIN_RULES = [
     pathParts: ['shared/inspector'],
   },
   {
-    key: 'uiException',
-    label: 'UI exception registry',
-    pathParts: ['shared/theme/uiExceptionAccents'],
+    key: 'appearanceDomain',
+    label: 'Appearance domain tokens',
+    pathParts: ['infrastructure/appearance/appearanceDomainTokens'],
   },
   {
     key: 'languageIdentity',
     label: 'Language identity',
-    pathParts: ['infrastructure/language-detection', 'shared/theme/languageIdentityAccents'],
+    pathParts: ['infrastructure/language-detection'],
   },
   {
     key: 'visualEffect',
@@ -140,40 +134,40 @@ export const COLOR_DOMAIN_LABELS = Object.fromEntries([
 
 export const COLOR_DOMAIN_CONTRACTS = [
   {
+    key: 'appearanceProjection',
+    owner: 'src/web-ui/src/infrastructure/appearance/builtins/buildBuiltinAppearance.ts',
+    reason: 'The builtin Appearance projection owns renderer palettes and named product-domain defaults derived from each primitive palette.',
+    mergePolicy: 'Keep values here only when a renderer or named domain role cannot be represented by the primitive palette shape; external packages remain free to override every projected role.',
+  },
+  {
     key: 'themePreset',
-    owner: 'src/web-ui/src/infrastructure/theme/presets',
-    reason: 'Builtin themes own primitive palette mapping and must keep per-theme personality instead of being folded into shared app tokens.',
+    owner: 'src/web-ui/src/infrastructure/appearance/builtins',
+    reason: 'Builtin appearances own primitive palette mapping and must keep per-appearance personality instead of being folded into shared app tokens.',
     mergePolicy: 'Only merge exact duplicate primitive values after confirming the theme still exposes distinct semantic roles.',
   },
   {
     key: 'themeRuntime',
-    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts',
-    reason: 'Runtime theme injection is the cross-platform bridge for static CSS, desktop WebView, web preview, and generated widget payloads.',
-    mergePolicy: 'Do not remove runtime aliases until static contract, runtime contract, and widget iframe compatibility fallback all stop requiring them.',
+    owner: 'src/web-ui/src/infrastructure/appearance/adapters/CssTokenAppearanceAdapter.ts',
+    reason: 'AppearanceRuntime applies the registered CSS token projection for static CSS, web preview, and embedded surface payloads.',
+    mergePolicy: 'Keep the runtime projection canonical and reject reintroduction of compatibility aliases or surface-local token owners.',
   },
   {
     key: 'tokenContract',
     owner: 'src/web-ui/src/component-library/styles',
-    reason: 'Static token files are the canonical contract for component styling and first paint before runtime theme injection completes.',
-    mergePolicy: 'Prefer aliasing to canonical tokens; only keep raw values for primitives or documented component roots.',
+    reason: 'Static Sass files bind component code to runtime-owned Appearance variables without owning visual values.',
+    mergePolicy: 'Keep bindings value-free and move every visual value into an Appearance package renderer setting.',
   },
   {
     key: 'generatedWidget',
     owner: 'src/web-ui/src/tools/generative-widget',
     reason: 'Generated widgets run in an isolated iframe boundary and need an explicit payload instead of scraping host CSS variables.',
-    mergePolicy: 'Keep payload variables canonical; keep legacy aliases in iframe fallback until widget consumers no longer read them.',
+    mergePolicy: 'Derive fallback values from a builtin Appearance package and keep iframe payload keys canonical.',
   },
   {
     key: 'bitfunCanvas',
     owner: 'src/web-ui/src/tools/bitfun-canvas',
     reason: 'BitFun Canvas renders generated TSX inside a dedicated iframe runtime with an SDK palette that must stay isolated from app chrome tokens.',
-    mergePolicy: 'Keep Canvas iframe and SDK colors in the Canvas runtime contract; promote only reusable host chrome roles to shared app tokens.',
-  },
-  {
-    key: 'boundaryFallback',
-    owner: 'src/web-ui/src/shared/theme/themeBoundaryFallbacks.ts',
-    reason: 'Boundary fallback colors cover iframe, mini app, and capture surfaces before the host theme contract is available.',
-    mergePolicy: 'Centralize fallback values here; do not duplicate fallback palettes in component selectors.',
+    mergePolicy: 'Keep Canvas iframe and SDK colors in the Canvas Appearance contract; promote only reusable host chrome roles to shared app tokens.',
   },
   {
     key: 'mermaid',
@@ -189,9 +183,9 @@ export const COLOR_DOMAIN_CONTRACTS = [
   },
   {
     key: 'syntax',
-    owner: 'src/web-ui/src/shared/prism; src/web-ui/src/shared/theme/syntaxHighlightAccents.ts',
-    reason: 'Syntax highlight colors preserve token class contrast and language readability, not generic app emphasis.',
-    mergePolicy: 'Only merge within the syntax palette after checking token adjacency and light/dark contrast.',
+    owner: 'src/web-ui/src/infrastructure/appearance/appearanceDomainTokens.ts; src/web-ui/src/shared/prism',
+    reason: 'Prism consumes named Appearance token roles for token-class contrast and readability.',
+    mergePolicy: 'Keep syntax values in the Appearance package and keep Prism consumers value-free.',
   },
   {
     key: 'terminal',
@@ -206,16 +200,16 @@ export const COLOR_DOMAIN_CONTRACTS = [
     mergePolicy: 'Keep diagnostic overlays isolated; merge only if the overlay no longer carries a debugging role.',
   },
   {
-    key: 'uiException',
-    owner: 'src/web-ui/src/shared/theme/uiExceptionAccents.ts',
-    reason: 'UI exception accents centralize fixed role and identity colors that are intentionally not global semantic tokens.',
-    mergePolicy: 'Require a role owner before adding; promote to component or semantic token only when multiple surfaces share the role.',
+    key: 'appearanceDomain',
+    owner: 'src/web-ui/src/infrastructure/appearance/appearanceDomainTokens.ts',
+    reason: 'Named product-domain roles expose stable CSS variable references while Appearance packages own their values.',
+    mergePolicy: 'Add a named role only when a visible semantic distinction is real; never place raw colors in the token reference module.',
   },
   {
     key: 'languageIdentity',
-    owner: 'src/web-ui/src/infrastructure/language-detection; src/web-ui/src/shared/theme/languageIdentityAccents.ts',
-    reason: 'Language identity colors help recognition of files and snippets and are not interchangeable with status colors.',
-    mergePolicy: 'Do not merge adjacent language identities solely by numeric color distance.',
+    owner: 'src/web-ui/src/infrastructure/appearance/appearanceDomainTokens.ts; src/web-ui/src/infrastructure/language-detection',
+    reason: 'Language identity consumers use named Appearance tokens rather than owning fixed colors.',
+    mergePolicy: 'Keep language role values package-controlled and do not hard-code colors in the language registry.',
   },
   {
     key: 'visualEffect',
@@ -227,22 +221,7 @@ export const COLOR_DOMAIN_CONTRACTS = [
 
 export const TOKEN_COMPATIBILITY_ALIAS_CONTRACTS = [];
 
-export const TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS = [
-  {
-    prefix: '--radius-',
-    canonicalPrefix: '--size-radius-',
-    owner: 'src/web-ui/src/tools/generative-widget/themePayloadCompatibility.ts',
-    reason: 'Radius aliases are retired from root/runtime but remain recognized so old generated widget iframe content maps to the canonical shape scale.',
-    removal: 'Retire after generated widget iframe compatibility no longer needs --radius-* fallbacks.',
-  },
-  {
-    prefix: '--spacing-',
-    canonicalPrefix: '--size-gap-',
-    owner: 'src/web-ui/src/tools/generative-widget/themePayloadCompatibility.ts',
-    reason: 'Spacing aliases are retired from root/runtime but remain recognized so old generated widget iframe content maps to the canonical spacing scale.',
-    removal: 'Retire after generated widget iframe compatibility no longer needs --spacing-* fallbacks.',
-  },
-];
+export const TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS = [];
 
 export const FALLBACK_VAR_CONTRACTS = [];
 
@@ -258,12 +237,6 @@ export const SURFACE_TOKEN_RENAME_CONTRACTS = [
     canonical: '--snapshot-card-operation-color',
     owner: 'src/web-ui/src/component-library/components/FlowChatCards/SnapshotCard',
     reason: 'Snapshot operation color is a card-local role and should not look like a reusable operation namespace for other surfaces.',
-  },
-  {
-    key: '--delay',
-    canonical: '--flowchat-scroll-anchor-delay',
-    owner: 'src/web-ui/src/flow_chat/components/modern/ScrollAnchor',
-    reason: 'ScrollAnchor animation delay is a Flow Chat runtime input; the generic key is too easy to collide with unrelated animation code.',
   },
   {
     key: '--um-failed-fs',
@@ -299,24 +272,24 @@ export const SURFACE_TOKEN_RENAME_CONTRACTS = [
 
 export const DYNAMIC_VAR_FAMILY_CONTRACTS = [
   {
-    prefix: '--bitfun-canvas-',
-    owner: 'src/web-ui/src/tools/bitfun-canvas/runtime/canvasRuntimeInstaller.ts; src/web-ui/src/tools/bitfun-canvas/runtime/styles/canvas-runtime.scss',
-    reason: 'BitFun Canvas iframe runtime receives host theme values through a scoped CSS variable family that must stay isolated from app root tokens.',
+    prefix: '--bf-appearance-asset-',
+    owner: 'src/web-ui/src/infrastructure/appearance/compiler/AppearanceCompiler.ts; src/web-ui/src/infrastructure/appearance/runtime/AppearanceRuntime.ts',
+    reason: 'Appearance package image ids are validated by the package schema, then projected to host-created blob URL variables for registered component parts.',
   },
   {
-    prefix: '--blur-',
-    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts',
-    reason: 'Theme runtime exports configurable blur scale entries from the active theme effects.',
+    prefix: '--bitfun-canvas-',
+    owner: 'src/web-ui/src/tools/bitfun-canvas/runtime/canvasRuntimeInstaller.ts; src/web-ui/src/tools/bitfun-canvas/runtime/styles/canvas-runtime.scss',
+    reason: 'BitFun Canvas iframe runtime receives host Appearance values through a scoped CSS variable family that must stay isolated from app root tokens.',
   },
   {
     prefix: '--color-accent-',
-    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts; src/mobile-web/src/theme/presets',
-    reason: 'Theme runtime and mobile presets export the active accent palette scale by numeric stop; installer exposes only exact --color-accent-500.',
+    owner: 'src/mobile-web/src/theme/presets',
+    reason: 'Mobile presets export the active accent palette scale by numeric stop.',
   },
   {
     prefix: '--color-purple-',
-    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts; src/mobile-web/src/theme/presets',
-    reason: 'Theme runtime and mobile presets export the secondary purple palette scale by numeric stop; installer keeps only the accent family it renders.',
+    owner: 'src/mobile-web/src/theme/presets',
+    reason: 'Mobile presets export the secondary accent palette by numeric stop.',
   },
   {
     prefix: '--color-pink-',
@@ -324,49 +297,14 @@ export const DYNAMIC_VAR_FAMILY_CONTRACTS = [
     reason: 'Mobile presets export assistant-mode identity accents by numeric stop for session and picker states.',
   },
   {
-    prefix: '--easing-',
-    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts',
-    reason: 'Theme runtime exports motion easing aliases from theme motion tokens.',
-  },
-  {
-    prefix: '--flowchat-font-size-',
+    prefix: '--bf-appearance-token-flowchat-font-size-',
     owner: 'src/web-ui/src/infrastructure/font-preference/core/FontPreferenceService.ts',
     reason: 'Font preference runtime exports FlowChat font-size aliases from the adjusted typography scale.',
   },
   {
-    prefix: '--font-size-',
-    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts; src/web-ui/src/infrastructure/font-preference/core/FontPreferenceService.ts',
-    reason: 'Theme runtime exports baseline typography size entries; font preference runtime can override the same family for user scaling.',
-  },
-  {
-    prefix: '--font-weight-',
-    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts',
-    reason: 'Theme runtime exports configurable typography weight entries.',
-  },
-  {
-    prefix: '--line-height-',
-    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts',
-    reason: 'Theme runtime exports configurable typography line-height entries.',
-  },
-  {
-    prefix: '--motion-',
-    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts',
-    reason: 'Theme runtime exports motion duration entries from active theme motion tokens.',
-  },
-  {
-    prefix: '--shadow-',
-    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts',
-    reason: 'Theme runtime exports configurable shadow entries.',
-  },
-  {
-    prefix: '--size-gap-',
-    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts',
-    reason: 'Size gap aliases are derived from theme spacing entries.',
-  },
-  {
-    prefix: '--size-radius-',
-    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts',
-    reason: 'Size radius aliases are derived from theme radius entries.',
+    prefix: '--bf-appearance-token-font-size-',
+    owner: 'src/web-ui/src/infrastructure/appearance/adapters/CssTokenAppearanceAdapter.ts; src/web-ui/src/infrastructure/font-preference/core/FontPreferenceService.ts',
+    reason: 'Appearance runtime exports baseline typography size entries; font preference runtime can override the same family for user scaling.',
   },
 ];
 
