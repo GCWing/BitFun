@@ -494,6 +494,16 @@ pub async fn run() {
 
     eprintln!("=== BitFun Desktop Starting ===");
 
+    if let Err(error) = bitfun_core::agentic::system::select_agentic_system_profile(
+        bitfun_core::agentic::system::DeliveryProfile::Desktop,
+    ) {
+        log::error!("Failed to select Desktop agent profile: {}", error);
+        show_fatal_startup_error(&format!(
+            "BitFun could not select its Desktop agent profile and cannot continue.\n\n{error}\n\nSee early-startup.log for details."
+        ));
+        return;
+    }
+
     let step_started = Instant::now();
     if let Err(e) = bitfun_core::service::config::initialize_global_config().await {
         log::error!("Failed to initialize global config service: {}", e);

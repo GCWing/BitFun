@@ -101,6 +101,22 @@ impl From<ToolPackFeatureGroup> for ProductFeatureGroup {
     }
 }
 
+impl From<ProductFeatureGroup> for ToolPackFeatureGroup {
+    fn from(value: ProductFeatureGroup) -> Self {
+        match value {
+            ProductFeatureGroup::Basic => Self::Basic,
+            ProductFeatureGroup::Git => Self::Git,
+            ProductFeatureGroup::Mcp => Self::Mcp,
+            ProductFeatureGroup::BrowserWeb => Self::BrowserWeb,
+            ProductFeatureGroup::ComputerUse => Self::ComputerUse,
+            ProductFeatureGroup::ImageAnalysis => Self::ImageAnalysis,
+            ProductFeatureGroup::MiniApp => Self::MiniApp,
+            ProductFeatureGroup::Canvas => Self::Canvas,
+            ProductFeatureGroup::AgentControl => Self::AgentControl,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProductCapabilityPack {
     id: ProductCapabilityId,
@@ -362,6 +378,32 @@ pub struct ProductCapabilityAssembly {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProductToolPlan {
+    feature_groups: Vec<ProductFeatureGroup>,
+    tool_provider_group_plan: Vec<ToolProviderGroupPlan>,
+}
+
+impl ProductToolPlan {
+    fn new(
+        feature_groups: Vec<ProductFeatureGroup>,
+        tool_provider_group_plan: Vec<ToolProviderGroupPlan>,
+    ) -> Self {
+        Self {
+            feature_groups,
+            tool_provider_group_plan,
+        }
+    }
+
+    pub fn feature_groups(&self) -> &[ProductFeatureGroup] {
+        &self.feature_groups
+    }
+
+    pub fn tool_provider_group_plan(&self) -> &[ToolProviderGroupPlan] {
+        &self.tool_provider_group_plan
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProductAssemblyPlan {
     profile: DeliveryProfile,
     capability_set: ProductCapabilitySet,
@@ -440,6 +482,10 @@ impl ProductAssemblyPlan {
 
     pub fn build_harness_registry(&self) -> Result<HarnessRegistry, HarnessRegistryBuildError> {
         self.capability_assembly.build_harness_registry()
+    }
+
+    pub fn tool_plan(&self) -> ProductToolPlan {
+        self.capability_assembly.tool_plan()
     }
 }
 
@@ -746,6 +792,13 @@ impl ProductCapabilityAssembly {
 
     pub fn tool_provider_group_plan(&self) -> &[ToolProviderGroupPlan] {
         &self.tool_provider_group_plan
+    }
+
+    pub fn tool_plan(&self) -> ProductToolPlan {
+        ProductToolPlan::new(
+            self.feature_groups.clone(),
+            self.tool_provider_group_plan.clone(),
+        )
     }
 
     pub fn harness_provider_descriptors(&self) -> &[HarnessProviderDescriptor] {
@@ -1079,6 +1132,16 @@ pub fn default_product_capability_registry() -> ProductCapabilityRegistry {
 
 pub fn default_product_capability_assembly() -> ProductCapabilityAssembly {
     default_product_capability_registry().build_assembly()
+}
+
+pub fn agent_runtime_baseline_tool_plan() -> ProductToolPlan {
+    ProductToolPlan::new(
+        vec![
+            ProductFeatureGroup::Basic,
+            ProductFeatureGroup::AgentControl,
+        ],
+        bitfun_tool_packs::product_tool_provider_group_plan().to_vec(),
+    )
 }
 
 pub fn product_assembly_plan_for_profile(profile: DeliveryProfile) -> ProductAssemblyPlan {

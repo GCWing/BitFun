@@ -93,8 +93,8 @@ Cargo package `bitfun-cli` 的 `aarch64-unknown-linux-ohos` 目标依赖解析�
 
 | 问题域 | 当前识别结果 | 主要风险 | 后续专题需要回答 |
 |---|---|---|---|
-| 产品依赖闭包 | CLI 已显式选择 `agent-runtime`、`canvas-runtime`、`external-sources`、`plugin-runtime` 与 `ssh-remote` Core owner feature，不再继承 `product-full`；当前闭包仍主动保留 remote、browser、canvas、plugin、watch、Git、SQLite、PTY 等现有能力 | 无关平台依赖阻塞构建；为过编译而破坏共享 owner | 在不改变现有 CLI 规格的前提下，哪些 owner 还应继续拆分或针对目标平台隔离 |
-| Rust 与依赖解析 | 仓库无根 `Cargo.lock`；Rust 1.94.1 探针先被要求 Rust 1.95 的 `oxc-browserslist`、`oxc_sourcemap` 阻塞 | 把通用 MSRV/解析问题误判为 OHOS 问题；构建不可复现 | 仓库认可的 Rust、依赖解析和构建基线 |
+| 产品依赖闭包 | CLI 已显式选择 `agent-runtime` 生命周期基线、实际 service owner、external/plugin/SSH owner 和九组 `tools-*`，不再继承 `product-full`；当前 CLI 闭包仍主动保留 remote、browser、canvas、plugin、watch、Git、SQLite、PTY 等现有能力 | 无关平台依赖阻塞构建；为过编译而破坏共享 owner | 在不改变现有 CLI 规格的前提下，哪些 owner 还应继续拆分或针对目标平台隔离 |
+| Rust 与依赖解析 | 当前仓库已有根 `Cargo.lock`；旧的 Rust 1.94.1 探针曾先被要求 Rust 1.95 的 `oxc-browserslist`、`oxc_sourcemap` 阻塞，必须在真正启动 OHOS 适配时按届时 lock 与工具链重跑 | 把通用 MSRV/解析问题误判为 OHOS 问题；使用过期解析结论 | 仓库认可的 Rust、依赖解析和构建基线 |
 | TUI/TTY | `ratatui/crossterm` 依赖 `mio`、rustix、signal-hook 和终端系统调用 | 能编译但 raw mode、输入、resize、信号或恢复不可用 | 真实系统终端支持范围与 TUI 退化边界 |
 | 剪贴板与语法高亮 | `arboard -> x11rb` 带入 X11；`syntect-tui` 重新带入 `onig_sys` | 桌面 Linux/C 原生依赖进入 OHOS 产物 | 这些能力是否必需，以及各自可维护的鸿蒙化路线 |
 | 进程与交互终端 | `portable-pty -> termios` 依赖 openpty、shell、信号、进程组和 `/dev` 语义 | 交互 shell、取消和子进程回收不成立 | OHOS 公开进程/PTY 能力与产品可接受的能力范围 |

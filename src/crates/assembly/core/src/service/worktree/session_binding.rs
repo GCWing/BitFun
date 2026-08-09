@@ -12,7 +12,6 @@
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::keyed_lock::KeyedAsyncLock;
 use crate::agentic::session::{SessionExecutionBindingError, SessionExecutionBindingUpdate};
-use crate::service::remote_ssh::lookup_remote_connection;
 use crate::service::workspace::get_global_workspace_service;
 use crate::service::worktree::{
     WorktreeCreateRequest, WorktreeListRequest, WorktreeRemoveRequest, WorktreeService,
@@ -176,10 +175,7 @@ async fn load_binding_context(
         (workspace_path, persisted_project_path, execution_target)
     };
 
-    if lookup_remote_connection(&project_workspace_path)
-        .await
-        .is_some()
-    {
+    if crate::service::remote_ssh::workspace_state::is_remote_path(&project_workspace_path).await {
         return Err(error(
             WorktreeErrorCode::RemoteUnsupported,
             "Managed worktrees are not supported for remote SSH workspaces yet",

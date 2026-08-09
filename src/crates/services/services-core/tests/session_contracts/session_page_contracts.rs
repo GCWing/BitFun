@@ -1,5 +1,3 @@
-#![cfg(feature = "local-storage")]
-
 use bitfun_core_types::SessionKind;
 use bitfun_services_core::session::{
     build_session_metadata_page, SessionMetadata, SessionRelationship, SessionRelationshipKind,

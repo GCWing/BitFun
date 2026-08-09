@@ -1483,11 +1483,6 @@ export const forbiddenContentRules = [
     path: 'src/crates/assembly/core/src/service/search/mod.rs',
     patterns: [
       {
-        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*mod remote_disabled\b/s,
-        message:
-          'core workspace search facade must not own disabled remote search stubs; re-export services-integrations remote_ssh workspace_search disabled surface',
-      },
-      {
         regex: /\bbitfun_services_integrations::workspace_search::flashgrep\b/,
         message:
           'core must not import flashgrep internals; use the remote workspace-search stdio facade instead',

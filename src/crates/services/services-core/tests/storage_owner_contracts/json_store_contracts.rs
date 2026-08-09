@@ -1,5 +1,3 @@
-#![cfg(feature = "local-storage")]
-
 use bitfun_services_core::json_store::{JsonFileStore, JsonFileStoreError};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};

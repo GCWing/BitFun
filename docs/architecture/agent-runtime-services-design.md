@@ -748,7 +748,8 @@ Rust Runtime SDK，不注册未实现的 `RuntimeServices` 能力，也不宣称
 本地工作区快照 owner port；Peer Host 只用它完成本地工作区准备、会话文件清单、类型化统计和工作区文件回滚。
 账号同步、富历史读取及 Peer Host/ACP 的其余维护等产品操作仍由 `assembly/core` 的单一兼容接口转发。
 `doctor` 与 `health` 校验真实组装结果及必需注册完整性；
-Core 的 Network、Git 和 MCP Catalog 当前仍含兼容 marker，因此该诊断不等于对这些外部服务做实时探活。
+Core 只为当前 feature closure 真正组装的 Network、Git、MCP Catalog 和
+Remote Workspace 注册 capability marker；该诊断仍不等于对外部服务做实时探活。
 
 该切换仍是 `product-full` 兼容组装，不是完整 ToolPipeline owner 迁移。
 协调器、调度器、持久化、工具管线和 Agentic Event Queue 仍由 Core 唯一持有。

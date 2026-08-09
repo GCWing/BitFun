@@ -1,4 +1,4 @@
-#![cfg(all(feature = "remote-ssh", not(feature = "remote-ssh-concrete")))]
+#![cfg(not(feature = "remote-ssh-concrete"))]
 
 use std::path::PathBuf;
 use std::sync::Arc;

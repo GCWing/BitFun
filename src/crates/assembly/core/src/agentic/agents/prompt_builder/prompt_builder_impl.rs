@@ -2,7 +2,9 @@
 use crate::agentic::memories::build_memory_read_path_reminder;
 use crate::agentic::memories::workspace::memory_root_dir;
 use crate::agentic::tools::implementations::ExecCommandTool;
+#[cfg(feature = "remote-workspace")]
 use crate::agentic::util::remote_workspace_layout::build_remote_workspace_layout_preview;
+#[cfg(feature = "remote-workspace")]
 use crate::agentic::workspace::WorkspaceBackend;
 use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::try_get_path_manager_arc;
@@ -12,6 +14,7 @@ use crate::service::config::{get_app_language_code, get_global_config_service};
 use crate::service::filesystem::get_formatted_directory_listing;
 use crate::service::i18n::LocaleId;
 use crate::service::instruction_context::build_workspace_instruction_files_context;
+#[cfg(feature = "remote-workspace")]
 use crate::service::remote_ssh::workspace_state::get_remote_workspace_manager;
 use crate::service::workspace::get_global_workspace_service;
 use crate::service::workspace::RelatedPath;
@@ -193,60 +196,70 @@ pub async fn build_prompt_context_for_workspace(
         return Some(base);
     }
 
-    let Some(connection_id) = workspace.connection_id() else {
-        return Some(base);
-    };
-    let connection_display_name = match &workspace.backend {
-        WorkspaceBackend::Remote {
-            connection_name, ..
-        } => connection_name.clone(),
-        _ => connection_id.to_string(),
-    };
-    let Some(manager) = get_remote_workspace_manager() else {
-        warn!(
+    #[cfg(not(feature = "remote-workspace"))]
+    {
+        Some(base)
+    }
+
+    #[cfg(feature = "remote-workspace")]
+    {
+        let Some(connection_id) = workspace.connection_id() else {
+            return Some(base);
+        };
+        let connection_display_name = match &workspace.backend {
+            WorkspaceBackend::Remote {
+                connection_name, ..
+            } => connection_name.clone(),
+            _ => connection_id.to_string(),
+        };
+        let Some(manager) = get_remote_workspace_manager() else {
+            warn!(
             "Remote workspace active but RemoteWorkspaceStateManager is missing; using minimal remote hints"
         );
-        return Some(base.with_remote_prompt_overlay(
-            RemoteExecutionHints {
-                connection_display_name,
-                kernel_name: "unknown".to_string(),
-                hostname: "unknown".to_string(),
-            },
-            None,
-        ));
-    };
+            return Some(base.with_remote_prompt_overlay(
+                RemoteExecutionHints {
+                    connection_display_name,
+                    kernel_name: "unknown".to_string(),
+                    hostname: "unknown".to_string(),
+                },
+                None,
+            ));
+        };
 
-    let ssh_manager = manager.get_ssh_manager().await;
-    let file_service = manager.get_file_service().await;
-    let (kernel_name, hostname) = if let Some(ref ssh) = ssh_manager {
-        if let Some(info) = ssh.get_server_info(connection_id).await {
-            (info.os_type, info.hostname)
+        let ssh_manager = manager.get_ssh_manager().await;
+        let file_service = manager.get_file_service().await;
+        let (kernel_name, hostname) = if let Some(ref ssh) = ssh_manager {
+            if let Some(info) = ssh.get_server_info(connection_id).await {
+                (info.os_type, info.hostname)
+            } else {
+                ("Linux".to_string(), "remote".to_string())
+            }
         } else {
             ("Linux".to_string(), "remote".to_string())
-        }
-    } else {
-        ("Linux".to_string(), "remote".to_string())
-    };
-    let remote_layout = if let Some(ref fs) = file_service {
-        match build_remote_workspace_layout_preview(fs, connection_id, &workspace_path, 200).await {
-            Ok((_, preview)) => Some(preview),
-            Err(e) => {
-                warn!("Remote workspace layout for prompt failed: {}", e);
-                None
+        };
+        let remote_layout = if let Some(ref fs) = file_service {
+            match build_remote_workspace_layout_preview(fs, connection_id, &workspace_path, 200)
+                .await
+            {
+                Ok((_, preview)) => Some(preview),
+                Err(e) => {
+                    warn!("Remote workspace layout for prompt failed: {}", e);
+                    None
+                }
             }
-        }
-    } else {
-        None
-    };
+        } else {
+            None
+        };
 
-    Some(base.with_remote_prompt_overlay(
-        RemoteExecutionHints {
-            connection_display_name,
-            kernel_name,
-            hostname,
-        },
-        remote_layout,
-    ))
+        Some(base.with_remote_prompt_overlay(
+            RemoteExecutionHints {
+                connection_display_name,
+                kernel_name,
+                hostname,
+            },
+            remote_layout,
+        ))
+    }
 }
 
 pub struct PromptBuilder {
