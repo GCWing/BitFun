@@ -8,6 +8,7 @@ use bitfun_core::service::config::get_global_config_service;
 use bitfun_core::util::errors::BitFunError;
 
 use crate::peer_host::args::{optional_bool, request_value};
+use crate::peer_host::state::PeerHostState;
 
 fn is_expected_config_path_not_found(error: &BitFunError, path: Option<&str>) -> bool {
     match (error, path) {
@@ -86,7 +87,7 @@ pub(crate) async fn get_configs(args: &Value) -> Result<Value, String> {
     Ok(json!(configs))
 }
 
-pub(crate) async fn set_config(args: &Value) -> Result<Value, String> {
+pub(crate) async fn set_config(state: &PeerHostState, args: &Value) -> Result<Value, String> {
     let request = request_value(args);
     let path = request
         .get("path")
@@ -110,7 +111,7 @@ pub(crate) async fn set_config(args: &Value) -> Result<Value, String> {
 
     // Config changed on this host via a peer controller — schedule the cloud
     // push so other same-account devices converge.
-    crate::account_sync::notify_local_settings_changed();
+    state.account_runtime.notify_local_settings_changed();
 
     Ok(json!("Configuration set successfully"))
 }

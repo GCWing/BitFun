@@ -65,14 +65,14 @@ flowchart TB
 | 范围 | 当前状态 |
 |---|---|
 | Embedded Desktop GUI | 继续使用 Desktop 事件投影和 Tauri adapter；按实际打开的本机 workspace 延迟取得并持有 Embedded ownership，不增加后台进程；目标迁入同进程私有 App Server |
-| Embedded interactive TUI | 已组装同进程私有 App Server，通过 in-memory transport、`AppServerClient` 和 `AppServerTuiBackend` 完成当前核心聊天与 Session 路径；剩余管理面继续迁移 |
+| Embedded interactive TUI | 已组装同进程私有 App Server，通过 in-memory transport、`AppServerClient` 和 `AppServerTuiBackend` 完成当前核心聊天、Session 与 Phase 3/4 管理面路径 |
 | Embedded Headless CLI/Peer Host | 保留各自独立 Runtime adapter、展示和断流策略；不因交互式 TUI 迁移而强制使用 App Server |
 | ACP/SDK Host | 使用同一个 Runtime 事件入口的 session-scoped 订阅；各自协议和进程生命周期保持独立 |
 | Runtime ownership | Desktop、CLI、ACP、SDK Host 和现有 Server agent bootstrap 共用 Core owner；Embedded 取得共享锁，Shared TUI 取得独占锁，同一 workspace 上两种 deployment 互斥 |
 | Session 写入 | BitFun Runtime 的持久化 Session 由 `SessionManager` 管理；同一存储位置中的同一 Session 同时只允许一个本机进程写入，list/view 等只读操作不受影响 |
 | 当前 HTTP Server | 已组装 Embedded Runtime 和 `BitfunAppServer`，每个 `/ws` 连接通过 WebSocket transport 运行一条 App Server connection；当前固定 loopback、单用户且缺少连接级身份与作用域绑定，不构成远程或多用户 Server API |
 | Shared local IPC | 未发布的 v17 本机协议已有 discovery、实例锁、严格握手、Session 控制权、有界事件流和 cleanup；唯一 consumer 是第一方交互式 TUI compatibility adapter；是否由 Shared App Server 替换仍待评审与等价证据 |
-| Shared TUI | `bitfun --shared` / `bitfun chat --shared` 可列出、创建、恢复 Session，删除未被控制的空闲非当前 Session，通过 `/fork` 从完整历史或选中提示词之前创建分支，重命名当前 Session，读取 transcript，通过 **View subagents** 只读查看当前根 Session 的子会话并定向取消子会话活动 Turn，切换当前 Session 的 Agent mode/model，通过 `/reload [skills|instructions]` 刷新声明式上下文，通过 `/compact` 或 `/summarize` 压缩当前 Session 上下文，在 Turn 空闲时通过 `/diff` 读取 Runtime 绑定工作区的只读差异，提交/取消 Turn，处理 Permission 和 UserInput；Model、Skill、Subagent 和 MCP 管理由 Shared CLI Host 显式装配 App Server 的具体 `AppManagementService` 保留，默认仍是 Embedded |
+| Shared TUI | `bitfun --shared` / `bitfun chat --shared` 可列出、创建、恢复 Session，删除未被控制的空闲非当前 Session，通过 `/fork` 从完整历史或选中提示词之前创建分支，重命名当前 Session，读取 transcript，通过 **View subagents** 只读查看当前根 Session 的子会话并定向取消子会话活动 Turn，切换当前 Session 的 Agent mode/model，通过 `/reload [skills|instructions]` 刷新声明式上下文，通过 `/compact` 或 `/summarize` 压缩当前 Session 上下文，在 Turn 空闲时通过 `/diff` 读取 Runtime 绑定工作区的只读差异，提交/取消 Turn，处理 Permission 和 UserInput；Model、Skill、Subagent、MCP、External Source V1 和 Hook 管理由 Shared CLI Host 显式装配 App Server 的具体 `AppManagementService` 保留；Account/Settings Sync、Worktree 和后续 External Application V2 未由当前 Shared Host 提供，默认仍是 Embedded |
 | Shared GUI/Headless/ACP/SDK Host/Remote | 未交付，也不会由 `--shared` 隐式启用；Replay、Observer、通用 Controller transfer 和 Session archive 同样不在当前协议中 |
 
 因此当前交付的是 Embedded TUI App Server 与一条窄的、显式启用的 Shared TUI compatibility deployment，不是通用本机 Server。
@@ -519,7 +519,7 @@ Session/Turn、事件恢复、Permission/UserInput、Controller、配置管理�
 - 当前入口使用第 1.1 节列出的 adapter；若第 1.2 节目标通过评审并迁移完成，Desktop GUI、Web UI 和交互式 TUI 才统一使用 App Server。
 - Client、窗口、Session 或 workspace 数量不会自动等量增加 Runtime 或 Plugin Host 进程。
 - 当前 Shared Runtime IPC 是第一方 TUI 的 private compatibility transport，不成为公开 SDK、Remote、Peer、HTTP 或浏览器协议；是否由 App Server Shared transport 替换仍待评审。
-- Shared TUI 的 Model、Skill、Subagent 和 MCP 管理暂由 CLI Host 显式装配的 App Server `AppManagementService` 承接；这不扩展 v17，不改变 Shared Runtime 对 Session/chat 的权威性，也不能用于 Remote workspace 的控制端本机回退。MCP service 的进程状态和 tool registry 只属于当前 CLI 进程，不即时重配已经运行的 Shared Runtime Host；跨进程 MCP 管理需要单独的同步/restart contract。
+- Shared TUI 的 Model、Skill、Subagent、MCP、External Source V1 和 Hook 管理暂由 CLI Host 显式装配的 App Server `AppManagementService` 承接；Account/Settings Sync、Worktree 和后续 External Application V2 未由当前 Shared Host 提供并返回 typed unsupported。这不扩展 v17，不改变 Shared Runtime 对 Session/chat 的权威性，也不能用于 Remote workspace 的控制端本机回退。MCP service 的进程状态和 tool registry 只属于当前 CLI 进程，不即时重配已经运行的 Shared Runtime Host；跨进程 MCP 管理需要单独的同步/restart contract。
 - 默认 GUI/TUI/Headless CLI、ACP 与 SDK Host 保持 Embedded；只有交互式 TUI 的显式 `--shared` 选择 Shared。互斥按 `workspace + product` 生效，不再按入口名称缩窄。
 - Account/session cloud sync 仍使用既有 Core compatibility 边界，不属于 Shared Runtime 支持。
 - Remote workspace 的文件、凭据、进程和 Runtime 位于目标执行域，禁止静默回落本机。

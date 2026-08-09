@@ -141,7 +141,10 @@ fn doctor_rejects_incomplete_e2e_storage_roots() {
 
 #[test]
 fn remaining_cli_local_persistence_stays_behind_explicit_owner_boundaries() {
-    const ACCOUNT_SYNC: &str = include_str!("../../src/account_sync.rs");
+    const ACCOUNT_ADAPTER: &str = include_str!("../../src/account.rs");
+    const ACCOUNT_RUNTIME: &str = include_str!(
+        "../../../../crates/assembly/core/src/service/remote_connect/account_runtime.rs"
+    );
     const STARTUP_PAGE: &str = include_str!("../../src/ui/startup.rs");
     const PEER_BOOTSTRAP: &str = include_str!("../../src/peer_host/bootstrap.rs");
     const PEER_STATE: &str = include_str!("../../src/peer_host/state.rs");
@@ -151,7 +154,7 @@ fn remaining_cli_local_persistence_stays_behind_explicit_owner_boundaries() {
         include_str!("../../../../crates/assembly/core/src/product_runtime/runtime_services.rs");
 
     for (path, source) in [
-        ("account_sync.rs", ACCOUNT_SYNC),
+        ("account.rs", ACCOUNT_ADAPTER),
         ("ui/startup.rs", STARTUP_PAGE),
         ("peer_host/bootstrap.rs", PEER_BOOTSTRAP),
         ("peer_host/state.rs", PEER_STATE),
@@ -165,8 +168,10 @@ fn remaining_cli_local_persistence_stays_behind_explicit_owner_boundaries() {
     }
 
     assert!(
-        ACCOUNT_SYNC.contains("CoreAgentRuntimeCompatibility"),
-        "account sync must receive the narrow Core compatibility facade"
+        ACCOUNT_RUNTIME.contains("pub struct AccountRuntime")
+            && ACCOUNT_ADAPTER.contains("impl AccountRuntimeHost for CliAccountRoutingHost")
+            && ACCOUNT_ADAPTER.contains("impl AccountSessionBackupPort"),
+        "account state must live in the shared owner while CLI keeps narrow Host adapters"
     );
     assert!(
         STARTUP_PAGE.contains("self.agent.account_snapshot()")
@@ -202,6 +207,26 @@ fn remaining_cli_local_persistence_stays_behind_explicit_owner_boundaries() {
             && PEER_SESSION_COMMANDS.contains("local_workspace_snapshot")
             && PEER_SNAPSHOT_COMMANDS.contains("local_workspace_snapshot"),
         "Peer Host local snapshot operations must consume the injected owner port"
+    );
+}
+
+#[test]
+fn embedded_account_management_adapts_the_shared_runtime_directly() {
+    const EMBEDDED_APP_SERVER: &str = include_str!("../../src/embedded_app_server.rs");
+    const CLI_MAIN: &str = include_str!("../../src/main.rs");
+    const MANAGEMENT: &str =
+        include_str!("../../../../crates/interfaces/app-server/src/management.rs");
+    const MANAGEMENT_SERVICE: &str =
+        include_str!("../../../../crates/interfaces/app-server/src/management/service.rs");
+
+    assert!(
+        EMBEDDED_APP_SERVER.contains("runtime.account_runtime().clone()")
+            && MANAGEMENT_SERVICE.contains("Option<Arc<AccountRuntime>>")
+            && MANAGEMENT_SERVICE.contains("login_with_credentials")
+            && !MANAGEMENT.contains("AccountManagementHost")
+            && !CLI_MAIN.contains("mod tui_account_management")
+            && !CLI_MAIN.contains("mod account_sync"),
+        "Embedded account management must adapt AccountRuntime without a management Host trait"
     );
 }
 
@@ -475,8 +500,10 @@ fn interactive_tui_worktrees_stay_behind_the_typed_backend() {
     const TUI_CLIENT: &str = include_str!("../../src/agent/tui_client.rs");
     const TUI_BACKEND: &str = include_str!("../../src/tui_backend.rs");
     const SHARED_BACKEND: &str = include_str!("../../src/shared_tui_backend.rs");
-    const WORKTREE_HOST: &str = include_str!("../../src/tui_worktree_management.rs");
+    const WORKTREE_MANAGEMENT: &str =
+        include_str!("../../../../crates/interfaces/app-server/src/management/worktree.rs");
     const EMBEDDED_APP_SERVER: &str = include_str!("../../src/embedded_app_server.rs");
+    const CLI_MAIN: &str = include_str!("../../src/main.rs");
 
     for direct_owner in [
         "GitService",
@@ -504,13 +531,16 @@ fn interactive_tui_worktrees_stay_behind_the_typed_backend() {
         );
     }
     assert!(
-        WORKTREE_HOST.contains("WorktreeService::bind_session")
-            && EMBEDDED_APP_SERVER.contains("CliWorktreeManagementHost"),
-        "the Embedded Host must inject the CLI Worktree owner"
+        WORKTREE_MANAGEMENT.contains("WorktreeService::bind_session")
+            && EMBEDDED_APP_SERVER.contains("load_for_local_host")
+            && !EMBEDDED_APP_SERVER.contains("LocalWorktreeManagement")
+            && !EMBEDDED_APP_SERVER.contains("tui_worktree_management"),
+        "the Embedded Host must enable the App Server's built-in local Worktree management"
     );
     assert!(
         SHARED_BACKEND.contains("WORKTREES_CAPABILITY")
-            && SHARED_BACKEND.contains("does not fall back"),
+            && SHARED_BACKEND.contains("does not fall back")
+            && CLI_MAIN.contains("AppManagementService::load().await?"),
         "Shared Worktree management must fail closed"
     );
 }

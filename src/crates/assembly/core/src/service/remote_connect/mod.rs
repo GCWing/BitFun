@@ -8,6 +8,7 @@
 //! tears down the relay side; bots keep running.  Use `stop_bot()` or
 //! `stop_all()` to shut everything down.
 
+pub mod account_runtime;
 pub mod bot;
 pub mod embedded_relay_host;
 pub mod lan;
