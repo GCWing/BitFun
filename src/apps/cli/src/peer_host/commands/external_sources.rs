@@ -3,9 +3,8 @@
 use std::path::PathBuf;
 
 use bitfun_core::external_sources::{
-    apply_external_application_action_v2, apply_external_source_control_action,
-    choose_external_mcp_conflict, choose_external_subagent_conflict, external_source_snapshot,
-    get_external_application_review_page_v2, get_external_application_snapshot_v2,
+    apply_external_source_control_action, choose_external_mcp_conflict,
+    choose_external_subagent_conflict, external_source_snapshot,
     get_external_source_control_snapshot, set_external_mcp_server_decision,
     set_external_prompt_command_conflict_choice, set_external_source_enabled,
     set_external_subagent_activation, set_external_subagent_model_binding,
@@ -15,37 +14,10 @@ use bitfun_core::external_sources::{
     ExternalSourceOperationErrorCode, ExternalSourceOperationResult, ExternalSourcePublicSnapshot,
     ExternalSubagentModelBindingTarget,
 };
-use bitfun_product_domains::external_source_control::{
-    ExternalApplicationControlRequestV2, ExternalApplicationHostCapabilitiesV2,
-    ExternalApplicationReviewPageRequestV2,
-};
 use serde_json::Value;
 
 use crate::peer_host::args::request_value;
 use crate::peer_host::state::PeerHostState;
-
-pub(super) fn supports(command: &str) -> bool {
-    matches!(
-        command,
-        "get_external_source_snapshot"
-            | "get_external_source_control_snapshot"
-            | "reveal_external_source_location"
-            | "apply_external_source_control_action_command"
-            | "set_external_source_enabled_command"
-            | "set_external_source_conflict_choice_command"
-            | "set_external_tool_target_decision_command"
-            | "set_external_tool_conflict_choice_command"
-            | "set_external_subagent_activation_command"
-            | "set_external_subagent_model_binding_command"
-            | "choose_external_subagent_conflict_command"
-            | "set_external_mcp_server_decision_command"
-            | "choose_external_mcp_conflict_command"
-            | "update_external_integration_policy_command"
-            | "get_external_application_snapshot_v2"
-            | "get_external_application_review_page_v2"
-            | "apply_external_application_action_v2"
-    )
-}
 
 fn required_bool(request: &Value, key: &str) -> ExternalSourceOperationResult<bool> {
     optional_bool_field(request, key)?.ok_or_else(|| {
@@ -161,32 +133,6 @@ fn public_snapshot(
         })
 }
 
-fn application_response(response: impl serde::Serialize) -> ExternalSourceOperationResult<Value> {
-    serde_json::to_value(response).map_err(|_| {
-        ExternalSourceOperationError::new(
-            ExternalSourceOperationErrorCode::Internal,
-            "External application response could not be encoded",
-            false,
-        )
-    })
-}
-
-fn domain_request<T: serde::de::DeserializeOwned>(
-    request: &Value,
-) -> ExternalSourceOperationResult<T> {
-    request
-        .get("request")
-        .cloned()
-        .ok_or_else(|| ExternalSourceOperationError::invalid_request("Missing request"))
-        .and_then(|request| {
-            serde_json::from_value(request).map_err(|_| {
-                ExternalSourceOperationError::invalid_request(
-                    "Invalid external application request",
-                )
-            })
-        })
-}
-
 pub(crate) async fn dispatch(
     command: &str,
     args: &Value,
@@ -210,36 +156,6 @@ async fn dispatch_inner(
     let request = request_value(args);
     let workspace = workspace_root(state, request).await?;
     let workspace = workspace.as_deref();
-    if command == "get_external_application_snapshot_v2" {
-        let snapshot = get_external_application_snapshot_v2(
-            workspace,
-            optional_bool_field(request, "forceRefresh")?.unwrap_or(false),
-            ExternalApplicationHostCapabilitiesV2::read_write(),
-        )
-        .await
-        .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)?;
-        return application_response(snapshot);
-    }
-    if command == "get_external_application_review_page_v2" {
-        let page_request: ExternalApplicationReviewPageRequestV2 = domain_request(request)?;
-        page_request
-            .validate()
-            .map_err(ExternalSourceOperationError::invalid_request)?;
-        let page = get_external_application_review_page_v2(workspace, page_request)
-            .await
-            .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)?;
-        return application_response(page);
-    }
-    if command == "apply_external_application_action_v2" {
-        let action_request: ExternalApplicationControlRequestV2 = domain_request(request)?;
-        action_request
-            .validate()
-            .map_err(ExternalSourceOperationError::invalid_request)?;
-        let result = apply_external_application_action_v2(workspace, action_request)
-            .await
-            .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)?;
-        return application_response(result);
-    }
     if command == "get_external_source_control_snapshot" {
         let snapshot = get_external_source_control_snapshot(
             workspace,
@@ -402,19 +318,6 @@ fn control_request(
 mod tests {
     use super::*;
     use bitfun_core::external_sources::ExternalSourceControlActionV1;
-
-    #[test]
-    fn peer_external_source_router_recognizes_v1_and_v2_without_catching_unrelated_commands() {
-        for command in [
-            "get_external_source_snapshot",
-            "get_external_application_snapshot_v2",
-            "get_external_application_review_page_v2",
-            "apply_external_application_action_v2",
-        ] {
-            assert!(supports(command), "missing {command}");
-        }
-        assert!(!supports("get_config"));
-    }
 
     #[test]
     fn optional_host_fields_reject_wrong_types() {

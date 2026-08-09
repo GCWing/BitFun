@@ -7,10 +7,8 @@
 内置扩展边界见 [`product-customization-blueprint.md`](product-customization-blueprint.md)；CLI 产品入口和配置
 兼容见 [`cli-product-line-design.md`](cli-product-line-design.md)；HarmonyOS PC 原生 CLI/TUI 平台规约见
 [`platform-portability-design.md`](platform-portability-design.md)。跨专题实施顺序见
-[`../plans/product-architecture-evolution-plan.md`](../plans/product-architecture-evolution-plan.md)。外部 AI 工作内容架构、应用级连接详细设计与对应执行计划分别见
-[`external-ai-work-sources-design.md`](extensions/external-ai-work-sources-design.md)、
-[`external-ai-app-connection-experience-design.md`](extensions/external-ai-app-connection-experience-design.md)和
-[`external-ai-app-connection-experience-plan.md`](../plans/external-ai-app-connection-experience-plan.md)；OpenCode 扩展总矩阵、配置资产、插件执行、
+[`../plans/product-architecture-evolution-plan.md`](../plans/product-architecture-evolution-plan.md)。外部 AI 工作内容架构见
+[`external-ai-work-sources-design.md`](extensions/external-ai-work-sources-design.md)；OpenCode 扩展总矩阵、配置资产、插件执行、
 终端插件和外部集成适配分别见
 [`opencode-extension-compatibility.md`](extensions/opencode-extension-compatibility.md)、
 [`opencode-config-assets-adapter-design.md`](extensions/opencode-config-assets-adapter-design.md)、
@@ -638,8 +636,8 @@ flowchart LR
   Node/Bun 和第三方 JS/TS 的子进程；插件启停与贡献生命周期仍由既有来源和能力归属模块管理。
 - 外部来源的 Command、Tool、Subagent、MCP 仍保留能力专属 DTO 和 owner，但它们的发现调度统一由
   `ExternalSourceControlPlane` 持有；当前 Desktop/TUI/Peer 的控制事实只通过版本化的 product-domain 只读视图共享，
-  不复制生态 payload、界面状态机或远端专用 DTO。Server 的 external-source helper 当前未接入 App Server schema，生产 `/ws`
-  返回 `method_not_found`；只有完成 V1 read-only schema、handler/client translation 和 WebSocket round-trip 后，Server 才进入该共享边界。
+  不复制生态 payload、界面状态机或远端专用 DTO。App Server 已注册 external-source schema、handler 和 client translation；Embedded Host
+  注入 management owner 后可以调用。通用 Server `/ws` 当前没有绑定可信工作区的 management owner，因此返回类型化 `unsupported`；只有注入 Host 持有的作用域化 owner 并通过 WebSocket round-trip 后，Server 才交付该共享边界。
 - 每个生态适配层独立保留该生态的外部格式、来源顺序和调用语义，并映射到 BitFun 归属模块；它本身不成为新的
   业务归属模块，也不能依赖或修改兄弟生态 adapter。通用目录、`ExternalSourceControlPlane` 和能力归属模块只依赖开放生态 ID、
   来源限定身份与能力专属 provider 契约，不按 OpenCode、Codex 或 Claude Code 分支行为。
@@ -817,10 +815,10 @@ flowchart LR
 
 | 当前入口 | 已有能力 | 明确边界 |
 |---|---|---|
-| Desktop | 使用 `product-full`；显示外部来源、审批、冲突、诊断和 Host 能力；目标增加应用级读模型、默认连接事实和批量确认 DTO | 可执行能力在事实所在 Host 运行；Safe Mode 只阻止新调用，不改来源、不取消正在运行的调用 |
-| CLI / TUI | 使用显式 Core owner feature closure（`agent-runtime`、`canvas-runtime`、`external-sources`、`plugin-runtime`、`ssh-remote`）；现有 `/extensions` 支持来源状态、刷新、Safe Mode 和来源开关，统一 `/hooks`（旧 `/hooks_external` 为别名）、`/tools` 和 `/agents` 保留各自专项职责 | 应用级摘要、首次连接、`/extensions review` 批量确认和任务相关 `action-required` 仍是目标能力，完成条件以对应详细设计和 P6 端到端证据为准；生态解析仍在适配器，不启动第二套 Agent Runtime；远程能力未接入时不回退本机 |
+| Desktop | 使用 `product-full`；Settings 从现有来源目录和 integration policy 生成简短应用概览，具体审批与冲突仍进入 Tool、Agent、MCP 或 Hook owner | 可执行能力在事实所在 Host 运行；Safe Mode 只阻止新调用，不改来源、不取消正在运行的调用 |
+| CLI / TUI | 使用显式 Core owner feature closure（`agent-runtime`、`canvas-runtime`、`external-sources`、`plugin-runtime`、`ssh-remote`）；`/extensions` 只提供状态、启停和刷新，`/hooks`、`/tools`、`/agent` 和 `/mcp` 处理各自能力 | 非交互不等待权限输入，也不从全局状态或错误文本推断特殊任务结果；生态解析仍在适配器；远程能力未接入时不回退本机 |
 | ACP | 使用 `DeliveryProfile::Acp`、Runtime Parts，以及 `agent-runtime`/`canvas-runtime`/`external-sources`/`ssh-remote` Core owner feature | load 成功后才发布活动状态；close 排空后再卸载；完整历史、Canvas 工具物化、兼容指令来源和配置仍由 Core/ACP 管理 |
-| Peer / Server | Peer Host 执行真实工作区操作；当前 HTTP Server 使用 `product-full` 组装 Embedded Runtime，并通过 `/ws` 暴露 App Server，但 external-source 方法尚未进入 schema、当前返回 `method_not_found` | 控制端不替远端发现或执行；Server external-source 只读投影须先完成真实 App Server 接线，且 loopback 单用户边界不扩展到远程/多用户；SSH Remote 未接入时返回不支持 |
+| Peer / Server | Peer Host 执行真实工作区操作；通用 HTTP Server 未绑定可信 workspace owner 时明确返回不支持 | 控制端不替远端发现或执行；loopback 单用户边界不扩展到远程/多用户；SSH Remote 未接入时返回不支持 |
 | Web / Mobile Web | 依赖现有后端入口 | 不持有插件执行单元，也不能据空 profile 宣称独立能力 |
 | HarmonyOS 手机 Remote | phone-only ArkTS 远程入口 | 不等于 HarmonyOS PC 本地 Runtime、CLI/TUI 或 GUI |
 
@@ -837,7 +835,7 @@ Shared Agent Runtime 是第一方多实例的目标部署，不是上表新增�
 
 底层来源与能力继续使用[外部 AI 工作内容设计](extensions/external-ai-work-sources-design.md#7-状态与提示规则)定义的
 已发现、已应用、可用、需确认、更新中、沿用上一版本、部分受限、暂时过期、已移除/已停用和不可用，并附带
-原因与恢复建议。目标状态下，Settings 首页和 TUI `/extensions` 将消费[应用级连接详细设计](extensions/external-ai-app-connection-experience-design.md#34-面向用户的应用级状态)派生的五种摘要；当前生产入口仍消费 V1 来源/能力控制事实，不能据目标文档宣称应用级连接已经交付。目标摘要不能替代底层事实，宿主也不能自行重算优先级。Host 的准备完成、重启、暂停、不支持或失败只作为详情映射。现有代码中的过渡状态只能展示为“静态预览、未执行”，不能因为进入来源清单就误报为已应用、已连接或可用。
+原因与恢复建议。Settings 首页和 TUI 可以把这些事实压缩为简短应用/来源概览，但不能建立第二套连接、审批或任务结果状态机，也不能因为进入来源清单就误报为已应用或可用。
 
 ## 7. 完成判定
 

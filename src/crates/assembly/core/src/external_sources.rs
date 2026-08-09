@@ -9,25 +9,6 @@ pub use bitfun_product_domains::external_integration_policy::{
     ExternalIntegrationPolicyScope, ExternalIntegrationPolicySnapshot,
     ExternalIntegrationPolicyStatus,
 };
-use bitfun_product_domains::external_source_control::{
-    derive_external_application_status_v2, ExternalApplicationConnectionStateV2,
-    ExternalApplicationControlActionV2, ExternalApplicationControlRequestV2,
-    ExternalApplicationControlResultV2, ExternalApplicationDefaultConnectionPolicyV2,
-    ExternalApplicationDesiredConnectionV2, ExternalApplicationDiscoveryStateV2,
-    ExternalApplicationHealthV2, ExternalApplicationHostCapabilitiesV2,
-    ExternalApplicationOperationOutcomeV2, ExternalApplicationOwnerGenerationV2,
-    ExternalApplicationPrimaryActionV2, ExternalApplicationRecoveryActionV2,
-    ExternalApplicationReviewCategoryCountV2, ExternalApplicationReviewItemKindV2,
-    ExternalApplicationReviewItemRefV2, ExternalApplicationReviewItemResultV2,
-    ExternalApplicationReviewItemV2, ExternalApplicationReviewPageRequestV2,
-    ExternalApplicationReviewPageV2, ExternalApplicationReviewRecommendationSummaryV2,
-    ExternalApplicationReviewSelectionBaselineV2, ExternalApplicationReviewSummaryV2,
-    ExternalApplicationRiskLevelV2, ExternalApplicationRiskSummaryV2,
-    ExternalApplicationSafetyCeilingV2, ExternalApplicationSnapshotV2,
-    ExternalApplicationSummaryV2, ExternalApplicationTargetScopeV2,
-    ExternalApplicationUserDecisionV2, EXTERNAL_APPLICATION_REVIEW_PAGE_MAX_ITEMS,
-    EXTERNAL_APPLICATION_SCHEMA_V2,
-};
 pub use bitfun_product_domains::external_source_control::{
     ExternalCapabilityKindV1, ExternalSourceControlActionV1, ExternalSourceControlRequestV1,
     ExternalSourceControlSnapshotV1, ExternalSourceRuntimeState, ExternalSourceSurfaceSnapshotV1,
@@ -146,7 +127,6 @@ pub const EXTERNAL_CAPABILITY_SUBAGENT: &str = "subagent";
 pub const EXTERNAL_CAPABILITY_MCP: &str = "mcp";
 pub const EXTERNAL_CAPABILITY_REFERENCE: &str = "reference";
 const EXTERNAL_ADAPTER_CONTRACT_MAJOR: u32 = 1;
-const EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION: u32 = 1;
 const MAX_PROMPT_COMMAND_FILE_REFERENCES: usize = 8;
 const MAX_PROMPT_COMMAND_FILE_BYTES: usize = 64 * 1024;
 const MAX_PROMPT_COMMAND_TOTAL_FILE_BYTES: usize = 128 * 1024;
@@ -693,8 +673,6 @@ fn external_capability_descriptor(
 #[derive(Clone)]
 struct ExternalEcosystemRegistration {
     descriptor: ExternalIntegrationEcosystemDescriptor,
-    default_connection_policy: ExternalApplicationDefaultConnectionPolicyV2,
-    default_connection_reason: &'static str,
     contract_major: u32,
     upstream_format_revision: &'static str,
     command_provider: Option<Arc<dyn PromptCommandSourceProvider>>,
@@ -806,8 +784,6 @@ fn default_external_integration_registry() -> Vec<ExternalEcosystemRegistration>
                     ),
                 ],
             },
-            default_connection_policy: ExternalApplicationDefaultConnectionPolicyV2::Connect,
-            default_connection_reason: "mature_declarative_support",
             contract_major: EXTERNAL_ADAPTER_CONTRACT_MAJOR,
             upstream_format_revision: "opencode-config-v1",
             command_provider: Some(Arc::new(OpenCodeCommandProvider::default())),
@@ -842,8 +818,6 @@ fn default_external_integration_registry() -> Vec<ExternalEcosystemRegistration>
                     ),
                 ],
             },
-            default_connection_policy: ExternalApplicationDefaultConnectionPolicyV2::DiscoverOnly,
-            default_connection_reason: "explicit_user_connection_required",
             contract_major: EXTERNAL_ADAPTER_CONTRACT_MAJOR,
             upstream_format_revision: "claude-code-config-v1",
             command_provider: Some(Arc::new(ClaudeCodeCommandProvider::default())),
@@ -871,8 +845,6 @@ fn default_external_integration_registry() -> Vec<ExternalEcosystemRegistration>
                     ),
                 ],
             },
-            default_connection_policy: ExternalApplicationDefaultConnectionPolicyV2::DiscoverOnly,
-            default_connection_reason: "explicit_user_connection_required",
             contract_major: EXTERNAL_ADAPTER_CONTRACT_MAJOR,
             upstream_format_revision: "codex-config-v1",
             command_provider: None,
@@ -908,49 +880,9 @@ fn default_external_integration_ecosystems() -> Vec<ExternalIntegrationEcosystem
 /// resolve this identity once; capability owners never hard-code it.
 const LEGACY_LOCAL_EXECUTION_DOMAIN_ID: &str = "local-user";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum ExternalSourcesConfigOrigin {
-    FreshV2,
-    LegacyMigration,
-    IncompatibleReset,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum StoredExternalApplicationDesiredConnection {
-    Connected,
-    Disconnected,
-    Deferred,
-    NeedsReview,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum StoredExternalApplicationDecisionOrigin {
-    User,
-    LegacySafety,
-    LegacyActive,
-    LegacyNeedsReview,
-    IncompatibleReset,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct StoredExternalApplicationConnectionDecision {
-    desired_connection: StoredExternalApplicationDesiredConnection,
-    decision_origin: StoredExternalApplicationDecisionOrigin,
-}
-
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 struct ExternalSourcesConfig {
-    #[serde(default, skip_serializing_if = "is_zero_u32")]
-    connection_schema_migration_version: u32,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    config_origin: Option<ExternalSourcesConfigOrigin>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    application_connections: BTreeMap<String, StoredExternalApplicationConnectionDecision>,
     #[serde(default)]
     integration_policy: StoredExternalIntegrationPolicy,
     /// Bounded recovery history for a policy document written by an
@@ -1014,12 +946,6 @@ impl std::fmt::Debug for ExternalSourcesConfig {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("ExternalSourcesConfig")
-            .field(
-                "connection_schema_migration_version",
-                &self.connection_schema_migration_version,
-            )
-            .field("config_origin", &self.config_origin)
-            .field("application_connections", &self.application_connections)
             .field("integration_policy", &self.integration_policy)
             .field(
                 "integration_policy_backups",
@@ -1155,6 +1081,57 @@ struct ExternalSourcePreferenceStore {
     path: PathBuf,
 }
 
+fn retired_automatic_application_policy() -> ExternalIntegrationPolicyDocument {
+    let mut policy = ExternalIntegrationPolicyDocument::default();
+    policy.user_defaults.enabled = true;
+    for (ecosystem, mode) in [
+        (OPENCODE_ECOSYSTEM_ID, ExternalIntegrationMode::Recommended),
+        (
+            CLAUDE_CODE_ECOSYSTEM_ID,
+            ExternalIntegrationMode::DiscoverOnly,
+        ),
+        (CODEX_ECOSYSTEM_ID, ExternalIntegrationMode::DiscoverOnly),
+    ] {
+        policy
+            .user_defaults
+            .ecosystems
+            .entry(EcosystemId::new(ecosystem).expect("built-in ecosystem id is valid"))
+            .or_default()
+            .mode = mode;
+    }
+    policy
+}
+
+fn normalize_retired_application_defaults(config: &mut ExternalSourcesConfig) {
+    // The retired application setup enabled integrations automatically. Undo
+    // only that exact untouched default; every user-authored deviation wins.
+    let from_retired_automatic_setup = config
+        .extensions
+        .get("configOrigin")
+        .and_then(serde_json::Value::as_str)
+        == Some("fresh_v2");
+    if !from_retired_automatic_setup {
+        return;
+    }
+
+    // Consume the retired origin on the first persisted update, including
+    // documents that already contain a user deviation or application choice.
+    // Otherwise a later user-authored policy matching the old default could be
+    // mistaken for untouched setup state and reset again.
+    config.extensions.remove("configOrigin");
+    let has_application_choice = match config.extensions.get("applicationConnections") {
+        None => false,
+        Some(serde_json::Value::Object(decisions)) => !decisions.is_empty(),
+        Some(_) => true,
+    };
+    if has_application_choice {
+        return;
+    }
+    if config.integration_policy.known() == Some(&retired_automatic_application_policy()) {
+        config.integration_policy = StoredExternalIntegrationPolicy::default();
+    }
+}
+
 impl ExternalSourcePreferenceStore {
     fn new(path: PathBuf) -> Self {
         Self { path }
@@ -1174,7 +1151,11 @@ impl ExternalSourcePreferenceStore {
         JsonFileStore
             .read_locked_optional(&self.path)
             .await
-            .map(|config| config.unwrap_or_default())
+            .map(|config| {
+                let mut config = config.unwrap_or_default();
+                normalize_retired_application_defaults(&mut config);
+                config
+            })
             .map_err(|error| error.to_string())
     }
 
@@ -1183,352 +1164,13 @@ impl ExternalSourcePreferenceStore {
         update: impl FnOnce(&mut ExternalSourcesConfig) -> R,
     ) -> Result<(R, ExternalSourcesConfig), String> {
         JsonFileStore
-            .update_locked(&self.path, ExternalSourcesConfig::default(), update)
+            .update_locked(&self.path, ExternalSourcesConfig::default(), |config| {
+                normalize_retired_application_defaults(config);
+                update(config)
+            })
             .await
             .map_err(|error| error.to_string())
     }
-
-    async fn ensure_application_connection_schema(
-        &self,
-        _execution_domain_id: &str,
-    ) -> Result<ExternalSourcesConfig, String> {
-        let json_store = JsonFileStore;
-        let _lock = json_store
-            .acquire_cross_process_lock(&self.path)
-            .await
-            .map_err(|error| error.to_string())?;
-        let existing = json_store
-            .read_optional::<ExternalSourcesConfig>(&self.path)
-            .await
-            .map_err(|error| error.to_string())?;
-        let was_missing = existing.is_none();
-        let mut changed = was_missing;
-
-        let mut config = match existing {
-            Some(config) => config,
-            None => {
-                let mut config = ExternalSourcesConfig::default();
-                apply_fresh_v2_product_defaults(&mut config)?;
-                config.config_origin = Some(ExternalSourcesConfigOrigin::FreshV2);
-                config
-            }
-        };
-        if config.integration_policy.known().is_none() {
-            return Err(format!(
-                "policy_unavailable: external integration policy schema major {} is not supported",
-                config.integration_policy.schema_major()
-            ));
-        }
-        if config.connection_schema_migration_version
-            > EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION
-        {
-            return Err(format!(
-                "policy_unavailable: external application connection schema version {} is not supported",
-                config.connection_schema_migration_version
-            ));
-        }
-        if config.connection_schema_migration_version
-            < EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION
-        {
-            if !was_missing && config.config_origin != Some(ExternalSourcesConfigOrigin::FreshV2) {
-                migrate_legacy_application_connections(&mut config, _execution_domain_id)?;
-            }
-            config.connection_schema_migration_version =
-                EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION;
-            config
-                .config_origin
-                .get_or_insert(ExternalSourcesConfigOrigin::LegacyMigration);
-            changed = true;
-        }
-        changed |= ensure_mcp_revision_secret(&mut config);
-        if changed {
-            json_store
-                .write_atomic_strict(&self.path, &config)
-                .await
-                .map_err(|error| error.to_string())?;
-        }
-        Ok(config)
-    }
-}
-
-fn is_zero_u32(value: &u32) -> bool {
-    *value == 0
-}
-
-fn apply_fresh_v2_product_defaults(config: &mut ExternalSourcesConfig) -> Result<(), String> {
-    let policy = config.integration_policy.known_mut().ok_or_else(|| {
-        "policy_unavailable: external integration policy is incompatible".to_string()
-    })?;
-    policy.user_defaults.enabled = true;
-    for registration in default_external_integration_registry() {
-        let mode = match registration.default_connection_policy {
-            ExternalApplicationDefaultConnectionPolicyV2::Connect => {
-                ExternalIntegrationMode::Recommended
-            }
-            ExternalApplicationDefaultConnectionPolicyV2::DiscoverOnly
-            | ExternalApplicationDefaultConnectionPolicyV2::Unsupported => {
-                ExternalIntegrationMode::DiscoverOnly
-            }
-        };
-        policy
-            .user_defaults
-            .ecosystems
-            .entry(registration.descriptor.ecosystem_id)
-            .or_default()
-            .mode = mode;
-    }
-    Ok(())
-}
-
-fn external_application_connection_key(
-    execution_domain_id: &str,
-    application_id: &str,
-    workspace_scope_id: Option<&str>,
-) -> String {
-    format!(
-        "{execution_domain_id}\u{1f}{application_id}\u{1f}{}",
-        workspace_scope_id.unwrap_or("user_default")
-    )
-}
-
-fn migrate_legacy_application_connections(
-    config: &mut ExternalSourcesConfig,
-    execution_domain_id: &str,
-) -> Result<(), String> {
-    let document = config.integration_policy.known().ok_or_else(|| {
-        "policy_unavailable: external integration policy is incompatible".to_string()
-    })?;
-    let workspace_scope_ids = document
-        .workspace_overrides
-        .keys()
-        .cloned()
-        .collect::<Vec<_>>();
-    let reset_origin = config.config_origin == Some(ExternalSourcesConfigOrigin::IncompatibleReset);
-    let mut decisions = BTreeMap::new();
-    for workspace_scope_id in std::iter::once(None).chain(
-        workspace_scope_ids
-            .iter()
-            .map(|workspace_scope_id| Some(workspace_scope_id.as_str())),
-    ) {
-        let policy = external_integration_policy_snapshot(
-            document,
-            workspace_scope_id,
-            default_external_integration_ecosystems(),
-        )
-        .map_err(|error| format!("policy_unavailable: {error}"))?;
-        for descriptor in &policy.registered_ecosystems {
-            let (desired_connection, decision_origin) = if reset_origin {
-                (
-                    StoredExternalApplicationDesiredConnection::Disconnected,
-                    StoredExternalApplicationDecisionOrigin::IncompatibleReset,
-                )
-            } else {
-                legacy_application_connection_decision(&policy.effective, &descriptor.ecosystem_id)
-            };
-            decisions.insert(
-                external_application_connection_key(
-                    execution_domain_id,
-                    descriptor.ecosystem_id.as_str(),
-                    workspace_scope_id,
-                ),
-                StoredExternalApplicationConnectionDecision {
-                    desired_connection,
-                    decision_origin,
-                },
-            );
-        }
-    }
-    config.application_connections = decisions;
-    Ok(())
-}
-
-fn legacy_application_connection_decision(
-    policy: &EffectiveExternalIntegrationPolicy,
-    ecosystem_id: &EcosystemId,
-) -> (
-    StoredExternalApplicationDesiredConnection,
-    StoredExternalApplicationDecisionOrigin,
-) {
-    let Some(ecosystem) = policy.ecosystems.get(ecosystem_id) else {
-        return (
-            StoredExternalApplicationDesiredConnection::NeedsReview,
-            StoredExternalApplicationDecisionOrigin::LegacyNeedsReview,
-        );
-    };
-    if !policy.enabled
-        || matches!(
-            ecosystem.mode,
-            ExternalIntegrationMode::Disabled
-                | ExternalIntegrationMode::DiscoverOnly
-                | ExternalIntegrationMode::Unknown(_)
-        )
-    {
-        return (
-            StoredExternalApplicationDesiredConnection::Disconnected,
-            StoredExternalApplicationDecisionOrigin::LegacySafety,
-        );
-    }
-    if ecosystem.capabilities.values().any(|access| {
-        matches!(
-            access,
-            ExternalIntegrationAccess::AskBeforeUse | ExternalIntegrationAccess::Auto
-        )
-    }) {
-        return (
-            StoredExternalApplicationDesiredConnection::Connected,
-            StoredExternalApplicationDecisionOrigin::LegacyActive,
-        );
-    }
-    (
-        StoredExternalApplicationDesiredConnection::NeedsReview,
-        StoredExternalApplicationDecisionOrigin::LegacyNeedsReview,
-    )
-}
-
-fn apply_external_application_connection_decision(
-    config: &mut ExternalSourcesConfig,
-    execution_domain_id: &str,
-    target_scope: ExternalApplicationTargetScopeV2,
-    workspace_scope_id: Option<&str>,
-    application_id: &str,
-    desired_connection: StoredExternalApplicationDesiredConnection,
-    expected_preference_revision: u64,
-) -> Result<bool, String> {
-    if config.preference_revision != expected_preference_revision {
-        return Err(stale_operation_error(
-            "External application preferences changed; refresh before retrying",
-        ));
-    }
-    if config.connection_schema_migration_version != EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION
-    {
-        return Err(incompatible_policy_error(
-            "External application connection preferences require migration",
-        ));
-    }
-    let registration = default_external_integration_registry()
-        .into_iter()
-        .find(|registration| registration.descriptor.ecosystem_id.as_str() == application_id)
-        .ok_or_else(|| {
-            invalid_operation_error(format!(
-                "External application '{application_id}' is not registered"
-            ))
-        })?;
-    match (target_scope, workspace_scope_id) {
-        (ExternalApplicationTargetScopeV2::UserDefault, None)
-        | (ExternalApplicationTargetScopeV2::WorkspaceOverride, Some(_)) => {}
-        (ExternalApplicationTargetScopeV2::UserDefault, Some(_)) => {
-            return Err(invalid_operation_error(
-                "User-default application decisions cannot include a workspace scope",
-            ));
-        }
-        (ExternalApplicationTargetScopeV2::WorkspaceOverride, None) => {
-            return Err(invalid_operation_error(
-                "Workspace application decisions require a workspace scope",
-            ));
-        }
-    }
-    let policy = config.integration_policy.known_mut().ok_or_else(|| {
-        incompatible_policy_error("External integration policy requires a backup and reset")
-    })?;
-    let mode = match desired_connection {
-        StoredExternalApplicationDesiredConnection::Connected => {
-            ExternalIntegrationMode::Recommended
-        }
-        StoredExternalApplicationDesiredConnection::Disconnected
-        | StoredExternalApplicationDesiredConnection::Deferred => ExternalIntegrationMode::Disabled,
-        StoredExternalApplicationDesiredConnection::NeedsReview => {
-            ExternalIntegrationMode::DiscoverOnly
-        }
-    };
-    let policy_changed = match target_scope {
-        ExternalApplicationTargetScopeV2::UserDefault => {
-            let enabled_changed = desired_connection
-                == StoredExternalApplicationDesiredConnection::Connected
-                && !policy.user_defaults.enabled;
-            if enabled_changed {
-                policy.user_defaults.enabled = true;
-            }
-            let ecosystem = policy
-                .user_defaults
-                .ecosystems
-                .entry(registration.descriptor.ecosystem_id.clone())
-                .or_default();
-            let mode_changed = ecosystem.mode != mode;
-            ecosystem.mode = mode;
-            enabled_changed || mode_changed
-        }
-        ExternalApplicationTargetScopeV2::WorkspaceOverride => {
-            let workspace_scope_id = workspace_scope_id
-                .expect("workspace scope was validated before applying its policy");
-            let workspace = policy
-                .workspace_overrides
-                .entry(workspace_scope_id.to_string())
-                .or_default();
-            let enabled_changed = desired_connection
-                == StoredExternalApplicationDesiredConnection::Connected
-                && workspace.enabled != Some(true);
-            if enabled_changed {
-                workspace.enabled = Some(true);
-            }
-            let ecosystem = workspace
-                .ecosystems
-                .entry(registration.descriptor.ecosystem_id.clone())
-                .or_default();
-            let mode_changed = ecosystem.mode.as_ref() != Some(&mode);
-            ecosystem.mode = Some(mode);
-            enabled_changed || mode_changed
-        }
-    };
-    let key = external_application_connection_key(
-        execution_domain_id,
-        application_id,
-        workspace_scope_id,
-    );
-    let decision = StoredExternalApplicationConnectionDecision {
-        desired_connection,
-        decision_origin: StoredExternalApplicationDecisionOrigin::User,
-    };
-    let decision_changed = config.application_connections.get(&key) != Some(&decision);
-    if decision_changed {
-        config.application_connections.insert(key, decision);
-    }
-    let changed = policy_changed || decision_changed;
-    if changed {
-        config.preference_revision = config.preference_revision.saturating_add(1);
-    }
-    Ok(changed)
-}
-
-fn external_application_action_scope_matches(
-    current_workspace_scope_id: Option<&str>,
-    target_scope: ExternalApplicationTargetScopeV2,
-    requested_workspace_scope_id: Option<&str>,
-) -> bool {
-    match target_scope {
-        ExternalApplicationTargetScopeV2::UserDefault => requested_workspace_scope_id.is_none(),
-        ExternalApplicationTargetScopeV2::WorkspaceOverride => {
-            current_workspace_scope_id.is_some()
-                && current_workspace_scope_id == requested_workspace_scope_id
-        }
-    }
-}
-
-fn ensure_mcp_revision_secret(config: &mut ExternalSourcesConfig) -> bool {
-    if config
-        .mcp_revision_secret
-        .as_deref()
-        .and_then(decode_mcp_revision_key)
-        .is_some()
-    {
-        return false;
-    }
-    let first = uuid::Uuid::new_v4();
-    let second = uuid::Uuid::new_v4();
-    let mut bytes = [0_u8; 32];
-    bytes[..16].copy_from_slice(first.as_bytes());
-    bytes[16..].copy_from_slice(second.as_bytes());
-    config.mcp_revision_secret = Some(hex::encode(bytes));
-    true
 }
 
 fn decode_mcp_revision_key(value: &str) -> Option<ExternalMcpRevisionKey> {
@@ -1537,38 +1179,37 @@ fn decode_mcp_revision_key(value: &str) -> Option<ExternalMcpRevisionKey> {
     Some(ExternalMcpRevisionKey::new(bytes))
 }
 
-fn legacy_config_after_migration_failure(
-    config: ExternalSourcesConfig,
-    migration_error: String,
-) -> Result<(ExternalSourcesConfig, ExternalMcpRevisionKey), String> {
-    let revision_key = config
-        .mcp_revision_secret
-        .as_deref()
-        .and_then(decode_mcp_revision_key)
-        .ok_or(migration_error)?;
-    Ok((config, revision_key))
-}
-
 async fn external_sources_config_with_mcp_revision_key(
 ) -> Result<(ExternalSourcesConfig, ExternalMcpRevisionKey), String> {
     let store = ExternalSourcePreferenceStore::global()?;
-    let config = match store
-        .ensure_application_connection_schema(LEGACY_LOCAL_EXECUTION_DOMAIN_ID)
-        .await
+    let config = store.read().await?;
+    if let Some(revision_key) = config
+        .mcp_revision_secret
+        .as_deref()
+        .and_then(decode_mcp_revision_key)
     {
-        Ok(config) => config,
-        Err(migration_error) => {
-            let legacy = store.read().await.map_err(|read_error| {
-                format!("{migration_error}; legacy preferences could not be read: {read_error}")
-            })?;
-            let fallback = legacy_config_after_migration_failure(legacy, migration_error.clone())?;
-            log::warn!(
-                "External application preference migration failed; continuing with legacy V1 preferences reason={}",
-                safe_external_log_token(&migration_error),
-            );
-            return Ok(fallback);
-        }
+        return Ok((config, revision_key));
+    }
+    let generated = {
+        let first = uuid::Uuid::new_v4();
+        let second = uuid::Uuid::new_v4();
+        let mut bytes = [0_u8; 32];
+        bytes[..16].copy_from_slice(first.as_bytes());
+        bytes[16..].copy_from_slice(second.as_bytes());
+        bytes
     };
+    let (_, config) = store
+        .update(|config| {
+            if config
+                .mcp_revision_secret
+                .as_deref()
+                .and_then(decode_mcp_revision_key)
+                .is_none()
+            {
+                config.mcp_revision_secret = Some(hex::encode(generated));
+            }
+        })
+        .await?;
     let revision_key = config
         .mcp_revision_secret
         .as_deref()
@@ -3304,457 +2945,6 @@ impl WorkspaceExternalSourceService {
         }
     }
 
-    fn application_snapshot_v2(
-        &self,
-        preferences: &ExternalSourcesConfig,
-        host_capabilities: ExternalApplicationHostCapabilitiesV2,
-    ) -> Result<ExternalApplicationSnapshotV2, String> {
-        let catalog = self.snapshot();
-        let workspace_scope_id = workspace_policy_key(self.workspace_root.as_deref());
-        let target_scope = if workspace_scope_id.is_some() {
-            ExternalApplicationTargetScopeV2::WorkspaceOverride
-        } else {
-            ExternalApplicationTargetScopeV2::UserDefault
-        };
-        let source_ecosystems = catalog
-            .sources
-            .iter()
-            .map(|source| {
-                (
-                    source.record.key.clone(),
-                    source.record.ecosystem_id.clone(),
-                )
-            })
-            .collect::<BTreeMap<_, _>>();
-        let subagents_by_candidate_id = catalog
-            .subagents
-            .iter()
-            .map(|subagent| (subagent.candidate_id.as_str(), subagent))
-            .collect::<BTreeMap<_, _>>();
-        let applications = default_external_integration_registry()
-            .into_iter()
-            .map(|registration| {
-                project_external_application_v2(
-                    &catalog,
-                    preferences,
-                    self.execution_domain_id.as_str(),
-                    workspace_scope_id.as_deref(),
-                    registration,
-                    host_capabilities,
-                    &source_ecosystems,
-                    &subagents_by_candidate_id,
-                )
-            })
-            .collect::<Vec<_>>();
-        let review_summary = external_application_review_summary(
-            &catalog,
-            self.execution_domain_id.as_str(),
-            workspace_scope_id.as_deref(),
-            target_scope,
-            preferences.preference_revision,
-            &subagents_by_candidate_id,
-        );
-        let snapshot = ExternalApplicationSnapshotV2 {
-            schema_version: EXTERNAL_APPLICATION_SCHEMA_V2,
-            execution_domain_id: self.execution_domain_id.clone(),
-            workspace_scope_id,
-            effective_connection_scope: target_scope,
-            refresh_generation: catalog.generation,
-            preference_revision: preferences.preference_revision,
-            safe_mode: self.safe_mode_enabled(),
-            host_capabilities,
-            applications,
-            review_summary,
-        };
-        snapshot
-            .validate()
-            .map_err(|error| format!("invalid external application projection: {error}"))?;
-        Ok(snapshot)
-    }
-
-    fn application_review_page_v2(
-        &self,
-        preferences: &ExternalSourcesConfig,
-        request: ExternalApplicationReviewPageRequestV2,
-    ) -> Result<ExternalApplicationReviewPageV2, String> {
-        request
-            .validate()
-            .map_err(|error| invalid_operation_error(error))?;
-        let workspace_scope_id = workspace_policy_key(self.workspace_root.as_deref());
-        let target_scope = if workspace_scope_id.is_some() {
-            ExternalApplicationTargetScopeV2::WorkspaceOverride
-        } else {
-            ExternalApplicationTargetScopeV2::UserDefault
-        };
-        if request.execution_domain_id != self.execution_domain_id
-            || request.workspace_scope_id != workspace_scope_id
-            || request.target_scope != target_scope
-        {
-            return Err(stale_operation_error(
-                "External application review belongs to a different Host or workspace",
-            ));
-        }
-        let catalog = self.snapshot();
-        let plan = external_application_review_plan(
-            &catalog,
-            self.execution_domain_id.as_str(),
-            workspace_scope_id.as_deref(),
-            target_scope,
-            preferences.preference_revision,
-        );
-        let opening_request = request.cursor.is_none() && request.expected_generations.is_empty();
-        if request.preference_revision != preferences.preference_revision
-            || (!opening_request
-                && (request.review_id != plan.review_id
-                    || request.expected_generations != plan.expected_generations))
-        {
-            return Err(stale_operation_error(
-                "External application review changed; refresh before continuing",
-            ));
-        }
-        let offset = match request.cursor.as_deref() {
-            None => 0,
-            Some(cursor) => plan.parse_cursor(cursor)?,
-        };
-        let end = offset
-            .saturating_add(request.page_size)
-            .min(plan.items.len());
-        let items = plan.items[offset..end].to_vec();
-        let next_cursor = (end < plan.items.len()).then(|| plan.cursor(end));
-        let page = ExternalApplicationReviewPageV2 {
-            schema_version: EXTERNAL_APPLICATION_SCHEMA_V2,
-            execution_domain_id: self.execution_domain_id.clone(),
-            workspace_scope_id,
-            target_scope,
-            review_id: plan.review_id,
-            preference_revision: preferences.preference_revision,
-            expected_generations: plan.expected_generations,
-            cursor: request.cursor,
-            next_cursor,
-            total_count: plan.items.len(),
-            items,
-        };
-        page.validate()
-            .map_err(|error| format!("invalid external application review projection: {error}"))?;
-        Ok(page)
-    }
-
-    async fn apply_application_action_v2(
-        self: &Arc<Self>,
-        request: ExternalApplicationControlRequestV2,
-    ) -> Result<ExternalApplicationControlResultV2, String> {
-        request
-            .validate()
-            .map_err(|error| invalid_operation_error(error))?;
-        let workspace_scope_id = workspace_policy_key(self.workspace_root.as_deref());
-        if request.execution_domain_id != self.execution_domain_id
-            || !external_application_action_scope_matches(
-                workspace_scope_id.as_deref(),
-                request.target_scope,
-                request.workspace_scope_id.as_deref(),
-            )
-        {
-            return Err(stale_operation_error(
-                "External application action belongs to a different Host or workspace",
-            ));
-        }
-        let operation_id = request.operation_id;
-        let expected_preference_revision = request.expected_preference_revision;
-        let item_results = match request.action {
-            ExternalApplicationControlActionV2::Refresh => {
-                self.refresh_with_runtime_invalidation().await?;
-                Vec::new()
-            }
-            ExternalApplicationControlActionV2::SetSafeMode { enabled } => {
-                self.set_safe_mode(enabled, Some(expected_preference_revision))
-                    .await?;
-                Vec::new()
-            }
-            ExternalApplicationControlActionV2::SetSourceEnabled {
-                source_key,
-                enabled,
-            } => {
-                self.set_source_enabled(&source_key, enabled, expected_preference_revision)
-                    .await?;
-                Vec::new()
-            }
-            ExternalApplicationControlActionV2::ConnectApplication { application_id } => {
-                self.persist_application_connection(
-                    request.target_scope,
-                    request.workspace_scope_id.as_deref(),
-                    &application_id,
-                    StoredExternalApplicationDesiredConnection::Connected,
-                    expected_preference_revision,
-                )
-                .await?;
-                Vec::new()
-            }
-            ExternalApplicationControlActionV2::DisconnectApplication { application_id } => {
-                self.persist_application_connection(
-                    request.target_scope,
-                    request.workspace_scope_id.as_deref(),
-                    &application_id,
-                    StoredExternalApplicationDesiredConnection::Disconnected,
-                    expected_preference_revision,
-                )
-                .await?;
-                Vec::new()
-            }
-            ExternalApplicationControlActionV2::SetApplicationDeferred { application_id } => {
-                self.persist_application_connection(
-                    request.target_scope,
-                    request.workspace_scope_id.as_deref(),
-                    &application_id,
-                    StoredExternalApplicationDesiredConnection::Deferred,
-                    expected_preference_revision,
-                )
-                .await?;
-                Vec::new()
-            }
-            ExternalApplicationControlActionV2::SubmitApplicationReview {
-                review_id,
-                expected_generations,
-                selection_baseline,
-                selection_overrides,
-            } => {
-                self.apply_application_review_v2(
-                    request.target_scope,
-                    request.workspace_scope_id.as_deref(),
-                    expected_preference_revision,
-                    &review_id,
-                    expected_generations,
-                    selection_baseline,
-                    selection_overrides,
-                )
-                .await?
-            }
-        };
-        let preferences = read_external_sources_config().await?;
-        let outcome = if item_results
-            .iter()
-            .any(|item| item.outcome != ExternalApplicationOperationOutcomeV2::Applied)
-            && !item_results
-                .iter()
-                .any(|item| item.outcome == ExternalApplicationOperationOutcomeV2::Applied)
-        {
-            item_results
-                .iter()
-                .map(|item| item.outcome)
-                .next()
-                .unwrap_or(ExternalApplicationOperationOutcomeV2::Applied)
-        } else {
-            ExternalApplicationOperationOutcomeV2::Applied
-        };
-        let result = ExternalApplicationControlResultV2 {
-            schema_version: EXTERNAL_APPLICATION_SCHEMA_V2,
-            operation_id,
-            preference_revision: preferences.preference_revision,
-            outcome,
-            item_results,
-        };
-        result
-            .validate()
-            .map_err(|error| format!("invalid external application action result: {error}"))?;
-        Ok(result)
-    }
-
-    async fn persist_application_connection(
-        self: &Arc<Self>,
-        target_scope: ExternalApplicationTargetScopeV2,
-        workspace_scope_id: Option<&str>,
-        application_id: &str,
-        desired_connection: StoredExternalApplicationDesiredConnection,
-        expected_preference_revision: u64,
-    ) -> Result<(), String> {
-        let workspace_scope_id = workspace_scope_id.map(str::to_string);
-        let execution_domain_id = self.execution_domain_id.to_string();
-        let application_id = application_id.to_string();
-        let (result, preferences) = ExternalSourcePreferenceStore::global()?
-            .update(move |config| {
-                apply_external_application_connection_decision(
-                    config,
-                    &execution_domain_id,
-                    target_scope,
-                    workspace_scope_id.as_deref(),
-                    &application_id,
-                    desired_connection,
-                    expected_preference_revision,
-                )
-            })
-            .await?;
-        result?;
-        propagate_integration_policy_preferences(&preferences, self);
-        self.refresh_preserving_worker_recovery().await?;
-        Ok(())
-    }
-
-    async fn apply_application_review_v2(
-        &self,
-        target_scope: ExternalApplicationTargetScopeV2,
-        workspace_scope_id: Option<&str>,
-        expected_preference_revision: u64,
-        review_id: &str,
-        expected_generations: Vec<ExternalApplicationOwnerGenerationV2>,
-        selection_baseline: ExternalApplicationReviewSelectionBaselineV2,
-        selection_overrides: Vec<
-            bitfun_product_domains::external_source_control::ExternalApplicationReviewSelectionOverrideV2,
-        >,
-    ) -> Result<Vec<ExternalApplicationReviewItemResultV2>, String> {
-        if selection_overrides.len() > EXTERNAL_APPLICATION_REVIEW_PAGE_MAX_ITEMS {
-            return Err(invalid_operation_error(
-                "External application review has too many selection overrides",
-            ));
-        }
-        let catalog = self.snapshot();
-        let plan = external_application_review_plan(
-            &catalog,
-            self.execution_domain_id.as_str(),
-            workspace_scope_id,
-            target_scope,
-            expected_preference_revision,
-        );
-        if review_id != plan.review_id
-            || expected_generations != plan.expected_generations
-            || expected_preference_revision != catalog.preference_revision
-        {
-            return Err(stale_operation_error(
-                "External application review changed; refresh before applying it",
-            ));
-        }
-        let plan_refs = plan
-            .items
-            .iter()
-            .map(|item| item.item_ref.clone())
-            .collect::<BTreeSet<_>>();
-        let mut overrides = BTreeMap::new();
-        for selection in selection_overrides {
-            if !plan_refs.contains(&selection.item_ref)
-                || overrides
-                    .insert(selection.item_ref, selection.selected)
-                    .is_some()
-            {
-                return Err(stale_operation_error(
-                    "External application review selections no longer match the current plan",
-                ));
-            }
-        }
-        let mut current_revision = expected_preference_revision;
-        let mut results = Vec::with_capacity(plan.items.len());
-        for item in plan.items {
-            if item.safety_ceiling == ExternalApplicationSafetyCeilingV2::Blocked {
-                results.push(ExternalApplicationReviewItemResultV2 {
-                    item_ref: item.item_ref,
-                    outcome: ExternalApplicationOperationOutcomeV2::Blocked,
-                    reason_code: Some("resolve_conflict".to_string()),
-                    recovery_actions: vec![ExternalApplicationRecoveryActionV2::ResolveConflict],
-                });
-                continue;
-            }
-            let selected =
-                overrides
-                    .get(&item.item_ref)
-                    .copied()
-                    .unwrap_or(match selection_baseline {
-                        ExternalApplicationReviewSelectionBaselineV2::Recommended => {
-                            item.recommended
-                        }
-                        ExternalApplicationReviewSelectionBaselineV2::None => false,
-                    });
-            let outcome = self
-                .apply_application_review_item(&catalog, &item.item_ref, selected, current_revision)
-                .await;
-            match outcome {
-                Ok(snapshot) => {
-                    current_revision = snapshot.preference_revision;
-                    results.push(ExternalApplicationReviewItemResultV2 {
-                        item_ref: item.item_ref,
-                        outcome: ExternalApplicationOperationOutcomeV2::Applied,
-                        reason_code: None,
-                        recovery_actions: Vec::new(),
-                    });
-                }
-                Err(error) => {
-                    let (outcome, reason_code, recovery_actions) =
-                        external_application_item_failure(&error);
-                    results.push(ExternalApplicationReviewItemResultV2 {
-                        item_ref: item.item_ref,
-                        outcome,
-                        reason_code: Some(reason_code),
-                        recovery_actions,
-                    });
-                }
-            }
-        }
-        Ok(results)
-    }
-
-    async fn apply_application_review_item(
-        &self,
-        catalog: &ExternalSourceCatalogSnapshot,
-        item_ref: &ExternalApplicationReviewItemRefV2,
-        selected: bool,
-        expected_preference_revision: u64,
-    ) -> Result<ExternalSourceCatalogSnapshot, String> {
-        match item_ref.kind {
-            ExternalApplicationReviewItemKindV2::Tool => {
-                let request = catalog
-                    .tool_approval_requests
-                    .iter()
-                    .find(|request| request.approval_key == item_ref.stable_id)
-                    .ok_or_else(|| {
-                        missing_candidate_error("External tool review item is no longer available")
-                    })?;
-                self.set_tool_target_decision(
-                    &request.approval_key,
-                    &request.decision_key,
-                    selected,
-                    expected_preference_revision,
-                )
-                .await
-            }
-            ExternalApplicationReviewItemKindV2::Mcp => {
-                let request = catalog
-                    .mcp_approval_requests
-                    .iter()
-                    .find(|request| request.decision_key == item_ref.stable_id)
-                    .ok_or_else(|| {
-                        missing_candidate_error("External MCP review item is no longer available")
-                    })?;
-                self.set_mcp_server_decision(
-                    &request.candidate_id,
-                    &request.decision_key,
-                    selected,
-                    catalog.mcp_generation,
-                    expected_preference_revision,
-                )
-                .await
-            }
-            ExternalApplicationReviewItemKindV2::Subagent => {
-                let summary = catalog
-                    .subagents
-                    .iter()
-                    .find(|summary| summary.decision_key == item_ref.stable_id)
-                    .ok_or_else(|| {
-                        missing_candidate_error(
-                            "External subagent review item is no longer available",
-                        )
-                    })?;
-                self.set_subagent_activation(
-                    &summary.candidate_id,
-                    selected,
-                    catalog.subagent_generation,
-                    expected_preference_revision,
-                    &summary.decision_key,
-                )
-                .await
-            }
-            ExternalApplicationReviewItemKindV2::Command
-            | ExternalApplicationReviewItemKindV2::Conflict => Err(conflict_operation_error(
-                "External conflict review requires an explicit owner choice",
-            )),
-        }
-    }
-
     fn safe_mode_enabled(&self) -> bool {
         external_source_safe_mode_enabled_for(
             self.execution_domain_id.as_str(),
@@ -4798,763 +3988,6 @@ impl WorkspaceExternalSourceService {
     }
 }
 
-#[derive(Default)]
-struct ExternalApplicationAggregateCounts {
-    enabled: usize,
-    pending_review: usize,
-    blocked: usize,
-    conflicts: usize,
-}
-
-struct ExternalApplicationReviewPlan {
-    review_id: String,
-    expected_generations: Vec<ExternalApplicationOwnerGenerationV2>,
-    items: Vec<ExternalApplicationReviewItemV2>,
-    summary_items: Vec<ExternalApplicationReviewSummaryItem>,
-}
-
-struct ExternalApplicationReviewSummaryItem {
-    item_ref: ExternalApplicationReviewItemRefV2,
-    recommended: bool,
-    safety_ceiling: ExternalApplicationSafetyCeilingV2,
-}
-
-impl ExternalApplicationReviewPlan {
-    fn summary(&self) -> Option<ExternalApplicationReviewSummaryV2> {
-        if self.summary_items.is_empty() {
-            return None;
-        }
-        let mut counts = BTreeMap::new();
-        for item in &self.summary_items {
-            *counts.entry(item.item_ref.kind).or_insert(0usize) += 1;
-        }
-        let recommended_count = self
-            .summary_items
-            .iter()
-            .filter(|item| item.recommended)
-            .count();
-        let blocked_count = self
-            .summary_items
-            .iter()
-            .filter(|item| item.safety_ceiling == ExternalApplicationSafetyCeilingV2::Blocked)
-            .count();
-        Some(ExternalApplicationReviewSummaryV2 {
-            review_id: self.review_id.clone(),
-            total_count: self.summary_items.len(),
-            category_counts: counts
-                .into_iter()
-                .map(|(kind, count)| ExternalApplicationReviewCategoryCountV2 { kind, count })
-                .collect(),
-            max_selection_count: self.summary_items.len().saturating_sub(blocked_count),
-            risk_summary: ExternalApplicationRiskSummaryV2 {
-                highest_level: Some(ExternalApplicationRiskLevelV2::High),
-                reason_codes: vec!["executable_content_requires_review".to_string()],
-            },
-            recommendation_summary: ExternalApplicationReviewRecommendationSummaryV2 {
-                recommended_count,
-                optional_count: self
-                    .summary_items
-                    .len()
-                    .saturating_sub(recommended_count)
-                    .saturating_sub(blocked_count),
-                blocked_count,
-            },
-            safety_ceiling: if blocked_count == self.summary_items.len() {
-                ExternalApplicationSafetyCeilingV2::Blocked
-            } else {
-                ExternalApplicationSafetyCeilingV2::ReviewRequired
-            },
-        })
-    }
-
-    fn cursor(&self, offset: usize) -> String {
-        format!("{}:{offset}", self.review_id)
-    }
-
-    fn parse_cursor(&self, cursor: &str) -> Result<usize, String> {
-        let offset = cursor
-            .strip_prefix(&format!("{}:", self.review_id))
-            .and_then(|offset| offset.parse::<usize>().ok())
-            .filter(|offset| *offset < self.items.len())
-            .ok_or_else(|| {
-                stale_operation_error(
-                    "External application review cursor changed; restart the review",
-                )
-            })?;
-        Ok(offset)
-    }
-}
-
-fn external_application_review_plan(
-    catalog: &ExternalSourceCatalogSnapshot,
-    execution_domain_id: &str,
-    workspace_scope_id: Option<&str>,
-    target_scope: ExternalApplicationTargetScopeV2,
-    preference_revision: u64,
-) -> ExternalApplicationReviewPlan {
-    let subagents_by_candidate_id = catalog
-        .subagents
-        .iter()
-        .map(|subagent| (subagent.candidate_id.as_str(), subagent))
-        .collect::<BTreeMap<_, _>>();
-    external_application_review_plan_internal(
-        catalog,
-        execution_domain_id,
-        workspace_scope_id,
-        target_scope,
-        preference_revision,
-        &subagents_by_candidate_id,
-        true,
-    )
-}
-
-fn external_application_review_summary(
-    catalog: &ExternalSourceCatalogSnapshot,
-    execution_domain_id: &str,
-    workspace_scope_id: Option<&str>,
-    target_scope: ExternalApplicationTargetScopeV2,
-    preference_revision: u64,
-    subagents_by_candidate_id: &BTreeMap<&str, &ExternalSubagentSummary>,
-) -> Option<ExternalApplicationReviewSummaryV2> {
-    external_application_review_plan_internal(
-        catalog,
-        execution_domain_id,
-        workspace_scope_id,
-        target_scope,
-        preference_revision,
-        subagents_by_candidate_id,
-        false,
-    )
-    .summary()
-}
-
-fn push_external_application_review_item<F>(
-    items: &mut Vec<ExternalApplicationReviewItemV2>,
-    summary_items: &mut Vec<ExternalApplicationReviewSummaryItem>,
-    include_item_details: bool,
-    item_ref: ExternalApplicationReviewItemRefV2,
-    recommended: bool,
-    safety_ceiling: ExternalApplicationSafetyCeilingV2,
-    build_item: F,
-) where
-    F: FnOnce(ExternalApplicationReviewItemRefV2) -> ExternalApplicationReviewItemV2,
-{
-    summary_items.push(ExternalApplicationReviewSummaryItem {
-        item_ref: item_ref.clone(),
-        recommended,
-        safety_ceiling,
-    });
-    if include_item_details {
-        items.push(build_item(item_ref));
-    }
-}
-
-fn push_external_application_conflict_review_item<F>(
-    items: &mut Vec<ExternalApplicationReviewItemV2>,
-    summary_items: &mut Vec<ExternalApplicationReviewSummaryItem>,
-    include_item_details: bool,
-    conflict_key: String,
-    build_display: F,
-) where
-    F: FnOnce() -> (String, String),
-{
-    let item_ref = ExternalApplicationReviewItemRefV2 {
-        kind: ExternalApplicationReviewItemKindV2::Conflict,
-        stable_id: conflict_key,
-    };
-    push_external_application_review_item(
-        items,
-        summary_items,
-        include_item_details,
-        item_ref,
-        false,
-        ExternalApplicationSafetyCeilingV2::Blocked,
-        |item_ref| {
-            let (display_name, display_summary) = build_display();
-            ExternalApplicationReviewItemV2 {
-                item_ref,
-                display_name,
-                display_summary,
-                risk_level: ExternalApplicationRiskLevelV2::High,
-                risk_reason_codes: vec!["ambiguous_runtime_route".to_string()],
-                recommended: false,
-                safety_ceiling: ExternalApplicationSafetyCeilingV2::Blocked,
-            }
-        },
-    );
-}
-
-fn external_application_review_plan_internal(
-    catalog: &ExternalSourceCatalogSnapshot,
-    execution_domain_id: &str,
-    workspace_scope_id: Option<&str>,
-    target_scope: ExternalApplicationTargetScopeV2,
-    preference_revision: u64,
-    subagents_by_candidate_id: &BTreeMap<&str, &ExternalSubagentSummary>,
-    include_item_details: bool,
-) -> ExternalApplicationReviewPlan {
-    let mut items = Vec::new();
-    let mut summary_items = Vec::new();
-    for request in &catalog.tool_approval_requests {
-        let item_ref = ExternalApplicationReviewItemRefV2 {
-            kind: ExternalApplicationReviewItemKindV2::Tool,
-            stable_id: request.approval_key.clone(),
-        };
-        push_external_application_review_item(
-            &mut items,
-            &mut summary_items,
-            include_item_details,
-            item_ref,
-            false,
-            ExternalApplicationSafetyCeilingV2::ReviewRequired,
-            |item_ref| ExternalApplicationReviewItemV2 {
-                item_ref,
-                display_name: request.source_display_name.clone(),
-                display_summary: format!(
-                    "{} external tool{} require approval",
-                    request.tool_names.len(),
-                    if request.tool_names.len() == 1 {
-                        ""
-                    } else {
-                        "s"
-                    }
-                ),
-                risk_level: ExternalApplicationRiskLevelV2::High,
-                risk_reason_codes: vec!["process_or_resource_access".to_string()],
-                recommended: false,
-                safety_ceiling: ExternalApplicationSafetyCeilingV2::ReviewRequired,
-            },
-        );
-    }
-    for request in &catalog.mcp_approval_requests {
-        let item_ref = ExternalApplicationReviewItemRefV2 {
-            kind: ExternalApplicationReviewItemKindV2::Mcp,
-            stable_id: request.decision_key.clone(),
-        };
-        push_external_application_review_item(
-            &mut items,
-            &mut summary_items,
-            include_item_details,
-            item_ref,
-            false,
-            ExternalApplicationSafetyCeilingV2::ReviewRequired,
-            |item_ref| ExternalApplicationReviewItemV2 {
-                item_ref,
-                display_name: request.definition.name.clone(),
-                display_summary: "External MCP server requires approval".to_string(),
-                risk_level: ExternalApplicationRiskLevelV2::High,
-                risk_reason_codes: vec!["process_or_network_access".to_string()],
-                recommended: false,
-                safety_ceiling: ExternalApplicationSafetyCeilingV2::ReviewRequired,
-            },
-        );
-    }
-    for candidate_id in &catalog.pending_subagent_approvals {
-        let Some(summary) = subagents_by_candidate_id
-            .get(candidate_id.as_str())
-            .copied()
-        else {
-            continue;
-        };
-        let item_ref = ExternalApplicationReviewItemRefV2 {
-            kind: ExternalApplicationReviewItemKindV2::Subagent,
-            stable_id: summary.decision_key.clone(),
-        };
-        push_external_application_review_item(
-            &mut items,
-            &mut summary_items,
-            include_item_details,
-            item_ref,
-            false,
-            ExternalApplicationSafetyCeilingV2::ReviewRequired,
-            |item_ref| ExternalApplicationReviewItemV2 {
-                item_ref,
-                display_name: summary.display_name.clone(),
-                display_summary: "External subagent and its requested tools require approval"
-                    .to_string(),
-                risk_level: ExternalApplicationRiskLevelV2::High,
-                risk_reason_codes: vec!["delegated_tool_access".to_string()],
-                recommended: false,
-                safety_ceiling: ExternalApplicationSafetyCeilingV2::ReviewRequired,
-            },
-        );
-    }
-    for conflict in catalog
-        .command_conflicts
-        .iter()
-        .filter(|conflict| conflict.selected_candidate_id.is_none())
-    {
-        push_external_application_conflict_review_item(
-            &mut items,
-            &mut summary_items,
-            include_item_details,
-            conflict.conflict_key.clone(),
-            || {
-                (
-                    format!("Resolve command conflict: {}", conflict.command_name),
-                    "Choose one compatible command source".to_string(),
-                )
-            },
-        );
-    }
-    for conflict in catalog
-        .tool_conflicts
-        .iter()
-        .filter(|conflict| conflict.selected_candidate_id.is_none())
-    {
-        push_external_application_conflict_review_item(
-            &mut items,
-            &mut summary_items,
-            include_item_details,
-            conflict.conflict_key.clone(),
-            || {
-                (
-                    format!("Resolve tool conflict: {}", conflict.tool_name),
-                    "Choose one compatible tool source".to_string(),
-                )
-            },
-        );
-    }
-    for conflict in catalog
-        .mcp_conflicts
-        .iter()
-        .filter(|conflict| conflict.selected_candidate_id.is_none())
-    {
-        push_external_application_conflict_review_item(
-            &mut items,
-            &mut summary_items,
-            include_item_details,
-            conflict.conflict_key.clone(),
-            || {
-                (
-                    format!("Resolve MCP conflict: {}", conflict.server_name),
-                    "Choose one compatible MCP server".to_string(),
-                )
-            },
-        );
-    }
-    for conflict in catalog
-        .subagent_conflicts
-        .iter()
-        .filter(|conflict| conflict.selected_candidate_id.is_none())
-    {
-        push_external_application_conflict_review_item(
-            &mut items,
-            &mut summary_items,
-            include_item_details,
-            conflict.conflict_key.clone(),
-            || {
-                (
-                    format!("Resolve subagent conflict: {}", conflict.logical_id),
-                    "Choose one compatible subagent source".to_string(),
-                )
-            },
-        );
-    }
-    items.sort_by(|left, right| left.item_ref.cmp(&right.item_ref));
-    items.dedup_by(|left, right| left.item_ref == right.item_ref);
-    summary_items.sort_by(|left, right| left.item_ref.cmp(&right.item_ref));
-    summary_items.dedup_by(|left, right| left.item_ref == right.item_ref);
-    let expected_generations = vec![
-        ExternalApplicationOwnerGenerationV2 {
-            owner: ExternalApplicationReviewItemKindV2::Command,
-            generation: catalog.generation,
-        },
-        ExternalApplicationOwnerGenerationV2 {
-            owner: ExternalApplicationReviewItemKindV2::Tool,
-            generation: catalog.generation,
-        },
-        ExternalApplicationOwnerGenerationV2 {
-            owner: ExternalApplicationReviewItemKindV2::Subagent,
-            generation: catalog.subagent_generation,
-        },
-        ExternalApplicationOwnerGenerationV2 {
-            owner: ExternalApplicationReviewItemKindV2::Mcp,
-            generation: catalog.mcp_generation,
-        },
-        ExternalApplicationOwnerGenerationV2 {
-            owner: ExternalApplicationReviewItemKindV2::Conflict,
-            generation: catalog.generation,
-        },
-    ];
-    let mut hasher = Sha256::new();
-    hasher.update(execution_domain_id.as_bytes());
-    hasher.update([0]);
-    hasher.update(workspace_scope_id.unwrap_or("<none>").as_bytes());
-    hasher.update([target_scope as u8]);
-    hasher.update(preference_revision.to_le_bytes());
-    for generation in &expected_generations {
-        hasher.update([generation.owner as u8]);
-        hasher.update(generation.generation.to_le_bytes());
-    }
-    for item in &summary_items {
-        hasher.update([item.item_ref.kind as u8]);
-        hasher.update(item.item_ref.stable_id.as_bytes());
-        hasher.update([0]);
-    }
-    let review_id = format!("review:{}", hex::encode(&hasher.finalize()[..16]));
-    ExternalApplicationReviewPlan {
-        review_id,
-        expected_generations,
-        items,
-        summary_items,
-    }
-}
-
-fn external_application_item_failure(
-    error: &str,
-) -> (
-    ExternalApplicationOperationOutcomeV2,
-    String,
-    Vec<ExternalApplicationRecoveryActionV2>,
-) {
-    let code = ExternalSourceOperationError::decode(error)
-        .map(|error| error.code)
-        .unwrap_or(ExternalSourceOperationErrorCode::Internal);
-    match code {
-        ExternalSourceOperationErrorCode::StaleRevision => (
-            ExternalApplicationOperationOutcomeV2::Stale,
-            code.as_str().to_string(),
-            vec![ExternalApplicationRecoveryActionV2::Refresh],
-        ),
-        ExternalSourceOperationErrorCode::Conflict
-        | ExternalSourceOperationErrorCode::PolicyLimited
-        | ExternalSourceOperationErrorCode::TrustRequired
-        | ExternalSourceOperationErrorCode::Unavailable
-        | ExternalSourceOperationErrorCode::RuntimeUnavailable => (
-            ExternalApplicationOperationOutcomeV2::Blocked,
-            code.as_str().to_string(),
-            vec![ExternalApplicationRecoveryActionV2::ViewReason],
-        ),
-        ExternalSourceOperationErrorCode::InvalidRequest
-        | ExternalSourceOperationErrorCode::NotFound => (
-            ExternalApplicationOperationOutcomeV2::Rejected,
-            code.as_str().to_string(),
-            vec![ExternalApplicationRecoveryActionV2::Refresh],
-        ),
-        _ => (
-            ExternalApplicationOperationOutcomeV2::Failed,
-            code.as_str().to_string(),
-            vec![ExternalApplicationRecoveryActionV2::Retry],
-        ),
-    }
-}
-
-fn project_external_application_v2(
-    catalog: &ExternalSourceCatalogSnapshot,
-    preferences: &ExternalSourcesConfig,
-    execution_domain_id: &str,
-    workspace_scope_id: Option<&str>,
-    registration: ExternalEcosystemRegistration,
-    host_capabilities: ExternalApplicationHostCapabilitiesV2,
-    source_ecosystems: &BTreeMap<SourceKey, EcosystemId>,
-    subagents_by_candidate_id: &BTreeMap<&str, &ExternalSubagentSummary>,
-) -> ExternalApplicationSummaryV2 {
-    let ecosystem_id = &registration.descriptor.ecosystem_id;
-    let sources = catalog
-        .sources
-        .iter()
-        .filter(|source| {
-            source.record.ecosystem_id == *ecosystem_id
-                && !matches!(source.lifecycle, ExternalSourceLifecycleState::Removed)
-        })
-        .collect::<Vec<_>>();
-    let discovery = if sources.is_empty() {
-        ExternalApplicationDiscoveryStateV2::NotDiscovered
-    } else {
-        ExternalApplicationDiscoveryStateV2::Discovered
-    };
-    let unavailable_sources = sources
-        .iter()
-        .filter(|source| matches!(source.lifecycle, ExternalSourceLifecycleState::Unavailable))
-        .count();
-    let degraded = sources.iter().any(|source| {
-        matches!(
-            source.lifecycle,
-            ExternalSourceLifecycleState::Degraded
-                | ExternalSourceLifecycleState::Restricted
-                | ExternalSourceLifecycleState::UsingLastValidVersion
-        ) || !source.record.diagnostics.is_empty()
-    });
-    let health = if !sources.is_empty() && unavailable_sources == sources.len() {
-        ExternalApplicationHealthV2::Unavailable
-    } else if degraded || unavailable_sources > 0 {
-        ExternalApplicationHealthV2::Degraded
-    } else {
-        ExternalApplicationHealthV2::Healthy
-    };
-    let explicit = workspace_scope_id
-        .and_then(|workspace_scope_id| {
-            preferences
-                .application_connections
-                .get(&external_application_connection_key(
-                    execution_domain_id,
-                    ecosystem_id.as_str(),
-                    Some(workspace_scope_id),
-                ))
-        })
-        .or_else(|| {
-            preferences
-                .application_connections
-                .get(&external_application_connection_key(
-                    execution_domain_id,
-                    ecosystem_id.as_str(),
-                    None,
-                ))
-        });
-    let (desired_connection, user_decision) = match explicit {
-        Some(decision) => (
-            public_desired_connection(decision.desired_connection),
-            public_user_decision(decision.desired_connection),
-        ),
-        None => (
-            match registration.default_connection_policy {
-                ExternalApplicationDefaultConnectionPolicyV2::Connect => {
-                    ExternalApplicationDesiredConnectionV2::Connected
-                }
-                ExternalApplicationDefaultConnectionPolicyV2::DiscoverOnly
-                | ExternalApplicationDefaultConnectionPolicyV2::Unsupported => {
-                    ExternalApplicationDesiredConnectionV2::Disconnected
-                }
-            },
-            ExternalApplicationUserDecisionV2::None,
-        ),
-    };
-    let connection = if desired_connection == ExternalApplicationDesiredConnectionV2::Connected
-        && discovery == ExternalApplicationDiscoveryStateV2::Discovered
-    {
-        ExternalApplicationConnectionStateV2::Connected
-    } else {
-        ExternalApplicationConnectionStateV2::Disconnected
-    };
-    let counts = external_application_counts(
-        catalog,
-        ecosystem_id,
-        source_ecosystems,
-        subagents_by_candidate_id,
-    );
-    let needs_attention = desired_connection == ExternalApplicationDesiredConnectionV2::NeedsReview
-        || (connection == ExternalApplicationConnectionStateV2::Connected
-            && (counts.pending_review > 0 || counts.conflicts > 0));
-    let temporarily_unavailable = discovery == ExternalApplicationDiscoveryStateV2::Discovered
-        && health == ExternalApplicationHealthV2::Unavailable;
-    let (effective_status, primary_action) = derive_external_application_status_v2(
-        needs_attention,
-        temporarily_unavailable,
-        host_capabilities.can_refresh,
-        connection,
-        discovery,
-    );
-    let recovery_actions = match primary_action {
-        ExternalApplicationPrimaryActionV2::Review => {
-            vec![ExternalApplicationRecoveryActionV2::Review]
-        }
-        ExternalApplicationPrimaryActionV2::Retry => {
-            vec![ExternalApplicationRecoveryActionV2::Retry]
-        }
-        ExternalApplicationPrimaryActionV2::ViewReason => {
-            vec![ExternalApplicationRecoveryActionV2::ViewReason]
-        }
-        _ => Vec::new(),
-    };
-    let acknowledged = preferences
-        .acknowledged_ecosystems
-        .contains(&acknowledged_ecosystem_key(
-            execution_domain_id,
-            ecosystem_id.as_str(),
-        ));
-    ExternalApplicationSummaryV2 {
-        application_id: ecosystem_id.to_string(),
-        ecosystem_id: ecosystem_id.to_string(),
-        display_name: registration.descriptor.display_name,
-        discovery,
-        connection,
-        desired_connection,
-        health,
-        effective_status,
-        primary_action,
-        default_connection_policy: registration.default_connection_policy,
-        default_connection_reason: registration.default_connection_reason.to_string(),
-        enabled_count: counts.enabled,
-        pending_review_count: counts.pending_review,
-        blocked_count: counts.blocked,
-        conflict_count: counts.conflicts,
-        risk_summary: ExternalApplicationRiskSummaryV2 {
-            highest_level: (counts.pending_review > 0 || counts.conflicts > 0)
-                .then_some(ExternalApplicationRiskLevelV2::High),
-            reason_codes: (counts.pending_review > 0 || counts.conflicts > 0)
-                .then(|| vec!["executable_content_requires_review".to_string()])
-                .unwrap_or_default(),
-        },
-        notice_key: (!acknowledged && discovery == ExternalApplicationDiscoveryStateV2::Discovered)
-            .then(|| {
-                format!(
-                    "application_discovered:{}:{}",
-                    ecosystem_id, registration.descriptor.adapter_revision
-                )
-            }),
-        user_decision,
-        recovery_actions,
-    }
-}
-
-fn public_desired_connection(
-    desired: StoredExternalApplicationDesiredConnection,
-) -> ExternalApplicationDesiredConnectionV2 {
-    match desired {
-        StoredExternalApplicationDesiredConnection::Connected => {
-            ExternalApplicationDesiredConnectionV2::Connected
-        }
-        StoredExternalApplicationDesiredConnection::Disconnected => {
-            ExternalApplicationDesiredConnectionV2::Disconnected
-        }
-        StoredExternalApplicationDesiredConnection::Deferred => {
-            ExternalApplicationDesiredConnectionV2::Deferred
-        }
-        StoredExternalApplicationDesiredConnection::NeedsReview => {
-            ExternalApplicationDesiredConnectionV2::NeedsReview
-        }
-    }
-}
-
-fn public_user_decision(
-    desired: StoredExternalApplicationDesiredConnection,
-) -> ExternalApplicationUserDecisionV2 {
-    match desired {
-        StoredExternalApplicationDesiredConnection::Connected => {
-            ExternalApplicationUserDecisionV2::Connected
-        }
-        StoredExternalApplicationDesiredConnection::Disconnected => {
-            ExternalApplicationUserDecisionV2::Disconnected
-        }
-        StoredExternalApplicationDesiredConnection::Deferred => {
-            ExternalApplicationUserDecisionV2::Deferred
-        }
-        StoredExternalApplicationDesiredConnection::NeedsReview => {
-            ExternalApplicationUserDecisionV2::NeedsReview
-        }
-    }
-}
-
-fn external_application_counts(
-    catalog: &ExternalSourceCatalogSnapshot,
-    ecosystem_id: &EcosystemId,
-    source_ecosystems: &BTreeMap<SourceKey, EcosystemId>,
-    subagents_by_candidate_id: &BTreeMap<&str, &ExternalSubagentSummary>,
-) -> ExternalApplicationAggregateCounts {
-    let source_belongs = |source_key: &SourceKey| {
-        source_ecosystems
-            .get(source_key)
-            .is_some_and(|source_ecosystem| source_ecosystem == ecosystem_id)
-    };
-    let mut counts = ExternalApplicationAggregateCounts::default();
-    for command in &catalog.commands {
-        if !source_belongs(&command.definition.id.source) {
-            continue;
-        }
-        match command.definition.availability {
-            PromptCommandAvailability::Available => counts.enabled += 1,
-            PromptCommandAvailability::Restricted { .. }
-            | PromptCommandAvailability::Invalid { .. } => counts.blocked += 1,
-            _ => counts.blocked += 1,
-        }
-    }
-    for tool in &catalog.tools {
-        if !source_belongs(&tool.definition.id.target.source) {
-            continue;
-        }
-        match tool.activation {
-            ExternalToolActivationState::Active => counts.enabled += 1,
-            ExternalToolActivationState::ApprovalRequired => counts.pending_review += 1,
-            ExternalToolActivationState::Conflict => {}
-            ExternalToolActivationState::Unsupported { .. }
-            | ExternalToolActivationState::RuntimeUnavailable { .. }
-            | ExternalToolActivationState::LoadFailed { .. } => counts.blocked += 1,
-            ExternalToolActivationState::Declined | ExternalToolActivationState::Disabled => {}
-            _ => counts.blocked += 1,
-        }
-    }
-    for subagent in &catalog.subagents {
-        if !subagent.source_keys.iter().any(source_belongs) {
-            continue;
-        }
-        match subagent.activation_state {
-            ExternalSubagentActivationState::Active => counts.enabled += 1,
-            ExternalSubagentActivationState::ApprovalRequired => counts.pending_review += 1,
-            ExternalSubagentActivationState::Conflict => {}
-            ExternalSubagentActivationState::Blocked
-            | ExternalSubagentActivationState::Unavailable => counts.blocked += 1,
-            ExternalSubagentActivationState::Declined
-            | ExternalSubagentActivationState::Disabled => {}
-        }
-    }
-    for server in &catalog.mcp_servers {
-        if !source_belongs(&server.definition.id.source) {
-            continue;
-        }
-        match server.activation_state {
-            ExternalMcpActivationState::Active => counts.enabled += 1,
-            ExternalMcpActivationState::ApprovalRequired
-            | ExternalMcpActivationState::ConfigurationChanged => counts.pending_review += 1,
-            ExternalMcpActivationState::Conflict => {}
-            ExternalMcpActivationState::Unsupported { .. }
-            | ExternalMcpActivationState::RuntimeUnavailable { .. }
-            | ExternalMcpActivationState::Removed => counts.blocked += 1,
-            ExternalMcpActivationState::Starting => counts.enabled += 1,
-            ExternalMcpActivationState::Declined
-            | ExternalMcpActivationState::Covered { .. }
-            | ExternalMcpActivationState::SourceDisabled => {}
-            _ => counts.blocked += 1,
-        }
-    }
-    counts.conflicts += catalog
-        .command_conflicts
-        .iter()
-        .filter(|conflict| {
-            conflict.selected_candidate_id.is_none()
-                && conflict
-                    .candidates
-                    .iter()
-                    .any(|candidate| candidate.ecosystem_id == *ecosystem_id)
-        })
-        .count();
-    counts.conflicts += catalog
-        .tool_conflicts
-        .iter()
-        .filter(|conflict| {
-            conflict.selected_candidate_id.is_none()
-                && conflict
-                    .candidates
-                    .iter()
-                    .any(|candidate| candidate.source.as_ref().is_some_and(&source_belongs))
-        })
-        .count();
-    counts.conflicts += catalog
-        .mcp_conflicts
-        .iter()
-        .filter(|conflict| {
-            conflict.selected_candidate_id.is_none()
-                && conflict
-                    .candidates
-                    .iter()
-                    .any(|candidate| candidate.source.as_ref().is_some_and(&source_belongs))
-        })
-        .count();
-    counts.conflicts += catalog
-        .subagent_conflicts
-        .iter()
-        .filter(|conflict| {
-            conflict.selected_candidate_id.is_none()
-                && conflict.candidates.iter().any(|candidate| {
-                    subagents_by_candidate_id
-                        .get(candidate.candidate_id.as_str())
-                        .is_some_and(|subagent| subagent.source_keys.iter().any(&source_belongs))
-                })
-        })
-        .count();
-    counts
-}
-
 fn lock_coordinator(
     control_plane: &ExternalSourceControlPlane,
 ) -> MutexGuard<'_, bitfun_external_sources::ExternalSourceCoordinator> {
@@ -6206,24 +4639,6 @@ async fn service_for_profile(
     service.touch();
     service.ensure_idle_keepalive();
     sync_service_preferences(&service).await?;
-    Ok(service)
-}
-
-async fn existing_service_for_profile(
-    workspace_root: Option<&Path>,
-    profile: ExternalSourceServiceProfile,
-) -> Result<Arc<WorkspaceExternalSourceService>, String> {
-    let workspace_root = normalize_workspace_root(workspace_root)?;
-    let _service_gate = workspace_service_gate().lock().await;
-    let service = workspace_services_for_profile(profile)
-        .get(&workspace_root)
-        .and_then(|service| service.value().upgrade())
-        .ok_or_else(|| {
-            stale_operation_error(
-                "External application snapshot expired; refresh before continuing",
-            )
-        })?;
-    service.touch();
     Ok(service)
 }
 
@@ -7167,27 +5582,6 @@ fn apply_integration_policy_mutation_to_config(
                 .user_defaults
                 .enabled = false;
             config.integration_policy = reset_policy;
-            config.config_origin = Some(ExternalSourcesConfigOrigin::IncompatibleReset);
-            config.connection_schema_migration_version =
-                EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION;
-            config.application_connections = default_external_integration_registry()
-                .into_iter()
-                .map(|registration| {
-                    (
-                        external_application_connection_key(
-                            LEGACY_LOCAL_EXECUTION_DOMAIN_ID,
-                            registration.descriptor.ecosystem_id.as_str(),
-                            None,
-                        ),
-                        StoredExternalApplicationConnectionDecision {
-                            desired_connection:
-                                StoredExternalApplicationDesiredConnection::Disconnected,
-                            decision_origin:
-                                StoredExternalApplicationDecisionOrigin::IncompatibleReset,
-                        },
-                    )
-                })
-                .collect();
             config.preference_revision = config.preference_revision.saturating_add(1);
             return Ok(true);
         }
@@ -8321,59 +6715,6 @@ pub async fn get_external_source_control_snapshot(
     Ok(service.surface_snapshot(host_capabilities))
 }
 
-pub async fn get_external_application_snapshot_v2(
-    workspace_root: Option<&Path>,
-    force_refresh: bool,
-    host_capabilities: ExternalApplicationHostCapabilitiesV2,
-) -> Result<ExternalApplicationSnapshotV2, String> {
-    if !host_capabilities.can_read_snapshot {
-        return Err(unavailable_operation_error(
-            "This Host cannot read external application state",
-        ));
-    }
-    let service = if host_capabilities.can_mutate {
-        service_for(workspace_root).await?
-    } else {
-        read_only_service_for(workspace_root).await?
-    };
-    if force_refresh {
-        if host_capabilities.can_refresh && host_capabilities.can_mutate {
-            service.refresh_with_runtime_invalidation().await?;
-        } else {
-            service.refresh().await?;
-        }
-    } else {
-        service.ensure_background_refresh();
-    }
-    let preferences = ExternalSourcePreferenceStore::global()?
-        .ensure_application_connection_schema(service.execution_domain_id.as_str())
-        .await?;
-    service.application_snapshot_v2(&preferences, host_capabilities)
-}
-
-pub async fn get_external_application_review_page_v2(
-    workspace_root: Option<&Path>,
-    request: ExternalApplicationReviewPageRequestV2,
-) -> Result<ExternalApplicationReviewPageV2, String> {
-    let service =
-        existing_service_for_profile(workspace_root, ExternalSourceServiceProfile::LocalExecution)
-            .await?;
-    let preferences = ExternalSourcePreferenceStore::global()?
-        .ensure_application_connection_schema(service.execution_domain_id.as_str())
-        .await?;
-    service.application_review_page_v2(&preferences, request)
-}
-
-pub async fn apply_external_application_action_v2(
-    workspace_root: Option<&Path>,
-    request: ExternalApplicationControlRequestV2,
-) -> Result<ExternalApplicationControlResultV2, String> {
-    service_for(workspace_root)
-        .await?
-        .apply_application_action_v2(request)
-        .await
-}
-
 pub async fn apply_external_source_control_action(
     workspace_root: Option<&Path>,
     request: ExternalSourceControlRequestV1,
@@ -8735,7 +7076,6 @@ mod opencode_local_source_order_tests;
 mod tests {
     use super::*;
     use crate::service::mcp::{ConfigLocation, MCPServerConfig, MCPServerType};
-    use bitfun_product_domains::external_source_control::ExternalApplicationEffectiveStatusV2;
     use bitfun_product_domains::external_sources::{
         EcosystemId, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
         PromptCommandAvailability, PromptCommandCatalogEntry, PromptCommandConflict,
@@ -10556,561 +8896,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fresh_v2_store_applies_only_the_product_default_connection() {
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("external-sources.json");
-        let store = ExternalSourcePreferenceStore::new(path);
-
-        let migrated = store
-            .ensure_application_connection_schema(LEGACY_LOCAL_EXECUTION_DOMAIN_ID)
-            .await
-            .expect("a missing preference file should initialize as fresh v2");
-
-        assert_eq!(
-            migrated.connection_schema_migration_version,
-            EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION
-        );
-        assert_eq!(
-            migrated.config_origin,
-            Some(ExternalSourcesConfigOrigin::FreshV2)
-        );
-        assert!(migrated.application_connections.is_empty());
-
-        let policy = integration_policy_snapshot(&migrated, None).unwrap();
-        assert!(policy.global_effective.enabled);
-        assert_eq!(
-            policy.global_effective.ecosystems[&EcosystemId::new(OPENCODE_ECOSYSTEM_ID).unwrap()]
-                .mode,
-            ExternalIntegrationMode::Recommended
-        );
-        for ecosystem_id in [CLAUDE_CODE_ECOSYSTEM_ID, CODEX_ECOSYSTEM_ID] {
-            assert_eq!(
-                policy.global_effective.ecosystems[&EcosystemId::new(ecosystem_id).unwrap()].mode,
-                ExternalIntegrationMode::DiscoverOnly
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn legacy_disabled_policy_migrates_to_explicit_safe_disconnects() {
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("external-sources.json");
-        let store = ExternalSourcePreferenceStore::new(path.clone());
-        let mut legacy = ExternalSourcesConfig::default();
-        legacy.preference_revision = 7;
-        legacy
-            .approved_tool_targets
-            .insert("preserved-approval".to_string());
-        JsonFileStore
-            .write_atomic_strict(&path, &legacy)
-            .await
-            .unwrap();
-
-        let migrated = store
-            .ensure_application_connection_schema(LEGACY_LOCAL_EXECUTION_DOMAIN_ID)
-            .await
-            .unwrap();
-
-        assert_eq!(
-            migrated.config_origin,
-            Some(ExternalSourcesConfigOrigin::LegacyMigration)
-        );
-        assert_eq!(migrated.preference_revision, 7);
-        assert!(migrated
-            .approved_tool_targets
-            .contains("preserved-approval"));
-        for application_id in [
-            OPENCODE_ECOSYSTEM_ID,
-            CLAUDE_CODE_ECOSYSTEM_ID,
-            CODEX_ECOSYSTEM_ID,
-        ] {
-            let key = format!(
-                "{}\u{1f}{}\u{1f}user_default",
-                LEGACY_LOCAL_EXECUTION_DOMAIN_ID, application_id
-            );
-            assert_eq!(
-                migrated.application_connections.get(&key),
-                Some(&StoredExternalApplicationConnectionDecision {
-                    desired_connection: StoredExternalApplicationDesiredConnection::Disconnected,
-                    decision_origin: StoredExternalApplicationDecisionOrigin::LegacySafety,
-                })
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn legacy_enabled_policy_migrates_each_opaque_workspace_scope_independently() {
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("external-sources.json");
-        let store = ExternalSourcePreferenceStore::new(path.clone());
-        let workspace_scope_id = "workspace:fedcba9876543210";
-        let mut legacy = ExternalSourcesConfig::default();
-        let policy = legacy.integration_policy.known_mut().unwrap();
-        policy.user_defaults.enabled = true;
-        policy
-            .user_defaults
-            .ecosystems
-            .entry(EcosystemId::new(CLAUDE_CODE_ECOSYSTEM_ID).unwrap())
-            .or_default()
-            .mode = ExternalIntegrationMode::DiscoverOnly;
-        let workspace = policy
-            .workspace_overrides
-            .entry(workspace_scope_id.to_string())
-            .or_default();
-        workspace.enabled = Some(true);
-        workspace
-            .ecosystems
-            .entry(EcosystemId::new(OPENCODE_ECOSYSTEM_ID).unwrap())
-            .or_default()
-            .mode = Some(ExternalIntegrationMode::DiscoverOnly);
-        workspace
-            .ecosystems
-            .entry(EcosystemId::new(CODEX_ECOSYSTEM_ID).unwrap())
-            .or_default()
-            .mode = Some(ExternalIntegrationMode::Recommended);
-        JsonFileStore
-            .write_atomic_strict(&path, &legacy)
-            .await
-            .unwrap();
-
-        let migrated = store
-            .ensure_application_connection_schema(LEGACY_LOCAL_EXECUTION_DOMAIN_ID)
-            .await
-            .unwrap();
-        let decision = |application_id: &str, scope: Option<&str>| {
-            migrated.application_connections[&external_application_connection_key(
-                LEGACY_LOCAL_EXECUTION_DOMAIN_ID,
-                application_id,
-                scope,
-            )]
-                .clone()
-        };
-        assert_eq!(
-            decision(OPENCODE_ECOSYSTEM_ID, None).desired_connection,
-            StoredExternalApplicationDesiredConnection::Connected
-        );
-        assert_eq!(
-            decision(CLAUDE_CODE_ECOSYSTEM_ID, None).desired_connection,
-            StoredExternalApplicationDesiredConnection::Disconnected
-        );
-        assert_eq!(
-            decision(OPENCODE_ECOSYSTEM_ID, Some(workspace_scope_id)).desired_connection,
-            StoredExternalApplicationDesiredConnection::Disconnected
-        );
-        assert_eq!(
-            decision(CODEX_ECOSYSTEM_ID, Some(workspace_scope_id)).desired_connection,
-            StoredExternalApplicationDesiredConnection::Connected
-        );
-    }
-
-    #[tokio::test]
-    async fn future_policy_schema_is_preserved_byte_for_byte_by_the_migration_gate() {
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("external-sources.json");
-        let raw = br#"{ "integrationPolicy": { "schemaMajor": 99, "opaque": [3, 2, 1] }, "future": true }"#;
-        std::fs::write(&path, raw).unwrap();
-        let store = ExternalSourcePreferenceStore::new(path.clone());
-
-        let error = store
-            .ensure_application_connection_schema(LEGACY_LOCAL_EXECUTION_DOMAIN_ID)
-            .await
-            .expect_err("future policy schemas must not be migrated");
-
-        assert!(error.contains("schema major 99"));
-        assert_eq!(std::fs::read(path).unwrap(), raw);
-    }
-
-    #[tokio::test]
-    async fn current_v2_schema_snapshot_gate_does_not_rewrite_preferences() {
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("external-sources.json");
-        let store = ExternalSourcePreferenceStore::new(path.clone());
-        let mut current = ExternalSourcesConfig::default();
-        current.connection_schema_migration_version =
-            EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION;
-        current.config_origin = Some(ExternalSourcesConfigOrigin::FreshV2);
-        current.mcp_revision_secret = Some("00".repeat(32));
-        let mut raw = serde_json::to_vec_pretty(&current).unwrap();
-        raw.extend_from_slice(b"\r\n");
-        std::fs::write(&path, &raw).unwrap();
-
-        store
-            .ensure_application_connection_schema(LEGACY_LOCAL_EXECUTION_DOMAIN_ID)
-            .await
-            .unwrap();
-
-        assert_eq!(std::fs::read(path).unwrap(), raw);
-    }
-
-    #[test]
-    fn legacy_config_with_a_revision_key_remains_available_after_migration_failure() {
-        let mut legacy = ExternalSourcesConfig::default();
-        legacy.mcp_revision_secret = Some("11".repeat(32));
-
-        let (preserved, revision_key) = legacy_config_after_migration_failure(
-            legacy.clone(),
-            "migration write failed".to_string(),
-        )
-        .unwrap();
-
-        assert_eq!(preserved, legacy);
-        assert!(!revision_key
-            .opaque_revision("test", [b"payload".as_slice()])
-            .is_empty());
-        assert!(legacy_config_after_migration_failure(
-            ExternalSourcesConfig::default(),
-            "migration write failed".to_string(),
-        )
-        .unwrap_err()
-        .contains("migration write failed"));
-    }
-
-    #[tokio::test]
-    async fn review_page_does_not_cold_start_an_external_source_service() {
-        let temp = tempfile::tempdir().unwrap();
-
-        let error = match existing_service_for_profile(
-            Some(temp.path()),
-            ExternalSourceServiceProfile::LocalExecution,
-        )
-        .await
-        {
-            Ok(_) => panic!("review page must not cold-start an external source service"),
-            Err(error) => error,
-        };
-
-        assert!(error.contains("stale_revision"));
-    }
-
-    #[test]
-    fn application_snapshot_uses_registry_defaults_and_shared_status_priority() {
-        let service = test_service(Vec::new());
-        let source_key = SourceKey::new("opencode.commands", "project").unwrap();
-        lock_snapshot(&service.snapshot).sources = vec![ExternalSourceCatalogEntry {
-            stable_key: source_key.stable_key(),
-            presentation_group_id: None,
-            record: ExternalSourceRecord {
-                key: source_key,
-                ecosystem_id: EcosystemId::new(OPENCODE_ECOSYSTEM_ID).unwrap(),
-                display_name: "OpenCode project commands".to_string(),
-                source_kind: "opencode_commands".to_string(),
-                scope: ExternalSourceScope::Project,
-                location: "<workspace>/.opencode/commands".to_string(),
-                execution_domain_id: ExecutionDomainId::new(LEGACY_LOCAL_EXECUTION_DOMAIN_ID)
-                    .unwrap(),
-                health: bitfun_product_domains::external_sources::ExternalSourceHealth::Available,
-                content_version: "v1".to_string(),
-                diagnostics: Vec::new(),
-            },
-            lifecycle: ExternalSourceLifecycleState::Available,
-        }];
-        let mut preferences = ExternalSourcesConfig::default();
-        apply_fresh_v2_product_defaults(&mut preferences).unwrap();
-        preferences.config_origin = Some(ExternalSourcesConfigOrigin::FreshV2);
-        preferences.connection_schema_migration_version =
-            EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION;
-
-        let snapshot = service
-            .application_snapshot_v2(
-                &preferences,
-                ExternalApplicationHostCapabilitiesV2::read_write(),
-            )
-            .unwrap();
-
-        assert_eq!(snapshot.schema_version, EXTERNAL_APPLICATION_SCHEMA_V2);
-        assert_eq!(snapshot.applications.len(), 3);
-        let open_code = snapshot
-            .applications
-            .iter()
-            .find(|application| application.application_id == OPENCODE_ECOSYSTEM_ID)
-            .unwrap();
-        assert_eq!(
-            open_code.default_connection_policy,
-            ExternalApplicationDefaultConnectionPolicyV2::Connect
-        );
-        assert_eq!(
-            open_code.user_decision,
-            ExternalApplicationUserDecisionV2::None
-        );
-        assert_eq!(
-            open_code.desired_connection,
-            ExternalApplicationDesiredConnectionV2::Connected
-        );
-        assert_eq!(
-            open_code.connection,
-            ExternalApplicationConnectionStateV2::Connected
-        );
-        assert_eq!(
-            open_code.effective_status,
-            ExternalApplicationEffectiveStatusV2::Connected
-        );
-        assert_eq!(
-            open_code.primary_action,
-            ExternalApplicationPrimaryActionV2::View
-        );
-        for application_id in [CLAUDE_CODE_ECOSYSTEM_ID, CODEX_ECOSYSTEM_ID] {
-            let application = snapshot
-                .applications
-                .iter()
-                .find(|application| application.application_id == application_id)
-                .unwrap();
-            assert_eq!(
-                application.default_connection_policy,
-                ExternalApplicationDefaultConnectionPolicyV2::DiscoverOnly
-            );
-            assert_eq!(
-                application.effective_status,
-                ExternalApplicationEffectiveStatusV2::NoConfiguration
-            );
-        }
-    }
-
-    #[test]
-    fn workspace_connection_decision_updates_v2_and_v1_projection_together() {
-        let mut preferences = ExternalSourcesConfig::default();
-        apply_fresh_v2_product_defaults(&mut preferences).unwrap();
-        preferences.config_origin = Some(ExternalSourcesConfigOrigin::FreshV2);
-        preferences.connection_schema_migration_version =
-            EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION;
-        preferences.preference_revision = 3;
-        let workspace_scope_id = "workspace:0123456789abcdef";
-
-        assert!(apply_external_application_connection_decision(
-            &mut preferences,
-            LEGACY_LOCAL_EXECUTION_DOMAIN_ID,
-            ExternalApplicationTargetScopeV2::WorkspaceOverride,
-            Some(workspace_scope_id),
-            CODEX_ECOSYSTEM_ID,
-            StoredExternalApplicationDesiredConnection::Connected,
-            3,
-        )
-        .unwrap());
-
-        assert_eq!(preferences.preference_revision, 4);
-        let key = external_application_connection_key(
-            LEGACY_LOCAL_EXECUTION_DOMAIN_ID,
-            CODEX_ECOSYSTEM_ID,
-            Some(workspace_scope_id),
-        );
-        assert_eq!(
-            preferences.application_connections.get(&key),
-            Some(&StoredExternalApplicationConnectionDecision {
-                desired_connection: StoredExternalApplicationDesiredConnection::Connected,
-                decision_origin: StoredExternalApplicationDecisionOrigin::User,
-            })
-        );
-        let document = preferences.integration_policy.known().unwrap();
-        assert_eq!(
-            document.user_defaults.ecosystems[&EcosystemId::new(CODEX_ECOSYSTEM_ID).unwrap()].mode,
-            ExternalIntegrationMode::DiscoverOnly
-        );
-        assert_eq!(
-            document.workspace_overrides[workspace_scope_id].ecosystems
-                [&EcosystemId::new(CODEX_ECOSYSTEM_ID).unwrap()]
-                .mode,
-            Some(ExternalIntegrationMode::Recommended)
-        );
-        assert!(apply_external_application_connection_decision(
-            &mut preferences,
-            LEGACY_LOCAL_EXECUTION_DOMAIN_ID,
-            ExternalApplicationTargetScopeV2::WorkspaceOverride,
-            Some(workspace_scope_id),
-            CODEX_ECOSYSTEM_ID,
-            StoredExternalApplicationDesiredConnection::Disconnected,
-            3,
-        )
-        .is_err());
-        assert_eq!(preferences.preference_revision, 4);
-    }
-
-    #[test]
-    fn application_action_scope_allows_explicit_user_default_from_a_workspace() {
-        let current_workspace_scope = Some("workspace:0123456789abcdef");
-
-        assert!(external_application_action_scope_matches(
-            current_workspace_scope,
-            ExternalApplicationTargetScopeV2::UserDefault,
-            None,
-        ));
-        assert!(external_application_action_scope_matches(
-            current_workspace_scope,
-            ExternalApplicationTargetScopeV2::WorkspaceOverride,
-            current_workspace_scope,
-        ));
-        assert!(!external_application_action_scope_matches(
-            current_workspace_scope,
-            ExternalApplicationTargetScopeV2::WorkspaceOverride,
-            Some("workspace:different"),
-        ));
-        assert!(!external_application_action_scope_matches(
-            None,
-            ExternalApplicationTargetScopeV2::WorkspaceOverride,
-            Some("workspace:0123456789abcdef"),
-        ));
-    }
-
-    #[test]
-    fn application_review_page_is_bounded_and_bound_to_owner_generations() {
-        let service = test_service(Vec::new());
-        let source_key = SourceKey::new("opencode.commands", "project").unwrap();
-        {
-            let mut catalog = lock_snapshot(&service.snapshot);
-            catalog.generation = 7;
-            catalog.subagent_generation = 3;
-            catalog.mcp_generation = 5;
-            catalog.sources = vec![ExternalSourceCatalogEntry {
-                stable_key: source_key.stable_key(),
-                presentation_group_id: None,
-                record: ExternalSourceRecord {
-                    key: source_key.clone(),
-                    ecosystem_id: EcosystemId::new(OPENCODE_ECOSYSTEM_ID).unwrap(),
-                    display_name: "OpenCode project commands".to_string(),
-                    source_kind: "opencode_commands".to_string(),
-                    scope: ExternalSourceScope::Project,
-                    location: "<workspace>/.opencode/commands".to_string(),
-                    execution_domain_id: ExecutionDomainId::new(LEGACY_LOCAL_EXECUTION_DOMAIN_ID)
-                        .unwrap(),
-                    health:
-                        bitfun_product_domains::external_sources::ExternalSourceHealth::Available,
-                    content_version: "v1".to_string(),
-                    diagnostics: Vec::new(),
-                },
-                lifecycle: ExternalSourceLifecycleState::Available,
-            }];
-            catalog.command_conflicts = vec![PromptCommandConflict {
-                conflict_key: "prompt-command-conflict".to_string(),
-                command_name: "review".to_string(),
-                candidates: vec![PromptCommandConflictCandidate {
-                    candidate_id: "opencode.commands:project:review".to_string(),
-                    source: source_key,
-                    source_display_name: "OpenCode".to_string(),
-                    ecosystem_id: EcosystemId::new(OPENCODE_ECOSYSTEM_ID).unwrap(),
-                    content_version: "command-v1".to_string(),
-                    command_description: "Review changes".to_string(),
-                    source_scope: ExternalSourceScope::Project,
-                    source_location: "<workspace>/.opencode/commands/review.md".to_string(),
-                    execution_target: PromptCommandExecutionTarget::Inline,
-                    availability: PromptCommandAvailability::Available,
-                }],
-                selected_candidate_id: None,
-            }];
-        }
-        let mut preferences = ExternalSourcesConfig::default();
-        apply_fresh_v2_product_defaults(&mut preferences).unwrap();
-        preferences.config_origin = Some(ExternalSourcesConfigOrigin::FreshV2);
-        preferences.connection_schema_migration_version =
-            EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION;
-        preferences.preference_revision = 11;
-
-        let snapshot = service
-            .application_snapshot_v2(
-                &preferences,
-                ExternalApplicationHostCapabilitiesV2::read_write(),
-            )
-            .unwrap();
-        let review = snapshot
-            .review_summary
-            .expect("unresolved conflict requires review");
-        assert_eq!(review.total_count, 1);
-        let initial_review_id = review.review_id.clone();
-        let request = ExternalApplicationReviewPageRequestV2 {
-            schema_version: EXTERNAL_APPLICATION_SCHEMA_V2,
-            execution_domain_id: service.execution_domain_id.clone(),
-            workspace_scope_id: None,
-            target_scope: ExternalApplicationTargetScopeV2::UserDefault,
-            review_id: review.review_id,
-            preference_revision: 11,
-            expected_generations: Vec::new(),
-            cursor: None,
-            page_size: EXTERNAL_APPLICATION_REVIEW_PAGE_MAX_ITEMS,
-        };
-        lock_snapshot(&service.snapshot).generation += 1;
-        let mut unbound_follow_up = request.clone();
-        unbound_follow_up.cursor = Some(format!("{}:0", unbound_follow_up.review_id));
-        assert!(service
-            .application_review_page_v2(&preferences, unbound_follow_up)
-            .unwrap_err()
-            .contains("stale_revision"));
-        let page = service
-            .application_review_page_v2(&preferences, request)
-            .unwrap();
-        assert_ne!(page.review_id, initial_review_id);
-        assert_eq!(page.items.len(), 1);
-        assert_eq!(
-            page.items[0].item_ref.kind,
-            ExternalApplicationReviewItemKindV2::Conflict
-        );
-        assert!(!page.items[0].display_summary.contains(".opencode"));
-        assert_eq!(page.expected_generations.len(), 5);
-    }
-
-    #[test]
-    fn application_review_plan_binds_pending_subagent_candidate_to_its_decision() {
-        let service = test_service(Vec::new());
-        let candidate_id = "opencode.subagents:project:reviewer";
-        let decision_key = "subagent-approval:reviewer";
-        let catalog = {
-            let mut catalog = lock_snapshot(&service.snapshot);
-            catalog.subagent_generation = 4;
-            catalog.subagents = vec![ExternalSubagentSummary {
-                candidate_id: candidate_id.to_string(),
-                logical_id: "reviewer".to_string(),
-                display_name: "Code reviewer".to_string(),
-                description: "Reviews the current change".to_string(),
-                provider_label: "OpenCode".to_string(),
-                scope: ExternalSourceScope::Project,
-                source_keys: Vec::new(),
-                source_location_labels: Vec::new(),
-                source_count: 1,
-                mode: Default::default(),
-                requested_model: Default::default(),
-                requested_model_profile: None,
-                model_binding_method: Default::default(),
-                model_binding_key: None,
-                effective_model_label: None,
-                effective_tool_labels: vec!["read".to_string()],
-                unavailable_tool_labels: Vec::new(),
-                supports_follow_up: false,
-                compatibility_state: ExternalSubagentCompatibilityState::Ready,
-                diagnostics: Vec::new(),
-                activation_state: ExternalSubagentActivationState::ApprovalRequired,
-                decision_key: decision_key.to_string(),
-            }];
-            catalog.pending_subagent_approvals = vec![candidate_id.to_string()];
-            catalog.clone()
-        };
-
-        let plan = external_application_review_plan(
-            &catalog,
-            LEGACY_LOCAL_EXECUTION_DOMAIN_ID,
-            None,
-            ExternalApplicationTargetScopeV2::UserDefault,
-            0,
-        );
-
-        assert_eq!(plan.items.len(), 1);
-        assert_eq!(plan.items[0].display_name, "Code reviewer");
-        assert_eq!(plan.items[0].item_ref.stable_id, decision_key);
-
-        let subagents_by_candidate_id = catalog
-            .subagents
-            .iter()
-            .map(|subagent| (subagent.candidate_id.as_str(), subagent))
-            .collect::<BTreeMap<_, _>>();
-        let summary_only = external_application_review_plan_internal(
-            &catalog,
-            LEGACY_LOCAL_EXECUTION_DOMAIN_ID,
-            None,
-            ExternalApplicationTargetScopeV2::UserDefault,
-            0,
-            &subagents_by_candidate_id,
-            false,
-        );
-        assert!(summary_only.items.is_empty());
-        assert_eq!(summary_only.summary(), plan.summary());
-    }
-
-    #[tokio::test]
     async fn acknowledging_an_ecosystem_survives_a_reload_and_stays_idempotent() {
         let temp = tempfile::tempdir().unwrap();
         let path = temp.path().join("external-sources.json");
@@ -11474,6 +9259,189 @@ mod tests {
         assert_eq!(encoded["futurePreferenceField"][0], "keep");
     }
 
+    fn retired_application_default_fixture() -> ExternalSourcesConfig {
+        let mut config = ExternalSourcesConfig::default();
+        let policy = config
+            .integration_policy
+            .known_mut()
+            .expect("the built-in integration policy is known");
+        policy.user_defaults.enabled = true;
+        for (ecosystem, mode) in [
+            (OPENCODE_ECOSYSTEM_ID, ExternalIntegrationMode::Recommended),
+            (
+                CLAUDE_CODE_ECOSYSTEM_ID,
+                ExternalIntegrationMode::DiscoverOnly,
+            ),
+            (CODEX_ECOSYSTEM_ID, ExternalIntegrationMode::DiscoverOnly),
+        ] {
+            policy
+                .user_defaults
+                .ecosystems
+                .entry(EcosystemId::new(ecosystem).unwrap())
+                .or_default()
+                .mode = mode;
+        }
+        config
+    }
+
+    fn retired_application_document(
+        config: ExternalSourcesConfig,
+        decisions: serde_json::Value,
+    ) -> serde_json::Value {
+        let mut raw = serde_json::to_value(config).unwrap();
+        raw["configOrigin"] = serde_json::json!("fresh_v2");
+        raw["connectionSchemaMigrationVersion"] = serde_json::json!(1);
+        raw["applicationConnections"] = decisions;
+        raw
+    }
+
+    #[tokio::test]
+    async fn retired_automatic_application_default_is_not_user_consent() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let raw = retired_application_document(
+            retired_application_default_fixture(),
+            serde_json::json!({}),
+        );
+        std::fs::write(&path, serde_json::to_vec_pretty(&raw).unwrap()).unwrap();
+        let store = ExternalSourcePreferenceStore::new(path);
+
+        let read = store.read().await.unwrap();
+        let read_policy = read.integration_policy.known().unwrap();
+        assert!(!read_policy.user_defaults.enabled);
+        assert!(read_policy.user_defaults.ecosystems.is_empty());
+        assert!(read.extensions.contains_key("applicationConnections"));
+
+        let (was_enabled, updated) = store
+            .update(|config| {
+                config
+                    .integration_policy
+                    .known()
+                    .unwrap()
+                    .user_defaults
+                    .enabled
+            })
+            .await
+            .unwrap();
+        assert!(!was_enabled);
+        assert!(
+            !updated
+                .integration_policy
+                .known()
+                .unwrap()
+                .user_defaults
+                .enabled
+        );
+    }
+
+    #[tokio::test]
+    async fn retired_migration_is_consumed_before_later_user_policy_changes() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let mut config = retired_application_default_fixture();
+        config
+            .integration_policy
+            .known_mut()
+            .unwrap()
+            .user_defaults
+            .ecosystems
+            .get_mut(&EcosystemId::new(CLAUDE_CODE_ECOSYSTEM_ID).unwrap())
+            .unwrap()
+            .mode = ExternalIntegrationMode::Disabled;
+        let raw = retired_application_document(config, serde_json::json!({}));
+        std::fs::write(&path, serde_json::to_vec_pretty(&raw).unwrap()).unwrap();
+        let store = ExternalSourcePreferenceStore::new(path);
+
+        let (_, migrated) = store.update(|_| {}).await.unwrap();
+        assert!(!migrated.extensions.contains_key("configOrigin"));
+        assert_eq!(
+            migrated
+                .integration_policy
+                .known()
+                .unwrap()
+                .user_defaults
+                .ecosystems[&EcosystemId::new(CLAUDE_CODE_ECOSYSTEM_ID).unwrap()]
+                .mode,
+            ExternalIntegrationMode::Disabled
+        );
+
+        store
+            .update(|config| {
+                config.integration_policy =
+                    StoredExternalIntegrationPolicy::Known(retired_automatic_application_policy());
+            })
+            .await
+            .unwrap();
+
+        let read = store.read().await.unwrap();
+        assert_eq!(
+            read.integration_policy.known(),
+            Some(&retired_automatic_application_policy())
+        );
+    }
+
+    #[tokio::test]
+    async fn retired_application_metadata_preserves_a_policy_user_deviation() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let mut config = retired_application_default_fixture();
+        config
+            .integration_policy
+            .known_mut()
+            .unwrap()
+            .user_defaults
+            .ecosystems
+            .get_mut(&EcosystemId::new(CLAUDE_CODE_ECOSYSTEM_ID).unwrap())
+            .unwrap()
+            .mode = ExternalIntegrationMode::Disabled;
+        let raw = retired_application_document(config, serde_json::json!({}));
+        std::fs::write(&path, serde_json::to_vec_pretty(&raw).unwrap()).unwrap();
+
+        let config = ExternalSourcePreferenceStore::new(path)
+            .read()
+            .await
+            .unwrap();
+        let policy = config.integration_policy.known().unwrap();
+
+        assert!(policy.user_defaults.enabled);
+        assert_eq!(
+            policy.user_defaults.ecosystems[&EcosystemId::new(CLAUDE_CODE_ECOSYSTEM_ID).unwrap()]
+                .mode,
+            ExternalIntegrationMode::Disabled
+        );
+    }
+
+    #[tokio::test]
+    async fn retired_application_metadata_preserves_an_explicit_application_choice() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let raw = retired_application_document(
+            retired_application_default_fixture(),
+            serde_json::json!({
+                "local-user\u{1f}opencode\u{1f}user_default": {
+                    "desiredConnection": "connected",
+                    "decisionOrigin": "user"
+                }
+            }),
+        );
+        std::fs::write(&path, serde_json::to_vec_pretty(&raw).unwrap()).unwrap();
+
+        let config = ExternalSourcePreferenceStore::new(path)
+            .read()
+            .await
+            .unwrap();
+
+        assert!(
+            config
+                .integration_policy
+                .known()
+                .unwrap()
+                .user_defaults
+                .enabled
+        );
+        assert!(config.extensions.contains_key("applicationConnections"));
+    }
+
     #[test]
     fn incompatible_policy_requires_explicit_reset_and_keeps_a_bounded_backup() {
         let future_policy = serde_json::json!({
@@ -11560,32 +9528,6 @@ mod tests {
             vec![11, 12, 13]
         );
         assert_eq!(config.integration_policy_backups[2], future_policy);
-        assert_eq!(
-            config.config_origin,
-            Some(ExternalSourcesConfigOrigin::IncompatibleReset)
-        );
-        assert_eq!(
-            config.connection_schema_migration_version,
-            EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION
-        );
-        for application_id in [
-            OPENCODE_ECOSYSTEM_ID,
-            CLAUDE_CODE_ECOSYSTEM_ID,
-            CODEX_ECOSYSTEM_ID,
-        ] {
-            let key = external_application_connection_key(
-                LEGACY_LOCAL_EXECUTION_DOMAIN_ID,
-                application_id,
-                None,
-            );
-            assert_eq!(
-                config.application_connections.get(&key),
-                Some(&StoredExternalApplicationConnectionDecision {
-                    desired_connection: StoredExternalApplicationDesiredConnection::Disconnected,
-                    decision_origin: StoredExternalApplicationDecisionOrigin::IncompatibleReset,
-                })
-            );
-        }
     }
 
     #[tokio::test]

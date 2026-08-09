@@ -398,34 +398,4 @@ mod tests {
             ]
         );
     }
-
-    #[test]
-    fn external_source_capability_does_not_advertise_unwired_shared_v2_methods() {
-        let external_sources = AppManagementCapabilities::available()
-            .descriptors()
-            .into_iter()
-            .find(|descriptor| descriptor.id == EXTERNAL_SOURCES_CAPABILITY)
-            .expect("external source capability");
-
-        for method in [
-            "externalSource/snapshot",
-            "externalSource/control",
-            "externalSource/review",
-        ] {
-            assert!(
-                external_sources.methods.iter().any(|item| item == method),
-                "missing {method}"
-            );
-        }
-        for method in [
-            "externalSource/applicationSnapshotV2",
-            "externalSource/applicationReviewPageV2",
-            "externalSource/applicationActionV2",
-        ] {
-            assert!(
-                !external_sources.methods.iter().any(|item| item == method),
-                "shared capability must not advertise unwired method {method}"
-            );
-        }
-    }
 }

@@ -25,3 +25,13 @@ pub const PROTOCOL_VERSION: u32 = 3;
 
 /// Oldest protocol version this implementation accepts.
 pub const MIN_PROTOCOL_VERSION: u32 = 2;
+
+#[cfg(test)]
+mod protocol_version_tests {
+    use super::PROTOCOL_VERSION;
+
+    #[test]
+    fn application_protocol_stays_at_version_3() {
+        assert_eq!(PROTOCOL_VERSION, 3);
+    }
+}

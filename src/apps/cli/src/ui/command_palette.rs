@@ -68,7 +68,6 @@ const DEFAULT_ITEM_ORDER: &[&str] = &[
     "mcp_servers",
     "extensions",
     "hooks",
-    "hooks_external",
     "login",
     "logout",
     "status",

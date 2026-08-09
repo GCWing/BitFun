@@ -10,8 +10,6 @@
 - 公开 Agent SDK：[`agent-sdk-product-architecture.md`](agent-sdk-product-architecture.md)
 - 产品定制：[`product-customization-blueprint.md`](product-customization-blueprint.md)
 - 外部 AI 工作来源：[`extensions/external-ai-work-sources-design.md`](extensions/external-ai-work-sources-design.md)
-- 外部 AI 应用连接体验：[`extensions/external-ai-app-connection-experience-design.md`](extensions/external-ai-app-connection-experience-design.md)
-- 外部 AI 应用连接执行计划：[`../plans/external-ai-app-connection-experience-plan.md`](../plans/external-ai-app-connection-experience-plan.md)
 - OpenCode 兼容矩阵：[`extensions/opencode-extension-compatibility.md`](extensions/opencode-extension-compatibility.md)
 - 插件 Runtime：[`extensions/plugin-runtime-design.md`](extensions/plugin-runtime-design.md)
 - Detached Dispatch：[`detached-task-dispatch.md`](detached-task-dispatch.md)
@@ -146,7 +144,7 @@ SHELL composer
 - `stream-json` stdout 每行是一个完整 Agent event。
 - 日志与诊断进入 stderr 或日志文件。
 - 默认拒绝需要人工确认的操作；只有显式调用级策略可以自动批准。
-- 目标连接体验交付后，只有 Agent Runtime 沿现有事件流返回与当前执行域、工作区作用域、根会话和根轮次完全匹配的依赖结果时，CLI 才投影类型化 `action-required`；当前实现尚未提供该结果。子代理必须通过现有父子关系事件证明仍属于根依赖链，无关待办或后台子代理不得改变退出结果。
+- 非交互入口不等待人工确认，也不从全局外部来源状态推断特殊任务结果。能力不可用时返回普通失败；能够可靠归属到 Tool、Agent 或 MCP owner 时，错误只给出对应管理入口。
 - 取消、事件失步、失败完成和 Patch 失败不能报告成功。
 
 ## 5. TUI 内部边界
@@ -185,10 +183,8 @@ CLI 通过 `DeliveryProfile::Cli` 消费经过校验的产品 Runtime parts。�
 
 CLI 只消费 typed summary 与 typed action：
 
-> **实现状态：部分交付。** 交互式 TUI 已通过 Host 返回的 V2 快照提供应用级状态、连接、断开、暂不使用和分页批量确认；Embedded 连接旧 Host 时回退既有 V1 只读状态，未接线的 Shared Runtime 明确不支持且绝不回退到控制进程本地执行。任务相关 `action-required` 与非交互 CLI 结果仍未交付。
-
-- `/extensions` 是应用级摘要、首次连接和状态恢复入口；`/extensions review` 提供与 GUI 等价的单页批量确认。
-- `/tools`、`/agent`、`/mcp` 和 `/hooks` 保留能力专项或高级管理职责，不复制应用级连接流程。
+- `/extensions` 只提供外部应用/来源的简短状态、启停和刷新，不拥有审批、冲突或批量决策。
+- `/tools`、`/agent`、`/mcp` 和 `/hooks` 是对应能力的直接管理入口；需要用户允许时由真实 owner 在该入口处理，不再增加跨能力复审流程。
 - 静态发现不等于代码执行或服务健康。
 - 配置导入不授予插件执行权限。
 - ACP、MCP import、Hook import、可执行插件和 TUI contribution 使用独立状态与生命周期。
