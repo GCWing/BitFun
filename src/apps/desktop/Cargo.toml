@@ -87,6 +87,9 @@ image = { workspace = true }
 resvg = { workspace = true }
 tempfile = { workspace = true }
 
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 bitflags = { workspace = true }
 core-foundation = { workspace = true }
