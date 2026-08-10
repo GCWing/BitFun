@@ -13,6 +13,12 @@ use log::{debug, info, warn};
 const SUBAGENT_INSTANCE_ID_PREFIX: &str = "subagent-instance";
 
 /// Lifecycle state of a persistent subagent instance.
+///
+/// `Destroyed` is the terminal lifecycle state. The registry implements
+/// hard-delete semantics: `destroy()` removes the entry from the map, so
+/// `get()` returns `None` afterwards. `Destroyed` is reserved for soft-delete
+/// / history scenarios in later phases and is never observed through registry
+/// lookups.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SubagentInstanceStatus {
     /// A Task is currently executing on this instance.
@@ -98,7 +104,8 @@ impl SubagentInstanceRegistry {
         }
     }
 
-    /// Register a new instance. Logs at debug level.
+    /// Register a new instance. Logs at debug level. Warns if an existing
+    /// entry with the same instance_id is overwritten.
     pub(crate) fn register(&self, instance: SubagentInstance) {
         debug!(
             "Subagent instance registered: instance_id={}, parent_session_id={}, child_session_id={}, agent_type={}",
@@ -107,8 +114,13 @@ impl SubagentInstanceRegistry {
             instance.child_session_id,
             instance.agent_type
         );
-        self.instances
-            .insert(instance.instance_id.clone(), instance);
+        let instance_id = instance.instance_id.clone();
+        if let Some(old) = self.instances.insert(instance_id.clone(), instance) {
+            warn!(
+                "Subagent instance register overwrote existing entry: instance_id={}, old_child_session_id={}",
+                instance_id, old.child_session_id
+            );
+        }
     }
 
     /// Get an instance by ID.
@@ -136,8 +148,8 @@ impl SubagentInstanceRegistry {
         }
         entry.status = SubagentInstanceStatus::Running;
         debug!(
-            "Subagent instance transitioning to Running: instance_id={}",
-            instance_id
+            "Subagent instance transitioning to Running: instance_id={}, parent_session_id={}",
+            instance_id, entry.parent_session_id
         );
         Ok(())
     }
@@ -163,18 +175,19 @@ impl SubagentInstanceRegistry {
         entry.status = SubagentInstanceStatus::Idle;
         entry.last_active_at = now_millis();
         debug!(
-            "Subagent instance transitioning to Idle: instance_id={}, last_active_at={}",
-            instance_id, entry.last_active_at
+            "Subagent instance transitioning to Idle: instance_id={}, parent_session_id={}, last_active_at={}",
+            instance_id, entry.parent_session_id, entry.last_active_at
         );
         Ok(())
     }
 
-    /// Destroy a single instance. Logs at info level.
+    /// Destroy a single instance. Logs at info level. Hard delete: the entry
+    /// is removed from the registry (see `SubagentInstanceStatus`).
     pub(crate) fn destroy(&self, instance_id: &str, reason: &str) {
-        if self.instances.remove(instance_id).is_some() {
+        if let Some((_, instance)) = self.instances.remove(instance_id) {
             info!(
-                "Subagent instance destroyed: instance_id={}, reason={}",
-                instance_id, reason
+                "Subagent instance destroyed: instance_id={}, parent_session_id={}, reason={}",
+                instance_id, instance.parent_session_id, reason
             );
         }
     }
@@ -463,5 +476,36 @@ mod tests {
         let victim = registry.list_for_parent("parent-a").pop().unwrap();
         registry.destroy(&victim, "test cleanup");
         assert_eq!(registry.active_count(), 2);
+    }
+
+    #[test]
+    fn transitions_after_destroy_return_not_found_error() {
+        let registry = SubagentInstanceRegistry::new();
+        let instance = test_instance("parent-1");
+        let instance_id = instance.instance_id.clone();
+        registry.register(instance);
+        registry.destroy(&instance_id, "test");
+
+        // Hard-delete semantics: a destroyed instance is no longer in the
+        // registry, so any transition attempt reports not-found.
+        assert!(registry.set_running(&instance_id).is_err());
+        assert!(registry.set_idle(&instance_id).is_err());
+    }
+
+    #[test]
+    fn register_overwrite_keeps_newest_instance() {
+        let registry = SubagentInstanceRegistry::new();
+        let original = test_instance("parent-1");
+        let instance_id = original.instance_id.clone();
+        let mut replacement = test_instance("parent-1");
+        replacement.instance_id = instance_id.clone();
+        replacement.child_session_id = "child-session-replacement".to_string();
+        registry.register(original);
+
+        registry.register(replacement);
+
+        assert_eq!(registry.active_count(), 1);
+        let fetched = registry.get(&instance_id).unwrap();
+        assert_eq!(fetched.child_session_id, "child-session-replacement");
     }
 }

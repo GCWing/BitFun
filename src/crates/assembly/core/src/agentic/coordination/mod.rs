@@ -8,8 +8,9 @@ pub mod coordinator;
 pub mod scheduler;
 pub mod state_manager;
 // Phase 1 of persistent subagents: types are not yet wired into production
-// call paths (Phase 2 registers the registry in the Coordinator).
-#[allow(dead_code)]
+// call paths (Phase 2 registers the registry in the Coordinator). The expect
+// fires a reminder once Phase 2 starts using the module.
+#[expect(dead_code, reason = "Phase 2 wires the registry into the Coordinator")]
 mod subagent_instance;
 pub mod turn_outcome;
 mod turn_settlement;
