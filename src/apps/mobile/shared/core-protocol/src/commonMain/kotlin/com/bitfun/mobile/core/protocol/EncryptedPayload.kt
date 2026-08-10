@@ -1,0 +1,17 @@
+package com.bitfun.mobile.core.protocol
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+/**
+ * Envelope for every encrypted relay exchange.
+ *
+ * Both fields are base64. The ciphertext carries a trailing 128-bit GCM
+ * authentication tag; see [com.bitfun.mobile.core.protocol] contract fixtures
+ * for the exact wire shape.
+ */
+@Serializable
+public data class EncryptedPayload(
+    @SerialName("encrypted_data") val encryptedData: String,
+    @SerialName("nonce") val nonce: String,
+)

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The "more" control. Not a `sys.symbol` in the source — `SidebarGlyphs.ets`
+    lays three rounded dots out in a Row by hand, and the headers draw the
+    `app.media.remote_ref_more` asset — but both are three dots laid out
+    horizontally, which is what Material's vertical default gets wrong. The
+    dots are sized off that asset: fat, with only a hairline between them.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#000000"
+        android:pathData="M3.6,8.7 A3.3,3.3 0 1 0 3.6,15.3 A3.3,3.3 0 1 0 3.6,8.7 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M12,8.7 A3.3,3.3 0 1 0 12,15.3 A3.3,3.3 0 1 0 12,8.7 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M20.4,8.7 A3.3,3.3 0 1 0 20.4,15.3 A3.3,3.3 0 1 0 20.4,8.7 Z" />
+</vector>

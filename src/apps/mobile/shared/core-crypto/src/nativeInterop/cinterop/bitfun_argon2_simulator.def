@@ -1,0 +1,4 @@
+package = com.bitfun.mobile.core.crypto.argon2
+headers = bitfun_argon2.h
+compilerOpts = -DARGON2_NO_THREADS
+staticLibraries = libbitfun_argon2.a

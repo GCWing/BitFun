@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    HarmonyOS `sys.symbol.checkmark_circle`, redrawn. The selected radio mark — outlined, unlike the solid `checkmark_circle_fill`.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M12,3.60 A8.4,8.4 0 1 0 12,20.40 A8.4,8.4 0 1 0 12,3.60 Z"
+        android:strokeWidth="1.7"
+        android:strokeColor="#000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M7.7,12.3 L10.6,15.2 L16.3,8.9"
+        android:strokeWidth="1.8"
+        android:strokeColor="#000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>

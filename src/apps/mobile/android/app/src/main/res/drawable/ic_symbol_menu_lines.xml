@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The control that opens the drawer. Traced from the source's own asset,
+    `app.media.gpt_home_menu_glyph` — two bars, not the three Material draws,
+    and the lower one deliberately short.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="22dp"
+    android:height="14dp"
+    android:viewportWidth="22"
+    android:viewportHeight="14">
+    <path
+        android:fillColor="#000000"
+        android:pathData="M2.81,1.75 H19.19 A1.07,1.07 0 0 1 19.19,3.89 H2.81 A1.07,1.07 0 0 1 2.81,1.75 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M2.81,10.13 H13.19 A1.04,1.04 0 0 1 13.19,12.21 H2.81 A1.04,1.04 0 0 1 2.81,10.13 Z" />
+</vector>

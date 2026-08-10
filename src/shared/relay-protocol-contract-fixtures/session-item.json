@@ -1,0 +1,131 @@
+{
+  "description": "Session entries as reported by list_sessions and the initial sync. Peers across desktop versions spell the identifier and the timestamps differently; every client must resolve them to the same values.",
+  "cases": [
+    {
+      "name": "canonical spelling",
+      "wire": {
+        "id": "sess_01HQ3",
+        "title": "Fix relay reconnect",
+        "agent_type": "code",
+        "status": "idle",
+        "updated_at": "2026-08-06T11:04:22Z",
+        "created_at": "2026-08-05T09:12:00Z",
+        "message_count": 14,
+        "workspace_path": "/workspace/bitfun",
+        "workspace_name": "bitfun"
+      },
+      "expected": {
+        "id": "sess_01HQ3",
+        "title": "Fix relay reconnect",
+        "agentType": "code",
+        "status": "idle",
+        "updatedAt": "2026-08-06T11:04:22Z",
+        "createdAt": "2026-08-05T09:12:00Z",
+        "messageCount": 14,
+        "workspacePath": "/workspace/bitfun",
+        "workspaceName": "bitfun"
+      }
+    },
+    {
+      "name": "identifier and title aliases",
+      "wire": {
+        "session_id": "sess_alias",
+        "name": "Named not titled",
+        "last_message_at": 1754476800,
+        "started_at": 1754390400
+      },
+      "expected": {
+        "id": "sess_alias",
+        "title": "Named not titled",
+        "agentType": null,
+        "status": null,
+        "updatedAt": "1754476800",
+        "createdAt": "1754390400",
+        "messageCount": null,
+        "workspacePath": null,
+        "workspaceName": null
+      }
+    },
+    {
+      "name": "canonical key wins over later aliases",
+      "wire": {
+        "id": "sess_priority",
+        "last_message_at": "2020-01-01T00:00:00Z",
+        "lastUpdated": "2019-01-01T00:00:00Z",
+        "updated_at": "2026-08-06T11:04:22Z",
+        "create_time": "2019-06-01T00:00:00Z",
+        "created_at": "2026-08-05T09:12:00Z"
+      },
+      "expected": {
+        "id": "sess_priority",
+        "title": null,
+        "agentType": null,
+        "status": null,
+        "updatedAt": "2026-08-06T11:04:22Z",
+        "createdAt": "2026-08-05T09:12:00Z",
+        "messageCount": null,
+        "workspacePath": null,
+        "workspaceName": null
+      }
+    },
+    {
+      "name": "blank and null candidates fall through",
+      "wire": {
+        "id": "sess_blank",
+        "updated_at": "   ",
+        "updatedAt": null,
+        "updated": "2026-08-06T11:04:22Z",
+        "title": "",
+        "message_count": 0
+      },
+      "expected": {
+        "id": "sess_blank",
+        "title": null,
+        "agentType": null,
+        "status": null,
+        "updatedAt": "2026-08-06T11:04:22Z",
+        "createdAt": "",
+        "messageCount": 0,
+        "workspacePath": null,
+        "workspaceName": null
+      }
+    },
+    {
+      "name": "no timestamp at all",
+      "wire": {
+        "id": "sess_bare"
+      },
+      "expected": {
+        "id": "sess_bare",
+        "title": null,
+        "agentType": null,
+        "status": null,
+        "updatedAt": "",
+        "createdAt": "",
+        "messageCount": null,
+        "workspacePath": null,
+        "workspaceName": null
+      }
+    },
+    {
+      "name": "unknown fields are ignored, not fatal",
+      "wire": {
+        "id": "sess_future",
+        "updated_at": "2026-08-06T11:04:22Z",
+        "some_field_added_by_a_newer_desktop": { "nested": true },
+        "another_one": [1, 2, 3]
+      },
+      "expected": {
+        "id": "sess_future",
+        "title": null,
+        "agentType": null,
+        "status": null,
+        "updatedAt": "2026-08-06T11:04:22Z",
+        "createdAt": "",
+        "messageCount": null,
+        "workspacePath": null,
+        "workspaceName": null
+      }
+    }
+  ]
+}

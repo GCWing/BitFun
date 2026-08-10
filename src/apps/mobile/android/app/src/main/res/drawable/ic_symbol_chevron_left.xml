@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    HarmonyOS `sys.symbol.chevron_left`, redrawn.
+
+    A stroked chevron rather than Material's `ArrowBack`: the source's back
+    affordance is a bare 2:1 angle bracket with round caps and no shaft, and an
+    arrow with a tail reads as a different control at this size.
+
+    Every glyph in this set shares the 24x24 viewport so one `size()` in the
+    composable means the same thing across all of them.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M14.6,5.4 L8.1,12 L14.6,18.6"
+        android:strokeWidth="1.9"
+        android:strokeColor="#000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

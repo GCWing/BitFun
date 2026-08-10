@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    HarmonyOS `sys.symbol.arrow_clockwise`, redrawn. Reload — the arc leaves a gap where the head sits.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M18.13,6.86 A8,8 0 1 1 12,4"
+        android:strokeWidth="1.7"
+        android:strokeColor="#000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M19.67,8.7 L15.93,7.66 L19.31,4.84 Z" />
+</vector>

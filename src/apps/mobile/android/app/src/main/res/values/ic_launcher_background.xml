@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The field the cube sits on, sampled from `png/BitFun-Logo.png` rather than
+      chosen: the same source supplies the foreground, and a background even a
+      shade off would draw a visible square where the seams cut through.
+
+      Not in `themes.xml` or `colors.xml` because it is not a UI colour — the
+      launcher reads it, the app never does.
+    -->
+    <color name="ic_launcher_background">#2A2A2A</color>
+</resources>

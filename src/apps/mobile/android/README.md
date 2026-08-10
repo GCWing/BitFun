@@ -1,11 +1,18 @@
 # BitFun Android
 
-Android application entrypoint.
+Android application entrypoint over the Kotlin Multiplatform shared core.
 
 Provisional source layout:
 
 - `app/src/main/kotlin/`: Kotlin application code.
 - `app/src/main/res/`: Android resources.
 
-Add the Gradle project files after the Android UI stack, package identifier,
-minimum SDK, and shared-core integration strategy are selected.
+Build debug and unsigned release artifacts with:
+
+```bash
+JAVA_HOME='/Applications/Android Studio.app/Contents/jbr/Contents/Home' ./gradlew :app:assembleDebug :app:assembleRelease
+```
+
+For a signed release, set `BITFUN_ANDROID_KEYSTORE`,
+`BITFUN_ANDROID_KEYSTORE_PASSWORD`, `BITFUN_ANDROID_KEY_ALIAS`, and
+`BITFUN_ANDROID_KEY_PASSWORD`. Release builds enable R8 and resource shrinking.
