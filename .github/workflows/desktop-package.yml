@@ -526,6 +526,7 @@ jobs:
         env:
           BITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           BITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          BITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
         run: bash scripts/sign-release-assets.sh release-manual-assets/*.exe
 
       - name: Collect updater assets
