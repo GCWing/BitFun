@@ -665,6 +665,9 @@
       "cliInstallFailed": "無法準備遠端執行環境。請檢查 SSH 連線後重試。",
       "cliInstallInProgress": "正在準備遠端執行環境…",
       "cliInstallUnknownVersion": "所需版本",
+      "modelSyncStarted": "正在將本機的模型設定複製到遠端裝置…",
+      "modelSyncSucceeded": "模型設定已複製，遠端裝置可以執行所選模型。",
+      "modelSyncFailed": "無法將模型設定複製到遠端裝置。",
       "errors": {
         "attachmentUnavailable": "這張圖片無法傳送到遠端裝置。請重新加入後再試。",
         "deviceAttachmentTooLarge": "透過帳號裝置傳送的圖片總大小不能超過 192 KB。請壓縮圖片，或改用 SSH 目標。",

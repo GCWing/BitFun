@@ -169,84 +169,6 @@
     }
   }
 
-  // Selectable approval-policy cards.
-  // Single column: three across a 560px modal left ~165px per card, which is
-  // not enough for a title plus a two-line description.
-  &__options {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: $size-gap-2;
-    min-width: 0;
-    margin: 0;
-    padding: 0;
-    border: 0;
-  }
-
-  &__option {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: start;
-    gap: $size-gap-2;
-    min-width: 0;
-    padding: $size-gap-2 $size-gap-3;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: $size-radius-sm;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-primary);
-    text-align: left;
-    cursor: pointer;
-    transition:
-      background-color 140ms ease,
-      border-color 140ms ease,
-      transform 120ms ease-out;
-
-    &:hover:not(:disabled),
-    &:focus-visible,
-    &[data-selected='true'] {
-      border-color: var(--bf-appearance-token-color-accent-500);
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 9%, transparent);
-      outline: none;
-    }
-
-    &:disabled {
-      cursor: not-allowed;
-      opacity: 0.55;
-    }
-
-    &:active:not(:disabled) {
-      transform: scale(0.99);
-    }
-
-    // Keep the leading policy icon aligned with the text column.
-    > svg:first-child {
-      margin-top: 1px;
-      color: var(--bf-appearance-token-color-text-muted);
-    }
-
-    > span {
-      display: flex;
-      min-width: 0;
-      flex-direction: column;
-      gap: 2px;
-      grid-column: 2 / 3;
-    }
-
-    &[data-selected='true'] > svg:first-child {
-      color: var(--bf-appearance-token-color-accent-500);
-    }
-
-    strong {
-      font-size: var(--bf-appearance-token-font-size-sm);
-      font-weight: 600;
-    }
-
-    small {
-      color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-font-size-xs);
-      line-height: 1.4;
-    }
-  }
-
   &__checks {
     display: grid;
     gap: 0;
@@ -361,12 +283,6 @@
 
   &__spin {
     animation: dispatch-install-spin 1s linear infinite;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dispatch-install-dialog__option {
-    transition-duration: 0.01ms;
   }
 }
 

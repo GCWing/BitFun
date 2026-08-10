@@ -665,6 +665,9 @@
       "cliInstallFailed": "无法准备远程运行环境。请检查 SSH 连接后重试。",
       "cliInstallInProgress": "正在准备远程运行环境…",
       "cliInstallUnknownVersion": "所需版本",
+      "modelSyncStarted": "正在把本机的模型配置复制到远程设备…",
+      "modelSyncSucceeded": "模型配置已复制，远程设备可以运行所选模型。",
+      "modelSyncFailed": "无法把模型配置复制到远程设备。",
       "errors": {
         "attachmentUnavailable": "这张图片无法发送到远程设备。请重新添加后再试。",
         "deviceAttachmentTooLarge": "通过账号设备发送的图片总大小不能超过 192 KB。请压缩图片，或改用 SSH 目标。",

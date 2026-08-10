@@ -64,6 +64,16 @@ export interface ExternalModelSelection {
   selectedReasoningPreset?: string;
   providerLabel: string;
   disabled?: boolean;
+  /**
+   * Also offer this device's own enabled models, and fall back to its catalog
+   * for reasoning presets.
+   *
+   * For a transport that only relays a session elsewhere, `models` is a probe
+   * snapshot rather than the set of choices the user has: the executing side
+   * is brought up to whatever is picked. Leave this off for a transport that
+   * owns a genuinely foreign model list.
+   */
+  includeLocalCatalog?: boolean;
   onSelect: (modelId: string) => void | Promise<void>;
   onSelectReasoningPreset?: (presetId: string | null) => void | Promise<void>;
 }
@@ -485,8 +495,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
   const externalAvailableModels = useMemo((): ModelInfo[] => {
     if (!externalSelection) return [];
+    const localSelectable = externalSelection.includeLocalCatalog
+      ? allModels.filter(model => model.enabled).map(model => model.id)
+      : [];
     return Array.from(new Set([
       ...externalSelection.models,
+      ...localSelectable,
       externalSelection.defaultModelId,
       externalSelection.selectedModelId,
     ].filter((model): model is string => !!model?.trim())))
@@ -514,20 +528,52 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       });
   }, [allModels, externalSelection]);
 
+  /**
+   * This device's own default, resolved to the concrete id the executing side
+   * needs. Only consulted when the target reported no default of its own, so a
+   * session that has never been given a model still shows what a local session
+   * here would run rather than whichever id happens to sort first.
+   */
+  const externalLocalDefaultModelId = useMemo((): string | undefined => {
+    if (!externalSelection?.includeLocalCatalog) return undefined;
+    const configured = modeDefaultModelId?.trim() || modeModel;
+    const concrete = resolveConcreteModelId(configured, defaultModels);
+    return concrete && allModels.some(model => model.id === concrete && model.enabled)
+      ? concrete
+      : undefined;
+  }, [
+    allModels,
+    defaultModels,
+    externalSelection?.includeLocalCatalog,
+    modeDefaultModelId,
+    modeModel,
+  ]);
   const externalCurrentModelId =
     externalSelection?.selectedModelId?.trim()
     || externalSelection?.defaultModelId?.trim()
+    || externalLocalDefaultModelId
     || externalAvailableModels[0]?.id
     || '';
   const externalCurrentModel = externalAvailableModels.find(
     model => model.id === externalCurrentModelId,
   ) ?? null;
   const externalReasoningProjection = useMemo((): ReasoningCatalogProjection | null => {
-    if (!externalSelection?.reasoningCatalog || !externalCurrentModelId) return null;
-    return externalSelection.reasoningCatalog.models.find(
-      model => model.id === externalCurrentModelId,
-    )?.reasoning ?? null;
-  }, [externalCurrentModelId, externalSelection?.reasoningCatalog]);
+    if (!externalSelection || !externalCurrentModelId) return null;
+    // The target's catalog wins where it has an entry: it is what the worker
+    // will actually execute. The local catalog covers a model this device just
+    // offered, and a projection restored without a probe snapshot at all.
+    const catalogs = [
+      externalSelection.reasoningCatalog,
+      ...(externalSelection.includeLocalCatalog && modelCatalog ? [modelCatalog] : []),
+    ];
+    for (const catalog of catalogs) {
+      const reasoning = catalog?.models.find(
+        model => model.id === externalCurrentModelId,
+      )?.reasoning;
+      if (reasoning) return reasoning;
+    }
+    return null;
+  }, [externalCurrentModelId, externalSelection, modelCatalog]);
 
   const acpFastMode = useMemo(
     () => resolveAcpFastModeState(acpOptions?.configOptions ?? []),

@@ -368,15 +368,15 @@ function auditDetail(
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+function auditStage(event: Extract<DispatchEvent, { type: 'audit' }>): string {
+  return typeof event.details.stage === 'string' ? event.details.stage.trim() : '';
+}
+
 function cliInstallAuditLabel(
   event: Extract<DispatchEvent, { type: 'audit' }>,
 ): string | null {
-  if (event.action !== 'cli-install') return null;
-  const stage = typeof event.details.stage === 'string'
-    ? event.details.stage.trim()
-    : '';
   const version = auditDetail(event.details, 'version');
-  switch (stage) {
+  switch (auditStage(event)) {
     case 'cli-install-started':
       return i18nService.t('flow-chat:chatInput.dispatch.cliInstallStarted', {
         version: version || i18nService.t('flow-chat:chatInput.dispatch.cliInstallUnknownVersion'),
@@ -393,17 +393,44 @@ function cliInstallAuditLabel(
 }
 
 /**
+ * The controller pushes this device's model configuration — API keys included
+ * — to a target that cannot serve the chosen model. That is worth a line in
+ * the transcript, so the automatic step stays as visible as the manual one it
+ * replaced, and stays visible after replay or a controller restart.
+ */
+function modelSyncAuditLabel(
+  event: Extract<DispatchEvent, { type: 'audit' }>,
+): string | null {
+  switch (auditStage(event)) {
+    case 'model-sync-succeeded':
+      return i18nService.t('flow-chat:chatInput.dispatch.modelSyncSucceeded');
+    case 'model-sync-failed':
+      return i18nService.t('flow-chat:chatInput.dispatch.modelSyncFailed');
+    default:
+      return i18nService.t('flow-chat:chatInput.dispatch.modelSyncStarted');
+  }
+}
+
+function setupAuditLabel(
+  event: Extract<DispatchEvent, { type: 'audit' }>,
+): string | null {
+  if (event.action === 'cli-install') return cliInstallAuditLabel(event);
+  if (event.action === 'model-sync') return modelSyncAuditLabel(event);
+  return null;
+}
+
+/**
  * Setup audits precede the target's SessionCreated/DialogTurnStarted events.
  * Project them into the optimistic turn so they remain visible after restart,
  * and so DialogTurnStarted can later adopt the same turn without duplication.
  */
-function applyCliInstallAudit(
+function applySetupAudit(
   context: FlowChatContext,
   job: DispatchObserverJob,
   event: Extract<DispatchEvent, { type: 'audit' }>,
   eventId: string,
 ): void {
-  const label = cliInstallAuditLabel(event);
+  const label = setupAuditLabel(event);
   if (!label) return;
 
   const session = context.flowChatStore.getState().sessions.get(job.sessionId);
@@ -543,7 +570,7 @@ function applyEvent(
   eventId: string,
 ): boolean {
   if (event.type === 'audit') {
-    applyCliInstallAudit(context, job, event, eventId);
+    applySetupAudit(context, job, event, eventId);
     return true;
   }
   if (event.type === 'jobState') {

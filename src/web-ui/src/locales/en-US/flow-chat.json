@@ -665,6 +665,9 @@
       "cliInstallFailed": "Could not prepare the remote environment. Check the SSH connection and try again.",
       "cliInstallInProgress": "Preparing the remote environment…",
       "cliInstallUnknownVersion": "required version",
+      "modelSyncStarted": "Copying this device’s model configuration to the remote device…",
+      "modelSyncSucceeded": "Model configuration copied; the remote device can run the selected model.",
+      "modelSyncFailed": "Could not copy the model configuration to the remote device.",
       "errors": {
         "attachmentUnavailable": "This image cannot be sent to the remote device. Add it again and retry.",
         "deviceAttachmentTooLarge": "Images sent to an account device can total at most 192 KB. Compress them or use an SSH target.",

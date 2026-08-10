@@ -128,6 +128,13 @@ async fn probe(request: DispatchProbeRequest) -> Result<DispatchProbeResponse> {
             .iter()
             .map(|capability| capability.to_string())
             .collect();
+    // Accepting the controller's model-sync audit row is a request-validation
+    // fact, not a runtime one, so it is advertised regardless of whether this
+    // platform can host detached workers.
+    capabilities.push(
+        bitfun_services_core::dispatch_contract::DISPATCH_SETUP_AUDIT_MODEL_SYNC_CAPABILITY
+            .to_string(),
+    );
     if runner::is_supported() {
         capabilities.push(
             bitfun_services_core::dispatch_contract::DISPATCH_DETACHED_WORKER_CAPABILITY
@@ -852,7 +859,9 @@ fn validate_submit_request(request: &DispatchSubmitRequest) -> Result<()> {
         bail!("dispatch setup audit exceeds the 32-event safety limit");
     }
     for event in &request.setup_audit {
-        if event.action != "cli-install" {
+        if !bitfun_services_core::dispatch_contract::dispatch_supported_setup_audit_actions()
+            .any(|action| action == event.action)
+        {
             bail!("dispatch setup audit contains an unsupported action");
         }
         if event.timestamp.trim().is_empty()

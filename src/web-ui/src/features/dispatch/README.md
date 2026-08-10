@@ -8,7 +8,14 @@ dispatch.
 1. A dispatch target is selected while creating a session and is immutable after
    the first turn. The model and approval policy are not: protocol v4 carries
    them per follow-up turn, and the target persists the effective values onto
-   the job.
+   the job. Because they are per-turn, neither is chosen in the setup dialog —
+   both are ordinary composer controls, identical to a local session's. The
+   setup dialog decides only what the target cannot change later: which target,
+   which base revision, and whether uncommitted changes travel.
+1b. A new dispatch session's approval policy is the one this device's own
+   permission default implies (`ask` → `remote`, auto-approve or full access →
+   `auto`). Because the policy is editable per turn, a target is only usable
+   when it advertises all three approval capabilities, not just the current one.
 1a. A dispatch session accepts follow-up messages. While a turn runs, a message
    is an `append` that steers it; once it has finished, a message is a
    `dispatch_continue` that queues the next turn against the same target
@@ -74,8 +81,12 @@ dispatch.
    the normal permission panel. The selected policy is visible in the normal
    session controls; submit must not add a second confirmation dialog.
 15. MiniApp and quick-input hosts do not expose the dispatch picker.
-16. Controller-side model settings never leak into an SSH dispatch. The submit
-    omits `model` unless preflight recorded an explicit target model choice.
+16. The model picker offers this controller's own catalog, because submission
+    guarantees the target can serve whatever it offers (invariant 25). The
+    target's probed list and default are a starting point, unioned in rather
+    than authoritative, so a projection restored without that snapshot still
+    has a working picker. Submit omits `model` only while the session has no
+    explicit choice, leaving the target on its own default.
 17. One-click synchronization is available from `running` through terminal
     states. It commits target changes when needed, validates that both managed
     worktrees remain on the named job branch, and verifies the returned Git
@@ -104,11 +115,21 @@ dispatch.
 24. Listing jobs for an explicitly selected target adopts only outbound
     observer routing records. It never restores the target session into the
     controller's backend store or acquires local runtime ownership.
-25. Model configuration sync is a separate, explicit, credential-bearing
-    operation with its own confirmation. It merges only the `ai` model keys
-    into the target's `app.json`, preserves every other target setting, aborts
-    rather than overwrite an unreadable or unparseable target config, and
-    writes owner-only via a temp-file rename.
+25. SSH submission pushes this controller's model configuration to a target
+    that cannot serve the submission's model, before creating any baseline, and
+    re-probes. Choosing the target is the consent: it is the same credential
+    write the manual command performs, and it stays visible as `model-sync`
+    rows in the preparation journal and the projected transcript, exactly like
+    `cli-install`. It merges only the `ai` model keys into the target's
+    `app.json`, preserves every other target setting, aborts rather than
+    overwrite an unreadable or unparseable target config, and writes
+    owner-only via a temp-file rename. A failed push is not fatal by itself:
+    the submission then reports the target's own model diagnostic. Device
+    targets have no such repair path and still fail closed.
+25a. Setup-audit rows are forwarded only when the target advertises the
+    matching capability. A target rejects an unknown audit action outright, so
+    `model-sync` rows are dropped for a CLI predating
+    `setup_audit_model_sync`; the controller journal keeps them regardless.
 26. Dispatch target and status are session-scoped navigation metadata. Workspace
     navigation must not install a dispatch target or filter its session list by
     dispatch target.

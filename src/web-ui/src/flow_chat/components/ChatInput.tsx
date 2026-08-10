@@ -145,6 +145,11 @@ import {
 } from './ChatInputWorkspaceStrip';
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
 import { isNonLocalDispatchTarget } from '@/features/dispatch/types';
+import {
+  DISPATCH_PERMISSION_MODES,
+  dispatchApprovalPolicyFromPermissionMode,
+  permissionModeFromDispatchApprovalPolicy,
+} from '@/features/dispatch/approvalPolicy';
 import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 import { useComposerCapabilities } from '../session-drivers/useComposerCapabilities';
 import { ComposerVoiceInputButton } from './voice/ComposerVoiceInputButton';
@@ -2155,11 +2160,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [applySessionPermissionMode, isAcpTargetSession, permissionModeSaving, sessionPermissionMode]);
 
   const dispatchPermissionMode: ChatInputPermissionMode =
-    effectiveTargetSession?.config.dispatchApprovalPolicy === 'auto'
-      ? 'auto'
-      : effectiveTargetSession?.config.dispatchApprovalPolicy === 'reject-and-report'
-        ? 'reject'
-        : 'ask';
+    permissionModeFromDispatchApprovalPolicy(
+      effectiveTargetSession?.config.dispatchApprovalPolicy,
+    );
   const dispatchSubmissionOptionsLocked = caps.submissionOptionsLocked;
   const handleDispatchPermissionModeChange = useCallback((
     nextMode: Exclude<ChatInputPermissionMode, 'acp'>,
@@ -2167,12 +2170,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (!effectiveTargetSessionId || dispatchSubmissionOptionsLocked) {
       return;
     }
-    const approvalPolicy =
-      nextMode === 'auto' || nextMode === 'full_access'
-        ? 'auto'
-        : nextMode === 'reject'
-          ? 'reject-and-report'
-          : 'remote';
+    const approvalPolicy = dispatchApprovalPolicyFromPermissionMode(nextMode);
     FlowChatStore.getInstance().updateSessionDispatchApprovalPolicy(
       effectiveTargetSessionId,
       approvalPolicy,
@@ -2254,11 +2252,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           ...flowChatSessionConfigForCurrentWorkspace(workspace),
           dispatchTargetRequest: selection.request,
           dispatchTarget: selection.target,
-          dispatchApprovalPolicy: selection.approvalPolicy,
+          // Not asked for while picking a target: a dispatch session starts on
+          // the same permission default a local session here would, and the
+          // composer strip stays the one place to change it.
+          dispatchApprovalPolicy: dispatchApprovalPolicyFromPermissionMode(
+            permissionMode === 'acp' ? 'ask' : permissionMode,
+          ),
           dispatchIncludeUncommitted: selection.includeUncommitted,
           dispatchBaseRef: selection.baseRef,
           // Undefined is intentional: the target's probed default model wins
-          // unless a future preflight selector records an explicit choice.
+          // until the composer's model picker records an explicit choice.
           dispatchModel: selection.model,
           dispatchModelCatalog: selection.modelCatalog,
           dispatchAvailableModels: selection.availableModels,
@@ -2270,7 +2273,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       log.error('Failed to create dispatched session projection', { error });
       notificationService.error(t('chatInput.dispatch.createFailed'));
     }
-  }, [effectiveSendAgentType, t, workspace]);
+  }, [effectiveSendAgentType, permissionMode, t, workspace]);
 
   const effectiveTargetSessionHasTurns = effectiveTargetSession
     ? !isProjectedSessionEmpty(effectiveTargetSession)
@@ -2349,6 +2352,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       defaultModelId: effectiveTargetSession.config.dispatchDefaultModel,
       reasoningCatalog: effectiveTargetSession.config.dispatchModelCatalog,
       selectedReasoningPreset: effectiveTargetSession.config.dispatchReasoningPreset,
+      // The probe snapshot above is a starting point, not the offer. Dispatch
+      // changes where a session runs, not which models this device has, and
+      // submission brings the target up to whatever is chosen here — so the
+      // picker offers the local catalog exactly as a local session would, and
+      // survives a projection restored without that snapshot.
+      includeLocalCatalog: true,
       providerLabel,
       disabled: caps.submissionOptionsLocked,
       onSelect: (modelId: string) => {
@@ -6111,7 +6120,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             ? {
                 mode: dispatchPermissionMode,
                 disabled: dispatchSubmissionOptionsLocked,
-                options: ['ask', 'auto', 'reject'],
+                options: DISPATCH_PERMISSION_MODES,
                 scopeLabel: t('chatInput.dispatch.sessionScope'),
                 onChange: handleDispatchPermissionModeChange,
                 onHide: handleHidePermissionModeControl,
