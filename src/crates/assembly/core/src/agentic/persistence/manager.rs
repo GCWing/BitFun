@@ -55,7 +55,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock, Weak};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::fs;
-use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 
 pub use bitfun_services_core::session::SessionMetadataPage;
@@ -3633,61 +3632,44 @@ impl PersistenceManager {
                 ))
             })?;
             metadata_bytes.push(b'\n');
+            let metadata_text = String::from_utf8(metadata_bytes).map_err(|error| {
+                BitFunError::serialization(format!(
+                    "Failed to decode serialized compression transcript metadata: {}",
+                    error
+                ))
+            })?;
 
-            let mut transcript_file = match fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&transcript_path)
+            // UX-P1-7: publish the transcript and metadata pair atomically
+            // (temp + rename / hard-link publish). The previous
+            // create_new + write_all path could expose a torn file to readers
+            // (compression transcript readers sit outside the session write
+            // lock). `write_text_atomic_create_new` publishes the fully
+            // written temp in one step and fails with AlreadyExists instead of
+            // replacing a racing file — preserving the unique-name retry
+            // semantics of the former create_new reservation.
+            match JsonFileStore
+                .write_text_atomic_create_new(&transcript_path, &transcript_content)
                 .await
             {
-                Ok(file) => file,
-                Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
+                Ok(()) => {}
+                Err(error) if error.is_already_exists() => continue,
                 Err(error) => {
-                    return Err(BitFunError::io(format!(
-                        "Failed to reserve compression transcript {}: {}",
-                        transcript_path.display(),
-                        error
-                    )))
+                    return Err(Self::json_store_error(error));
                 }
-            };
-
-            let mut meta_file = match fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&meta_path)
+            }
+            match JsonFileStore
+                .write_text_atomic_create_new(&meta_path, &metadata_text)
                 .await
             {
-                Ok(file) => file,
-                Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+                Ok(()) => {}
+                Err(error) if error.is_already_exists() => {
                     let _ = fs::remove_file(&transcript_path).await;
                     continue;
                 }
                 Err(error) => {
                     let _ = fs::remove_file(&transcript_path).await;
-                    return Err(BitFunError::io(format!(
-                        "Failed to reserve compression transcript metadata {}: {}",
-                        meta_path.display(),
-                        error
-                    )));
+                    return Err(Self::json_store_error(error));
                 }
-            };
-
-            let write_result = async {
-                transcript_file.write_all(transcript_bytes).await?;
-                transcript_file.flush().await?;
-                meta_file.write_all(&metadata_bytes).await?;
-                meta_file.flush().await
-            }
-            .await;
-            if let Err(error) = write_result {
-                drop(transcript_file);
-                drop(meta_file);
-                let _ = fs::remove_file(&transcript_path).await;
-                let _ = fs::remove_file(&meta_path).await;
-                return Err(BitFunError::io(format!(
-                    "Failed to write compression transcript pair: {}",
-                    error
-                )));
             }
 
             let uri = bitfun_agent_tools::build_bitfun_current_session_uri(&format!(
@@ -3892,15 +3874,13 @@ impl PersistenceManager {
         let index = rendered.index;
 
         let transcript_content = lines.join("\n");
-        fs::write(&transcript_path, transcript_content)
-            .await
-            .map_err(|e| {
-                BitFunError::io(format!(
-                    "Failed to write transcript file {}: {}",
-                    transcript_path.display(),
-                    e
-                ))
-            })?;
+        // UX-P1-7: replace the bare fs::write with an atomic temp+rename write
+        // (same tombstone pattern). SessionHistory export and compression
+        // transcript readers read this file outside the session write lock, so
+        // a direct overwrite could expose a torn/partial transcript to a
+        // concurrent reader.
+        self.write_text_atomic(&transcript_path, &transcript_content)
+            .await?;
 
         let transcript = SessionTranscriptExport {
             session_id: session_id.to_string(),
@@ -4648,6 +4628,191 @@ mod tests {
             .expect("selected transcript should be readable");
         assert!(selected_transcript.contains("hello transcript"));
         assert!(!selected_transcript.contains("hidden transcript payload"));
+    }
+
+    #[tokio::test]
+    async fn transcript_atomic_write_leaves_no_torn_or_temp_artifacts() {
+        // UX-P1-7 regression: export_session_transcript must publish the
+        // transcript via temp+rename (write_text_atomic). A concurrent reader
+        // must never observe a partial file, and the atomic writer must not
+        // leave `.tmp` droppings behind after success.
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+        let session_id = Uuid::new_v4().to_string();
+
+        let metadata = SessionMetadata::new(
+            session_id.clone(),
+            "Atomic transcript".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        manager
+            .save_session_metadata(workspace.path(), &metadata)
+            .await
+            .expect("metadata should save");
+
+        for turn_index in 0..3usize {
+            let mut turn = DialogTurnData::new(
+                format!("turn-{turn_index}"),
+                turn_index,
+                session_id.clone(),
+                UserMessageData {
+                    id: format!("user-{turn_index}"),
+                    content: format!("atomic transcript line {turn_index}"),
+                    timestamp: turn_index as u64,
+                    metadata: None,
+                },
+            );
+            turn.mark_completed();
+            manager
+                .save_dialog_turn(workspace.path(), &turn)
+                .await
+                .expect("turn should save");
+        }
+
+        // Re-export twice: the fingerprint cache path is skipped on the second
+        // call only if the stored meta matches; force a regenerate by using a
+        // different turns selector each time, then read the file back fully.
+        // A torn/partial write would truncate the body mid-line, so the
+        // strongest complete-read assertion is: the file contains the full
+        // index header, the selected turn body, and ends on a clean structural
+        // marker (the render's own closing line / omitted-turns note) rather
+        // than a half-written line.
+        for (index, selector) in ["0:1", "0:2"].iter().enumerate() {
+            let export = manager
+                .export_session_transcript(
+                    workspace.path(),
+                    &session_id,
+                    &SessionTranscriptExportOptions {
+                        turns: Some(vec![selector.to_string()]),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .expect("transcript export should succeed");
+            let transcript = std::fs::read_to_string(&export.transcript_path)
+                .expect("transcript file should be readable");
+            assert!(
+                transcript.contains("## Index"),
+                "export {index} must include the index header"
+            );
+            assert!(
+                transcript.contains("atomic transcript line 0"),
+                "export {index} must contain the full rendered body"
+            );
+            assert!(
+                transcript.trim_end().ends_with(")") || transcript.trim_end().ends_with("]"),
+                "export {index} must not be truncated mid-line; tail: {:?}",
+                transcript.trim_end().chars().rev().take(40).collect::<String>()
+            );
+            // The structural closing marker of a rendered transcript is the
+            // "(omitted turn(s) N-M)" note or the last turn's closing tag —
+            // both end with a closing bracket. A torn file cannot end cleanly.
+            assert!(
+                transcript.trim_end().ends_with("[/user]")
+                    || transcript.trim_end().contains("omitted turn"),
+                "export {index} must end on a structural marker"
+            );
+        }
+
+        // No temp droppings survive next to the transcript artifacts.
+        let artifacts_dir = manager
+            .session_layout(workspace.path())
+            .artifacts_dir(&session_id);
+        let mut entries = std::fs::read_dir(&artifacts_dir).expect("artifacts dir");
+        while let Some(entry) = entries.next().transpose().expect("entry") {
+            let name = entry.file_name().to_string_lossy().to_string();
+            assert!(
+                !name.contains(".tmp"),
+                "atomic write must not leave temp files, found: {name}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn compression_transcript_pair_is_published_atomically() {
+        // UX-P1-7 regression: create_compression_transcript must publish the
+        // transcript + meta pair via atomic create-new writes (temp + rename /
+        // hard-link publish). The pair must be fully readable immediately
+        // after the call, and no `.tmp` files may remain.
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+        let session_id = Uuid::new_v4().to_string();
+
+        let metadata = SessionMetadata::new(
+            session_id.clone(),
+            "Compression transcript".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        manager
+            .save_session_metadata(workspace.path(), &metadata)
+            .await
+            .expect("metadata should save");
+
+        for turn_index in 0..2usize {
+            let mut turn = DialogTurnData::new(
+                format!("turn-{turn_index}"),
+                turn_index,
+                session_id.clone(),
+                UserMessageData {
+                    id: format!("user-{turn_index}"),
+                    content: format!("compression line {turn_index}"),
+                    timestamp: turn_index as u64,
+                    metadata: None,
+                },
+            );
+            turn.mark_completed();
+            manager
+                .save_dialog_turn(workspace.path(), &turn)
+                .await
+                .expect("turn should save");
+        }
+
+        let artifact = manager
+            .create_compression_transcript(
+                workspace.path(),
+                &session_id,
+                1,
+                "compression-1",
+                "test",
+            )
+            .await
+            .expect("compression transcript should be created")
+            .expect("artifact should exist");
+
+        let transcript = std::fs::read_to_string(&artifact.transcript_path)
+            .expect("compression transcript should be readable");
+        assert!(
+            transcript.contains("compression line 0"),
+            "compression transcript must contain the full body"
+        );
+        assert!(
+            transcript.contains("compression line 1"),
+            "compression transcript must include the boundary turn"
+        );
+
+        let meta = std::fs::read_to_string(&artifact.meta_path)
+            .expect("compression meta should be readable");
+        assert!(
+            meta.contains("\"boundaryTurnIndex\": 1"),
+            "compression meta must be complete JSON: {meta}"
+        );
+
+        let dir = artifact
+            .transcript_path
+            .parent()
+            .expect("transcript parent dir");
+        let mut entries = std::fs::read_dir(dir).expect("transcript dir");
+        while let Some(entry) = entries.next().transpose().expect("entry") {
+            let name = entry.file_name().to_string_lossy().to_string();
+            assert!(
+                !name.contains(".tmp"),
+                "atomic pair write must not leave temp files, found: {name}"
+            );
+        }
     }
 
     #[tokio::test]
