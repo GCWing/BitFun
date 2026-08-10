@@ -1495,9 +1495,15 @@ impl ExecutionEngine {
     ///   skipped when off). Without it in the scope key, a session that toggles
     ///   on↔off mid-session would keep hitting the stale cached content,
     ///   because cache hits only check identity + TTL, never content.
-    fn user_context_cache_identity_for(
+    /// - `|instr:<digest>` (TOKEN-03): the digest of the workspace instruction
+    ///   files (workspace-level `AGENTS.md`/`CLAUDE.md` and user-level external
+    ///   sources when enabled). Appended AFTER the stable prefix so unchanged
+    ///   content keeps hitting the cache while an edited instruction file
+    ///   invalidates it.
+    async fn user_context_cache_identity_for(
         base_identity: UserContextCacheIdentity,
         remote_connection: Option<&str>,
+        workspace_root: Option<std::path::PathBuf>,
     ) -> UserContextCacheIdentity {
         let mut scope_key = base_identity.scope_key;
         if let Some(connection) = remote_connection {
@@ -1509,6 +1515,10 @@ impl ExecutionEngine {
             "{scope_key}|extsrc:{}",
             if external_sources { "on" } else { "off" }
         );
+        if let Some(workspace_root) = workspace_root {
+            let digest = workspace_instruction_digest(&workspace_root, external_sources).await;
+            scope_key = format!("{scope_key}|instr:{digest}");
+        }
         UserContextCacheIdentity::new(scope_key)
     }
 
@@ -1553,7 +1563,16 @@ impl ExecutionEngine {
         let user_context_identity = Self::user_context_cache_identity_for(
             current_agent.user_context_cache_identity(),
             remote_connection_for_cache.as_deref(),
-        );
+            // TOKEN-03: include the workspace instruction content digest so a
+            // changed instruction file invalidates the session-level cache.
+            // The digest is appended AFTER the existing scope-key prefix so
+            // stable prefixes keep matching for unchanged content.
+            execution_context
+                .workspace
+                .as_ref()
+                .map(|workspace| workspace.root_path().to_path_buf()),
+        )
+        .await;
         let user_context = if let Some(cached_user_context) = self
             .session_manager
             .cached_user_context(session_id, &user_context_identity)
@@ -1658,7 +1677,77 @@ impl ExecutionEngine {
             .await;
         Ok(system_prompt)
     }
+}
 
+/// TOKEN-03: digest of the workspace instruction files that feed the User
+/// Context reminder, so the session-level User Context cache invalidates when
+/// an instruction file's content changes (the cache identity previously only
+/// covered the policy scope labels, so edited instructions stayed invisible
+/// until the session rebuilt).
+///
+/// Best-effort: any read/scan failure falls back to `"unreadable"` so the
+/// digest never blocks prompt assembly; the cache just misses once and the
+/// fresh content is re-read on the miss path.
+async fn workspace_instruction_digest(workspace_root: &std::path::Path, external_sources: bool) -> String {
+    use std::collections::BTreeMap;
+
+    let mut digest_input = String::new();
+
+    // Workspace-level instruction files (startup-context, no path patterns).
+    match bitfun_services_core::workspace_instructions::read_workspace_instruction_files(
+        workspace_root,
+    )
+    .await
+    {
+        Ok(files) => {
+            for file in files {
+                digest_input.push_str(&file.name);
+                digest_input.push('\0');
+                digest_input.push_str(&file.content);
+                digest_input.push('\0');
+            }
+        }
+        Err(error) => {
+            log::warn!(
+                "workspace_instruction_digest: failed to read workspace instruction files: {}",
+                error
+            );
+            return "unreadable".to_string();
+        }
+    }
+
+    // User-level external instruction sources (~/.claude/CLAUDE.md, OpenCode
+    // AGENTS.md, Codex AGENTS.md, rules/) — only when the master switch is on,
+    // mirroring the render path in service::instruction_context.
+    if external_sources {
+        match crate::instruction_sources::load_local_user_instruction_files(workspace_root).await
+        {
+            loaded => {
+                let mut names: BTreeMap<String, String> = BTreeMap::new();
+                for file in loaded.files {
+                    names.insert(file.name.clone(), file.content.clone());
+                }
+                for (name, content) in names {
+                    digest_input.push_str(&name);
+                    digest_input.push('\0');
+                    digest_input.push_str(&content);
+                    digest_input.push('\0');
+                }
+            }
+        }
+    }
+
+    if digest_input.is_empty() {
+        return "none".to_string();
+    }
+
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(digest_input.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+impl ExecutionEngine {
     async fn resolve_turn_prompt_scaffold(
         &self,
         input: TurnPromptScaffoldInput<'_>,
@@ -5768,8 +5857,8 @@ mod tests {
     }
 
     #[cfg(feature = "external-sources")]
-    #[test]
-    fn user_context_cache_identity_includes_external_sources_switch_state() {
+    #[tokio::test]
+    async fn user_context_cache_identity_includes_external_sources_switch_state() {
         // P2-1 (KV cache design audit 20260810): the external_instruction_sources
         // master switch changes the rendered User Context content (external user
         // files are skipped when off), but cache hits only check identity + TTL,
@@ -5782,9 +5871,9 @@ mod tests {
         );
 
         crate::service::config::set_external_instruction_sources_enabled(true);
-        let on = ExecutionEngine::user_context_cache_identity_for(base.clone(), None);
+        let on = ExecutionEngine::user_context_cache_identity_for(base.clone(), None, None).await;
         crate::service::config::set_external_instruction_sources_enabled(false);
-        let off = ExecutionEngine::user_context_cache_identity_for(base.clone(), None);
+        let off = ExecutionEngine::user_context_cache_identity_for(base.clone(), None, None).await;
 
         assert_eq!(
             on.scope_key,
@@ -5803,8 +5892,8 @@ mod tests {
     }
 
     #[cfg(feature = "external-sources")]
-    #[test]
-    fn user_context_cache_identity_layers_remote_and_switch_state() {
+    #[tokio::test]
+    async fn user_context_cache_identity_layers_remote_and_switch_state() {
         // remote:<connection> and extsrc:<on|off> are orthogonal scope suffixes:
         // a remote overlay reconnect and a switch toggle must both invalidate
         // the user context cache independently while composing in one key.
@@ -5814,7 +5903,7 @@ mod tests {
         );
 
         crate::service::config::set_external_instruction_sources_enabled(true);
-        let identity = ExecutionEngine::user_context_cache_identity_for(base, Some("ssh-host/22"));
+        let identity = ExecutionEngine::user_context_cache_identity_for(base, Some("ssh-host/22"), None).await;
         assert_eq!(
             identity.scope_key,
             "workspace_instructions|remote:ssh-host/22|extsrc:on"
@@ -5870,7 +5959,9 @@ mod tests {
         let on_identity = ExecutionEngine::user_context_cache_identity_for(
             base_identity.clone(),
             None,
-        );
+            None,
+        )
+        .await;
         session_manager
             .remember_user_context(
                 &session.session_id,
@@ -5891,7 +5982,9 @@ mod tests {
         let off_identity = ExecutionEngine::user_context_cache_identity_for(
             base_identity,
             None,
-        );
+            None,
+        )
+        .await;
         assert_ne!(on_identity, off_identity);
         assert_eq!(
             session_manager
