@@ -71,8 +71,7 @@ use bitfun_runtime_ports::{
     AgentThreadGoalDeliveryKind, AgentThreadGoalDeliveryRequest, AgentTurnCancellationPort,
     AgentTurnCancellationRequest, AgentTurnCancellationResult, DialogSessionStateFact,
     DialogSubmitQueueAction, DialogSubmitQueueFacts, PortError, PortErrorKind, PortResult,
-    RoundInjection, RoundInjectionKind, SessionStoragePathRequest, SessionStorePort,
-    SessionTranscriptRequest,
+    SessionStoragePathRequest, SessionStorePort, SessionTranscriptRequest,
 };
 pub use bitfun_runtime_ports::{
     AgentSessionReplyRoute, DialogQueuePriority, DialogSteerOutcome, DialogSubmissionPolicy,
@@ -385,50 +384,6 @@ struct BackgroundResultDelivery {
     user_message_metadata: Option<serde_json::Value>,
 }
 
-struct SchedulerRoundInjectionSource {
-    buffer: Arc<SessionRoundInjectionBuffer>,
-}
-
-impl DialogRoundInjectionSource for SchedulerRoundInjectionSource {
-    fn has_pending(&self, session_id: &str, turn_id: &str) -> bool {
-        self.buffer.has_pending_for_turn(session_id, turn_id)
-    }
-
-    fn pending_tool_preemption(
-        &self,
-        session_id: &str,
-        turn_id: &str,
-    ) -> bitfun_runtime_ports::RoundInjectionToolPreemption {
-        self.buffer
-            .pending_tool_preemption_for_turn(session_id, turn_id)
-    }
-
-    fn take_pending(&self, session_id: &str, turn_id: &str) -> Vec<RoundInjection> {
-        self.buffer.drain_for_turn(session_id, turn_id)
-    }
-
-    fn acknowledge_consumed(
-        &self,
-        session_id: &str,
-        _turn_id: &str,
-        _injection_id: &str,
-        kind: RoundInjectionKind,
-    ) {
-        // UserSteering 消费确认：引擎注入完成（持久化进历史）后，把内容标记为
-        // 已消费——同一用户消息再次经 steering 通道推入时被 push 去重抑制，
-        // 杜绝 2-7 次重复注入。消费确认的记录与注入点分离：模板/结构/位置
-        // 零改动，仅记录"这个内容已注入过"。标记在 buffer 内部（push 侧查）。
-        if kind == RoundInjectionKind::UserSteering {
-            // The engine only acknowledges with an injection id; the content
-            // key is derived from the pending entries drained for this turn.
-            // We keep the steering content keyed by id -> content mapping on
-            // the buffer so the same message cannot re-enter through a new
-            // buffer entry (see `mark_steering_consumed` callers).
-            self.buffer.acknowledge_injection(session_id, _injection_id);
-        }
-    }
-}
-
 /// Message queue manager for dialog turns.
 ///
 /// All user-facing callers (frontend Tauri commands, remote server, bot router)
@@ -459,9 +414,12 @@ pub struct DialogScheduler {
     /// Cloneable sender given to ConversationCoordinator for turn outcome notifications
     outcome_tx: mpsc::Sender<(String, TurnOutcome)>,
     /// Per-session FIFO buffer of round injections drained at round boundaries
-    /// by the engine and injected into the running dialog turn.
+    /// by the engine and injected into the running dialog turn. The buffer
+    /// itself implements [`DialogRoundInjectionSource`], including
+    /// `acknowledge_consumed` for UserSteering dedup, so no core-side wrapper
+    /// is needed.
     round_injection_buffer: Arc<SessionRoundInjectionBuffer>,
-    round_injection_source: Arc<SchedulerRoundInjectionSource>,
+    round_injection_source: Arc<SessionRoundInjectionBuffer>,
     /// Child sessions already cancelled for a parent maintenance attempt but
     /// not yet observed as drained. Retain them across retryable timeouts even
     /// after their one-shot cancellation controls have been claimed.
@@ -586,9 +544,7 @@ impl DialogScheduler {
     ) -> Arc<Self> {
         let (outcome_tx, outcome_rx) = mpsc::channel(128);
         let round_injection_buffer = Arc::new(SessionRoundInjectionBuffer::default());
-        let round_injection_source = Arc::new(SchedulerRoundInjectionSource {
-            buffer: round_injection_buffer.clone(),
-        });
+        let round_injection_source = round_injection_buffer.clone();
 
         let warden_session_manager = Arc::clone(&session_manager);
         // 持久化 Warden 耻辱墙，使记录的违规跨进程重启存活——

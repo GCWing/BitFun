@@ -841,6 +841,27 @@ impl DialogRoundInjectionSource for SessionRoundInjectionBuffer {
     fn take_pending(&self, session_id: &str, turn_id: &str) -> Vec<RoundInjection> {
         self.drain_for_turn(session_id, turn_id)
     }
+
+    fn acknowledge_consumed(
+        &self,
+        session_id: &str,
+        _turn_id: &str,
+        injection_id: &str,
+        kind: RoundInjectionKind,
+    ) {
+        // UserSteering 消费确认：引擎注入完成（持久化进历史）后，把内容标记为
+        // 已消费——同一用户消息再次经 steering 通道推入时被 push 去重抑制，
+        // 杜绝 2-7 次重复注入。消费确认的记录与注入点分离：模板/结构/位置
+        // 零改动，仅记录"这个内容已注入过"。标记在 buffer 内部（push 侧查）。
+        if kind == RoundInjectionKind::UserSteering {
+            // The engine only acknowledges with an injection id; the content
+            // key is derived from the pending entries drained for this turn.
+            // We keep the steering content keyed by id -> content mapping on
+            // the buffer so the same message cannot re-enter through a new
+            // buffer entry (see `acknowledge_injection`).
+            self.acknowledge_injection(session_id, injection_id);
+        }
+    }
 }
 
 pub const fn resolve_background_delivery_action(
