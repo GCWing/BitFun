@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   setVisibleTurnInfo: vi.fn(),
   enterFollowOutput: vi.fn(),
   exitFollowOutput: vi.fn(),
+  handleUserScrollIntent: vi.fn(),
   /** False stands in for a Turn Virtuoso can place but the DOM cannot resolve. */
   renderItemMetadata: true,
 }));
@@ -123,7 +124,7 @@ vi.mock('./useFlowChatFollowOutput', () => ({
     enterFollowOutput: mocks.enterFollowOutput,
     exitFollowOutput: mocks.exitFollowOutput,
     scheduleFollowToLatest: vi.fn(),
-    handleUserScrollIntent: vi.fn(),
+    handleUserScrollIntent: mocks.handleUserScrollIntent,
     handleScroll: vi.fn(),
     handleScrollSettled: vi.fn(),
     handleViewportResize: vi.fn(),
@@ -187,6 +188,7 @@ describe('VirtualMessageList natural scroll contract', () => {
     mocks.scrollTo.mockReset();
     mocks.enterFollowOutput.mockReset();
     mocks.exitFollowOutput.mockReset();
+    mocks.handleUserScrollIntent.mockReset();
     mocks.setVisibleTurnInfo.mockReset();
     mocks.virtuosoProps = null;
     mocks.renderItemMetadata = true;
@@ -369,6 +371,52 @@ describe('VirtualMessageList natural scroll contract', () => {
     } finally {
       restoreLayout();
     }
+  });
+
+  describe('scrollbar drags release the viewport', () => {
+    // Content box ends at 0 + 1384; the gutter runs from there to 1394.
+    const CONTENT_BOX_WIDTH = 1384;
+
+    function pressAt(clientX: number) {
+      const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller]')!;
+      Object.defineProperty(scroller, 'clientWidth', {
+        configurable: true,
+        value: CONTENT_BOX_WIDTH,
+      });
+      act(() => {
+        // jsdom has no PointerEvent; only `clientX` is read.
+        scroller.dispatchEvent(new MouseEvent('pointerdown', { clientX, bubbles: true }));
+        scroller.dispatchEvent(new Event('scroll'));
+      });
+    }
+
+    it('treats a scroll under a scrollbar press as intent', () => {
+      act(() => root.render(<VirtualMessageList />));
+      pressAt(CONTENT_BOX_WIDTH + 6);
+      expect(mocks.handleUserScrollIntent).toHaveBeenCalled();
+    });
+
+    it('leaves a scroll under a press on the transcript alone', () => {
+      // Layout growth and virtualizer remeasurement emit scroll events too, so
+      // the press is what qualifies one — not the event itself.
+      act(() => root.render(<VirtualMessageList />));
+      pressAt(CONTENT_BOX_WIDTH - 200);
+      expect(mocks.handleUserScrollIntent).not.toHaveBeenCalled();
+    });
+
+    it('disarms on release, so a later scroll is not intent', () => {
+      act(() => root.render(<VirtualMessageList />));
+      pressAt(CONTENT_BOX_WIDTH + 6);
+      mocks.handleUserScrollIntent.mockClear();
+
+      const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller]')!;
+      act(() => {
+        window.dispatchEvent(new MouseEvent('pointerup'));
+        scroller.dispatchEvent(new Event('scroll'));
+      });
+
+      expect(mocks.handleUserScrollIntent).not.toHaveBeenCalled();
+    });
   });
 
   it('prepares history navigation without manufacturing bottom range', () => {

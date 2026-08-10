@@ -297,6 +297,18 @@ coordinator, and the reasons there is no coordinator are unchanged (see below).
 - Ordinary `scroll` events do not transfer viewport ownership; only explicit
   wheel, touch, or keyboard navigation exits follow-output. A gesture that comes
   to rest inside the reserved blank hands it back.
+- A scrollbar drag is the one exception, and the press is what makes it one: a
+  pointer held past the content box's trailing edge is on the bar, so the
+  scrolling it causes *is* intent. The press only arms it — `scrollbar-gutter:
+  stable` keeps the gutter reserved whether or not a bar is drawn there, so a
+  press that scrolls nothing changes nothing. Unqualified, a drag never released
+  the viewport: measured on WebView2, follow-output rewrote its target against
+  the thumb every frame for a 100px oscillation, and a drag that came to rest in
+  the reserved blank was skipped by the snap back because follow still nominally
+  owned it — with the frame loop long since asleep, so nothing corrected it.
+- Ownership outliving the frame loop is deliberate, and it is why the snap back's
+  "follow owns this" guard cannot be read as "something is correcting this".
+  Streaming has to be able to resume follow after the settle budget runs out.
 - The pinned Turn's offset is re-resolved from live layout every frame. Virtuoso
   re-estimates unrendered item heights, so a cached absolute offset would drift.
 - When streaming stops, `hold-tail` settles any remaining blank with one smooth
@@ -337,9 +349,11 @@ too high or too low. Re-check the offset math before bumping the dependency.
 
 ## Known Gaps
 
-- Dragging the scrollbar does not exit follow-output. It produces only `scroll`
-  events, which are deliberately not treated as intent, so a drag during
-  streaming is a tug of war with the frame loop.
+- A scrollbar drag is recognised from the gutter the bar occupies, so it is
+  invisible where the platform draws overlay scrollbars that take no layout
+  width — WebKit-backed builds, where `scrollbar-gutter: stable` reserves
+  nothing either. There the drag is once again a tug of war with the frame loop.
+  Closing this means a signal that does not depend on the bar having a box.
 - A collapse larger than `tailHoldMaxGapPx` still moves the viewport, by the
   excess only.
 - An animated scroll aims at the target it was issued for. Jumping to latest
@@ -498,7 +512,11 @@ confirm:
     blank: the last Turn and the input clearance stay visible above the
     reservation. Repeat with the composer expanded, which is where the reserve
     falls back to the hold-gap floor.
-16. Click the last Turn on the Turn Rail while it is short. It must land in one
+16. Drag the scrollbar, without touching the wheel first, down into the reserved
+    blank and let go: it must snap back. Then drag it while output streams: the
+    transcript must follow the thumb without the frame loop fighting it. A press
+    on the thumb that moves nothing must leave the viewport alone.
+17. Click the last Turn on the Turn Rail while it is short. It must land in one
     movement at the end of the transcript — no top-align followed by a slide
     back down. Do it from near the tail *and* from the top of a long session:
     those are the rendered and unrendered branches, and they take different

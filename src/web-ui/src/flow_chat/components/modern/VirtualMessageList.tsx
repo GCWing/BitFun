@@ -292,6 +292,23 @@ function getVirtualItemStableKey(item: VirtualItem): string {
   }
 }
 
+/**
+ * Whether a pointer press landed on the scroller's scrollbar rather than on the
+ * transcript.
+ *
+ * `clientWidth` stops at the scrollbar, so anything past the content box's
+ * trailing edge is the bar or its track. Measured on WebView2: a 10px gutter,
+ * a press on the transcript at `clientX` 1497 against a content box ending at
+ * 1641, and presses on the bar at 1643-1647.
+ *
+ * Chromium does dispatch `pointerdown` for a scrollbar press. WebKit-backed
+ * builds draw overlay scrollbars that take no layout width, leaving no gutter
+ * to test against, so this returns false there and the drag stays unnoticed.
+ */
+function isScrollbarPress(event: PointerEvent, scroller: HTMLElement): boolean {
+  return event.clientX > scroller.getBoundingClientRect().left + scroller.clientWidth;
+}
+
 function isElementVisibleInScroller(element: HTMLElement, scroller: HTMLElement): boolean {
   const elementRect = element.getBoundingClientRect();
   const scrollerRect = scroller.getBoundingClientRect();
@@ -327,6 +344,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const tailRealignCallbacksRef = useRef(0);
   /** Synchronous mirror of `isAtBottom`, read by a resize for the pre-resize answer. */
   const isAtTailRef = useRef(true);
+  /** A pointer is held on the scrollbar, so the scrolling it causes is intent. */
+  const isScrollbarPressRef = useRef(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [isOpenViewportSettled, setIsOpenViewportSettled] = useState(false);
   const preparedTurnNavigationRef = useRef<PreparedTurnNavigation | null>(null);
@@ -703,6 +722,16 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   useEffect(() => {
     if (!scrollerElement) return;
     const handleNativeScroll = () => {
+      /*
+       * A scroll under a scrollbar press is the one case where a plain scroll
+       * event does carry intent — the press is what qualifies it. Left
+       * unqualified, a drag never released the viewport: follow-output kept
+       * writing its target every frame against the thumb (measured: a 100px
+       * oscillation, every frame, for as long as the drag lasted), and a drag
+       * that came to rest in the reserved blank was skipped by the snap back
+       * because follow still nominally owned it.
+       */
+      if (isScrollbarPressRef.current) notifyUserScrollIntent();
       updateIsAtBottom();
       handleScroll();
       scheduleVisibleTurnInfoUpdate();
@@ -714,15 +743,34 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         notifyUserScrollIntent();
       }
     };
+    /*
+     * Arming rather than releasing outright: `scrollbar-gutter: stable` keeps
+     * the gutter reserved whether or not a bar is drawn in it, so a press there
+     * is only intent once something actually scrolls. A click on the thumb that
+     * moves nothing leaves the viewport where it was.
+     */
+    const handlePointerDown = (event: PointerEvent) => {
+      isScrollbarPressRef.current = isScrollbarPress(event, scrollerElement);
+    };
+    const handlePointerRelease = () => {
+      isScrollbarPressRef.current = false;
+    };
     scrollerElement.addEventListener('scroll', handleNativeScroll, { passive: true });
     scrollerElement.addEventListener('wheel', handleWheel, { passive: true });
     scrollerElement.addEventListener('touchmove', handleTouchMove, { passive: true });
     scrollerElement.addEventListener('keydown', handleKeyDown);
+    scrollerElement.addEventListener('pointerdown', handlePointerDown, { passive: true });
+    // On the window: a drag can be released anywhere, including outside it.
+    window.addEventListener('pointerup', handlePointerRelease, { passive: true });
+    window.addEventListener('pointercancel', handlePointerRelease, { passive: true });
     return () => {
       scrollerElement.removeEventListener('scroll', handleNativeScroll);
       scrollerElement.removeEventListener('wheel', handleWheel);
       scrollerElement.removeEventListener('touchmove', handleTouchMove);
       scrollerElement.removeEventListener('keydown', handleKeyDown);
+      scrollerElement.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('pointerup', handlePointerRelease);
+      window.removeEventListener('pointercancel', handlePointerRelease);
     };
   }, [
     handleScroll,
