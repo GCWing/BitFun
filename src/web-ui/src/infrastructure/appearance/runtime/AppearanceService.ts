@@ -1,7 +1,11 @@
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
+import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { createLogger } from '@/shared/utils/logger';
 import {
   builtinAppearanceCatalog,
+  DEFAULT_DARK_APPEARANCE_ID,
+  DEFAULT_LIGHT_APPEARANCE_ID,
   getBuiltinAppearance,
   getSystemAppearanceId,
 } from '../builtins/catalog';
@@ -31,6 +35,7 @@ import type { AppearanceRuntime } from './AppearanceRuntime';
 const log = createLogger('AppearanceService');
 const APPEARANCE_SELECTION_CONFIG_PATH = 'appearance.selection';
 const MAX_SEEN_SYNC_EVENTS = 256;
+const SYSTEM_COLOR_SCHEME_CHANGED_EVENT = 'bitfun:system-color-scheme-changed';
 
 interface AppearanceSource {
   pkg: AppearancePackage;
@@ -129,6 +134,8 @@ export class AppearanceService {
   private initializePromise: Promise<void> | null = null;
   private mutationQueue: Promise<void> = Promise.resolve();
   private systemMedia: MediaQueryList | null = null;
+  private systemColorSchemeUnsubscribe: (() => void) | null = null;
+  private ohosSystemAppearanceId: string | null = null;
   private syncUnsubscribe: (() => void) | null = null;
   private reconciliationQueued = false;
   private activeSource: AppearanceSource | null = null;
@@ -403,6 +410,7 @@ export class AppearanceService {
 
   async dispose(): Promise<void> {
     this.detachSystemListener();
+    this.detachNativeSystemListener();
     this.detachReconciliationListeners();
     this.syncUnsubscribe?.();
     this.syncUnsubscribe = null;
@@ -421,6 +429,9 @@ export class AppearanceService {
       ? configuredSelection.trim()
       : SYSTEM_APPEARANCE_ID;
     this.persistedSelectionId = selected;
+    if (selected === SYSTEM_APPEARANCE_ID) {
+      await this.refreshNativeSystemAppearance();
+    }
     try {
       await this.applySelectionTransaction(selected, {
         persist: false,
@@ -450,6 +461,7 @@ export class AppearanceService {
       });
     }
     this.attachSystemListener();
+    this.attachNativeSystemListener();
     this.attachReconciliationListeners();
   }
 
@@ -457,7 +469,20 @@ export class AppearanceService {
     selected: AppearanceSelectionId,
     options: ApplySelectionOptions,
   ): Promise<void> {
-    const resolvedId = selected === SYSTEM_APPEARANCE_ID ? getSystemAppearanceId() : selected;
+    if (selected === SYSTEM_APPEARANCE_ID && !this.ohosSystemAppearanceId) {
+      await this.refreshNativeSystemAppearance();
+    } else if (selected !== SYSTEM_APPEARANCE_ID) {
+      this.ohosSystemAppearanceId = null;
+      const selectedPackage = await this.resolvePackage(selected);
+      if (selectedPackage?.pkg.mode === 'light' || selectedPackage?.pkg.mode === 'dark') {
+        void workspaceAPI.setThemeMode(selectedPackage.pkg.mode).catch(error => {
+          log.debug('Native appearance mode sync is unavailable', { error });
+        });
+      }
+    }
+    const resolvedId = selected === SYSTEM_APPEARANCE_ID
+      ? (this.ohosSystemAppearanceId ?? getSystemAppearanceId())
+      : selected;
     const unchanged = this.snapshot.initialized
       && this.snapshot.selectedAppearanceId === selected
       && this.snapshot.resolvedAppearanceId === resolvedId
@@ -585,6 +610,40 @@ export class AppearanceService {
     if (this.systemMedia || typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
     this.systemMedia = window.matchMedia('(prefers-color-scheme: dark)');
     this.systemMedia.addEventListener('change', this.handleSystemAppearanceChange);
+  }
+
+  private attachNativeSystemListener(): void {
+    if (this.systemColorSchemeUnsubscribe) return;
+    this.systemColorSchemeUnsubscribe = api.listen<{ scheme?: 'light' | 'dark' }>(
+      SYSTEM_COLOR_SCHEME_CHANGED_EVENT,
+      payload => {
+        if (this.snapshot.selectedAppearanceId !== SYSTEM_APPEARANCE_ID) return;
+        const scheme = payload?.scheme;
+        if (scheme !== 'light' && scheme !== 'dark') return;
+        this.ohosSystemAppearanceId = scheme === 'dark'
+          ? DEFAULT_DARK_APPEARANCE_ID
+          : DEFAULT_LIGHT_APPEARANCE_ID;
+        this.handleSystemAppearanceChange();
+      },
+    );
+  }
+
+  private detachNativeSystemListener(): void {
+    this.systemColorSchemeUnsubscribe?.();
+    this.systemColorSchemeUnsubscribe = null;
+  }
+
+  private async refreshNativeSystemAppearance(): Promise<void> {
+    try {
+      const scheme = await workspaceAPI.setThemeMode('system');
+      if (scheme === 'light' || scheme === 'dark') {
+        this.ohosSystemAppearanceId = scheme === 'dark'
+          ? DEFAULT_DARK_APPEARANCE_ID
+          : DEFAULT_LIGHT_APPEARANCE_ID;
+      }
+    } catch (error) {
+      log.debug('Native system appearance discovery is unavailable', { error });
+    }
   }
 
   private detachSystemListener(): void {

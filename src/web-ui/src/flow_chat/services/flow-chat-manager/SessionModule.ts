@@ -22,8 +22,7 @@ import type {
   SessionHistoryHydrationLocation,
 } from './types';
 import type { Session } from '../../types/flow-chat';
-import { touchSessionActivity, cleanupSaveState, updateSessionMetadata } from './PersistenceModule';
-import { cleanupSessionBuffers } from './TextChunkModule';
+import { touchSessionActivity } from './PersistenceModule';
 import {
   createTextSessionTitleDescriptor,
   createDefaultSessionTitleDescriptor,

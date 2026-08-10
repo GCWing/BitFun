@@ -18,7 +18,6 @@ import { createLogger } from '@/shared/utils/logger';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import type { WorkspaceInfo } from '@/shared/types';
 import { getRecentWorkspaceLineParts } from '@/shared/utils/recentWorkspaceDisplay';
-import { formatRecentWorkspaceDate } from './recentWorkspaceDate';
 import './WelcomeScene.scss';
 import {workspaceAPI} from "@/infrastructure";
 
@@ -67,7 +66,7 @@ const WelcomeScene: React.FC = () => {
     } finally {
       setIsSelecting(false);
     }
-  }, [openWorkspace, openScene, t]);
+  }, [openWorkspace, openScene]);
 
   const handleNewProject = useCallback(() => {
     window.dispatchEvent(new Event('nav:new-project'));

@@ -436,7 +436,7 @@ export const Modal: React.FC<ModalProps> = ({
       ]
         .filter(Boolean)
         .join(' ')}
-      onClick={closeOnOverlayClick ? onClose : undefined}
+      onClick={closeOnOverlayClick ? handleOverlayClick : undefined}
       onMouseDown={handleOverlayMouseDown}
       data-bf-component="modal"
       data-bf-part="overlay"

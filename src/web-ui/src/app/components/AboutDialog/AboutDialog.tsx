@@ -256,7 +256,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
             <div className="bitfun-about-dialog__hero" data-bf-component="about-dialog" data-bf-part="hero">
               <h1 className="bitfun-about-dialog__title" data-bf-component="about-dialog" data-bf-part="title">{version.name}</h1>
               <div className="bitfun-about-dialog__version-badge" data-bf-component="about-dialog" data-bf-part="version">
-                {t('about.version', { version: formatVersion(version.version, version.isDev) })}
+                {t('about.version', { version: displayedVersion })}
               </div>
               <div className="bitfun-about-dialog__divider" data-bf-component="about-dialog" data-bf-part="decoration" />
               <div className="bitfun-about-dialog__dots" data-bf-component="about-dialog" data-bf-part="decoration">

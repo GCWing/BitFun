@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { open } from '@tauri-apps/plugin-dialog';
 import {
   Box,
   FolderPlus,

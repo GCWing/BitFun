@@ -19,6 +19,8 @@ import type { ToolCardProps } from '../types/flow-chat';
 import { Terminal, ExternalLink, Square } from 'lucide-react';
 import { createTerminalTab } from '@/shared/utils/tabUtils';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
+import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
+import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 import { DotMatrixLoader, IconButton } from '../../component-library';
 import { LazyTerminalOutputRenderer } from '@/tools/terminal/components/LazyTerminalOutputRenderer';
 import { createLogger } from '@/shared/utils/logger';
@@ -453,11 +455,11 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
 
   const handleMouseDown = useCallback(() => {
     setShouldExpand(true);
-  }, [toggleExpanded, shouldExpand, setShouldExpand]);
+  }, []);
 
   const handleMouseMove = useCallback(() => {
     setShouldExpand(false);
-  }, [toggleExpanded, shouldExpand, setShouldExpand]);
+  }, []);
 
   const handleCardClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
@@ -602,6 +604,15 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
       content={renderCommandContent()}
       extra={renderHeaderExtra(true)}
       statusIcon={renderLoadingStatusIcon()}
+    />
+  );
+
+  const renderCompactHeader = () => (
+    <CompactToolCardHeader
+      icon={<ToolCardStatusSlot status={status} toolIcon={<Terminal size={16} />} defaultIcon="tool" />}
+      action={t('toolCards.terminal.executeCommand')}
+      content={renderCommandContent('compact')}
+      rightStatusIcon={renderLoadingStatusIcon()}
     />
   );
 

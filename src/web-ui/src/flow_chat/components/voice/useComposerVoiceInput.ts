@@ -9,7 +9,6 @@ import {
 import { useAIExperienceSettings } from '@/infrastructure/config/hooks';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { useSceneStore } from '@/app/stores/sceneStore';
-import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import {
