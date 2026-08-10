@@ -148,6 +148,7 @@
     "status": "Connection",
     "statusDesc": "",
     "notConnected": "Not connected",
+    "readyNotConnected": "Ready, connects on use",
     "refreshStatus": "Refresh status",
     "connect": "Connect",
     "defaultCdp": "Default CDP",

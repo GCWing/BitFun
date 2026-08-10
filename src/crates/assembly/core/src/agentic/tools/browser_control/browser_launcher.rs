@@ -61,6 +61,13 @@ impl BrowserLauncher {
         provider::BrowserLauncher::is_default_cdp_enabled(kind)
     }
 
+    /// Browser-level endpoint published by a browser that is running right now
+    /// with remote debugging enabled. `None` means there is nothing to attach
+    /// to without going through the launch flow.
+    pub fn user_profile_debug_endpoint(kind: &BrowserKind) -> Option<BrowserDebugEndpoint> {
+        provider::BrowserLauncher::user_profile_debug_endpoint(kind)
+    }
+
     pub async fn launch_with_cdp(kind: &BrowserKind, port: u16) -> BitFunResult<LaunchResult> {
         Ok(provider::BrowserLauncher::launch_with_cdp_options(
             kind,

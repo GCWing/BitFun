@@ -145,6 +145,7 @@
     "status": "連接狀態",
     "statusDesc": "",
     "notConnected": "未連接",
+    "readyNotConnected": "已就緒，使用時自動連接",
     "refreshStatus": "重新整理狀態",
     "connect": "連接瀏覽器",
     "defaultCdp": "預設 CDP",

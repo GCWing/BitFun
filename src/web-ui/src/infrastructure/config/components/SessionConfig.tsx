@@ -143,6 +143,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
 
   // ── Browser control state ───────────────────────────────────────────────
   const [browserCdpAvailable, setBrowserCdpAvailable] = useState(false);
+  const [browserReady, setBrowserReady] = useState(false);
   const [browserDefaultCdpSupported, setBrowserDefaultCdpSupported] = useState(false);
   const [browserDefaultCdpEnabled, setBrowserDefaultCdpEnabled] = useState(false);
   const [browserKind, setBrowserKind] = useState('');
@@ -191,6 +192,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
           cdpAvailable: boolean;
           defaultCdpSupported: boolean;
           defaultCdpEnabled: boolean;
+          browserReady: boolean;
           browserKind: string;
           browserVersion: string | null;
           port: number;
@@ -201,6 +203,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setBrowserCdpAvailable(s.cdpAvailable);
       setBrowserDefaultCdpSupported(s.defaultCdpSupported);
       setBrowserDefaultCdpEnabled(s.defaultCdpEnabled);
+      setBrowserReady(s.browserReady);
       setBrowserKind(s.browserKind);
       setBrowserVersion(s.browserVersion);
       setBrowserPageCount(s.pageCount);
@@ -899,9 +902,15 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const computerUseScreenLabel = computerUseStatusLoading
     ? t('loading.text')
     : computerUseScreen ? t('computerUse.granted') : t('computerUse.notGranted');
+  // A ready browser is not a failure state: BitFun attaches to it the moment
+  // something needs it, so say that rather than the bare "not connected".
   const browserStatusLabel = browserCdpAvailable
     ? `${browserKind} · ${browserPageCount} ${t('browserControl.tabs')}`
-    : browserStatusLoading ? t('loading.text') : t('browserControl.notConnected');
+    : browserStatusLoading
+      ? t('loading.text')
+      : browserReady
+        ? t('browserControl.readyNotConnected')
+        : t('browserControl.notConnected');
   const browserSelectOptions: SelectOption[] = browserOptions.map((option) => ({
     value: option.value,
     label: option.installed ? option.label : `${option.label} (${t('browserControl.notInstalled')})`,

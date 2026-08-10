@@ -148,6 +148,7 @@
     "status": "连接状态",
     "statusDesc": "",
     "notConnected": "未连接",
+    "readyNotConnected": "已就绪，使用时自动连接",
     "refreshStatus": "刷新状态",
     "connect": "连接浏览器",
     "defaultCdp": "默认 CDP",

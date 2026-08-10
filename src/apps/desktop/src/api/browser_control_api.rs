@@ -18,6 +18,52 @@ fn default_cdp_port() -> u16 {
     DEFAULT_CDP_PORT
 }
 
+/// Reattach to a browser that is already running with remote debugging on.
+///
+/// The browser remembers the remote debugging preference across its own
+/// restarts, and it keeps an approved connection grant for as long as it stays
+/// running — but BitFun's connection registry lives in this process, so every
+/// BitFun restart otherwise leaves Settings reporting "not connected" until
+/// something asks for the browser. Reattaching here restores that connection
+/// without the user having to click anything.
+///
+/// This never starts a browser and never opens a settings page: when there is
+/// no live endpoint to reattach to, it does nothing and leaves the on-demand
+/// path to handle it.
+pub fn init_on_startup() {
+    tokio::spawn(async {
+        let Ok(kind) = selected_browser_kind().await else {
+            return;
+        };
+        let Some(endpoint) = BrowserLauncher::user_profile_debug_endpoint(&kind) else {
+            return;
+        };
+        if CdpClient::browser_connection_for_kind(DEFAULT_CDP_PORT, &kind)
+            .await
+            .is_some()
+        {
+            return;
+        }
+        // A denial or an approval timeout is an ordinary outcome here, not an
+        // error worth surfacing: the user never asked for this connection.
+        match CdpClient::connect_user_profile_browser(
+            DEFAULT_CDP_PORT,
+            endpoint.port,
+            &kind,
+            &endpoint.web_socket_url,
+        )
+        .await
+        {
+            Ok(_) => log::info!("Reattached to the running {} profile on startup", kind),
+            Err(error) => log::info!(
+                "Could not reattach to the running {} profile on startup: {}",
+                kind,
+                error
+            ),
+        }
+    });
+}
+
 async fn selected_browser_kind() -> Result<BrowserKind, String> {
     let config = get_global_config_service()
         .await
@@ -93,6 +139,10 @@ pub struct BrowserControlStatusResponse {
     pub cdp_available: bool,
     pub default_cdp_supported: bool,
     pub default_cdp_enabled: bool,
+    /// The selected browser is running with remote debugging on, so BitFun can
+    /// attach whenever it needs to. Distinguishes "ready, nothing attached yet"
+    /// from "nothing to attach to", which both used to read as "not connected".
+    pub browser_ready: bool,
     pub browser_kind: String,
     pub browser_version: Option<String>,
     pub port: u16,
@@ -107,7 +157,14 @@ pub async fn browser_control_get_status(
     let port = request.port;
     let configured_kind = selected_browser_kind().await?;
     let default_cdp_supported = BrowserLauncher::supports_default_cdp(&configured_kind);
-    let default_cdp_enabled = BrowserLauncher::is_default_cdp_enabled(&configured_kind);
+    // Probe the live endpoint once and answer both questions from it: whether
+    // the persistent setting is on, and whether there is something to attach to
+    // right now. The probe is a file read plus a short local TCP connect, so it
+    // never prompts the browser the way attaching does.
+    let user_profile_endpoint = BrowserLauncher::user_profile_debug_endpoint(&configured_kind);
+    let default_cdp_enabled = default_cdp_supported
+        && (user_profile_endpoint.is_some()
+            || BrowserLauncher::is_default_cdp_enabled(&configured_kind));
     let user_profile_connection =
         CdpClient::browser_connection_for_kind(port, &configured_kind).await;
     let legacy_version =
@@ -132,6 +189,7 @@ pub async fn browser_control_get_status(
         }
     });
     let available = user_profile_connection.is_some() || legacy_matches_selection;
+    let browser_ready = available || user_profile_endpoint.is_some();
 
     let (version, page_count, actual_kind) = if available {
         let ver_info = if let Some(connection) = &user_profile_connection {
@@ -167,6 +225,7 @@ pub async fn browser_control_get_status(
         cdp_available: available,
         default_cdp_supported,
         default_cdp_enabled,
+        browser_ready,
         browser_kind: actual_kind.to_string(),
         browser_version: version,
         port,

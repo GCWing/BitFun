@@ -1070,6 +1070,16 @@ pub async fn run() {
                 step_started,
             );
 
+            // Reattach to a browser that is already running with remote
+            // debugging on, so a BitFun restart does not drop the connection.
+            let step_started = Instant::now();
+            api::browser_control_api::init_on_startup();
+            startup_trace.record_elapsed_step(
+                "native_setup",
+                "browser_control_init_on_startup",
+                step_started,
+            );
+
             {
                 let step_started = Instant::now();
                 let _terminal_state: tauri::State<'_, api::terminal_api::TerminalState> =
