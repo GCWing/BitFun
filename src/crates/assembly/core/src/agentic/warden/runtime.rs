@@ -181,11 +181,14 @@ impl WardenRuntime {
 
     /// Create a runtime that persists the shame wall registry to `path`.
     ///
-    /// An existing registry is loaded at startup; a missing or unparseable
-    /// file falls back to an empty registry (the failure is logged, not fatal).
+    /// An existing registry is loaded at startup; a missing file falls back
+    /// to an empty registry (the failure is logged, not fatal). P1-S3：损坏
+    /// （parse 失败）文件先被 rename 为 `.corrupt-<ts>` 备份再以空注册表
+    /// 启动，后续 save 的原子写只覆盖原路径，历史违规可从备份恢复——不再
+    /// 静默覆盖损坏文件（保恢复路径）。
     pub fn with_shame_wall_path(session_manager: Arc<SessionManager>, path: PathBuf) -> Self {
         let mut runtime = Self::new(session_manager);
-        match ShameWallRegistry::load_from_path(&path) {
+        match ShameWallRegistry::load_from_path_quarantining(&path) {
             Ok(registry) => runtime.shame_wall = registry,
             Err(err) => warn!(
                 "warden runtime: falling back to empty shame wall registry at {}: {}",

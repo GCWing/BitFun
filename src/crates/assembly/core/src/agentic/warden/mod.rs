@@ -34,6 +34,7 @@ pub mod punishment_executor;
 pub mod runtime;
 
 use crate::util::errors::{BitFunError, BitFunResult};
+use log::warn;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap};
 
@@ -262,8 +263,15 @@ impl ShameWallRegistry {
 
     /// Load a registry from a JSON file at `path`.
     ///
-    /// A missing or unparseable file yields a default (empty) registry so the
-    /// runtime can bootstrap without failing the process.
+    /// A missing file yields a default (empty) registry so the runtime can
+    /// bootstrap without failing the process.
+    ///
+    /// P1-S3：**parse 失败的文件不会被静默覆盖**。损坏文件先被 rename 为
+    /// `<path>.corrupt-<unix-ts>` 备份（保留恢复路径），再以空注册表启动；
+    /// 后续 `save_to_path` 的原子写只会落到原路径，历史违规数据仍可从
+    /// 备份文件恢复，不会因一次启动的静默降级而永久丢失（与 tombstone
+    /// 「损坏不覆盖 + Err 传播」哲学对齐，同时保持启动可用性）。若备份
+    /// rename 本身失败（只读目录等），则返回该 IO 错误让调用方决定。
     pub fn load_from_path(path: &std::path::Path) -> BitFunResult<Self> {
         match std::fs::read_to_string(path) {
             Ok(contents) => {
@@ -282,6 +290,40 @@ impl ShameWallRegistry {
                 path.display(),
                 err
             ))),
+        }
+    }
+
+    /// Load a registry from a JSON file, quarantining a corrupt file before
+    /// falling back to an empty registry (P1-S3).
+    ///
+    /// Semantics:
+    /// - Missing file → default (empty) registry, no backup written.
+    /// - Parse failure → rename the corrupt file to
+    ///   `<path>.corrupt-<unix-ts>` (preserving the recovery path), then
+    ///   return a default (empty) registry.
+    /// - IO read failure → propagated `Err` (caller decides).
+    pub fn load_from_path_quarantining(path: &std::path::Path) -> BitFunResult<Self> {
+        match Self::load_from_path(path) {
+            Ok(registry) => Ok(registry),
+            Err(err) if matches!(err, BitFunError::Deserialization(_)) => {
+                let backup = corrupt_backup_path_for(path);
+                if let Err(rename_err) = std::fs::rename(path, &backup) {
+                    return Err(BitFunError::io(format!(
+                        "failed to quarantine corrupt shame-wall registry at {} to {}: {}",
+                        path.display(),
+                        backup.display(),
+                        rename_err
+                    )));
+                }
+                warn!(
+                    "quarantined corrupt shame-wall registry: path={}, backup={}, original_error={}",
+                    path.display(),
+                    backup.display(),
+                    err
+                );
+                Ok(Self::default())
+            }
+            Err(err) => Err(err),
         }
     }
 
@@ -338,6 +380,23 @@ fn temp_path_for(path: &std::path::Path) -> std::path::PathBuf {
     let unique = uuid::Uuid::new_v4();
     let parent = path.parent().unwrap_or_else(|| std::path::Path::new("."));
     parent.join(format!(".{file_name}.{unique}.tmp"))
+}
+
+/// Build the quarantine backup path for a corrupt registry file (P1-S3).
+///
+/// `<name>.corrupt-<unix-ts>` sits next to the original so the damaged file is
+/// preserved for recovery without clobbering the live path.
+fn corrupt_backup_path_for(path: &std::path::Path) -> std::path::PathBuf {
+    let file_name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "registry".to_string());
+    let parent = path.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0);
+    parent.join(format!("{file_name}.corrupt-{now}"))
 }
 
 // ---------------------------------------------------------------------------
@@ -700,6 +759,89 @@ mod tests {
         let registry = ShameWallRegistry::default();
         assert_eq!(registry.version, 1);
         assert!(registry.entries.is_empty());
+    }
+
+    #[test]
+    fn corrupt_shame_wall_file_is_quarantined_not_overwritten() {
+        // P1-S3：损坏文件 load 时被 rename 为 .corrupt-<ts> 备份，原路径
+        // 之后以空注册表启动；后续 save 只写原路径，备份保留恢复路径。
+        let dir = std::env::temp_dir().join(format!(
+            "warden-corrupt-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let path = dir.join("shame-wall-registry.json");
+        std::fs::write(&path, "{ this is not valid json").expect("write corrupt file");
+
+        let registry = ShameWallRegistry::load_from_path_quarantining(&path)
+            .expect("corrupt file must quarantine and fall back to empty registry");
+        assert!(
+            registry.entries.is_empty(),
+            "corrupt file must yield an empty registry"
+        );
+
+        // 原路径必须已消失（被 rename 走），损坏内容不得留在原位被后续
+        // save 覆盖；备份文件保留原始损坏内容（恢复路径）。
+        assert!(
+            !path.exists(),
+            "corrupt file must be renamed away from the live path"
+        );
+        let backups: Vec<_> = std::fs::read_dir(&dir)
+            .expect("read dir")
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .contains("shame-wall-registry.json.corrupt-")
+            })
+            .collect();
+        assert_eq!(
+            backups.len(),
+            1,
+            "exactly one .corrupt-<ts> backup must be created"
+        );
+        let backup_contents = std::fs::read_to_string(backups[0].path()).expect("read backup");
+        assert_eq!(
+            backup_contents, "{ this is not valid json",
+            "backup must preserve the original corrupt contents"
+        );
+
+        // 以空注册表 save 后，原路径被原子写覆盖为新数据，但备份仍在。
+        registry
+            .save_to_path(&path)
+            .expect("save empty registry to live path");
+        assert!(path.exists(), "live path must be recreated by save");
+        let live: ShameWallRegistry =
+            serde_json::from_str(&std::fs::read_to_string(&path).expect("read live")).expect(
+                "live path must contain a valid registry after save",
+            );
+        assert!(live.entries.is_empty());
+        assert!(
+            backups[0].path().exists(),
+            "corrupt backup must survive subsequent saves"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn missing_shame_wall_file_is_not_quarantined() {
+        // 缺失文件不应产生备份（仅损坏文件才隔离）。
+        let dir = std::env::temp_dir().join(format!(
+            "warden-missing-quarantine-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let path = dir.join("shame-wall-registry.json");
+        let registry = ShameWallRegistry::load_from_path_quarantining(&path)
+            .expect("missing file must yield empty registry");
+        assert!(registry.entries.is_empty());
+        assert!(
+            std::fs::read_dir(&dir).expect("read dir").next().is_none(),
+            "missing file must not create any backup"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
