@@ -34,10 +34,50 @@ still drag earlier content down by the collapse delta, spacer or not.
 Both are pure functions over geometry. They hold no timers and observe no
 mutation.
 
+## Opening a Session
+
+A session mounts against an unsettled transcript: item heights are still
+estimates, and an `isPartial` session pages older Turns in for hundreds of
+milliseconds. The end of content can travel thousands of pixels after the first
+alignment, so opening is its own phase with its own rules.
+
+**While opening, the transcript is hidden and the follow target is
+authoritative.** It tracks the content end exactly — no remembered offset, no
+gap tolerance, and no accommodation of a foreign `scrollTop` write. Virtuoso
+writes during this window too (it compensates a history prepend from the item
+index before the prepended heights reach the DOM); fighting it is invisible
+because nothing is painted, and accommodating it would be permanent once paging
+stops.
+
+**After the reveal, the follow target is cooperative.** The gap tolerance
+applies again, because from then on a shrinking content end means a card
+collapsed, not that measurement is still catching up.
+
+The reveal waits for a *semantic* signal — the last virtual item rendered with
+its end inside the viewport, plus the viewport in position — not for geometry to
+stop changing. Before Virtuoso renders anything, `scrollHeight` and the content
+end sit unchanged at their unmeasured values, which is indistinguishable from
+having finished; a stability test reveals on frame 3 and shows the whole settle.
+
+`tailHoldMaxGapPx` is a **streaming allowance**. Blank below the live output is
+tolerable only because more output is about to fill it. Do not reuse it to
+absorb anything else — applied to a foreign forward move it parks the content
+end mid-viewport permanently, since nothing pulls the target back down.
+
 ## Current Behavior
 
 - A newly submitted Turn scrolls to the viewport top and enters follow-output.
   Every other entry reason resumes at the end of real content.
+- Session open enters follow-output as `session-open`, even with nothing
+  streaming. The frame loop then runs on a `SETTLE_FRAMES` budget that refreshes
+  whenever the target actually moves, so it tracks measurement and paging and
+  then goes quiet. Without it nothing owns the viewport after the one-shot
+  alignment, and the transcript strands wherever that early shot landed.
+- `scrollToTurnEnd` deliberately does **not** exit follow-output. It is the
+  session-open placement and wants the same position the settle is converging
+  on; releasing ownership there hands the viewport back to nobody.
+- The history prepend anchor is skipped while follow-output owns the viewport.
+  Restoring a pre-prepend position is only meaningful when the user owns it.
 - `useFlowChatFollowOutput` is the only continuous writer while output streams.
 - `scheduleFollowToLatest` re-asserts ownership after a layout change but does
   **not** force the content end. A collapse resizes content too, and the hold
@@ -54,6 +94,24 @@ mutation.
 - "At bottom" is measured against the end of real content, not the end of the
   spacer. Virtuoso's own `atBottomStateChange` is therefore unused.
 
+## Virtuoso Footer Coupling
+
+react-virtuoso adds the **entire** footer height when it scrolls to the *last*
+index with `align: 'end'` (`dist/index.mjs`: `ft === wt && (St += O)`, where `O`
+is `footerHeight`). FlowChat relies on that for the input-stack clearance on
+session open, but the tail spacer lives in the same footer, so an uncorrected
+end-alignment opens the session on a screen of reserved blank.
+
+Every `align: 'end'` scroll therefore passes
+`endAlignedTailOffsetPx(index, itemCount, tailSpacerPx)`, which cancels the
+spacer's share and only the spacer's share. The affected call sites are
+`initialTopMostItemIndex`, `scrollToTurnEnd`, and the `scrollToContentEnd`
+fallback. `align: 'start'` and `align: 'center'` are unaffected — Virtuoso adds
+footer height for the last index only.
+
+If a future Virtuoso upgrade changes that rule, sessions will open one viewport
+too high or too low. Re-check the offset math before bumping the dependency.
+
 ## Known Gaps
 
 - Users can still scroll down into the reserved blank. Clamping or snapping that
@@ -62,6 +120,22 @@ mutation.
 - A collapse larger than `tailHoldMaxGapPx` still moves the viewport, by the
   excess only.
 - On a very short transcript the scrollbar exposes a viewport of empty range.
+- The opening reveal has a hard frame cap. A session that pages for longer than
+  the cap is revealed mid-settle; raising the cap trades that against a longer
+  blank on open.
+
+## Why There Is No Viewport Coordinator
+
+There was one — `FlowChatViewportCoordinator.ts`, removed alongside the
+compensation engine. Single-writer semantics are not reachable here: Virtuoso
+writes `scrollTop` from inside the library (`initialTopMostItemIndex`, the
+`firstItemIndex` prepend compensation, `scrollToIndex`), so a coordinator can
+only serialise *our* writes and the conflicts observed in practice were with
+that third writer.
+
+What works instead is a single *source of truth*. Read the live viewport, and
+make each phase's rule idempotent with respect to a foreign write: authoritative
+while hidden, cooperative once painted.
 
 ## Viewport Ownership
 

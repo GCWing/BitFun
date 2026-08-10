@@ -59,6 +59,28 @@ export function tailHoldMaxGapPx(clientHeight: number): number {
 }
 
 /**
+ * Correction for a Virtuoso `scrollToIndex({ align: 'end' })`.
+ *
+ * react-virtuoso adds the *entire* footer height when the target is the last
+ * index, so that scrolling to the end of the last item reveals the footer
+ * (`dist/index.mjs`: `xt === "end" ? (… , ft === wt && (St += O))`, where `O`
+ * is `footerHeight`). That is the behaviour that makes a new session open with
+ * the input-stack clearance visible, so it must be kept — but the resident tail
+ * spacer lives in the same footer, and revealing *that* means opening on a
+ * screen of blank.
+ *
+ * Cancel exactly the spacer's share. Virtuoso samples `footerHeight` and this
+ * offset in the same reaction, so they cannot disagree.
+ */
+export function endAlignedTailOffsetPx(
+  targetIndex: number,
+  itemCount: number,
+  tailSpacerPx: number,
+): number {
+  return targetIndex >= itemCount - 1 && tailSpacerPx > 0 ? -tailSpacerPx : 0;
+}
+
+/**
  * Resolve the next follow target.
  *
  * `pin-turn-top` holds a freshly submitted Turn at the viewport top while its

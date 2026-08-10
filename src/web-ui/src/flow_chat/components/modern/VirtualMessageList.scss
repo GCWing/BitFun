@@ -49,6 +49,15 @@
     scrollbar-gutter: stable;
   }
   
+  /*
+   * The opening viewport settles over several frames as items measure and
+   * history pages in. Keep it laid out and measurable but unpainted until then;
+   * see the opening-reveal effect in VirtualMessageList.tsx.
+   */
+  &[data-open-viewport-settled='false'] {
+    visibility: hidden;
+  }
+
   &--empty {
     display: flex;
     align-items: center;

@@ -33,6 +33,7 @@ interface HarnessProps {
   scrollToContentEnd?: (behavior: ScrollBehavior) => void;
   scrollTurnToTop?: (turnId: string) => boolean;
   resolveTurnTopScrollTop?: (turnId: string) => number | null;
+  isOpeningViewport?: boolean;
   onController: (controller: Controller) => void;
 }
 
@@ -43,6 +44,7 @@ function Harness({
   scrollToContentEnd = () => {},
   scrollTurnToTop = () => false,
   resolveTurnTopScrollTop = () => null,
+  isOpeningViewport = false,
   onController,
 }: HarnessProps) {
   const scrollerRef = React.useRef<HTMLElement | null>(scroller);
@@ -57,6 +59,7 @@ function Harness({
     scrollToContentEnd,
     scrollTurnToTop,
     resolveTurnTopScrollTop,
+    isOpeningViewport: () => isOpeningViewport,
   });
   onController(controller);
   return <div data-following={String(controller.isFollowingOutput)} />;
@@ -109,6 +112,10 @@ describe('useFlowChatFollowOutput', () => {
     act(() => {
       root.render(<Harness {...props} latestTurnId="turn-1" isStreaming={false} />);
     });
+    // Mount settles on the content end; only the *new Turn* must not.
+    expect(scrollToContentEnd).toHaveBeenCalledWith('auto');
+    scrollToContentEnd.mockClear();
+
     act(() => {
       root.render(<Harness {...props} latestTurnId="turn-2" isStreaming={false} />);
     });
@@ -116,6 +123,79 @@ describe('useFlowChatFollowOutput', () => {
     expect(scrollTurnToTop).toHaveBeenCalledWith('turn-2');
     expect(scrollToContentEnd).not.toHaveBeenCalled();
     expect(controller?.isFollowingOutput).toBe(true);
+  });
+
+  it('settles on the content end when a session opens without streaming', () => {
+    const scrollToContentEnd = vi.fn();
+    act(() => {
+      root.render(
+        <Harness
+          latestTurnId="turn-1"
+          isStreaming={false}
+          scroller={scroller}
+          scrollToContentEnd={scrollToContentEnd}
+          onController={next => { controller = next; }}
+        />,
+      );
+    });
+
+    expect(scrollToContentEnd).toHaveBeenCalledWith('auto');
+    expect(controller?.isFollowingOutput).toBe(true);
+  });
+
+  it('tracks the content end exactly while the transcript is still opening', () => {
+    // Virtuoso compensates a history prepend by writing scrollTop before the
+    // prepended heights reach the DOM. While opening, the transcript is hidden
+    // and we are authoritative — accommodating that write would be invisible
+    // now and permanent once paging stops.
+    setScrollerMetrics(scroller, {
+      scrollHeight: 1500 + TAIL_SPACER,
+      clientHeight: VIEWPORT,
+      scrollTop: 0,
+    });
+    act(() => {
+      root.render(
+        <Harness
+          latestTurnId="turn-1"
+          scroller={scroller}
+          isOpeningViewport
+          onController={next => { controller = next; }}
+        />,
+      );
+    });
+    runNextFrame();
+    expect(scroller.scrollTop).toBe(1000);
+
+    scroller.scrollTop = 1000 + 380;
+    runNextFrame();
+    expect(scroller.scrollTop).toBe(1000);
+  });
+
+  it('does not strand the viewport inside the tail spacer after opening', () => {
+    // Regression: the gap tolerance is a streaming allowance. Applied to a
+    // foreign forward move it parked the content end mid-viewport forever,
+    // because nothing pulls the target back down once paging stops.
+    setScrollerMetrics(scroller, {
+      scrollHeight: 1500 + TAIL_SPACER,
+      clientHeight: VIEWPORT,
+      scrollTop: 0,
+    });
+    act(() => {
+      root.render(
+        <Harness
+          latestTurnId="turn-1"
+          scroller={scroller}
+          isOpeningViewport
+          onController={next => { controller = next; }}
+        />,
+      );
+    });
+    runNextFrame();
+
+    scroller.scrollTop = 1000 + 380;
+    runNextFrame();
+    expect(scroller.scrollTop).toBe(1000);
+    expect(1000).toBeLessThan(1000 + MAX_GAP);
   });
 
   it('falls back to the content end when the new Turn cannot be targeted', () => {

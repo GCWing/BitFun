@@ -50,7 +50,11 @@ import {
 import { RuntimeStatusSlot } from './RuntimeStatusSlot';
 import { StickyTaskIndicator } from '../StickyTaskIndicator';
 import { useFlowChatFollowOutput } from './useFlowChatFollowOutput';
-import { contentEndScrollTop, tailSpacerPxForViewport } from './flowChatTailFollow';
+import {
+  contentEndScrollTop,
+  endAlignedTailOffsetPx,
+  tailSpacerPxForViewport,
+} from './flowChatTailFollow';
 import { VirtualItemRenderer } from './VirtualItemRenderer';
 import { getLeadingVirtualItemIndexDelta } from './virtualMessageListLayout';
 import { resolveVisibleFlowChatTurnIds } from './flowChatVisibleTurns';
@@ -61,6 +65,10 @@ const SEARCH_NAVIGATION_MAX_ATTEMPTS = 24;
 const FLOW_CHAT_VIRTUOSO_OVERSCAN = { main: 600, reverse: 600 } as const;
 /** Distance from the end of real content still treated as "at the bottom". */
 const AT_CONTENT_END_THRESHOLD_PX = 50;
+/** Consecutive quiet frames that mark the opening viewport as settled. */
+const OPEN_REVEAL_QUIET_FRAMES = 2;
+/** Hard cap so the transcript is always revealed, settled or not. */
+const OPEN_REVEAL_MAX_FRAMES = 40;
 const FLOW_CHAT_VIRTUOSO_VIEWPORT_INCREASE = { top: 600, bottom: 600 } as const;
 const IDLE_HISTORY_WINDOW_BOUNDARY_STATE: Record<
   SessionHistoryWindowDirection,
@@ -279,6 +287,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const [scrollerElement, setScrollerElement] = useState<HTMLElement | null>(null);
   const [viewportHeightPx, setViewportHeightPx] = useState(0);
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const [isOpenViewportSettled, setIsOpenViewportSettled] = useState(false);
   const preparedTurnNavigationRef = useRef<PreparedTurnNavigation | null>(null);
   const historyPrependAnchorRef = useRef<HistoryPrependAnchor | null>(null);
   const boundaryRequestRef = useRef<Record<SessionHistoryWindowDirection, Promise<void> | null>>({
@@ -303,13 +312,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     virtuosoIndexState.firstItemIndex = VIRTUOSO_FIRST_ITEM_INDEX_BASE;
     virtuosoIndexState.virtualItems = virtualItems;
   } else if (virtuosoIndexState.virtualItems !== virtualItems) {
+    const leadingDelta = getLeadingVirtualItemIndexDelta(
+      virtuosoIndexState.virtualItems,
+      virtualItems,
+      getVirtualItemStableKey,
+    );
     virtuosoIndexState.firstItemIndex = Math.max(
       0,
-      virtuosoIndexState.firstItemIndex + getLeadingVirtualItemIndexDelta(
-        virtuosoIndexState.virtualItems,
-        virtualItems,
-        getVirtualItemStableKey,
-      ),
+      virtuosoIndexState.firstItemIndex + leadingDelta,
     );
     virtuosoIndexState.virtualItems = virtualItems;
   }
@@ -345,6 +355,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   }, [tailSpacerPx]);
   const getTailSpacerPx = useCallback(() => tailSpacerPxRef.current, []);
 
+  const isOpenViewportSettledRef = useRef(isOpenViewportSettled);
+  isOpenViewportSettledRef.current = isOpenViewportSettled;
+  const isOpeningViewport = useCallback(() => !isOpenViewportSettledRef.current, []);
+
   const getRenderedUserMessageElement = useCallback((turnId: string) => (
     Array.from(
       scrollerElementRef.current?.querySelectorAll<HTMLElement>(
@@ -367,9 +381,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       scroller.scrollTo({ top: readContentEndScrollTop(scroller), behavior });
       return;
     }
+    const lastIndex = Math.max(0, virtualItems.length - 1);
     virtuosoRef.current?.scrollToIndex({
-      index: Math.max(0, virtualItems.length - 1),
+      index: lastIndex,
       align: 'end',
+      offset: endAlignedTailOffsetPx(lastIndex, virtualItems.length, tailSpacerPxRef.current),
       behavior: normalizeVirtuosoBehavior(behavior),
     });
   }, [readContentEndScrollTop, virtualItems.length]);
@@ -396,6 +412,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   }, [getRenderedUserMessageElement]);
 
   const {
+    isFollowingOutput,
     enterFollowOutput,
     exitFollowOutput,
     scheduleFollowToLatest,
@@ -412,7 +429,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     scrollToContentEnd,
     scrollTurnToTop,
     resolveTurnTopScrollTop,
+    isOpeningViewport,
   });
+
+  const isFollowingOutputRef = useRef(isFollowingOutput);
+  isFollowingOutputRef.current = isFollowingOutput;
 
   const notifyUserScrollIntent = useCallback(() => {
     handleUserScrollIntent();
@@ -481,6 +502,57 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       visibleTurnUpdateFrameRef.current = null;
     }
   }, []);
+
+
+  /*
+   * Opening reveal.
+   *
+   * A session mounts against an unmeasured transcript: for the first frames the
+   * real content is a few hundred pixels of estimate, so the end of content
+   * genuinely *is* the top, and the settle then walks the viewport down as items
+   * measure and history pages in. Every step of that walk is correct and every
+   * step is visible, which reads as a flash. Hold the transcript hidden — laid
+   * out and measurable, just not painted — until it stops moving.
+   */
+  useLayoutEffect(() => {
+    if (!scrollerElement || isOpenViewportSettled) return;
+
+    let frame = 0;
+    let quietFrames = 0;
+    let rafId: number | null = null;
+    const lastVirtualIndex = virtualItems.length - 1;
+
+    const check = () => {
+      frame += 1;
+      /*
+       * Geometry stability is not a settle signal on its own: before Virtuoso
+       * renders anything, `scrollHeight` and the content end sit unchanged at
+       * their unmeasured values, which is indistinguishable from having
+       * finished. Require the last item to actually be rendered with its end
+       * inside the viewport — that is the thing the reveal is waiting for.
+       */
+      const lastItem = scrollerElement.querySelector<HTMLElement>(
+        `.virtual-item-wrapper[data-virtual-index="${lastVirtualIndex}"]`,
+      );
+      const contentEnd = readContentEndScrollTop(scrollerElement);
+      const inPosition = Math.abs(scrollerElement.scrollTop - contentEnd) <= AT_CONTENT_END_THRESHOLD_PX;
+      const tailVisible = lastItem !== null
+        && lastItem.getBoundingClientRect().bottom
+          <= scrollerElement.getBoundingClientRect().bottom + AT_CONTENT_END_THRESHOLD_PX;
+      quietFrames = tailVisible && inPosition ? quietFrames + 1 : 0;
+
+      if (quietFrames >= OPEN_REVEAL_QUIET_FRAMES || frame >= OPEN_REVEAL_MAX_FRAMES) {
+        setIsOpenViewportSettled(true);
+        return;
+      }
+      rafId = requestAnimationFrame(check);
+    };
+    rafId = requestAnimationFrame(check);
+
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+  }, [isOpenViewportSettled, readContentEndScrollTop, scrollerElement, virtualItems.length]);
 
   // "At bottom" means the end of real content, not the end of the tail spacer.
   const updateIsAtBottom = useCallback(() => {
@@ -602,10 +674,18 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       }
     }
     if (targetIndex < 0 || !virtuosoRef.current) return false;
-    exitFollowOutput('scroll-to-turn');
-    virtuosoRef.current.scrollToIndex({ index: targetIndex, align: 'end', behavior: 'auto' });
+    // Deliberately does not exit follow-output. This is the session-open
+    // placement, which wants the same position the tail follow is settling on;
+    // releasing ownership here strands the viewport wherever this one early
+    // shot landed, before item measurement and history paging have finished.
+    virtuosoRef.current.scrollToIndex({
+      index: targetIndex,
+      align: 'end',
+      offset: endAlignedTailOffsetPx(targetIndex, virtualItems.length, tailSpacerPxRef.current),
+      behavior: 'auto',
+    });
     return true;
-  }, [exitFollowOutput, virtualItems]);
+  }, [virtualItems]);
 
   const isTurnRenderedInViewport = useCallback((turnId: string) => {
     const scroller = scrollerElementRef.current;
@@ -691,6 +771,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const captureHistoryPrependAnchor = useCallback(() => {
     const scroller = scrollerElementRef.current;
     if (!scroller) return false;
+    // Preserving a pre-prepend anchor only makes sense while the user owns the
+    // viewport. When follow-output owns it the follow target already defines
+    // the position, and restoring the anchor fights it for exactly one frame —
+    // which reads as a flash while a session pages in its history.
+    if (isFollowingOutputRef.current) {
+      historyPrependAnchorRef.current = null;
+      return true;
+    }
     const scrollerRect = scroller.getBoundingClientRect();
     const anchor = Array.from(
       scroller.querySelectorAll<HTMLElement>(
@@ -857,6 +945,19 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     previousHistoryBoundaryStatusNode,
     tailSpacerPx,
   ]);
+  // Session open bottom-aligns the last item. Virtuoso reveals the whole footer
+  // for that alignment, which now contains the tail spacer, so the spacer's
+  // share is cancelled here. Virtuoso samples this alongside `footerHeight`
+  // when it finally scrolls, so the two stay consistent.
+  const lastItemIndex = Math.max(0, virtualItems.length - 1);
+  const initialTopMostItemIndex = useMemo(() => {
+    const value = {
+      index: lastItemIndex,
+      align: 'end' as const,
+      offset: endAlignedTailOffsetPx(lastItemIndex, virtualItems.length, tailSpacerPx),
+    };
+    return value;
+  }, [lastItemIndex, tailSpacerPx, virtualItems.length]);
   const computeVirtuosoItemKey = useCallback((_: number, item: VirtualItem) => (
     `${activeSessionId ?? 'no-active-session'}:${getVirtualItemStableKey(item)}`
   ), [activeSessionId]);
@@ -889,13 +990,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       data-presentation-mode={presentationMode}
       data-viewport-mode={viewportMode}
       data-streaming-output={isStreamingOutput ? 'true' : 'false'}
+      data-open-viewport-settled={isOpenViewportSettled ? 'true' : 'false'}
     >
       <Virtuoso
         key={activeSessionId ?? 'no-active-session'}
         ref={virtuosoRef}
         data={virtualItems}
         firstItemIndex={virtuosoFirstItemIndex}
-        initialTopMostItemIndex={{ index: Math.max(0, virtualItems.length - 1), align: 'end' }}
+        initialTopMostItemIndex={initialTopMostItemIndex}
         computeItemKey={computeVirtuosoItemKey}
         itemContent={renderVirtuosoItem}
         followOutput={false}

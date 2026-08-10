@@ -160,12 +160,47 @@ describe('VirtualMessageList natural scroll contract', () => {
     expect(footer?.style.minHeight).toBe('168px');
   });
 
-  it('starts at the natural tail instead of pinning the latest user message', () => {
+  it('starts bottom-aligned on the last item, with nothing to cancel yet', () => {
     act(() => root.render(<VirtualMessageList />));
     expect(mocks.virtuosoProps?.initialTopMostItemIndex).toEqual({
       index: 1,
       align: 'end',
+      offset: 0,
     });
+  });
+
+  it('cancels the resident tail spacer in the initial bottom alignment', () => {
+    // Virtuoso reveals the whole footer when end-aligning the last item, so
+    // without this the session would open on a screen of reserved blank.
+    const originalClientHeight = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'clientHeight',
+    );
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+      configurable: true,
+      get: () => 600,
+    });
+
+    try {
+      act(() => root.render(<VirtualMessageList />));
+
+      expect(mocks.virtuosoProps?.initialTopMostItemIndex).toEqual({
+        index: 1,
+        align: 'end',
+        offset: -600,
+      });
+      const spacer = container.querySelector<HTMLElement>('.message-list-tail-spacer');
+      expect(spacer?.style.height).toBe('600px');
+      // The input-stack footer stays a separate, unchanged reservation.
+      expect(container.querySelector<HTMLElement>('.message-list-footer')?.style.height)
+        .toBe('168px');
+    } finally {
+      if (originalClientHeight) {
+        Object.defineProperty(HTMLElement.prototype, 'clientHeight', originalClientHeight);
+      } else {
+        delete (HTMLElement.prototype as unknown as Record<string, unknown>).clientHeight;
+      }
+    }
   });
 
   it('navigates a Turn with best-effort start alignment and no range reservation', () => {

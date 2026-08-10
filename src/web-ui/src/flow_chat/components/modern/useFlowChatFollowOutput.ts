@@ -6,7 +6,11 @@ import {
   type TailFollowState,
 } from './flowChatTailFollow';
 
-export type FollowOutputEnterReason = 'jump-to-latest' | 'new-turn' | 'streaming-resumed';
+export type FollowOutputEnterReason =
+  | 'jump-to-latest'
+  | 'new-turn'
+  | 'session-open'
+  | 'streaming-resumed';
 export type FollowOutputExitReason =
   | 'session-changed'
   | 'user-scroll'
@@ -28,6 +32,8 @@ interface UseFlowChatFollowOutputOptions {
   scrollTurnToTop: (turnId: string) => boolean;
   /** Offset that would place a Turn's user message at the viewport top, if rendered. */
   resolveTurnTopScrollTop: (turnId: string) => number | null;
+  /** True while the transcript is still hidden for the opening reveal. */
+  isOpeningViewport: () => boolean;
 }
 
 interface UseFlowChatFollowOutputResult {
@@ -48,6 +54,19 @@ const BOTTOM_EPSILON_PX = 2;
  */
 const PIN_RESOLVE_MAX_ATTEMPTS = 30;
 
+/**
+ * Frames the follow target keeps being re-asserted after a non-streaming entry,
+ * refreshed whenever it actually moves.
+ *
+ * A session opens against an unsettled transcript: item heights are still
+ * estimates and `isPartial` sessions page older Turns in, so the end of content
+ * can travel thousands of pixels after the first alignment. The browser used to
+ * absorb that for free — a bottom-aligned scroll was clamped at `scrollHeight -
+ * clientHeight`, so any target at or past the end snapped onto it. The resident
+ * tail spacer removes that clamp, so the settle has to be explicit.
+ */
+const SETTLE_FRAMES = 90;
+
 export function useFlowChatFollowOutput({
   activeSessionId,
   latestTurnId,
@@ -59,6 +78,7 @@ export function useFlowChatFollowOutput({
   scrollToContentEnd,
   scrollTurnToTop,
   resolveTurnTopScrollTop,
+  isOpeningViewport,
 }: UseFlowChatFollowOutputOptions): UseFlowChatFollowOutputResult {
   const [isFollowingOutput, setIsFollowingOutput] = useState(false);
   const isFollowingOutputRef = useRef(false);
@@ -75,6 +95,7 @@ export function useFlowChatFollowOutput({
   const pinTurnIdRef = useRef<string | null>(null);
   const pinScrollTopRef = useRef<number | null>(null);
   const pinAttemptsRef = useRef(0);
+  const settleFramesRef = useRef(0);
 
   isFollowingOutputRef.current = isFollowingOutput;
   isStreamingRef.current = isStreaming;
@@ -136,30 +157,63 @@ export function useFlowChatFollowOutput({
       return;
     }
 
-    const next = nextTailFollowState(followStateRef.current, {
-      desiredScrollTop: readContentEndScrollTop(scroller),
-      pinScrollTop: readPinScrollTop(),
+    const remembered = followStateRef.current;
+    const desired = readContentEndScrollTop(scroller);
+    /*
+     * While the transcript is opening it is still hidden, so nothing is gained
+     * by remembering an earlier offset: drop the memory and track the content
+     * end exactly. Virtuoso writes `scrollTop` too during this window — it
+     * compensates a history prepend from the item index before the prepended
+     * heights reach the DOM — and any accommodation of that is both invisible
+     * and, once paging stops, permanent. The gap tolerance is a *streaming*
+     * allowance: blank below the live output is acceptable only because more
+     * output is about to fill it.
+     */
+    const previous: TailFollowState = isOpeningViewport()
+      ? { mode: remembered.mode, target: desired }
+      : remembered;
+    const pin = readPinScrollTop();
+    const next = nextTailFollowState(previous, {
+      desiredScrollTop: desired,
+      pinScrollTop: pin,
       maxGapPx: tailHoldMaxGapPx(scroller.clientHeight),
     });
     followStateRef.current = next;
     if (next.mode === 'hold-tail') {
       clearPin();
     }
+    // Content is still moving, so keep the settle window open.
+    if (Math.abs(next.target - previous.target) > BOTTOM_EPSILON_PX) {
+      settleFramesRef.current = SETTLE_FRAMES;
+    }
 
     if (Math.abs(next.target - scroller.scrollTop) > BOTTOM_EPSILON_PX) {
       scroller.scrollTop = next.target;
     }
-  }, [clearPin, readContentEndScrollTop, readPinScrollTop, scrollerRef]);
+  }, [
+    clearPin,
+    isOpeningViewport,
+    readContentEndScrollTop,
+    readPinScrollTop,
+    scrollerRef,
+  ]);
 
   const runFollowFrame = useCallback(() => {
     followFrameRef.current = null;
     if (
       !isFollowingOutputRef.current ||
-      !isStreamingRef.current ||
       !isViewportActiveRef.current ||
       document.hidden
     ) {
       return;
+    }
+    // Streaming holds the loop open indefinitely; anything else runs only
+    // until the transcript stops moving.
+    if (!isStreamingRef.current && settleFramesRef.current <= 0) {
+      return;
+    }
+    if (!isStreamingRef.current) {
+      settleFramesRef.current -= 1;
     }
 
     applyFollowTarget();
@@ -167,7 +221,11 @@ export function useFlowChatFollowOutput({
   }, [applyFollowTarget]);
 
   const startFollowFrame = useCallback(() => {
-    if (followFrameRef.current === null && isFollowingOutputRef.current && isStreamingRef.current) {
+    if (
+      followFrameRef.current === null &&
+      isFollowingOutputRef.current &&
+      (isStreamingRef.current || settleFramesRef.current > 0)
+    ) {
       followFrameRef.current = requestAnimationFrame(runFollowFrame);
     }
   }, [runFollowFrame]);
@@ -178,10 +236,12 @@ export function useFlowChatFollowOutput({
     }
     isFollowingOutputRef.current = true;
     setIsFollowingOutput(true);
+    settleFramesRef.current = SETTLE_FRAMES;
 
     const scroller = scrollerRef.current;
     const contentEnd = scroller ? readContentEndScrollTop(scroller) : 0;
     const pinTurnId = reason === 'new-turn' ? latestTurnIdRef.current : null;
+
 
     // A newly submitted Turn opens at the viewport top; every other entry
     // reason resumes at the end of real content.
@@ -223,6 +283,7 @@ export function useFlowChatFollowOutput({
     if (!isFollowingOutputRef.current || !isViewportActiveRef.current) {
       return;
     }
+    settleFramesRef.current = SETTLE_FRAMES;
     applyFollowTarget();
     startFollowFrame();
   }, [applyFollowTarget, startFollowFrame]);
@@ -240,8 +301,8 @@ export function useFlowChatFollowOutput({
   useEffect(() => {
     if (!hasMountedRef.current) {
       hasMountedRef.current = true;
-      if (isStreaming && virtualItemCount > 0) {
-        enterFollowOutput('streaming-resumed');
+      if (virtualItemCount > 0) {
+        enterFollowOutput(isStreaming ? 'streaming-resumed' : 'session-open');
       }
       return;
     }
@@ -250,8 +311,8 @@ export function useFlowChatFollowOutput({
       previousSessionIdRef.current = activeSessionId;
       previousLatestTurnIdRef.current = latestTurnId;
       exitFollowOutput('session-changed');
-      if (isStreaming && virtualItemCount > 0) {
-        enterFollowOutput('streaming-resumed');
+      if (virtualItemCount > 0) {
+        enterFollowOutput(isStreaming ? 'streaming-resumed' : 'session-open');
       }
       return;
     }
