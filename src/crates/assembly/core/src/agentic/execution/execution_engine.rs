@@ -4904,7 +4904,8 @@ impl ExecutionEngine {
                             }
                         };
                         let user_msg = Message::internal_reminder(reminder_kind, wrapped)
-                            .with_turn_id(context.dialog_turn_id.clone());
+                            .with_turn_id(context.dialog_turn_id.clone())
+                            .with_steering_id(injection.id.clone());
                         messages.push(user_msg.clone());
                         if let Err(e) = self
                             .session_manager

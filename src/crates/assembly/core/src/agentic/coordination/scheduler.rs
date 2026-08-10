@@ -3161,7 +3161,7 @@ impl DialogScheduler {
                         );
                     }
                     self.round_injection_buffer
-                        .mark_steering_consumed(session_id, &steering_content);
+                        .mark_steering_consumed(session_id, &steering_content, steering.dedup_key());
                 }
             }
             self.round_injection_buffer

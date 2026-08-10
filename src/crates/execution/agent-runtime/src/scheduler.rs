@@ -593,15 +593,26 @@ impl DialogRoundInjectionInterrupt {
 #[derive(Debug, Default)]
 pub struct SessionRoundInjectionBuffer {
     inner: dashmap::DashMap<String, Vec<RoundInjection>>,
-    /// Consumed UserSteering content keys `(session_id, content)` so a user
-    /// message that was already injected into this session is never injected
-    /// again — the observable driver of the 2-7x UserSteering duplicates.
+    /// Consumed UserSteering keys so a user message that was already injected
+    /// into this session is never injected again — the observable driver of the
+    /// 2-7x UserSteering duplicates.
+    ///
+    /// TOKEN-01: keys are `(session_id, steering_id)` when the injection
+    /// carried a dedup marker, and `(session_id, content)` as a content-based
+    /// fallback for legacy steering entries without an id. The id-keyed path
+    /// avoids content scanning (which risks prompt-cache prefix drift).
     /// Cleared when the session is cleared/recycled (`clear`).
     consumed_steering: dashmap::DashSet<(String, String)>,
     /// Injection-id → content map for steering entries drained but not yet
     /// acknowledged; `acknowledge_injection` looks the content up here and
     /// records it into `consumed_steering`.
     pending_steering_content: dashmap::DashMap<(String, String), String>,
+    /// Injection-id → steering-id map for steering entries drained but not yet
+    /// acknowledged. When the injection carries a dedup marker (TOKEN-01), the
+    /// acknowledgement records `(session, steering_id)` instead of the content
+    /// key, so duplicate pushes are suppressed by metadata, not by scanning
+    /// the prompt payload.
+    pending_steering_ids: dashmap::DashMap<(String, String), String>,
 }
 
 /// Time window within which same-kind background-result notifications for the
@@ -631,15 +642,18 @@ impl SessionRoundInjectionBuffer {
     /// position, or the per-kind template, so the provider-side prompt prefix
     /// for the *kept* injection is byte-identical to the pre-fix behavior.
     pub fn push(&self, session_id: &str, message: RoundInjection) {
-        // UserSteering 消费确认：同内容已被本会话注入过（acked）→ 不重复注入。
-        // 注入结构（模板/位置/顺序）零改动，仅抑制已消费内容的重复投递。
+        // UserSteering 消费确认：同内容/同 steering_id 已被本会话注入过
+        // （acked）→ 不重复注入。注入结构（模板/位置/顺序）零改动，仅抑制
+        // 已消费内容的重复投递。TOKEN-01：优先按 steering_id 元数据键判断，
+        // 无 id 的遗留条目回退内容键。
         if message.kind == RoundInjectionKind::UserSteering
-            && self.steering_already_consumed(session_id, &message.content)
+            && self.steering_already_consumed(session_id, &message)
         {
             log::debug!(
-                "UserSteering already consumed; suppressing re-injection: session_id={}, content_len={}",
+                "UserSteering already consumed; suppressing re-injection: session_id={}, content_len={}, steering_id={:?}",
                 session_id,
-                message.content.len()
+                message.content.len(),
+                message.dedup_key()
             );
             return;
         }
@@ -653,6 +667,7 @@ impl SessionRoundInjectionBuffer {
             (RoundInjectionKind::UserSteering, RoundInjectionKind::UserSteering) => {
                 existing.content == message.content
                     && existing.prepended_reminders == message.prepended_reminders
+                    && existing.dedup_key() == message.dedup_key()
             }
             _ => false,
         });
@@ -668,18 +683,31 @@ impl SessionRoundInjectionBuffer {
         entry.push(message);
     }
 
-    /// Record that a UserSteering content was actually injected for the
-    /// session, so later duplicate pushes are suppressed. Keys are cleared
-    /// when the session is cleared/recycled (`clear`).
-    pub fn mark_steering_consumed(&self, session_id: &str, content: &str) {
+    /// Record that a UserSteering was actually injected for the session, so
+    /// later duplicate pushes are suppressed. Keys are cleared when the
+    /// session is cleared/recycled (`clear`). TOKEN-01: prefers the steering
+    /// id metadata key when available, falling back to the content key for
+    /// legacy steering entries without an id.
+    pub fn mark_steering_consumed(&self, session_id: &str, content: &str, steering_id: Option<&str>) {
+        let key = steering_id
+            .map(|id| format!("id:{id}"))
+            .unwrap_or_else(|| format!("content:{content}"));
         self.consumed_steering
-            .insert((session_id.to_string(), content.to_string()));
+            .insert((session_id.to_string(), key));
     }
 
-    /// Whether the (session, content) key is currently marked consumed.
-    fn steering_already_consumed(&self, session_id: &str, content: &str) -> bool {
-        self.consumed_steering
-            .contains(&(session_id.to_string(), content.to_string()))
+    /// Whether the (session, key) is currently marked consumed. TOKEN-01:
+    /// the id metadata key is authoritative when present; the content key
+    /// remains as a fallback for legacy entries.
+    fn steering_already_consumed(&self, session_id: &str, message: &RoundInjection) -> bool {
+        match message.dedup_key() {
+            Some(steering_id) => self
+                .consumed_steering
+                .contains(&(session_id.to_string(), format!("id:{steering_id}"))),
+            None => self
+                .consumed_steering
+                .contains(&(session_id.to_string(), format!("content:{}", message.content))),
+        }
     }
 
     /// Whether `existing` and `candidate` fall inside the same notification
@@ -713,6 +741,12 @@ impl SessionRoundInjectionBuffer {
                             (session_id.to_string(), msg.id.clone()),
                             msg.content.clone(),
                         );
+                        if let Some(steering_id) = msg.dedup_key() {
+                            self.pending_steering_ids.insert(
+                                (session_id.to_string(), msg.id.clone()),
+                                steering_id.to_string(),
+                            );
+                        }
                     }
                     taken.push(msg);
                 }
@@ -722,6 +756,12 @@ impl SessionRoundInjectionBuffer {
                             (session_id.to_string(), msg.id.clone()),
                             msg.content.clone(),
                         );
+                        if let Some(steering_id) = msg.dedup_key() {
+                            self.pending_steering_ids.insert(
+                                (session_id.to_string(), msg.id.clone()),
+                                steering_id.to_string(),
+                            );
+                        }
                     }
                     taken.push(msg);
                 }
@@ -732,14 +772,21 @@ impl SessionRoundInjectionBuffer {
         taken
     }
 
-    /// Look up the drained steering content for `injection_id` and record it as
-    /// consumed for the session, so a duplicate push is suppressed.
+    /// Look up the drained steering content / steering id for `injection_id`
+    /// and record it as consumed for the session, so a duplicate push is
+    /// suppressed. TOKEN-01: prefers the steering-id metadata key when the
+    /// injection carried a dedup marker; falls back to the content key for
+    /// legacy steering entries without an id.
     pub fn acknowledge_injection(&self, session_id: &str, injection_id: &str) {
+        let steering_id = self
+            .pending_steering_ids
+            .remove(&(session_id.to_string(), injection_id.to_string()))
+            .map(|(_, id)| id);
         if let Some((_, content)) = self
             .pending_steering_content
             .remove(&(session_id.to_string(), injection_id.to_string()))
         {
-            self.mark_steering_consumed(session_id, &content);
+            self.mark_steering_consumed(session_id, &content, steering_id.as_deref());
         }
     }
 
@@ -817,6 +864,8 @@ impl SessionRoundInjectionBuffer {
         self.consumed_steering
             .retain(|(entry_session_id, _)| entry_session_id != session_id);
         self.pending_steering_content
+            .retain(|(entry_session_id, _), _| entry_session_id != session_id);
+        self.pending_steering_ids
             .retain(|(entry_session_id, _), _| entry_session_id != session_id);
     }
 
@@ -1382,6 +1431,68 @@ mod tests {
         let pending = buffer.drain_for_turn("session-1", "turn-1");
         assert_eq!(pending.len(), 1);
         assert_eq!(pending[0].content, "check tests");
+    }
+
+    #[test]
+    fn consumed_steering_id_suppresses_reinjection_without_content_scanning() {
+        // TOKEN-01 防回退标记：消费确认记录 steering_id 元数据键。同一
+        // steering 事件（同一 steering_id）在后续轮/turn 再次推入时必须被
+        // 抑制——即便内容被包装文本包裹（content 键无法匹配，id 键仍命中）。
+        let buffer = SessionRoundInjectionBuffer::default();
+        let mut steering = injection(RoundInjectionKind::UserSteering, "check tests");
+        steering.id = "steer-001".to_string();
+        buffer.push("session-1", steering.clone());
+        let drained = buffer.drain_for_turn("session-1", "turn-1");
+        assert_eq!(drained.len(), 1);
+        buffer.acknowledge_injection("session-1", "steer-001");
+
+        // 同一 steering_id 再次 push（例如跨 turn 残留转交后回灌）：被 id 键抑制。
+        let mut re_pushed = injection(RoundInjectionKind::UserSteering, "check tests");
+        re_pushed.id = "steer-001".to_string();
+        buffer.push("session-1", re_pushed);
+        let drained_again = buffer.drain_for_turn("session-1", "turn-2");
+        assert!(
+            drained_again.is_empty(),
+            "same steering_id must not be re-injected"
+        );
+    }
+
+    #[test]
+    fn distinct_steering_ids_survive_after_one_is_consumed_by_id() {
+        // TOKEN-01 防回退标记：id 键去重不得误伤不同 steering 事件（不同
+        // steering_id），即使它们恰好携带相同内容（真实用户两次相同输入）。
+        let buffer = SessionRoundInjectionBuffer::default();
+        let mut first = injection(RoundInjectionKind::UserSteering, "repeat me");
+        first.id = "steer-1".to_string();
+        buffer.push("session-1", first);
+        buffer.drain_for_turn("session-1", "turn-1");
+        buffer.acknowledge_injection("session-1", "steer-1");
+
+        let mut second = injection(RoundInjectionKind::UserSteering, "repeat me");
+        second.id = "steer-2".to_string();
+        buffer.push("session-1", second);
+        let drained = buffer.drain_for_turn("session-1", "turn-2");
+        assert_eq!(drained.len(), 1);
+        assert_eq!(drained[0].id, "steer-2");
+    }
+
+    #[test]
+    fn legacy_content_key_fallback_suppresses_after_acknowledge() {
+        // TOKEN-01 防回退标记回退路径：无 steering_id 的遗留条目仍按内容键
+        // 抑制，行为与修复前一致（不因引入 id 键而退化）。
+        let buffer = SessionRoundInjectionBuffer::default();
+        let steering = injection(RoundInjectionKind::UserSteering, "legacy steering");
+        buffer.push("session-1", steering.clone());
+        let drained = buffer.drain_for_turn("session-1", "turn-1");
+        assert_eq!(drained.len(), 1);
+        buffer.acknowledge_injection("session-1", &drained[0].id);
+
+        buffer.push("session-1", steering);
+        let drained_again = buffer.drain_for_turn("session-1", "turn-2");
+        assert!(
+            drained_again.is_empty(),
+            "legacy content key must still suppress duplicates"
+        );
     }
 
     #[test]

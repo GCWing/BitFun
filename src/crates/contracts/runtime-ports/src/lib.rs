@@ -2083,6 +2083,21 @@ pub struct RoundInjection {
     pub prepended_reminders: Vec<AgentDialogPrependedReminder>,
 }
 
+impl RoundInjection {
+    /// TOKEN-01 dedup marker: the caller-supplied steering id that uniquely
+    /// identifies this user-steering event end to end (the scheduler generates
+    /// it in `buffer_steering` as `Uuid::new_v4()`). `UserSteering` injections
+    /// always carry it; the other kinds return `None`.
+    pub fn dedup_key(&self) -> Option<&str> {
+        match self.kind {
+            RoundInjectionKind::UserSteering => Some(self.id.as_str()),
+            RoundInjectionKind::BackgroundResult | RoundInjectionKind::ThreadGoalObjectiveUpdated => {
+                None
+            }
+        }
+    }
+}
+
 /// Observes round-boundary injections for a given running turn.
 pub trait DialogRoundInjectionSource: Send + Sync {
     fn has_pending(&self, session_id: &str, turn_id: &str) -> bool;
