@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   contentEndScrollTop,
-  endAlignedTailOffsetPx,
   FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX,
   isViewportAtTail,
   memorylessFollowState,
@@ -105,25 +104,6 @@ describe('contentEndScrollTop', () => {
       clientHeight: VIEWPORT,
       tailSpacerPx: SPACER,
     })).toBe(0);
-  });
-});
-
-describe('endAlignedTailOffsetPx', () => {
-  it('cancels the spacer when Virtuoso end-aligns the last item', () => {
-    // Virtuoso reveals the whole footer for `align: 'end'` on the last index,
-    // which would otherwise scroll the resident spacer into view as blank.
-    expect(endAlignedTailOffsetPx(9, 10, SPACER)).toBe(-SPACER);
-  });
-
-  it('leaves earlier items alone', () => {
-    // Virtuoso only adds footerHeight for the last index.
-    expect(endAlignedTailOffsetPx(8, 10, SPACER)).toBe(0);
-    expect(endAlignedTailOffsetPx(0, 10, SPACER)).toBe(0);
-  });
-
-  it('is inert before the viewport is measured', () => {
-    expect(endAlignedTailOffsetPx(9, 10, 0)).toBe(0);
-    expect(Object.is(endAlignedTailOffsetPx(9, 10, 0), -0)).toBe(false);
   });
 });
 

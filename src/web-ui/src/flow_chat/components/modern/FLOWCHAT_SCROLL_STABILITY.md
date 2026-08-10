@@ -435,6 +435,28 @@ footer height for the last index only.
 If a future Virtuoso upgrade changes that rule, sessions will open one viewport
 too high or too low. Re-check the offset math before bumping the dependency.
 
+## What Belongs to the Virtualizer
+
+Two things leak out of a virtualizer, and neither is portable: **the index space
+it counts in**, and **the corrections it applies on its own behalf**. Both live
+in `flowChatVirtuosoBridge.ts` — the `firstItemIndex` cursor and its prepend
+arithmetic, the translation out of that index space, the end-align footer
+correction above, and the session-open placement. A different virtualizer
+deletes that file rather than reimplementing it.
+
+Two things that look like they belong there do not:
+
+- **Positions in `virtualItems`.** That array is FlowChat's own projection, not
+  the virtualizer's, so an index into it means the same thing under any of them.
+  `scrollToIndex`, `scrollToSearchMatch`, and `data-virtual-index` all carry one
+  and are left alone. The Virtuoso index space is converted at both edges —
+  `rangeChanged` on the way in, `itemContent` on the way out — so it never
+  reaches them.
+- **When to page.** `historyBoundariesForVisibleRange` decides that a boundary
+  is worth asking about from a visible item range and nothing else. Its two
+  thresholds are the ones that decide where a junction happens, which is why
+  they are named and tested rather than inline.
+
 ## Known Gaps
 
 - A scrollbar drag is recognised from the gutter the bar occupies, so it is
@@ -567,6 +589,8 @@ pnpm --dir src/web-ui run lint
 pnpm --dir src/web-ui run test:run \
   src/flow_chat/components/modern/flowChatTailFollow.test.ts \
   src/flow_chat/components/modern/flowChatLiveTailWindow.test.ts \
+  src/flow_chat/components/modern/flowChatVirtuosoBridge.test.ts \
+  src/flow_chat/components/modern/flowChatHistoryBoundary.test.ts \
   src/flow_chat/components/modern/flowChatViewportAnchor.test.ts \
   src/flow_chat/components/modern/useFlowChatViewportAnchor.test.tsx \
   src/flow_chat/components/modern/useFlowChatFollowOutput.test.tsx \
@@ -642,6 +666,8 @@ confirm:
 
 - `flowChatTailFollow.ts`
 - `flowChatLiveTailWindow.ts`
+- `flowChatVirtuosoBridge.ts`
+- `flowChatHistoryBoundary.ts`
 - `flowChatViewportAnchor.ts`
 - `useFlowChatViewportAnchor.ts`
 - `useFlowChatFollowOutput.ts`

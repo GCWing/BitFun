@@ -54,23 +54,30 @@ import { findRenderedTurnAnchorElement } from './flowChatViewportAnchor';
 import { useFlowChatViewportAnchor } from './useFlowChatViewportAnchor';
 import {
   contentEndScrollTop,
-  endAlignedTailOffsetPx,
   FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX as AT_CONTENT_END_THRESHOLD_PX,
   FLOWCHAT_TURN_TOP_GAP_PX,
   isViewportAtTail,
   tailSpacerPxForViewport,
   turnTopAlignmentEntersReservedBlank,
 } from './flowChatTailFollow';
+import {
+  advanceVirtuosoIndexCursor,
+  createVirtuosoIndexCursor,
+  endAlignedTailOffsetPx,
+  initialTopMostItemForSessionOpen,
+  normalizeVirtuosoBehavior,
+  toLocalItemRange,
+  type VirtuosoIndexCursor,
+} from './flowChatVirtuosoBridge';
+import { historyBoundariesForVisibleRange } from './flowChatHistoryBoundary';
 import { VirtualItemRenderer } from './VirtualItemRenderer';
 import {
   estimateVirtualMessageItemHeight,
-  getLeadingVirtualItemIndexDelta,
 } from './virtualMessageListLayout';
 import { resolveVisibleFlowChatTurnIds } from './flowChatVisibleTurns';
 import { warnHistoryPagingRefusedWithPendingTurns } from '../../services/historySessionDiagnostics';
 import './VirtualMessageList.scss';
 
-const VIRTUOSO_FIRST_ITEM_INDEX_BASE = 1_000_000;
 const SEARCH_NAVIGATION_MAX_ATTEMPTS = 24;
 const FLOW_CHAT_VIRTUOSO_OVERSCAN = { main: 600, reverse: 600 } as const;
 /** Consecutive quiet frames that mark the opening viewport as settled. */
@@ -268,10 +275,6 @@ function normalizeBoundaryResult(
   return result;
 }
 
-function normalizeVirtuosoBehavior(behavior: ScrollBehavior): 'auto' | 'smooth' {
-  return behavior === 'smooth' ? 'smooth' : 'auto';
-}
-
 function getVirtualItemStableKey(item: VirtualItem): string {
   switch (item.type) {
     case 'user-message':
@@ -400,29 +403,16 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const searchNavigationRequestIdRef = useRef(0);
   const visibleTurnUpdateFrameRef = useRef<number | null>(null);
 
-  const virtuosoIndexStateRef = useRef({
-    sessionId: activeSessionId,
-    firstItemIndex: VIRTUOSO_FIRST_ITEM_INDEX_BASE,
-    virtualItems,
-  });
-  const virtuosoIndexState = virtuosoIndexStateRef.current;
-  if (virtuosoIndexState.sessionId !== activeSessionId) {
-    virtuosoIndexState.sessionId = activeSessionId;
-    virtuosoIndexState.firstItemIndex = VIRTUOSO_FIRST_ITEM_INDEX_BASE;
-    virtuosoIndexState.virtualItems = virtualItems;
-  } else if (virtuosoIndexState.virtualItems !== virtualItems) {
-    const leadingDelta = getLeadingVirtualItemIndexDelta(
-      virtuosoIndexState.virtualItems,
+  const virtuosoIndexCursorRef = useRef<VirtuosoIndexCursor<VirtualItem> | null>(null);
+  virtuosoIndexCursorRef.current = virtuosoIndexCursorRef.current === null
+    ? createVirtuosoIndexCursor(activeSessionId, virtualItems)
+    : advanceVirtuosoIndexCursor(
+      virtuosoIndexCursorRef.current,
+      activeSessionId,
       virtualItems,
       getVirtualItemStableKey,
     );
-    virtuosoIndexState.firstItemIndex = Math.max(
-      0,
-      virtuosoIndexState.firstItemIndex + leadingDelta,
-    );
-    virtuosoIndexState.virtualItems = virtualItems;
-  }
-  const virtuosoFirstItemIndex = virtuosoIndexState.firstItemIndex;
+  const virtuosoFirstItemIndex = virtuosoIndexCursorRef.current.firstItemIndex;
 
   const userMessageItems = useMemo(() => virtualItems
     .map((item, index) => ({ item, index }))
@@ -1156,12 +1146,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   }, [onHistoryWindowBoundaryIntent]);
 
   const handleRangeChanged = useCallback((range: ListRange) => {
-    const localStart = Math.max(0, range.startIndex - virtuosoFirstItemIndex);
-    const localEnd = Math.max(localStart, range.endIndex - virtuosoFirstItemIndex);
     scheduleVisibleTurnInfoUpdate();
-    if (localStart <= 1) requestHistoryBoundary('before');
-    if (localEnd >= virtualItems.length - 2 && presentationMode === 'history-window') {
-      requestHistoryBoundary('after');
+    const visibleRange = toLocalItemRange(range, virtuosoFirstItemIndex);
+    for (const direction of historyBoundariesForVisibleRange(
+      visibleRange,
+      virtualItems.length,
+      presentationMode,
+    )) {
+      requestHistoryBoundary(direction);
     }
   }, [presentationMode, requestHistoryBoundary, scheduleVisibleTurnInfoUpdate, virtualItems.length, virtuosoFirstItemIndex]);
 
@@ -1287,19 +1279,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     previousHistoryBoundaryStatusNode,
     tailSpacerPx,
   ]);
-  // Session open bottom-aligns the last item. Virtuoso reveals the whole footer
-  // for that alignment, which now contains the tail spacer, so the spacer's
-  // share is cancelled here. Virtuoso samples this alongside `footerHeight`
-  // when it finally scrolls, so the two stay consistent.
-  const lastItemIndex = Math.max(0, virtualItems.length - 1);
-  const initialTopMostItemIndex = useMemo(() => {
-    const value = {
-      index: lastItemIndex,
-      align: 'end' as const,
-      offset: endAlignedTailOffsetPx(lastItemIndex, virtualItems.length, tailSpacerPx),
-    };
-    return value;
-  }, [lastItemIndex, tailSpacerPx, virtualItems.length]);
+  const initialTopMostItemIndex = useMemo(() => (
+    initialTopMostItemForSessionOpen(virtualItems.length, tailSpacerPx)
+  ), [tailSpacerPx, virtualItems.length]);
   const computeVirtuosoItemKey = useCallback((_: number, item: VirtualItem) => (
     `${activeSessionId ?? 'no-active-session'}:${getVirtualItemStableKey(item)}`
   ), [activeSessionId]);

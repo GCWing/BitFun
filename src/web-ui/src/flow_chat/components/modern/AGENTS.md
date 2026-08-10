@@ -30,6 +30,13 @@ Also follow the repository and Web UI instructions in the parent guides.
   `useFlowChatViewportAnchor.ts` and must stay independent of the virtualizer:
   it may read the scroller and the Turns rendered inside it, and nothing else.
   Virtualizer-specific compensation stays in `VirtualMessageList`.
+- `flowChatVirtuosoBridge.ts` holds everything that exists only because
+  react-virtuoso is the virtualizer — the index space and the corrections it
+  applies on its own behalf. Nothing outside it and `VirtualMessageList` may
+  import from it, and nothing that survives a virtualizer change may go into it.
+- Deciding *that* a history boundary is worth asking about belongs to
+  `flowChatHistoryBoundary.ts` and reads only a visible item range. Deciding
+  whether the ask is honoured stays in the container.
 - Keep Virtuoso `followOutput={false}`. "At bottom" is measured against the end
   of real content, so Virtuoso's `atBottomStateChange` stays unused.
 - One-shot Turn/search/history navigation remains inside `VirtualMessageList`.
@@ -53,6 +60,8 @@ pnpm --dir src/web-ui run test:run <focused-test-files>
 Relevant tests include:
 
 - `flowChatTailFollow.test.ts`
+- `flowChatVirtuosoBridge.test.ts`
+- `flowChatHistoryBoundary.test.ts`
 - `flowChatViewportAnchor.test.ts`
 - `useFlowChatViewportAnchor.test.tsx`
 - `useFlowChatFollowOutput.test.tsx`
