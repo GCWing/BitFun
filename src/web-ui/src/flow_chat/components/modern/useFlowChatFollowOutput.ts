@@ -468,7 +468,20 @@ export function useFlowChatFollowOutput({
       }
     }
 
-    if (isFollowingOutputRef.current || isOpeningViewport()) {
+    /*
+     * Ownership is not correction, and the difference is deliberate: the frame
+     * loop stops once the settle budget runs out, but ownership survives so
+     * that streaming can resume following. Reading ownership as "something is
+     * correcting this" hands the viewport to a loop that is not running —
+     * measured, a drag came to rest 813px into the reserved blank with
+     * `isFollowingOutput` true, the loop asleep, and nothing to bring it back.
+     *
+     * A live loop still gets the viewport to itself. It reaches its target in a
+     * single frame, so a snap back would only be racing it.
+     */
+    const isFollowCorrectingViewport = isFollowingOutputRef.current
+      && followFrameRef.current !== null;
+    if (isFollowCorrectingViewport || isOpeningViewport()) {
       return;
     }
 

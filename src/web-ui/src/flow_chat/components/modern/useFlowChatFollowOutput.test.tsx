@@ -624,6 +624,61 @@ describe('useFlowChatFollowOutput', () => {
       expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: 'smooth' });
     });
 
+    it('returns a viewport follow owns but is no longer correcting', () => {
+      /*
+       * Ownership outlives the frame loop by design, so "follow owns this" does
+       * not mean "something is bringing it back". A scrollbar drag reaches this
+       * state on every platform whose scrollbar leaves no gutter to recognise
+       * the press by; before this, the viewport simply stayed in the blank.
+       */
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1500 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 0,
+      });
+      act(() => {
+        root.render(
+          <Harness
+            latestTurnId="turn-1"
+            isStreaming={false}
+            scroller={scroller}
+            onController={next => { controller = next; }}
+          />,
+        );
+      });
+      // Run the settle budget out: the loop stops, ownership does not.
+      while (frames.length > 0) runNextFrame();
+      expect(controller?.isFollowingOutput).toBe(true);
+
+      restInBlank(1000 + TAIL_SPACER);
+
+      expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: 'smooth' });
+    });
+
+    it('leaves a viewport the frame loop is still correcting to the loop', () => {
+      // A live loop reaches its target in one frame; snapping back would only
+      // race it, and with an animation that the next frame would cancel.
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1500 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 0,
+      });
+      act(() => {
+        root.render(
+          <Harness
+            latestTurnId="turn-1"
+            scroller={scroller}
+            onController={next => { controller = next; }}
+          />,
+        );
+      });
+      scrollTo.mockClear();
+
+      restInBlank(1000 + TAIL_SPACER);
+
+      expect(scrollTo).not.toHaveBeenCalled();
+    });
+
     it('returns a short new Turn to the viewport top, not to the content end', () => {
       // The pin outlives the user takeover on purpose. Snapping to the content
       // end here would scroll *up* and shove the message the user just sent

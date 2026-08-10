@@ -306,9 +306,14 @@ coordinator, and the reasons there is no coordinator are unchanged (see below).
   the thumb every frame for a 100px oscillation, and a drag that came to rest in
   the reserved blank was skipped by the snap back because follow still nominally
   owned it — with the frame loop long since asleep, so nothing corrected it.
-- Ownership outliving the frame loop is deliberate, and it is why the snap back's
-  "follow owns this" guard cannot be read as "something is correcting this".
-  Streaming has to be able to resume follow after the settle budget runs out.
+- Ownership outliving the frame loop is deliberate — streaming has to be able to
+  resume follow after the settle budget runs out — so the snap back asks whether
+  follow is **correcting** the viewport, not whether it owns it. A live loop gets
+  the viewport to itself, since it reaches its target in one frame and a snap
+  back would only race it. An asleep one does not: a viewport left in the
+  reserved blank under a sleeping loop is stranded, and nothing else was watching
+  for it. This is the half of the scrollbar problem that is fixed everywhere,
+  including where the drag itself cannot be recognised.
 - The pinned Turn's offset is re-resolved from live layout every frame. Virtuoso
   re-estimates unrendered item heights, so a cached absolute offset would drift.
 - When streaming stops, `hold-tail` settles any remaining blank with one smooth
@@ -352,8 +357,12 @@ too high or too low. Re-check the offset math before bumping the dependency.
 - A scrollbar drag is recognised from the gutter the bar occupies, so it is
   invisible where the platform draws overlay scrollbars that take no layout
   width — WebKit-backed builds, where `scrollbar-gutter: stable` reserves
-  nothing either. There the drag is once again a tug of war with the frame loop.
-  Closing this means a signal that does not depend on the bar having a box.
+  nothing either. There the drag still fights the frame loop while output
+  streams; it no longer strands the viewport, because the snap back now asks
+  whether follow is correcting rather than whether it owns. Closing the rest
+  means either a signal that does not depend on the bar having a box, or a
+  scrollbar of our own — which would also stop the thumb from reaching the
+  reserved blank at all, and take the empty-range gap below with it.
 - A collapse larger than `tailHoldMaxGapPx` still moves the viewport, by the
   excess only.
 - An animated scroll aims at the target it was issued for. Jumping to latest
