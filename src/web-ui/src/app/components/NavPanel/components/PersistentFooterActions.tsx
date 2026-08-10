@@ -12,6 +12,7 @@ import {
   ExternalLink,
   BarChart3,
   ChevronUp,
+  MessageSquare,
 } from 'lucide-react';
 import { systemAPI } from '@/infrastructure/api';
 import { Tooltip, Modal } from '@/component-library';
@@ -20,6 +21,7 @@ import { useSceneManager } from '../../../hooks/useSceneManager';
 import { useNavSceneStore } from '../../../stores/navSceneStore';
 import { useSceneStore } from '../../../stores/sceneStore';
 import { useCanvasStore } from '@/app/components/panels/content-canvas/stores';
+import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/ToolbarModeContext';
 import { useNotification } from '@/shared/notification-system';
 import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
@@ -60,6 +62,7 @@ const PersistentFooterActions: React.FC = () => {
     const activeTab = s.primaryGroup.tabs.find((t) => t.id === s.primaryGroup.activeTabId);
     return activeTab?.content.type === 'browser';
   });
+  const { enableToolbarMode } = useToolbarModeContext();
   const { warning } = useNotification();
   const { loggedIn: accountLoggedIn, deviceName: accountDeviceName } = useAccountLoginState();
   const { status: privacyStatus } = usePrivacy();
@@ -183,6 +186,11 @@ const PersistentFooterActions: React.FC = () => {
     setShowAbout(true);
   };
 
+  const handleFloatingMode = useCallback(() => {
+    closeMenu();
+    void enableToolbarMode();
+  }, [closeMenu, enableToolbarMode]);
+
   const handleFeedback = useCallback(async () => {
     closeMenu();
     if (feedbackPlatformEnabled) {
@@ -230,8 +238,6 @@ const PersistentFooterActions: React.FC = () => {
 
   const isBrowserActive =
     activeTabId === 'browser' || (activeTabId === 'session' && isBrowserPanelActiveInCanvas);
-
-  const SHOW_BROWSER_ENTRY = true;
 
   return (
     <>
@@ -399,23 +405,6 @@ const PersistentFooterActions: React.FC = () => {
             </button>
           </Tooltip>
 
-          {SHOW_BROWSER_ENTRY && (
-            <Tooltip content={t('scenes.browser')} placement="right">
-              <button
-                type="button"
-                className={`bitfun-nav-panel__footer-btn bitfun-nav-panel__footer-btn--icon${isBrowserActive ? ' is-active' : ''}`}
-                aria-label={t('scenes.browser')}
-                aria-pressed={isBrowserActive}
-                onClick={handleOpenBrowser}
-                data-testid="browser-panel-entry"
-              >
-                <span className="bitfun-nav-panel__footer-btn-icon-swap" aria-hidden="true">
-                  <Globe size={15} className="bitfun-nav-panel__footer-btn-icon-swap-default" />
-                  <ExternalLink size={15} className="bitfun-nav-panel__footer-btn-icon-swap-hover" />
-                </span>
-              </button>
-            </Tooltip>
-          )}
           <Tooltip content={t('scenes.browser')} placement="right">
             <button
               type="button"

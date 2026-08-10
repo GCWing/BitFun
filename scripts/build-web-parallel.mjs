@@ -18,6 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const skipGenTypes = process.argv.includes('--skip-gen-types');
 
 function runPrefixed(prefix, command, args, cwd) {
   return new Promise((resolve) => {
@@ -62,16 +63,18 @@ function runPrefixed(prefix, command, args, cwd) {
 // finish before the Vite build so the frontend picks up fresh types). This is
 // the only step that requires a working Rust toolchain; local frontend-only
 // iteration can skip it with `pnpm --dir src/web-ui build`.
-const genTypesCode = await runPrefixed(
-  'gen-types',
-  'pnpm',
-  ['--dir', 'src/web-ui', 'run', 'gen:types'],
-  ROOT_DIR,
-);
-if (genTypesCode !== 0) {
-  process.stderr.write('[build-web-parallel] gen:types failed (see output above)\n');
-  process.exitCode = 1;
-  process.exit();
+if (!skipGenTypes) {
+  const genTypesCode = await runPrefixed(
+    'gen-types',
+    'pnpm',
+    ['--dir', 'src/web-ui', 'run', 'gen:types'],
+    ROOT_DIR,
+  );
+  if (genTypesCode !== 0) {
+    process.stderr.write('[build-web-parallel] gen:types failed (see output above)\n');
+    process.exitCode = 1;
+    process.exit();
+  }
 }
 
 // Step 2: type-check and Vite build run in parallel.

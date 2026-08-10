@@ -54,6 +54,7 @@
     "prebuild:web": "pnpm run copy-assets --silent && pnpm run generate-all --silent",
     "type-check:web": "pnpm --dir src/web-ui run type-check",
     "build": "pnpm run build:web",
+    "build:frontend-only": "pnpm run appearance:contract-audit && node scripts/build-web-parallel.mjs --skip-gen-types && pnpm run verify:monaco-assets && pnpm run prepare:mobile-web",
     "verify:monaco-assets": "node scripts/verify-monaco-assets.cjs",
     "build:web": "pnpm run appearance:contract-audit && node scripts/build-web-parallel.mjs && pnpm run verify:monaco-assets",
     "build:mobile-web": "pnpm --dir src/mobile-web build",
