@@ -102,7 +102,6 @@
       "title": "蜂群架构监视器",
       "loading": "加载中...",
       "notReady": "蜂群架构 MiniApp 尚未就绪",
-      "notReadyDetail": "{{error}}。请确认它已编译并部署。",
       "retryHint": "请确认 MiniApp 已编译并部署，然后重新打开面板。",
       "restore": "还原",
       "maximize": "最大化",

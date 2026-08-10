@@ -114,7 +114,9 @@
     },
     "output_tokens": {
       "__title": "Output token tiers",
-      "ratio_percent": "Output-token ratio (% of window)"
+      "ratio_percent": "Output-token ratio (% of window)",
+      "automatic_tiers": "Automatic output-token tiers",
+      "automatic_tiersReadonly": "Read-only: tiers are resolved by the backend when automatic tiering is enabled. Largest tier first."
     },
     "goal": {
       "__title": "Goal continuation",

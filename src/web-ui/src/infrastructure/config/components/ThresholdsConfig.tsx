@@ -294,6 +294,7 @@ export default function ThresholdsConfig() {
     field: DomainField<D>,
     min = 1,
     step = 1,
+    precision = 0,
   ) => {
     const value = (config[domain] as Record<string, unknown>)[field as string] as number;
     const labelKey = `fields.${domain}.${String(field)}`;
@@ -303,6 +304,7 @@ export default function ThresholdsConfig() {
           value={value}
           min={min}
           step={step}
+          precision={precision}
           disabled={savingKey === `ai.thresholds.${domain}.${String(field)}`}
           onChange={(next) => void updateField(domain, field, Number(next))}
         />
@@ -386,6 +388,11 @@ export default function ThresholdsConfig() {
       renderField('acp_timeout', 'direct_secs', 1),
       renderField('acp_timeout', 'task_secs', 1),
     ]);
+    add('warden', [
+      renderField('warden', 'max_defer_count', 0),
+      renderField('warden', 'max_rate', 0, 1, 1),
+      renderField('warden', 'judgement_timeout_secs', 1),
+    ]);
     add('deep_review', [
       renderField('deep_review', 'diff_max_chars_per_turn', 1, 100),
       renderField('deep_review', 'diff_max_acquisitions_per_turn', 1),
@@ -403,6 +410,17 @@ export default function ThresholdsConfig() {
     ]);
     add('output_tokens', [
       renderField('output_tokens', 'ratio_percent', 1),
+      (
+        <ConfigPageRow
+          key="output_tokens.automatic_tiers"
+          label={t('fields.output_tokens.automatic_tiers')}
+          description={t('fields.output_tokens.automatic_tiersReadonly')}
+        >
+          <span className="thresholds-readonly-value">
+            {(config.output_tokens.automatic_tiers ?? []).join(' / ')}
+          </span>
+        </ConfigPageRow>
+      ),
     ]);
     add('goal', [
       renderField('goal', 'idle_wakeup_delay_ms', 1, 1000),
@@ -410,7 +428,7 @@ export default function ThresholdsConfig() {
     ]);
 
     return sections;
-  }, [renderField, t]);
+  }, [renderField, t, config]);
 
   if (loading) {
     return <ConfigPageLoading text={t('messages.loading')} />;

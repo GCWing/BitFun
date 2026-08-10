@@ -140,18 +140,33 @@ const CreateLegionPage: React.FC<CreateLegionPageProps> = ({ onBack }) => {
         className="create-agent-page__section"
         data-bf-component="create-legion-page"
         data-bf-part="section"
+        aria-labelledby="create-legion-patterns-title"
       >
-        <h2 className="create-agent-page__section-title">{t('legionPattern.orchestrationPatterns')}</h2>
-        <div className="legion-pattern-grid">
+        <h2
+          id="create-legion-patterns-title"
+          className="create-agent-page__section-title"
+        >
+          {t('legionPattern.orchestrationPatterns')}
+        </h2>
+        <div
+          className="legion-pattern-grid"
+          role="radiogroup"
+          aria-label={t('legionPattern.orchestrationPatterns')}
+        >
           {PATTERNS.map((pattern) => (
             <div
               key={pattern.id}
               className={`legion-pattern-chip ${pattern.id === selectedPatternId ? 'legion-pattern-chip--active' : ''}`}
               onClick={() => handleSelectPattern(pattern.id)}
-              role="button"
-              tabIndex={0}
-              aria-pressed={pattern.id === selectedPatternId}
-              onKeyDown={(e) => e.key === 'Enter' && handleSelectPattern(pattern.id)}
+              role="radio"
+              tabIndex={pattern.id === selectedPatternId ? 0 : -1}
+              aria-checked={pattern.id === selectedPatternId}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleSelectPattern(pattern.id);
+                }
+              }}
               data-testid="legion-pattern-option"
               data-pattern-id={pattern.id}
             >
@@ -165,7 +180,11 @@ const CreateLegionPage: React.FC<CreateLegionPageProps> = ({ onBack }) => {
       {selectedPattern ? (
         <>
           {/* Summary */}
-          <section className="create-agent-page__section">
+          <section
+            className="create-agent-page__section"
+            aria-live="polite"
+            aria-atomic="true"
+          >
             <h2 className="create-agent-page__section-title">{t('legionPattern.overview')}</h2>
             <p className="legion-summary-desc">{selectedPattern.description}</p>
             <div className="legion-summary-meta">

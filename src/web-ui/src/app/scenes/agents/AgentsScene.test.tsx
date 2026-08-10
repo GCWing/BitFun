@@ -374,6 +374,69 @@ describeWithJsdom('AgentsScene', () => {
     expect(container.querySelectorAll('[data-testid="legion-pattern-option"]').length).toBeGreaterThan(0);
   }, 10_000);
 
+  it('exposes the pattern selector as a radiogroup and fires on Space key (前端-P2-3)', async () => {
+    const { default: AgentsScene } = await import('./AgentsScene');
+
+    await act(async () => {
+      root.render(<AgentsScene />);
+    });
+    const createBtn = container.querySelector<HTMLButtonElement>('[data-testid="agents-create-legion-btn"]');
+    await act(async () => {
+      createBtn?.click();
+    });
+
+    // Single-select semantics: group is a radiogroup, options are radios with aria-checked.
+    const group = container.querySelector('[role="radiogroup"]');
+    expect(group).toBeTruthy();
+    const options = [...container.querySelectorAll('[role="radio"]')] as HTMLElement[];
+    expect(options.length).toBeGreaterThan(0);
+    expect(options.filter((o) => o.getAttribute('aria-checked') === 'true').length).toBe(1);
+
+    // Space key must select a non-active option (button semantics: Enter + Space).
+    const inactive = options.find((o) => o.getAttribute('aria-checked') !== 'true');
+    expect(inactive).toBeTruthy();
+    await act(async () => {
+      inactive!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    });
+    const selected = [...container.querySelectorAll('[role="radio"]')].find(
+      (o) => o.getAttribute('aria-checked') === 'true',
+    );
+    expect(selected?.getAttribute('data-pattern-id')).toBe(inactive?.getAttribute('data-pattern-id'));
+  }, 10_000);
+
+  it('announces the pattern summary through aria-live (前端-P2-4)', async () => {
+    const { default: AgentsScene } = await import('./AgentsScene');
+
+    await act(async () => {
+      root.render(<AgentsScene />);
+    });
+    const createBtn = container.querySelector<HTMLButtonElement>('[data-testid="agents-create-legion-btn"]');
+    await act(async () => {
+      createBtn?.click();
+    });
+
+    // The summary section that changes on pattern switch is polite/atomic.
+    const liveRegions = [...container.querySelectorAll('[aria-live="polite"]')] as HTMLElement[];
+    expect(liveRegions.length).toBeGreaterThan(0);
+    expect(liveRegions.some((r) => r.getAttribute('aria-atomic') === 'true')).toBe(true);
+  }, 10_000);
+
+  it('marks the createLegion page with the agents scene-root contract (前端-P2-6)', async () => {
+    const { default: AgentsScene } = await import('./AgentsScene');
+
+    await act(async () => {
+      root.render(<AgentsScene />);
+    });
+    const createBtn = container.querySelector<HTMLButtonElement>('[data-testid="agents-create-legion-btn"]');
+    await act(async () => {
+      createBtn?.click();
+    });
+
+    const pageRoot = container.querySelector('[data-testid="create-legion-page"]')?.parentElement;
+    expect(pageRoot?.getAttribute('data-bf-scene')).toBe('agents');
+    expect(pageRoot?.getAttribute('data-bf-part')).toBe('root');
+  }, 10_000);
+
   it('renders saved legion presets through the LegionCard gallery (P1-1 wiring)', async () => {
     const { LegionPresetAPI } = await import('@/infrastructure/api/service-api/LegionPresetAPI');
     const listPresets = LegionPresetAPI.listPresets as ReturnType<typeof vi.fn>;

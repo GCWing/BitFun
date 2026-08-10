@@ -102,7 +102,6 @@
       "title": "Bee colony architecture monitor",
       "loading": "Loading...",
       "notReady": "Bee colony MiniApp not ready",
-      "notReadyDetail": "{{error}}. Make sure it is compiled and deployed.",
       "retryHint": "Make sure the MiniApp is compiled and deployed, then reopen the panel.",
       "restore": "Restore",
       "maximize": "Maximize",

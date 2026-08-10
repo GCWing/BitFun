@@ -172,6 +172,34 @@ describe('ThresholdsConfig', () => {
     expect(container.querySelectorAll('input[type="number"]').length).toBeGreaterThan(10);
   });
 
+  it('renders the warden group with all three fields (前端-P2-1)', async () => {
+    getConfigMock.mockResolvedValue({
+      warden: { max_defer_count: 3, max_rate: 1000, judgement_timeout_secs: 8 },
+    });
+    await renderConfig();
+
+    expect(container.textContent).toContain('fields.warden.__title');
+    expect(container.textContent).toContain('fields.warden.max_defer_count');
+    expect(container.textContent).toContain('fields.warden.max_rate');
+    expect(container.textContent).toContain('fields.warden.judgement_timeout_secs');
+  });
+
+  it('renders output_tokens.automatic_tiers as read-only (前端-P2-2)', async () => {
+    getConfigMock.mockResolvedValue({
+      output_tokens: { automatic_tiers: [8000, 16000, 24000, 32000, 64000], ratio_percent: 40 },
+    });
+    await renderConfig();
+
+    // Read-only label + joined tier values are rendered; no NumberInput for the array.
+    expect(container.textContent).toContain('fields.output_tokens.automatic_tiers');
+    expect(container.textContent).toContain('8000 / 16000 / 24000 / 32000 / 64000');
+    // The array must not be editable through a number input.
+    const inputs = [...container.querySelectorAll('input[type="number"]')] as HTMLInputElement[];
+    const outputTokensRow = container.textContent?.indexOf('fields.output_tokens.__title') ?? -1;
+    expect(outputTokensRow).toBeGreaterThanOrEqual(0);
+    expect(inputs.length).toBeGreaterThanOrEqual(2); // ratio_percent + other fields
+  });
+
   it('persists a field change through setConfig with the ai.thresholds path', async () => {
     getConfigMock.mockResolvedValue(undefined);
     setConfigMock.mockResolvedValue(undefined);

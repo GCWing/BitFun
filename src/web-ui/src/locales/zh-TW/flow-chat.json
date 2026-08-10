@@ -102,7 +102,6 @@
       "title": "蜂群架構監視器",
       "loading": "載入中...",
       "notReady": "蜂群架構 MiniApp 尚未就緒",
-      "notReadyDetail": "{{error}}。請確認它已編譯並部署。",
       "retryHint": "請確認 MiniApp 已編譯並部署，然後重新開啟面板。",
       "restore": "還原",
       "maximize": "最大化",

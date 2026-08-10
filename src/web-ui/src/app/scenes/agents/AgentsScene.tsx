@@ -1420,7 +1420,7 @@ const AgentsScene: React.FC = () => {
 
   if (page === 'createLegion') {
     return (
-      <div className="bitfun-agents-scene bitfun-agents-scene--page">
+      <div className="bitfun-agents-scene bitfun-agents-scene--page" data-bf-scene="agents" data-bf-part="root">
         <CreateLegionPage onBack={openHome} />
       </div>
     );

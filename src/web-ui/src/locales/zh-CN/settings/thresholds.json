@@ -114,7 +114,9 @@
     },
     "output_tokens": {
       "__title": "输出 token 档位",
-      "ratio_percent": "输出 token 占窗口比例（%）"
+      "ratio_percent": "输出 token 占窗口比例（%）",
+      "automatic_tiers": "自动输出 token 档位",
+      "automatic_tiersReadonly": "只读：档位由后端在启用自动分档时解析。档位从大到小排列。"
     },
     "goal": {
       "__title": "目标续接",

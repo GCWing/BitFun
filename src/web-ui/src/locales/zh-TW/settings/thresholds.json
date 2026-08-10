@@ -114,7 +114,9 @@
     },
     "output_tokens": {
       "__title": "輸出 token 檔位",
-      "ratio_percent": "輸出 token 佔視窗比例（%）"
+      "ratio_percent": "輸出 token 佔視窗比例（%）",
+      "automatic_tiers": "自動輸出 token 檔位",
+      "automatic_tiersReadonly": "唯讀：檔位由後端在啟用自動分檔時解析。檔位由大到小排列。"
     },
     "goal": {
       "__title": "目標續接",
