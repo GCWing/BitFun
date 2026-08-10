@@ -53,6 +53,49 @@ pub mod workspace_state {
         )
     }
 
+    /// Resolve the on-disk persisted sessions directory for a workspace path.
+    /// In the dependency-light compat surface there is no SSH registry, so this
+    /// falls back to the local workspace runtime layout. Kept in sync with the
+    /// full `remote-workspace` implementation in `workspace_state.rs`.
+    pub async fn get_effective_session_path(
+        workspace_path: &str,
+        remote_connection_id: Option<&str>,
+        remote_ssh_host: Option<&str>,
+    ) -> PathBuf {
+        let runtime_service = crate::service::workspace_runtime::WorkspaceRuntimeService::new(
+            crate::infrastructure::get_path_manager_arc(),
+        );
+        let identity = resolve_workspace_session_identity(
+            workspace_path,
+            remote_connection_id,
+            remote_ssh_host,
+        )
+        .await;
+        let Some(identity) = identity else {
+            return runtime_service
+                .context_for_local_workspace(std::path::Path::new(workspace_path))
+                .sessions_dir;
+        };
+        if identity.hostname == "_unresolved" {
+            if let Some(connection_id) = identity.remote_connection_id.as_deref() {
+                return unresolved_remote_session_storage_dir(
+                    connection_id,
+                    identity.logical_workspace_path(),
+                );
+            }
+        }
+        if identity.hostname == LOCAL_WORKSPACE_SSH_HOST {
+            return runtime_service
+                .context_for_local_workspace(std::path::Path::new(
+                    identity.logical_workspace_path(),
+                ))
+                .sessions_dir;
+        }
+        runtime_service
+            .context_for_local_workspace(std::path::Path::new(workspace_path))
+            .sessions_dir
+    }
+
     pub async fn is_remote_path(_path: &str) -> bool {
         false
     }
