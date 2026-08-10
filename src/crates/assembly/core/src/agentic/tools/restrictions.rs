@@ -587,9 +587,13 @@ mod tests {
             permissions.allowed_tool_names.contains("SessionMessage"),
             "Commander should allow SessionMessage tool"
         );
+        // UX-P0-1 收窄：SessionHistory 移出共享工具集（Commander 模板派生自
+        // subagent_default_tools()），跨会话 transcript 读取仅 Warden 模板
+        // 显式授予 + 工具内授权门兜底。Commander 主会话经 UI/前端历史视图
+        // 读取，不走该工具。
         assert!(
-            permissions.allowed_tool_names.contains("SessionHistory"),
-            "Commander should allow SessionHistory tool"
+            !permissions.allowed_tool_names.contains("SessionHistory"),
+            "Commander should NOT allow SessionHistory tool (UX-P0-1 narrow)"
         );
         // 全工具语义（Commander 主会话 = 全工具执行者）：操作类与
         // 工具白名单同步全量，WriteFile/DeleteFile/ExecuteCode 均允许。

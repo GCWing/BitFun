@@ -608,6 +608,186 @@ pub(crate) async fn resolve_session_mutation_authorization(
     Ok(())
 }
 
+/// SessionHistory 读取授权开关。
+///
+/// 读取（export transcript）与变更（delete/cancel/deliver）语义对齐 R4
+/// 共享授权门，并补两条读取专属约束：
+/// - 同 workspace 归属校验（caller 与 target 的 storage dir 必须一致）；
+/// - 树内双向授权（祖先可导出后代、后代可导出祖先），跨树拒绝。
+///
+/// `allow_owner_bypass`：owner（Commander 角色或 RBAC 关闭）豁免读取，
+/// 与 delete 的 owner 语义一致（主会话=用户 owner，可导出任意会话）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct SessionHistoryAuthOptions {
+    pub allow_owner_bypass: bool,
+}
+
+impl SessionHistoryAuthOptions {
+    pub(crate) const fn read() -> Self {
+        Self {
+            allow_owner_bypass: true,
+        }
+    }
+}
+
+/// 会话读取（SessionHistory export）授权判定（UX-P0-1 根因级修复）。
+///
+/// 对齐 [`resolve_session_mutation_authorization`]（session_control_tool.rs
+/// R4 共享授权门）的 owner / created_by / 祖先判定语义，并增加：
+/// 1. 同 workspace 归属校验：caller 与 target 必须属于同一 workspace
+///    （storage dir 一致），跨 workspace 一律拒绝；
+/// 2. 树内双向授权：caller 是 target 的祖先（可导出后代），或 target 是
+///    caller 的祖先（后代可导出祖先）——限定仅本会话树祖先/后代可导出；
+/// 3. Warden/daemon 会话豁免（R-A.04 同源校验）：Warden 模板刻意保留
+///    SessionHistory 作跨会话审计读取（SKILL.md §工具权限），其 daemon
+///    会话形态即授权依据，豁免树内/created_by 判定。
+///
+/// 决策链：
+/// 1. 同 workspace 归属校验（新增，读取专属）；
+/// 2. Warden/daemon 会话豁免（R-A.04）；
+/// 3. owner 豁免（Commander 角色或 RBAC 关闭）；
+/// 4. created_by 匹配（`session-<caller>` 标记）；
+/// 5. 树内双向祖先授权（内存树快路径 + 持久化 metadata 链回退，空树
+///    不能被利用来绕过授权）。
+///
+/// `Ok(())` = 已授权；`Err` 为拒绝原因（tool error）。
+pub(crate) async fn resolve_session_read_authorization(
+    session_manager: &crate::agentic::session::session_manager::SessionManager,
+    tree: &SessionTreeManager,
+    caller_session_id: &str,
+    caller_workspace_path: &std::path::Path,
+    target_session_id: &str,
+    target_workspace_path: &std::path::Path,
+    action_label: &str,
+    options: SessionHistoryAuthOptions,
+) -> BitFunResult<()> {
+    // 0. 同 workspace 归属校验：跨 workspace 导出一律拒绝。storage dir
+    //    规范化后比较（temp/符号链接形态差异不会造成误判）。
+    if !same_session_storage_dir(caller_workspace_path, target_workspace_path) {
+        return Err(BitFunError::tool(format!(
+            "cannot {action_label} session '{target_session_id}': caller session '{caller_session_id}' belongs to a different workspace"
+        )));
+    }
+
+    // R-A.04 同源：Warden/daemon 会话是可信审计角色，豁免读取授权
+    // （SessionHistory 是 Warden 模板刻意保留的跨会话审计工具）。
+    if caller_is_warden_or_daemon(
+        session_manager,
+        caller_workspace_path,
+        caller_session_id,
+    )
+    .await
+    {
+        return Ok(());
+    }
+
+    // owner 豁免：Commander 角色或 RBAC 关闭（与 delete 的 owner 语义一致）。
+    let caller_is_owner = options.allow_owner_bypass && caller_is_owner_session(caller_session_id);
+
+    // created_by 匹配：`session-<caller>` 标记（R-2）。
+    let created_by_match = session_manager
+        .load_session_metadata(target_workspace_path, target_session_id)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|metadata| metadata.created_by)
+        .is_some_and(|creator| creator == session_control_creator_marker(caller_session_id));
+
+    if caller_is_owner || created_by_match {
+        return Ok(());
+    }
+
+    // 树内双向祖先授权：先内存树快路径，空树回退持久化 metadata 链
+    // （与 mutation 门同款防绕过）。祖先可导出后代；后代可导出祖先。
+    let target_ancestors = collect_session_ancestor_chain(
+        session_manager,
+        tree,
+        target_workspace_path,
+        target_session_id,
+    )
+    .await;
+    if target_ancestors.iter().any(|id| id == caller_session_id) {
+        return Ok(());
+    }
+    let caller_ancestors = collect_session_ancestor_chain(
+        session_manager,
+        tree,
+        caller_workspace_path,
+        caller_session_id,
+    )
+    .await;
+    if caller_ancestors.iter().any(|id| id == target_session_id) {
+        return Ok(());
+    }
+
+    Err(BitFunError::tool(format!(
+        "session '{caller_session_id}' is not authorized to {action_label} session '{target_session_id}': not the owner, not the creator, and not in the same session tree (ancestor/descendant)"
+    )))
+}
+
+/// 同 workspace 归属判定：storage dir 规范化后相等。
+fn same_session_storage_dir(a: &std::path::Path, b: &std::path::Path) -> bool {
+    let canonical =
+        |path: &std::path::Path| dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    canonical(a) == canonical(b)
+}
+
+/// caller 是否为 Warden/daemon 会话（R-A.04 同源校验，含持久化回退）。
+async fn caller_is_warden_or_daemon(
+    session_manager: &crate::agentic::session::session_manager::SessionManager,
+    caller_workspace_path: &std::path::Path,
+    caller_session_id: &str,
+) -> bool {
+    if let Some(session) = session_manager.get_session(caller_session_id) {
+        return session.config.is_daemon || session.agent_type.starts_with("warden-");
+    }
+    session_manager
+        .load_session_metadata(caller_workspace_path, caller_session_id)
+        .await
+        .ok()
+        .flatten()
+        .map(|m| m.is_daemon || m.agent_type.starts_with("warden-"))
+        .unwrap_or(false)
+}
+
+/// 收集会话祖先链：内存树非空用树快路径；否则回退持久化 metadata 链
+/// （带循环保护，损坏 lineage 不会挂起）。与 mutation 门祖先遍历同款。
+async fn collect_session_ancestor_chain(
+    session_manager: &crate::agentic::session::session_manager::SessionManager,
+    tree: &SessionTreeManager,
+    workspace_path: &std::path::Path,
+    session_id: &str,
+) -> Vec<String> {
+    let tree_ancestors = tree.walk_ancestors(session_id);
+    if !tree_ancestors.is_empty() {
+        return tree_ancestors;
+    }
+    let mut metadata_ancestors = Vec::new();
+    let mut visited = std::collections::HashSet::new();
+    visited.insert(session_id.to_string());
+    let mut current = session_id.to_string();
+    loop {
+        let metadata = session_manager
+            .load_session_metadata(workspace_path, &current)
+            .await
+            .ok()
+            .flatten();
+        match metadata.and_then(|m| m.relationship.and_then(|r| r.parent_session_id)) {
+            Some(parent_id) => {
+                if !visited.insert(parent_id.clone()) {
+                    // Cycle detected; stop walking to avoid hanging on a
+                    // corrupt lineage chain.
+                    break;
+                }
+                metadata_ancestors.push(parent_id.clone());
+                current = parent_id;
+            }
+            None => break,
+        }
+    }
+    metadata_ancestors
+}
+
 /// Build the delete action result JSON.
 /// Cascade child-deletion failures are surfaced as a structured list
 /// (`cascade_failures`: `[{session_id, reason}, ...]`). Since the delete
@@ -3019,5 +3199,256 @@ mod tests {
         assert!(output.contains("## Session Tree (JSON)"));
         assert!(output.contains("\"sessionName\": \"Session root\""));
         assert!(output.contains("\"sessionId\": \"root\""));
+    }
+
+    // ---------------------------------------------------------------------
+    // UX-P0-1: SessionHistory 读取授权门（resolve_session_read_authorization）
+    // 攻击者矩阵：unrelated 拒绝 / owner 豁免 / created_by 放行 /
+    // 祖先-后代双向放行 / 后代可导出祖先 / daemon+warden 豁免 /
+    // 跨 workspace 拒绝 / 缺 metadata 拒绝。
+    // ---------------------------------------------------------------------
+
+    fn read_authz_session_manager() -> Arc<crate::agentic::session::session_manager::SessionManager>
+    {
+        test_session_manager()
+    }
+
+    #[tokio::test]
+    async fn read_authz_rejects_unrelated_caller_without_metadata() {
+        // 攻击者矩阵 A：非 owner、无 created_by、树内外均无关系 -> 拒绝。
+        let session_manager = read_authz_session_manager();
+        let tree = SessionTreeManager::new(8);
+        let workspace = TestTempDir::new("bitfun-read-authz-unrelated");
+        let workspace_string = workspace.as_string();
+        let workspace_path = std::path::Path::new(&workspace_string);
+        let error = resolve_session_read_authorization(
+            &session_manager,
+            &tree,
+            "caller-1",
+            workspace_path,
+            "target-1",
+            workspace_path,
+            "export history of",
+            SessionHistoryAuthOptions::read(),
+        )
+        .await
+        .expect_err("unrelated caller without metadata must be rejected");
+        assert!(
+            error.to_string().contains("not authorized to export history of"),
+            "{error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn read_authz_owner_bypasses_gate() {
+        // 攻击者矩阵 B：owner（Commander 角色）豁免——主会话=用户 owner，
+        // 可导出任意同 workspace 会话（含无 metadata）。
+        use crate::agentic::tools::restrictions::set_session_role;
+        let _ = set_session_role("read-authz-owner", AgentRole::Commander);
+        let session_manager = read_authz_session_manager();
+        let tree = SessionTreeManager::new(8);
+        let workspace = TestTempDir::new("bitfun-read-authz-owner");
+        let workspace_string = workspace.as_string();
+        let workspace_path = std::path::Path::new(&workspace_string);
+
+        resolve_session_read_authorization(
+            &session_manager,
+            &tree,
+            "read-authz-owner",
+            workspace_path,
+            "no-metadata-target",
+            workspace_path,
+            "export history of",
+            SessionHistoryAuthOptions::read(),
+        )
+        .await
+        .expect("owner should bypass the read gate");
+    }
+
+    #[tokio::test]
+    async fn read_authz_created_by_match_allows_caller() {
+        // 攻击者矩阵 C：created_by == session-<caller> -> 放行。
+        let session_manager = read_authz_session_manager();
+        let tree = SessionTreeManager::new(8);
+        let workspace = TestTempDir::new("bitfun-read-authz-created-by");
+        let workspace_string = workspace.as_string();
+        let workspace_path = std::path::Path::new(&workspace_string);
+        let target_id = "target-1";
+        let metadata = crate::service::session::SessionMetadata::new(
+            target_id.to_string(),
+            "target".to_string(),
+            "agentic".to_string(),
+            "auto".to_string(),
+        );
+        let mut created_metadata = metadata.clone();
+        created_metadata.created_by = Some(session_control_creator_marker("caller-1"));
+        session_manager
+            .save_session_metadata(workspace_path, &created_metadata)
+            .await
+            .expect("save metadata");
+
+        resolve_session_read_authorization(
+            &session_manager,
+            &tree,
+            "caller-1",
+            workspace_path,
+            target_id,
+            workspace_path,
+            "export history of",
+            SessionHistoryAuthOptions::read(),
+        )
+        .await
+        .expect("creator should be authorized to read");
+    }
+
+    #[tokio::test]
+    async fn read_authz_ancestor_allows_caller_to_read_descendant() {
+        // 攻击者矩阵 D：祖先可导出后代（树注册关系）。
+        let session_manager = read_authz_session_manager();
+        let tree = SessionTreeManager::new(8);
+        tree.register_child("caller-1", "child-1", 1)
+            .expect("register child");
+        let workspace = TestTempDir::new("bitfun-read-authz-ancestor");
+        let workspace_string = workspace.as_string();
+        let workspace_path = std::path::Path::new(&workspace_string);
+
+        resolve_session_read_authorization(
+            &session_manager,
+            &tree,
+            "caller-1",
+            workspace_path,
+            "child-1",
+            workspace_path,
+            "export history of",
+            SessionHistoryAuthOptions::read(),
+        )
+        .await
+        .expect("ancestor should be authorized to read descendant");
+    }
+
+    #[tokio::test]
+    async fn read_authz_descendant_allows_caller_to_read_ancestor() {
+        // 攻击者矩阵 E：后代可导出祖先（与 delete/cancel 仅祖先->后代单向
+        // 不同，读取按指令限定「仅本会话树祖先/后代」双向授权）。
+        let session_manager = read_authz_session_manager();
+        let tree = SessionTreeManager::new(8);
+        tree.register_child("root-1", "caller-1", 1)
+            .expect("register child");
+        let workspace = TestTempDir::new("bitfun-read-authz-descendant");
+        let workspace_string = workspace.as_string();
+        let workspace_path = std::path::Path::new(&workspace_string);
+
+        resolve_session_read_authorization(
+            &session_manager,
+            &tree,
+            "caller-1",
+            workspace_path,
+            "root-1",
+            workspace_path,
+            "export history of",
+            SessionHistoryAuthOptions::read(),
+        )
+        .await
+        .expect("descendant should be authorized to read ancestor");
+    }
+
+    #[tokio::test]
+    async fn read_authz_rejects_sibling_without_creator_link() {
+        // 攻击者矩阵 F：同一父树下的兄弟会话（caller 与 target 无
+        // 祖先/后代关系、非 owner/creator）-> 拒绝。树内兄弟不能互读。
+        let session_manager = read_authz_session_manager();
+        let tree = SessionTreeManager::new(8);
+        tree.register_child("root-1", "caller-1", 1)
+            .expect("register child");
+        tree.register_child("root-1", "target-1", 1)
+            .expect("register child");
+        let workspace = TestTempDir::new("bitfun-read-authz-sibling");
+        let workspace_string = workspace.as_string();
+        let workspace_path = std::path::Path::new(&workspace_string);
+
+        let error = resolve_session_read_authorization(
+            &session_manager,
+            &tree,
+            "caller-1",
+            workspace_path,
+            "target-1",
+            workspace_path,
+            "export history of",
+            SessionHistoryAuthOptions::read(),
+        )
+        .await
+        .expect_err("sibling sessions must not read each other");
+        assert!(
+            error.to_string().contains("not authorized to export history of"),
+            "{error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn read_authz_rejects_cross_workspace() {
+        // 攻击者矩阵 G：caller 与 target 不同 workspace -> 一律拒绝
+        // （即使 caller 是 Commander owner）。跨 workspace 导出是
+        // UX-P0-1 的核心隔离边界。
+        use crate::agentic::tools::restrictions::set_session_role;
+        let _ = set_session_role("read-authz-cross-ws", AgentRole::Commander);
+        let session_manager = read_authz_session_manager();
+        let tree = SessionTreeManager::new(8);
+        let caller_ws = TestTempDir::new("bitfun-read-authz-caller-ws");
+        let target_ws = TestTempDir::new("bitfun-read-authz-target-ws");
+
+        let error = resolve_session_read_authorization(
+            &session_manager,
+            &tree,
+            "read-authz-cross-ws",
+            std::path::Path::new(&caller_ws.as_string()),
+            "target-1",
+            std::path::Path::new(&target_ws.as_string()),
+            "export history of",
+            SessionHistoryAuthOptions::read(),
+        )
+        .await
+        .expect_err("cross-workspace export must be rejected even for owner");
+        assert!(
+            error.to_string().contains("belongs to a different workspace"),
+            "{error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn read_authz_warden_daemon_caller_bypasses_tree_gate() {
+        // 攻击者矩阵 H：Warden/daemon 会话豁免（R-A.04 同源）——Warden
+        // 模板刻意保留 SessionHistory 作跨会话审计读取。内存会话
+        // is_daemon=true 即豁免。
+        let session_manager = read_authz_session_manager();
+        let tree = SessionTreeManager::new(8);
+        let workspace = TestTempDir::new("bitfun-read-authz-warden");
+        let workspace_string = workspace.as_string();
+        let workspace_path = std::path::Path::new(&workspace_string);
+        session_manager
+            .create_session_with_id(
+                Some("warden-session".to_string()),
+                "Warden".to_string(),
+                "warden-review".to_string(),
+                crate::agentic::core::SessionConfig {
+                    workspace_path: Some(workspace.as_string()),
+                    is_daemon: true,
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create warden daemon session");
+
+        resolve_session_read_authorization(
+            &session_manager,
+            &tree,
+            "warden-session",
+            workspace_path,
+            "any-target-1",
+            workspace_path,
+            "export history of",
+            SessionHistoryAuthOptions::read(),
+        )
+        .await
+        .expect("warden daemon caller should bypass the read tree gate");
     }
 }

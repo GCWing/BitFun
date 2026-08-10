@@ -125,7 +125,6 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
     let mut tools = vec![
         "Task".to_string(),
         "SessionMessage".to_string(),
-        "SessionHistory".to_string(),
         "ListModels".to_string(),
         "Read".to_string(),
         "view_image".to_string(),
@@ -167,6 +166,10 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
 
 /// Unified tool set for all SubAgents (built-in + ACP + custom).
 /// Includes shared_coding_mode_tools() + SessionControl (fission core).
+///
+/// SessionHistory 刻意不在共享工具集内（UX-P0-1 收窄）：跨会话 transcript
+/// 读取是高敏感操作（含 tool_inputs/thinking），仅 Warden 模板显式授予，
+/// 且工具本身有读取授权门（resolve_session_read_authorization）。
 pub fn subagent_default_tools() -> Vec<String> {
     let mut tools = shared_coding_mode_tools();
     if !tools.contains(&"SessionControl".to_string()) {
@@ -366,6 +369,22 @@ mod tests {
         assert!(tools.contains(&"ReadCanvas".to_string()));
         assert!(tools.contains(&"UpdateCanvas".to_string()));
         assert!(tools.contains(&"PatchCanvas".to_string()));
+    }
+
+    #[test]
+    fn shared_coding_mode_tools_exclude_session_history() {
+        // UX-P0-1 收窄：SessionHistory 移出共享工具集，跨会话读取仅
+        // Warden 模板显式授予 + 工具内授权门兜底。防回退回归断言。
+        let tools = shared_coding_mode_tools();
+        assert!(
+            !tools.contains(&"SessionHistory".to_string()),
+            "SessionHistory must not be in shared_coding_mode_tools (UX-P0-1 narrow)"
+        );
+        let subagents = crate::agentic::agents::subagent_default_tools();
+        assert!(
+            !subagents.contains(&"SessionHistory".to_string()),
+            "SessionHistory must not be in subagent_default_tools (UX-P0-1 narrow)"
+        );
     }
 
     #[test]
