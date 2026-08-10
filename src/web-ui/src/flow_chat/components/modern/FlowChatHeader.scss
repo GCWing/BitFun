@@ -8,44 +8,18 @@
   justify-content: space-between;
   gap: $size-gap-1;
   padding: 0 $size-gap-3;
-  border-bottom: 1px dashed var(--bf-appearance-token-border-base);
+  border-bottom: 1px solid var(--bf-appearance-token-border-base);
 
-  // Frosted glass effect.
-  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 45%, transparent);
-  backdrop-filter: blur(20px) saturate(1.3);
-  -webkit-backdrop-filter: blur(20px) saturate(1.3);
-  
+  // Opaque bar stacked above the message list, so message geometry stays
+  // independent of the header.
+  background: var(--bf-appearance-token-color-bg-scene);
+
   height: 36px;
   min-height: 36px;
   flex-shrink: 0;
   transition: all $motion-base $easing-standard;
   position: relative;
   z-index: 10;
-  
-  // ==================== Bottom gradient blur ====================
-  &::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 100%;
-    height: 16px;
-    pointer-events: none;
-    
-    background: linear-gradient(
-      to bottom,
-      color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 35%, transparent) 0%,
-      color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 20%, transparent) 35%,
-      color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 8%, transparent) 65%,
-      transparent 100%
-    );
-
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-
-    mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
-  }
 
   &__btw-back {
     flex: 0 0 auto;

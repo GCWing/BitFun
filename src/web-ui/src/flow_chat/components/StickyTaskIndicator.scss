@@ -7,7 +7,7 @@
   position: absolute;
   left: 0;
   right: 0;
-  top: 93px; // Below FlowChatHeader (36px) + ScrollToTurnHeaderButton hover zone (57px).
+  top: 36px; // Below the ScrollToTurnHeaderButton hover zone.
   z-index: 10;
   pointer-events: none;
 

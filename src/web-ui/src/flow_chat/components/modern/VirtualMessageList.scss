@@ -62,11 +62,11 @@
     padding: 2rem;
   }
   
-  // Reserve space for the floating FlowChatHeader.
-  // Header height (36px) + border (1px) + blur area (16px) + extra gap (4px) = 57px.
+  // FlowChatHeader sits above the list in normal flow, so only a small
+  // breathing gap is needed before the first item.
   .message-list-header {
-    height: 57px;
-    min-height: 57px;
+    height: 8px;
+    min-height: 8px;
     flex-shrink: 0;
   }
 

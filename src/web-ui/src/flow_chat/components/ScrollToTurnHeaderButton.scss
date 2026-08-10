@@ -7,7 +7,7 @@
   position: absolute;
   left: 0;
   right: 0;
-  top: 57px; // Keep in sync with `.message-list-header` height.
+  top: 0; // FlowChatHeader is stacked above the list, so start at the viewport top.
   z-index: 10;
   pointer-events: none;
 
@@ -98,7 +98,7 @@
 // ========== Responsive tweaks ==========
 @media (max-width: 768px) {
   .scroll-to-turn-header-trigger {
-    top: 57px;
+    top: 0;
     height: 64px;
 
     &__btn {
