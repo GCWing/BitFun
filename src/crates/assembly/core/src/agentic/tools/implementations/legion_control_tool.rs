@@ -11,6 +11,7 @@ use crate::agentic::agents::team_presets::{
     create_preset, delete_preset, get_preset, list_presets, LegionEdge, LegionNode, LegionPreset,
 };
 use crate::agentic::coordination::{get_global_coordinator, ConversationCoordinator};
+use crate::agentic::keyed_lock::KeyedAsyncLock;
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
@@ -28,6 +29,7 @@ use bitfun_services_core::session::types::{SessionRelationship, SessionRelations
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{BTreeSet, HashMap};
+use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Default upper bound on the number of legion nodes in one topology.
@@ -54,6 +56,23 @@ const MAX_LEGION_NODES: usize = 20;
 const LEGION_DEPLOY_TIMES_METADATA_KEY: &str = "legionDeployTimes";
 /// Sliding window for the legion deployment frequency limit (seconds).
 const LEGION_DEPLOY_WINDOW_SECS: i64 = 60 * 60;
+
+/// Serializes the legion deployment frequency read-check-write for one
+/// (workspace, creator) pair (UX-P1-5).
+///
+/// The frequency limit is a read-modify-write over the creator session's
+/// `legionDeployTimes` custom metadata. Without serialization, two concurrent
+/// loads can both read an empty history, both pass the cap check, and both
+/// deploy — the limit degrades to best-effort. Keyed by the normalized
+/// deployment workspace + creator session id so different creators (or
+/// different workspaces) never contend, while the same creator's concurrent
+/// loads are serialized. The lock covers the check *and* the reservation write
+/// (below), so an in-flight deployment is already counted by the next load.
+static LEGION_DEPLOY_LOCKS: OnceLock<KeyedAsyncLock> = OnceLock::new();
+
+fn legion_deploy_locks() -> &'static KeyedAsyncLock {
+    LEGION_DEPLOY_LOCKS.get_or_init(KeyedAsyncLock::default)
+}
 
 /// Resolve the effective per-topology node cap.
 ///
@@ -115,6 +134,34 @@ fn current_unix_secs() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_secs() as i64)
         .unwrap_or_default()
+}
+
+/// Prune a `legionDeployTimes` history to the one-hour sliding window and
+/// decide whether a new deployment would exceed `frequency_per_hour` (UX-P1-5).
+///
+/// Pure helper extracted so the frequency-limit decision is unit-testable
+/// without a coordinator: the caller holds the per-(workspace, creator)
+/// [`legion_deploy_locks`] guard while running this read + the reservation
+/// write, which is what makes the check-and-reserve atomic.
+fn frequency_limit_reached(
+    deploy_times: &mut Vec<i64>,
+    now: i64,
+    frequency_per_hour: usize,
+) -> bool {
+    deploy_times.retain(|timestamp| *timestamp >= now - LEGION_DEPLOY_WINDOW_SECS);
+    deploy_times.len() >= frequency_per_hour
+}
+
+/// Remove `reserved_timestamp` from a `legionDeployTimes` history while
+/// pruning stale entries (UX-P1-5 rollback; pure helper for tests).
+fn rollback_deploy_timestamp_from_history(
+    deploy_times: &mut Vec<i64>,
+    now: i64,
+    reserved_timestamp: i64,
+) {
+    deploy_times.retain(|timestamp| {
+        *timestamp != reserved_timestamp && *timestamp >= now - LEGION_DEPLOY_WINDOW_SECS
+    });
 }
 
 /// LegionControl tool - deploy a legion team topology into persisted sessions.
@@ -491,6 +538,60 @@ impl LegionControlTool {
             coordinator.session_tree().remove_subtree(session_id);
         }
     }
+
+    /// Remove a reserved deployment-frequency timestamp from the creator
+    /// session's `legionDeployTimes` metadata (UX-P1-5 rollback).
+    ///
+    /// The frequency reservation is written before the creation loop starts,
+    /// so a failed deployment (depth cap, session creation, or lineage attach
+    /// rollback) must undo it — otherwise a failed load would consume one
+    /// deployment slot forever. Best-effort: a rollback failure only logs (the
+    /// original deployment error is never masked) and the stale timestamp ages
+    /// out of the sliding window after `LEGION_DEPLOY_WINDOW_SECS`.
+    async fn rollback_deploy_timestamp(
+        coordinator: &ConversationCoordinator,
+        workspace_path: &std::path::Path,
+        creator_session_id: &str,
+        reserved_timestamp: i64,
+    ) {
+        let now = current_unix_secs();
+        let creator_metadata = coordinator
+            .session_manager
+            .load_session_metadata(workspace_path, creator_session_id)
+            .await
+            .ok()
+            .flatten();
+        let mut deploy_times: Vec<i64> = creator_metadata
+            .as_ref()
+            .and_then(|metadata| metadata.custom_metadata.as_ref())
+            .and_then(|value| value.get(LEGION_DEPLOY_TIMES_METADATA_KEY))
+            .and_then(|value| value.as_array())
+            .map(|entries| {
+                entries
+                    .iter()
+                    .filter_map(|entry| entry.as_i64())
+                    .collect::<Vec<i64>>()
+            })
+            .unwrap_or_default();
+        rollback_deploy_timestamp_from_history(&mut deploy_times, now, reserved_timestamp);
+        let deploy_times_json: Vec<Value> = deploy_times.into_iter().map(Value::from).collect();
+        if let Err(e) = coordinator
+            .session_manager
+            .merge_session_custom_metadata(
+                creator_session_id,
+                json!({
+                    LEGION_DEPLOY_TIMES_METADATA_KEY: deploy_times_json,
+                }),
+            )
+            .await
+        {
+            log::warn!(
+                "LegionControl load: failed to roll back reserved deploy timestamp on creator '{}': {}",
+                creator_session_id,
+                e
+            );
+        }
+    }
 }
 
 #[async_trait]
@@ -697,6 +798,17 @@ Related tools:
             // resolve_legion_topology applies the same bound as a second guard.
             // The cap is front-end configurable (`ai.legion_max_nodes`); an
             // unset config resolves to the legacy default (legion 阈值参数配置化）。
+            //
+            // UX-P1-4 TOCTOU note: this check is an *early-reject* hint only.
+            // `validate_input` and `call_impl` are independent framework calls
+            // with no shared state, so the two resolve their own `max_nodes`.
+            // The authoritative bound is enforced inside `call_impl`, which
+            // resolves `max_nodes` exactly once and passes it into
+            // `resolve_legion_topology` (the same value guards validation and
+            // deployment within a single dispatch — see the load branch
+            // below). A config hot-update between validate and call therefore
+            // cannot bypass the cap: execution always uses the value resolved
+            // at dispatch time.
             let max_nodes = resolve_legion_max_nodes().await;
             if let Some(nodes) = &parsed.nodes {
                 if nodes.len() > max_nodes {
@@ -927,6 +1039,12 @@ Related tools:
                 // `ai.legion_deploy_frequency_per_hour`); unset values resolve
                 // to the legacy hard-coded defaults (legion 阈值参数配置化，
                 // 默认路径零回归).
+                //
+                // UX-P1-4: `max_nodes` is resolved exactly once per dispatch
+                // and passed into `resolve_legion_topology` below — the same
+                // value guards both structural validation and the deployment,
+                // so a config hot-update between this resolution and the
+                // creation loop cannot make validation and execution disagree.
                 let max_nodes = resolve_legion_max_nodes().await;
                 let max_total_nodes = resolve_legion_max_total_nodes().await;
                 let frequency_per_hour = resolve_legion_deploy_frequency_per_hour().await;
@@ -1031,11 +1149,24 @@ Related tools:
                 // one-hour sliding window counts timestamps newer than
                 // `now - LEGION_DEPLOY_WINDOW_SECS`; when the count would
                 // reach the cap the load is rejected BEFORE any session is
-                // created. `0` disables the limit. A metadata read failure is
-                // treated as an empty history (never blocks a first load), and
-                // a timestamp persistence failure only logs — the deployment
-                // itself is not rolled back for a best-effort counter.
+                // created. `0` disables the limit.
+                //
+                // UX-P1-5 atomicity: the check and the reservation write run
+                // under `legion_deploy_locks()` keyed by (workspace, creator).
+                // The timestamp is reserved *before* deployment begins (inside
+                // the lock), so a concurrent load of the same creator cannot
+                // both pass the check — the in-flight deployment is already
+                // counted. A metadata read failure is treated as an empty
+                // history (never blocks a first load); a reservation
+                // persistence failure fails the load closed instead of
+                // silently deploying without a counter. On deployment
+                // rollback the reserved timestamp is removed (best-effort),
+                // so a failed load never leaves a phantom count behind.
+                let mut reserved_deploy_timestamp: Option<i64> = None;
                 if frequency_per_hour > 0 {
+                    let deploy_lock_key = format!("{display_workspace}:{creator_session_id}");
+                    let _deploy_guard = legion_deploy_locks().lock(&deploy_lock_key).await;
+                    let now = current_unix_secs();
                     let creator_metadata = coordinator
                         .session_manager
                         .load_session_metadata(
@@ -1045,7 +1176,6 @@ Related tools:
                         .await
                         .ok()
                         .flatten();
-                    let now = current_unix_secs();
                     let mut deploy_times: Vec<i64> = creator_metadata
                         .as_ref()
                         .and_then(|metadata| metadata.custom_metadata.as_ref())
@@ -1058,43 +1188,72 @@ Related tools:
                                 .collect::<Vec<i64>>()
                         })
                         .unwrap_or_default();
-                    deploy_times.retain(|timestamp| *timestamp >= now - LEGION_DEPLOY_WINDOW_SECS);
-                    if deploy_times.len() >= frequency_per_hour {
+                    if frequency_limit_reached(&mut deploy_times, now, frequency_per_hour) {
                         return Err(BitFunError::tool(format!(
                             "LegionControl load: deployment frequency limit reached: {} deployment(s) within the last hour, exceeding the cap {} (configured via ai.legion_deploy_frequency_per_hour)",
                             deploy_times.len(),
                             frequency_per_hour
                         )));
                     }
+                    deploy_times.push(now);
+                    reserved_deploy_timestamp = Some(now);
+                    let deploy_times_json: Vec<Value> =
+                        deploy_times.into_iter().map(Value::from).collect();
+                    if let Err(e) = coordinator
+                        .session_manager
+                        .merge_session_custom_metadata(
+                            creator_session_id,
+                            json!({
+                                LEGION_DEPLOY_TIMES_METADATA_KEY: deploy_times_json,
+                            }),
+                        )
+                        .await
+                    {
+                        // Fail closed: without a durable reservation the next
+                        // concurrent load could bypass the frequency cap.
+                        return Err(BitFunError::tool(format!(
+                            "LegionControl load: failed to reserve deployment timestamp on creator '{}': {}",
+                            creator_session_id, e
+                        )));
+                    }
                 }
 
-                // Cross-deployment aggregate cap (d2-P2-3): the per-topology
-                // cap only bounds a single call; repeated loads plus nested
-                // legion fission could otherwise accumulate an unbounded fleet
-                // of persisted subagent sessions under this creator. Count
-                // every existing descendant session of the creator (the full
-                // subtree, not just direct children) and reject the deployment
-                // before any session is created when adding `topology.len()`
-                // would exceed the effective total cap (`ai.legion_max_total_nodes`).
-                // The check runs before the creation loop, so a rejected load
-                // never leaves a partial deployment behind.
-                let existing_descendants = coordinator
+                // Cross-deployment aggregate cap (d2-P2-3 + UX-P1-5): the
+                // per-topology cap only bounds a single call; repeated loads
+                // plus nested legion fission could otherwise accumulate an
+                // unbounded fleet of persisted subagent sessions. The count is
+                // *workspace-dimensional* (all persisted legion node sessions
+                // in the deployment workspace, across every nested layer),
+                // because nested legions deploy their children as independent
+                // creators — a creator-subtree count would let recursive
+                // fission exceed `ai.legion_max_total_nodes` layer by layer.
+                // Reject the deployment before any session is created when
+                // adding `topology.len()` would exceed the effective total
+                // cap. The check runs before the creation loop, so a rejected
+                // load never leaves a partial deployment behind.
+                let existing_legion_nodes = coordinator
                     .session_manager
-                    .session_tree_descendants(
-                        Some(std::path::Path::new(&display_workspace)),
-                        creator_session_id,
-                    )
+                    .count_workspace_legion_node_sessions(std::path::Path::new(&display_workspace))
                     .await
                     .map_err(|e| {
                         BitFunError::tool(format!(
-                            "LegionControl load: failed to enumerate creator subtree for aggregate session cap: {}",
+                            "LegionControl load: failed to enumerate workspace legion nodes for aggregate session cap: {}",
                             e
                         ))
                     })?;
-                if existing_descendants.len() + topology.len() > max_total_nodes {
+                if existing_legion_nodes + topology.len() > max_total_nodes {
+                    if let Some(timestamp) = reserved_deploy_timestamp {
+                        Self::rollback_deploy_timestamp(
+                            &coordinator,
+                            &std::path::PathBuf::from(&display_workspace),
+                            creator_session_id,
+                            timestamp,
+                        )
+                        .await;
+                    }
                     return Err(BitFunError::tool(format!(
-                        "LegionControl load: aggregate session cap reached: creator subtree already holds {} session(s), adding {} would exceed the cap {}",
-                        existing_descendants.len(),
+                        "LegionControl load: aggregate session cap reached: workspace already holds {} legion node session(s), adding {} would exceed the cap {}",
+                        existing_legion_nodes,
                         topology.len(),
                         max_total_nodes
                     )));
@@ -1126,6 +1285,15 @@ Related tools:
                             &created,
                         )
                         .await;
+                        if let Some(timestamp) = reserved_deploy_timestamp {
+                            Self::rollback_deploy_timestamp(
+                                &coordinator,
+                                &std::path::PathBuf::from(&display_workspace),
+                                creator_session_id,
+                                timestamp,
+                            )
+                            .await;
+                        }
                         return Err(BitFunError::tool(format!(
                             "LegionControl load: session depth limit reached for node '{}': child depth {} would exceed max allowed depth {}",
                             node.id, child_depth, max_depth
@@ -1204,6 +1372,15 @@ Related tools:
                                 &created,
                             )
                             .await;
+                            if let Some(timestamp) = reserved_deploy_timestamp {
+                                Self::rollback_deploy_timestamp(
+                                    &coordinator,
+                                    &std::path::PathBuf::from(&display_workspace),
+                                    creator_session_id,
+                                    timestamp,
+                                )
+                                .await;
+                            }
                             return Err(BitFunError::tool(
                                 CoreServiceAgentRuntime::runtime_error_message(error),
                             ));
@@ -1235,6 +1412,15 @@ Related tools:
                             &created,
                         )
                         .await;
+                        if let Some(timestamp) = reserved_deploy_timestamp {
+                            Self::rollback_deploy_timestamp(
+                                &coordinator,
+                                &std::path::PathBuf::from(&display_workspace),
+                                creator_session_id,
+                                timestamp,
+                            )
+                            .await;
+                        }
                         return Err(error);
                     }
 
@@ -1266,57 +1452,11 @@ Related tools:
                     })
                     .collect();
 
-                // Record this deployment in the creator's frequency history
-                // (legion 阈值参数配置化): read the existing `legionDeployTimes`
-                // array, prune entries outside the sliding window, append the
-                // current timestamp, and write the full array back. Best-effort
-                // — a persistence failure only logs; the next load's sliding
-                // window simply starts one deployment short. A failed load
-                // (rollback path above) never records a timestamp.
-                if frequency_per_hour > 0 {
-                    let creator_metadata = coordinator
-                        .session_manager
-                        .load_session_metadata(
-                            &std::path::PathBuf::from(&display_workspace),
-                            creator_session_id,
-                        )
-                        .await
-                        .ok()
-                        .flatten();
-                    let now = current_unix_secs();
-                    let mut deploy_times: Vec<i64> = creator_metadata
-                        .as_ref()
-                        .and_then(|metadata| metadata.custom_metadata.as_ref())
-                        .and_then(|value| value.get(LEGION_DEPLOY_TIMES_METADATA_KEY))
-                        .and_then(|value| value.as_array())
-                        .map(|entries| {
-                            entries
-                                .iter()
-                                .filter_map(|entry| entry.as_i64())
-                                .collect::<Vec<i64>>()
-                        })
-                        .unwrap_or_default();
-                    deploy_times.retain(|timestamp| *timestamp >= now - LEGION_DEPLOY_WINDOW_SECS);
-                    deploy_times.push(now);
-                    let deploy_times_json: Vec<Value> =
-                        deploy_times.into_iter().map(Value::from).collect();
-                    if let Err(e) = coordinator
-                        .session_manager
-                        .merge_session_custom_metadata(
-                            creator_session_id,
-                            json!({
-                                LEGION_DEPLOY_TIMES_METADATA_KEY: deploy_times_json,
-                            }),
-                        )
-                        .await
-                    {
-                        log::warn!(
-                            "LegionControl load: failed to record deploy timestamp on creator '{}': {}",
-                            creator_session_id,
-                            e
-                        );
-                    }
-                }
+                // The deployment frequency timestamp was already reserved
+                // (atomically, under the KeyedAsyncLock) before the creation
+                // loop started (UX-P1-5). A successful deployment keeps the
+                // reservation as its durable record; a failed deployment rolls
+                // it back. Nothing further to write here.
 
                 let result_for_assistant = format!(
                     "Deployed {} legion node(s){}",
@@ -1877,5 +2017,119 @@ mod tests {
         assert_eq!(times.len(), 2);
         assert_eq!(times[0], now - window + 5);
         assert_eq!(times[1], now);
+    }
+
+    // ── UX-P1-5: frequency limit atomicity helpers ─────────────────────
+
+    #[test]
+    fn frequency_limit_helper_rejects_only_at_the_cap() {
+        let now = current_unix_secs();
+        let window = LEGION_DEPLOY_WINDOW_SECS;
+        let mut history = vec![now - window + 1, now];
+
+        // Below the cap: allowed, no mutation besides pruning stale entries.
+        assert!(!frequency_limit_reached(&mut history, now, 3));
+        assert_eq!(history.len(), 2);
+
+        // Exactly at the cap: rejected.
+        history.push(now - 1);
+        assert!(frequency_limit_reached(&mut history, now, 3));
+
+        // A stale entry (outside the window) is pruned and no longer counts.
+        let mut with_stale = vec![now - window - 100, now, now - 1];
+        assert!(frequency_limit_reached(&mut with_stale, now, 2));
+        assert_eq!(with_stale.len(), 2, "stale entry must be pruned");
+    }
+
+    #[test]
+    fn rollback_helper_removes_only_the_reserved_timestamp() {
+        let now = current_unix_secs();
+        let window = LEGION_DEPLOY_WINDOW_SECS;
+        let mut history = vec![now - 100, now, now - window - 1];
+
+        rollback_deploy_timestamp_from_history(&mut history, now, now);
+
+        // The reserved timestamp is removed; the older in-window entry stays;
+        // the stale entry is pruned.
+        assert_eq!(history, vec![now - 100]);
+    }
+
+    #[tokio::test]
+    async fn concurrent_loads_of_the_same_creator_are_serialized_by_the_deploy_lock() {
+        // UX-P1-5 concurrent-bypass regression: two loads racing on the same
+        // (workspace, creator) key must be serialized by the KeyedAsyncLock.
+        // Simulate the check-and-reserve critical section: task A acquires the
+        // lock and keeps it held (with a freshly reserved timestamp); task B
+        // must not be able to enter (and pass its own check) until A releases.
+        let key = "workspace-a:creator-1".to_string();
+        let locks = legion_deploy_locks();
+        let (entered_b_tx, mut entered_b_rx) = tokio::sync::oneshot::channel();
+        let (release_a_tx, release_a_rx) = tokio::sync::oneshot::channel::<()>();
+
+        let task_a = {
+            let key = key.clone();
+            tokio::spawn(async move {
+                let _guard = locks.lock(&key).await;
+                // Simulate: read history (empty), reserve a timestamp, keep the
+                // lock held until the test releases it.
+                let _ = release_a_rx.await;
+                // Dropping the guard releases the lock.
+            })
+        };
+        let task_b = {
+            let key = key.clone();
+            tokio::spawn(async move {
+                // A second concurrent load for the same creator must block
+                // until A releases the lock. Assert that we are *not* able to
+                // acquire it while A holds it.
+                let _guard = locks.lock(&key).await;
+                let _ = entered_b_tx.send(());
+            })
+        };
+
+        // Give A time to acquire the lock and B time to start waiting.
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        assert!(
+            entered_b_rx.try_recv().is_err(),
+            "task B must not enter the critical section while A holds the deploy lock"
+        );
+
+        release_a_tx.send(()).expect("release A");
+        let _ = task_a.await.expect("task A");
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            entered_b_rx,
+        )
+        .await
+        .expect("task B must acquire the lock after A releases")
+        .expect("B entered");
+        let _ = task_b.await.expect("task B");
+    }
+
+    #[tokio::test]
+    async fn sequential_check_reserve_under_lock_counts_inflight_deployments() {
+        // UX-P1-5 regression at the helper level: the production critical
+        // section is (lock) read-history → check cap → reserve (push now).
+        // Running the same sequence twice *under the same lock* (as the
+        // production code does per load) must make the second load observe the
+        // first load's reservation and reject once the cap is hit.
+        let key = "workspace-a:creator-2".to_string();
+        let locks = legion_deploy_locks();
+        let now = current_unix_secs();
+        let cap = 1usize;
+
+        let mut deploy_times: Vec<i64> = Vec::new();
+        for round in 0..2 {
+            let _guard = locks.lock(&key).await;
+            if frequency_limit_reached(&mut deploy_times, now, cap) {
+                assert_eq!(round, 1, "the second load must be rejected");
+                return;
+            }
+            deploy_times.push(now);
+            if round == 0 {
+                continue;
+            }
+            panic!("the second load must hit the frequency cap");
+        }
     }
 }
