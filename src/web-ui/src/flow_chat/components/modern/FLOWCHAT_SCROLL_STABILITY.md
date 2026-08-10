@@ -1,19 +1,47 @@
 # FlowChat Tail Reservation Contract
 
-FlowChat reserves a resident tail spacer of roughly one viewport below the
-transcript, and pairs it with a follow target that does not move backwards for
-free. Together these give a newly submitted Turn a top-aligned position and keep
-a tool-card collapse from dragging earlier content down.
+FlowChat reserves a resident tail spacer below the transcript, and pairs it with
+a follow target that does not move backwards for free. Together these give a
+newly submitted Turn a top-aligned position and keep a tool-card collapse from
+dragging earlier content down.
 
 ## The Rule That Matters
 
 **Static reservation is allowed. Reactive compensation is not.**
 
-The tail spacer's height is a function of the viewport and nothing else. It must
-never be derived from a measured content height, a collapse delta, an animation
-duration, or a streaming rate. The moment its height reacts to content, it stops
-being a reservation and becomes the compensation engine that was removed in
-"remove synthetic tail-space scrolling" — do not rebuild that under a new name.
+The tail spacer's height is a function of the viewport and the input-stack
+inset. It must never be derived from a measured content height, a collapse
+delta, an animation duration, or a streaming rate. The moment its height reacts
+to content, it stops being a reservation and becomes the compensation engine
+that was removed in "remove synthetic tail-space scrolling" — do not rebuild
+that under a new name.
+
+## How Much To Reserve
+
+The spacer keeps two offsets inside the scroll range, and is the larger of what
+they need. Both are bounds, not estimates: reserving more than the larger one is
+pure blank at the end of the scroll range, and reserving less than either is a
+clamp.
+
+- **A pinned Turn.** Worst case its user message is the newest item with nothing
+  answering it yet, so the message, the input inset and the spacer are all that
+  lie below the message top. `clientHeight - bottomInsetPx -
+  PINNED_TURN_MIN_ITEM_HEIGHT_PX` is exactly enough to put it on the top edge.
+- **A held collapse gap.** `hold-tail` parks up to `tailHoldMaxGapPx` past the
+  content end, and an offset the browser clamps is one the hold rule does not
+  actually get to hold.
+
+`PINNED_TURN_MIN_ITEM_HEIGHT_PX` must stay an **under**estimate of a
+user-message item. Too low costs a few spare pixels of blank; too high puts the
+pinned offset past the end of the scroll range, and the Turn is clamped back
+down from the viewport top while the follow loop rewrites the clamped offset
+every frame.
+
+While the pin reserve is the binding bound, the spacer and the footer sum to a
+constant: growing the composer moves the content end without moving the end of
+the scroll range. Under the hold-gap floor the spacer stops tracking the inset
+and the range grows with the composer, exactly as it did when the spacer was a
+flat viewport.
 
 ## Why Both Halves Are Required
 
@@ -223,6 +251,13 @@ coordinator, and the reasons there is no coordinator are unchanged (see below).
   viewport state — having the two disagree would be worse than either choice.
   The exemption therefore outlives the Turn: a short Turn stays pinned until a
   newer one replaces it.
+- Top-aligning a Turn aims at `FLOWCHAT_TURN_TOP_GAP_PX` above its user message,
+  not at the message itself. The first Turn already sits below that gap for
+  free, because `.message-list-header` occupies it at the head of the scroll
+  content; every other Turn used to land flat on the top edge, and the two read
+  as different alignments. The header renders at the same constant so they
+  cannot drift. Both the one-shot scroll and the offset the follow loop
+  re-asserts every frame carry it — if only one did, they would fight.
 - Session open enters follow-output as `session-open`, even with nothing
   streaming. The frame loop then runs on a `SETTLE_FRAMES` budget that refreshes
   whenever the target actually moves, so it tracks measurement and paging and
@@ -374,13 +409,14 @@ timer, or add mount-triggered motion that changes transcript geometry.
 The Virtuoso footer holds two independent pieces, and they must stay separate:
 
 ```text
-message-list-footer     = current input-stack height + bottom inset + clearance
-message-list-tail-spacer = tailSpacerPxForViewport(scroller.clientHeight)
+message-list-footer      = current input-stack height + bottom inset + clearance
+message-list-tail-spacer = tailSpacerPxForViewport(clientHeight, footer)
 ```
 
 The footer must not retain an earlier input height or include an estimated card
-shrink. The spacer must not be folded into the footer calculation, or input
-height would once again drive the scroll range.
+shrink. The spacer reads the footer to size itself, but the two must not be
+folded into one number: the footer is content the transcript clears, the spacer
+is range past the end of content, and only the footer is inside the content end.
 
 ## Verification
 
@@ -431,6 +467,15 @@ confirm:
     the blank and let go. After the snap back the jump-to-latest affordance must
     be gone — this is the one path where the viewport arrives at the tail
     without a scroll event to notice it.
+14. Send a one-line message and let it pin. It must come to rest at the top with
+    the same small gap above it as the very first Turn of the session, and the
+    pin must hold steady rather than creeping down — a pinned offset past the
+    end of the scroll range is clamped, and the follow loop will rewrite it
+    every frame.
+15. Drag the scrollbar to the very bottom. The screen must not be entirely
+    blank: the last Turn and the input clearance stay visible above the
+    reservation. Repeat with the composer expanded, which is where the reserve
+    falls back to the hold-gap floor.
 
 ## Related Files
 

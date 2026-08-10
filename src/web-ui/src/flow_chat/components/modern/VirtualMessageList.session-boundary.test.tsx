@@ -3,6 +3,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FLOWCHAT_TURN_TOP_GAP_PX, tailSpacerPxForViewport } from './flowChatTailFollow';
 import { VirtualMessageList, type VirtualMessageListRef } from './VirtualMessageList';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -189,14 +190,19 @@ describe('VirtualMessageList natural scroll contract', () => {
     try {
       act(() => root.render(<VirtualMessageList />));
 
+      // Sized to put a bare new Turn on the top edge, which is less than the
+      // viewport — the end of the scroll range must not be a blank screen.
+      const expectedSpacerPx = tailSpacerPxForViewport(600, 168);
+      expect(expectedSpacerPx).toBeLessThan(600);
       expect(mocks.virtuosoProps?.initialTopMostItemIndex).toEqual({
         index: 1,
         align: 'end',
-        offset: -600,
+        offset: -expectedSpacerPx,
       });
       const spacer = container.querySelector<HTMLElement>('.message-list-tail-spacer');
-      expect(spacer?.style.height).toBe('600px');
-      // The input-stack footer stays a separate, unchanged reservation.
+      expect(spacer?.style.height).toBe(`${expectedSpacerPx}px`);
+      // The input-stack footer stays a separate reservation. It feeds the
+      // spacer's size, but the two are never folded into one number.
       expect(container.querySelector<HTMLElement>('.message-list-footer')?.style.height)
         .toBe('168px');
     } finally {
@@ -220,6 +226,9 @@ describe('VirtualMessageList natural scroll contract', () => {
     expect(mocks.scrollToIndex).toHaveBeenCalledWith({
       index: 1,
       align: 'start',
+      // The same breathing gap the Virtuoso header gives the first Turn, so a
+      // navigated Turn and the first one are aligned identically.
+      offset: -FLOWCHAT_TURN_TOP_GAP_PX,
       behavior: 'auto',
     });
     expect(container.querySelector('.message-list-footer')?.getAttribute('style')).toContain('168px');

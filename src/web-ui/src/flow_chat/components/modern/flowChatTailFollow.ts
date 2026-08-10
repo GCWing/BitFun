@@ -1,10 +1,10 @@
 /**
  * FlowChat tail-follow geometry.
  *
- * The transcript keeps a resident tail spacer of roughly one viewport below the
- * real content. The spacer is static: its height follows the viewport and
- * nothing else. It never reacts to a measured content change, so it is a
- * reservation rather than a compensation.
+ * The transcript keeps a resident tail spacer below the real content, sized
+ * from the viewport and the current input-stack inset. The spacer is static: it
+ * never reacts to a measured content change, so it is a reservation rather than
+ * a compensation.
  *
  * The spacer alone does not stabilise the viewport. It only removes the
  * browser's forced `scrollTop` clamp when content shrinks; the follow target
@@ -48,9 +48,59 @@ export interface TailFollowInput {
   maxGapPx: number;
 }
 
-/** Height of the resident tail spacer for a given viewport. */
-export function tailSpacerPxForViewport(clientHeight: number): number {
-  return Math.max(0, Math.round(clientHeight));
+/**
+ * Breathing gap held above a Turn whose user message is aligned to the viewport
+ * top.
+ *
+ * The first Turn gets this for free: `.message-list-header` sits above it in
+ * the scroll content, so a transcript resting at `scrollTop: 0` already shows
+ * the gap. Every other Turn is reached by a scroll that lands its message flat
+ * on the top edge, which read as a different alignment rather than the same one
+ * — so top-aligning aims at `top - this` instead, and the header renders at
+ * exactly this height so the two cannot drift apart.
+ */
+export const FLOWCHAT_TURN_TOP_GAP_PX = 8;
+
+/**
+ * Lower bound on the rendered height of a user-message item.
+ *
+ * This sizes the pin reserve below, so it must be an *under*estimate. Too low
+ * only leaves the pin a few spare pixels; too high makes the pinned offset
+ * exceed the scroll range, and the browser clamps the Turn back down from the
+ * viewport top with the follow loop rewriting the clamped offset every frame.
+ * A single line with no timestamp row is comfortably above this at any
+ * supported font size, and the item is free to be taller.
+ */
+const PINNED_TURN_MIN_ITEM_HEIGHT_PX = 40;
+
+/**
+ * Height of the resident tail spacer.
+ *
+ * The spacer exists to keep two offsets inside the scroll range, and it is
+ * sized to the larger of what they need — one viewport was simply the cheapest
+ * bound that covered both, and it costs a full screen of blank at the end of
+ * the scroll range.
+ *
+ * - **A pinned Turn.** Worst case its user message is the newest item and
+ *   nothing has answered it yet, so everything below the message top is the
+ *   message, the input-stack inset, and this spacer. Reserving
+ *   `clientHeight - bottomInsetPx - PINNED_TURN_MIN_ITEM_HEIGHT_PX` is exactly
+ *   enough to put that message on the top edge.
+ * - **A held collapse gap.** `hold-tail` keeps an offset up to
+ *   `tailHoldMaxGapPx` past the content end, and an offset the browser clamps
+ *   is an offset the hold rule does not actually get to hold.
+ *
+ * `bottomInsetPx` is the input-stack footer, which grows as the composer does.
+ * That is a layout input, not a content measurement — and while the pin reserve
+ * is the binding bound the two sum to a constant, so growing the composer moves
+ * the content end without moving the end of the scroll range.
+ */
+export function tailSpacerPxForViewport(
+  clientHeight: number,
+  bottomInsetPx: number,
+): number {
+  const pinnedTurnReservePx = clientHeight - bottomInsetPx - PINNED_TURN_MIN_ITEM_HEIGHT_PX;
+  return Math.max(0, Math.round(Math.max(pinnedTurnReservePx, tailHoldMaxGapPx(clientHeight))));
 }
 
 /**

@@ -72,10 +72,10 @@
   }
   
   // FlowChatHeader sits above the list in normal flow, so only a small
-  // breathing gap is needed before the first item.
+  // breathing gap is needed before the first item. Its height is supplied
+  // inline from `FLOWCHAT_TURN_TOP_GAP_PX`, which every top-aligned Turn also
+  // scrolls to — the gap must be one number, not two that happen to match.
   .message-list-header {
-    height: 8px;
-    min-height: 8px;
     flex-shrink: 0;
   }
 

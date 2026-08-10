@@ -13,7 +13,8 @@ import {
 } from './flowChatTailFollow';
 
 const VIEWPORT = 800;
-const SPACER = tailSpacerPxForViewport(VIEWPORT);
+const BOTTOM_INSET = 168;
+const SPACER = tailSpacerPxForViewport(VIEWPORT, BOTTOM_INSET);
 const MAX_GAP = tailHoldMaxGapPx(VIEWPORT);
 const THRESHOLD = FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX;
 
@@ -24,6 +25,35 @@ function holding(target: number): TailFollowState {
 function pinning(target: number): TailFollowState {
   return { mode: 'pin-turn-top', target };
 }
+
+describe('tailSpacerPxForViewport', () => {
+  it('reserves exactly enough to put a bare new Turn on the top edge', () => {
+    // Worst case for the pin: the user message is the newest item and nothing
+    // has answered it, so the message, the input inset and the spacer are all
+    // that lie below its top. One viewport of them is what the pin needs.
+    const spacer = tailSpacerPxForViewport(VIEWPORT, BOTTOM_INSET);
+    const smallestUserMessagePx = VIEWPORT - BOTTOM_INSET - spacer;
+    expect(smallestUserMessagePx).toBeGreaterThan(0);
+    expect(smallestUserMessagePx).toBeLessThan(64);
+  });
+
+  it('never reserves less than the gap the hold rule may be holding', () => {
+    // A composer expanded most of the way up the viewport leaves the pin almost
+    // nothing to reserve, but `hold-tail` still parks up to `tailHoldMaxGapPx`
+    // past the content end — and an offset the browser clamps is an offset the
+    // hold rule does not get to hold.
+    expect(tailSpacerPxForViewport(VIEWPORT, VIEWPORT - 80))
+      .toBe(tailHoldMaxGapPx(VIEWPORT));
+  });
+
+  it('stays well under a full viewport, so the scroll range does not end in blank', () => {
+    expect(tailSpacerPxForViewport(VIEWPORT, BOTTOM_INSET)).toBeLessThan(VIEWPORT);
+  });
+
+  it('reserves nothing before the scroller has been measured', () => {
+    expect(tailSpacerPxForViewport(0, BOTTOM_INSET)).toBe(0);
+  });
+});
 
 describe('contentEndScrollTop', () => {
   it('excludes the resident tail spacer from the tail target', () => {

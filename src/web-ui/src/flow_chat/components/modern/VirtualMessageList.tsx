@@ -54,6 +54,7 @@ import {
   contentEndScrollTop,
   endAlignedTailOffsetPx,
   FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX as AT_CONTENT_END_THRESHOLD_PX,
+  FLOWCHAT_TURN_TOP_GAP_PX,
   isViewportAtTail,
   tailSpacerPxForViewport,
 } from './flowChatTailFollow';
@@ -184,10 +185,19 @@ type HistoryPrependAnchor = {
 
 const FlowChatVirtuosoHeader = ({ context }: ContextProp<FlowChatVirtuosoContext>) => (
   <>
+    {/*
+      The gap the first Turn sits below. Every other Turn is top-aligned to the
+      same gap explicitly, so this height is the shared constant rather than a
+      style of its own.
+    */}
     <div
       className="message-list-header"
       data-bf-component="virtual-message-list"
       data-bf-part="header"
+      style={{
+        height: `${FLOWCHAT_TURN_TOP_GAP_PX}px`,
+        minHeight: `${FLOWCHAT_TURN_TOP_GAP_PX}px`,
+      }}
     />
     {context.previousHistoryBoundaryStatusNode}
   </>
@@ -378,7 +388,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const inputHeight = useChatInputState(state => state.inputHeight);
   const bottomLayoutInsetPx = computeFlowChatInputStackFooterPx(inputHeight);
 
-  const tailSpacerPx = tailSpacerPxForViewport(viewportHeightPx);
+  const tailSpacerPx = tailSpacerPxForViewport(viewportHeightPx, bottomLayoutInsetPx);
   const tailSpacerPxRef = useRef(tailSpacerPx);
   useLayoutEffect(() => {
     tailSpacerPxRef.current = tailSpacerPx;
@@ -435,10 +445,17 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       item.turnId === turnId && item.type === 'user-message'
     ));
     if (targetIndex < 0 || !virtuosoRef.current) return false;
-    virtuosoRef.current.scrollToIndex({ index: targetIndex, align: 'start', behavior: 'auto' });
+    virtuosoRef.current.scrollToIndex({
+      index: targetIndex,
+      align: 'start',
+      offset: -FLOWCHAT_TURN_TOP_GAP_PX,
+      behavior: 'auto',
+    });
     return true;
   }, [virtualItems]);
 
+  // Must agree with `scrollTurnToTop` down to the pixel: this is the offset the
+  // follow loop re-asserts every frame, so a disagreement is a fight.
   const resolveTurnTopScrollTop = useCallback((turnId: string) => {
     const scroller = scrollerElementRef.current;
     const element = getRenderedUserMessageElement(turnId);
@@ -447,7 +464,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       0,
       scroller.scrollTop
         + element.getBoundingClientRect().top
-        - scroller.getBoundingClientRect().top,
+        - scroller.getBoundingClientRect().top
+        - FLOWCHAT_TURN_TOP_GAP_PX,
     );
   }, [getRenderedUserMessageElement]);
 
@@ -765,6 +783,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     virtuosoRef.current.scrollToIndex({
       index: targetIndex,
       align: 'start',
+      offset: -FLOWCHAT_TURN_TOP_GAP_PX,
       behavior: normalizeVirtuosoBehavior(options?.behavior ?? 'auto'),
     });
     return 'settled';

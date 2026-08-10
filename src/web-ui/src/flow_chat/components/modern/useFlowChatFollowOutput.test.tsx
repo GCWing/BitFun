@@ -11,8 +11,11 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 type Controller = ReturnType<typeof useFlowChatFollowOutput>;
 
 const VIEWPORT = 500;
-/** Matches `tailSpacerPxForViewport(VIEWPORT)`. */
-const TAIL_SPACER = 500;
+/** Input-stack footer the harness renders below the transcript. */
+const BOTTOM_INSET = 100;
+/** The spacer the component would render for a given viewport. */
+const spacerFor = (clientHeight: number) => tailSpacerPxForViewport(clientHeight, BOTTOM_INSET);
+const TAIL_SPACER = spacerFor(VIEWPORT);
 /** Matches `tailHoldMaxGapPx(VIEWPORT)`. */
 const MAX_GAP = 300;
 
@@ -56,8 +59,8 @@ function Harness({
     isStreaming,
     isViewportActive: true,
     scrollerRef,
-    // The spacer tracks the viewport, exactly as the component's state does.
-    getTailSpacerPx: () => tailSpacerPxForViewport(scroller.clientHeight),
+    // Sized from live layout, exactly as the component's state does.
+    getTailSpacerPx: () => tailSpacerPxForViewport(scroller.clientHeight, BOTTOM_INSET),
     scrollToContentEnd,
     scrollTurnToTop,
     resolveTurnTopScrollTop,
@@ -727,7 +730,7 @@ describe('useFlowChatFollowOutput', () => {
     /** Mounts at the content end, then hands the viewport to the user. */
     function restAtContentEnd() {
       setScrollerMetrics(scroller, {
-        scrollHeight: 1500 + VIEWPORT,
+        scrollHeight: 1500 + spacerFor(VIEWPORT),
         clientHeight: VIEWPORT,
         scrollTop: 0,
       });
@@ -749,7 +752,7 @@ describe('useFlowChatFollowOutput', () => {
     /** Content and footer stay at 1500; only the viewport, and so the spacer, change. */
     function resizeViewportTo(clientHeight: number, scrollTop: number) {
       setScrollerMetrics(scroller, {
-        scrollHeight: 1500 + clientHeight,
+        scrollHeight: 1500 + spacerFor(clientHeight),
         clientHeight,
         scrollTop,
       });
@@ -848,7 +851,7 @@ describe('useFlowChatFollowOutput', () => {
 
       // Narrower: the same text wraps into 300px more content.
       setScrollerMetrics(scroller, {
-        scrollHeight: 1800 + VIEWPORT,
+        scrollHeight: 1800 + spacerFor(VIEWPORT),
         clientHeight: VIEWPORT,
         scrollTop: 1000,
       });
@@ -860,7 +863,7 @@ describe('useFlowChatFollowOutput', () => {
 
       // Re-measurement adds another 200px above the viewport.
       setScrollerMetrics(scroller, {
-        scrollHeight: 2000 + VIEWPORT,
+        scrollHeight: 2000 + spacerFor(VIEWPORT),
         clientHeight: VIEWPORT,
         scrollTop: 1300,
       });
@@ -874,7 +877,7 @@ describe('useFlowChatFollowOutput', () => {
     it('leaves a reflow alone for a viewport that was not at the end', () => {
       restAtContentEnd();
       setScrollerMetrics(scroller, {
-        scrollHeight: 1800 + VIEWPORT,
+        scrollHeight: 1800 + spacerFor(VIEWPORT),
         clientHeight: VIEWPORT,
         scrollTop: 200,
       });
