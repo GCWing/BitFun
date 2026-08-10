@@ -1,11 +1,9 @@
 /**
  * Mermaid rendering service.
- * Principle: fetch config from the theme system, avoid hard-coded colors.
+ * Visual configuration is projected by MermaidAppearanceAdapter.
  */
 
-import { getMermaidConfig, setupThemeListener, MERMAID_THEME_CHANGE_EVENT, getThemeType } from '../theme/mermaidTheme';
-
-export { MERMAID_THEME_CHANGE_EVENT };
+import { getMermaidConfig } from '../appearance/mermaidAppearance';
 
 type MermaidRuntime = typeof import('mermaid')['default'];
 
@@ -18,24 +16,11 @@ function loadMermaidRuntime(): Promise<MermaidRuntime> {
 
 export class MermaidService {
   private static instance: MermaidService;
-  private cleanupThemeListener: (() => void) | null = null;
-
   public static getInstance(): MermaidService {
     if (!MermaidService.instance) {
       MermaidService.instance = new MermaidService();
     }
     return MermaidService.instance;
-  }
-
-  constructor() {
-    this.setupThemeListener();
-  }
-
-  /** Set up theme listener. */
-  private setupThemeListener(): void {
-    this.cleanupThemeListener = setupThemeListener(() => {
-      // Theme changes emit events consumed by UI components.
-    });
   }
 
   /** Load and initialize Mermaid before each render. */
@@ -56,7 +41,7 @@ export class MermaidService {
 
   /** Render a Mermaid diagram. */
   public async renderDiagram(sourceCode: string): Promise<string> {
-    // Reinitialize per render to ensure correct theme.
+    // Reinitialize per render so the active Appearance projection is used.
     const mermaid = await this.initializeMermaid();
 
     try {
@@ -104,11 +89,6 @@ export class MermaidService {
       const errorMessage = error instanceof Error ? error.message : String(error);
       return { valid: false, error: errorMessage };
     }
-  }
-
-  /** Get current theme type. */
-  public getCurrentThemeType(): 'dark' | 'light' {
-    return getThemeType();
   }
 
   /** Get default template. */
@@ -204,13 +184,6 @@ export class MermaidService {
     return blob;
   }
 
-  /** Dispose resources. */
-  public dispose(): void {
-    if (this.cleanupThemeListener) {
-      this.cleanupThemeListener();
-      this.cleanupThemeListener = null;
-    }
-  }
 }
 
 export const mermaidService = MermaidService.getInstance();

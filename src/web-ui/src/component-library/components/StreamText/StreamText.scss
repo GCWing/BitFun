@@ -18,9 +18,9 @@
   --stream-text-sunset-pink-rgb: 255, 159, 243;
   --stream-text-glitch-magenta-rgb: 255, 0, 255;
   --stream-text-glitch-cyan-rgb: 0, 255, 255;
-  --stream-text-theme-purple-rgb: 168, 85, 247;
-  --stream-text-theme-purple-neon-rgb: 192, 132, 252;
-  --stream-text-theme-green-rgb: 34, 197, 94;
+  --stream-text-palette-purple-rgb: 168, 85, 247;
+  --stream-text-palette-purple-neon-rgb: 192, 132, 252;
+  --stream-text-palette-green-rgb: 34, 197, 94;
   --stream-text-matrix-green: rgb(var(--stream-text-matrix-green-rgb));
   --stream-text-rainbow-pink: rgb(var(--stream-text-rainbow-pink-rgb));
   --stream-text-rainbow-orange: rgb(var(--stream-text-rainbow-orange-rgb));
@@ -39,12 +39,12 @@
   --stream-text-sunset-pink: rgb(var(--stream-text-sunset-pink-rgb));
   --stream-text-glitch-magenta: rgb(var(--stream-text-glitch-magenta-rgb));
   --stream-text-glitch-cyan: rgb(var(--stream-text-glitch-cyan-rgb));
-  --stream-text-theme-purple: rgb(var(--stream-text-theme-purple-rgb));
-  --stream-text-theme-purple-neon: rgb(var(--stream-text-theme-purple-neon-rgb));
-  --stream-text-theme-green: rgb(var(--stream-text-theme-green-rgb));
+  --stream-text-palette-purple: rgb(var(--stream-text-palette-purple-rgb));
+  --stream-text-palette-purple-neon: rgb(var(--stream-text-palette-purple-neon-rgb));
+  --stream-text-palette-green: rgb(var(--stream-text-palette-green-rgb));
 
   display: inline;
-  font-family: var(--font-family-sans);
+  font-family: var(--bf-appearance-token-font-family-sans);
   line-height: 1.6;
   position: relative;
 }
@@ -52,13 +52,13 @@
 
 .stream-text__content {
   display: inline;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 .stream-text__char {
   display: inline-block;
   position: relative;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 
@@ -237,7 +237,7 @@
   0% {
     opacity: 0;
     transform: translateY(-20px);
-    color: var(--color-static-white);
+    color: var(--bf-appearance-token-color-static-white);
     text-shadow: 0 0 20px var(--stream-text-matrix-green);
   }
   50% {
@@ -369,7 +369,7 @@
   20% {
     opacity: 1;
     filter: brightness(2);
-    text-shadow: 0 0 8px var(--color-overlay-white-80);
+    text-shadow: 0 0 8px var(--bf-appearance-token-color-overlay-white-80);
   }
   100% {
     opacity: 1;
@@ -389,7 +389,7 @@
 .stream-cursor--line {
   width: 2px;
   height: 1em;
-  background: var(--color-accent-700);
+  background: var(--bf-appearance-token-color-accent-700);
   animation: cursor-blink 1s step-end infinite;
 }
 
@@ -401,7 +401,7 @@
 .stream-cursor--block {
   width: 0.6em;
   height: 1em;
-  background: var(--border-accent-strong);
+  background: var(--bf-appearance-token-border-accent-strong);
   animation: cursor-blink 1s step-end infinite;
 }
 
@@ -409,7 +409,7 @@
 .stream-cursor--underline {
   width: 0.6em;
   height: 2px;
-  background: var(--color-accent-700);
+  background: var(--bf-appearance-token-color-accent-700);
   animation: cursor-blink 1s step-end infinite;
 }
 
@@ -417,11 +417,11 @@
 .stream-cursor--glow {
   width: 2px;
   height: 1em;
-  background: var(--color-accent-600);
+  background: var(--bf-appearance-token-color-accent-600);
   box-shadow:
-    0 0 10px var(--color-accent-700),
-    0 0 20px var(--border-accent-strong),
-    0 0 30px var(--border-accent);
+    0 0 10px var(--bf-appearance-token-color-accent-700),
+    0 0 20px var(--bf-appearance-token-border-accent-strong),
+    0 0 30px var(--bf-appearance-token-border-accent);
   animation: cursor-glow 1s ease-in-out infinite;
 }
 
@@ -429,15 +429,15 @@
   0%, 100% {
     opacity: 1;
     box-shadow:
-      0 0 10px var(--color-accent-700),
-      0 0 20px var(--border-accent-strong);
+      0 0 10px var(--bf-appearance-token-color-accent-700),
+      0 0 20px var(--bf-appearance-token-border-accent-strong);
   }
   50% {
     opacity: 0.7;
     box-shadow:
-      0 0 20px var(--color-accent-600),
-      0 0 40px var(--color-accent-700),
-      0 0 60px var(--border-accent-strong);
+      0 0 20px var(--bf-appearance-token-color-accent-600),
+      0 0 40px var(--bf-appearance-token-color-accent-700),
+      0 0 60px var(--bf-appearance-token-border-accent-strong);
   }
 }
 
@@ -487,34 +487,34 @@
 }
 
 
-.stream-text--theme-blue {
-  color: var(--color-accent-600);
+.stream-text--palette-blue {
+  color: var(--bf-appearance-token-color-accent-600);
 }
 
-.stream-text--theme-blue.stream-text--neon {
-  color: var(--color-accent-500);
-}
-
-
-.stream-text--theme-purple {
-  color: var(--stream-text-theme-purple);
-}
-
-.stream-text--theme-purple.stream-text--neon {
-  color: var(--stream-text-theme-purple-neon);
+.stream-text--palette-blue.stream-text--neon {
+  color: var(--bf-appearance-token-color-accent-500);
 }
 
 
-.stream-text--theme-green {
-  color: var(--stream-text-theme-green);
+.stream-text--palette-purple {
+  color: var(--stream-text-palette-purple);
 }
 
-.stream-text--theme-green.stream-text--neon {
-  color: var(--color-success);
+.stream-text--palette-purple.stream-text--neon {
+  color: var(--stream-text-palette-purple-neon);
 }
 
 
-.stream-text--theme-rainbow {
+.stream-text--palette-green {
+  color: var(--stream-text-palette-green);
+}
+
+.stream-text--palette-green.stream-text--neon {
+  color: var(--bf-appearance-token-color-success);
+}
+
+
+.stream-text--palette-rainbow {
   background: linear-gradient(
     90deg,
     var(--stream-text-rainbow-pink) 0%,
@@ -532,7 +532,7 @@
 }
 
 
-.stream-text--theme-fire {
+.stream-text--palette-fire {
   background: linear-gradient(
     90deg,
     var(--stream-text-fire-red),
@@ -549,7 +549,7 @@
 }
 
 
-.stream-text--theme-ocean {
+.stream-text--palette-ocean {
   background: linear-gradient(
     90deg,
     var(--stream-text-ocean-deep),
@@ -566,7 +566,7 @@
 }
 
 
-.stream-text--theme-sunset {
+.stream-text--palette-sunset {
   background: linear-gradient(
     90deg,
     var(--stream-text-sunset-coral),
@@ -616,10 +616,10 @@
 
 
   .stream-text--gradient,
-  .stream-text--theme-rainbow,
-  .stream-text--theme-fire,
-  .stream-text--theme-ocean,
-  .stream-text--theme-sunset {
+  .stream-text--palette-rainbow,
+  .stream-text--palette-fire,
+  .stream-text--palette-ocean,
+  .stream-text--palette-sunset {
     animation: none;
     background-position: 0% center;
   }
@@ -640,10 +640,10 @@
   }
 
   .stream-text--gradient,
-  .stream-text--theme-rainbow,
-  .stream-text--theme-fire,
-  .stream-text--theme-ocean,
-  .stream-text--theme-sunset {
+  .stream-text--palette-rainbow,
+  .stream-text--palette-fire,
+  .stream-text--palette-ocean,
+  .stream-text--palette-sunset {
     background: none;
     -webkit-text-fill-color: currentColor;
     color: inherit;

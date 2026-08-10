@@ -19,9 +19,12 @@ use bitfun_agent_tools::effective_tool_invocation;
 use bitfun_events::{AgenticEvent, ToolEventIdentity};
 use tokio::time::Instant;
 
-use crate::agent::runtime_client::CliAgentRuntimeClient;
+use crate::agent::runtime_client::ExecAgentRuntimeClient;
 use crate::config::CliConfig;
-use crate::diagnostics::{emit_exit_diagnostic, ExitContext, ExitKind};
+use crate::diagnostics::{
+    cli_error_code, emit_exit_diagnostic, user_facing_error_message, ExitContext, ExitKind,
+    SESSION_IN_USE_ERROR_CODE,
+};
 use crate::runtime::CliRuntimeContext;
 
 pub(super) const TOOL_START_INPUT_PREVIEW_CHARS: usize = 4_000;
@@ -117,6 +120,8 @@ pub(super) struct ExecJsonResult {
     subtype: &'static str,
     is_error: bool,
     result: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error_code: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -398,6 +403,7 @@ impl ExecJsonResult {
             subtype,
             is_error,
             result: result.into(),
+            error_code: None,
             session_id,
             turn_id,
             usage,
@@ -408,6 +414,11 @@ impl ExecJsonResult {
 
     fn with_patch(mut self, patch: Option<ExecPatchOutput>) -> Self {
         self.patch = patch;
+        self
+    }
+
+    pub(super) fn with_error_code(mut self, error_code: &'static str) -> Self {
+        self.error_code = Some(error_code);
         self
     }
 
@@ -437,6 +448,17 @@ pub(super) fn serialize_stream_envelope(
     Ok(serde_json::to_string(envelope)?)
 }
 
+pub(super) fn session_in_use_stream_envelope() -> bitfun_events::AgenticEventEnvelope {
+    bitfun_events::AgenticEventEnvelope::new(
+        AgenticEvent::SystemError {
+            session_id: None,
+            error: SESSION_IN_USE_ERROR_CODE.to_string(),
+            recoverable: true,
+        },
+        bitfun_events::AgenticEventPriority::Critical,
+    )
+}
+
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ExecSessionOptions {
     pub resume: Option<String>,
@@ -450,7 +472,7 @@ pub(crate) struct ExecMode {
     config: CliConfig,
     message: String,
     agent_type: String,
-    agent: Arc<CliAgentRuntimeClient>,
+    agent: Arc<ExecAgentRuntimeClient>,
     runtime: Arc<CliRuntimeContext>,
     pub(super) workspace_path: Option<PathBuf>,
     /// Git tree captured before execution so committed agent changes remain
@@ -487,7 +509,7 @@ impl ExecMode {
             | crate::runtime::approval::CliApprovalPolicy::DisableAuto
             | crate::runtime::approval::CliApprovalPolicy::Reject => ExecApprovalMode::Reject,
         };
-        let agent = Arc::new(CliAgentRuntimeClient::new(
+        let agent = Arc::new(ExecAgentRuntimeClient::new(
             runtime.as_ref(),
             workspace_path.clone(),
         ));
@@ -604,20 +626,32 @@ impl ExecMode {
         let session_id = match self.prepare_session().await {
             Ok(session_id) => session_id,
             Err(error) => {
+                let error_code = cli_error_code(&error);
+                let detail = user_facing_error_message(&error);
                 emit_exit_diagnostic(
                     ExitKind::SessionCreateFailed,
-                    &error.to_string(),
+                    &detail,
                     &self.exit_context(None, None),
                 );
                 if self.output_format == ExecOutputFormat::Json {
-                    let result = ExecJsonResult::preflight_error(error.to_string());
+                    let mut result = ExecJsonResult::preflight_error(detail);
+                    if let Some(error_code) = error_code {
+                        result = result.with_error_code(error_code);
+                    }
                     println!("{}", serde_json::to_string_pretty(&result)?);
+                } else if self.output_format == ExecOutputFormat::StreamJson
+                    && error_code == Some(SESSION_IN_USE_ERROR_CODE)
+                {
+                    self.emit_stream_envelope(&session_in_use_stream_envelope())?;
                 }
                 return Err(error);
             }
         };
         tracing::info!(session_id = %session_id, "Session ready");
-        let mut event_rx = self.agent.event_source().subscribe();
+        let mut event_rx = self
+            .agent
+            .subscribe_events()
+            .map_err(|error| anyhow::anyhow!(error.into_message()))?;
 
         self.print_text(|| {
             eprintln!("Executing: {}", self.message);
@@ -962,16 +996,15 @@ impl ExecMode {
                 Err(error) => (Vec::new(), Err(error)),
             };
             for envelope in buffered_events {
-                let _ = self
-                    .project_exec_nonterminal_event(
-                        &envelope,
-                        &session_id,
-                        &turn_id,
-                        &mut assistant_text,
-                        &mut usage,
-                        &mut total_tool_calls,
-                    )
-                    .await?;
+                self.project_exec_nonterminal_event(
+                    &envelope,
+                    &session_id,
+                    &turn_id,
+                    &mut assistant_text,
+                    &mut usage,
+                    &mut total_tool_calls,
+                )
+                .await?;
             }
             match resolve_cancelled_turn_observation(
                 observed_terminal,

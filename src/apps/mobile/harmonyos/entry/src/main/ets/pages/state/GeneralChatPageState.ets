@@ -1,4 +1,10 @@
-import { ChatMessage, RemoteSession, SelectedImageAttachment, SessionSummary } from '../../model/RemoteModels';
+import {
+  ChatMessage,
+  RemoteModelCatalog,
+  RemoteSession,
+  SelectedImageAttachment,
+  SessionSummary
+} from '../../model/RemoteModels';
 import { ChatTimelineItem, ChatTimelineRevisionTracker } from '../../services/ChatTimelineProjector';
 import { GeneralChatServiceState } from '../../services/general-chat/GeneralChatServiceState';
 import { RemoteUiState } from '../../services/RemoteUiState';
@@ -18,6 +24,8 @@ export class GeneralChatPageState {
   @Trace apiUrl: string = '';
   @Trace modelName: string = '';
   @Trace hasApiKey: boolean = false;
+  @Trace modelCatalog: RemoteModelCatalog = RemoteUiState.emptyModelCatalog();
+  @Trace selectedModelId: string = '';
   @Trace statusText: string = '';
   @Trace chatInput: string = '';
   @Trace selectedImages: SelectedImageAttachment[] = [];
@@ -87,6 +95,16 @@ export class GeneralChatPageState {
 
   setServiceState(serviceState: GeneralChatServiceState): void {
     this.serviceState = serviceState;
+  }
+
+  setModelCatalog(modelCatalog: RemoteModelCatalog, selectedModelId: string): void {
+    this.modelCatalog = {
+      version: modelCatalog.version,
+      models: modelCatalog.models.slice(),
+      default_models: modelCatalog.default_models,
+      session_model_id: modelCatalog.session_model_id
+    };
+    this.selectedModelId = selectedModelId;
   }
 
   setStatus(statusText: string): void {

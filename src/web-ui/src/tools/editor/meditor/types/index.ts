@@ -6,11 +6,6 @@ import { CSSProperties, ReactNode } from 'react'
 export type EditorMode = 'ir' | 'split' | 'edit' | 'preview'
 
 /**
- * Editor theme
- */
-export type EditorTheme = 'light' | 'dark'
-
-/**
  * Toolbar button configuration
  */
 export interface ToolbarButton {
@@ -58,7 +53,6 @@ export interface EditorOptions {
   height?: string | number
   width?: string | number
   mode?: EditorMode
-  theme?: EditorTheme
   toolbar?: boolean | ToolbarConfig
   outline?: boolean
   counter?: boolean
@@ -101,7 +95,6 @@ export interface EditorInstance {
   focus: () => void
   blur: () => void
   setMode: (mode: EditorMode) => void
-  setTheme: (theme: EditorTheme) => void
   getSelection: () => { start: number; end: number; text: string }
   destroy: () => void
   /** Scroll to specific line */

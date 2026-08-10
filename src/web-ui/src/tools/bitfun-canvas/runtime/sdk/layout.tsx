@@ -93,7 +93,7 @@ export function Divider({ style, ...props }: CanvasDividerProps) {
       {...props}
       style={{
         border: 0,
-        borderTop: '1px solid var(--border-subtle)',
+        borderTop: '1px solid var(--bf-appearance-token-border-subtle)',
         width: '100%',
         margin: '4px 0',
         ...style,

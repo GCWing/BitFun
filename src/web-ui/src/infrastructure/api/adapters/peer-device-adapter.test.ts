@@ -5,6 +5,7 @@ import {
   PEER_READ_REQUEST_TIMEOUT_MS,
   PEER_RETRY_BASE_DELAY_MS,
   PeerDeviceTransportAdapter,
+  PeerProductCommandError,
   isPeerLocalOnlyCommand,
   isPeerRetryableIdempotentMutation,
   isPeerRetryableReadCommand,
@@ -23,11 +24,16 @@ describe('isPeerLocalOnlyCommand', () => {
     expect(isPeerLocalOnlyCommand('get_prevent_sleep_enabled')).toBe(true);
     expect(isPeerLocalOnlyCommand('set_prevent_sleep_enabled')).toBe(true);
   });
+
+  it('keeps native main-window geometry control on the controller computer', () => {
+    expect(isPeerLocalOnlyCommand('set_main_window_transient_geometry')).toBe(true);
+  });
 });
 
 describe('peerInvokePriorityFor', () => {
   it('ranks session hydrate commands high', () => {
     expect(peerInvokePriorityFor('restore_session_view')).toBe('high');
+    expect(peerInvokePriorityFor('load_session_turn_window')).toBe('high');
     expect(peerInvokePriorityFor('list_persisted_sessions_page')).toBe('high');
     expect(peerInvokePriorityFor('initialize_workspace_startup_state')).toBe('high');
     expect(peerInvokePriorityFor('start_dialog_turn')).toBe('high');
@@ -82,6 +88,7 @@ describe('peerInvokePriorityFor', () => {
     expect(isPeerRetryableReadCommand('list_persisted_sessions_page')).toBe(true);
     expect(isPeerRetryableReadCommand('get_opened_workspaces')).toBe(true);
     expect(isPeerRetryableReadCommand('restore_session_view')).toBe(true);
+    expect(isPeerRetryableReadCommand('load_session_turn_window')).toBe(true);
     expect(isPeerRetryableReadCommand('start_dialog_turn')).toBe(false);
     expect(isPeerRetryableReadCommand('delete_session')).toBe(false);
     expect(isPeerRetryableReadCommand('respond_permission')).toBe(false);
@@ -272,6 +279,23 @@ describe('PeerDeviceTransportAdapter queue', () => {
       expect.any(String),
       PEER_MUTATION_REQUEST_TIMEOUT_MS,
     );
+  });
+
+  it('preserves a session conflict returned by the Peer Host without replaying it', async () => {
+    const deviceRpc = vi.fn().mockResolvedValue(JSON.stringify({
+      resp: 'host_invoke_result',
+      ok: false,
+      error: 'session_in_use: Session is already open for writing: session-1',
+    }));
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc);
+
+    await expect(adapter.request('ensure_coordinator_session', {
+      request: { sessionId: 'session-1', workspacePath: '/repo' },
+    })).rejects.toEqual(expect.objectContaining<Partial<PeerProductCommandError>>({
+      name: 'PeerProductCommandError',
+      message: 'session_in_use: Session is already open for writing: session-1',
+    }));
+    expect(deviceRpc).toHaveBeenCalledTimes(1);
   });
 
   it('recovers an idempotent dialog submission after a transient Relay failure', async () => {

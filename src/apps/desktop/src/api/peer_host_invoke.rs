@@ -37,11 +37,21 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "initialize_tray_after_startup",
     "startup_window_control",
     "toggle_main_window_fullscreen",
+    "set_main_window_transient_geometry",
     "get_prevent_sleep_enabled",
     "set_prevent_sleep_enabled",
     "restart_app",
     "check_for_updates",
     "install_update",
+    "appearance_market_browse",
+    "appearance_market_download_release",
+    "appearance_market_get_listing",
+    "appearance_market_get_review_submission",
+    "appearance_market_list_review_submissions",
+    "appearance_market_list_submissions",
+    "appearance_market_review_submission",
+    "appearance_market_submit_package",
+    "appearance_market_withdraw_submission",
     // Account identity / peer mode control (stay on controller)
     "account_login",
     "account_finalize_login",
@@ -93,6 +103,24 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     // This-machine computer-use / OS permission prompts
     "computer_use_request_permissions",
     "computer_use_open_system_settings",
+    // Detached dispatch uses controller-owned SSH credentials and observers.
+    "dispatch_list_targets",
+    "dispatch_probe_target",
+    "dispatch_install_cli_start",
+    "dispatch_install_cli_poll",
+    "dispatch_install_cli_cancel",
+    "dispatch_provision_target",
+    "dispatch_sync_model_config",
+    "dispatch_submit",
+    "dispatch_status",
+    "dispatch_query",
+    "dispatch_cancel",
+    "dispatch_sync_result",
+    "dispatch_list_jobs",
+    "dispatch_answer",
+    "dispatch_append",
+    "dispatch_load_transcript",
+    "dispatch_save_transcript",
     // One-click relay deploy SSHes from the controller to a user host
     "relay_deploy_preflight",
     "relay_deploy_install_docker",
@@ -155,7 +183,7 @@ struct HostInvokeBridgeRequest {
 }
 
 pub fn is_local_only_command(command: &str) -> bool {
-    LOCAL_ONLY_COMMANDS.iter().any(|denied| *denied == command)
+    LOCAL_ONLY_COMMANDS.contains(&command)
 }
 
 /// Register a controller device id to receive peer UI events.
@@ -429,6 +457,23 @@ mod tests {
                 .and_then(Value::as_bool),
             Some(true)
         );
+    }
+
+    #[test]
+    fn appearance_market_stays_on_the_controller_device() {
+        for command in [
+            "appearance_market_browse",
+            "appearance_market_get_listing",
+            "appearance_market_download_release",
+            "appearance_market_get_review_submission",
+            "appearance_market_list_review_submissions",
+            "appearance_market_list_submissions",
+            "appearance_market_review_submission",
+            "appearance_market_submit_package",
+            "appearance_market_withdraw_submission",
+        ] {
+            assert!(is_local_only_command(command), "{command}");
+        }
     }
 
     #[test]

@@ -2,6 +2,7 @@
 //!
 //! Handles communication connections to MCP servers and request/response management.
 
+use super::MCPServerTimeouts;
 use crate::mcp::adapter::MCPToolCatalogClient;
 use crate::mcp::protocol::{
     create_initialize_request, create_ping_request, create_prompts_get_request,
@@ -15,6 +16,7 @@ use crate::mcp::{MCPRuntimeError, MCPRuntimeResult};
 use log::{debug, warn};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::future::Future;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -50,14 +52,28 @@ pub struct MCPConnection {
     transport: TransportType,
     pending_requests: Arc<RwLock<HashMap<u64, ResponseWaiter>>>,
     initialize_timeout: Option<Duration>,
+    catalog_timeout: Option<Duration>,
+    execution_timeout: Option<Duration>,
     event_tx: broadcast::Sender<MCPConnectionEvent>,
 }
 
 const LOCAL_INITIALIZE_TIMEOUT: Duration = Duration::from_secs(30);
 
+fn timeout_duration(milliseconds: Option<u64>) -> Option<Duration> {
+    milliseconds.map(Duration::from_millis)
+}
+
 impl MCPConnection {
     /// Creates a new local connection instance (stdin/stdout).
     pub fn new_local(stdin: ChildStdin, message_rx: mpsc::UnboundedReceiver<MCPMessage>) -> Self {
+        Self::new_local_with_timeouts(stdin, message_rx, MCPServerTimeouts::default())
+    }
+
+    pub(super) fn new_local_with_timeouts(
+        stdin: ChildStdin,
+        message_rx: mpsc::UnboundedReceiver<MCPMessage>,
+        timeouts: MCPServerTimeouts,
+    ) -> Self {
         let transport = Arc::new(MCPTransport::new(stdin));
         let pending_requests = Arc::new(RwLock::new(HashMap::new()));
         let (event_tx, _) = broadcast::channel(64);
@@ -71,7 +87,10 @@ impl MCPConnection {
         Self {
             transport: TransportType::Local(transport),
             pending_requests,
-            initialize_timeout: Some(LOCAL_INITIALIZE_TIMEOUT),
+            initialize_timeout: timeout_duration(timeouts.startup_ms)
+                .or(Some(LOCAL_INITIALIZE_TIMEOUT)),
+            catalog_timeout: timeout_duration(timeouts.catalog_ms),
+            execution_timeout: timeout_duration(timeouts.execution_ms),
             event_tx,
         }
     }
@@ -101,7 +120,25 @@ impl MCPConnection {
         headers: HashMap<String, String>,
         oauth_enabled: bool,
     ) -> MCPRuntimeResult<Self> {
-        let initialize_timeout = None;
+        Self::new_remote_with_data_dir_and_timeouts(
+            data_dir,
+            server_id,
+            url,
+            headers,
+            oauth_enabled,
+            MCPServerTimeouts::default(),
+        )
+        .await
+    }
+
+    pub(super) async fn new_remote_with_data_dir_and_timeouts(
+        data_dir: impl Into<PathBuf>,
+        server_id: &str,
+        url: String,
+        headers: HashMap<String, String>,
+        oauth_enabled: bool,
+        timeouts: MCPServerTimeouts,
+    ) -> MCPRuntimeResult<Self> {
         let transport = Arc::new(
             RemoteMCPTransport::new(data_dir, server_id, url, headers, None, oauth_enabled).await?,
         );
@@ -111,7 +148,9 @@ impl MCPConnection {
         Ok(Self {
             transport: TransportType::Remote(transport),
             pending_requests,
-            initialize_timeout,
+            initialize_timeout: timeout_duration(timeouts.startup_ms),
+            catalog_timeout: timeout_duration(timeouts.catalog_ms),
+            execution_timeout: timeout_duration(timeouts.execution_ms),
             event_tx,
         })
     }
@@ -258,6 +297,19 @@ impl MCPConnection {
         }
     }
 
+    async fn await_phase<T>(
+        phase: &'static str,
+        timeout: Option<Duration>,
+        future: impl Future<Output = MCPRuntimeResult<T>>,
+    ) -> MCPRuntimeResult<T> {
+        match timeout {
+            Some(timeout) => tokio::time::timeout(timeout, future)
+                .await
+                .map_err(|_| MCPRuntimeError::timeout(format!("MCP {phase} request timed out")))?,
+            None => future.await,
+        }
+    }
+
     /// Initializes the connection.
     pub async fn initialize(
         &self,
@@ -285,7 +337,12 @@ impl MCPConnection {
                 Ok(result)
             }
             TransportType::Remote(transport) => {
-                transport.initialize(client_name, client_version).await
+                Self::await_phase(
+                    "startup",
+                    self.initialize_timeout,
+                    transport.initialize(client_name, client_version),
+                )
+                .await
             }
         }
     }
@@ -299,11 +356,22 @@ impl MCPConnection {
             TransportType::Local(_) => {
                 let request = create_resources_list_request(0, cursor);
                 let response = self
-                    .send_request_and_wait(request.method.clone(), request.params)
+                    .send_request_and_wait_with_timeout(
+                        request.method.clone(),
+                        request.params,
+                        self.catalog_timeout,
+                    )
                     .await?;
                 parse_response_result(&response)
             }
-            TransportType::Remote(transport) => transport.list_resources(cursor).await,
+            TransportType::Remote(transport) => {
+                Self::await_phase(
+                    "catalog",
+                    self.catalog_timeout,
+                    transport.list_resources(cursor),
+                )
+                .await
+            }
         }
     }
 
@@ -313,11 +381,22 @@ impl MCPConnection {
             TransportType::Local(_) => {
                 let request = create_resources_read_request(0, uri);
                 let response = self
-                    .send_request_and_wait(request.method.clone(), request.params)
+                    .send_request_and_wait_with_timeout(
+                        request.method.clone(),
+                        request.params,
+                        self.execution_timeout,
+                    )
                     .await?;
                 parse_response_result(&response)
             }
-            TransportType::Remote(transport) => transport.read_resource(uri).await,
+            TransportType::Remote(transport) => {
+                Self::await_phase(
+                    "execution",
+                    self.execution_timeout,
+                    transport.read_resource(uri),
+                )
+                .await
+            }
         }
     }
 
@@ -330,11 +409,22 @@ impl MCPConnection {
             TransportType::Local(_) => {
                 let request = create_prompts_list_request(0, cursor);
                 let response = self
-                    .send_request_and_wait(request.method.clone(), request.params)
+                    .send_request_and_wait_with_timeout(
+                        request.method.clone(),
+                        request.params,
+                        self.catalog_timeout,
+                    )
                     .await?;
                 parse_response_result(&response)
             }
-            TransportType::Remote(transport) => transport.list_prompts(cursor).await,
+            TransportType::Remote(transport) => {
+                Self::await_phase(
+                    "catalog",
+                    self.catalog_timeout,
+                    transport.list_prompts(cursor),
+                )
+                .await
+            }
         }
     }
 
@@ -348,11 +438,22 @@ impl MCPConnection {
             TransportType::Local(_) => {
                 let request = create_prompts_get_request(0, name, arguments);
                 let response = self
-                    .send_request_and_wait(request.method.clone(), request.params)
+                    .send_request_and_wait_with_timeout(
+                        request.method.clone(),
+                        request.params,
+                        self.execution_timeout,
+                    )
                     .await?;
                 parse_response_result(&response)
             }
-            TransportType::Remote(transport) => transport.get_prompt(name, arguments).await,
+            TransportType::Remote(transport) => {
+                Self::await_phase(
+                    "execution",
+                    self.execution_timeout,
+                    transport.get_prompt(name, arguments),
+                )
+                .await
+            }
         }
     }
 
@@ -362,11 +463,22 @@ impl MCPConnection {
             TransportType::Local(_) => {
                 let request = create_tools_list_request(0, cursor);
                 let response = self
-                    .send_request_and_wait(request.method.clone(), request.params)
+                    .send_request_and_wait_with_timeout(
+                        request.method.clone(),
+                        request.params,
+                        self.catalog_timeout,
+                    )
                     .await?;
                 parse_response_result(&response)
             }
-            TransportType::Remote(transport) => transport.list_tools(cursor).await,
+            TransportType::Remote(transport) => {
+                Self::await_phase(
+                    "catalog",
+                    self.catalog_timeout,
+                    transport.list_tools(cursor),
+                )
+                .await
+            }
         }
     }
 
@@ -382,12 +494,23 @@ impl MCPConnection {
                 let request = create_tools_call_request(0, name, arguments);
 
                 let response = self
-                    .send_request_and_wait(request.method.clone(), request.params)
+                    .send_request_and_wait_with_timeout(
+                        request.method.clone(),
+                        request.params,
+                        self.execution_timeout,
+                    )
                     .await?;
 
                 parse_response_result(&response)
             }
-            TransportType::Remote(transport) => transport.call_tool(name, arguments).await,
+            TransportType::Remote(transport) => {
+                Self::await_phase(
+                    "execution",
+                    self.execution_timeout,
+                    transport.call_tool(name, arguments),
+                )
+                .await
+            }
         }
     }
 
@@ -428,13 +551,17 @@ impl MCPConnection {
     }
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use crate::mcp::protocol::MCPToolResultContent;
+    #[cfg(unix)]
     use serde_json::json;
+    #[cfg(unix)]
     use tokio::io::{AsyncBufReadExt, BufReader};
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn local_tool_calls_do_not_inherit_initialize_timeout() {
         let mut child = tokio::process::Command::new("sh")
@@ -496,6 +623,7 @@ mod tests {
         let _ = child.kill().await;
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn local_initialize_uses_initialize_timeout() {
         let mut child = tokio::process::Command::new("sh")
@@ -519,6 +647,60 @@ mod tests {
         assert_eq!(error.kind(), crate::mcp::MCPRuntimeErrorKind::Timeout);
 
         drop(stdout);
+        let _ = child.kill().await;
+    }
+
+    #[test]
+    fn mcp_connection_timeout_child() {
+        if std::env::var_os("BITFUN_MCP_CONNECTION_TIMEOUT_CHILD").is_some() {
+            std::thread::sleep(Duration::from_secs(30));
+        }
+    }
+
+    #[tokio::test]
+    async fn local_catalog_and_execution_timeouts_remove_pending_requests() {
+        let mut child = tokio::process::Command::new(std::env::current_exe().unwrap())
+            .arg("--exact")
+            .arg("mcp::server::connection::tests::mcp_connection_timeout_child")
+            .arg("--nocapture")
+            .env("BITFUN_MCP_CONNECTION_TIMEOUT_CHILD", "1")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("spawn silent test child");
+        let stdin = child.stdin.take().expect("capture child stdin");
+        let (_tx, rx) = mpsc::unbounded_channel();
+        let connection = MCPConnection::new_local_with_timeouts(
+            stdin,
+            rx,
+            super::MCPServerTimeouts {
+                startup_ms: None,
+                catalog_ms: Some(10),
+                execution_ms: Some(10),
+            },
+        );
+
+        let catalog_error = connection
+            .list_tools(None)
+            .await
+            .expect_err("catalog request should time out");
+        assert_eq!(
+            catalog_error.kind(),
+            crate::mcp::MCPRuntimeErrorKind::Timeout
+        );
+        assert!(connection.pending_requests.read().await.is_empty());
+
+        let execution_error = connection
+            .call_tool("slow_tool", None)
+            .await
+            .expect_err("execution request should time out");
+        assert_eq!(
+            execution_error.kind(),
+            crate::mcp::MCPRuntimeErrorKind::Timeout
+        );
+        assert!(connection.pending_requests.read().await.is_empty());
+
         let _ = child.kill().await;
     }
 }

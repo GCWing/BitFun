@@ -2,7 +2,7 @@ use bitfun_claude_code_adapter::{ClaudeCodeMcpProvider, ClaudeCodeMcpProviderOpt
 use bitfun_product_domains::external_sources::{
     ExecutionDomainId, ExternalMcpDiscoveryInput, ExternalMcpRevisionKey,
     ExternalMcpSourceProvider, ExternalMcpStaticStatus, ExternalMcpTransportKind,
-    ExternalSourceContext, ExternalSourceScope,
+    ExternalSourceContext, ExternalSourceScope, PreparedExternalMcpImportTransport,
 };
 use std::collections::BTreeSet;
 use std::fs;
@@ -188,6 +188,81 @@ fn discovery_is_static_and_public_projection_redacts_runtime_values() {
 }
 
 #[test]
+fn safe_servers_have_a_native_import_projection_and_unsafe_fields_require_setup() {
+    let fixture = Fixture::new();
+    write(
+        &fixture.user_config,
+        r#"{"mcpServers":{
+          "local":{"command":"docs-mcp"},
+          "remote":{"type":"http","url":"https://docs.example.test/mcp"},
+          "args":{"command":"docs-mcp","args":["--stdio"]},
+          "env":{"command":"docs-mcp","env":{"TOKEN":"secret"}},
+          "cwd":{"command":"docs-mcp","cwd":"tools"},
+          "query":{"type":"http","url":"https://docs.example.test/mcp?token=secret"},
+          "headers":{"type":"http","url":"https://docs.example.test/mcp","headers":{"Authorization":"secret"}}
+        }}"#,
+    );
+    let provider = fixture.provider();
+    let input = fixture.input();
+    let snapshot = provider.discover(&input).unwrap();
+
+    let local = snapshot
+        .servers
+        .iter()
+        .find(|server| server.name == "local")
+        .unwrap();
+    let prepared_local = provider
+        .prepare_import(&input, &local.id, &local.behavior_version)
+        .unwrap();
+    assert!(matches!(
+        prepared_local.transport,
+        PreparedExternalMcpImportTransport::Local { ref command, ref args }
+            if command == "docs-mcp" && args.is_empty()
+    ));
+
+    let remote = snapshot
+        .servers
+        .iter()
+        .find(|server| server.name == "remote")
+        .unwrap();
+    let prepared_remote = provider
+        .prepare_import(&input, &remote.id, &remote.behavior_version)
+        .unwrap();
+    assert!(matches!(
+        prepared_remote.transport,
+        PreparedExternalMcpImportTransport::Remote { ref url }
+            if url == "https://docs.example.test/mcp"
+    ));
+
+    let args = snapshot
+        .servers
+        .iter()
+        .find(|server| server.name == "args")
+        .unwrap();
+    let prepared_args = provider
+        .prepare_import(&input, &args.id, &args.behavior_version)
+        .unwrap();
+    assert!(matches!(
+        prepared_args.transport,
+        PreparedExternalMcpImportTransport::Local { ref args, .. }
+            if args == &["--stdio"]
+    ));
+
+    for name in ["env", "cwd", "query", "headers"] {
+        let server = snapshot
+            .servers
+            .iter()
+            .find(|server| server.name == name)
+            .unwrap();
+        let error = provider
+            .prepare_import(&input, &server.id, &server.behavior_version)
+            .unwrap_err();
+        assert_eq!(error.code, "external_mcp.import_setup_required");
+        assert!(!error.message.contains("secret"));
+    }
+}
+
+#[test]
 fn public_working_directory_uses_a_workspace_relative_or_redacted_label() {
     let fixture = Fixture::new();
     let outside = fixture._temp.path().join("outside/private");
@@ -277,6 +352,69 @@ fn unsupported_upstream_fields_fail_closed_instead_of_changing_behavior_silently
             .prepare_server(&fixture.input(), &server.id, &server.behavior_version)
             .is_err());
     }
+}
+
+#[test]
+fn claude_timeout_controls_execution_and_subsecond_values_are_ignored() {
+    let fixture = Fixture::new();
+    write(
+        fixture.project.join(".mcp.json"),
+        r#"{"mcpServers":{
+          "docs":{"command":"docs-server","timeout":2500},
+          "native-ignored":{"command":"ignored-server","timeout":500}
+        }}"#,
+    );
+    let provider = fixture.provider();
+    let input = fixture.input();
+
+    let snapshot = provider.discover(&input).unwrap();
+    let docs = snapshot
+        .servers
+        .iter()
+        .find(|server| server.name == "docs")
+        .unwrap();
+    let ignored = snapshot
+        .servers
+        .iter()
+        .find(|server| server.name == "native-ignored")
+        .unwrap();
+    assert_eq!(docs.static_status, ExternalMcpStaticStatus::Ready);
+    assert_eq!(docs.timeouts.startup_ms, None);
+    assert_eq!(docs.timeouts.catalog_ms, None);
+    assert_eq!(docs.timeouts.execution_ms, Some(2_500));
+    assert_eq!(ignored.static_status, ExternalMcpStaticStatus::Ready);
+    assert!(ignored.timeouts.is_empty());
+    assert!(snapshot
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "claude.mcp.execution_limit_ignored"));
+
+    let prepared = provider
+        .prepare_server(&input, &docs.id, &docs.behavior_version)
+        .unwrap();
+    assert_eq!(prepared.timeouts, docs.timeouts);
+    assert_eq!(
+        provider
+            .prepare_import(&input, &docs.id, &docs.behavior_version)
+            .unwrap_err()
+            .code,
+        "external_mcp.import_setup_required"
+    );
+}
+
+#[test]
+fn claude_timeout_that_cannot_cross_product_surfaces_losslessly_is_unsupported() {
+    let fixture = Fixture::new();
+    write(
+        fixture.project.join(".mcp.json"),
+        r#"{"mcpServers":{"docs":{"command":"docs-server","timeout":9007199254740992}}}"#,
+    );
+
+    let snapshot = fixture.provider().discover(&fixture.input()).unwrap();
+    assert!(matches!(
+        snapshot.servers[0].static_status,
+        ExternalMcpStaticStatus::Unsupported { .. }
+    ));
 }
 
 #[test]

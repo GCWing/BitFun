@@ -47,6 +47,15 @@ describe('modelConfigs', () => {
     })).toBe('settings/ai-model:providers.zhipu.name');
   });
 
+  it('recognizes the full TokenDance chat completions URL', async () => {
+    const { getProviderDisplayName } = await import('./modelConfigs');
+
+    expect(getProviderDisplayName({
+      base_url: 'https://tokendance.space/gateway/v1/chat/completions',
+      model_name: 'glm-5.2',
+    })).toBe('settings/ai-model:providers.tokendance.name');
+  });
+
   it('allocates readable model config IDs with collision and selector handling', async () => {
     const { allocateModelConfigId } = await import('./modelConfigs');
 

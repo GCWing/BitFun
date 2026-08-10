@@ -5,6 +5,12 @@ use bitfun_product_domains::external_hook_catalog::{
     ExternalHookSource, ExternalHookSourceKind,
 };
 use bitfun_product_domains::external_hook_contributions::ExternalHookPoint;
+use bitfun_product_domains::external_hook_import::{
+    ExternalHookImportDependencyV1, ExternalHookImportDispositionV1, ExternalHookImportHandlerV1,
+    ExternalHookImportPlanV1, ExternalHookImportSkippedV1, PreparedExternalHookAsset,
+    PreparedExternalHookHandler, PreparedExternalHookImport, EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
+    MANAGED_HOOK_ROOT_PLACEHOLDER,
+};
 use bitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceDiagnostic, ExternalSourceHealth,
     ExternalSourceScope, ProviderId, SourceKey,
@@ -153,4 +159,166 @@ fn empty_catalog_is_pending_until_the_first_discovery_finishes() {
     assert!(snapshot.discovery_pending);
     assert_eq!(snapshot.schema_version, 1);
     assert!(snapshot.providers.is_empty());
+}
+
+#[test]
+fn import_plan_has_a_versioned_exact_wire_shape_and_redacted_debug() {
+    let plan = ExternalHookImportPlanV1 {
+        schema_version: EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
+        source: source(),
+        disposition: ExternalHookImportDispositionV1::Import,
+        behavior_version: "sha256:behavior".to_string(),
+        handlers: vec![ExternalHookImportHandlerV1 {
+            stable_key: "pre-tool-0".to_string(),
+            event: "PreToolUse".to_string(),
+            matcher: Some("Bash".to_string()),
+            command: "private-command --token secret".to_string(),
+            command_windows: None,
+            timeout_seconds: Some(30),
+            status_message: Some("secret-status".to_string()),
+            dependencies: vec![ExternalHookImportDependencyV1::External {
+                location: "/opt/private/tool".to_string(),
+            }],
+        }],
+        skipped: vec![ExternalHookImportSkippedV1 {
+            reason_code: "unsupported_async".to_string(),
+            count: 1,
+        }],
+        plan_fingerprint: "sha256:plan".to_string(),
+    };
+
+    plan.validate().unwrap();
+    let value = serde_json::to_value(&plan).unwrap();
+    assert_eq!(value["schemaVersion"], 1);
+    assert_eq!(value["disposition"], "import");
+    assert_eq!(value["handlers"][0]["dependencies"][0]["kind"], "external");
+    assert!(
+        serde_json::from_value::<ExternalHookImportPlanV1>(serde_json::json!({
+            "schemaVersion": 1,
+            "source": value["source"],
+            "disposition": "import",
+            "behaviorVersion": "sha256:behavior",
+            "handlers": [],
+            "skipped": [],
+            "planFingerprint": "sha256:plan",
+            "unexpected": true
+        }))
+        .is_err()
+    );
+    let debug = format!("{plan:?}");
+    assert!(!debug.contains("private-command"));
+    assert!(!debug.contains("secret"));
+    assert!(!debug.contains("secret-status"));
+    assert!(!debug.contains("/opt/private/tool"));
+
+    let handler_debug = format!("{:?}", plan.handlers[0]);
+    assert!(!handler_debug.contains("secret-status"));
+}
+
+#[test]
+fn prepared_behavior_version_tracks_commands_and_asset_bytes_without_debug_leaks() {
+    let prepared = |command: &str, bytes: &[u8]| {
+        PreparedExternalHookImport::new(
+            source(),
+            vec![PreparedExternalHookHandler {
+                stable_key: "pre-tool-0".to_string(),
+                event: "PreToolUse".to_string(),
+                matcher: Some("Bash".to_string()),
+                command: command.to_string(),
+                command_windows: None,
+                timeout_seconds: Some(30),
+                status_message: None,
+                dependencies: Vec::new(),
+            }],
+            vec![ExternalHookImportSkippedV1 {
+                reason_code: "unsupported_async".to_string(),
+                count: 1,
+            }],
+            vec![PreparedExternalHookAsset {
+                relative_path: "hooks/check.py".into(),
+                bytes: bytes.to_vec(),
+            }],
+        )
+        .unwrap()
+    };
+
+    let first = prepared("python hooks/check.py", b"print('one')");
+    let command_changed = prepared("python3 hooks/check.py", b"print('one')");
+    let asset_changed = prepared("python hooks/check.py", b"print('two')");
+    assert_ne!(first.behavior_version, command_changed.behavior_version);
+    assert_ne!(first.behavior_version, asset_changed.behavior_version);
+    let debug = format!("{first:?}");
+    assert!(!debug.contains("python hooks/check.py"));
+    assert!(!debug.contains("print('one')"));
+}
+
+#[test]
+fn prepared_assets_reject_paths_deeper_than_the_fixed_import_budget() {
+    let error = PreparedExternalHookImport::new(
+        source(),
+        vec![PreparedExternalHookHandler {
+            stable_key: "pre-tool-0".to_string(),
+            event: "PreToolUse".to_string(),
+            matcher: None,
+            command: "check".to_string(),
+            command_windows: None,
+            timeout_seconds: None,
+            status_message: None,
+            dependencies: Vec::new(),
+        }],
+        Vec::new(),
+        vec![PreparedExternalHookAsset {
+            relative_path: "one/two/three/four/five/six/seven/eight/nine/check.py".into(),
+            bytes: vec![1],
+        }],
+    )
+    .unwrap_err();
+
+    assert!(error.to_string().contains("asset path"));
+}
+
+#[test]
+fn prepared_import_preserves_skipped_only_preview_but_rejects_an_empty_result() {
+    let skipped_only = PreparedExternalHookImport::new(
+        source(),
+        Vec::new(),
+        vec![ExternalHookImportSkippedV1 {
+            reason_code: "unsupported_handler_type".to_string(),
+            count: 2,
+        }],
+        Vec::new(),
+    )
+    .unwrap();
+    assert!(skipped_only.handlers.is_empty());
+
+    assert!(PreparedExternalHookImport::new(source(), Vec::new(), Vec::new(), Vec::new()).is_err());
+}
+
+#[test]
+fn prepared_handler_materializes_only_the_reserved_managed_root_placeholder() {
+    let handler = PreparedExternalHookHandler {
+        stable_key: "pre-tool-0".to_string(),
+        event: "PreToolUse".to_string(),
+        matcher: None,
+        command: format!(
+            "python \"{MANAGED_HOOK_ROOT_PLACEHOLDER}/hooks/check.py\" --label literal"
+        ),
+        command_windows: None,
+        timeout_seconds: None,
+        status_message: None,
+        dependencies: vec![ExternalHookImportDependencyV1::Managed {
+            relative_path: "hooks/check.py".to_string(),
+        }],
+    };
+
+    let review = handler
+        .public_review_at(std::path::Path::new("D:/managed/import"))
+        .unwrap();
+    assert_eq!(
+        review.command,
+        "python \"D:/managed/import/hooks/check.py\" --label literal"
+    );
+    assert!(handler
+        .public_review_at(std::path::Path::new("D:/unsafe/$root"))
+        .is_err());
 }

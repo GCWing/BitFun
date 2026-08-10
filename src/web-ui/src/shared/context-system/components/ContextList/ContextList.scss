@@ -23,9 +23,9 @@
     display: flex;
     align-items: center;
     gap: $size-gap-2;
-    font-size: var(--font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: $font-weight-medium;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
   
   &__count {
@@ -37,9 +37,9 @@
     padding: 0 6px;
     font-size: 11px;
     font-weight: $font-weight-semibold;
-    color: var(--color-text-primary);
-    background: var(--element-bg-medium);
-    border: 1px solid var(--border-subtle);
+    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-appearance-token-element-bg-medium);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: $size-radius-full;
   }
   
@@ -48,19 +48,19 @@
     align-items: center;
     gap: $size-gap-1;
     padding: 4px 8px;
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
     font-weight: $font-weight-medium;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     background: transparent;
-    border: 1px solid var(--border-subtle);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: $size-radius-sm;
     cursor: pointer;
     transition: all $motion-fast $easing-standard;
     
     &:hover {
-      background: var(--color-error-bg);
-      border-color: var(--color-error-border);
-      color: var(--color-error);
+      background: var(--bf-appearance-token-color-error-bg);
+      border-color: var(--bf-appearance-token-color-error-border);
+      color: var(--bf-appearance-token-color-error);
     }
     
     &:active {
@@ -101,20 +101,20 @@
   }
   
   &__empty-icon {
-    color: var(--color-text-disabled);
+    color: var(--bf-appearance-token-color-text-disabled);
     margin-bottom: $size-gap-3;
   }
   
   &__empty-text {
-    font-size: var(--font-size-base);
+    font-size: var(--bf-appearance-token-font-size-base);
     font-weight: $font-weight-medium;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     margin: 0 0 $size-gap-1;
   }
   
   &__empty-hint {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-disabled);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-disabled);
     margin: 0;
     max-width: 300px;
     line-height: 1.5;

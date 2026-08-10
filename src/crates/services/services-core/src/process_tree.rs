@@ -392,9 +392,9 @@ mod tests {
         if std::env::var_os("BITFUN_DETACHED_FIXTURE").is_none() {
             return;
         }
-        // SAFETY: the fixture is a single-threaded test subprocess created
-        // solely to verify the documented process-group containment limit.
         assert!(
+            // SAFETY: the fixture is a single-threaded test subprocess created
+            // solely to verify the documented process-group containment limit.
             unsafe { libc::setsid() } >= 0,
             "fixture must create a new session"
         );

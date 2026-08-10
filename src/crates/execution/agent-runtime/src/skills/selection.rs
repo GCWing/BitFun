@@ -45,6 +45,9 @@ impl SkillCandidate {
                 group_key,
                 is_shadowed: false,
                 shadowed_by_key: None,
+                allow_implicit_invocation: data.allow_implicit_invocation,
+                allow_user_invocation: data.allow_user_invocation,
+                argument_hint: data.argument_hint,
             },
             priority,
         }
@@ -141,6 +144,27 @@ pub fn resolve_visible_skills(candidates: Vec<SkillCandidate>) -> Vec<SkillInfo>
         .collect()
 }
 
+pub fn filter_implicitly_invocable_skills(skills: Vec<SkillInfo>) -> Vec<SkillInfo> {
+    skills
+        .into_iter()
+        .filter(|skill| skill.allow_implicit_invocation)
+        .collect()
+}
+
+pub fn filter_user_invocable_skills(skills: Vec<SkillInfo>) -> Vec<SkillInfo> {
+    skills
+        .into_iter()
+        .filter(|skill| skill.allow_user_invocation)
+        .collect()
+}
+
+pub fn is_skill_globally_enabled(
+    skill: &SkillInfo,
+    globally_disabled_user_skills: &HashSet<String>,
+) -> bool {
+    skill.level != SkillLocation::User || !globally_disabled_user_skills.contains(&skill.key)
+}
+
 pub fn filter_candidates_for_mode(
     candidates: Vec<SkillCandidate>,
     mode_id: &str,
@@ -198,6 +222,7 @@ pub fn build_mode_skill_infos(
     mode_id: &str,
     user_overrides: &UserModeSkillOverrides,
     disabled_project_skills: &HashSet<String>,
+    globally_disabled_user_skills: &HashSet<String>,
 ) -> Vec<ModeSkillInfo> {
     let resolved_by_name: HashMap<String, String> = resolved_skills
         .iter()
@@ -215,7 +240,8 @@ pub fn build_mode_skill_infos(
                 user_overrides,
                 disabled_project_skills,
             );
-            let selected_for_runtime = resolved_keys.contains(&skill.key);
+            let globally_enabled = is_skill_globally_enabled(&skill, globally_disabled_user_skills);
+            let selected_for_runtime = globally_enabled && resolved_keys.contains(&skill.key);
             let mode_winner_key = state
                 .effective_enabled
                 .then(|| resolved_by_name.get(&skill.name))
@@ -229,6 +255,7 @@ pub fn build_mode_skill_infos(
             ModeSkillInfo {
                 skill,
                 default_enabled: state.default_enabled,
+                globally_enabled,
                 effective_enabled: state.effective_enabled,
                 disabled_by_mode: !state.effective_enabled,
                 selected_for_runtime,
@@ -254,9 +281,15 @@ pub fn resolve_default_hidden_builtin_for_explicit_invocation(
         return ExplicitSkillInvocationResolution::NotFound;
     };
 
+    // gstack and computer-use builtins are default-hidden but remain explicitly
+    // invocable: computer-use (agent-browser) is opt-in everywhere because
+    // ControlHub's browser domain is the default browser-automation path.
     if info.level == SkillLocation::User
         && info.is_builtin
-        && info.group_key.as_deref() == Some("gstack")
+        && matches!(
+            info.group_key.as_deref(),
+            Some("gstack") | Some("computer-use")
+        )
         && !resolve_skill_default_enabled_for_mode(&info, mode_id)
     {
         return ExplicitSkillInvocationResolution::Found(info);
@@ -305,6 +338,9 @@ mod tests {
                 group_key: None,
                 is_shadowed: false,
                 shadowed_by_key: None,
+                allow_implicit_invocation: true,
+                allow_user_invocation: true,
+                argument_hint: None,
             },
             priority: 0,
         }

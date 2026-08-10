@@ -32,7 +32,7 @@ export interface CanvasPalette {
     readonly diffStripAdded: string;
     readonly diffStripRemoved: string;
 }
-export interface CanvasHostThemeOverrides {
+export interface CanvasHostAppearanceOverrides {
     readonly primary?: string;
     readonly editorBackground?: string;
     readonly editorForeground?: string;
@@ -41,12 +41,10 @@ export type Color = "gray" | "purple" | "green" | "yellow" | "cyan" | "pink" | "
 export type CategoryPalette = Readonly<Record<Color, string>>;
 export declare const canvasPaletteDark: CanvasPalette;
 export declare const canvasPaletteLight: CanvasPalette;
-export declare function applyWorkbenchSurfaces(palette: CanvasPalette, surfaces: Pick<CanvasHostThemeOverrides, "editorBackground" | "editorForeground">): CanvasPalette;
+export declare function applyWorkbenchSurfaces(palette: CanvasPalette, surfaces: Pick<CanvasHostAppearanceOverrides, "editorBackground" | "editorForeground">): CanvasPalette;
 export declare function applyPrimaryColor(palette: CanvasPalette, primary: string): CanvasPalette;
 export declare const categoryPaletteDark: CategoryPalette;
 export declare const categoryPaletteLight: CategoryPalette;
-/** Legacy `colorPalette` name kept for back-compat; prefer `useHostTheme().category`. */
-export declare const colorPalette: CategoryPalette;
 export declare const usageColorSequence: readonly Color[];
 export declare const chartColorSequence: readonly string[];
 export interface CanvasTokens {
@@ -88,10 +86,10 @@ export interface CanvasTokens {
     };
     readonly category: CategoryPalette;
 }
-/** Semantic colors for components. Spacing and radius live in `theme.ts`. */
+/** Semantic colors for components. Spacing and radius live in `appearance.ts`. */
 export declare const canvasTokens: CanvasTokens;
 export declare const canvasTokensLight: CanvasTokens;
-export declare function buildHostTokens(kind: string, overrides?: CanvasHostThemeOverrides): {
+export declare function buildHostTokens(kind: string, overrides?: CanvasHostAppearanceOverrides): {
     tokens: CanvasTokens;
     palette: CanvasPalette;
 };

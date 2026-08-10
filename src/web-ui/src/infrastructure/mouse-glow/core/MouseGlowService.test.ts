@@ -112,6 +112,48 @@ describe('MouseGlowService', () => {
     surface.remove();
   });
 
+  it('only reads geometry for the selected surface', () => {
+    const surface = document.createElement('div');
+    surface.className = 'workspace-card';
+    surface.style.border = '1px solid black';
+    surface.style.borderRadius = '8px';
+    surface.style.background = 'black';
+    const readSurfaceGeometry = vi.fn(() => ({
+      bottom: 128,
+      height: 80,
+      left: 20,
+      right: 220,
+      top: 48,
+      width: 200,
+      x: 20,
+      y: 48,
+      toJSON: () => ({}),
+    }));
+    surface.getBoundingClientRect = readSurfaceGeometry;
+    const wrapper = document.createElement('div');
+    const content = document.createElement('code');
+    const readWrapperGeometry = vi.fn();
+    const readContentGeometry = vi.fn();
+    wrapper.getBoundingClientRect = readWrapperGeometry;
+    content.getBoundingClientRect = readContentGeometry;
+    wrapper.appendChild(content);
+    surface.appendChild(wrapper);
+    document.body.appendChild(surface);
+    service.initialize();
+
+    content.dispatchEvent(new MouseEvent('pointermove', {
+      bubbles: true,
+      clientX: 72,
+      clientY: 68,
+    }));
+    nextFrame?.(0);
+
+    expect(readContentGeometry).not.toHaveBeenCalled();
+    expect(readWrapperGeometry).not.toHaveBeenCalled();
+    expect(readSurfaceGeometry).toHaveBeenCalledTimes(1);
+    surface.remove();
+  });
+
   it('keeps the glow up until the frame resolves where the pointer went', () => {
     const surface = document.createElement('div');
     surface.setAttribute('data-mouse-glow-surface', '');
@@ -249,6 +291,8 @@ describe('MouseGlowService', () => {
     const stackingHost = document.createElement('div');
     stackingHost.style.position = 'relative';
     stackingHost.style.zIndex = '1';
+    const readStackingHostGeometry = vi.fn();
+    stackingHost.getBoundingClientRect = readStackingHostGeometry;
     const surface = document.createElement('div');
     surface.setAttribute('data-mouse-glow-surface', '');
     surface.getBoundingClientRect = () => ({
@@ -295,7 +339,9 @@ describe('MouseGlowService', () => {
 
     const overlay = document.getElementById('bitfun-mouse-glow-overlay');
     expect(overlay?.hasAttribute('data-active')).toBe(true);
-    expect(overlay?.parentElement).toBe(stackingHost);
+    expect(overlay?.parentElement).toBe(document.body);
+    expect(overlay?.hasAttribute('data-local-position')).toBe(false);
+    expect(readStackingHostGeometry).not.toHaveBeenCalled();
     expect(Number(window.getComputedStyle(listbox).zIndex)).toBeGreaterThan(49);
 
     option.dispatchEvent(new MouseEvent('pointermove', {
@@ -359,7 +405,7 @@ describe('MouseGlowService', () => {
     transformedHost.style.position = 'absolute';
     transformedHost.style.zIndex = '100';
     transformedHost.style.transform = 'translateX(-50%)';
-    transformedHost.getBoundingClientRect = () => ({
+    const readTransformedHostGeometry = vi.fn(() => ({
       bottom: 700,
       height: 200,
       left: 100,
@@ -369,7 +415,8 @@ describe('MouseGlowService', () => {
       x: 100,
       y: 500,
       toJSON: () => ({}),
-    });
+    }));
+    transformedHost.getBoundingClientRect = readTransformedHostGeometry;
     const inputSurface = document.createElement('div');
     inputSurface.setAttribute('data-mouse-glow-surface', '');
     inputSurface.style.border = '1px solid black';
@@ -400,11 +447,12 @@ describe('MouseGlowService', () => {
     nextFrame?.(0);
 
     const overlay = document.getElementById('bitfun-mouse-glow-overlay');
-    expect(overlay?.parentElement).toBe(transformedHost);
-    expect(overlay?.hasAttribute('data-local-position')).toBe(true);
-    expect(overlay?.style.transform).toBe('translate3d(20px, 40px, 0)');
+    expect(overlay?.parentElement).toBe(document.body);
+    expect(overlay?.hasAttribute('data-local-position')).toBe(false);
+    expect(overlay?.style.transform).toBe('translate3d(120px, 540px, 0)');
     expect(overlay?.style.getPropertyValue('--mouse-glow-local-x')).toBe('60px');
     expect(overlay?.style.getPropertyValue('--mouse-glow-local-y')).toBe('20px');
+    expect(readTransformedHostGeometry).not.toHaveBeenCalled();
     transformedHost.remove();
   });
 

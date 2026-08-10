@@ -1,14 +1,14 @@
 //! Workspace manager.
 
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "git")]
 use super::worktree_topology::global_worktree_topology_service;
 use super::WorktreeTopologyFreshness;
-use crate::service::remote_ssh::workspace_state::{
+use crate::util::{errors::*, FrontMatterMarkdown};
+use bitfun_services_core::workspace_identity::{
     canonicalize_local_workspace_root, local_workspace_roots_equal,
     local_workspace_stable_storage_id, normalize_local_workspace_root_for_stable_id,
     normalize_remote_workspace_path, LOCAL_WORKSPACE_SSH_HOST,
 };
-use crate::util::{errors::*, FrontMatterMarkdown};
 use log::{info, warn};
 
 use serde::{Deserialize, Serialize};
@@ -49,6 +49,44 @@ pub enum WorkspaceKind {
     Normal,
     Assistant,
     Remote,
+}
+
+/// Stable identity of the assistant workspace that owns the primary role.
+///
+/// Workspace ids can be rekeyed when storage paths are normalized, so the
+/// primary selection is persisted using the assistant identity instead.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum PrimaryAssistantKey {
+    BuiltIn,
+    Named { assistant_id: String },
+}
+
+impl PrimaryAssistantKey {
+    pub fn from_workspace(workspace: &WorkspaceInfo) -> Option<Self> {
+        if workspace.workspace_kind != WorkspaceKind::Assistant {
+            return None;
+        }
+
+        Some(match workspace.assistant_id.as_deref() {
+            Some(assistant_id) if !assistant_id.trim().is_empty() => Self::Named {
+                assistant_id: assistant_id.trim().to_string(),
+            },
+            _ => Self::BuiltIn,
+        })
+    }
+
+    pub fn matches(&self, workspace: &WorkspaceInfo) -> bool {
+        if workspace.workspace_kind != WorkspaceKind::Assistant {
+            return false;
+        }
+
+        match (self, workspace.assistant_id.as_deref()) {
+            (Self::BuiltIn, None) => true,
+            (Self::Named { assistant_id }, Some(candidate)) => assistant_id == candidate,
+            _ => false,
+        }
+    }
 }
 
 pub(crate) const IDENTITY_FILE_NAME: &str = "IDENTITY.md";
@@ -450,13 +488,13 @@ impl WorkspaceInfo {
         workspace_root: &Path,
         freshness: WorktreeTopologyFreshness,
     ) -> Option<WorkspaceWorktreeInfo> {
-        #[cfg(not(feature = "service-integrations"))]
+        #[cfg(not(feature = "git"))]
         {
-            let _ = workspace_root;
+            let _ = (workspace_root, freshness);
             return None;
         }
 
-        #[cfg(feature = "service-integrations")]
+        #[cfg(feature = "git")]
         {
             let normalized_workspace_path = workspace_root.to_string_lossy().replace('\\', "/");
             let worktrees = match global_worktree_topology_service()
@@ -761,6 +799,7 @@ pub struct WorkspaceManager {
     current_workspace_id: Option<String>,
     recent_workspaces: Vec<String>,
     recent_assistant_workspaces: Vec<String>,
+    primary_assistant_key: Option<PrimaryAssistantKey>,
     max_recent_workspaces: usize,
 }
 
@@ -791,6 +830,7 @@ impl WorkspaceManager {
             current_workspace_id: None,
             recent_workspaces: Vec::new(),
             recent_assistant_workspaces: Vec::new(),
+            primary_assistant_key: None,
             max_recent_workspaces: config.max_recent_workspaces,
         }
     }
@@ -1296,6 +1336,76 @@ impl WorkspaceManager {
             .iter()
             .filter_map(|id| self.workspaces.get(id))
             .collect()
+    }
+
+    /// Returns the persisted primary assistant identity.
+    pub fn get_primary_assistant_key(&self) -> Option<&PrimaryAssistantKey> {
+        self.primary_assistant_key.as_ref()
+    }
+
+    /// Restores the persisted primary assistant identity.
+    pub fn set_primary_assistant_key(&mut self, key: Option<PrimaryAssistantKey>) {
+        self.primary_assistant_key = key;
+    }
+
+    /// Resolves the primary assistant workspace from its stable identity.
+    pub fn get_primary_assistant_workspace(&self) -> Option<&WorkspaceInfo> {
+        self.primary_assistant_key.as_ref().and_then(|key| {
+            self.workspaces
+                .values()
+                .find(|workspace| key.matches(workspace))
+        })
+    }
+
+    /// Selects the primary assistant and returns its previous identity.
+    pub fn set_primary_assistant_workspace(
+        &mut self,
+        workspace_id: &str,
+    ) -> BitFunResult<Option<PrimaryAssistantKey>> {
+        let workspace = self.workspaces.get(workspace_id).ok_or_else(|| {
+            BitFunError::service(format!("Workspace not found: {}", workspace_id))
+        })?;
+        let key = PrimaryAssistantKey::from_workspace(workspace).ok_or_else(|| {
+            BitFunError::service(format!(
+                "Workspace is not an assistant workspace: {}",
+                workspace_id
+            ))
+        })?;
+
+        Ok(self.primary_assistant_key.replace(key))
+    }
+
+    /// Repairs a missing/invalid primary selection using a deterministic fallback.
+    pub fn ensure_primary_assistant_selection(&mut self) -> bool {
+        if self.get_primary_assistant_workspace().is_some() {
+            return false;
+        }
+
+        let fallback = self
+            .workspaces
+            .values()
+            .filter(|workspace| workspace.workspace_kind == WorkspaceKind::Assistant)
+            .min_by(|left, right| {
+                let left_key = (
+                    left.assistant_id.is_some(),
+                    left.assistant_id.as_deref().unwrap_or_default(),
+                    left.id.as_str(),
+                );
+                let right_key = (
+                    right.assistant_id.is_some(),
+                    right.assistant_id.as_deref().unwrap_or_default(),
+                    right.id.as_str(),
+                );
+                left_key.cmp(&right_key)
+            })
+            .and_then(PrimaryAssistantKey::from_workspace);
+
+        if self.primary_assistant_key == fallback {
+            return false;
+        }
+
+        self.primary_assistant_key = fallback;
+        true
     }
 
     /// Searches workspaces.

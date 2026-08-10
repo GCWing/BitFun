@@ -125,10 +125,10 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
   };
 
   return (
-    <div className="mcp-resource-browser">
-      <div className="browser-header">
+    <div className="mcp-resource-browser" data-bf-component="mcp-resource-browser" data-bf-part="root">
+      <div data-bf-component="mcp-resource-browser" data-bf-part="header" className="browser-header">
         <h2>{t('resourceBrowser.title')}</h2>
-        <div className="header-actions">
+        <div data-bf-component="mcp-resource-browser" data-bf-part="headerActions" className="header-actions">
           <Button
             variant="secondary"
             size="small"
@@ -148,7 +148,7 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
         </div>
       </div>
 
-      <div className="browser-search">
+      <div data-bf-component="mcp-resource-browser" data-bf-part="search" className="browser-search">
         <input
           type="text"
           placeholder={t('resourceBrowser.search.placeholder')}
@@ -158,12 +158,12 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
         />
       </div>
 
-      <div className="browser-content">
-        <div className="resources-list">
+      <div data-bf-component="mcp-resource-browser" data-bf-part="content" className="browser-content">
+        <div data-bf-component="mcp-resource-browser" data-bf-part="list" className="resources-list">
           {loading ? (
-            <div className="loading-state">{t('resourceBrowser.loading.resources')}</div>
+            <div data-bf-component="mcp-resource-browser" data-bf-part="loading" className="loading-state">{t('resourceBrowser.loading.resources')}</div>
           ) : filteredResources.length === 0 ? (
-            <div className="empty-state">
+            <div data-bf-component="mcp-resource-browser" data-bf-part="empty" className="empty-state">
               <div className="empty-icon">
                 <SearchIcon size={28} />
               </div>
@@ -172,12 +172,15 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
           ) : (
             filteredResources.map((resource) => (
               <div
+                data-bf-component="mcp-resource-browser"
+                data-bf-part="resource"
+                data-bf-state={selectedResource?.uri === resource.uri ? 'selected' : undefined}
                 key={resource.uri}
                 className={`resource-item ${selectedResource?.uri === resource.uri ? 'selected' : ''}`}
                 onClick={() => loadResourceContent(resource)}
               >
-                <div className="resource-icon">{getMimeTypeIcon(resource.mimeType)}</div>
-                <div className="resource-info">
+                <div data-bf-component="mcp-resource-browser" data-bf-part="resourceIcon" className="resource-icon">{getMimeTypeIcon(resource.mimeType)}</div>
+                <div data-bf-component="mcp-resource-browser" data-bf-part="resourceInfo" className="resource-info">
                   <div className="resource-name">{resource.name}</div>
                   {resource.description && (
                     <div className="resource-description">{resource.description}</div>
@@ -189,10 +192,10 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
           )}
         </div>
 
-        <div className="resource-viewer">
+        <div data-bf-component="mcp-resource-browser" data-bf-part="viewer" className="resource-viewer">
           {selectedResource ? (
             <>
-              <div className="viewer-header">
+              <div data-bf-component="mcp-resource-browser" data-bf-part="viewerHeader" className="viewer-header">
                 <div className="viewer-title">
                   <span className="viewer-icon">{getMimeTypeIcon(selectedResource.mimeType)}</span>
                   <span className="viewer-name">{selectedResource.title || selectedResource.name}</span>
@@ -201,7 +204,7 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
                   <div className="viewer-mime-type">{selectedResource.mimeType}</div>
                 )}
               </div>
-              <div className="viewer-content">
+              <div data-bf-component="mcp-resource-browser" data-bf-part="viewerContent" className="viewer-content">
                 {loadingContent ? (
                   <div className="loading-content">{t('resourceBrowser.loading.content')}</div>
                 ) : resourceContent ? (

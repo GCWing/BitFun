@@ -38,14 +38,28 @@ export const PeerRemoteBadge: React.FC = () => {
       className="bitfun-peer-remote-badge"
       data-testid="peer-remote-badge"
       title={t('accountLogin.peerRemoteBadgeTitle', { name: deviceName })}
+      data-bf-component="peer-device"
+      data-bf-part="badge"
     >
-      <Monitor size={13} className="bitfun-peer-remote-badge__icon" aria-hidden="true" />
-      <span className="bitfun-peer-remote-badge__label">
+      <Monitor
+        size={13}
+        className="bitfun-peer-remote-badge__icon"
+        aria-hidden="true"
+        data-bf-component="peer-device"
+        data-bf-part="badgeIcon"
+      />
+      <span
+        className="bitfun-peer-remote-badge__label"
+        data-bf-component="peer-device"
+        data-bf-part="badgeLabel"
+      >
         {t('accountLogin.peerRemoteLabel', { name: deviceName })}
       </span>
       <button
         type="button"
         className="bitfun-peer-remote-badge__disconnect"
+        data-bf-component="peer-device"
+        data-bf-part="disconnectButton"
         onClick={() => {
           void handleDisconnect();
         }}

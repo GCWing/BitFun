@@ -109,6 +109,45 @@ mod visual_grid_tests {
     }
 }
 
+#[cfg(all(test, target_os = "windows"))]
+mod windows_foreground_tests {
+    use super::*;
+
+    #[test]
+    fn foreground_app_reports_executable_separately_from_window_title() {
+        let app = DesktopComputerUseHost::windows_foreground_application(
+            "Search".to_string(),
+            4242,
+            Some("explorer.exe".to_string()),
+        );
+
+        assert_eq!(app.name.as_deref(), Some("Search"));
+        assert_eq!(app.process_name.as_deref(), Some("explorer.exe"));
+        assert_eq!(app.process_id, Some(4242));
+    }
+
+    #[test]
+    fn foreground_app_falls_back_to_title_only_when_process_lookup_fails() {
+        let app =
+            DesktopComputerUseHost::windows_foreground_application("Search".to_string(), 4242, None);
+
+        assert_eq!(app.name.as_deref(), Some("Search"));
+        assert_eq!(app.process_name, None);
+    }
+
+    #[test]
+    fn foreground_app_drops_empty_title_and_empty_executable() {
+        let app = DesktopComputerUseHost::windows_foreground_application(
+            String::new(),
+            0,
+            Some(String::new()),
+        );
+
+        assert_eq!(app.name, None);
+        assert_eq!(app.process_name, None);
+    }
+}
+
 /// Unified mutable session state for computer use — one mutex instead of five.
 /// State transitions are applied centrally after each action (screenshot, pointer move, click, etc.).
 #[derive(Debug)]
@@ -123,7 +162,7 @@ struct ComputerUseSessionMutableState {
     navigation_focus: Option<ComputerUseNavFocus>,
     /// Cached full-screen screenshot for fast consecutive crops.
     screenshot_cache: Option<ScreenshotCacheEntry>,
-    /// After `screenshot`, block `pointer_move_rel` / `ComputerUseMouseStep` until an absolute move
+    /// After `screenshot`, block `pointer_move_rel` until an absolute move
     /// from AX/OCR/globals (`mouse_move`, `move_to_text`, `click_element`) clears this.
     block_vision_pixel_nudge_after_screenshot: bool,
     /// After click / key / type / scroll / drag: recommend a **`screenshot`** to confirm UI state (Cowork verify).
@@ -394,6 +433,9 @@ end tell"#])
         let bundle = parts.get(2).map(|x| x.trim()).filter(|x| !x.is_empty());
         Some(ComputerUseForegroundApplication {
             name: Some(name.to_string()),
+            // `name of p` from System Events is already the process name, not a
+            // window title, so it doubles as the process identity here.
+            process_name: Some(name.to_string()),
             bundle_id: bundle.map(|b| b.to_string()),
             process_id: Some(pid),
         })
@@ -430,17 +472,41 @@ end tell"#])
                 } else {
                     String::new()
                 };
-                Some(ComputerUseForegroundApplication {
-                    name: if title.is_empty() { None } else { Some(title) },
-                    bundle_id: None,
-                    process_id: Some(pid as i32),
-                })
+                let exe_basename = if pid == 0 {
+                    None
+                } else {
+                    crate::computer_use::windows_list_apps::exe_basename_for_pid(pid)
+                };
+                Some(Self::windows_foreground_application(title, pid, exe_basename))
             };
 
             ComputerUseSessionSnapshot {
                 foreground_application: foreground,
                 pointer_global: pointer,
             }
+        }
+    }
+
+    /// Build the Windows foreground-app identity from the window title and the
+    /// owning process's executable basename.
+    ///
+    /// `name` stays the window title; `process_name` carries the *process*
+    /// identity. Callers that classify the frontmost app (browser detection)
+    /// must match on `process_name`: window titles collide with app names by
+    /// substring (a "Search" window contains "arc"). When the process cannot be
+    /// opened (access denied, exited), `process_name` is `None` and callers see
+    /// the pre-existing title-only shape.
+    #[cfg(target_os = "windows")]
+    fn windows_foreground_application(
+        title: String,
+        pid: u32,
+        exe_basename: Option<String>,
+    ) -> ComputerUseForegroundApplication {
+        ComputerUseForegroundApplication {
+            name: if title.is_empty() { None } else { Some(title) },
+            process_name: exe_basename.filter(|s| !s.is_empty()),
+            bundle_id: None,
+            process_id: Some(pid as i32),
         }
     }
 

@@ -4,9 +4,8 @@ use crate::client::{AIClient, StreamResponse};
 use crate::providers::shared;
 use crate::stream::handle_gemini_stream;
 use crate::trace::ModelExchangeTraceConfig;
-use crate::types::ReasoningMode;
-use crate::types::{Message, ToolDefinition};
-use anyhow::Result;
+use crate::types::{Message, ReasoningPresetAction, ReasoningPresetDescriptor, ToolDefinition};
+use anyhow::{anyhow, Result};
 use log::debug;
 use reqwest::RequestBuilder;
 
@@ -50,18 +49,6 @@ pub(crate) fn resolve_request_url(base_url: &str, model_name: &str) -> String {
     )
 }
 
-fn apply_reasoning_fields(request_body: &mut serde_json::Value, mode: ReasoningMode) {
-    if matches!(mode, ReasoningMode::Enabled | ReasoningMode::Adaptive) {
-        insert_generation_field(
-            request_body,
-            "thinkingConfig",
-            serde_json::json!({
-                "includeThoughts": true,
-            }),
-        );
-    }
-}
-
 fn ensure_generation_config(
     request_body: &mut serde_json::Value,
 ) -> &mut serde_json::Map<String, serde_json::Value> {
@@ -83,6 +70,69 @@ fn insert_generation_field(
     value: serde_json::Value,
 ) {
     ensure_generation_config(request_body).insert(key.to_string(), value);
+}
+
+fn compile_reasoning_action(
+    preset: &ReasoningPresetDescriptor,
+    action: &ReasoningPresetAction,
+    request_body: &mut serde_json::Value,
+    configured_model: &str,
+    max_tokens: Option<u32>,
+) -> Result<bool> {
+    let model = preset
+        .execution_model
+        .as_deref()
+        .unwrap_or(configured_model)
+        .trim()
+        .to_ascii_lowercase();
+    match action {
+        ReasoningPresetAction::Effort { value } if model.starts_with("gemini-3-") => {
+            insert_generation_field(
+                request_body,
+                "thinkingConfig",
+                serde_json::json!({
+                    "includeThoughts": true,
+                    "thinkingLevel": value.trim().to_ascii_uppercase(),
+                }),
+            );
+            Ok(true)
+        }
+        ReasoningPresetAction::BudgetTokens { value } if model.starts_with("gemini-2.5-") => {
+            if max_tokens.is_some_and(|limit| *value > limit) {
+                return Err(anyhow!(
+                    "Gemini reasoning budget {} exceeds max output tokens {}",
+                    value,
+                    max_tokens.unwrap_or_default()
+                ));
+            }
+            insert_generation_field(
+                request_body,
+                "thinkingConfig",
+                serde_json::json!({
+                    "includeThoughts": true,
+                    "thinkingBudget": value,
+                }),
+            );
+            Ok(true)
+        }
+        ReasoningPresetAction::Toggle { enabled } if model.starts_with("gemini-2.5-flash") => {
+            insert_generation_field(
+                request_body,
+                "thinkingConfig",
+                serde_json::json!({
+                    "includeThoughts": enabled,
+                    "thinkingBudget": if *enabled { -1 } else { 0 },
+                }),
+            );
+            Ok(true)
+        }
+        ReasoningPresetAction::Effort { .. }
+        | ReasoningPresetAction::Toggle { .. }
+        | ReasoningPresetAction::BudgetTokens { .. } => Ok(false),
+        ReasoningPresetAction::RequestPatch { .. } => {
+            unreachable!("patches are compiled by shared code")
+        }
+    }
 }
 
 fn normalize_stop_sequences(value: &serde_json::Value) -> Option<serde_json::Value> {
@@ -215,13 +265,13 @@ fn translate_extra_body(
     }
 }
 
-pub(crate) fn build_request_body(
+pub(crate) fn try_build_request_body(
     client: &AIClient,
     system_instruction: Option<serde_json::Value>,
     contents: Vec<serde_json::Value>,
     gemini_tools: Option<Vec<serde_json::Value>>,
     extra_body: Option<serde_json::Value>,
-) -> serde_json::Value {
+) -> Result<serde_json::Value> {
     let mut request_body = serde_json::json!({
         "contents": contents,
     });
@@ -250,7 +300,11 @@ pub(crate) fn build_request_body(
         insert_generation_field(&mut request_body, "topP", serde_json::json!(top_p));
     }
 
-    apply_reasoning_fields(&mut request_body, client.config.reasoning_mode);
+    let base_reasoning_fields = shared::capture_reasoning_fields(
+        &request_body,
+        &[],
+        &[("generationConfig", "thinkingConfig")],
+    );
 
     if let Some(tools) = gemini_tools {
         let tool_names = tools
@@ -280,6 +334,26 @@ pub(crate) fn build_request_body(
         }
     }
 
+    let protected_keys = &["contents", "systemInstruction", "tools", "toolConfig"];
+    let protected_nested = &[("generationConfig", "maxOutputTokens")];
+    if let Some(preset) = client.model_reasoning_preset.as_ref() {
+        shared::apply_reasoning_actions(
+            preset,
+            &mut request_body,
+            protected_keys,
+            protected_nested,
+            |action, body| {
+                compile_reasoning_action(
+                    preset,
+                    action,
+                    body,
+                    &client.config.model,
+                    client.config.max_tokens,
+                )
+            },
+        )?;
+    }
+
     let protected_body = shared::protect_request_body(
         client,
         &mut request_body,
@@ -301,6 +375,29 @@ pub(crate) fn build_request_body(
     }
 
     shared::restore_protected_body(&mut request_body, protected_body);
+    if let Some(preset) = client.selected_reasoning_preset.as_ref() {
+        shared::reset_reasoning_fields(
+            &mut request_body,
+            base_reasoning_fields.as_ref(),
+            &[],
+            &[("generationConfig", "thinkingConfig")],
+        );
+        shared::apply_reasoning_actions(
+            preset,
+            &mut request_body,
+            protected_keys,
+            protected_nested,
+            |action, body| {
+                compile_reasoning_action(
+                    preset,
+                    action,
+                    body,
+                    &client.config.model,
+                    client.config.max_tokens,
+                )
+            },
+        )?;
+    }
 
     shared::log_request_body(
         "ai::gemini_stream_request",
@@ -308,7 +405,25 @@ pub(crate) fn build_request_body(
         &request_body,
     );
 
-    request_body
+    Ok(request_body)
+}
+
+#[cfg(test)]
+pub(crate) fn build_request_body(
+    client: &AIClient,
+    system_instruction: Option<serde_json::Value>,
+    contents: Vec<serde_json::Value>,
+    gemini_tools: Option<Vec<serde_json::Value>>,
+    extra_body: Option<serde_json::Value>,
+) -> serde_json::Value {
+    try_build_request_body(
+        client,
+        system_instruction,
+        contents,
+        gemini_tools,
+        extra_body,
+    )
+    .expect("request body should compile")
 }
 
 pub(crate) async fn send_stream(
@@ -328,13 +443,13 @@ pub(crate) async fn send_stream(
     let (system_instruction, contents) =
         GeminiMessageConverter::convert_messages(messages, &client.config.model);
     let gemini_tools = GeminiMessageConverter::convert_tools(tools);
-    let request_body = build_request_body(
+    let request_body = try_build_request_body(
         client,
         system_instruction,
         contents,
         gemini_tools,
         extra_body,
-    );
+    )?;
     let idle_timeout = client.stream_options.idle_timeout;
     let ttft_timeout = client.stream_options.ttft_timeout;
 

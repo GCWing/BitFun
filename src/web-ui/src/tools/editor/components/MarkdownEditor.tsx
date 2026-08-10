@@ -21,7 +21,6 @@ import {
 } from '@/infrastructure/peer-device/peerModeFlag';
 import { CubeLoading, Button } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
-import { useTheme } from '@/infrastructure/theme/hooks/useTheme';
 import CodeEditor from './CodeEditor';
 import {
   diskVersionFromMetadata,
@@ -97,7 +96,6 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   onFileMissingFromDiskChange,
 }) => {
   const { t } = useI18n('tools');
-  const { isLight } = useTheme();
   const [content, setContent] = useState<string>(initialContent);
   const [hasChanges, setHasChanges] = useState(false);
   const [viewMode, setViewMode] = useState<'preview' | 'markdown'>('preview');
@@ -652,7 +650,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 
   if (loading) {
     return (
-      <div className={`bitfun-markdown-editor-loading ${className}`}>
+      <div className={`bitfun-markdown-editor-loading ${className}`} data-bf-component="markdown-editor" data-bf-part="loading" data-bf-state="loading">
         <CubeLoading size="medium" text={t('editor.markdownEditor.loadingFile')} />
       </div>
     );
@@ -660,7 +658,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 
   if (error) {
     return (
-      <div className={`bitfun-markdown-editor-error ${className}`}>
+      <div className={`bitfun-markdown-editor-error ${className}`} data-bf-component="markdown-editor" data-bf-part="error" data-bf-state="error">
         <div className="error-content">
           <AlertCircle className="error-icon" />
           <p>{error}</p>
@@ -707,9 +705,9 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 
   if (shouldUseSourcePreviewFallback) {
     return (
-      <div className={`bitfun-markdown-editor ${className}`}>
+      <div className={`bitfun-markdown-editor ${className}`} data-bf-component="markdown-editor" data-bf-part="root" data-bf-view={unsafeViewMode}>
         {notices.length > 0 && (
-          <div className="bitfun-markdown-editor__notice-bar">
+          <div className="bitfun-markdown-editor__notice-bar" data-bf-component="markdown-editor" data-bf-part="notice">
             <AlertCircle className="bitfun-markdown-editor__notice-icon" />
             <div className="bitfun-markdown-editor__notice-copy">
               {notices.map(notice => (
@@ -718,8 +716,8 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             </div>
           </div>
         )}
-        <div className="bitfun-markdown-editor__mode-toolbar">
-          <div className="bitfun-markdown-editor__mode-toggle" role="tablist" aria-label={t('editor.markdownEditor.viewModeLabel')}>
+        <div className="bitfun-markdown-editor__mode-toolbar" data-bf-component="markdown-editor" data-bf-part="toolbar">
+          <div className="bitfun-markdown-editor__mode-toggle" role="tablist" aria-label={t('editor.markdownEditor.viewModeLabel')} data-bf-component="markdown-editor" data-bf-part="modeToggle">
             <Button
               type="button"
               size="small"
@@ -741,7 +739,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               {t('editor.markdownEditor.preview')}
             </Button>
           </div>
-          <div className="bitfun-markdown-editor__toolbar-actions">
+          <div className="bitfun-markdown-editor__toolbar-actions" data-bf-component="markdown-editor" data-bf-part="actions">
             <Button
               type="button"
               size="small"
@@ -760,7 +758,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             </Button>
           </div>
         </div>
-        <div className="bitfun-markdown-editor__unsafe-body">
+        <div className="bitfun-markdown-editor__unsafe-body" data-bf-component="markdown-editor" data-bf-part="body">
           {unsafeViewMode === 'source' ? (
             <CodeEditor
               filePath={filePath}
@@ -799,7 +797,6 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               onSave={handleSave}
               onDirtyChange={handleDirtyChange}
               mode="preview"
-              theme={isLight ? 'light' : 'dark'}
               height="100%"
               width="100%"
               placeholder={t('editor.markdownEditor.placeholder')}
@@ -815,9 +812,9 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   }
 
   return (
-    <div className={`bitfun-markdown-editor ${className}`}>
+    <div className={`bitfun-markdown-editor ${className}`} data-bf-component="markdown-editor" data-bf-part="root" data-bf-view={viewMode}>
       {notices.length > 0 && (
-        <div className="bitfun-markdown-editor__notice-bar">
+        <div className="bitfun-markdown-editor__notice-bar" data-bf-component="markdown-editor" data-bf-part="notice">
           <AlertCircle className="bitfun-markdown-editor__notice-icon" />
           <div className="bitfun-markdown-editor__notice-copy">
             {notices.map(notice => (
@@ -826,8 +823,8 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           </div>
         </div>
       )}
-      <div className="bitfun-markdown-editor__mode-toolbar">
-        <div className="bitfun-markdown-editor__mode-toggle" role="tablist" aria-label={t('editor.markdownEditor.viewModeLabel')}>
+      <div className="bitfun-markdown-editor__mode-toolbar" data-bf-component="markdown-editor" data-bf-part="toolbar">
+        <div className="bitfun-markdown-editor__mode-toggle" role="tablist" aria-label={t('editor.markdownEditor.viewModeLabel')} data-bf-component="markdown-editor" data-bf-part="modeToggle">
           <Button
             type="button"
             size="small"
@@ -849,7 +846,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             {t('editor.markdownEditor.markdown')}
           </Button>
         </div>
-        <div className="bitfun-markdown-editor__toolbar-actions">
+        <div className="bitfun-markdown-editor__toolbar-actions" data-bf-component="markdown-editor" data-bf-part="actions">
           <Button
             type="button"
             size="small"
@@ -868,22 +865,23 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           </Button>
         </div>
       </div>
-      <MEditor
-        ref={editorRef}
-        value={content}
-        onChange={handleContentChange}
-        onSave={handleSave}
-        onDirtyChange={handleDirtyChange}
-        mode={viewMode === 'preview' ? 'preview' : 'edit'}
-        theme={isLight ? 'light' : 'dark'}
-        height="100%"
-        width="100%"
-        placeholder={t('editor.markdownEditor.placeholder')}
-        readonly={readOnly}
-        toolbar={false}
-        filePath={filePath}
-        basePath={basePath}
-      />
+      <div className="bitfun-markdown-editor__body" data-bf-component="markdown-editor" data-bf-part="body">
+        <MEditor
+          ref={editorRef}
+          value={content}
+          onChange={handleContentChange}
+          onSave={handleSave}
+          onDirtyChange={handleDirtyChange}
+          mode={viewMode === 'preview' ? 'preview' : 'edit'}
+          height="100%"
+          width="100%"
+          placeholder={t('editor.markdownEditor.placeholder')}
+          readonly={readOnly}
+          toolbar={false}
+          filePath={filePath}
+          basePath={basePath}
+        />
+      </div>
     </div>
   );
 };

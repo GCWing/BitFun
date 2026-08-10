@@ -8,7 +8,7 @@ use crate::service::workspace_runtime::get_workspace_runtime_service_arc;
 use async_trait::async_trait;
 use bitfun_ai_adapters::{
     ModelExchangeRequestAttempt, ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace,
-    ModelExchangeTraceConfig, ModelExchangeTraceSink,
+    ModelExchangeRoundAttempt, ModelExchangeTraceConfig, ModelExchangeTraceSink,
 };
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
@@ -55,7 +55,11 @@ struct ModelExchangeTraceRequestRecord {
     request_url: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     body: Option<Value>,
+    /// Adapter-local HTTP/SSE retry number. This restarts for each logical
+    /// model-round attempt.
     attempt_number: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    round_attempt: Option<ModelExchangeRoundAttempt>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -288,6 +292,7 @@ impl ModelExchangeTraceSink for WorkspaceModelExchangeTraceSink {
                 request_url: attempt.request_url.clone(),
                 body: attempt.request_body.clone(),
                 attempt_number: attempt.attempt_number,
+                round_attempt: attempt.round_attempt.clone(),
             },
         };
 
@@ -404,8 +409,8 @@ pub(super) async fn prepare_model_exchange_trace_for_workspace(
         },
     };
 
-    Some(ModelExchangeTraceConfig {
-        sink: Arc::new(WorkspaceModelExchangeTraceSink::new(
+    Some(ModelExchangeTraceConfig::new(
+        Arc::new(WorkspaceModelExchangeTraceSink::new(
             WorkspaceModelExchangeTraceInput {
                 trace_session_dir,
                 policy,
@@ -419,8 +424,8 @@ pub(super) async fn prepare_model_exchange_trace_for_workspace(
                 model_id: ai_client.config.model.clone(),
             },
         )),
-        capture_request_body: policy.capture_request_body,
-    })
+        policy.capture_request_body,
+    ))
 }
 
 async fn current_model_exchange_trace_policy() -> Option<ModelExchangeTracePolicy> {
@@ -527,6 +532,10 @@ mod tests {
                 request_url: "https://example.invalid/model".to_string(),
                 request_body: Some(serde_json::json!({"request": "body"})),
                 attempt_number: 2,
+                round_attempt: Some(ModelExchangeRoundAttempt {
+                    attempt_id: "round-1:attempt:3".to_string(),
+                    attempt_index: 3,
+                }),
             })
             .await
             .expect("trace request should be recorded");
@@ -550,6 +559,13 @@ mod tests {
         assert_eq!(record.request.api_format, "api-format");
         assert_eq!(record.request.model_id, "model-identity");
         assert_eq!(record.request.attempt_number, 2);
+        assert_eq!(
+            record.request.round_attempt,
+            Some(ModelExchangeRoundAttempt {
+                attempt_id: "round-1:attempt:3".to_string(),
+                attempt_index: 3,
+            })
+        );
         assert_eq!(
             record.request.body,
             Some(serde_json::json!({"request": "body"}))

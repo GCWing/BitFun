@@ -6,7 +6,7 @@
 import React from 'react';
 import { CheckSquare, Square, Circle } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
-import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
+import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 import { BaseToolCard, BaseToolCardProps } from '../BaseToolCard';
 import './TodoCard.scss';
 
@@ -52,7 +52,7 @@ export const TodoCard: React.FC<TodoCardProps> = ({
 
   if (displayMode === 'compact') {
     return (
-      <div className={`todo-card todo-card--compact todo-card--${status}`}>
+      <div className={`todo-card todo-card--compact todo-card--${status}`} data-bf-component="flow-chat-card" data-bf-part="compact" data-bf-display="compact" data-bf-status={status}>
         <CheckSquare className="todo-card__icon" size={14} />
         <span className="todo-card__action">{t('flowChatCards.todoCard.title')}:</span>
         <span className="todo-card__stats">
@@ -72,7 +72,7 @@ export const TodoCard: React.FC<TodoCardProps> = ({
       displayMode={displayMode}
       input={input}
       result={result}
-      primaryColor={UI_EXCEPTION_ACCENTS.todo}
+      primaryColor={APPEARANCE_DOMAIN_TOKENS.todo}
       className="todo-card"
       {...baseProps}
     >
@@ -94,9 +94,9 @@ export const TodoCard: React.FC<TodoCardProps> = ({
       )}
 
       {resolvedTodos.length > 0 && (
-        <div className="todo-card__list">
+        <div className="todo-card__list" data-bf-component="flow-chat-card" data-bf-part="list">
           {resolvedTodos.map((todo: TodoItem) => (
-            <div key={todo.id} className={`todo-card__item todo-card__item--${todo.status}`}>
+            <div key={todo.id} className={`todo-card__item todo-card__item--${todo.status}`} data-bf-component="flow-chat-card" data-bf-part="item">
               {getStatusIcon(todo.status)}
               <span className="todo-card__item-content">{todo.content}</span>
             </div>
@@ -105,7 +105,7 @@ export const TodoCard: React.FC<TodoCardProps> = ({
       )}
 
       {resolvedTodos.length === 0 && status === 'completed' && (
-        <div className="todo-card__empty">
+        <div className="todo-card__empty" data-bf-component="flow-chat-card" data-bf-part="empty">
           {t('flowChatCards.todoCard.noTasks')}
         </div>
       )}

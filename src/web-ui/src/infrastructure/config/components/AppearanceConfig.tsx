@@ -2,16 +2,15 @@ import React, { useCallback, useMemo } from 'react';
 import { FontPreferencePanel } from '@/infrastructure/font-preference';
 import { useMouseGlowPreference } from '@/infrastructure/mouse-glow';
 import { useTranslation } from 'react-i18next';
-import { Select, Switch, Tooltip } from '@/component-library';
+import { Select, Switch } from '@/component-library';
 import {
-  useTheme,
-  ThemeMetadata,
-  ThemeConfig as ThemeConfigType,
-  SYSTEM_THEME_ID,
-} from '@/infrastructure/theme';
-import { themeService } from '@/infrastructure/theme/core/ThemeService';
+  SYSTEM_APPEARANCE_ID,
+  useAppearance,
+  type AppearanceCatalogEntry,
+} from '@/infrastructure/appearance';
 import { useLanguageSelector } from '@/infrastructure/i18n';
 import type { LocaleId } from '@/infrastructure/i18n/types';
+import { AppearancePackageConfigSection } from './AppearancePackageConfigSection';
 import {
   ConfigPageContent,
   ConfigPageHeader,
@@ -22,63 +21,84 @@ import {
 } from './common';
 import './AppearanceConfig.scss';
 
-function AppearanceThemeSection() {
+function AppearanceSelectionSection() {
   const { t } = useTranslation('settings/basics');
-  const { themeId, themes, setTheme, loading } = useTheme();
+  const {
+    selectedAppearanceId,
+    appearances,
+    select,
+    initialized,
+    status,
+  } = useAppearance();
   const { currentLanguage, supportedLocales, selectLanguage, isChanging } = useLanguageSelector();
 
-  const handleThemeChange = async (newThemeId: string) => {
-    await setTheme(newThemeId);
+  const handleAppearanceChange = async (nextAppearanceId: string) => {
+    await select(nextAppearanceId);
   };
 
-  const getThemeDisplayName = useCallback((theme: ThemeMetadata) => {
-    const i18nKey = `appearance.presets.${theme.id}`;
-    return theme.builtin
-      ? t(`${i18nKey}.name`, { defaultValue: theme.name })
-      : theme.name;
+  const getAppearanceDisplayName = useCallback((appearance: AppearanceCatalogEntry) => {
+    const presetId = appearance.id.replace(/^builtin\./, '');
+    const i18nKey = `appearance.presets.${presetId}`;
+    return appearance.source === 'builtin'
+      ? t(`${i18nKey}.name`, { defaultValue: appearance.name })
+      : appearance.name;
   }, [t]);
 
-  const getThemeDisplayDescription = useCallback((theme: ThemeMetadata) => {
-    const i18nKey = `appearance.presets.${theme.id}`;
-    return theme.builtin
-      ? t(`${i18nKey}.description`, { defaultValue: theme.description || '' })
-      : theme.description || '';
+  const getAppearanceDisplayDescription = useCallback((appearance: AppearanceCatalogEntry) => {
+    const presetId = appearance.id.replace(/^builtin\./, '');
+    const i18nKey = `appearance.presets.${presetId}`;
+    return appearance.source === 'builtin'
+      ? t(`${i18nKey}.description`, { defaultValue: appearance.description || '' })
+      : appearance.description || '';
   }, [t]);
 
-  const themeSelectOptions = useMemo(
+  const appearanceOptions = useMemo(
     () => [
       {
-        value: SYSTEM_THEME_ID,
-        label: t('appearance.systemTheme'),
-        description: t('appearance.systemThemeDescription'),
-        testId: 'appearance-theme-option',
+        value: SYSTEM_APPEARANCE_ID,
+        label: t('appearance.systemAppearance'),
+        description: t('appearance.systemAppearanceDescription'),
+        testId: 'appearance-palette-option',
         testAttributes: {
-          'data-theme-id': SYSTEM_THEME_ID,
+          'data-appearance-id': SYSTEM_APPEARANCE_ID,
         },
       },
-      ...themes.map((theme) => ({
-        value: theme.id,
-        label: getThemeDisplayName(theme),
-        description: getThemeDisplayDescription(theme),
-        testId: 'appearance-theme-option',
+      ...appearances.map((appearance) => ({
+        value: appearance.id,
+        label: getAppearanceDisplayName(appearance),
+        description: getAppearanceDisplayDescription(appearance),
+        testId: 'appearance-palette-option',
         testAttributes: {
-          'data-theme-id': theme.id,
+          'data-appearance-id': appearance.id,
         },
       })),
     ],
-    [themes, t, getThemeDisplayDescription, getThemeDisplayName]
+    [appearances, t, getAppearanceDisplayDescription, getAppearanceDisplayName]
   );
 
   return (
-    <div className="theme-config" data-testid="appearance-theme-section">
-      <div className="theme-config__content">
+    <div
+      className="appearance-settings"
+      data-testid="appearance-settings-section"
+      data-bf-component="appearance-config"
+      data-bf-part="settings"
+    >
+      <div
+        className="appearance-settings__content"
+        data-bf-component="appearance-config"
+        data-bf-part="settingsContent"
+      >
         <ConfigPageSection title={t('appearance.title')} description={t('appearance.hint')}>
           <ConfigPageRow
             label={t('appearance.language')}
             description={t('appearance.languageRowHint')}
             align="center"
           >
-            <div className="theme-config__language-select">
+            <div
+              className="appearance-settings__language-select"
+              data-bf-component="appearance-config"
+              data-bf-part="language"
+            >
               <Select
                 value={currentLanguage}
                 onChange={(value) =>
@@ -99,49 +119,38 @@ function AppearanceThemeSection() {
             </div>
           </ConfigPageRow>
           <ConfigPageRow
-            label={t('appearance.themes')}
-            description={t('appearance.themeRowHint')}
+            label={t('appearance.appearances')}
+            description={t('appearance.appearanceRowHint')}
             align="center"
           >
-            <div className="theme-config__theme-picker">
-              <div className="theme-config__theme-select">
+            <div
+              className="appearance-settings__palette-picker"
+              data-bf-component="appearance-config"
+              data-bf-part="palettePicker"
+            >
+              <div
+                className="appearance-settings__palette-select"
+                data-bf-component="appearance-config"
+                data-bf-part="paletteSelect"
+              >
                 <Select
-                  value={themeId ?? ''}
-                  onChange={(value) => handleThemeChange(value as string)}
-                  disabled={loading}
-                  options={themeSelectOptions}
-                  triggerTestId="appearance-theme-select"
-                  renderOption={(option) => {
-                    const v = String(option.value);
-                    const fullTheme =
-                      v === SYSTEM_THEME_ID
-                        ? themeService.getTheme(themeService.getResolvedThemeId())
-                        : (() => {
-                            const meta = themes.find((item) => item.id === v);
-                            return meta ? themeService.getTheme(meta.id) : null;
-                          })();
-                    const optionContent = (
-                      <div className="theme-config__theme-option">
-                        <span className="theme-config__theme-option-name">{option.label}</span>
-                        {option.description && (
-                          <span className="theme-config__theme-option-desc">{option.description}</span>
-                        )}
-                      </div>
-                    );
-
-                    if (!fullTheme) return optionContent;
-
-                    return (
-                      <Tooltip
-                        content={<ThemePreviewThumbnail theme={fullTheme} />}
-                        placement="right"
-                        delay={300}
-                        className="theme-preview-tooltip"
-                      >
-                        {optionContent}
-                      </Tooltip>
-                    );
-                  }}
+                  value={selectedAppearanceId}
+                  onChange={(value) => handleAppearanceChange(value as string)}
+                  disabled={!initialized || status === 'applying'}
+                  options={appearanceOptions}
+                  triggerTestId="appearance-palette-select"
+                  renderOption={(option) => (
+                    <div
+                      className="appearance-settings__palette-option"
+                      data-bf-component="appearance-config"
+                      data-bf-part="paletteOption"
+                    >
+                      <span className="appearance-settings__palette-option-name">{option.label}</span>
+                      {option.description && (
+                        <span className="appearance-settings__palette-option-desc">{option.description}</span>
+                      )}
+                    </div>
+                  )}
                 />
               </div>
             </div>
@@ -157,10 +166,7 @@ function AppearanceEffectsSection() {
   const { enabled, setEnabled } = useMouseGlowPreference();
 
   return (
-    <ConfigPageSection
-      title={t('effects.title')}
-      description={t('effects.hint')}
-    >
+    <ConfigPageSection title={t('effects.title')} description={t('effects.hint')}>
       <ConfigPageRow
         label={t('effects.mouseGlow.label')}
         description={t('effects.mouseGlow.description')}
@@ -178,253 +184,24 @@ function AppearanceEffectsSection() {
   );
 }
 
-interface ThemePreviewThumbnailProps {
-  theme: ThemeConfigType;
-}
-
-function ThemePreviewThumbnail({ theme }: ThemePreviewThumbnailProps) {
-  const { colors } = theme;
-
-  return (
-    <div
-      className="theme-preview-thumbnail"
-      style={{
-        background: colors.background.primary,
-        borderColor: colors.border.base,
-      }}
-    >
-      <div
-        className="theme-preview-thumbnail__titlebar"
-        style={{
-          background: colors.background.secondary,
-          borderColor: colors.border.subtle,
-        }}
-      >
-        <div className="theme-preview-thumbnail__menu">
-          <span
-            className="theme-preview-thumbnail__menu-dot"
-            style={{ background: colors.accent['500'] }}
-          />
-        </div>
-
-        <div className="theme-preview-thumbnail__title" style={{ color: colors.text.muted }}>
-          BitFun
-        </div>
-
-        <div className="theme-preview-thumbnail__window-controls">
-          <span className="theme-preview-thumbnail__window-btn" style={{ color: colors.text.secondary }}>
-            <svg width="8" height="8" viewBox="0 0 14 14" fill="none">
-              <line x1="3" y1="7" x2="11" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </span>
-
-          <span className="theme-preview-thumbnail__window-btn" style={{ color: colors.text.secondary }}>
-            <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
-              <rect
-                x="2"
-                y="2"
-                width="8"
-                height="8"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </span>
-
-          <span
-            className="theme-preview-thumbnail__window-btn theme-preview-thumbnail__window-btn--close"
-            style={{ color: colors.text.secondary }}
-          >
-            <svg width="8" height="8" viewBox="0 0 14 14" fill="none">
-              <line x1="3" y1="3" x2="11" y2="11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              <line x1="11" y1="3" x2="3" y2="11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </span>
-        </div>
-      </div>
-
-      <div className="theme-preview-thumbnail__main">
-        <div
-          className="theme-preview-thumbnail__sidebar"
-          style={{
-            background: colors.background.secondary,
-            borderColor: colors.border.subtle,
-          }}
-        >
-          <div className="theme-preview-thumbnail__tree-item">
-            <span
-              className="theme-preview-thumbnail__folder-icon"
-              style={{ background: colors.accent['500'] }}
-            />
-            <span
-              className="theme-preview-thumbnail__tree-text"
-              style={{ background: colors.text.secondary }}
-            />
-          </div>
-
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="theme-preview-thumbnail__tree-item theme-preview-thumbnail__tree-item--file">
-              <span
-                className="theme-preview-thumbnail__file-icon"
-                style={{ background: colors.semantic.info }}
-              />
-              <span
-                className="theme-preview-thumbnail__tree-text theme-preview-thumbnail__tree-text--short"
-                style={{ background: colors.text.muted }}
-              />
-            </div>
-          ))}
-        </div>
-
-        <div className="theme-preview-thumbnail__chat" style={{ background: colors.background.scene }}>
-          <div
-            className="theme-preview-thumbnail__message theme-preview-thumbnail__message--user"
-            style={{
-              background: colors.accent['200'],
-              borderColor: colors.accent['400'],
-            }}
-          >
-            <div
-              className="theme-preview-thumbnail__message-line"
-              style={{ background: colors.text.primary }}
-            />
-          </div>
-
-          <div
-            className="theme-preview-thumbnail__message theme-preview-thumbnail__message--ai"
-            style={{
-              background: colors.element.subtle,
-              borderColor: colors.border.subtle,
-            }}
-          >
-            <div
-              className="theme-preview-thumbnail__message-line"
-              style={{ background: colors.text.secondary }}
-            />
-            <div
-              className="theme-preview-thumbnail__message-line theme-preview-thumbnail__message-line--short"
-              style={{ background: colors.text.muted }}
-            />
-          </div>
-
-          <div
-            className="theme-preview-thumbnail__code-block"
-            style={{
-              background: colors.background.tertiary,
-              borderColor: colors.border.base,
-            }}
-          >
-            <div
-              className="theme-preview-thumbnail__code-line"
-              style={{ background: colors.purple?.['500'] || colors.accent['500'] }}
-            />
-            <div
-              className="theme-preview-thumbnail__code-line theme-preview-thumbnail__code-line--long"
-              style={{ background: colors.semantic.success }}
-            />
-          </div>
-        </div>
-
-        <div
-          className="theme-preview-thumbnail__editor"
-          style={{
-            background: colors.background.workbench,
-            borderColor: colors.border.subtle,
-          }}
-        >
-          <div
-            className="theme-preview-thumbnail__tabs"
-            style={{
-              background: colors.background.secondary,
-              borderColor: colors.border.subtle,
-            }}
-          >
-            <span
-              className="theme-preview-thumbnail__tab theme-preview-thumbnail__tab--active"
-              style={{
-                background: colors.background.primary,
-                borderColor: colors.accent['500'],
-              }}
-            />
-            <span
-              className="theme-preview-thumbnail__tab"
-              style={{ background: colors.element.subtle }}
-            />
-          </div>
-
-          <div className="theme-preview-thumbnail__code-content">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="theme-preview-thumbnail__editor-line">
-                <span
-                  className="theme-preview-thumbnail__line-number"
-                  style={{ background: colors.text.disabled }}
-                />
-                <span
-                  className="theme-preview-thumbnail__line-code"
-                  style={{
-                    background: i % 2 === 0 ? colors.accent['500'] : colors.text.secondary,
-                    width: `${30 + (i * 8) % 40}%`,
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div
-        className="theme-preview-thumbnail__statusbar"
-        style={{
-          background: colors.background.secondary,
-          borderColor: colors.border.subtle,
-        }}
-      >
-        <div className="theme-preview-thumbnail__status-section">
-          <span
-            className="theme-preview-thumbnail__status-icon"
-            style={{ background: colors.accent['500'] }}
-          />
-          <span
-            className="theme-preview-thumbnail__status-text"
-            style={{ background: colors.text.muted }}
-          />
-        </div>
-
-        <div className="theme-preview-thumbnail__status-section">
-          <span className="theme-preview-thumbnail__git-icon" style={{ color: colors.git.branch }}>
-            <svg width="7" height="7" viewBox="0 0 16 16" fill="none">
-              <circle cx="4" cy="4" r="2" stroke="currentColor" strokeWidth="1.5" />
-              <circle cx="12" cy="12" r="2" stroke="currentColor" strokeWidth="1.5" />
-              <circle cx="12" cy="4" r="2" stroke="currentColor" strokeWidth="1.5" />
-              <path d="M4 6v4c0 1.1.9 2 2 2h4" stroke="currentColor" strokeWidth="1.5" />
-            </svg>
-          </span>
-          <span
-            className="theme-preview-thumbnail__status-text theme-preview-thumbnail__status-text--branch"
-            style={{ background: colors.git.branch }}
-          />
-        </div>
-
-        <span
-          className="theme-preview-thumbnail__status-icon theme-preview-thumbnail__status-icon--notification"
-          style={{ background: colors.semantic.info }}
-        />
-      </div>
-    </div>
-  );
-}
-
 const AppearanceConfig: React.FC = () => {
   const { t } = useTranslation('settings/appearance');
 
   return (
-    <ConfigPageLayout className="bitfun-appearance-config">
+    <ConfigPageLayout
+      className="bitfun-appearance-config"
+      data-bf-component="appearance-config"
+      data-bf-part="root"
+    >
       <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
-      <ConfigPageContent className="bitfun-appearance-config__content">
+      <ConfigPageContent
+        className="bitfun-appearance-config__content"
+        data-bf-component="appearance-config"
+        data-bf-part="content"
+      >
         <ConfigPageSectionStack data-testid="appearance-config">
-          <AppearanceThemeSection />
+          <AppearanceSelectionSection />
+          <AppearancePackageConfigSection />
           <AppearanceEffectsSection />
           <FontPreferencePanel />
         </ConfigPageSectionStack>

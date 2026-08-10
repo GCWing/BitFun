@@ -99,4 +99,41 @@ export default tseslint.config(
       parser: tseslint.parser,
     },
   },
+  {
+    // SessionDriver seam fence: flow_chat must reach dispatch machinery only
+    // through session-drivers. This is the executable form of "no dispatch
+    // branches in flow_chat" — reintroducing one fails the build.
+    //
+    // Exceptions, each with an owner:
+    // - session-drivers/**: the dispatch driver's own implementation.
+    // - types/flow-chat.ts: type-only SessionConfig fields (collapses into a
+    //   single `config.dispatch` member in a follow-up).
+    // - store/FlowChatStore.ts: dispatch snapshot/cursor mutations kept
+    //   in-place by design during the seam refactor (same follow-up).
+    // - ChatInput.tsx / ChatInputWorkspaceStrip.tsx: render the dispatch
+    //   target-picker feature chip — feature UI, not transport branching.
+    files: ['src/flow_chat/**/*.{ts,tsx}'],
+    ignores: [
+      'src/flow_chat/session-drivers/**',
+      'src/flow_chat/types/flow-chat.ts',
+      'src/flow_chat/store/FlowChatStore.ts',
+      'src/flow_chat/components/ChatInput.tsx',
+      'src/flow_chat/components/ChatInputWorkspaceStrip.tsx',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/features/dispatch/*'],
+              message:
+                'flow_chat reaches dispatch only through session-drivers. ' +
+                'Add the behavior to the SessionDriver interface instead.',
+            },
+          ],
+        },
+      ],
+    },
+  },
 );

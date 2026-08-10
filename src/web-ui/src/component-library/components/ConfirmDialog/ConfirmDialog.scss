@@ -11,17 +11,17 @@
   width: 100%;
   max-width: 560px;
   box-sizing: border-box;
-  padding-top: $size-gap-16;
+  padding-top: $size-gap-8;
 
   &__icon {
     flex-shrink: 0;
-    width: 48px;
-    height: 48px;
+    width: 40px;
+    height: 40px;
     margin: 0 auto $size-gap-4;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
+    border-radius: $size-radius-full;
 
     svg {
       flex-shrink: 0;
@@ -29,38 +29,38 @@
   }
 
   &--info &__icon {
-    background: color-mix(in srgb, var(--color-info) 15%, transparent);
-    color: var(--color-info);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-info) 15%, transparent);
+    color: var(--bf-appearance-token-color-info);
   }
 
   &--warning &__icon {
-    background: color-mix(in srgb, var(--color-warning) 15%, transparent);
-    color: var(--color-warning);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 15%, transparent);
+    color: var(--bf-appearance-token-color-warning);
   }
 
   &--error &__icon {
-    background: color-mix(in srgb, var(--color-error) 15%, transparent);
-    color: var(--color-error);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-error) 15%, transparent);
+    color: var(--bf-appearance-token-color-error);
   }
 
   &--success &__icon {
-    background: color-mix(in srgb, var(--color-success) 15%, transparent);
-    color: var(--color-success);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 15%, transparent);
+    color: var(--bf-appearance-token-color-success);
   }
 
   &__content {
     flex: 1;
     min-width: 0;
     margin: 0;
-    padding: 0 $size-gap-6 $size-gap-4;
+    padding: 0 $size-gap-6 $size-gap-5;
   }
 
   &__title {
-    font-size: var(--font-size-lg);
+    font-size: var(--bf-appearance-token-font-size-lg);
     font-weight: $font-weight-semibold;
     line-height: 1.35;
     letter-spacing: 0;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     margin: 0 0 $size-gap-3;
     text-align: center;
   }
@@ -70,9 +70,9 @@
   }
 
   &__message {
-    font-size: var(--font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-sm);
     line-height: 1.55;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     text-align: left;
     white-space: normal;
     overflow-wrap: anywhere;
@@ -90,10 +90,10 @@
   /** Lead line before bullet list (e.g. “This will:”) */
   &__message-intro {
     margin: 0 0 $size-gap-3;
-    font-size: var(--font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: $font-weight-medium;
     line-height: 1.5;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   /** Structured bullet list inside confirm body */
@@ -102,17 +102,17 @@
     margin: 0;
     padding: $size-gap-3 $size-gap-5;
     border-radius: $size-radius-base;
-    background: var(--element-bg-subtle);
-    border: 1px solid var(--border-base);
+    background: var(--bf-appearance-token-element-bg-subtle);
+    border: 1px solid var(--bf-appearance-token-border-base);
   }
 
   &__bullet-list li {
     position: relative;
     margin: 0;
     padding-left: $size-gap-5;
-    font-size: var(--font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-sm);
     line-height: 1.55;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
 
     &::before {
       content: '';
@@ -122,7 +122,7 @@
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: color-mix(in srgb, var(--color-text-secondary) 45%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-text-secondary) 45%, transparent);
     }
   }
 
@@ -133,8 +133,8 @@
   &__preview {
     margin-top: $size-gap-3;
     padding: $size-gap-3 $size-gap-4;
-    background: var(--element-bg-subtle);
-    border: 1px solid var(--border-base);
+    background: var(--bf-appearance-token-element-bg-subtle);
+    border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: $size-radius-base;
     text-align: left;
     overflow: auto;
@@ -150,8 +150,8 @@
       background: transparent;
       box-shadow: none;
       font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-      font-size: var(--font-size-xs);
-      color: var(--color-text-primary);
+      font-size: var(--bf-appearance-token-font-size-xs);
+      color: var(--bf-appearance-token-color-text-primary);
       white-space: pre-wrap;
       word-break: break-all;
       line-height: 1.5;
@@ -165,7 +165,7 @@
     justify-content: flex-end;
     align-items: center;
     padding: $size-gap-4 $size-gap-6 $size-gap-5;
-    border-top: 1px solid var(--border-base);
+    border-top: 1px solid var(--bf-appearance-token-border-base);
 
     .btn {
       min-width: 88px;

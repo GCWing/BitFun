@@ -40,14 +40,14 @@ impl AnthropicMessageConverter {
             }
         }
 
-        // Anthropic requires user/assistant messages to alternate
+        // Canonicalize consecutive turns into a single content-block message.
         let mut merged_messages = Self::merge_consecutive_messages(anthropic_messages);
         Self::trim_final_assistant_trailing_whitespace(&mut merged_messages);
 
         (system_message, merged_messages)
     }
 
-    /// Merge consecutive same-role messages to keep user/assistant alternating
+    /// Merge consecutive same-role turns while preserving their content blocks.
     fn merge_consecutive_messages(messages: Vec<Value>) -> Vec<Value> {
         let mut merged: Vec<Value> = Vec::new();
 
@@ -57,47 +57,13 @@ impl AnthropicMessageConverter {
             if let Some(last) = merged.last_mut() {
                 let last_role = last.get("role").and_then(|r| r.as_str()).unwrap_or("");
 
-                if last_role == role && role == "user" {
-                    let current_content = msg.get("content");
-                    let last_content = last.get_mut("content");
-
-                    match (last_content, current_content) {
-                        (Some(Value::Array(last_arr)), Some(Value::Array(curr_arr))) => {
-                            last_arr.extend(curr_arr.clone());
-                            continue;
-                        }
-                        (Some(Value::Array(last_arr)), Some(Value::String(curr_str))) => {
-                            last_arr.push(json!({
-                                "type": "text",
-                                "text": curr_str
-                            }));
-                            continue;
-                        }
-                        (Some(Value::String(last_str)), Some(Value::Array(curr_arr))) => {
-                            let mut new_content = vec![json!({
-                                "type": "text",
-                                "text": last_str
-                            })];
-                            new_content.extend(curr_arr.clone());
-                            *last = json!({
-                                "role": "user",
-                                "content": new_content
-                            });
-                            continue;
-                        }
-                        (Some(Value::String(last_str)), Some(Value::String(curr_str))) => {
-                            let merged_text = if last_str.is_empty() {
-                                curr_str.to_string()
-                            } else {
-                                format!("{}\n\n{}", last_str, curr_str)
-                            };
-                            *last = json!({
-                                "role": "user",
-                                "content": merged_text
-                            });
-                            continue;
-                        }
-                        _ => {}
+                if last_role == role && matches!(role, "user" | "assistant") {
+                    if let (Some(last_blocks), Some(current_blocks)) = (
+                        last.get_mut("content").and_then(Value::as_array_mut),
+                        msg.get("content").and_then(Value::as_array),
+                    ) {
+                        last_blocks.extend(current_blocks.iter().cloned());
+                        continue;
                     }
                 }
             }
@@ -152,7 +118,10 @@ impl AnthropicMessageConverter {
 
         json!({
             "role": "user",
-            "content": content
+            "content": [{
+                "type": "text",
+                "text": content
+            }]
         })
     }
 
@@ -305,5 +274,60 @@ mod tests {
 
         assert_eq!(content[0]["type"], json!("text"));
         assert_eq!(content[0]["text"], json!("<assistant_prefill>"));
+    }
+
+    #[test]
+    fn uses_content_blocks_and_merges_consecutive_turns() {
+        let tool_result = Message {
+            role: "tool".to_string(),
+            content: Some("tool output".to_string()),
+            reasoning_content: None,
+            thinking_signature: None,
+            tool_calls: None,
+            tool_call_id: Some("call_1".to_string()),
+            name: None,
+            is_error: None,
+            tool_image_attachments: None,
+        };
+
+        let (_, messages) = AnthropicMessageConverter::convert_messages(vec![
+            Message::user("first user turn".to_string()),
+            Message::user("second user turn".to_string()),
+            Message::assistant("first assistant turn".to_string()),
+            Message::assistant("second assistant turn".to_string()),
+            tool_result,
+            Message::user("follow-up".to_string()),
+        ]);
+
+        assert_eq!(
+            messages,
+            vec![
+                json!({
+                    "role": "user",
+                    "content": [
+                        { "type": "text", "text": "first user turn" },
+                        { "type": "text", "text": "second user turn" }
+                    ]
+                }),
+                json!({
+                    "role": "assistant",
+                    "content": [
+                        { "type": "text", "text": "first assistant turn" },
+                        { "type": "text", "text": "second assistant turn" }
+                    ]
+                }),
+                json!({
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "call_1",
+                            "content": "tool output"
+                        },
+                        { "type": "text", "text": "follow-up" }
+                    ]
+                })
+            ]
+        );
     }
 }

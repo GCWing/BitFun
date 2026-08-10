@@ -1,8 +1,9 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Box,
   FolderPlus,
   LayoutGrid,
+  PackagePlus,
   Play,
   Sparkles,
   Square,
@@ -13,6 +14,10 @@ import { useSceneManager } from '@/app/hooks/useSceneManager';
 import MiniAppCard from '../components/MiniAppCard';
 import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
+import {
+  miniAppMarketAPI,
+  type MarketPackageInspection,
+} from '@/infrastructure/api/service-api/MiniAppMarketAPI';
 import { createLogger } from '@/shared/utils/logger';
 import { Search, ConfirmDialog, Button, Badge } from '@/component-library';
 import {
@@ -26,11 +31,13 @@ import {
 } from '@/app/components';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import { getMiniAppIconGradient, renderMiniAppIcon } from '../utils/miniAppIcons';
+import { loadInstalledMarketOrigins } from '../utils/loadInstalledMarketOrigins';
 import { pickLocalizedString, pickLocalizedTags } from '../utils/pickLocalizedString';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useMiniAppStore } from '../miniAppStore';
 import { useI18n } from '@/infrastructure/i18n';
 import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefresh';
+import { useNotification } from '@/shared/notification-system';
 import './MiniAppGalleryView.scss';
 import {workspaceAPI} from "@/infrastructure";
 
@@ -41,11 +48,14 @@ const MiniAppGalleryView: React.FC = () => {
   const loading = useMiniAppStore((state) => state.loading);
   const runningWorkerIds = useMiniAppStore((state) => state.runningWorkerIds);
   const customizingAppIds = useMiniAppStore((state) => state.customizingAppIds);
+  const marketOrigins = useMiniAppStore((state) => state.marketOrigins);
   const setApps = useMiniAppStore((state) => state.setApps);
   const setLoading = useMiniAppStore((state) => state.setLoading);
+  const setMarketOrigins = useMiniAppStore((state) => state.setMarketOrigins);
   const setRunningWorkerIds = useMiniAppStore((state) => state.setRunningWorkerIds);
   const markWorkerStopped = useMiniAppStore((state) => state.markWorkerStopped);
   const { workspacePath } = useCurrentWorkspace();
+  const notification = useNotification();
   const { openScene, activateScene, closeScene, openTabs } = useSceneManager();
   const { t, currentLanguage } = useI18n('scenes/miniapp');
 
@@ -53,6 +63,10 @@ const MiniAppGalleryView: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [selectedApp, setSelectedApp] = useState<MiniAppMeta | null>(null);
+  const [pendingPackage, setPendingPackage] = useState<{
+    path: string;
+    inspection: MarketPackageInspection;
+  } | null>(null);
 
   const openTabIds = useMemo(() => new Set(openTabs.map((tab) => tab.id)), [openTabs]);
   const runningIdSet = useMemo(() => new Set(runningWorkerIds), [runningWorkerIds]);
@@ -149,18 +163,20 @@ const MiniAppGalleryView: React.FC = () => {
   const refetchMiniAppGallery = useCallback(async () => {
     setLoading(true);
     try {
-      const [refreshed, running] = await Promise.all([
+      const [refreshed, running, origins] = await Promise.all([
         miniAppAPI.listMiniApps(),
         miniAppAPI.workerListRunning(),
+        loadInstalledMarketOrigins(),
       ]);
       setApps(refreshed);
       setRunningWorkerIds(running);
+      setMarketOrigins(origins);
     } catch (error) {
       log.error('Failed to refresh miniapp gallery', error);
     } finally {
       setLoading(false);
     }
-  }, [setApps, setLoading, setRunningWorkerIds]);
+  }, [setApps, setLoading, setMarketOrigins, setRunningWorkerIds]);
 
   useGallerySceneAutoRefresh({
     sceneId: 'miniapps',
@@ -178,6 +194,72 @@ const MiniAppGalleryView: React.FC = () => {
       handleOpenApp(app.id);
     } catch (error) {
       log.error('Import from folder failed', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const preparePackageImport = useCallback(async (path: string) => {
+    if (!path.toLowerCase().endsWith('.bfminiapp')) return;
+    try {
+      const inspection = await miniAppMarketAPI.inspectPackage(path);
+      setPendingPackage({ path, inspection });
+    } catch (error) {
+      log.error('Inspect MiniApp package failed', error);
+      notification.error(t('market.import.invalid', { error: String(error) }));
+    }
+  }, [notification, t]);
+
+  const handleAddPackage = async () => {
+    const selected = await open({
+      directory: false,
+      multiple: false,
+      title: t('market.import.choose'),
+      filters: [{ name: t('market.import.packageFile'), extensions: ['bfminiapp'] }],
+    });
+    const path = Array.isArray(selected) ? selected[0] : selected;
+    if (path) await preparePackageImport(path);
+  };
+
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    let cancelled = false;
+    void import('@tauri-apps/api/webview')
+      .then(({ getCurrentWebview }) =>
+        getCurrentWebview().onDragDropEvent((event) => {
+          if (cancelled || event.payload.type !== 'drop') return;
+          const packagePath = event.payload.paths.find((path) =>
+            path.toLowerCase().endsWith('.bfminiapp'),
+          );
+          if (packagePath) void preparePackageImport(packagePath);
+        }))
+      .then((unlisten) => {
+        if (cancelled) {
+          unlisten();
+        } else {
+          stop = unlisten;
+        }
+      })
+      .catch((error) => log.warn('MiniApp package drag-and-drop unavailable', error));
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, [preparePackageImport]);
+
+  const handlePackageImportConfirm = async () => {
+    if (!pendingPackage) return;
+    const selected = pendingPackage;
+    setPendingPackage(null);
+    setLoading(true);
+    try {
+      const app = await miniAppMarketAPI.importPackage(selected.path, true);
+      setApps([app, ...apps]);
+      notification.success(t('market.import.imported', { name: app.name }));
+      handleOpenApp(app.id);
+    } catch (error) {
+      log.error('Import MiniApp package failed', error);
+      notification.error(t('market.import.failed', { error: String(error) }));
     } finally {
       setLoading(false);
     }
@@ -212,6 +294,7 @@ const MiniAppGalleryView: React.FC = () => {
             index={index}
             isRunning={runningIdSet.has(app.id)}
             isCustomizing={customizingIdSet.has(app.id)}
+            marketReleaseNumber={marketOrigins[app.id]?.releaseNumber}
             onOpenDetails={setSelectedApp}
             onOpen={handleOpenApp}
             onDelete={handleDeleteRequest}
@@ -222,7 +305,7 @@ const MiniAppGalleryView: React.FC = () => {
   };
 
   return (
-    <GalleryLayout className="miniapp-gallery">
+    <GalleryLayout data-bf-component="miniapp-gallery-view" data-bf-part="root" className="miniapp-gallery">
       <GalleryPageHeader
         title={t('title')}
         subtitle={t('subtitle')}
@@ -238,11 +321,20 @@ const MiniAppGalleryView: React.FC = () => {
             >
               <FolderPlus size={15} />
             </button>
+            <button
+              type="button"
+              className="gallery-action-btn"
+              onClick={() => void handleAddPackage()}
+              disabled={loading}
+              title={t('market.import.action')}
+            >
+              <PackagePlus size={15} />
+            </button>
           </>
         )}
       />
 
-      <div className="gallery-zones">
+      <div data-bf-component="miniapp-gallery-view" data-bf-part="content" className="gallery-zones">
         <GalleryZone
           title={t('running')}
           tools={runningApps.length > 0 ? <span className="gallery-zone-badge">{runningApps.length}</span> : null}
@@ -256,6 +348,7 @@ const MiniAppGalleryView: React.FC = () => {
                   index={index}
                   isRunning
                   isCustomizing={customizingIdSet.has(app.id)}
+                  marketReleaseNumber={marketOrigins[app.id]?.releaseNumber}
                   onOpenDetails={setSelectedApp}
                   onOpen={handleOpenApp}
                   onDelete={handleDeleteRequest}
@@ -275,9 +368,11 @@ const MiniAppGalleryView: React.FC = () => {
           tools={(
             <>
               {categories.length > 1 ? (
-                <div className="gallery-chip-row">
+                <div data-bf-component="miniapp-gallery-view" data-bf-part="categoryFilters" className="gallery-chip-row">
                   {categories.map((category) => (
                     <button
+                      data-bf-component="miniapp-gallery-view"
+                      data-bf-part="categoryFilter"
                       key={category}
                       type="button"
                       className={[
@@ -309,7 +404,9 @@ const MiniAppGalleryView: React.FC = () => {
         title={selectedApp ? pickLocalizedString(selectedApp, currentLanguage, 'name') : ''}
         badges={selectedApp?.category ? <Badge variant="info">{selectedApp.category}</Badge> : null}
         description={selectedApp ? pickLocalizedString(selectedApp, currentLanguage, 'description') : undefined}
-        meta={selectedApp ? <span>v{selectedApp.version}</span> : null}
+        meta={selectedApp ? (
+          <span>v{marketOrigins[selectedApp.id]?.releaseNumber ?? selectedApp.version}</span>
+        ) : null}
         actions={selectedApp ? (
           <>
             {runningIdSet.has(selectedApp.id) ? (
@@ -332,7 +429,7 @@ const MiniAppGalleryView: React.FC = () => {
         {selectedApp ? (() => {
           const detailTags = pickLocalizedTags(selectedApp, currentLanguage);
           return detailTags.length ? (
-            <div className="miniapp-gallery__detail-tags">
+            <div data-bf-component="miniapp-gallery-view" data-bf-part="detailTags" className="miniapp-gallery__detail-tags">
               {detailTags.map((tag) => (
                 <span key={tag} className="miniapp-gallery__detail-tag">
                   <Tag size={11} />
@@ -353,6 +450,26 @@ const MiniAppGalleryView: React.FC = () => {
         type="warning"
         confirmDanger
         confirmText={t('confirmDelete.confirm')}
+        cancelText={t('confirmDelete.cancel')}
+      />
+
+      <ConfirmDialog
+        isOpen={pendingPackage !== null}
+        onClose={() => setPendingPackage(null)}
+        onConfirm={() => void handlePackageImportConfirm()}
+        title={t('market.import.confirmTitle', {
+          name: pendingPackage?.inspection.name ?? '',
+        })}
+        message={t('market.import.confirmMessage', {
+          description: pendingPackage?.inspection.description ?? '',
+          permissions: [
+            ...(pendingPackage?.inspection.permissionDiff.added ?? []),
+            ...(pendingPackage?.inspection.permissionDiff.expanded ?? []),
+          ].join(', ') || t('market.detail.noPermissions'),
+          sha256: pendingPackage?.inspection.packageSha256 ?? '',
+        })}
+        type="warning"
+        confirmText={t('market.import.confirm')}
         cancelText={t('confirmDelete.cancel')}
       />
     </GalleryLayout>

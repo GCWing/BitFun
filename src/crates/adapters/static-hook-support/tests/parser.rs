@@ -2,15 +2,52 @@ use bitfun_product_domains::external_hook_catalog::{
     ExternalHookHandlerKind, ExternalHookMatcherSummary,
 };
 use bitfun_static_hook_support::{
-    parse_hook_document, read_bounded_file, redacted_parse_content_version, regular_file_exists,
-    BoundedFileRead, StaticHookDocumentFormat, StaticHookHandlerRule, StaticHookParseIssue,
+    parse_hook_document, prepare_static_hook_command, read_bounded_file,
+    redacted_parse_content_version, regular_file_exists, visit_hook_document, BoundedFileRead,
+    StaticHookAssetError, StaticHookDocumentFormat, StaticHookHandlerRule, StaticHookParseIssue,
 };
+use std::collections::BTreeMap;
 use std::fs;
 
 const RULES: &[StaticHookHandlerRule] = &[
     StaticHookHandlerRule::new("command", ExternalHookHandlerKind::Command, &["command"]),
     StaticHookHandlerRule::new("prompt", ExternalHookHandlerKind::Prompt, &[]),
 ];
+
+#[test]
+fn one_document_walk_exposes_borrowed_handlers_without_retaining_bodies() {
+    let mut commands = Vec::new();
+    let summary = visit_hook_document(
+        br#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"private-token"},{}]}]}}"#,
+        StaticHookDocumentFormat::Json,
+        16,
+        |handler| {
+            let Some(command) = handler
+                .handler
+                .as_object()
+                .and_then(|value| value.get("command"))
+                .and_then(serde_json::Value::as_str)
+            else {
+                return false;
+            };
+            commands.push((
+                handler.native_event.to_string(),
+                handler.group_index,
+                handler.handler_index,
+                command.to_string(),
+            ));
+            true
+        },
+    );
+
+    assert_eq!(
+        commands,
+        vec![("PreToolUse".to_string(), 0, 0, "private-token".to_string())]
+    );
+    assert_eq!(summary.inspected_handlers, 2);
+    assert_eq!(summary.issues, vec![StaticHookParseIssue::HandlerInvalid]);
+    assert!(!format!("{summary:?}").contains("private-token"));
+}
 
 #[test]
 fn parses_json_to_redacted_handler_facts() {
@@ -184,4 +221,60 @@ fn repeated_parse_failures_are_aggregated_by_issue_kind() {
             .count(),
         1
     );
+}
+
+#[test]
+fn static_hook_command_copies_only_referenced_assets_and_marks_external_paths() {
+    let temp = tempfile::tempdir().unwrap();
+    let config_dir = temp.path().join(".claude");
+    fs::create_dir_all(config_dir.join("hooks")).unwrap();
+    fs::write(config_dir.join("hooks/check.py"), b"print('checked')").unwrap();
+    let external = temp.path().join("external-tool");
+    let external_text = external.to_string_lossy().replace('\\', "/");
+    let mut assets = BTreeMap::new();
+
+    let prepared = prepare_static_hook_command(
+        &format!("python .claude/hooks/check.py {external_text}"),
+        &config_dir,
+        ".claude",
+        &mut assets,
+    )
+    .unwrap();
+
+    assert!(prepared
+        .command
+        .contains("__BITFUN_MANAGED_HOOK_ROOT__/hooks/check.py"));
+    assert_eq!(
+        assets.get(std::path::Path::new("hooks/check.py")).unwrap(),
+        b"print('checked')"
+    );
+    assert!(prepared.dependencies.iter().any(|dependency| matches!(
+        dependency,
+        bitfun_product_domains::external_hook_import::ExternalHookImportDependencyV1::Managed { relative_path }
+            if relative_path == "hooks/check.py"
+    )));
+    assert!(prepared.dependencies.iter().any(|dependency| matches!(
+        dependency,
+        bitfun_product_domains::external_hook_import::ExternalHookImportDependencyV1::External { location }
+            if location.replace('\\', "/") == external_text
+    )));
+}
+
+#[test]
+fn dynamic_source_hook_paths_fail_closed_without_mutating_assets() {
+    let temp = tempfile::tempdir().unwrap();
+    let config_dir = temp.path().join(".claude");
+    fs::create_dir_all(config_dir.join("hooks")).unwrap();
+    let mut assets = BTreeMap::new();
+
+    let error = prepare_static_hook_command(
+        "python .claude/hooks/$SCRIPT.py",
+        &config_dir,
+        ".claude",
+        &mut assets,
+    )
+    .unwrap_err();
+
+    assert_eq!(error, StaticHookAssetError::DynamicPath);
+    assert!(assets.is_empty());
 }

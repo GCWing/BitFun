@@ -113,6 +113,7 @@ describe('ExecProcessToolCardView', () => {
     act(() => {
       root.unmount();
     });
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -164,5 +165,93 @@ describe('ExecProcessToolCardView', () => {
     expect(container.querySelector('.compact-tool-card')).toBeNull();
     expect(container.textContent).toContain('Waiting for confirmation');
     expect(container.textContent).not.toContain('Receiving parameters...');
+  });
+
+  it('retains a just-completed tail result during the grace period', () => {
+    const resultModel: ExecProcessCardModel = {
+      ...model,
+      resultOutput: 'All tests passed',
+    };
+
+    act(() => {
+      root.render(
+        <ExecProcessToolCardView
+          toolItem={toolItem('running')}
+          model={resultModel}
+          isLastItem
+        />,
+      );
+    });
+
+    expect(container.querySelector('.base-tool-card')).not.toBeNull();
+    expect(container.querySelector('.compact-tool-card')).toBeNull();
+
+    act(() => {
+      root.render(
+        <ExecProcessToolCardView
+          toolItem={toolItem('completed')}
+          model={resultModel}
+          isLastItem
+        />,
+      );
+    });
+
+    expect(container.querySelector('.base-tool-card')).not.toBeNull();
+    expect(container.querySelector('.compact-tool-card')).toBeNull();
+    expect(container.textContent).toContain('All tests passed');
+
+    act(() => {
+      root.render(
+        <ExecProcessToolCardView
+          toolItem={toolItem('completed')}
+          model={resultModel}
+          isLastItem={false}
+        />,
+      );
+    });
+
+    // Collapsed cards keep the BaseToolCard shell and animate height closed.
+    expect(container.querySelector('.base-tool-card')).not.toBeNull();
+    expect(container.querySelector('.base-tool-card.expanded')).toBeNull();
+    expect(container.querySelector('.compact-tool-card')).toBeNull();
+  });
+
+  it('collapses a completed tail result when the grace period expires', () => {
+    vi.useFakeTimers();
+    const resultModel: ExecProcessCardModel = {
+      ...model,
+      resultOutput: 'All tests passed',
+    };
+
+    act(() => {
+      root.render(
+        <ExecProcessToolCardView
+          toolItem={toolItem('running')}
+          model={resultModel}
+          isLastItem
+        />,
+      );
+    });
+
+    act(() => {
+      root.render(
+        <ExecProcessToolCardView
+          toolItem={toolItem('completed')}
+          model={resultModel}
+          isLastItem
+        />,
+      );
+    });
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+    act(() => {
+      vi.advanceTimersByTime(799);
+    });
+    expect(container.querySelector('.base-tool-card.expanded')).not.toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(container.querySelector('.base-tool-card.expanded')).toBeNull();
   });
 });

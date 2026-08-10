@@ -47,6 +47,22 @@ function hasBlockingModal(): boolean {
   return document.querySelector('[role="dialog"][aria-modal="true"]') !== null;
 }
 
+function isTextEntryKey(event: KeyboardEvent): boolean {
+  if (event.defaultPrevented || event.metaKey) {
+    return false;
+  }
+
+  const usesAltGraph = event.getModifierState?.('AltGraph') ?? false;
+  if ((event.ctrlKey || event.altKey) && !usesAltGraph) {
+    return false;
+  }
+
+  return event.key.length === 1
+    || event.key === 'Dead'
+    || event.key === 'Process'
+    || event.keyCode === 229;
+}
+
 interface UseComposerDefaultFocusOptions {
   editorRef: RefObject<HTMLElement | null>;
   sessionId: string | null;
@@ -106,4 +122,38 @@ export function useComposerDefaultFocus({
       }
     };
   }, [focusComposerIfUnowned]);
+
+  useEffect(() => {
+    const focusComposerForTextEntry = (event: KeyboardEvent) => {
+      if (
+        !sceneActiveRef.current
+        || !sessionIdRef.current
+        || !isTextEntryKey(event)
+        || hasBlockingModal()
+      ) {
+        return;
+      }
+
+      const editor = editorRef.current;
+      if (
+        !editor
+        || !editor.isConnected
+        || editor.getAttribute('contenteditable') === 'false'
+        || editor.getAttribute('aria-disabled') === 'true'
+        || document.activeElement === editor
+        || hasVisibleTextInputFocus()
+      ) {
+        return;
+      }
+
+      // Focus synchronously and leave the event untouched. The browser can then
+      // apply this same keystroke (including IME/dead-key input) to the composer.
+      editor.focus({ preventScroll: true });
+    };
+
+    document.addEventListener('keydown', focusComposerForTextEntry, true);
+    return () => {
+      document.removeEventListener('keydown', focusComposerForTextEntry, true);
+    };
+  }, [editorRef]);
 }

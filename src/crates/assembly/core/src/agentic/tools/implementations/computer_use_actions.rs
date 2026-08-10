@@ -22,8 +22,8 @@ use super::control_hub::{coded_tool_error, err_response, ControlHubError, ErrorC
 /// Key = target PID, value = `(target_signature, before_digest, count)`.
 /// When the same `(action,target)` lands on an unchanged digest twice in a
 /// row the dispatcher injects an `app_state.loop_warning` so the model is
-/// forced off the failing path on its **next** turn (`/Screenshot policy/
-/// Mandatory screenshot moments` in `claw_mode.md`).
+/// forced off the failing path on its **next** turn (see the observe → act →
+/// verify guidance in `computer_use_mode.md`).
 type AppLoopTracker =
     std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<i32, (String, String, u32)>>>;
 
@@ -84,6 +84,53 @@ fn loop_tracker_observe(
     }
 }
 
+/// Routing note attached to successful `system.open_url` results. The URL
+/// opens in the user's default browser, which the agent can neither observe
+/// nor control — without this note models routinely follow `open_url` with
+/// desktop clicks at the browser window (exactly what the desktop browser
+/// guard rejects).
+const OPEN_URL_ROUTING_NOTE: &str = "The page is now open in the user's default browser; \
+     BitFun cannot observe or control that window. To read or interact with the page yourself, \
+     use ControlHub domain=\"browser\" instead (browser.connect, then snapshot).";
+
+/// Routing note attached to successful `system.open_file` results. The file
+/// opens in an external application window the agent cannot see from this
+/// result alone.
+const OPEN_FILE_ROUTING_NOTE: &str = "The file is now open in an external application window; \
+     this result gives no view into it. To interact with that window, use ComputerUse desktop \
+     actions (take a screenshot first to observe it).";
+
+/// Chromium-family **application identities**: macOS bundle ids and executable
+/// basenames. Matched whole (bundle ids additionally match their channel
+/// suffixes, e.g. `com.google.chrome.canary`) — never as a bare substring,
+/// because "arc" is a substring of "search" and "edge" of "knowledge".
+const CHROMIUM_APP_IDENTITIES: &[&str] = &[
+    // macOS bundle ids
+    "com.google.chrome",
+    "org.chromium.chromium",
+    "com.microsoft.edgemac",
+    "com.brave.browser",
+    "company.thebrowser.browser",
+    // Windows / Linux executable basenames
+    "chrome",
+    "chrome.exe",
+    "chromium",
+    "chromium.exe",
+    "google-chrome",
+    "msedge",
+    "msedge.exe",
+    "brave",
+    "brave.exe",
+    "brave-browser",
+    "arc",
+    "arc.exe",
+];
+
+/// Product tokens unambiguous enough to identify a Chromium browser from a
+/// human-readable name alone. "edge" and "arc" are ordinary English words and
+/// are handled separately (see [`ComputerUseActions::name_suggests_chromium`]).
+const CHROMIUM_NAME_TOKENS: &[&str] = &["chrome", "chromium", "brave"];
+
 pub(crate) struct ComputerUseActions;
 
 impl Default for ComputerUseActions {
@@ -103,58 +150,144 @@ impl ComputerUseActions {
     ) -> ControlHubError {
         let app_name = foreground
             .and_then(|app| app.name.as_deref())
-            .unwrap_or("a web browser");
+            .unwrap_or("a Chromium-family browser");
         ControlHubError::new(
             ErrorCode::GuardRejected,
             format!(
-                "desktop.{} is blocked while {} is frontmost. Use ControlHub domain=\"browser\" for all browser interaction; desktop mouse/keyboard browser control is forbidden.",
+                "ComputerUse `{}` is blocked because it would drive {}, a Chromium-family browser — not because your task is browser-related. No ComputerUse input action may drive such a browser, including the `app_*`, `interactive_*` and `visual_*` variants; use ControlHub domain=\"browser\" instead. Non-Chromium browsers (Firefox/Safari) and native apps stay desktop-controllable.",
                 action, app_name
             ),
         )
         .with_hints([
-            "Use browser.connect to attach via the test port, then drive the page with snapshot/click/fill/press_key",
-            "For login/cookies/extensions, guide the user to start their default browser with the test port enabled before calling browser.connect",
+            "If your target is NOT the browser: the guard only looks at the app this action would drive, so switch focus with `key_chord` [\"alt\",\"tab\"] / [\"command\",\"tab\"] (never guarded) or `open_app`, or skip focus entirely and pass an explicit non-browser `app` selector ({pid|bundle_id|name}, from `list_apps`) to `app_click` / `app_type_text` / `app_scroll` / `app_key_chord`",
+            "Page content: call ControlHub browser.connect first — it starts/attaches BitFun's managed browser profile with CDP enabled — then drive the page with snapshot/click/fill/press_key",
+            "Browser chrome (address bar, tabs, back/forward, reload, downloads): use browser.navigate / tab_new / switch_page / back / forward / reload / close instead of mouse+keyboard",
+            "File picker or <input type=file>: do NOT drive the native dialog — use browser.set_file_input_files { selector, files: [\"/abs/path\"] }. For JS alert/confirm/prompt use browser.dialog",
+            "For login/cookies/extensions keep using the CDP browser path; do not ask the user to enable a debug port on their everyday browser profile",
             "For isolated project Web UI testing, use the headless browser flow instead of desktop automation",
         ])
     }
 
-    fn is_probably_browser_app(foreground: &ComputerUseForegroundApplication) -> bool {
-        let name = foreground
-            .name
-            .as_deref()
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        let bundle = foreground
+    /// Structured app identity: macOS bundle id, or the executable basename on
+    /// platforms that report one. Deliberately **not** the display name: on
+    /// Windows `foreground.name` is the foreground *window title*
+    /// (`GetWindowTextW`), which is user content, not an app identity.
+    fn app_identity(foreground: &ComputerUseForegroundApplication) -> Option<&str> {
+        foreground
             .bundle_id
             .as_deref()
-            .unwrap_or("")
-            .to_ascii_lowercase();
-
-        const NAME_HINTS: &[&str] = &[
-            "chrome",
-            "chromium",
-            "edge",
-            "brave",
-            "arc",
-            "firefox",
-            "safari",
-            "browser",
-            "浏览器",
-        ];
-        const BUNDLE_HINTS: &[&str] = &[
-            "chrome", "chromium", "edge", "brave", "arc", "firefox", "safari", "browser",
-        ];
-
-        NAME_HINTS.iter().any(|hint| name.contains(hint))
-            || BUNDLE_HINTS.iter().any(|hint| bundle.contains(hint))
+            .or(foreground.process_name.as_deref())
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
     }
 
-    async fn desktop_action_targets_browser(
+    fn identity_is_chromium(identity: &str) -> bool {
+        let id = identity.trim().to_ascii_lowercase();
+        CHROMIUM_APP_IDENTITIES.iter().any(|known| {
+            id == *known
+                // Channel variants: com.google.chrome.canary, com.brave.browser.beta …
+                || (known.contains('.')
+                    && !known.ends_with(".exe")
+                    && id.starts_with(&format!("{known}.")))
+        })
+    }
+
+    /// Whole-token match on a human-readable app name or window title, used only
+    /// when no structured identity is available. Substring matching is not an
+    /// option here: "Search" contains "arc", "Knowledge Base" contains "edge".
+    fn name_suggests_chromium(name: &str) -> bool {
+        let name = name.to_ascii_lowercase();
+        let tokens: Vec<&str> = name
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .filter(|token| !token.is_empty())
+            .collect();
+        tokens.iter().any(|token| CHROMIUM_NAME_TOKENS.contains(token))
+            // "edge" needs the product phrase, "arc" the trailing-app-name shape
+            // Chromium browsers give their windows ("Page title — Arc").
+            || tokens.windows(2).any(|pair| matches!(pair, ["microsoft", "edge"]))
+            || matches!(tokens.last(), Some(&"arc"))
+    }
+
+    fn is_probably_browser_app(foreground: &ComputerUseForegroundApplication) -> bool {
+        // Only Chromium-family browsers are guarded: they are the only ones the
+        // ControlHub browser domain can drive over CDP. Firefox/Safari (and other
+        // non-Chromium browsers) have no CDP path, so desktop control must stay
+        // allowed for them — blocking both surfaces would leave no control path.
+        match Self::app_identity(foreground) {
+            Some(identity) => Self::identity_is_chromium(identity),
+            None => Self::name_suggests_chromium(foreground.name.as_deref().unwrap_or("")),
+        }
+    }
+
+    /// Identifiers carried by an explicit `app` selector. `{"pid":N}` carries
+    /// none, so it cannot be classified here.
+    fn selector_labels(app: &Value) -> Vec<&str> {
+        match app {
+            Value::String(name) => vec![name.as_str()],
+            Value::Object(_) => ["name", "bundle_id"]
+                .iter()
+                .filter_map(|key| app.get(*key).and_then(Value::as_str))
+                .filter(|label| !label.trim().is_empty())
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    fn selector_is_chromium(app: &Value) -> bool {
+        Self::selector_labels(app)
+            .iter()
+            .any(|label| Self::identity_is_chromium(label) || Self::name_suggests_chromium(label))
+    }
+
+    /// `alt+tab` / `command+tab` and their shift variants: the OS app switcher.
+    /// It is the only way to move focus off a browser with the keyboard, so
+    /// guarding it would leave a non-browser task with no way to reach its
+    /// target app.
+    fn is_focus_switch_chord(action: &str, params: &Value) -> bool {
+        if action != "key_chord" {
+            return false;
+        }
+        let Some(keys) = params.get("keys").and_then(Value::as_array) else {
+            return false;
+        };
+        let keys: Vec<String> = keys
+            .iter()
+            .filter_map(Value::as_str)
+            .map(|key| key.trim().to_ascii_lowercase())
+            .collect();
+        keys.iter().any(|key| key == "tab")
+            && keys.iter().all(|key| {
+                matches!(
+                    key.as_str(),
+                    "tab"
+                        | "alt"
+                        | "option"
+                        | "command"
+                        | "cmd"
+                        | "meta"
+                        | "super"
+                        | "shift"
+                        | "control"
+                        | "ctrl"
+                )
+            })
+    }
+
+    /// Rejects physical input actions that would drive a CDP-drivable browser.
+    /// Read-only observation actions (`screenshot`, `locate`, `describe_screen`,
+    /// `get_app_state`, `build_*_view`, …) and scripts stay allowed. Called by
+    /// `ComputerUseTool::call_impl` before dispatch.
+    pub(crate) async fn desktop_action_targets_browser(
         &self,
         action: &str,
+        params: &Value,
         context: &ToolUseContext,
     ) -> Option<ControlHubError> {
-        let guarded_actions = [
+        // Every action that produces physical input, app-scoped and
+        // interactive/visual variants included: guarding only the frontmost
+        // primitives would let the model bypass the boundary by renaming the
+        // same click (`app_click` with an explicit browser selector).
+        const GUARDED_ACTIONS: &[&str] = &[
             "click",
             "click_target",
             "click_element",
@@ -166,11 +299,29 @@ impl ComputerUseActions {
             "key_chord",
             "type_text",
             "paste",
-            "locate",
             "move_to_text",
+            "app_click",
+            "app_type_text",
+            "app_scroll",
+            "app_key_chord",
+            "interactive_click",
+            "interactive_type_text",
+            "interactive_scroll",
+            "visual_click",
         ];
-        if !guarded_actions.contains(&action) {
+        if !GUARDED_ACTIONS.contains(&action) || Self::is_focus_switch_chord(action, params) {
             return None;
+        }
+        if let Some(app) = params.get("app") {
+            if Self::selector_is_chromium(app) {
+                return Some(Self::desktop_browser_guard_error(action, None));
+            }
+            // A selector naming another app drives that app whatever is
+            // frontmost — and answering from the selector alone also skips the
+            // host round-trip. A pid-only selector names nothing: fall through.
+            if !Self::selector_labels(app).is_empty() {
+                return None;
+            }
         }
         let host = context.computer_use_host.as_ref()?;
         let snapshot = host.computer_use_session_snapshot().await;
@@ -354,10 +505,6 @@ impl ComputerUseActions {
                 )]);
             }
             _ => {}
-        }
-
-        if let Some(err) = self.desktop_action_targets_browser(action, context).await {
-            return Ok(err_response("desktop", action, err));
         }
 
         // UX shortcut: every screen-coordinate action accepts an optional
@@ -835,6 +982,41 @@ impl ComputerUseActions {
                 .and_then(|v| v.screenshot.as_ref())
                 .or(res.snapshot.screenshot.as_ref());
             result_with_optional_screenshot(data, summary, shot_opt)
+        }
+
+        // These actions only make sense with a marked-up screenshot the model
+        // can look at; text-only models are steered to the AX/OCR text paths.
+        if text_only
+            && matches!(
+                action,
+                "build_interactive_view"
+                    | "interactive_click"
+                    | "build_visual_mark_view"
+                    | "visual_click"
+            )
+        {
+            return Err(coded_tool_error(
+                ErrorCode::NotAvailable,
+                format!(
+                    "`{}` requires a vision-capable primary model (its result is a marked-up screenshot). Use `describe_screen` or `get_app_state` to observe as text, then act with `app_click`, `click_target`, `move_to_text`, or `key_chord`.",
+                    action
+                ),
+            ));
+        }
+        // Same gate, different reason: these two act on the `i` index of an
+        // interactive view, and building that view is itself vision-only.
+        if text_only && matches!(action, "interactive_type_text" | "interactive_scroll") {
+            let replacement = if action == "interactive_scroll" {
+                "app_scroll"
+            } else {
+                "app_type_text"
+            };
+            return Err(coded_tool_error(
+                ErrorCode::NotAvailable,
+                format!(
+                    "`{action}` addresses elements by the `i` index of an interactive view, which requires a vision-capable primary model. Use `{replacement}` with a `focus` target resolved from `get_app_state` / `describe_screen` instead."
+                ),
+            ));
         }
 
         let bg = host.supports_background_input();
@@ -1516,8 +1698,16 @@ impl ComputerUseActions {
                     .ok_or_else(|| BitFunError::tool("open_url requires 'url'".to_string()))?;
                 match LocalSystemProvider::new().open_url(url) {
                     Ok(outcome) => Ok(vec![ToolResult::ok(
-                        json!({ "opened": true, "url": url, "method": outcome.method }),
-                        Some(format!("Opened {} in default handler", url)),
+                        json!({
+                            "opened": true,
+                            "url": url,
+                            "method": outcome.method,
+                            "note": OPEN_URL_ROUTING_NOTE,
+                        }),
+                        Some(format!(
+                            "Opened {} in default handler. {}",
+                            url, OPEN_URL_ROUTING_NOTE
+                        )),
                     )]),
                     Err(e) => Ok(local_system_error_response("system", "open_url", e)),
                 }
@@ -1539,11 +1729,16 @@ impl ComputerUseActions {
                             "path": path_str,
                             "with_app": app_name,
                             "method": outcome.method,
+                            "note": OPEN_FILE_ROUTING_NOTE,
                         }),
-                        Some(match app_name {
-                            Some(a) => format!("Opened {} with {}", path_str, a),
-                            None => format!("Opened {} with default handler", path_str),
-                        }),
+                        Some(format!(
+                            "{}. {}",
+                            match app_name {
+                                Some(a) => format!("Opened {} with {}", path_str, a),
+                                None => format!("Opened {} with default handler", path_str),
+                            },
+                            OPEN_FILE_ROUTING_NOTE
+                        )),
                     )]),
                     Err(e) => Ok(local_system_error_response("system", "open_file", e)),
                 }
@@ -1591,6 +1786,10 @@ fn error_code_from_local(code: &str) -> ErrorCode {
 #[cfg(test)]
 mod tests {
     use super::loop_tracker_observe;
+    use super::ComputerUseActions;
+    use super::{OPEN_FILE_ROUTING_NOTE, OPEN_URL_ROUTING_NOTE};
+    use crate::agentic::tools::computer_use_host::ComputerUseForegroundApplication;
+    use serde_json::json;
 
     // A unique PID avoids interference with the shared APP_LOOP_TRACKER state
     // across tests in the same process.
@@ -1634,6 +1833,224 @@ mod tests {
             "visual loop warning should still offer screenshot recovery: {}",
             warning
         );
+    }
+
+    fn foreground(name: &str, bundle_id: &str) -> ComputerUseForegroundApplication {
+        ComputerUseForegroundApplication {
+            name: Some(name.to_string()),
+            bundle_id: Some(bundle_id.to_string()),
+            process_name: None,
+            process_id: Some(1),
+        }
+    }
+
+    /// A host that reports no app identity — on Windows `name` is the
+    /// foreground *window title*, not an application name.
+    fn titled(window_title: &str) -> ComputerUseForegroundApplication {
+        ComputerUseForegroundApplication {
+            name: Some(window_title.to_string()),
+            bundle_id: None,
+            process_name: None,
+            process_id: Some(1),
+        }
+    }
+
+    /// Windows shape: window title in `name`, executable basename in
+    /// `process_name`.
+    fn windows_app(window_title: &str, exe: &str) -> ComputerUseForegroundApplication {
+        ComputerUseForegroundApplication {
+            name: Some(window_title.to_string()),
+            bundle_id: None,
+            process_name: Some(exe.to_string()),
+            process_id: Some(1),
+        }
+    }
+
+    /// Only Chromium-family browsers are CDP-drivable via the ControlHub
+    /// browser domain. Firefox/Safari must NOT trip the desktop browser guard
+    /// or the user would have no control path at all.
+    #[test]
+    fn browser_guard_matches_only_chromium_family() {
+        assert!(ComputerUseActions::is_probably_browser_app(&foreground(
+            "Google Chrome",
+            "com.google.Chrome"
+        )));
+        assert!(ComputerUseActions::is_probably_browser_app(&foreground(
+            "Microsoft Edge",
+            "com.microsoft.edgemac"
+        )));
+        assert!(ComputerUseActions::is_probably_browser_app(&foreground(
+            "Google Chrome Canary",
+            "com.google.Chrome.canary"
+        )));
+        assert!(!ComputerUseActions::is_probably_browser_app(&foreground(
+            "Firefox",
+            "org.mozilla.firefox"
+        )));
+        assert!(!ComputerUseActions::is_probably_browser_app(&foreground(
+            "Safari",
+            "com.apple.Safari"
+        )));
+    }
+
+    /// The identity wins over the display name: an editor window whose title
+    /// happens to contain a browser word is still an editor.
+    #[test]
+    fn browser_guard_prefers_identity_over_display_name() {
+        assert!(!ComputerUseActions::is_probably_browser_app(&foreground(
+            "chrome-devtools.ts — Code",
+            "com.microsoft.VSCode"
+        )));
+    }
+
+    /// Window titles are user content, not app identities. Substring hints on
+    /// them locked desktop input out of ordinary Windows apps ("Knowledge Base"
+    /// contains "edge", "Search Results" contains "arc").
+    #[test]
+    fn browser_guard_ignores_window_titles_that_merely_contain_browser_words() {
+        for title in [
+            "Knowledge Base - Obsidian",
+            "edge_cases.ts - proj - Visual Studio Code",
+            "Search Results in Documents",
+            "Monarch",
+            "Archive Utility",
+            "Ledger Live",
+        ] {
+            assert!(
+                !ComputerUseActions::is_probably_browser_app(&titled(title)),
+                "`{title}` is not a browser"
+            );
+        }
+    }
+
+    /// Without an identity the window title is the only signal left, so real
+    /// Chromium windows must still be recognised from it.
+    #[test]
+    fn browser_guard_still_matches_chromium_window_titles() {
+        for title in [
+            "Google - Google Chrome",
+            "Inbox - Microsoft Edge",
+            "BitFun docs — Arc",
+            "New Tab - Brave",
+        ] {
+            assert!(
+                ComputerUseActions::is_probably_browser_app(&titled(title)),
+                "`{title}` is a Chromium browser window"
+            );
+        }
+    }
+
+    /// Windows/Linux report an executable basename rather than a bundle id.
+    #[test]
+    fn browser_guard_matches_executable_basenames() {
+        assert!(ComputerUseActions::is_probably_browser_app(&foreground(
+            "Google - Google Chrome",
+            "chrome.exe"
+        )));
+        assert!(ComputerUseActions::is_probably_browser_app(&foreground(
+            "Inbox - Microsoft Edge",
+            "msedge.exe"
+        )));
+        assert!(!ComputerUseActions::is_probably_browser_app(&foreground(
+            "edge_cases.ts - Visual Studio Code",
+            "Code.exe"
+        )));
+        assert!(!ComputerUseActions::is_probably_browser_app(&foreground(
+            "Knowledge Base - Obsidian",
+            "obsidian.exe"
+        )));
+    }
+
+    /// An explicit `app` selector is classified without asking the host, so
+    /// `app_click { app: { name: "Google Chrome" } }` cannot be used to reach
+    /// the browser from the desktop side.
+    #[test]
+    fn app_selector_naming_a_chromium_browser_is_recognised() {
+        assert!(ComputerUseActions::selector_is_chromium(
+            &json!({ "name": "Google Chrome" })
+        ));
+        assert!(ComputerUseActions::selector_is_chromium(
+            &json!({ "bundle_id": "com.microsoft.edgemac" })
+        ));
+        assert!(ComputerUseActions::selector_is_chromium(&json!(
+            "Brave Browser"
+        )));
+        assert!(!ComputerUseActions::selector_is_chromium(
+            &json!({ "name": "WeChat" })
+        ));
+        // pid-only carries no identity — the frontmost check decides instead.
+        assert!(!ComputerUseActions::selector_is_chromium(
+            &json!({ "pid": 123 })
+        ));
+    }
+
+    /// The app switcher must stay callable while a browser is frontmost: it is
+    /// the escape hatch for tasks whose target is not the browser at all.
+    #[test]
+    fn app_switcher_chords_are_never_guarded() {
+        assert!(ComputerUseActions::is_focus_switch_chord(
+            "key_chord",
+            &json!({ "keys": ["alt", "tab"] })
+        ));
+        assert!(ComputerUseActions::is_focus_switch_chord(
+            "key_chord",
+            &json!({ "keys": ["command", "shift", "tab"] })
+        ));
+        assert!(!ComputerUseActions::is_focus_switch_chord(
+            "key_chord",
+            &json!({ "keys": ["command", "t"] })
+        ));
+        assert!(!ComputerUseActions::is_focus_switch_chord(
+            "type_text",
+            &json!({ "keys": ["alt", "tab"] })
+        ));
+    }
+
+    /// The rejection must lead somewhere: a non-browser escape route, the
+    /// ControlHub actions that own browser chrome / file pickers / dialogs, and
+    /// no contradiction with `browser.connect`'s "never ask for a debug port".
+    #[test]
+    fn browser_guard_hints_offer_an_executable_way_out() {
+        let error = ComputerUseActions::desktop_browser_guard_error("click", None);
+        assert!(
+            error.message.contains("not because your task is browser-related"),
+            "{}",
+            error.message
+        );
+        let hints = error.hints.join(" | ");
+        assert!(hints.contains("browser.connect"), "{hints}");
+        assert!(hints.contains("browser.set_file_input_files"), "{hints}");
+        assert!(hints.contains("browser.dialog"), "{hints}");
+        assert!(hints.contains("browser.navigate"), "{hints}");
+        assert!(hints.contains("open_app"), "{hints}");
+        assert!(hints.contains("app_click"), "{hints}");
+        assert!(
+            !hints.contains("test port enabled") && !hints.contains("--remote-debugging-port"),
+            "must not contradict browser.connect's managed-profile rule: {hints}"
+        );
+    }
+
+    /// `open_url` hands the page to the user's default browser, which the
+    /// agent can neither observe nor control. The success note must say so
+    /// and route follow-up page work to the ControlHub browser domain —
+    /// never to desktop clicks (those trip the desktop browser guard).
+    #[test]
+    fn open_url_routing_note_points_at_browser_domain() {
+        assert!(OPEN_URL_ROUTING_NOTE.contains("cannot observe or control"));
+        assert!(OPEN_URL_ROUTING_NOTE.contains("ControlHub domain=\"browser\""));
+        assert!(OPEN_URL_ROUTING_NOTE.contains("browser.connect"));
+        assert!(OPEN_URL_ROUTING_NOTE.contains("snapshot"));
+    }
+
+    /// `open_file` opens an external app window; follow-up interaction goes
+    /// through ComputerUse desktop actions (screenshot first), NOT the
+    /// browser domain.
+    #[test]
+    fn open_file_routing_note_points_at_desktop_actions() {
+        assert!(OPEN_FILE_ROUTING_NOTE.contains("external application window"));
+        assert!(OPEN_FILE_ROUTING_NOTE.contains("ComputerUse desktop"));
+        assert!(OPEN_FILE_ROUTING_NOTE.contains("screenshot"));
+        assert!(!OPEN_FILE_ROUTING_NOTE.contains("browser"));
     }
 
     /// A genuine tree mutation (digest changes) must NOT trigger the warning,

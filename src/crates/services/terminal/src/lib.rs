@@ -43,8 +43,8 @@ pub use exec::{
     SendStdinRequest as LocalSendStdinRequest, WriteStdinRequest as LocalWriteStdinRequest,
 };
 pub use exec_shell::{
-    parse_configured_shell_preference, resolve_local_exec_shell, ConfiguredShellPreference,
-    ResolvedLocalExecShell,
+    parse_configured_shell_preference, resolve_local_exec_shell,
+    resolve_local_exec_shell_without_probe, ConfiguredShellPreference, ResolvedLocalExecShell,
 };
 pub use pty::{
     // New component-based types

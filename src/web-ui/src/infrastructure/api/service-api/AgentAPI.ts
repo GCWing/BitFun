@@ -5,7 +5,9 @@ import { createTauriCommandError } from '../errors/TauriCommandError';
 import type {
   DialogTurnData,
   ModelRoundAttemptDiagnostic,
+  SessionContextUsage,
   SessionRelationship,
+  SessionTurnCatalog,
 } from '@/shared/types/session-history';
 import type { ImageContextData as ImageInputContextData } from './ImageContextTypes';
 import type { AgentSource } from './CustomAgentAPI';
@@ -13,6 +15,11 @@ import type {
   ReviewTargetEvidence,
   ReviewTeamRunManifest,
 } from '@/shared/services/reviewTeamService';
+import type {
+  SessionExecutionTarget,
+  SessionExecutionTargetRequest,
+} from './WorktreeAPI';
+import { toWorktreeCommandError } from './WorktreeAPI';
 
 
 
@@ -30,9 +37,16 @@ export interface SessionModelAutoMigratedEvent {
   reason: string;
 }
 
+export interface SessionReasoningPresetAutoClearedEvent {
+  sessionId: string;
+  previousPresetId: string;
+  reason: string;
+}
+
  
 export interface SessionConfig {
   modelName?: string;
+  reasoningPreset?: string;
   maxContextTokens?: number;
   autoCompact?: boolean;
   enableTools?: boolean;
@@ -49,6 +63,9 @@ export interface CreateSessionRequest {
   sessionName: string;
   agentType: string;
   workspacePath: string;
+  projectWorkspacePath?: string;
+  executionTarget?: SessionExecutionTargetRequest;
+  requestId?: string;
   workspaceId?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -64,6 +81,11 @@ export interface CreateSessionResponse {
   sessionId: string;
   sessionName: string;
   agentType: string;
+  modelId?: string;
+  workspacePath?: string;
+  workspaceId?: string;
+  projectWorkspacePath?: string;
+  executionTarget?: SessionExecutionTarget;
 }
 
  
@@ -72,14 +94,26 @@ export interface StartDialogTurnRequest {
   userInput: string;
   originalUserInput?: string;
   turnId?: string; 
+  execution?: AgentDialogTurnExecution;
   agentType: string; 
+  /** Concrete root where this session executes. */
   workspacePath?: string;
+  /** Stable project root used to locate persistence for worktree sessions. */
+  projectWorkspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
   /** Optional multimodal image contexts (snake_case fields, aligned with backend ImageContextData). */
   imageContexts?: ImageInputContextData[];
   userMessageMetadata?: Record<string, unknown>;
 }
+
+export type AgentDialogTurnExecution =
+  | { kind: 'standard' }
+  | {
+      kind: 'fresh_external_subagent';
+      ecosystemId: string;
+      logicalId: string;
+    };
 
 export interface StartDialogTurnResponse {
   success: boolean;
@@ -141,6 +175,7 @@ export interface SessionInfo {
   agentType: string;
   /** Current/default model selection for the next dialog turn. */
   modelName?: string;
+  reasoningPreset?: string | null;
   /** Mode of the last surviving user dialog turn in session history. */
   lastUserDialogAgentType?: string;
   /** Mode of the most recent user submission accepted by the runtime. */
@@ -199,6 +234,7 @@ export interface SessionViewRestoreTiming {
   visibilityMetadataDurationMs: number;
   loadSessionWithTurnsDurationMs: number;
   normalizeTurnIdsDurationMs: number;
+  turnCatalogDurationMs?: number;
   totalDurationMs: number;
   turnLoad: SessionTurnLoadTiming;
 }
@@ -206,12 +242,46 @@ export interface SessionViewRestoreTiming {
 export interface RestoreSessionViewResponse {
   session: SessionInfo;
   turns: DialogTurnData[];
+  currentContextUsage?: SessionContextUsage | null;
+  turnCatalog?: SessionTurnCatalog;
   contextRestoreState: 'ready' | 'pending';
   isPartial?: boolean;
   loadedTurnCount?: number;
   totalTurnCount?: number;
   timings?: SessionViewRestoreTiming;
 }
+
+export interface LoadSessionTurnWindowRequest {
+  sessionId: string;
+  workspacePath: string;
+  includeInternal?: boolean;
+  targetStorageTurnIndex: number;
+  expectedTurnId?: string;
+  expectedCatalogRevision?: string;
+  before?: number;
+  after?: number;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+}
+
+export type LoadSessionTurnWindowResponse =
+  | {
+      status: 'ready';
+      catalogRevision: string;
+      totalTurnCount: number;
+      startOrdinal: number;
+      endOrdinalExclusive: number;
+      targetTurnId: string;
+      turns: DialogTurnData[];
+    }
+  | {
+      status: 'stale';
+      catalog: SessionTurnCatalog;
+    }
+  | {
+      status: 'not-found';
+      catalog: SessionTurnCatalog;
+    };
 
 export interface EnsureAssistantBootstrapRequest {
   sessionId: string;
@@ -245,6 +315,44 @@ export interface EnsureAssistantBootstrapResponse {
 export interface UpdateSessionModelRequest {
   sessionId: string;
   modelName: string;
+  reasoningPreset?: string | null;
+  workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+  includeInternal?: boolean;
+}
+
+/** `ask` | `auto_approve` | `full_access`; `null` clears the session override. */
+export type SessionPermissionMode = 'ask' | 'auto_approve' | 'full_access';
+
+export interface SessionPermissionModeRequest {
+  sessionId: string;
+  /** Omit or pass null to clear the override and follow the global default. */
+  mode?: SessionPermissionMode | null;
+  workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+  includeInternal?: boolean;
+}
+
+export interface SessionPermissionModeResponse {
+  mode: SessionPermissionMode | null;
+}
+
+export interface UpdateSessionModeRequest {
+  sessionId: string;
+  modeId: string;
+  workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+  includeInternal?: boolean;
+}
+
+export type AgentContextReloadTarget = 'all' | 'skills' | 'instructions';
+
+export interface AgentContextReloadRequest {
+  sessionId: string;
+  target: AgentContextReloadTarget;
 }
 
 export interface UpdateSessionTitleRequest {
@@ -380,6 +488,7 @@ export interface SubagentSessionLinkedEvent extends AgenticEvent {
   parentToolCallId: string;
   agentType?: string;
   modelId?: string;
+  focusedReviewDisplayLabel?: string;
 }
 
 export type DeepReviewQueueStatus =
@@ -451,9 +560,9 @@ export interface ModelRoundCompletedEvent extends AgenticEvent {
   durationMs?: number;
   providerId?: string;
   /** Resolved AI model configuration ID. */
-  modelConfigId: string;
+  modelConfigId?: string;
   /** Provider model name sent on the request. */
-  effectiveModelName: string;
+  effectiveModelName?: string;
   firstChunkMs?: number;
   firstVisibleOutputMs?: number;
   streamDurationMs?: number;
@@ -474,9 +583,9 @@ export interface ModelRoundStartedEvent extends AgenticEvent {
   roundGroupId?: string;
   roundIndex: number;
   /** Resolved AI model configuration ID. */
-  modelConfigId: string;
+  modelConfigId?: string;
   /** Provider model name sent on the request. */
-  effectiveModelName: string;
+  effectiveModelName?: string;
 }
 
 export interface AcpContextUsageUpdatedEvent extends AgenticEvent {
@@ -519,6 +628,9 @@ export class AgentAPI {
     try {
       return await api.invoke<CreateSessionResponse>('create_session', { request });
     } catch (error) {
+      if (request.executionTarget && request.executionTarget.kind !== 'local') {
+        throw toWorktreeCommandError(error);
+      }
       throw createTauriCommandError('create_session', error, request);
     }
   }
@@ -807,6 +919,22 @@ export class AgentAPI {
     }
   }
 
+  async loadSessionTurnWindow(
+    request: LoadSessionTurnWindowRequest,
+  ): Promise<LoadSessionTurnWindowResponse> {
+    try {
+      return await api.invoke<LoadSessionTurnWindowResponse>('load_session_turn_window', {
+        request,
+      });
+    } catch (error) {
+      throw createTauriCommandError('load_session_turn_window', error, {
+        sessionId: request.sessionId,
+        workspacePath: request.workspacePath,
+        targetStorageTurnIndex: request.targetStorageTurnIndex,
+      });
+    }
+  }
+
   async setSessionMemoryMode(
     request: SetSessionMemoryModeRequest
   ): Promise<SetSessionMemoryModeResponse> {
@@ -858,6 +986,56 @@ export class AgentAPI {
       await api.invoke<void>('update_session_model', { request });
     } catch (error) {
       throw createTauriCommandError('update_session_model', error, request);
+    }
+  }
+
+  /**
+   * Sets the tool permission mode for one session. Other open sessions keep
+   * their own selection; passing no mode returns this session to the
+   * user-level default.
+   */
+  async updateSessionPermissionMode(
+    request: SessionPermissionModeRequest,
+  ): Promise<SessionPermissionModeResponse> {
+    try {
+      return await api.invoke<SessionPermissionModeResponse>(
+        'update_session_permission_mode',
+        { request },
+      );
+    } catch (error) {
+      throw createTauriCommandError('update_session_permission_mode', error, request);
+    }
+  }
+
+  /** Reads a session's own permission mode; `null` means it follows the default. */
+  async getSessionPermissionMode(
+    request: SessionPermissionModeRequest,
+  ): Promise<SessionPermissionModeResponse> {
+    try {
+      return await api.invoke<SessionPermissionModeResponse>(
+        'get_session_permission_mode',
+        { request },
+      );
+    } catch (error) {
+      throw createTauriCommandError('get_session_permission_mode', error, request);
+    }
+  }
+
+  async updateSessionMode(request: UpdateSessionModeRequest): Promise<void> {
+    try {
+      await api.invoke<void>('update_session_mode', { request });
+    } catch (error) {
+      throw createTauriCommandError('update_session_mode', error, request);
+    }
+  }
+
+  async reloadSessionContext(
+    request: AgentContextReloadRequest,
+  ): Promise<void> {
+    try {
+      await api.invoke<void>('reload_session_context', { request });
+    } catch (error) {
+      throw createTauriCommandError('reload_session_context', error, request);
     }
   }
 
@@ -958,6 +1136,15 @@ export class AgentAPI {
   ): () => void {
     return api.listen<SessionModelAutoMigratedEvent>(
       'agentic://session-model-auto-migrated',
+      callback
+    );
+  }
+
+  onSessionReasoningPresetAutoCleared(
+    callback: (event: SessionReasoningPresetAutoClearedEvent) => void
+  ): () => void {
+    return api.listen<SessionReasoningPresetAutoClearedEvent>(
+      'agentic://session-reasoning-preset-auto-cleared',
       callback
     );
   }
@@ -1121,10 +1308,25 @@ export class AgentAPI {
     return api.listen<SessionTitleGeneratedEvent>('session_title_generated', callback);
   }
 
-  async cancelSession(sessionId: string): Promise<void> {
+  async cancelSession(
+    sessionId: string,
+    options?: { cancelDescendants?: boolean },
+  ): Promise<{
+    cancelled: boolean;
+    dialogTurnId: string | null;
+  }> {
     try {
-      await api.invoke<void>('cancel_session', {
-        request: { sessionId }
+      const request = {
+        sessionId,
+        ...(options?.cancelDescendants === undefined
+          ? {}
+          : { cancelDescendants: options.cancelDescendants }),
+      };
+      return await api.invoke<{
+        cancelled: boolean;
+        dialogTurnId: string | null;
+      }>('cancel_session', {
+        request,
       });
     } catch (error) {
       throw createTauriCommandError('cancel_session', error, { sessionId });
@@ -1223,9 +1425,15 @@ export class AgentAPI {
   
 
    
-  async getAvailableModes(): Promise<ModeInfo[]> {
+  async getAvailableModes(request: {
+    workspacePath?: string;
+    remoteConnectionId?: string;
+    remoteSshHost?: string;
+  } = {}): Promise<ModeInfo[]> {
     try {
-      return await api.invoke<ModeInfo[]>('get_available_modes');
+      return await api.invoke<ModeInfo[]>('get_available_modes', {
+        request,
+      });
     } catch (error) {
       throw createTauriCommandError('get_available_modes', error);
     }

@@ -181,17 +181,18 @@ export const PrivacyGate: React.FC<{ children: React.ReactNode }> = ({ children 
         closeOnOverlayClick={!submitting}
         testId="privacy-consent-gate"
       >
+        <div data-bf-component="privacy-gate" data-bf-part="root">
         {status?.policy ? (
           <>
-            <div className="bitfun-privacy-dialog__metadata">
+            <div className="bitfun-privacy-dialog__metadata" data-bf-component="privacy-gate" data-bf-part="metadata">
               <span>{copy.effective}: {status.policy.effectiveAt.slice(0, 10)}</span>
               <span>{copy.updated}: {status.policy.updatedAt.slice(0, 10)}</span>
             </div>
             <div className="bitfun-privacy-consent-dialog__intro">{copy.intro}</div>
-            <div className="bitfun-privacy-dialog__document" aria-label={copy.title}>
+            <div className="bitfun-privacy-dialog__document" aria-label={copy.title} data-bf-component="privacy-gate" data-bf-part="document">
               <PrivacyDocument content={status.policy.content} />
             </div>
-            <div className="bitfun-privacy-consent-dialog__footer">
+            <div className="bitfun-privacy-consent-dialog__footer" data-bf-component="privacy-gate" data-bf-part="footer">
               {!status.releaseReady && (
                 <div className="bitfun-privacy-gate__configuration-error">{copy.releaseBlocked}</div>
               )}
@@ -210,7 +211,7 @@ export const PrivacyGate: React.FC<{ children: React.ReactNode }> = ({ children 
                     data-testid="privacy-consent-checkbox"
                   />
                 ) : <span />}
-                <div className="bitfun-privacy-gate__actions">
+                <div className="bitfun-privacy-gate__actions" data-bf-component="privacy-gate" data-bf-part="actions">
                   <Button variant="secondary" disabled={submitting} onClick={() => void handleNotAccepted()}>
                     {copy.disagree}
                   </Button>
@@ -227,6 +228,7 @@ export const PrivacyGate: React.FC<{ children: React.ReactNode }> = ({ children 
             </div>
           </>
         ) : null}
+        </div>
       </Modal>
       {!status && isTauriRuntime() && !loadError && (
         <div className="bitfun-privacy-loading" aria-live="polite">

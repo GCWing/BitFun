@@ -4,7 +4,8 @@ use bitfun_product_domains::external_sources::{
 };
 use bitfun_product_domains::external_subagents::{
     ExternalSubagentCompatibilityState, ExternalSubagentDiscoveryInput,
-    ExternalSubagentModelRequest, ExternalSubagentSourceProvider,
+    ExternalSubagentModelProfileRequest, ExternalSubagentModelRequest,
+    ExternalSubagentSourceProvider,
 };
 use std::collections::BTreeSet;
 use std::fs;
@@ -91,6 +92,33 @@ developer_instructions = "Project-only instructions"
 }
 
 #[test]
+fn model_named_inherit_remains_an_opaque_codex_reference() {
+    let fixture = Fixture::new();
+    write(
+        fixture.codex_home.join("config.toml"),
+        r#"[agents.named]
+description = "Named model"
+config_file = "./agents/named.toml"
+"#,
+    );
+    write(
+        fixture.codex_home.join("agents/named.toml"),
+        r#"developer_instructions = "Use the configured model"
+model = "inherit"
+"#,
+    );
+
+    let definition = &fixture.discover(BTreeSet::new()).definitions[0];
+    assert_eq!(
+        definition.requested_model,
+        ExternalSubagentModelRequest::Reference {
+            provider_hint: None,
+            model_name: "inherit".to_string(),
+        }
+    );
+}
+
+#[test]
 fn standalone_project_role_overlays_user_role_and_inherits_missing_description() {
     let fixture = Fixture::new();
     write(
@@ -124,7 +152,7 @@ model = "gpt-project"
     assert_eq!(definition.provenance.len(), 2);
     assert_eq!(
         definition.requested_model,
-        ExternalSubagentModelRequest::Exact {
+        ExternalSubagentModelRequest::Reference {
             provider_hint: None,
             model_name: "gpt-project".to_string(),
         }
@@ -165,7 +193,7 @@ nickname_candidates = ["Atlas"]
     assert_eq!(definition.provenance.len(), 2);
     assert_eq!(
         definition.requested_model,
-        ExternalSubagentModelRequest::Exact {
+        ExternalSubagentModelRequest::Reference {
             provider_hint: None,
             model_name: "gpt-inherited".to_string(),
         }
@@ -225,7 +253,7 @@ config_file = "./agents/prompt_only.toml"
     assert_eq!(model_only.prompt.expose(), "Inherited prompt");
     assert_eq!(
         model_only.requested_model,
-        ExternalSubagentModelRequest::Exact {
+        ExternalSubagentModelRequest::Reference {
             provider_hint: None,
             model_name: "gpt-project".to_string(),
         }
@@ -239,7 +267,7 @@ config_file = "./agents/prompt_only.toml"
     assert_eq!(prompt_only.prompt.expose(), "Project prompt");
     assert_eq!(
         prompt_only.requested_model,
-        ExternalSubagentModelRequest::Exact {
+        ExternalSubagentModelRequest::Reference {
             provider_hint: None,
             model_name: "gpt-inherited".to_string(),
         }
@@ -270,10 +298,16 @@ command = "private-server"
     );
     assert!(definition
         .diagnostic_codes
-        .contains(&"codex_agent_reasoning_not_imported".to_string()));
-    assert!(definition
-        .diagnostic_codes
         .contains(&"codex_agent_sandbox_not_imported".to_string()));
+    assert!(!definition
+        .diagnostic_codes
+        .contains(&"codex_agent_reasoning_not_imported".to_string()));
+    assert_eq!(
+        definition.requested_model_profile,
+        Some(ExternalSubagentModelProfileRequest::ReasoningEffort {
+            value: "high".to_string(),
+        })
+    );
     assert!(definition
         .diagnostic_codes
         .contains(&"codex_agent_mcp_not_imported".to_string()));
@@ -481,18 +515,114 @@ config_file = "./agents/reviewer.toml"
     assert!(definition.disabled);
     assert_eq!(
         definition.requested_model,
-        ExternalSubagentModelRequest::Exact {
+        ExternalSubagentModelRequest::Reference {
             provider_hint: None,
             model_name: "gpt-default".to_string(),
         },
     );
     assert_eq!(
         definition.compatibility,
-        ExternalSubagentCompatibilityState::Blocked,
+        ExternalSubagentCompatibilityState::Ready
+    );
+    assert_eq!(
+        definition.requested_model_profile,
+        Some(ExternalSubagentModelProfileRequest::ReasoningEffort {
+            value: "high".to_string(),
+        })
+    );
+    assert!(!definition
+        .diagnostic_codes
+        .contains(&"codex_agent_default_reasoning_not_imported".to_string()));
+}
+
+#[test]
+fn role_reasoning_effort_overrides_the_codex_subagent_default() {
+    let fixture = Fixture::new();
+    write(
+        fixture.codex_home.join("config.toml"),
+        r#"[agents]
+default_subagent_reasoning_effort = "high"
+
+[agents.reviewer]
+description = "Reviewer"
+config_file = "./agents/reviewer.toml"
+"#,
+    );
+    write(
+        fixture.codex_home.join("agents/reviewer.toml"),
+        r#"developer_instructions = "Review carefully"
+model = "gpt-5"
+model_reasoning_effort = "low"
+"#,
+    );
+
+    let definition = &fixture.discover(BTreeSet::new()).definitions[0];
+    assert_eq!(
+        definition.requested_model_profile,
+        Some(ExternalSubagentModelProfileRequest::ReasoningEffort {
+            value: "low".to_string(),
+        })
+    );
+    assert_eq!(
+        definition.compatibility,
+        ExternalSubagentCompatibilityState::Ready
+    );
+}
+
+#[test]
+fn custom_reasoning_effort_with_surrounding_whitespace_is_not_rewritten() {
+    let fixture = Fixture::new();
+    write(
+        fixture.codex_home.join("config.toml"),
+        r#"[agents.reviewer]
+description = "Reviewer"
+config_file = "./agents/reviewer.toml"
+"#,
+    );
+    write(
+        fixture.codex_home.join("agents/reviewer.toml"),
+        r#"developer_instructions = "Review carefully"
+model = "gpt-5"
+model_reasoning_effort = " custom "
+"#,
+    );
+
+    let definition = &fixture.discover(BTreeSet::new()).definitions[0];
+    assert_eq!(definition.requested_model_profile, None);
+    assert_eq!(
+        definition.compatibility,
+        ExternalSubagentCompatibilityState::Invalid
     );
     assert!(definition
         .diagnostic_codes
-        .contains(&"codex_agent_default_reasoning_not_imported".to_string()));
+        .contains(&"codex_agent_reasoning_effort_invalid".to_string()));
+}
+
+#[test]
+fn oversized_custom_reasoning_effort_isolated_to_its_agent() {
+    let fixture = Fixture::new();
+    write(
+        fixture.codex_home.join("config.toml"),
+        r#"[agents.reviewer]
+description = "Reviewer"
+config_file = "./agents/reviewer.toml"
+"#,
+    );
+    let role = format!(
+        "developer_instructions = \"Review carefully\"\nmodel = \"gpt-5\"\nmodel_reasoning_effort = \"{}\"\n",
+        "x".repeat(4097)
+    );
+    write(fixture.codex_home.join("agents/reviewer.toml"), &role);
+
+    let snapshot = fixture.discover(BTreeSet::new());
+    assert_eq!(snapshot.definitions.len(), 1);
+    assert_eq!(
+        snapshot.definitions[0].compatibility,
+        ExternalSubagentCompatibilityState::Invalid
+    );
+    assert!(snapshot.definitions[0]
+        .diagnostic_codes
+        .contains(&"codex_agent_reasoning_effort_invalid".to_string()));
 }
 
 #[test]

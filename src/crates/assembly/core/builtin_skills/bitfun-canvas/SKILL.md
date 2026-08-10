@@ -71,7 +71,7 @@ Be creative. The SDK gives you expressive building blocks — use them in whatev
 
 Not everything deserves equal treatment. Primary content gets more space, larger headings, and accent color. Supporting content stays compact. Squint test: blur your eyes — can you tell what matters?
 
-**Color.** All colors from `useHostTheme()` tokens — read its JSDoc in the SDK declarations for the return shape and usage pattern. No hardcoded hex. Use accent color deliberately, not on everything.
+**Color.** All colors from `useHostAppearance()` tokens — read its JSDoc in the SDK declarations for the return shape and usage pattern. No hardcoded hex. Use accent color deliberately, not on everything.
 
 ### Slop patterns — forbidden
 

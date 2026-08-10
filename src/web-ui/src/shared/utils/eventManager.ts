@@ -240,7 +240,6 @@ export const EventTypes = {
   MESSAGE_STREAM_END: 'message:stream_end',
   CONFIG_CHANGE: 'config:change',
   MODEL_CHANGE: 'model:change',
-  THEME_CHANGE: 'theme:change',
 } as const;
 
 

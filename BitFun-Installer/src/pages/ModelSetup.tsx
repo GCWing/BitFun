@@ -320,7 +320,8 @@ export function ModelSetup({ options, setOptions, onSkip, onNext, onTestConnecti
     return template.baseUrlOptions.map((opt) => ({
       value: opt.url,
       label: opt.url,
-      description: `${opt.format.toUpperCase()} · ${opt.noteKey ? t(opt.noteKey) : ''}`,
+      // Degrade to the key's last segment rather than the whole dotted path.
+      description: `${opt.format.toUpperCase()} · ${opt.noteKey ? t(opt.noteKey, { defaultValue: opt.noteKey.split('.').pop() }) : ''}`,
     }));
   }, [template, t]);
 
@@ -440,8 +441,12 @@ export function ModelSetup({ options, setOptions, onSkip, onNext, onTestConnecti
                       setBaseUrl(e.target.value);
                       resetTestState();
                       resetRemoteDiscovery();
-                      if (template && !isCustomProvider) {
-                        setApiFormat(resolveProviderFormat(template, e.target.value));
+                      // Only a preset URL implies its format. A hand-typed proxy URL
+                      // keeps whatever the user picked, instead of snapping back to
+                      // the template default and mismatching the endpoint.
+                      const preset = template?.baseUrlOptions?.find((o) => o.url === e.target.value.trim());
+                      if (preset && !isCustomProvider) {
+                        setApiFormat(preset.format);
                       }
                     }}
                   />

@@ -6,9 +6,12 @@ import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
 import { FlowToolCard } from '../FlowToolCard';
 import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
 import { SmoothHeightCollapse } from '../modern/SmoothHeightCollapse';
+import { FLOWCHAT_COLLAPSE_DURATION_MS } from '../modern/flowChatCollapseMotion';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { getSubagentProjectionState } from '../../utils/subagentProjection';
 import { ensureBtwSessionAvailable } from '../../services/btwSessionPane';
+import { RuntimeStatusSlot } from '../modern/RuntimeStatusSlot';
+import { useRuntimeStatusStore } from '../../store/runtimeStatusStore';
 import './SubagentProjectionView.scss';
 
 interface SubagentProjectionViewProps {
@@ -59,18 +62,20 @@ const SubagentProjectionTextBlock = React.memo<{ textItem: FlowTextItem; classNa
   };
 
   return (
-    <div className="subagent-projection-text--truncated">
+    <div data-bf-component="subagent-projection" data-bf-part="truncated" className="subagent-projection-text--truncated">
       <FlowTextBlock
         textItem={truncatedItem}
         className={className}
         replayStreamingOnMount={false}
       />
-      <div className="subagent-projection-text__hint">
-        <span className="subagent-projection-text__message">
+      <div data-bf-component="subagent-projection" data-bf-part="hint" className="subagent-projection-text__hint">
+        <span data-bf-component="subagent-projection" data-bf-part="message" className="subagent-projection-text__message">
           {t('subagent.showingLines', { shown: SUBAGENT_TEXT_TRUNCATE_LINES, total: lines.length })}
         </span>
         <button
           type="button"
+          data-bf-component="subagent-projection"
+          data-bf-part="expandAction"
           className="subagent-projection-text__expand-btn"
           onClick={() => setIsExpanded(true)}
         >
@@ -86,7 +91,7 @@ function renderProjectedItem(
   sessionId: string | undefined,
   turnId: string | undefined,
   compactText: boolean,
-  isLastActiveItem: boolean,
+  isLastVisibleItem: boolean,
 ): React.ReactNode {
   switch (item.type) {
     case 'text':
@@ -102,18 +107,19 @@ function renderProjectedItem(
         <ModelThinkingDisplay
           key={item.id}
           thinkingItem={item as FlowThinkingItem}
-          isLastItem={isLastActiveItem}
+          isLastItem={isLastVisibleItem}
           displayContext="subagent-projection"
         />
       );
     case 'tool':
       return (
-        <div key={item.id} className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool">
+        <div data-bf-component="subagent-projection" data-bf-part="item" key={item.id} className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool">
           <FlowToolCard
             toolItem={item as FlowToolItem}
             sessionId={sessionId}
             turnId={turnId}
             displayContext="subagent-projection"
+            isLastItem={isLastVisibleItem}
           />
         </div>
       );
@@ -221,6 +227,11 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
     ?? projectionState?.session?.sessionId
     ?? directSubagentSessionId;
   const items = liveItems;
+  const runtimeStatus = useRuntimeStatusStore(state => (
+    resolvedSubagentSessionId
+      ? state.bySessionId.get(resolvedSubagentSessionId)
+      : undefined
+  ));
 
   useEffect(() => {
     if (!resolvedSubagentSessionId || itemsProp !== undefined) {
@@ -259,22 +270,10 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
     });
   }, [items.length, itemsProp, parentSessionId, parentToolIds, resolvedSubagentSessionId, sessionId]);
 
-  const lastActiveItemId = useMemo(() => {
-    for (let index = items.length - 1; index >= 0; index -= 1) {
-      const item = items[index];
-      if (item.status !== 'completed' && item.status !== 'cancelled' && item.status !== 'rejected' && item.status !== 'error') {
-        return item.id;
-      }
-      if (item.type === 'thinking' && (item as FlowThinkingItem).isStreaming) {
-        return item.id;
-      }
-      if (item.type === 'text' && (item as FlowTextItem).isStreaming) {
-        return item.id;
-      }
-    }
-
-    return items.length > 0 ? items[items.length - 1]?.id ?? null : null;
-  }, [items]);
+  // Tail position, not active status, controls live completion retention.
+  // Otherwise a newer settled action can collapse while an older item still
+  // carries a stale active status.
+  const lastVisibleItemId = items[items.length - 1]?.id;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -328,31 +327,38 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
 
   const shouldRenderProjection =
     Boolean(resolvedSubagentSessionId) &&
-    items.length > 0;
+    (items.length > 0 || projectionState?.isRunning === true || Boolean(runtimeStatus));
 
   if (!shouldRenderProjection) {
     return null;
   }
 
   return (
-    <div
+    <div data-bf-component="subagent-projection" data-bf-part="root" data-bf-state={isCollapsed ? 'collapsed' : 'expanded'}
       className={`subagent-projection-wrapper ${isCollapsed ? 'subagent-projection-wrapper--collapsed' : 'subagent-projection-wrapper--expanded'} ${className}`.trim()}
       data-subagent-session-id={resolvedSubagentSessionId}
     >
-      <SmoothHeightCollapse isOpen={!isCollapsed} className="subagent-projection-collapse">
+      <SmoothHeightCollapse
+        isOpen={!isCollapsed}
+        className="subagent-projection-collapse"
+        durationMs={FLOWCHAT_COLLAPSE_DURATION_MS}
+       data-bf-component="subagent-projection" data-bf-part="collapse">
         <div
           ref={containerRef}
+          data-bf-component="subagent-projection"
+          data-bf-part="container"
           className={`subagent-projection-container ${isCollapsed ? 'subagent-projection-container--collapsed' : 'subagent-projection-container--expanded'}`}
           data-parent-tool-id={parentTaskToolId}
         >
-          <div className="subagent-projection-content">
+          <div data-bf-component="subagent-projection" data-bf-part="content" className="subagent-projection-content">
             {items.map(item => renderProjectedItem(
               item,
               sessionId ?? resolvedSubagentSessionId,
               turnId,
               compactText,
-              item.id === lastActiveItemId,
+              item.id === lastVisibleItemId,
             ))}
+            <RuntimeStatusSlot sessionId={resolvedSubagentSessionId} />
           </div>
         </div>
       </SmoothHeightCollapse>

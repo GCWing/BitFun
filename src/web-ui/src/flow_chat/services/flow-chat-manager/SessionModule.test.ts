@@ -4,7 +4,9 @@ import {
   createChatSession,
   deleteChatSession,
   ensureBackendSession,
+  hydrateSessionHistoryForDetail,
   preloadHistoricalSessionForOpen,
+  reloadSessionTitle,
   retryCreateBackendSession,
   resolveAgentTypeForSessionCreation,
   SESSION_ACTIVITY_TOUCH_DELAY_MS,
@@ -33,6 +35,7 @@ const configManagerMocks = vi.hoisted(() => ({
 
 const sessionApiMocks = vi.hoisted(() => ({
   archiveSession: vi.fn(),
+  loadSessionMetadata: vi.fn(),
 }));
 
 const persistenceMocks = vi.hoisted(() => ({
@@ -43,6 +46,13 @@ const persistenceMocks = vi.hoisted(() => ({
 
 const stateMachineMocks = vi.hoisted(() => ({
   delete: vi.fn(),
+}));
+
+const dispatchStoreMocks = vi.hoisted(() => ({
+  jobs: {} as Record<string, { sessionId: string }>,
+  registerJob: vi.fn(),
+  dismissSession: vi.fn(),
+  updateTitle: vi.fn(),
 }));
 
 vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
@@ -94,6 +104,12 @@ vi.mock('./TextChunkModule', () => ({
 
 vi.mock('../../state-machine', () => ({
   stateMachineManager: stateMachineMocks,
+}));
+
+vi.mock('@/features/dispatch/dispatchJobStore', () => ({
+  dispatchJobStore: {
+    getState: () => dispatchStoreMocks,
+  },
 }));
 
 function createDeferred<T>() {
@@ -326,7 +342,7 @@ describe('createChatSession', () => {
     expect(agentApiMocks.createSession).toHaveBeenCalledTimes(1);
   });
 
-  it('snapshots the current mode model into a newly created session', async () => {
+  it('projects the runtime-resolved model for a newly created session', async () => {
     configManagerMocks.getConfigs.mockImplementation(async (paths: string[]) => {
       if (paths.length === 1 && paths[0] === 'ai.agent_model_defaults') {
         return { 'ai.agent_model_defaults': { mode: 'model-b' } };
@@ -340,13 +356,16 @@ describe('createChatSession', () => {
     const { context, flowChatStore } = createContext(createSession({
       workspacePath: '/home/wsp/projects/Test',
     }));
+    agentApiMocks.createSession.mockResolvedValueOnce({
+      sessionId: 'created-1',
+      modelId: 'model-b',
+    });
 
     await createChatSession(context, { workspacePath: '/home/wsp/projects/Test' }, 'agentic');
 
     expect(agentApiMocks.createSession).toHaveBeenCalledWith(expect.objectContaining({
       config: expect.objectContaining({
-        modelName: 'model-b',
-        maxContextTokens: 64000,
+        modelName: undefined,
       }),
     }));
     expect(flowChatStore.createSession).toHaveBeenCalledWith(
@@ -375,6 +394,10 @@ describe('createChatSession', () => {
     const { context, flowChatStore } = createContext(createSession({
       workspacePath: '/home/wsp/projects/Test',
     }));
+    agentApiMocks.createSession.mockResolvedValueOnce({
+      sessionId: 'created-1',
+      modelId: 'model-a',
+    });
 
     await createChatSession(context, {
       workspacePath: '/home/wsp/projects/Test',
@@ -384,7 +407,6 @@ describe('createChatSession', () => {
     expect(agentApiMocks.createSession).toHaveBeenCalledWith(expect.objectContaining({
       config: expect.objectContaining({
         modelName: 'model-a',
-        maxContextTokens: 32000,
       }),
     }));
     expect(flowChatStore.createSession).toHaveBeenCalledWith(
@@ -400,11 +422,105 @@ describe('createChatSession', () => {
       expect.any(Object),
     );
   });
+
+  it('creates an observer projection without a local model or backend session', async () => {
+    configManagerMocks.getConfigs.mockRejectedValue(
+      new Error('No controller-side model is configured'),
+    );
+    const { context, flowChatStore } = createContext(createSession({
+      workspacePath: '/source/repo',
+    }));
+
+    const sessionId = await createChatSession(context, {
+      workspacePath: '/source/repo',
+      dispatchTargetRequest: {
+        kind: 'ssh',
+        connectionId: 'ssh-1',
+        workspacePath: '/target/repo',
+      },
+      dispatchTarget: {
+        kind: 'ssh',
+        connectionId: 'ssh-1',
+        workspacePath: '/target/repo',
+        displayName: 'build-host',
+      },
+      dispatchApprovalPolicy: 'reject-and-report',
+    }, 'agentic');
+
+    expect(sessionId).toEqual(expect.any(String));
+    expect(agentApiMocks.createSession).not.toHaveBeenCalled();
+    expect(flowChatStore.createSession).toHaveBeenCalledWith(
+      sessionId,
+      expect.objectContaining({
+        modelName: undefined,
+        dispatchJobId: expect.any(String),
+        dispatchApprovalPolicy: 'reject-and-report',
+        dispatchJobState: 'submitting',
+        dispatchCursor: 0,
+      }),
+      undefined,
+      expect.any(String),
+      128128,
+      'agentic',
+      '/source/repo',
+      undefined,
+      undefined,
+      expect.any(Object),
+    );
+    expect(dispatchStoreMocks.registerJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId,
+        state: 'submitting',
+        approvalPolicy: 'reject-and-report',
+        model: undefined,
+      }),
+    );
+    expect(configManagerMocks.getConfigs).not.toHaveBeenCalled();
+  });
+});
+
+describe('reloadSessionTitle', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('replaces only the existing title from authoritative remote metadata', async () => {
+    const dialogTurns = [{ id: 'turn-1' }] as Session['dialogTurns'];
+    const session = createSession({
+      title: 'Stale title',
+      dialogTurns,
+      workspacePath: '/remote/worktree',
+      projectWorkspacePath: '/remote/project',
+      remoteConnectionId: 'connection-1',
+      remoteSshHost: 'ssh.example.test',
+    });
+    const { context, flowChatStore } = createContext(session);
+    sessionApiMocks.loadSessionMetadata.mockResolvedValue({
+      sessionId: session.sessionId,
+      sessionName: 'Authoritative title',
+      turnCount: 1,
+      customMetadata: null,
+    });
+
+    await reloadSessionTitle(context, session.sessionId);
+
+    expect(sessionApiMocks.loadSessionMetadata).toHaveBeenCalledWith(
+      session.sessionId,
+      '/remote/project',
+      'connection-1',
+      'ssh.example.test',
+    );
+    const updated = flowChatStore.getState().sessions.get(session.sessionId);
+    expect(updated?.title).toBe('Authoritative title');
+    expect(updated?.dialogTurns).toBe(dialogTurns);
+    expect(updated?.workspacePath).toBe('/remote/worktree');
+  });
 });
 
 describe('SessionModule historical session coordination', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    dispatchStoreMocks.jobs = {};
   });
 
   afterEach(async () => {
@@ -614,6 +730,116 @@ describe('SessionModule historical session coordination', () => {
     await load.promise;
   });
 
+  it('deduplicates concurrent detail hydration and includes internal child output', async () => {
+    const load = createDeferred<void>();
+    const { context, flowChatStore } = createContext(createSession({
+      isHistorical: false,
+      historyState: 'new',
+      sessionKind: 'subagent',
+    }));
+    flowChatStore.loadSessionHistory.mockReturnValueOnce(load.promise);
+
+    const first = hydrateSessionHistoryForDetail(context, 'history-1');
+    const second = hydrateSessionHistoryForDetail(context, 'history-1');
+    await Promise.resolve();
+
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(1);
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledWith(
+      'history-1',
+      'D:/workspace/BitFun',
+      undefined,
+      undefined,
+      undefined,
+      { includeInternal: true, deferFullHistoryUntilActive: false },
+    );
+
+    load.resolve();
+    await Promise.all([first, second]);
+  });
+
+  it('uses the owning panel scope when a legacy child is missing its workspace location', async () => {
+    const { context, flowChatStore } = createContext(createSession({
+      workspacePath: undefined,
+      remoteConnectionId: undefined,
+      remoteSshHost: undefined,
+      sessionKind: 'subagent',
+    }));
+
+    await hydrateSessionHistoryForDetail(context, 'history-1', {
+      workspacePath: 'D:/workspace/BitFun',
+      remoteConnectionId: 'remote-current',
+      remoteSshHost: 'host-current',
+    });
+
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledWith(
+      'history-1',
+      'D:/workspace/BitFun',
+      undefined,
+      'remote-current',
+      'host-current',
+      { includeInternal: true, deferFullHistoryUntilActive: false },
+    );
+  });
+
+  it('retries with a stronger location after a reused weak hydrate fails', async () => {
+    const { context, flowChatStore } = createContext(createSession({
+      workspacePath: undefined,
+      remoteConnectionId: undefined,
+      remoteSshHost: undefined,
+      sessionKind: 'subagent',
+    }));
+
+    const weakHydrate = hydrateSessionHistoryForDetail(context, 'history-1');
+    const strongHydrate = hydrateSessionHistoryForDetail(context, 'history-1', {
+      workspacePath: 'D:/workspace/BitFun',
+      remoteConnectionId: 'remote-current',
+      remoteSshHost: 'host-current',
+    });
+
+    await expect(weakHydrate).rejects.toThrow('Workspace path is required');
+    await expect(strongHydrate).resolves.toBeUndefined();
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(1);
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledWith(
+      'history-1',
+      'D:/workspace/BitFun',
+      undefined,
+      'remote-current',
+      'host-current',
+      { includeInternal: true, deferFullHistoryUntilActive: false },
+    );
+  });
+
+  it('upgrades a weaker in-flight preload before showing subagent details', async () => {
+    const preload = createDeferred<void>();
+    const { context, flowChatStore } = createContext(createSession({
+      sessionKind: 'subagent',
+    }));
+    context.pendingHistoryLoads.set('history-other', Promise.resolve());
+    flowChatStore.loadSessionHistory
+      .mockReturnValueOnce(preload.promise)
+      .mockResolvedValueOnce(undefined);
+
+    preloadHistoricalSessionForOpen(context, 'history-1');
+    await Promise.resolve();
+    const detailHydrate = hydrateSessionHistoryForDetail(context, 'history-1');
+
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(1);
+
+    preload.resolve();
+    await detailHydrate;
+
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(2);
+    expect(flowChatStore.loadSessionHistory).toHaveBeenNthCalledWith(
+      2,
+      'history-1',
+      'D:/workspace/BitFun',
+      undefined,
+      undefined,
+      undefined,
+      { includeInternal: true, deferFullHistoryUntilActive: false },
+    );
+  });
+
   it('retries a reused preload that stale-skipped after explicit activation', async () => {
     const stalePreload = createDeferred<void>();
     const retryLoad = createDeferred<void>();
@@ -817,6 +1043,63 @@ describe('SessionModule historical session coordination', () => {
     expect(persistenceMocks.cleanupSaveState).toHaveBeenCalledWith(context, 'active-1');
   });
 
+  it('tombstones a deleted dispatch projection instead of deleting a local session', async () => {
+    const session = createSession({
+      sessionId: 'dispatch-session',
+      isHistorical: false,
+      config: {
+        dispatchTarget: {
+          kind: 'ssh',
+          connectionId: 'ssh-1',
+          workspacePath: '/target/repo',
+          displayName: 'build-host',
+        },
+        dispatchJobId: 'job-1',
+      },
+    });
+    const { context, flowChatStore } = createContext(session, {
+      activeSessionId: session.sessionId,
+    });
+
+    await deleteChatSession(context, session.sessionId);
+
+    expect(dispatchStoreMocks.dismissSession).toHaveBeenCalledWith(
+      session.sessionId,
+      'job-1',
+    );
+    expect(flowChatStore.removeSession).toHaveBeenCalledWith(
+      session.sessionId,
+      { nextActiveSessionId: null },
+    );
+    expect(flowChatStore.deleteSession).not.toHaveBeenCalled();
+  });
+
+  it('deletes a dispatch projection found only through the observer job index', async () => {
+    const session = createSession({
+      sessionId: 'dispatch-session',
+      isHistorical: false,
+      config: { agentType: 'agentic' },
+    });
+    dispatchStoreMocks.jobs = {
+      'job-1': { sessionId: session.sessionId },
+    };
+    const { context, flowChatStore } = createContext(session, {
+      activeSessionId: session.sessionId,
+    });
+
+    await deleteChatSession(context, session.sessionId);
+
+    expect(dispatchStoreMocks.dismissSession).toHaveBeenCalledWith(
+      session.sessionId,
+      undefined,
+    );
+    expect(flowChatStore.removeSession).toHaveBeenCalledWith(
+      session.sessionId,
+      { nextActiveSessionId: null },
+    );
+    expect(flowChatStore.deleteSession).not.toHaveBeenCalled();
+  });
+
   it('returns to the welcome state after deleting a non-empty active session', async () => {
     const activeSession = createSession({
       sessionId: 'active-1',
@@ -1017,6 +1300,43 @@ describe('SessionModule historical session coordination', () => {
     expect(context.flowChatStore.getState().sessions.get('history-1')).toMatchObject({
       contextRestoreState: 'failed',
     });
+  });
+
+  it('does not recreate metadata-only non-empty history when context restore fails', async () => {
+    const { context } = createContext(createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [],
+      totalTurnCount: 23,
+    } as any));
+    agentApiMocks.ensureCoordinatorSession.mockRejectedValueOnce(
+      new Error('Session metadata not found')
+    );
+
+    await expect(ensureBackendSession(context, 'history-1')).rejects.toThrow();
+
+    expect(agentApiMocks.ensureCoordinatorSession).toHaveBeenCalledTimes(1);
+    expect(agentApiMocks.createSession).not.toHaveBeenCalled();
+  });
+
+  it('does not recreate a session that another BitFun instance is writing', async () => {
+    const { context } = createContext(createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [],
+    } as any));
+    agentApiMocks.ensureCoordinatorSession.mockRejectedValueOnce(
+      new Error('session_in_use: Session is already open for writing: history-1')
+    );
+
+    await expect(ensureBackendSession(context, 'history-1')).rejects.toThrow(
+      'session_in_use:',
+    );
+
+    expect(agentApiMocks.ensureCoordinatorSession).toHaveBeenCalledTimes(1);
+    expect(agentApiMocks.createSession).not.toHaveBeenCalled();
   });
 
   it('keeps recreate fallback for empty pending context sessions', async () => {

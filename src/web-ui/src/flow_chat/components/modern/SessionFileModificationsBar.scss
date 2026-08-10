@@ -9,10 +9,10 @@
   flex-direction: column;
   gap: $size-gap-1;
   padding: $size-gap-2 $size-gap-3;
-  border-bottom: 1px dashed var(--border-base);
+  border-bottom: 1px dashed var(--bf-appearance-token-border-base);
 
   // Frosted glass effect aligned with FlowChatHeader.
-  background: color-mix(in srgb, var(--color-bg-elevated) 45%, transparent);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 45%, transparent);
   backdrop-filter: blur(20px) saturate(1.3);
   -webkit-backdrop-filter: blur(20px) saturate(1.3);
 
@@ -26,7 +26,7 @@
     width: 100%;
     margin: 0 auto;
     border-bottom: none;
-    border-top: 1px dashed var(--border-base);
+    border-top: 1px dashed var(--bf-appearance-token-border-base);
     padding: 8px 12px;
 
     .session-file-modifications-bar__list {
@@ -52,9 +52,9 @@
   }
 
   .file-count {
-    font-size: var(--tool-card-action-font-size);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
     font-weight: $font-weight-medium;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     white-space: nowrap;
   }
 
@@ -62,16 +62,16 @@
     display: flex;
     align-items: center;
     gap: $size-gap-2;
-    font-size: var(--tool-card-action-font-size);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
     font-weight: $font-weight-medium;
     font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
 
     .stat-add {
-      color: var(--color-success);
+      color: var(--bf-appearance-token-color-success);
     }
 
     .stat-del {
-      color: var(--color-error);
+      color: var(--bf-appearance-token-color-error);
     }
   }
 
@@ -86,14 +86,14 @@
     background: transparent;
     border: none;
     border-radius: 6px;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     transition: all $motion-fast $easing-standard;
     flex-shrink: 0;
 
     &:hover:not(:disabled) {
-      background: var(--element-bg-hover);
-      color: var(--color-text-primary);
+      background: var(--bf-appearance-token-element-bg-hover);
+      color: var(--bf-appearance-token-color-text-primary);
     }
 
     &:active:not(:disabled) {
@@ -122,7 +122,7 @@
     padding-right: 4px;
 
     scrollbar-width: thin;
-    scrollbar-color: var(--border-medium) transparent;
+    scrollbar-color: var(--bf-appearance-token-border-medium) transparent;
 
     &::-webkit-scrollbar {
       width: 6px;
@@ -133,11 +133,11 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background-color: var(--border-medium);
+      background-color: var(--bf-appearance-token-border-medium);
       border-radius: 3px;
 
       &:hover {
-        background-color: var(--border-strong);
+        background-color: var(--bf-appearance-token-border-strong);
       }
     }
   }
@@ -151,18 +151,18 @@
     background: transparent;
     border: none;
     border-radius: 4px;
-    font-size: var(--tool-card-action-font-size);
-    color: var(--color-text-primary);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    color: var(--bf-appearance-token-color-text-primary);
     cursor: pointer;
     transition: all $motion-fast $easing-standard;
     user-select: none;
 
     &:hover {
-      background: var(--element-bg-hover);
+      background: var(--bf-appearance-token-element-bg-hover);
     }
 
     &:active {
-      background: var(--element-bg-base);
+      background: var(--bf-appearance-token-element-bg-base);
     }
 
     &__icon {
@@ -174,15 +174,15 @@
       height: 20px;
 
       .icon-write {
-        color: var(--color-success);
+        color: var(--bf-appearance-token-color-success);
       }
 
       .icon-edit {
-        color: var(--color-accent-500);
+        color: var(--bf-appearance-token-color-accent-500);
       }
 
       .icon-delete {
-        color: var(--color-error);
+        color: var(--bf-appearance-token-color-error);
       }
     }
 
@@ -201,10 +201,10 @@
       min-height: 20px;
       padding: 0 7px;
       border-radius: 999px;
-      border: 1px solid color-mix(in srgb, var(--color-accent-400) 18%, var(--border-subtle));
-      background: color-mix(in srgb, var(--color-accent-400) 9%, transparent);
-      color: color-mix(in srgb, var(--color-accent-400) 72%, var(--color-text-secondary));
-      font-size: var(--flowchat-font-size-xxs);
+      border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-400) 18%, var(--bf-appearance-token-border-subtle));
+      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-400) 9%, transparent);
+      color: color-mix(in srgb, var(--bf-appearance-token-color-accent-400) 72%, var(--bf-appearance-token-color-text-secondary));
+      font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
       font-weight: $font-weight-semibold;
       line-height: 1;
       white-space: nowrap;
@@ -216,22 +216,22 @@
       align-items: center;
       gap: 6px;
       flex-shrink: 0;
-      font-size: var(--tool-card-action-font-size);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
       font-weight: $font-weight-medium;
       font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
 
       .stat-add {
-        color: var(--color-success);
+        color: var(--bf-appearance-token-color-success);
       }
 
       .stat-del {
-        color: var(--color-error);
+        color: var(--bf-appearance-token-color-error);
       }
     }
 
     &__error {
-      font-size: var(--flowchat-font-size-xs);
-      color: var(--color-error);
+      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      color: var(--bf-appearance-token-color-error);
       font-style: italic;
     }
 
@@ -239,7 +239,7 @@
     &--delete {
       .file-row__name {
         text-decoration: line-through;
-        color: var(--color-text-secondary);
+        color: var(--bf-appearance-token-color-text-secondary);
       }
     }
 
@@ -259,11 +259,11 @@
     align-items: center;
     justify-content: center;
     padding: 8px;
-    font-size: var(--tool-card-action-font-size);
-    color: var(--color-text-secondary);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    color: var(--bf-appearance-token-color-text-secondary);
     font-style: italic;
-    background: color-mix(in srgb, var(--color-bg-secondary) 50%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 50%, transparent);
     border-radius: 4px;
-    border: 1px dashed var(--border-base);
+    border: 1px dashed var(--bf-appearance-token-border-base);
   }
 }

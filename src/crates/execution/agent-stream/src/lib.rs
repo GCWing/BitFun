@@ -12,6 +12,7 @@ use crate::tool_call_accumulator::{
     FinalizedToolCall, PendingToolCalls, ToolCallBoundary, ToolCallFinalizeOptions,
     ToolCallStreamKey,
 };
+use bitfun_core_types::errors::AiProviderError;
 use bitfun_events::{AgenticEvent, AgenticEventPriority as EventPriority, ToolEventData};
 use futures::{Stream, StreamExt};
 pub use hidden_text::{HiddenTextBlock, HiddenTextStreamParser, HiddenTextTag};
@@ -57,6 +58,7 @@ impl ToolCall {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StreamProcessorError {
     AiClient(String),
+    AiProvider(AiProviderError),
     Cancelled(String),
 }
 
@@ -64,6 +66,7 @@ impl fmt::Display for StreamProcessorError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::AiClient(msg) => write!(f, "AI client error: {}", msg),
+            Self::AiProvider(error) => write!(f, "AI provider error: {}", error),
             Self::Cancelled(msg) => write!(f, "Operation cancelled: {}", msg),
         }
     }
@@ -1050,6 +1053,7 @@ impl StreamProcessor {
                             break;
                         }
                         TimedStreamItem::Item(Err(e)) => {
+                            let provider_error = e.downcast_ref::<AiProviderError>().cloned();
                             let error_msg = format!("Stream processing error: {}", e);
                             error!("{}", error_msg);
                             let non_recoverable_stream_error =
@@ -1067,7 +1071,9 @@ impl StreamProcessor {
                             flush_sse_on_error(&sse_collector, &error_msg).await;
                             self.graceful_shutdown_from_ctx(&mut ctx, error_msg.clone()).await;
                             return Err(StreamProcessError::new(
-                                StreamProcessorError::AiClient(error_msg),
+                                provider_error
+                                    .map(StreamProcessorError::AiProvider)
+                                    .unwrap_or(StreamProcessorError::AiClient(error_msg)),
                                 ctx.has_effective_output,
                             ));
                         }
@@ -1218,10 +1224,11 @@ impl StreamProcessor {
 mod tests {
     use super::{
         is_token_limit_finish_reason, GracefulShutdownInput, HiddenTextTag, SseLogCollector,
-        SseLogConfig, StreamEventSink, StreamProcessOptions, StreamProcessor,
+        SseLogConfig, StreamEventSink, StreamProcessOptions, StreamProcessor, StreamProcessorError,
         ToolArgumentRepairKind, ToolCall, ToolCallCompletion,
     };
     use super::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
+    use bitfun_core_types::errors::{AiProviderError, ErrorCategory};
     use bitfun_events::{AgenticEvent, AgenticEventPriority as EventPriority, ToolEventData};
     use futures::StreamExt;
     use serde_json::json;
@@ -1251,6 +1258,47 @@ mod tests {
 
     fn build_processor() -> StreamProcessor {
         StreamProcessor::new(Arc::new(NoopEventSink))
+    }
+
+    #[tokio::test]
+    async fn preserves_structured_provider_error_from_adapter_stream() {
+        let processor = build_processor();
+        let provider_error = AiProviderError::from_parts(
+            "Request failed".to_string(),
+            Some("openai".to_string()),
+            Some("context_length_exceeded".to_string()),
+            None,
+        );
+        let stream = iter(vec![Err::<UnifiedResponse, _>(anyhow::Error::new(
+            provider_error,
+        ))])
+        .boxed();
+
+        let result = processor
+            .process_stream(
+                stream,
+                None,
+                None,
+                "session_1".to_string(),
+                "turn_1".to_string(),
+                "round_1".to_string(),
+                "round_1:attempt:1".to_string(),
+                1,
+                &CancellationToken::new(),
+            )
+            .await
+            .expect_err("provider error should fail the stream");
+
+        match result.error {
+            StreamProcessorError::AiProvider(error) => {
+                assert_eq!(error.category, ErrorCategory::ContextOverflow);
+                assert_eq!(
+                    error.provider_code.as_deref(),
+                    Some("context_length_exceeded")
+                );
+            }
+            error => panic!("unexpected stream error: {error:?}"),
+        }
     }
 
     #[tokio::test]

@@ -1,3 +1,5 @@
+#![cfg(feature = "lsp")]
+
 use bitfun_core_types::lsp::{CapabilitiesConfig, LspPlugin, ServerConfig};
 use bitfun_services_core::lsp::{
     resolve_plugin_command_for_target, LspPluginRegistryError, LspPluginRuntimeArch,

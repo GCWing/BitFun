@@ -1,0 +1,35 @@
+import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
+
+export const peerDeviceAppearanceDescriptor: AppearanceSurfaceDescriptor = {
+  id: 'peer-device',
+  parts: [
+    { id: 'overlay' },
+    { id: 'dialog' },
+    { id: 'header' },
+    { id: 'title' },
+    { id: 'closeButton' },
+    { id: 'toolbar' },
+    { id: 'toolButton' },
+    { id: 'path' },
+    { id: 'pathInput' },
+    { id: 'pathDisplay' },
+    { id: 'body' },
+    { id: 'status' },
+    { id: 'list' },
+    { id: 'item' },
+    { id: 'footer' },
+    { id: 'selection' },
+    { id: 'actions' },
+    { id: 'badge' },
+    { id: 'badgeIcon' },
+    { id: 'badgeLabel' },
+    { id: 'disconnectButton' },
+  ],
+  states: [
+    { id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } },
+    { id: 'error', selector: { kind: 'self', suffix: '[data-bf-state~="error"]' } },
+    { id: 'empty', selector: { kind: 'self', suffix: '[data-bf-state~="empty"]' } },
+    { id: 'selected', selector: { kind: 'self', suffix: '[data-bf-state~="selected"]' } },
+    { id: 'disabled', selector: { kind: 'self', suffix: ':disabled' } },
+  ],
+};

@@ -4,6 +4,8 @@
 
 use crate::util::errors::*;
 use async_trait::async_trait;
+use bitfun_core_types::WorktreeSettings;
+pub use bitfun_core_types::{ReasoningConfig, ReasoningPreset, ReasoningPresetAction};
 use bitfun_runtime_ports::{PermissionRule, ToolPermissionConfig};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -70,12 +72,15 @@ pub struct GlobalConfig {
     /// ACP client configuration (stored as `{ "acpClients": { ... } }`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub acp_clients: Option<serde_json::Value>,
-    /// Theme system configuration.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub themes: Option<ThemesConfig>,
+    /// Web UI appearance selection. The full package contract is owned by the frontend.
+    pub appearance: AppearanceConfig,
     /// Web UI font size preferences (`get_config` / `set_config` path `font`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub font: Option<FontPreferenceSnapshot>,
+    /// Version of the persisted configuration schema. This is intentionally
+    /// independent from the BitFun application version stored in `version`.
+    #[serde(default = "default_config_schema_version")]
+    pub schema_version: u32,
     pub version: String,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub last_modified: chrono::DateTime<chrono::Utc>,
@@ -136,6 +141,37 @@ pub struct AppConfig {
     /// Allowed values: "quit" | "minimize_to_tray" | "ask".
     #[serde(default = "default_close_button_behavior")]
     pub close_button_behavior: String,
+    /// Native agent lifecycle hooks (Codex-compatible hooks.json).
+    #[serde(default)]
+    pub hooks: AgentHooksConfig,
+    /// Defaults for opt-in managed Git worktrees.
+    #[serde(default)]
+    pub worktrees: WorktreeSettings,
+}
+
+/// Enablement gates for native agent hooks.
+///
+/// Hook declarations themselves live in `hooks.json` documents (user scope:
+/// `config/hooks.json` next to this file; project scope:
+/// `{project}/.bitfun/config/hooks.json`), not in this settings document.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct AgentHooksConfig {
+    /// Master switch for native agent hooks.
+    pub enabled: bool,
+    /// Whether project-scope hook files are honored. Disabled by default
+    /// because project hook files execute commands from the checked-out
+    /// repository; enable only for workspaces you trust.
+    pub project_hooks_enabled: bool,
+}
+
+impl Default for AgentHooksConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            project_hooks_enabled: false,
+        }
+    }
 }
 
 /// Versioned user preference for grouping selectable Agent tools in the UI.
@@ -212,6 +248,9 @@ pub struct AppLoggingConfig {
     /// Whether diagnostic logs may include sensitive troubleshooting payloads.
     #[serde(default = "default_true")]
     pub include_sensitive_diagnostics: bool,
+    /// Whether the local UI records detailed Flow Chat viewport diagnostics.
+    #[serde(default)]
+    pub flow_chat_diagnostics: bool,
     /// Per-request AI model exchange tracing configuration for developer diagnostics.
     #[serde(default)]
     pub model_exchange_tracing: ModelExchangeTracingConfig,
@@ -233,12 +272,38 @@ pub struct ModelExchangeTracingConfig {
 }
 
 /// FlowChat UI preferences.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppFlowChatConfig {
     /// Optional user override for the default ChatInput mode id.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_mode_id: Option<String>,
+    /// Whether the chat input exposes the global permission-mode shortcut.
+    ///
+    /// The default is visible, but that value is omitted from persisted config
+    /// so existing config files remain unchanged until the user hides it.
+    #[serde(
+        default = "default_show_permission_mode_control",
+        skip_serializing_if = "is_permission_mode_control_visible"
+    )]
+    pub show_permission_mode_control: bool,
+}
+
+fn default_show_permission_mode_control() -> bool {
+    true
+}
+
+fn is_permission_mode_control_visible(value: &bool) -> bool {
+    *value
+}
+
+impl Default for AppFlowChatConfig {
+    fn default() -> Self {
+        Self {
+            default_mode_id: None,
+            show_permission_mode_control: default_show_permission_mode_control(),
+        }
+    }
 }
 
 /// A user-defined quick action for the FlowChat post-coding actions menu.
@@ -273,6 +338,32 @@ impl Default for VoiceInputConfig {
             microphone_device_id: String::new(),
         }
     }
+}
+
+/// Domain request for atomically saving a cloud speech-recognition model and
+/// selecting it for voice input. Text-generation fields are intentionally not
+/// part of this contract.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct SaveCloudSpeechConfigRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config_id: Option<String>,
+    pub preset: String,
+    pub name: String,
+    pub base_url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_url: Option<String>,
+    pub model_name: String,
+    pub api_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct SaveCloudSpeechConfigResult {
+    pub model_id: String,
+    pub created: bool,
 }
 
 /// AI experience configuration.
@@ -355,28 +446,26 @@ pub struct NotificationConfig {
     /// Whether to show a toast notification when a dialog turn completes while the window is not focused.
     #[serde(default = "default_true")]
     pub dialog_completion_notify: bool,
+    /// Whether to show a toast notification when an approval request arrives while the window is not focused.
+    #[serde(default = "default_true")]
+    pub permission_request_notify: bool,
     /// Whether to show built-in tip cards on startup (can be disabled by the user).
     #[serde(default = "default_true")]
     pub enable_startup_tips: bool,
 }
 
-/// Theme system configuration. The full GUI theme contract is owned by TS/web-ui;
-/// Rust stores only the selected theme id and opaque custom-theme payloads.
+/// Web UI appearance configuration. Rust stores only the selected package id.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub struct ThemesConfig {
-    /// Currently active theme ID.
-    pub current: String,
-    /// User-defined themes (stored as JSON).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub custom: Option<serde_json::Value>,
+pub struct AppearanceConfig {
+    /// Selected appearance package ID or `system`.
+    pub selection: String,
 }
 
-impl Default for ThemesConfig {
+impl Default for AppearanceConfig {
     fn default() -> Self {
         Self {
-            current: "bitfun-light".to_string(),
-            custom: None,
+            selection: "system".to_string(),
         }
     }
 }
@@ -393,7 +482,6 @@ pub struct EditorConfig {
     pub word_wrap: String,
     pub line_numbers: String,
     pub minimap: MinimapConfig,
-    pub theme: String,
     pub auto_save: String,
     pub auto_save_delay: u32,
     pub format_on_save: bool,
@@ -422,38 +510,6 @@ pub struct TerminalConfig {
     pub cursor_blink: bool,
     pub cursor_style: String,
     pub scrollback: u32,
-    /// Terminal ANSI palette/defaults. This keeps the historical
-    /// `terminal.theme` config key but is not the GUI theme contract.
-    pub theme: TerminalThemeConfig,
-
-    /// User-defined environment variables applied to every new terminal
-    /// session and to agent/tool one-shot command execution.
-    pub env_vars: HashMap<String, String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct TerminalThemeConfig {
-    pub background: String,
-    pub foreground: String,
-    pub cursor: String,
-    pub selection: String,
-    pub black: String,
-    pub red: String,
-    pub green: String,
-    pub yellow: String,
-    pub blue: String,
-    pub magenta: String,
-    pub cyan: String,
-    pub white: String,
-    pub bright_black: String,
-    pub bright_red: String,
-    pub bright_green: String,
-    pub bright_yellow: String,
-    pub bright_blue: String,
-    pub bright_magenta: String,
-    pub bright_cyan: String,
-    pub bright_white: String,
 }
 
 /// Workspace configuration.
@@ -493,6 +549,12 @@ pub enum ModelCapability {
     SpeechRecognition,
 }
 
+pub const CURRENT_CONFIG_SCHEMA_VERSION: u32 = 1;
+
+fn default_config_schema_version() -> u32 {
+    CURRENT_CONFIG_SCHEMA_VERSION
+}
+
 /// Model category (for UI display and filtering).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -514,8 +576,6 @@ pub enum ModelCategory {
     /// Speech recognition model.
     SpeechRecognition,
 }
-
-pub use bitfun_core_types::ReasoningMode;
 
 /// Default model configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -542,8 +602,12 @@ pub struct DefaultModelsConfig {
 /// model named `inherit` can never be interpreted as a control value.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
+#[derive(Default)]
 pub enum SubagentModelSelection {
-    Fixed { model_id: String },
+    Fixed {
+        model_id: String,
+    },
+    #[default]
     Inherit,
 }
 
@@ -559,12 +623,6 @@ impl SubagentModelSelection {
             Self::Fixed { model_id } => Some(model_id.as_str()),
             Self::Inherit => None,
         }
-    }
-}
-
-impl Default for SubagentModelSelection {
-    fn default() -> Self {
-        Self::Inherit
     }
 }
 
@@ -698,6 +756,10 @@ pub struct AIConfig {
     /// profile_id -> AgentProfileConfig
     #[serde(default, deserialize_with = "deserialize_agent_profiles")]
     pub agent_profiles: HashMap<String, AgentProfileConfig>,
+
+    /// User-level Skill availability shared by every agent profile.
+    #[serde(default)]
+    pub skill_settings: SkillSettingsConfig,
 
     /// Review team configuration.
     /// team_id -> ReviewTeamConfig
@@ -924,8 +986,18 @@ pub struct AgentProfileConfig {
     pub tool_permission_rules: Vec<PermissionRule>,
 }
 
+/// User-level Skill configuration shared by every agent profile.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct SkillSettingsConfig {
+    /// User-level Skill keys disabled for every agent profile.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub globally_disabled_user_skills: Vec<String>,
+}
+
 /// API view of a mode configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(default)]
 pub struct AgentProfileView {
     pub profile_id: String,
@@ -1310,17 +1382,9 @@ pub struct AIModelConfig {
     /// Additional metadata (JSON, for extensibility).
     pub metadata: Option<serde_json::Value>,
 
-    /// Compatibility-only input field for older saved configs.
-    ///
-    /// New code should use `reasoning_mode`. This field is deserialized for migration and
-    /// compatibility, then omitted from future saves. When `reasoning_mode` is absent, `true`
-    /// maps to `enabled` and `false` maps to `default`.
-    #[serde(default, skip_serializing)]
-    pub enable_thinking_process: bool,
-
-    /// Provider-agnostic reasoning mode.
+    /// Canonical model reasoning presets and default selection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reasoning_mode: Option<ReasoningMode>,
+    pub reasoning: Option<ReasoningConfig>,
 
     /// Whether to parse OpenAI-compatible text chunks containing `<think>...</think>` into
     /// streaming reasoning content.
@@ -1339,15 +1403,6 @@ pub struct AIModelConfig {
     /// Whether to skip SSL certificate verification (advanced; use only when necessary).
     #[serde(default)]
     pub skip_ssl_verify: bool,
-
-    /// Reasoning effort level for providers that support explicit effort controls.
-    /// Valid values are provider-specific. None = use API default.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reasoning_effort: Option<String>,
-
-    /// Optional Anthropic manual thinking token budget.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub thinking_budget_tokens: Option<u32>,
 
     /// Custom request body (JSON string, used to override default request body fields).
     #[serde(default)]
@@ -1413,10 +1468,21 @@ pub enum SubscriptionProvider {
     Opencode,
 }
 
+/// OpenCode API product selected for a subscription-authenticated model.
+/// Zen and Go share one account credential but use different API namespaces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenCodePlan {
+    Zen,
+    Go,
+}
+
 /// Where to obtain the runtime auth material for an `AIModelConfig`.
 ///
 /// Stored on disk as `{"type":"api_key"}` or
 /// `{"type":"subscription","provider":"codex"|"antigravity"|"opencode"}`.
+/// OpenCode models may additionally persist `"plan":"zen"|"go"`; an absent
+/// plan preserves the legacy Zen Chat Completions behavior.
 /// Tokens live in the subscription auth store and are resolved at request time.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -1425,7 +1491,11 @@ pub enum AuthConfig {
     #[default]
     ApiKey,
     /// Use BitFun in-app subscription OAuth for the named provider.
-    Subscription { provider: SubscriptionProvider },
+    Subscription {
+        provider: SubscriptionProvider,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        plan: Option<OpenCodePlan>,
+    },
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -1447,15 +1517,12 @@ struct AIModelConfigCompat {
     capabilities: Vec<ModelCapability>,
     recommended_for: Vec<String>,
     metadata: Option<serde_json::Value>,
-    enable_thinking_process: Option<bool>,
-    reasoning_mode: Option<ReasoningMode>,
+    reasoning: Option<ReasoningConfig>,
     #[serde(default = "default_true")]
     inline_think_in_text: bool,
     custom_headers: Option<std::collections::HashMap<String, String>>,
     custom_headers_mode: Option<String>,
     skip_ssl_verify: bool,
-    reasoning_effort: Option<String>,
-    thinking_budget_tokens: Option<u32>,
     custom_request_body: Option<String>,
     custom_request_body_mode: Option<String>,
     /// Parsed flexibly so unknown legacy auth tags fall back to ApiKey.
@@ -1472,16 +1539,6 @@ fn parse_auth_config(value: Option<serde_json::Value>) -> AuthConfig {
 
 impl From<AIModelConfigCompat> for AIModelConfig {
     fn from(value: AIModelConfigCompat) -> Self {
-        let reasoning_mode = value.reasoning_mode.or_else(|| {
-            value.enable_thinking_process.map(|enabled| {
-                if enabled {
-                    ReasoningMode::Enabled
-                } else {
-                    ReasoningMode::Default
-                }
-            })
-        });
-
         Self {
             id: value.id,
             name: value.name,
@@ -1499,30 +1556,15 @@ impl From<AIModelConfigCompat> for AIModelConfig {
             capabilities: value.capabilities,
             recommended_for: value.recommended_for,
             metadata: value.metadata,
-            enable_thinking_process: value.enable_thinking_process.unwrap_or(false),
-            reasoning_mode,
+            reasoning: value.reasoning,
             inline_think_in_text: value.inline_think_in_text,
             custom_headers: value.custom_headers,
             custom_headers_mode: value.custom_headers_mode,
             skip_ssl_verify: value.skip_ssl_verify,
-            reasoning_effort: value.reasoning_effort,
-            thinking_budget_tokens: value.thinking_budget_tokens,
             custom_request_body: value.custom_request_body,
             custom_request_body_mode: value.custom_request_body_mode,
             auth: parse_auth_config(value.auth),
         }
-    }
-}
-
-impl AIModelConfig {
-    pub fn effective_reasoning_mode(&self) -> ReasoningMode {
-        self.reasoning_mode.unwrap_or({
-            if self.enable_thinking_process {
-                ReasoningMode::Enabled
-            } else {
-                ReasoningMode::Default
-            }
-        })
     }
 }
 
@@ -1572,6 +1614,33 @@ pub struct ConfigValidationResult {
     pub valid: bool,
     pub errors: Vec<ConfigValidationError>,
     pub warnings: Vec<ConfigValidationWarning>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<ConfigDiagnostic>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ConfigDiagnosticSeverity {
+    Error,
+    Warning,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ConfigDiagnosticRecoverability {
+    None,
+    AutoFix,
+    ModelDisabled,
+    DefaultsUsed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ConfigDiagnostic {
+    pub path: String,
+    pub message: String,
+    pub code: String,
+    pub severity: ConfigDiagnosticSeverity,
+    pub recoverability: ConfigDiagnosticRecoverability,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1603,8 +1672,9 @@ impl Default for GlobalConfig {
             tool_permissions: ToolPermissionConfig::default(),
             mcp_servers: None,
             acp_clients: None,
-            themes: Some(ThemesConfig::default()),
+            appearance: AppearanceConfig::default(),
             font: None,
+            schema_version: CURRENT_CONFIG_SCHEMA_VERSION,
             version: "1.0.0".to_string(),
             last_modified: chrono::Utc::now(),
         }
@@ -1636,6 +1706,7 @@ impl Default for AppConfig {
                 position: "topRight".to_string(),
                 duration: 5000,
                 dialog_completion_notify: true,
+                permission_request_notify: true,
                 enable_startup_tips: true,
             },
             flow_chat: AppFlowChatConfig::default(),
@@ -1644,6 +1715,8 @@ impl Default for AppConfig {
             user_tool_groups: UserToolGroupsConfig::default(),
             user_skill_groups: UserSkillGroupsConfig::default(),
             close_button_behavior: default_close_button_behavior(),
+            hooks: AgentHooksConfig::default(),
+            worktrees: WorktreeSettings::default(),
         }
     }
 }
@@ -1653,7 +1726,8 @@ impl Default for AppLoggingConfig {
         Self {
             // Set to Debug in early development for easier diagnostics
             level: "debug".to_string(),
-            include_sensitive_diagnostics: false,
+            include_sensitive_diagnostics: true,
+            flow_chat_diagnostics: false,
             model_exchange_tracing: ModelExchangeTracingConfig::default(),
         }
     }
@@ -1698,7 +1772,6 @@ impl Default for EditorConfig {
                 side: "right".to_string(),
                 size: "proportional".to_string(),
             },
-            theme: "vs".to_string(),
             auto_save: "afterDelay".to_string(),
             auto_save_delay: 1000,
             format_on_save: true,
@@ -1718,35 +1791,6 @@ impl Default for TerminalConfig {
             cursor_blink: true,
             cursor_style: "block".to_string(),
             scrollback: 1000,
-            theme: TerminalThemeConfig::default(),
-            env_vars: HashMap::new(),
-        }
-    }
-}
-
-impl Default for TerminalThemeConfig {
-    fn default() -> Self {
-        Self {
-            background: "#1e1e1e".to_string(),
-            foreground: "#d4d4d4".to_string(),
-            cursor: "#d4d4d4".to_string(),
-            selection: "#264f78".to_string(),
-            black: "#000000".to_string(),
-            red: "#cd3131".to_string(),
-            green: "#0dbc79".to_string(),
-            yellow: "#e5e510".to_string(),
-            blue: "#2472c8".to_string(),
-            magenta: "#bc3fbc".to_string(),
-            cyan: "#11a8cd".to_string(),
-            white: "#e5e5e5".to_string(),
-            bright_black: "#666666".to_string(),
-            bright_red: "#f14c4c".to_string(),
-            bright_green: "#23d18b".to_string(),
-            bright_yellow: "#f5f543".to_string(),
-            bright_blue: "#3b8eea".to_string(),
-            bright_magenta: "#d670d6".to_string(),
-            bright_cyan: "#29b8db".to_string(),
-            bright_white: "#e5e5e5".to_string(),
         }
     }
 }
@@ -1784,6 +1828,7 @@ impl Default for AIConfig {
             default_models: DefaultModelsConfig::default(),
             agent_model_defaults: AgentModelDefaultsConfig::default(),
             agent_profiles: std::collections::HashMap::new(),
+            skill_settings: SkillSettingsConfig::default(),
             review_teams: default_review_team_configs(),
             review_team_rate_limit_status: default_review_team_rate_limit_status(),
             subagent_max_concurrency: default_subagent_max_concurrency(),
@@ -1846,14 +1891,11 @@ impl Default for AIModelConfig {
             capabilities: vec![],
             recommended_for: vec![],
             metadata: None,
-            enable_thinking_process: false,
-            reasoning_mode: None,
+            reasoning: None,
             inline_think_in_text: true,
             custom_headers: None,
             custom_headers_mode: None,
             skip_ssl_verify: false,
-            reasoning_effort: None,
-            thinking_budget_tokens: None,
             custom_request_body: None,
             custom_request_body_mode: None,
             auth: AuthConfig::ApiKey,
@@ -1886,6 +1928,7 @@ impl Default for NotificationConfig {
             position: "topRight".to_string(),
             duration: 5000,
             dialog_completion_notify: true,
+            permission_request_notify: true,
             enable_startup_tips: true,
         }
     }
@@ -1902,11 +1945,44 @@ impl Default for MinimapConfig {
 }
 
 impl AIModelConfig {
+    pub fn supports_capability(&self, capability: ModelCapability) -> bool {
+        if self.capabilities.is_empty() {
+            self.default_capabilities_for_category()
+                .contains(&capability)
+        } else {
+            self.capabilities.contains(&capability)
+        }
+    }
+
+    pub fn supports_text_generation(&self) -> bool {
+        self.supports_capability(ModelCapability::TextChat)
+    }
+
+    /// Canonicalizes fields that only have meaning for text-generation
+    /// requests. Returns the names of fields that were cleared.
+    pub fn normalize_inapplicable_generation_fields(&mut self) -> Vec<&'static str> {
+        if self.supports_text_generation() {
+            return Vec::new();
+        }
+
+        let mut cleared = Vec::new();
+        if self.context_window.take().is_some() {
+            cleared.push("context_window");
+        }
+        if self.max_tokens.take().is_some() {
+            cleared.push("max_tokens");
+        }
+        if self.temperature.take().is_some() {
+            cleared.push("temperature");
+        }
+        if self.top_p.take().is_some() {
+            cleared.push("top_p");
+        }
+        cleared
+    }
+
     pub fn supports_image_understanding(&self) -> bool {
-        self.capabilities
-            .iter()
-            .any(|cap| matches!(cap, ModelCapability::ImageUnderstanding))
-            || matches!(self.category, ModelCategory::Multimodal)
+        self.supports_capability(ModelCapability::ImageUnderstanding)
     }
 
     /// Legacy helper that infers the model category from the model name and provider.
@@ -2036,9 +2112,10 @@ impl AIModelConfig {
 mod tests {
     use super::{
         AIConfig, AIExperienceConfig, AIModelConfig, AgentModelDefaultsConfig, AgentProfileConfig,
-        AgentProfileView, AppConfig, AppLoggingConfig, GlobalConfig, MemoryExternalContextPolicy,
-        ModelExchangeTracingMode, ReasoningMode, SubagentBatchExecutionPolicy,
-        SubagentModelSelection, UserSkillGroupsConfig, UserToolGroupsConfig,
+        AgentProfileView, AppConfig, AppLoggingConfig, AuthConfig, GlobalConfig,
+        MemoryExternalContextPolicy, ModelExchangeTracingMode, NotificationConfig, OpenCodePlan,
+        SubagentBatchExecutionPolicy, SubagentModelSelection, SubscriptionProvider,
+        UserSkillGroupsConfig, UserToolGroupsConfig,
     };
     use bitfun_runtime_ports::ToolPermissionConfig;
 
@@ -2049,6 +2126,49 @@ mod tests {
         let config: AppConfig =
             serde_json::from_value(serde_json::json!({})).expect("empty app config should default");
         assert!(!config.prevent_sleep);
+    }
+
+    #[test]
+    fn subscription_auth_preserves_legacy_opencode_and_roundtrips_go_plan() {
+        let legacy: AuthConfig = serde_json::from_value(serde_json::json!({
+            "type": "subscription",
+            "provider": "opencode"
+        }))
+        .expect("legacy OpenCode auth should deserialize");
+        assert_eq!(
+            legacy,
+            AuthConfig::Subscription {
+                provider: SubscriptionProvider::Opencode,
+                plan: None,
+            }
+        );
+        assert_eq!(
+            serde_json::to_value(&legacy).expect("legacy auth should serialize"),
+            serde_json::json!({
+                "type": "subscription",
+                "provider": "opencode"
+            })
+        );
+
+        let go = AuthConfig::Subscription {
+            provider: SubscriptionProvider::Opencode,
+            plan: Some(OpenCodePlan::Go),
+        };
+        let serialized = serde_json::to_value(&go).expect("Go auth should serialize");
+        assert_eq!(serialized["plan"], "go");
+        assert_eq!(
+            serde_json::from_value::<AuthConfig>(serialized).expect("Go auth should roundtrip"),
+            go
+        );
+    }
+
+    #[test]
+    fn permission_request_notifications_default_to_enabled() {
+        assert!(NotificationConfig::default().permission_request_notify);
+
+        let config: NotificationConfig = serde_json::from_value(serde_json::json!({}))
+            .expect("empty notification config should default");
+        assert!(config.permission_request_notify);
     }
 
     #[test]
@@ -2174,7 +2294,7 @@ mod tests {
     }
 
     #[test]
-    fn deserializes_compatibility_thinking_flag_into_reasoning_mode() {
+    fn removed_reasoning_fields_are_ignored_without_creating_reasoning_config() {
         let config: AIModelConfig = serde_json::from_value(serde_json::json!({
             "id": "model_1",
             "name": "Provider",
@@ -2183,12 +2303,14 @@ mod tests {
             "base_url": "https://example.com/v1",
             "api_key": "key",
             "enabled": true,
-            "enable_thinking_process": true
+            "enable_thinking_process": true,
+            "reasoning_mode": "adaptive",
+            "reasoning_effort": "high",
+            "thinking_budget_tokens": 12000
         }))
-        .expect("legacy config should deserialize");
+        .expect("config with removed fields should deserialize");
 
-        assert_eq!(config.reasoning_mode, Some(ReasoningMode::Enabled));
-        assert!(config.enable_thinking_process);
+        assert!(config.reasoning.is_none());
     }
 
     #[test]
@@ -2241,7 +2363,7 @@ mod tests {
     }
 
     #[test]
-    fn global_config_serialization_omits_legacy_theme_section() {
+    fn global_config_serialization_uses_appearance_selection() {
         let serialized =
             serde_json::to_value(GlobalConfig::default()).expect("config should serialize");
 
@@ -2249,10 +2371,8 @@ mod tests {
             serialized.get("theme").is_none(),
             "Rust config must not export the removed GUI theme schema"
         );
-        assert_eq!(
-            serialized["themes"]["current"], "bitfun-light",
-            "theme selection remains in the TS-owned themes contract"
-        );
+        assert!(serialized.get("themes").is_none());
+        assert_eq!(serialized["appearance"]["selection"], "system");
     }
 
     #[test]
@@ -2328,6 +2448,7 @@ mod tests {
                     "position": "top-right",
                     "duration": 4000,
                     "dialog_completion_notify": true,
+                    "permission_request_notify": false,
                     "enable_startup_tips": true
                 },
                 "ai_experience": {
@@ -2351,6 +2472,7 @@ mod tests {
         .expect("minimal app config with quick_actions should deserialize");
 
         let actions = &config.app.ai_experience.quick_actions;
+        assert!(!config.app.notifications.permission_request_notify);
         assert_eq!(actions.len(), 1);
         assert_eq!(actions[0].id, "custom_1");
         assert_eq!(actions[0].label, "Run tests");
@@ -2359,6 +2481,10 @@ mod tests {
         assert_eq!(
             serialized["app"]["ai_experience"]["quick_actions"][0]["id"],
             "custom_1"
+        );
+        assert_eq!(
+            serialized["app"]["notifications"]["permission_request_notify"],
+            false
         );
     }
 
@@ -2401,25 +2527,41 @@ mod tests {
     }
 
     #[test]
-    fn deserializes_compatibility_false_thinking_flag_into_default_reasoning_mode() {
-        let config: AIModelConfig = serde_json::from_value(serde_json::json!({
-            "id": "model_1",
-            "name": "Provider",
-            "provider": "openai",
-            "model_name": "test-model",
-            "base_url": "https://example.com/v1",
-            "api_key": "key",
-            "enabled": true,
-            "enable_thinking_process": false
+    fn app_flow_chat_permission_mode_control_defaults_to_visible_without_persisting_default() {
+        let default_config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "app": {
+                "flow_chat": {}
+            }
         }))
-        .expect("legacy config should deserialize");
+        .expect("flow chat config without visibility preference should deserialize");
 
-        assert_eq!(config.reasoning_mode, Some(ReasoningMode::Default));
-        assert!(!config.enable_thinking_process);
+        assert!(default_config.app.flow_chat.show_permission_mode_control);
+        let default_serialized =
+            serde_json::to_value(&default_config).expect("config should serialize");
+        assert!(default_serialized["app"]["flow_chat"]
+            .get("show_permission_mode_control")
+            .is_none());
+
+        let hidden_config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "app": {
+                "flow_chat": {
+                    "show_permission_mode_control": false
+                }
+            }
+        }))
+        .expect("flow chat config with hidden permission control should deserialize");
+
+        assert!(!hidden_config.app.flow_chat.show_permission_mode_control);
+        let hidden_serialized =
+            serde_json::to_value(&hidden_config).expect("config should serialize");
+        assert_eq!(
+            hidden_serialized["app"]["flow_chat"]["show_permission_mode_control"],
+            false
+        );
     }
 
     #[test]
-    fn serialization_omits_compatibility_thinking_flag() {
+    fn serialization_omits_removed_reasoning_fields() {
         let config: AIModelConfig = serde_json::from_value(serde_json::json!({
             "id": "model_1",
             "name": "Provider",
@@ -2430,15 +2572,15 @@ mod tests {
             "enabled": true,
             "enable_thinking_process": true
         }))
-        .expect("legacy config should deserialize");
+        .expect("config with removed fields should deserialize");
 
         let value = serde_json::to_value(&config).expect("config should serialize");
 
         assert!(value.get("enable_thinking_process").is_none());
-        assert_eq!(
-            value.get("reasoning_mode").and_then(|v| v.as_str()),
-            Some("enabled")
-        );
+        assert!(value.get("reasoning_mode").is_none());
+        assert!(value.get("reasoning_effort").is_none());
+        assert!(value.get("thinking_budget_tokens").is_none());
+        assert!(value.get("reasoning").is_none());
     }
 
     #[test]
@@ -2699,6 +2841,7 @@ mod tests {
         .expect("logging config without sensitive preference should deserialize");
 
         assert!(config.include_sensitive_diagnostics);
+        assert!(!config.flow_chat_diagnostics);
         assert_eq!(
             config.model_exchange_tracing.mode,
             ModelExchangeTracingMode::Off

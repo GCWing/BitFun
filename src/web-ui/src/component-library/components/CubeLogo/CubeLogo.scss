@@ -38,7 +38,7 @@
     background: linear-gradient(
       135deg,
       rgba(var(--private-cube-logo-particle-rgb), 0.8),
-      var(--border-accent-strong)
+      var(--bf-appearance-token-border-accent-strong)
     );
     box-shadow: 0 0 6px rgba(var(--private-cube-logo-particle-rgb), 0.5);
     animation: cube-logo-particle-float 5s ease-in-out infinite;
@@ -125,9 +125,9 @@
   }
 }
 
-:root[data-theme="light"] .cube-logo,
-:root[data-theme-type="light"] .cube-logo,
-[data-theme-type="light"] .cube-logo {
+:root[data-bf-appearance-mode="light"] .cube-logo,
+:root[data-bf-appearance-mode="light"] .cube-logo,
+[data-bf-appearance-mode="light"] .cube-logo {
   --private-cube-logo-particle-rgb: 90, 123, 178;
   --private-cube-logo-particle-secondary-rgb: 124, 107, 153;
   --private-cube-logo-face-border-rgb: 90, 123, 178;
@@ -145,7 +145,7 @@
   --private-cube-logo-face-left-shadow-rgb: 107, 90, 137;
 }
 
-:root[data-theme-type="light"] {
+:root[data-bf-appearance-mode="light"] {
   .cube-logo__face {
     border: 0.3px solid rgba(var(--private-cube-logo-face-border-rgb), 0.4);
 

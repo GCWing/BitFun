@@ -1,11 +1,11 @@
 .compact-tool-card-wrapper.web-fetch-card .compact-tool-card.status-error .tool-card-icon-marks,
 .base-tool-card-wrapper.web-fetch-card .base-tool-card.status-error .tool-card-icon-marks {
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
 }
 
 .compact-tool-card-wrapper.web-fetch-card .compact-tool-card.status-error.clickable:hover .tool-card-icon-marks,
 .base-tool-card-wrapper.web-fetch-card:hover .base-tool-card.status-error .tool-card-icon-marks {
-  color: var(--color-error);
+  color: var(--bf-appearance-token-color-error);
   transform: scale(1.05);
 }
 
@@ -39,10 +39,10 @@
   align-items: center;
   min-height: 22px;
   padding: 0 8px;
-  border: 1px solid color-mix(in srgb, var(--border-base) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 82%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-bg-elevated) 88%, transparent);
-  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 88%, transparent);
+  color: var(--bf-appearance-token-color-text-secondary);
   font-size: 12px;
   line-height: 1.2;
 }

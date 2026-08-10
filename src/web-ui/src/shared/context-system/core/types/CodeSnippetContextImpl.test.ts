@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
+import {
+  APPEARANCE_DOMAIN_TOKENS,
+  APPEARANCE_LANGUAGE_TOKENS,
+} from '@/infrastructure/appearance/appearanceDomainTokens';
 import { getLanguageColor, getLanguageDisplayName } from './CodeSnippetContextImpl';
 
 describe('CodeSnippetContextImpl language metadata', () => {
@@ -13,14 +16,16 @@ describe('CodeSnippetContextImpl language metadata', () => {
   });
 
   it('keeps code snippet language accents centralized', () => {
-    expect(getLanguageColor('typescript')).toBe('#3178c6');
-    expect(getLanguageColor('rust')).toBe('#e38c00');
-    expect(getLanguageColor('java')).toBe('#e38c00');
-    expect(getLanguageColor('unknown-lang')).toBe('#64748b');
-    expect(getLanguageColor()).toBe('#64748b');
+    expect(getLanguageColor('typescript')).toBe(APPEARANCE_LANGUAGE_TOKENS.typescript);
+    expect(getLanguageColor('rust')).toBe(APPEARANCE_LANGUAGE_TOKENS.rust);
+    expect(getLanguageColor('java')).toBe(APPEARANCE_LANGUAGE_TOKENS.java);
+    expect(getLanguageColor('unknown-lang')).toBe(APPEARANCE_LANGUAGE_TOKENS.plaintext);
+    expect(getLanguageColor()).toBe(APPEARANCE_LANGUAGE_TOKENS.plaintext);
   });
 
   it('keeps mermaid diagram context color in the UI exception registry', () => {
-    expect(UI_EXCEPTION_ACCENTS.mermaidDiagram).toBe('#22c55e');
+    expect(APPEARANCE_DOMAIN_TOKENS.mermaidDiagram).toBe(
+      'var(--bf-appearance-token-domain-mermaid-diagram)',
+    );
   });
 });

@@ -1,6 +1,8 @@
 //! MiniApp manager: CRUD, version management, compile on save.
 
-use crate::miniapp::compiler::{compile_with_request, MiniAppCompileRequest};
+use crate::miniapp::compiler::{
+    compile_market_with_request, compile_with_request, MiniAppCompileRequest,
+};
 use crate::miniapp::permission_policy::{
     resolve_policy_with_request, MiniAppPermissionPolicyRequest,
 };
@@ -17,6 +19,7 @@ use bitfun_product_domains::miniapp::draft::MiniAppDraft;
 use bitfun_product_domains::miniapp::lifecycle::{
     build_worker_revision, MiniAppCreateInput, MiniAppUpdatePatch,
 };
+use bitfun_product_domains::miniapp::market::{InstalledMarketOrigin, MarketPackageMeta};
 use bitfun_product_domains::miniapp::ports::{
     MiniAppCompilePort, MiniAppImportFromPathRequest, MiniAppPortError, MiniAppPortErrorKind,
     MiniAppPortFuture, MiniAppRuntimeFacade,
@@ -71,16 +74,52 @@ impl MiniAppManager {
         app_id: &str,
         source: &MiniAppSource,
         permissions: &MiniAppPermissions,
+        appearance_mode: &str,
+        workspace_root: Option<&Path>,
+    ) -> BitFunResult<String> {
+        let app_data_dir = self.path_manager.miniapp_dir(app_id);
+        let request = MiniAppCompileRequest::from_paths(
+            app_id,
+            &app_data_dir,
+            workspace_root,
+            appearance_mode,
+        );
+        compile_with_request(source, permissions, &request)
+    }
+
+    pub fn compile_market_source(
+        &self,
+        app_id: &str,
+        source: &MiniAppSource,
+        permissions: &MiniAppPermissions,
         theme: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<String> {
         let app_data_dir = self.path_manager.miniapp_dir(app_id);
         let request =
             MiniAppCompileRequest::from_paths(app_id, &app_data_dir, workspace_root, theme);
-        compile_with_request(source, permissions, &request)
+        compile_market_with_request(source, permissions, &request)
     }
 
     fn compile_source_with_app_data_dir(
+        &self,
+        app_id: &str,
+        app_data_dir: &Path,
+        source: &MiniAppSource,
+        permissions: &MiniAppPermissions,
+        appearance_mode: &str,
+        workspace_root: Option<&Path>,
+    ) -> BitFunResult<String> {
+        let request = MiniAppCompileRequest::from_paths(
+            app_id,
+            app_data_dir,
+            workspace_root,
+            appearance_mode,
+        );
+        compile_with_request(source, permissions, &request)
+    }
+
+    fn compile_market_source_with_app_data_dir(
         &self,
         app_id: &str,
         app_data_dir: &Path,
@@ -91,7 +130,20 @@ impl MiniAppManager {
     ) -> BitFunResult<String> {
         let request =
             MiniAppCompileRequest::from_paths(app_id, app_data_dir, workspace_root, theme);
-        compile_with_request(source, permissions, &request)
+        compile_market_with_request(source, permissions, &request)
+    }
+
+    pub async fn uses_market_strict_runtime(&self, app_id: &str) -> bool {
+        self.storage
+            .load_meta(app_id)
+            .await
+            .ok()
+            .is_some_and(|meta| {
+                matches!(
+                    meta.runtime_profile,
+                    bitfun_product_domains::miniapp::types::MiniAppRuntimeProfile::MarketStrict
+                )
+            })
     }
 
     /// List all MiniApp metadata.
@@ -108,6 +160,14 @@ impl MiniAppManager {
             .load_app_ensuring_runtime_state(app_id.to_string())
             .await
             .map_err(map_miniapp_port_error)
+    }
+
+    /// Get persisted metadata without normalizing runtime state.
+    ///
+    /// Agent-side finalization uses this raw baseline before source files are
+    /// synchronized, so legacy/runtime repair cannot hide a direct file edit.
+    pub async fn get_meta(&self, app_id: &str) -> BitFunResult<MiniAppMeta> {
+        self.storage.load_meta(app_id).await
     }
 
     /// Create a new MiniApp (generates id, sets created_at/updated_at, compiles).
@@ -177,13 +237,23 @@ impl MiniAppManager {
             ai_context,
         };
         let now = Utc::now().timestamp_millis();
-        let compiled_html = self.compile_source(
-            app_id,
-            patch.source_for_compile(&previous_app),
-            patch.permissions_for_compile(&previous_app),
-            "dark",
-            workspace_root,
-        )?;
+        let compiled_html = if self.uses_market_strict_runtime(app_id).await {
+            self.compile_market_source(
+                app_id,
+                patch.source_for_compile(&previous_app),
+                patch.permissions_for_compile(&previous_app),
+                "dark",
+                workspace_root,
+            )?
+        } else {
+            self.compile_source(
+                app_id,
+                patch.source_for_compile(&previous_app),
+                patch.permissions_for_compile(&previous_app),
+                "dark",
+                workspace_root,
+            )?
+        };
         self.runtime_facade()
             .persist_update_result_for_app(
                 app_id.to_string(),
@@ -305,7 +375,7 @@ impl MiniAppManager {
     pub async fn create_draft(
         &self,
         app_id: &str,
-        theme: &str,
+        appearance_mode: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<MiniAppDraft> {
         let app = self.get(app_id).await?;
@@ -316,7 +386,7 @@ impl MiniAppManager {
             &self.storage.draft_dir(app_id, &draft_id),
             &app.source,
             &app.permissions,
-            theme,
+            appearance_mode,
             workspace_root,
         )?;
         let draft_root = self
@@ -352,7 +422,7 @@ impl MiniAppManager {
         &self,
         app_id: &str,
         draft_id: &str,
-        theme: &str,
+        appearance_mode: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<MiniAppDraft> {
         let draft = self.get_draft(app_id, draft_id).await?;
@@ -362,7 +432,7 @@ impl MiniAppManager {
             &self.storage.draft_dir(app_id, draft_id),
             &draft.app.source,
             &draft.app.permissions,
-            theme,
+            appearance_mode,
             workspace_root,
         )?;
         self.runtime_facade()
@@ -376,7 +446,7 @@ impl MiniAppManager {
         app_id: &str,
         draft_id: &str,
         permissions: MiniAppPermissions,
-        theme: &str,
+        appearance_mode: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<MiniAppDraft> {
         let draft = self.get_draft(app_id, draft_id).await?;
@@ -386,7 +456,7 @@ impl MiniAppManager {
             &self.storage.draft_dir(app_id, draft_id),
             &draft.app.source,
             &permissions,
-            theme,
+            appearance_mode,
             workspace_root,
         )?;
         self.runtime_facade()
@@ -410,7 +480,7 @@ impl MiniAppManager {
         &self,
         app_id: &str,
         draft_id: &str,
-        theme: &str,
+        appearance_mode: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<MiniApp> {
         let current = self.get(app_id).await?;
@@ -420,7 +490,7 @@ impl MiniAppManager {
             app_id,
             &draft_app.source,
             &draft_app.permissions,
-            theme,
+            appearance_mode,
             workspace_root,
         )?;
         self.runtime_facade()
@@ -557,16 +627,21 @@ impl MiniAppManager {
             .map_err(map_miniapp_port_error)
     }
 
-    /// Recompile app (e.g. after workspace or theme change). Updates compiled_html and saves.
+    /// Recompile app after workspace or appearance changes. Updates compiled_html and saves.
     pub async fn recompile(
         &self,
         app_id: &str,
-        theme: &str,
+        appearance_mode: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<MiniApp> {
         let app = self.storage.load(app_id).await?;
-        let compiled_html =
-            self.compile_source(app_id, &app.source, &app.permissions, theme, workspace_root)?;
+        let compiled_html = self.compile_source(
+            app_id,
+            &app.source,
+            &app.permissions,
+            appearance_mode,
+            workspace_root,
+        )?;
         self.runtime_facade()
             .persist_recompile_result_for_app(app, compiled_html, Utc::now().timestamp_millis())
             .await
@@ -576,7 +651,7 @@ impl MiniAppManager {
     pub async fn sync_from_fs(
         &self,
         app_id: &str,
-        theme: &str,
+        appearance_mode: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<MiniApp> {
         let previous_app = self.storage.load(app_id).await?;
@@ -585,7 +660,7 @@ impl MiniAppManager {
             app_id,
             &source,
             &previous_app.permissions,
-            theme,
+            appearance_mode,
             workspace_root,
         )?;
         self.runtime_facade()
@@ -615,12 +690,70 @@ impl MiniAppManager {
                 MiniAppImportFromPathRequest {
                     source_path,
                     app_id: id,
-                    theme: "dark".to_string(),
+                    appearance_mode: "dark".to_string(),
                     workspace_root: workspace_root.map(Path::to_path_buf),
                     imported_at,
                     recompiled_at: Utc::now().timestamp_millis(),
                 },
             )
+            .await
+            .map_err(map_miniapp_port_error)
+    }
+
+    /// Commit a locally revalidated marketplace package under a new local UUID.
+    /// The marketplace release number is stored in origin metadata and remains
+    /// independent from the local MiniApp version counter.
+    pub async fn install_market_package(
+        &self,
+        package_meta: MarketPackageMeta,
+        source: MiniAppSource,
+        origin: InstalledMarketOrigin,
+    ) -> BitFunResult<MiniApp> {
+        let id = Uuid::new_v4().to_string();
+        let now = Utc::now().timestamp_millis();
+        let compiled_html =
+            self.compile_market_source(&id, &source, &package_meta.permissions, "dark", None)?;
+        self.runtime_facade()
+            .install_market_app(id, package_meta, source, origin, compiled_html, now)
+            .await
+            .map_err(map_miniapp_port_error)
+    }
+
+    /// Import a self-contained `.bfminiapp` file without a server-attested
+    /// listing origin. It still receives the strict runtime profile, but is
+    /// labeled as an ordinary import because a downloaded file carries no
+    /// authenticated listing/release envelope.
+    pub async fn install_strict_package_import(
+        &self,
+        package_meta: MarketPackageMeta,
+        source: MiniAppSource,
+    ) -> BitFunResult<MiniApp> {
+        let id = Uuid::new_v4().to_string();
+        let now = Utc::now().timestamp_millis();
+        let compiled_html =
+            self.compile_market_source(&id, &source, &package_meta.permissions, "dark", None)?;
+        self.runtime_facade()
+            .import_strict_package(id, package_meta, source, compiled_html, now)
+            .await
+            .map_err(map_miniapp_port_error)
+    }
+
+    /// Replace an installed marketplace app after a manual update decision.
+    /// Storage is preserved and the old local version is snapshotted before an
+    /// atomic directory swap.
+    pub async fn update_market_package(
+        &self,
+        app_id: &str,
+        package_meta: MarketPackageMeta,
+        source: MiniAppSource,
+        origin: InstalledMarketOrigin,
+    ) -> BitFunResult<MiniApp> {
+        let previous = self.storage.load(app_id).await?;
+        let now = Utc::now().timestamp_millis();
+        let compiled_html =
+            self.compile_market_source(app_id, &source, &package_meta.permissions, "dark", None)?;
+        self.runtime_facade()
+            .update_market_app(previous, package_meta, source, origin, compiled_html, now)
             .await
             .map_err(map_miniapp_port_error)
     }
@@ -632,7 +765,7 @@ impl MiniAppCompilePort for MiniAppManager {
         app_id: String,
         source: MiniAppSource,
         permissions: MiniAppPermissions,
-        theme: String,
+        appearance_mode: String,
         workspace_root: Option<PathBuf>,
     ) -> MiniAppPortFuture<'_, String> {
         Box::pin(async move {
@@ -640,7 +773,7 @@ impl MiniAppCompilePort for MiniAppManager {
                 &app_id,
                 &source,
                 &permissions,
-                &theme,
+                &appearance_mode,
                 workspace_root.as_deref(),
             )
             .map_err(map_bitfun_error_to_miniapp_port_error)
@@ -820,6 +953,7 @@ mod tests {
             permissions: MiniAppPermissions::default(),
             ai_context: None,
             runtime: Default::default(),
+            runtime_profile: Default::default(),
             i18n: None,
         };
         tokio::fs::write(
@@ -896,6 +1030,21 @@ mod tests {
         assert!(rolled_back.runtime.deps_dirty);
         assert!(rolled_back.runtime.worker_restart_required);
         assert_eq!(manager.list_versions(&app.id).await.unwrap(), vec![1, 2]);
+    }
+
+    #[tokio::test]
+    async fn sync_from_fs_recompiles_without_versioning_unchanged_content() {
+        let manager = test_manager();
+        let app = create_sample_app(&manager).await;
+
+        let synced = manager.sync_from_fs(&app.id, "dark", None).await.unwrap();
+
+        assert_eq!(synced.version, app.version);
+        assert_eq!(synced.updated_at, app.updated_at);
+        assert_eq!(synced.runtime.source_revision, app.runtime.source_revision);
+        assert_eq!(synced.runtime.content_hash, app.runtime.content_hash);
+        assert!(!synced.compiled_html.is_empty());
+        assert!(manager.list_versions(&app.id).await.unwrap().is_empty());
     }
 
     #[tokio::test]
@@ -1031,7 +1180,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn apply_draft_does_not_require_manifest_metadata() {
+    async fn unchanged_draft_apply_does_not_require_manifest_or_create_a_version() {
         let manager = test_manager();
         let app = create_sample_app(&manager).await;
         let draft = manager.create_draft(&app.id, "dark", None).await.unwrap();
@@ -1045,9 +1194,9 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(applied.version, app.version + 1);
+        assert_eq!(applied.version, app.version);
         assert_eq!(applied.source.css, app.source.css);
-        assert_eq!(manager.list_versions(&app.id).await.unwrap(), vec![1]);
+        assert!(manager.list_versions(&app.id).await.unwrap().is_empty());
     }
 
     #[tokio::test]

@@ -36,6 +36,7 @@ agent-facing tool surface.
 
 ```bash
 cargo test -p tool-runtime
+cargo test -p tool-runtime --features document-read fs::document
 cargo test -p tool-runtime --features web-readable web
 node scripts/check-core-boundaries.mjs
 ```

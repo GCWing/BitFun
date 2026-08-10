@@ -19,5 +19,9 @@ serde_json = { workspace = true, optional = true }
 [dev-dependencies]
 serde_json = { workspace = true }
 
+[[test]]
+name = "serde_tests"
+required-features = ["serde"]
+
 [lints]
 workspace = true

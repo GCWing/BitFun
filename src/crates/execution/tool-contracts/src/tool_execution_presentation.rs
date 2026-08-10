@@ -76,8 +76,14 @@ pub fn build_tool_execution_error_presentation(
     tool_name: &str,
     category: &str,
     error_message: &str,
-    provided_arguments: Option<String>,
+    unparseable_raw_arguments: Option<String>,
 ) -> ToolExecutionErrorPresentation {
+    // Callers may supply this only for a tool call whose provider arguments
+    // could not be parsed. Parsed arguments already appear on the preceding
+    // tool call and must not be repeated in its result.
+    let provided_arguments = (category == "invalid_arguments")
+        .then_some(unparseable_raw_arguments)
+        .flatten();
     let mut result_json = serde_json::json!({
         "error": error_message,
         "category": category,

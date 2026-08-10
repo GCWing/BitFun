@@ -1,9 +1,151 @@
 {
   "title": "外部 AI 應用",
-  "subtitle": "使用其他 AI 應用的命令、工具、Agent 與 MCP，並檢查其 Hook。",
+  "subtitle": "使用其他 AI 應用的命令、工具、Agent 與 MCP，並管理相容的 Hook。",
   "legacyHostNotice": "目前執行 Host 使用舊版外部來源協定；升級 Host 後才能使用安全模式。",
   "loading": "正在檢查外部來源…",
   "checkingNonBlocking": "正在檢查更新…",
+  "applications": {
+    "title": "已發現的應用",
+    "status": {
+      "configuration_available": "有可用設定",
+      "temporarily_unavailable": "暫時無法使用",
+      "needs_attention": "需要處理",
+      "connected": "已連線",
+      "connected_custom": "已連線 · 自訂",
+      "discovered": "發現可用設定",
+      "checking": "正在檢查",
+      "no_configuration": "未發現設定"
+    },
+    "summary": {
+      "blockedCount": "{{count}} 項受阻",
+      "blockedCount_other": "{{count}} 項受阻",
+      "conflictCount": "{{count}} 個衝突",
+      "conflictCount_other": "{{count}} 個衝突",
+      "health": {
+        "degraded": "部分可用",
+        "unavailable": "無法使用"
+      },
+      "checking": "正在尋找設定",
+      "noContent": "暫時沒有可用內容"
+    },
+    "counts": {
+      "commands_one": "{{count}} 個命令",
+      "commands_other": "{{count}} 個命令",
+      "tools_one": "{{count}} 個工具",
+      "tools_other": "{{count}} 個工具",
+      "agents_one": "{{count}} 個 Agent",
+      "agents_other": "{{count}} 個 Agent",
+      "mcps_one": "{{count}} 個 MCP 伺服器",
+      "mcps_other": "{{count}} 個 MCP 伺服器"
+    },
+    "actions": {
+      "connect": "連線",
+      "manage": "管理",
+      "review": "檢查"
+    },
+    "expand": "顯示或隱藏 {{name}} 的能力",
+    "toggleLabel": "啟用或停用 {{name}}",
+    "review": {
+      "back": "返回應用列表",
+      "selectionCount": "已選擇 {{selected}} / {{maximum}} 項",
+      "selectionLimit": "已達到選擇上限",
+      "loading": "正在載入審核項目…",
+      "loadMore": "載入更多",
+      "useRecommended": "使用建議設定",
+      "doNotEnable": "暫不啟用",
+      "adjustItems": "調整單項",
+      "enableThisItem": "啟用此項",
+      "doNotEnableAny": "全部不啟用",
+      "enableRecommended": "啟用建議項",
+      "enableSelected": "啟用已選項（{{count}}）",
+      "keepDisabled": "保持停用",
+      "customize": "逐項選擇",
+      "unknownApplication": "外部應用",
+      "category": {
+        "command": "命令",
+        "tool": "工具",
+        "subagent": "Agent",
+        "mcp": "MCP 伺服器",
+        "conflict": "衝突"
+      },
+      "recommendation": {
+        "enable": "BitFun 建議啟用此項。",
+        "keepDisabled": "BitFun 建議保持此項停用；確實需要時再選擇「啟用此項」。",
+        "blocked": "目前安全策略不允許啟用此項，它將保持停用。",
+        "multiple": "有 {{count}} 項需要確認。BitFun 建議啟用其中 {{recommended}} 項，其餘保持停用；可展開「逐項選擇」查看或修改。"
+      },
+      "riskReason": {
+        "processOrResourceAccess": "啟用後，BitFun 可以執行此工具並讓它存取本機資源。",
+        "processOrNetworkAccess": "啟用後，可能會啟動本機程序或連線至外部服務。",
+        "delegatedToolAccess": "啟用後，此 Agent 可以呼叫為它設定的工具。",
+        "ambiguousRuntimeRoute": "存在多個同名來源，請先在進階設定中選擇一個來源。"
+      },
+      "risk": {
+        "low": "低風險",
+        "moderate": "中等風險",
+        "high": "高風險"
+      },
+      "safety": {
+        "blocked": "已被安全策略阻止"
+      },
+      "outcome": {
+        "applied": "變更已套用",
+        "partial": "部分變更未能套用，請查看下方結果。",
+        "rejected": "變更遭到拒絕",
+        "blocked": "變更遭安全策略阻止",
+        "stale": "設定已變更，已載入最新狀態。",
+        "failed": "變更未能套用"
+      },
+      "itemOutcome": {
+        "applied": "已套用",
+        "rejected": "未套用",
+        "blocked": "已阻止",
+        "stale": "審核後已變更",
+        "failed": "未能套用"
+      },
+      "title_one": "{{count}} 項需要確認",
+      "title_other": "{{count}} 項需要確認"
+    },
+    "capabilities": {
+      "command": "命令",
+      "tool": "工具",
+      "agents": "代理",
+      "mcps": "MCP 伺服器"
+    },
+    "capabilityAccess": {
+      "auto": "自動可用",
+      "ask_before_use": "使用前詢問",
+      "discover_only": "僅探索",
+      "disabled": "已停用"
+    },
+    "advanced": {
+      "title": "進階設定"
+    },
+    "detail": {
+      "back": "返回應用清單",
+      "reviewTitle_one": "{{count}} 項等待確認",
+      "reviewTitle_other": "{{count}} 項等待確認",
+      "reviewDescription": "可執行能力在確認前不會執行。",
+      "sourceSummary_one": "{{count}} 個設定來源",
+      "sourceSummary_other": "{{count}} 個設定來源",
+      "usingTitle": "可用內容",
+      "usingDescription": "低風險內容可以自動可用；可執行內容仍受控。",
+      "foundCount_one": "發現 {{count}} 項",
+      "foundCount_other": "發現 {{count}} 項",
+      "autoAvailable": "自動可用",
+      "managed": "管理",
+      "capabilities": {
+        "commands": "命令",
+        "tools": "工具",
+        "agents": "Agent",
+        "mcps": "MCP 伺服器"
+      }
+    }
+  },
+  "hooksManagement": {
+    "title": "Hooks",
+    "loading": "正在載入 Hook 管理…"
+  },
   "hooks": {
     "title": "Hooks",
     "description": "檢視 OpenCode、Claude Code 與 Codex 的 Hook 設定。BitFun 只讀取設定檔，不執行任何程式碼。",
@@ -15,7 +157,6 @@
     "showMoreSourcesForProvider": "再顯示 {{provider}} 的 {{count}} 個來源",
     "showMoreEntriesForProvider": "再顯示 {{provider}} 的 {{count}} 個 Hook",
     "showMoreDiagnosticsForProvider": "再顯示 {{provider}} 的 {{count}} 筆診斷",
-    "technicalDetails": "技術詳情",
     "loading": "正在檢查 Hook 設定…",
     "pending": "Hook 探索仍在進行，目錄會自動更新。",
     "empty": "未發現 Hook 設定。",
@@ -90,7 +231,6 @@
     "hideDetails": "收合詳細資料",
     "close": "關閉",
     "unknown": "未知",
-    "technicalDetails": "技術詳細資料",
     "selected": "目前使用",
     "selectedUnavailable": "已選擇，目前無法使用",
     "notSelected": "未使用",
@@ -105,6 +245,7 @@
     "updated": "已儲存。",
     "waitForUpdate": "另一項變更仍在儲存，請等待完成後再做選擇。",
     "agentUpdated": "已儲存「{{name}}」的變更並重新整理狀態。",
+    "modelBindingUpdated": "已儲存 Agent 模型綁定並重新整理受影響的 Agent。",
     "mcpUpdated": "已儲存 MCP 伺服器選擇並重新整理狀態。"
   },
   "recoveryActions": {
@@ -114,13 +255,14 @@
     "resolve_conflict": "解決衝突",
     "install_runtime": "安裝或修復所需執行階段，然後重新整理。",
     "reconnect_host": "重新連線或升級執行 Host，然後重試。",
-    "exit_safe_mode": "退出安全模式"
+    "exit_safe_mode": "退出安全模式",
+    "upgrade_host": "升級 Host",
+    "view_reason": "檢視原因"
   },
   "safeMode": {
     "title": "外部來源安全模式",
     "description": "阻止新的外部工具、Agent 與 MCP 呼叫，同時保留已探索的命令與診斷資訊；已在執行的呼叫不會被取消。",
-    "activeDescription": "新的外部可執行呼叫已被阻止；已在執行的呼叫仍可能完成，命令與診斷資訊可繼續用於復原。",
-    "activeNotice": "安全模式僅對目前的 Host 程序與執行域有效；重新啟動或切換執行 Host 後會自動關閉。",
+    "activeNotice": "目前 Host 程序已阻止新的外部呼叫；已在執行的呼叫仍可能完成，重新啟動或切換 Host 後安全模式會自動關閉。",
     "toggleLabel": "使用外部來源安全模式",
     "entered": "外部來源安全模式已啟用。",
     "exited": "外部來源安全模式已關閉，符合條件的整合已重新協調。"
@@ -129,7 +271,7 @@
     "hostTitle": "此處暫時無法使用",
     "hostDescription": "請在桌面端檢視或管理外部設定。",
     "remoteDescription": "此遠端專案暫不支援外部設定，請切回本機專案。",
-    "remoteConnectionDescription": "遠端連線無法使用，請重試或中斷連線。"
+    "remoteConnectionDescription": "遠端連線無法使用，請重試連線。"
   },
   "policy": {
     "title": "接入設定",
@@ -177,6 +319,7 @@
       "auto": "自動使用"
     },
     "capability": {
+      "reference": "引用目錄",
       "command": "命令",
       "tool": "工具",
       "subagent": "Agent",
@@ -205,11 +348,8 @@
     "refreshRequired": "操作完成前目錄已變更。請重新整理並確認目前狀態後重試。",
     "policyIncompatible": "外部設定由較新的 BitFun 版本寫入。請先備份並重設，再進行變更。",
     "unavailableRetry": "暫時無法使用，請稍後重試。",
-    "internal": "操作失敗，請重新整理後重試。",
-    "referenceId": "參考編號：{{id}}",
-    "errorCode": "錯誤編號：{{code}}",
-    "stage": "處理階段：{{stage}}",
-    "causationId": "關聯操作：{{id}}"
+    "internal": "操作失敗，目前設定未變更。請使用下方操作重試；若仍失敗，請聯絡支援並提供參考編號。",
+    "referenceId": "支援參考編號（聯絡支援時請提供）：{{id}}"
   },
   "diagnostics": {
     "summary": "有 {{count}} 項內容需要注意，請查看詳細資料以瞭解影響範圍。",
@@ -225,7 +365,7 @@
       "unreadableSource": "BitFun 無法讀取來源中的部分內容。請檢查檔案存取權限後重新整理。",
       "notSupported": "BitFun 暫不支援此類外部內容，因此沒有載入或執行它。",
       "checkFailed": "BitFun 未能檢查一個來源，其他來源仍可使用。請重新整理後重試。",
-      "sourceIssue": "BitFun 在一個來源中發現問題，受影響的內容未啟用。請查看技術詳細資料。"
+      "sourceIssue": "BitFun 在一個來源中發現問題，受影響的內容未啟用。請檢查來源設定後重新整理。"
     }
   },
   "sources": {
@@ -246,8 +386,16 @@
     "enable": "啟用 Agent",
     "reviewTitle": "查看 {{name}} 的執行設定",
     "approvalWarning": "啟用後，此 Agent 可以讓所選模型呼叫上方工具。其指令、模型、工具或設定來源變更時，BitFun 會要求你再次確認。",
-    "singleRun": "單次執行，不支援追問",
+    "role": {
+      "primary": "主工作階段",
+      "subagent": "單次任務，不支援追問",
+      "all": "主工作階段和單次任務"
+    },
     "modelUnavailable": "無法使用",
+    "modelResolvedFromParentAtTaskStart": "任務開始時從父工作階段解析",
+    "requestedModel": "來源宣告：{{model}}",
+    "requestedModelProfile": "來源 Profile：{{profile}}",
+    "modelBindingMethod": "解析方式：{{method}}",
     "model": "模型：{{model}}",
     "tools": "工具：{{tools}}",
     "executionDomain": "執行位置：本機與目前工作區",
@@ -256,6 +404,38 @@
     "noTools": "無工具",
     "unavailableToolsUnknown": "目前 Host 未提供工具名稱",
     "sourceLocations": "設定來源（{{count}} 個）"
+  },
+  "agentModelBindings": {
+    "title": "Agent 模型綁定",
+    "affectedAgents": "影響 {{count}} 個 Agent",
+    "effectiveModel": "實際使用 {{model}}",
+    "configuredEffort": "已設定推理強度：{{value}}",
+    "selectLabel": "為 {{request}} 選擇 BitFun 模型",
+    "automatic": "已自動比對",
+    "targetUnavailable": "已無法使用：{{target}}",
+    "request": {
+      "default": "BitFun 預設模型",
+      "inherit": "父工作階段模型"
+    },
+    "profile": {
+      "namedVariant": "命名變體 {{name}}",
+      "reasoningEffort": "推理強度 {{value}}"
+    },
+    "target": {
+      "source": "使用來源自動比對",
+      "unbound": "未綁定模型",
+      "primary": "主要模型",
+      "fast": "快速模型",
+      "model": "已設定模型"
+    },
+    "method": {
+      "default": "BitFun 預設模型",
+      "inherit": "繼承父工作階段模型",
+      "exact": "精確比對已設定模型",
+      "explicit": "使用者綁定",
+      "binding_required": "需要選擇模型",
+      "binding_unavailable": "已儲存的模型無法使用"
+    }
   },
   "agentState": {
     "approval_required": "待確認",
@@ -371,6 +551,11 @@
     "argumentCount": "命令參數數量：{{count}}",
     "headerCount": "已設定 {{count}} 個 HTTP 標頭",
     "headerNames": "HTTP 標頭：{{names}}",
+    "timeoutSummary": "逾時覆寫：{{values}}",
+    "timeoutStartup": "啟動 {{duration}}",
+    "timeoutCatalog": "目錄讀取 {{duration}}",
+    "timeoutExecution": "執行 {{duration}}",
+    "timeoutMilliseconds": "{{value}} 毫秒",
     "changePolicy": "伺服器設定變更後，BitFun 會在再次載入前請你確認。",
     "runtimeUnavailableGuidance": "請先停用此伺服器，修正來源設定或驗證後再啟用，通常不需要重新啟動 BitFun。",
     "unsupportedGuidance": "請在來源應用程式中修改此設定，然後重新整理。",
@@ -535,6 +720,11 @@
     "configLocations": "設定位置",
     "inherited": "繼承自整體模式",
     "capability": {
+      "reference": {
+        "description": "OpenCode 設定中的具名本機目錄",
+        "effect": "在工作空間目錄檢視與明確目錄導覽中顯示引用。",
+        "risk": "引用不會授予額外的檔案存取權限。"
+      },
       "subagent": {
         "description": "發現 {{count}} 個 Agent · 來自{{scope}}",
         "effect": "啟用後允許呼叫 OpenCode 中定義的 Agent。",

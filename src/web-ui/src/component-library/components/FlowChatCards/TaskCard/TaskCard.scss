@@ -41,18 +41,18 @@
 
   &__icon {
     @include shared.liquid-icon;
-    color: var(--color-purple-500);
+    color: var(--bf-appearance-token-color-purple-500);
   }
 
 
   &__action {
     font-weight: 500;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
 
   &__description {
-    color: var(--color-static-white);
+    color: var(--bf-appearance-token-color-static-white);
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -69,7 +69,7 @@
     align-items: flex-start;
     gap: 8px;
     padding: 6px 0;
-    border-bottom: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
 
     &:last-child {
       border-bottom: none;
@@ -79,13 +79,13 @@
   &__label {
     font-size: 12px;
     font-weight: 600;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     min-width: 80px;
   }
 
   &__value {
     font-size: 13px;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     flex: 1;
   }
 
@@ -100,22 +100,22 @@
     gap: 8px;
     width: 100%;
     padding: 10px 12px;
-    background: var(--color-bg-primary);
-    border: 1px solid var(--border-subtle);
+    background: var(--bf-appearance-token-color-bg-primary);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: 4px;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
 
     &:hover {
-      background: var(--color-bg-primary);
-      border-color: var(--border-medium);
+      background: var(--bf-appearance-token-color-bg-primary);
+      border-color: var(--bf-appearance-token-border-medium);
     }
 
     svg:first-child {
-      color: var(--color-purple-600);
+      color: var(--bf-appearance-token-color-purple-600);
     }
 
     span {
@@ -124,15 +124,15 @@
     }
 
     svg:last-child {
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
     }
   }
 
   &__result-content {
     margin-top: 8px;
     padding: 12px;
-    background: var(--color-bg-primary);
-    border: 1px solid var(--border-subtle);
+    background: var(--bf-appearance-token-color-bg-primary);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: 4px;
     max-height: 400px;
     overflow-y: auto;
@@ -143,7 +143,7 @@
     margin: 0;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 12px;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-word;
@@ -156,10 +156,10 @@
     gap: 8px;
     margin-top: 12px;
     padding: 12px;
-    background: color-mix(in srgb, var(--color-purple-600) 5%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-purple-600) 20%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-purple-600) 5%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-purple-600) 20%, transparent);
     border-radius: 4px;
-    color: var(--color-purple-600);
+    color: var(--bf-appearance-token-color-purple-600);
     font-size: 13px;
   }
 

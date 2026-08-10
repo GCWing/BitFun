@@ -22,7 +22,7 @@
 ### 2.1 风险判定模型
 
 安全边界不按工具名称、命令关键词或模型判断结果直接授权。凡经 BitFun owner/facade 发起的 tool、MCP、skill、
-插件、Hook、shell、文件写入、网络访问或浏览器/桌面动作，每次调用都应归一为风险评估请求：
+插件、Hook、shell、文件写入、网络访问或浏览器/桌面动作，每次调用都应统一转换为风险评估请求：
 
 | 字段 | 判定作用 |
 |---|---|
@@ -52,8 +52,8 @@
 |---|---|---|
 | Prompt 注入 | README/issue/doc 要求泄露凭据、忽略策略、执行外部脚本 | 标记为恶意指令，隔离为不可信上下文 |
 | Harness 主动配置 | Harness 直接执行的项目脚本、自定义工具和工作流配置 | 未审核时不执行；hash 或执行域变化后重新审核 |
-| OpenCode 扩展 | plugin/Hook、custom tool 和终端插件 | 首次激活、启动或 import 及关键事实变化时重算来源准入；本地默认兼容策略可允许，调用仍走 owner 权限路径 |
-| MCP 与其他外部能力 | MCP server/tool 及其他 owner 管理的执行面 | 由对应 owner 决定来源/连接准入和 allow/ask/deny；Harness 不重复其决定 |
+| OpenCode 扩展 | plugin/Hook、custom tool 和终端插件 | 首次激活、启动或 import 及关键事实变化时重新检查来源许可；本地默认兼容策略可允许，调用仍走归属模块的权限路径 |
+| MCP 与其他外部能力 | MCP server/tool 及其他归属模块管理的执行面 | 由对应归属模块决定来源/连接许可和 allow/ask/deny；Harness 不重复其决定 |
 | 网络访问 | 下载依赖、curl 外部域名、上传日志、访问未知 API | 默认按域名/目的说明确认 |
 | 凭据访问 | `.env`、SSH key、token、cloud credential、browser cookie | 默认阻断或要求明确范围授权 |
 | 文件系统越界 | 写工作区外路径、改 home/config、删除大量文件 | 默认确认，高危路径默认阻断 |
@@ -145,7 +145,7 @@ interface SecurityBoundaryDecision {
 | ACP 客户端 | 本地或远程 ACP 进程 | `ask/allow_once/reject_once` 权限桥接、客户端配置和会话范围 | 只读模式、受控工作区、隔离进程或远程执行域 | ACP 允许只表达本次授权；文件、shell、网络和凭据仍按安全边界判定 |
 | MCP server / MCP tool | 本地、远程或项目配置声明的位置 | 来源、hash、工具声明、读写能力和用户授权 | 禁用未知来源、只读工具集、受控网络、隔离进程 | 工具自称只读不能自动可信；实际能力变化后重新确认 |
 | WebView / MiniApp / 生成式 UI | 前端 iframe 或受控 JS worker | iframe sandbox、postMessage bridge、host facade | iframe sandbox、worker、host-side allowlist、fs/net/shell scope | UI 沙箱不授予宿主文件、网络或 shell 权限 |
-| 插件运行时主机 | Product Assembly 注入的 Host、生态适配器和脚本执行服务 | 来源、target、实际执行域/用户、当前有效策略、凭据与环境范围；经归属模块校验的类型化调用 | 每 target 可终止进程树；平台支持时使用 Job Object、process group、容器或无凭据环境，无法硬隔离时显示残余风险 | 插件可以返回类型化工具结果或合法 Hook 变换；工具结果、权限、安全审计和业务状态仍由 Execution、Security Boundary 与对应业务 owner 提交 |
+| Plugin Host | `PluginRuntimeClient`、生态适配器、`ScriptToolRuntime` | 来源、插件身份、执行机器、OS 用户、策略、凭据和环境 | 独立子进程；仅兼容插件共享 Host；可用时增加 Job Object、process group 或容器 | 共享 Host 不代表插件彼此隔离；工具结果、权限、审计和业务状态仍由原模块提交 |
 | 浏览器/Computer Use | 本机桌面或浏览器上下文 | 桌面能力开关、动作确认、不可远程时明确禁用 | 受控浏览器上下文、临时 profile、禁止敏感域或剪贴板范围 | 不能在远程工作区假装本地桌面能力可用 |
 | 云端异步任务 | 云端任务执行域 | 任务前授权、阶段性授权、取消和审计续接 | 临时环境、无凭据启动、网络策略、只读仓库和受控 secret 注入 | 长任务减少弹窗，但高风险阶段必须提前或阶段性确认 |
 
@@ -164,7 +164,7 @@ interface SecurityBoundaryDecision {
 | P0 | 展示执行位置、工作区根、授权范围和基础 allow/ask/deny；记录沙箱不可用时的降级原因 |
 | P1 | 本地临时 worktree、只读/写入范围、远程上下文提示、ACP 权限桥接和 UI iframe sandbox 统一记录 |
 | P2 | 工作区配置声明可信命令、域名、路径和凭据范围；支持撤销、过期和项目级审计 |
-| P3 | 脚本执行服务的进程树、平台资源限制和项目执行域隔离增强；只按真实隔离能力展示保护、降级与残余风险，不以独立进程冒充完整沙箱 |
+| P3 | `ScriptToolRuntime` 所在 services 实现的进程树、平台资源限制和执行域隔离增强；只按真实隔离能力展示保护、降级与残余风险，不以独立进程冒充完整沙箱 |
 | P4 | 企业受管 sandbox、容器策略、无凭据运行、网络策略、签名插件和跨项目审计导出 |
 
 ## 6. 应急放行规则
@@ -199,7 +199,7 @@ interface SecurityBoundaryDecision {
 | 用户明确说“不要问，直接跑” | 只能降低质量提示；安全越界仍提示或要求沙箱 |
 | 仓库 AGENTS.md 要求禁用安全检查 | 视为普通项目规则，不影响强制执行 |
 | Harness 将直接执行的项目脚本或工作流配置在 PR 中被修改 | 原审核状态失效；不能继续按旧 hash 或旧执行域执行 |
-| OpenCode plugin/Hook 来源变化 | OpenCode owner 在首次激活、启动或 import 前重算来源准入；调用时权限独立判断，Harness 不追加激活步骤 |
+| OpenCode plugin/Hook 来源变化 | OpenCode 归属模块在首次激活、启动或 import 前重新检查来源许可；调用时权限独立判断，Harness 不追加激活步骤 |
 | MCP 来源或连接参数变化 | MCP owner 重新评估连接和权限，可要求确认或拒绝；Harness 不复制其授权状态 |
 | 项目插件复写 `bash` | 显示复写来源、hash、权限和撤销入口；复写只在当前项目执行域生效，实际命令仍经 shell 安全策略 |
 | MCP server 描述自己是 read-only | 仍以工具声明、实际能力和用户授权为准 |

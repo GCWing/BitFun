@@ -4,8 +4,9 @@ use super::lifecycle::{
     completed_turn_failure, drain_interrupted_turn_events, effective_event_invocation,
     event_belongs_to_exec_turn, event_turn_id, is_exec_terminal,
     permission_action_required_message, resolve_cancelled_turn_observation,
-    serialize_stream_envelope, settlement_failure, should_reject_permission_request,
-    ExecApprovalMode, ExecJsonResult, ExecMode, ExecTokenUsage, TOOL_START_INPUT_PREVIEW_CHARS,
+    serialize_stream_envelope, session_in_use_stream_envelope, settlement_failure,
+    should_reject_permission_request, ExecApprovalMode, ExecJsonResult, ExecMode, ExecTokenUsage,
+    TOOL_START_INPUT_PREVIEW_CHARS,
 };
 use super::patch::write_patch_to_path;
 use super::patch::{git_diff_base, untracked_files};
@@ -376,6 +377,17 @@ fn preflight_json_error_omits_unknown_runtime_ids() {
     assert_eq!(value["is_error"], true);
     assert!(value.get("session_id").is_none());
     assert!(value.get("turn_id").is_none());
+    assert!(value.get("error_code").is_none());
+}
+
+#[test]
+fn session_conflict_json_error_exposes_the_existing_runtime_code() {
+    let result = ExecJsonResult::preflight_error("close the other instance")
+        .with_error_code("session_in_use");
+    let value = serde_json::to_value(result).expect("serialize result");
+
+    assert_eq!(value["error_code"], "session_in_use");
+    assert_eq!(value["result"], "close the other instance");
 }
 
 #[test]
@@ -404,6 +416,19 @@ fn stream_json_reuses_the_existing_agentic_envelope() {
     assert_eq!(value["event"]["type"], "SessionStateChanged");
     assert!(value.get("schema_version").is_none());
     assert!(value.get("sequence").is_none());
+}
+
+#[test]
+fn session_conflict_stream_json_reuses_system_error_without_a_new_event_schema() {
+    let envelope = session_in_use_stream_envelope();
+    let encoded = serialize_stream_envelope(&envelope).expect("serialize envelope");
+    let value: serde_json::Value = serde_json::from_str(&encoded).expect("JSONL record");
+
+    assert_eq!(value["event"]["type"], "SystemError");
+    assert_eq!(value["event"]["error"], "session_in_use");
+    assert_eq!(value["event"]["recoverable"], true);
+    assert!(value["event"]["session_id"].is_null());
+    assert!(value.get("error_code").is_none());
 }
 
 #[test]

@@ -40,4 +40,19 @@ describe('TerminalOutputFallback', () => {
     expect(fallback?.style.height).toBe('34px');
     expect(fallback?.style.overflow).toBe('hidden');
   });
+
+  it('uses the same normalized rows as the xterm renderer', () => {
+    act(() => {
+      root.render(
+        <TerminalOutputFallback
+          content={'one\n\x1b[?25h'}
+          maxRows={2}
+        />
+      );
+    });
+
+    const fallback = container.querySelector<HTMLPreElement>('pre.terminal-output-pre');
+    expect(fallback?.textContent).toBe('one');
+    expect(fallback?.style.height).toBe('17px');
+  });
 });

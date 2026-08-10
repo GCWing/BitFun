@@ -1,0 +1,27 @@
+import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance/types';
+export const selectAppearanceDescriptor: AppearanceSurfaceDescriptor = {
+  id: 'select', parts: [
+    { id: 'root', propertyProfile: 'control', visualRole: 'control' },
+    { id: 'label', propertyProfile: 'paint', visualRole: 'content' },
+    { id: 'trigger', propertyProfile: 'control', visualRole: 'control' },
+    { id: 'value', propertyProfile: 'paint', visualRole: 'content' },
+    { id: 'suffix', propertyProfile: 'paint', visualRole: 'decoration' },
+    { id: 'loading', propertyProfile: 'paint', visualRole: 'decoration' },
+    { id: 'clear', propertyProfile: 'control', visualRole: 'control' },
+    { id: 'arrow', propertyProfile: 'paint', visualRole: 'decoration' },
+    { id: 'dropdown', propertyProfile: 'overlay', visualRole: 'popup' },
+    { id: 'search', propertyProfile: 'control', visualRole: 'control' },
+    { id: 'searchInput', propertyProfile: 'control', visualRole: 'control' },
+    { id: 'options', visualRole: 'content' },
+    { id: 'option', propertyProfile: 'control', visualRole: 'control' },
+    { id: 'optionIcon', propertyProfile: 'paint', visualRole: 'decoration' },
+    { id: 'optionLabel', propertyProfile: 'paint', visualRole: 'content' },
+    { id: 'optionDescription', propertyProfile: 'paint', visualRole: 'content' },
+    { id: 'group', visualRole: 'content' },
+    { id: 'groupLabel', propertyProfile: 'paint', visualRole: 'content' },
+    { id: 'empty', visualRole: 'content' },
+    { id: 'message', propertyProfile: 'paint', visualRole: 'content' },
+  ],
+  facets: [{ id: 'size', attribute: 'data-bf-size', values: ['small', 'medium', 'large'] }, { id: 'placement', attribute: 'data-bf-placement', values: ['top', 'bottom'] }, { id: 'multiple', attribute: 'data-bf-multiple', values: ['true', 'false'] }],
+  states: [{ id: 'hover', selector: { kind: 'self', suffix: ':hover' } }, { id: 'focusWithin', selector: { kind: 'self', suffix: ':focus-within' } }, { id: 'open', selector: { kind: 'self', suffix: '[data-bf-state~="open"]' } }, { id: 'selected', selector: { kind: 'self', suffix: '[data-bf-state~="selected"]' } }, { id: 'highlighted', selector: { kind: 'self', suffix: '[data-bf-state~="highlighted"]' } }, { id: 'disabled', selector: { kind: 'self', suffix: '[data-bf-state~="disabled"]' } }, { id: 'error', selector: { kind: 'self', suffix: '[data-bf-state~="error"]' } }, { id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } }],
+};

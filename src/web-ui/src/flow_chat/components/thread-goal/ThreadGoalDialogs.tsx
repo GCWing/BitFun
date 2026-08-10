@@ -121,8 +121,12 @@ export const ThreadGoalDialogs: React.FC<ThreadGoalDialogsProps> = ({
         contentClassName="bitfun-thread-goal-modal__body"
       >
         {goal ? (
-          <div className="bitfun-thread-goal-menu">
-            <div className="bitfun-thread-goal-menu__header">
+          <div
+            className="bitfun-thread-goal-menu"
+            data-bf-component="thread-goal-dialogs"
+            data-bf-part="menu"
+          >
+            <div data-bf-component="thread-goal-dialogs" data-bf-part="header" className="bitfun-thread-goal-menu__header">
               <span className={statusBadgeClass(goal.status)}>
                 <Target size={14} aria-hidden />
                 {statusLabel}
@@ -132,11 +136,11 @@ export const ThreadGoalDialogs: React.FC<ThreadGoalDialogsProps> = ({
               ) : null}
             </div>
 
-            <section className="bitfun-thread-goal-menu__section" aria-labelledby="thread-goal-objective">
+            <section data-bf-component="thread-goal-dialogs" data-bf-part="section" className="bitfun-thread-goal-menu__section" aria-labelledby="thread-goal-objective">
               <h3 id="thread-goal-objective" className="bitfun-thread-goal-menu__section-title">
                 {t('threadGoal.objectiveLabel')}
               </h3>
-              <p className="bitfun-thread-goal-menu__objective">{goal.objective}</p>
+              <p data-bf-component="thread-goal-dialogs" data-bf-part="objective" className="bitfun-thread-goal-menu__objective">{goal.objective}</p>
             </section>
 
             {showWorkflow ? (
@@ -147,9 +151,11 @@ export const ThreadGoalDialogs: React.FC<ThreadGoalDialogsProps> = ({
                 <h3 id="thread-goal-workflow" className="bitfun-thread-goal-menu__section-title">
                   {t('threadGoal.workflow.title')}
                 </h3>
-                <ol className="bitfun-thread-goal-menu__workflow">
+                <ol data-bf-component="thread-goal-dialogs" data-bf-part="workflow" className="bitfun-thread-goal-menu__workflow">
                   {workflowSteps.map(step => (
                     <li
+                      data-bf-component="thread-goal-dialogs"
+                      data-bf-part="workflowItem"
                       key={step.id}
                       className={[
                         'bitfun-thread-goal-menu__workflow-step',
@@ -175,8 +181,8 @@ export const ThreadGoalDialogs: React.FC<ThreadGoalDialogsProps> = ({
               </section>
             ) : null}
 
-            <div className="bitfun-thread-goal-menu__footer">
-              <div className="bitfun-thread-goal-menu__actions">
+            <div data-bf-component="thread-goal-dialogs" data-bf-part="footer" className="bitfun-thread-goal-menu__footer">
+              <div data-bf-component="thread-goal-dialogs" data-bf-part="actions" className="bitfun-thread-goal-menu__actions">
                 {controller.availableActions.map(action => (
                   <Button
                     key={action}
@@ -190,13 +196,18 @@ export const ThreadGoalDialogs: React.FC<ThreadGoalDialogsProps> = ({
                   </Button>
                 ))}
               </div>
-              <p className="bitfun-thread-goal-menu__hint">{commandHint}</p>
+              <p data-bf-component="thread-goal-dialogs" data-bf-part="hint" className="bitfun-thread-goal-menu__hint">{commandHint}</p>
             </div>
           </div>
         ) : (
-          <div className="bitfun-thread-goal-menu bitfun-thread-goal-menu--empty">
-            <p className="bitfun-thread-goal-menu__hint">{t('threadGoal.menuEmpty')}</p>
-            <div className="bitfun-thread-goal-menu__actions">
+          <div
+            className="bitfun-thread-goal-menu bitfun-thread-goal-menu--empty"
+            data-bf-component="thread-goal-dialogs"
+            data-bf-part="menu"
+            data-bf-state="empty"
+          >
+            <p data-bf-component="thread-goal-dialogs" data-bf-part="hint" className="bitfun-thread-goal-menu__hint">{t('threadGoal.menuEmpty')}</p>
+            <div data-bf-component="thread-goal-dialogs" data-bf-part="actions" className="bitfun-thread-goal-menu__actions">
               <Button
                 type="button"
                 variant="primary"
@@ -223,7 +234,11 @@ export const ThreadGoalDialogs: React.FC<ThreadGoalDialogsProps> = ({
         contentInset
         contentClassName="bitfun-thread-goal-modal__body"
       >
-        <div className="bitfun-thread-goal-edit">
+        <div
+          className="bitfun-thread-goal-edit"
+          data-bf-component="thread-goal-dialogs"
+          data-bf-part="edit"
+        >
           <p className="bitfun-thread-goal-edit__hint">{t('threadGoal.editHint')}</p>
           <Textarea
             value={draft}
@@ -233,7 +248,7 @@ export const ThreadGoalDialogs: React.FC<ThreadGoalDialogsProps> = ({
             disabled={disabled}
             placeholder={t('threadGoal.editPlaceholder')}
           />
-          <div className="bitfun-thread-goal-edit__actions">
+          <div data-bf-component="thread-goal-dialogs" data-bf-part="actions" className="bitfun-thread-goal-edit__actions">
             <Button type="button" variant="ghost" size="small" onClick={controller.closeEdit}>
               {t('threadGoal.editCancel')}
             </Button>
@@ -258,12 +273,16 @@ export const ThreadGoalDialogs: React.FC<ThreadGoalDialogsProps> = ({
         contentInset
         contentClassName="bitfun-thread-goal-modal__body"
       >
-        <div className="bitfun-thread-goal-resume">
+        <div
+          className="bitfun-thread-goal-resume"
+          data-bf-component="thread-goal-dialogs"
+          data-bf-part="resume"
+        >
           <p className="bitfun-thread-goal-resume__subtitle">
             {t('threadGoal.resumeSubtitle', { objective: goal?.objective ?? '' })}
           </p>
           <p className="bitfun-thread-goal-resume__hint">{t('threadGoal.resumeHint')}</p>
-          <div className="bitfun-thread-goal-resume__actions">
+          <div data-bf-component="thread-goal-dialogs" data-bf-part="actions" className="bitfun-thread-goal-resume__actions">
             <Button
               type="button"
               variant="ghost"

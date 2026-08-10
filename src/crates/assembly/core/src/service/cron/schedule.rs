@@ -179,6 +179,8 @@ mod tests {
                 workspace: CronWorkspaceRef {
                     workspace_id: None,
                     workspace_path: "E:/workspace".to_string(),
+                    project_workspace_path: None,
+                    execution_target: None,
                     remote_connection_id: None,
                     remote_ssh_host: None,
                 },

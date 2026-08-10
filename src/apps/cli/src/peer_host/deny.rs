@@ -15,11 +15,21 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "initialize_tray_after_startup",
     "startup_window_control",
     "toggle_main_window_fullscreen",
+    "set_main_window_transient_geometry",
     "get_prevent_sleep_enabled",
     "set_prevent_sleep_enabled",
     "restart_app",
     "check_for_updates",
     "install_update",
+    "appearance_market_browse",
+    "appearance_market_download_release",
+    "appearance_market_get_listing",
+    "appearance_market_get_review_submission",
+    "appearance_market_list_review_submissions",
+    "appearance_market_list_submissions",
+    "appearance_market_review_submission",
+    "appearance_market_submit_package",
+    "appearance_market_withdraw_submission",
     "account_login",
     "account_finalize_login",
     "account_logout",
@@ -71,6 +81,23 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "relay_deploy_cancel",
     "relay_deploy_register",
     "relay_deploy_verify",
+    "dispatch_list_targets",
+    "dispatch_probe_target",
+    "dispatch_install_cli_start",
+    "dispatch_install_cli_poll",
+    "dispatch_install_cli_cancel",
+    "dispatch_provision_target",
+    "dispatch_sync_model_config",
+    "dispatch_submit",
+    "dispatch_status",
+    "dispatch_query",
+    "dispatch_sync_result",
+    "dispatch_cancel",
+    "dispatch_list_jobs",
+    "dispatch_answer",
+    "dispatch_append",
+    "dispatch_load_transcript",
+    "dispatch_save_transcript",
 ];
 
 /// Desktop IDE surfaces that CLI Peer Host does not implement.
@@ -88,11 +115,11 @@ static CLI_UNSUPPORTED_EXACT: &[&str] = &[
 ];
 
 pub(crate) fn is_local_only_command(command: &str) -> bool {
-    LOCAL_ONLY_COMMANDS.iter().any(|denied| *denied == command)
+    LOCAL_ONLY_COMMANDS.contains(&command)
 }
 
 pub(crate) fn is_cli_unsupported_command(command: &str) -> bool {
-    if CLI_UNSUPPORTED_EXACT.iter().any(|c| *c == command) {
+    if CLI_UNSUPPORTED_EXACT.contains(&command) {
         return true;
     }
     let prefixes = [
@@ -107,4 +134,34 @@ pub(crate) fn is_cli_unsupported_command(command: &str) -> bool {
         "review_platform_",
     ];
     prefixes.iter().any(|prefix| command.starts_with(prefix))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_local_only_command;
+
+    #[test]
+    fn outbound_dispatch_control_plane_stays_local_only() {
+        for command in [
+            "dispatch_list_targets",
+            "dispatch_probe_target",
+            "dispatch_install_cli_start",
+            "dispatch_install_cli_poll",
+            "dispatch_install_cli_cancel",
+            "dispatch_provision_target",
+            "dispatch_sync_model_config",
+            "dispatch_submit",
+            "dispatch_status",
+            "dispatch_query",
+            "dispatch_sync_result",
+            "dispatch_cancel",
+            "dispatch_list_jobs",
+            "dispatch_answer",
+            "dispatch_append",
+            "dispatch_load_transcript",
+            "dispatch_save_transcript",
+        ] {
+            assert!(is_local_only_command(command), "{command}");
+        }
+    }
 }

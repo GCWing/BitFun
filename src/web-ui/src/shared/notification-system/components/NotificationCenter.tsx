@@ -1,4 +1,4 @@
-
+ 
 
 import React, { useState, useMemo } from 'react';
 import { X, CheckCheck, Trash2, XCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
@@ -21,29 +21,30 @@ export const NotificationCenter: React.FC = () => {
     return [...allProgressNotifications, ...allLoadingNotifications];
   }, [allProgressNotifications, allLoadingNotifications]);
 
+  
   const handleClose = React.useCallback(() => {
     notificationService.toggleCenter(false);
   }, []);
 
-
+  
   const handleMarkAllRead = () => {
     notificationService.markAllAsRead();
   };
 
-
+  
   const handleClearAll = () => {
     notificationService.clearHistory();
   };
 
-
+  
   const handleDeleteNotification = (e: React.MouseEvent, notificationId: string) => {
-    e.stopPropagation();
+    e.stopPropagation(); 
     notificationService.deleteFromHistory(notificationId);
   };
 
-
+  
   const handleNotificationClick = (notification: NotificationRecord) => {
-
+    
     setExpandedIds(prev => {
       const newSet = new Set(prev);
       if (newSet.has(notification.id)) {
@@ -54,37 +55,37 @@ export const NotificationCenter: React.FC = () => {
       return newSet;
     });
 
-
+    
     if (!notification.read) {
       notificationService.markAsRead(notification.id);
     }
-
-
+    
+    
     if (notification.metadata?.onClick) {
       notification.metadata.onClick();
     }
   };
 
-
+  
   const filteredHistory = useMemo(() => {
     let filtered = history;
 
-
-
+    
+    
     filtered = filtered.filter(n => {
       if (n.variant === 'progress' || n.variant === 'loading') {
-
+        
         return n.status === 'completed' || n.status === 'failed' || n.status === 'cancelled';
       }
-      return true;
+      return true; 
     });
 
-
+    
     if (filter !== 'all') {
       filtered = filtered.filter(n => n.type === filter);
     }
 
-
+    
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(n =>
@@ -96,7 +97,7 @@ export const NotificationCenter: React.FC = () => {
     return filtered;
   }, [history, filter, searchQuery]);
 
-
+  
   const groupedHistory = useMemo(() => {
     const now = Date.now();
     const today = new Date(now).setHours(0, 0, 0, 0);
@@ -110,7 +111,7 @@ export const NotificationCenter: React.FC = () => {
 
     filteredHistory.forEach(notification => {
       const notificationDate = new Date(notification.timestamp).setHours(0, 0, 0, 0);
-
+      
       if (notificationDate === today) {
         groups.today.push(notification);
       } else if (notificationDate === yesterday) {
@@ -123,14 +124,14 @@ export const NotificationCenter: React.FC = () => {
     return groups;
   }, [filteredHistory]);
 
-
+  
   const formatTime = (timestamp: number) => {
     return formatDate(timestamp, { hour: '2-digit', minute: '2-digit' });
   };
 
-
+  
   const getIcon = (type: string, status?: string) => {
-
+    
     if (status === 'completed') {
       return '✓';
     }
@@ -140,8 +141,8 @@ export const NotificationCenter: React.FC = () => {
     if (status === 'cancelled') {
       return '⊘';
     }
-
-
+    
+    
     switch (type) {
       case 'success':
         return '✓';
@@ -168,39 +169,41 @@ export const NotificationCenter: React.FC = () => {
     return diagnostics || (rawError ? `raw_error=${rawError}` : null);
   };
 
-
+  
   const renderActiveTaskItem = (notification: Notification) => {
     const isProgress = notification.variant === 'progress';
     const isLoading = notification.variant === 'loading';
-
-
+    
+    
     const getProgressInfo = () => {
       if (isLoading) {
-        return null;
+        return null;  
       }
-
+      
       if (isProgress) {
         const mode = notification.progressMode || (notification.textOnly ? 'text-only' : 'percentage');
         if (mode === 'text-only') return null;
-
+        
         if (mode === 'fraction' && notification.current !== undefined && notification.total !== undefined) {
           return `${notification.current}/${notification.total}`;
         }
-
+        
         if (mode === 'percentage' && notification.progress !== undefined) {
           return `${Math.round(notification.progress)}%`;
         }
       }
-
+      
       return null;
     };
-
+    
     const progressInfo = getProgressInfo();
-
+    
     return (
       <div
         key={notification.id}
         className="notification-center__active-task-item"
+        data-bf-component="notification"
+        data-bf-part="centerItem"
       >
         <div className="notification-center__active-task-icon">
           <Loader2 size={16} className="notification-center__spinner" />
@@ -215,11 +218,11 @@ export const NotificationCenter: React.FC = () => {
           <div className="notification-center__active-task-message">
             {isProgress && notification.progressText ? notification.progressText : (notification.messageNode ?? notification.message)}
           </div>
-
+          
           {isProgress && (() => {
             const mode = notification.progressMode || (notification.textOnly ? 'text-only' : 'percentage');
             if (mode === 'text-only') return null;
-
+            
             return (
               <div className="notification-center__active-task-progress-bar">
                 <div
@@ -234,27 +237,27 @@ export const NotificationCenter: React.FC = () => {
     );
   };
 
-
+  
   const renderNotificationItem = (notification: NotificationRecord) => {
     const isProgress = notification.variant === 'progress';
     const isLoading = notification.variant === 'loading';
-    const iconClass = (isProgress || isLoading) && notification.status
-      ? `notification-center__item-icon--${notification.status}`
+    const iconClass = (isProgress || isLoading) && notification.status 
+      ? `notification-center__item-icon--${notification.status}` 
       : `notification-center__item-icon--${notification.type}`;
 
-
+    
     const now = Date.now();
     const today = new Date(now).setHours(0, 0, 0, 0);
     const yesterday = today - 86400000;
     const notificationDate = new Date(notification.timestamp).setHours(0, 0, 0, 0);
-
+    
     const timeDisplay = notificationDate < yesterday
       ? formatDate(notification.timestamp, {
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
       : formatTime(notification.timestamp);
 
     const isExpanded = expandedIds.has(notification.id);
@@ -270,6 +273,9 @@ export const NotificationCenter: React.FC = () => {
         data-notification-message={notification.message}
         data-notification-diagnostics={technicalDetails ?? undefined}
         data-context-type="notification"
+        data-bf-component="notification"
+        data-bf-part="centerItem"
+        data-bf-state={`${!notification.read ? 'unread ' : ''}${isExpanded ? 'expanded' : ''}`.trim() || undefined}
       >
         <div className={`notification-center__item-icon ${iconClass}`}>
           {getIcon(notification.type, notification.status)}
@@ -277,30 +283,30 @@ export const NotificationCenter: React.FC = () => {
         <div className="notification-center__item-content">
           <div className="notification-center__item-header">
             <div className="notification-center__item-title">{notification.title}</div>
-
+            
             {isProgress && (() => {
               const mode = notification.progressMode || (notification.textOnly ? 'text-only' : 'percentage');
               if (mode === 'text-only') return null;
-
+              
               if (mode === 'fraction' && notification.current !== undefined && notification.total !== undefined) {
                 return <div className="notification-center__item-percentage">{notification.current}/{notification.total}</div>;
               }
-
+              
               if (mode === 'percentage' && notification.progress !== undefined) {
                 return <div className="notification-center__item-percentage">{Math.round(notification.progress)}%</div>;
               }
-
+              
               return null;
             })()}
           </div>
           <div className="notification-center__item-message">
             {(isProgress && notification.progressText) ? notification.progressText : (notification.messageNode ?? notification.message)}
           </div>
-
+          
           {isProgress && (() => {
             const mode = notification.progressMode || (notification.textOnly ? 'text-only' : 'percentage');
             if (mode === 'text-only') return null;
-
+            
             return (
               <div className="notification-center__item-progress-bar">
                 <div
@@ -327,29 +333,16 @@ export const NotificationCenter: React.FC = () => {
         </div>
         {!notification.read && <div className="notification-center__item-badge" />}
         <div className="notification-center__item-actions">
-          {technicalDetails && (
-            <button
-              className="notification-center__item-expand"
-              onClick={(e) => {
-                e.stopPropagation();
-                setExpandedIds(prev => {
-                  const newSet = new Set(prev);
-                  if (newSet.has(notification.id)) {
-                    newSet.delete(notification.id);
-                  } else {
-                    newSet.add(notification.id);
-                  }
-                  return newSet;
-                });
-                if (!notification.read) {
-                  notificationService.markAsRead(notification.id);
-                }
-              }}
-              title={isExpanded ? t('common:actions.collapse') : t('common:actions.expand')}
-            >
-              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            </button>
-          )}
+          <button
+            className="notification-center__item-expand"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleNotificationClick(notification);
+            }}
+            title={isExpanded ? t('common:actions.collapse') : t('common:actions.expand')}
+          >
+            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
           <button
             className="notification-center__item-delete"
             onClick={(e) => handleDeleteNotification(e, notification.id)}
@@ -369,9 +362,9 @@ export const NotificationCenter: React.FC = () => {
       showCloseButton={false}
       size="large"
     >
-      <div className="notification-center" data-testid="notification-center">
-
-        <div className="notification-center__header">
+      <div className="notification-center" data-testid="notification-center" data-bf-component="notification" data-bf-part="centerRoot">
+        
+        <div className="notification-center__header" data-bf-component="notification" data-bf-part="centerHeader">
           <h2 className="notification-center__title">{t('components:notificationCenter.title')}</h2>
           <div className="notification-center__header-actions">
             <button
@@ -399,7 +392,7 @@ export const NotificationCenter: React.FC = () => {
           </div>
         </div>
 
-
+        
         <div className="notification-center__search">
           <Search
             placeholder={t('components:notificationCenter.searchPlaceholder')}
@@ -410,7 +403,7 @@ export const NotificationCenter: React.FC = () => {
           />
         </div>
 
-
+        
         <div className="notification-center__filters">
           <button
             className={`notification-center__filter ${filter === 'all' ? 'is-active' : ''}`}
@@ -438,9 +431,9 @@ export const NotificationCenter: React.FC = () => {
           </button>
         </div>
 
-
-        <div className="notification-center__content">
-
+        
+        <div className="notification-center__content" data-bf-component="notification" data-bf-part="centerList">
+          
           {activeTaskNotifications.length > 0 && (
             <div className="notification-center__active-section" data-testid="notification-center-active-section">
               <div className="notification-center__active-section-title">
@@ -461,7 +454,7 @@ export const NotificationCenter: React.FC = () => {
             </div>
           ) : (
             <>
-
+              
               {groupedHistory.today.length > 0 && (
                 <div className="notification-center__group">
                   <div className="notification-center__group-title">{t('common:time.today')}</div>
@@ -469,7 +462,7 @@ export const NotificationCenter: React.FC = () => {
                 </div>
               )}
 
-
+              
               {groupedHistory.yesterday.length > 0 && (
                 <div className="notification-center__group">
                   <div className="notification-center__group-title">{t('common:time.yesterday')}</div>
@@ -477,7 +470,7 @@ export const NotificationCenter: React.FC = () => {
                 </div>
               )}
 
-
+              
               {groupedHistory.earlier.length > 0 && (
                 <div className="notification-center__group">
                   <div className="notification-center__group-title">{t('components:notificationCenter.groups.earlier')}</div>

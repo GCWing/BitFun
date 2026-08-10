@@ -18,9 +18,9 @@
 }
 
 .grid-card {
-  background: var(--color-bg-secondary);
+  background: var(--bf-appearance-token-color-bg-secondary);
   border-radius: 12px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   overflow: hidden;
   transition: all 0.3s ease;
   display: flex;
@@ -28,26 +28,26 @@
 }
 
 .grid-card:hover {
-  border-color: var(--border-accent-subtle);
-  box-shadow: var(--shadow-base), var(--glow-shadow-blue);
+  border-color: var(--bf-appearance-token-border-accent-subtle);
+  box-shadow: var(--bf-appearance-token-shadow-base), var(--bf-appearance-token-glow-shadow-blue);
 }
 
 .grid-card-header {
   padding: 20px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
 }
 
 .grid-card-title {
   margin: 0 0 8px 0;
   font-size: 18px;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 .grid-card-description {
   margin: 0;
   font-size: 13px;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   line-height: 1.5;
 }
 
@@ -62,16 +62,16 @@
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   margin-bottom: 12px;
   letter-spacing: 0.5px;
 }
 
 .preview-canvas {
   padding: 32px;
-  background: var(--color-bg-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
   border-radius: 8px;
-  border: 1px dashed var(--border-base);
+  border: 1px dashed var(--bf-appearance-token-border-base);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -84,7 +84,7 @@
 
 .grid-card-info {
   padding: 20px;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--bf-appearance-token-border-subtle);
 }
 
 .info-list {
@@ -97,11 +97,11 @@
 
 .info-list dt {
   font-weight: 600;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 .info-list dd {
   margin: 0;
-  color: var(--color-text-secondary);
-  font-family: var(--tool-card-font-mono);
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-family: var(--bf-appearance-token-tool-card-font-mono);
 }

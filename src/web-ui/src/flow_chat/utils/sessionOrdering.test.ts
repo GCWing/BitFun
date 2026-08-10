@@ -158,4 +158,36 @@ describe('sessionOrdering', () => {
       )
     ).toBe(true);
   });
+
+  it('groups a worktree execution session under its main project', () => {
+    const session = {
+      workspacePath: '/worktrees/project/wt-1',
+      projectWorkspacePath: '/projects/project',
+      remoteConnectionId: undefined,
+      remoteSshHost: undefined,
+    };
+
+    expect(
+      sessionBelongsToWorkspaceNavRow(session, '/projects/project')
+    ).toBe(true);
+    expect(
+      sessionBelongsToWorkspaceNavRow(session, '/projects/other')
+    ).toBe(false);
+  });
+
+  it('does not assign a workspace-less session to every navigation row', () => {
+    const session = {
+      workspacePath: undefined,
+      projectWorkspacePath: undefined,
+      remoteConnectionId: undefined,
+      remoteSshHost: undefined,
+    };
+
+    expect(
+      sessionBelongsToWorkspaceNavRow(session, '/assistants/default')
+    ).toBe(false);
+    expect(
+      sessionBelongsToWorkspaceNavRow(session, '/projects/BitFun')
+    ).toBe(false);
+  });
 });

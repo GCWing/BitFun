@@ -4,25 +4,22 @@ import {
   TEXT_STROKE_GRADIENT_COLORS,
   buildTextStrokeColorCycle,
 } from './TextStrokeEffectGradient';
-import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
+import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 
-const MIGRATED_TEXT_STROKE_VISUAL_SEQUENCE = [
-  '#eab308',
-  '#ef4444',
-  '#3b82f6',
-  '#06b6d4',
-  '#8b5cf6',
-] as const;
+const TEXT_STROKE_TOKEN_SEQUENCE = Array.from(
+  { length: 5 },
+  (_, index) => `var(--bf-appearance-token-domain-text-stroke-${index})`,
+);
 
 describe('TextStrokeEffect color cycles', () => {
-  it('keeps gradient animation values closed over the original visual color sequence', () => {
-    expect(UI_EXCEPTION_ACCENTS.textStroke).toEqual(MIGRATED_TEXT_STROKE_VISUAL_SEQUENCE);
-    expect(TEXT_STROKE_GRADIENT_COLORS).toBe(UI_EXCEPTION_ACCENTS.textStroke);
+  it('keeps gradient animation values closed over the appearance token sequence', () => {
+    expect(APPEARANCE_DOMAIN_TOKENS.textStroke).toEqual(TEXT_STROKE_TOKEN_SEQUENCE);
+    expect(TEXT_STROKE_GRADIENT_COLORS).toBe(APPEARANCE_DOMAIN_TOKENS.textStroke);
 
     const expectedCycle = [
-      ...MIGRATED_TEXT_STROKE_VISUAL_SEQUENCE.slice(2),
-      ...MIGRATED_TEXT_STROKE_VISUAL_SEQUENCE.slice(0, 2),
-      MIGRATED_TEXT_STROKE_VISUAL_SEQUENCE[2],
+      ...TEXT_STROKE_TOKEN_SEQUENCE.slice(2),
+      ...TEXT_STROKE_TOKEN_SEQUENCE.slice(0, 2),
+      TEXT_STROKE_TOKEN_SEQUENCE[2],
     ].join('; ');
     expect(buildTextStrokeColorCycle(2)).toBe(expectedCycle);
   });

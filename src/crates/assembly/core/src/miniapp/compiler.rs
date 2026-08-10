@@ -14,7 +14,7 @@ pub fn compile(
     app_id: &str,
     app_data_dir: &str,
     workspace_dir: &str,
-    theme: &str,
+    appearance_mode: &str,
 ) -> BitFunResult<String> {
     bitfun_product_domains::miniapp::compiler::compile(
         source,
@@ -22,7 +22,7 @@ pub fn compile(
         app_id,
         app_data_dir,
         workspace_dir,
-        theme,
+        appearance_mode,
     )
     .map_err(|e| BitFunError::validation(e.to_string()))
 }
@@ -34,4 +34,17 @@ pub fn compile_with_request(
 ) -> BitFunResult<String> {
     bitfun_product_domains::miniapp::compiler::compile_with_request(source, permissions, request)
         .map_err(|e| BitFunError::validation(e.to_string()))
+}
+
+pub fn compile_market_with_request(
+    source: &MiniAppSource,
+    permissions: &MiniAppPermissions,
+    request: &MiniAppCompileRequest,
+) -> BitFunResult<String> {
+    bitfun_product_domains::miniapp::compiler::compile_market_with_request(
+        source,
+        permissions,
+        request,
+    )
+    .map_err(|e| BitFunError::validation(e.to_string()))
 }

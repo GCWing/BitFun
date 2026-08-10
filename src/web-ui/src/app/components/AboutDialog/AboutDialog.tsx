@@ -10,7 +10,7 @@ import { Tooltip, Modal, Button, Alert } from '@/component-library';
 import { Copy, Check, Download, CheckCircle2, Package } from 'lucide-react';
 import {
   getAboutInfo,
-  formatVersion,
+  formatDisplayedVersion,
   formatBuildDate
 } from '@/shared/utils/version';
 import { createLogger } from '@/shared/utils/logger';
@@ -105,9 +105,9 @@ interface AboutDialogProps {
 }
 
 export const AboutDialog: React.FC<AboutDialogProps> = ({
-                                                          isOpen,
-                                                          onClose
-                                                        }) => {
+  isOpen,
+  onClose
+}) => {
   const { t } = useI18n('common');
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
   const [manualCheckBusy, setManualCheckBusy] = useState(false);
@@ -115,6 +115,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
   const [manualCheckErrorMessage, setManualCheckErrorMessage] = useState<string | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualData, setManualData] = useState<CheckForUpdatesResponse | null>(null);
+  const [nativeVersion, setNativeVersion] = useState<string | null>(null);
   const updateStatus = useUpdateInstallStore(state => state.status);
   const updateProgress = useUpdateInstallStore(state => state.progress);
   const updateError = useUpdateInstallStore(state => state.error);
@@ -124,6 +125,13 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
 
   const aboutInfo = getAboutInfo();
   const { version, license } = aboutInfo;
+  const nativeRuntime = isTauriRuntime();
+  const displayedVersion = formatDisplayedVersion(
+    version,
+    nativeVersion,
+    nativeRuntime,
+    import.meta.env.DEV
+  );
   const updateProgressPercent =
       updateProgress.total != null && updateProgress.total > 0
           ? Math.min(100, Math.round((updateProgress.downloaded / updateProgress.total) * 100))
@@ -135,6 +143,21 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
       setManualCheckErrorMessage(null);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !nativeRuntime) return;
+    let active = true;
+    void systemAPI.getAppVersion()
+      .then(currentVersion => {
+        if (active) setNativeVersion(currentVersion);
+      })
+      .catch(error => {
+        log.warn('get_app_version failed; using generated version metadata', error);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isOpen, nativeRuntime]);
 
   const handleCheckForUpdates = useCallback(async () => {
     if (!isTauriRuntime()) {
@@ -228,15 +251,15 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
             showCloseButton={true}
             size="medium"
         >
-          <div className="bitfun-about-dialog__content">
+          <div className="bitfun-about-dialog__content" data-bf-component="about-dialog" data-bf-part="root">
             {/* Hero section - product info */}
-            <div className="bitfun-about-dialog__hero">
-              <h1 className="bitfun-about-dialog__title">{version.name}</h1>
-              <div className="bitfun-about-dialog__version-badge">
+            <div className="bitfun-about-dialog__hero" data-bf-component="about-dialog" data-bf-part="hero">
+              <h1 className="bitfun-about-dialog__title" data-bf-component="about-dialog" data-bf-part="title">{version.name}</h1>
+              <div className="bitfun-about-dialog__version-badge" data-bf-component="about-dialog" data-bf-part="version">
                 {t('about.version', { version: formatVersion(version.version, version.isDev) })}
               </div>
-              <div className="bitfun-about-dialog__divider" />
-              <div className="bitfun-about-dialog__dots">
+              <div className="bitfun-about-dialog__divider" data-bf-component="about-dialog" data-bf-part="decoration" />
+              <div className="bitfun-about-dialog__dots" data-bf-component="about-dialog" data-bf-part="decoration">
                 <span></span>
                 <span></span>
                 <span></span>
@@ -244,10 +267,15 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
             </div>
 
             {/* Scrollable area */}
-            <div className="bitfun-about-dialog__scrollable">
+            <div className="bitfun-about-dialog__scrollable" data-bf-component="about-dialog" data-bf-part="content">
               {isTauriRuntime() ? (
-                  <div className="bitfun-about-dialog__update-card">
-                    <div className="bitfun-about-dialog__update-card-top">
+                  <div
+                    className="bitfun-about-dialog__update-card"
+                    data-bf-component="about-dialog"
+                    data-bf-part="updateCard"
+                    data-bf-state={`${manualCheckBusy ? 'checking' : ''} ${manualCheckStatus} ${updateStatus}`.trim() || undefined}
+                  >
+                    <div className="bitfun-about-dialog__update-card-top" data-bf-component="about-dialog" data-bf-part="updateHeader">
                       <div className="bitfun-about-dialog__update-card-main">
                         <div className="bitfun-about-dialog__update-card-head">
                           <div className="bitfun-about-dialog__update-card-icon" aria-hidden>
@@ -262,7 +290,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                             </p>
                           </div>
                         </div>
-                        <div className="bitfun-about-dialog__update-card-feedback">
+                        <div className="bitfun-about-dialog__update-card-feedback" data-bf-component="about-dialog" data-bf-part="updateFeedback">
                           {manualCheckStatus === 'latest' ? (
                               <div
                                   className="bitfun-about-dialog__update-status bitfun-about-dialog__update-status--success"
@@ -282,7 +310,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                           ) : null}
                         </div>
                       </div>
-                      <div className="bitfun-about-dialog__update-card-actions">
+                      <div className="bitfun-about-dialog__update-card-actions" data-bf-component="about-dialog" data-bf-part="updateActions">
                         <Button
                             variant="secondary"
                             size="small"
@@ -301,6 +329,8 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                         <div className="bitfun-about-dialog__download-status" role="status">
                           <div
                               className="bitfun-about-dialog__download-bar"
+                              data-bf-component="about-dialog"
+                              data-bf-part="progress"
                               role="progressbar"
                               aria-valuemin={0}
                               aria-valuemax={100}
@@ -313,6 +343,8 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                                       ? 'bitfun-about-dialog__download-fill'
                                       : 'bitfun-about-dialog__download-fill bitfun-about-dialog__download-fill--indeterminate'
                                 }
+                                data-bf-component="about-dialog"
+                                data-bf-part="progressFill"
                                 style={
                                   updateProgressPercent != null
                                       ? { width: `${updateProgressPercent}%` }
@@ -357,45 +389,47 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                   <p className="bitfun-about-dialog__update-hint">{t('update.desktopOnly')}</p>
               )}
               <div className="bitfun-about-dialog__info-section">
-                <div className="bitfun-about-dialog__info-card">
+                <div className="bitfun-about-dialog__info-card" data-bf-component="about-dialog" data-bf-part="infoCard">
                   <div className="bitfun-about-dialog__info-row">
                     <span className="bitfun-about-dialog__info-label">{t('about.buildDate')}</span>
                     <span className="bitfun-about-dialog__info-value">
                   {formatBuildDate(version.buildDate)}
                 </span>
-                  </div>
+              </div>
 
-                  {version.gitCommit && (
-                      <div className="bitfun-about-dialog__info-row">
-                        <span className="bitfun-about-dialog__info-label">{t('about.commit')}</span>
-                        <div className="bitfun-about-dialog__info-value-group">
-                    <span className="bitfun-about-dialog__info-value bitfun-about-dialog__info-value--mono">
+              {version.gitCommit && (
+                <div className="bitfun-about-dialog__info-row" data-bf-component="about-dialog" data-bf-part="infoRow">
+                  <span className="bitfun-about-dialog__info-label" data-bf-component="about-dialog" data-bf-part="infoLabel">{t('about.commit')}</span>
+                  <div className="bitfun-about-dialog__info-value-group">
+                    <span className="bitfun-about-dialog__info-value bitfun-about-dialog__info-value--mono" data-bf-component="about-dialog" data-bf-part="infoValue">
                       {version.gitCommit}
                     </span>
-                          <Tooltip content={t('about.copy')}>
-                            <button
-                                className="bitfun-about-dialog__copy-btn"
-                                onClick={() => copyToClipboard(version.gitCommit || '', 'commit')}
-                            >
-                              {copiedItem === 'commit' ? <Check size={12} /> : <Copy size={12} />}
-                            </button>
-                          </Tooltip>
-                        </div>
-                      </div>
-                  )}
-
-                  {version.gitBranch && (
-                      <div className="bitfun-about-dialog__info-row">
-                        <span className="bitfun-about-dialog__info-label">{t('about.branch')}</span>
-                        <span className="bitfun-about-dialog__info-value">{version.gitBranch}</span>
-                      </div>
-                  )}
+                    <Tooltip content={t('about.copy')}>
+                      <button
+                        className="bitfun-about-dialog__copy-btn"
+                        data-bf-component="about-dialog"
+                        data-bf-part="copyButton"
+                        onClick={() => copyToClipboard(version.gitCommit || '', 'commit')}
+                      >
+                        {copiedItem === 'commit' ? <Check size={12} /> : <Copy size={12} />}
+                      </button>
+                    </Tooltip>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {version.gitBranch && (
+                <div className="bitfun-about-dialog__info-row" data-bf-component="about-dialog" data-bf-part="infoRow">
+                  <span className="bitfun-about-dialog__info-label" data-bf-component="about-dialog" data-bf-part="infoLabel">{t('about.branch')}</span>
+                  <span className="bitfun-about-dialog__info-value" data-bf-component="about-dialog" data-bf-part="infoValue">{version.gitBranch}</span>
+                </div>
+              )}
             </div>
+          </div>
+        </div>
 
             {/* Footer */}
-            <div className="bitfun-about-dialog__footer">
+            <div className="bitfun-about-dialog__footer" data-bf-component="about-dialog" data-bf-part="footer">
               <div className="bitfun-about-dialog__links">
                 <button
                     className="bitfun-about-dialog__link"
@@ -404,7 +438,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                 >
                   {t('about.openSource')}
                 </button>
-                <span className="bitfun-about-dialog__link-sep">·</span>
+                <span className="bitfun-about-dialog__link-sep">路</span>
                 <button
                     className="bitfun-about-dialog__link"
                     onClick={openPrivacyStatement}
@@ -416,8 +450,8 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                   ) : null}
                 </button>
               </div>
-              <p className="bitfun-about-dialog__license">{license.text}</p>
-              <p className="bitfun-about-dialog__copyright">
+              <p className="bitfun-about-dialog__license" data-bf-component="about-dialog" data-bf-part="license">{license.text}</p>
+              <p className="bitfun-about-dialog__copyright" data-bf-component="about-dialog" data-bf-part="copyright">
                 {t('about.copyright')}
               </p>
             </div>

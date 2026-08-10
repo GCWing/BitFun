@@ -16,7 +16,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-bg-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
   pointer-events: none;
 
   // ── Exit state ─────────────────────────────────────────────────────────────
@@ -65,8 +65,8 @@
   left: 50%;
   min-width: 220px;
   max-width: min(360px, calc(100vw - 48px));
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-xs);
   line-height: 1.4;
   text-align: center;
   opacity: 0;

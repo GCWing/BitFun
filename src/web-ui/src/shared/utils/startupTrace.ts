@@ -1,4 +1,5 @@
 import { createLogger } from './logger';
+import { isNonLocalRemoteHost, isRemoteSessionScope } from './remoteSessionScope';
 import { roundDurationMs, type LoggerLike } from './timing';
 
 type NowFn = () => number;
@@ -215,33 +216,11 @@ function sanitizeTraceData(data?: TraceData): TraceData | undefined {
   return sanitized;
 }
 
-function isNonLocalRemoteHost(value: unknown): boolean {
-  if (typeof value !== 'string') {
-    return false;
-  }
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) {
-    return false;
-  }
-  return !(
-    normalized === 'localhost' ||
-    normalized.startsWith('localhost:') ||
-    normalized === '127.0.0.1' ||
-    normalized.startsWith('127.0.0.1:') ||
-    normalized === '::1' ||
-    normalized === '[::1]' ||
-    normalized.startsWith('[::1]:')
-  );
-}
-
 export function isRemoteTraceContext(
   remoteConnectionId?: unknown,
   remoteSshHost?: unknown
 ): boolean {
-  if (typeof remoteConnectionId === 'string' && remoteConnectionId.trim().length > 0) {
-    return true;
-  }
-  return isNonLocalRemoteHost(remoteSshHost);
+  return isRemoteSessionScope(remoteConnectionId, remoteSshHost);
 }
 
 function hasRemoteKey(key: string, value: unknown): boolean {

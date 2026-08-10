@@ -1,56 +1,85 @@
-import { CARD, INK, LINE, MUTED } from './Theme';
+import { CARD, FILE_LINK, INK, LINE, MUTED, SOFT } from './Theme';
 
 @Component
 export struct FileReferenceCard {
   @Prop path: string = '';
   @Prop label: string = '';
   @Prop status: string = '';
+  @Prop previewLabel: string = '';
   @Prop buttonLabel: string = '';
   @Prop disabled: boolean = false;
+  @Prop selected: boolean = false;
+  @Prop previewLoading: boolean = false;
+  onPreview: (path: string, label: string) => void = (_path: string, _label: string) => {};
   onDownload: (path: string) => void = (_path: string) => {};
 
   build() {
     Row({ space: 10 }) {
-      Text('▤')
+      Row({ space: 10 }) {
+        Stack({ alignContent: Alignment.Center }) {
+          if (this.previewLoading) {
+            LoadingProgress()
+              .width(17)
+              .height(17)
+              .color(FILE_LINK)
+          } else {
+            Text('▤')
+              .fontSize(16)
+              .fontColor(INK)
+          }
+        }
         .width(34)
         .height(34)
-        .fontSize(16)
-        .fontColor(INK)
-        .textAlign(TextAlign.Center)
-        .backgroundColor('#F3F2EE')
+        .backgroundColor(SOFT)
         .borderRadius(12)
-      Column({ space: 3 }) {
-        Text(this.label)
-          .fontSize(13)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(INK)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(this.status)
-          .fontSize(11)
-          .fontColor(MUTED)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Column({ space: 3 }) {
+          Text(this.label)
+            .fontSize(13)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(INK)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(this.status)
+            .fontSize(11)
+            .fontColor(FILE_LINK)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
       }
       .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
-      Text(this.buttonLabel)
-        .fontSize(12)
-        .fontColor(this.disabled ? MUTED : INK)
-        .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-        .backgroundColor('#F0EFEB')
-        .borderRadius(14)
-        .border({ width: 1, color: LINE })
-        .onClick(() => {
-          if (!this.disabled) {
-            this.onDownload(this.path);
-          }
-        })
+      .height(44)
+      .accessibilityText(`${this.previewLabel} ${this.label}`)
+      .onClick(() => {
+        this.onPreview(this.path, this.label);
+      })
+      Stack({ alignContent: Alignment.Center }) {
+        if (this.disabled) {
+          LoadingProgress()
+            .width(18)
+            .height(18)
+            .color(MUTED)
+        } else {
+          SymbolGlyph($r('sys.symbol.arrow_down_to_line'))
+            .fontSize(19)
+            .fontColor([INK])
+        }
+      }
+      .width(44)
+      .height(44)
+      .accessibilityText(this.buttonLabel)
+      .opacity(this.disabled ? 0.55 : 1)
+      .onClick(() => {
+        if (!this.disabled) {
+          this.onDownload(this.path);
+        }
+      })
     }
     .width('100%')
     .padding(12)
-    .backgroundColor(CARD)
+    .backgroundColor(this.selected ? SOFT : CARD)
     .borderRadius(14)
-    .border({ width: 1, color: LINE })
+    .border({ width: 1, color: this.selected ? FILE_LINK : LINE })
   }
 }

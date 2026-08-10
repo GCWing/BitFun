@@ -38,8 +38,8 @@ use bitfun_product_domains::miniapp::lifecycle::{
     apply_import_runtime_state, apply_recompile_result, apply_sync_from_fs_result,
     apply_update_patch, build_created_app, build_deps_revision, build_runtime_state,
     build_source_revision, build_worker_revision, clear_worker_restart_required_state,
-    ensure_runtime_state, mark_deps_installed_state, prepare_draft_app, prepare_rollback_app,
-    workspace_dir_string, MiniAppCreateInput, MiniAppUpdatePatch,
+    ensure_runtime_state, mark_deps_installed_state, miniapp_content_hash, prepare_draft_app,
+    prepare_rollback_app, workspace_dir_string, MiniAppCreateInput, MiniAppUpdatePatch,
 };
 use bitfun_product_domains::miniapp::permission_policy::resolve_policy;
 use bitfun_product_domains::miniapp::ports::{
@@ -180,7 +180,7 @@ impl MiniAppCompilePort for CompilePortStub {
         app_id: String,
         source: MiniAppSource,
         _permissions: MiniAppPermissions,
-        theme: String,
+        appearance_mode: String,
         workspace_root: Option<PathBuf>,
     ) -> MiniAppPortFuture<'_, String> {
         let calls = self.calls.clone();
@@ -189,13 +189,13 @@ impl MiniAppCompilePort for CompilePortStub {
                 "{}|{}|{}|{}",
                 app_id,
                 source.html,
-                theme,
+                appearance_mode,
                 workspace_root
                     .as_deref()
                     .map(Path::to_string_lossy)
                     .unwrap_or_else(|| "".into())
             ));
-            Ok(format!("<html>{app_id}:{theme}</html>"))
+            Ok(format!("<html>{app_id}:{appearance_mode}</html>"))
         })
     }
 }
@@ -440,6 +440,42 @@ impl MiniAppStoragePort for StoragePortStub {
         })
     }
 
+    fn install_market_atomic(
+        &self,
+        app: MiniApp,
+        metadata: MiniAppCustomizationMetadata,
+    ) -> MiniAppPortFuture<'_, ()> {
+        let state = self.state.clone();
+        Box::pin(async move {
+            let app_id = app.id.clone();
+            let mut state = state.lock().unwrap();
+            state.current = app;
+            state.customization.insert(app_id, metadata);
+            state.save_count += 1;
+            Ok(())
+        })
+    }
+
+    fn replace_market_atomic(
+        &self,
+        previous: MiniApp,
+        next: MiniApp,
+        metadata: MiniAppCustomizationMetadata,
+    ) -> MiniAppPortFuture<'_, ()> {
+        let state = self.state.clone();
+        Box::pin(async move {
+            let app_id = next.id.clone();
+            let previous_version = previous.version;
+            let mut state = state.lock().unwrap();
+            state.versions.insert(previous_version, previous);
+            state.saved_version_numbers.push(previous_version);
+            state.current = next;
+            state.customization.insert(app_id, metadata);
+            state.save_count += 1;
+            Ok(())
+        })
+    }
+
     fn delete(&self, _app_id: String) -> MiniAppPortFuture<'_, ()> {
         Box::pin(async { Ok(()) })
     }
@@ -549,6 +585,15 @@ fn miniapp_bridge_exposes_deck_render_page_namespace() {
 }
 
 #[test]
+fn miniapp_bridge_exposes_topic_session_lifecycle() {
+    let bridge = build_bridge_script("app-1", "/tmp/app", "/tmp/workspace", "dark", "win32");
+
+    assert!(bridge.contains("agent.ensureSession"));
+    assert!(bridge.contains("chat.focusSession"));
+    assert!(bridge.contains("chat.clearSession"));
+}
+
+#[test]
 fn miniapp_permission_policy_preserves_scope_resolution() {
     let permissions = MiniAppPermissions {
         fs: Some(FsPermissions {
@@ -592,7 +637,7 @@ fn miniapp_compiler_preserves_head_injection_contract() {
     .unwrap();
 
     assert!(out.contains("<meta charset=\"utf-8\">"));
-    assert!(out.contains("data-theme-type=\"dark\""));
+    assert!(out.contains("data-bf-appearance-mode=\"dark\""));
     assert!(out.contains("<script type=\"module\">"));
     assert!(out.contains("console.log('ready')"));
 }
@@ -835,11 +880,11 @@ fn miniapp_host_routing_preserves_existing_primitive_and_allowlist_contract() {
         [("GIT_TERMINAL_PROMPT", "0"), ("LC_ALL", "C")]
     );
 
-    assert!(command_basename_allowed(&[], "git"));
+    assert!(!command_basename_allowed(&[], "git"));
     assert!(command_basename_allowed(&["Git".to_string()], "git"));
     assert!(!command_basename_allowed(&["cargo".to_string()], "git"));
 
-    assert!(host_allowed_by_allowlist(&[], "api.example.com"));
+    assert!(!host_allowed_by_allowlist(&[], "api.example.com"));
     assert!(host_allowed_by_allowlist(
         &["*".to_string()],
         "api.example.com"
@@ -1169,6 +1214,63 @@ fn miniapp_lifecycle_manager_state_helpers_preserve_core_transitions() {
     assert!(imported.runtime.worker_restart_required);
     assert_eq!(imported.runtime.source_revision, "src:4:4000");
     assert_eq!(imported.runtime.deps_revision, "lodash@^4.17.21");
+}
+
+#[test]
+fn miniapp_content_hash_ignores_runtime_artifacts_and_tracks_product_content() {
+    let mut app = sample_miniapp_for_lifecycle(MiniAppSource {
+        css: "body { color: black; }".to_string(),
+        ..MiniAppSource::default()
+    });
+    let initial_hash = miniapp_content_hash(&app);
+
+    app.version += 1;
+    app.updated_at += 1000;
+    app.compiled_html = "<html>different runtime artifact</html>".to_string();
+    app.runtime.source_revision = "src:99:9999".to_string();
+    assert_eq!(miniapp_content_hash(&app), initial_hash);
+
+    app.source.css = "body { color: red; }".to_string();
+    assert_ne!(miniapp_content_hash(&app), initial_hash);
+}
+
+#[test]
+fn miniapp_sync_and_draft_apply_do_not_create_versions_for_unchanged_content() {
+    let mut current = sample_miniapp_for_lifecycle(MiniAppSource {
+        css: "body { color: black; }".to_string(),
+        ..MiniAppSource::default()
+    });
+    ensure_runtime_state(&mut current);
+
+    let synced = apply_sync_from_fs_result(
+        &current,
+        current.source.clone(),
+        "<html>recompiled</html>".to_string(),
+        5000,
+    );
+    assert_eq!(synced.version, current.version);
+    assert_eq!(synced.updated_at, current.updated_at);
+    assert_eq!(
+        synced.runtime.source_revision,
+        current.runtime.source_revision
+    );
+    assert_eq!(synced.runtime.content_hash, current.runtime.content_hash);
+    assert_eq!(synced.compiled_html, "<html>recompiled</html>");
+
+    let applied = apply_draft_to_active(
+        &current,
+        current.clone(),
+        "<html>draft recompiled</html>".to_string(),
+        6000,
+    );
+    assert_eq!(applied.version, current.version);
+    assert_eq!(applied.updated_at, current.updated_at);
+    assert_eq!(
+        applied.runtime.source_revision,
+        current.runtime.source_revision
+    );
+    assert_eq!(applied.runtime.content_hash, current.runtime.content_hash);
+    assert_eq!(applied.compiled_html, "<html>draft recompiled</html>");
 }
 
 #[test]
@@ -1910,7 +2012,7 @@ fn miniapp_runtime_facade_owns_import_bundle_recompile_and_runtime_state_workflo
         MiniAppImportFromPathRequest {
             source_path: PathBuf::from("fixtures/imported"),
             app_id: "imported-id".to_string(),
-            theme: "dark".to_string(),
+            appearance_mode: "dark".to_string(),
             workspace_root: Some(PathBuf::from("workspace/project")),
             imported_at: 5000,
             recompiled_at: 6000,
@@ -2047,6 +2149,7 @@ fn miniapp_customization_apply_helper_preserves_builtin_override_policy() {
             kind: MiniAppCustomizationOriginKind::UserCreated,
             builtin_id: None,
             builtin_version: None,
+            market: None,
         },
         local_override: false,
         last_applied_draft_id: None,
@@ -2204,6 +2307,7 @@ fn sample_miniapp_for_lifecycle(source: MiniAppSource) -> MiniApp {
         permissions: MiniAppPermissions::default(),
         ai_context: None,
         runtime: MiniAppRuntimeState::default(),
+        runtime_profile: Default::default(),
         i18n: None,
     }
 }

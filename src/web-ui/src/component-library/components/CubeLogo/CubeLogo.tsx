@@ -72,18 +72,20 @@ export const CubeLogo: React.FC<CubeLogoProps> = ({
       <div
         key={key}
         className="cube-logo__block"
+        data-bf-component="cube-logo"
+        data-bf-part="block"
         style={{
           width: actualSize,
           height: actualSize,
           transform: `translate3d(${x * blockSize}px, ${-y * blockSize}px, ${z * blockSize}px)`
         }}
       >
-        <div className="cube-logo__face cube-logo__face--front" style={{ width: actualSize, height: actualSize, transform: `translateZ(${actualSize/2}px)` }} />
-        <div className="cube-logo__face cube-logo__face--back" style={{ width: actualSize, height: actualSize, transform: `translateZ(${-actualSize/2}px) rotateY(180deg)` }} />
-        <div className="cube-logo__face cube-logo__face--top" style={{ width: actualSize, height: actualSize, transform: `translateY(${-actualSize/2}px) rotateX(90deg)` }} />
-        <div className="cube-logo__face cube-logo__face--bottom" style={{ width: actualSize, height: actualSize, transform: `translateY(${actualSize/2}px) rotateX(-90deg)` }} />
-        <div className="cube-logo__face cube-logo__face--right" style={{ width: actualSize, height: actualSize, transform: `translateX(${actualSize/2}px) rotateY(90deg)` }} />
-        <div className="cube-logo__face cube-logo__face--left" style={{ width: actualSize, height: actualSize, transform: `translateX(${-actualSize/2}px) rotateY(-90deg)` }} />
+        <div className="cube-logo__face cube-logo__face--front" data-bf-component="cube-logo" data-bf-part="face" style={{ width: actualSize, height: actualSize, transform: `translateZ(${actualSize/2}px)` }} />
+        <div className="cube-logo__face cube-logo__face--back" data-bf-component="cube-logo" data-bf-part="face" style={{ width: actualSize, height: actualSize, transform: `translateZ(${-actualSize/2}px) rotateY(180deg)` }} />
+        <div className="cube-logo__face cube-logo__face--top" data-bf-component="cube-logo" data-bf-part="face" style={{ width: actualSize, height: actualSize, transform: `translateY(${-actualSize/2}px) rotateX(90deg)` }} />
+        <div className="cube-logo__face cube-logo__face--bottom" data-bf-component="cube-logo" data-bf-part="face" style={{ width: actualSize, height: actualSize, transform: `translateY(${actualSize/2}px) rotateX(-90deg)` }} />
+        <div className="cube-logo__face cube-logo__face--right" data-bf-component="cube-logo" data-bf-part="face" style={{ width: actualSize, height: actualSize, transform: `translateX(${actualSize/2}px) rotateY(90deg)` }} />
+        <div className="cube-logo__face cube-logo__face--left" data-bf-component="cube-logo" data-bf-part="face" style={{ width: actualSize, height: actualSize, transform: `translateX(${-actualSize/2}px) rotateY(-90deg)` }} />
       </div>
     );
   };
@@ -91,6 +93,9 @@ export const CubeLogo: React.FC<CubeLogoProps> = ({
   return (
     <div 
       className={`cube-logo ${isCompact ? 'cube-logo--compact' : ''} ${className}`}
+      data-bf-component="cube-logo"
+      data-bf-part="root"
+      data-bf-variant={variant}
       style={{ 
         width: size, 
         height: size,
@@ -98,11 +103,13 @@ export const CubeLogo: React.FC<CubeLogoProps> = ({
       }}
     >
       {showParticles && (
-        <div className="cube-logo__particles">
+        <div className="cube-logo__particles" data-bf-component="cube-logo" data-bf-part="particles">
           {particles.map(p => (
             <span
               key={p.id}
               className="cube-logo__particle"
+              data-bf-component="cube-logo"
+              data-bf-part="particle"
               style={{
                 left: `${p.x}%`,
                 top: `${p.y}%`,
@@ -117,8 +124,8 @@ export const CubeLogo: React.FC<CubeLogoProps> = ({
         </div>
       )}
       
-      <div className="cube-logo__scene">
-        <div className="cube-logo__cube">
+      <div className="cube-logo__scene" data-bf-component="cube-logo" data-bf-part="scene">
+        <div className="cube-logo__cube" data-bf-component="cube-logo" data-bf-part="cube">
           {blocks.map(({ x, y, z, key }) => renderBlock(x, y, z, key))}
         </div>
       </div>

@@ -70,6 +70,7 @@ export class GitStateManager {
   private cacheConfig: CacheConfig = { ...DEFAULT_CACHE_CONFIG };
   private readonly DEBOUNCE_DELAY = 100;
   private globalListenersInitialized = false;
+  private globalListenerCleanups: Array<() => void> = [];
 
   private constructor() {
     this.setupGlobalListeners();
@@ -263,6 +264,18 @@ export class GitStateManager {
     this.states.clear();
 
     this.windowFocusRefreshCounts.clear();
+
+    // Detach global listeners so resetInstance() does not leak a live set
+    // of window focus / git event handlers per disposed instance.
+    for (const cleanup of this.globalListenerCleanups) {
+      try {
+        cleanup();
+      } catch {
+        // Best-effort cleanup.
+      }
+    }
+    this.globalListenerCleanups = [];
+    this.globalListenersInitialized = false;
   }
 
   // -------------------------------------------------------------------------
@@ -746,10 +759,18 @@ export class GitStateManager {
 
     if (typeof window !== 'undefined') {
       window.addEventListener('focus', this.handleWindowFocus);
+      this.globalListenerCleanups.push(() => {
+        window.removeEventListener('focus', this.handleWindowFocus);
+      });
     }
 
-    gitEventService.on('operation:completed', this.handleGitOperationCompleted);
-    gitEventService.on('branch:changed', this.handleBranchChanged);
+    // gitEventService.on wraps the listener internally, so removal must go
+    // through the returned unsubscribe functions (gitEventService.off with
+    // the raw listener would not match the wrapped one).
+    this.globalListenerCleanups.push(
+      gitEventService.on('operation:completed', this.handleGitOperationCompleted),
+      gitEventService.on('branch:changed', this.handleBranchChanged),
+    );
   }
 
   private handleWindowFocus = (): void => {

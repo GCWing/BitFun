@@ -1,8 +1,17 @@
 use super::types::{AgentCategory, AgentEntry, AgentInfo, AgentSource, SubAgentSource};
 use super::AgentRegistry;
 use crate::agentic::agents::{Agent, SubagentVisibilityPolicy};
+use crate::agentic::deep_review_policy::{
+    CODE_REVIEW_AGENT_TYPE, DEEP_REVIEW_AGENT_TYPE, REVIEW_FIXER_AGENT_TYPE,
+};
+use crate::agentic::workspace::canonical_local_workspace_path;
 use bitfun_agent_runtime::prompt_cache::prompt_cache_scope_key;
-use bitfun_core_types::{SessionContinuationPolicy, SessionModelBindingPolicy};
+use bitfun_core_types::{
+    SessionAgentRouteOwner, SessionContinuationPolicy, SessionModelBindingPolicy,
+};
+use bitfun_product_domains::external_sources::EcosystemId;
+use bitfun_product_domains::external_subagents::ExternalSubagentMode;
+use log::{debug, warn};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock, Weak};
@@ -14,19 +23,58 @@ pub(crate) fn external_subagent_runtime_key(digest: &str) -> String {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ExternalSubagentModelBinding {
-    pub model_id: String,
-    pub configuration_fingerprint: String,
+pub enum ExternalSubagentModelBinding {
+    Fixed {
+        model_id: String,
+        configuration_fingerprint: String,
+    },
+    InheritParent,
+}
+
+impl ExternalSubagentModelBinding {
+    pub fn fixed_model_id(&self) -> Option<&str> {
+        match self {
+            Self::Fixed { model_id, .. } => Some(model_id),
+            Self::InheritParent => None,
+        }
+    }
+
+    pub fn configuration_fingerprint(&self) -> Option<&str> {
+        match self {
+            Self::Fixed {
+                configuration_fingerprint,
+                ..
+            } => Some(configuration_fingerprint),
+            Self::InheritParent => None,
+        }
+    }
 }
 
 #[derive(Clone)]
 pub struct ExternalSubagentRegistration {
     pub runtime_key: String,
     pub logical_id: String,
+    pub ecosystem_id: EcosystemId,
     pub provider_label: String,
     pub model_binding: ExternalSubagentModelBinding,
     pub hidden: bool,
+    pub mode: ExternalSubagentMode,
     pub agent: Arc<dyn Agent>,
+}
+
+#[derive(Clone, Copy)]
+enum ExternalAgentProjection {
+    Primary,
+    Subagent,
+}
+
+impl ExternalAgentProjection {
+    fn is_supported_by(self, mode: ExternalSubagentMode) -> bool {
+        match self {
+            Self::Primary => mode.supports_primary(),
+            Self::Subagent => mode.supports_subagent(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -114,9 +162,22 @@ impl ExternalSubagentRegistryState {
             .retain(|runtime_key, entry| entry.lease_count > 0 || routed.contains(runtime_key));
     }
 
-    fn acquire(self: &Arc<Self>, runtime_key: &str) -> Option<ExternalSubagentInvocationBinding> {
+    fn acquire_matching(
+        self: &Arc<Self>,
+        runtime_key: &str,
+        expected_ecosystem_id: Option<&EcosystemId>,
+        projection: ExternalAgentProjection,
+    ) -> Option<ExternalSubagentInvocationBinding> {
         let mut generations = self.write_generations();
         let entry = generations.get_mut(runtime_key)?;
+        if expected_ecosystem_id
+            .is_some_and(|expected| expected != &entry.registration.ecosystem_id)
+        {
+            return None;
+        }
+        if !projection.is_supported_by(entry.registration.mode) {
+            return None;
+        }
         entry.lease_count = entry.lease_count.saturating_add(1);
         Some(ExternalSubagentInvocationBinding {
             runtime_agent_key: runtime_key.to_string(),
@@ -128,6 +189,33 @@ impl ExternalSubagentRegistryState {
                 state: Arc::downgrade(self),
                 runtime_key: runtime_key.to_string(),
                 model_binding: entry.registration.model_binding.clone(),
+            }),
+        })
+    }
+
+    fn acquire(self: &Arc<Self>, runtime_key: &str) -> Option<ExternalSubagentInvocationBinding> {
+        self.acquire_matching(runtime_key, None, ExternalAgentProjection::Subagent)
+    }
+
+    fn acquire_primary(
+        self: &Arc<Self>,
+        runtime_key: &str,
+    ) -> Option<ExternalPrimaryAgentTurnBinding> {
+        let mut generations = self.write_generations();
+        let entry = generations.get_mut(runtime_key)?;
+        if !entry.registration.mode.supports_primary() {
+            return None;
+        }
+        entry.lease_count = entry.lease_count.saturating_add(1);
+        let model_binding = entry.registration.model_binding.clone();
+        Some(ExternalPrimaryAgentTurnBinding {
+            runtime_agent_key: runtime_key.to_string(),
+            model_binding: Some(model_binding.clone()),
+            route_owner: SessionAgentRouteOwner::External,
+            lease: Some(ExternalSubagentGenerationLease {
+                state: Arc::downgrade(self),
+                runtime_key: runtime_key.to_string(),
+                model_binding,
             }),
         })
     }
@@ -194,6 +282,13 @@ pub struct ExternalSubagentInvocationBinding {
     pub lease: Option<ExternalSubagentGenerationLease>,
 }
 
+pub struct ExternalPrimaryAgentTurnBinding {
+    pub runtime_agent_key: String,
+    pub model_binding: Option<ExternalSubagentModelBinding>,
+    pub route_owner: SessionAgentRouteOwner,
+    pub lease: Option<ExternalSubagentGenerationLease>,
+}
+
 impl AgentRegistry {
     /// Returns whether the logical id is owned by an external route in the
     /// requested workspace. `Unavailable` remains externally owned so a
@@ -212,8 +307,9 @@ impl AgentRegistry {
             )
         };
         workspace_root.is_some_and(|workspace| {
+            let workspace = canonical_local_workspace_path(workspace);
             routes
-                .get(workspace)
+                .get(&workspace)
                 .and_then(|workspace_routes| workspace_routes.get(&logical_key))
                 .is_some_and(is_external)
         })
@@ -225,6 +321,7 @@ impl AgentRegistry {
         registrations: Vec<ExternalSubagentRegistration>,
         routes: BTreeMap<String, ExternalSubagentRoute>,
     ) {
+        let workspace_root = canonical_local_workspace_path(workspace_root);
         {
             let mut generations = self.external_subagents.write_generations();
             for registration in registrations {
@@ -257,7 +354,7 @@ impl AgentRegistry {
         let previous = self
             .external_subagents
             .read_routes()
-            .get(workspace_root)
+            .get(&workspace_root)
             .cloned()
             .unwrap_or_default();
         // An active external implementation disappearing must never expose a
@@ -276,14 +373,15 @@ impl AgentRegistry {
         }
         self.external_subagents
             .write_routes()
-            .insert(workspace_root.to_path_buf(), routes);
+            .insert(workspace_root, routes);
         self.external_subagents.prune_unrouted_generations();
     }
 
     pub fn release_external_subagent_workspace(&self, workspace_root: &Path) {
+        let workspace_root = canonical_local_workspace_path(workspace_root);
         self.external_subagents
             .write_routes()
-            .remove(workspace_root);
+            .remove(&workspace_root);
         self.external_subagents.prune_unrouted_generations();
     }
 
@@ -296,10 +394,11 @@ impl AgentRegistry {
         let logical_key = normalize_external_logical_id(logical_id);
         if external_sources_supported {
             if let Some(workspace_root) = workspace_root {
+                let workspace_key = canonical_local_workspace_path(workspace_root);
                 if let Some(route) = self
                     .external_subagents
                     .read_routes()
-                    .get(workspace_root)
+                    .get(&workspace_key)
                     .and_then(|routes| routes.get(&logical_key))
                     .cloned()
                 {
@@ -319,15 +418,123 @@ impl AgentRegistry {
             .map(|entry| local_binding(logical_id, entry.agent.id()))
     }
 
+    /// Resolve a user-facing main-agent id to the exact generation that owns
+    /// the next turn. The returned lease keeps prompt, tools, permissions, and
+    /// model metadata stable until that turn settles.
+    pub fn resolve_primary_agent_for_turn(
+        &self,
+        logical_id: &str,
+        workspace_root: Option<&Path>,
+        external_sources_supported: bool,
+        expected_owner: Option<SessionAgentRouteOwner>,
+    ) -> Option<ExternalPrimaryAgentTurnBinding> {
+        let logical_key = normalize_external_logical_id(logical_id);
+        if external_sources_supported {
+            if let Some(workspace_root) = workspace_root {
+                let workspace_key = canonical_local_workspace_path(workspace_root);
+                if let Some(route) = self
+                    .external_subagents
+                    .read_routes()
+                    .get(&workspace_key)
+                    .and_then(|routes| routes.get(&logical_key))
+                    .cloned()
+                {
+                    let binding = match route {
+                        ExternalSubagentRoute::Local => {
+                            match self.find_agent_entry(logical_id, Some(workspace_root)) {
+                                Some(entry) if is_local_session_primary_entry(&entry) => {
+                                    Some(local_primary_binding(entry.agent.id()))
+                                }
+                                Some(entry) => {
+                                    warn!(
+                                        "Session primary agent resolution rejected a registered non-mode agent under a Local route: logical_id={}, category={:?}, source={:?}",
+                                        logical_id,
+                                        entry.category,
+                                        entry.source
+                                    );
+                                    None
+                                }
+                                None => None,
+                            }
+                        }
+                        ExternalSubagentRoute::External(runtime_key) => {
+                            self.external_subagents.acquire_primary(&runtime_key)
+                        }
+                        ExternalSubagentRoute::Unavailable => None,
+                    };
+                    return binding.filter(|binding| {
+                        expected_owner.is_none_or(|owner| binding.route_owner == owner)
+                    });
+                }
+            }
+        }
+        if expected_owner == Some(SessionAgentRouteOwner::External) {
+            return None;
+        }
+        match self.find_agent_entry(logical_id, workspace_root) {
+            Some(entry) if is_local_session_primary_entry(&entry) => {
+                Some(local_primary_binding(entry.agent.id()))
+            }
+            Some(entry) => {
+                warn!(
+                    "Session primary agent resolution rejected a registered non-mode agent: logical_id={}, category={:?}, source={:?}, expected_owner={:?}",
+                    logical_id,
+                    entry.category,
+                    entry.source,
+                    expected_owner
+                );
+                None
+            }
+            None => {
+                debug!(
+                    "Session primary agent resolution found no registered agent: logical_id={}, expected_owner={:?}",
+                    logical_id, expected_owner
+                );
+                None
+            }
+        }
+    }
+
+    /// Resolve only the currently approved external route for an exact
+    /// ecosystem. Command delegation must never fall back to a same-name local
+    /// agent or cross an ecosystem boundary after the command was expanded.
+    pub fn resolve_external_subagent_for_fresh_invocation(
+        &self,
+        logical_id: &str,
+        ecosystem_id: &EcosystemId,
+        workspace_root: Option<&Path>,
+    ) -> Option<ExternalSubagentInvocationBinding> {
+        let workspace_root = workspace_root?;
+        let workspace_key = canonical_local_workspace_path(workspace_root);
+        let logical_key = normalize_external_logical_id(logical_id);
+        let route = self
+            .external_subagents
+            .read_routes()
+            .get(&workspace_key)
+            .and_then(|routes| routes.get(&logical_key))
+            .cloned()?;
+        match route {
+            ExternalSubagentRoute::External(runtime_key) => {
+                self.external_subagents.acquire_matching(
+                    &runtime_key,
+                    Some(ecosystem_id),
+                    ExternalAgentProjection::Subagent,
+                )
+            }
+            ExternalSubagentRoute::Local | ExternalSubagentRoute::Unavailable => None,
+        }
+    }
+
     pub(super) fn apply_external_routes_to_query(
         &self,
         workspace_root: &Path,
         mut local: Vec<AgentInfo>,
     ) -> Vec<AgentInfo> {
+        let workspace_root = canonical_local_workspace_path(workspace_root);
         let routes = self
             .external_subagents
             .read_routes()
-            .get(workspace_root)
+            .get(&workspace_root)
             .cloned()
             .unwrap_or_default();
         let generations = self.external_subagents.read_generations();
@@ -342,10 +549,47 @@ impl AgentRegistry {
                     let Some(entry) = generations.get(&runtime_key) else {
                         continue;
                     };
-                    if entry.registration.hidden {
+                    if entry.registration.hidden || !entry.registration.mode.supports_subagent() {
                         continue;
                     }
-                    local.push(external_agent_info(entry));
+                    local.push(external_agent_info(
+                        entry,
+                        ExternalAgentProjection::Subagent,
+                    ));
+                }
+            }
+        }
+        local
+    }
+
+    pub(super) fn apply_external_routes_to_modes(
+        &self,
+        workspace_root: &Path,
+        mut local: Vec<AgentInfo>,
+    ) -> Vec<AgentInfo> {
+        let workspace_root = canonical_local_workspace_path(workspace_root);
+        let routes = self
+            .external_subagents
+            .read_routes()
+            .get(&workspace_root)
+            .cloned()
+            .unwrap_or_default();
+        let generations = self.external_subagents.read_generations();
+        for (logical_id, route) in routes {
+            match route {
+                ExternalSubagentRoute::Local => {}
+                ExternalSubagentRoute::Unavailable => {
+                    local.retain(|agent| normalize_external_logical_id(&agent.id) != logical_id);
+                }
+                ExternalSubagentRoute::External(runtime_key) => {
+                    local.retain(|agent| normalize_external_logical_id(&agent.id) != logical_id);
+                    let Some(entry) = generations.get(&runtime_key) else {
+                        continue;
+                    };
+                    if entry.registration.hidden || !entry.registration.mode.supports_primary() {
+                        continue;
+                    }
+                    local.push(external_agent_info(entry, ExternalAgentProjection::Primary));
                 }
             }
         }
@@ -368,7 +612,47 @@ fn local_binding(logical_id: &str, runtime_agent_key: &str) -> ExternalSubagentI
     }
 }
 
-fn external_agent_info(entry: &ExternalSubagentGenerationEntry) -> AgentInfo {
+/// Builtin agents that are allowed to act as the main agent of a session even
+/// though they are not registered as `Mode` (review child sessions).
+///
+/// Review child sessions are created by the product surfaces with
+/// `agentType=CodeReview` (standard) or `agentType=DeepReview` (strict), and
+/// the remediation phase of either session runs with `agentType=ReviewFixer`.
+/// All three must resolve through the primary-agent path for create, turn,
+/// restore, and compaction. Other subagents (e.g. `ReviewWorker`,
+/// `ReviewJudge`) stay restricted.
+fn is_builtin_session_primary_agent(id: &str) -> bool {
+    matches!(
+        id,
+        CODE_REVIEW_AGENT_TYPE | DEEP_REVIEW_AGENT_TYPE | REVIEW_FIXER_AGENT_TYPE
+    )
+}
+
+/// Whether a locally-resolved agent entry may act as a session primary agent.
+///
+/// Used by both the explicit `ExternalSubagentRoute::Local` branch and the
+/// no-route fallback so review child sessions (CodeReview/DeepReview) resolve
+/// identically regardless of whether a workspace route table pins them to the
+/// local implementation.
+fn is_local_session_primary_entry(entry: &AgentEntry) -> bool {
+    entry.category == AgentCategory::Mode
+        || (entry.source == AgentSource::Builtin
+            && is_builtin_session_primary_agent(entry.agent.id()))
+}
+
+fn local_primary_binding(runtime_agent_key: &str) -> ExternalPrimaryAgentTurnBinding {
+    ExternalPrimaryAgentTurnBinding {
+        runtime_agent_key: runtime_agent_key.to_string(),
+        model_binding: None,
+        route_owner: SessionAgentRouteOwner::Local,
+        lease: None,
+    }
+}
+
+fn external_agent_info(
+    entry: &ExternalSubagentGenerationEntry,
+    projection: ExternalAgentProjection,
+) -> AgentInfo {
     let agent = entry.registration.agent.as_ref();
     let default_tools = agent.default_tools();
     AgentInfo {
@@ -396,12 +680,18 @@ fn external_agent_info(entry: &ExternalSubagentGenerationEntry) -> AgentInfo {
         override_state: None,
         state_reason: None,
         source: AgentSource::External,
-        subagent_source: Some(SubAgentSource::External),
+        subagent_source: matches!(projection, ExternalAgentProjection::Subagent)
+            .then_some(SubAgentSource::External),
         path: None,
-        model: Some(entry.registration.model_binding.model_id.clone()),
-        model_is_explicit: Some(true),
-        visibility: Some(SubagentVisibilityPolicy::public().summary()),
+        model: entry
+            .registration
+            .model_binding
+            .fixed_model_id()
+            .map(str::to_string),
+        model_is_explicit: Some(entry.registration.model_binding.fixed_model_id().is_some()),
+        visibility: matches!(projection, ExternalAgentProjection::Subagent)
+            .then(|| SubagentVisibilityPolicy::public().summary()),
         external_provider_label: Some(entry.registration.provider_label.clone()),
-        supports_follow_up: false,
+        supports_follow_up: matches!(projection, ExternalAgentProjection::Primary),
     }
 }

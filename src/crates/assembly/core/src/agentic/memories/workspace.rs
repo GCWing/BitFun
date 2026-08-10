@@ -340,9 +340,6 @@ fn map_memory_workspace_git_error(
         MemoryWorkspaceGitError::Join { source } => {
             BitFunError::service(format!("{join_context}: {source}"))
         }
-        error @ MemoryWorkspaceGitError::UnsupportedGitStatus { .. } => {
-            BitFunError::service(error.to_string())
-        }
         error => BitFunError::io(error.to_string()),
     }
 }

@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { Globe, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
-import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
+import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 import { BaseToolCard, BaseToolCardProps } from '../BaseToolCard';
 import './WebSearchCard.scss';
 
@@ -40,12 +40,16 @@ export const WebSearchCard: React.FC<WebSearchCardProps> = ({
 
   const isSearch = searchType === 'search';
   const cardTitle = isSearch ? t('flowChatCards.webSearchCard.searchTitle') : t('flowChatCards.webSearchCard.fetchTitle');
-  const cardColor = UI_EXCEPTION_ACCENTS.toolIdentity.webSearch;
+  const cardColor = APPEARANCE_DOMAIN_TOKENS.toolIdentity.webSearch;
 
   if (displayMode === 'compact') {
     return (
       <div
         className={`web-search-card web-search-card--compact web-search-card--${status} web-search-card--${searchType}`}
+        data-bf-component="flow-chat-card"
+        data-bf-part="compact"
+        data-bf-display="compact"
+        data-bf-status={status}
         style={{ '--private-web-search-card-identity-color': cardColor } as React.CSSProperties}
       >
         <Globe className="web-search-card__icon" size={14} />
@@ -91,7 +95,7 @@ export const WebSearchCard: React.FC<WebSearchCardProps> = ({
         </div>
 
         {status === 'completed' && resolvedResults.length > 0 && (
-          <div className="web-search-card__results-section">
+          <div className="web-search-card__results-section" data-bf-component="flow-chat-card" data-bf-part="result">
             <button
               className="web-search-card__results-header"
               onClick={() => setIsExpanded(!isExpanded)}
@@ -102,9 +106,9 @@ export const WebSearchCard: React.FC<WebSearchCardProps> = ({
             </button>
 
             {isExpanded && (
-              <div className="web-search-card__results-list">
+              <div className="web-search-card__results-list" data-bf-component="flow-chat-card" data-bf-part="list">
                 {resolvedResults.map((item: WebSearchResult, index: number) => (
-                  <div key={index} className="web-search-card__result-item">
+                  <div key={index} className="web-search-card__result-item" data-bf-component="flow-chat-card" data-bf-part="item">
                     <div className="web-search-card__result-header">
                       <span className="web-search-card__result-title">{item.title}</span>
                       {item.url && (
@@ -133,13 +137,13 @@ export const WebSearchCard: React.FC<WebSearchCardProps> = ({
         )}
 
         {status === 'completed' && resolvedResults.length === 0 && (
-          <div className="web-search-card__no-results">
+          <div className="web-search-card__no-results" data-bf-component="flow-chat-card" data-bf-part="empty">
             {t('flowChatCards.webSearchCard.noResults')}
           </div>
         )}
 
         {(status === 'running' || status === 'streaming') && (
-          <div className="web-search-card__searching">
+          <div className="web-search-card__searching" data-bf-component="flow-chat-card" data-bf-part="processing">
             <Globe className="web-search-card__searching-icon" size={14} />
             <span>{t('flowChatCards.webSearchCard.searching')}</span>
           </div>

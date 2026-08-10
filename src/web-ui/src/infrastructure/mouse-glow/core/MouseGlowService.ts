@@ -279,7 +279,11 @@ export class MouseGlowService {
       overlayHost,
       style,
     );
-    const overlayPosition = this.getOverlayPosition(geometry, overlayHost);
+    const overlayPosition = this.getOverlayPosition(
+      geometry,
+      overlayHost,
+      overlayHost === surface ? rect : null,
+    );
     this.activeSurface = surface;
     overlay.toggleAttribute('data-divider', dividerGeometry !== null);
     overlay.toggleAttribute('data-local-position', overlayPosition.isLocal);
@@ -319,6 +323,7 @@ export class MouseGlowService {
   private getOverlayPosition(
     geometry: OverlayGeometry,
     host: HTMLElement,
+    knownHostRect: DOMRect | null,
   ): { isLocal: boolean; left: number; top: number } {
     if (host === document.body) {
       return { isLocal: false, left: geometry.left, top: geometry.top };
@@ -329,7 +334,7 @@ export class MouseGlowService {
       return { isLocal: false, left: geometry.left, top: geometry.top };
     }
 
-    const hostRect = host.getBoundingClientRect();
+    const hostRect = knownHostRect ?? host.getBoundingClientRect();
     const borderLeftWidth = parseFloat(hostStyle.borderLeftWidth) || 0;
     const borderTopWidth = parseFloat(hostStyle.borderTopWidth) || 0;
     return {
@@ -408,11 +413,6 @@ export class MouseGlowService {
       return false;
     }
 
-    const rect = element.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) {
-      return false;
-    }
-
     if (!this.isVisibleElement(style)) {
       return false;
     }
@@ -441,7 +441,6 @@ export class MouseGlowService {
       return false;
     }
 
-    const rect = element.getBoundingClientRect();
     if (!this.isVisibleElement(style)) {
       return false;
     }
@@ -451,7 +450,7 @@ export class MouseGlowService {
       return true;
     }
 
-    return this.hasDividerSemantics(element) && this.isLineLikeGeometry(rect);
+    return this.hasDividerSemantics(element);
   }
 
   private getDividerGeometry(
@@ -485,7 +484,7 @@ export class MouseGlowService {
       }
     }
 
-    if (this.hasDividerSemantics(element)) {
+    if (this.hasDividerSemantics(element) && this.isLineLikeGeometry(rect)) {
       return {
         height: Math.max(rect.height, 1),
         left: rect.left,
@@ -557,9 +556,6 @@ export class MouseGlowService {
       if (this.isFloatingLayer(current)) {
         return current;
       }
-      if (this.createsStackingContext(current)) {
-        return current;
-      }
       current = current.parentElement;
     }
     return document.body;
@@ -582,22 +578,6 @@ export class MouseGlowService {
       && Array.from(element.classList).some(className =>
         FLOATING_LAYER_CLASS_PATTERN.test(className)
       )
-    );
-  }
-
-  private createsStackingContext(element: HTMLElement): boolean {
-    const style = window.getComputedStyle(element);
-    const positionedWithZIndex =
-      style.position !== 'static' && style.zIndex !== 'auto';
-
-    return (
-      positionedWithZIndex
-      || style.position === 'fixed'
-      || style.position === 'sticky'
-      || style.isolation === 'isolate'
-      || (style.opacity !== '' && style.opacity !== '1')
-      || (style.mixBlendMode !== '' && style.mixBlendMode !== 'normal')
-      || style.willChange.includes('opacity')
     );
   }
 

@@ -56,18 +56,17 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   onCollapsePanel,
   terminalResizeSuspended = false,
 }) => {
-  // Store state
-  const {
-    primaryGroup,
-    secondaryGroup,
-    tertiaryGroup,
-    layout,
-    isMissionControlOpen,
-    setAnchorPosition,
-    setAnchorSize,
-    closeMissionControl,
-    openMissionControl,
-  } = useCanvasStore();
+  // Store state — fine-grained selectors so unrelated store changes
+  // (drag state, closed-tab history, ...) do not re-render the whole canvas.
+  const primaryGroup = useCanvasStore(state => state.primaryGroup);
+  const secondaryGroup = useCanvasStore(state => state.secondaryGroup);
+  const tertiaryGroup = useCanvasStore(state => state.tertiaryGroup);
+  const layout = useCanvasStore(state => state.layout);
+  const isMissionControlOpen = useCanvasStore(state => state.isMissionControlOpen);
+  const setAnchorPosition = useCanvasStore(state => state.setAnchorPosition);
+  const setAnchorSize = useCanvasStore(state => state.setAnchorSize);
+  const closeMissionControl = useCanvasStore(state => state.closeMissionControl);
+  const openMissionControl = useCanvasStore(state => state.openMissionControl);
   const activeBtwSessionTab = useCanvasStore(state => selectActiveBtwSessionTab(state as any));
   const activeBtwSessionData = activeBtwSessionTab?.content.data as
     | { childSessionId: string; parentSessionId: string; workspacePath?: string }
@@ -154,9 +153,9 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
     }
 
     return (
-      <div className="canvas-content-canvas__main">
+      <div data-bf-component="content-canvas" data-bf-part="main" className="canvas-content-canvas__main">
         {/* Editor area */}
-        <div className="canvas-content-canvas__editor">
+        <div className="canvas-content-canvas__editor" data-bf-component="content-canvas" data-bf-part="editor">
           <EditorArea
             workspacePath={workspacePath}
             isSceneActive={isSceneActive}
@@ -179,7 +178,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
             onClose={handleAnchorClose}
           >
             {/* Anchor content (e.g., terminal) renders here */}
-            <div className="canvas-content-canvas__anchor-content">
+            <div className="canvas-content-canvas__anchor-content" data-bf-component="content-canvas" data-bf-part="anchorContent">
             </div>
           </AnchorZone>
         )}
@@ -188,8 +187,11 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   };
 
   return (
-    <div
+    <div data-bf-component="content-canvas" data-bf-part="root"
       className={`canvas-content-canvas ${layout.isMaximized ? 'is-maximized' : ''}`}
+      data-canvas-mode={mode}
+      data-bf-mode={mode}
+      data-bf-state={layout.isMaximized ? 'maximized' : ''}
       data-shortcut-scope="canvas"
     >
       {/* Main content */}

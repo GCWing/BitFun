@@ -23,7 +23,9 @@ import { notificationService } from '../../../shared/notification-system/service
 import { createLogger } from '@/shared/utils/logger';
 import { handleThreadGoalUpdated } from '../threadGoalEventService';
 import { resolveThreadGoalUserMessageDisplay } from '../../utils/threadGoalDisplay';
+import { cleanRemoteUserInput } from '../../utils/userInputText';
 import { effectiveToolInvocation, getEffectiveToolName } from '../../utils/toolInvocationIdentity';
+import { absoluteSessionTurnIndexForId } from '../../utils/flowChatTurnOrdinal';
 import type {
   DeepReviewQueueStateChangedEvent,
   ImageAnalysisEvent,
@@ -33,6 +35,7 @@ import type {
   OpenBuiltInBrowserEvent,
   AcpContextUsageUpdatedEvent,
   SessionModelAutoMigratedEvent,
+  SessionReasoningPresetAutoClearedEvent,
   SubagentSessionLinkedEvent,
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { MCPAPI } from '@/infrastructure/api/service-api/MCPAPI';
@@ -77,6 +80,11 @@ import {
 } from './RuntimeStatusModule';
 import { requestPeerSessionRefresh } from './PeerSessionRefreshModule';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
+import {
+  optimisticTurnAdoptionKey,
+  sessionPendingTurnAdoptionKey,
+  stripOptimisticTurnAdoption,
+} from '../../utils/optimisticTurnAdoption';
 
 const log = createLogger('EventHandlerModule');
 const TURN_COMPLETION_QUIET_WINDOW_MS = 500;
@@ -151,7 +159,12 @@ export const __test_only__ = {
   resolveDialogTurnDisplayContent,
   mergeParamsPartialEventData,
   findSubagentParentInfoByRound,
+  handleDialogTurnStarted,
   handleDialogTurnFailed,
+  handleSubagentSessionLinked,
+  handleModelRoundStart,
+  handleTokenUsageUpdate,
+  handleCompressionCompleted,
 };
 
 function shouldMarkUnreadCompletion(sessionId: string): boolean {
@@ -395,6 +408,7 @@ function ensureSubagentSession(
   subagentSessionId: string,
   event?: Record<string, unknown>,
   explicitSubagentType?: string,
+  focusedReviewDisplayLabel?: SubagentSessionLinkedEvent['focusedReviewDisplayLabel'],
 ): void {
   const store = FlowChatStore.getInstance();
   const existing = store.getState().sessions.get(subagentSessionId);
@@ -413,13 +427,14 @@ function ensureSubagentSession(
         subagentType: subagentType || undefined,
       });
     }
+    store.updateSessionFocusedReviewDisplayLabel(subagentSessionId, focusedReviewDisplayLabel);
     return;
   }
 
   const parentSession = store.getState().sessions.get(parentInfo.sessionId);
   const parentTurnIndex = parentSession
-    ?.dialogTurns
-    .findIndex(turn => turn.id === parentInfo.dialogTurnId);
+    ? absoluteSessionTurnIndexForId(parentSession, parentInfo.dialogTurnId)
+    : undefined;
   store.addExternalSession(
     subagentSessionId,
     buildSubagentSessionTitleWithType(parentInfo, explicitSubagentType),
@@ -433,10 +448,15 @@ function ensureSubagentSession(
       btwOrigin: {
         parentSessionId: parentInfo.sessionId,
         parentDialogTurnId: parentInfo.dialogTurnId,
-        parentTurnIndex: typeof parentTurnIndex === 'number' && parentTurnIndex >= 0
-          ? parentTurnIndex + 1
-          : undefined,
+        parentTurnIndex,
       },
+      focusedReviewDisplayLabel,
+      projectWorkspacePath:
+        parentSession?.projectWorkspacePath
+        || parentSession?.config.projectWorkspacePath
+        || parentSession?.workspacePath,
+      executionTarget: parentSession?.config.executionTarget,
+      workspaceId: parentSession?.workspaceId,
     },
     parentSession?.remoteConnectionId || extractEventRemoteConnectionId(event),
     parentSession?.remoteSshHost || extractEventRemoteSshHost(event),
@@ -486,6 +506,11 @@ function handleSubagentSessionLinked(
     event?.subagentDialogTurnId ?? (event as any)?.subagent_dialog_turn_id;
   const agentType = event?.agentType ?? (event as any)?.agent_type;
   const modelId = event?.modelId ?? (event as any)?.model_id;
+  const rawFocusedReviewDisplayLabel = event?.focusedReviewDisplayLabel
+    ?? (event as any)?.focused_review_display_label;
+  const focusedReviewDisplayLabel = typeof rawFocusedReviewDisplayLabel === 'string'
+    ? rawFocusedReviewDisplayLabel
+    : undefined;
 
   if (!childSessionId || !parentSessionId || !parentDialogTurnId || !parentToolCallId) {
     log.warn('SubagentSessionLinked missing required fields', { event });
@@ -499,7 +524,14 @@ function handleSubagentSessionLinked(
   };
 
   attachSubagentSessionToParentTool(parentInfo, childSessionId, subagentDialogTurnId);
-  ensureSubagentSession(context, parentInfo, childSessionId, event as Record<string, unknown>, agentType);
+  ensureSubagentSession(
+    context,
+    parentInfo,
+    childSessionId,
+    event as Record<string, unknown>,
+    agentType,
+    focusedReviewDisplayLabel,
+  );
   if (typeof modelId === 'string' && modelId.trim()) {
     FlowChatStore.getInstance().updateSessionModelName(childSessionId, modelId.trim());
   }
@@ -789,6 +821,9 @@ export async function initializeEventListeners(
     onSessionModelAutoMigrated: (event) => {
       handleSessionModelAutoMigrated(event);
     },
+    onSessionReasoningPresetAutoCleared: (event) => {
+      handleSessionReasoningPresetAutoCleared(event);
+    },
     onUserSteeringInjected: (event) => {
       handleUserSteeringInjected(context, event);
     }
@@ -872,6 +907,20 @@ function handleSessionCreated(context: FlowChatContext, event: any): void {
   const store = FlowChatStore.getInstance();
   const existing = store.getState().sessions.get(sessionId);
   const workspacePath = resolveExternalSessionWorkspacePath(context, event);
+  const projectWorkspacePath =
+    (typeof event.projectWorkspacePath === 'string' && event.projectWorkspacePath)
+    || (typeof event.project_workspace_path === 'string' && event.project_workspace_path)
+    || workspacePath;
+  const executionTarget =
+    event.executionTarget && typeof event.executionTarget === 'object'
+      ? event.executionTarget
+      : event.execution_target && typeof event.execution_target === 'object'
+        ? event.execution_target
+        : undefined;
+  const workspaceId =
+    (typeof event.workspaceId === 'string' && event.workspaceId)
+    || (typeof event.workspace_id === 'string' && event.workspace_id)
+    || undefined;
   const remoteConnectionId = extractEventRemoteConnectionId(event);
   const remoteSshHost = extractEventRemoteSshHost(event);
 
@@ -882,7 +931,11 @@ function handleSessionCreated(context: FlowChatContext, event: any): void {
     sessionName || 'Remote Session',
     agentType || 'agentic',
     workspacePath,
-    undefined,
+    {
+      projectWorkspacePath,
+      executionTarget,
+      workspaceId,
+    },
     remoteConnectionId,
     remoteSshHost
   );
@@ -1016,6 +1069,7 @@ function finalizeTurnCompletionState(
   context.flowChatStore.markSessionFinished(sessionId);
 
   context.flowChatStore.updateDialogTurn(sessionId, turnId, turn => {
+    const completedAt = Date.now();
     const updatedModelRounds = turn.modelRounds.map((round) => {
       if (round.isStreaming) {
         return {
@@ -1023,7 +1077,7 @@ function finalizeTurnCompletionState(
           isStreaming: false,
           isComplete: true,
           status: 'completed' as const,
-          endTime: Date.now()
+          endTime: round.endTime ?? completedAt
         };
       }
       return round;
@@ -1033,7 +1087,7 @@ function finalizeTurnCompletionState(
       ...turn,
       modelRounds: updatedModelRounds,
       status: 'completed' as const,
-      endTime: Date.now()
+      endTime: turn.endTime ?? completedAt
     };
   });
   reconcileBackgroundSubagentSession(sessionId);
@@ -1132,11 +1186,42 @@ function handleSessionTitleGenerated(event: any): void {
 }
 
 function handleSessionModelAutoMigrated(event: SessionModelAutoMigratedEvent): void {
-  const { sessionId, newModelId } = event;
+  const { sessionId, previousModelId, newModelId, reason } = event;
   if (!sessionId || !newModelId) return;
 
   const store = FlowChatStore.getInstance();
-  store.updateSessionModelName(sessionId, newModelId);
+  const applied = store.applySessionModelAutoMigration(
+    sessionId,
+    previousModelId ?? '',
+    newModelId,
+  );
+  if (!applied) {
+    log.debug('Ignoring stale session model migration', {
+      sessionId,
+      previousModelId,
+      newModelId,
+      reason,
+      currentModelId: store.getState().sessions.get(sessionId)?.config.modelName,
+    });
+  }
+}
+
+function handleSessionReasoningPresetAutoCleared(
+  event: SessionReasoningPresetAutoClearedEvent,
+): void {
+  const { sessionId, previousPresetId, reason } = event;
+  if (!sessionId || !previousPresetId) return;
+
+  const store = FlowChatStore.getInstance();
+  const applied = store.applySessionReasoningPresetAutoClear(sessionId, previousPresetId);
+  if (!applied) {
+    log.debug('Ignoring stale session reasoning preset auto-clear', {
+      sessionId,
+      previousPresetId,
+      reason,
+      currentPresetId: store.getState().sessions.get(sessionId)?.config.reasoningPreset,
+    });
+  }
 }
 
 /**
@@ -1445,22 +1530,6 @@ function handleImageAnalysisCompleted(_context: FlowChatContext, event: ImageAna
   log.info('Image analysis completed', { sessionId, success, durationMs });
 }
 
-/**
- * Strip agent-internal XML wrapper tags from user input before displaying.
- * Handles both normal and forwarded-agent envelopes.
- */
-function cleanRemoteUserInput(raw: string): string {
-  const s = raw.trim();
-  const userQueryMatch = s.match(/<user_query>\s*([\s\S]*?)\s*<\/user_query>/);
-  if (userQueryMatch) {
-    return userQueryMatch[1].trim();
-  }
-
-  return s
-    .replace(/<system(?:_|-)reminder>[\s\S]*?<\/system(?:_|-)reminder>/g, '')
-    .trim();
-}
-
 function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
   const { sessionId, turnId, turnIndex, userInput, originalUserInput, userMessageMetadata } = event;
 
@@ -1473,7 +1542,6 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
   const tempTurnId = pendingImageAnalysisTurns.get(sessionId);
   const hadTempTurn = !!tempTurnId;
   if (tempTurnId) {
-    store.deleteDialogTurn(sessionId, tempTurnId);
     pendingImageAnalysisTurns.delete(sessionId);
 
     // State machine was already transitioned to PROCESSING by ImageAnalysisStarted.
@@ -1484,7 +1552,7 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
       ctx.currentDialogTurnId = turnId;
     }
 
-    log.info('Replaced temp image analysis turn with real turn', {
+    log.info('Adopting temp image analysis turn as real turn', {
       sessionId,
       tempTurnId,
       realTurnId: turnId,
@@ -1537,7 +1605,57 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
     userMessageMetadata?.kind === 'manual_compaction' ? 'manual_compaction' : 'user_dialog';
 
   const freshSession = store.getState().sessions.get(sessionId);
-  const dialogTurn = freshSession?.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
+  let dialogTurn = freshSession?.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
+  let projectedNewTurn = false;
+
+  if (!dialogTurn && freshSession) {
+    // Adoption is keyed purely by turn metadata: a driver that projected an
+    // optimistic turn marked it with the session's pending adoption key, and
+    // the executor's own DialogTurnStarted adopts it in place. No transport
+    // check — a session whose turns carry no key never matches.
+    const pendingAdoptionKey = sessionPendingTurnAdoptionKey(freshSession);
+    const optimisticTurn = pendingAdoptionKey
+      ? freshSession.dialogTurns.find(
+          turn => optimisticTurnAdoptionKey(turn) === pendingAdoptionKey,
+        )
+      : undefined;
+    if (optimisticTurn) {
+      const optimisticMetadata = stripOptimisticTurnAdoption(
+        optimisticTurn.userMessage.metadata,
+      );
+      const mergedMetadata =
+        optimisticMetadata || userMessageMetadata
+          ? { ...optimisticMetadata, ...userMessageMetadata }
+          : undefined;
+      store.replaceOptimisticDialogTurn(sessionId, optimisticTurn.id, {
+        ...optimisticTurn,
+        id: turnId,
+        kind: optimisticTurn.kind || turnKind,
+        userMessage: {
+          ...optimisticTurn.userMessage,
+          content: optimisticTurn.userMessage.content || displayContent,
+          hasImages,
+          metadata: mergedMetadata,
+          images,
+        },
+        status: 'pending',
+        storageTurnIndex: typeof turnIndex === 'number' ? turnIndex : undefined,
+        backendTurnIndex: typeof turnIndex === 'number' ? turnIndex : undefined,
+      });
+      dialogTurn = store.getState().sessions
+        .get(sessionId)
+        ?.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
+      projectedNewTurn = !!dialogTurn;
+      const deferredOldKey = `${sessionId}:${optimisticTurn.id}`;
+      const deferredNewKey = `${sessionId}:${turnId}`;
+      const hadDeferredOldSave = context.deferredStorageIdentitySaves?.delete(deferredOldKey) === true;
+      const hadDeferredNewSave = context.deferredStorageIdentitySaves?.delete(deferredNewKey) === true;
+      if (hadDeferredOldSave || hadDeferredNewSave) {
+        void saveDialogTurnToDisk(context, sessionId, turnId);
+      }
+    }
+  }
+
   if (!dialogTurn) {
     const newTurn: DialogTurn = {
       id: turnId,
@@ -1554,9 +1672,19 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
       modelRounds: [],
       status: 'pending',
       startTime: Date.now(),
+      storageTurnIndex: typeof turnIndex === 'number' ? turnIndex : undefined,
       backendTurnIndex: typeof turnIndex === 'number' ? turnIndex : undefined,
     };
-    store.addDialogTurn(sessionId, newTurn);
+    const replacedTempTurn = tempTurnId
+      ? store.replaceOptimisticDialogTurn(sessionId, tempTurnId, newTurn)
+      : false;
+    if (!replacedTempTurn) {
+      store.addDialogTurn(sessionId, newTurn);
+    }
+    projectedNewTurn = true;
+  }
+
+  if (projectedNewTurn) {
     reconcileBackgroundSubagentSession(sessionId);
 
     context.contentBuffers.set(sessionId, new Map());
@@ -1573,7 +1701,15 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
     return;
   }
 
-  if (typeof turnIndex === 'number' && dialogTurn.backendTurnIndex === undefined) {
+  if (!dialogTurn) {
+    return;
+  }
+
+  if (
+    typeof turnIndex === 'number'
+    && dialogTurn.storageTurnIndex === undefined
+    && dialogTurn.backendTurnIndex === undefined
+  ) {
     store.updateDialogTurn(sessionId, turnId, turn => ({
       ...turn,
       kind: turn.kind || turnKind,
@@ -1581,8 +1717,13 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
         ...turn.userMessage,
         metadata: turn.userMessage.metadata || userMessageMetadata,
       },
+      storageTurnIndex: turnIndex,
       backendTurnIndex: turnIndex,
     }));
+    const deferredKey = `${sessionId}:${turnId}`;
+    if (context.deferredStorageIdentitySaves?.delete(deferredKey)) {
+      void saveDialogTurnToDisk(context, sessionId, turnId);
+    }
   }
   reconcileBackgroundSubagentSession(sessionId);
 
@@ -1749,7 +1890,7 @@ function handleToolEvent(
     return;
   }
 
-  clearRuntimeStatus(context, sessionId, turnId);
+  clearRuntimeStatus(context, sessionId, turnId, { roundId });
   touchPendingTurnCompletion(context, sessionId, turnId);
   
   const eventData: ToolEventData = {
@@ -1825,9 +1966,6 @@ function handleModelRoundStart(context: FlowChatContext, event: ModelRoundStarte
     event.renderHints?.disableExploreGrouping === true ||
     event.metadata?.disableExploreGrouping === true ||
     event.disableExploreGrouping === true;
-  const modelConfigId = event.modelConfigId.trim();
-  const effectiveModelName = event.effectiveModelName.trim();
-
   const modelRound: ModelRound = {
     id: roundId,
     index: roundIndex || 0,
@@ -1837,8 +1975,9 @@ function handleModelRoundStart(context: FlowChatContext, event: ModelRoundStarte
     isComplete: false,
     status: 'streaming',
     startTime: Date.now(),
-    modelConfigId,
-    effectiveModelName,
+    // Model identity is optional: external ACP agents carry none.
+    ...(event.modelConfigId ? { modelConfigId: event.modelConfigId.trim() } : {}),
+    ...(event.effectiveModelName ? { effectiveModelName: event.effectiveModelName.trim() } : {}),
     ...(disableExploreGrouping
       ? { renderHints: { disableExploreGrouping: true } }
       : {}),
@@ -1850,12 +1989,12 @@ function handleModelRoundStart(context: FlowChatContext, event: ModelRoundStarte
   const linkedParentInfo =
     findSubagentParentInfoByRound(sessionId, turnId) ||
     getLinkedSubagentParentInfo(sessionId);
-  if (linkedParentInfo && effectiveModelName) {
+  if (linkedParentInfo && modelRound.effectiveModelName) {
     updateSubagentParentTaskModel(
       context,
       linkedParentInfo,
-      modelConfigId,
-      effectiveModelName,
+      modelRound.modelConfigId,
+      modelRound.effectiveModelName,
     );
   }
   
@@ -1988,6 +2127,13 @@ function handleTokenUsageUpdate(context: FlowChatContext, event: any): void {
     log.debug('Session not found (token usage update)', { sessionId });
     return;
   }
+  if (
+    typeof turnId !== 'string'
+    || !session.dialogTurns.some(turn => turn.id === turnId)
+  ) {
+    log.debug('Dropped token usage update for non-visible turn', { sessionId, turnId });
+    return;
+  }
   if (typeof inputTokens !== 'number' || typeof totalTokens !== 'number') {
     log.debug('Dropped invalid token usage update', { event });
     return;
@@ -1996,7 +2142,9 @@ function handleTokenUsageUpdate(context: FlowChatContext, event: any): void {
   store.updateTokenUsage(sessionId, {
     inputTokens,
     outputTokens: typeof outputTokens === 'number' ? outputTokens : undefined,
-    totalTokens
+    totalTokens,
+    turnId,
+    source: 'model_request',
   }, turnId);
 
   if (maxContextTokens !== undefined && maxContextTokens !== null) {
@@ -2104,16 +2252,24 @@ function handleCompressionStarted(_context: FlowChatContext, event: any): void {
  */
 function handleCompressionCompleted(context: FlowChatContext, event: any): void {
   const { 
-    sessionId, turnId, compressionId, compressionCount, 
+    sessionId, turnId, compressionId, compressionCount, applied,
     tokensBefore, tokensAfter, compressionRatio, durationMs, hasSummary, summarySource
   } = event;
   
   log.info('Context compression completed', {
-    sessionId, turnId, compressionId, compressionCount, 
+    sessionId, turnId, compressionId, compressionCount, applied,
     tokensBefore, tokensAfter, compressionRatio, durationMs
   });
   
   const store = FlowChatStore.getInstance();
+  const session = store.getState().sessions.get(sessionId);
+  if (
+    typeof turnId !== 'string'
+    || !session?.dialogTurns.some(turn => turn.id === turnId)
+  ) {
+    log.debug('Dropped compression completion for non-visible turn', { sessionId, turnId });
+    return;
+  }
   
   store.updateModelRoundItem(sessionId, turnId, compressionId, {
     toolResult: {
@@ -2132,6 +2288,22 @@ function handleCompressionCompleted(context: FlowChatContext, event: any): void 
     status: 'completed',
     endTime: Date.now()
   } as any);
+
+  // Keep the input-box context usage display in sync: a completed compression
+  // shrinks the context immediately, but no TokenUsageUpdated event follows it
+  // (that event is only emitted after a model response). Reflect the compacted
+  // size here so the percentage and "last request input context" refresh right
+  // away. Do not pass a dialogTurnId: compression is not a model invocation, so
+  // it must not accumulate into the turn's token usage.
+  if (applied === true && typeof tokensAfter === 'number' && tokensAfter >= 0) {
+    store.updateTokenUsage(sessionId, {
+      inputTokens: tokensAfter,
+      totalTokens: tokensAfter,
+      outputTokens: undefined,
+      turnId,
+      source: 'context_compression',
+    });
+  }
   
   immediateSaveDialogTurn(context, sessionId, turnId);
 }
@@ -2222,6 +2394,7 @@ export function handleDialogTurnComplete(
   const success = event?.success;
   const finishReason = event?.finishReason ?? event?.finish_reason;
   const hasFinalResponse = event?.hasFinalResponse ?? event?.has_final_response;
+  const durationMs = optionalNumber(event?.durationMs ?? event?.duration_ms);
 
   if (!sessionId || !turnId) {
     log.warn('DialogTurnCompleted missing sessionId or turnId', { event });
@@ -2268,6 +2441,9 @@ export function handleDialogTurnComplete(
     return {
       ...turn,
       status: 'finishing' as const,
+      endTime: durationMs === undefined
+        ? turn.endTime
+        : turn.startTime + Math.max(0, durationMs),
       success: success ?? undefined,
       finishReason: finishReason ?? undefined,
       hasFinalResponse: typeof hasFinalResponse === 'boolean' ? hasFinalResponse : undefined,

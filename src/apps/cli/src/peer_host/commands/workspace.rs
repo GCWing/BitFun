@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use bitfun_runtime_ports::SessionStoragePathRequest;
 use serde_json::{json, Value};
 
 use crate::peer_host::args::{get_string, request_value};
@@ -51,6 +52,14 @@ pub(crate) async fn get_current_workspace(state: &PeerHostState) -> Result<Value
 pub(crate) async fn open_workspace(state: &PeerHostState, args: &Value) -> Result<Value, String> {
     let request = request_value(args);
     let path = get_string(request, "path")?;
+    state
+        .compatibility
+        .ensure_workspace_runtime_ownership(&SessionStoragePathRequest {
+            workspace_path: PathBuf::from(&path),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        })
+        .map_err(|error| format!("Agent Runtime ownership is unavailable: {error}"))?;
     let info = state
         .workspace_service
         .open_workspace(PathBuf::from(path))

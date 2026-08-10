@@ -51,7 +51,7 @@ interface SessionUsageReportCardProps {
 const UsageMiniListFilePathLabel = React.forwardRef<HTMLSpanElement, { pathLabel: string }>(
   function UsageMiniListFilePathLabel({ pathLabel }, ref) {
     return (
-      <span ref={ref} className="session-usage-report-card__mini-list-file-name">
+      <span data-bf-component="session-usage-report-card" data-bf-part="listRow" ref={ref} className="session-usage-report-card__mini-list-file-name">
         {getUsageFileNameFromPath(pathLabel)}
       </span>
     );
@@ -129,7 +129,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
 
   if (isLoading) {
     return (
-      <div className="session-usage-report-card session-usage-report-card--loading" aria-live="polite">
+      <div data-bf-component="session-usage-report-card" data-bf-part="loading" data-bf-state="loading" className="session-usage-report-card session-usage-report-card--loading" aria-live="polite">
         <div className="session-usage-report-card__loading-main">
           <ToolProcessingDots className="session-usage-report-card__loading-dots" size={12} />
           <div>
@@ -146,8 +146,8 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
 
   if (!report) {
     return (
-      <div className="session-usage-report-card session-usage-report-card--fallback">
-        <div className="session-usage-report-card__fallback-actions">
+      <div data-bf-component="session-usage-report-card" data-bf-part="fallback" data-bf-state="fallback" className="session-usage-report-card session-usage-report-card--fallback">
+        <div className="session-usage-report-card__fallback-actions" data-bf-component="session-usage-report-card" data-bf-part="actions">
           <Tooltip content={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}>
             <IconButton
               variant="ghost"
@@ -229,9 +229,9 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
     (report.coverage.level !== 'complete' ? ' session-usage-report-card__coverage--hint' : '');
 
   return (
-    <div className="session-usage-report-card" data-report-id={report.reportId}>
-      <div className="session-usage-report-card__header">
-        <div className="session-usage-report-card__title-block">
+    <div data-bf-component="session-usage-report-card" data-bf-part="root" className="session-usage-report-card" data-report-id={report.reportId}>
+      <div className="session-usage-report-card__header" data-bf-component="session-usage-report-card" data-bf-part="header">
+        <div className="session-usage-report-card__title-block" data-bf-component="session-usage-report-card" data-bf-part="title">
           <h3 className="session-usage-report-card__title">{t('usage.card.heading')}</h3>
           <div className="session-usage-report-card__meta">
             <span>{formatUsageTimestamp(generatedAt ?? report.generatedAt, t)}</span>
@@ -239,7 +239,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
             <span>{workspacePathLabel}</span>
           </div>
         </div>
-        <div className="session-usage-report-card__actions">
+        <div className="session-usage-report-card__actions" data-bf-component="session-usage-report-card" data-bf-part="actions">
           {report.coverage.level !== 'complete' ? (
             <Tooltip content={t('usage.coverage.partialNotice')} placement="top">
               <span className={coverageBadgeClassName}>
@@ -290,11 +290,11 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
         </div>
       </div>
 
-      <div className="session-usage-report-card__metrics">
+      <div className="session-usage-report-card__metrics" data-bf-component="session-usage-report-card" data-bf-part="metrics">
         {metrics.map(metric => {
           const Icon = metric.icon;
           return (
-            <div
+            <div data-bf-component="session-usage-report-card" data-bf-part="metric"
               className={`session-usage-report-card__metric${metric.tone ? ` session-usage-report-card__metric--${metric.tone}` : ''}`}
               key={metric.key}
             >
@@ -306,7 +306,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
         })}
       </div>
 
-      <div className="session-usage-report-card__lists">
+      <div className="session-usage-report-card__lists" data-bf-component="session-usage-report-card" data-bf-part="lists">
         <UsageMiniList
           title={t('usage.sections.models')}
           showAll={buildShowAllAction({
@@ -485,7 +485,7 @@ function UsageFileChangeDetail({
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   return (
-    <span
+    <span data-bf-component="session-usage-report-card" data-bf-part="fileStat"
       className="session-usage-report-card__file-stat"
       aria-label={`${t('usage.table.added')}: ${formatUsageNumber(addedLines, t)}, ${t('usage.table.deleted')}: ${formatUsageNumber(deletedLines, t)}`}
     >
@@ -511,7 +511,7 @@ function formatSignedFileLineCount(
 
 function UsageMiniList({ title, showAll, items, emptyLabel, emptyDescription }: UsageMiniListProps) {
   return (
-    <div className="session-usage-report-card__mini-list">
+    <div data-bf-component="session-usage-report-card" data-bf-part="list" className="session-usage-report-card__mini-list">
       <div className="session-usage-report-card__mini-list-header">
         <div className="session-usage-report-card__mini-list-title">{title}</div>
         {showAll && (
@@ -535,7 +535,7 @@ function UsageMiniList({ title, showAll, items, emptyLabel, emptyDescription }: 
         </div>
       ) : (
         items.map(item => (
-          <div className="session-usage-report-card__mini-list-row" key={`${getMiniListLabelText(item.label)}-${item.value}`}>
+          <div className="session-usage-report-card__mini-list-row" key={`${getMiniListLabelText(item.label)}-${item.value}`} data-bf-component="session-usage-report-card" data-bf-part="listRow">
             <UsageMiniListLabelView label={item.label} />
             <span className="session-usage-report-card__mini-list-value">{item.value}</span>
             <span className="session-usage-report-card__mini-list-detail">{item.detail}</span>

@@ -14,13 +14,13 @@ import {
   SEARCH_TOOL_NAMES,
   COMMAND_TOOL_NAMES,
 } from '../tool-cards/toolCardMetadata';
-import { isCompletedToolInTransientWindow } from '../components/modern/modelRoundItemGrouping';
 import { flowChatStore } from './FlowChatStore';
 import { getEffectiveToolName } from '../utils/toolInvocationIdentity';
 import {
   getTurnCompletionNotice,
   type TurnCompletionNotice,
 } from '../utils/turnCompletionNotice';
+import { createAbsoluteSessionTurnIndexResolver } from '../utils/flowChatTurnOrdinal';
 
 /**
  * Explore group statistics (merged computed stats)
@@ -44,9 +44,9 @@ export interface ExploreGroupData {
   isLastGroupInTurn: boolean;
   /**
    * True when this group is no longer the tail of the turn — a non-explore
-   * (critical) round or turn completion has ended the group. The renderer uses
-   * this to trigger a one-shot auto-collapse instead of continuously watching
-   * isGroupStreaming.
+   * (critical) round, a top-level notice, or a newer dialog turn has superseded
+   * the group. Turn completion alone does not cut the live tail. The renderer
+   * uses this to trigger one-shot auto-collapse.
    */
   wasCutByCritical: boolean;
 }
@@ -56,7 +56,13 @@ export interface ExploreGroupData {
  * Used for virtual scrolling, flattens DialogTurn into renderable items
  */
 export type VirtualItem =
-  | { type: 'user-message'; data: DialogTurn['userMessage']; turnId: string }
+  | {
+      type: 'user-message';
+      data: DialogTurn['userMessage'];
+      turnId: string;
+      absoluteTurnIndex?: number;
+      turnStatus?: DialogTurn['status'];
+    }
   | {
       type: 'user-steering-message';
       data: NonNullable<DialogTurn['userMessage']>;
@@ -74,10 +80,6 @@ export type VirtualItem =
       turnEndedAt?: number;
       turnDurationMs?: number;
       turnTokenUsage?: TokenUsage;
-      segmentId?: string;
-      segmentIndex?: number;
-      segmentCount?: number;
-      sourceRoundId?: string;
     }
   | { type: 'explore-group'; data: ExploreGroupData; turnId: string }
   | { type: 'turn-completion-notice'; data: TurnCompletionNotice; turnId: string }
@@ -99,6 +101,7 @@ export interface VisibleTurnInfo {
   totalTurns: number;
   userMessage: string;
   turnId: string;
+  visibleTurnIds: string[];
 }
 
 interface ModernFlowChatState {
@@ -120,32 +123,10 @@ interface ModernFlowChatState {
  * Pure thinking rounds (thinking without critical tools) are merged into
  * adjacent explore groups to reduce visual noise from standalone "thinking N chars" lines.
  * Pure text rounds (like final replies) should not be collapsed.
- * Keep streaming narrative visible in-place until the stream settles; otherwise
- * a mid-stream switch to explore-group remounts the text block and replays the
- * typewriter animation from the beginning.
+ * Explore-capable rounds keep explore-group identity from the first render so
+ * settling a streaming narrative cannot swap Virtuoso keys and remount the pane.
+ * Typewriter remount risk is covered by useTypewriter(replayOnMount: false).
  */
-function hasActiveStreamingNarrative(round: ModelRound): boolean {
-  return round.items.some(item => {
-    if (item.type !== 'text' && item.type !== 'thinking') return false;
-    const maybeStreaming = item as { isStreaming?: boolean; status?: string };
-    return maybeStreaming.isStreaming === true &&
-      (maybeStreaming.status === 'streaming' || maybeStreaming.status === 'running');
-  });
-}
-
-function hasActiveTool(round: ModelRound): boolean {
-  return round.items.some(item => {
-    if (item.type !== 'tool') return false;
-    return item.status !== 'completed' && item.status !== 'cancelled' && item.status !== 'rejected' && item.status !== 'error';
-  });
-}
-
-function hasRecentlyCompletedTool(round: ModelRound, nowMs: number): boolean {
-  return round.items.some(item => {
-    return isCompletedToolInTransientWindow(item, nowMs);
-  });
-}
-
 function hasTrailingVisibleText(round: ModelRound): boolean {
   for (let index = round.items.length - 1; index >= 0; index -= 1) {
     const item = round.items[index];
@@ -163,18 +144,10 @@ function hasTrailingVisibleText(round: ModelRound): boolean {
   return false;
 }
 
-function isExploreOnlyRound(round: ModelRound, nowMs: number): boolean {
+function isExploreOnlyRound(round: ModelRound): boolean {
   if (!round.items || round.items.length === 0) return false;
 
   if (round.renderHints?.disableExploreGrouping === true) {
-    return false;
-  }
-
-  if (round.isStreaming && hasActiveStreamingNarrative(round)) {
-    return false;
-  }
-
-  if (hasActiveTool(round) || (round.isStreaming && hasRecentlyCompletedTool(round, nowMs))) {
     return false;
   }
 
@@ -199,77 +172,6 @@ function isExploreOnlyRound(round: ModelRound, nowMs: number): boolean {
   });
   
   return allItemsCollapsible;
-}
-
-const MODEL_ROUND_VIRTUAL_CHUNK_ITEM_LIMIT = 4;
-const MODEL_ROUND_VIRTUAL_CHUNK_THRESHOLD = MODEL_ROUND_VIRTUAL_CHUNK_ITEM_LIMIT * 3;
-
-interface ModelRoundVirtualChunk {
-  round: ModelRound;
-  segmentId?: string;
-  segmentIndex?: number;
-  segmentCount?: number;
-  sourceRoundId?: string;
-}
-
-function shouldSplitModelRoundForVirtualItems(
-  round: ModelRound,
-  isTurnComplete: boolean,
-  nowMs: number,
-  isLastRound: boolean,
-): boolean {
-  // Never split the turn-tail round on completion: replacing one Virtuoso key
-  // with N segment keys remounts the visible assistant message and flashes the
-  // chat pane. Older non-tail rounds may still split for virtualization.
-  if (isLastRound) {
-    return false;
-  }
-
-  return (
-    isTurnComplete &&
-    isTerminalRoundStatus(round.status) &&
-    !round.isStreaming &&
-    round.isComplete !== false &&
-    round.items.length > MODEL_ROUND_VIRTUAL_CHUNK_THRESHOLD &&
-    !hasActiveTool(round) &&
-    !hasRecentlyCompletedTool(round, nowMs) &&
-    round.items.every(item => !isActiveFlowItem(item))
-  );
-}
-
-function splitModelRoundForVirtualItems(
-  round: ModelRound,
-  isTurnComplete: boolean,
-  nowMs: number,
-  isLastRound: boolean,
-): ModelRoundVirtualChunk[] {
-  if (!shouldSplitModelRoundForVirtualItems(round, isTurnComplete, nowMs, isLastRound)) {
-    return [{ round }];
-  }
-
-  const segmentCount = Math.ceil(round.items.length / MODEL_ROUND_VIRTUAL_CHUNK_ITEM_LIMIT);
-  const chunks: ModelRoundVirtualChunk[] = [];
-
-  for (let segmentIndex = 0; segmentIndex < segmentCount; segmentIndex += 1) {
-    const start = segmentIndex * MODEL_ROUND_VIRTUAL_CHUNK_ITEM_LIMIT;
-    const end = start + MODEL_ROUND_VIRTUAL_CHUNK_ITEM_LIMIT;
-    const segmentId = `${round.id}:segment:${segmentIndex}`;
-
-    chunks.push({
-      round: {
-        ...round,
-        id: segmentId,
-        items: round.items.slice(start, end),
-        historyRounds: segmentIndex === 0 ? round.historyRounds : undefined,
-      },
-      segmentId,
-      segmentIndex,
-      segmentCount,
-      sourceRoundId: round.id,
-    });
-  }
-
-  return chunks;
 }
 
 /**
@@ -360,8 +262,14 @@ function isStableTurnProjection(turn: DialogTurn): boolean {
 
 let cachedSession: Session | null = null;
 let cachedDialogTurnsRef: DialogTurn[] | null = null;
+let cachedTurnCatalogRef: Session['turnCatalog'] | undefined;
+let cachedIsPartial: boolean | undefined;
+let cachedTotalTurnCount: number | undefined;
 let cachedVirtualItems: VirtualItem[] = [];
-let cachedTurnItems = new WeakMap<DialogTurn, VirtualItem[]>();
+let cachedTurnItems = new WeakMap<
+  DialogTurn,
+  { items: VirtualItem[]; hasNewerDialogTurn: boolean; absoluteTurnIndex: number }
+>();
 
 /**
  * Convert Session to virtualized render items
@@ -377,6 +285,9 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
     if (cachedSession !== null) {
       cachedSession = null;
       cachedDialogTurnsRef = null;
+      cachedTurnCatalogRef = undefined;
+      cachedIsPartial = undefined;
+      cachedTotalTurnCount = undefined;
       cachedVirtualItems = [];
       cachedTurnItems = new WeakMap();
     }
@@ -385,21 +296,34 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
   
   if (
     cachedSession?.sessionId === session.sessionId && 
-    cachedDialogTurnsRef === session.dialogTurns
+    cachedDialogTurnsRef === session.dialogTurns &&
+    cachedTurnCatalogRef === session.turnCatalog &&
+    cachedIsPartial === session.isPartial &&
+    cachedTotalTurnCount === session.totalTurnCount
   ) {
     return cachedVirtualItems;
   }
   
   cachedSession = session;
   cachedDialogTurnsRef = session.dialogTurns;
+  cachedTurnCatalogRef = session.turnCatalog;
+  cachedIsPartial = session.isPartial;
+  cachedTotalTurnCount = session.totalTurnCount;
 
   const items: VirtualItem[] = [];
-  const nowMs = Date.now();
+  const resolveAbsoluteTurnIndex = createAbsoluteSessionTurnIndexResolver(session);
 
-  session.dialogTurns.forEach(turn => {
+  session.dialogTurns.forEach((turn, turnIndex) => {
+    const hasNewerDialogTurn = turnIndex < session.dialogTurns.length - 1;
+    const absoluteTurnIndex = resolveAbsoluteTurnIndex(turnIndex);
     const cachedItems = cachedTurnItems.get(turn);
-    if (cachedItems && isStableTurnProjection(turn)) {
-      items.push(...cachedItems);
+    if (
+      cachedItems &&
+      cachedItems.hasNewerDialogTurn === hasNewerDialogTurn &&
+      cachedItems.absoluteTurnIndex === absoluteTurnIndex &&
+      isStableTurnProjection(turn)
+    ) {
+      items.push(...cachedItems.items);
       return;
     }
     const turnItemStart = items.length;
@@ -409,6 +333,8 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
         type: 'user-message',
         data: turn.userMessage,
         turnId: turn.id,
+        absoluteTurnIndex,
+        turnStatus: turn.status,
       });
     }
 
@@ -455,7 +381,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
 
     const flushRoundEntries = (
       rounds: ModelRound[],
-      _options: { collapseTrailingExploreGroup: boolean },
+      options: { collapseTrailingExploreGroup: boolean },
     ) => {
       if (rounds.length === 0) return;
 
@@ -473,7 +399,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
       let currentGroup: TempExploreGroup | null = null;
 
       rounds.forEach((round, index) => {
-        const exploreOnly = isExploreOnlyRound(round, nowMs);
+        const exploreOnly = isExploreOnlyRound(round);
         if (exploreOnly) {
           const stats = computeRoundStats(round);
           if (currentGroup) {
@@ -517,8 +443,12 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
         const group = tempGroups[groupIndex];
 
         if (group && group.startIndex === roundIndex) {
-          const isLastGroup = groupIndex === tempGroups.length - 1;
-          const isGroupStreaming = group.rounds.some(r => r.isStreaming);
+          const isLastGroupInTurn =
+            group.endIndex === rounds.length - 1 &&
+            !options.collapseTrailingExploreGroup;
+          const isGroupStreaming = group.rounds.some(
+            r => r.isStreaming || r.items.some(isActiveFlowItem),
+          );
           // A group is "cut by critical" when it is no longer the tail of the
           // turn. Two conditions cover all cases:
           //   1. group.endIndex < rounds.length - 1: there are rounds after
@@ -529,10 +459,15 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
           //      tempGroups only contains explore-only groups; a following
           //      critical round (e.g. TodoWrite) is invisible to tempGroups
           //      yet still sits after this group in the rounds array.
-          //   2. turn is complete and no round in this group is still streaming.
+          //   2. the caller knows another top-level item follows this segment
+          //      (user steering, a completion/failure notice, or a newer turn).
+          //
+          // Turn completion by itself is deliberately not a cut. The live tail
+          // keeps its final action visible; a later conversation item is what
+          // makes the group compact.
           const wasCutByCritical =
             group.endIndex < rounds.length - 1 ||
-            (isTurnComplete && !isGroupStreaming);
+            options.collapseTrailingExploreGroup;
 
           const groupId = group.rounds[0]?.id ?? `explore-group-${turn.id}-${group.startIndex}`;
 
@@ -549,7 +484,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
                 commandCount: group.commandCount,
               },
               isGroupStreaming,
-              isLastGroupInTurn: isLastGroup,
+              isLastGroupInTurn,
               wasCutByCritical,
             },
           });
@@ -557,32 +492,29 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
           roundIndex = group.endIndex + 1;
           groupIndex++;
         } else {
-          const isLastRound = roundIndex === rounds.length - 1;
-          const roundChunks = splitModelRoundForVirtualItems(round, isTurnComplete, nowMs, isLastRound);
-          roundChunks.forEach((chunk, chunkIndex) => {
-            items.push({
-              type: 'model-round',
-              data: chunk.round,
-              turnId: turn.id,
-              isLastRound: isLastRound && chunkIndex === roundChunks.length - 1,
-              isTurnComplete,
-              turnStartedAt: turn.startTime,
-              turnEndedAt: turn.endTime,
-              turnDurationMs: typeof turn.endTime === 'number'
-                ? Math.max(0, turn.endTime - turn.startTime)
-                : undefined,
-              turnTokenUsage: turn.tokenUsage,
-              segmentId: chunk.segmentId,
-              segmentIndex: chunk.segmentIndex,
-              segmentCount: chunk.segmentCount,
-              sourceRoundId: chunk.sourceRoundId,
-            });
+          // One round is always exactly one virtual item. Splitting a completed
+          // round into segments swaps a single Virtuoso key for N new keys,
+          // which remounts the visible assistant message and flashes the pane.
+          items.push({
+            type: 'model-round',
+            data: round,
+            turnId: turn.id,
+            isLastRound: roundIndex === rounds.length - 1,
+            isTurnComplete,
+            turnStartedAt: turn.startTime,
+            turnEndedAt: turn.endTime,
+            turnDurationMs: typeof turn.endTime === 'number'
+              ? Math.max(0, turn.endTime - turn.startTime)
+              : undefined,
+            turnTokenUsage: turn.tokenUsage,
           });
           roundIndex++;
         }
       }
     };
 
+    const completionNotice = getTurnCompletionNotice(turn);
+    const hasFailureNotice = turn.status === 'error' && Boolean(turn.error || turn.errorDetail);
     let pendingRounds: ModelRound[] = [];
 
     renderEntries.forEach(entry => {
@@ -603,9 +535,13 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
       });
     });
 
-    flushRoundEntries(pendingRounds, { collapseTrailingExploreGroup: true });
+    flushRoundEntries(pendingRounds, {
+      collapseTrailingExploreGroup:
+        hasNewerDialogTurn ||
+        completionNotice !== null ||
+        hasFailureNotice,
+    });
 
-    const completionNotice = getTurnCompletionNotice(turn);
     if (completionNotice) {
       items.push({
         type: 'turn-completion-notice',
@@ -614,7 +550,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
       });
     }
 
-    if (turn.status === 'error' && (turn.error || turn.errorDetail)) {
+    if (hasFailureNotice) {
       items.push({
         type: 'turn-failure-notice',
         turnId: turn.id,
@@ -626,7 +562,11 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
     }
 
     if (isStableTurnProjection(turn)) {
-      cachedTurnItems.set(turn, items.slice(turnItemStart));
+      cachedTurnItems.set(turn, {
+        items: items.slice(turnItemStart),
+        hasNewerDialogTurn,
+        absoluteTurnIndex,
+      });
     }
   });
 
@@ -680,6 +620,9 @@ export const useModernFlowChatStore = create<ModernFlowChatState>()(
     clear: () => {
       cachedSession = null;
       cachedDialogTurnsRef = null;
+      cachedTurnCatalogRef = undefined;
+      cachedIsPartial = undefined;
+      cachedTotalTurnCount = undefined;
       cachedVirtualItems = [];
       cachedTurnItems = new WeakMap();
 

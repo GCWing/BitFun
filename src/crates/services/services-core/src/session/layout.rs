@@ -43,6 +43,10 @@ impl SessionStorageLayout {
         self.session_dir(session_id).join("prompt_cache.json")
     }
 
+    pub fn turn_catalog_path(&self, session_id: &str) -> PathBuf {
+        self.session_dir(session_id).join("turn-catalog.json")
+    }
+
     pub fn request_traces_dir(&self, session_id: &str) -> PathBuf {
         self.session_dir(session_id).join("request-traces")
     }

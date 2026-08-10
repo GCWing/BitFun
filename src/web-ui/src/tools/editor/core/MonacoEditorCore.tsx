@@ -8,11 +8,11 @@
  */
 
 import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
-import * as monaco from 'monaco-editor';
+import type * as monaco from 'monaco-editor';
 import { createLogger } from '@/shared/utils/logger';
 import { monacoInitManager } from '../services/MonacoInitManager';
+import { monacoApi } from '../services/monacoRuntime';
 import { monacoModelManager } from '../services/MonacoModelManager';
-import { themeManager } from '../services/ThemeManager';
 import { editorExtensionManager } from '../services/EditorExtensionManager';
 import { buildEditorOptions } from '../services/EditorOptionsBuilder';
 import { activeEditTargetService, createMonacoEditTarget } from '../services/ActiveEditTargetService';
@@ -44,7 +44,6 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
       preset = 'standard',
       config,
       readOnly = false,
-      theme,
       enableLsp = true,
       showLineNumbers = true,
       showMinimap = true,
@@ -76,7 +75,6 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
     const presetRef = useRef(preset);
     const configRef = useRef(config);
     const readOnlyRef = useRef(readOnly);
-    const themeRef = useRef(theme);
     const enableLspRef = useRef(enableLsp);
     const showLineNumbersRef = useRef(showLineNumbers);
     const showMinimapRef = useRef(showMinimap);
@@ -96,7 +94,6 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
     presetRef.current = preset;
     configRef.current = config;
     readOnlyRef.current = readOnly;
-    themeRef.current = theme;
     enableLspRef.current = enableLsp;
     showLineNumbersRef.current = showLineNumbers;
     showMinimapRef.current = showMinimap;
@@ -187,8 +184,6 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
           
           if (isUnmountedRef.current) return;
           
-          themeManager.initialize();
-          
           const model = monacoModelManager.getOrCreateModel(
             currentFilePath,
             languageRef.current,
@@ -201,7 +196,6 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
             readOnly: readOnlyRef.current,
             lineNumbers: showLineNumbersRef.current,
             minimap: showMinimapRef.current,
-            theme: themeRef.current,
           };
           
           const editorOptions = buildEditorOptions({
@@ -210,7 +204,7 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
             overrides,
           });
           
-          const editor = monaco.editor.create(container, {
+          const editor = monacoApi.editor.create(container, {
             ...editorOptions,
             model,
           });
@@ -237,7 +231,7 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
           
           registerEventListeners(editor, model);
           
-          editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+          editor.addCommand(monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyS, () => {
             const content = model.getValue();
             onSaveRef.current?.(content);
           });
@@ -335,7 +329,6 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
         readOnly,
         lineNumbers: showLineNumbers,
         minimap: showMinimap,
-        theme,
       };
       
       const editorOptions = buildEditorOptions({
@@ -345,7 +338,7 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
       });
       
       editorRef.current.updateOptions(editorOptions);
-    }, [config, preset, readOnly, showLineNumbers, showMinimap, theme]);
+    }, [config, preset, readOnly, showLineNumbers, showMinimap]);
 
     useEffect(() => {
       if (!isReady || !modelRef.current) {
@@ -353,19 +346,9 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
       }
 
       if (modelRef.current.getLanguageId() !== language) {
-        monaco.editor.setModelLanguage(modelRef.current, language);
+        monacoApi.editor.setModelLanguage(modelRef.current, language);
       }
     }, [isReady, language]);
-    
-    useEffect(() => {
-      const unsubscribe = themeManager.onThemeChange((event) => {
-        if (editorRef.current) {
-          monaco.editor.setTheme(event.currentThemeId);
-        }
-      });
-      
-      return unsubscribe;
-    }, []);
     
     return (
       <div

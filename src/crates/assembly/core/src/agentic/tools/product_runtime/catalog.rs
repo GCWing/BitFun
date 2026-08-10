@@ -283,22 +283,32 @@ pub(crate) async fn resolve_product_tool_manifest(
 }
 
 async fn contextual_tool_snapshot(context: &ToolUseContext) -> Vec<ToolRef> {
-    if !context.is_remote() {
-        crate::external_sources::ensure_external_source_workspace_runtime(context.workspace_root())
+    #[cfg(feature = "external-sources")]
+    {
+        if !context.is_remote() {
+            crate::external_sources::ensure_external_source_workspace_runtime(
+                context.workspace_root(),
+            )
             .await;
+        }
+        let registry = get_global_tool_registry();
+        let tools = registry.read().await.get_all_tools();
+        let route_root = crate::external_tools::external_tool_route_root(
+            context.workspace_root(),
+            context.is_remote(),
+        );
+        return tools
+            .into_iter()
+            .filter_map(|tool| {
+                crate::external_tools::resolve_external_tool_for_workspace(tool, route_root)
+            })
+            .collect();
     }
-    let route_root = crate::external_tools::external_tool_route_root(
-        context.workspace_root(),
-        context.is_remote(),
-    );
-    let registry = get_global_tool_registry();
-    let tools = registry.read().await.get_all_tools();
-    tools
-        .into_iter()
-        .filter_map(|tool| {
-            crate::external_tools::resolve_external_tool_for_workspace(tool, route_root)
-        })
-        .collect()
+    #[cfg(not(feature = "external-sources"))]
+    {
+        let _ = context;
+        get_global_tool_registry().read().await.get_all_tools()
+    }
 }
 
 pub(crate) async fn resolve_product_resolved_visible_tools(
@@ -358,6 +368,7 @@ mod tests {
     use crate::agentic::tools::registry::create_tool_registry;
     use crate::agentic::tools::tool_context_runtime::ToolUseContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
+    #[cfg(feature = "external-sources")]
     use crate::agentic::WorkspaceBinding;
     use bitfun_agent_tools::{
         GetToolSpecCatalogProvider, ToolCatalogSnapshotProvider, CALL_DEFERRED_TOOL_NAME,
@@ -365,6 +376,7 @@ mod tests {
     };
     use serde_json::{json, Value};
     use std::collections::HashMap;
+    #[cfg(feature = "external-sources")]
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -446,6 +458,7 @@ mod tests {
         tool_context(None)
     }
 
+    #[cfg(feature = "external-sources")]
     #[test]
     fn remote_workspace_route_root_isolated_from_same_local_path() {
         let root = std::env::current_dir().expect("absolute test workspace root");

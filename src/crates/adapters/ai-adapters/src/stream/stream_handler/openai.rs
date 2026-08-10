@@ -4,6 +4,7 @@ use super::{next_stream_item, StreamTimeoutController, StreamTimeoutStage, Timed
 use crate::stream::types::openai::OpenAISSEData;
 use crate::stream::types::unified::UnifiedResponse;
 use anyhow::{anyhow, Result};
+use bitfun_core_types::errors::AiProviderError;
 use eventsource_stream::Eventsource;
 use log::{error, trace, warn};
 use reqwest::Response;
@@ -60,6 +61,22 @@ fn extract_sse_api_error_message(event_json: &Value) -> Option<String> {
         return Some(message.to_string());
     }
     Some("An error occurred during streaming".to_string())
+}
+
+fn extract_sse_api_error(event_json: &Value) -> Option<AiProviderError> {
+    let error = event_json.get("error")?;
+    let code = error
+        .get("code")
+        .or_else(|| error.get("type"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let message = extract_sse_api_error_message(event_json)?;
+    Some(AiProviderError::from_parts(
+        message,
+        Some("openai".to_string()),
+        code,
+        None,
+    ))
 }
 
 /// Convert a byte stream into a structured response stream
@@ -160,12 +177,13 @@ pub async fn handle_openai_stream(
             }
         };
 
-        if let Some(api_error_message) = extract_sse_api_error_message(&event_json) {
-            let error_msg = format!("SSE API error: {}, data: {}", api_error_message, raw);
+        if let Some(mut provider_error) = extract_sse_api_error(&event_json) {
+            provider_error.message =
+                format!("SSE API error: {}, data: {}", provider_error.message, raw);
             stats.increment("error:api");
             stats.log_summary("sse_api_error");
-            error!("{}", error_msg);
-            let _ = tx_event.send(Err(anyhow!(error_msg)));
+            error!("{}", provider_error);
+            let _ = tx_event.send(Err(anyhow!(provider_error)));
             return;
         }
 
@@ -250,7 +268,10 @@ pub async fn handle_openai_stream(
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_sse_api_error_message, is_valid_chat_completion_chunk_weak};
+    use super::{
+        extract_sse_api_error, extract_sse_api_error_message, is_valid_chat_completion_chunk_weak,
+    };
+    use bitfun_core_types::errors::ErrorCategory;
 
     #[test]
     fn weak_filter_accepts_chat_completion_chunk() {
@@ -299,6 +320,23 @@ mod tests {
         assert_eq!(
             extract_sse_api_error_message(&event).as_deref(),
             Some("provider error")
+        );
+    }
+
+    #[test]
+    fn preserves_context_overflow_code_from_stream_error() {
+        let event = serde_json::json!({
+            "error": {
+                "code": "context_length_exceeded",
+                "message": "Request failed"
+            }
+        });
+
+        let error = extract_sse_api_error(&event).expect("provider error");
+        assert_eq!(error.category, ErrorCategory::ContextOverflow);
+        assert_eq!(
+            error.provider_code.as_deref(),
+            Some("context_length_exceeded")
         );
     }
 

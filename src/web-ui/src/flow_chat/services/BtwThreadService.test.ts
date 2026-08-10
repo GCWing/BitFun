@@ -181,6 +181,29 @@ describe('BtwThreadService', () => {
     });
   });
 
+  it('stores an absolute parent Turn index for a partial restored tail', () => {
+    sessions.set('parent-1', {
+      ...sessions.get('parent-1'),
+      isPartial: true,
+      loadedTurnCount: 3,
+      totalTurnCount: 100,
+      dialogTurns: [
+        { id: 'turn-98' },
+        { id: 'turn-99' },
+        { id: 'turn-parent-1' },
+      ],
+    });
+
+    const result = createBtwSessionPlaceholder({
+      parentSessionId: 'parent-1',
+      workspacePath: '/workspace',
+      childSessionName: 'Side question',
+    });
+
+    expect(result.parentDialogTurnId).toBe('turn-parent-1');
+    expect(result.parentTurnIndex).toBe(100);
+  });
+
   it('passes image contexts and parent turn metadata through to the desktop /btw API', async () => {
     sessions.set('btw-child', {
       sessionId: 'btw-child',

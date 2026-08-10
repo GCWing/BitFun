@@ -163,7 +163,7 @@ pub(super) fn non_windows_pwsh_candidates() -> Vec<ShellCandidate> {
 }
 
 #[cfg(windows)]
-pub(super) fn detect_git_bash() -> Option<DetectedShell> {
+pub(super) fn git_bash_candidates() -> Vec<ShellCandidate> {
     let mut paths = Vec::new();
     if let Some(git) = ShellDetector::find_all_in_path("git")
         .into_iter()
@@ -222,16 +222,26 @@ pub(super) fn detect_git_bash() -> Option<DetectedShell> {
                 .join("bash.exe"),
         ]);
     }
-    paths.into_iter().find_map(|path| {
-        let value = path.to_string_lossy().to_ascii_lowercase();
-        if value.contains("system32") || value.contains("syswow64") {
-            None
-        } else {
-            ShellDetector::validate_candidate(ShellCandidate::new(
-                path,
-                ShellType::Bash,
-                ShellDiscoverySource::SystemInstall,
-            ))
-        }
-    })
+    paths
+        .into_iter()
+        .filter_map(|path| {
+            let value = path.to_string_lossy().to_ascii_lowercase();
+            if value.contains("system32") || value.contains("syswow64") {
+                None
+            } else {
+                Some(ShellCandidate::new(
+                    path,
+                    ShellType::Bash,
+                    ShellDiscoverySource::SystemInstall,
+                ))
+            }
+        })
+        .collect()
+}
+
+#[cfg(windows)]
+pub(super) fn detect_git_bash() -> Option<DetectedShell> {
+    git_bash_candidates()
+        .into_iter()
+        .find_map(ShellDetector::validate_candidate)
 }

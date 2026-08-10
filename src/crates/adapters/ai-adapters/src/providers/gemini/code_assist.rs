@@ -181,13 +181,13 @@ pub(crate) async fn send_stream(
     let (system_instruction, contents) =
         GeminiMessageConverter::convert_messages(messages, &client.config.model);
     let gemini_tools = GeminiMessageConverter::convert_tools(tools);
-    let inner = gemini_request::build_request_body(
+    let inner = gemini_request::try_build_request_body(
         client,
         system_instruction,
         contents,
         gemini_tools,
         extra_body,
-    );
+    )?;
 
     let antigravity = client
         .config

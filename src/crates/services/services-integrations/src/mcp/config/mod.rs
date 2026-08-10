@@ -1,12 +1,17 @@
 //! MCP configuration data contracts.
 
 mod cursor_format;
+mod import;
 mod json_config;
 mod location;
 mod service;
 mod service_helpers;
 
 pub use cursor_format::{config_to_cursor_format, parse_cursor_format};
+pub use import::{
+    MCPImportError, MCPImportServer, MCPImportTransport, MCPImportedServerSummary,
+    MCPUserImportSnapshot, MCPUserJsonConfigSnapshot,
+};
 pub use json_config::{
     format_mcp_json_config_value, validate_mcp_json_config, MCPJsonConfigValidationError,
 };

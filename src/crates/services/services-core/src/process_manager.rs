@@ -57,9 +57,7 @@ impl ProcessManager {
         job.set_extended_limit_info(&info)?;
 
         // Assign current process to Job so child processes inherit automatically
-        if let Err(e) = job.assign_current_process() {
-            warn!("Failed to assign current process to job: {}", e);
-        }
+        job.assign_current_process()?;
 
         let mut job_guard = self.job.lock().map_err(|e| {
             std::io::Error::other(format!("Failed to lock process manager job mutex: {}", e))
@@ -164,4 +162,18 @@ fn build_macos_path_env() -> Option<std::ffi::OsString> {
 
 pub fn cleanup_all_processes() {
     GLOBAL_PROCESS_MANAGER.cleanup_all();
+}
+
+/// Keep descendants of a long-lived service in the process-wide Job.
+pub fn contain_current_process_tree() -> std::io::Result<()> {
+    #[cfg(windows)]
+    if GLOBAL_PROCESS_MANAGER
+        .job
+        .lock()
+        .map_err(|error| std::io::Error::other(error.to_string()))?
+        .is_none()
+    {
+        return Err(std::io::Error::other("Windows process Job is unavailable"));
+    }
+    Ok(())
 }

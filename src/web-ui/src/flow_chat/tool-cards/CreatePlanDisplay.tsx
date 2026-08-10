@@ -392,8 +392,8 @@ ${JSON.stringify(simpleTodos, null, 2)}
 
   if (!planData) {
     return (
-      <div className={`create-plan-display create-plan-display--loading create-plan-display--loading-shimmer status-${status}`}>
-        <div className="create-plan-header create-plan-header--loading-shimmer">
+      <div data-bf-component="create-plan-display" data-bf-part="loading" data-bf-state="loading" className={`create-plan-display create-plan-display--loading create-plan-display--loading-shimmer status-${status}`}>
+        <div className="create-plan-header create-plan-header--loading-shimmer" data-bf-component="create-plan-display" data-bf-part="header">
           <span>{t('toolCards.plan.loadingPlan')}</span>
         </div>
       </div>
@@ -401,18 +401,22 @@ ${JSON.stringify(simpleTodos, null, 2)}
   }
 
   return (
-    <div
+    <div data-bf-component="create-plan-display" data-bf-part="root"
       ref={cardRootRef}
       data-tool-card-id={toolCardId ?? ''}
       className={`create-plan-display status-${status}${isLoading ? ' create-plan-display--plan-generating' : ''}`}
     >
       <div
         className={`create-plan-header${isLoading ? ' create-plan-header--loading-shimmer' : ''}`}
+        data-bf-component="create-plan-display"
+        data-bf-part="header"
       >
         <Tooltip content={t('toolCards.plan.clickToOpenPlan')}>
           <button
             type="button"
             className="create-plan-header-main create-plan-header-main--clickable"
+            data-bf-component="create-plan-display"
+            data-bf-part="headerMain"
             onClick={handleViewPlan}
           >
             <div className="header-left">
@@ -453,8 +457,8 @@ ${JSON.stringify(simpleTodos, null, 2)}
         </div>
       </div>
 
-      <div className="create-plan-content">
-        <div className="plan-content-left">
+      <div className="create-plan-content" data-bf-component="create-plan-display" data-bf-part="content">
+        <div className="plan-content-left" data-bf-component="create-plan-display" data-bf-part="overview">
           <h3 className="plan-title">{planData.name}</h3>
           <p className="plan-overview">{planData.overview}</p>
         </div>
@@ -470,12 +474,14 @@ ${JSON.stringify(simpleTodos, null, 2)}
       </div>
 
       {planData.todos && planData.todos.length > 0 && isTodosExpanded && (
-        <div className="create-plan-todos create-plan-todos--expanded">
+        <div className="create-plan-todos create-plan-todos--expanded" data-bf-component="create-plan-display" data-bf-part="todos" data-bf-state="expanded">
           <div className="todos-list">
             {todoRenderItems.map(({ todo, key }) => (
               <div
                 key={key}
                 className={`todo-item status-${todo.status || 'pending'}`}
+                data-bf-component="create-plan-display"
+                data-bf-part="todo"
               >
                 {todo.status === 'completed' && (
                   <CheckCircle2 size={12} className="todo-icon todo-icon--completed" />
@@ -496,7 +502,7 @@ ${JSON.stringify(simpleTodos, null, 2)}
         </div>
       )}
 
-      <div className={`create-plan-footer${isLoading ? ' create-plan-footer--generating-only' : ''}`}>
+      <div className={`create-plan-footer${isLoading ? ' create-plan-footer--generating-only' : ''}`} data-bf-component="create-plan-display" data-bf-part="footer">
         {!isLoading && (
           <button className="view-plan-btn" type="button" onClick={handleViewPlan}>
             {t('toolCards.plan.viewPlan')}

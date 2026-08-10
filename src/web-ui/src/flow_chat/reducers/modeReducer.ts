@@ -14,6 +14,8 @@ export interface ModeInfo {
    * Modes with the same key can reuse the same session-level prompt cache.
    */
   promptCacheScopeKey: string;
+  source?: 'builtin' | 'user' | 'project' | 'external';
+  model?: string;
 }
 
 export interface ModeState {

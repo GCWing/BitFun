@@ -55,7 +55,7 @@
   --cs-sans: var(--bitfun-font-sans, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif);
 }
 
-[data-theme-type="light"] {
+[data-bf-appearance-mode="light"] {
   color-scheme: light;
   /* Sturdier alpha & a slightly muted glow on near-white surfaces. */
   --cs-accent-soft: rgba(71, 85, 105, 0.10);

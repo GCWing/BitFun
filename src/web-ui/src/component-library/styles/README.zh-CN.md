@@ -32,9 +32,9 @@
 @import '../../styles/tokens.scss';
 
 .card {
-  background: var(--element-bg-subtle);
-  border: 1px solid var(--border-base);
-  box-shadow: var(--shadow-sm);
+  background: var(--bf-appearance-token-element-bg-subtle);
+  border: 1px solid var(--bf-appearance-token-border-base);
+  box-shadow: var(--bf-appearance-token-shadow-sm);
 }
 ```
 

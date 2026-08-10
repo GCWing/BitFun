@@ -28,7 +28,7 @@
       "allow": []
     },
     "node": {
-      "enabled": true,
+      "enabled": false,
       "max_memory_mb": 128,
       "timeout_ms": 5000
     }

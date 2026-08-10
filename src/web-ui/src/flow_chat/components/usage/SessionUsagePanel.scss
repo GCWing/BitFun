@@ -3,8 +3,8 @@
   flex-direction: column;
   height: 100%;
   min-width: 0;
-  background: var(--color-bg-scene);
-  color: var(--color-text-primary);
+  background: var(--bf-appearance-token-color-bg-scene);
+  color: var(--bf-appearance-token-color-text-primary);
 
   &--fallback {
     position: relative;
@@ -27,8 +27,8 @@
     flex-shrink: 0;
     min-height: 74px;
     padding: 10px 12px;
-    border-bottom: 1px dashed var(--border-base);
-    background: var(--color-bg-secondary);
+    border-bottom: 1px dashed var(--bf-appearance-token-border-base);
+    background: var(--bf-appearance-token-color-bg-secondary);
   }
 
   &__title-wrap {
@@ -51,22 +51,22 @@
     flex: 0 0 auto;
     padding: 2px 7px;
     border-radius: 999px;
-    font-size: var(--flowchat-font-size-xxs);
-    line-height: var(--flowchat-compact-line-height);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
 
     &--complete {
-      color: var(--color-success);
-      background: color-mix(in srgb, var(--color-success) 12%, transparent);
+      color: var(--bf-appearance-token-color-success);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 12%, transparent);
     }
 
     &--partial {
-      color: var(--color-warning);
-      background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+      color: var(--bf-appearance-token-color-warning);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 12%, transparent);
     }
 
     &--minimal {
-      color: var(--color-text-secondary);
-      background: color-mix(in srgb, var(--element-bg-soft) 88%, transparent);
+      color: var(--bf-appearance-token-color-text-secondary);
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
     }
 
     &--hint {
@@ -79,10 +79,10 @@
 
     h2 {
       margin: 0;
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
       font-size: 14px;
       font-weight: 650;
-      line-height: var(--flowchat-compact-line-height);
+      line-height: var(--bf-appearance-token-flowchat-compact-line-height);
     }
   }
 
@@ -100,12 +100,12 @@
     align-items: center;
     gap: 6px;
     min-width: 0;
-    color: var(--color-text-muted);
-    font-size: var(--flowchat-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
   }
 
   &__meta-label {
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
   }
 
@@ -113,7 +113,7 @@
     min-width: 0;
     max-width: min(520px, 58vw);
     overflow: hidden;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -131,8 +131,8 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    color: var(--color-text-secondary);
-    font-size: var(--flowchat-font-size-xs);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
     line-height: 1;
     white-space: nowrap;
     cursor: pointer;
@@ -141,10 +141,10 @@
       width: 12px;
       height: 12px;
       margin: 0;
-      accent-color: var(--color-accent-500);
+      accent-color: var(--bf-appearance-token-color-accent-500);
 
       &:focus-visible {
-        outline: 2px solid color-mix(in srgb, var(--color-accent-500) 70%, transparent);
+        outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 70%, transparent);
         outline-offset: 2px;
       }
     }
@@ -171,8 +171,8 @@
     gap: 2px;
     flex-shrink: 0;
     padding: 8px 10px 0;
-    border-bottom: 1px solid color-mix(in srgb, var(--border-base) 70%, transparent);
-    background: color-mix(in srgb, var(--color-bg-secondary) 84%, var(--color-bg-scene));
+    border-bottom: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 70%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 84%, var(--bf-appearance-token-color-bg-scene));
     overflow-x: auto;
   }
 
@@ -182,19 +182,19 @@
     border: 0;
     border-bottom: 2px solid transparent;
     background: transparent;
-    color: var(--color-text-secondary);
-    font-size: var(--tool-card-action-font-size);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
     white-space: nowrap;
     cursor: pointer;
 
     &:hover {
-      color: var(--color-text-primary);
-      background: color-mix(in srgb, var(--element-bg-soft) 72%, transparent);
+      color: var(--bf-appearance-token-color-text-primary);
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 72%, transparent);
     }
 
     &--active {
-      color: var(--color-text-primary);
-      border-bottom-color: var(--color-accent-500);
+      color: var(--bf-appearance-token-color-text-primary);
+      border-bottom-color: var(--bf-appearance-token-color-accent-500);
     }
   }
 
@@ -223,14 +223,14 @@
     gap: 6px;
     min-height: 30px;
     padding: 7px 8px;
-    border-left: 2px solid color-mix(in srgb, var(--color-warning) 74%, transparent);
-    background: color-mix(in srgb, var(--color-warning) 8%, transparent);
-    color: var(--color-text-secondary);
-    font-size: var(--tool-card-action-font-size);
+    border-left: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-warning) 74%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 8%, transparent);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
 
     svg {
       flex: 0 0 auto;
-      color: var(--color-warning);
+      color: var(--bf-appearance-token-color-warning);
     }
   }
 
@@ -247,14 +247,14 @@
     min-width: 0;
     min-height: 64px;
     padding: 10px;
-    border: 1px solid color-mix(in srgb, var(--border-base) 58%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 58%, transparent);
     border-radius: 6px;
-    background: color-mix(in srgb, var(--element-bg-soft) 56%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 56%, transparent);
 
     svg {
       flex: 0 0 auto;
       margin-top: 1px;
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
 
     div {
@@ -265,20 +265,20 @@
     }
 
     span {
-      color: var(--color-text-secondary);
-      font-size: var(--flowchat-font-size-xs);
+      color: var(--bf-appearance-token-color-text-secondary);
+      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
     }
 
     strong {
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
       font-size: 16px;
       font-weight: 650;
       white-space: nowrap;
     }
 
     em {
-      color: var(--color-text-muted);
-      font-size: var(--flowchat-font-size-xs);
+      color: var(--bf-appearance-token-color-text-muted);
+      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
       font-style: normal;
     }
   }
@@ -295,22 +295,22 @@
       gap: 8px;
       min-width: 0;
       padding: 8px 0;
-      border-bottom: 1px dashed color-mix(in srgb, var(--border-base) 70%, transparent);
+      border-bottom: 1px dashed color-mix(in srgb, var(--bf-appearance-token-border-base) 70%, transparent);
     }
 
     dt,
     dd {
       min-width: 0;
       margin: 0;
-      font-size: var(--tool-card-action-font-size);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
     }
 
     dt {
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
 
     dd {
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
       overflow: hidden;
       text-align: right;
       text-overflow: ellipsis;
@@ -321,11 +321,11 @@
   &__privacy {
     gap: 8px;
     padding: 10px 0 0;
-    border-top: 1px dashed color-mix(in srgb, var(--border-base) 70%, transparent);
+    border-top: 1px dashed color-mix(in srgb, var(--bf-appearance-token-border-base) 70%, transparent);
 
     svg {
       flex: 0 0 auto;
-      color: var(--color-success);
+      color: var(--bf-appearance-token-color-success);
     }
 
     div {
@@ -336,39 +336,39 @@
     }
 
     strong {
-      font-size: var(--tool-card-action-font-size);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
     }
 
     span {
-      color: var(--color-text-secondary);
-      font-size: var(--flowchat-font-size-xs);
-      line-height: var(--flowchat-support-line-height);
+      color: var(--bf-appearance-token-color-text-secondary);
+      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      line-height: var(--bf-appearance-token-flowchat-support-line-height);
     }
   }
 
   &__scope-line {
     justify-content: space-between;
     gap: 8px;
-    color: var(--color-text-secondary);
-    font-size: var(--tool-card-action-font-size);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
 
     strong {
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
       font-weight: 600;
     }
   }
 
   &__section-help {
     margin: -4px 0 0;
-    color: var(--color-text-muted);
-    font-size: var(--tool-card-action-font-size);
-    line-height: var(--flowchat-support-line-height);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
   }
 
   &__table-wrap {
     min-width: 0;
     overflow: auto;
-    border: 1px solid color-mix(in srgb, var(--border-base) 60%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 60%, transparent);
     border-radius: 6px;
   }
 
@@ -376,25 +376,25 @@
     width: 100%;
     min-width: 620px;
     border-collapse: collapse;
-    font-size: var(--tool-card-action-font-size);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
 
     th,
     td {
       padding: 8px;
-      border-bottom: 1px solid color-mix(in srgb, var(--border-base) 60%, transparent);
+      border-bottom: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 60%, transparent);
       text-align: left;
       vertical-align: middle;
     }
 
     th {
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
       font-weight: 600;
-      background: color-mix(in srgb, var(--element-bg-soft) 66%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 66%, transparent);
       white-space: nowrap;
     }
 
     td {
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
 
       span {
         display: block;
@@ -441,13 +441,13 @@
         padding-right: 6px;
         padding-left: 6px;
         text-align: center;
-        background: color-mix(in srgb, var(--color-bg-scene) 92%, var(--element-bg-soft));
-        box-shadow: -10px 0 14px -14px color-mix(in srgb, var(--color-text-primary) 54%, transparent);
+        background: color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 92%, var(--bf-appearance-token-element-bg-soft));
+        box-shadow: -10px 0 14px -14px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 54%, transparent);
       }
 
       th:last-child {
         z-index: 2;
-        background: color-mix(in srgb, var(--element-bg-soft) 72%, var(--color-bg-scene));
+        background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 72%, var(--bf-appearance-token-color-bg-scene));
       }
     }
   }
@@ -460,7 +460,7 @@
     display: block;
     max-width: 100%;
     overflow: hidden;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     font-weight: 500;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -479,7 +479,7 @@
   }
 
   &__missing-cell {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__table td &__missing-value {
@@ -488,11 +488,11 @@
     max-width: none;
     min-height: 20px;
     padding: 0 7px;
-    border: 1px solid color-mix(in srgb, var(--border-base) 54%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 54%, transparent);
     border-radius: 999px;
-    background: color-mix(in srgb, var(--element-bg-soft) 58%, transparent);
-    color: var(--color-text-muted);
-    font-size: var(--flowchat-font-size-xs);
+    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 58%, transparent);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
     line-height: 1;
     white-space: nowrap;
 
@@ -512,7 +512,7 @@
     justify-content: center;
     width: 24px;
     height: 24px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__turn-link,
@@ -522,7 +522,7 @@
     padding: 0;
     border: 0;
     background: transparent;
-    color: var(--color-accent-500);
+    color: var(--bf-appearance-token-color-accent-500);
     font: inherit;
     text-align: left;
     text-decoration: underline;
@@ -534,11 +534,11 @@
     white-space: nowrap;
 
     &:hover {
-      color: var(--color-accent-600);
+      color: var(--bf-appearance-token-color-accent-600);
     }
 
     &:focus-visible {
-      outline: 2px solid color-mix(in srgb, var(--color-accent-500) 70%, transparent);
+      outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 70%, transparent);
       outline-offset: 2px;
       border-radius: 3px;
     }
@@ -556,16 +556,16 @@
     grid-template-columns: max-content minmax(0, 1fr);
     gap: 3px 8px;
     margin: 0;
-    color: var(--color-text-muted);
-    font-size: var(--flowchat-font-size-xs);
-    line-height: var(--flowchat-compact-line-height);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
 
     > div {
       display: contents;
     }
 
     dt {
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
       white-space: nowrap;
     }
 
@@ -587,7 +587,7 @@
     padding: 0;
     border: 0;
     background: transparent;
-    color: var(--color-accent-500);
+    color: var(--bf-appearance-token-color-accent-500);
     font: inherit;
     text-decoration: underline;
     text-decoration-thickness: 1px;
@@ -595,19 +595,19 @@
     cursor: pointer;
 
     &:hover {
-      color: var(--color-accent-600);
+      color: var(--bf-appearance-token-color-accent-600);
     }
 
     &:focus-visible {
-      outline: 2px solid color-mix(in srgb, var(--color-accent-500) 70%, transparent);
+      outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 70%, transparent);
       outline-offset: 2px;
       border-radius: 3px;
     }
   }
 
   &__turn-index-overflow {
-    color: var(--color-text-muted);
-    font-size: var(--flowchat-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
     white-space: nowrap;
   }
 
@@ -616,20 +616,20 @@
     align-items: center;
     justify-content: flex-end;
     gap: 10px;
-    color: var(--color-text-muted);
-    font-size: var(--flowchat-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
   }
 
   &__table-expand {
     padding: 0;
     border: 0;
     background: transparent;
-    color: var(--color-accent-500);
+    color: var(--bf-appearance-token-color-accent-500);
     font: inherit;
     cursor: pointer;
 
     &:hover {
-      color: var(--color-accent-600);
+      color: var(--bf-appearance-token-color-accent-600);
       text-decoration: underline;
       text-underline-offset: 3px;
     }
@@ -643,20 +643,20 @@
     gap: 4px;
     min-height: 120px;
     padding: 12px;
-    color: var(--color-text-muted);
-    font-size: var(--tool-card-action-font-size);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
     text-align: center;
-    border: 1px dashed color-mix(in srgb, var(--border-base) 72%, transparent);
+    border: 1px dashed color-mix(in srgb, var(--bf-appearance-token-border-base) 72%, transparent);
     border-radius: 6px;
 
     strong {
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
       font-weight: 600;
     }
 
     span {
       max-width: 440px;
-      line-height: var(--flowchat-support-line-height);
+      line-height: var(--bf-appearance-token-flowchat-support-line-height);
     }
   }
 

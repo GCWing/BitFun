@@ -15,7 +15,10 @@ slices that are outside pure product logic but still platform-neutral.
   integration feature-group list.
 - MCP config/process/transport lifecycle, server runtime state
   (registry/connection pool/catalog/reconnect/runtime-only config), lifecycle
-  policy, and protocol result-content rendering live here; MCP wire types may be
+  policy, OAuth credential storage/authorization bootstrap, the concrete RMCP
+  dependency, and protocol result-content rendering live here. Core may keep
+  compatibility exports plus product callback/session/reconnect orchestration,
+  but must not reintroduce a direct RMCP dependency. MCP wire types may be
   projected into execution-owned tool bridge descriptors. Product tool registry
   assembly, manifest filtering, `GetToolSpec` execution, and bridge
   presentation/validation behavior remain outside this crate unless a reviewed
@@ -31,10 +34,12 @@ slices that are outside pure product logic but still platform-neutral.
   concrete scheduler/session restore, terminal pre-warm adapters, and product
   execution remain core-owned unless a reviewed port/provider moves them with
   equivalence tests.
-- Remote-SSH path/session identity helpers, disabled surfaces, SSH channels,
-  SFTP, remote FS, remote workspace FS/shell providers, remote terminal, remote
-  ExecCommand runtime-port adapter, and manager assembly live here behind
-  explicit remote SSH features.
+- Remote-SSH registries, disabled surfaces, SSH channels, SFTP, remote FS,
+  remote workspace FS/shell providers, remote terminal, remote ExecCommand
+  runtime-port adapter, and manager assembly live here behind explicit remote
+  SSH features. Stable workspace path/session identity is owned by
+  `services-core::workspace_identity`; `remote_ssh::paths` is only its legacy
+  compatibility re-export and must not regain transport-independent logic.
 - One-click relay self-deploy (`remote_ssh/relay_deploy.rs`) stages embedded
   scripts under `~/.bitfun/relay-deploy/` and clones source to
   `~/.bitfun/relay-src/` (never `$HOME/bitfun`). Embeds
@@ -50,10 +55,10 @@ slices that are outside pure product logic but still platform-neutral.
   provider boundary.
 - Browser-control owns provider-neutral browser detection, CDP endpoint HTTP
   probing/page creation, and CDP launch process handling behind
-  `browser-control`; product profile paths and tool envelopes stay in higher
+  `browser-control`; product profile paths and tool request/result types stay in higher
   layers.
 - Web tool network providers own concrete HTTP/Exa requests behind `web-tools`;
-  product validation, readable extraction, and tool result envelopes stay in
+  product validation, readable extraction, and tool result types stay in
   higher layers.
 - Debug log file append, redaction, default path/env config, and optional HTTP
   dispatch live behind `debug-log`; core only keeps ingest-server and product
@@ -70,12 +75,12 @@ slices that are outside pure product logic but still platform-neutral.
   integrity checks, fixed package input reads, no-follow path handling,
   trust-file locking, and atomic persistence. Product path selection stays in
   assembly; ecosystem parsing and
-  Plugin Runtime Host behavior stay in their adapter and execution owners.
+  PluginRuntimeClient behavior stays in its adapter and execution modules.
 - Script-tool runtime integration owns provider-neutral process supervision,
-  bounded framing/output, target load/invoke/cancel/dispose, timeout, and worker
+  bounded framing/output, script load/invoke/cancel/dispose, timeout, and worker
   health behind `script-tool-runtime`. It must not parse OpenCode source paths,
   decide approval/conflicts, register product tools, or claim OS sandboxing.
-  Approved modules run in target child processes separated from the Rust host for
+  Approved modules run in dedicated child processes separated from the Rust application process for
   failure containment, not as a security or protocol-authentication boundary.
   The shared `services-core::process_tree` boundary owns managed-descendant cleanup for
   script workers, local stdio MCP, and other managed service children: Unix uses a dedicated process group; Windows attaches a

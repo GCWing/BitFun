@@ -1,21 +1,32 @@
 import { AppShellState } from '../state/AppShellState';
+import { PAGE_BG } from './Theme';
+
+const WIDE_SETTINGS_SHEET_MAX_WIDTH: number = 680;
+const WIDE_CONNECT_SHEET_MAX_WIDTH: number = 620;
+const WIDE_SHEET_MIN_WIDTH: number = 540;
+const WIDE_SHEET_MAX_HEIGHT: number = 760;
+const WIDE_SHEET_MIN_HEIGHT: number = 560;
+const WIDE_SHEET_VERTICAL_MARGIN: number = 80;
+const WIDE_SHEET_RADIUS: number = 30;
 
 @ComponentV2
 export struct AppShell {
   @Param shellState: AppShellState = new AppShellState();
+  @Param useWideLayout: boolean = false;
   @BuilderParam content: () => void = this.EmptyBuilder;
   @BuilderParam sidebar: () => void = this.EmptyBuilder;
   @BuilderParam settings: () => void = this.EmptyBuilder;
   @BuilderParam connect: () => void = this.EmptyBuilder;
   @Event onCloseSidebar: () => void = () => {};
   @Local shellWidth: number = 440;
+  @Local shellHeight: number = 0;
 
   build() {
     Stack({ alignContent: Alignment.Start }) {
       Column() {
         this.sidebar()
       }
-      .width('76%')
+      .width(this.sidebarWidth())
       .height('100%')
       .alignItems(HorizontalAlign.Start)
       .opacity(this.shellState.showSidebar ? 1 : 0)
@@ -31,20 +42,15 @@ export struct AppShell {
         }
         .width('100%')
         .height('100%')
-        .bindSheet($$this.shellState.showConnectSheet, this.connect(), {
-          height: SheetSize.LARGE,
-          backgroundColor: '#00000000',
-          maskColor: '#44000000',
-          showClose: false,
-          dragBar: false
-        })
+        .bindSheet($$this.shellState.showConnectSheet, this.ConnectSheetContent(), this.connectSheetOptions())
 
         if (this.shellState.showSidebar) {
           Column() {
           }
           .width('100%')
           .height('100%')
-          .backgroundColor('#66FFFFFF')
+          .backgroundColor(PAGE_BG)
+          .opacity(0.62)
           .transition(TransitionEffect.opacity(0)
             .animation({ duration: 210, curve: Curve.EaseOut }))
           .onClick(() => {
@@ -54,7 +60,7 @@ export struct AppShell {
       }
       .width('100%')
       .height('100%')
-      .backgroundColor('#FFFFFF')
+      .backgroundColor(PAGE_BG)
       .borderRadius(this.shellState.showSidebar ? 28 : 0)
       .clip(true)
       .shadow({
@@ -69,7 +75,7 @@ export struct AppShell {
         centerX: '0%',
         centerY: '50%'
       })
-      .translate({ x: this.shellState.showSidebar ? this.shellWidth * 0.765 : 0 })
+      .translate({ x: this.shellState.showSidebar ? this.sidebarWidth() : 0 })
       .animation({
         duration: this.shellState.showSidebar ? 320 : 250,
         curve: Curve.EaseOut
@@ -78,15 +84,121 @@ export struct AppShell {
     .width('100%')
     .height('100%')
     .onAreaChange((_oldArea: Area, newArea: Area) => {
-      this.shellWidth = Number(newArea.width);
+      this.shellWidth = this.areaLength(newArea.width);
+      this.shellHeight = this.areaLength(newArea.height);
     })
-    .bindSheet($$this.shellState.showSettings, this.settings(), {
+    .bindSheet($$this.shellState.showSettings, this.SettingsSheetContent(), this.settingsSheetOptions())
+  }
+
+  @Builder
+  private SettingsSheetContent() {
+    Column() {
+      this.settings()
+    }
+    .width('100%')
+    .height('100%')
+    .borderRadius(this.shouldUseWideSheetLayout() ? WIDE_SHEET_RADIUS : 0)
+    .clip(this.shouldUseWideSheetLayout())
+    .shadow({
+      radius: this.shouldUseWideSheetLayout() ? 30 : 0,
+      color: this.shouldUseWideSheetLayout() ? '#22000000' : '#00000000',
+      offsetY: this.shouldUseWideSheetLayout() ? 12 : 0
+    })
+  }
+
+  @Builder
+  private ConnectSheetContent() {
+    Column() {
+      this.connect()
+    }
+    .width('100%')
+    .height('100%')
+    .borderRadius(this.shouldUseWideSheetLayout() ? WIDE_SHEET_RADIUS : 0)
+    .clip(this.shouldUseWideSheetLayout())
+    .shadow({
+      radius: this.shouldUseWideSheetLayout() ? 30 : 0,
+      color: this.shouldUseWideSheetLayout() ? '#22000000' : '#00000000',
+      offsetY: this.shouldUseWideSheetLayout() ? 12 : 0
+    })
+  }
+
+  private sidebarWidth(): number {
+    if (this.shellWidth <= 0) {
+      return 280;
+    }
+    if (this.shellWidth < 720) {
+      return Math.min(280, Math.max(220, Math.round(this.shellWidth * 0.68)));
+    }
+    return Math.min(420, Math.max(280, Math.round(this.shellWidth * 0.35)));
+  }
+
+  private settingsSheetOptions(): SheetOptions {
+    if (!this.shouldUseWideSheetLayout()) {
+      return this.bottomSheetOptions();
+    }
+    return this.wideCenterSheetOptions(this.settingsSheetWidth());
+  }
+
+  private connectSheetOptions(): SheetOptions {
+    if (!this.shouldUseWideSheetLayout()) {
+      return this.bottomSheetOptions();
+    }
+    return this.wideCenterSheetOptions(this.connectSheetWidth());
+  }
+
+  private bottomSheetOptions(): SheetOptions {
+    return {
       height: SheetSize.LARGE,
       backgroundColor: '#00000000',
       maskColor: '#44000000',
       showClose: false,
       dragBar: false
-    })
+    };
+  }
+
+  private wideCenterSheetOptions(width: number): SheetOptions {
+    return {
+      height: this.wideSheetHeight(),
+      width,
+      preferType: SheetType.CENTER,
+      backgroundColor: '#00000000',
+      maskColor: '#44000000',
+      showClose: false,
+      dragBar: false
+    };
+  }
+
+  private settingsSheetWidth(): number {
+    return Math.min(
+      WIDE_SETTINGS_SHEET_MAX_WIDTH,
+      Math.max(WIDE_SHEET_MIN_WIDTH, Math.round(this.shellWidth * 0.48))
+    );
+  }
+
+  private connectSheetWidth(): number {
+    return Math.min(
+      WIDE_CONNECT_SHEET_MAX_WIDTH,
+      Math.max(WIDE_SHEET_MIN_WIDTH, Math.round(this.shellWidth * 0.46))
+    );
+  }
+
+  private wideSheetHeight(): number {
+    if (this.shellHeight <= 0) {
+      return WIDE_SHEET_MAX_HEIGHT;
+    }
+    return Math.min(
+      WIDE_SHEET_MAX_HEIGHT,
+      Math.max(WIDE_SHEET_MIN_HEIGHT, Math.round(this.shellHeight - WIDE_SHEET_VERTICAL_MARGIN))
+    );
+  }
+
+  private shouldUseWideSheetLayout(): boolean {
+    return this.useWideLayout;
+  }
+
+  private areaLength(value: Object): number {
+    const parsed = Number.parseFloat(`${value}`);
+    return Number.isNaN(parsed) ? 0 : parsed;
   }
 
   @Builder

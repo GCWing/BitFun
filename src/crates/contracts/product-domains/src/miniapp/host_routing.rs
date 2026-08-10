@@ -393,15 +393,15 @@ pub fn command_basename_for_allowlist(command: &str) -> String {
 }
 
 pub fn command_basename_allowed(allowlist: &[String], basename: &str) -> bool {
-    allowlist.is_empty()
-        || allowlist
+    !allowlist.is_empty()
+        && allowlist
             .iter()
             .any(|allowed| allowed.to_lowercase() == basename)
 }
 
 pub fn host_allowed_by_allowlist(allowlist: &[String], host: &str) -> bool {
-    allowlist.is_empty()
-        || allowlist.iter().any(|allowed| {
+    !allowlist.is_empty()
+        && allowlist.iter().any(|allowed| {
             allowed == "*" || host == allowed || host.ends_with(&format!(".{}", allowed))
         })
 }

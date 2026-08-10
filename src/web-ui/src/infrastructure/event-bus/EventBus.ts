@@ -31,11 +31,20 @@ export interface EventMetadata {
   data?: any;
 }
 
+/**
+ * In dev builds the history keeps full payloads for debugging; in production
+ * only the event name / timestamp / sender are kept so the last MAX_HISTORY
+ * payloads (which can include large state snapshots) stay collectable by GC.
+ */
+const EVENT_HISTORY_KEEPS_PAYLOAD = import.meta.env.DEV;
+
 export class EventBus {
   private listeners = new Map<string, Set<EventHandler>>();
   private onceListeners = new Map<string, Set<EventHandler>>();
   private options: Required<EventBusOptions>;
+  /** Ring buffer of the most recent MAX_HISTORY events (write-index overwrite). */
   private eventHistory: EventMetadata[] = [];
+  private eventHistoryWriteIndex = 0;
   private readonly MAX_HISTORY = 1000;
 
   constructor(options: EventBusOptions = {}) {
@@ -232,17 +241,23 @@ export class EventBus {
    * Get event history (in-memory).
    */
   getEventHistory(eventName?: string, limit?: number): EventMetadata[] {
-    let history = this.eventHistory;
-    
+    // Reassemble chronological order from the ring buffer.
+    let history = this.eventHistory.length < this.MAX_HISTORY
+      ? [...this.eventHistory]
+      : [
+        ...this.eventHistory.slice(this.eventHistoryWriteIndex),
+        ...this.eventHistory.slice(0, this.eventHistoryWriteIndex),
+      ];
+
     if (eventName) {
       history = history.filter(event => event.name === eventName);
     }
-    
+
     if (limit) {
       history = history.slice(-limit);
     }
-    
-    return [...history];
+
+    return history;
   }
 
   /**
@@ -250,6 +265,7 @@ export class EventBus {
    */
   clearEventHistory(): void {
     this.eventHistory = [];
+    this.eventHistoryWriteIndex = 0;
   }
 
   /**
@@ -293,12 +309,21 @@ export class EventBus {
   }
 
   private recordEvent(metadata: EventMetadata): void {
-    this.eventHistory.push(metadata);
-    
-    // Enforce history size limit.
-    if (this.eventHistory.length > this.MAX_HISTORY) {
-      this.eventHistory = this.eventHistory.slice(-this.MAX_HISTORY);
+    // Outside dev builds, do not retain a strong reference to the payload.
+    const record: EventMetadata = EVENT_HISTORY_KEEPS_PAYLOAD
+      ? metadata
+      : { name: metadata.name, timestamp: metadata.timestamp, sender: metadata.sender };
+
+    // Ring buffer: overwrite the oldest slot instead of copying the array on
+    // every emit once the cap is reached.
+    if (this.eventHistory.length < this.MAX_HISTORY) {
+      this.eventHistory.push(record);
+      this.eventHistoryWriteIndex = this.eventHistory.length % this.MAX_HISTORY;
+      return;
     }
+
+    this.eventHistory[this.eventHistoryWriteIndex] = record;
+    this.eventHistoryWriteIndex = (this.eventHistoryWriteIndex + 1) % this.MAX_HISTORY;
   }
 }
 
@@ -338,7 +363,6 @@ export const EVENT_NAMES = {
   PLUGIN_ERROR: 'plugin:error',
   
   // UI
-  THEME_CHANGED: 'ui:theme:changed',
   NOTIFICATION: 'ui:notification',
   MODAL_OPENED: 'ui:modal:opened',
   MODAL_CLOSED: 'ui:modal:closed'

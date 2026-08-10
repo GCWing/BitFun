@@ -30,14 +30,12 @@ export {
   MonacoManager,
   monacoModelManager,
   monacoGlobalManager,
-  themeManager,
   editorExtensionManager,
   buildEditorOptions,
   buildDiffEditorOptions,
 } from './services';
 
 export type {
-  ThemeChangeEvent,
   ModelMetadata,
   ModelCreatedEvent,
   ModelContentChangedEvent,
@@ -79,7 +77,6 @@ export type {
 
 export {
   useEditorConfig,
-  useEditorTheme,
   useEditorOptions,
   useSimpleEditorOptions,
   useDiffEditorOptions,
@@ -110,7 +107,6 @@ export type { EditorBreadcrumbProps } from './components/EditorBreadcrumb';
 export { EditorStatusBar } from './components/EditorStatusBar';
 export type { EditorStatusBarProps } from './components/EditorStatusBar';
 
-export { BitFunDarkTheme, BitFunDarkThemeMetadata } from './themes/bitfun-dark.theme';
 
 import { createLogger } from '@/shared/utils/logger';
 

@@ -9,6 +9,7 @@ use super::execution_policy::{
     clamp_u64, clamp_usize, reviewer_agent_type_count, DeepReviewExecutionPolicy,
     DeepReviewPolicyViolation, DeepReviewSubagentRole,
 };
+use super::focused_assignment::is_adaptive_review_manifest;
 use serde_json::Value;
 use std::time::{Duration, Instant};
 
@@ -18,6 +19,7 @@ const DEFAULT_AUTO_RETRY_ELAPSED_GUARD_SECONDS: u64 = 180;
 const MAX_QUEUE_WAIT_SECONDS: u64 = 3600;
 const MAX_AUTO_RETRY_ELAPSED_GUARD_SECONDS: u64 = 900;
 const EFFECTIVE_CONCURRENCY_RECOVERY_SUCCESS_WINDOW: usize = 3;
+const MAX_ADAPTIVE_PARALLEL_INSTANCES: usize = 2;
 
 /// Dynamic concurrency control for deep review reviewer launches.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -191,10 +193,16 @@ impl DeepReviewExecutionPolicy {
         &self,
         raw_manifest: &Value,
     ) -> DeepReviewConcurrencyPolicy {
-        raw_manifest
+        let mut policy = raw_manifest
             .get("concurrencyPolicy")
             .map(DeepReviewConcurrencyPolicy::from_manifest)
-            .unwrap_or_default()
+            .unwrap_or_default();
+        if is_adaptive_review_manifest(raw_manifest) {
+            policy.max_parallel_instances = policy
+                .max_parallel_instances
+                .min(MAX_ADAPTIVE_PARALLEL_INSTANCES);
+        }
+        policy
     }
 }
 
@@ -283,5 +291,41 @@ impl DeepReviewConcurrencyPolicy {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn adaptive_review_caps_parallel_focused_checks_at_two() {
+        let policy = DeepReviewExecutionPolicy::default();
+
+        assert_eq!(
+            policy
+                .concurrency_policy_from_manifest(&json!({
+                    "reviewMode": "deep",
+                    "adaptiveReview": { "version": 1, "maxFocusedCalls": 3 },
+                    "concurrencyPolicy": { "maxParallelInstances": 16 }
+                }))
+                .max_parallel_instances,
+            2
+        );
+    }
+
+    #[test]
+    fn legacy_manifest_preserves_configured_parallel_limit() {
+        let policy = DeepReviewExecutionPolicy::default();
+
+        assert_eq!(
+            policy
+                .concurrency_policy_from_manifest(&json!({
+                    "concurrencyPolicy": { "maxParallelInstances": 8 }
+                }))
+                .max_parallel_instances,
+            8
+        );
     }
 }

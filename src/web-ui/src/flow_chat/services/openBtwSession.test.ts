@@ -6,10 +6,11 @@ const mocks = vi.hoisted(() => ({
   createTab: vi.fn(),
   clearSessionUnreadCompletion: vi.fn(),
   findTabByMetadata: vi.fn(),
+  updateTabContent: vi.fn(),
   switchToTab: vi.fn(),
   closeTab: vi.fn(),
   addExternalSession: vi.fn(),
-  loadSessionHistory: vi.fn(),
+  hydrateSessionHistoryForDetail: vi.fn(() => Promise.resolve()),
   updateSessionRelationship: vi.fn(),
   switchChatSession: vi.fn(),
   syncSessionToModernStore: vi.fn(),
@@ -74,6 +75,7 @@ vi.mock('@/app/components/panels/content-canvas/stores', () => ({
       secondaryGroup: { activeTabId: null, tabs: [] },
       tertiaryGroup: { activeTabId: null, tabs: [] },
       findTabByMetadata: (...args: unknown[]) => mocks.findTabByMetadata(...args),
+      updateTabContent: (...args: unknown[]) => mocks.updateTabContent(...args),
       switchToTab: (...args: unknown[]) => mocks.switchToTab(...args),
       closeTab: (...args: unknown[]) => mocks.closeTab(...args),
     }),
@@ -88,8 +90,6 @@ vi.mock('../store/FlowChatStore', () => ({
     }),
     addExternalSession: (...args: unknown[]) =>
       mocks.addExternalSession(...args),
-    loadSessionHistory: (...args: unknown[]) =>
-      mocks.loadSessionHistory(...args),
     updateSessionRelationship: (...args: unknown[]) =>
       mocks.updateSessionRelationship(...args),
     clearSessionUnreadCompletion: (...args: unknown[]) =>
@@ -100,6 +100,8 @@ vi.mock('../store/FlowChatStore', () => ({
 vi.mock('./FlowChatManager', () => ({
   flowChatManager: {
     switchChatSession: (...args: unknown[]) => mocks.switchChatSession(...args),
+    hydrateSessionHistoryForDetail: (...args: unknown[]) =>
+      mocks.hydrateSessionHistoryForDetail(...args),
   },
 }));
 
@@ -115,10 +117,11 @@ describe('openBtwSessionInAuxPane', () => {
     mocks.createTab.mockClear();
     mocks.clearSessionUnreadCompletion.mockClear();
     mocks.findTabByMetadata.mockReset();
+    mocks.updateTabContent.mockClear();
     mocks.switchToTab.mockClear();
     mocks.closeTab.mockClear();
     mocks.addExternalSession.mockClear();
-    mocks.loadSessionHistory.mockClear();
+    mocks.hydrateSessionHistoryForDetail.mockClear();
     mocks.updateSessionRelationship.mockClear();
     mocks.switchChatSession.mockReset();
     mocks.syncSessionToModernStore.mockClear();
@@ -165,6 +168,42 @@ describe('openBtwSessionInAuxPane', () => {
     expect(mocks.clearSessionUnreadCompletion).toHaveBeenCalledWith('review-child');
   });
 
+  it('carries Review-check presentation without changing the child session kind', () => {
+    sessions.set('parent-session', {
+      sessionId: 'parent-session',
+      workspacePath: 'D:\\workspace\\repo',
+      mode: 'DeepReview',
+    });
+
+    openBtwSessionInAuxPane({
+      childSessionId: 'review-check-child',
+      parentSessionId: 'parent-session',
+      workspacePath: 'D:\\workspace\\repo',
+      sessionKind: 'subagent',
+      viewKind: 'review-check',
+      includeInternal: true,
+      expand: false,
+    });
+
+    expect(mocks.createTab).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          childSessionId: 'review-check-child',
+          viewKind: 'review-check',
+        }),
+      }),
+    );
+    expect(mocks.addExternalSession).toHaveBeenCalledWith(
+      'review-check-child',
+      expect.any(String),
+      'DeepReview',
+      'D:\\workspace\\repo',
+      expect.objectContaining({ sessionKind: 'subagent' }),
+      undefined,
+      undefined,
+    );
+  });
+
   it('switches to an existing aux pane tab without expanding the right panel again', () => {
     const dispatchEvent = stubWindowForPanelExpansion(false);
     mocks.findTabByMetadata.mockReturnValue({
@@ -176,11 +215,23 @@ describe('openBtwSessionInAuxPane', () => {
       childSessionId: 'review-child',
       parentSessionId: 'parent-session',
       workspacePath: 'D:\\workspace\\repo',
+      viewKind: 'review-check',
+      sessionTitle: 'Checking authentication',
     });
 
     expect(mocks.findTabByMetadata).toHaveBeenCalledWith({
       duplicateCheckKey: 'btw-session-review-child',
     });
+    expect(mocks.updateTabContent).toHaveBeenCalledWith(
+      'existing-review-tab',
+      'secondary',
+      expect.objectContaining({
+        data: expect.objectContaining({
+          viewKind: 'review-check',
+          displayTitle: 'Checking authentication',
+        }),
+      }),
+    );
     expect(mocks.switchToTab).toHaveBeenCalledWith('existing-review-tab', 'secondary');
     expect(mocks.createTab).not.toHaveBeenCalled();
     expect(dispatchEvent).not.toHaveBeenCalledWith(
@@ -238,13 +289,13 @@ describe('openBtwSessionInAuxPane', () => {
       'remote-1',
       'host-1',
     );
-    expect(mocks.loadSessionHistory).toHaveBeenCalledWith(
+    expect(mocks.hydrateSessionHistoryForDetail).toHaveBeenCalledWith(
       'subagent-child',
-      'D:\\workspace\\repo',
-      undefined,
-      'remote-1',
-      'host-1',
-      { includeInternal: true },
+      {
+        workspacePath: 'D:\\workspace\\repo',
+        remoteConnectionId: 'remote-1',
+        remoteSshHost: 'host-1',
+      },
     );
   });
 
@@ -283,13 +334,37 @@ describe('openBtwSessionInAuxPane', () => {
         parentToolCallId: 'call-1',
       }),
     );
-    expect(mocks.loadSessionHistory).toHaveBeenCalledWith(
+    expect(mocks.hydrateSessionHistoryForDetail).toHaveBeenCalledWith('subagent-child');
+  });
+
+  it('passes the parent location when a legacy child has no saved workspace scope', () => {
+    sessions.set('parent-session', {
+      sessionId: 'parent-session',
+      workspacePath: 'D:\\workspace\\repo',
+      mode: 'agentic',
+      remoteConnectionId: 'remote-current',
+      remoteSshHost: 'host-current',
+    });
+    sessions.set('subagent-child', {
+      sessionId: 'subagent-child',
+      sessionKind: 'subagent',
+      isHistorical: true,
+      historyState: 'metadata-only',
+    });
+
+    ensureBtwSessionAvailable({
+      childSessionId: 'subagent-child',
+      parentSessionId: 'parent-session',
+      sessionKind: 'subagent',
+    });
+
+    expect(mocks.hydrateSessionHistoryForDetail).toHaveBeenCalledWith(
       'subagent-child',
-      'D:\\workspace\\repo',
-      undefined,
-      'remote-1',
-      'host-1',
-      { includeInternal: true },
+      {
+        workspacePath: 'D:\\workspace\\repo',
+        remoteConnectionId: 'remote-current',
+        remoteSshHost: 'host-current',
+      },
     );
   });
 
@@ -321,14 +396,7 @@ describe('openBtwSessionInAuxPane', () => {
     });
 
     expect(mocks.addExternalSession).not.toHaveBeenCalled();
-    expect(mocks.loadSessionHistory).toHaveBeenCalledWith(
-      'subagent-child',
-      'D:\\workspace\\repo',
-      undefined,
-      'remote-1',
-      'host-1',
-      { includeInternal: true },
-    );
+    expect(mocks.hydrateSessionHistoryForDetail).toHaveBeenCalledWith('subagent-child');
   });
 
   it('does not hydrate an existing live subagent with in-memory turns just to fill missing model selection', () => {
@@ -376,7 +444,7 @@ describe('openBtwSessionInAuxPane', () => {
         parentToolCallId: 'call-1',
       }),
     );
-    expect(mocks.loadSessionHistory).not.toHaveBeenCalled();
+    expect(mocks.hydrateSessionHistoryForDetail).not.toHaveBeenCalled();
   });
 });
 

@@ -27,6 +27,19 @@ pub enum SessionModelBindingPolicy {
     ApprovedImmutable,
 }
 
+/// Durable owner of the session's logical main-agent route.
+///
+/// External routes are resolved by Product Assembly for each turn. Persisting
+/// only this provider-neutral owner prevents a missing external definition from
+/// silently falling back to a same-name local mode after restart.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionAgentRouteOwner {
+    #[default]
+    Local,
+    External,
+}
+
 pub fn validate_session_id(session_id: &str) -> Result<(), String> {
     if session_id.is_empty() {
         return Err("session_id cannot be empty".to_string());

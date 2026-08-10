@@ -9,6 +9,7 @@ import {
 import { useAIExperienceSettings } from '@/infrastructure/config/hooks';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { useSceneStore } from '@/app/stores/sceneStore';
+import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import {
@@ -639,6 +640,9 @@ export function useComposerVoiceInput({
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [cancelRecording, phase]);
 
+  // Keep the idle control clickable when capture is unavailable so the
+  // start handler can explain the unsupported state instead of silently
+  // presenting a disabled button.
   const disabled = phase === 'recording'
     ? false
     : !settings?.enabled || !speechRuntimeSupported || (!isTauriRuntime() && !isMediaCaptureSupported()) || phase === 'preparing' || phase === 'transcribing';

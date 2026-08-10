@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, Tooltip } from '@/component-library';
 import { notificationService } from '@/shared/notification-system';
 import { createMarkdownEditorTab } from '@/shared/utils/tabUtils';
+import { downloadMarkdownInBrowser } from '@/shared/utils/browserDownload';
 import {
   formatCodeReviewReportMarkdown,
   type CodeReviewReportData,
@@ -32,16 +33,6 @@ function timestampForFileName(): string {
 
 function isTauriDesktop(): boolean {
   return typeof window !== 'undefined' && '__TAURI__' in window;
-}
-
-function downloadMarkdownInBrowser(fileName: string, markdown: string): void {
-  const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName;
-  anchor.click();
-  URL.revokeObjectURL(url);
 }
 
 export const CodeReviewReportExportActions: React.FC<CodeReviewReportExportActionsProps> = ({
@@ -81,6 +72,7 @@ export const CodeReviewReportExportActions: React.FC<CodeReviewReportExportActio
       architecture: t('toolCards.codeReview.coverageSources.architecture'),
       frontend: t('toolCards.codeReview.coverageSources.frontend'),
       qualityGate: t('toolCards.codeReview.coverageSources.qualityGate'),
+      focusedCheck: t('toolCards.codeReview.coverageSources.focusedCheck'),
     },
     groupTitles: {
       must_fix: t('toolCards.codeReview.groups.must_fix'),
@@ -115,7 +107,7 @@ export const CodeReviewReportExportActions: React.FC<CodeReviewReportExportActio
     () => formatCodeReviewReportMarkdown(
       reviewData,
       markdownLabels,
-      { runManifest },
+      { runManifest: reviewData.review_mode === 'deep' ? runManifest : undefined },
     ),
     [markdownLabels, reviewData, runManifest],
   );

@@ -6,6 +6,9 @@
 #[cfg(feature = "announcement")]
 pub mod announcement;
 
+#[cfg(feature = "miniapp-market")]
+pub mod appearance_market;
+
 #[cfg(feature = "browser-control")]
 pub mod browser_control;
 
@@ -30,11 +33,20 @@ pub mod function_agents;
 #[cfg(feature = "git")]
 pub mod git;
 
+#[cfg(feature = "hook-import")]
+pub mod hook_import;
+
 #[cfg(feature = "mcp")]
 pub mod mcp;
 
+#[cfg(feature = "models-dev")]
+pub mod models_dev;
+
 #[cfg(feature = "miniapp-runtime")]
 pub mod miniapp;
+
+#[cfg(feature = "miniapp-market")]
+pub mod miniapp_market;
 
 #[cfg(feature = "plugin-source")]
 pub mod plugin_source;

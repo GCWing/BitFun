@@ -4,7 +4,7 @@
 
 use super::service::ConfigService;
 use crate::util::errors::*;
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 use log::warn;
 use log::{debug, info};
 use std::sync::Arc;
@@ -35,8 +35,8 @@ pub enum ConfigUpdateEvent {
         model_id: String,
         model_name: String,
     },
-    /// Theme configuration updated.
-    ThemeUpdated { theme_id: String },
+    /// Web UI appearance selection updated.
+    AppearanceUpdated { appearance_id: String },
     /// Editor configuration updated.
     EditorUpdated,
     /// Terminal configuration updated.
@@ -47,6 +47,9 @@ pub enum ConfigUpdateEvent {
     AppUpdated,
     /// Configuration fully reloaded.
     ConfigReloaded,
+    /// The models.dev reasoning catalog snapshot changed. Session owners use
+    /// this to reconcile persisted reasoning preset selections.
+    ReasoningCatalogUpdated,
     /// Debug-mode configuration updated.
     DebugModeConfigUpdated {
         /// The new ingest port.
@@ -108,7 +111,7 @@ impl GlobalConfigManager {
 
         info!("Global config service initialized");
 
-        #[cfg(feature = "product-full")]
+        #[cfg(feature = "agent-runtime")]
         {
             match super::mode_config_canonicalizer::canonicalize_agent_profile_configs().await {
                 Ok(report) => {
@@ -168,7 +171,7 @@ impl GlobalConfigManager {
     pub async fn reload() -> BitFunResult<()> {
         let service = Self::get_service().await?;
         service.reload().await?;
-        #[cfg(feature = "product-full")]
+        #[cfg(feature = "agent-runtime")]
         if let Err(error) =
             super::mode_config_canonicalizer::canonicalize_agent_profile_configs().await
         {
@@ -212,14 +215,16 @@ impl GlobalConfigManager {
         Ok(())
     }
 
-    /// Updates the theme configuration and broadcasts an event.
-    pub async fn update_theme(&self, theme_id: &str) -> BitFunResult<()> {
+    /// Updates the Web UI appearance selection and broadcasts an event.
+    pub async fn update_appearance(&self, appearance_id: &str) -> BitFunResult<()> {
         let service = Self::get_service().await?;
-        service.set_config("theme.id", theme_id).await?;
-        let stored_theme_id: String = service.get_config(Some("themes.current")).await?;
+        service
+            .set_config("appearance.selection", appearance_id)
+            .await?;
+        let stored_appearance_id: String = service.get_config(Some("appearance.selection")).await?;
 
-        Self::broadcast_update(ConfigUpdateEvent::ThemeUpdated {
-            theme_id: stored_theme_id,
+        Self::broadcast_update(ConfigUpdateEvent::AppearanceUpdated {
+            appearance_id: stored_appearance_id,
         })
         .await;
 
@@ -246,10 +251,10 @@ pub async fn load_terminal_env_vars() -> std::collections::HashMap<String, Strin
         return std::collections::HashMap::new();
     };
     match config_service
-        .get_config::<super::types::TerminalConfig>(Some("terminal"))
+        .get_config::<std::collections::HashMap<String, String>>(Some("terminal.env_vars"))
         .await
     {
-        Ok(cfg) => cfg.env_vars,
+        Ok(env_vars) => env_vars,
         Err(_) => std::collections::HashMap::new(),
     }
 }

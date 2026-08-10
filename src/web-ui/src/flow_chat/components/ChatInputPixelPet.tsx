@@ -49,7 +49,7 @@ const PETDEX_ROWS = 9;
 
 function Silhouette() {
   return (
-    <g className="bitfun-panda-head__silhouette" aria-hidden>
+    <g data-bf-component="chat-input-pixel-pet" data-bf-part="silhouette" className="bitfun-panda-head__silhouette" aria-hidden>
       {/* Ears + back-hump bump */}
       <g className="bitfun-panda-head__ears">
         <g className="bitfun-panda-head__ear bitfun-panda-head__ear--left">
@@ -143,7 +143,7 @@ function Silhouette() {
 
 function FaceRest() {
   return (
-    <g className="bitfun-panda-head__face bitfun-panda-head__face--rest">
+    <g data-bf-component="chat-input-pixel-pet" data-bf-part="rest" className="bitfun-panda-head__face bitfun-panda-head__face--rest">
       <g className="bitfun-panda-head__zzz" aria-hidden>
         <text
           x={215}
@@ -173,7 +173,7 @@ function FaceRest() {
 
 function FaceAnalyzing() {
   return (
-    <g className="bitfun-panda-head__face bitfun-panda-head__face--analyze">
+    <g data-bf-component="chat-input-pixel-pet" data-bf-part="analyze" className="bitfun-panda-head__face bitfun-panda-head__face--analyze">
       <g className="bitfun-panda-head__think" aria-hidden>
         <circle cx={222} cy={72} r={4.5} className="bitfun-panda__b bitfun-panda-head__think-pip" />
         <circle cx={250} cy={48} r={6} className="bitfun-panda__b bitfun-panda-head__think-pip" />
@@ -185,7 +185,7 @@ function FaceAnalyzing() {
 
 function FaceWaiting() {
   return (
-    <g className="bitfun-panda-head__face bitfun-panda-head__face--wait">
+    <g data-bf-component="chat-input-pixel-pet" data-bf-part="wait" className="bitfun-panda-head__face bitfun-panda-head__face--wait">
       <g className="bitfun-panda-head__wait-pips" aria-hidden>
         <circle cx={228} cy={50} r={5} className="bitfun-panda-head__wait-pip" />
         <circle cx={252} cy={50} r={5} className="bitfun-panda-head__wait-pip" />
@@ -197,7 +197,7 @@ function FaceWaiting() {
 
 function FaceWorking() {
   return (
-    <g className="bitfun-panda-head__face bitfun-panda-head__face--work">
+    <g data-bf-component="chat-input-pixel-pet" data-bf-part="work" className="bitfun-panda-head__face bitfun-panda-head__face--work">
       {/* Sweat drop trickling down from forehead — classic "trying hard" cue. */}
       <g className="bitfun-panda-head__sweat" aria-hidden>
         <path
@@ -211,7 +211,7 @@ function FaceWorking() {
 
 function FaceHover() {
   return (
-    <g className="bitfun-panda-head__face bitfun-panda-head__face--hover">
+    <g data-bf-component="chat-input-pixel-pet" data-bf-part="hover" className="bitfun-panda-head__face bitfun-panda-head__face--hover">
       <g className="bitfun-panda-head__sparkles" aria-hidden>
         <path d="M226 46 L232 58 L244 64 L232 70 L226 82 L220 70 L208 64 L220 58 Z" className="bitfun-panda-head__sparkle bitfun-panda-head__sparkle--a" />
         <path d="M270 20 L274 28 L282 32 L274 36 L270 44 L266 36 L258 32 L266 28 Z" className="bitfun-panda-head__sparkle bitfun-panda-head__sparkle--b" />
@@ -222,7 +222,7 @@ function FaceHover() {
 
 function FaceDragging() {
   return (
-    <g className="bitfun-panda-head__face bitfun-panda-head__face--drag">
+    <g data-bf-component="chat-input-pixel-pet" data-bf-part="drag" className="bitfun-panda-head__face bitfun-panda-head__face--drag">
       <g className="bitfun-panda-head__drag-lines" aria-hidden>
         <path d="M226 48 C244 40 262 40 282 48" className="bitfun-panda-head__drag-line bitfun-panda-head__drag-line--a" />
         <path d="M230 72 C248 64 268 65 286 75" className="bitfun-panda-head__drag-line bitfun-panda-head__drag-line--b" />
@@ -423,12 +423,16 @@ export const ChatInputPixelPet: React.FC<ChatInputPixelPetProps> = ({
       }
       : {};
     return (
-      <div
+      <div data-bf-component="chat-input-pixel-pet" data-bf-part="root"
+        data-bf-mood={mood}
+        data-bf-layout="petdex"
         className={`bitfun-chat-input-pixel-pet${layoutMod} ${className}`.trim()}
         style={nativePetdexStyle as React.CSSProperties}
         aria-hidden
       >
         <div
+          data-bf-component="chat-input-pixel-pet"
+          data-bf-part="petdex"
           className={`bitfun-chat-input-pixel-pet__petdex bitfun-chat-input-pixel-pet__petdex--${mood}`}
           style={{
             '--bitfun-petdex-src': `url("${petSrc}")`,
@@ -441,14 +445,16 @@ export const ChatInputPixelPet: React.FC<ChatInputPixelPetProps> = ({
 
   if (pet) {
     return (
-      <div className={`bitfun-chat-input-pixel-pet${layoutMod} ${className}`.trim()} aria-hidden />
+      <div data-bf-component="chat-input-pixel-pet" data-bf-part="root" data-bf-mood={mood} data-bf-layout={layout ?? 'default'} className={`bitfun-chat-input-pixel-pet${layoutMod} ${className}`.trim()} aria-hidden />
     );
   }
 
   return (
-    <div className={`bitfun-chat-input-pixel-pet${layoutMod} ${className}`.trim()} aria-hidden>
-      <div className={stageClasses}>
+    <div data-bf-component="chat-input-pixel-pet" data-bf-part="root" data-bf-mood={mood} data-bf-layout={layout ?? 'default'} className={`bitfun-chat-input-pixel-pet${layoutMod} ${className}`.trim()} aria-hidden>
+      <div data-bf-component="chat-input-pixel-pet" data-bf-part="stage" className={stageClasses}>
         <svg
+          data-bf-component="chat-input-pixel-pet"
+          data-bf-part="svg"
           className={`bitfun-chat-input-pixel-pet__svg bitfun-chat-input-pixel-pet__svg--${mood}`}
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           xmlns="http://www.w3.org/2000/svg"
@@ -478,7 +484,7 @@ export const ChatInputPixelPet: React.FC<ChatInputPixelPetProps> = ({
           </defs>
           <g className={`bitfun-panda-head bitfun-panda-head--${mood}`}>
             <Silhouette />
-            <g className="bitfun-panda-head__faces">
+            <g data-bf-component="chat-input-pixel-pet" data-bf-part="face" className="bitfun-panda-head__faces">
               {FACE_ORDER.map(m => (
                 <g
                   key={m}

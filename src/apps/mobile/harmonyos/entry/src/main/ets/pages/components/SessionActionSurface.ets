@@ -1,0 +1,196 @@
+import { RemoteI18n } from '../../i18n/RemoteI18n';
+import { CARD, INK, LINE, MUTED, RED, SOFT } from './Theme';
+
+export enum SessionActionPresentation {
+  BottomSheet = 'bottom_sheet',
+  Popover = 'popover'
+}
+
+@ComponentV2
+export struct SessionActionSurface {
+  @Param presentation: SessionActionPresentation = SessionActionPresentation.BottomSheet;
+  @Param sessionTitle: string = '';
+  @Param archived: boolean = false;
+  @Param canViewDetails: boolean = false;
+  @Param canArchive: boolean = false;
+  @Param canExport: boolean = false;
+  @Param canDelete: boolean = false;
+  @Event onArchive: () => void = () => {};
+  @Event onViewDetails: () => void = () => {};
+  @Event onExport: () => void = () => {};
+  @Event onDelete: () => void = () => {};
+  @Event onClose: () => void = () => {};
+  @Local confirmingDelete: boolean = false;
+
+  build() {
+    Column() {
+      if (this.presentation === SessionActionPresentation.BottomSheet) {
+        Text('')
+          .width(36)
+          .height(4)
+          .backgroundColor(LINE)
+          .borderRadius(2)
+          .margin({ bottom: 10 })
+      }
+
+      Row({ space: 12 }) {
+        Column({ space: 3 }) {
+          Text(RemoteI18n.t('session.actions'))
+            .width('100%')
+            .fontSize(13)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(MUTED)
+          Text(this.sessionTitle || RemoteI18n.t('sidebar.untitled'))
+            .width('100%')
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(INK)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+
+        Stack({ alignContent: Alignment.Center }) {
+          SymbolGlyph($r('sys.symbol.xmark'))
+            .fontSize(16)
+            .fontColor([MUTED])
+            .width(20)
+            .height(20)
+        }
+        .width(40)
+        .height(40)
+        .accessibilityText(RemoteI18n.t('common.close'))
+        .onClick(() => this.onClose())
+      }
+      .width('100%')
+      .height(52)
+      .alignItems(VerticalAlign.Center)
+
+      Divider().color(LINE).margin({ top: 6, bottom: 8 })
+
+      if (this.confirmingDelete) {
+        this.DeleteConfirmation()
+      } else {
+        if (this.canViewDetails) {
+          this.ActionRow('details', RemoteI18n.t('session.viewDetails'), () => {
+            this.onViewDetails();
+            this.onClose();
+          })
+        }
+        if (this.canArchive) {
+          this.ActionRow('archive', this.archived ? RemoteI18n.t('sidebar.unarchive') :
+            RemoteI18n.t('sidebar.archive'), () => {
+            this.onArchive();
+            this.onClose();
+          })
+        }
+        if (this.canExport) {
+          this.ActionRow('export', RemoteI18n.t('sidebar.exportMarkdown'), () => {
+            this.onExport();
+            this.onClose();
+          })
+        }
+        if (this.canDelete) {
+          if (this.canArchive || this.canExport) {
+            Divider().color(LINE).margin({ top: 6, bottom: 6 })
+          }
+          this.ActionRow('delete', RemoteI18n.t('common.delete'), () => {
+            this.confirmingDelete = true;
+          }, true)
+        }
+      }
+    }
+    .width(this.presentation === SessionActionPresentation.Popover ? 300 : '100%')
+    .padding({ left: 16, right: 16, top: 10, bottom: 18 })
+    .backgroundColor(CARD)
+    .border({ width: 1, color: LINE })
+    .borderRadius(16)
+    .shadow({
+      radius: this.presentation === SessionActionPresentation.Popover ? 20 : 0,
+      color: this.presentation === SessionActionPresentation.Popover ? '#1A000000' : '#00000000',
+      offsetY: this.presentation === SessionActionPresentation.Popover ? 8 : 0
+    })
+    .alignItems(HorizontalAlign.Center)
+  }
+
+  @Builder
+  private ActionRow(kind: string, label: string, action: () => void, destructive: boolean = false) {
+    Row({ space: 12 }) {
+      this.ActionIcon(kind, destructive)
+      Text(label)
+        .layoutWeight(1)
+        .fontSize(15)
+        .fontColor(destructive ? RED : INK)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+    }
+    .width('100%')
+    .height(46)
+    .padding({ left: 10, right: 10 })
+    .borderRadius(8)
+    .backgroundColor('#00000000')
+    .onClick(action)
+  }
+
+  @Builder
+  private ActionIcon(kind: string, destructive: boolean) {
+    if (kind === 'details') {
+      SymbolGlyph($r('sys.symbol.info_circle'))
+        .fontSize(19)
+        .fontColor([MUTED])
+    } else if (kind === 'archive') {
+      SymbolGlyph($r('sys.symbol.archivebox'))
+        .fontSize(19)
+        .fontColor([destructive ? RED : MUTED])
+    } else if (kind === 'export') {
+      SymbolGlyph($r('sys.symbol.cloud'))
+        .fontSize(19)
+        .fontColor([MUTED])
+    } else {
+      SymbolGlyph($r('sys.symbol.trash'))
+        .fontSize(19)
+        .fontColor([RED])
+    }
+  }
+
+  @Builder
+  private DeleteConfirmation() {
+    Column({ space: 12 }) {
+      Text(RemoteI18n.t('sidebar.deleteConfirm'))
+        .width('100%')
+        .fontSize(13)
+        .lineHeight(19)
+        .fontColor(MUTED)
+      Row({ space: 10 }) {
+        Text(RemoteI18n.t('common.cancel'))
+          .layoutWeight(1)
+          .height(44)
+          .fontSize(14)
+          .fontColor(INK)
+          .textAlign(TextAlign.Center)
+          .backgroundColor(SOFT)
+          .borderRadius(8)
+          .onClick(() => {
+            this.confirmingDelete = false;
+          })
+        Text(RemoteI18n.t('common.delete'))
+          .layoutWeight(1)
+          .height(44)
+          .fontSize(14)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(CARD)
+          .textAlign(TextAlign.Center)
+          .backgroundColor(RED)
+          .borderRadius(8)
+          .onClick(() => {
+            this.onDelete();
+            this.onClose();
+          })
+      }
+      .width('100%')
+    }
+    .width('100%')
+    .padding({ top: 4, bottom: 4 })
+  }
+}

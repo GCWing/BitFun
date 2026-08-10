@@ -75,5 +75,8 @@ pub use round_preempt::{
 pub use session::*;
 pub use side_question::*;
 pub use skill_agent_snapshot::*;
-pub use system::{init_agentic_system, init_agentic_system_for_profile, AgenticSystem};
+pub use system::{
+    init_agentic_system, init_agentic_system_for_profile,
+    init_agentic_system_for_profile_with_runtime_ownership, AgenticSystem,
+};
 pub use workspace::{WorkspaceBackend, WorkspaceBinding};

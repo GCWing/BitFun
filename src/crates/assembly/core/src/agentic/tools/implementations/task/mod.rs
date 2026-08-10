@@ -7,14 +7,16 @@ use crate::agentic::deep_review::task_adapter::{
     DeepReviewProviderQueueWaitOutcome, DeepReviewQueueWaitOutcome, DeepReviewQueueWaitSkipReason,
 };
 use crate::agentic::deep_review_policy::{
-    deep_review_active_reviewer_count, deep_review_effective_parallel_instances,
-    deep_review_has_judge_been_launched, deep_review_turn_elapsed_seconds,
+    adaptive_review_max_focused_calls, deep_review_active_reviewer_count,
+    deep_review_effective_parallel_instances, deep_review_has_judge_been_launched,
+    deep_review_turn_elapsed_seconds, is_adaptive_review_manifest, is_review_worker_agent_type,
     load_default_deep_review_policy, record_deep_review_effective_concurrency_success,
     record_deep_review_runtime_auto_retry, record_deep_review_runtime_auto_retry_suppressed,
-    record_deep_review_runtime_manual_retry, record_deep_review_task_budget,
+    record_deep_review_runtime_manual_retry, record_deep_review_task_budget_with_focus,
     DeepReviewActiveReviewerGuard, DeepReviewCapacityQueueReason, DeepReviewConcurrencyPolicy,
     DeepReviewExecutionPolicy, DeepReviewPolicyViolation, DeepReviewRunManifestGate,
-    DeepReviewSubagentRole, DEEP_REVIEW_AGENT_TYPE,
+    DeepReviewSubagentRole, FocusedReviewAssignment, FocusedReviewBudgetClaim,
+    DEEP_REVIEW_AGENT_TYPE, REVIEW_WORKER_AGENT_TYPE,
 };
 use crate::agentic::events::DeepReviewQueueStatus;
 use crate::agentic::tools::framework::{
@@ -22,7 +24,7 @@ use crate::agentic::tools::framework::{
 };
 use crate::agentic::tools::pipeline::SubagentParentInfo;
 use crate::service::config::global::GlobalConfigManager;
-use crate::service::config::types::{AIConfig, GlobalConfig};
+use crate::service::config::types::AIConfig;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::timing::elapsed_ms_u64;
 use async_trait::async_trait;
@@ -104,11 +106,22 @@ impl TaskTool {
     }
 
     async fn get_agents_types(&self, context: Option<&ToolUseContext>) -> Vec<String> {
-        Self::get_enabled_agents(context)
+        let mut agent_types: Vec<String> = Self::get_enabled_agents(context)
             .await
             .into_iter()
             .map(|agent| agent.id)
-            .collect()
+            .collect();
+        // ReviewWorker stays hidden from ordinary CodeReview sessions. The
+        // prepared adaptive manifest is the authority that admits the one
+        // runtime worker reached through LaunchReviewAgent.
+        if Self::is_deep_review_context(context)
+            && !agent_types
+                .iter()
+                .any(|agent| agent == REVIEW_WORKER_AGENT_TYPE)
+        {
+            agent_types.push(REVIEW_WORKER_AGENT_TYPE.to_string());
+        }
+        agent_types
     }
 }
 
@@ -197,19 +210,19 @@ impl Tool for TaskTool {
                 .unwrap_or("fork_context")
                 .to_string(),
             TaskAction::SendInput => input
-                .get("session_id")
+                .get("agent_id")
                 .and_then(Value::as_str)
                 .map(str::trim)
-                .filter(|session_id| !session_id.is_empty())
-                .map(|session_id| format!("send_input:{session_id}"))
-                .ok_or_else(|| BitFunError::validation("session_id is required".to_string()))?,
+                .filter(|agent_id| !agent_id.is_empty())
+                .map(|agent_id| format!("send_input:{agent_id}"))
+                .ok_or_else(|| BitFunError::validation("agent_id is required".to_string()))?,
             TaskAction::Cancel => input
-                .get("session_id")
+                .get("agent_id")
                 .and_then(Value::as_str)
                 .map(str::trim)
-                .filter(|session_id| !session_id.is_empty())
-                .map(|session_id| format!("cancel:{session_id}"))
-                .ok_or_else(|| BitFunError::validation("session_id is required".to_string()))?,
+                .filter(|agent_id| !agent_id.is_empty())
+                .map(|agent_id| format!("cancel:{agent_id}"))
+                .ok_or_else(|| BitFunError::validation("agent_id is required".to_string()))?,
         };
         Ok(vec![PermissionIntent::new("task", vec![resource])])
     }

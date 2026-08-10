@@ -1,17 +1,13 @@
 import React, { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch, Bot, Link2, ListChecks, Loader2, Clock3, ShieldCheck, Pencil } from 'lucide-react';
+import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, Bot, Link2, ListChecks, Loader2, Clock3, ShieldCheck, Pencil, Server } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DotMatrixArrowRightIcon } from './DotMatrixArrowRightIcon';
 import { Button, ConfirmDialog, InputDialog, Modal, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { aiExperienceConfigService } from '@/infrastructure/config/services/AIExperienceConfigService';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
-import {
-  createWorktreeWorkspace,
-  deleteWorktreeWorkspace,
-  WorktreeWorkspaceCreationError,
-} from '@/infrastructure/services/business/worktreeWorkspaceService';
 import { useNavSceneStore } from '@/app/stores/navSceneStore';
 import { useApp } from '@/app/hooks/useApp';
 import { useGitBasicInfo } from '@/tools/git/hooks/useGitState';
@@ -28,11 +24,9 @@ import {
 import { findReusableEmptySessionId } from '@/app/utils/projectSessionWorkspace';
 import type { AcpClientInfo } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { loadWorkspaceAcpMenuClients } from './workspaceAcpMenuClients';
-import { BranchSelectModal, type BranchSelectResult } from '../../../panels/BranchSelectModal';
 import SessionsSection from '../sessions/SessionsSection';
 import {
   WorkspaceKind,
-  isLinkedWorktreeWorkspace,
   isRemoteWorkspace,
   type WorkspaceInfo,
 } from '@/shared/types';
@@ -92,11 +86,11 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const { t } = useI18n('common');
   const { t: tFiles } = useTranslation('panels/files');
   const {
-    openWorkspace,
     setActiveWorkspace,
     closeWorkspaceById,
     deleteAssistantWorkspace,
     deleteWorkspace,
+    primaryAssistantWorkspaceId,
     resetAssistantWorkspace,
     renameWorkspace,
   } = useWorkspaceContext();
@@ -111,25 +105,14 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     getWorkspaceGitBasicInfoOptions(workspace, isActive),
     historySessionOpenTransition !== null
   );
-  const {
-    isRepository,
-    isLoading: isGitBasicInfoLoading,
-    state: gitBasicInfoState,
-    refreshBasic: refreshGitBasicInfo,
-  } = useGitBasicInfo(
-    workspace.rootPath,
-    gitBasicInfoOptions
-  );
+  useGitBasicInfo(workspace.rootPath, gitBasicInfoOptions);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [worktreeModalOpen, setWorktreeModalOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deleteWorktreeDialogOpen, setDeleteWorktreeDialogOpen] = useState(false);
   const [deleteWorkspaceDialogOpen, setDeleteWorkspaceDialogOpen] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [relatedPathsDialogOpen, setRelatedPathsDialogOpen] = useState(false);
   const [projectPermissionsDialogOpen, setProjectPermissionsDialogOpen] = useState(false);
   const [isDeletingAssistant, setIsDeletingAssistant] = useState(false);
-  const [isDeletingWorktree, setIsDeletingWorktree] = useState(false);
   const [isDeletingWorkspace, setIsDeletingWorkspace] = useState(false);
   const [isResettingWorkspace, setIsResettingWorkspace] = useState(false);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
@@ -148,17 +131,17 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const popoverResizeObserverRef = useRef<ResizeObserver | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
-  const isNamedAssistantWorkspace =
-    workspace.workspaceKind === WorkspaceKind.Assistant &&
-    Boolean(workspace.assistantId);
   const isDefaultAssistantWorkspace =
     workspace.workspaceKind === WorkspaceKind.Assistant &&
-    !workspace.assistantId;
+    (workspace.id === primaryAssistantWorkspaceId ||
+      (!primaryAssistantWorkspaceId && !workspace.assistantId));
+  const isDeletableAssistantWorkspace =
+    workspace.workspaceKind === WorkspaceKind.Assistant &&
+    !isDefaultAssistantWorkspace;
   const workspaceDisplayName =
     workspace.workspaceKind === WorkspaceKind.Assistant
       ? workspace.identity?.name?.trim() || workspace.name
       : workspace.name;
-  const isLinkedWorktree = isLinkedWorktreeWorkspace(workspace);
   const relatedPathCount = workspace.relatedPaths?.length ?? 0;
   const workspaceIsRemote = isRemoteWorkspace(workspace);
   const canShowSearchIndex =
@@ -168,12 +151,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
       workspace.workspaceKind === WorkspaceKind.Normal
       || workspace.workspaceKind === WorkspaceKind.Remote
     );
-  const shouldRefreshGitBasicInfoOnMenuOpen =
-    !isActive &&
-    !workspaceIsRemote &&
-    !gitBasicInfoState &&
-    !isGitBasicInfoLoading;
-  const isWorktreeActionDisabled = isGitBasicInfoLoading || !isRepository;
   const workspaceSearchIndex = useWorkspaceSearchIndex({
     workspacePath: canShowSearchIndex ? workspace.rootPath : undefined,
     enabled: canShowSearchIndex,
@@ -233,6 +210,35 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const remoteConnStatus = workspace.connectionId && sshContext
     ? sshContext.workspaceStatuses[workspace.connectionId]
     : undefined;
+
+  const remoteMeta = useMemo(() => {
+    if (!workspaceIsRemote) {
+      return null;
+    }
+
+    const status = remoteConnStatus ?? 'unknown';
+    const statusLabel = t(`nav.workspaces.remote.status.${status}`, {
+      defaultValue: t('nav.workspaces.remote.status.unknown'),
+    });
+    const connectionLabel = workspace.connectionName?.trim() || workspace.sshHost?.trim() || '';
+
+    return {
+      status,
+      statusLabel,
+      connectionLabel,
+      /** A green dot already reads as "fine"; spell out only the states that need attention. */
+      showStatusText: status !== 'connected',
+      tooltip: t('nav.workspaces.remote.tooltip', {
+        connection: connectionLabel,
+        host: workspace.sshHost?.trim() || connectionLabel,
+        status: statusLabel,
+      }),
+      ariaLabel: t('nav.workspaces.remote.ariaLabel', {
+        connection: connectionLabel,
+        status: statusLabel,
+      }),
+    };
+  }, [remoteConnStatus, t, workspace.connectionName, workspace.sshHost, workspaceIsRemote]);
 
   const searchIndexIndicator = useMemo(() => {
     if (!canShowSearchIndex) {
@@ -408,12 +414,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   }, [updateMenuPosition]);
 
   const handleMenuTriggerClick = useCallback(() => {
-    const nextOpen = !menuOpen;
-    setMenuOpen(nextOpen);
-    if (nextOpen && shouldRefreshGitBasicInfoOnMenuOpen) {
-      void refreshGitBasicInfo();
-    }
-  }, [menuOpen, refreshGitBasicInfo, shouldRefreshGitBasicInfoOnMenuOpen]);
+    setMenuOpen(open => !open);
+  }, []);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -604,7 +606,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   }, []);
 
   const handleConfirmDeleteAssistant = useCallback(async () => {
-    if (!isNamedAssistantWorkspace || isDeletingAssistant) {
+    if (!isDeletableAssistantWorkspace || isDeletingAssistant) {
       return;
     }
 
@@ -620,7 +622,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     } finally {
       setIsDeletingAssistant(false);
     }
-  }, [deleteAssistantWorkspace, isDeletingAssistant, isNamedAssistantWorkspace, t, workspace.id]);
+  }, [deleteAssistantWorkspace, isDeletableAssistantWorkspace, isDeletingAssistant, t, workspace.id]);
 
   const handleConfirmResetWorkspace = useCallback(async () => {
     if (!isDefaultAssistantWorkspace || isResettingWorkspace) {
@@ -788,63 +790,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     }
   }, [setActiveWorkspace, t, workspace]);
 
-  const handleCreateWorktree = useCallback(async (result: BranchSelectResult) => {
-    try {
-      const created = await createWorktreeWorkspace({
-        repositoryPath: workspace.rootPath,
-        branch: result.branch,
-        isNew: result.isNew,
-        openAfterCreate: result.openAfterCreate,
-        openWorkspace,
-      });
-      notificationService.success(
-        created.openedWorkspace
-          ? t('nav.workspaces.worktreeCreatedAndOpened')
-          : t('nav.workspaces.worktreeCreated'),
-        { duration: 2500 },
-      );
-    } catch (error) {
-      notificationService.error(
-        t(
-          error instanceof WorktreeWorkspaceCreationError && error.stage === 'open'
-            ? 'nav.workspaces.worktreeCreateOrOpenFailed'
-            : 'nav.workspaces.worktreeCreateFailed',
-          {
-          error: error instanceof Error ? error.message : String(error),
-          },
-        ),
-        { duration: 4000 }
-      );
-    }
-  }, [openWorkspace, t, workspace.rootPath]);
-
-  const handleRequestDeleteWorktree = useCallback(() => {
-    setMenuOpen(false);
-    setDeleteWorktreeDialogOpen(true);
-  }, []);
-
-  const handleConfirmDeleteWorktree = useCallback(async () => {
-    if (!isLinkedWorktree || isDeletingWorktree) {
-      return;
-    }
-
-    setIsDeletingWorktree(true);
-    try {
-      await deleteWorktreeWorkspace({
-        workspace,
-        closeWorkspaceById,
-      });
-      notificationService.success(t('nav.workspaces.worktreeDeleted'), { duration: 2500 });
-    } catch (error) {
-      notificationService.error(
-        error instanceof Error ? error.message : t('nav.workspaces.deleteWorktreeFailed'),
-        { duration: 4000 },
-      );
-    } finally {
-      setIsDeletingWorktree(false);
-    }
-  }, [closeWorkspaceById, isDeletingWorktree, isLinkedWorktree, t, workspace]);
-
   const handleOpenFiles = useCallback(async () => {
     try {
       await handleActivate();
@@ -868,6 +813,15 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         sessionsCollapsed && 'is-sessions-collapsed',
         isSingle && 'is-single',
       ].filter(Boolean).join(' ')}
+      data-bf-component="workspace-item"
+      data-bf-part="root"
+      data-bf-variant="assistant"
+      data-bf-state={[
+        isActive && 'active',
+        isDragging && 'dragging',
+        sessionsCollapsed && 'collapsed',
+        workspaceIsRemote && 'remote',
+      ].filter(Boolean).join(' ')}
       aria-current={isActive ? 'location' : undefined}
       aria-grabbed={draggable ? isDragging : undefined}
       data-testid="nav-workspace-item"
@@ -875,6 +829,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
       data-workspace-kind={workspace.workspaceKind}
       data-workspace-active={isActive ? 'true' : 'false'}>
         <div
+          data-bf-component="workspace-item"
+          data-bf-part="card"
           ref={cardRef}
           className="bitfun-nav-panel__assistant-item-card"
           draggable={draggable}
@@ -887,6 +843,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           data-workspace-id={workspace.id}
         >
           <button
+            data-bf-component="workspace-item"
+            data-bf-part="collapse"
             type="button"
             className="bitfun-nav-panel__assistant-item-collapse-btn"
             onClick={e => { e.stopPropagation(); handleCollapseToggle(); }}
@@ -895,7 +853,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             data-testid="nav-workspace-sessions-toggle"
             data-workspace-id={workspace.id}
           >
-            <span className="bitfun-nav-panel__assistant-item-avatar" aria-hidden="true">
+            <span className="bitfun-nav-panel__assistant-item-avatar" data-bf-component="workspace-item" data-bf-part="icon" aria-hidden="true">
               {isActive ? (
                 <span className="bitfun-nav-panel__assistant-item-active-icon">
                   <DotMatrixArrowRightIcon size={14} />
@@ -912,15 +870,19 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           </button>
           <Tooltip content={workspace.rootPath} placement="right" followCursor disabled={isDragging}>
             <button
+              data-bf-component="workspace-item"
+              data-bf-part="name"
               type="button"
               className="bitfun-nav-panel__assistant-item-name-btn"
               onClick={e => { e.stopPropagation(); void handleCardNameClick(); }}
               data-testid="nav-workspace-name-btn"
               data-workspace-id={workspace.id}
             >
-              <span className="bitfun-nav-panel__assistant-item-label">{workspaceDisplayName}</span>
+              <span className="bitfun-nav-panel__assistant-item-label" data-bf-component="workspace-item" data-bf-part="label">{workspaceDisplayName}</span>
               {isDefaultAssistantWorkspace ? (
                 <span
+                  data-bf-component="workspace-item"
+                  data-bf-part="badge"
                   className="bitfun-nav-panel__assistant-item-badge"
                   title={t('nav.workspaces.primaryAssistant')}
                 >
@@ -930,9 +892,11 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             </button>
           </Tooltip>
 
-          <div className="bitfun-nav-panel__assistant-item-menu" ref={menuRef} onClick={e => e.stopPropagation()}>
+          <div className="bitfun-nav-panel__assistant-item-menu" data-bf-component="workspace-item" data-bf-part="menu" ref={menuRef} onClick={e => e.stopPropagation()}>
             <Tooltip content={t('nav.items.project')} placement="right" followCursor>
               <button
+                data-bf-component="workspace-item"
+                data-bf-part="action"
                 type="button"
                 className="bitfun-nav-panel__assistant-item-menu-trigger"
                 onClick={() => { void handleOpenFiles(); }}
@@ -944,6 +908,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             </Tooltip>
             <div ref={menuAnchorRef}>
               <button
+                data-bf-component="workspace-item"
+                data-bf-part="action"
                 type="button"
                 className={`bitfun-nav-panel__assistant-item-menu-trigger${menuOpen ? ' is-open' : ''}`}
                 onClick={handleMenuTriggerClick}
@@ -956,6 +922,9 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
 
             {menuOpen && menuPosition && createPortal(
               <div
+                data-bf-component="workspace-item"
+                data-bf-part="menuPopover"
+                data-bf-state="open"
                 ref={setMenuPopoverRef}
                 className="bitfun-nav-panel__workspace-item-menu-popover"
                 role="menu"
@@ -965,6 +934,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               >
                   <button
                     type="button"
+                    data-bf-component="workspace-item"
+                    data-bf-part="menuItem"
                     className="bitfun-nav-panel__workspace-item-menu-item"
                     onClick={() => { void handleCreateSession(); }}
                     data-testid="nav-workspace-menu-create-session"
@@ -974,6 +945,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   </button>
                   <button
                     type="button"
+                    data-bf-component="workspace-item"
+                    data-bf-part="menuItem"
                     className="bitfun-nav-panel__workspace-item-menu-item"
                     onClick={handleOpenScheduledJobs}
                   >
@@ -982,6 +955,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   </button>
                   <button
                     type="button"
+                    data-bf-component="workspace-item"
+                    data-bf-part="menuItem"
                     className="bitfun-nav-panel__workspace-item-menu-item"
                     onClick={handleOpenProjectPermissions}
                     data-testid="nav-workspace-menu-project-permissions"
@@ -991,9 +966,11 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                       {t('nav.workspaces.actions.manageProjectPermissions')}
                     </span>
                   </button>
-                  <div className="bitfun-nav-panel__workspace-item-menu-divider" />
+                  <div className="bitfun-nav-panel__workspace-item-menu-divider" data-bf-component="workspace-item" data-bf-part="menuDivider" />
                   <button
                     type="button"
+                    data-bf-component="workspace-item"
+                    data-bf-part="menuItem"
                     className="bitfun-nav-panel__workspace-item-menu-item"
                     onClick={() => { void handleCopyWorkspacePath(); }}
                     disabled={!workspace.rootPath}
@@ -1004,6 +981,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 </button>
                   <button
                     type="button"
+                    data-bf-component="workspace-item"
+                    data-bf-part="menuItem"
                     className="bitfun-nav-panel__workspace-item-menu-item"
                     onClick={() => { void handleReveal(); }}
                     disabled={isRemoteWorkspace(workspace)}
@@ -1012,12 +991,14 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   <FolderSearch size={13} />
                   <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.reveal')}</span>
                 </button>
-                {(isDefaultAssistantWorkspace || isNamedAssistantWorkspace) ? (
+                {(isDefaultAssistantWorkspace || isDeletableAssistantWorkspace) ? (
                   <>
-                    <div className="bitfun-nav-panel__workspace-item-menu-divider" />
+                    <div className="bitfun-nav-panel__workspace-item-menu-divider" data-bf-component="workspace-item" data-bf-part="menuDivider" />
                     {isDefaultAssistantWorkspace ? (
                       <button
                         type="button"
+                        data-bf-component="workspace-item"
+                        data-bf-part="menuItem"
                         className="bitfun-nav-panel__workspace-item-menu-item is-danger"
                         onClick={handleRequestResetWorkspace}
                         disabled={isResettingWorkspace}
@@ -1027,9 +1008,11 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                         <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.resetWorkspace')}</span>
                       </button>
                     ) : null}
-                    {isNamedAssistantWorkspace ? (
+                    {isDeletableAssistantWorkspace ? (
                       <button
                         type="button"
+                        data-bf-component="workspace-item"
+                        data-bf-part="menuItem"
                         className="bitfun-nav-panel__workspace-item-menu-item is-danger"
                         onClick={handleRequestDeleteAssistant}
                         disabled={isDeletingAssistant}
@@ -1042,12 +1025,14 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   </>
                 ) : null}
               </div>,
-              document.body
+              getAppearanceOverlayHost()
             )}
           </div>
         </div>
 
         <div
+          data-bf-component="workspace-item"
+          data-bf-part="sessions"
           className={`bitfun-nav-panel__assistant-item-sessions${sessionsCollapsed ? ' is-collapsed' : ''}`}
           data-testid="nav-workspace-session-region"
           data-workspace-id={workspace.id}
@@ -1123,6 +1108,15 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
       sessionsCollapsed && 'is-sessions-collapsed',
       isSingle && 'is-single',
     ].filter(Boolean).join(' ')}
+    data-bf-component="workspace-item"
+    data-bf-part="root"
+    data-bf-variant="workspace"
+    data-bf-state={[
+      isActive && 'active',
+      isDragging && 'dragging',
+      sessionsCollapsed && 'collapsed',
+      workspaceIsRemote && 'remote',
+    ].filter(Boolean).join(' ')}
     aria-current={isActive ? 'location' : undefined}
     aria-grabbed={draggable ? isDragging : undefined}
     data-testid="nav-workspace-item"
@@ -1130,6 +1124,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     data-workspace-kind={workspace.workspaceKind}
     data-workspace-active={isActive ? 'true' : 'false'}>
       <div
+        data-bf-component="workspace-item"
+        data-bf-part="card"
         ref={cardRef}
         className="bitfun-nav-panel__workspace-item-card"
         draggable={draggable}
@@ -1142,6 +1138,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         data-workspace-id={workspace.id}
       >
         <button
+          data-bf-component="workspace-item"
+          data-bf-part="collapse"
           type="button"
           className="bitfun-nav-panel__workspace-item-collapse-btn"
           onClick={e => { e.stopPropagation(); handleCollapseToggle(); }}
@@ -1150,12 +1148,14 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           data-testid="nav-workspace-sessions-toggle"
           data-workspace-id={workspace.id}
         >
-          <span className="bitfun-nav-panel__workspace-item-icon" aria-hidden="true">
+          <span className="bitfun-nav-panel__workspace-item-icon" data-bf-component="workspace-item" data-bf-part="icon" aria-hidden="true">
             <span className="bitfun-nav-panel__workspace-item-icon-default">
               {isActive ? (
                 <span className="bitfun-nav-panel__workspace-item-active-icon">
                   <DotMatrixArrowRightIcon size={14} />
                 </span>
+              ) : workspaceIsRemote ? (
+                <Server size={14} />
               ) : (
                 <FolderOpen size={14} />
               )}
@@ -1166,10 +1166,12 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           </span>
         </button>
         <div className="bitfun-nav-panel__workspace-item-name-cluster">
-          <div className="bitfun-nav-panel__workspace-item-name-stack">
+          <div className={`bitfun-nav-panel__workspace-item-name-stack${remoteMeta ? ' is-remote' : ''}`}>
             <div className="bitfun-nav-panel__workspace-item-name-row">
               <Tooltip content={workspace.rootPath} placement="right" followCursor disabled={isDragging}>
                 <button
+                  data-bf-component="workspace-item"
+                  data-bf-part="name"
                   type="button"
                   className="bitfun-nav-panel__workspace-item-name-btn"
                   onClick={e => { e.stopPropagation(); void handleCardNameClick(); }}
@@ -1177,9 +1179,9 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   data-workspace-id={workspace.id}
                 >
                   <span className="bitfun-nav-panel__workspace-item-name-line">
-                    <span className="bitfun-nav-panel__workspace-item-label">{workspaceDisplayName}</span>
+                    <span className="bitfun-nav-panel__workspace-item-label" data-bf-component="workspace-item" data-bf-part="label">{workspaceDisplayName}</span>
                     {relatedPathCount > 0 ? (
-                      <span className="bitfun-nav-panel__workspace-item-badge">
+                      <span className="bitfun-nav-panel__workspace-item-badge" data-bf-component="workspace-item" data-bf-part="badge">
                         {t('nav.workspaces.relatedPaths.badge', { count: relatedPathCount })}
                       </span>
                     ) : null}
@@ -1198,6 +1200,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                     })}
                   >
                     <button
+                      data-bf-component="workspace-item"
+                      data-bf-part="indexIndicator"
                       type="button"
                       className={`bitfun-nav-panel__workspace-index-indicator is-${searchIndexIndicator.tone}`}
                       aria-label={searchIndexIndicator.ariaLabel}
@@ -1218,7 +1222,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                     contentInset
                     contentClassName="bitfun-nav-panel__workspace-index-modal-content"
                   >
-                    <div className={`bitfun-nav-panel__workspace-index-tooltip is-${searchIndexIndicator.tone}`}>
+                    <div className={`bitfun-nav-panel__workspace-index-tooltip is-${searchIndexIndicator.tone}`} data-bf-component="workspace-item" data-bf-part="indexPanel">
                       <div className="bitfun-nav-panel__workspace-index-tooltip-header">
                         <div className="bitfun-nav-panel__workspace-index-tooltip-heading">
                           <span className={`bitfun-nav-panel__workspace-index-tooltip-dot is-${searchIndexIndicator.tone}`} aria-hidden="true" />
@@ -1301,22 +1305,44 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 </>
               )}
             </div>
-            {isRemoteWorkspace(workspace) && (
-              <span className="bitfun-nav-panel__workspace-item-subtitle">
-                <span
-                  className={`bitfun-nav-panel__workspace-item-status-dot is-${remoteConnStatus ?? 'unknown'}`}
-                  aria-label={remoteConnStatus ?? 'unknown'}
-                />
-                <span>{workspace.connectionName}</span>
-              </span>
+            {remoteMeta && (
+              <div className="bitfun-nav-panel__workspace-item-subtitle">
+                <Tooltip content={remoteMeta.tooltip} placement="right" followCursor>
+                  <span
+                    data-bf-component="workspace-item"
+                    data-bf-part="remoteStatus"
+                    className={`bitfun-nav-panel__workspace-item-remote is-${remoteMeta.status}`}
+                    role="img"
+                    aria-label={remoteMeta.ariaLabel}
+                    data-testid="nav-workspace-remote-meta"
+                    data-remote-status={remoteMeta.status}
+                  >
+                    <span className="bitfun-nav-panel__workspace-item-remote-name">
+                      {remoteMeta.connectionLabel}
+                    </span>
+                    {remoteMeta.showStatusText ? (
+                      <span className="bitfun-nav-panel__workspace-item-remote-status">
+                        {remoteMeta.statusLabel}
+                      </span>
+                    ) : null}
+                    <span
+                      className={`bitfun-nav-panel__workspace-item-status-dot is-${remoteMeta.status}`}
+                      aria-hidden="true"
+                    />
+                  </span>
+                </Tooltip>
+              </div>
             )}
           </div>
         </div>
 
         <div className="bitfun-nav-panel__workspace-item-actions" onClick={e => e.stopPropagation()}>
-          <div className="bitfun-nav-panel__workspace-item-menu" ref={menuRef}>
+          <div className="bitfun-nav-panel__workspace-item-menu" data-bf-component="workspace-item" data-bf-part="menu" ref={menuRef}>
             <Tooltip content={t('nav.items.project')} placement="right" followCursor>
               <button
+                data-bf-component="workspace-item"
+                data-bf-part="menuTrigger"
+                data-bf-state={menuOpen ? 'open' : undefined}
                 type="button"
                 className="bitfun-nav-panel__workspace-item-menu-trigger"
                 onClick={() => { void handleOpenFiles(); }}
@@ -1328,6 +1354,9 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             </Tooltip>
             <div ref={menuAnchorRef}>
               <button
+                data-bf-component="workspace-item"
+                data-bf-part="menuTrigger"
+                data-bf-state={menuOpen ? 'open' : undefined}
                 type="button"
                 className={`bitfun-nav-panel__workspace-item-menu-trigger${menuOpen ? ' is-open' : ''}`}
                 onClick={handleMenuTriggerClick}
@@ -1340,6 +1369,9 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
 
             {menuOpen && menuPosition && createPortal(
               <div
+                data-bf-component="workspace-item"
+                data-bf-part="menuPopover"
+                data-bf-state="open"
                 ref={setMenuPopoverRef}
                 className="bitfun-nav-panel__workspace-item-menu-popover"
                 role="menu"
@@ -1349,6 +1381,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               >
                 <button
                   type="button"
+                  data-bf-component="workspace-item"
+                  data-bf-part="menuItem"
                   className="bitfun-nav-panel__workspace-item-menu-item"
                   onClick={handleCreateCodeSession}
                   data-testid="nav-workspace-menu-create-code-session"
@@ -1358,6 +1392,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 </button>
                 <button
                   type="button"
+                  data-bf-component="workspace-item"
+                  data-bf-part="menuItem"
                   className="bitfun-nav-panel__workspace-item-menu-item"
                   onClick={handleCreateCoworkSession}
                   data-testid="nav-workspace-menu-create-cowork-session"
@@ -1371,6 +1407,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                     <button
                       key={client.id}
                       type="button"
+                      data-bf-component="workspace-item"
+                      data-bf-part="menuItem"
                       className="bitfun-nav-panel__workspace-item-menu-item"
                       onClick={() => { void handleCreateAcpSession(client); }}
                       data-testid="nav-workspace-menu-create-acp-session"
@@ -1386,6 +1424,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 {acpClientsLoading ? (
                   <button
                     type="button"
+                    data-bf-component="workspace-item"
+                    data-bf-part="menuItem"
                     className="bitfun-nav-panel__workspace-item-menu-item"
                     disabled
                   >
@@ -1395,6 +1435,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 ) : null}
                 <button
                   type="button"
+                  data-bf-component="workspace-item"
+                  data-bf-part="menuItem"
                   className="bitfun-nav-panel__workspace-item-menu-item"
                   onClick={() => { void handleCreateInitSession(); }}
                   data-testid="nav-workspace-menu-create-init-session"
@@ -1404,6 +1446,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 </button>
                 <button
                   type="button"
+                  data-bf-component="workspace-item"
+                  data-bf-part="menuItem"
                   className="bitfun-nav-panel__workspace-item-menu-item"
                   onClick={() => {
                     setMenuOpen(false);
@@ -1418,6 +1462,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 </button>
                 <button
                   type="button"
+                  data-bf-component="workspace-item"
+                  data-bf-part="menuItem"
                   className="bitfun-nav-panel__workspace-item-menu-item"
                   onClick={handleOpenProjectPermissions}
                   data-testid="nav-workspace-menu-project-permissions"
@@ -1429,15 +1475,19 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 </button>
                 <button
                   type="button"
+                  data-bf-component="workspace-item"
+                  data-bf-part="menuItem"
                   className="bitfun-nav-panel__workspace-item-menu-item"
                   onClick={handleOpenScheduledJobs}
                 >
                   <Clock3 size={13} />
                   <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.scheduledJobs.open')}</span>
                 </button>
-                <div className="bitfun-nav-panel__workspace-item-menu-divider" />
+                <div className="bitfun-nav-panel__workspace-item-menu-divider" data-bf-component="workspace-item" data-bf-part="menuDivider" />
                 <button
                   type="button"
+                  data-bf-component="workspace-item"
+                  data-bf-part="menuItem"
                   className="bitfun-nav-panel__workspace-item-menu-item"
                   onClick={handleRequestRename}
                   data-testid="nav-workspace-menu-rename"
@@ -1447,34 +1497,10 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                     {t('nav.workspaces.actions.rename')}
                   </span>
                 </button>
-                {isLinkedWorktree ? (
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__workspace-item-menu-item is-danger"
-                    onClick={handleRequestDeleteWorktree}
-                    disabled={isDeletingWorktree}
-                    data-testid="nav-workspace-menu-delete-worktree"
-                  >
-                    <Trash2 size={13} />
-                    <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.deleteWorktree')}</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__workspace-item-menu-item"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setWorktreeModalOpen(true);
-                    }}
-                    disabled={isWorktreeActionDisabled}
-                    data-testid="nav-workspace-menu-new-worktree"
-                  >
-                    {isGitBasicInfoLoading ? <Loader2 size={13} /> : <GitBranch size={13} />}
-                    <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.newWorktree')}</span>
-                  </button>
-                )}
                 <button
                   type="button"
+                  data-bf-component="workspace-item"
+                  data-bf-part="menuItem"
                   className="bitfun-nav-panel__workspace-item-menu-item"
                   onClick={() => { void handleCopyWorkspacePath(); }}
                   disabled={!workspace.rootPath}
@@ -1485,6 +1511,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 </button>
                 <button
                   type="button"
+                  data-bf-component="workspace-item"
+                  data-bf-part="menuItem"
                   className="bitfun-nav-panel__workspace-item-menu-item"
                   onClick={() => { void handleReveal(); }}
                   disabled={isRemoteWorkspace(workspace)}
@@ -1493,9 +1521,11 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   <FolderSearch size={13} />
                   <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.reveal')}</span>
                 </button>
-                <div className="bitfun-nav-panel__workspace-item-menu-divider" />
+                <div className="bitfun-nav-panel__workspace-item-menu-divider" data-bf-component="workspace-item" data-bf-part="menuDivider" />
                 <button
                   type="button"
+                  data-bf-component="workspace-item"
+                  data-bf-part="menuItem"
                   className="bitfun-nav-panel__workspace-item-menu-item"
                   onClick={handleOpenSessionBatchModal}
                 >
@@ -1504,6 +1534,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 </button>
                 <button
                   type="button"
+                  data-bf-component="workspace-item"
+                  data-bf-part="menuItem"
                   className="bitfun-nav-panel__workspace-item-menu-item is-danger"
                   onClick={() => { void handleCloseWorkspace(); }}
                   data-testid="nav-workspace-menu-close"
@@ -1521,13 +1553,15 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.deleteWorkspace')}</span>
                 </button>
               </div>,
-              document.body
+              getAppearanceOverlayHost()
             )}
           </div>
         </div>
       </div>
 
       <div
+        data-bf-component="workspace-item"
+        data-bf-part="sessions"
         className={`bitfun-nav-panel__workspace-item-sessions${sessionsCollapsed ? ' is-collapsed' : ''}`}
         data-testid="nav-workspace-session-region"
         data-workspace-id={workspace.id}
@@ -1554,26 +1588,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         cancelText={t('actions.cancel')}
         validator={validateWorkspaceName}
         required={false}
-      />
-      <BranchSelectModal
-        isOpen={worktreeModalOpen}
-        onClose={() => setWorktreeModalOpen(false)}
-        onSelect={(result) => { void handleCreateWorktree(result); }}
-        repositoryPath={workspace.rootPath}
-        title={t('nav.workspaces.actions.newWorktree')}
-        showOpenAfterCreate
-        defaultOpenAfterCreate
-      />
-      <ConfirmDialog
-        isOpen={deleteWorktreeDialogOpen}
-        onClose={() => setDeleteWorktreeDialogOpen(false)}
-        onConfirm={() => { void handleConfirmDeleteWorktree(); }}
-        title={t('nav.workspaces.deleteWorktreeDialog.title', { name: workspaceDisplayName })}
-        message={t('nav.workspaces.deleteWorktreeDialog.message')}
-        confirmText={t('nav.workspaces.actions.deleteWorktree')}
-        cancelText={t('actions.cancel')}
-        confirmDanger
-        preview={`${t('nav.workspaces.deleteWorktreeDialog.pathLabel')}\n${workspace.rootPath}`}
       />
       <ConfirmDialog
         isOpen={deleteWorkspaceDialogOpen}

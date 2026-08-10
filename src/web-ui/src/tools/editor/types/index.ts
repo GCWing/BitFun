@@ -160,7 +160,7 @@ export interface LanguageDetectionResult {
   detected: boolean;
 }
 
-/** Editor theme definition */
+/** Editor appearance definition */
 export interface EditorTheme {
   id: string;
   name: string;
@@ -260,7 +260,6 @@ export interface MarkdownEditorConfig {
   previewPosition: 'right' | 'bottom';
   enableAutoSave: boolean;
   autoSaveDelay: number;
-  theme: 'light' | 'dark' | 'nord';
   fontSize: number;
   lineHeight: number;
   enableSpellCheck: boolean;

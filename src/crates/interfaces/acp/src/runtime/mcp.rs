@@ -163,6 +163,7 @@ fn stdio_server_config(acp_session_id: &str, server: McpServerStdio) -> Result<M
         oauth: None,
         oauth_enabled: None,
         xaa: None,
+        timeouts: Default::default(),
     })
 }
 
@@ -204,6 +205,7 @@ fn remote_server_config(
         oauth: None,
         oauth_enabled: None,
         xaa: None,
+        timeouts: Default::default(),
     })
 }
 

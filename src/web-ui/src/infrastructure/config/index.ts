@@ -57,7 +57,7 @@ export const ConfigInfrastructureMetadata = {
   dependencies: ['event-bus'],
   capabilities: [
     'configuration-management',
-    'theme-switching',
+    'appearance-selection',
     'ai-model-configuration',
     'editor-settings',
     'import-export'

@@ -57,8 +57,8 @@ export class AppErrorBoundary extends Component<Props, State> {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'var(--color-bg-workbench)',
-          color: 'var(--color-text-primary)',
+          background: 'var(--bf-appearance-token-color-bg-workbench)',
+          color: 'var(--bf-appearance-token-color-text-primary)',
           padding: 24,
           boxSizing: 'border-box',
         }}
@@ -71,8 +71,8 @@ export class AppErrorBoundary extends Component<Props, State> {
               onClick={this.handleReload}
               style={{
                 padding: '8px 12px',
-                background: 'var(--color-accent-600)',
-                color: 'var(--color-static-white)',
+                background: 'var(--bf-appearance-token-color-accent-600)',
+                color: 'var(--bf-appearance-token-color-static-white)',
                 border: 'none',
                 borderRadius: 8,
                 cursor: 'pointer',
@@ -88,8 +88,8 @@ export class AppErrorBoundary extends Component<Props, State> {
                 style={{
                   marginTop: 12,
                   padding: 12,
-                  background: 'var(--color-bg-secondary)',
-                  color: 'var(--color-text-secondary)',
+                  background: 'var(--bf-appearance-token-color-bg-secondary)',
+                  color: 'var(--bf-appearance-token-color-text-secondary)',
                   borderRadius: 8,
                   overflow: 'auto',
                   maxHeight: 240,

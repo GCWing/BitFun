@@ -16,6 +16,19 @@ use tokio::time::{timeout, Duration};
 
 struct MinimalOwner;
 
+fn created_session_result(
+    session_id: impl Into<String>,
+    request: AgentSessionCreateRequest,
+) -> AgentSessionCreateResult {
+    let mut result =
+        AgentSessionCreateResult::new(session_id, request.session_name, request.agent_type);
+    result.workspace_path = request.workspace_path;
+    result.workspace_id = Some("workspace-fixture".to_string());
+    result.project_workspace_path = request.project_workspace_path;
+    result.execution_target = request.execution_target;
+    result
+}
+
 struct BlockingCreateOwner {
     calls: AtomicUsize,
     deleted: AtomicUsize,
@@ -38,11 +51,7 @@ impl AgentSubmissionPort for MinimalOwner {
         &self,
         request: AgentSessionCreateRequest,
     ) -> PortResult<AgentSessionCreateResult> {
-        Ok(AgentSessionCreateResult {
-            session_id: "unused".to_string(),
-            session_name: request.session_name,
-            agent_type: request.agent_type,
-        })
+        Ok(created_session_result("unused", request))
     }
 
     async fn create_session_with_id(
@@ -50,11 +59,7 @@ impl AgentSubmissionPort for MinimalOwner {
         session_id: String,
         request: AgentSessionCreateRequest,
     ) -> PortResult<AgentSessionCreateResult> {
-        Ok(AgentSessionCreateResult {
-            session_id,
-            session_name: request.session_name,
-            agent_type: request.agent_type,
-        })
+        Ok(created_session_result(session_id, request))
     }
 
     async fn create_transient_session_with_id(
@@ -99,11 +104,7 @@ impl AgentSubmissionPort for BlockingCreateOwner {
         if self.calls.fetch_add(1, Ordering::AcqRel) == 0 {
             self.release.notified().await;
         }
-        Ok(AgentSessionCreateResult {
-            session_id: "session-blocking".to_string(),
-            session_name: request.session_name,
-            agent_type: request.agent_type,
-        })
+        Ok(created_session_result("session-blocking", request))
     }
 
     async fn create_session_with_id(
@@ -114,11 +115,7 @@ impl AgentSubmissionPort for BlockingCreateOwner {
         if self.calls.fetch_add(1, Ordering::AcqRel) == 0 {
             self.release.notified().await;
         }
-        Ok(AgentSessionCreateResult {
-            session_id,
-            session_name: request.session_name,
-            agent_type: request.agent_type,
-        })
+        Ok(created_session_result(session_id, request))
     }
 
     async fn create_transient_session_with_id(
@@ -362,6 +359,8 @@ async fn transport_accepts_input_while_an_owner_call_is_pending_and_bounds_reque
     let created: serde_json::Value =
         serde_json::from_str(&lines.next_line().await.unwrap().unwrap()).unwrap();
     assert_eq!(created["id"], 2);
+    assert_eq!(created["result"]["workspacePath"], "D:/workspace/project");
+    assert_eq!(created["result"]["workspaceId"], "workspace-fixture");
     client_write
         .write_all(b"{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"session/create\",\"params\":{}}\n")
         .await

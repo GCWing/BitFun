@@ -6,28 +6,28 @@
 
 // Accent / semantic colors (theme-aware via tokens; fallback values keep
 // dark-only consumers happy if tokens are missing).
-$ins-blue:   var(--color-accent-500);
-$ins-green:  var(--color-success);
-$ins-red:    var(--color-error);
-$ins-orange: var(--color-warning);
+$ins-blue:   var(--bf-appearance-token-color-accent-500);
+$ins-green:  var(--bf-appearance-token-color-success);
+$ins-red:    var(--bf-appearance-token-color-error);
+$ins-orange: var(--bf-appearance-token-color-warning);
 
-$ins-blue-bg:  var(--color-accent-100);
-$ins-green-bg: var(--color-success-bg);
-$ins-red-bg:   var(--color-error-bg);
+$ins-blue-bg:  var(--bf-appearance-token-color-accent-100);
+$ins-green-bg: var(--bf-appearance-token-color-success-bg);
+$ins-red-bg:   var(--bf-appearance-token-color-error-bg);
 
 // Surfaces & borders - local card layer, not a public theme contract.
 // The text mix preserves resting-card separation in light themes where
 // scene and elevated surfaces are intentionally both white.
-$ins-surface:       color-mix(in srgb, var(--color-bg-elevated) 94%, var(--color-text-primary) 6%);
-$ins-surface-soft:  var(--element-bg-subtle);
-$ins-surface-hover: var(--element-bg-soft);
-$ins-border:        var(--border-base);
-$ins-border-hover:  var(--border-medium);
+$ins-surface:       color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 94%, var(--bf-appearance-token-color-text-primary) 6%);
+$ins-surface-soft:  var(--bf-appearance-token-element-bg-subtle);
+$ins-surface-hover: var(--bf-appearance-token-element-bg-soft);
+$ins-border:        var(--bf-appearance-token-border-base);
+$ins-border-hover:  var(--bf-appearance-token-border-medium);
 
 // Hover tint that flips with theme: blends toward primary text color
 // (dark on light theme, light on dark theme), so it always reads correctly.
-$ins-tint-1: color-mix(in srgb, var(--color-bg-elevated) 88%, var(--color-text-primary) 12%);
-$ins-tint-2: color-mix(in srgb, var(--color-bg-elevated) 82%, var(--color-text-primary) 18%);
+$ins-tint-1: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 88%, var(--bf-appearance-token-color-text-primary) 12%);
+$ins-tint-2: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 82%, var(--bf-appearance-token-color-text-primary) 18%);
 
 // Spacing: 4 / 8 / 14 / 22 / 40
 $ins-xs: 4px;
@@ -78,7 +78,7 @@ $ins-label:   12px;
   font-family: $font-family-sans;
   font-size: $ins-body;
   line-height: 1.6;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -109,14 +109,14 @@ $ins-label:   12px;
 .insights-scene__header-title {
   font-size: $ins-title;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   margin: 0 0 2px;
   letter-spacing: 0;
 }
 
 .insights-scene__header-subtitle {
   font-size: $ins-small;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   margin: 0;
 }
 
@@ -145,10 +145,10 @@ $ins-label:   12px;
     padding-bottom: 5px;
   }
 
-  .select__dropdown {
-    width: 340px;
-    right: auto;
-  }
+}
+
+.insights-scene__model-select-dropdown {
+  width: min(340px, calc(100vw - 48px));
 }
 
 .insights-model-select {
@@ -164,7 +164,7 @@ $ins-label:   12px;
     display: -webkit-box;
     width: 100%;
     overflow: hidden;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     font-size: 11px;
     font-weight: 500;
     line-height: 1.25;
@@ -177,7 +177,7 @@ $ins-label:   12px;
     display: block;
     width: 100%;
     overflow: hidden;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: 9px;
     line-height: 1.2;
     text-overflow: ellipsis;
@@ -190,7 +190,7 @@ $ins-label:   12px;
   }
 
   &__option-name {
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     font-size: 12px;
     font-weight: 500;
     line-height: 1.35;
@@ -200,7 +200,7 @@ $ins-label:   12px;
 
   &__option-meta {
     margin-top: 2px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: 10px;
     line-height: 1.3;
     overflow-wrap: anywhere;
@@ -223,7 +223,7 @@ $ins-label:   12px;
 .insights-scene__control-label {
   font-size: 11px;
   font-weight: $font-weight-medium;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   white-space: nowrap;
 }
 
@@ -246,14 +246,14 @@ $ins-label:   12px;
   @extend %ins-btn;
   background: $ins-blue-bg;
   color: $ins-blue;
-  &:hover { background: var(--color-accent-200); }
+  &:hover { background: var(--bf-appearance-token-color-accent-200); }
 }
 
 .insights-scene__cancel-btn {
   @extend %ins-btn;
   background: $ins-red-bg;
   color: $ins-red;
-  &:hover { background: var(--color-error-border); }
+  &:hover { background: var(--bf-appearance-token-color-error-border); }
 }
 
 // Error / progress
@@ -282,7 +282,7 @@ $ins-label:   12px;
   border: 1px solid $ins-border;
   border-radius: $ins-r;
   background: $ins-surface;
-  box-shadow: var(--shadow-xs);
+  box-shadow: var(--bf-appearance-token-shadow-xs);
 
   &__status {
     display: grid;
@@ -316,13 +316,13 @@ $ins-label:   12px;
     font-size: 15px;
     font-weight: 600;
     line-height: 1.35;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__detail {
     margin-top: 2px;
     overflow: hidden;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: $ins-label;
     line-height: 1.4;
     text-overflow: ellipsis;
@@ -333,13 +333,13 @@ $ins-label:   12px;
     display: flex;
     align-items: center;
     gap: $ins-xs;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: 11px;
     white-space: nowrap;
 
     strong {
       min-width: 36px;
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
       font-variant-numeric: tabular-nums;
       font-weight: 600;
     }
@@ -373,7 +373,7 @@ $ins-label:   12px;
     align-items: center;
     min-width: 0;
     gap: 6px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
 
     &--active { color: $ins-blue; }
     &--complete { color: $ins-green; }
@@ -433,7 +433,7 @@ $ins-label:   12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 .insights-scene__history-count {
@@ -446,7 +446,7 @@ $ins-label:   12px;
   padding: 0 5px;
   border-radius: 9px;
   background: $ins-surface-soft;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   font-size: 10px;
   font-weight: 600;
 }
@@ -464,7 +464,7 @@ $ins-label:   12px;
   display: flex;
   justify-content: center;
   padding: $ins-xl;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 .insights-scene__spinner { animation: ins-spin 0.9s linear infinite; }
@@ -472,7 +472,7 @@ $ins-label:   12px;
 .insights-scene__empty {
   text-align: center;
   padding: $ins-xl;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   font-size: $ins-small;
 }
 
@@ -502,22 +502,22 @@ $ins-label:   12px;
   &:hover {
     background: $ins-tint-1;
     border-color: $ins-border-hover;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--bf-appearance-token-shadow-sm);
     transform: translateY(-1px);
   }
 
   &:active {
     transform: translateY(0);
-    box-shadow: 0 1px 4px var(--color-overlay-black-12);
+    box-shadow: 0 1px 4px var(--bf-appearance-token-color-overlay-black-12);
     transition-duration: 0.08s;
   }
 
   &:hover &__date {
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &:hover &__metric {
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 
   &__top {
@@ -531,13 +531,13 @@ $ins-label:   12px;
   &__date {
     font-size: $ins-body;
     font-weight: 500;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     transition: color 0.2s;
   }
 
   &__range {
     font-size: $ins-small;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     flex-shrink: 0;
   }
 
@@ -553,7 +553,7 @@ $ins-label:   12px;
     align-items: center;
     min-width: 0;
     gap: 7px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     transition: color 0.2s;
 
     > span {
@@ -566,7 +566,7 @@ $ins-label:   12px;
 
     strong {
       overflow: hidden;
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
       font-size: $ins-small;
       font-weight: 600;
       text-overflow: ellipsis;
@@ -588,7 +588,7 @@ $ins-label:   12px;
       display: inline-flex;
       align-items: center;
       gap: 3px;
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
       font-size: 10px;
       line-height: 1.3;
     }
@@ -626,7 +626,7 @@ $ins-label:   12px;
     margin-top: $ins-sm;
     padding-top: $ins-sm;
     border-top: 1px solid $ins-border;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: 9px;
     line-height: 1.3;
     opacity: 0.72;
@@ -684,7 +684,6 @@ $ins-label:   12px;
     width: 100%;
     flex: 0 0 100%;
 
-    .select__dropdown { width: 100%; right: 0; }
   }
   .insights-scene__control-label { width: 100%; }
   .insights-meta-card__top { align-items: flex-start; flex-direction: column; }
@@ -728,14 +727,14 @@ $ins-label:   12px;
     border: none;
     border-radius: $ins-r-sm;
     background: transparent;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: $ins-small;
     cursor: pointer;
     transition: background 0.12s, color 0.12s;
     flex-shrink: 0;
     white-space: nowrap;
 
-    &:hover { background: $ins-surface-hover; color: var(--color-text-primary); }
+    &:hover { background: $ins-surface-hover; color: var(--bf-appearance-token-color-text-primary); }
   }
 
   // Thin vertical separator after back button
@@ -755,7 +754,7 @@ $ins-label:   12px;
     gap: $ins-lg;
     margin-left: auto;
     font-size: $ins-small;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     flex-shrink: 0;
 
     span {
@@ -775,12 +774,12 @@ $ins-label:   12px;
     border: none;
     border-radius: $ins-r-sm;
     background: $ins-surface;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: $ins-small;
     cursor: pointer;
     transition: background 0.12s, color 0.12s;
 
-    &:hover:not(:disabled) { background: $ins-surface-hover; color: var(--color-text-primary); }
+    &:hover:not(:disabled) { background: $ins-surface-hover; color: var(--bf-appearance-token-color-text-primary); }
     &:disabled { opacity: 0.35; cursor: not-allowed; }
   }
 }
@@ -802,10 +801,10 @@ $ins-label:   12px;
   &::-webkit-scrollbar { width: 6px; }
   &::-webkit-scrollbar-track { background: transparent; }
   &::-webkit-scrollbar-thumb {
-    background: var(--border-base);
+    background: var(--bf-appearance-token-border-base);
     border-radius: 3px;
   }
-  &::-webkit-scrollbar-thumb:hover { background: var(--border-medium); }
+  &::-webkit-scrollbar-thumb:hover { background: var(--bf-appearance-token-border-medium); }
 }
 
 // Report body column
@@ -837,13 +836,13 @@ $ins-label:   12px;
     line-height: 1.2;
     background: linear-gradient(
       135deg,
-      var(--color-text-primary) 0%,
-      color-mix(in srgb, var(--color-text-primary) 70%, $ins-blue 30%) 100%
+      var(--bf-appearance-token-color-text-primary) 0%,
+      color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 70%, $ins-blue 30%) 100%
     );
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 }
 
@@ -873,7 +872,7 @@ $ins-label:   12px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.6px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.5;
     padding: $ins-sm $ins-sm $ins-xs;
   }
@@ -886,7 +885,7 @@ $ins-label:   12px;
     padding: 6px $ins-sm 6px $ins-md;
     border: none;
     background: transparent;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: $ins-small;
     text-align: left;
     cursor: pointer;
@@ -913,12 +912,12 @@ $ins-label:   12px;
     svg { display: none; }
 
     &:hover {
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
       background: $ins-surface-soft;
     }
 
     &.is-active {
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
       font-weight: 600;
       background: $ins-blue-bg;
 
@@ -953,7 +952,7 @@ $ins-label:   12px;
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.025em;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   margin: 0 0 $ins-lg;
   padding: 0;
 
@@ -974,14 +973,14 @@ $ins-label:   12px;
 .insights-section h4 {
   font-size: $ins-body;
   font-weight: 600;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   margin: $ins-lg 0 $ins-sm;
   letter-spacing: -0.01em;
 }
 
 .insights-section-intro {
   font-size: $ins-body;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   margin: -$ins-sm 0 $ins-lg;
   line-height: 1.7;
 }
@@ -994,14 +993,14 @@ $ins-label:   12px;
   box-sizing: border-box;
   border-radius: $ins-r-lg;
   // Whole block reads as one framed panel (theme border, stronger than $ins-border)
-  border: 1px solid var(--border-base);
+  border: 1px solid var(--bf-appearance-token-border-base);
   background: transparent;
   padding: $ins-lg;
   margin-bottom: $ins-xl;
   overflow: hidden;
   transition: border-color 0.15s ease;
 
-  &:hover { border-color: var(--border-medium); }
+  &:hover { border-color: var(--bf-appearance-token-border-medium); }
 
   &__title {
     font-size: 11px;
@@ -1020,7 +1019,7 @@ $ins-label:   12px;
 
   &__item {
     font-size: $ins-body;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: 1.7;
     padding: $ins-md 0;
     border-bottom: 1px solid $ins-border;
@@ -1029,7 +1028,7 @@ $ins-label:   12px;
     &:last-child  { border-bottom: none; padding-bottom: 0; }
 
     strong {
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
       font-weight: 600;
       letter-spacing: -0.01em;
     }
@@ -1049,7 +1048,7 @@ $ins-label:   12px;
   padding: $ins-sm;
   border-radius: $ins-r-lg;
   border: 1px solid $ins-border;
-  background: var(--element-bg-subtle);
+  background: var(--bf-appearance-token-element-bg-subtle);
   transition: border-color 0.15s ease;
 
   &:hover { border-color: $ins-border-hover; }
@@ -1085,14 +1084,14 @@ $ins-label:   12px;
   &__value {
     font-size: 20px;
     font-weight: 600;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     letter-spacing: -0.03em;
     line-height: 1.2;
   }
 
   &__label {
     font-size: 11px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.4px;
     margin-top: 4px;
@@ -1123,7 +1122,7 @@ $ins-label:   12px;
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.6px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     margin-bottom: $ins-md;
     opacity: 0.6;
   }
@@ -1139,7 +1138,7 @@ $ins-label:   12px;
   &__label {
     width: 88px;
     font-size: $ins-small;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     flex-shrink: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1166,7 +1165,7 @@ $ins-label:   12px;
     width: 30px;
     font-size: $ins-small;
     font-weight: 500;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     text-align: right;
   }
 }
@@ -1195,7 +1194,7 @@ $ins-label:   12px;
 
   &__narrative {
     font-size: $ins-body;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: 1.7;
     margin: 0 0 $ins-md;
   }
@@ -1208,7 +1207,7 @@ $ins-label:   12px;
 
   &__pattern {
     font-size: $ins-small;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: 1.6;
     padding: $ins-sm 0;
     border-bottom: 1px solid $ins-border;
@@ -1218,7 +1217,7 @@ $ins-label:   12px;
     // "· " bullet prefix via pseudo
     &::before {
       content: '·  ';
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
     }
   }
 }
@@ -1248,19 +1247,19 @@ $ins-label:   12px;
   &__name {
     font-weight: 600;
     font-size: $ins-body;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     letter-spacing: -0.01em;
   }
 
   &__count {
     font-size: $ins-small;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     flex-shrink: 0;
   }
 
   &__desc {
     font-size: $ins-small;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     line-height: 1.6;
     margin: 0;
   }
@@ -1279,14 +1278,14 @@ $ins-label:   12px;
   &__title {
     font-weight: 600;
     font-size: $ins-body;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     letter-spacing: -0.01em;
     margin: 0 0 4px;
   }
 
   &__desc {
     font-size: $ins-small;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: 1.65;
     margin: 0;
   }
@@ -1297,7 +1296,7 @@ $ins-label:   12px;
     gap: 6px;
     font-size: $ins-small;
     font-weight: 500;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     margin: $ins-sm 0 0;
     line-height: 1.5;
 
@@ -1323,14 +1322,14 @@ $ins-label:   12px;
   &__title {
     font-weight: 600;
     font-size: $ins-body;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     letter-spacing: -0.01em;
     margin: 0 0 4px;
   }
 
   &__desc {
     font-size: $ins-small;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: 1.65;
     margin: 0;
   }
@@ -1338,13 +1337,13 @@ $ins-label:   12px;
   &__examples {
     margin: $ins-xs 0 0 $ins-md;
     font-size: $ins-small;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     list-style: none;
     padding: 0;
 
     li {
       margin-bottom: 2px;
-      &::before { content: '·  '; color: var(--color-text-muted); }
+      &::before { content: '·  '; color: var(--bf-appearance-token-color-text-muted); }
     }
   }
 
@@ -1355,7 +1354,7 @@ $ins-label:   12px;
     margin-top: $ins-sm;
     font-size: $ins-small;
     font-weight: 500;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     line-height: 1.55;
 
     &::before {
@@ -1379,7 +1378,7 @@ $ins-label:   12px;
   padding: $ins-md $ins-lg;
   margin-bottom: $ins-md;
   font-size: $ins-small;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   line-height: 1.7;
 }
 
@@ -1387,7 +1386,7 @@ $ins-label:   12px;
 .insights-conclusion-line {
   font-size: $ins-small;
   font-weight: 500;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   padding-top: $ins-sm;
   border-top: 1px solid $ins-border;
   margin-top: $ins-md;
@@ -1411,7 +1410,7 @@ $ins-label:   12px;
 
   &__unit {
     font-size: $ins-label;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 }
 
@@ -1422,12 +1421,12 @@ $ins-label:   12px;
 .insights-report-body {
   strong {
     font-weight: 500;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   em {
     font-style: italic;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 }
 
@@ -1458,7 +1457,7 @@ $ins-label:   12px;
     display: inline-block;
     font-size: 11px;
     font-weight: 500;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     background: $ins-surface-soft;
     border: 1px solid $ins-border;
     border-radius: $ins-r-sm;
@@ -1468,7 +1467,7 @@ $ins-label:   12px;
 
   &__rationale {
     font-size: $ins-small;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     line-height: 1.6;
     margin: $ins-xs 0 0;
     font-style: italic;
@@ -1511,21 +1510,21 @@ $ins-label:   12px;
   &__title {
     font-weight: 600;
     font-size: $ins-body;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     letter-spacing: -0.01em;
     margin: 0 0 3px;
   }
 
   &__desc {
     font-size: $ins-small;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: 1.65;
     margin: 0;
   }
 
   &__benefit {
     font-size: $ins-small;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     line-height: 1.55;
     margin: 4px 0 0;
     font-style: italic;
@@ -1549,14 +1548,14 @@ $ins-label:   12px;
   &__title {
     font-weight: 600;
     font-size: $ins-body;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     letter-spacing: -0.01em;
     margin: 0 0 3px;
   }
 
   &__desc {
     font-size: $ins-small;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: 1.65;
     margin: 0;
   }
@@ -1572,7 +1571,7 @@ $ins-label:   12px;
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     margin-bottom: $ins-xs;
     opacity: 0.7;
   }
@@ -1597,7 +1596,7 @@ $ins-label:   12px;
     border-radius: $ins-r-sm;
     font-size: $ins-small;
     font-family: $font-family-mono;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     white-space: pre-wrap;
     word-break: break-word;
     line-height: 1.6;
@@ -1619,7 +1618,7 @@ $ins-label:   12px;
     border: 1px solid $ins-border;
     border-radius: $ins-r-sm;
     background: $ins-surface;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
     opacity: 0;   // hidden until row hover
     transition: opacity 0.15s, background 0.15s, color 0.15s, border-color 0.15s;
@@ -1627,7 +1626,7 @@ $ins-label:   12px;
     &:hover {
       background: $ins-surface-hover;
       border-color: $ins-border-hover;
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
     }
   }
 }
@@ -1677,14 +1676,14 @@ $ins-label:   12px;
   &__title {
     font-weight: 600;
     font-size: $ins-body;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     letter-spacing: -0.01em;
     margin: 0 0 5px;
   }
 
   &__desc {
     font-size: $ins-small;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: 1.65;
     margin: 0;
   }
@@ -1698,7 +1697,7 @@ $ins-label:   12px;
     padding-top: $ins-md;
     border-top: 1px solid $ins-border;
     font-size: $ins-small;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: 1.55;
   }
 
@@ -1720,7 +1719,7 @@ $ins-label:   12px;
   margin-bottom: $ins-xl;
   padding-top: $ins-xl + $ins-sm;
   // Clear divider from section above (stronger than $ins-border)
-  border-top: 1px solid var(--border-base);
+  border-top: 1px solid var(--bf-appearance-token-border-base);
   text-align: left;
 
   &__blob, &__blob-2 { display: none; }
@@ -1734,19 +1733,19 @@ $ins-label:   12px;
     border: 1px solid color-mix(in srgb, $ins-blue 28%, transparent);
     background: $ins-blue-bg;
     transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-    box-shadow: var(--shadow-xs);
+    box-shadow: var(--bf-appearance-token-shadow-xs);
 
     &:hover {
       border-color: color-mix(in srgb, $ins-blue 45%, transparent);
-      background: var(--color-accent-200);
-      box-shadow: var(--shadow-sm);
+      background: var(--bf-appearance-token-color-accent-200);
+      box-shadow: var(--bf-appearance-token-shadow-sm);
     }
   }
 
   &__headline {
     font-size: 18px;
     font-weight: 600;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     margin: 0 0 $ins-sm;
     letter-spacing: -0.02em;
     line-height: 1.25;
@@ -1754,7 +1753,7 @@ $ins-label:   12px;
 
   &__message {
     font-size: $ins-body;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: 1.7;
     margin: 0;
     max-width: none;

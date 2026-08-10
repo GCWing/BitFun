@@ -5,7 +5,7 @@
  * virtualized list.
  */
 
-import { useEffect, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { createLogger } from '@/shared/utils/logger';
 import { flowChatStore } from '../../store/FlowChatStore';
@@ -27,6 +27,8 @@ interface UseFlowChatNavigationOptions {
   virtualItems: VirtualItem[];
   virtualListRef: RefObject<VirtualMessageListRef | null>;
   onExpandExploreGroup?: (groupId: string) => void;
+  onBeforeTurnPinRequest?: (request: FlowChatPinTurnToTopRequest) => void;
+  onNavigateToFocusTurn?: (request: FlowChatFocusItemRequest) => Promise<boolean> | boolean;
 }
 
 async function waitForCondition(predicate: () => boolean, timeoutMs: number): Promise<boolean> {
@@ -49,6 +51,7 @@ async function waitForAnimationFrames(frameCount: number): Promise<void> {
 function navigateToResolvedTarget(
   virtualListRef: RefObject<VirtualMessageListRef | null>,
   target: ResolvedFocusTarget,
+  options?: { allowLocalTurnIndex?: boolean },
 ): void {
   const list = virtualListRef.current;
   if (!list) return;
@@ -63,7 +66,7 @@ function navigateToResolvedTarget(
     return;
   }
 
-  if (target.resolvedTurnIndex) {
+  if (options?.allowLocalTurnIndex !== false && target.resolvedTurnIndex) {
     list.scrollToTurn(target.resolvedTurnIndex);
   }
 }
@@ -73,8 +76,19 @@ export function useFlowChatNavigation({
   virtualItems,
   virtualListRef,
   onExpandExploreGroup,
+  onBeforeTurnPinRequest,
+  onNavigateToFocusTurn,
 }: UseFlowChatNavigationOptions): void {
   const [pendingTurnPinRequest, setPendingTurnPinRequest] = useState<FlowChatPinTurnToTopRequest | null>(null);
+  const virtualItemsRef = useRef(virtualItems);
+  const onExpandExploreGroupRef = useRef(onExpandExploreGroup);
+  const onNavigateToFocusTurnRef = useRef(onNavigateToFocusTurn);
+
+  useLayoutEffect(() => {
+    virtualItemsRef.current = virtualItems;
+    onExpandExploreGroupRef.current = onExpandExploreGroup;
+    onNavigateToFocusTurnRef.current = onNavigateToFocusTurn;
+  }, [onExpandExploreGroup, onNavigateToFocusTurn, virtualItems]);
 
   useEffect(() => {
     const unsubscribe = globalEventBus.on<FlowChatPinTurnToTopRequest>(FLOWCHAT_PIN_TURN_TO_TOP_EVENT, (request) => {
@@ -82,11 +96,12 @@ export function useFlowChatNavigation({
         return;
       }
 
+      onBeforeTurnPinRequest?.(request);
       setPendingTurnPinRequest(request);
     });
 
     return unsubscribe;
-  }, [activeSessionId]);
+  }, [activeSessionId, onBeforeTurnPinRequest]);
 
   useEffect(() => {
     if (!pendingTurnPinRequest) return;
@@ -118,23 +133,53 @@ export function useFlowChatNavigation({
         }
       }
 
-      await waitForCondition(() => {
+      const ready = await waitForCondition(() => {
         const modernActiveSessionId = useModernFlowChatStore.getState().activeSession?.sessionId;
         return modernActiveSessionId === sessionId && !!virtualListRef.current;
       }, 1500);
+      if (!ready) {
+        log.warn('FlowChat focus target did not become active before timeout', { sessionId });
+        return;
+      }
+
+      const delegatedTurnNavigationAttempted = Boolean(
+        (request.turnId || request.turnIndex)
+        && onNavigateToFocusTurnRef.current,
+      );
+      let delegatedTurnNavigation = false;
+      if (delegatedTurnNavigationAttempted && onNavigateToFocusTurnRef.current) {
+        try {
+          delegatedTurnNavigation = await onNavigateToFocusTurnRef.current(request);
+        } catch (error) {
+          log.warn('Failed to navigate to the requested FlowChat Turn window', {
+            sessionId,
+            turnId: request.turnId,
+            turnIndex: request.turnIndex,
+            error,
+          });
+        }
+      }
 
       const targetSession = flowChatStore.getState().sessions.get(sessionId);
       const resolvedTarget = resolveFlowChatFocusTarget(
         request,
-        useModernFlowChatStore.getState().virtualItems,
+        virtualItemsRef.current,
         targetSession,
       );
 
-      if (resolvedTarget.expandExploreGroupId) {
-        onExpandExploreGroup?.(resolvedTarget.expandExploreGroupId);
+      if (!delegatedTurnNavigation) {
+        if (resolvedTarget.expandExploreGroupId) {
+          onExpandExploreGroupRef.current?.(resolvedTarget.expandExploreGroupId);
+        }
+        navigateToResolvedTarget(virtualListRef, resolvedTarget, {
+          // A focus request carries an absolute Session Turn index. Once the
+          // container-owned catalog/window transaction has handled that
+          // coordinate, it must never be reused as an index into the current
+          // partial presentation. Stable ids and already-rendered item indexes
+          // remain safe fallbacks.
+          allowLocalTurnIndex: !delegatedTurnNavigationAttempted,
+        });
       }
-
-      navigateToResolvedTarget(virtualListRef, resolvedTarget);
 
       if (!itemId) return;
 
@@ -142,13 +187,30 @@ export function useFlowChatNavigation({
 
       const maxAttempts = 120;
       let attempts = 0;
+      let expandedExploreGroupId: string | null = null;
       const tryFocus = () => {
         attempts += 1;
-        const focusItemId = resolvedTarget.focusItemId ?? itemId;
+        const currentTarget = resolveFlowChatFocusTarget(
+          request,
+          virtualItemsRef.current,
+          flowChatStore.getState().sessions.get(sessionId),
+        );
+        if (
+          currentTarget.expandExploreGroupId
+          && currentTarget.expandExploreGroupId !== expandedExploreGroupId
+        ) {
+          expandedExploreGroupId = currentTarget.expandExploreGroupId;
+          onExpandExploreGroupRef.current?.(currentTarget.expandExploreGroupId);
+        }
+        const focusItemId = currentTarget.focusItemId ?? itemId;
         const element = document.querySelector(`[data-flow-item-id="${CSS.escape(focusItemId)}"]`) as HTMLElement | null;
         if (!element) {
-          if (attempts % 12 === 0 && !resolvedTarget.preferPinnedTurnNavigation) {
-            navigateToResolvedTarget(virtualListRef, resolvedTarget);
+          if (
+            attempts % 12 === 0
+            && !delegatedTurnNavigationAttempted
+            && !currentTarget.preferPinnedTurnNavigation
+          ) {
+            navigateToResolvedTarget(virtualListRef, currentTarget);
           }
           if (attempts < maxAttempts) {
             requestAnimationFrame(tryFocus);
@@ -165,5 +227,5 @@ export function useFlowChatNavigation({
     });
 
     return unsubscribe;
-  }, [activeSessionId, onExpandExploreGroup, virtualListRef]);
+  }, [activeSessionId, virtualListRef]);
 }

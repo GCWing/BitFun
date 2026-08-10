@@ -128,6 +128,100 @@ describe('external prompt command projection', () => {
     expect(items.every(item => item.conflictKey === 'review-conflict')).toBe(true);
     expect(items.every(item => item.expectedPreferenceRevision === 9)).toBe(true);
   });
+
+  it('carries the owning ecosystem so the picker can name the application', () => {
+    expect(buildExternalPromptCommandItems(snapshot())[0]).toMatchObject({
+      ecosystemId: 'claude-code',
+      status: 'available',
+    });
+  });
+
+  it('asks the user to pick a source while a conflict is unresolved', () => {
+    const items = buildExternalPromptCommandItems(snapshot({
+      commands: [],
+      commandConflicts: [{
+        conflictKey: 'review-conflict',
+        commandName: 'review',
+        candidates: [
+          {
+            candidateId: 'claude-review',
+            source: { providerId: 'claude-code.commands', sourceId: 'project' },
+            sourceDisplayName: 'Claude Code project commands',
+            ecosystemId: 'claude-code',
+            contentVersion: 'claude-v1',
+            commandDescription: 'Review with Claude conventions',
+            sourceScope: 'project',
+            sourceLocation: '.claude/commands',
+            availability: { state: 'available' },
+          },
+          {
+            candidateId: 'opencode-review',
+            source: { providerId: 'opencode.commands', sourceId: 'project' },
+            sourceDisplayName: 'OpenCode project commands',
+            ecosystemId: 'opencode',
+            contentVersion: 'opencode-v1',
+            commandDescription: 'Review with OpenCode conventions',
+            sourceScope: 'project',
+            sourceLocation: '.opencode/commands',
+            availability: { state: 'available' },
+          },
+        ],
+      }],
+    }));
+
+    expect(items.map(item => item.status)).toEqual(['choose_source', 'choose_source']);
+    expect(items.map(item => item.ecosystemId)).toEqual(['claude-code', 'opencode']);
+  });
+
+  it('drops the pick-a-source hint once the conflict is resolved', () => {
+    const items = buildExternalPromptCommandItems(snapshot({
+      commands: [],
+      commandConflicts: [{
+        conflictKey: 'review-conflict',
+        commandName: 'review',
+        selectedCandidateId: 'claude-review',
+        candidates: [{
+          candidateId: 'claude-review',
+          source: { providerId: 'claude-code.commands', sourceId: 'project' },
+          sourceDisplayName: 'Claude Code project commands',
+          ecosystemId: 'claude-code',
+          contentVersion: 'claude-v1',
+          commandDescription: 'Review with Claude conventions',
+          sourceScope: 'project',
+          sourceLocation: '.claude/commands',
+          availability: { state: 'available' },
+        }],
+      }],
+    }));
+
+    expect(items.map(item => item.status)).toEqual(['available']);
+  });
+
+  it('reports a policy-blocked command as restricted instead of asking for a source', () => {
+    const items = buildExternalPromptCommandItems(snapshot({
+      commands: [],
+      commandConflicts: [{
+        conflictKey: 'review-conflict',
+        commandName: 'review',
+        candidates: [{
+          candidateId: 'claude-review',
+          source: { providerId: 'claude-code.commands', sourceId: 'project' },
+          sourceDisplayName: 'Claude Code project commands',
+          ecosystemId: 'claude-code',
+          contentVersion: 'claude-v1',
+          commandDescription: 'Review with Claude conventions',
+          sourceScope: 'project',
+          sourceLocation: '.claude/commands',
+          availability: {
+            state: 'restricted',
+            reason: 'External command execution is disabled by integration policy',
+          },
+        }],
+      }],
+    }));
+
+    expect(items[0]).toMatchObject({ status: 'restricted', available: false });
+  });
 });
 
 describe('external prompt command invocation resolution', () => {

@@ -14,7 +14,7 @@ export interface RemoteCryptoOptions {
   randomBytes?: (size: number) => Uint8Array;
 }
 
-class HarmonyRemoteCryptoCipher implements RemoteCryptoCipher {
+export class HarmonyRemoteCryptoCipher implements RemoteCryptoCipher {
   async encrypt(plainBytes: Uint8Array, key: Uint8Array, nonce: Uint8Array): Promise<Uint8Array> {
     const symKey = await cryptoFramework.createSymKeyGenerator('AES256').convertKey({ data: key });
     const cipher = cryptoFramework.createCipher('AES256|GCM|NoPadding');

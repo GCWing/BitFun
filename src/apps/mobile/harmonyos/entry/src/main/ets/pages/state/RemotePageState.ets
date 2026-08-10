@@ -17,17 +17,22 @@ import { RemoteUiState } from '../../services/RemoteUiState';
  */
 @ObservedV2
 export class RemotePageState {
-  @Trace desktopName: string = 'MacBook Pro';
+  @Trace desktopName: string = '';
   @Trace desktopId: string = '';
   @Trace remoteUrl: string = '';
   @Trace userId: string = '';
   @Trace requiresAccountAuth: boolean = false;
   @Trace accountUsername: string = '';
+  @Trace accountUserId: string = '';
   @Trace authenticatedUserId: string = '';
+  @Trace controlTargetType: string = 'none';
+  @Trace controlTargetDeviceId: string = '';
+  @Trace controlTargetDeviceName: string = '';
   @Trace statusText: string = '';
   @Trace connectionState: string = 'idle';
   @Trace connectionFailureKind: string = '';
   @Trace isBusy: boolean = false;
+  @Trace isLoadingHome: boolean = false;
   @Trace showRemoteUrlInput: boolean = false;
   @Trace workspaceName: string = '';
   @Trace workspacePath: string = '';
@@ -55,6 +60,7 @@ export class RemotePageState {
   @Trace selectedImages: SelectedImageAttachment[] = [];
   @Trace isVoiceListening: boolean = false;
   @Trace sessionQuery: string = '';
+  @Trace sessionFilter: string = 'all';
   @Trace hasMoreSessions: boolean = false;
   @Trace isLoadingSessions: boolean = false;
   @Trace sessionErrorText: string = '';
@@ -62,6 +68,10 @@ export class RemotePageState {
 
   setQuery(query: string): void {
     this.sessionQuery = query;
+  }
+
+  setFilter(filter: string): void {
+    this.sessionFilter = filter;
   }
 
   setDesktopName(desktopName: string): void {
@@ -82,6 +92,24 @@ export class RemotePageState {
   setAccountPairing(requiresAccountAuth: boolean, accountUsername: string): void {
     this.requiresAccountAuth = requiresAccountAuth;
     this.accountUsername = accountUsername;
+  }
+
+  setAccountUsername(accountUsername: string): void {
+    this.accountUsername = accountUsername;
+  }
+
+  setAccountUserId(accountUserId: string): void {
+    this.accountUserId = accountUserId;
+  }
+
+  setControlTarget(type: string, deviceId: string, deviceName: string): void {
+    this.controlTargetType = type;
+    this.controlTargetDeviceId = deviceId;
+    this.controlTargetDeviceName = deviceName;
+  }
+
+  clearControlTarget(): void {
+    this.setControlTarget('none', '', '');
   }
 
   setRemoteUrl(remoteUrl: string): void {
@@ -110,6 +138,10 @@ export class RemotePageState {
 
   setBusy(isBusy: boolean): void {
     this.isBusy = isBusy;
+  }
+
+  setLoadingHome(isLoadingHome: boolean): void {
+    this.isLoadingHome = isLoadingHome;
   }
 
   setRemoteUrlInputVisible(visible: boolean): void {
@@ -190,6 +222,10 @@ export class RemotePageState {
     this.timelineItems = timelineItems.slice();
   }
 
+  setHasMoreMessages(hasMoreMessages: boolean): void {
+    this.hasMoreMessages = hasMoreMessages;
+  }
+
   clearTimeline(): void {
     this.persistedMessages = [];
     this.optimisticMessages = [];
@@ -258,6 +294,7 @@ export class RemotePageState {
     this.sessions = [];
     this.hasMoreSessions = false;
     this.isLoadingSessions = false;
+    this.isLoadingHome = false;
     this.sessionErrorText = '';
   }
 
@@ -321,9 +358,7 @@ export class RemotePageState {
           context_window: model.context_window,
           enabled: model.enabled,
           capabilities: model.capabilities.slice(),
-          enable_thinking_process: model.enable_thinking_process,
-          reasoning_mode: model.reasoning_mode,
-          reasoning_effort: model.reasoning_effort
+          reasoning: model.reasoning
         };
       }),
       default_models: {

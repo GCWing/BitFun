@@ -1,7 +1,7 @@
 /**
  * NavBar — navigation history controls + window chrome.
  *
- * Sits at the top of the left column, same height as SceneBar (32px).
+ * Sits at the top of the left column, same height as SceneBar (38px).
  * Layout: [←][→]  <drag-region>  [_][□][×]
  *
  * - Back/Forward buttons mirror IDE navigation history.
@@ -16,9 +16,8 @@ import { useNavSceneStore } from '../../stores/navSceneStore';
 import { useI18n } from '../../../infrastructure/i18n';
 import { PanelLeftIcon } from '../TitleBar/PanelIcons';
 import { createLogger } from '@/shared/utils/logger';
-import { isMacOSDesktopRuntime } from '@/infrastructure/runtime';
+import { isMacOSDesktopRuntime, supportsNativeWindowDragging } from '@/infrastructure/runtime';
 import './NavBar.scss';
-import { workspaceAPI } from '@/infrastructure';
 
 const log = createLogger('NavBar');
 
@@ -42,32 +41,37 @@ const NavBar: React.FC<NavBarProps> = ({
   const isMacOS = useMemo(() => {
     return isMacOSDesktopRuntime();
   }, []);
+  const canDragWindow = supportsNativeWindowDragging();
   const showSceneNav = useNavSceneStore(s => s.showSceneNav);
-  const navSceneId = useNavSceneStore(s => s.navSceneId);
-  const goBack = useNavSceneStore(s => s.goBack);
-  const goForward = useNavSceneStore(s => s.goForward);
-  const canGoBack = showSceneNav && !!navSceneId;
+  const navSceneId   = useNavSceneStore(s => s.navSceneId);
+  const goBack       = useNavSceneStore(s => s.goBack);
+  const goForward    = useNavSceneStore(s => s.goForward);
+  const canGoBack    = showSceneNav && !!navSceneId;
   const canGoForward = !showSceneNav && !!navSceneId;
-  const isDraggingRef = useRef(false);
+  const lastMouseDownTimeRef = useRef<number>(0);
 
-  const handleBarMouseDown = (() => {
-    isDraggingRef.current = true;
-  })
+  const handleBarMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!canDragWindow) return;
 
-  const handleBarMouseMove = async () => {
-    if (isDraggingRef.current) {
+    const now = Date.now();
+    const timeSinceLastMouseDown = now - lastMouseDownTimeRef.current;
+    lastMouseDownTimeRef.current = now;
+
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+    if (target.closest(INTERACTIVE_SELECTOR)) return;
+    if (timeSinceLastMouseDown < 500 && timeSinceLastMouseDown > 50) return;
+
+    void (async () => {
       try {
-        await workspaceAPI.window_start_dragging();
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        await getCurrentWindow().startDragging();
       } catch (error) {
         log.debug('startDragging failed', error);
       }
-    }
-
-  };
-
-  const handlebarMouseUp = (() => {
-    isDraggingRef.current = false;
-  });
+    })();
+  }, [canDragWindow]);
 
   const handleBarDoubleClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement | null;
@@ -80,11 +84,13 @@ const NavBar: React.FC<NavBarProps> = ({
 
   if (isCollapsed) {
     return (
-      <div className={rootClassName} role="toolbar" aria-label={t('nav.aria.navControl')} onMouseDown={handleBarMouseDown} onMouseMove={handleBarMouseMove} onMouseUp={handlebarMouseUp} onDoubleClick={handleBarDoubleClick}>
+      <div data-bf-component="nav-bar" data-bf-part="root" data-bf-state="collapsed" className={rootClassName} role="toolbar" aria-label={t('nav.aria.navControl')} onMouseDown={handleBarMouseDown} onDoubleClick={handleBarDoubleClick}>
         <Tooltip content={t('header.expandLeftPanel')} placement="bottom" followCursor>
           <button
             type="button"
             className="bitfun-nav-bar__panel-toggle"
+            data-bf-component="nav-bar"
+            data-bf-part="panelToggle"
             onClick={onExpandNav}
             aria-label={t('header.expandLeftPanel')}
           >
@@ -96,11 +102,13 @@ const NavBar: React.FC<NavBarProps> = ({
   }
 
   return (
-    <div className={rootClassName} role="toolbar" aria-label={t('nav.aria.navControl')} onMouseDown={handleBarMouseDown} onMouseMove={handleBarMouseMove} onMouseUp={handlebarMouseUp} onDoubleClick={handleBarDoubleClick}>
+    <div data-bf-component="nav-bar" data-bf-part="root" className={rootClassName} role="toolbar" aria-label={t('nav.aria.navControl')} onMouseDown={handleBarMouseDown} onDoubleClick={handleBarDoubleClick}>
       <Tooltip content={t('header.collapseLeftPanel')} placement="bottom" followCursor>
         <button
           type="button"
           className="bitfun-nav-bar__panel-toggle"
+          data-bf-component="nav-bar"
+          data-bf-part="panelToggle"
           onClick={onExpandNav}
           aria-label={t('header.collapseLeftPanel')}
         >
@@ -111,7 +119,10 @@ const NavBar: React.FC<NavBarProps> = ({
       {/* Back / Forward */}
       <Tooltip content={t('nav.backShortcut')} placement="bottom" followCursor disabled={!canGoBack}>
         <button
+          type="button"
           className={`bitfun-nav-bar__btn${!canGoBack ? ' is-inactive' : ''}`}
+          data-bf-component="nav-bar"
+          data-bf-part="back"
           onClick={canGoBack ? goBack : undefined}
           aria-disabled={!canGoBack}
           aria-label={t('nav.back')}
@@ -122,7 +133,10 @@ const NavBar: React.FC<NavBarProps> = ({
 
       <Tooltip content={t('nav.forwardShortcut')} placement="bottom" followCursor disabled={!canGoForward}>
         <button
+          type="button"
           className={`bitfun-nav-bar__btn${!canGoForward ? ' is-inactive' : ''}`}
+          data-bf-component="nav-bar"
+          data-bf-part="forward"
           onClick={canGoForward ? goForward : undefined}
           aria-disabled={!canGoForward}
           aria-label={t('nav.forward')}

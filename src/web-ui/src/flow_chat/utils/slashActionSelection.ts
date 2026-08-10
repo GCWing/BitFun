@@ -5,7 +5,7 @@ export type SlashActionId =
   | 'review'
   | 'goal'
   | 'usage'
-  | 'reload-skills'
+  | 'reload'
   | 'compact'
   | 'init';
 
@@ -54,7 +54,7 @@ export function resolveSlashActionInputValue(
       return '/usage';
     case 'init':
       return '/init';
-    case 'reload-skills':
-      return '/reload-skills';
+    case 'reload':
+      return '/reload';
   }
 }

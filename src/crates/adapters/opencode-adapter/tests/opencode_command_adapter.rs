@@ -1,7 +1,8 @@
 use bitfun_opencode_adapter::{OpenCodeCommandProvider, OpenCodeCommandProviderOptions};
 use bitfun_product_domains::external_sources::{
-    ExecutionDomainId, ExternalSourceContext, ExternalSourceHealth, PromptCommandAvailability,
-    PromptCommandDefinition, PromptCommandProviderSnapshot, PromptCommandSourceProvider,
+    EcosystemId, ExecutionDomainId, ExternalSourceContext, ExternalSourceHealth,
+    PromptCommandAvailability, PromptCommandDefinition, PromptCommandExecutionTarget,
+    PromptCommandProviderSnapshot, PromptCommandShellPreference, PromptCommandSourceProvider,
 };
 use std::collections::BTreeSet;
 use std::fs;
@@ -49,6 +50,7 @@ impl Fixture {
             legacy_user_config_dir: Some(self.legacy_user_config.clone()),
             explicit_config_file: None,
             explicit_config_dir: None,
+            inline_config_content: None,
             project_config_enabled,
         })
     }
@@ -159,6 +161,7 @@ fn mirrors_current_opencode_command_precedence_phases() {
         legacy_user_config_dir: Some(fixture.legacy_user_config.clone()),
         explicit_config_file: None,
         explicit_config_dir: Some(explicit.clone()),
+        inline_config_content: None,
         project_config_enabled: true,
     });
     let winner = || {
@@ -345,17 +348,25 @@ fn invalid_source_is_diagnostic_and_does_not_remove_other_valid_sources() {
 }
 
 #[test]
-fn unsupported_expansion_features_restrict_the_whole_command() {
+fn supported_subagent_delegation_is_typed_and_other_unsupported_features_stay_restricted() {
     let fixture = Fixture::new();
     write(
         fixture.user_config.join("opencode.json"),
         r#"{
+          "shell": "pwsh",
           "command": {
-            "shell": {"template":"Run !`git status`"},
-            "file": {"template":"Review @src/main.rs"},
+            "shell": {"template":"Run !`git status` and review @src/main.rs"},
+            "file": {"template":"Review @src/main.rs, @src/main.rs, and @docs/guide.md with $ARGUMENTS"},
+            "dynamic-file": {"template":"Review @src/$1.rs"},
+            "unsafe-file": {"template":"Review @/etc/passwd"},
             "config-var": {"template":"Review {env:HOME}"},
             "agent": {"template":"Delegate this", "agent":"explore"},
-            "subtask": {"template":"Delegate this", "subtask":true}
+            "agent-subtask": {"template":"Delegate this", "agent":"explore", "subtask":true},
+            "agent-shell": {"template":"Run !`git status` then delegate", "agent":"explore"},
+            "primary-agent": {"template":"Stay primary", "agent":"build", "subtask":false},
+            "subtask": {"template":"Delegate this", "subtask":true},
+            "model": {"template":"Delegate this", "agent":"explore", "model":"provider/model"},
+            "variant": {"template":"Delegate this", "agent":"explore", "variant":"high"}
           }
         }"#,
     );
@@ -366,7 +377,16 @@ fn unsupported_expansion_features_restrict_the_whole_command() {
         .sources
         .iter()
         .any(|source| source.health == ExternalSourceHealth::Partial));
-    for name in ["shell", "file", "config-var", "agent", "subtask"] {
+    for name in [
+        "dynamic-file",
+        "unsafe-file",
+        "config-var",
+        "agent-shell",
+        "primary-agent",
+        "subtask",
+        "model",
+        "variant",
+    ] {
         let command = snapshot
             .commands
             .iter()
@@ -376,8 +396,150 @@ fn unsupported_expansion_features_restrict_the_whole_command() {
             command.availability,
             PromptCommandAvailability::Restricted { .. }
         ));
-        assert!(provider.expand(command, "").is_err());
+        assert!(provider.expand(&fixture.context(), command, "").is_err());
     }
+    let agent_shell = snapshot
+        .commands
+        .iter()
+        .find(|command| command.name == "agent-shell")
+        .unwrap();
+    let PromptCommandAvailability::Restricted {
+        required_capabilities,
+        ..
+    } = &agent_shell.availability
+    else {
+        panic!("shell-backed subagent delegation must be restricted")
+    };
+    assert!(required_capabilities.contains(&"command.external_subagent.shell".to_string()));
+    for name in ["agent", "agent-subtask"] {
+        let command = snapshot
+            .commands
+            .iter()
+            .find(|command| command.name == name)
+            .unwrap();
+        assert!(matches!(
+            command.availability,
+            PromptCommandAvailability::Available
+        ));
+        assert_eq!(
+            command.execution_target,
+            PromptCommandExecutionTarget::FreshExternalSubagent {
+                ecosystem_id: EcosystemId::new("opencode").unwrap(),
+                logical_id: "explore".to_string(),
+            }
+        );
+        assert_eq!(
+            provider
+                .expand(&fixture.context(), command, "")
+                .unwrap()
+                .content,
+            "Delegate this"
+        );
+    }
+    let shell = snapshot
+        .commands
+        .iter()
+        .find(|command| command.name == "shell")
+        .unwrap();
+    assert!(matches!(
+        shell.availability,
+        PromptCommandAvailability::Available
+    ));
+    assert_eq!(
+        shell.shell_preference,
+        Some(PromptCommandShellPreference::Preferred {
+            executable: "pwsh".to_string()
+        })
+    );
+    let shell_expansion = provider
+        .expand(&fixture.context(), shell, "")
+        .unwrap()
+        .shell
+        .unwrap();
+    assert_eq!(shell_expansion.working_directory, fixture.project);
+    assert_eq!(shell_expansion.invocations[0].command, "git status");
+    assert!(shell_expansion.invocations[0].can_remember);
+    let dynamic_file = snapshot
+        .commands
+        .iter()
+        .find(|command| command.name == "dynamic-file")
+        .unwrap();
+    let PromptCommandAvailability::Restricted {
+        required_capabilities,
+        ..
+    } = &dynamic_file.availability
+    else {
+        panic!("dynamic file references must be restricted")
+    };
+    assert!(required_capabilities.contains(&"command.file_reference.dynamic".to_string()));
+    let unsafe_file = snapshot
+        .commands
+        .iter()
+        .find(|command| command.name == "unsafe-file")
+        .unwrap();
+    let PromptCommandAvailability::Restricted {
+        required_capabilities,
+        ..
+    } = &unsafe_file.availability
+    else {
+        panic!("unsafe file references must be restricted")
+    };
+    assert!(required_capabilities.contains(&"command.file_reference.unsafe_path".to_string()));
+
+    let file_command = snapshot
+        .commands
+        .iter()
+        .find(|command| command.name == "file")
+        .unwrap();
+    assert!(matches!(
+        file_command.availability,
+        PromptCommandAvailability::Available
+    ));
+    let expansion = provider
+        .expand(
+            &fixture.context(),
+            file_command,
+            "@arguments/are-not-files.md",
+        )
+        .unwrap();
+    assert_eq!(
+        expansion.workspace_file_references,
+        ["src/main.rs", "docs/guide.md"]
+    );
+    assert_eq!(
+        expansion.content,
+        "Review @src/main.rs, @src/main.rs, and @docs/guide.md with @arguments/are-not-files.md"
+    );
+}
+
+#[test]
+fn empty_configured_shell_uses_the_host_default() {
+    let fixture = Fixture::new();
+    write(
+        fixture.user_config.join("opencode.json"),
+        r#"{
+          "shell": "  ",
+          "command": {
+            "status": {"template":"Run !`git status`"}
+          }
+        }"#,
+    );
+
+    let snapshot = fixture.provider().discover(&fixture.context()).unwrap();
+    let command = snapshot
+        .commands
+        .iter()
+        .find(|command| command.name == "status")
+        .unwrap();
+
+    assert!(matches!(
+        command.availability,
+        PromptCommandAvailability::Available
+    ));
+    assert_eq!(
+        command.shell_preference,
+        Some(PromptCommandShellPreference::HostDefault)
+    );
 }
 
 #[test]
@@ -492,7 +654,10 @@ fn expands_arguments_and_positions_using_the_frozen_opencode_semantics() {
             .iter()
             .find(|item| item.name == name)
             .unwrap();
-        provider.expand(command, arguments).unwrap().content
+        provider
+            .expand(&fixture.context(), command, arguments)
+            .unwrap()
+            .content
     };
     assert_eq!(
         expand("all", "src/lib.rs carefully"),
@@ -506,6 +671,28 @@ fn expands_arguments_and_positions_using_the_frozen_opencode_semantics() {
         expand("append", "with tests"),
         "Review this change\n\nwith tests"
     );
+}
+
+#[test]
+fn rejects_argument_expansion_before_repeated_placeholders_can_overallocate() {
+    let fixture = Fixture::new();
+    write(
+        fixture.user_config.join("commands/large.md"),
+        &"$ARGUMENTS".repeat(1024),
+    );
+    let provider = fixture.provider();
+    let snapshot = provider.discover(&fixture.context()).unwrap();
+    let command = snapshot
+        .commands
+        .iter()
+        .find(|command| command.name == "large")
+        .unwrap();
+
+    let error = provider
+        .expand(&fixture.context(), command, &"x".repeat(2048))
+        .unwrap_err();
+
+    assert_eq!(error.code, "opencode.command.expansion_too_large");
 }
 
 #[test]
@@ -585,6 +772,22 @@ fn semantically_invalid_known_command_is_marked_unavailable() {
 }
 
 #[test]
+fn malformed_skills_field_does_not_hide_other_valid_command_contributions() {
+    let fixture = Fixture::new();
+    write(
+        fixture.user_config.join("opencode.json"),
+        r#"{"skills":["valid",42],"command":{"review":{"template":"review this"}}}"#,
+    );
+
+    let snapshot = fixture.provider().discover(&fixture.context()).unwrap();
+
+    assert!(snapshot
+        .commands
+        .iter()
+        .any(|command| command.id.local_id.as_str() == "review"));
+}
+
+#[test]
 fn invalid_command_directory_shape_is_unavailable_not_a_stable_empty_source() {
     let fixture = Fixture::new();
     write(fixture.user_config.join("command"), "not a directory");
@@ -615,6 +818,7 @@ fn explicit_paths_aliasing_default_paths_do_not_duplicate_sources_or_commands() 
         legacy_user_config_dir: Some(fixture.legacy_user_config.clone()),
         explicit_config_file: Some(config),
         explicit_config_dir: Some(fixture.user_config.clone()),
+        inline_config_content: None,
         project_config_enabled: true,
     });
 

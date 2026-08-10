@@ -5,6 +5,7 @@ use crate::agentic::tools::framework::{
     ValidationResult,
 };
 use crate::agentic::tools::registry::get_global_tool_registry;
+use crate::agentic::workspace::workspace_route_key;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_external_sources::{ExternalSourceControlPlane, ExternalToolCoordinatorSnapshot};
@@ -1003,9 +1004,9 @@ impl ExternalToolRuntimeManager {
         reason: &str,
     ) -> bool {
         let mut loaded = self.loaded.lock().await;
-        if !loaded
+        if loaded
             .get(runtime_target_id)
-            .is_some_and(|target| target.load_generation == load_generation)
+            .is_none_or(|target| target.load_generation != load_generation)
         {
             return false;
         }
@@ -2037,17 +2038,6 @@ async fn local_candidate(tool: &Arc<dyn Tool>) -> ExternalToolConflictCandidate 
     }
 }
 
-pub(crate) fn workspace_route_key(workspace_root: Option<&Path>) -> String {
-    workspace_root
-        .map(|path| {
-            dunce::canonicalize(path)
-                .unwrap_or_else(|_| path.to_path_buf())
-                .to_string_lossy()
-                .into_owned()
-        })
-        .unwrap_or_else(|| "<global>".to_string())
-}
-
 fn workspace_conflict_domain(execution_domain_id: &str, workspace_key: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(workspace_key.as_bytes());
@@ -2078,6 +2068,27 @@ fn tool_diagnostic(
         message: message.into(),
         source,
     }
+}
+
+pub(super) fn merge_tool_state(
+    mut snapshot: bitfun_product_domains::external_sources::ExternalSourceCatalogSnapshot,
+    tool_snapshot: &ExternalToolCoordinatorSnapshot,
+    state: ExternalToolProductState,
+) -> bitfun_product_domains::external_sources::ExternalSourceCatalogSnapshot {
+    snapshot.generation = snapshot.generation.max(tool_snapshot.generation);
+    snapshot.discovery_pending |= tool_snapshot.discovery_pending;
+    snapshot.sources.extend(tool_snapshot.sources.clone());
+    snapshot
+        .sources
+        .sort_by(|left, right| left.stable_key.cmp(&right.stable_key));
+    snapshot.tools = state.tools;
+    snapshot.tool_approval_requests = state.approval_requests;
+    snapshot.tool_conflicts = state.conflicts;
+    snapshot
+        .diagnostics
+        .extend(tool_snapshot.diagnostics.clone());
+    snapshot.diagnostics.extend(state.diagnostics);
+    snapshot
 }
 
 #[cfg(test)]
@@ -2670,25 +2681,4 @@ mod tests {
         );
         assert!(manager.lost_targets.lock().await.is_empty());
     }
-}
-
-pub(super) fn merge_tool_state(
-    mut snapshot: bitfun_product_domains::external_sources::ExternalSourceCatalogSnapshot,
-    tool_snapshot: &ExternalToolCoordinatorSnapshot,
-    state: ExternalToolProductState,
-) -> bitfun_product_domains::external_sources::ExternalSourceCatalogSnapshot {
-    snapshot.generation = snapshot.generation.max(tool_snapshot.generation);
-    snapshot.discovery_pending |= tool_snapshot.discovery_pending;
-    snapshot.sources.extend(tool_snapshot.sources.clone());
-    snapshot
-        .sources
-        .sort_by(|left, right| left.stable_key.cmp(&right.stable_key));
-    snapshot.tools = state.tools;
-    snapshot.tool_approval_requests = state.approval_requests;
-    snapshot.tool_conflicts = state.conflicts;
-    snapshot
-        .diagnostics
-        .extend(tool_snapshot.diagnostics.clone());
-    snapshot.diagnostics.extend(state.diagnostics);
-    snapshot
 }

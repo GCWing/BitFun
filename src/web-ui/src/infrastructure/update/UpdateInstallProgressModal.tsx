@@ -54,23 +54,27 @@ export const UpdateInstallProgressModal: React.FC<UpdateInstallProgressModalProp
   let body: React.ReactNode = null;
   if (errorMessage) {
     body = (
-      <Alert
-        type="error"
-        message={errorMessage}
-        showIcon
-        className="bitfun-update-progress__alert"
-      />
+      <div data-bf-component="update" data-bf-part="alert">
+        <Alert
+          type="error"
+          message={errorMessage}
+          showIcon
+          className="bitfun-update-progress__alert"
+        />
+      </div>
     );
   } else if (installed) {
     body = (
       <>
-        <Alert
-          type="success"
-          message={t('update.installedMessage')}
-          showIcon
-          className="bitfun-update-progress__alert"
-        />
-        <div className="bitfun-update-progress__actions">
+        <div data-bf-component="update" data-bf-part="alert">
+          <Alert
+            type="success"
+            message={t('update.installedMessage')}
+            showIcon
+            className="bitfun-update-progress__alert"
+          />
+        </div>
+        <div className="bitfun-update-progress__actions" data-bf-component="update" data-bf-part="actions">
           <Button variant="secondary" size="medium" onClick={onCloseInstalled}>
             {t('update.restartLater')}
           </Button>
@@ -90,6 +94,8 @@ export const UpdateInstallProgressModal: React.FC<UpdateInstallProgressModalProp
           aria-valuemax={100}
           aria-valuenow={pct ?? undefined}
           aria-label={t('update.downloadingTitle')}
+          data-bf-component="update"
+          data-bf-part="progressBar"
         >
           <div
             className={
@@ -98,14 +104,17 @@ export const UpdateInstallProgressModal: React.FC<UpdateInstallProgressModalProp
                 : 'bitfun-update-progress__fill bitfun-update-progress__fill--indeterminate'
             }
             style={pct != null ? { width: `${pct}%` } : undefined}
+            data-bf-component="update"
+            data-bf-part="progressFill"
+            data-bf-state={pct == null ? 'indeterminate' : undefined}
           />
         </div>
-        <p className="bitfun-update-progress__hint">
+        <p className="bitfun-update-progress__hint" data-bf-component="update" data-bf-part="progressHint">
           {pct != null
             ? t('update.progressPercent', { percent: String(pct) })
             : t('update.progressUnknown')}
         </p>
-        <p className="bitfun-update-progress__restart">{t('update.restartHint')}</p>
+        <p className="bitfun-update-progress__restart" data-bf-component="update" data-bf-part="restartHint">{t('update.restartHint')}</p>
       </>
     );
   }
@@ -118,7 +127,12 @@ export const UpdateInstallProgressModal: React.FC<UpdateInstallProgressModalProp
       showCloseButton={!!error || !!installed}
       size="small"
     >
-      <div className="bitfun-update-progress">
+      <div
+        className="bitfun-update-progress"
+        data-bf-component="update"
+        data-bf-part="progressRoot"
+        data-bf-status={error ? 'error' : installed ? 'installed' : 'downloading'}
+      >
         {body}
       </div>
     </Modal>

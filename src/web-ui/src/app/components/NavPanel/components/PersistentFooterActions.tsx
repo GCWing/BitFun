@@ -1,8 +1,10 @@
-import React, { lazy, Suspense, useState, useCallback, useEffect } from 'react';
+import React, { lazy, Suspense, useState, useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Settings,
   Info,
   MoreVertical,
+  PictureInPicture2,
   SquareTerminal,
   Terminal,
   Smartphone,
@@ -11,7 +13,6 @@ import {
   BarChart3,
   ChevronUp,
   MessageSquare,
-  // LogIn,
 } from 'lucide-react';
 import { systemAPI } from '@/infrastructure/api';
 import { Tooltip, Modal } from '@/component-library';
@@ -20,10 +21,12 @@ import { useSceneManager } from '../../../hooks/useSceneManager';
 import { useNavSceneStore } from '../../../stores/navSceneStore';
 import { useSceneStore } from '../../../stores/sceneStore';
 import { useCanvasStore } from '@/app/components/panels/content-canvas/stores';
+import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/ToolbarModeContext';
 import { useNotification } from '@/shared/notification-system';
 import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
-// import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
+import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import NotificationButton from '../../TitleBar/NotificationButton';
+import GithubStarButton from './GithubStarButton';
 import { usePrivacy } from '../../Privacy/PrivacyContext';
 import {
   hasActionableUnreadReply,
@@ -36,10 +39,10 @@ import {
   getRemoteConnectDisclaimerAgreed,
   setRemoteConnectDisclaimerAgreed,
 } from '../../RemoteConnectDialog/remoteConnectDisclaimerStorage';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 
 const RemoteConnectDialog = lazy(() => import('../../RemoteConnectDialog'));
-// BitFun account login is disabled while the product feature is being retired.
-// const AccountLoginDialog = lazy(() => import('../../AccountLoginDialog'));
 const AboutDialog = lazy(() =>
   import('../../AboutDialog').then(module => ({ default: module.AboutDialog }))
 );
@@ -59,6 +62,7 @@ const PersistentFooterActions: React.FC = () => {
     const activeTab = s.primaryGroup.tabs.find((t) => t.id === s.primaryGroup.activeTabId);
     return activeTab?.content.type === 'browser';
   });
+  const { enableToolbarMode } = useToolbarModeContext();
   const { warning } = useNotification();
   const { loggedIn: accountLoggedIn, deviceName: accountDeviceName } = useAccountLoginState();
   const { status: privacyStatus } = usePrivacy();
@@ -87,6 +91,16 @@ const PersistentFooterActions: React.FC = () => {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuClosing, setMenuClosing] = useState(false);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const menuPopoverRef = useRef<HTMLDivElement>(null);
+  const menuLayout = useAnchoredPopoverPosition({
+    open: menuOpen,
+    anchorRef: menuTriggerRef,
+    popoverRef: menuPopoverRef,
+    preferredPlacement: 'top',
+    alignment: 'start',
+    gap: 6,
+  });
   const [showAbout, setShowAbout] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   // const [showAccountLogin, setShowAccountLogin] = useState(false);
@@ -172,6 +186,11 @@ const PersistentFooterActions: React.FC = () => {
     setShowAbout(true);
   };
 
+  const handleFloatingMode = useCallback(() => {
+    closeMenu();
+    void enableToolbarMode();
+  }, [closeMenu, enableToolbarMode]);
+
   const handleFeedback = useCallback(async () => {
     closeMenu();
     if (feedbackPlatformEnabled) {
@@ -220,15 +239,14 @@ const PersistentFooterActions: React.FC = () => {
   const isBrowserActive =
     activeTabId === 'browser' || (activeTabId === 'session' && isBrowserPanelActiveInCanvas);
 
-  const SHOW_BROWSER_ENTRY = true;
-
   return (
     <>
-      <div className="bitfun-nav-panel__footer">
+      <div className="bitfun-nav-panel__footer" data-bf-component="nav-panel" data-bf-part="footer">
         <div className="bitfun-nav-panel__footer-left">
           <div className="bitfun-nav-panel__footer-more-wrap">
             <Tooltip content={t('nav.moreOptions')} placement="right" followCursor disabled={menuOpen}>
               <button
+                ref={menuTriggerRef}
                 type="button"
                 className={`bitfun-nav-panel__footer-btn bitfun-nav-panel__footer-btn--icon bitfun-nav-panel__footer-more-btn${menuOpen ? ' is-active' : ''}`}
                 aria-label={hasMoreMenuAttention
@@ -237,6 +255,9 @@ const PersistentFooterActions: React.FC = () => {
                 aria-expanded={menuOpen}
                 onClick={toggleMenu}
                 data-testid="nav-footer-more-btn"
+                data-bf-component="nav-panel"
+                data-bf-part="footerButton"
+                data-bf-state={menuOpen ? 'active' : undefined}
               >
                 {menuOpen ? (
                   <MoreVertical size={15} aria-hidden="true" />
@@ -252,21 +273,33 @@ const PersistentFooterActions: React.FC = () => {
               </button>
             </Tooltip>
 
-            {menuOpen && (
+            {menuOpen && createPortal(
               <>
                 <div
                   className="bitfun-nav-panel__footer-backdrop"
                   onClick={closeMenu}
                 />
                 <div
+                  ref={menuPopoverRef}
                   className={`bitfun-nav-panel__footer-menu${menuClosing ? ' is-closing' : ''}`}
                   role="menu"
                   data-testid="nav-footer-menu"
+                  data-bf-component="nav-panel"
+                  data-bf-part="footerMenu"
+                  data-bf-state={menuClosing ? 'closing' : 'open'}
+                  data-bf-placement={menuLayout?.placement ?? 'top'}
+                  style={{
+                    top: `${menuLayout?.top ?? 0}px`,
+                    left: `${menuLayout?.left ?? 0}px`,
+                    visibility: menuLayout ? 'visible' : 'hidden',
+                  }}
                 >
                   <button
                     type="button"
                     className="bitfun-nav-panel__footer-menu-item"
                     role="menuitem"
+                    data-bf-component="nav-panel"
+                    data-bf-part="footerMenuItem"
                     onClick={handleRemoteConnect}
                   >
                     <Smartphone size={14} />
@@ -279,11 +312,25 @@ const PersistentFooterActions: React.FC = () => {
                       <span className="bitfun-nav-panel__footer-menu-item-dot" />
                     )}
                   </button>
-                  <div className="bitfun-nav-panel__footer-menu-divider" />
+                  <div className="bitfun-nav-panel__footer-menu-divider" data-bf-component="nav-panel" data-bf-part="footerMenuDivider" />
                   <button
                     type="button"
                     className="bitfun-nav-panel__footer-menu-item"
                     role="menuitem"
+                    data-bf-component="nav-panel"
+                    data-bf-part="footerMenuItem"
+                    onClick={handleFloatingMode}
+                  >
+                    <PictureInPicture2 size={14} />
+                    <span>{t('header.switchToToolbar')}</span>
+                  </button>
+                  <div className="bitfun-nav-panel__footer-menu-divider" data-bf-component="nav-panel" data-bf-part="footerMenuDivider" />
+                  <button
+                    type="button"
+                    className="bitfun-nav-panel__footer-menu-item"
+                    role="menuitem"
+                    data-bf-component="nav-panel"
+                    data-bf-part="footerMenuItem"
                     onClick={handleOpenInsights}
                   >
                     <BarChart3 size={14} />
@@ -295,6 +342,8 @@ const PersistentFooterActions: React.FC = () => {
                     role="menuitem"
                     onClick={handleOpenSettings}
                     data-testid="nav-footer-settings-item"
+                    data-bf-component="nav-panel"
+                    data-bf-part="footerMenuItem"
                   >
                     <Settings size={14} />
                     <span>{t('shared:features.settings')}</span>
@@ -318,6 +367,8 @@ const PersistentFooterActions: React.FC = () => {
                       type="button"
                       className="bitfun-nav-panel__footer-menu-item"
                       role="menuitem"
+                      data-bf-component="nav-panel"
+                      data-bf-part="footerMenuItem"
                       onClick={handleShowAbout}
                       aria-label={hasPrivacyUpdate
                         ? t('privacy.aboutEntryUpdated')
@@ -330,7 +381,8 @@ const PersistentFooterActions: React.FC = () => {
                       ) : null}
                   </button>
                 </div>
-              </>
+              </>,
+              getAppearanceOverlayHost(),
             )}
           </div>
 
@@ -342,6 +394,9 @@ const PersistentFooterActions: React.FC = () => {
               aria-pressed={showSceneNav && navSceneId === 'shell'}
               onClick={handleOpenShell}
               data-testid="shell-panel-entry"
+              data-bf-component="nav-panel"
+              data-bf-part="footerButton"
+              data-bf-state={showSceneNav && navSceneId === 'shell' ? 'active' : undefined}
             >
               <span className="bitfun-nav-panel__footer-btn-icon-swap" aria-hidden="true">
                 <SquareTerminal size={15} className="bitfun-nav-panel__footer-btn-icon-swap-default" />
@@ -350,26 +405,28 @@ const PersistentFooterActions: React.FC = () => {
             </button>
           </Tooltip>
 
-          {SHOW_BROWSER_ENTRY && (
-            <Tooltip content={t('scenes.browser')} placement="right">
-              <button
-                type="button"
-                className={`bitfun-nav-panel__footer-btn bitfun-nav-panel__footer-btn--icon${isBrowserActive ? ' is-active' : ''}`}
-                aria-label={t('scenes.browser')}
-                aria-pressed={isBrowserActive}
-                onClick={handleOpenBrowser}
-                data-testid="browser-panel-entry"
-              >
-                <span className="bitfun-nav-panel__footer-btn-icon-swap" aria-hidden="true">
-                  <Globe size={15} className="bitfun-nav-panel__footer-btn-icon-swap-default" />
-                  <ExternalLink size={15} className="bitfun-nav-panel__footer-btn-icon-swap-hover" />
-                </span>
-              </button>
-            </Tooltip>
-          )}
+          <Tooltip content={t('scenes.browser')} placement="right">
+            <button
+              type="button"
+              className={`bitfun-nav-panel__footer-btn bitfun-nav-panel__footer-btn--icon${isBrowserActive ? ' is-active' : ''}`}
+              aria-label={t('scenes.browser')}
+              aria-pressed={isBrowserActive}
+              onClick={handleOpenBrowser}
+              data-testid="browser-panel-entry"
+              data-bf-component="nav-panel"
+              data-bf-part="footerButton"
+              data-bf-state={isBrowserActive ? 'active' : undefined}
+            >
+              <span className="bitfun-nav-panel__footer-btn-icon-swap" aria-hidden="true">
+                <Globe size={15} className="bitfun-nav-panel__footer-btn-icon-swap-default" />
+                <ExternalLink size={15} className="bitfun-nav-panel__footer-btn-icon-swap-hover" />
+              </span>
+            </button>
+          </Tooltip>
         </div>
 
         <div className="bitfun-nav-panel__footer-right">
+          <GithubStarButton />
           <NotificationButton className="bitfun-nav-panel__footer-btn" navFooterHoverIconSwap />
         </div>
       </div>

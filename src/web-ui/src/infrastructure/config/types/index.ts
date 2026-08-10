@@ -108,11 +108,13 @@ export interface ModelExchangeTracingConfig {
 export interface AppLoggingConfig {
   level: BackendLogLevel;
   include_sensitive_diagnostics: boolean;
+  flow_chat_diagnostics: boolean;
   model_exchange_tracing: ModelExchangeTracingConfig;
 }
 
 export interface AppFlowChatConfig {
   default_mode_id?: string | null;
+  show_permission_mode_control?: boolean;
 }
 
 export interface SidebarConfig {
@@ -131,6 +133,8 @@ export interface NotificationConfig {
   duration: number;
   /** Whether to show a toast when a dialog turn completes while the window is not focused. */
   dialog_completion_notify: boolean;
+  /** Whether to show a toast when an approval request arrives while the window is not focused. */
+  permission_request_notify: boolean;
   /** Whether to show built-in tip cards on each startup. Defaults to true. */
   enable_startup_tips: boolean;
 }
@@ -186,11 +190,46 @@ export type ModelCategory =
   | 'multimodal'
   | 'speech_recognition';
 
-export type ReasoningMode =
-  | 'default'
-  | 'enabled'
-  | 'disabled'
-  | 'adaptive';
+export type ReasoningCatalogBinding =
+  | { source: 'auto' }
+  | { source: 'models_dev'; provider: string; model: string }
+  | { source: 'disabled' };
+
+export type ReasoningPresetAction =
+  | { type: 'effort'; value: string }
+  | { type: 'toggle'; enabled: boolean }
+  | { type: 'budget_tokens'; value: number }
+  | { type: 'request_patch'; body: Record<string, unknown> };
+
+export interface ReasoningPreset {
+  id: string;
+  label?: string;
+  order?: number;
+  disabled?: boolean;
+  actions?: ReasoningPresetAction[];
+}
+
+export interface ReasoningConfig {
+  catalog?: ReasoningCatalogBinding;
+  default_preset?: string;
+  presets?: ReasoningPreset[];
+}
+
+export type ReasoningPresetSource = 'models_dev' | 'adapter_fallback' | 'model_config';
+
+export interface ReasoningPresetDescriptor {
+  id: string;
+  label: string;
+  order: number;
+  actions: ReasoningPresetAction[];
+  source: ReasoningPresetSource;
+}
+
+export interface ReasoningCatalogProjection {
+  status: 'unsupported' | 'known' | 'unknown';
+  default_preset?: string;
+  presets?: ReasoningPresetDescriptor[];
+}
 
 export interface ModelMetadata {
   category: ModelCategory;
@@ -239,13 +278,10 @@ export interface AIModelConfig {
   capabilities: ModelCapability[];
   recommended_for?: string[];
   metadata?: Record<string, any>;
-  reasoning_mode?: ReasoningMode;
+  /** Canonical reasoning preset configuration. */
+  reasoning?: ReasoningConfig;
   /** Parse `<think>...</think>` text chunks into streaming reasoning content. */
   inline_think_in_text?: boolean;
-  /** Provider-specific reasoning effort. */
-  reasoning_effort?: string;
-  /** Optional Anthropic manual thinking token budget. */
-  thinking_budget_tokens?: number;
   /** Authentication source. Defaults to inline `api_key`. */
   auth?: AuthConfig;
 }
@@ -253,10 +289,18 @@ export interface AIModelConfig {
 /** Subscription provider for in-app OAuth auth. */
 export type SubscriptionProvider = 'codex' | 'antigravity' | 'opencode';
 
+/** OpenCode billing/API product. Both plans reuse the same signed-in account. */
+export type OpenCodePlan = 'zen' | 'go';
+
 /** Authentication source persisted on each model entry. */
 export type AuthConfig =
   | { type: 'api_key' }
-  | { type: 'subscription'; provider: SubscriptionProvider };
+  | {
+      type: 'subscription';
+      provider: SubscriptionProvider;
+      /** Absent on legacy OpenCode configs, which continue to use Zen. */
+      plan?: OpenCodePlan;
+    };
 
 export interface ProxyConfig {
   enabled: boolean;
@@ -350,11 +394,17 @@ export interface SkillInfo {
   isShadowed?: boolean;
   /** Key of the skill that shadows this one (if any). */
   shadowedByKey?: string | null;
+  /** False when the skill should stay out of user-facing invocation pickers. */
+  allowUserInvocation?: boolean;
+  /** Optional usage hint displayed by invocation pickers. */
+  argumentHint?: string | null;
 }
 
 export interface ModeSkillInfo extends SkillInfo {
   /** True when this skill is enabled before any mode-specific override is applied. */
   defaultEnabled: boolean;
+  /** False when this user-level skill is disabled for every agent profile. */
+  globallyEnabled: boolean;
   /** True when this skill remains enabled after all mode-specific overrides are applied. */
   effectiveEnabled: boolean;
   /** Backward-compatible inverse of `effectiveEnabled`. */
@@ -370,6 +420,10 @@ export interface ModeSkillInfo extends SkillInfo {
     | 'builtin_policy_disabled'
     | 'enabled_by_user_override'
     | 'disabled_by_user_override';
+}
+
+export interface GlobalSkillSettings {
+  globallyDisabledUserSkillKeys: string[];
 }
 
 export interface SkillMarketItem {
@@ -535,7 +589,6 @@ export interface EditorConfig {
   word_wrap: string;
   line_numbers: string;
   minimap: MinimapConfig;
-  theme: string;
   auto_save: string;
   auto_save_delay: number;
   format_on_save: boolean;
@@ -565,7 +618,6 @@ export interface TerminalConfig {
   cursor_style: string;
   cursor_blink: boolean;
   scrollback_lines: number;
-  theme: string;
   transparency: number;
   bell_style: string;
   copy_on_select: boolean;
@@ -606,6 +658,15 @@ export interface ConfigValidationResult {
   valid: boolean;
   errors: ConfigValidationError[];
   warnings: ConfigValidationWarning[];
+  diagnostics?: ConfigDiagnostic[];
+}
+
+export interface ConfigDiagnostic {
+  path: string;
+  message: string;
+  code: string;
+  severity: 'error' | 'warning';
+  recoverability: 'none' | 'auto_fix' | 'model_disabled' | 'defaults_used';
 }
 
 export interface ConfigValidationError {
@@ -652,12 +713,12 @@ export type ConfigPath =
   | 'app.telemetry'
   | 'app.flow_chat'
   | 'app.flow_chat.default_mode_id'
+  | 'app.flow_chat.show_permission_mode_control'
   | 'app.sidebar'
   | 'app.sidebar.width'
   | 'app.sidebar.collapsed'
   | 'editor'
   | 'editor.font_size'
-  | 'editor.theme'
   | 'terminal'
   | 'terminal.default_shell'
   | 'terminal.terminal_panel_position'
@@ -679,10 +740,13 @@ export interface ConfigPanelProps {
 export interface RuntimeLoggingInfo {
   effectiveLevel: BackendLogLevel;
   sessionLogDir: string;
+  earlyStartupLogPath: string;
+  nativeStartupTracePath: string;
   appLogPath: string;
   aiLogPath: string;
   flashgrepLogPath: string;
   webviewLogPath: string;
+  flowChatLogPath: string;
   previousUnexpectedExit?: UnexpectedExitInfo | null;
 }
 

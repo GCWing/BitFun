@@ -1,0 +1,377 @@
+@use '../../component-library/styles/tokens' as *;
+
+// Three deliberate type steps, so "section" reads louder than "item" and
+// "item" reads louder than "explanation":
+//   title   18px/600  — the dialog's own heading
+//   section 13px/600  — section headings
+//   body    13px/400  — values and labels
+//   support 12px      — descriptions under a title
+// Nothing uses 10px; at that size the descriptions were unreadable and every
+// level looked the same.
+//
+// One box level only. Sections are separated by a hairline rule instead of
+// being drawn as cards: the modal is already a surface, and nesting a card
+// inside it (and a second card inside that) made a three-field form read as a
+// stack of unrelated panels. The approval options stay bordered because they
+// are the one thing here that is clickable and selectable.
+.dispatch-install-dialog {
+  display: flex;
+  min-height: 0;
+  max-height: min(78vh, 720px);
+  flex-direction: column;
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: var(--bf-appearance-token-font-size-sm);
+
+  &__header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: $size-gap-4 $size-gap-4 $size-gap-3;
+  }
+
+  &__title {
+    margin: 0;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  &__subtitle {
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+  }
+
+  // The one scrolling region. Keeps the footer reachable on short viewports,
+  // which the section stack used to push off-screen.
+  &__body {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    padding: 0 $size-gap-4 $size-gap-4;
+    overflow-y: auto;
+
+    // The body is a height-constrained column flex container, so its children
+    // would otherwise shrink below their content instead of scrolling.
+    > * {
+      flex-shrink: 0;
+    }
+
+    > [role='alert'] {
+      margin-bottom: $size-gap-3;
+    }
+  }
+
+  &__section {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+    padding: $size-gap-3 0;
+
+    &:first-child {
+      padding-top: 0;
+    }
+
+    &:last-child {
+      padding-bottom: 0;
+    }
+
+    + .dispatch-install-dialog__section {
+      border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    }
+  }
+
+  &__section-title {
+    margin: 0;
+    font-size: var(--bf-appearance-token-font-size-sm);
+    font-weight: 600;
+  }
+
+  &__hint {
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    line-height: 1.45;
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-1;
+  }
+
+  &__field-label {
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    font-weight: 600;
+  }
+
+  // A read-only path, not a code sample: drop the global `code` pill so the
+  // section keeps exactly one box level (the revision input).
+  &__path {
+    padding: 0;
+    border: 0;
+    background: none;
+    overflow-wrap: anywhere;
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-family: var(--bf-appearance-token-font-family-mono);
+    font-size: var(--bf-appearance-token-font-size-xs);
+  }
+
+  &__base-ref {
+    cursor: text;
+
+    input {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 32px;
+      padding: 0 $size-gap-2;
+      border: 1px solid var(--bf-appearance-token-border-subtle);
+      border-radius: $size-radius-base;
+      background: var(--bf-appearance-token-color-bg-primary);
+      color: var(--bf-appearance-token-color-text-primary);
+      font-family: var(--bf-appearance-token-font-family-mono);
+      font-size: var(--bf-appearance-token-font-size-xs);
+
+      &:focus-visible {
+        border-color: var(--bf-appearance-token-color-accent-500);
+        outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 24%, transparent);
+        outline-offset: 1px;
+      }
+    }
+  }
+
+  // Checkbox with its explanation attached, rather than a label and a loose
+  // hint that could belong to anything below it.
+  &__toggle {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: $size-gap-2;
+    font-size: var(--bf-appearance-token-font-size-xs);
+    line-height: 1.4;
+    cursor: pointer;
+
+    input {
+      margin: 1px 0 0;
+    }
+
+    > span {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      gap: 2px;
+      font-weight: 500;
+    }
+
+    small {
+      font-weight: 400;
+    }
+  }
+
+  // Selectable approval-policy cards.
+  // Single column: three across a 560px modal left ~165px per card, which is
+  // not enough for a title plus a two-line description.
+  &__options {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: $size-gap-2;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  &__option {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+    gap: $size-gap-2;
+    min-width: 0;
+    padding: $size-gap-2 $size-gap-3;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-primary);
+    text-align: left;
+    cursor: pointer;
+    transition:
+      background-color 140ms ease,
+      border-color 140ms ease,
+      transform 120ms ease-out;
+
+    &:hover:not(:disabled),
+    &:focus-visible,
+    &[data-selected='true'] {
+      border-color: var(--bf-appearance-token-color-accent-500);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 9%, transparent);
+      outline: none;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    &:active:not(:disabled) {
+      transform: scale(0.99);
+    }
+
+    // Keep the leading policy icon aligned with the text column.
+    > svg:first-child {
+      margin-top: 1px;
+      color: var(--bf-appearance-token-color-text-muted);
+    }
+
+    > span {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      gap: 2px;
+      grid-column: 2 / 3;
+    }
+
+    &[data-selected='true'] > svg:first-child {
+      color: var(--bf-appearance-token-color-accent-500);
+    }
+
+    strong {
+      font-size: var(--bf-appearance-token-font-size-sm);
+      font-weight: 600;
+    }
+
+    small {
+      color: var(--bf-appearance-token-color-text-muted);
+      font-size: var(--bf-appearance-token-font-size-xs);
+      line-height: 1.4;
+    }
+  }
+
+  &__checks {
+    display: grid;
+    gap: 0;
+
+    > div {
+      display: grid;
+      grid-template-columns: minmax(104px, auto) minmax(0, 1fr);
+      gap: $size-gap-2;
+      padding: $size-gap-2 0;
+
+      + div {
+        border-top: 1px solid var(--bf-appearance-token-border-subtle);
+      }
+
+      > span {
+        color: var(--bf-appearance-token-color-text-muted);
+        font-size: var(--bf-appearance-token-font-size-xs);
+      }
+
+      > strong {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        font-weight: 500;
+      }
+
+      &[data-state='ok'] > strong {
+        color: var(--bf-appearance-token-color-success);
+      }
+
+      &[data-state='blocked'] > strong {
+        color: var(--bf-appearance-token-color-warning);
+      }
+
+      &[data-state='pending'] > strong {
+        color: var(--bf-appearance-token-color-text-secondary);
+      }
+    }
+  }
+
+  &__pending,
+  &__retry {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+  }
+
+  &__retry {
+    justify-content: space-between;
+
+    > span {
+      flex: 1;
+    }
+  }
+
+  &__details {
+    width: 100%;
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+
+    summary {
+      width: fit-content;
+      color: var(--bf-appearance-token-color-text-secondary);
+      cursor: pointer;
+      user-select: none;
+
+      &:hover,
+      &:focus-visible {
+        color: var(--bf-appearance-token-color-text-primary);
+      }
+    }
+
+    &[open] summary {
+      margin-bottom: $size-gap-2;
+    }
+
+    dl {
+      display: grid;
+      gap: $size-gap-1;
+      width: 100%;
+      margin: 0;
+    }
+
+    dl > div {
+      display: grid;
+      grid-template-columns: 84px minmax(0, 1fr);
+      gap: $size-gap-2;
+    }
+
+    dt {
+      color: var(--bf-appearance-token-color-text-muted);
+    }
+
+    dd {
+      min-width: 0;
+      margin: 0;
+      overflow-wrap: anywhere;
+      font-family: var(--bf-appearance-token-font-family-mono);
+    }
+  }
+
+  // Pinned so the primary action never scrolls away.
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: $size-gap-2;
+    padding: $size-gap-3 $size-gap-4;
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    background: var(--bf-appearance-token-color-bg-primary);
+  }
+
+  &__spin {
+    animation: dispatch-install-spin 1s linear infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dispatch-install-dialog__option {
+    transition-duration: 0.01ms;
+  }
+}
+
+@keyframes dispatch-install-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

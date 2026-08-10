@@ -875,26 +875,27 @@ impl WorkspaceLspManager {
         let _language_clone4 = language.to_string();
         let workspace_path4 = self.workspace_path.clone();
         let emitter_for_diagnostics = self.emitter.clone();
-        let lsp_manager_for_cache = self.lsp_manager.clone();
+        // Grab the dedicated cache handle once so the per-publishDiagnostics
+        // path never takes the outer `lsp_manager` lock, and never holds a
+        // read guard across the emitter await.
+        let diagnostics_cache = {
+            let lsp = self.lsp_manager.read().await;
+            lsp.diagnostics_cache_handle()
+        };
 
         let diagnostics_callback =
             Arc::new(move |uri: String, diagnostics: Vec<serde_json::Value>| {
                 let workspace = workspace_path4.clone();
                 let emitter_clone = emitter_for_diagnostics.clone();
-                let lsp_mgr = lsp_manager_for_cache.clone();
+                let cache = diagnostics_cache.clone();
 
                 tokio::spawn(async move {
+                    // Cache and event share the same allocation via Arc.
+                    let diagnostics = Arc::new(diagnostics);
                     {
-                        let lsp = lsp_mgr.read().await;
-                        lsp.update_diagnostics_cache(uri.clone(), diagnostics.clone())
-                            .await;
+                        let mut cache = cache.write().await;
+                        cache.insert(uri.clone(), diagnostics.clone());
                     }
-
-                    let event = LspEvent::Diagnostics {
-                        workspace_path: workspace.display().to_string(),
-                        uri: uri.clone(),
-                        diagnostics: diagnostics.clone(),
-                    };
 
                     let emitter_guard = emitter_clone.read().await;
                     if let Some(emitter) = emitter_guard.as_ref() {
@@ -903,10 +904,20 @@ impl WorkspaceLspManager {
                             uri,
                             diagnostics.len()
                         );
-                        if let Ok(event_data) = serde_json::to_value(&event) {
-                            if let Err(e) = emitter.emit("lsp-event", event_data).await {
-                                error!("Failed to emit diagnostics event: {}", e);
+                        // Hand-built to match `LspEvent::Diagnostics` under
+                        // #[serde(tag = "type", content = "data")]; this avoids
+                        // deep-cloning the diagnostics array into an
+                        // intermediate event struct before serialization.
+                        let event_data = serde_json::json!({
+                            "type": "Diagnostics",
+                            "data": {
+                                "workspace_path": workspace.display().to_string(),
+                                "uri": uri,
+                                "diagnostics": &*diagnostics,
                             }
+                        });
+                        if let Err(e) = emitter.emit("lsp-event", event_data).await {
+                            error!("Failed to emit diagnostics event: {}", e);
                         }
                     }
                 });

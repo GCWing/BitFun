@@ -4,8 +4,17 @@
 //! and change handling.
 
 use super::types::*;
+#[cfg(feature = "ai-adapter-runtime")]
+use crate::infrastructure::ai::reasoning_catalog::{
+    load_models_dev_reasoning_catalog_without_refresh, project_model_reasoning_catalog,
+};
+#[cfg(feature = "ai-adapter-runtime")]
+use crate::infrastructure::ai::AIClient;
 use crate::util::errors::*;
 use async_trait::async_trait;
+use bitfun_core_types::ReasoningCatalogBinding;
+#[cfg(test)]
+use bitfun_core_types::{ReasoningConfig, ReasoningPreset, ReasoningPresetAction};
 use log::{error, info};
 use std::collections::HashMap;
 
@@ -25,6 +34,83 @@ fn serialize_default_config(section: &str, value: impl serde::Serialize) -> serd
 /// AI configuration provider.
 pub struct AIConfigProvider;
 
+fn ai_validation_error_location(message: &str) -> (String, String) {
+    let model_field = if message.contains("Model name is required") {
+        Some(("name", "MODEL_NAME_INVALID"))
+    } else if message.contains("Model provider is required") {
+        Some(("provider", "MODEL_PROVIDER_INVALID"))
+    } else if message.contains("context_window") {
+        Some(("context_window", "MODEL_CONTEXT_WINDOW_INVALID"))
+    } else if message.contains("max_tokens") {
+        Some(("max_tokens", "MODEL_MAX_TOKENS_INVALID"))
+    } else if message.contains("reasoning config") {
+        Some(("reasoning", "MODEL_REASONING_INVALID"))
+    } else if message.contains("reasoning default preset") {
+        Some((
+            "reasoning.default_preset",
+            "MODEL_REASONING_DEFAULT_INVALID",
+        ))
+    } else if message.contains("reasoning target") {
+        Some(("reasoning", "MODEL_REASONING_TARGET_INVALID"))
+    } else if message.contains("reasoning preset") {
+        Some(("reasoning.presets", "MODEL_REASONING_PRESET_INVALID"))
+    } else {
+        None
+    };
+
+    if let Some((field, code)) = model_field {
+        if let Some(index) = message
+            .rsplit_once(" at index ")
+            .and_then(|(_, suffix)| suffix.split(':').next())
+            .and_then(|value| value.parse::<usize>().ok())
+        {
+            return (format!("ai.models[{index}].{field}"), code.to_string());
+        }
+    }
+
+    if message.contains("stream_idle_timeout_secs") {
+        return (
+            "ai.stream_idle_timeout_secs".to_string(),
+            "AI_STREAM_IDLE_TIMEOUT_INVALID".to_string(),
+        );
+    }
+    if message.contains("stream_ttft_timeout_secs") {
+        return (
+            "ai.stream_ttft_timeout_secs".to_string(),
+            "AI_STREAM_TTFT_TIMEOUT_INVALID".to_string(),
+        );
+    }
+    if message.starts_with("Function Agent '") {
+        if let Some((_, suffix)) = message.split_once("Function Agent '") {
+            if let Some((agent, _)) = suffix.split_once('\'') {
+                return (
+                    format!("ai.func_agent_models.{agent}"),
+                    "FUNC_AGENT_MODEL_INVALID".to_string(),
+                );
+            }
+        }
+    }
+
+    ("ai".to_string(), "VALIDATION_ERROR".to_string())
+}
+
+fn ai_validation_warning_location(config: &GlobalConfig, message: &str) -> String {
+    let Some(model_name) = message
+        .strip_prefix("Model '")
+        .and_then(|value| value.split_once("' has empty API key"))
+        .map(|(name, _)| name)
+    else {
+        return "ai".to_string();
+    };
+    config
+        .ai
+        .models
+        .iter()
+        .position(|model| model.name == model_name)
+        .map(|index| format!("ai.models[{index}].api_key"))
+        .unwrap_or_else(|| "ai".to_string())
+}
+
 #[async_trait]
 impl ConfigProvider for AIConfigProvider {
     fn name(&self) -> &str {
@@ -39,6 +125,17 @@ impl ConfigProvider for AIConfigProvider {
         let mut warnings = Vec::new();
 
         if let Ok(ai_config) = serde_json::from_value::<AIConfig>(config.clone()) {
+            #[cfg(feature = "ai-adapter-runtime")]
+            let models_dev = if ai_config.models.iter().any(|model| {
+                model.reasoning.as_ref().is_some_and(|reasoning| {
+                    !matches!(reasoning.catalog, ReasoningCatalogBinding::Disabled)
+                })
+            }) {
+                Some(load_models_dev_reasoning_catalog_without_refresh().await)
+            } else {
+                None
+            };
+
             if let Some(stream_idle_timeout_secs) = ai_config.stream_idle_timeout_secs {
                 if stream_idle_timeout_secs == 0 {
                     return Err(BitFunError::validation(
@@ -56,6 +153,9 @@ impl ConfigProvider for AIConfigProvider {
             }
 
             for (index, model) in ai_config.models.iter().enumerate() {
+                if !model.enabled {
+                    continue;
+                }
                 if model.name.trim().is_empty() {
                     return Err(BitFunError::validation(format!(
                         "Model name is required at index {}",
@@ -71,34 +171,119 @@ impl ConfigProvider for AIConfigProvider {
                 if model.api_key.trim().is_empty() {
                     warnings.push(format!("Model '{}' has empty API key", model.name));
                 }
-                if let Some(context_window) = model.context_window {
-                    if context_window < MIN_MODEL_CONTEXT_WINDOW_TOKENS {
-                        return Err(BitFunError::validation(format!(
-                            "Model '{}' context_window must be at least {}",
-                            model.name, MIN_MODEL_CONTEXT_WINDOW_TOKENS
-                        )));
+                if model.supports_text_generation() {
+                    if let Some(context_window) = model.context_window {
+                        if context_window < MIN_MODEL_CONTEXT_WINDOW_TOKENS {
+                            return Err(BitFunError::validation(format!(
+                                "Model '{}' context_window must be at least {} at index {}",
+                                model.name, MIN_MODEL_CONTEXT_WINDOW_TOKENS, index
+                            )));
+                        }
+                    }
+                    if let Some(max_tokens) = model.max_tokens {
+                        if max_tokens == 0 {
+                            return Err(BitFunError::validation(format!(
+                                "Model '{}' max_tokens must be greater than 0 at index {}",
+                                model.name, index
+                            )));
+                        }
+                    }
+                    if let Some(temperature) = model.temperature {
+                        if !temperature.is_nan() && !(0.0..=2.0).contains(&temperature) {
+                            warnings.push(format!(
+                                "Model '{}' temperature should be between 0 and 2",
+                                model.name
+                            ));
+                        }
                     }
                 }
-                if let Some(max_tokens) = model.max_tokens {
-                    if max_tokens == 0 {
-                        return Err(BitFunError::validation(format!(
-                            "Model '{}' max_tokens must be greater than 0",
-                            model.name
-                        )));
+
+                if let Some(reasoning) = model.reasoning.as_ref() {
+                    reasoning.validate_schema().map_err(|message| {
+                        BitFunError::validation(format!(
+                            "Model '{}' reasoning config is invalid at index {}: {}",
+                            model.name, index, message
+                        ))
+                    })?;
+
+                    if let Some(default_preset) = reasoning.default_preset.as_deref() {
+                        #[cfg(feature = "ai-adapter-runtime")]
+                        {
+                            let projection = project_model_reasoning_catalog(
+                                model,
+                                models_dev
+                                    .as_ref()
+                                    .and_then(|snapshot| snapshot.catalog.as_deref()),
+                            );
+                            if projection.default_preset.as_deref() != Some(default_preset) {
+                                return Err(BitFunError::validation(format!(
+                                    "Model '{}' reasoning default preset '{}' is not available at index {}",
+                                    model.name, default_preset, index
+                                )));
+                            }
+                        }
+
+                        #[cfg(not(feature = "ai-adapter-runtime"))]
+                        if reasoning.preset(default_preset).is_none()
+                            && matches!(reasoning.catalog, ReasoningCatalogBinding::Disabled)
+                        {
+                            return Err(BitFunError::validation(format!(
+                                "Model '{}' reasoning default preset '{}' is not available at index {}",
+                                model.name, default_preset, index
+                            )));
+                        }
                     }
-                }
-                if let Some(temperature) = model.temperature {
-                    if !temperature.is_nan() && !(0.0..=2.0).contains(&temperature) {
-                        warnings.push(format!(
-                            "Model '{}' temperature should be between 0 and 2",
-                            model.name
-                        ));
+
+                    #[cfg(feature = "ai-adapter-runtime")]
+                    {
+                        let runtime_config = <crate::util::types::AIConfig as TryFrom<
+                            AIModelConfig,
+                        >>::try_from(model.clone())
+                        .map_err(|message| {
+                            BitFunError::validation(format!(
+                                "Model '{}' reasoning target is invalid at index {}: {}",
+                                model.name, index, message
+                            ))
+                        })?;
+                        let client = AIClient::new(runtime_config);
+                        let projection = project_model_reasoning_catalog(
+                            model,
+                            models_dev
+                                .as_ref()
+                                .and_then(|snapshot| snapshot.catalog.as_deref()),
+                        );
+                        for preset in reasoning
+                            .presets
+                            .iter()
+                            .filter(|preset| !preset.disabled && !preset.actions.is_empty())
+                        {
+                            let preset_id = preset.id.trim();
+                            let descriptor = projection
+                                .presets
+                                .iter()
+                                .find(|descriptor| descriptor.id == preset_id)
+                                .ok_or_else(|| {
+                                    BitFunError::validation(format!(
+                                        "Model '{}' reasoning preset '{}' is not available at index {}",
+                                        model.name, preset_id, index
+                                    ))
+                                })?;
+                            client.validate_reasoning_preset(descriptor).map_err(|error| {
+                                BitFunError::validation(format!(
+                                    "Model '{}' reasoning preset '{}' is unsupported at index {}: {}",
+                                    model.name, preset_id, index, error
+                                ))
+                            })?;
+                        }
                     }
                 }
             }
 
             for (func_agent_name, model_id) in &ai_config.func_agent_models {
-                if !ai_config.models.iter().any(|m| m.id == *model_id)
+                if !ai_config
+                    .models
+                    .iter()
+                    .any(|m| m.enabled && m.id == *model_id)
                     && model_id != "primary"
                     && model_id != "fast"
                 {
@@ -160,52 +345,31 @@ impl ConfigProvider for AIConfigProvider {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn rejects_a_model_context_window_smaller_than_32k() {
-        let mut config = AIConfig::default();
-        config.models.push(AIModelConfig {
-            name: "Test model".to_string(),
-            provider: "openai".to_string(),
-            context_window: Some(MIN_MODEL_CONTEXT_WINDOW_TOKENS - 1),
-            ..AIModelConfig::default()
-        });
-        let value = serde_json::to_value(config).expect("AI config should serialize");
-
-        let error = AIConfigProvider
-            .validate_config(&value)
-            .await
-            .expect_err("small context windows must be rejected");
-
-        assert!(error
-            .to_string()
-            .contains("context_window must be at least 32000"));
-    }
-}
-
-/// Theme system configuration provider (new, supports theme management).
-pub struct ThemesConfigProvider;
+/// Web UI appearance selection provider.
+pub struct AppearanceConfigProvider;
 
 #[async_trait]
-impl ConfigProvider for ThemesConfigProvider {
+impl ConfigProvider for AppearanceConfigProvider {
     fn name(&self) -> &str {
-        "themes"
+        "appearance"
     }
 
     fn get_default_config(&self) -> serde_json::Value {
-        serialize_default_config("themes", ThemesConfig::default())
+        serialize_default_config("appearance", AppearanceConfig::default())
     }
 
     async fn validate_config(&self, config: &serde_json::Value) -> BitFunResult<Vec<String>> {
         let warnings = Vec::new();
 
-        if let Ok(_themes_config) = serde_json::from_value::<ThemesConfig>(config.clone()) {
+        if let Ok(appearance_config) = serde_json::from_value::<AppearanceConfig>(config.clone()) {
+            if appearance_config.selection.trim().is_empty() {
+                return Err(BitFunError::validation(
+                    "Appearance selection must not be empty".to_string(),
+                ));
+            }
         } else {
             return Err(BitFunError::validation(
-                "Invalid themes config format".to_string(),
+                "Invalid appearance config format".to_string(),
             ));
         }
 
@@ -217,10 +381,12 @@ impl ConfigProvider for ThemesConfigProvider {
         _old_config: &serde_json::Value,
         new_config: &serde_json::Value,
     ) -> BitFunResult<()> {
-        if let Ok(themes_config) = serde_json::from_value::<ThemesConfig>(new_config.clone()) {
+        if let Ok(appearance_config) =
+            serde_json::from_value::<AppearanceConfig>(new_config.clone())
+        {
             info!(
-                "Themes config changed: current theme = {}",
-                themes_config.current
+                "Appearance config changed: selection = {}",
+                appearance_config.selection
             );
         }
         Ok(())
@@ -279,8 +445,8 @@ impl ConfigProvider for EditorConfigProvider {
     ) -> BitFunResult<()> {
         if let Ok(editor_config) = serde_json::from_value::<EditorConfig>(new_config.clone()) {
             info!(
-                "Editor config changed: font_size={}, theme={}",
-                editor_config.font_size, editor_config.theme
+                "Editor config changed: font_size={}",
+                editor_config.font_size
             );
         }
         Ok(())
@@ -510,7 +676,7 @@ impl ConfigProviderRegistry {
         };
 
         registry.register(Box::new(AIConfigProvider));
-        registry.register(Box::new(ThemesConfigProvider));
+        registry.register(Box::new(AppearanceConfigProvider));
         registry.register(Box::new(EditorConfigProvider));
         registry.register(Box::new(TerminalConfigProvider));
         registry.register(Box::new(WorkspaceConfigProvider));
@@ -548,30 +714,62 @@ impl ConfigProviderRegistry {
         let mut errors = Vec::new();
         let mut warnings = Vec::new();
 
-        if let Some(provider) = self.get_provider("app") {
-            let app_value = serde_json::to_value(&config.app)?;
-            match provider.validate_config(&app_value).await {
+        for provider_name in ["ai", "appearance", "editor", "terminal", "workspace", "app"] {
+            let Some(provider) = self.get_provider(provider_name) else {
+                continue;
+            };
+            let section_value = self.get_config_section(provider_name, config)?;
+            match provider.validate_config(&section_value).await {
                 Ok(provider_warnings) => {
                     warnings.extend(provider_warnings.into_iter().map(|msg| {
                         ConfigValidationWarning {
-                            path: "app".to_string(),
+                            path: if provider_name == "ai" {
+                                ai_validation_warning_location(config, &msg)
+                            } else {
+                                provider_name.to_string()
+                            },
                             message: msg,
                             code: "VALIDATION_WARNING".to_string(),
                             severity: "warning".to_string(),
                         }
                     }))
                 }
-                Err(e) => errors.push(ConfigValidationError {
-                    path: "app".to_string(),
-                    message: e.to_string(),
-                    code: "VALIDATION_ERROR".to_string(),
-                    severity: "error".to_string(),
-                }),
+                Err(e) => {
+                    let message = e.to_string();
+                    let (path, code) = if provider_name == "ai" {
+                        ai_validation_error_location(&message)
+                    } else {
+                        (provider_name.to_string(), "VALIDATION_ERROR".to_string())
+                    };
+                    errors.push(ConfigValidationError {
+                        path,
+                        message,
+                        code,
+                        severity: "error".to_string(),
+                    });
+                }
             }
         }
 
         Ok(ConfigValidationResult {
             valid: errors.is_empty(),
+            diagnostics: errors
+                .iter()
+                .map(|error| ConfigDiagnostic {
+                    path: error.path.clone(),
+                    message: error.message.clone(),
+                    code: error.code.clone(),
+                    severity: ConfigDiagnosticSeverity::Error,
+                    recoverability: ConfigDiagnosticRecoverability::None,
+                })
+                .chain(warnings.iter().map(|warning| ConfigDiagnostic {
+                    path: warning.path.clone(),
+                    message: warning.message.clone(),
+                    code: warning.code.clone(),
+                    severity: ConfigDiagnosticSeverity::Warning,
+                    recoverability: ConfigDiagnosticRecoverability::None,
+                }))
+                .collect(),
             errors,
             warnings,
         })
@@ -604,7 +802,7 @@ impl ConfigProviderRegistry {
     ) -> BitFunResult<serde_json::Value> {
         match section {
             "app" => Ok(serde_json::to_value(&config.app)?),
-            "themes" => Ok(serde_json::to_value(&config.themes)?),
+            "appearance" => Ok(serde_json::to_value(&config.appearance)?),
             "editor" => Ok(serde_json::to_value(&config.editor)?),
             "terminal" => Ok(serde_json::to_value(&config.terminal)?),
             "workspace" => Ok(serde_json::to_value(&config.workspace)?),
@@ -620,5 +818,239 @@ impl ConfigProviderRegistry {
 impl Default for ConfigProviderRegistry {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn model_with_reasoning(reasoning: ReasoningConfig) -> AIModelConfig {
+        AIModelConfig {
+            id: "reasoning-model".to_string(),
+            name: "Reasoning model".to_string(),
+            provider: "responses".to_string(),
+            model_name: "gpt-5.4".to_string(),
+            base_url: "https://api.openai.com/v1/responses".to_string(),
+            enabled: true,
+            reasoning: Some(reasoning),
+            ..AIModelConfig::default()
+        }
+    }
+
+    async fn validate_reasoning(reasoning: ReasoningConfig) -> BitFunResult<Vec<String>> {
+        let mut config = AIConfig::default();
+        config.models.push(model_with_reasoning(reasoning));
+        AIConfigProvider
+            .validate_config(&serde_json::to_value(config)?)
+            .await
+    }
+
+    #[tokio::test]
+    async fn rejects_a_model_context_window_smaller_than_32k() {
+        let mut config = AIConfig::default();
+        config.models.push(AIModelConfig {
+            name: "Test model".to_string(),
+            provider: "openai".to_string(),
+            context_window: Some(MIN_MODEL_CONTEXT_WINDOW_TOKENS - 1),
+            enabled: true,
+            ..AIModelConfig::default()
+        });
+        let value = serde_json::to_value(config).expect("AI config should serialize");
+
+        let error = AIConfigProvider
+            .validate_config(&value)
+            .await
+            .expect_err("small context windows must be rejected");
+
+        assert!(error
+            .to_string()
+            .contains("context_window must be at least 32000"));
+    }
+
+    #[tokio::test]
+    async fn accepts_generation_sentinels_on_pure_speech_models() {
+        let mut config = AIConfig::default();
+        config.models.push(AIModelConfig {
+            name: "Qwen ASR".to_string(),
+            provider: "openai".to_string(),
+            enabled: true,
+            category: ModelCategory::SpeechRecognition,
+            capabilities: vec![ModelCapability::SpeechRecognition],
+            context_window: Some(0),
+            max_tokens: Some(0),
+            ..AIModelConfig::default()
+        });
+
+        AIConfigProvider
+            .validate_config(&serde_json::to_value(config).unwrap())
+            .await
+            .expect("pure speech models do not use generation token fields");
+    }
+
+    #[tokio::test]
+    async fn mixed_text_and_speech_models_still_require_a_valid_context_window() {
+        let mut config = AIConfig::default();
+        config.models.push(AIModelConfig {
+            name: "Mixed model".to_string(),
+            provider: "openai".to_string(),
+            enabled: true,
+            capabilities: vec![
+                ModelCapability::TextChat,
+                ModelCapability::SpeechRecognition,
+            ],
+            context_window: Some(0),
+            ..AIModelConfig::default()
+        });
+
+        let error = AIConfigProvider
+            .validate_config(&serde_json::to_value(config).unwrap())
+            .await
+            .expect_err("text-capable models must retain generation validation");
+        assert!(error
+            .to_string()
+            .contains("context_window must be at least"));
+    }
+
+    #[tokio::test]
+    async fn registry_reports_precise_model_validation_paths_and_codes() {
+        let mut config = AIConfig::default();
+        config.models.push(AIModelConfig {
+            id: "broken".to_string(),
+            name: "Broken model".to_string(),
+            provider: "openai".to_string(),
+            enabled: true,
+            context_window: Some(0),
+            ..AIModelConfig::default()
+        });
+
+        let result = ConfigProviderRegistry::new()
+            .validate_config(&GlobalConfig {
+                ai: config,
+                ..GlobalConfig::default()
+            })
+            .await
+            .expect("validation result");
+
+        assert_eq!(result.errors[0].path, "ai.models[0].context_window");
+        assert_eq!(result.errors[0].code, "MODEL_CONTEXT_WINDOW_INVALID");
+        assert_eq!(result.diagnostics[0].path, "ai.models[0].context_window");
+    }
+
+    #[tokio::test]
+    async fn rejects_invalid_canonical_reasoning_actions() {
+        for (action, expected) in [
+            (
+                ReasoningPresetAction::BudgetTokens { value: 0 },
+                "budget_tokens value must be greater than 0",
+            ),
+            (
+                ReasoningPresetAction::RequestPatch {
+                    body: serde_json::json!(["invalid"]),
+                },
+                "request_patch body must be a JSON object",
+            ),
+        ] {
+            let error = validate_reasoning(ReasoningConfig {
+                default_preset: Some("custom".to_string()),
+                presets: vec![ReasoningPreset {
+                    id: "custom".to_string(),
+                    actions: vec![action],
+                    ..ReasoningPreset::default()
+                }],
+                ..ReasoningConfig::default()
+            })
+            .await
+            .expect_err("invalid reasoning schema must be rejected");
+
+            assert!(error.to_string().contains(expected), "{error}");
+        }
+    }
+
+    #[cfg(feature = "ai-adapter-runtime")]
+    #[tokio::test]
+    async fn rejects_reasoning_actions_unsupported_by_the_configured_target() {
+        let error = validate_reasoning(ReasoningConfig {
+            catalog: ReasoningCatalogBinding::Disabled,
+            default_preset: Some("on".to_string()),
+            presets: vec![ReasoningPreset {
+                id: "on".to_string(),
+                actions: vec![ReasoningPresetAction::Toggle { enabled: true }],
+                ..ReasoningPreset::default()
+            }],
+        })
+        .await
+        .expect_err("Responses must reject a generic toggle action");
+
+        assert!(error.to_string().contains("unsupported"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn rejects_duplicate_and_unavailable_default_presets() {
+        let duplicate = validate_reasoning(ReasoningConfig {
+            presets: vec![
+                ReasoningPreset {
+                    id: "same".to_string(),
+                    actions: vec![ReasoningPresetAction::Toggle { enabled: true }],
+                    ..ReasoningPreset::default()
+                },
+                ReasoningPreset {
+                    id: "same".to_string(),
+                    actions: vec![ReasoningPresetAction::Toggle { enabled: false }],
+                    ..ReasoningPreset::default()
+                },
+            ],
+            ..ReasoningConfig::default()
+        })
+        .await
+        .expect_err("duplicate preset IDs must be rejected");
+        assert!(duplicate.to_string().contains("duplicate preset ID 'same'"));
+
+        let unavailable = validate_reasoning(ReasoningConfig {
+            catalog: ReasoningCatalogBinding::Disabled,
+            default_preset: Some("missing".to_string()),
+            ..ReasoningConfig::default()
+        })
+        .await
+        .expect_err("missing default preset must be rejected");
+        assert!(unavailable
+            .to_string()
+            .contains("default preset 'missing' is not available"));
+    }
+
+    #[cfg(feature = "ai-adapter-runtime")]
+    #[tokio::test]
+    async fn accepts_generated_models_dev_default_preset() {
+        validate_reasoning(ReasoningConfig {
+            catalog: ReasoningCatalogBinding::Auto,
+            default_preset: Some("high".to_string()),
+            ..ReasoningConfig::default()
+        })
+        .await
+        .expect("bundled models.dev preset should be valid");
+    }
+
+    #[tokio::test]
+    async fn registry_runs_ai_validation() {
+        let mut config = GlobalConfig::default();
+        config.ai.models.push(model_with_reasoning(ReasoningConfig {
+            presets: vec![ReasoningPreset {
+                id: "bad".to_string(),
+                actions: vec![ReasoningPresetAction::BudgetTokens { value: 0 }],
+                ..ReasoningPreset::default()
+            }],
+            ..ReasoningConfig::default()
+        }));
+
+        let validation = ConfigProviderRegistry::new()
+            .validate_config(&config)
+            .await
+            .expect("registry validation result");
+
+        assert!(!validation.valid);
+        assert_eq!(validation.errors[0].path, "ai.models[0].reasoning");
+        assert!(validation.errors[0]
+            .message
+            .contains("budget_tokens value must be greater than 0"));
     }
 }

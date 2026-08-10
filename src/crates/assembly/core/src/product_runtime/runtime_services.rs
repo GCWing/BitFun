@@ -1,4 +1,4 @@
-//! Core product-full runtime service adapters.
+//! Core Agent Runtime service adapters.
 //!
 //! This file registers existing core concrete adapters into typed runtime
 //! service builders. It does not create new runtime behavior.
@@ -20,7 +20,6 @@ use terminal_core::TerminalRuntimePort;
 
 use crate::agentic::session::CoreSessionStorePort;
 
-#[cfg(feature = "service-integrations")]
 use crate::service_agent_runtime::{
     CoreRemoteWorkspaceFileRuntimeHost, CoreRemoteWorkspaceRuntimeHost,
 };
@@ -90,22 +89,14 @@ impl RuntimeServicesProvider for CoreRuntimeServicesProvider {
         #[cfg(feature = "ssh-remote")]
         let builder = builder.with_optional_remote_exec(Some(Self::remote_exec_port()));
 
-        #[cfg(feature = "service-integrations")]
-        {
-            let remote_workspace: Arc<dyn RemoteWorkspacePort> =
-                Arc::new(CoreRemoteWorkspaceRuntimeHost::new());
-            let remote_projection: Arc<dyn RemoteProjectionPort> =
-                Arc::new(CoreRemoteWorkspaceFileRuntimeHost::new());
+        let remote_workspace: Arc<dyn RemoteWorkspacePort> =
+            Arc::new(CoreRemoteWorkspaceRuntimeHost::new());
+        let remote_projection: Arc<dyn RemoteProjectionPort> =
+            Arc::new(CoreRemoteWorkspaceFileRuntimeHost::new());
 
-            builder
-                .with_optional_remote_workspace(Some(remote_workspace))
-                .with_optional_remote_projection(Some(remote_projection))
-        }
-
-        #[cfg(not(feature = "service-integrations"))]
-        {
-            builder
-        }
+        builder
+            .with_optional_remote_workspace(Some(remote_workspace))
+            .with_optional_remote_projection(Some(remote_projection))
     }
 }
 
@@ -124,11 +115,20 @@ impl CoreLocalRuntimeServicesProvider {
 
 impl RuntimeServicesProvider for CoreLocalRuntimeServicesProvider {
     fn register(&self, builder: RuntimeServicesBuilder) -> RuntimeServicesBuilder {
-        builder
+        let builder = builder
             .with_filesystem(self.ports.filesystem())
             .with_workspace(self.ports.workspace())
             .with_events(self.ports.events())
-            .with_clock(self.ports.clock())
+            .with_clock(self.ports.clock());
+
+        #[cfg(feature = "git")]
+        let builder = builder.with_optional_git(Some(Arc::new(
+            bitfun_services_integrations::git::GitWorkspaceDiffPort::new(
+                self.ports.workspace_root(),
+            ),
+        )));
+
+        builder
     }
 }
 
@@ -153,7 +153,7 @@ pub fn build_local_runtime_services(
 #[cfg(test)]
 mod local_runtime_tests {
     use super::build_local_runtime_services;
-    use bitfun_runtime_ports::RuntimeServiceCapability;
+    use bitfun_runtime_ports::{RuntimeServiceCapability, WorkspaceDiffContent};
 
     #[test]
     fn local_runtime_services_bind_required_core_and_workspace_ports() {
@@ -178,6 +178,32 @@ mod local_runtime_tests {
             assert!(services.has_capability(capability), "missing {capability}");
         }
         assert!(services.clock.now_unix_millis() > 0);
+    }
+
+    #[tokio::test]
+    async fn local_runtime_services_bind_git_queries_to_the_canonical_workspace() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        bitfun_services_integrations::git::execute_git_command_sync(
+            workspace.path().to_string_lossy().as_ref(),
+            &["init"],
+        )
+        .expect("git repository");
+        std::fs::write(workspace.path().join("new.txt"), "new file\n").expect("workspace file");
+
+        let (_, services) =
+            build_local_runtime_services(workspace.path(), 8).expect("local runtime services");
+        let snapshot = services
+            .git
+            .expect("git capability")
+            .workspace_diff()
+            .await
+            .expect("real workspace diff provider");
+
+        assert!(snapshot.files.iter().any(|file| {
+            file.path == "new.txt"
+                && file.untracked
+                && matches!(file.content, WorkspaceDiffContent::Text { .. })
+        }));
     }
 
     #[test]

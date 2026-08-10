@@ -10,6 +10,8 @@ pub use bitfun_agent_runtime::deep_review::{
     manifest, queue, shared_context, team_definition, tool_context,
 };
 
+pub mod capabilities;
 pub mod report;
+pub mod scope;
 pub mod task_adapter;
 pub mod tool_measurement;

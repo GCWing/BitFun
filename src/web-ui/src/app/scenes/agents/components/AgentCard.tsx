@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { Badge } from '@/component-library';
 import type { AgentWithCapabilities } from '../agentsStore';
 import { AGENT_ICON_MAP } from '../agentsIcons';
-import { CAPABILITY_ACCENT, getCapabilityAccentBorder } from '../agentTheme';
+import { CAPABILITY_ACCENT, getCapabilityAccentBorder } from '../agentAppearance';
 import { getCardGradient } from '@/shared/utils/cardGradients';
 import { getAgentBadge, getAgentDescription, getCapabilityLabel } from '../utils';
 import './AgentCard.scss';
@@ -38,7 +38,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
   const openDetails = () => onOpenDetails(agent);
 
   return (
-    <div
+    <div data-bf-component="agent-card" data-bf-part="root"
       className="agent-card"
       style={{
         '--surface-stagger-index': index,
@@ -56,16 +56,16 @@ const AgentCard: React.FC<AgentCardProps> = ({
       data-subagent-source={agent.subagentSource ?? ''}
     >
       {/* Header: icon + name */}
-      <div className="agent-card__header">
-        <div className="agent-card__icon-area">
-          <div className="agent-card__icon">
+      <div className="agent-card__header" data-bf-component="agent-card" data-bf-part="header">
+        <div className="agent-card__icon-area" data-bf-component="agent-card" data-bf-part="iconArea">
+          <div className="agent-card__icon" data-bf-component="agent-card" data-bf-part="icon">
             <Icon size={20} strokeWidth={1.6} />
           </div>
         </div>
-        <div className="agent-card__header-info">
-          <div className="agent-card__title-row">
-            <span className="agent-card__name" data-testid="agent-list-item-title">{agent.name}</span>
-            <div className="agent-card__badges">
+        <div className="agent-card__header-info" data-bf-component="agent-card" data-bf-part="headerInfo">
+          <div className="agent-card__title-row" data-bf-component="agent-card" data-bf-part="titleRow">
+            <span className="agent-card__name" data-bf-component="agent-card" data-bf-part="name" data-testid="agent-list-item-title">{agent.name}</span>
+            <div className="agent-card__badges" data-bf-component="agent-card" data-bf-part="badges">
               <Badge variant={badge.variant}>
                 {agent.agentKind === 'mode' ? <Cpu size={10} /> : <Bot size={10} />}
                 {badge.label}
@@ -76,14 +76,14 @@ const AgentCard: React.FC<AgentCardProps> = ({
       </div>
 
       {/* Body: description + meta */}
-      <div className="agent-card__body">
-        <p className="agent-card__desc" data-testid="agent-list-item-description">
+      <div className="agent-card__body" data-bf-component="agent-card" data-bf-part="body">
+        <p className="agent-card__desc" data-bf-component="agent-card" data-bf-part="description" data-testid="agent-list-item-description">
           {getAgentDescription(t, agent)}
         </p>
       </div>
 
-      <div className="agent-card__footer">
-        <div className="agent-card__cap-chips">
+      <div className="agent-card__footer" data-bf-component="agent-card" data-bf-part="footer">
+        <div className="agent-card__cap-chips" data-bf-component="agent-card" data-bf-part="capabilities">
           {agent.capabilities.slice(0, 3).map((cap) => (
             <span
               key={cap.category}
@@ -97,7 +97,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
             </span>
           ))}
         </div>
-        <div className="agent-card__meta">
+        <div className="agent-card__meta" data-bf-component="agent-card" data-bf-part="meta">
           <span className="agent-card__meta-item">
             <Wrench size={12} />
             {totalTools}

@@ -7,6 +7,8 @@ import type { SkillInfo } from '@/infrastructure/config/types';
 import { useInstalledSkills } from './useInstalledSkills';
 
 const getSkillConfigsMock = vi.hoisted(() => vi.fn());
+const getGlobalSkillSettingsMock = vi.hoisted(() => vi.fn());
+const setGlobalSkillDisabledMock = vi.hoisted(() => vi.fn());
 const deleteSkillMock = vi.hoisted(() => vi.fn());
 const validateSkillPathMock = vi.hoisted(() => vi.fn());
 const notificationMocks = vi.hoisted(() => ({
@@ -22,6 +24,8 @@ vi.mock('react-i18next', () => ({
 vi.mock('@/infrastructure/api', () => ({
   configAPI: {
     getSkillConfigs: getSkillConfigsMock,
+    getGlobalSkillSettings: getGlobalSkillSettingsMock,
+    setGlobalSkillDisabled: setGlobalSkillDisabledMock,
     validateSkillPath: validateSkillPathMock,
     addSkill: vi.fn(),
     deleteSkill: deleteSkillMock,
@@ -59,6 +63,12 @@ describe('useInstalledSkills', () => {
     document.body.appendChild(container);
     root = createRoot(container);
     getSkillConfigsMock.mockReset().mockResolvedValue([]);
+    getGlobalSkillSettingsMock.mockReset().mockResolvedValue({
+      globallyDisabledUserSkillKeys: [],
+    });
+    setGlobalSkillDisabledMock.mockReset().mockResolvedValue({
+      globallyDisabledUserSkillKeys: [],
+    });
     deleteSkillMock.mockReset().mockResolvedValue(undefined);
     validateSkillPathMock.mockReset().mockResolvedValue({ valid: true, name: 'test' });
     notificationMocks.success.mockReset();
@@ -80,6 +90,7 @@ describe('useInstalledSkills', () => {
     });
 
     expect(getSkillConfigsMock).not.toHaveBeenCalled();
+    expect(getGlobalSkillSettingsMock).not.toHaveBeenCalled();
     expect(container.textContent).toBe('idle');
 
     await act(async () => {
@@ -88,6 +99,7 @@ describe('useInstalledSkills', () => {
     });
 
     expect(getSkillConfigsMock).toHaveBeenCalledTimes(1);
+    expect(getGlobalSkillSettingsMock).toHaveBeenCalledTimes(1);
   });
 
   it('ignores a desktop skill load that finishes after switching away', async () => {

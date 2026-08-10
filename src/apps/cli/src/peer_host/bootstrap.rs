@@ -30,12 +30,16 @@ pub(crate) async fn ensure_peer_host_ready(runtime: &CliRuntimeContext) -> Resul
     };
 
     let filesystem_service = Arc::new(FileSystemServiceFactory::create_default());
+    let agent_events = runtime
+        .agent_runtime()
+        .subscribe_events()
+        .map_err(|error| anyhow::anyhow!(error.into_message()))
+        .context("Peer Host agent event stream is unavailable")?;
 
     let state = PeerHostState {
         agent_runtime: runtime.agent_runtime().clone(),
         local_workspace_snapshot: runtime.local_workspace_snapshot().clone(),
         compatibility: runtime.compatibility().clone(),
-        agent_events: runtime.agent_events().clone(),
         turns: PeerTurnTracker::new(),
         workspace_service,
         filesystem_service,
@@ -46,7 +50,7 @@ pub(crate) async fn ensure_peer_host_ready(runtime: &CliRuntimeContext) -> Resul
         return Ok(());
     }
 
-    start_peer_event_fanout(state);
+    start_peer_event_fanout(state, agent_events);
     tracing::info!("CLI peer host services ready");
     Ok(())
 }

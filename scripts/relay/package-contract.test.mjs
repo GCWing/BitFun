@@ -27,6 +27,9 @@ test('formal and nightly releases gate publication on Linux binaries', () => {
     assert.match(workflow, /needs:\s*\[[^\]]*linux-binaries[^\]]*\]/);
     assert.match(workflow, /bitfun-relay-server-\*\.tar\.gz/);
     assert.match(workflow, /bitfun-cli-\*\.tar\.gz/);
+    assert.match(workflow, /linux-release-assets\/\*\.tar\.gz\.sig/);
+    assert.match(workflow, /linux-release-assets\/\*\.tar\.gz\.sha256\.sig/);
+    assert.match(workflow, /\$\{cli_url\}\.sha256\.sig/);
     assert.match(workflow, /linux-binaries\.json/);
   }
 
@@ -35,6 +38,38 @@ test('formal and nightly releases gate publication on Linux binaries', () => {
   assert.match(reusable, /x86_64-unknown-linux-gnu/);
   assert.match(reusable, /scripts\/relay\/package-unix\.sh/);
   assert.match(reusable, /scripts\/cli\/package-unix\.sh/);
+});
+
+test('formal and nightly releases publish signed anonymous multi-platform Relay images', () => {
+  const formal = read('.github/workflows/desktop-package.yml');
+  const nightly = read('.github/workflows/nightly.yml');
+  const dockerfile = read('src/apps/relay-server/Dockerfile.release');
+  const smoke = read('scripts/relay/smoke-image.sh');
+
+  for (const workflow of [formal, nightly]) {
+    assert.match(workflow, /packages:\s*write/);
+    assert.match(workflow, /docker\/build-push-action@v7/);
+    assert.match(workflow, /platforms:\s*linux\/amd64,linux\/arm64/);
+    assert.match(workflow, /ghcr\.io\/gcwing\/bitfun-relay-server/);
+    assert.match(workflow, /relay-image\.json/);
+    assert.match(workflow, /scripts\/sign-release-assets\.sh relay-image\.json/);
+    assert.match(workflow, /scripts\/relay\/smoke-image\.sh/);
+    assert.match(workflow, /Verify anonymous .*image access|Verify anonymous pull access/);
+    assert.match(workflow, /DOCKER_CONFIG="\$clean_config" docker buildx imagetools inspect/);
+  }
+  assert.match(formal, /latest_release=.*releases\/latest/);
+  assert.doesNotMatch(nightly, /bitfun-relay-server:latest/);
+
+  assert.match(smoke, /for arch in amd64 arm64/);
+  assert.match(smoke, /\.State\.Health/);
+  assert.match(smoke, /docker image rm "\$IMAGE_REF"/);
+  assert.match(smoke, /docker logs --tail/);
+
+  assert.match(dockerfile, /org\.opencontainers\.image\.source="https:\/\/github\.com\/GCWing\/BitFun"/);
+  assert.match(dockerfile, /TARGETARCH/);
+  assert.match(dockerfile, /bitfun-relay-server/);
+  assert.match(dockerfile, /relay-admin/);
+  assert.match(dockerfile, /debian:trixie-slim/);
 });
 
 test('exactly one workflow publishes the Linux CLI archives', () => {
@@ -64,4 +99,15 @@ test('release asset names carry no SemVer build metadata', () => {
   assert.match(reusable, /package-unix\.sh "\$ASSET_VERSION"/);
   assert.doesNotMatch(reusable, /package-unix\.sh "\$VERSION"/);
   assert.match(nightly, /--version "\$\{NIGHTLY_VERSION%%\+\*\}"/);
+});
+
+test('nightly publishes signed macOS CLI archives for SSH dispatch', () => {
+  const nightly = read('.github/workflows/nightly.yml');
+
+  assert.match(nightly, /Package macOS CLI for SSH dispatch/);
+  assert.match(nightly, /scripts\/cli\/package-unix\.sh "\$ASSET_VERSION" "\$TARGET"/);
+  assert.match(nightly, /steps\.macos-cli\.outputs\.archive/);
+  assert.match(nightly, /bitfun-cli-\*-apple-darwin\.tar\.gz\.sha256\.sig/);
+  assert.match(nightly, /for target in aarch64-apple-darwin x86_64-apple-darwin/);
+  assert.match(nightly, /\$\{archive\}\.sha256\.sig/);
 });

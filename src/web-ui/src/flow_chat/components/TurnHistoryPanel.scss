@@ -2,9 +2,9 @@
 
 .turn-history-panel {
   padding: 16px;
-  background: var(--color-bg-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
   border-radius: 8px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--bf-appearance-token-shadow-sm);
 
   .turn-history-header {
     display: flex;
@@ -12,19 +12,19 @@
     align-items: center;
     margin-bottom: 16px;
     padding-bottom: 12px;
-    border-bottom: 1px solid var(--border-base);
+    border-bottom: 1px solid var(--bf-appearance-token-border-base);
 
     h3 {
       margin: 0;
       font-size: 16px;
       font-weight: 600;
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
     }
 
     .turn-count {
-      font-size: var(--tool-card-action-font-size);
-      color: var(--color-text-secondary);
-      background: var(--element-bg-soft);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
+      color: var(--bf-appearance-token-color-text-secondary);
+      background: var(--bf-appearance-token-element-bg-soft);
       padding: 4px 8px;
       border-radius: 4px;
     }
@@ -41,18 +41,18 @@
 
   .turn-history-item {
     padding: 12px;
-    border: 1px solid var(--border-base);
+    border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: 6px;
     transition: all 0.2s ease;
 
     &:hover {
-      border-color: var(--color-accent-600);
-      box-shadow: 0 2px 4px color-mix(in srgb, var(--color-accent-600) 10%, transparent);
+      border-color: var(--bf-appearance-token-color-accent-600);
+      box-shadow: 0 2px 4px color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 10%, transparent);
     }
 
     &.current {
-      background: var(--color-accent-100);
-      border-color: var(--color-accent-600);
+      background: var(--bf-appearance-token-color-accent-100);
+      border-color: var(--bf-appearance-token-color-accent-600);
     }
 
     .turn-item-header {
@@ -64,19 +64,19 @@
       .turn-index {
         font-size: 14px;
         font-weight: 600;
-        color: var(--color-text-primary);
+        color: var(--bf-appearance-token-color-text-primary);
       }
     }
 
     .turn-item-files {
       margin: 8px 0;
       padding: 8px;
-      background: var(--element-bg-subtle);
+      background: var(--bf-appearance-token-element-bg-subtle);
       border-radius: 4px;
 
       .files-label {
-        font-size: var(--tool-card-action-font-size);
-        color: var(--color-text-secondary);
+        font-size: var(--bf-appearance-token-tool-card-action-font-size);
+        color: var(--bf-appearance-token-color-text-secondary);
         font-weight: 500;
         display: block;
         margin-bottom: 4px;
@@ -87,15 +87,15 @@
         padding-left: 16px;
 
         .file-item {
-          font-size: var(--tool-card-action-font-size);
-          color: var(--color-text-secondary);
+          font-size: var(--bf-appearance-token-tool-card-action-font-size);
+          color: var(--bf-appearance-token-color-text-secondary);
           margin: 2px 0;
-          font-family: var(--font-family-mono);
+          font-family: var(--bf-appearance-token-font-family-mono);
         }
 
         .file-item-more {
-          font-size: var(--tool-card-action-font-size);
-          color: var(--color-text-muted);
+          font-size: var(--bf-appearance-token-tool-card-action-font-size);
+          color: var(--bf-appearance-token-color-text-muted);
           font-style: italic;
           list-style: none;
           margin-left: -16px;
@@ -104,8 +104,8 @@
     }
 
     .turn-item-time {
-      font-size: var(--flowchat-font-size-xs);
-      color: var(--color-text-muted);
+      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      color: var(--bf-appearance-token-color-text-muted);
       margin-top: 8px;
     }
   }
@@ -114,7 +114,7 @@
 .turn-history-panel-loading {
   padding: 40px;
   text-align: center;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   font-size: 14px;
 }
 
@@ -124,12 +124,12 @@
 
   p {
     margin: 8px 0;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     font-size: 14px;
 
     &.hint {
-      font-size: var(--tool-card-action-font-size);
-      color: var(--color-text-muted);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
+      color: var(--bf-appearance-token-color-text-muted);
     }
   }
 }

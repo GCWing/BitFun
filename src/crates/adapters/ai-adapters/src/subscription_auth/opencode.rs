@@ -1,14 +1,17 @@
-//! OpenCode Zen subscription login and credential resolution.
+//! OpenCode account login, catalog discovery, and credential resolution.
 //!
 //! Uses the OAuth 2.0 Device Authorization Grant against
-//! `console.opencode.ai`, aligned with OpenCode's `provider/opencode.ts`. The
-//! resolved credential targets the OpenAI-compatible Zen endpoint.
+//! `console.opencode.ai`, aligned with OpenCode's `provider/opencode.ts`.
+//! One OAuth identity can authenticate both the Zen and Go API products.
 
 use super::store::{self, StoredCredential};
-use super::{ResolvedCredential, StartedLogin};
+use super::{
+    OpenCodePlan, ResolvedCredential, StartedLogin, SubscriptionApiOffering,
+    SubscriptionOfferingModel,
+};
 use anyhow::{anyhow, Context, Result};
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
@@ -17,9 +20,17 @@ const CLIENT_ID: &str = "opencode-cli";
 const DEVICE_GRANT: &str = "urn:ietf:params:oauth:grant-type:device_code";
 const ZEN_BASE_URL: &str = "https://opencode.ai/zen/v1";
 const ZEN_REQUEST_URL: &str = "https://opencode.ai/zen/v1/chat/completions";
+const ZEN_RESPONSES_URL: &str = "https://opencode.ai/zen/v1/responses";
+const ZEN_MESSAGES_URL: &str = "https://opencode.ai/zen/v1/messages";
+const GO_BASE_URL: &str = "https://opencode.ai/zen/go/v1";
+const GO_REQUEST_URL: &str = "https://opencode.ai/zen/go/v1/chat/completions";
+const GO_RESPONSES_URL: &str = "https://opencode.ai/zen/go/v1/responses";
+const GO_MESSAGES_URL: &str = "https://opencode.ai/zen/go/v1/messages";
 const DEFAULT_MODEL: &str = "gpt-5.4";
 const REFRESH_LEEWAY_MS: i64 = 5 * 60 * 1000;
 const STORE_KEY: &str = "opencode";
+const OFFERINGS_METADATA_KEY: &str = "api_offerings";
+const SUPPORTED_FORMATS: [&str; 3] = ["openai", "responses", "anthropic"];
 
 #[derive(Debug, Deserialize)]
 struct DeviceCodeResponse {
@@ -56,6 +67,54 @@ struct OrgResponse {
     id: Option<String>,
     #[serde(default)]
     name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RemoteConfigResponse {
+    config: RemoteConfig,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct RemoteConfig {
+    #[serde(default)]
+    provider: HashMap<String, RemoteProvider>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct RemoteProvider {
+    #[serde(default)]
+    npm: Option<String>,
+    #[serde(default)]
+    api: Option<String>,
+    #[serde(default)]
+    models: HashMap<String, RemoteModel>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct RemoteModel {
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    status: Option<String>,
+    #[serde(default)]
+    provider: Option<RemoteModelProvider>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct RemoteModelProvider {
+    #[serde(default)]
+    npm: Option<String>,
+    #[serde(default)]
+    api: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct OpenCodeRoute {
+    base_url: &'static str,
+    request_url: &'static str,
+    format: &'static str,
 }
 
 fn http_client() -> Result<reqwest::Client> {
@@ -123,8 +182,266 @@ async fn poll_once(device_code: &str) -> Result<DevicePoll> {
     ))
 }
 
-async fn fetch_metadata(access: &str) -> serde_json::Value {
-    let mut metadata = serde_json::Map::new();
+fn plan_base_url(plan: OpenCodePlan) -> &'static str {
+    match plan {
+        OpenCodePlan::Zen => ZEN_BASE_URL,
+        OpenCodePlan::Go => GO_BASE_URL,
+    }
+}
+
+fn route_for(plan: OpenCodePlan, format: &str) -> Result<OpenCodeRoute> {
+    let normalized = format.trim().to_ascii_lowercase();
+    let route = match (plan, normalized.as_str()) {
+        (OpenCodePlan::Zen, "openai") => OpenCodeRoute {
+            base_url: ZEN_BASE_URL,
+            request_url: ZEN_REQUEST_URL,
+            format: "openai",
+        },
+        (OpenCodePlan::Zen, "response" | "responses") => OpenCodeRoute {
+            base_url: ZEN_BASE_URL,
+            request_url: ZEN_RESPONSES_URL,
+            format: "responses",
+        },
+        (OpenCodePlan::Zen, "anthropic") => OpenCodeRoute {
+            base_url: ZEN_BASE_URL,
+            request_url: ZEN_MESSAGES_URL,
+            format: "anthropic",
+        },
+        (OpenCodePlan::Go, "openai") => OpenCodeRoute {
+            base_url: GO_BASE_URL,
+            request_url: GO_REQUEST_URL,
+            format: "openai",
+        },
+        (OpenCodePlan::Go, "response" | "responses") => OpenCodeRoute {
+            base_url: GO_BASE_URL,
+            request_url: GO_RESPONSES_URL,
+            format: "responses",
+        },
+        (OpenCodePlan::Go, "anthropic") => OpenCodeRoute {
+            base_url: GO_BASE_URL,
+            request_url: GO_MESSAGES_URL,
+            format: "anthropic",
+        },
+        _ => {
+            return Err(anyhow!(
+                "OpenCode {:?} does not support BitFun request format '{}'",
+                plan,
+                format.trim()
+            ));
+        }
+    };
+    Ok(route)
+}
+
+fn empty_offering(plan: OpenCodePlan, format: &str) -> SubscriptionApiOffering {
+    SubscriptionApiOffering {
+        plan,
+        format: format.to_string(),
+        base_url: plan_base_url(plan).to_string(),
+        suggested_model: String::new(),
+        models: Vec::new(),
+    }
+}
+
+fn fallback_offerings() -> Vec<SubscriptionApiOffering> {
+    [OpenCodePlan::Zen, OpenCodePlan::Go]
+        .into_iter()
+        .flat_map(|plan| {
+            SUPPORTED_FORMATS
+                .into_iter()
+                .map(move |format| empty_offering(plan, format))
+        })
+        .collect()
+}
+
+fn canonicalize_offerings(
+    offerings: impl IntoIterator<Item = SubscriptionApiOffering>,
+) -> Vec<SubscriptionApiOffering> {
+    let mut result = fallback_offerings();
+
+    for mut offering in offerings {
+        let normalized_format = offering.format.trim().to_ascii_lowercase();
+        let normalized_format = match normalized_format.as_str() {
+            "response" | "responses" => "responses",
+            "openai" => "openai",
+            "anthropic" => "anthropic",
+            _ => continue,
+        };
+        offering.format = normalized_format.to_string();
+        offering.base_url = plan_base_url(offering.plan).to_string();
+
+        let mut seen = HashSet::new();
+        offering.models.retain(|model| {
+            let id = model.id.trim();
+            !id.is_empty() && seen.insert(id.to_ascii_lowercase())
+        });
+        offering.models.sort_by(|left, right| {
+            left.display_name
+                .as_deref()
+                .unwrap_or(&left.id)
+                .to_ascii_lowercase()
+                .cmp(
+                    &right
+                        .display_name
+                        .as_deref()
+                        .unwrap_or(&right.id)
+                        .to_ascii_lowercase(),
+                )
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        offering.suggested_model = offering
+            .models
+            .first()
+            .map(|model| model.id.clone())
+            .unwrap_or_default();
+
+        if let Some(slot) = result.iter_mut().find(|candidate| {
+            candidate.plan == offering.plan && candidate.format == offering.format
+        }) {
+            *slot = offering;
+        }
+    }
+
+    result
+}
+
+fn plan_for_provider(provider_id: &str) -> Option<OpenCodePlan> {
+    match provider_id {
+        "opencode" => Some(OpenCodePlan::Zen),
+        "opencode-go" => Some(OpenCodePlan::Go),
+        _ => None,
+    }
+}
+
+fn format_for_remote_model(npm: Option<&str>, api: Option<&str>) -> Option<&'static str> {
+    let package = npm.unwrap_or_default().to_ascii_lowercase();
+    if package.contains("openai-compatible") {
+        return Some("openai");
+    }
+    if package.contains("anthropic") {
+        return Some("anthropic");
+    }
+    if package == "@ai-sdk/openai" || package.ends_with("/openai") {
+        return Some("responses");
+    }
+
+    let api = api.unwrap_or_default().trim_end_matches('/');
+    if api.ends_with("/chat/completions") {
+        Some("openai")
+    } else if api.ends_with("/responses") {
+        Some("responses")
+    } else if api.ends_with("/messages") {
+        Some("anthropic")
+    } else {
+        None
+    }
+}
+
+fn offerings_from_remote_config(config: RemoteConfig) -> Vec<SubscriptionApiOffering> {
+    let mut offerings = fallback_offerings();
+
+    for (provider_id, provider) in config.provider {
+        let Some(plan) = plan_for_provider(&provider_id) else {
+            continue;
+        };
+        for (catalog_id, model) in provider.models {
+            if model.status.as_deref() == Some("deprecated") {
+                continue;
+            }
+            let npm = model
+                .provider
+                .as_ref()
+                .and_then(|item| item.npm.as_deref())
+                .or(provider.npm.as_deref());
+            let api = model
+                .provider
+                .as_ref()
+                .and_then(|item| item.api.as_deref())
+                .or(provider.api.as_deref());
+            let Some(format) = format_for_remote_model(npm, api) else {
+                // BitFun does not currently have a compatible adapter for
+                // every AI SDK package returned by OpenCode (for example its
+                // Google-native gateway shape). Do not offer a model with an
+                // endpoint we cannot faithfully reproduce.
+                continue;
+            };
+            let id = model.id.unwrap_or(catalog_id).trim().to_string();
+            if id.is_empty() {
+                continue;
+            }
+            let display_name = model
+                .name
+                .map(|name| name.trim().to_string())
+                .filter(|name| !name.is_empty() && name != &id);
+            if let Some(offering) = offerings
+                .iter_mut()
+                .find(|candidate| candidate.plan == plan && candidate.format == format)
+            {
+                offering
+                    .models
+                    .push(SubscriptionOfferingModel { id, display_name });
+            }
+        }
+    }
+
+    canonicalize_offerings(offerings)
+}
+
+pub(crate) fn offerings_from_metadata(
+    metadata: Option<&serde_json::Value>,
+) -> Vec<SubscriptionApiOffering> {
+    let parsed = metadata
+        .and_then(|value| value.get(OFFERINGS_METADATA_KEY))
+        .cloned()
+        .and_then(|value| serde_json::from_value::<Vec<SubscriptionApiOffering>>(value).ok());
+    canonicalize_offerings(parsed.unwrap_or_default())
+}
+
+async fn fetch_remote_offerings(
+    client: &reqwest::Client,
+    access: &str,
+    org_id: Option<&str>,
+) -> Option<Vec<SubscriptionApiOffering>> {
+    let mut request = client
+        .get(format!("{SERVER}/api/config"))
+        .bearer_auth(access);
+    if let Some(org_id) = org_id {
+        request = request.header("x-org-id", org_id);
+    }
+    let response = match request.send().await {
+        Ok(response) => response,
+        Err(error) => {
+            log::warn!("fetch OpenCode provider catalog failed: {error}");
+            return None;
+        }
+    };
+    // OpenCode treats 404 as "no remote provider override" rather than an
+    // authentication or transport failure. Keep the existing catalog/fallback
+    // without emitting a misleading warning.
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return None;
+    }
+    if !response.status().is_success() {
+        log::warn!(
+            "fetch OpenCode provider catalog failed: status={}",
+            response.status()
+        );
+        return None;
+    }
+    match response.json::<RemoteConfigResponse>().await {
+        Ok(remote) => Some(offerings_from_remote_config(remote.config)),
+        Err(error) => {
+            log::warn!("parse OpenCode provider catalog failed: {error}");
+            None
+        }
+    }
+}
+
+async fn fetch_metadata(access: &str, existing: Option<&serde_json::Value>) -> serde_json::Value {
+    let mut metadata = existing
+        .and_then(serde_json::Value::as_object)
+        .cloned()
+        .unwrap_or_default();
     metadata.insert(
         "server".to_string(),
         serde_json::Value::String(SERVER.to_string()),
@@ -159,9 +476,14 @@ async fn fetch_metadata(access: &str) -> serde_json::Value {
         if let Ok(mut orgs) = resp.json::<Vec<OrgResponse>>().await {
             orgs.sort_by(|a, b| {
                 a.name
-                    .clone()
+                    .as_deref()
                     .unwrap_or_default()
-                    .cmp(&b.name.clone().unwrap_or_default())
+                    .cmp(b.name.as_deref().unwrap_or_default())
+                    .then_with(|| {
+                        a.id.as_deref()
+                            .unwrap_or_default()
+                            .cmp(b.id.as_deref().unwrap_or_default())
+                    })
             });
             if let Some(org) = orgs.into_iter().next() {
                 if let Some(id) = org.id {
@@ -171,6 +493,13 @@ async fn fetch_metadata(access: &str) -> serde_json::Value {
                     metadata.insert("org_name".to_string(), serde_json::Value::String(name));
                 }
             }
+        }
+    }
+
+    let org_id = metadata.get("org_id").and_then(serde_json::Value::as_str);
+    if let Some(offerings) = fetch_remote_offerings(&client, access, org_id).await {
+        if let Ok(value) = serde_json::to_value(offerings) {
+            metadata.insert(OFFERINGS_METADATA_KEY.to_string(), value);
         }
     }
 
@@ -264,7 +593,7 @@ pub(crate) async fn begin_login(
                             // commit lock should cover only the credential
                             // store transaction, never up to 60 seconds of
                             // metadata fetching.
-                            let metadata = fetch_metadata(&tokens.access_token).await;
+                            let metadata = fetch_metadata(&tokens.access_token, None).await;
                             return Ok((tokens, metadata));
                         }
                         DevicePoll::Pending => {
@@ -296,7 +625,7 @@ async fn ensure_fresh() -> Result<String> {
     let snapshot = store::load_entry_with_revision(STORE_KEY).await?;
     let entry = snapshot
         .credential
-        .ok_or_else(|| anyhow!("OpenCode Zen is not connected; sign in first"))?;
+        .ok_or_else(|| anyhow!("OpenCode is not connected; sign in first"))?;
     match entry {
         StoredCredential::Api { key, .. } => Ok(key),
         StoredCredential::Oauth {
@@ -330,17 +659,69 @@ async fn ensure_fresh() -> Result<String> {
     }
 }
 
-/// Resolves the runtime credential (refreshing OAuth tokens if required).
-pub(crate) async fn resolve() -> Result<ResolvedCredential> {
+/// Refreshes account/org/catalog metadata using a fresh credential.
+pub(crate) async fn refresh_profile() -> Result<()> {
+    let access = ensure_fresh().await?;
+    let snapshot = store::load_entry_with_revision(STORE_KEY).await?;
+    let entry = snapshot
+        .credential
+        .ok_or_else(|| anyhow!("OpenCode is not connected; sign in first"))?;
+    let existing_metadata = match &entry {
+        StoredCredential::Oauth { metadata, .. } | StoredCredential::Api { metadata, .. } => {
+            metadata.as_ref()
+        }
+    };
+    let metadata = fetch_metadata(&access, existing_metadata).await;
+    if existing_metadata == Some(&metadata) {
+        return Ok(());
+    }
+
+    let updated = match entry {
+        StoredCredential::Oauth {
+            refresh,
+            access,
+            expires,
+            account_id,
+            ..
+        } => StoredCredential::Oauth {
+            refresh,
+            access,
+            expires,
+            account_id,
+            metadata: Some(metadata),
+        },
+        StoredCredential::Api { key, .. } => StoredCredential::Api {
+            key,
+            metadata: Some(metadata),
+        },
+    };
+    let outcome = store::upsert_if_revision(STORE_KEY, snapshot.revision, updated).await?;
+    super::require_current_store_revision(super::SubscriptionProvider::Opencode, outcome)?;
+    log::info!("opencode account metadata refreshed");
+    Ok(())
+}
+
+async fn resolve_route(route: OpenCodeRoute) -> Result<ResolvedCredential> {
     let api_key = ensure_fresh().await?;
     Ok(ResolvedCredential {
         api_key,
-        base_url: Some(ZEN_BASE_URL.to_string()),
-        request_url: Some(ZEN_REQUEST_URL.to_string()),
-        format: Some("openai".to_string()),
+        base_url: Some(route.base_url.to_string()),
+        request_url: Some(route.request_url.to_string()),
+        format: Some(route.format.to_string()),
         extra_headers: HashMap::new(),
         expires_at: None,
     })
+}
+
+/// Resolves the legacy OpenCode target. Models saved before plan-aware auth
+/// are kept on their historical Zen Chat Completions route.
+pub(crate) async fn resolve() -> Result<ResolvedCredential> {
+    resolve_route(route_for(OpenCodePlan::Zen, "openai")?).await
+}
+
+/// Resolves a concrete OpenCode plan and wire format to a trusted endpoint.
+pub(crate) async fn resolve_for(plan: OpenCodePlan, format: &str) -> Result<ResolvedCredential> {
+    resolve_route(route_for(plan, format)?).await
 }
 
 /// Provider metadata used to seed a new model entry.
@@ -350,7 +731,13 @@ pub(crate) fn suggested() -> (&'static str, &'static str, &'static str) {
 
 #[cfg(test)]
 mod tests {
-    use super::absolute_verification_url;
+    use super::{
+        absolute_verification_url, offerings_from_metadata, offerings_from_remote_config,
+        route_for, OpenCodePlan, RemoteConfig, RemoteModel, RemoteModelProvider, RemoteProvider,
+        GO_MESSAGES_URL, GO_REQUEST_URL, GO_RESPONSES_URL, ZEN_MESSAGES_URL, ZEN_REQUEST_URL,
+        ZEN_RESPONSES_URL,
+    };
+    use std::collections::HashMap;
 
     #[test]
     fn prefixes_relative_device_verification_path() {
@@ -368,5 +755,126 @@ mod tests {
             ),
             "https://console.opencode.ai/device?user_code=ABCD-1234&client_id=opencode-cli"
         );
+    }
+
+    #[test]
+    fn maps_every_supported_plan_and_format_to_a_trusted_endpoint() {
+        let cases = [
+            (OpenCodePlan::Zen, "openai", ZEN_REQUEST_URL, "openai"),
+            (
+                OpenCodePlan::Zen,
+                "responses",
+                ZEN_RESPONSES_URL,
+                "responses",
+            ),
+            (
+                OpenCodePlan::Zen,
+                "anthropic",
+                ZEN_MESSAGES_URL,
+                "anthropic",
+            ),
+            (OpenCodePlan::Go, "openai", GO_REQUEST_URL, "openai"),
+            (OpenCodePlan::Go, "responses", GO_RESPONSES_URL, "responses"),
+            (OpenCodePlan::Go, "anthropic", GO_MESSAGES_URL, "anthropic"),
+        ];
+
+        for (plan, format, request_url, canonical_format) in cases {
+            let route = route_for(plan, format).expect("route should be supported");
+            assert_eq!(route.request_url, request_url);
+            assert_eq!(route.format, canonical_format);
+        }
+        assert!(route_for(OpenCodePlan::Go, "gemini").is_err());
+    }
+
+    #[test]
+    fn groups_remote_catalog_models_by_plan_and_wire_format() {
+        let config = RemoteConfig {
+            provider: HashMap::from([
+                (
+                    "opencode".to_string(),
+                    RemoteProvider {
+                        npm: Some("@ai-sdk/openai-compatible".to_string()),
+                        api: Some("https://opencode.ai/zen/v1".to_string()),
+                        models: HashMap::from([
+                            (
+                                "glm-5.2".to_string(),
+                                RemoteModel {
+                                    name: Some("GLM 5.2".to_string()),
+                                    ..Default::default()
+                                },
+                            ),
+                            (
+                                "gpt-5.6-sol".to_string(),
+                                RemoteModel {
+                                    provider: Some(RemoteModelProvider {
+                                        npm: Some("@ai-sdk/openai".to_string()),
+                                        api: Some("https://opencode.ai/zen/v1".to_string()),
+                                    }),
+                                    ..Default::default()
+                                },
+                            ),
+                            (
+                                "gemini-3.6-flash".to_string(),
+                                RemoteModel {
+                                    provider: Some(RemoteModelProvider {
+                                        npm: Some("@ai-sdk/google".to_string()),
+                                        api: Some("https://opencode.ai/zen/v1".to_string()),
+                                    }),
+                                    ..Default::default()
+                                },
+                            ),
+                        ]),
+                    },
+                ),
+                (
+                    "opencode-go".to_string(),
+                    RemoteProvider {
+                        models: HashMap::from([(
+                            "minimax-m3".to_string(),
+                            RemoteModel {
+                                provider: Some(RemoteModelProvider {
+                                    npm: Some("@ai-sdk/anthropic".to_string()),
+                                    api: Some("https://opencode.ai/zen/go/v1".to_string()),
+                                }),
+                                ..Default::default()
+                            },
+                        )]),
+                        ..Default::default()
+                    },
+                ),
+            ]),
+        };
+
+        let offerings = offerings_from_remote_config(config);
+        let zen_chat = offerings
+            .iter()
+            .find(|item| item.plan == OpenCodePlan::Zen && item.format == "openai")
+            .unwrap();
+        assert_eq!(zen_chat.models[0].id, "glm-5.2");
+        assert_eq!(zen_chat.models[0].display_name.as_deref(), Some("GLM 5.2"));
+        let zen_responses = offerings
+            .iter()
+            .find(|item| item.plan == OpenCodePlan::Zen && item.format == "responses")
+            .unwrap();
+        assert_eq!(zen_responses.models[0].id, "gpt-5.6-sol");
+        let go_messages = offerings
+            .iter()
+            .find(|item| item.plan == OpenCodePlan::Go && item.format == "anthropic")
+            .unwrap();
+        assert_eq!(go_messages.models[0].id, "minimax-m3");
+        assert!(!offerings
+            .iter()
+            .flat_map(|item| &item.models)
+            .any(|model| model.id == "gemini-3.6-flash"));
+    }
+
+    #[test]
+    fn legacy_metadata_still_exposes_both_plans() {
+        let offerings = offerings_from_metadata(Some(&serde_json::json!({
+            "email": "user@example.com"
+        })));
+        assert_eq!(offerings.len(), 6);
+        assert!(offerings.iter().any(|item| item.plan == OpenCodePlan::Zen));
+        assert!(offerings.iter().any(|item| item.plan == OpenCodePlan::Go));
     }
 }

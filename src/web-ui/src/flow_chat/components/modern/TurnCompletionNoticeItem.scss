@@ -5,30 +5,30 @@
   width: auto;
   margin:
     8px
-    var(--flowchat-content-inline-pad)
-    calc(var(--flowchat-turn-gap) + 0.18rem)
-    var(--flowchat-content-inline-pad);
+    var(--bf-appearance-token-flowchat-content-inline-pad)
+    calc(var(--bf-appearance-token-flowchat-turn-gap) + 0.18rem)
+    var(--bf-appearance-token-flowchat-content-inline-pad);
   padding: 6px 10px;
   border: 1px solid transparent;
   border-radius: 12px;
-  background: color-mix(in srgb, var(--color-bg-secondary) 92%, transparent);
-  color: var(--color-text-primary);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 92%, transparent);
+  color: var(--bf-appearance-token-color-text-primary);
   font-size: 12px;
   line-height: 1.45;
 
   &--warning {
-    border-color: color-mix(in srgb, var(--color-warning) 45%, transparent);
-    background: color-mix(in srgb, var(--color-warning) 10%, var(--color-bg-secondary));
+    border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 45%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 10%, var(--bf-appearance-token-color-bg-secondary));
   }
 
   &--error {
-    border-color: color-mix(in srgb, var(--color-error) 45%, transparent);
-    background: color-mix(in srgb, var(--color-error) 10%, var(--color-bg-secondary));
+    border-color: color-mix(in srgb, var(--bf-appearance-token-color-error) 45%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-error) 10%, var(--bf-appearance-token-color-bg-secondary));
   }
 
   &--info {
-    border-color: color-mix(in srgb, var(--color-accent-500) 45%, transparent);
-    background: color-mix(in srgb, var(--color-accent-500) 10%, var(--color-bg-secondary));
+    border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 45%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, var(--bf-appearance-token-color-bg-secondary));
   }
 }
 
@@ -97,8 +97,8 @@
 
 @media (max-width: 900px) {
   .turn-completion-notice {
-    margin-left: var(--flowchat-content-inline-pad-mobile);
-    margin-right: var(--flowchat-content-inline-pad-mobile);
+    margin-left: var(--bf-appearance-token-flowchat-content-inline-pad-mobile);
+    margin-right: var(--bf-appearance-token-flowchat-content-inline-pad-mobile);
   }
 
   .turn-completion-notice__content {

@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { ChevronRight, ChevronDown, FolderOpen, FileText } from 'lucide-react';
 import { Input } from '../../../component-library/components/Input';
 import { dragManager } from '../../../shared/services/DragManager';
@@ -179,7 +180,7 @@ const RenameInput: React.FC<RenameInputProps> = ({ node, siblings, isRemote, onR
         >
           {error}
         </div>,
-        document.body,
+        getAppearanceOverlayHost(),
       )
     : null;
 
@@ -279,8 +280,8 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
     dragImage.style.position = 'absolute';
     dragImage.style.top = '-1000px';
     dragImage.style.padding = '8px';
-    dragImage.style.background = 'var(--color-overlay-black-80)';
-    dragImage.style.color = 'var(--color-static-white)';
+    dragImage.style.background = 'var(--bf-appearance-token-color-overlay-black-80)';
+    dragImage.style.color = 'var(--bf-appearance-token-color-static-white)';
     dragImage.style.borderRadius = '4px';
     document.body.appendChild(dragImage);
     dragImageRef.current = dragImage;

@@ -3,7 +3,7 @@ use super::*;
 impl TaskTool {
     pub(super) fn context_mode_from_input(input: &Value) -> BitFunResult<SubagentContextMode> {
         match input.get("fork_context") {
-            None => Ok(SubagentContextMode::Fresh),
+            None | Some(Value::Null) => Ok(SubagentContextMode::Fresh),
             Some(value) => {
                 let fork_context = value.as_bool().ok_or_else(|| {
                     BitFunError::tool("fork_context must be a boolean".to_string())
@@ -54,10 +54,17 @@ impl TaskTool {
     }
 
     pub(super) fn is_deep_review_context(context: Option<&ToolUseContext>) -> bool {
-        context
-            .and_then(|context| context.agent_type.as_deref())
-            .map(str::trim)
-            .is_some_and(|agent_type| agent_type == DEEP_REVIEW_AGENT_TYPE)
+        let Some(context) = context else {
+            return false;
+        };
+        match context.agent_type.as_deref().map(str::trim) {
+            Some(DEEP_REVIEW_AGENT_TYPE) => true,
+            Some("CodeReview") => context
+                .custom_data
+                .get("deep_review_run_manifest")
+                .is_some_and(is_adaptive_review_manifest),
+            _ => false,
+        }
     }
 
     pub(super) fn has_deep_review_retry_fields(input: &Value) -> bool {

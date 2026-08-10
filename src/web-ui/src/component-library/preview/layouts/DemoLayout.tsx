@@ -12,19 +12,19 @@ interface DemoLayoutProps {
 
 export const DemoLayout: React.FC<DemoLayoutProps> = ({ components }) => {
   return (
-    <div className="demo-layout">
+    <div className="demo-layout" data-bf-component="component-preview" data-bf-part="demoRoot">
       {components.map((component) => (
-        <div key={component.id} className="demo-card">
-          <div className="demo-card-header">
+        <div key={component.id} className="demo-card" data-bf-component="component-preview" data-bf-part="demoCard">
+          <div className="demo-card-header" data-bf-component="component-preview" data-bf-part="demoHeader">
             <h3 className="demo-card-title">{component.name}</h3>
             <p className="demo-card-description">{component.description}</p>
           </div>
           
-          <div className="demo-stage">
+          <div className="demo-stage" data-bf-component="component-preview" data-bf-part="demoStage">
             <component.component />
           </div>
           
-          <div className="demo-card-footer">
+          <div className="demo-card-footer" data-bf-component="component-preview" data-bf-part="demoFooter">
             <span className="demo-id">ID: {component.id}</span>
           </div>
         </div>

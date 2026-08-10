@@ -5,10 +5,10 @@
 .loading-notification {
   min-width: 260px;
   max-width: 320px;
-  background: var(--color-bg-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
   border-radius: $size-radius-base;
-  box-shadow: 0 2px 6px var(--color-overlay-black-08);
-  border: 1px solid var(--border-base);
+  box-shadow: 0 2px 6px var(--bf-appearance-token-color-overlay-black-08);
+  border: 1px solid var(--bf-appearance-token-border-base);
   padding: $size-gap-2 $size-gap-3;
   display: flex;
   align-items: flex-start;
@@ -23,7 +23,7 @@
   }
   
   &--failed {
-    border-color: var(--color-error-border);
+    border-color: var(--bf-appearance-token-color-error-border);
     
     .loading-notification__spinner {
       animation: none;
@@ -42,7 +42,7 @@
 
   
   &__spinner {
-    color: var(--color-warning);
+    color: var(--bf-appearance-token-color-warning);
     animation: bitfun-spin 1s linear infinite;
   }
 
@@ -58,13 +58,13 @@
     font-weight: $font-weight-semibold;
 
     &--success {
-      background: var(--color-success-bg);
-      color: var(--color-success);
+      background: var(--bf-appearance-token-color-success-bg);
+      color: var(--bf-appearance-token-color-success);
     }
 
     &--error {
-      background: var(--color-error-bg);
-      color: var(--color-error);
+      background: var(--bf-appearance-token-color-error-bg);
+      color: var(--bf-appearance-token-color-error);
     }
   }
 
@@ -75,15 +75,15 @@
   }
 
   &__title {
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
     font-weight: $font-weight-medium;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     margin-bottom: 2px;
   }
 
   &__message {
     font-size: 11px;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: 1.4;
   }
 
@@ -99,13 +99,13 @@
     background: transparent;
     border: none;
     border-radius: $size-radius-sm;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
     transition: all $motion-base $easing-standard;
 
     &:hover {
-      background: var(--element-bg-base);
-      color: var(--color-text-primary);
+      background: var(--bf-appearance-token-element-bg-base);
+      color: var(--bf-appearance-token-color-text-primary);
     }
 
     &:active {

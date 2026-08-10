@@ -11,7 +11,6 @@ export const APP_INFO = {
 
 
 export const STORAGE_KEYS = {
-  THEME: 'bitfun-theme',
   LANGUAGE: 'bitfun-language',
   LEFT_PANEL_WIDTH: 'bitfun-left-panel-width',
   LEFT_PANEL_COLLAPSED: 'bitfun-left-panel-collapsed',
@@ -38,13 +37,6 @@ export const PANEL_CONFIG = {
 export const calculateDefaultPanelWidth = (windowWidth: number = window.innerWidth): number => {
   return Math.max(PANEL_CONFIG.MIN_WIDTH, Math.floor(windowWidth * PANEL_CONFIG.DEFAULT_LEFT_PANEL_RATIO));
 };
-
-
-// export const THEMES = {
-//   LIGHT: 'light',
-//   DARK: 'dark',
-//   AUTO: 'auto'
-// } as const;
 
 
 export const SUPPORTED_FILE_TYPES = {
@@ -101,7 +93,6 @@ export const MODEL_PROVIDERS = {
 
 
 export const DEFAULT_CONFIG = {
-  THEME: 'auto', 
   LANGUAGE: 'zh-CN',
   AUTO_SAVE: true,
   AUTO_ANALYZE: false,

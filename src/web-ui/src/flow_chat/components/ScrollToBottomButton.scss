@@ -11,49 +11,50 @@
   align-items: center;
   justify-content: center;
   
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   padding: 0;
 
   // Theme-aware surface so the control separates from the transcript; icon uses primary text (SVG stroke)
-  background: color-mix(in srgb, var(--color-bg-elevated) 92%, transparent);
-  color: var(--color-text-primary);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 92%, transparent);
+  color: var(--bf-appearance-token-color-text-primary);
 
-  border: 2px solid var(--color-text-primary);
+  border: 2px solid var(--bf-appearance-token-color-text-primary);
   border-radius: 10px;
 
   backdrop-filter: blur(14px) saturate(1.15);
   -webkit-backdrop-filter: blur(14px) saturate(1.15);
 
   box-shadow:
-    0 4px 18px rgba(var(--color-static-black-rgb), 0.38),
-    0 0 0 1px color-mix(in srgb, var(--color-text-primary) 28%, transparent),
-    inset 0 1px 0 color-mix(in srgb, var(--color-text-primary) 12%, transparent);
+    0 4px 18px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.38),
+    0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 28%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 12%, transparent);
   
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 140ms ease;
   
   z-index: 10;
 
   &:hover {
-    background: color-mix(in srgb, var(--color-bg-elevated) 98%, transparent);
-    color: var(--color-text-primary);
-    border-color: var(--color-text-primary);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 98%, transparent);
+    color: var(--bf-appearance-token-color-text-primary);
+    border-color: var(--bf-appearance-token-color-text-primary);
     transform: translateY(-2px);
 
     box-shadow:
-      0 8px 22px rgba(var(--color-static-black-rgb), 0.42),
-      0 0 0 1px color-mix(in srgb, var(--color-text-primary) 40%, transparent),
-      inset 0 1px 0 color-mix(in srgb, var(--color-text-primary) 16%, transparent);
+      0 8px 22px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.42),
+      0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 40%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 16%, transparent);
   }
 
   &:active {
-    transform: translateY(0);
-    transition: all 0.1s ease;
+    transform: scale(0.97);
   }
 
   &:focus-visible {
-    outline: 3px solid var(--color-text-primary);
+    outline: 3px solid var(--bf-appearance-token-color-text-primary);
     outline-offset: 3px;
   }
 
@@ -75,22 +76,22 @@
     justify-content: center;
     
     // Glass-like badge
-    background: color-mix(in srgb, var(--color-accent-600) 92%, var(--color-static-black));
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 92%, var(--bf-appearance-token-color-static-black));
     color: white;
     border-radius: 8px;
-    border: 1px solid color-mix(in srgb, var(--color-accent-500) 30%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 30%, transparent);
     
     // Frosted effect
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     
-    font-size: var(--flowchat-font-size-2xs);
+    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
     font-weight: 600;
     line-height: 1;
     
     box-shadow: 
-      0 2px 8px var(--border-accent),
-      inset 0 1px 0 var(--color-overlay-white-20);
+      0 2px 8px var(--bf-appearance-token-border-accent),
+      inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-20);
   }
 }
 
@@ -99,8 +100,13 @@
   .scroll-to-bottom-button {
     bottom: 60px; /* Closer to the bottom on mobile */
     right: 16px;
-    width: 40px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .scroll-to-bottom-button {
+    transition-duration: 0ms;
+  }
+}

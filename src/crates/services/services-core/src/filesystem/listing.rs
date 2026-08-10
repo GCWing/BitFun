@@ -38,7 +38,7 @@ pub fn list_directory_entries(
         )));
     }
 
-    let mut result = Vec::new();
+    let mut result = Vec::with_capacity(limit.min(4096));
     let mut queue = VecDeque::new();
 
     if let Ok(metadata) = fs::symlink_metadata(path) {
@@ -134,17 +134,9 @@ pub fn list_directory_entries(
                 false
             };
 
-            let is_symlink = if let Ok(metadata) = fs::symlink_metadata(entry_path) {
-                metadata.file_type().is_symlink()
-            } else {
-                false
-            };
-
-            if !is_excluded && !is_gitignored && !is_symlink {
-                result.push(entry.clone());
-            }
-
-            if entry.is_dir && !is_special && !is_excluded && !is_gitignored && !is_symlink {
+            // Entries are only enqueued after a symlink_metadata check at
+            // enqueue time, so no re-stat is needed here.
+            if entry.is_dir && !is_special && !is_excluded && !is_gitignored {
                 if let Ok(entries) = fs::read_dir(entry_path) {
                     for dir_entry in entries.flatten() {
                         let path = dir_entry.path();
@@ -162,6 +154,10 @@ pub fn list_directory_entries(
                         }
                     }
                 }
+            }
+
+            if !is_excluded && !is_gitignored {
+                result.push(entry);
             }
         }
 

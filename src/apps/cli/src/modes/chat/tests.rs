@@ -4,36 +4,119 @@ mod tests {
 
     use super::{
         action_opens_extension_management, agent_event_stream_failure, apply_agent_mode_feedback,
-        apply_model_selection_feedback, builtin_command_reconfirmation,
-        cli_native_prompt_command_descriptors, command_route, extension_command_help_request,
-        external_agent_attention, external_agent_diagnostic_lines,
+        apply_model_selection_feedback, apply_session_model_migration,
+        apply_session_rename_feedback, begin_slash_menu_selection, builtin_arguments_error,
+        builtin_arguments_route, builtin_command_reconfirmation,
+        clear_selected_native_command_prefill, cli_native_prompt_command_descriptors,
+        command_route, consume_selected_native_command_once, context_compression_tool_event,
+        extension_command_help_request, external_agent_attention, external_agent_diagnostic_lines,
         external_agent_pending_notice_key, external_agent_result_is_stale,
-        external_agent_review_text, external_command_projections, external_control_review_text,
+        external_agent_review_text, external_command_projections,
+        external_control_read_only_review_text, external_control_review_text,
         external_hook_help_text, external_integration_policy_lines,
         external_operation_error_status, external_tool_mutation_result_label,
         external_tool_pending_notice_key, external_tool_result_is_stale, external_tool_review_text,
         external_tool_run_location_label, mark_active_turn_failed,
-        merge_external_agent_mutation_snapshot, mode_change_blocks_typed_submission,
-        mode_change_completion_should_exit, native_command_choice_is_active,
-        native_command_reconfirmation_is_required, parse_external_agent_review_action,
-        parse_external_control_action, parse_external_tool_review_action,
-        previous_session_mode_change_status, render_external_hook_catalog, CommandRoute,
-        ExternalAgentReviewAction, ExternalControlUiAction, ExternalSourceConflictPreferences,
-        ExternalToolReviewAction, ModeSelectionApplyOutcome, ModelSelectionApplyOutcome,
+        merge_external_agent_mutation_snapshot, native_command_choice_is_active,
+        native_command_reconfirmation_is_required, native_hook_help_text,
+        parse_external_agent_review_action, parse_external_control_action,
+        parse_external_tool_review_action, parse_hook_management_action, parse_reload_invocation,
+        parse_reload_target, pending_session_operation_blocks_runtime_action,
+        previous_session_update_status, primary_model_usage_for_active_turn,
+        render_external_hook_catalog, render_native_hook_overview, requested_session_name,
+        retain_selected_native_command_for_input, selected_command_prefill,
+        session_command_help_note, session_delete_allowed, session_delete_feedback,
+        session_switch_targets_pending_delete, session_update_allowed,
+        session_update_blocks_typed_submission, session_update_completion_should_exit,
+        shared_session_change_is_blocked, steering_unsupported_reason,
+        terminal_event_allowed_while_local_effect_pending, CommandRoute, ExternalAgentReviewAction,
+        ExternalControlUiAction, ExternalSourceConflictPreferences, ExternalToolReviewAction,
+        HookManagementAction, PendingSessionOperationKind, SessionUpdateApplyOutcome,
+        SHARED_TUI_CHAT_STATUS,
     };
-    use crate::actions::{action_conflict_behavior_version, ActionState, ResolvedKeymap};
+    use crate::actions::{
+        action_conflict_behavior_version, ActionHandler, ActionState, ResolvedKeymap,
+    };
     use crate::chat_state::ChatState;
     use crate::config::ShortcutsConfig;
+    use crate::ui::chat::ChatView;
     use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
-    use bitfun_core::external_hooks::ExternalHookCatalogSnapshotV1;
-    use bitfun_core::external_sources::{
-        native_prompt_command_conflict_key, ExternalSourceAssetKind, ExternalSourceCatalogSnapshot,
-        ExternalSourceControlSnapshotV1, ExternalSourceDiagnostic,
-        ExternalSourceDiagnosticSeverity, ExternalSourceOperationError,
-        ExternalSourceOperationErrorCode, ExternalSubagentActivationState,
+    use crate::ui::theme::Theme;
+    use bitfun_app_server_protocol::hook::{
+        NativeHookFileSummary as NativeHookFileView,
+        NativeHookHandlerSummary as NativeHookHandlerView, NativeHookOverview,
+        NativeHookRuleSummary as NativeHookRuleView,
+    };
+    use bitfun_events::{AgenticEvent, ToolEventData};
+    use bitfun_product_domains::external_hook_catalog::{
+        ExternalHookCatalogEntry, ExternalHookCatalogSnapshotV1, ExternalHookHandlerKind,
+        ExternalHookMatcherSummary, ExternalHookNativeActivation, ExternalHookProjectionStatus,
+    };
+    use bitfun_product_domains::external_source_control::ExternalSourceControlSnapshotV1;
+    use bitfun_product_domains::external_sources::{
+        native_prompt_command_conflict_key, ExternalSourceAssetKind,
+        ExternalSourceCatalogSnapshot as RawExternalSourceCatalogSnapshot,
+        ExternalSourceDiagnostic, ExternalSourceDiagnosticSeverity, ExternalSourceOperationError,
+        ExternalSourceOperationErrorCode,
+        ExternalSourcePublicSnapshot as ExternalSourceCatalogSnapshot, ExternalSourceScope,
         ExternalToolActivationState,
     };
+    use bitfun_product_domains::external_subagents::{
+        ExternalSubagentActivationState, ExternalSubagentModelBindingTarget,
+    };
+    use bitfun_runtime_ports::AgentContextReloadTarget;
+    use crossterm::event::Event;
     use std::collections::{BTreeMap, BTreeSet};
+
+    fn public_external_source_snapshot(value: serde_json::Value) -> ExternalSourceCatalogSnapshot {
+        let snapshot: RawExternalSourceCatalogSnapshot =
+            serde_json::from_value(value).expect("parse raw external source test snapshot");
+        snapshot.into()
+    }
+
+    #[test]
+    fn explicit_same_id_agent_selection_rebinds_through_the_runtime_owner() {
+        let source = include_str!("selection.rs").replace("\r\n", "\n");
+        let selection = source
+            .split_once("fn apply_agent_selection(")
+            .expect("agent selection method")
+            .1
+            .split_once("fn poll_session_operation_completion(")
+            .expect("agent selection boundary")
+            .0;
+
+        assert!(selection.contains(".update_session_mode(&task_session_id, &task_mode_id)"));
+        assert!(!selection.contains("selected.id == self.agent_type"));
+    }
+
+    #[test]
+    fn reload_command_uses_one_closed_optional_target() {
+        assert_eq!(
+            parse_reload_target("").unwrap(),
+            AgentContextReloadTarget::All
+        );
+        assert_eq!(
+            parse_reload_target(" SKILLS ").unwrap(),
+            AgentContextReloadTarget::Skills
+        );
+        assert_eq!(
+            parse_reload_target("Instructions").unwrap(),
+            AgentContextReloadTarget::Instructions
+        );
+        assert!(parse_reload_target("mcp").is_err());
+        assert!(parse_reload_target("skills instructions").is_err());
+
+        assert_eq!(
+            parse_reload_invocation("reload-skills", "")
+                .unwrap()
+                .unwrap(),
+            AgentContextReloadTarget::Skills
+        );
+        assert!(parse_reload_invocation("reload-skills", "instructions")
+            .unwrap()
+            .is_err());
+        assert!(parse_reload_invocation("other", "").is_none());
+    }
 
     fn external_command(
         name: &str,
@@ -151,6 +234,13 @@ mod tests {
         assert!(text.contains("source disable <source-key>"));
         assert!(text.contains("Tools: 2 items, 1 review, 0 conflicts, inactive"));
         assert!(text.contains("/extensions safe-mode off"));
+
+        let read_only = external_control_read_only_review_text(&control);
+        assert!(read_only.contains("Read-only compatibility status"));
+        assert!(read_only.contains("/extensions refresh"));
+        assert!(!read_only.contains("/extensions safe-mode"));
+        assert!(!read_only.contains("source enable <source-key>"));
+        assert!(!read_only.contains("source disable <source-key>"));
     }
 
     #[test]
@@ -202,7 +292,7 @@ mod tests {
     }
 
     fn external_tool_review_snapshot() -> ExternalSourceCatalogSnapshot {
-        serde_json::from_value(serde_json::json!({
+        public_external_source_snapshot(serde_json::json!({
             "generation": 3,
             "discoveryPending": false,
             "sources": [{
@@ -413,7 +503,6 @@ mod tests {
                 "source": { "providerId": "opencode.tools", "sourceId": "project" }
             }]
         }))
-        .unwrap()
     }
 
     #[test]
@@ -654,6 +743,16 @@ mod tests {
             crate::actions::action_for_alias("/hooks", crate::actions::ActionContext::Chat)
                 .expect("/hooks must be registered");
         assert_eq!(action.id, "hooks");
+        // /hooks shows BitFun's own executable hooks; the external read-only
+        // catalog keeps its own command.
+        assert_eq!(action.handler, ActionHandler::NativeHooks);
+        for alias in ["/hooks_external", "/hooks-external"] {
+            let external =
+                crate::actions::action_for_alias(alias, crate::actions::ActionContext::Chat)
+                    .unwrap_or_else(|| panic!("{alias} must be registered"));
+            assert_eq!(external.id, "hooks_external");
+            assert_eq!(external.handler, ActionHandler::ExternalHooks);
+        }
         let collision = external_command("hooks", None);
         assert_eq!(
             command_route(true, Some(&collision), false, false),
@@ -667,6 +766,7 @@ mod tests {
         assert!(extension_command_help_request("hooks", "--help").is_some());
         assert!(extension_command_help_request("hooks", "unexpected").is_none());
         assert!(extension_command_help_request("help", "hooks").is_some());
+        assert!(extension_command_help_request("hooks_external", "--help").is_some());
         assert!(extension_command_help_request("help", "other").is_none());
         assert!(extension_command_help_request("extensions", "-h")
             .unwrap()
@@ -681,6 +781,37 @@ mod tests {
             extension_command_help_request("help", "agents"),
             Some(agent_help)
         );
+    }
+
+    #[test]
+    fn hooks_management_requires_an_explicit_second_step_for_writes() {
+        assert_eq!(
+            parse_hook_management_action("import 2").unwrap(),
+            HookManagementAction::Import {
+                source_number: 2,
+                confirm: false,
+            }
+        );
+        assert_eq!(
+            parse_hook_management_action("update 1 --confirm").unwrap(),
+            HookManagementAction::Update {
+                import_number: 1,
+                confirm: true,
+            }
+        );
+        assert!(parse_hook_management_action("remove 1").is_err());
+        assert_eq!(
+            parse_hook_management_action("remove 1 --confirm").unwrap(),
+            HookManagementAction::Remove { import_number: 1 }
+        );
+        assert!(parse_hook_management_action("reset user").is_err());
+        assert_eq!(
+            parse_hook_management_action("reset project --confirm").unwrap(),
+            HookManagementAction::Reset {
+                scope: ExternalSourceScope::Project,
+            }
+        );
+        assert!(parse_hook_management_action("enable 0").is_err());
     }
 
     #[test]
@@ -751,7 +882,8 @@ mod tests {
         .unwrap();
 
         let text = render_external_hook_catalog(&snapshot);
-        assert!(text.contains("Hooks (read-only)"));
+        assert!(text.contains("Available external Hook sources"));
+        assert!(text.contains("Discovery is read-only"));
         assert!(text.contains("Claude Code"));
         assert!(text.contains("PreToolUse"));
         assert!(text.contains("coverage mapped: BitFun tool before"));
@@ -762,14 +894,102 @@ mod tests {
         assert!(!text.contains("command body"));
     }
 
+    fn native_hook_overview() -> NativeHookOverview {
+        NativeHookOverview {
+            enabled: true,
+            project_hooks_enabled: false,
+            files: vec![
+                NativeHookFileView {
+                    scope: "user".to_string(),
+                    location: "<user-config>/config/hooks.json".to_string(),
+                    exists: true,
+                    loaded: true,
+                },
+                NativeHookFileView {
+                    scope: "project".to_string(),
+                    location: "<workspace>/.bitfun/config/hooks.json".to_string(),
+                    exists: true,
+                    loaded: false,
+                },
+            ],
+            rules: vec![NativeHookRuleView {
+                event: "PreToolUse".to_string(),
+                matcher: "Bash".to_string(),
+                matcher_is_valid: true,
+                scope: "user".to_string(),
+                handlers: vec![NativeHookHandlerView {
+                    command_summary: "jq -r '.tool_input.command' >> ~/log".to_string(),
+                    command_truncated: false,
+                    timeout_seconds: 600,
+                    status_message: None,
+                }],
+            }],
+            total_handlers: 1,
+            issues: vec!["Hook event 'PreTool' is not a supported event name: /ws".to_string()],
+        }
+    }
+
     #[test]
-    fn hooks_help_uses_the_established_slash_help_pattern() {
+    fn native_hook_text_reports_gating_layers_and_issues() {
+        let text = render_native_hook_overview(&native_hook_overview());
+
+        assert!(text.contains("Hooks (BitFun)"));
+        assert!(text.contains("Hooks: enabled (app.hooks.enabled)"));
+        assert!(text.contains("Project hook file: disabled (app.hooks.project_hooks_enabled)"));
+        assert!(text.contains("user [loaded; present]"));
+        assert!(text.contains("project [not loaded; present]"));
+        assert!(text.contains("PreToolUse"));
+        assert!(text.contains("matcher: Bash [user; 1 handler]"));
+        assert!(text.contains("timeout 600s"));
+        assert!(text.contains("is not a supported event name"));
+    }
+
+    #[test]
+    fn native_hook_text_explains_an_empty_or_disabled_configuration() {
+        let mut overview = native_hook_overview();
+        overview.rules.clear();
+        overview.total_handlers = 0;
+        overview.issues.clear();
+        assert!(render_native_hook_overview(&overview).contains("No hooks are configured."));
+
+        overview.enabled = false;
+        let disabled = render_native_hook_overview(&overview);
+        assert!(disabled.contains("Hooks: disabled (app.hooks.enabled)"));
+        assert!(disabled.contains("set app.hooks.enabled to run them"));
+    }
+
+    #[test]
+    fn native_hook_text_flags_a_matcher_that_never_matches() {
+        let mut overview = native_hook_overview();
+        overview.rules[0].matcher = "Bash(".to_string();
+        overview.rules[0].matcher_is_valid = false;
+
+        let text = render_native_hook_overview(&overview);
+
+        assert!(text.contains("invalid pattern, never matches"));
+    }
+
+    #[test]
+    fn external_hooks_help_uses_the_established_slash_help_pattern() {
         let help = external_hook_help_text();
         assert!(help.contains("Usage: /hooks"));
+        assert!(help.contains("Compatibility aliases: /hooks_external and /hooks-external"));
         assert!(help.contains("/help hooks"));
         assert!(help.contains("/hooks -h"));
         assert!(help.contains("/hooks --help"));
         assert!(!help.contains("/builtin:hooks"));
+    }
+
+    #[test]
+    fn native_hooks_help_uses_the_established_slash_help_pattern() {
+        let help = native_hook_help_text();
+        assert!(help.contains("Usage: /hooks"));
+        assert!(help.contains("/help hooks"));
+        assert!(help.contains("/hooks -h"));
+        assert!(help.contains("/hooks --help"));
+        // The two views must stay distinguishable from their help alone.
+        assert!(help.contains("/hooks_external"));
+        assert!(!help.contains("Usage: /hooks_external"));
     }
 
     #[test]
@@ -851,21 +1071,17 @@ mod tests {
             }))
             .unwrap();
         snapshot.entries = (0..105)
-            .map(
-                |index| bitfun_core::external_hooks::ExternalHookCatalogEntry {
-                    stable_key: format!("test-{index}"),
-                    source: snapshot.sources[0].key.clone(),
-                    native_event: format!("Event{index}"),
-                    matcher: bitfun_core::external_hooks::ExternalHookMatcherSummary::Any,
-                    handler_kind: bitfun_core::external_hooks::ExternalHookHandlerKind::Command,
-                    projection_status:
-                        bitfun_core::external_hooks::ExternalHookProjectionStatus::NativeOnly,
-                    native_activation:
-                        bitfun_core::external_hooks::ExternalHookNativeActivation::Unknown,
-                    mapping: None,
-                    content_version: format!("entry-v{index}"),
-                },
-            )
+            .map(|index| ExternalHookCatalogEntry {
+                stable_key: format!("test-{index}"),
+                source: snapshot.sources[0].key.clone(),
+                native_event: format!("Event{index}"),
+                matcher: ExternalHookMatcherSummary::Any,
+                handler_kind: ExternalHookHandlerKind::Command,
+                projection_status: ExternalHookProjectionStatus::NativeOnly,
+                native_activation: ExternalHookNativeActivation::Unknown,
+                mapping: None,
+                content_version: format!("entry-v{index}"),
+            })
             .collect();
 
         let text = render_external_hook_catalog(&snapshot);
@@ -876,7 +1092,7 @@ mod tests {
 
     #[test]
     fn unresolved_provider_conflicts_expose_explicit_cli_choices() {
-        let snapshot: ExternalSourceCatalogSnapshot = serde_json::from_value(serde_json::json!({
+        let snapshot = public_external_source_snapshot(serde_json::json!({
             "generation": 1,
             "discoveryPending": false,
             "sources": [
@@ -940,8 +1156,7 @@ mod tests {
                     }
                 ]
             }]
-        }))
-        .unwrap();
+        }));
 
         let projections = external_command_projections(&snapshot, &BTreeMap::new());
 
@@ -966,6 +1181,126 @@ mod tests {
             command_route(true, Some(&selected), false, false),
             CommandRoute::External
         );
+    }
+
+    #[test]
+    fn rename_arguments_run_only_after_the_builtin_collision_route_wins() {
+        let action =
+            crate::actions::action_for_alias("/rename", crate::actions::ActionContext::Chat)
+                .expect("rename action");
+
+        assert!(builtin_arguments_route(
+            CommandRoute::Builtin,
+            action.handler,
+        ));
+        for route in [
+            CommandRoute::External,
+            CommandRoute::AskForCollisionChoice,
+            CommandRoute::WaitForDiscovery,
+        ] {
+            assert!(!builtin_arguments_route(route, action.handler));
+        }
+    }
+
+    #[test]
+    fn session_actions_reject_arguments_only_after_the_builtin_route_wins() {
+        assert_eq!(
+            builtin_arguments_error(
+                CommandRoute::Builtin,
+                ActionHandler::CompactSession,
+                "unexpected"
+            ),
+            Some("Usage: /compact")
+        );
+        assert_eq!(
+            builtin_arguments_error(CommandRoute::Builtin, ActionHandler::CompactSession, "   "),
+            None
+        );
+        assert_eq!(
+            builtin_arguments_error(
+                CommandRoute::External,
+                ActionHandler::CompactSession,
+                "unexpected"
+            ),
+            None
+        );
+        assert_eq!(
+            builtin_arguments_error(
+                CommandRoute::Builtin,
+                ActionHandler::ForkSession,
+                "unexpected"
+            ),
+            Some("Usage: /fork")
+        );
+        assert_eq!(
+            builtin_arguments_error(CommandRoute::Builtin, ActionHandler::Timeline, "unexpected"),
+            Some("Usage: /timeline")
+        );
+        assert_eq!(
+            builtin_arguments_error(
+                CommandRoute::Builtin,
+                ActionHandler::UndoSession,
+                "unexpected"
+            ),
+            Some("Usage: /undo")
+        );
+        assert_eq!(
+            builtin_arguments_error(
+                CommandRoute::Builtin,
+                ActionHandler::RedoSession,
+                "unexpected"
+            ),
+            Some("Usage: /redo")
+        );
+        assert_eq!(
+            builtin_arguments_error(CommandRoute::Builtin, ActionHandler::Editor, "unexpected"),
+            Some("Usage: /editor")
+        );
+        assert_eq!(
+            builtin_arguments_error(
+                CommandRoute::Builtin,
+                ActionHandler::ToggleTimestamps,
+                "unexpected"
+            ),
+            Some("Usage: /timestamps")
+        );
+        assert_eq!(
+            builtin_arguments_error(
+                CommandRoute::Builtin,
+                ActionHandler::ToggleThinking,
+                "unexpected"
+            ),
+            Some("Usage: /thinking")
+        );
+        assert_eq!(
+            builtin_arguments_error(
+                CommandRoute::Builtin,
+                ActionHandler::CopyTranscript,
+                "unexpected"
+            ),
+            Some("Usage: /copy")
+        );
+        assert_eq!(
+            builtin_arguments_error(
+                CommandRoute::Builtin,
+                ActionHandler::ExportTranscript,
+                "unexpected"
+            ),
+            Some("Usage: /export")
+        );
+    }
+
+    #[test]
+    fn pending_local_effect_fences_input_but_keeps_resize_events() {
+        assert!(!terminal_event_allowed_while_local_effect_pending(
+            &Event::Paste("new draft".to_string())
+        ));
+        assert!(!terminal_event_allowed_while_local_effect_pending(
+            &Event::FocusLost
+        ));
+        assert!(terminal_event_allowed_while_local_effect_pending(
+            &Event::Resize(120, 40)
+        ));
     }
 
     #[test]
@@ -1088,31 +1423,271 @@ mod tests {
     }
 
     #[test]
-    fn model_selection_keeps_the_applied_session_model_when_default_persistence_fails() {
+    fn primary_model_usage_projection_rejects_other_sessions_turns_and_subagents() {
         let mut state = ChatState::new(
             "session".to_string(),
             "Session".to_string(),
             "agentic".to_string(),
             Some("D:/workspace/current".to_string()),
         );
+        state.handle_turn_started("turn", "hello");
+
+        let event =
+            |session_id: &str, turn_id: &str, is_subagent: bool| AgenticEvent::TokenUsageUpdated {
+                session_id: session_id.to_string(),
+                turn_id: turn_id.to_string(),
+                model_config_id: "model-config".to_string(),
+                effective_model_name: "example-model".to_string(),
+                input_tokens: 80_000,
+                output_tokens: Some(2_000),
+                total_tokens: 82_000,
+                max_context_tokens: Some(128_000),
+                is_subagent,
+                cached_tokens: Some(10_000),
+                token_details: None,
+            };
+
+        let usage = primary_model_usage_for_active_turn(&event("session", "turn", false), &state)
+            .expect("matching primary-model event");
+        assert_eq!(usage.total_tokens, 82_000);
+        assert_eq!(usage.effective_model_name, "example-model");
+
+        assert!(primary_model_usage_for_active_turn(
+            &event("other-session", "turn", false),
+            &state
+        )
+        .is_none());
+        assert!(primary_model_usage_for_active_turn(
+            &event("session", "other-turn", false),
+            &state
+        )
+        .is_none());
+        assert!(
+            primary_model_usage_for_active_turn(&event("session", "turn", true), &state).is_none()
+        );
+    }
+
+    #[test]
+    fn context_compression_projection_is_scoped_to_the_active_session_turn() {
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+        state.handle_turn_started("turn", "/compact");
+
+        let started = AgenticEvent::ContextCompressionStarted {
+            session_id: "session".to_string(),
+            turn_id: "turn".to_string(),
+            compression_id: "compression".to_string(),
+            trigger: "manual".to_string(),
+            tokens_before: 80_000,
+            context_window: 128_000,
+        };
+        let projected =
+            context_compression_tool_event(&started, &state).expect("active compression event");
+        match projected {
+            ToolEventData::Started {
+                identity, params, ..
+            } => {
+                assert_eq!(identity.tool_id, "compression");
+                assert_eq!(identity.effective_name(), "ContextCompression");
+                assert_eq!(params["trigger"], "manual");
+                assert_eq!(params["tokens_before"], 80_000);
+            }
+            _ => panic!("expected started tool event"),
+        }
+
+        let other_turn = AgenticEvent::ContextCompressionStarted {
+            session_id: "session".to_string(),
+            turn_id: "other-turn".to_string(),
+            compression_id: "other-compression".to_string(),
+            trigger: "manual".to_string(),
+            tokens_before: 80_000,
+            context_window: 128_000,
+        };
+        assert!(context_compression_tool_event(&other_turn, &state).is_none());
+
+        let other_session = AgenticEvent::ContextCompressionStarted {
+            session_id: "other-session".to_string(),
+            turn_id: "turn".to_string(),
+            compression_id: "other-compression".to_string(),
+            trigger: "manual".to_string(),
+            tokens_before: 80_000,
+            context_window: 128_000,
+        };
+        assert!(context_compression_tool_event(&other_session, &state).is_none());
+    }
+
+    #[test]
+    fn context_compression_completion_projects_the_persisted_tool_shape() {
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+        state.handle_turn_started("turn", "/compact");
+        let completed = AgenticEvent::ContextCompressionCompleted {
+            session_id: "session".to_string(),
+            turn_id: "turn".to_string(),
+            compression_id: "compression".to_string(),
+            compression_count: 2,
+            tokens_before: 80_000,
+            tokens_after: 20_000,
+            compression_ratio: 0.25,
+            duration_ms: 42,
+            has_summary: true,
+            summary_source: "model".to_string(),
+            applied: true,
+        };
+
+        match context_compression_tool_event(&completed, &state)
+            .expect("active compression completion")
+        {
+            ToolEventData::Completed {
+                identity,
+                result,
+                duration_ms,
+                ..
+            } => {
+                assert_eq!(identity.tool_id, "compression");
+                assert_eq!(result["tokens_before"], 80_000);
+                assert_eq!(result["tokens_after"], 20_000);
+                assert_eq!(result["applied"], true);
+                assert_eq!(result["summary_source"], "model");
+                assert_eq!(duration_ms, 42);
+            }
+            _ => panic!("expected completed tool event"),
+        }
+    }
+
+    #[test]
+    fn context_compression_failure_projects_the_existing_tool_error_shape() {
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+        state.handle_turn_started("turn", "/compact");
+        let failed = AgenticEvent::ContextCompressionFailed {
+            session_id: "session".to_string(),
+            turn_id: "turn".to_string(),
+            compression_id: "compression".to_string(),
+            error: "summary request failed".to_string(),
+        };
+
+        match context_compression_tool_event(&failed, &state).expect("active compression failure") {
+            ToolEventData::Failed {
+                identity, error, ..
+            } => {
+                assert_eq!(identity.tool_id, "compression");
+                assert_eq!(error, "summary request failed");
+            }
+            _ => panic!("expected failed tool event"),
+        }
+    }
+
+    #[test]
+    fn model_selection_commits_only_the_current_session_state_after_runtime_success() {
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+        state.current_model_id = Some("old-model-id".to_string());
         state.current_model_name = "Old model".to_string();
 
         apply_model_selection_feedback(
             &mut state,
             "New model / Provider",
             "new-model-id",
-            ModelSelectionApplyOutcome::Applied {
-                default_persist_error: Some("config storage unavailable".to_string()),
-            },
+            SessionUpdateApplyOutcome::Applied,
         );
 
+        assert_eq!(state.current_model_id.as_deref(), Some("new-model-id"));
         assert_eq!(state.current_model_name, "New model / Provider");
-        let notice = state.messages.last().expect("partial-success notice");
+        assert!(state.messages.is_empty());
+    }
+
+    #[test]
+    fn runtime_model_migration_replaces_the_visible_session_model_and_explains_why() {
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+        state.current_model_id = Some("removed-model".to_string());
+        state.current_model_name = "Removed model".to_string();
+
+        assert!(apply_session_model_migration(
+            &mut state,
+            "session",
+            "removed-model",
+            "replacement-model",
+            "model_deleted",
+        ));
+
+        assert_eq!(state.current_model_id.as_deref(), Some("replacement-model"));
+        assert_eq!(state.current_model_name, "replacement-model");
+        let notice = state.messages.last().expect("migration notice");
         let crate::chat_state::FlowItem::Text { content, .. } = &notice.flow_items[0] else {
-            panic!("partial-success notice must be text");
+            panic!("migration notice must be text");
         };
-        assert!(content.contains("current session"));
-        assert!(content.contains("future sessions"));
+        assert!(content.contains("removed-model"));
+        assert!(content.contains("replacement-model"));
+        assert!(content.contains("model_deleted"));
+    }
+
+    #[test]
+    fn runtime_model_migration_ignores_another_session() {
+        let mut state = ChatState::new(
+            "current-session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+        state.current_model_id = Some("removed-model".to_string());
+        state.current_model_name = "Removed model".to_string();
+
+        assert!(!apply_session_model_migration(
+            &mut state,
+            "other-session",
+            "removed-model",
+            "replacement-model",
+            "model_deleted",
+        ));
+        assert_eq!(state.current_model_id.as_deref(), Some("removed-model"));
+        assert!(state.messages.is_empty());
+    }
+
+    #[test]
+    fn runtime_model_migration_ignores_a_stale_previous_selector() {
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+        state.current_model_id = Some("newer-explicit-model".to_string());
+        state.current_model_name = "Newer explicit model".to_string();
+
+        assert!(!apply_session_model_migration(
+            &mut state,
+            "session",
+            "removed-model",
+            "auto",
+            "model_deleted",
+        ));
+        assert_eq!(
+            state.current_model_id.as_deref(),
+            Some("newer-explicit-model")
+        );
+        assert!(state.messages.is_empty());
     }
 
     #[test]
@@ -1123,15 +1698,17 @@ mod tests {
             "agentic".to_string(),
             Some("D:/workspace/current".to_string()),
         );
+        state.current_model_id = Some("old-model-id".to_string());
         state.current_model_name = "Old model".to_string();
 
         apply_model_selection_feedback(
             &mut state,
             "New model / Provider",
             "new-model-id",
-            ModelSelectionApplyOutcome::SessionUpdateFailed("session unavailable".to_string()),
+            SessionUpdateApplyOutcome::SessionUpdateFailed("session unavailable".to_string()),
         );
 
+        assert_eq!(state.current_model_id.as_deref(), Some("old-model-id"));
         assert_eq!(state.current_model_name, "Old model");
         let notice = state.messages.last().expect("failure notice");
         let crate::chat_state::FlowItem::Text { content, .. } = &notice.flow_items[0] else {
@@ -1139,6 +1716,34 @@ mod tests {
         };
         assert!(content.contains("was not changed"));
         assert!(content.contains("retry"));
+    }
+
+    #[test]
+    fn unknown_model_update_outcome_requires_restore_before_retry() {
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+        state.current_model_id = Some("old-model-id".to_string());
+        state.current_model_name = "Old model".to_string();
+
+        apply_model_selection_feedback(
+            &mut state,
+            "New model / Provider",
+            "new-model-id",
+            SessionUpdateApplyOutcome::OutcomeUnknown("request timed out".to_string()),
+        );
+
+        assert_eq!(state.current_model_id.as_deref(), Some("old-model-id"));
+        assert_eq!(state.current_model_name, "Old model");
+        let notice = state.messages.last().expect("unknown-outcome notice");
+        let crate::chat_state::FlowItem::Text { content, .. } = &notice.flow_items[0] else {
+            panic!("unknown-outcome notice must be text");
+        };
+        assert!(content.contains("outcome is unknown"));
+        assert!(content.contains("restore this session"));
     }
 
     #[test]
@@ -1155,7 +1760,7 @@ mod tests {
             &mut current_mode,
             &mut state,
             "plan",
-            ModeSelectionApplyOutcome::Applied,
+            SessionUpdateApplyOutcome::Applied,
         );
 
         assert!(applied);
@@ -1177,7 +1782,7 @@ mod tests {
             &mut current_mode,
             &mut state,
             "plan",
-            ModeSelectionApplyOutcome::SessionUpdateFailed(
+            SessionUpdateApplyOutcome::SessionUpdateFailed(
                 "session storage unavailable".to_string(),
             ),
         );
@@ -1194,10 +1799,11 @@ mod tests {
     }
 
     #[test]
-    fn previous_session_mode_failure_is_not_reported_as_a_success() {
-        let status = previous_session_mode_change_status(
+    fn previous_session_update_failure_is_not_reported_as_a_success() {
+        let status = previous_session_update_status(
+            "mode",
             "Plan",
-            &ModeSelectionApplyOutcome::SessionUpdateFailed("storage unavailable".to_string()),
+            &SessionUpdateApplyOutcome::SessionUpdateFailed("storage unavailable".to_string()),
         );
 
         assert!(status.contains("failed"));
@@ -1206,19 +1812,419 @@ mod tests {
     }
 
     #[test]
-    fn pending_mode_change_allows_host_commands_but_blocks_agent_submission() {
-        assert!(mode_change_blocks_typed_submission(true, "continue"));
-        assert!(!mode_change_blocks_typed_submission(true, "/new"));
-        assert!(!mode_change_blocks_typed_submission(true, "/sessions"));
-        assert!(!mode_change_blocks_typed_submission(true, "/exit"));
-        assert!(!mode_change_blocks_typed_submission(false, "continue"));
+    fn previous_session_unknown_outcome_requires_a_reload() {
+        let status = previous_session_update_status(
+            "name",
+            "Renamed",
+            &SessionUpdateApplyOutcome::OutcomeUnknown("rollback was not confirmed".to_string()),
+        );
+
+        assert!(status.contains("This TUI is closing"));
+        assert!(status.contains("restore that session"));
+        assert!(!status.contains("Shared TUI"));
     }
 
     #[test]
-    fn failed_mode_save_cancels_automatic_exit() {
-        assert!(mode_change_completion_should_exit(true, true));
-        assert!(!mode_change_completion_should_exit(true, false));
-        assert!(!mode_change_completion_should_exit(false, true));
+    fn unknown_mode_update_outcome_requires_restore_before_retry() {
+        let mut current_mode = "agentic".to_string();
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+
+        let applied = apply_agent_mode_feedback(
+            &mut current_mode,
+            &mut state,
+            "plan",
+            SessionUpdateApplyOutcome::OutcomeUnknown("request timed out".to_string()),
+        );
+
+        assert!(!applied);
+        assert_eq!(current_mode, "agentic");
+        assert_eq!(state.agent_type, "agentic");
+        let notice = state.messages.last().expect("unknown-outcome notice");
+        let crate::chat_state::FlowItem::Text { content, .. } = &notice.flow_items[0] else {
+            panic!("unknown-outcome notice must be text");
+        };
+        assert!(content.contains("outcome is unknown"));
+        assert!(content.contains("This TUI is closing"));
+        assert!(content.contains("restore this session"));
+        assert!(!content.contains("was not changed"));
+    }
+
+    #[test]
+    fn rename_arguments_are_trimmed_and_empty_names_show_usage() {
+        assert_eq!(
+            requested_session_name("  Auth refactor  ").as_deref(),
+            Some("Auth refactor")
+        );
+        assert!(requested_session_name("").is_none());
+        assert!(requested_session_name("   ").is_none());
+    }
+
+    #[test]
+    fn session_name_changes_only_after_runtime_confirmation() {
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Original".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+
+        assert!(!apply_session_rename_feedback(
+            &mut state,
+            "Rejected",
+            SessionUpdateApplyOutcome::SessionUpdateFailed("storage failed".to_string()),
+        ));
+        assert_eq!(state.session_name, "Original");
+
+        assert!(!apply_session_rename_feedback(
+            &mut state,
+            "Unknown",
+            SessionUpdateApplyOutcome::OutcomeUnknown("request timed out".to_string()),
+        ));
+        assert_eq!(state.session_name, "Original");
+
+        assert!(apply_session_rename_feedback(
+            &mut state,
+            "Auth refactor",
+            SessionUpdateApplyOutcome::Applied,
+        ));
+        assert_eq!(state.session_name, "Auth refactor");
+    }
+
+    #[test]
+    fn shared_session_delete_is_available_only_when_idle_and_no_operation_is_pending() {
+        assert!(session_delete_allowed(false, true, false, false));
+        assert!(!session_delete_allowed(true, true, false, false));
+        assert!(!session_delete_allowed(false, true, true, false));
+        assert!(!session_delete_allowed(false, true, false, true));
+
+        // Embedded deletion keeps its existing ability to delete another
+        // Session while the current Session is running a Turn.
+        assert!(session_delete_allowed(false, false, true, false));
+    }
+
+    #[test]
+    fn session_delete_removes_the_item_only_after_runtime_confirmation() {
+        let (remove, status) = session_delete_feedback(
+            "Old session",
+            &SessionUpdateApplyOutcome::SessionUpdateFailed("session in use".to_string()),
+        );
+        assert!(!remove);
+        assert!(status.contains("session in use"));
+
+        let (remove, status) =
+            session_delete_feedback("Old session", &SessionUpdateApplyOutcome::Applied);
+        assert!(remove);
+        assert_eq!(status, "Session deleted: Old session");
+
+        let (remove, status) = session_delete_feedback(
+            "Old session",
+            &SessionUpdateApplyOutcome::OutcomeUnknown("request timed out".to_string()),
+        );
+        assert!(!remove);
+        assert!(status.contains("unknown outcome"));
+        assert!(status.contains("closing"));
+    }
+
+    #[test]
+    fn chat_session_delete_reuses_the_existing_async_session_slot() {
+        let source = include_str!("sessions.rs").replace("\r\n", "\n");
+        let delete = source
+            .split_once("fn handle_session_delete(")
+            .expect("delete handler")
+            .1;
+
+        assert!(delete.contains("rt_handle.spawn"));
+        assert!(delete.contains("pending_session_operation = Some(PendingSessionOperation"));
+        assert!(!delete.contains("block_in_place"));
+        assert!(!source.contains("PendingSessionDelete"));
+    }
+
+    #[test]
+    fn delegated_command_checks_session_state_before_materializing_a_worktree() {
+        let source = include_str!("sessions.rs").replace("\r\n", "\n");
+        let submission = source
+            .split_once("fn send_external_subagent_command_to_agent(")
+            .expect("delegated command submission")
+            .1
+            .split_once("fn send_draft_to_agent(")
+            .expect("delegated command submission boundary")
+            .0;
+
+        let shared_guard = submission.find("if self.agent.is_shared()").unwrap();
+        let pending_guard = submission.find("pending_session_operation").unwrap();
+        let busy_guard = submission.find("if chat_state.is_processing").unwrap();
+        let worktree_materialization = submission
+            .find("self.materialize_requested_worktree")
+            .unwrap();
+        assert!(shared_guard < worktree_materialization);
+        assert!(pending_guard < worktree_materialization);
+        assert!(busy_guard < worktree_materialization);
+        assert!(
+            submission
+                .matches("chat_view.set_draft(submitted_draft)")
+                .count()
+                >= 4
+        );
+    }
+
+    #[test]
+    fn workspace_diff_load_does_not_block_the_tui_event_loop() {
+        let commands = include_str!("commands.rs").replace("\r\n", "\n");
+        let handler = commands
+            .split_once("ActionHandler::WorkspaceDiff => {")
+            .expect("workspace diff handler")
+            .1
+            .split_once("ActionHandler::CompactSession => {")
+            .expect("workspace diff handler boundary")
+            .0;
+        let run_loop = include_str!("run.rs").replace("\r\n", "\n");
+
+        assert!(handler.contains("rt_handle.spawn"));
+        assert!(handler.contains("pending_workspace_diff"));
+        assert!(!handler.contains("block_in_place"));
+        assert!(run_loop.contains("poll_workspace_diff"));
+    }
+
+    #[test]
+    fn shared_workspace_diff_pending_state_serializes_runtime_actions_only() {
+        use crate::actions::ActionHandler;
+        use crate::modes::chat::pending_workspace_diff_blocks_runtime_action;
+
+        assert!(pending_workspace_diff_blocks_runtime_action(
+            true,
+            true,
+            ActionHandler::SubmitInput
+        ));
+        assert!(pending_workspace_diff_blocks_runtime_action(
+            true,
+            true,
+            ActionHandler::SelectModel
+        ));
+        assert!(pending_workspace_diff_blocks_runtime_action(
+            true,
+            true,
+            ActionHandler::NewSession
+        ));
+        assert!(!pending_workspace_diff_blocks_runtime_action(
+            true,
+            true,
+            ActionHandler::SelectTheme
+        ));
+        assert!(!pending_workspace_diff_blocks_runtime_action(
+            false,
+            true,
+            ActionHandler::SubmitInput
+        ));
+        assert!(!pending_workspace_diff_blocks_runtime_action(
+            true,
+            false,
+            ActionHandler::SubmitInput
+        ));
+    }
+
+    #[test]
+    fn pending_session_operation_routes_commands_to_their_action_guards() {
+        assert!(session_update_blocks_typed_submission(true, "continue"));
+        assert!(!session_update_blocks_typed_submission(true, "/new"));
+        assert!(!session_update_blocks_typed_submission(true, "/sessions"));
+        assert!(!session_update_blocks_typed_submission(true, "/exit"));
+        assert!(!session_update_blocks_typed_submission(false, "continue"));
+
+        assert!(pending_session_operation_blocks_runtime_action(
+            true,
+            true,
+            ActionHandler::Sessions,
+        ));
+        assert!(pending_session_operation_blocks_runtime_action(
+            true,
+            true,
+            ActionHandler::Init,
+        ));
+        assert!(pending_session_operation_blocks_runtime_action(
+            true,
+            true,
+            ActionHandler::RenameSession,
+        ));
+        assert!(!pending_session_operation_blocks_runtime_action(
+            true,
+            true,
+            ActionHandler::Exit,
+        ));
+        assert!(!pending_session_operation_blocks_runtime_action(
+            true,
+            true,
+            ActionHandler::OpenAgentSelector,
+        ));
+        assert!(!pending_session_operation_blocks_runtime_action(
+            false,
+            true,
+            ActionHandler::Sessions,
+        ));
+        assert!(pending_session_operation_blocks_runtime_action(
+            false,
+            true,
+            ActionHandler::UndoSession,
+        ));
+        assert!(pending_session_operation_blocks_runtime_action(
+            true,
+            true,
+            ActionHandler::RedoSession,
+        ));
+        assert!(!pending_session_operation_blocks_runtime_action(
+            true,
+            false,
+            ActionHandler::Sessions,
+        ));
+    }
+
+    #[test]
+    fn parameterized_slash_selection_prefills_the_native_command() {
+        assert_eq!(
+            selected_command_prefill(ActionHandler::RenameSession),
+            Some("/rename ")
+        );
+        assert_eq!(selected_command_prefill(ActionHandler::Sessions), None);
+    }
+
+    #[test]
+    fn explicit_native_selection_is_consumed_by_one_matching_submission() {
+        let mut selected = Some("rename".to_string());
+        assert!(consume_selected_native_command_once(
+            &mut selected,
+            "rename"
+        ));
+        assert!(selected.is_none());
+        assert!(!consume_selected_native_command_once(
+            &mut selected,
+            "rename"
+        ));
+
+        let mut different = Some("rename".to_string());
+        assert!(!consume_selected_native_command_once(
+            &mut different,
+            "help"
+        ));
+        assert!(different.is_none());
+    }
+
+    #[test]
+    fn selected_native_command_choice_is_cleared_when_prefill_is_edited_away() {
+        let mut selected = Some("rename".to_string());
+
+        retain_selected_native_command_for_input(&mut selected, "/rename Auth refactor");
+        assert_eq!(selected.as_deref(), Some("rename"));
+
+        retain_selected_native_command_for_input(&mut selected, "/renam Auth refactor");
+        assert!(selected.is_none());
+    }
+
+    #[test]
+    fn selected_native_command_prefill_is_cleared_without_discarding_normal_drafts() {
+        let mut view = ChatView::new(Theme::dark(), Vec::new());
+        view.set_input("/rename Release notes");
+        let mut selected = Some("rename".to_string());
+
+        clear_selected_native_command_prefill(&mut selected, &mut view);
+
+        assert!(selected.is_none());
+        assert!(view.input_text().is_empty());
+
+        view.set_input("Keep this normal draft");
+        clear_selected_native_command_prefill(&mut selected, &mut view);
+        assert_eq!(view.input_text(), "Keep this normal draft");
+    }
+
+    #[test]
+    fn every_new_slash_menu_selection_clears_the_pending_native_choice() {
+        let mut selected = Some("rename".to_string());
+        begin_slash_menu_selection(&mut selected, Some("external-command"));
+        assert_eq!(selected, None);
+
+        selected = Some("rename".to_string());
+        begin_slash_menu_selection(&mut selected, Some("auto"));
+        assert_eq!(selected, None);
+
+        selected = Some("rename".to_string());
+        begin_slash_menu_selection(&mut selected, None);
+        assert_eq!(selected.as_deref(), Some("rename"));
+    }
+
+    #[test]
+    fn session_command_help_comes_from_the_action_registry() {
+        let help = session_command_help_note();
+        let rename =
+            crate::actions::action_for_alias("/rename", crate::actions::ActionContext::Chat)
+                .expect("rename action");
+
+        assert!(help.contains("Session Commands"));
+        assert!(help.contains(rename.description));
+        assert!(help.contains("/rename <name>"));
+        assert!(help.contains("/timeline"));
+        assert!(help.contains("/undo"));
+        assert!(help.contains("/redo"));
+    }
+
+    #[test]
+    fn shared_session_change_waits_for_the_current_session_update_result() {
+        assert!(shared_session_change_is_blocked(true, true));
+        assert!(!shared_session_change_is_blocked(true, false));
+        assert!(!shared_session_change_is_blocked(false, true));
+    }
+
+    #[test]
+    fn embedded_session_switch_waits_only_when_the_target_is_being_deleted() {
+        let deleting = PendingSessionOperationKind::Delete {
+            session_name: "Old session".to_string(),
+        };
+        let renaming = PendingSessionOperationKind::Rename {
+            session_name: "New name".to_string(),
+        };
+
+        assert!(session_switch_targets_pending_delete(
+            "session-b",
+            Some(("session-b", &deleting)),
+        ));
+        assert!(!session_switch_targets_pending_delete(
+            "session-a",
+            Some(("session-b", &deleting)),
+        ));
+        assert!(!session_switch_targets_pending_delete(
+            "session-b",
+            Some(("session-b", &renaming)),
+        ));
+        assert!(!session_switch_targets_pending_delete("session-b", None));
+    }
+
+    #[test]
+    fn shared_chat_status_describes_local_compatibility_management() {
+        assert!(SHARED_TUI_CHAT_STATUS.contains("current Session Agent mode"));
+        assert!(!SHARED_TUI_CHAT_STATUS.contains("current Session model"));
+        assert!(SHARED_TUI_CHAT_STATUS.contains("current Session name"));
+        assert!(SHARED_TUI_CHAT_STATUS.contains("/reload [skills|instructions]"));
+        assert!(SHARED_TUI_CHAT_STATUS.contains("Model, Skill, Subagent, and MCP management"));
+        assert!(SHARED_TUI_CHAT_STATUS.contains("local compatibility owner"));
+        assert!(SHARED_TUI_CHAT_STATUS
+            .contains("do not reconfigure an already-running Shared Runtime Host"));
+        assert!(SHARED_TUI_CHAT_STATUS.contains("other management remain Embedded"));
+    }
+
+    #[test]
+    fn failed_session_update_cancels_automatic_exit() {
+        assert!(session_update_completion_should_exit(true, true));
+        assert!(!session_update_completion_should_exit(true, false));
+        assert!(!session_update_completion_should_exit(false, true));
+    }
+
+    #[test]
+    fn session_updates_require_an_idle_session_and_one_pending_operation() {
+        assert!(session_update_allowed(false, false));
+        assert!(!session_update_allowed(true, false));
+        assert!(!session_update_allowed(false, true));
     }
 
     #[test]
@@ -1230,7 +2236,7 @@ mod tests {
         assert!(help.contains("Command Palette"));
     }
     fn external_agent_review_snapshot() -> ExternalSourceCatalogSnapshot {
-        serde_json::from_value(serde_json::json!({
+        public_external_source_snapshot(serde_json::json!({
             "generation": 9,
             "discoveryPending": false,
             "sources": [],
@@ -1250,6 +2256,14 @@ mod tests {
                 }],
                 "sourceLocationLabels": ["<workspace>/.opencode/agents/review.md"],
                 "sourceCount": 1,
+                "requestedModel": {
+                    "kind": "reference",
+                    "providerHint": "anthropic",
+                    "modelName": "claude-sonnet-4"
+                },
+                "requestedModelProfile": { "kind": "named_variant", "name": "high" },
+                "modelBindingMethod": "binding_required",
+                "modelBindingKey": "external_subagent_model_binding:review",
                 "effectiveModelLabel": "fast",
                 "effectiveToolLabels": ["read", "search"],
                 "supportsFollowUp": false,
@@ -1257,6 +2271,29 @@ mod tests {
                 "diagnostics": [],
                 "activationState": { "state": "approval_required" },
                 "decisionKey": "decision-v1"
+            }],
+            "subagentModelBindingGroups": [{
+                "bindingKey": "external_subagent_model_binding:review",
+                "request": {
+                    "kind": "reference",
+                    "providerHint": "anthropic",
+                    "modelName": "claude-sonnet-4"
+                },
+                "profileRequest": { "kind": "named_variant", "name": "high" },
+                "scope": "project",
+                "method": "binding_required",
+                "affectedCandidateIds": [
+                    "external_subagent:opencode:review:v1",
+                    "external_subagent:claude:review:v1"
+                ]
+            }],
+            "subagentModelBindingOptions": [{
+                "target": { "kind": "primary" },
+                "effectiveModelLabel": "GPT-5",
+                "configuredReasoningEffort": "high"
+            }, {
+                "target": { "kind": "fast" },
+                "effectiveModelLabel": "GLM-4.5-Air"
             }],
             "subagentConflicts": [{
                 "conflictKey": "conflict-v1",
@@ -1275,7 +2312,6 @@ mod tests {
             }],
             "pendingSubagentApprovals": ["external_subagent:opencode:review:v1"]
         }))
-        .unwrap()
     }
 
     #[test]
@@ -1284,6 +2320,12 @@ mod tests {
 
         assert!(summary.contains("one run only; no follow-up"));
         assert!(summary.contains("Model: fast"));
+        assert!(summary.contains("Requested model: anthropic/claude-sonnet-4"));
+        assert!(summary.contains("Requested profile: named variant high"));
+        assert!(summary.contains("configured effort: high"));
+        assert!(summary.contains("Resolution: choose a BitFun model"));
+        assert!(summary.contains("Affects 2 agents"));
+        assert!(summary.contains("/agent bind 1 2"));
         assert!(summary.contains("Tools: read, search"));
         assert!(summary.contains("/agent enable 1"));
         assert!(summary.contains("/agent choose 1 2"));
@@ -1300,6 +2342,18 @@ mod tests {
         let mut unavailable = external_agent_review_snapshot();
         unavailable.subagents[0].effective_model_label = None;
         assert!(external_agent_review_text(Some(&unavailable)).contains("Model: unavailable"));
+
+        let mut inherited = external_agent_review_snapshot();
+        inherited.subagents[0].requested_model =
+            bitfun_product_domains::external_subagents::ExternalSubagentModelRequest::Inherit;
+        inherited.subagents[0].model_binding_method =
+            bitfun_product_domains::external_subagents::ExternalSubagentModelBindingMethod::Inherit;
+        inherited.subagents[0].model_binding_key = None;
+        inherited.subagents[0].effective_model_label = None;
+        let inherited_summary = external_agent_review_text(Some(&inherited));
+        assert!(inherited_summary
+            .contains("Model: resolved from the parent session when the task starts"));
+        assert!(!inherited_summary.contains("Model: unavailable"));
     }
 
     #[test]
@@ -1421,6 +2475,24 @@ mod tests {
                 candidate_id: "external_subagent:opencode:review:v1".to_string(),
                 decision_key: "decision-v1".to_string(),
                 approved: true,
+                expected_subagent_generation: 4,
+                expected_preference_revision: 7,
+            }
+        );
+        assert_eq!(
+            parse_external_agent_review_action("bind 1 2", Some(&snapshot), None).unwrap(),
+            ExternalAgentReviewAction::Bind {
+                binding_key: "external_subagent_model_binding:review".to_string(),
+                target: Some(ExternalSubagentModelBindingTarget::Fast),
+                expected_subagent_generation: 4,
+                expected_preference_revision: 7,
+            }
+        );
+        assert_eq!(
+            parse_external_agent_review_action("bind 1 0", Some(&snapshot), None).unwrap(),
+            ExternalAgentReviewAction::Bind {
+                binding_key: "external_subagent_model_binding:review".to_string(),
+                target: None,
                 expected_subagent_generation: 4,
                 expected_preference_revision: 7,
             }
@@ -1578,5 +2650,76 @@ mod tests {
         assert!(config.contains("could not read its model settings"));
         assert!(config.contains("can read and save its settings"));
         assert!(!config.contains("requested model is not available"));
+    }
+
+    #[test]
+    fn busy_chat_submission_steers_without_inventing_a_command_or_losing_the_draft() {
+        let source = include_str!("commands.rs").replace("\r\n", "\n");
+        let submission = source
+            .split_once("fn submit_input(")
+            .expect("submit input")
+            .1
+            .split_once("fn send_shell_command(")
+            .expect("submit input boundary")
+            .0;
+        let steering = source
+            .split_once("fn steer_draft_to_agent(")
+            .expect("steering submission")
+            .1
+            .split_once("fn send_shell_command(")
+            .expect("steering submission boundary")
+            .0;
+
+        assert!(submission.contains("if chat_state.is_processing"));
+        assert!(submission.contains("steering_unsupported_reason"));
+        assert!(submission.contains("self.steer_draft_to_agent"));
+        assert!(!submission.contains("/steer"));
+        assert!(steering.contains("agent.steer_current_turn"));
+        assert!(steering.contains("chat_state.handle_user_steering"));
+        assert!(steering.contains("chat_view.set_draft(draft)"));
+    }
+
+    #[test]
+    fn active_turn_steering_accepts_text_and_rejects_rich_drafts() {
+        let plain = crate::ui::composer::ComposerDraft::from_text("check tests");
+        assert_eq!(steering_unsupported_reason(&plain), None);
+
+        let mut referenced = plain.clone();
+        referenced
+            .workspace_references
+            .push(bitfun_runtime_ports::AgentWorkspaceReference {
+                path: "src/lib.rs".to_string(),
+                kind: bitfun_runtime_ports::AgentWorkspaceReferenceKind::File,
+                start_line: None,
+                end_line: None,
+                source: bitfun_runtime_ports::AgentWorkspaceReferenceSourceRange {
+                    start: 0,
+                    end: 11,
+                    value: "@src/lib.rs".to_string(),
+                },
+            });
+        assert!(steering_unsupported_reason(&referenced)
+            .expect("workspace reference rejection")
+            .contains("Workspace references"));
+
+        let mut imaged = plain;
+        imaged
+            .image_attachments
+            .push(crate::ui::composer::ComposerImageAttachment {
+                image: crate::ui::composer::ComposerImage::new(
+                    "image-1",
+                    "image.png",
+                    "image/png",
+                    std::sync::Arc::<[u8]>::from([1, 2, 3]),
+                ),
+                source: crate::ui::composer::ComposerSourceRange {
+                    start: 0,
+                    end: 9,
+                    value: "[Image 1]".to_string(),
+                },
+            });
+        assert!(steering_unsupported_reason(&imaged)
+            .expect("image rejection")
+            .contains("Images"));
     }
 }

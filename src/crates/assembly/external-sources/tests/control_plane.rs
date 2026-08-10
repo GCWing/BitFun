@@ -24,6 +24,7 @@ fn control_plane_owns_all_typed_coordinator_snapshots() {
         Vec::new(),
         Vec::new(),
         Vec::new(),
+        Vec::new(),
     )
     .unwrap();
 
@@ -31,6 +32,7 @@ fn control_plane_owns_all_typed_coordinator_snapshots() {
     assert!(plane.tools(|coordinator| coordinator.snapshot().sources.is_empty()));
     assert!(plane.subagents(|coordinator| coordinator.snapshot().sources.is_empty()));
     assert!(plane.mcp(|coordinator| coordinator.snapshot().sources.is_empty()));
+    assert!(plane.workspace_references(|coordinator| coordinator.snapshot().sources.is_empty()));
 }
 
 #[test]
@@ -38,6 +40,7 @@ fn suppression_replacement_is_applied_to_every_typed_coordinator() {
     let plane = ExternalSourceControlPlane::new(
         context(),
         revision_key(),
+        Vec::new(),
         Vec::new(),
         Vec::new(),
         Vec::new(),
@@ -64,6 +67,10 @@ fn suppression_replacement_is_applied_to_every_typed_coordinator() {
     );
     assert_eq!(
         plane.mcp(|coordinator| coordinator.suppressed_sources().clone()),
+        suppressed
+    );
+    assert_eq!(
+        plane.workspace_references(|coordinator| coordinator.suppressed_sources().clone()),
         suppressed
     );
 }

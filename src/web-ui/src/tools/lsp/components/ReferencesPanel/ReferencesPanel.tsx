@@ -126,14 +126,16 @@ export const ReferencesPanel: React.FC<ReferencesPanelProps> = ({
 
   if (references.length === 0) {
     return (
-      <div className="references-panel" style={panelStyle}>
-        <div className="references-panel__header">
-          <div className="references-panel__title">
+      <div className="references-panel" style={panelStyle} data-bf-component="references-panel" data-bf-part="root" data-bf-state="empty">
+        <div data-bf-component="references-panel" data-bf-part="header" className="references-panel__header">
+          <div data-bf-component="references-panel" data-bf-part="title" className="references-panel__title">
             <FileText size={16} />
             <span>{t('lsp.referencesPanel.emptyTitle')}</span>
           </div>
           <IconButton 
             className="references-panel__close" 
+            data-bf-component="references-panel"
+            data-bf-part="close"
             onClick={onClose}
             size="small"
             variant="ghost"
@@ -141,7 +143,7 @@ export const ReferencesPanel: React.FC<ReferencesPanelProps> = ({
             <X size={16} />
           </IconButton>
         </div>
-        <div className="references-panel__empty">
+        <div data-bf-component="references-panel" data-bf-part="empty" className="references-panel__empty">
           {symbolName
             ? t('lsp.referencesPanel.emptyWithSymbol', { symbol: symbolName })
             : t('lsp.referencesPanel.emptyDescription')}
@@ -151,9 +153,9 @@ export const ReferencesPanel: React.FC<ReferencesPanelProps> = ({
   }
 
   return (
-    <div className="references-panel" style={panelStyle}>
-      <div className="references-panel__header">
-        <div className="references-panel__title">
+    <div className="references-panel" style={panelStyle} data-bf-component="references-panel" data-bf-part="root">
+      <div data-bf-component="references-panel" data-bf-part="header" className="references-panel__header">
+        <div data-bf-component="references-panel" data-bf-part="title" className="references-panel__title">
           <FileText size={16} />
           <span>
             {symbolName
@@ -164,6 +166,8 @@ export const ReferencesPanel: React.FC<ReferencesPanelProps> = ({
         </div>
         <IconButton 
           className="references-panel__close" 
+          data-bf-component="references-panel"
+          data-bf-part="close"
           onClick={onClose}
           size="small"
           variant="ghost"
@@ -172,31 +176,33 @@ export const ReferencesPanel: React.FC<ReferencesPanelProps> = ({
         </IconButton>
       </div>
 
-      <div className="references-panel__content">
+      <div data-bf-component="references-panel" data-bf-part="content" className="references-panel__content">
         {groupedReferences.map((group) => (
-          <div key={group.filePath} className="references-panel__file-group">
-            <div className="references-panel__file-header" title={group.filePath}>
+          <div data-bf-component="references-panel" data-bf-part="fileGroup" key={group.filePath} className="references-panel__file-group">
+            <div data-bf-component="references-panel" data-bf-part="fileHeader" className="references-panel__file-header" title={group.filePath}>
               <FileText size={14} />
-              <div className="references-panel__file-path">
+              <div data-bf-component="references-panel" data-bf-part="filePath" className="references-panel__file-path">
                 {group.filePath.replace(/^file:\/\/\//, '')}
               </div>
-              <div className="references-panel__file-count">
+              <div data-bf-component="references-panel" data-bf-part="fileCount" className="references-panel__file-count">
                 {group.references.length}
               </div>
             </div>
 
-            <div className="references-panel__reference-list">
+            <div data-bf-component="references-panel" data-bf-part="list" className="references-panel__reference-list">
               {group.references.map((ref, index) => (
                 <div
+                  data-bf-component="references-panel"
+                  data-bf-part="item"
                   key={`${group.filePath}-${index}`}
                   className="references-panel__reference-item"
                   onClick={() => handleReferenceClick(ref.location)}
                 >
                   <ChevronRight size={14} className="references-panel__reference-icon" />
-                  <div className="references-panel__reference-line">
+                  <div data-bf-component="references-panel" data-bf-part="line" className="references-panel__reference-line">
                     {ref.lineNumber}
                   </div>
-                  <div className="references-panel__reference-preview">
+                  <div data-bf-component="references-panel" data-bf-part="preview" className="references-panel__reference-preview">
                     {ref.preview.trim() || t('lsp.referencesPanel.emptyLine')}
                   </div>
                 </div>

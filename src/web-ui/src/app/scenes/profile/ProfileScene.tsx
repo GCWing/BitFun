@@ -8,7 +8,7 @@ interface ProfileSceneProps {
 }
 
 const ProfileScene: React.FC<ProfileSceneProps> = () => (
-  <div className="bitfun-profile-scene">
+  <div className="bitfun-profile-scene" data-bf-scene="profile" data-bf-part="root">
     <NurseryView />
   </div>
 );

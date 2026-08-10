@@ -1,0 +1,14 @@
+import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
+
+export const computerUseToolCardAppearanceDescriptor: AppearanceSurfaceDescriptor = {
+  id: 'computer-use-tool-card',
+  parts: [
+    { id: 'root' }, { id: 'content' }, { id: 'permissionDenied' },
+    { id: 'settingsButton' }, { id: 'expanded' }, { id: 'row' },
+    { id: 'loopWarning' }, { id: 'actionCode' },
+  ],
+  states: [
+    { id: 'expanded', selector: { kind: 'self', suffix: '[data-bf-state~="expanded"]' } },
+    { id: 'failed', selector: { kind: 'self', suffix: '[data-bf-state~="failed"]' } },
+  ],
+};

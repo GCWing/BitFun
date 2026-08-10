@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import type { FlowChatState, Session } from '@/flow_chat/types/flow-chat';
 import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
-import { findReusableEmptySessionId } from './projectSessionWorkspace';
+import {
+  findReusableEmptySessionId,
+  pickPrimaryAssistantWorkspace,
+} from './projectSessionWorkspace';
 
 const resetStore = () => {
   flowChatStore.setState((): FlowChatState => ({
@@ -56,5 +59,41 @@ describe('findReusableEmptySessionId', () => {
     }));
 
     expect(findReusableEmptySessionId(workspace, 'agentic')).toBeNull();
+  });
+});
+
+describe('pickPrimaryAssistantWorkspace', () => {
+  const createAssistantWorkspace = (
+    id: string,
+    assistantId?: string,
+  ): WorkspaceInfo => ({
+    id,
+    name: id,
+    rootPath: `/assistants/${id}`,
+    workspaceKind: WorkspaceKind.Assistant,
+    assistantId,
+  });
+
+  it('selects the primary assistant even when a named assistant appears first', () => {
+    const namedAssistant = createAssistantWorkspace('named', 'assistant-1');
+    const primaryAssistant = createAssistantWorkspace('primary');
+
+    expect(
+      pickPrimaryAssistantWorkspace([namedAssistant, primaryAssistant])
+    ).toBe(primaryAssistant);
+  });
+
+  it('selects the configured primary assistant by workspace id', () => {
+    const firstAssistant = createAssistantWorkspace('first', 'assistant-1');
+    const configuredPrimary = createAssistantWorkspace('configured', 'assistant-2');
+
+    expect(pickPrimaryAssistantWorkspace([firstAssistant, configuredPrimary], 'configured'))
+      .toBe(configuredPrimary);
+  });
+
+  it('does not fall back to a named assistant', () => {
+    const namedAssistant = createAssistantWorkspace('named', 'assistant-1');
+
+    expect(pickPrimaryAssistantWorkspace([namedAssistant])).toBeNull();
   });
 });

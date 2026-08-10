@@ -209,6 +209,56 @@ describe('SSHRemoteProvider startup restore', () => {
     );
   });
 
+  it('reconnects one SSH profile once when several workspaces share it', async () => {
+    const firstWorkspace = {
+      id: 'ws-shared-1',
+      name: 'first',
+      rootPath: '/srv/first',
+      workspaceType: WorkspaceType.SingleProject,
+      workspaceKind: WorkspaceKind.Remote,
+      languages: [] as string[],
+      openedAt: new Date().toISOString(),
+      lastAccessed: new Date().toISOString(),
+      tags: [] as string[],
+      connectionId: 'conn-shared',
+      connectionName: 'shared-box',
+      sshHost: 'shared.example.com',
+    };
+    const secondWorkspace = {
+      ...firstWorkspace,
+      id: 'ws-shared-2',
+      name: 'second',
+      rootPath: '/srv/second',
+    };
+    workspaceManagerMock.getState.mockReturnValue({
+      loading: false,
+      openedWorkspaces: new Map([
+        [firstWorkspace.id, firstWorkspace],
+        [secondWorkspace.id, secondWorkspace],
+      ]),
+      activeWorkspaceId: firstWorkspace.id,
+    });
+    sshApiMock.listSavedConnections.mockResolvedValue([{
+      id: 'conn-shared',
+      name: 'shared-box',
+      host: 'shared.example.com',
+      port: 22,
+      username: 'root',
+      authType: { type: 'PrivateKey', keyPath: '/tmp/id_rsa' },
+    }]);
+    sshApiMock.connect.mockResolvedValue({
+      success: true,
+      connectionId: 'conn-shared',
+    });
+
+    await renderProvider();
+
+    expect(sshApiMock.connect).toHaveBeenCalledTimes(1);
+    expect(sshApiMock.openWorkspace).toHaveBeenCalledTimes(2);
+    expect(sshApiMock.openWorkspace).toHaveBeenCalledWith('conn-shared', '/srv/first');
+    expect(sshApiMock.openWorkspace).toHaveBeenCalledWith('conn-shared', '/srv/second');
+  });
+
   it('keeps a disconnected remote workspace after the 180s reconnect budget elapses', async () => {
     vi.useFakeTimers();
 

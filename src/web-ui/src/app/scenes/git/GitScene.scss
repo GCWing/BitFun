@@ -38,11 +38,11 @@
   &__init-line {
     width: 40px;
     height: 1px;
-    background: var(--border-subtle);
+    background: var(--bf-appearance-token-border-subtle);
 
     &--dashed {
       border: none;
-      background: repeating-linear-gradient(90deg, var(--border-subtle) 0, var(--border-subtle) 4px, transparent 4px, transparent 8px);
+      background: repeating-linear-gradient(90deg, var(--bf-appearance-token-border-subtle) 0, var(--bf-appearance-token-border-subtle) 4px, transparent 4px, transparent 8px);
     }
   }
 
@@ -50,7 +50,7 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--color-text-muted);
+    background: var(--bf-appearance-token-color-text-muted);
 
     &--muted {
       opacity: 0.5;
@@ -67,7 +67,7 @@
   }
 
   &__init-icon {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__init-text {
@@ -77,12 +77,12 @@
       margin: 0 0 4px;
       font-size: 14px;
       font-weight: 600;
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
     }
     p {
       margin: 0;
       font-size: 12px;
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
   }
 
@@ -91,36 +91,36 @@
     align-items: center;
     gap: 6px;
     padding: 8px 16px;
-    border: 1px solid var(--btn-primary-border);
+    border: 1px solid var(--bf-appearance-token-btn-primary-border);
     border-radius: 8px;
-    background: var(--btn-primary-bg);
-    color: var(--btn-primary-color);
-    box-shadow: var(--btn-primary-shadow);
+    background: var(--bf-appearance-token-btn-primary-bg);
+    color: var(--bf-appearance-token-btn-primary-color);
+    box-shadow: var(--bf-appearance-token-btn-primary-shadow);
     font-size: 12px;
     font-weight: 500;
     cursor: pointer;
     transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 
     &:hover {
-      background: var(--btn-primary-hover-bg);
-      color: var(--btn-primary-hover-color);
-      border-color: var(--btn-primary-hover-border);
-      box-shadow: var(--btn-primary-hover-shadow);
-      transform: var(--btn-primary-hover-transform);
+      background: var(--bf-appearance-token-btn-primary-hover-bg);
+      color: var(--bf-appearance-token-btn-primary-hover-color);
+      border-color: var(--bf-appearance-token-btn-primary-hover-border);
+      box-shadow: var(--bf-appearance-token-btn-primary-hover-shadow);
+      transform: var(--bf-appearance-token-btn-primary-hover-transform);
     }
 
     &:active {
-      background: var(--btn-primary-active-bg);
-      color: var(--btn-primary-active-color);
-      border-color: var(--btn-primary-active-border);
-      box-shadow: var(--btn-primary-active-shadow);
-      transform: var(--btn-primary-active-transform);
+      background: var(--bf-appearance-token-btn-primary-active-bg);
+      color: var(--bf-appearance-token-btn-primary-active-color);
+      border-color: var(--bf-appearance-token-btn-primary-active-border);
+      box-shadow: var(--bf-appearance-token-btn-primary-active-shadow);
+      transform: var(--bf-appearance-token-btn-primary-active-transform);
     }
   }
 
   &__init-hint {
     font-size: 11px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__loading-actions {

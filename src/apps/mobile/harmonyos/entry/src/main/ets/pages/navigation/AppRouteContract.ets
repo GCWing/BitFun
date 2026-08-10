@@ -2,7 +2,13 @@ export enum AppRoute {
   ChatHome = 'ChatHome',
   GeneralChat = 'GeneralChat',
   RemoteHome = 'RemoteHome',
+  RemoteCreate = 'RemoteCreate',
   RemoteChat = 'RemoteChat'
+}
+
+export enum ConversationSource {
+  General = 'general',
+  Remote = 'remote'
 }
 
 export class ChatRouteParam {
@@ -54,6 +60,27 @@ export class AppRouteContract {
     return route === AppRoute.GeneralChat || route === AppRoute.RemoteChat;
   }
 
+  static conversationSource(route: AppRoute): ConversationSource {
+    if (route === AppRoute.RemoteHome || route === AppRoute.RemoteCreate || route === AppRoute.RemoteChat) {
+      return ConversationSource.Remote;
+    }
+    return ConversationSource.General;
+  }
+
+  static routeForConversationSource(
+    source: ConversationSource,
+    remoteAvailable: boolean,
+    activeRemoteSessionId: string
+  ): AppNavigationPathSpec {
+    if (source === ConversationSource.General) {
+      return new AppNavigationPathSpec(AppRoute.ChatHome);
+    }
+    if (remoteAvailable && activeRemoteSessionId.length > 0) {
+      return new AppNavigationPathSpec(AppRoute.RemoteChat, activeRemoteSessionId);
+    }
+    return new AppNavigationPathSpec(AppRoute.RemoteHome);
+  }
+
   static routeParam(sessionId: string): ChatRouteParam {
     return new ChatRouteParam(sessionId);
   }
@@ -73,6 +100,9 @@ export class AppRouteContract {
       return AppNavigationBackAction.CloseActiveChat;
     }
     if (route === AppRoute.RemoteHome) {
+      return AppNavigationBackAction.PopRemoteHome;
+    }
+    if (route === AppRoute.RemoteCreate) {
       return AppNavigationBackAction.PopRemoteHome;
     }
     return AppNavigationBackAction.AllowSystem;

@@ -2,7 +2,7 @@
  * Segmented usage bar primitive — proportional pills + remainder, with an
  * optional one-line label row above. Visually matches `BitFun UI`
  * `ContextUsageTray`'s usage bar, themed for canvas via the shared `Color`
- * palette and `useHostTheme()` semantic tokens.
+ * palette and `useHostAppearance()` semantic tokens.
  */
 import type { CSSProperties, JSX, ReactNode } from "react";
 import { type Color } from "./canvas-tokens.js";

@@ -39,8 +39,8 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({
         'bitfun-nav-panel__section-header',
         isInteractive && 'bitfun-nav-panel__section-header--interactive',
         collapsible && 'bitfun-nav-panel__section-header--collapsible',
-        onSceneOpen && 'bitfun-nav-panel__section-header--scene-link',
-        isSceneEntry && 'bitfun-nav-panel__section-header--scene-entry',
+        onSceneOpen && 'bitfun-nav-panel__section-header--bf-appearance-token-scene-link',
+        isSceneEntry && 'bitfun-nav-panel__section-header--bf-appearance-token-scene-entry',
       ]
         .filter(Boolean)
         .join(' ')}

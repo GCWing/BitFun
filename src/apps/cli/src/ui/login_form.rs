@@ -12,9 +12,10 @@ use ratatui::{
     Frame,
 };
 
-use crate::account::{AccountDevice, AccountInfo};
-use crate::account_sync::{sync_phase_label, SyncProgress, SyncStatus};
 use crate::ui::theme::{StyleKind, Theme};
+use bitfun_app_server_protocol::account::{
+    AccountDevice, AccountInfo, SettingsSyncProgress, SettingsSyncStatus,
+};
 
 /// Credentials collected by the login form.
 #[derive(Debug, Clone)]
@@ -106,7 +107,7 @@ pub(crate) struct LoginFormState {
     account_focus: AccountFocus,
     account_info: Option<AccountInfo>,
     devices: Vec<AccountDevice>,
-    sync_progress: SyncProgress,
+    sync_progress: SettingsSyncProgress,
 }
 
 impl LoginFormState {
@@ -127,7 +128,7 @@ impl LoginFormState {
             account_focus: AccountFocus::Close,
             account_info: None,
             devices: Vec::new(),
-            sync_progress: SyncProgress::default(),
+            sync_progress: SettingsSyncProgress::default(),
         }
     }
 
@@ -169,7 +170,7 @@ impl LoginFormState {
         &mut self,
         info: AccountInfo,
         devices: Vec<AccountDevice>,
-        sync_progress: SyncProgress,
+        sync_progress: SettingsSyncProgress,
     ) {
         self.visible = true;
         self.mode = PanelMode::Account;
@@ -184,7 +185,7 @@ impl LoginFormState {
     pub(crate) fn update_account_progress(
         &mut self,
         devices: Option<Vec<AccountDevice>>,
-        sync_progress: SyncProgress,
+        sync_progress: SettingsSyncProgress,
     ) {
         if let Some(devices) = devices {
             self.devices = devices;
@@ -658,27 +659,31 @@ impl LoginFormState {
 
         let sync = &self.sync_progress;
         let sync_text = match sync.status {
-            SyncStatus::Idle => "Sync: idle".to_string(),
-            SyncStatus::Syncing => {
+            SettingsSyncStatus::Idle => "Sync: idle".to_string(),
+            SettingsSyncStatus::Syncing => {
                 format!("Syncing: {}  {}%", sync_phase_label(sync), sync.percent)
             }
-            SyncStatus::Done => format!(
+            SettingsSyncStatus::Done => format!(
                 "Sync done — settings={} exported={}",
                 sync.settings_synced, sync.sessions_exported
             ),
-            SyncStatus::Failed => format!(
+            SettingsSyncStatus::Failed => format!(
                 "Sync failed: {}",
                 sync.error.as_deref().unwrap_or("unknown error")
             ),
+            SettingsSyncStatus::Cancelled => "Sync cancelled".to_string(),
         };
         let sync_style = match sync.status {
-            SyncStatus::Failed => theme.style(StyleKind::Error),
-            SyncStatus::Done => theme.style(StyleKind::Info),
-            SyncStatus::Syncing => theme.style(StyleKind::Primary),
-            SyncStatus::Idle => theme.style(StyleKind::Muted),
+            SettingsSyncStatus::Failed => theme.style(StyleKind::Error),
+            SettingsSyncStatus::Done => theme.style(StyleKind::Info),
+            SettingsSyncStatus::Syncing => theme.style(StyleKind::Primary),
+            SettingsSyncStatus::Idle => theme.style(StyleKind::Muted),
+            SettingsSyncStatus::Cancelled => theme.style(StyleKind::Muted),
         };
         let bar_width = rows[1].width.saturating_sub(2) as usize;
-        let filled = if sync.status == SyncStatus::Syncing || sync.status == SyncStatus::Done {
+        let filled = if sync.status == SettingsSyncStatus::Syncing
+            || sync.status == SettingsSyncStatus::Done
+        {
             ((sync.percent as usize) * bar_width) / 100
         } else {
             0
@@ -888,6 +893,27 @@ impl LoginFormState {
             .alignment(Alignment::Center),
             area,
         );
+    }
+}
+
+fn sync_phase_label(progress: &SettingsSyncProgress) -> String {
+    match progress.phase.as_str() {
+        "uploading_settings" => "Uploading settings...".into(),
+        "downloading_settings" => "Downloading settings...".into(),
+        "applying_settings" => "Applying cloud settings...".into(),
+        "settings_done" => "Settings sync done".into(),
+        "listing_sessions" => "Listing local sessions...".into(),
+        "exporting_sessions" => {
+            if let (Some(current), Some(total)) = (progress.current, progress.total) {
+                format!("Uploading sessions ({current}/{total})...")
+            } else {
+                "Uploading sessions...".into()
+            }
+        }
+        "done" => format!("Sync complete (exported {})", progress.sessions_exported),
+        "starting" => "Starting sync...".into(),
+        other if other.is_empty() => "Sync".into(),
+        other => other.to_string(),
     }
 }
 

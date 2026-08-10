@@ -269,19 +269,19 @@
           "label": "禁用状态: ",
           "text": "使用 disabled 属性，opacity 降低为 0.5"
         },
-        "theme": {
-          "label": "主题支持: ",
-          "text": "primary 变体通过 CSS 变量支持主题定制"
+        "appearance": {
+          "label": "外观支持: ",
+          "text": "primary 变体遵循 Appearance 变量"
         }
       }
     },
     "previewApp": {
       "title": "BitFun 组件库",
-      "themeLabel": "主题",
-      "themeTypeLight": "浅色",
-      "themeTypeDark": "深色",
-      "themeDescriptionLight": "浅色主题",
-      "themeDescriptionDark": "深色主题",
+      "appearanceLabel": "外观",
+      "appearanceModeLight": "浅色",
+      "appearanceModeDark": "深色",
+      "appearanceDescriptionLight": "浅色外观",
+      "appearanceDescriptionDark": "深色外观",
       "sidebarTitle": "组件导航",
       "expandSidebar": "展开导航",
       "collapseSidebar": "收起导航",

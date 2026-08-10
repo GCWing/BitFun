@@ -88,7 +88,7 @@ pub trait ComputerUseHost: Send + Sync + std::fmt::Debug {
     /// Fails if no screenshot was taken in this process since startup (or since last host reset).
     fn map_image_coords_to_pointer(&self, x: i32, y: i32) -> BitFunResult<(i32, i32)>;
 
-    /// Same as `map_image_coords_to_pointer` but **sub-point** precision (macOS: use for `ComputerUseMousePrecise`).
+    /// Same as `map_image_coords_to_pointer` but **sub-point** precision (macOS: use for the `mouse_move` action).
     fn map_image_coords_to_pointer_f64(&self, x: i32, y: i32) -> BitFunResult<(f64, f64)> {
         let (a, b) = self.map_image_coords_to_pointer(x, y)?;
         Ok((a as f64, b as f64))
@@ -110,10 +110,10 @@ pub trait ComputerUseHost: Send + Sync + std::fmt::Debug {
 
     async fn mouse_move(&self, x: i32, y: i32) -> BitFunResult<()>;
 
-    /// Move the pointer by `(dx, dy)` in **global screen pixels** (same space as `ComputerUseMousePrecise` absolute).
+    /// Move the pointer by `(dx, dy)` in **global screen pixels** (same space as absolute `mouse_move` globals).
     async fn pointer_move_relative(&self, dx: i32, dy: i32) -> BitFunResult<()>;
 
-    /// Click at the **current** pointer position only (does not move). Use `ComputerUseMousePrecise` / `ComputerUseMouseStep` / `pointer_move_rel` first.
+    /// Click at the **current** pointer position only (does not move). Use `mouse_move` / `move_to_text` / `pointer_move_rel` first.
     /// `button`: "left" | "right" | "middle"
     /// On desktop, enforces the vision fine-screenshot guard (unlike [`mouse_click_authoritative`](Self::mouse_click_authoritative)).
     async fn mouse_click(&self, button: &str) -> BitFunResult<()>;
@@ -187,7 +187,7 @@ pub trait ComputerUseHost: Send + Sync + std::fmt::Debug {
     /// After a successful `screenshot_display`, the model may `mouse_click` (until the pointer moves again).
     fn computer_use_after_screenshot(&self) {}
 
-    /// After `ComputerUseMousePrecise` / `ComputerUseMouseStep` / relative pointer moves: the next `mouse_click` must be preceded by a new screenshot.
+    /// After `mouse_move` / `pointer_move_rel` pointer moves: the next `mouse_click` must be preceded by a new screenshot.
     fn computer_use_after_pointer_mutation(&self) {}
 
     /// After `mouse_click`, require a fresh screenshot before the next click (unless pointer moved, which also invalidates).

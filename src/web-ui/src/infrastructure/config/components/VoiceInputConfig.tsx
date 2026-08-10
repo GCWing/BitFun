@@ -88,7 +88,8 @@ function isQwenAsrConfig(model?: AIModelConfig | null): boolean {
   if (!model) return true;
   return (
     model.model_name === QWEN_ASR_FLASH_MODEL_ID ||
-    model.base_url.includes('dashscope.aliyuncs.com/compatible-mode')
+    model.base_url.includes('dashscope.aliyuncs.com/compatible-mode') ||
+    model.base_url.includes('dashscope-intl.aliyuncs.com/compatible-mode')
   );
 }
 
@@ -350,51 +351,30 @@ const VoiceInputConfig: React.FC = () => {
 
     setBusyAction('saveCloudModel');
     try {
-      const allModels = await configManager.getConfig<AIModelConfig[]>('ai.models') || [];
       const modelId = cloudDraft.configId || selectedCloudModel?.id || `speech_cloud_${Date.now()}`;
-      const nextModel: AIModelConfig = {
-        id: modelId,
+      const result = await configManager.saveCloudSpeechConfig({
+        configId: modelId,
+        preset: cloudDraft.preset,
         name,
-        provider: 'openai',
-        api_key: apiKey,
-        base_url: baseUrl,
-        request_url: resolveTranscriptionRequestUrl(baseUrl),
-        model_name: modelName,
-        context_window: 0,
-        max_tokens: 0,
-        enabled: true,
-        category: 'speech_recognition',
-        capabilities: ['speech_recognition'],
-        recommended_for: ['voice_input'],
-        metadata: {
-          ...(selectedCloudModel?.metadata || {}),
-          speech_provider_preset: cloudDraft.preset,
-        },
-        auth: { type: 'api_key' },
-      };
-      const replaced = allModels.some(model => model.id === modelId);
-      const nextModels = replaced
-        ? allModels.map(model => model.id === modelId ? nextModel : model)
-        : [...allModels, nextModel];
-      const currentDefaultModels = await configManager.getConfig<DefaultModelsConfig>('ai.default_models') || {};
-
-      await configManager.setConfig('ai.models', nextModels);
-      await configManager.setConfig('ai.default_models', {
-        ...currentDefaultModels,
-        speech_recognition: modelId,
+        baseUrl,
+        requestUrl: resolveTranscriptionRequestUrl(baseUrl),
+        modelName,
+        apiKey,
       });
-      await updateVoiceInput({
-        provider: 'cloud',
-        model_id: modelId,
-      }, { silent: true });
-      setCloudDraft(createCloudSpeechDraftFromModel(nextModel));
-      setCloudModels(nextModels.filter(model => {
+      const [nextModels, nextDefaultModels] = await Promise.all([
+        configManager.getConfig<AIModelConfig[]>('ai.models'),
+        configManager.getConfig<DefaultModelsConfig>('ai.default_models'),
+      ]);
+      const savedModel = (nextModels || []).find(model => model.id === result.modelId);
+      setCloudDraft(createCloudSpeechDraftFromModel(savedModel));
+      setCloudModels((nextModels || []).filter(model => {
         const capabilities = Array.isArray(model.capabilities) ? model.capabilities : [];
         return !!model.enabled && (
           model.category === 'speech_recognition' ||
           capabilities.includes('speech_recognition')
         );
       }));
+      setDefaultModels(nextDefaultModels || {});
       notificationService.success(t('cloudConfig.messages.saveSuccess'));
     } catch (error) {
       log.error('Failed to save cloud speech model', { error });
@@ -402,7 +382,7 @@ const VoiceInputConfig: React.FC = () => {
     } finally {
       setBusyAction(null);
     }
-  }, [cloudDraft, selectedCloudModel, t, updateVoiceInput]);
+  }, [cloudDraft, selectedCloudModel, t]);
 
   const handleDownload = useCallback((model: SpeechModelStatus) => {
     if (model.state === 'downloading') return;
@@ -500,7 +480,11 @@ const VoiceInputConfig: React.FC = () => {
 
   if (!speechRuntimeSupported) {
     return (
-      <ConfigPageLayout className="voice-input-config">
+      <ConfigPageLayout
+        className="voice-input-config"
+        data-bf-component="voice-input-config"
+        data-bf-part="root"
+      >
         <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
         <ConfigPageContent>
           <ConfigPageMessage message={{ type: 'info', text: t('messages.unsupported') }} />
@@ -511,7 +495,11 @@ const VoiceInputConfig: React.FC = () => {
 
   if (loading || settingsLoading) {
     return (
-      <ConfigPageLayout className="voice-input-config">
+      <ConfigPageLayout
+        className="voice-input-config"
+        data-bf-component="voice-input-config"
+        data-bf-part="root"
+      >
         <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
         <ConfigPageContent>
           <ConfigPageLoading text={t('loading')} />
@@ -522,7 +510,11 @@ const VoiceInputConfig: React.FC = () => {
 
   if (settingsError || !settings || !voiceInput) {
     return (
-      <ConfigPageLayout className="voice-input-config">
+      <ConfigPageLayout
+        className="voice-input-config"
+        data-bf-component="voice-input-config"
+        data-bf-part="root"
+      >
         <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
         <ConfigPageContent>
           <ConfigPageMessage message={{ type: 'error', text: t('messages.loadFailed') }} />
@@ -532,7 +524,11 @@ const VoiceInputConfig: React.FC = () => {
   }
 
   return (
-    <ConfigPageLayout className="voice-input-config">
+    <ConfigPageLayout
+      className="voice-input-config"
+      data-bf-component="voice-input-config"
+      data-bf-part="root"
+    >
       <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
 
       <ConfigPageContent className="voice-input-config__content">
@@ -774,7 +770,11 @@ const VoiceInputConfig: React.FC = () => {
           )}
         >
           {models.length > 0 ? (
-            <div className="voice-input-config__model-list">
+            <div
+              className="voice-input-config__model-list"
+              data-bf-component="voice-input-config"
+              data-bf-part="modelList"
+            >
               {models.map(model => {
                 const isUsable = model.state === 'installed';
                 const isSelected = model.modelId === selectedLocalModelId && selectedProvider === 'local' && isUsable;
@@ -786,6 +786,8 @@ const VoiceInputConfig: React.FC = () => {
                 return (
                   <div
                     className={`voice-input-config__model-card${isSelected ? ' voice-input-config__model-card--selected' : ''}`}
+                    data-bf-component="voice-input-config"
+                    data-bf-part="modelCard"
                     key={model.modelId}
                   >
                     <div className="voice-input-config__model-main">
@@ -834,7 +836,11 @@ const VoiceInputConfig: React.FC = () => {
                       </div>
                     ) : null}
 
-                    <div className="voice-input-config__model-actions">
+                    <div
+                      className="voice-input-config__model-actions"
+                      data-bf-component="voice-input-config"
+                      data-bf-part="modelActions"
+                    >
                       <Button
                         variant={isSelected ? 'secondary' : 'ghost'}
                         size="small"

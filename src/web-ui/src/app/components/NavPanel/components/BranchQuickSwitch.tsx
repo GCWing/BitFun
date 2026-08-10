@@ -225,13 +225,13 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div
+    <div data-bf-component="branch-quick-switch" data-bf-part="root"
       ref={panelRef}
       className="branch-quick-switch"
       style={{ top: position.top, left: position.left, width: PANEL_WIDTH }}
       onKeyDown={handleKeyDown}
     >
-      <div className="branch-quick-switch__search">
+      <div data-bf-component="branch-quick-switch" data-bf-part="search" className="branch-quick-switch__search">
         <input
           ref={inputRef}
           type="text"
@@ -239,21 +239,29 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="branch-quick-switch__input"
+          data-bf-component="branch-quick-switch"
+          data-bf-part="input"
         />
       </div>
-      <div ref={listRef} className="branch-quick-switch__list">
+      <div data-bf-component="branch-quick-switch" data-bf-part="list" ref={listRef} className="branch-quick-switch__list">
         {isLoading ? (
-          <div className="branch-quick-switch__loading">
+          <div data-bf-component="branch-quick-switch" data-bf-part="loading" className="branch-quick-switch__loading">
             <Loader2 size={16} className="branch-quick-switch__spinner" />
             <span>{t('quickSwitch.loading')}</span>
           </div>
         ) : filteredBranches.length === 0 ? (
-          <div className="branch-quick-switch__empty">
+          <div data-bf-component="branch-quick-switch" data-bf-part="empty" className="branch-quick-switch__empty">
             {searchTerm ? t('empty.noMatchingBranches') : t('empty.noBranches')}
           </div>
         ) : (
           filteredBranches.map((branch, index) => (
             <div
+              data-bf-component="branch-quick-switch"
+              data-bf-part="item"
+              data-bf-state={[
+                branch.current && 'current',
+                index === selectedIndex && 'selected',
+              ].filter(Boolean).join(' ') || undefined}
               key={branch.name}
               className={[
                 'branch-quick-switch__item',
@@ -265,7 +273,7 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
               onMouseEnter={() => setSelectedIndex(index)}
             >
               <GitBranch size={14} className="branch-quick-switch__item-icon" />
-              <span className="branch-quick-switch__item-name">{branch.name}</span>
+              <span data-bf-component="branch-quick-switch" data-bf-part="itemName" className="branch-quick-switch__item-name">{branch.name}</span>
               {branch.current && <Check size={14} className="branch-quick-switch__item-check" />}
               {switchingBranch === branch.name && <Loader2 size={14} className="branch-quick-switch__spinner" />}
             </div>

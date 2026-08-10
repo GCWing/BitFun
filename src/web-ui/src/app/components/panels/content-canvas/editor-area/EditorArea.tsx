@@ -33,30 +33,30 @@ export const EditorArea: React.FC<EditorAreaProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const topRowRef = useRef<HTMLDivElement>(null);
 
-  const {
-    primaryGroup,
-    secondaryGroup,
-    tertiaryGroup,
-    activeGroupId,
-    layout,
-    draggingTabId,
-    draggingFromGroupId,
-    switchToTab,
-    closeTab,
-    closeAllTabs,
-    promoteTab,
-    togglePinTab,
-    startDrag,
-    endDrag,
-    reorderTab,
-    handleDrop,
-    setSplitRatio,
-    setSplitRatio2,
-    setActiveGroup,
-    updateTabContent,
-    setTabDirty,
-    setTabFileDeletedFromDisk,
-  } = useCanvasStore();
+  // Fine-grained selectors: subscribe to each slice/action individually so
+  // unrelated store changes do not re-render the editor area.
+  const primaryGroup = useCanvasStore(state => state.primaryGroup);
+  const secondaryGroup = useCanvasStore(state => state.secondaryGroup);
+  const tertiaryGroup = useCanvasStore(state => state.tertiaryGroup);
+  const activeGroupId = useCanvasStore(state => state.activeGroupId);
+  const layout = useCanvasStore(state => state.layout);
+  const draggingTabId = useCanvasStore(state => state.draggingTabId);
+  const draggingFromGroupId = useCanvasStore(state => state.draggingFromGroupId);
+  const switchToTab = useCanvasStore(state => state.switchToTab);
+  const closeTab = useCanvasStore(state => state.closeTab);
+  const closeAllTabs = useCanvasStore(state => state.closeAllTabs);
+  const promoteTab = useCanvasStore(state => state.promoteTab);
+  const togglePinTab = useCanvasStore(state => state.togglePinTab);
+  const startDrag = useCanvasStore(state => state.startDrag);
+  const endDrag = useCanvasStore(state => state.endDrag);
+  const reorderTab = useCanvasStore(state => state.reorderTab);
+  const handleDrop = useCanvasStore(state => state.handleDrop);
+  const setSplitRatio = useCanvasStore(state => state.setSplitRatio);
+  const setSplitRatio2 = useCanvasStore(state => state.setSplitRatio2);
+  const setActiveGroup = useCanvasStore(state => state.setActiveGroup);
+  const updateTabContent = useCanvasStore(state => state.updateTabContent);
+  const setTabDirty = useCanvasStore(state => state.setTabDirty);
+  const setTabFileDeletedFromDisk = useCanvasStore(state => state.setTabFileDeletedFromDisk);
 
   const handleTabClick = useCallback((groupId: EditorGroupId) => (tabId: string) => {
     switchToTab(tabId, groupId);
@@ -158,8 +158,8 @@ export const EditorArea: React.FC<EditorAreaProps> = ({
 
   if (splitMode === 'none') {
     return (
-      <div ref={containerRef} className="canvas-editor-area">
-        <div className="canvas-editor-area__primary">
+      <div data-bf-component="canvas-editor-area" data-bf-part="root" data-bf-layout="none" ref={containerRef} className="canvas-editor-area">
+        <div data-bf-component="canvas-editor-area" data-bf-part="primary" className="canvas-editor-area__primary">
           {renderEditorGroup('primary', primaryGroup)}
         </div>
       </div>
@@ -168,8 +168,8 @@ export const EditorArea: React.FC<EditorAreaProps> = ({
 
   if (splitMode === 'horizontal') {
     return (
-      <div ref={containerRef} className="canvas-editor-area is-split is-horizontal">
-        <div className="canvas-editor-area__primary" style={{ width: `${splitRatio * 100}%` }}>
+      <div data-bf-component="canvas-editor-area" data-bf-part="root" data-bf-layout="horizontal" ref={containerRef} className="canvas-editor-area is-split is-horizontal">
+        <div data-bf-component="canvas-editor-area" data-bf-part="primary" className="canvas-editor-area__primary" style={{ width: `${splitRatio * 100}%` }}>
           {renderEditorGroup('primary', primaryGroup)}
         </div>
         <SplitHandle
@@ -178,7 +178,7 @@ export const EditorArea: React.FC<EditorAreaProps> = ({
           onRatioChange={setSplitRatio}
           containerRef={containerRef}
         />
-        <div className="canvas-editor-area__secondary" style={{ width: `${(1 - splitRatio) * 100}%` }}>
+        <div data-bf-component="canvas-editor-area" data-bf-part="secondary" className="canvas-editor-area__secondary" style={{ width: `${(1 - splitRatio) * 100}%` }}>
           {renderEditorGroup('secondary', secondaryGroup)}
         </div>
       </div>
@@ -187,8 +187,8 @@ export const EditorArea: React.FC<EditorAreaProps> = ({
 
   if (splitMode === 'vertical') {
     return (
-      <div ref={containerRef} className="canvas-editor-area is-split is-vertical">
-        <div className="canvas-editor-area__primary" style={{ height: `${splitRatio * 100}%` }}>
+      <div data-bf-component="canvas-editor-area" data-bf-part="root" data-bf-layout="vertical" ref={containerRef} className="canvas-editor-area is-split is-vertical">
+        <div data-bf-component="canvas-editor-area" data-bf-part="primary" className="canvas-editor-area__primary" style={{ height: `${splitRatio * 100}%` }}>
           {renderEditorGroup('primary', primaryGroup)}
         </div>
         <SplitHandle
@@ -197,7 +197,7 @@ export const EditorArea: React.FC<EditorAreaProps> = ({
           onRatioChange={setSplitRatio}
           containerRef={containerRef}
         />
-        <div className="canvas-editor-area__secondary" style={{ height: `${(1 - splitRatio) * 100}%` }}>
+        <div data-bf-component="canvas-editor-area" data-bf-part="secondary" className="canvas-editor-area__secondary" style={{ height: `${(1 - splitRatio) * 100}%` }}>
           {renderEditorGroup('secondary', secondaryGroup)}
         </div>
       </div>
@@ -206,9 +206,9 @@ export const EditorArea: React.FC<EditorAreaProps> = ({
 
   if (splitMode === 'grid') {
     return (
-      <div ref={containerRef} className="canvas-editor-area is-grid">
-        <div ref={topRowRef} className="canvas-editor-area__top-row" style={{ flex: `0 0 calc(${splitRatio * 100}% - 2px)` }}>
-          <div className="canvas-editor-area__primary" style={{ flex: `0 0 calc(${splitRatio2 * 100}% - 2px)` }}>
+      <div data-bf-component="canvas-editor-area" data-bf-part="root" data-bf-layout="grid" ref={containerRef} className="canvas-editor-area is-grid">
+        <div data-bf-component="canvas-editor-area" data-bf-part="topRow" ref={topRowRef} className="canvas-editor-area__top-row" style={{ flex: `0 0 calc(${splitRatio * 100}% - 2px)` }}>
+          <div data-bf-component="canvas-editor-area" data-bf-part="primary" className="canvas-editor-area__primary" style={{ flex: `0 0 calc(${splitRatio2 * 100}% - 2px)` }}>
             {renderEditorGroup('primary', primaryGroup)}
           </div>
           <SplitHandle
@@ -217,7 +217,7 @@ export const EditorArea: React.FC<EditorAreaProps> = ({
             onRatioChange={setSplitRatio2}
             containerRef={topRowRef}
           />
-          <div className="canvas-editor-area__secondary" style={{ flex: 1, minWidth: 0 }}>
+          <div data-bf-component="canvas-editor-area" data-bf-part="secondary" className="canvas-editor-area__secondary" style={{ flex: 1, minWidth: 0 }}>
             {renderEditorGroup('secondary', secondaryGroup)}
           </div>
         </div>
@@ -227,7 +227,7 @@ export const EditorArea: React.FC<EditorAreaProps> = ({
           onRatioChange={setSplitRatio}
           containerRef={containerRef}
         />
-        <div className="canvas-editor-area__tertiary" style={{ flex: 1, minHeight: 0 }}>
+        <div data-bf-component="canvas-editor-area" data-bf-part="tertiary" className="canvas-editor-area__tertiary" style={{ flex: 1, minHeight: 0 }}>
           {renderEditorGroup('tertiary', tertiaryGroup)}
         </div>
       </div>

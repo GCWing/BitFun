@@ -23,9 +23,13 @@ use crate::{
         emit_preflight_json_error, ExecApprovalMode, ExecMode, ExecOutputFormat, ExecSessionOptions,
     },
     ui::string_utils::truncate_str,
-    ConfigAction, ExternalAccessArg, ExternalCapabilityArg, ExternalConfigAction,
+    ConfigAction, DispatchAction, ExternalAccessArg, ExternalCapabilityArg, ExternalConfigAction,
     ExternalPolicyModeArg, ExternalPolicyScopeArg, SessionAction,
 };
+
+/// Sized for submit/continue requests carrying inline image attachments
+/// (16 MiB of data URLs) plus headroom for the rest of the payload.
+const MAX_DISPATCH_STDIN_BYTES: u64 = 24 * 1024 * 1024;
 
 pub(crate) struct ExecCommandArgs {
     pub message: Option<String>,
@@ -39,6 +43,78 @@ pub(crate) struct ExecCommandArgs {
     pub output_patch: Option<String>,
     pub verify_final_changes: bool,
     pub approval_mode: ExecApprovalMode,
+}
+
+pub(crate) async fn handle_dispatch_action(action: DispatchAction) -> Result<()> {
+    // Dispatch verbs may initialize global configuration before a detached
+    // worker builds its runtime. Select the CLI profile at the process entry
+    // point so config canonicalization cannot lazily claim product-full first.
+    crate::agent::agentic_system::select_agentic_system_profile(
+        bitfun_core::product_assembly::DeliveryProfile::Cli,
+    )?;
+    let verb = match action {
+        DispatchAction::Run { job } => return crate::dispatch::run_worker(job).await,
+        DispatchAction::WorkspaceProvisionRun { job } => {
+            return crate::dispatch::run_workspace_provision(job)
+        }
+        DispatchAction::WorkspaceBundleCommitRun { job } => {
+            return crate::dispatch::run_workspace_bundle_commit(job)
+        }
+        DispatchAction::WorkspaceSyncRun { job } => {
+            return crate::dispatch::run_workspace_sync(job)
+        }
+        DispatchAction::Probe => "probe",
+        DispatchAction::Submit => "submit",
+        DispatchAction::Status => "status",
+        DispatchAction::Cancel => "cancel",
+        DispatchAction::List => "list",
+        DispatchAction::Answer => "answer",
+        DispatchAction::Append => "append",
+        DispatchAction::Continue => "continue",
+        DispatchAction::Query => "query",
+        DispatchAction::WorkspaceProvision => "workspace-provision",
+        DispatchAction::WorkspaceBundleBegin => "workspace-bundle-begin",
+        DispatchAction::WorkspaceBundleChunk => "workspace-bundle-chunk",
+        DispatchAction::WorkspaceBundleCommit => "workspace-bundle-commit",
+        DispatchAction::WorkspaceSync => "workspace-sync",
+        DispatchAction::WorkspaceSyncChunk => "workspace-sync-chunk",
+    };
+    let result = async {
+        use std::io::{IsTerminal, Read};
+        let mut raw = String::new();
+        let stdin = std::io::stdin();
+        if !stdin.is_terminal() {
+            stdin
+                .take(MAX_DISPATCH_STDIN_BYTES + 1)
+                .read_to_string(&mut raw)
+                .context("read dispatch JSON from stdin")?;
+            if raw.len() as u64 > MAX_DISPATCH_STDIN_BYTES {
+                anyhow::bail!("dispatch JSON input exceeds the 24 MiB safety limit");
+            }
+        }
+        let input = if raw.trim().is_empty() {
+            serde_json::json!({})
+        } else {
+            serde_json::from_str(&raw).context("decode dispatch JSON from stdin")?
+        };
+        crate::dispatch::run_dispatch_verb(verb, input).await
+    }
+    .await;
+
+    match result {
+        Ok(response) => {
+            println!("{}", serde_json::to_string(&response)?);
+            Ok(())
+        }
+        Err(error) => {
+            let response = serde_json::json!({
+                "protocolVersion": crate::dispatch::protocol::DISPATCH_PROTOCOL_VERSION,
+                "error": format!("{error:#}"),
+            });
+            println!("{}", serde_json::to_string(&response)?);
+            Err(error)
+        }
+    }
 }
 
 pub(crate) async fn handle_exec_command(config: CliConfig, args: ExecCommandArgs) -> Result<()> {
@@ -807,6 +883,7 @@ pub(crate) fn handle_health_command() -> Result<()> {
 
 pub(crate) async fn serve_acp_stdio() -> Result<()> {
     crate::setup_workspace();
+    let workspace_root = std::env::current_dir().context("Failed to resolve ACP workspace")?;
 
     crate::agent::agentic_system::select_agentic_system_profile(
         bitfun_core::product_assembly::DeliveryProfile::Acp,
@@ -824,14 +901,25 @@ pub(crate) async fn serve_acp_stdio() -> Result<()> {
 
     crate::initialize_terminal_service().await;
 
+    let path_manager = bitfun_core::infrastructure::try_get_path_manager_arc()
+        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+    let deployment = bitfun_services_core::runtime_ownership::RuntimeDeployment::Embedded;
+    let runtime_ownership = bitfun_core::runtime_ownership::CoreRuntimeOwnership::fixed_workspace(
+        path_manager.as_ref(),
+        "acp",
+        &workspace_root,
+        deployment,
+    )
+    .map_err(|error| anyhow::anyhow!(error.startup_message(deployment, "acp")))?;
+
     let agentic_system = crate::agent::agentic_system::init_agentic_system(
         bitfun_core::product_assembly::DeliveryProfile::Acp,
+        std::sync::Arc::new(runtime_ownership),
     )
     .await
     .context("Failed to initialize agentic system")?;
     tracing::info!("Agentic system initialized");
 
-    let workspace_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let runtime = crate::runtime::AcpRuntimeContext::build(agentic_system, workspace_root)?;
     let (agent_runtime, compatibility) = runtime.parts();
     bitfun_acp::BitfunAcpRuntime::serve_stdio(agent_runtime, compatibility).await?;

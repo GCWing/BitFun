@@ -33,7 +33,7 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
   displayName,
   icon,
   description,
-  primaryColor = 'var(--color-accent-600)',
+  primaryColor = 'var(--bf-appearance-token-color-accent-600)',
   status = 'pending',
   displayMode = 'standard',
   requiresConfirmation = false,
@@ -101,9 +101,13 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
     return (
       <div 
         className={`base-tool-card base-tool-card--compact base-tool-card--${currentStatus} ${className}`}
+        data-bf-component="flow-chat-card"
+        data-bf-part="root"
+        data-bf-display="compact"
+        data-bf-status={currentStatus}
         style={{ '--base-tool-card-accent-color': primaryColor } as React.CSSProperties}
       >
-        <div className="base-tool-card__compact-content">
+        <div className="base-tool-card__compact-content" data-bf-component="flow-chat-card" data-bf-part="compact">
           {typeof icon === 'string' ? (
             <span className="base-tool-card__icon-emoji">{icon}</span>
           ) : (
@@ -111,7 +115,7 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
           )}
           <span className="base-tool-card__action">{displayName}</span>
           {children}
-          <span className="base-tool-card__status">{getStatusIcon()}</span>
+          <span className="base-tool-card__status" data-bf-component="flow-chat-card" data-bf-part="status">{getStatusIcon()}</span>
         </div>
       </div>
     );
@@ -120,9 +124,13 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
   return (
     <div 
       className={`base-tool-card base-tool-card--${displayMode} base-tool-card--${currentStatus} ${className}`}
+      data-bf-component="flow-chat-card"
+      data-bf-part="root"
+      data-bf-display={displayMode}
+      data-bf-status={currentStatus}
       style={{ '--base-tool-card-accent-color': primaryColor } as React.CSSProperties}
     >
-      <div className="base-tool-card__header">
+      <div className="base-tool-card__header" data-bf-component="flow-chat-card" data-bf-part="header">
         <div className="base-tool-card__info">
           {typeof icon === 'string' ? (
             <span className="base-tool-card__icon-emoji">{icon}</span>
@@ -136,14 +144,14 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
             )}
           </div>
         </div>
-        <div className="base-tool-card__status-container">
+        <div className="base-tool-card__status-container" data-bf-component="flow-chat-card" data-bf-part="status">
           <span className="base-tool-card__status-icon">{getStatusIcon()}</span>
           <span className="base-tool-card__status-text">{getStatusText()}</span>
         </div>
       </div>
 
       {children && (
-        <div className="base-tool-card__content">
+        <div className="base-tool-card__content" data-bf-component="flow-chat-card" data-bf-part="content">
           {children}
         </div>
       )}
@@ -158,7 +166,7 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
       )}
 
       {requiresConfirmation && !userConfirmed && currentStatus !== 'completed' && (
-        <div className="base-tool-card__actions">
+        <div className="base-tool-card__actions" data-bf-component="flow-chat-card" data-bf-part="actions">
           <button 
             className="base-tool-card__button base-tool-card__button--confirm"
             onClick={handleConfirm}
@@ -177,7 +185,7 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
       )}
 
       {result && (
-        <div className="base-tool-card__result">
+        <div className="base-tool-card__result" data-bf-component="flow-chat-card" data-bf-part="result">
           <div className="base-tool-card__result-label">{t('flowChatCards.baseToolCard.result')}</div>
           <div className="base-tool-card__result-content">
             <pre>{JSON.stringify(result, null, 2)}</pre>
@@ -194,7 +202,7 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
       )}
 
       {error && (
-        <div className="base-tool-card__error">
+        <div className="base-tool-card__error" data-bf-component="flow-chat-card" data-bf-part="error">
           <XCircle className="base-tool-card__error-icon" size={16} />
           <span className="base-tool-card__error-message">{error}</span>
         </div>

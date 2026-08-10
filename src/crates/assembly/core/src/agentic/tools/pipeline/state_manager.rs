@@ -91,6 +91,18 @@ impl ToolStateManager {
         self.tasks.get(tool_id).map(|t| t.clone())
     }
 
+    /// Replace a task's effective tool arguments before execution.
+    /// Used by PreToolUse hook `updatedInput` rewrites; later readers
+    /// (validation, permission planning, execution) observe the new value.
+    pub fn update_task_arguments(&self, tool_id: &str, arguments: serde_json::Value) -> bool {
+        if let Some(mut task) = self.tasks.get_mut(tool_id) {
+            task.invocation.effective_arguments = arguments;
+            true
+        } else {
+            false
+        }
+    }
+
     /// Get all tasks of a session
     pub fn get_session_tasks(&self, session_id: &str) -> Vec<ToolTask> {
         self.tasks

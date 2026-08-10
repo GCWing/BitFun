@@ -5,6 +5,7 @@
     "searchNoResults": "No matching settings",
     "searchClear": "Clear search",
     "beta": "Beta",
+    "unseenItems": "Not seen yet",
     "searchAliases": {
       "archivedSessions": [],
       "keyboard": [],
@@ -16,8 +17,9 @@
     },
     "tabDescriptions": {
       "basics": "Logging, terminal shell, notifications, and launch at login.",
-      "appearance": "Language, theme, and UI font size.",
+      "appearance": "Language, visual appearance, and UI font size.",
       "models": "AI models, API keys, providers, proxy, and session title.",
+      "worktrees": "Defaults for isolated Git worktrees and parallel sessions.",
       "sessionPersonalization": "Agent companion.",
       "sessionPermissions": "Accelerated workspace search, tool confirmation, Computer use, browser, and debug.",
       "quickActions": "One-click AI actions after coding. Built-in and customizable prompts.",
@@ -26,6 +28,7 @@
       "memories": "Automatic memory generation, injection, retention windows, and memory models.",
       "mcpTools": "MCP servers and tool integrations.",
       "externalSources": "Load compatible commands and extensions from other AI applications.",
+      "hooks": "Run your own commands at Agent lifecycle points. Codex-compatible.",
       "acpAgents": "External ACP agents such as opencode, Claude Code, and Codex.",
       "editor": "Editor font, display, and formatting.",
       "lsp": "Language servers and code intelligence.",
@@ -41,6 +44,7 @@
       "basics": "Basics",
       "appearance": "Appearance",
       "models": "Models",
+      "worktrees": "Worktrees",
       "sessionPersonalization": "Personalization",
       "sessionPermissions": "Permissions",
       "quickActions": "Quick Actions",
@@ -50,6 +54,7 @@
       "skills": "Skills",
       "mcpTools": "MCP",
       "externalSources": "External AI Apps",
+      "hooks": "Agent Hooks",
       "acpAgents": "ACP Agents",
       "agents": "Agents",
       "editor": "Editor",
@@ -65,9 +70,9 @@
       "description": "Select interface language",
       "auto": "Auto Detect"
     },
-    "theme": {
-      "title": "Theme",
-      "description": "Select interface theme",
+    "appearance": {
+      "title": "Appearance",
+      "description": "Select interface appearance",
       "light": "Light",
       "dark": "Dark",
       "system": "Follow System"
@@ -535,11 +540,11 @@
       "subtitle": "Configure and manage agents, including function agents and super agents",
       "create": "Create Agent"
     },
-    "theme": {
-      "title": "Theme Settings",
-      "subtitle": "Customize the app appearance and theme colors",
-      "import": "Import Theme",
-      "export": "Export Current Theme"
+    "appearance": {
+      "title": "Appearance Settings",
+      "subtitle": "Customize the app appearance and colors",
+      "import": "Import Appearance",
+      "export": "Export Current Appearance"
     }
   }
 }

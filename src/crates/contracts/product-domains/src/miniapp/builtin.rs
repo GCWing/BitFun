@@ -151,7 +151,7 @@ pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
     },
     BuiltinMiniAppBundle {
         id: "builtin-ppt-live",
-        version: 252,
+        version: 259,
         meta_json: include_str!("builtin/assets/ppt-live/meta.json"),
         html: include_str!("builtin/assets/ppt-live/index.html"),
         css: include_str!("builtin/assets/ppt-live/style.css"),
@@ -549,9 +549,9 @@ mod tests {
         assert_eq!(meta["version"].as_u64(), Some(u64::from(app.version)));
         assert_eq!(bundle["version"].as_u64(), Some(u64::from(app.version)));
         assert_eq!(meta["permissions"]["node"]["enabled"], false);
-        // AI permission is enabled so the UI can list models for Cowork selection
-        // via app.ai.getModels(); generation still goes through agent.run.
-        assert_eq!(meta["permissions"]["ai"]["enabled"], true);
+        // Model selection belongs to the host's shared ChatInput; PPT Live no
+        // longer needs raw AI access merely to duplicate the model catalog.
+        assert!(meta["permissions"].get("ai").is_none());
         assert_eq!(meta["permissions"]["agent"]["enabled"], true);
         assert_eq!(meta["permissions"]["agent"]["rate_limit_per_minute"], 120);
         // Research happens inside hidden agent turns (WebSearch/WebFetch via
@@ -585,14 +585,20 @@ mod tests {
         // reads the files back instead of parsing giant JSON text.
         assert!(adapter_source.contains("protocol: 'files'"));
         assert!(adapter_source.contains("appDataWorkspace: options.appDataWorkspace"));
-        assert!(adapter_source.contains("model: options.model"));
+        assert!(!adapter_source.contains("model: options.model"));
+        assert!(adapter_source.contains("displayText: options.displayText"));
+        assert!(app.ui_js.contains("payload?.displayText"));
+        assert!(app
+            .ui_js
+            .contains("displayText: options.displayText || requestInput.instruction"));
         assert!(app.ui_js.contains("project.json"));
         assert!(app.ui_js.contains("slides/slide-"));
         let ui_source = include_str!("builtin/assets/ppt-live/ui.js");
         assert!(ui_source.contains("backendUsesFileProtocol"));
         assert!(ui_source.contains("tryReadDeckSlideFile"));
-        assert!(ui_source.contains("preferredModel"));
-        assert!(ui_source.contains("modelSelect"));
+        assert!(!ui_source.contains("preferredModel"));
+        assert!(!ui_source.contains("modelSelect"));
+        assert!(!app.html.contains("modelSelect"));
         assert!(meta["permissions"]["fs"]["read"]
             .as_array()
             .is_some_and(|scopes| scopes.iter().any(|scope| scope == "{appdata}")));
@@ -603,12 +609,15 @@ mod tests {
         assert!(
             include_str!("builtin/assets/ppt-live/ui.js").contains("installBitFunBackendAdapter")
         );
-        assert!(meta["permissions"]["ai"]["enabled"]
-            .as_bool()
-            .unwrap_or(false));
         // The single cowork agent turn loads the stable ppt-design skill key.
         assert!(prompt_source.contains("user::bitfun-system::ppt-design"));
         let ppt_live_source = include_str!("builtin/assets/ppt-live/ui.js");
+        // PPT Live registers bounded content into the host's standard floating
+        // ChatInput. It must not request a private composer layout or panel.
+        assert!(ppt_live_source.contains("claimComposer?.({"));
+        assert!(ppt_live_source.contains("placeholder: t('bubblePlaceholder')"));
+        assert!(!ppt_live_source.contains("panelSize:"));
+        assert!(!ppt_live_source.contains("rows: 3"));
         // Single-turn cowork generation: one agent turn produces the whole deck.
         assert!(ppt_live_source.contains("runCoworkDeckGeneration"));
         assert!(ppt_live_source.contains("readDeckFromProjectFiles"));

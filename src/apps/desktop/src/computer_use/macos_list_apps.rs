@@ -117,7 +117,7 @@ pub(super) fn list_running_apps(include_hidden: bool) -> BitFunResult<Vec<AppInf
     // Best-effort stable order: alphabetical by name. The richer
     // "recently used / most launched" sort is left to a future
     // LaunchServices-backed implementation.
-    apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    apps.sort_by_key(|a| a.name.to_lowercase());
     if let Ok(mut guard) = CACHE.lock() {
         *guard = Some((Instant::now(), include_hidden, apps.clone()));
     }

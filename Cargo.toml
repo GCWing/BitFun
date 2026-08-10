@@ -5,8 +5,15 @@ members = [
     "src/apps/desktop",
     "src/apps/server",
     "src/apps/relay-server",
+    "src/apps/miniapp-market-server",
+    "src/apps/skin-market-server",
     "src/crates/interfaces/acp",
+    "src/crates/interfaces/app-server",
+    "src/crates/interfaces/app-server-client",
+    "src/crates/interfaces/app-server-protocol",
     "src/crates/interfaces/sdk-host",
+    "src/crates/adapters/agent-runtime-ipc",
+    "src/crates/assembly/agent-content",
     "src/crates/assembly/core",
     "src/crates/assembly/external-sources",
     "src/crates/adapters/ai-adapters",
@@ -18,6 +25,8 @@ members = [
     "src/crates/adapters/transport",
     "src/crates/services/services-core",
     "src/crates/services/services-integrations",
+    "src/crates/services/miniapp-market-service",
+    "src/crates/services/skin-market-service",
     "src/crates/services/relay-service",
     "src/crates/services/page-function-runtime",
     "src/crates/services/terminal",
@@ -28,7 +37,7 @@ members = [
     "src/crates/execution/tool-call-jsonrepair",
     "src/crates/execution/tool-contracts",
     "src/crates/execution/harness",
-    "src/crates/execution/plugin-runtime-host",
+    "src/crates/execution/plugin-runtime-client",
     "src/crates/execution/runtime-services",
     "src/crates/execution/tool-provider-groups",
     "src/crates/execution/tool-execution",
@@ -45,7 +54,7 @@ resolver = "2"
 
 # Shared package metadata — single source of truth for version
 [workspace.package]
-version = "0.2.14" # x-release-please-version
+version = "0.2.16" # x-release-please-version
 authors = ["BitFun Team"]
 edition = "2021"
 
@@ -69,7 +78,7 @@ undocumented_unsafe_blocks = "warn"
 # Shared dependency versions to keep all crates aligned
 [workspace.dependencies]
 # Async runtime
-tokio = { version = "1.52", features = ["full"] }
+tokio = { version = "1.52", default-features = false }
 tokio-stream = "0.1.18"
 tokio-util = "0.7.18"
 async-trait = "0.1.89"
@@ -80,6 +89,12 @@ futures-util = "0.3.31"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
+
+# Document conversion
+anydoc = "=0.1.6"
+
+# TypeScript binding generation (schema-first; gated by per-crate `ts` features)
+ts-rs = { version = "12", features = ["serde-json-impl", "no-serde-warnings"] }
 
 # Error handling
 anyhow = "1.0"
@@ -118,7 +133,8 @@ encoding_rs = "0.8.35"
 url = "2"
 
 # HTTP client
-reqwest = { version = "0.13.4", default-features = false, features = ["native-tls", "rustls", "http2", "json", "stream", "multipart", "query", "form"] }
+reqwest = { version = "0.13.4", default-features = false, features = ["http2", "json", "stream", "multipart", "query", "form"] }
+semver = "1.0"
 
 # Debug Log HTTP Server
 axum = { version = "0.8", features = ["json", "ws"] }
@@ -161,6 +177,8 @@ syntect-tui = "3.0"
 once_cell = "1"
 libc = "0.2"
 arboard = "3"
+shlex = "1.3"
+winsplit = "0.1"
 
 # Grep (search)
 grep-searcher = "0.1"
@@ -279,13 +297,25 @@ tauri-macros = { git = "https://github.com/richerfu/tauri", branch = "feat/open-
 tauri-runtime-wry = { git = "https://github.com/richerfu/tauri", branch = "feat/open-harmony"}
 
 [profile.dev]
-incremental = true
+# Line tables only: keeps panic backtrace line numbers while shrinking PDB/DWARF
+# output dramatically, which speeds up the Windows link step the most.
+# Need full debug info for a debugger session? Override per-invocation with
+# CARGO_PROFILE_DEV_DEBUG=2.
+debug = "line-tables-only"
 
 [profile.release]
 opt-level = 3
-lto = true
+# Thin LTO instead of fat LTO: 30-60% faster release codegen/link for ~0-2%
+# runtime cost. This was already proven on the Linux aarch64 packaging runner.
+# NOTE: needs one packaging regression round across all platforms (medium risk).
+lto = "thin"
 codegen-units = 1
 strip = true
+# NOTE: do not set `panic = "abort"` here. Several production paths rely on
+# `catch_unwind` to contain third-party panics instead of taking down the app:
+# `browser_api::browser_get_url` (known wry bug where WKWebView URL is nil) and
+# the relay client's TLS connector construction. Aborting would turn those
+# recoverable failures into process crashes.
 
 [profile.release-fast]
 inherits = "release"

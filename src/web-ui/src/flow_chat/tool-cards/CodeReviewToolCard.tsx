@@ -54,10 +54,10 @@ const EVIDENCE_STATUS_LABEL_KEYS: Record<ReviewEvidenceStatus, string> = {
 const log = createLogger('CodeReviewToolCard');
 
 const riskLevelColors: Record<string, string> = {
-  low: 'var(--color-success)',
-  medium: 'var(--color-warning)',
-  high: 'color-mix(in srgb, var(--color-warning) 55%, var(--color-error))',
-  critical: 'var(--color-error)',
+  low: 'var(--bf-appearance-token-color-success)',
+  medium: 'var(--bf-appearance-token-color-warning)',
+  high: 'color-mix(in srgb, var(--bf-appearance-token-color-warning) 55%, var(--bf-appearance-token-color-error))',
+  critical: 'var(--bf-appearance-token-color-error)',
 };
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
@@ -77,7 +77,12 @@ const ReviewReportSection: React.FC<ReviewReportSectionProps> = ({
   onToggle,
   children,
 }) => (
-  <section className={`review-report-section ${expanded ? 'is-expanded' : ''}`}>
+  <section
+    className={`review-report-section ${expanded ? 'is-expanded' : ''}`}
+    data-bf-component="code-review-tool-card"
+    data-bf-part="group"
+    data-bf-state={expanded ? 'expanded' : undefined}
+  >
     <button
       type="button"
       className="review-report-section__header"
@@ -125,6 +130,9 @@ function getCoverageSourceLabel(sourceReviewer: string | undefined, t: Translate
     frontend: t('toolCards.codeReview.coverageSources.frontend', {
       defaultValue: 'Frontend coverage',
     }),
+    focusedCheck: t('toolCards.codeReview.coverageSources.focusedCheck', {
+      defaultValue: 'Additional check',
+    }),
     qualityGate: t('toolCards.codeReview.coverageSources.qualityGate', {
       defaultValue: 'Quality check',
     }),
@@ -152,7 +160,7 @@ function getReliabilityNoticeLabel(notice: ReviewReliabilityNotice, t: Translate
       concurrency_limited: 'Review launch was concurrency-limited',
       partial_reviewer: 'Review returned partial result',
       target_evidence_limited: 'Target evidence limited',
-      reduced_scope: 'Focused review scope',
+      reduced_scope: 'Limited review scope',
       retry_guidance: 'Retry guidance emitted',
       skipped_reviewers: 'Review scope tailored',
       token_budget_limited: 'Token budget limited review coverage',
@@ -169,17 +177,17 @@ function getReliabilityNoticeDetail(notice: ReviewReliabilityNotice, t: Translat
   return t(`toolCards.codeReview.reliabilityStatus.${notice.kind}.detail`, {
     count: notice.count ?? 0,
     defaultValue: {
-      context_pressure: '{{count}} review checks planned for a large or constrained target.',
+      context_pressure: 'A large or constrained target has {{count}} planned review work items.',
       compression_preserved: 'Coverage notes include preserved context from compression.',
       cache_hit: '{{count}} previous review result reused matching cached output.',
       cache_miss: '{{count}} review result ran fresh or refreshed stale cache.',
       concurrency_limited: '{{count}} review launch hit a concurrency cap.',
       partial_reviewer: '{{count}} review result is partial; confidence is limited.',
       target_evidence_limited: 'Prepared target evidence could not safely cover every requested change.',
-      reduced_scope: 'This review used a focused scope profile.',
+      reduced_scope: 'This review used a limited scope.',
       retry_guidance: '{{count}} retry guidance item was emitted for partial review coverage.',
-      skipped_reviewers: '{{count}} optional check was outside this run because of applicability, configuration, or budget.',
-      token_budget_limited: 'Token budget mode kept {{count}} optional check outside this run.',
+      skipped_reviewers: 'Optional review work not run: {{count}} (applicability, configuration, or budget).',
+      token_budget_limited: 'Optional review work not run due to token budget: {{count}}.',
       user_decision: '{{count}} review item needs your decision before fixing.',
     }[notice.kind],
   });
@@ -216,7 +224,7 @@ function renderReportGroupList<TId extends RemediationGroupId | StrengthGroupId>
   titleForGroup: (id: TId) => string,
 ): React.ReactNode {
   return groups.map((group) => (
-    <div key={group.id} id={`review-remediation-group-${group.id}`} className="review-report-group">
+    <div key={group.id} id={`review-remediation-group-${group.id}`} className="review-report-group" data-bf-component="code-review-tool-card" data-bf-part="group">
       <div className="review-report-group__title">{titleForGroup(group.id)}</div>
       <ul className="review-report-group__list">
         {group.items.map((item, index) => (
@@ -329,9 +337,9 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
       case 'low':
         return <Info size={14} style={{ color: riskLevelColors.low }} />;
       case 'info':
-        return <Info size={14} style={{ color: 'var(--color-text-muted)' }} />;
+        return <Info size={14} style={{ color: 'var(--bf-appearance-token-color-text-muted)' }} />;
       default:
-        return <Info size={14} style={{ color: 'var(--color-text-muted)' }} />;
+        return <Info size={14} style={{ color: 'var(--bf-appearance-token-color-text-muted)' }} />;
     }
   };
 
@@ -592,10 +600,12 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
     const coverageExpanded = expandedReportSectionIds.has('coverage');
 
     return (
-      <div className="code-review-details">
+      <div className="code-review-details" data-bf-component="code-review-tool-card" data-bf-part="details">
         {reliabilityNotices.length > 0 && (
           <div
             className="review-reliability-status"
+            data-bf-component="code-review-tool-card"
+            data-bf-part="reliability"
             aria-label={t('toolCards.codeReview.reliabilityStatus.title')}
           >
             <div className="review-reliability-status__title">
@@ -606,6 +616,8 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
                 <div
                   key={notice.kind}
                   className={`review-reliability-status__item review-reliability-status__item--${notice.severity}`}
+                  data-bf-component="code-review-tool-card"
+                  data-bf-part="reliabilityItem"
                 >
                   <span className="review-reliability-status__icon">
                     {getReliabilityNoticeIcon(notice)}
@@ -624,7 +636,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
           </div>
         )}
 
-        <div className="review-summary">
+        <div className="review-summary" data-bf-component="code-review-tool-card" data-bf-part="summary">
           <div className="summary-header">{t('toolCards.codeReview.overallAssessment')}</div>
           <div className="summary-rows">
             {riskLevel && (
@@ -693,12 +705,12 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
             expanded={issuesExpanded}
             onToggle={handleToggleReportSection('issues')}
           >
-            <div className="issues-list">
+            <div className="issues-list" data-bf-component="code-review-tool-card" data-bf-part="issues">
               {issues.map((issue, index) => (
                 (() => {
                   const coverageSource = getCoverageSourceLabel(issue.source_reviewer, t);
                   return (
-                    <div
+                    <div data-bf-component="code-review-tool-card" data-bf-part="issue"
                       key={index}
                       id={`review-issue-${index}`}
                       className={`review-issue-item severity-${getSeverityClass(issue.severity ?? 'info')}`}
@@ -752,7 +764,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
             expanded={remediationExpanded}
             onToggle={handleToggleReportSection('remediation')}
           >
-            <div className="review-remediation">
+            <div className="review-remediation" data-bf-component="code-review-tool-card" data-bf-part="remediation">
             <div className="remediation-header-row">
               <div>
                 <div className="remediation-header">
@@ -761,7 +773,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
               </div>
             </div>
             {review_mode === 'deep' ? (
-              <div className="review-remediation__groups">
+              <div className="review-remediation__groups" data-bf-component="code-review-tool-card" data-bf-part="groups">
                 {reportSections.remediationGroups.map((group) => {
                   const groupTitle = getRemediationGroupTitle(group.id, t);
 
@@ -769,14 +781,14 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
                   if (group.id === 'needs_decision') {
                     const rawEntries = reviewData?.report_sections?.remediation_groups?.needs_decision;
                     return (
-                      <div key={group.id} id={`review-remediation-group-${group.id}`} className="review-report-group">
+                      <div data-bf-component="code-review-tool-card" data-bf-part="group" key={group.id} id={`review-remediation-group-${group.id}`} className="review-report-group">
                         <div className="review-report-group__title">{groupTitle}</div>
                         <ul className="review-report-group__list">
                           {group.items.map((_, index) => {
                             const raw = rawEntries?.[index];
                             const ctx = raw ? normalizeDecisionEntry(raw as string | DecisionContext) : null;
                             return (
-                              <li key={`${group.id}-${index}`} id={`review-remediation-${group.id}-${index}`}>
+                              <li data-bf-component="code-review-tool-card" data-bf-part="decision" key={`${group.id}-${index}`} id={`review-remediation-${group.id}-${index}`}>
                                 {ctx && ctx.question !== ctx.plan ? (
                                   <div className="review-decision-item">
                                     <div className="review-decision-item__question">{ctx.question}</div>
@@ -806,7 +818,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
 
                   // Default rendering for other groups
                   return (
-                    <div key={group.id} id={`review-remediation-group-${group.id}`} className="review-report-group">
+                    <div data-bf-component="code-review-tool-card" data-bf-part="group" key={group.id} id={`review-remediation-group-${group.id}`} className="review-report-group">
                       <div className="review-report-group__title">{groupTitle}</div>
                       <ul className="review-report-group__list">
                         {group.items.map((item, index) => (
@@ -818,7 +830,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
                 })}
               </div>
             ) : (
-              <div className="remediation-list">
+              <div className="remediation-list" data-bf-component="code-review-tool-card" data-bf-part="remediationList">
                 {remediationItems.map((item) => {
                 const issue = item.issue;
                 const expanded = expandedRemediationIds.has(item.id);
@@ -827,7 +839,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
                   : null;
 
                 return (
-                  <div
+                  <div data-bf-component="code-review-tool-card" data-bf-part="remediationItem"
                     key={item.id}
                     className="remediation-item"
                   >
@@ -921,7 +933,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
             expanded={strengthsExpanded}
             onToggle={handleToggleReportSection('strengths')}
           >
-            <div className="review-positive">
+            <div className="review-positive" data-bf-component="code-review-tool-card" data-bf-part="positive">
               {renderReportGroupList(
                 reportSections.strengthGroups,
                 (id) => getStrengthGroupTitle(id, t),
@@ -962,7 +974,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
   const normalizedStatus = status === 'analyzing' ? 'running' : status;
 
   return (
-    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
+    <div data-bf-component="code-review-tool-card" data-bf-part="root" ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
       <BaseToolCard
         status={normalizedStatus as 'pending' | 'preparing' | 'streaming' | 'running' | 'completed' | 'error' | 'cancelled'}
         isExpanded={isExpanded}

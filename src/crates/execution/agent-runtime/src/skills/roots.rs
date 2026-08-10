@@ -1,5 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use super::types::SkillSourceDialect;
+
 pub const USER_SKILL_KEY_PREFIX: &str = "user";
 pub const PROJECT_SKILL_KEY_PREFIX: &str = "project";
 pub const BITFUN_USER_SKILL_SLOT: &str = "bitfun";
@@ -109,6 +111,14 @@ pub const USER_CONFIG_SKILL_ROOTS: &[SkillRootSpec] = &[SkillRootSpec {
     source_id: "opencode",
     source_label: "OpenCode",
 }];
+
+pub(crate) fn skill_source_dialect(source_slot: &str) -> SkillSourceDialect {
+    match source_slot {
+        "claude" | "home.claude" => SkillSourceDialect::ClaudeCode,
+        "codex" | "home.codex" => SkillSourceDialect::Codex,
+        _ => SkillSourceDialect::AgentSkills,
+    }
+}
 
 pub fn resolve_user_config_skill_root(
     spec: &SkillRootSpec,

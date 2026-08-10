@@ -101,31 +101,6 @@ pub(crate) fn ensure_deep_review_auto_retry_allowed(
     runtime_task_execution::ensure_deep_review_auto_retry_allowed(conc_policy, elapsed_seconds)
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn deep_review_task_completion_result(
-    delegate_target_label: &str,
-    result_text: &str,
-    context_mode: &str,
-    duration_ms: u128,
-    is_partial_timeout: bool,
-    reason: Option<&str>,
-    ledger_event_id: Option<&str>,
-    retry_hint: &str,
-) -> (Value, String) {
-    runtime_task_execution::deep_review_task_completion_result(
-        runtime_task_execution::DeepReviewTaskCompletionResultInput {
-            delegate_target_label,
-            result_text,
-            context_mode,
-            duration_ms,
-            is_partial_timeout,
-            reason,
-            ledger_event_id,
-            retry_hint,
-        },
-    )
-}
-
 pub(crate) fn deep_review_cancelled_reviewer_result(
     subagent_type: &str,
     reason: &str,

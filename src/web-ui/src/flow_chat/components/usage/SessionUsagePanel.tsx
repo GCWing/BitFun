@@ -20,9 +20,7 @@ import { createDiffEditorTab } from '@/shared/utils/tabUtils';
 import { createLogger } from '@/shared/utils/logger';
 import {
   FLOWCHAT_FOCUS_ITEM_EVENT,
-  FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
   type FlowChatFocusItemRequest,
-  type FlowChatPinTurnToTopRequest,
 } from '../../events/flowchatNavigation';
 import {
   calculateShare,
@@ -156,8 +154,8 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
 
   if (!report) {
     return (
-      <div className="session-usage-panel session-usage-panel--fallback">
-        <div className="session-usage-panel__fallback-toolbar">
+      <div data-bf-component="session-usage-panel" data-bf-part="root" data-bf-state="fallback" className="session-usage-panel session-usage-panel--fallback">
+        <div className="session-usage-panel__fallback-toolbar" data-bf-component="session-usage-panel" data-bf-part="header">
           <Tooltip content={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}>
             <IconButton
               variant="ghost"
@@ -190,8 +188,8 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
   );
 
   return (
-    <div className="session-usage-panel">
-      <header className="session-usage-panel__header">
+    <div data-bf-component="session-usage-panel" data-bf-part="root" data-bf-tab={activeTab} className="session-usage-panel">
+      <header className="session-usage-panel__header" data-bf-component="session-usage-panel" data-bf-part="header">
         <div className="session-usage-panel__title-wrap">
           <div className="session-usage-panel__title-main">
             <h2>{t('usage.title')}</h2>
@@ -244,6 +242,8 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
 
       <nav
         className="session-usage-panel__tabs"
+        data-bf-component="session-usage-panel"
+        data-bf-part="tabs"
         role="tablist"
         aria-orientation="horizontal"
         aria-label={t('usage.panel.tabsLabel')}
@@ -261,6 +261,10 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
             aria-controls={tabPanelId(tab)}
             tabIndex={activeTab === tab ? 0 : -1}
             className={`session-usage-panel__tab${activeTab === tab ? ' session-usage-panel__tab--active' : ''}`}
+            data-bf-component="session-usage-panel"
+            data-bf-part="tab"
+            data-bf-tab={tab}
+            data-bf-state={activeTab === tab ? 'active' : undefined}
             onClick={() => setActiveTab(tab)}
             onKeyDown={event => handleTabKeyDown(event, tab)}
           >
@@ -271,6 +275,9 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
 
       <main
         className="session-usage-panel__body"
+        data-bf-component="session-usage-panel"
+        data-bf-part="body"
+        data-bf-tab={activeTab}
         role="tabpanel"
         id={tabPanelId(activeTab)}
         aria-labelledby={tabId(activeTab)}
@@ -332,7 +339,7 @@ function UsageMetaRow({
   onCopy?: () => void;
 }) {
   return (
-    <div className="session-usage-panel__meta-row">
+    <div data-bf-component="session-usage-panel" data-bf-part="metaRow" className="session-usage-panel__meta-row">
       <span className="session-usage-panel__meta-label">{label}</span>
       <span className="session-usage-panel__meta-value" title={value}>{value}</span>
       {onCopy && copyLabel && (
@@ -414,12 +421,14 @@ function UsageRowAnchorLink({
   label,
   help,
   sessionId,
+  turnId,
   turnIndex,
   itemId,
 }: {
   label: string;
   help?: string;
   sessionId?: string;
+  turnId?: string;
   turnIndex?: number;
   itemId?: string;
 }) {
@@ -427,7 +436,7 @@ function UsageRowAnchorLink({
   const displayTurnIndex = typeof turnIndex === 'number' && Number.isFinite(turnIndex)
     ? getDisplayTurnIndex(turnIndex)
     : undefined;
-  const canJump = Boolean(sessionId && displayTurnIndex);
+  const canJump = Boolean(sessionId && (turnId || displayTurnIndex));
 
   if (!canJump) {
     return <UsageValue value={label} help={help} />;
@@ -441,9 +450,14 @@ function UsageRowAnchorLink({
       onClick={() => {
         const request: FlowChatFocusItemRequest = {
           sessionId: sessionId as string,
-          turnIndex: displayTurnIndex as number,
           source: 'usage-report',
         };
+        if (turnId) {
+          request.turnId = turnId;
+        }
+        if (displayTurnIndex) {
+          request.turnIndex = displayTurnIndex;
+        }
         if (itemId) {
           request.itemId = itemId;
         }
@@ -615,7 +629,7 @@ function UsageOverview({ report }: { report: SessionUsageReport }) {
   ];
 
   return (
-    <section className="session-usage-panel__section">
+    <section data-bf-component="session-usage-panel" data-bf-part="section" className="session-usage-panel__section">
       {report.coverage.level !== 'complete' && (
         <div className="session-usage-panel__notice">
           <AlertTriangle size={14} aria-hidden />
@@ -627,7 +641,7 @@ function UsageOverview({ report }: { report: SessionUsageReport }) {
         {metrics.map(metric => {
           const Icon = metric.icon;
           return (
-            <div className="session-usage-panel__overview-metric" key={metric.key}>
+            <div data-bf-component="session-usage-panel" data-bf-part="metric" className="session-usage-panel__overview-metric" key={metric.key}>
               <Icon size={16} aria-hidden />
               <div>
                 <span>{metric.label}</span>
@@ -704,6 +718,7 @@ function UsageModels({ report, sessionId }: { report: SessionUsageReport; sessio
                 label={modelLabel}
                 help={modelHelp}
                 sessionId={sessionId}
+                turnId={model.sampleTurnId}
                 turnIndex={model.sampleTurnIndex}
               />
             ),
@@ -765,6 +780,7 @@ function UsageTools({ report, sessionId }: { report: SessionUsageReport; session
               <UsageRowAnchorLink
                 label={tool.redacted ? getRedactedLabel(t) : tool.toolName}
                 sessionId={sessionId}
+                turnId={tool.sampleTurnId}
                 turnIndex={tool.sampleTurnIndex}
                 itemId={tool.sampleItemId}
               />
@@ -946,7 +962,7 @@ function UsageFiles({
   }), [handleJumpToFileTurn, handleOpenFileDiff, openingDiffKey, redactPaths, report.files.files, report.files.scope, sessionId, t, workspacePath]);
 
   return (
-    <section className="session-usage-panel__section">
+    <section data-bf-component="session-usage-panel" data-bf-part="section" className="session-usage-panel__section">
       <div className="session-usage-panel__scope-line">
         <span>{t('usage.panel.fileScope')}</span>
         <UsageValue
@@ -977,7 +993,7 @@ function UsageFiles({
 function UsageErrors({ report, sessionId }: { report: SessionUsageReport; sessionId?: string }) {
   const { t } = useTranslation('flow-chat');
   return (
-    <section className="session-usage-panel__section">
+    <section data-bf-component="session-usage-panel" data-bf-part="section" className="session-usage-panel__section">
       <div className="session-usage-panel__scope-line">
         <span>{t('usage.panel.errorScope')}</span>
         <UsageValue
@@ -1036,6 +1052,7 @@ function UsageErrors({ report, sessionId }: { report: SessionUsageReport; sessio
                   label={example.redacted ? getRedactedLabel(t) : example.label}
                   help={t('usage.help.errorExampleRow')}
                   sessionId={sessionId}
+                  turnId={example.sampleTurnId}
                   turnIndex={example.sampleTurnIndex}
                   itemId={example.sampleItemId}
                 />
@@ -1080,31 +1097,26 @@ function UsageSlowest({ report, sessionId }: { report: SessionUsageReport; sessi
   const handleJumpToSpan = useCallback((span: SessionUsageReport['slowest'][number]) => {
     if (!sessionId) return;
 
-    if (span.itemId && typeof span.turnIndex === 'number') {
-      const request: FlowChatFocusItemRequest = {
-        sessionId,
-        turnIndex: span.turnIndex,
-        itemId: span.itemId,
-        source: 'usage-report',
-      };
-      globalEventBus.emit(FLOWCHAT_FOCUS_ITEM_EVENT, request, 'SessionUsagePanel');
-      return;
-    }
+    if (!span.turnId && typeof span.turnIndex !== 'number') return;
 
-    if (!span.turnId) return;
-
-    const request: FlowChatPinTurnToTopRequest = {
+    const request: FlowChatFocusItemRequest = {
       sessionId,
-      turnId: span.turnId,
-      behavior: 'smooth',
-      pinMode: 'transient',
       source: 'usage-report',
     };
-    globalEventBus.emit(FLOWCHAT_PIN_TURN_TO_TOP_EVENT, request, 'SessionUsagePanel');
+    if (span.turnId) {
+      request.turnId = span.turnId;
+    }
+    if (typeof span.turnIndex === 'number' && Number.isFinite(span.turnIndex)) {
+      request.turnIndex = getDisplayTurnIndex(span.turnIndex);
+    }
+    if (span.itemId) {
+      request.itemId = span.itemId;
+    }
+    globalEventBus.emit(FLOWCHAT_FOCUS_ITEM_EVENT, request, 'SessionUsagePanel');
   }, [sessionId]);
 
   return (
-    <section className="session-usage-panel__section">
+    <section data-bf-component="session-usage-panel" data-bf-part="section" className="session-usage-panel__section">
       <div className="session-usage-panel__scope-line">
         <span>{t('usage.sections.slowest')}</span>
         <UsageValue
@@ -1130,7 +1142,7 @@ function UsageSlowest({ report, sessionId }: { report: SessionUsageReport; sessi
           const detailRows = getSlowSpanDetailRows(span, t);
           const canJumpToSpan = Boolean(
             sessionId &&
-            (span.turnId || (span.itemId && typeof span.turnIndex === 'number'))
+            (span.turnId || (typeof span.turnIndex === 'number' && Number.isFinite(span.turnIndex)))
           );
           const jumpHelp = t('usage.actions.jumpToTurn');
           const labelCell: UsageTableCell = canJumpToSpan
@@ -1257,7 +1269,7 @@ function UsageTable({ empty, emptyLabel, emptyDescription, emptyHelp, headers, r
 
   if (empty) {
     return (
-      <div className="session-usage-panel__empty">
+      <div data-bf-component="session-usage-panel" data-bf-part="empty" className="session-usage-panel__empty">
         <UsageValue value={emptyLabel} help={emptyHelp} strong />
         {emptyDescription && <span>{emptyDescription}</span>}
       </div>
@@ -1271,7 +1283,7 @@ function UsageTable({ empty, emptyLabel, emptyDescription, emptyHelp, headers, r
 
   return (
     <>
-      <div className="session-usage-panel__table-wrap">
+      <div data-bf-component="session-usage-panel" data-bf-part="table" className="session-usage-panel__table-wrap">
         <table className={['session-usage-panel__table', tableClassName].filter(Boolean).join(' ')}>
           <thead>
             <tr>

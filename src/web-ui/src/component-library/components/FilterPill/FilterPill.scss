@@ -14,11 +14,11 @@
   align-items: center;
   gap: 5px;
   padding: 5px 10px;
-  background: var(--element-bg-soft);
+  background: var(--bf-appearance-token-element-bg-soft);
   border: 1px solid transparent;
   border-radius: 14px;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-font-size-xs);
   font-weight: $font-weight-medium;
   font-family: $font-family-sans;
   cursor: pointer;
@@ -26,22 +26,22 @@
   white-space: nowrap;
 
   &:hover:not(:disabled) {
-    background: var(--element-bg-base);
-    color: var(--color-text-primary);
+    background: var(--bf-appearance-token-element-bg-base);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &--active {
-    background: var(--git-color-branch-bg);
+    background: var(--bf-appearance-token-git-color-branch-bg);
     border-color: transparent;
-    color: var(--git-color-branch);
+    color: var(--bf-appearance-token-git-color-branch);
 
     .v-filter-pill__count {
-      background: color-mix(in srgb, var(--git-color-branch) 22%, transparent);
-      color: var(--git-color-branch);
+      background: color-mix(in srgb, var(--bf-appearance-token-git-color-branch) 22%, transparent);
+      color: var(--bf-appearance-token-git-color-branch);
     }
 
     &:hover:not(:disabled) {
-      background: var(--git-color-branch-bg-hover);
+      background: var(--bf-appearance-token-git-color-branch-bg-hover);
     }
   }
 
@@ -59,11 +59,11 @@
     align-items: center;
     justify-content: center;
     padding: 1px 5px;
-    background: var(--element-bg-base);
+    background: var(--bf-appearance-token-element-bg-base);
     border-radius: 6px;
     font-size: 10px;
     font-weight: $font-weight-semibold;
     font-family: $font-family-mono;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 }

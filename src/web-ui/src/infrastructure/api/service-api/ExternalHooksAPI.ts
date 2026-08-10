@@ -64,6 +64,60 @@ export interface ExternalHookCatalogSnapshot {
   diagnostics: ExternalHookDiagnostic[];
 }
 
+export type ExternalHookImportDependency =
+  | { kind: 'managed'; relativePath: string }
+  | { kind: 'external'; location: string };
+
+export interface ExternalHookImportHandler {
+  stableKey: string;
+  event: string;
+  matcher?: string;
+  command: string;
+  commandWindows?: string;
+  timeoutSeconds?: number;
+  statusMessage?: string;
+  dependencies: ExternalHookImportDependency[];
+}
+
+export interface ExternalHookImportPlan {
+  schemaVersion: 1;
+  source: ExternalHookSource;
+  disposition: 'import' | 'update' | 'unchanged' | 'unavailable';
+  behaviorVersion: string;
+  handlers: ExternalHookImportHandler[];
+  skipped: Array<{ reasonCode: string; count: number }>;
+  planFingerprint: string;
+}
+
+export interface ImportedHookSourceSnapshot {
+  importId: string;
+  source: ExternalHookSource;
+  enabled: boolean;
+  behaviorVersion: string;
+  state: 'current' | 'update_available' | 'source_missing' | 'update_check_failed'
+    | 'bundle_missing';
+}
+
+export interface ExternalHookImportSnapshot {
+  schemaVersion: 1;
+  revision: string;
+  catalog: ExternalHookCatalogSnapshot;
+  imports: ImportedHookSourceSnapshot[];
+  diagnostics: ExternalHookDiagnostic[];
+}
+
+export type ExternalHookImportApplyResult = {
+  schemaVersion: 1;
+  outcome:
+    | { kind: 'applied' | 'unchanged'; snapshot: ExternalHookImportSnapshot }
+    | { kind: 'stale'; refreshedPlan: ExternalHookImportPlan };
+};
+
+export type ExternalHookImportMutation =
+  | { kind: 'set_enabled'; importId: string; enabled: boolean }
+  | { kind: 'remove'; importId: string }
+  | { kind: 'reset_corrupt_store'; scope: ExternalHookSource['scope'] };
+
 const MAX_CATALOG_ITEMS = 8192;
 const MAX_PROVIDER_ITEMS = 2048;
 const MAX_SOURCE_DIAGNOSTICS = 256;
@@ -355,6 +409,155 @@ function normalizeCatalog(value: unknown): ExternalHookCatalogSnapshot {
   };
 }
 
+function optionalString(value: unknown, maxLength: number): string | undefined {
+  return value === undefined ? undefined : boundedString(value, maxLength);
+}
+
+function positiveInteger(value: unknown): number {
+  if (!Number.isSafeInteger(value) || (value as number) <= 0) invalidResponse();
+  return value as number;
+}
+
+function dependency(value: unknown): ExternalHookImportDependency {
+  const tagged = exactRecord(value, ['kind'], ['relativePath', 'location']);
+  if (tagged.kind === 'managed' && tagged.location === undefined) {
+    return { kind: 'managed', relativePath: boundedString(tagged.relativePath, 4096) };
+  }
+  if (tagged.kind === 'external' && tagged.relativePath === undefined) {
+    return { kind: 'external', location: boundedString(tagged.location, 4096) };
+  }
+  return invalidResponse();
+}
+
+function importHandler(value: unknown): ExternalHookImportHandler {
+  const record = exactRecord(value, ['stableKey', 'event', 'command'], [
+    'matcher',
+    'commandWindows',
+    'timeoutSeconds',
+    'statusMessage',
+    'dependencies',
+  ]);
+  const dependencies = record.dependencies === undefined
+    ? []
+    : boundedArray(record.dependencies).map(dependency);
+  if (dependencies.length > 256) invalidResponse();
+  const timeoutSeconds = record.timeoutSeconds === undefined
+    ? undefined
+    : positiveInteger(record.timeoutSeconds);
+  return {
+    stableKey: boundedString(record.stableKey, 160),
+    event: boundedString(record.event, 160),
+    command: boundedString(record.command, 65_536),
+    ...(optionalString(record.matcher, 512) === undefined
+      ? {} : { matcher: optionalString(record.matcher, 512) }),
+    ...(optionalString(record.commandWindows, 65_536) === undefined
+      ? {} : { commandWindows: optionalString(record.commandWindows, 65_536) }),
+    ...(timeoutSeconds === undefined ? {} : { timeoutSeconds }),
+    ...(optionalString(record.statusMessage, 4096) === undefined
+      ? {} : { statusMessage: optionalString(record.statusMessage, 4096) }),
+    dependencies,
+  };
+}
+
+function normalizeImportPlan(value: unknown): ExternalHookImportPlan {
+  const record = exactRecord(value, [
+    'schemaVersion',
+    'source',
+    'disposition',
+    'behaviorVersion',
+    'handlers',
+    'skipped',
+    'planFingerprint',
+  ]);
+  if (record.schemaVersion !== 1) invalidResponse();
+  const handlers = boundedArray(record.handlers).map(importHandler);
+  const skipped = boundedArray(record.skipped).map((item) => {
+    const skippedItem = exactRecord(item, ['reasonCode', 'count']);
+    return {
+      reasonCode: boundedString(skippedItem.reasonCode, 160),
+      count: positiveInteger(skippedItem.count),
+    };
+  });
+  if (handlers.length > 2048 || skipped.length > 256) invalidResponse();
+  return {
+    schemaVersion: 1,
+    source: source(record.source),
+    disposition: enumString(record.disposition, [
+      'import',
+      'update',
+      'unchanged',
+      'unavailable',
+    ] as const),
+    behaviorVersion: boundedString(record.behaviorVersion, 160),
+    handlers,
+    skipped,
+    planFingerprint: boundedString(record.planFingerprint, 160),
+  };
+}
+
+function importedSource(value: unknown): ImportedHookSourceSnapshot {
+  const record = exactRecord(value, [
+    'importId',
+    'source',
+    'enabled',
+    'behaviorVersion',
+    'state',
+  ]);
+  if (typeof record.enabled !== 'boolean') invalidResponse();
+  return {
+    importId: boundedString(record.importId, 160),
+    source: source(record.source),
+    enabled: record.enabled,
+    behaviorVersion: boundedString(record.behaviorVersion, 160),
+    state: enumString(record.state, [
+      'current',
+      'update_available',
+      'source_missing',
+      'update_check_failed',
+      'bundle_missing',
+    ] as const),
+  };
+}
+
+function normalizeImportSnapshot(value: unknown): ExternalHookImportSnapshot {
+  const record = exactRecord(value, [
+    'schemaVersion',
+    'revision',
+    'catalog',
+    'imports',
+  ], ['diagnostics']);
+  if (record.schemaVersion !== 1) invalidResponse();
+  const imports = boundedArray(record.imports).map(importedSource);
+  if (imports.length > 4096) invalidResponse();
+  return {
+    schemaVersion: 1,
+    revision: boundedString(record.revision, 160),
+    catalog: normalizeCatalog(record.catalog),
+    imports,
+    diagnostics: diagnostics(record.diagnostics),
+  };
+}
+
+function normalizeApplyResult(value: unknown): ExternalHookImportApplyResult {
+  const record = exactRecord(value, ['schemaVersion', 'outcome']);
+  if (record.schemaVersion !== 1) invalidResponse();
+  const outcome = exactRecord(record.outcome, ['kind'], ['snapshot', 'refreshedPlan']);
+  if ((outcome.kind === 'applied' || outcome.kind === 'unchanged')
+    && outcome.refreshedPlan === undefined) {
+    return {
+      schemaVersion: 1,
+      outcome: { kind: outcome.kind, snapshot: normalizeImportSnapshot(outcome.snapshot) },
+    };
+  }
+  if (outcome.kind === 'stale' && outcome.snapshot === undefined) {
+    return {
+      schemaVersion: 1,
+      outcome: { kind: 'stale', refreshedPlan: normalizeImportPlan(outcome.refreshedPlan) },
+    };
+  }
+  return invalidResponse();
+}
+
 export const externalHooksAPI = {
   async getCatalog(workspacePath?: string, forceRefresh = false) {
     const response = await invokeExternalSourceCommand<unknown>('get_external_hook_catalog', {
@@ -364,5 +567,61 @@ export const externalHooksAPI = {
       },
     });
     return normalizeCatalog(response);
+  },
+  async getImportSnapshot(workspacePath?: string, refreshUpdates = false) {
+    const response = await invokeExternalSourceCommand<unknown>(
+      'get_external_hook_import_snapshot',
+      {
+        request: {
+          workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+          refreshUpdates,
+        },
+      },
+    );
+    return normalizeImportSnapshot(response);
+  },
+  async planImport(workspacePath: string | undefined, sourceKey: ExternalHookSourceKey) {
+    const response = await invokeExternalSourceCommand<unknown>(
+      'plan_external_hook_import_command',
+      {
+        request: {
+          workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+          source: sourceKey,
+        },
+      },
+    );
+    return normalizeImportPlan(response);
+  },
+  async applyImport(workspacePath: string | undefined, plan: ExternalHookImportPlan) {
+    const response = await invokeExternalSourceCommand<unknown>(
+      'apply_external_hook_import_command',
+      {
+        request: {
+          workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+          importRequest: {
+            schemaVersion: 1,
+            source: plan.source.key,
+            planFingerprint: plan.planFingerprint,
+          },
+        },
+      },
+    );
+    return normalizeApplyResult(response);
+  },
+  async mutateImport(
+    workspacePath: string | undefined,
+    expectedRevision: string,
+    action: ExternalHookImportMutation,
+  ) {
+    const response = await invokeExternalSourceCommand<unknown>(
+      'mutate_external_hook_import_command',
+      {
+        request: {
+          workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+          mutation: { schemaVersion: 1, expectedRevision, action },
+        },
+      },
+    );
+    return normalizeImportSnapshot(response);
   },
 };

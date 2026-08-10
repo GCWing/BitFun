@@ -1,3 +1,5 @@
+#![cfg(feature = "local-storage")]
+
 use bitfun_services_core::token_usage::{
     ModelTokenStats, SessionTokenStats, TimeRange, TokenUsageQuery, TokenUsageRecord,
 };

@@ -5,9 +5,11 @@ use bitfun_agent_runtime::sdk::AgentRuntime;
 use bitfun_core::agentic::system::{self, AgenticSystem};
 use bitfun_core::product_assembly::{DeliveryProfile, ProductAssembler, ProductAssemblyInput};
 use bitfun_core::product_runtime::{
-    build_local_runtime_services, ensure_product_dialog_scheduler, CoreProductAgentEventSource,
-    CoreProductAgentRuntime, CoreRuntimeServicesProvider,
+    build_local_runtime_services, ensure_product_dialog_scheduler, CoreProductAgentRuntime,
+    CoreProductEventQueueOwner, CoreRuntimeServicesProvider,
 };
+use bitfun_core::runtime_ownership::{CoreRuntimeOwnership, RuntimeDeployment};
+use std::sync::Arc;
 
 const RUNTIME_EVENT_BUFFER: usize = 256;
 const DELIVERY_PROFILE: DeliveryProfile = DeliveryProfile::Sdk;
@@ -15,7 +17,7 @@ const DELIVERY_PROFILE: DeliveryProfile = DeliveryProfile::Sdk;
 pub(crate) struct SdkHostRuntime {
     workspace_root: PathBuf,
     agent_runtime: AgentRuntime,
-    _agent_events: CoreProductAgentEventSource,
+    _agent_event_queue_owner: CoreProductEventQueueOwner,
 }
 
 impl SdkHostRuntime {
@@ -27,25 +29,38 @@ impl SdkHostRuntime {
     pub(crate) async fn build(workspace_root: impl AsRef<Path>) -> Result<Self> {
         let (workspace_root, services) =
             build_local_runtime_services(workspace_root, RUNTIME_EVENT_BUFFER)?;
+        let path_manager = bitfun_core::infrastructure::try_get_path_manager_arc()
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+        let deployment = RuntimeDeployment::Embedded;
+        let runtime_ownership = CoreRuntimeOwnership::fixed_workspace(
+            path_manager.as_ref(),
+            "sdk-host",
+            &workspace_root,
+            deployment,
+        )
+        .map_err(|error| anyhow::anyhow!(error.startup_message(deployment, "sdk-host")))?;
 
-        // The SDK Host keeps its own product identity. The SDK and CLI profiles
-        // currently select the same assembly-plan ceiling from shared facts.
-        // The Host's effective wire capability set remains a strict subset.
+        // SDK Host keeps its own delivery profile while sharing the product-wide
+        // workspace ownership identity with every first-party entrypoint.
         let parts = ProductAssembler::new()
             .assemble(ProductAssemblyInput::new(DELIVERY_PROFILE, services))
             .context("Failed to assemble SDK Host product runtime")?;
-        let agentic_system = system::init_agentic_system_for_profile(parts.plan().profile())
-            .await
-            .context("Failed to initialize agentic system")?;
+        let agentic_system = system::init_agentic_system_for_profile_with_runtime_ownership(
+            parts.plan().profile(),
+            Arc::new(runtime_ownership),
+        )
+        .await
+        .context("Failed to initialize agentic system")?;
         bind_core_execution_ports(&agentic_system);
         let scheduler = ensure_product_dialog_scheduler(&agentic_system);
         let (services, harness_registry, _disabled_plugin_runtime) = parts.into_runtime_parts();
-        let agent_events = CoreProductAgentEventSource::new(agentic_system.event_queue.clone());
+        let agent_event_queue_owner =
+            CoreProductEventQueueOwner::new(agentic_system.event_queue.clone());
         let agent_runtime = CoreProductAgentRuntime::build_sdk_host(
             agentic_system.coordinator,
             scheduler,
             agentic_system.token_usage_service,
-            agent_events.runtime_source(),
+            agent_event_queue_owner.runtime_source(),
             services,
             harness_registry,
         )
@@ -55,7 +70,7 @@ impl SdkHostRuntime {
         Ok(Self {
             workspace_root,
             agent_runtime,
-            _agent_events: agent_events,
+            _agent_event_queue_owner: agent_event_queue_owner,
         })
     }
 

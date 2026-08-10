@@ -3,15 +3,15 @@
  */
 
 .image-analysis-card {
-  --image-analysis-surface: var(--element-bg-soft);
-  --image-analysis-background: var(--color-bg-primary);
-  --image-analysis-border: var(--border-base);
-  --image-analysis-text: var(--color-text-primary);
-  --image-analysis-text-secondary: var(--color-text-secondary);
-  --image-analysis-primary: var(--color-accent-500);
-  --image-analysis-success: var(--color-success);
-  --image-analysis-error: var(--color-error);
-  --image-analysis-primary-rgb: var(--color-accent-500-rgb);
+  --image-analysis-surface: var(--bf-appearance-token-element-bg-soft);
+  --image-analysis-background: var(--bf-appearance-token-color-bg-primary);
+  --image-analysis-border: var(--bf-appearance-token-border-base);
+  --image-analysis-text: var(--bf-appearance-token-color-text-primary);
+  --image-analysis-text-secondary: var(--bf-appearance-token-color-text-secondary);
+  --image-analysis-primary: var(--bf-appearance-token-color-accent-500);
+  --image-analysis-success: var(--bf-appearance-token-color-success);
+  --image-analysis-error: var(--bf-appearance-token-color-error);
+  --image-analysis-primary-rgb: var(--bf-appearance-token-color-accent-500-rgb);
   --image-analysis-error-rgb: 239 68 68;
 
   background: var(--image-analysis-surface);
@@ -100,7 +100,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: var(--tool-card-action-font-size);
+  font-size: var(--bf-appearance-token-tool-card-action-font-size);
   
   &.analyzing {
     color: var(--image-analysis-primary);
@@ -125,7 +125,7 @@
     .retry-btn {
       margin-left: 8px;
       padding: 2px 8px;
-      font-size: var(--flowchat-font-size-xs);
+      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
       background: var(--image-analysis-error);
       color: white;
       border: none;
@@ -159,8 +159,8 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  font-size: var(--tool-card-action-font-size);
-  line-height: var(--flowchat-support-line-height);
+  font-size: var(--bf-appearance-token-tool-card-action-font-size);
+  line-height: var(--bf-appearance-token-flowchat-support-line-height);
   color: var(--image-analysis-text);
   
   .summary-icon {
@@ -176,7 +176,7 @@
   gap: 4px;
   margin-top: 8px;
   padding: 4px 8px;
-  font-size: var(--tool-card-action-font-size);
+  font-size: var(--bf-appearance-token-tool-card-action-font-size);
   color: var(--image-analysis-primary);
   background: transparent;
   border: none;
@@ -204,7 +204,7 @@
     }
     
     h4 {
-      font-size: var(--tool-card-action-font-size);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
       font-weight: 600;
       color: var(--image-analysis-text-secondary);
       margin: 0 0 6px 0;
@@ -213,8 +213,8 @@
     }
     
     p {
-      font-size: var(--tool-card-action-font-size);
-      line-height: var(--flowchat-text-line-height);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
+      line-height: var(--bf-appearance-token-flowchat-text-line-height);
       color: var(--image-analysis-text);
       margin: 0;
     }
@@ -228,7 +228,7 @@
     .tag {
       display: inline-block;
       padding: 4px 10px;
-      font-size: var(--tool-card-action-font-size);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
       background: var(--image-analysis-surface);
       color: var(--image-analysis-text);
       border: 1px solid var(--image-analysis-border);
@@ -240,7 +240,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: var(--tool-card-action-font-size);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
     color: var(--image-analysis-text-secondary);
     
     .meta-separator {
@@ -258,21 +258,18 @@
   padding: 8px 12px;
   background: rgba(var(--image-analysis-error-rgb) / 0.1);
   border-radius: 6px;
-  font-size: var(--tool-card-action-font-size);
+  font-size: var(--bf-appearance-token-tool-card-action-font-size);
   color: var(--image-analysis-error);
 }
 
-// Dark mode support
-@media (prefers-color-scheme: dark) {
-  .image-analysis-card {
-    --image-analysis-surface: var(--color-bg-elevated);
-    --image-analysis-background: var(--color-bg-primary);
-    --image-analysis-border: var(--border-base);
-    --image-analysis-text: var(--color-text-primary);
-    --image-analysis-text-secondary: var(--color-text-muted);
-    --image-analysis-primary: var(--color-accent-500);
-    --image-analysis-success: var(--color-success);
-    --image-analysis-error: var(--color-error);
-  }
+:root[data-bf-appearance-mode='dark'] .image-analysis-card {
+  --image-analysis-surface: var(--bf-appearance-token-color-bg-elevated);
+  --image-analysis-background: var(--bf-appearance-token-color-bg-primary);
+  --image-analysis-border: var(--bf-appearance-token-border-base);
+  --image-analysis-text: var(--bf-appearance-token-color-text-primary);
+  --image-analysis-text-secondary: var(--bf-appearance-token-color-text-muted);
+  --image-analysis-primary: var(--bf-appearance-token-color-accent-500);
+  --image-analysis-success: var(--bf-appearance-token-color-success);
+  --image-analysis-error: var(--bf-appearance-token-color-error);
 }
 

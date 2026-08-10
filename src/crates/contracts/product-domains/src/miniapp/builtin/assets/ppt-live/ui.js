@@ -30,8 +30,6 @@ import {
   densityToIndex,
   indexToDensity,
   uid,
-  DEFAULT_PREFERRED_MODEL,
-  normalizePreferredModel,
 } from './src/state.js';
 import { getAllStylePresets, getStylePreset, DEFAULT_STYLE_PRESET, resolveStylePalette } from './src/style-presets.js';
 import { enhanceFlatSelect, refreshFlatSelect } from './src/flat-select.js';
@@ -261,6 +259,8 @@ async function restoreHistory(id) {
   rerender();
   syncStylePanelFromState(state);
   setStatus(t('historyRestored'));
+  await clearFocusedDeckAgentSession();
+  await ensureDeckAgentSession();
   await storageSet(STORAGE_KEY, { ...state, updatedAt: Date.now() });
 }
 
@@ -306,11 +306,6 @@ function setBusy(nextBusy, message) {
     if (node.id === 'newDeck') return;
     node.disabled = busy;
   });
-  const pill = $('aiStatusPill');
-  if (pill) {
-    pill.textContent = busy ? t('statusPillBusy') : t('statusPillReady');
-    pill.classList.toggle('is-busy', busy);
-  }
   if (message) setStatus(message);
 }
 
@@ -436,8 +431,10 @@ function updateBriefFromInputs(options = {}) {
   state = ensureState(state);
 }
 
+// The last instruction the user sent from the floating session bubble. PPT Live
+// has no input of its own, so slide-level actions build on this.
 function promptValue() {
-  return $('topicInput')?.value.trim() || '';
+  return String(state.promptDraft || '').trim();
 }
 
 function isDefaultDraft() {
@@ -465,27 +462,22 @@ function hasUsableDeckForRevision() {
     && !isRecoverableWorkingOnlyState(state);
 }
 
-async function generateOutline() {
-  await handlePromptSubmit();
-}
-
-async function generateDeck() {
-  await handlePromptSubmit();
-}
-
-async function generateDeckFromPrompt() {
-  await handlePromptSubmit();
-}
-
-async function handlePromptSubmit() {
+/**
+ * Run one generation/edit request. The instruction text arrives from the
+ * floating session bubble (`app.chat.onUserMessage`) — PPT Live has no
+ * composer of its own; this is the single entry point either way.
+ */
+async function submitInstruction(rawInstruction, rawDisplayText = rawInstruction) {
   if (promptSubmitGuard || backendRunInFlight) {
+    setStatus(t('bubbleBusy'));
     return;
   }
-  const instruction = promptValue();
+  const instruction = String(rawInstruction || '').trim();
   if (!instruction) {
     setStatus(t('promptRequired'));
     return;
   }
+  const displayText = String(rawDisplayText || '').trim() || instruction;
   promptSubmitGuard = true;
   const reviseExistingDeck = hasUsableDeckForRevision();
   state.promptDraft = instruction;
@@ -496,6 +488,7 @@ async function handlePromptSubmit() {
     await runPptLiveBackend('auto', instruction, {
       includeTopic: !reviseExistingDeck,
       persistBeforeRun: true,
+      displayText,
     });
     return;
   } catch (error) {
@@ -809,6 +802,67 @@ function currentDeckProject() {
   };
 }
 
+async function clearFocusedDeckAgentSession() {
+  try {
+    await runtime().chat?.clearSession?.();
+  } catch (error) {
+    runtime().log?.warn?.('PPT Live could not clear the previous topic session', {
+      error: String(error),
+    });
+  }
+}
+
+/**
+ * Every deck topic owns a hidden Agent session before the bubble can open.
+ * Existing/history topics rebind their persisted session id; a blank topic
+ * gets a fresh session in its own appdata project directory.
+ */
+async function ensureDeckAgentSession() {
+  const host = runtime();
+  if (typeof host.backend?.ensureSession !== 'function' || !host.appDataDir) {
+    const existingSessionId = String(state.agentSession?.id || '');
+    if (existingSessionId) {
+      void host.chat?.focusSession?.(existingSessionId)?.catch?.(() => {});
+    }
+    return existingSessionId || null;
+  }
+
+  const topicEpoch = deckEpoch;
+  const topicId = String(state.sessionId || '');
+  const project = currentDeckProject() || newDeckProject();
+  const requestSession = async (sessionId) => host.backend.ensureSession({
+    sessionId: sessionId || undefined,
+    appDataWorkspace: project.workspaceSubdir,
+  });
+
+  let result;
+  const persistedSessionId = String(state.agentSession?.id || '');
+  try {
+    result = await requestSession(persistedSessionId);
+  } catch (error) {
+    if (!persistedSessionId || !isUnknownSessionBackendError(error)) throw error;
+    runtime().log?.warn?.('PPT Live topic session is stale; creating a replacement', {
+      sessionId: persistedSessionId,
+      error: String(error),
+    });
+    result = await requestSession('');
+  }
+
+  const sessionId = String(result?.sessionId || '');
+  if (!sessionId) throw new Error('PPT Live session initialization returned no sessionId');
+  if (deckEpoch !== topicEpoch || String(state.sessionId || '') !== topicId) {
+    return null;
+  }
+  state.agentSession = {
+    id: sessionId,
+    workspaceSubdir: project.workspaceSubdir,
+    runId: project.runId,
+    skillKey: PPT_DESIGN_SKILL_KEY,
+  };
+  await host.chat?.focusSession?.(sessionId);
+  return sessionId;
+}
+
 function deckSlideFileName(slideNumber) {
   return `slides/slide-${String(slideNumber).padStart(2, '0')}.html`;
 }
@@ -1050,7 +1104,9 @@ async function runPptLiveBackend(operation, instruction, options = {}) {
     if (options.persistBeforeRun) {
       await persist(true);
     }
-    await runCoworkDeckGeneration(operation, instruction);
+    await runCoworkDeckGeneration(operation, instruction, {
+      displayText: options.displayText,
+    });
   } finally {
     backendRunInFlight = false;
   }
@@ -1090,20 +1146,20 @@ async function executeBackendTurn(requestInput, hooks = {}, options = {}) {
   const activity = { lastEventAt: Date.now() };
 
   try {
-    const preferredModel = normalizePreferredModel(
-      options.model || state.preferredModel || DEFAULT_PREFERRED_MODEL,
-    );
     const result = await host.backend.call('ppt.generate', requestInput, {
       entityId: 'deck',
       idempotencyKey: `ppt-live-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       sessionId: options.sessionId || undefined,
       appDataWorkspace: options.appDataWorkspace || undefined,
-      model: preferredModel,
+      displayText: options.displayText || requestInput.instruction,
     });
     sessionId = result?.sessionId || null;
     turnId = result?.turnId || result?.actionRunId || null;
     if (!sessionId || !turnId) throw new Error('PPT Live backend did not return sessionId/turnId');
     trackBackendRun(sessionId, turnId);
+    // Show this agent run on the floating bubble's chat surface — the bubble
+    // is PPT Live's process display (Agentic MiniApp showcase pattern).
+    void host.chat?.focusSession?.(sessionId)?.catch?.(() => {});
     if (isDeckEpochStale(runEpoch)) throw new Error('Generation stopped');
 
     const waitForResult = new Promise((resolve, reject) => {
@@ -1389,7 +1445,7 @@ function buildBackendRequestBase(operation, instruction) {
  * applies them to the UI. Interrupted attempts retry as "continue" turns
  * inside the same agent session so the model resumes with its prior context.
  */
-async function runCoworkDeckGeneration(operation, instruction) {
+async function runCoworkDeckGeneration(operation, instruction, options = {}) {
   const runEpoch = deckEpoch;
   setBusy(true, t('working'));
   resetGeneration();
@@ -1659,6 +1715,7 @@ async function runCoworkDeckGeneration(operation, instruction) {
           sessionId: retrySession?.id || undefined,
           appDataWorkspace: retrySession?.project?.workspaceSubdir,
           resultKind: project ? 'text' : undefined,
+          displayText: options.displayText || instruction,
         });
         retrySession.id = sessionId || retrySession.id;
         state.agentSession = {
@@ -1667,8 +1724,6 @@ async function runCoworkDeckGeneration(operation, instruction) {
           runId: retrySession?.project?.runId || '',
           skillKey: PPT_DESIGN_SKILL_KEY,
         };
-        state.preferredModel = normalizePreferredModel(state.preferredModel);
-
         // The agent delivered through files; read them back.
         addGenerationEvent({ title: t('generationParsingDeck'), detail: '', kind: 'parsing' });
         setGenerationStep('verify', 'running', t('generationVerifyingDeck'));
@@ -2657,6 +2712,8 @@ async function newDeck() {
   rerender();
   syncStylePanelFromState(state);
   setStatus(t('blankDeckReady'));
+  await clearFocusedDeckAgentSession();
+  await ensureDeckAgentSession();
   await persist(true);
 }
 
@@ -2900,6 +2957,20 @@ async function executeExport(format) {
 let exportInFlight = false;
 
 const handlers = {
+  // Welcome-screen example: hand it to the bubble composer for the user to
+  // edit and send. PPT Live never submits on their behalf here.
+  useWelcomePrompt(text) {
+    const prompt = String(text || '').trim();
+    if (!prompt) return;
+    const setDraft = runtime().chat?.setComposerDraft;
+    if (!setDraft) {
+      setStatus(t('bubbleUnavailable'));
+      return;
+    }
+    void setDraft(prompt)?.catch?.((error) => {
+      runtime().log?.warn?.('PPT Live could not prefill the bubble composer', { error: String(error) });
+    });
+  },
   updateOutline(index, value) {
     state.outline[index] = value;
     if (state.slides[index]) state.slides[index].title = value;
@@ -3130,33 +3201,8 @@ function bindEvents() {
     const drawer = $('historyDrawer');
     if (drawer) drawer.hidden = true;
   });
-  document.querySelectorAll('[data-sidebar-tab]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const tab = button.dataset.sidebarTab;
-      document.querySelectorAll('[data-sidebar-tab]').forEach((node) => {
-        node.classList.toggle('is-active', node.dataset.sidebarTab === tab);
-      });
-      document.querySelectorAll('[data-sidebar-panel]').forEach((node) => {
-        node.classList.toggle('is-active', node.dataset.sidebarPanel === tab);
-      });
-    });
-  });
-
-  $('topicInput')?.addEventListener('input', () => {
-    const reviseExistingDeck = hasUsableDeckForRevision();
-    if (reviseExistingDeck) {
-      state.promptDraft = $('topicInput')?.value || '';
-      void persist(true);
-      return;
-    }
-    updateBriefFromInputs({ includeTopic: true });
-    void persist(true);
-  });
   $('newDeck')?.addEventListener('click', () => void newDeck());
   $('cancelGeneration')?.addEventListener('click', () => void stopBackendRun(false));
-  $('sendPrompt')?.addEventListener('click', () => void handlePromptSubmit());
-  $('generateOutline')?.addEventListener('click', () => void generateOutline());
-  $('generateDeck')?.addEventListener('click', () => void generateDeckFromPrompt());
   $('addOutlineItem')?.addEventListener('click', () => {
     state.outline.push(t('newSlideTitle'));
     rerender();
@@ -3207,12 +3253,12 @@ function bindEvents() {
     fitTargets.forEach((node) => layoutObserver.observe(node));
   }
 
-  /* === New v2 UI interactions === */
+  /* === Studio UI interactions === */
   bindCanvasZoom();
   bindFloatingToolbar();
   bindPropertyPanels();
   bindExportModal();
-  bindHostTheme();
+  bindHostAppearance();
 }
 
 /* ============================================
@@ -3382,26 +3428,6 @@ function bindPropertyPanels() {
     });
   }
 
-  /* Cowork model selector */
-  const modelSelect = $('modelSelect');
-  if (modelSelect) {
-    enhanceFlatSelect(modelSelect);
-    modelSelect.addEventListener('change', () => {
-      const selected = normalizePreferredModel(modelSelect.value);
-      if (selected === state.preferredModel) return;
-      state.preferredModel = selected;
-      // Drop the reused session so the next turn starts with the newly chosen model
-      // context cleanly when host-side model update is unavailable.
-      if (state.agentSession?.id) {
-        state.agentSession = {
-          ...state.agentSession,
-          id: '',
-        };
-      }
-      refreshFlatSelect(modelSelect);
-      void persist(true);
-    });
-  }
 }
 
 /* ============================================
@@ -3636,45 +3662,36 @@ function bindExportModal() {
 }
 
 /* ============================================
-   HOST THEME — follow BitFun light/dark
+   HOST APPEARANCE — follow BitFun light/dark mode
    ============================================ */
-const THEME_STORAGE_KEY = 'pptLiveTheme';
-
-function resolveTheme(theme) {
-  if (theme === 'dark' || theme === 'light') return theme;
+function resolveAppearanceMode(mode) {
+  if (mode === 'dark' || mode === 'light') return mode;
   if (window.matchMedia?.('(prefers-color-scheme: dark)')?.matches) return 'dark';
   return 'light';
 }
 
-function getHostTheme() {
-  const attrTheme = document.documentElement.getAttribute('data-theme-type')
-    || document.documentElement.getAttribute('data-theme');
-  if (attrTheme === 'dark' || attrTheme === 'light') return attrTheme;
-  const hostTheme = runtime().theme;
-  if (hostTheme === 'dark' || hostTheme === 'light') return hostTheme;
-  return resolveTheme();
+function getHostAppearanceMode() {
+  const attributeMode = document.documentElement.getAttribute('data-bf-appearance-mode');
+  if (attributeMode === 'dark' || attributeMode === 'light') return attributeMode;
+  const runtimeMode = runtime().appearanceMode;
+  if (runtimeMode === 'dark' || runtimeMode === 'light') return runtimeMode;
+  return resolveAppearanceMode();
 }
 
-function applyTheme(theme) {
-  const resolved = resolveTheme(theme);
+function applyAppearanceMode(mode) {
+  const resolved = resolveAppearanceMode(mode);
   const root = document.documentElement;
-  root.setAttribute('data-theme', resolved);
-  root.setAttribute('data-theme-type', resolved);
+  root.setAttribute('data-bf-appearance-mode', resolved);
   root.style.colorScheme = resolved;
   ensureCanvasFitted();
   rerender();
 }
 
-function bindHostTheme() {
-  try {
-    localStorage.removeItem(THEME_STORAGE_KEY);
-  } catch {
-    memoryStorage.delete(THEME_STORAGE_KEY);
-  }
-  applyTheme(getHostTheme());
-  runtime().onThemeChange?.((payload) => {
-    const next = payload?.type === 'dark' ? 'dark' : 'light';
-    applyTheme(next);
+function bindHostAppearance() {
+  applyAppearanceMode(getHostAppearanceMode());
+  runtime().onAppearanceChange?.((payload) => {
+    const next = payload?.mode === 'dark' ? 'dark' : 'light';
+    applyAppearanceMode(next);
   });
 }
 
@@ -3713,70 +3730,38 @@ function renderStylePresetOptions() {
   refreshFlatSelect(stylePresetSelect);
 }
 
-function appendModelOption(select, value, label) {
-  const option = document.createElement('option');
-  option.value = value;
-  option.textContent = label;
-  select.append(option);
-}
-
-/** Match host chat ModelSelector: concrete options use model_name. */
-function modelOptionLabel(model) {
-  const modelName = String(model?.modelName || model?.model_name || '').trim();
-  if (modelName) return modelName;
-  const configName = String(model?.name || '').trim();
-  if (configName) return configName;
-  return String(model?.id || '').trim();
-}
-
-function renderModelOptions(models = []) {
-  const modelSelect = $('modelSelect');
-  if (!modelSelect) return;
-  const selected = normalizePreferredModel(state.preferredModel);
-  modelSelect.textContent = '';
-
-  // Same special entries as chat ModelSelector: auto / primary / fast, then concrete models.
-  appendModelOption(modelSelect, 'auto', t('modelOptionAuto'));
-  appendModelOption(modelSelect, 'primary', t('modelOptionPrimary'));
-  appendModelOption(modelSelect, 'fast', t('modelOptionFast'));
-
-  for (const model of Array.isArray(models) ? models : []) {
-    const id = String(model?.id || '').trim();
-    if (!id || id === 'auto' || id === 'primary' || id === 'fast') continue;
-    appendModelOption(modelSelect, id, modelOptionLabel(model));
-  }
-
-  if (![...modelSelect.options].some((option) => option.value === selected)) {
-    appendModelOption(modelSelect, selected, selected);
-  }
-  modelSelect.value = selected;
-  if (modelSelect.selectedIndex < 0) modelSelect.value = DEFAULT_PREFERRED_MODEL;
-  state.preferredModel = normalizePreferredModel(modelSelect.value);
-  refreshFlatSelect(modelSelect);
-}
-
-async function loadModelOptions() {
-  renderModelOptions([]);
-  const getModels = runtime()?.ai?.getModels;
-  if (typeof getModels !== 'function') return;
-  try {
-    const models = await getModels();
-    renderModelOptions(models);
-  } catch (error) {
-    runtime().log?.warn?.('PPT Live failed to list AI models', { error: String(error) });
-    renderModelOptions([]);
-  }
-}
-
 function syncLocale() {
   state.generation = normalizeGeneration(state.generation);
   applyI18n();
   renderStylePresetOptions();
-  renderModelOptions([]);
-  void loadModelOptions();
-  const pill = $('aiStatusPill');
-  if (pill) pill.textContent = busy ? t('statusPillBusy') : t('statusPillReady');
+  syncComposerClaim();
   rerender();
+}
+
+/**
+ * Claim the floating session bubble as PPT Live's composer. Re-claimed on
+ * every locale change so the bubble placeholder stays localized. Idempotent —
+ * the host treats repeated claims as an upsert.
+ */
+function syncComposerClaim() {
+  void runtime().chat?.claimComposer?.({
+    composer: {
+      placeholder: t('bubblePlaceholder'),
+    },
+    welcome: {
+      title: t('bubbleWelcomeTitle'),
+      description: t('bubbleWelcomeBody'),
+      workspaceLabel: t('bubbleWorkspaceLabel'),
+      suggestionsLabel: t('bubbleSuggestionsLabel'),
+      suggestions: [
+        { label: t('welcomeTip1'), prompt: t('welcomeTip1') },
+        { label: t('welcomeTip2'), prompt: t('welcomeTip2') },
+        { label: t('welcomeTip3'), prompt: t('welcomeTip3') },
+      ],
+    },
+  })?.catch?.((error) => {
+    runtime().log?.warn?.('PPT Live could not claim the bubble composer', { error: String(error) });
+  });
 }
 
 async function init() {
@@ -3785,8 +3770,8 @@ async function init() {
     await loadState();
     await recoverFromRestart();
     syncLocale();
+    await ensureDeckAgentSession();
     syncStylePanelFromState(state);
-    await loadModelOptions();
     await persist(true);
   } catch (error) {
     runtime().log?.error?.('PPT Live init failed', { error: String(error) });
@@ -3800,4 +3785,12 @@ async function init() {
 bindEvents();
 observeThumbPreviews();
 runtime().onLocaleChange?.(() => syncLocale());
+// Requests arrive from the floating session bubble: the host routes composer
+// input here while PPT Live's claim is active (see syncComposerClaim).
+runtime().chat?.onUserMessage?.((payload) => {
+  const text = String(payload?.text || '').trim();
+  if (!text) return;
+  const displayText = String(payload?.displayText || '').trim() || text;
+  void submitInstruction(text, displayText);
+});
 init();

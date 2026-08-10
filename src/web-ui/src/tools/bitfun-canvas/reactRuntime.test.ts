@@ -124,28 +124,28 @@ describe('React Canvas runtime bridge', () => {
     });
   });
 
-  it('bridges host theme variables into the iframe runtime', () => {
-    const html = buildReactCanvasHtml(compiledHtml, { title: 'Theme' });
+  it('bridges host appearance variables into the iframe runtime', () => {
+    const html = buildReactCanvasHtml(compiledHtml, { title: 'Appearance' });
 
-    expect(html).toContain('nextTheme.vars');
+    expect(html).toContain('nextAppearance.vars');
     expect(html).toContain("rootStyle.setProperty(name, value.trim())");
-    expect(html).toContain('--color-bg-primary');
+    expect(html).toContain('--bf-appearance-token-color-bg-primary');
   });
 
-  it('exposes semantic theme tokens through useHostTheme().tokens', async () => {
+  it('exposes semantic appearance tokens through useHostAppearance().tokens', async () => {
     const html = buildReactCanvasHtml(`<!DOCTYPE html>
 <script type="module" data-revision="rev_tokens">
-const { useHostTheme } = window.BitfunCanvasSDK;
+const { useHostAppearance } = window.BitfunCanvasSDK;
 const { h } = window.BitfunCanvasRuntime;
 function Canvas() {
-  const { tokens } = useHostTheme();
+  const { tokens } = useHostAppearance();
   return h('svg', null,
     h('rect', { 'data-testid': 'node', width: 20, height: 20, fill: tokens.bg.elevated }),
     h('text', { 'data-testid': 'label', fill: tokens.text.primary }, 'Node')
   );
 }
 window.BitfunCanvasRuntime.mount(Canvas);
-</script>`, { title: 'Theme tokens' });
+</script>`, { title: 'Appearance tokens' });
 
     const { dom, messages } = await runCanvasHtml(html ?? '');
 

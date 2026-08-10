@@ -1,5 +1,10 @@
 #![cfg(feature = "remote-connect")]
 
+use bitfun_core_types::{
+    ModelsDevCatalogSource, ModelsDevReasoningCatalog, ModelsDevReasoningModel,
+    ModelsDevReasoningProvider, ReasoningCapabilityStatus, ReasoningCatalogProjection,
+    ReasoningPresetAction, ReasoningPresetDescriptor, ReasoningPresetSource,
+};
 use bitfun_events::{AgenticEvent, ToolEventData};
 use bitfun_runtime_ports::{
     AgentSubmissionSource, RemoteControlSessionState, RemoteControlStateSnapshot,
@@ -37,8 +42,8 @@ use bitfun_services_integrations::remote_connect::{
     RemoteDialogSubmissionPolicy, RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome,
     RemoteDialogWorkspaceBinding, RemoteImageContext, RemoteImageContextAdapter,
     RemoteModelCapabilityFact, RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelConfig,
-    RemoteModelFacts, RemoteReasoningModeFact, RemoteRecentWorkspaceFacts, RemoteResponse,
-    RemoteSessionMetadata, RemoteSessionStateTracker, RemoteSessionTrackerHost,
+    RemoteModelFacts, RemoteRecentWorkspaceFacts, RemoteResponse, RemoteSessionMetadata,
+    RemoteSessionModelSelection, RemoteSessionStateTracker, RemoteSessionTrackerHost,
     RemoteSessionTrackerRegistry, RemoteSessionWorkspaceIdentity, RemoteTerminalPrewarmRequest,
     RemoteToolStatus, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk, RemoteWorkspaceFileContent,
     RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind,
@@ -459,13 +464,16 @@ fn remote_chat_history_assembly_preserves_message_shape_and_item_order() {
 }
 
 #[test]
-fn remote_chat_history_assembly_skips_in_progress_assistant_history() {
+fn remote_chat_history_assembly_preserves_in_progress_assistant_history() {
     let turn = remote_history_contract_turn(true);
 
     let messages = build_remote_chat_messages(vec![turn]);
 
-    assert_eq!(messages.len(), 1);
+    assert_eq!(messages.len(), 2);
     assert_eq!(messages[0].role, "user");
+    assert_eq!(messages[1].role, "assistant");
+    assert_eq!(messages[1].content, "visible text");
+    assert_eq!(messages[1].tools.as_ref().unwrap()[0].status, "running");
 }
 
 #[test]
@@ -1832,10 +1840,17 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
         }
     );
     assert_eq!(
-        remote_session_model_updated_response("session-1", "model-1"),
+        remote_session_model_updated_response(
+            "session-1",
+            RemoteSessionModelSelection {
+                model_id: "model-1".to_string(),
+                reasoning_preset: None,
+            },
+        ),
         RemoteResponse::SessionModelUpdated {
             session_id: "session-1".to_string(),
             model_id: "model-1".to_string(),
+            reasoning_preset: None,
         }
     );
     assert_eq!(
@@ -2030,6 +2045,52 @@ fn remote_connect_command_wire_shape_lives_in_owner_contract() {
 }
 
 #[test]
+fn remote_model_selection_command_preserves_present_nullable_preset() {
+    let omitted: RemoteCommand = serde_json::from_value(serde_json::json!({
+        "cmd": "set_session_model",
+        "session_id": "session-1",
+        "model_id": "model-1"
+    }))
+    .expect("deserialize legacy model-only command");
+    let explicit_auto: RemoteCommand = serde_json::from_value(serde_json::json!({
+        "cmd": "set_session_model",
+        "session_id": "session-1",
+        "model_id": "model-1",
+        "reasoning_preset": null
+    }))
+    .expect("deserialize explicit auto preset");
+    let explicit_high: RemoteCommand = serde_json::from_value(serde_json::json!({
+        "cmd": "set_session_model",
+        "session_id": "session-1",
+        "model_id": "model-1",
+        "reasoning_preset": "high"
+    }))
+    .expect("deserialize explicit reasoning preset");
+
+    assert!(matches!(
+        omitted,
+        RemoteCommand::SetSessionModel {
+            reasoning_preset: None,
+            ..
+        }
+    ));
+    assert!(matches!(
+        explicit_auto,
+        RemoteCommand::SetSessionModel {
+            reasoning_preset: Some(None),
+            ..
+        }
+    ));
+    assert!(matches!(
+        explicit_high,
+        RemoteCommand::SetSessionModel {
+            reasoning_preset: Some(Some(ref preset)),
+            ..
+        } if preset == "high"
+    ));
+}
+
+#[test]
 fn remote_connect_response_wire_shape_lives_in_owner_contract() {
     let active_turn = ActiveTurnSnapshot {
         turn_id: "turn-1".to_string(),
@@ -2109,16 +2170,17 @@ fn sample_remote_model_catalog(version: u64) -> RemoteModelCatalog {
             context_window: Some(128_000),
             enabled: true,
             capabilities: vec!["text_chat".to_string()],
-            enable_thinking_process: false,
-            reasoning_mode: Some("default".to_string()),
-            reasoning_effort: None,
-            thinking_budget_tokens: None,
+            reasoning: None,
         }],
+        provider_catalog: Default::default(),
+        models_dev_reasoning_catalog: None,
         default_models: RemoteDefaultModelsConfig {
             primary: Some("model-1".to_string()),
             ..RemoteDefaultModelsConfig::default()
         },
+        reasoning_preset_selection_supported: true,
         session_model_id: Some("model-1".to_string()),
+        session_reasoning_preset: None,
     }
 }
 
@@ -2126,6 +2188,7 @@ fn sample_remote_model_catalog(version: u64) -> RemoteModelCatalog {
 fn remote_connect_model_catalog_builder_preserves_config_shape() {
     let catalog = build_remote_model_catalog(RemoteModelCatalogFacts {
         last_modified_ms: -7,
+        source_version: Some(7),
         models: vec![RemoteModelFacts {
             id: "model-1".to_string(),
             name: "Model One".to_string(),
@@ -2139,11 +2202,35 @@ fn remote_connect_model_catalog_builder_preserves_config_shape() {
                 RemoteModelCapabilityFact::ImageUnderstanding,
                 RemoteModelCapabilityFact::FunctionCalling,
             ],
-            enable_thinking_process: true,
-            reasoning_mode: Some(RemoteReasoningModeFact::Adaptive),
-            reasoning_effort: Some("medium".to_string()),
-            thinking_budget_tokens: Some(4096),
+            reasoning: Some(ReasoningCatalogProjection {
+                status: ReasoningCapabilityStatus::Known,
+                default_preset: Some("high".to_string()),
+                presets: vec![ReasoningPresetDescriptor {
+                    id: "high".to_string(),
+                    label: "High".to_string(),
+                    order: 10,
+                    actions: vec![ReasoningPresetAction::Effort {
+                        value: "high".to_string(),
+                    }],
+                    source: ReasoningPresetSource::ModelsDev,
+                    execution_provider: None,
+                    execution_model: None,
+                }],
+            }),
         }],
+        provider_catalog: Default::default(),
+        models_dev_reasoning_catalog: Some(ModelsDevReasoningCatalog {
+            revision: "models-dev-revision".to_string(),
+            source: ModelsDevCatalogSource::Cache,
+            providers: vec![ModelsDevReasoningProvider {
+                id: "github-copilot".to_string(),
+                name: "GitHub Copilot".to_string(),
+                models: vec![ModelsDevReasoningModel {
+                    id: "gpt-5.1-codex".to_string(),
+                    display_name: Some("GPT-5.1 Codex".to_string()),
+                }],
+            }],
+        }),
         default_models: RemoteDefaultModelsConfig {
             primary: Some("model-1".to_string()),
             fast: Some("fast-model".to_string()),
@@ -2151,11 +2238,22 @@ fn remote_connect_model_catalog_builder_preserves_config_shape() {
             ..RemoteDefaultModelsConfig::default()
         },
         session_model_id: Some("session-model".to_string()),
+        session_reasoning_preset: Some("high".to_string()),
     });
 
-    assert_eq!(catalog.version, 0);
+    assert!(catalog.reasoning_preset_selection_supported);
     assert_eq!(catalog.session_model_id.as_deref(), Some("session-model"));
+    assert_eq!(catalog.session_reasoning_preset.as_deref(), Some("high"));
     assert_eq!(catalog.default_models.fast.as_deref(), Some("fast-model"));
+    assert_eq!(
+        catalog
+            .models_dev_reasoning_catalog
+            .as_ref()
+            .expect("models.dev reasoning catalog")
+            .providers[0]
+            .id,
+        "github-copilot"
+    );
     let model = catalog.models.first().expect("model config");
     assert_eq!(model.id, "model-1");
     assert_eq!(model.context_window, Some(128_000));
@@ -2167,10 +2265,72 @@ fn remote_connect_model_catalog_builder_preserves_config_shape() {
             "function_calling".to_string(),
         ]
     );
-    assert!(model.enable_thinking_process);
-    assert_eq!(model.reasoning_mode.as_deref(), Some("adaptive"));
-    assert_eq!(model.reasoning_effort.as_deref(), Some("medium"));
-    assert_eq!(model.thinking_budget_tokens, Some(4096));
+    let reasoning = model.reasoning.as_ref().expect("reasoning projection");
+    assert_eq!(reasoning.status, ReasoningCapabilityStatus::Known);
+    assert_eq!(reasoning.default_preset.as_deref(), Some("high"));
+    assert_eq!(reasoning.presets[0].id, "high");
+}
+
+#[test]
+fn remote_model_catalog_version_fits_javascript_number_precision() {
+    let catalog = build_remote_model_catalog(RemoteModelCatalogFacts {
+        last_modified_ms: 0,
+        source_version: Some(u64::MAX),
+        models: Vec::new(),
+        provider_catalog: Default::default(),
+        models_dev_reasoning_catalog: None,
+        default_models: RemoteDefaultModelsConfig::default(),
+        session_model_id: None,
+        session_reasoning_preset: None,
+    });
+
+    assert!(catalog.version <= (1_u64 << 53) - 1);
+}
+
+#[test]
+fn remote_model_catalog_version_tracks_session_selection() {
+    let facts = RemoteModelCatalogFacts {
+        last_modified_ms: 42,
+        source_version: Some(7),
+        models: Vec::new(),
+        provider_catalog: Default::default(),
+        models_dev_reasoning_catalog: None,
+        default_models: RemoteDefaultModelsConfig::default(),
+        session_model_id: Some("model-1".to_string()),
+        session_reasoning_preset: None,
+    };
+    let model_one = build_remote_model_catalog(facts.clone());
+    let high = build_remote_model_catalog(RemoteModelCatalogFacts {
+        session_reasoning_preset: Some("high".to_string()),
+        ..facts.clone()
+    });
+    let model_two = build_remote_model_catalog(RemoteModelCatalogFacts {
+        session_model_id: Some("model-2".to_string()),
+        ..facts
+    });
+
+    assert_ne!(model_one.version, high.version);
+    assert_ne!(model_one.version, model_two.version);
+}
+
+#[test]
+fn remote_model_catalog_version_tracks_provider_catalog_revision() {
+    let mut facts = RemoteModelCatalogFacts {
+        last_modified_ms: 42,
+        source_version: Some(7),
+        models: Vec::new(),
+        provider_catalog: Default::default(),
+        models_dev_reasoning_catalog: None,
+        default_models: RemoteDefaultModelsConfig::default(),
+        session_model_id: None,
+        session_reasoning_preset: None,
+    };
+    facts.provider_catalog.revision = "catalog-a".to_string();
+    let catalog_a = build_remote_model_catalog(facts.clone());
+    facts.provider_catalog.revision = "catalog-b".to_string();
+    let catalog_b = build_remote_model_catalog(facts);
+
+    assert_ne!(catalog_a.version, catalog_b.version);
 }
 
 #[derive(Default)]
@@ -2308,6 +2468,7 @@ fn remote_connect_tracker_keeps_subagent_items_out_of_parent_accumulators() {
         parent_tool_call_id: "task-1".to_string(),
         agent_type: None,
         model_id: None,
+        focused_review_display_label: None,
     });
     tracker.handle_agentic_event(&AgenticEvent::TextChunk {
         session_id: "child-session".to_string(),

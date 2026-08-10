@@ -114,9 +114,13 @@ export const TYPEWRITER_FINISH_MIN_PAINT_INTERVAL_MS = 8;
 
 export interface TypewriterOptions {
   /**
-   * When false, mounting starts from the current text and only reveals later
-   * appended content. This prevents history/detail views from replaying already
-   * streamed output when they are opened.
+   * Replay the whole current text on mount. Defaults to false: mounting starts
+   * from the current text and only reveals later appended content.
+   *
+   * Replaying on mount is almost never what you want in the message list. The
+   * list is virtualized, so a still-streaming block that scrolls out of view and
+   * back remounts — replaying would reset it to an empty string and re-grow it,
+   * which the user sees as the conversation refreshing itself.
    */
   replayOnMount?: boolean;
 }
@@ -204,7 +208,7 @@ export function useTypewriter(
   animate: boolean,
   options: TypewriterOptions = {}
 ): TypewriterResult {
-  const replayOnMount = options.replayOnMount ?? true;
+  const replayOnMount = options.replayOnMount ?? false;
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(getPrefersReducedMotion);
   const shouldReplayInitialText = animate && replayOnMount && !prefersReducedMotion;
   const [displayText, setDisplayText] = useState(shouldReplayInitialText ? '' : targetText);

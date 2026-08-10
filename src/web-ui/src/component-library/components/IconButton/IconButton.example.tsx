@@ -19,15 +19,15 @@ const HeartIcon = () => (
   </svg>
 );
 
-const previewBackground = 'color-mix(in srgb, var(--color-static-black) 90%, var(--color-static-white))';
-const previewTextMuted = 'color-mix(in srgb, var(--color-static-white) 63%, var(--color-static-black))';
+const previewBackground = 'color-mix(in srgb, var(--bf-appearance-token-color-static-black) 90%, var(--bf-appearance-token-color-static-white))';
+const previewTextMuted = 'color-mix(in srgb, var(--bf-appearance-token-color-static-white) 63%, var(--bf-appearance-token-color-static-black))';
 
 export const IconButtonExample: React.FC = () => {
   const { t } = useI18n('components');
 
   return (
     <div style={{ padding: '24px', background: previewBackground, minHeight: '100vh' }}>
-      <h2 style={{ color: 'var(--color-static-white)', marginBottom: '24px' }}>
+      <h2 style={{ color: 'var(--bf-appearance-token-color-static-white)', marginBottom: '24px' }}>
         {t('componentLibrary.iconButtonExample.title')}
       </h2>
       
@@ -122,8 +122,8 @@ export const IconButtonExample: React.FC = () => {
         </div>
       </div>
 
-      <div style={{ marginTop: '48px', padding: '16px', background: 'var(--color-overlay-white-08)', borderRadius: '8px' }}>
-        <h3 style={{ color: 'var(--color-static-white)', marginBottom: '12px' }}>
+      <div style={{ marginTop: '48px', padding: '16px', background: 'var(--bf-appearance-token-color-overlay-white-08)', borderRadius: '8px' }}>
+        <h3 style={{ color: 'var(--bf-appearance-token-color-static-white)', marginBottom: '12px' }}>
           {t('componentLibrary.iconButtonExample.sections.usage')}
         </h3>
         <ul style={{ color: previewTextMuted, lineHeight: '1.8' }}>
@@ -140,8 +140,8 @@ export const IconButtonExample: React.FC = () => {
             {t('componentLibrary.iconButtonExample.usage.disabled.text')}
           </li>
           <li>
-            <strong>{t('componentLibrary.iconButtonExample.usage.theme.label')}</strong>
-            {t('componentLibrary.iconButtonExample.usage.theme.text')}
+            <strong>{t('componentLibrary.iconButtonExample.usage.appearance.label')}</strong>
+            {t('componentLibrary.iconButtonExample.usage.appearance.text')}
           </li>
         </ul>
       </div>

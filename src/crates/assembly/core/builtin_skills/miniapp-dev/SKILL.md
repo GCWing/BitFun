@@ -98,7 +98,41 @@ description: 'Generate and refine BitFun MiniApps. Use when the user wants a new
 - 需要 npm 依赖
 - 需要较长链路或较复杂的后台逻辑
 
-### 4. 用 `InitMiniApp` 创建骨架
+### 4. 选择正确的编辑流程
+
+先判断当前任务属于哪一种，不要混用：
+
+#### 新建 MiniApp
+
+1. 调用 `InitMiniApp`，保存返回的 `app_id` 和根目录。
+2. 只在返回的根目录中编辑 `source/index.html`、`source/style.css`、
+   `source/ui.js`、按需编辑 `source/worker.js`，以及确有必要的 `meta.json`
+   产品字段。
+3. 编辑完成后必须调用 `FinalizeMiniApp`，传入刚才的 `app_id`。
+4. 只有 `FinalizeMiniApp` 成功后才算交付完成。
+
+#### 更新已有 MiniApp
+
+1. 复用已有应用的 `app_id` 和根目录，不要再次调用 `InitMiniApp` 创建副本。
+2. 在已有根目录中完成修改。
+3. 每一批文件修改完成后必须调用一次 `FinalizeMiniApp`。
+4. 如果预期有修改但返回 `changed: false`，检查文件是否写进了正确的应用根目录；
+   不要靠手动增加版本号掩盖问题。
+
+`FinalizeMiniApp` 会重新从磁盘读取源码、编译 `compiled.html`、持久化内容修订，
+并通知已经打开的 MiniApp 刷新。版本号由它管理；不要手改 `version`、
+`created_at`、`updated_at`、`runtime` 或 `compiled.html`。
+
+#### 定制草稿
+
+如果当前提示明确给出了 `Draft root` / 草稿目录：
+
+- 只编辑草稿目录
+- 不调用 `InitMiniApp`
+- 不调用 `FinalizeMiniApp`
+- 由定制面板负责“刷新草稿预览”和“应用草稿”
+
+### 5. 用 `InitMiniApp` 创建骨架
 
 创建后，围绕这些文件工作：
 
@@ -115,7 +149,7 @@ description: 'Generate and refine BitFun MiniApps. Use when the user wants a new
 - `ui.js` 负责状态、渲染、事件、i18n
 - `worker.js` 只承载真正需要后台执行的逻辑
 
-### 5. 只使用真实存在的宿主能力
+### 6. 只使用真实存在的宿主能力
 
 MiniApp 里可用的是 `window.app`。
 
@@ -129,9 +163,9 @@ MiniApp 里可用的是 `window.app`。
 - `app.dialog.*`
 - `app.clipboard.*`
 - `app.ai.*`
-- `app.theme`
+- `app.appearanceMode`
 - `app.locale`
-- `app.onThemeChange`
+- `app.onAppearanceChange`
 - `app.onLocaleChange`
 - `app.t(...)`
 - `app.call(...)` 仅在 `node.enabled = true` 时
@@ -140,7 +174,7 @@ MiniApp 里可用的是 `window.app`。
 
 - [`api-reference.md`](api-reference.md)
 
-### 6. 不要假设这些 API 存在
+### 7. 不要假设这些 API 存在
 
 默认**不要**写这些不存在的接口：
 
@@ -163,7 +197,7 @@ await app.shell.exec('git ...', { cwd: app.workspaceDir })
 await app.fs.readFile(...)
 ```
 
-### 7. 从第一版就带上 i18n 和 theme
+### 8. 从第一版就带上 i18n 和 theme
 
 不要把多语言和主题适配留到最后。
 
@@ -175,7 +209,7 @@ await app.fs.readFile(...)
 - 样式优先使用 `--bitfun-*`
 - 测试 light/dark + zh/en
 
-### 8. 先做核心体验，不补假内容
+### 9. 先做核心体验，不补假内容
 
 如果缺素材、图标、真实数据：
 
@@ -249,3 +283,24 @@ await app.fs.readFile(...)
 - i18n 至少覆盖 `zh-CN` / `en-US`
 - light/dark 没有明显样式问题
 - 没有遗留 “TODO / 占位 / Lorem ipsum”
+- 普通新建/更新流程已成功调用 `FinalizeMiniApp`
+- 预期有改动时 `FinalizeMiniApp` 返回 `changed: true`
+- 没有手动修改生命周期字段或 `compiled.html`
+
+## 发布到市场
+
+用户明确要求把 MiniApp 发布/上架到市场时，用 `PublishMiniApp` 工具：
+
+- 传 `app_id` 和 1–5 张截图路径（PNG/JPEG/WebP，单张 ≤ 5 MiB）。
+  没有截图时先向用户要，或请用户在「市场 → 我的投稿」用「截取当前画面」生成。
+- **截图比例用 16:9，推荐 1920×1080**。市场网页和 BitFun 桌面端都按 16:9
+  居中裁剪显示，非 16:9 的图会被切掉边缘。第一张是列表卡片封面，选最能说明
+  用途的那张，关键信息放画面中部不要贴边。超过 2560px 的边会被服务端缩到
+  2560，所以 2560×1440 是有效上限。
+- 名称、描述、图标、分类、标签自动取自 `meta.json`；slug 和版本号自动推导。
+  发布前确认 `meta.json` 的 `description` 非空、权限是最小集
+  （市场会拒绝 `node.enabled=true`、宽泛 fs scope 等）。
+- 未登录时工具会返回 GitHub 授权链接：把链接给用户，等用户完成授权后
+  用相同参数再调用一次即可继续。
+- 提交后进入人工审核；用户可在「市场 → 我的投稿」查看状态。
+- 这是对外动作：只在用户明确要求发布时调用，不要主动发布。

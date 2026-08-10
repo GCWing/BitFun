@@ -16,5 +16,6 @@ pub use bitfun_services_core::session_usage::{
 };
 pub use service::{
     build_session_usage_report_from_sources, build_session_usage_report_from_turns,
-    generate_session_usage_report, SessionUsageReportRequest,
+    generate_session_usage_report, generate_session_usage_report_from_storage_path,
+    SessionUsageReportRequest,
 };

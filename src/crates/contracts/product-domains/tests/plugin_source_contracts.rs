@@ -426,10 +426,9 @@ fn activation_lifecycle_is_exact_independent_and_idempotent() {
         .expect("deactivate source")
         .is_some());
     assert_eq!((store.epoch(), store.activation_epoch()), (trust_epoch, 9));
-    assert!(!store
+    assert!(store
         .clear_activation_record(PROJECT, WORKSPACE, &package.package_id, None)
-        .expect("repeat deactivation")
-        .is_some());
+        .expect("repeat deactivation").is_none());
     assert_eq!((store.epoch(), store.activation_epoch()), (trust_epoch, 9));
 }
 
@@ -495,10 +494,9 @@ fn stale_residual_cleanup_cannot_clear_a_newer_activation() {
         .expect("read current activation authority")
         .activation_epoch();
 
-    assert!(!store
+    assert!(store
         .clear_activation_record(PROJECT, WORKSPACE, &package.package_id, Some(stale_epoch),)
-        .expect("stale cleanup is a no-op")
-        .is_some());
+        .expect("stale cleanup is a no-op").is_none());
     assert!(store.is_activated(PROJECT, WORKSPACE, &package));
     assert_eq!(store.activation_epoch(), current_epoch);
 }

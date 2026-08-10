@@ -44,18 +44,18 @@ export const TurnFailureNoticeItem: React.FC<TurnFailureNoticeItemProps> = ({ er
   }, [rawError]);
 
   return (
-    <section
+    <section data-bf-component="turn-failure-notice" data-bf-part="root" data-bf-state={[isOpen && 'open', copied && 'copied'].filter(Boolean).join(' ')}
       className={`turn-failure-notice turn-failure-notice--${presentation.severity}`}
       aria-label={t(presentation.titleKey)}
     >
-      <div className="turn-failure-notice__icon" aria-hidden="true">
+      <div data-bf-component="turn-failure-notice" data-bf-part="icon" className="turn-failure-notice__icon" aria-hidden="true">
         <AlertCircle size={16} />
       </div>
-      <div className="turn-failure-notice__content">
-        <div className="turn-failure-notice__header">
-          <div className="turn-failure-notice__summary">
-            <div className="turn-failure-notice__title">{t(presentation.titleKey)}</div>
-            <div className="turn-failure-notice__message">{t(presentation.messageKey)}</div>
+      <div data-bf-component="turn-failure-notice" data-bf-part="content" className="turn-failure-notice__content">
+        <div data-bf-component="turn-failure-notice" data-bf-part="header" className="turn-failure-notice__header">
+          <div data-bf-component="turn-failure-notice" data-bf-part="summary" className="turn-failure-notice__summary">
+            <div data-bf-component="turn-failure-notice" data-bf-part="title" className="turn-failure-notice__title">{t(presentation.titleKey)}</div>
+            <div data-bf-component="turn-failure-notice" data-bf-part="message" className="turn-failure-notice__message">{t(presentation.messageKey)}</div>
           </div>
 
           {(facts.length > 0 || rawError) && (
@@ -65,6 +65,8 @@ export const TurnFailureNoticeItem: React.FC<TurnFailureNoticeItemProps> = ({ er
             >
               <button
                 type="button"
+                data-bf-component="turn-failure-notice"
+                data-bf-part="toggle"
                 className="turn-failure-notice__details-toggle"
                 aria-expanded={isOpen}
                 aria-controls={detailsId}
@@ -78,11 +80,11 @@ export const TurnFailureNoticeItem: React.FC<TurnFailureNoticeItemProps> = ({ er
         </div>
 
         {isOpen && (
-          <div id={detailsId} className="turn-failure-notice__details">
+          <div id={detailsId} data-bf-component="turn-failure-notice" data-bf-part="details" className="turn-failure-notice__details">
             {facts.length > 0 && (
-              <dl className="turn-failure-notice__facts">
+              <dl data-bf-component="turn-failure-notice" data-bf-part="facts" className="turn-failure-notice__facts">
                 {facts.map(fact => (
-                  <div key={fact.label} className="turn-failure-notice__fact">
+                  <div key={fact.label} data-bf-component="turn-failure-notice" data-bf-part="fact" className="turn-failure-notice__fact">
                     <dt>{fact.label}</dt>
                     <dd>{fact.value}</dd>
                   </div>
@@ -90,12 +92,14 @@ export const TurnFailureNoticeItem: React.FC<TurnFailureNoticeItemProps> = ({ er
               </dl>
             )}
             {rawError && (
-              <div className="turn-failure-notice__raw-error">
-                <div className="turn-failure-notice__raw-error-header">
+              <div data-bf-component="turn-failure-notice" data-bf-part="rawError" className="turn-failure-notice__raw-error">
+                <div data-bf-component="turn-failure-notice" data-bf-part="rawHeader" className="turn-failure-notice__raw-error-header">
                   <span>{t('turnFailure.providerError')}</span>
                   <Tooltip content={copied ? t('turnFailure.copied') : t('turnFailure.copy')} placement="top">
                     <button
                       type="button"
+                      data-bf-component="turn-failure-notice"
+                      data-bf-part="copy"
                       className="turn-failure-notice__copy"
                       onClick={() => void copyRawError()}
                       aria-label={t('turnFailure.copy')}
@@ -104,7 +108,7 @@ export const TurnFailureNoticeItem: React.FC<TurnFailureNoticeItemProps> = ({ er
                     </button>
                   </Tooltip>
                 </div>
-                <pre>{rawError}</pre>
+                <pre data-bf-component="turn-failure-notice" data-bf-part="code">{rawError}</pre>
               </div>
             )}
           </div>

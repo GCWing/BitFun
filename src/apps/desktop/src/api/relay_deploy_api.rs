@@ -11,7 +11,7 @@
 //! `src/web-ui/src/features/relay-deploy/README.md`.
 
 use bitfun_core::service::remote_ssh::relay_deploy::{
-    self, RelayDeployTask, RelayPreflight, RelayTaskPoll, RelayTaskStart,
+    self, RelayDeployTask, RelayMirrorMode, RelayPreflight, RelayTaskPoll, RelayTaskStart,
 };
 use serde::Serialize;
 use tauri::State;
@@ -39,14 +39,21 @@ pub async fn relay_deploy_preflight(
 pub async fn relay_deploy_install_docker(
     state: State<'_, AppState>,
     connection_id: String,
+    mirror_mode: Option<RelayMirrorMode>,
 ) -> Result<RelayTaskStart, String> {
     let manager = state
         .get_ssh_manager_async()
         .await
         .map_err(|e| e.to_string())?;
-    relay_deploy::start_task(&manager, &connection_id, RelayDeployTask::InstallDocker, 0)
-        .await
-        .map_err(|e| e.to_string())
+    relay_deploy::start_task(
+        &manager,
+        &connection_id,
+        RelayDeployTask::InstallDocker,
+        0,
+        mirror_mode.unwrap_or_default(),
+    )
+    .await
+    .map_err(|e| e.to_string())
 }
 
 /// Stage the interactive deploy driver (run it in a remote PTY; poll via
@@ -56,6 +63,7 @@ pub async fn relay_deploy_start(
     state: State<'_, AppState>,
     connection_id: String,
     port: Option<u16>,
+    mirror_mode: Option<RelayMirrorMode>,
 ) -> Result<RelayTaskStart, String> {
     let manager = state
         .get_ssh_manager_async()
@@ -66,6 +74,7 @@ pub async fn relay_deploy_start(
         &connection_id,
         RelayDeployTask::Deploy,
         port.unwrap_or(0),
+        mirror_mode.unwrap_or_default(),
     )
     .await
     .map_err(|e| e.to_string())

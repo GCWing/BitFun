@@ -24,6 +24,33 @@ const requireSessionWorkspacePath = (sessionId: string, workspacePath?: string):
   return resolved;
 };
 
+interface SnapshotSessionScope {
+  workspacePath: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+}
+
+type SnapshotRemoteScope = Omit<SnapshotSessionScope, 'workspacePath'>;
+
+const requireSessionSnapshotScope = (
+  sessionId: string,
+  workspacePath?: string,
+): SnapshotSessionScope => {
+  const session = flowChatStore.getState().sessions.get(sessionId);
+  const remoteConnectionId = session?.remoteConnectionId || session?.config?.remoteConnectionId;
+  const remoteSshHost = remoteConnectionId
+    ? session?.remoteSshHost || session?.config?.remoteSshHost
+    : undefined;
+  return {
+    workspacePath: requireSessionWorkspacePath(sessionId, workspacePath),
+    ...(remoteConnectionId ? { remoteConnectionId } : {}),
+    ...(remoteSshHost ? { remoteSshHost } : {}),
+  };
+};
+
+const snapshotScopeKey = (scope: SnapshotSessionScope): string =>
+  `${scope.workspacePath}:${scope.remoteConnectionId || ''}:${scope.remoteSshHost || ''}`;
+
 
 export interface SandboxSessionModifications {
   hasModifications: boolean;
@@ -162,10 +189,10 @@ export class SnapshotAPI {
     total_changes: number;
   }> {
     try {
-      const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
-      const key = `get_session_stats:${resolvedWorkspacePath}:${sessionId}`;
+      const scope = requireSessionSnapshotScope(sessionId, workspacePath);
+      const key = `get_session_stats:${snapshotScopeKey(scope)}:${sessionId}`;
       return await this.dedupeInFlight(key, () => api.invoke('get_session_stats', {
-        request: { session_id: sessionId, workspacePath: resolvedWorkspacePath }
+        request: { session_id: sessionId, ...scope }
       }));
     } catch (error) {
       throw createTauriCommandError('get_session_stats', error, { sessionId, workspacePath });
@@ -175,10 +202,10 @@ export class SnapshotAPI {
    
   async getSessionFiles(sessionId: string, workspacePath?: string): Promise<string[]> {
     try {
-      const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
-      const key = `get_session_files:${resolvedWorkspacePath}:${sessionId}`;
+      const scope = requireSessionSnapshotScope(sessionId, workspacePath);
+      const key = `get_session_files:${snapshotScopeKey(scope)}:${sessionId}`;
       return await this.dedupeInFlight(key, () => api.invoke('get_session_files', {
-        request: { session_id: sessionId, workspacePath: resolvedWorkspacePath }
+        request: { session_id: sessionId, ...scope }
       }));
     } catch (error) {
       throw createTauriCommandError('get_session_files', error, { sessionId, workspacePath });
@@ -193,9 +220,9 @@ export class SnapshotAPI {
     workspacePath?: string,
   ): Promise<SandboxOperationDiff> {
     try {
-      const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
+      const scope = requireSessionSnapshotScope(sessionId, workspacePath);
       return await api.invoke('get_operation_diff', { 
-        request: { sessionId, filePath, operationId, workspacePath: resolvedWorkspacePath } 
+        request: { sessionId, filePath, operationId, ...scope }
       });
     } catch (error) {
       throw createTauriCommandError('get_operation_diff', error, {
@@ -213,10 +240,10 @@ export class SnapshotAPI {
     workspacePath?: string,
   ): Promise<SessionFileDiffStats> {
     try {
-      const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
-      const key = `get_session_file_diff_stats:${resolvedWorkspacePath}:${sessionId}:${filePath}`;
+      const scope = requireSessionSnapshotScope(sessionId, workspacePath);
+      const key = `get_session_file_diff_stats:${snapshotScopeKey(scope)}:${sessionId}:${filePath}`;
       return await this.dedupeInFlight(key, () => api.invoke('get_session_file_diff_stats', {
-        request: { sessionId, filePath, workspacePath: resolvedWorkspacePath },
+        request: { sessionId, filePath, ...scope },
       }));
     } catch (error) {
       throw createTauriCommandError('get_session_file_diff_stats', error, {
@@ -233,10 +260,10 @@ export class SnapshotAPI {
     workspacePath?: string,
   ): Promise<SandboxOperationSummary> {
     try {
-      const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
-      const key = `get_operation_summary:${resolvedWorkspacePath}:${sessionId}:${operationId}`;
+      const scope = requireSessionSnapshotScope(sessionId, workspacePath);
+      const key = `get_operation_summary:${snapshotScopeKey(scope)}:${sessionId}:${operationId}`;
       return await this.dedupeInFlight(key, () => api.invoke('get_operation_summary', {
-        request: { sessionId, operationId, workspacePath: resolvedWorkspacePath }
+        request: { sessionId, operationId, ...scope }
       }));
     } catch (error) {
       throw createTauriCommandError('get_operation_summary', error, {
@@ -248,11 +275,15 @@ export class SnapshotAPI {
   }
 
    
-  async getBaselineSnapshotDiff(filePath: string, workspacePath?: string): Promise<SandboxOperationDiff> {
+  async getBaselineSnapshotDiff(
+    filePath: string,
+    workspacePath?: string,
+    remoteScope: SnapshotRemoteScope = {},
+  ): Promise<SandboxOperationDiff> {
     try {
       const resolvedWorkspacePath = requireWorkspacePath(workspacePath);
       return await api.invoke('get_baseline_snapshot_diff', {
-        request: { filePath, workspacePath: resolvedWorkspacePath }
+        request: { filePath, workspacePath: resolvedWorkspacePath, ...remoteScope }
       });
     } catch (error) {
       throw createTauriCommandError('get_baseline_snapshot_diff', error, { filePath, workspacePath });
@@ -264,9 +295,9 @@ export class SnapshotAPI {
    
   async acceptSessionModifications(sessionId: string, workspacePath?: string): Promise<void> {
     try {
-      const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
+      const scope = requireSessionSnapshotScope(sessionId, workspacePath);
       await api.invoke('accept_session', {
-        request: { sessionId, workspacePath: resolvedWorkspacePath }
+        request: { sessionId, ...scope }
       });
     } catch (error) {
       throw createTauriCommandError('accept_session', error, { sessionId, workspacePath });
@@ -276,9 +307,9 @@ export class SnapshotAPI {
    
   async rejectSessionModifications(sessionId: string, workspacePath?: string): Promise<void> {
     try {
-      const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
+      const scope = requireSessionSnapshotScope(sessionId, workspacePath);
       await api.invoke('rollback_session', {
-        request: { sessionId, deleteSession: true, workspacePath: resolvedWorkspacePath }
+        request: { sessionId, deleteSession: true, ...scope }
       });
     } catch (error) {
       throw createTauriCommandError('rollback_session', error, { sessionId, workspacePath });
@@ -292,9 +323,9 @@ export class SnapshotAPI {
     workspacePath?: string,
   ): Promise<void> {
     try {
-      const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
+      const scope = requireSessionSnapshotScope(sessionId, workspacePath);
       await api.invoke('accept_file', {
-        request: { sessionId, filePath, workspacePath: resolvedWorkspacePath }
+        request: { sessionId, filePath, ...scope }
       });
     } catch (error) {
       throw createTauriCommandError('accept_file', error, { sessionId, filePath, workspacePath });
@@ -308,9 +339,9 @@ export class SnapshotAPI {
     workspacePath?: string,
   ): Promise<void> {
     try {
-      const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
+      const scope = requireSessionSnapshotScope(sessionId, workspacePath);
       await api.invoke('reject_file', {
-        request: { sessionId, filePath, workspacePath: resolvedWorkspacePath }
+        request: { sessionId, filePath, ...scope }
       });
     } catch (error) {
       throw createTauriCommandError('reject_file', error, { sessionId, filePath, workspacePath });
@@ -346,9 +377,9 @@ export class SnapshotAPI {
     workspacePath?: string,
   ): Promise<void> {
     try {
-      const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
+      const scope = requireSessionSnapshotScope(sessionId, workspacePath);
       await api.invoke('accept_operation', {
-        request: { sessionId, operationId, workspacePath: resolvedWorkspacePath }
+        request: { sessionId, operationId, ...scope }
       });
     } catch (error) {
       throw createTauriCommandError('accept_operation', error, { sessionId, operationId, workspacePath });
@@ -362,9 +393,9 @@ export class SnapshotAPI {
     workspacePath?: string,
   ): Promise<void> {
     try {
-      const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
+      const scope = requireSessionSnapshotScope(sessionId, workspacePath);
       await api.invoke('reject_operation', {
-        request: { sessionId, operationId, workspacePath: resolvedWorkspacePath }
+        request: { sessionId, operationId, ...scope }
       });
     } catch (error) {
       throw createTauriCommandError('reject_operation', error, { sessionId, operationId, workspacePath });
@@ -374,9 +405,9 @@ export class SnapshotAPI {
    
   async rollbackSession(sessionId: string, workspacePath?: string): Promise<void> {
     try {
-      const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
+      const scope = requireSessionSnapshotScope(sessionId, workspacePath);
       await api.invoke('rollback_session', { 
-        request: { sessionId, workspacePath: resolvedWorkspacePath } 
+        request: { sessionId, ...scope }
       });
     } catch (error) {
       throw createTauriCommandError('rollback_session', error, { sessionId, workspacePath });
@@ -394,11 +425,14 @@ export class SnapshotAPI {
   }
 
    
-  async getSnapshotStats(workspacePath?: string): Promise<any> {
+  async getSnapshotStats(
+    workspacePath?: string,
+    remoteScope: SnapshotRemoteScope = {},
+  ): Promise<any> {
     try {
       const resolvedWorkspacePath = requireWorkspacePath(workspacePath);
       return await api.invoke('get_snapshot_system_stats', {
-        request: { workspacePath: resolvedWorkspacePath }
+        request: { workspacePath: resolvedWorkspacePath, ...remoteScope }
       });
     } catch (error) {
       throw createTauriCommandError('get_snapshot_system_stats', error, { workspacePath });
@@ -406,11 +440,14 @@ export class SnapshotAPI {
   }
 
    
-  async getSnapshotSessions(workspacePath?: string): Promise<any> {
+  async getSnapshotSessions(
+    workspacePath?: string,
+    remoteScope: SnapshotRemoteScope = {},
+  ): Promise<any> {
     try {
       const resolvedWorkspacePath = requireWorkspacePath(workspacePath);
       return await api.invoke('get_snapshot_sessions', {
-        request: { workspacePath: resolvedWorkspacePath }
+        request: { workspacePath: resolvedWorkspacePath, ...remoteScope }
       });
     } catch (error) {
       throw createTauriCommandError('get_snapshot_sessions', error, { workspacePath });
@@ -420,9 +457,9 @@ export class SnapshotAPI {
    
   async getSessionOperations(sessionId: string, workspacePath?: string): Promise<any> {
     try {
-      const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
+      const scope = requireSessionSnapshotScope(sessionId, workspacePath);
       return await api.invoke('get_session_operations', {
-        request: { sessionId, workspacePath: resolvedWorkspacePath }
+        request: { sessionId, ...scope }
       });
     } catch (error) {
       throw createTauriCommandError('get_session_operations', error, { sessionId, workspacePath });
@@ -439,12 +476,12 @@ export class SnapshotAPI {
     workspacePath?: string,
   ): Promise<void> {
     try {
-      const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
+      const scope = requireSessionSnapshotScope(sessionId, workspacePath);
       await api.invoke('record_turn_snapshot', {
         session_id: sessionId,
         turn_index: turnIndex,
         modified_files: modifiedFiles,
-        workspacePath: resolvedWorkspacePath,
+        ...scope,
       });
     } catch (error) {
       throw createTauriCommandError('record_turn_snapshot', error, {
@@ -464,13 +501,13 @@ export class SnapshotAPI {
     workspacePath?: string,
   ): Promise<string[]> {
     try {
-      const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
+      const scope = requireSessionSnapshotScope(sessionId, workspacePath);
       return await api.invoke('rollback_to_turn', {
         request: {
           session_id: sessionId,
           turn_index: turnIndex,
           delete_turns: deleteTurns,
-          workspacePath: resolvedWorkspacePath,
+          ...scope,
         }
       });
     } catch (error) {
@@ -490,12 +527,12 @@ export class SnapshotAPI {
     workspacePath?: string,
   ): Promise<string[]> {
     try {
-      const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
+      const scope = requireSessionSnapshotScope(sessionId, workspacePath);
       return await api.invoke('rollback_session', {
         request: {
           session_id: sessionId,
           delete_session: deleteSession,
-          workspacePath: resolvedWorkspacePath,
+          ...scope,
         }
       });
     } catch (error) {
@@ -509,12 +546,12 @@ export class SnapshotAPI {
     workspacePath?: string,
   ): Promise<TurnSnapshot[]> {
     try {
-      const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
+      const scope = requireSessionSnapshotScope(sessionId, workspacePath);
       
       const turnIndices: number[] = await api.invoke('get_session_turns', {
         request: {
           session_id: sessionId,
-          workspacePath: resolvedWorkspacePath,
+          ...scope,
         }
       });
 
@@ -526,7 +563,7 @@ export class SnapshotAPI {
             request: {
               session_id: sessionId,
               turn_index: turnIndex,
-              workspacePath: resolvedWorkspacePath,
+              ...scope,
             }
           });
 
@@ -555,11 +592,15 @@ export class SnapshotAPI {
   }
 
    
-  async getFileChangeHistory(filePath: string, workspacePath?: string): Promise<FileChangeEntry[]> {
+  async getFileChangeHistory(
+    filePath: string,
+    workspacePath?: string,
+    remoteScope: SnapshotRemoteScope = {},
+  ): Promise<FileChangeEntry[]> {
     try {
       const resolvedWorkspacePath = requireWorkspacePath(workspacePath);
       const result = await api.invoke('get_file_change_history', {
-        request: { file_path: filePath, workspacePath: resolvedWorkspacePath }
+        request: { file_path: filePath, workspacePath: resolvedWorkspacePath, ...remoteScope }
       });
       return result as FileChangeEntry[];
     } catch (error) {
@@ -568,11 +609,14 @@ export class SnapshotAPI {
   }
 
    
-  async getAllModifiedFiles(workspacePath?: string): Promise<string[]> {
+  async getAllModifiedFiles(
+    workspacePath?: string,
+    remoteScope: SnapshotRemoteScope = {},
+  ): Promise<string[]> {
     try {
       const resolvedWorkspacePath = requireWorkspacePath(workspacePath);
       return await api.invoke('get_all_modified_files', {
-        request: { workspacePath: resolvedWorkspacePath }
+        request: { workspacePath: resolvedWorkspacePath, ...remoteScope }
       });
     } catch (error) {
       throw createTauriCommandError('get_all_modified_files', error, { workspacePath });

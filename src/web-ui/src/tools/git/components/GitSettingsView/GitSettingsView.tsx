@@ -157,14 +157,14 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
   }, []);
 
   const renderUserTab = useCallback(() => (
-    <div className="bitfun-git-settings-view__content">
-      <div className="bitfun-git-settings-view__section">
+    <div data-bf-component="git-settings-view" data-bf-part="content" className="bitfun-git-settings-view__content">
+      <div data-bf-component="git-settings-view" data-bf-part="section" className="bitfun-git-settings-view__section">
         <h4 className="bitfun-git-settings-view__section-title">{t('settingsView.sections.user.title')}</h4>
         <p className="bitfun-git-settings-view__section-description">
           {t('settingsView.sections.user.description')}
         </p>
         
-        <div className="bitfun-git-settings-view__form-group">
+        <div data-bf-component="git-settings-view" data-bf-part="formGroup" className="bitfun-git-settings-view__form-group">
           <label className="bitfun-git-settings-view__form-label">
             <User size={16} />
             {t('settingsView.sections.user.nameLabel')}
@@ -178,7 +178,7 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
           />
         </div>
         
-        <div className="bitfun-git-settings-view__form-group">
+        <div data-bf-component="git-settings-view" data-bf-part="formGroup" className="bitfun-git-settings-view__form-group">
           <label className="bitfun-git-settings-view__form-label">
             <Mail size={16} />
             {t('settingsView.sections.user.emailLabel')}
@@ -196,11 +196,11 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
   ), [config.user, updateUserConfig, t]);
 
   const renderRepositoryTab = useCallback(() => (
-    <div className="bitfun-git-settings-view__content">
-      <div className="bitfun-git-settings-view__section">
+    <div data-bf-component="git-settings-view" data-bf-part="content" className="bitfun-git-settings-view__content">
+      <div data-bf-component="git-settings-view" data-bf-part="section" className="bitfun-git-settings-view__section">
         <h4 className="bitfun-git-settings-view__section-title">{t('settingsView.sections.editor.title')}</h4>
         
-        <div className="bitfun-git-settings-view__form-group">
+        <div data-bf-component="git-settings-view" data-bf-part="formGroup" className="bitfun-git-settings-view__form-group">
           <Select
             label={t('settingsView.sections.editor.defaultEditorLabel')}
             options={[
@@ -216,10 +216,10 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
         </div>
       </div>
 
-      <div className="bitfun-git-settings-view__section">
+      <div data-bf-component="git-settings-view" data-bf-part="section" className="bitfun-git-settings-view__section">
         <h4 className="bitfun-git-settings-view__section-title">{t('settingsView.sections.lineEndings.title')}</h4>
         
-        <div className="bitfun-git-settings-view__form-group">
+        <div data-bf-component="git-settings-view" data-bf-part="formGroup" className="bitfun-git-settings-view__form-group">
           <Select
             label={t('settingsView.sections.lineEndings.autocrlfLabel')}
             options={[
@@ -233,15 +233,15 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
         </div>
       </div>
 
-      <div className="bitfun-git-settings-view__section">
+      <div data-bf-component="git-settings-view" data-bf-part="section" className="bitfun-git-settings-view__section">
         <h4 className="bitfun-git-settings-view__section-title">{t('settingsView.sections.remotes.title')}</h4>
         
         {Object.entries(config.remote).map(([name, remote]) => (
-          <div key={name} className="bitfun-git-settings-view__config-item">
+          <div data-bf-component="git-settings-view" data-bf-part="configItem" key={name} className="bitfun-git-settings-view__config-item">
             <div className="bitfun-git-settings-view__config-info">
               <div className="bitfun-git-settings-view__config-key">{name}</div>
             </div>
-            <div className="bitfun-git-settings-view__form-group">
+            <div data-bf-component="git-settings-view" data-bf-part="formGroup" className="bitfun-git-settings-view__form-group">
               <label className="bitfun-git-settings-view__form-label">{t('settingsView.sections.remotes.urlLabel')}</label>
               <Input
                 className="bitfun-git-settings-view__form-input"
@@ -258,11 +258,11 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
   ), [config.core, config.remote, updateCoreConfig, updateRemoteConfig, t]);
 
   const renderAdvancedTab = useCallback(() => (
-    <div className="bitfun-git-settings-view__content">
-      <div className="bitfun-git-settings-view__section">
+    <div data-bf-component="git-settings-view" data-bf-part="content" className="bitfun-git-settings-view__content">
+      <div data-bf-component="git-settings-view" data-bf-part="section" className="bitfun-git-settings-view__section">
         <h4 className="bitfun-git-settings-view__section-title">{t('settingsView.sections.core.title')}</h4>
         
-        <div className="bitfun-git-settings-view__form-group">
+        <div data-bf-component="git-settings-view" data-bf-part="formGroup" className="bitfun-git-settings-view__form-group">
           <Checkbox
             checked={config.core.ignorecase}
             onChange={(e) => updateCoreConfig('ignorecase', e.target.checked)}
@@ -272,17 +272,17 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
         </div>
       </div>
 
-      <div className="bitfun-git-settings-view__section">
+      <div data-bf-component="git-settings-view" data-bf-part="section" className="bitfun-git-settings-view__section">
         <h4 className="bitfun-git-settings-view__section-title">{t('settingsView.sections.branch.title')}</h4>
         
         {Object.entries(config.branch).map(([branchName, branchConfig]) => (
-          <div key={branchName} className="bitfun-git-settings-view__config-item">
+          <div data-bf-component="git-settings-view" data-bf-part="configItem" key={branchName} className="bitfun-git-settings-view__config-item">
             <div className="bitfun-git-settings-view__config-info">
               <div className="bitfun-git-settings-view__config-key">
                 {t('settingsView.sections.branch.branchLabel', { branch: branchName })}
               </div>
             </div>
-            <div className="bitfun-git-settings-view__form-group">
+            <div data-bf-component="git-settings-view" data-bf-part="formGroup" className="bitfun-git-settings-view__form-group">
               <label className="bitfun-git-settings-view__form-label">{t('settingsView.sections.branch.remoteLabel')}</label>
               <Input
                 className="bitfun-git-settings-view__form-input"
@@ -291,7 +291,7 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
                 readOnly
               />
             </div>
-            <div className="bitfun-git-settings-view__form-group">
+            <div data-bf-component="git-settings-view" data-bf-part="formGroup" className="bitfun-git-settings-view__form-group">
               <label className="bitfun-git-settings-view__form-label">{t('settingsView.sections.branch.mergeLabel')}</label>
               <Input
                 className="bitfun-git-settings-view__form-input"
@@ -315,8 +315,8 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
 
   if (loading) {
     return (
-      <div className={`bitfun-git-settings-view bitfun-git-settings-view--loading ${className}`}>
-        <div className="bitfun-git-settings-view__empty-state">
+      <div className={`bitfun-git-settings-view bitfun-git-settings-view--loading ${className}`} data-bf-component="git-settings-view" data-bf-part="root" data-bf-state="loading">
+        <div data-bf-component="git-settings-view" data-bf-part="loading" className="bitfun-git-settings-view__empty-state">
           <RefreshCw size={24} className="bitfun-git-settings-view__loading-spinner" />
           <p>{t('settingsView.loading')}</p>
         </div>
@@ -326,8 +326,8 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
 
   if (error && !config.user.name) {
     return (
-      <div className={`bitfun-git-settings-view bitfun-git-settings-view--error ${className}`}>
-        <div className="bitfun-git-settings-view__empty-state">
+      <div className={`bitfun-git-settings-view bitfun-git-settings-view--error ${className}`} data-bf-component="git-settings-view" data-bf-part="root" data-bf-state="error">
+        <div data-bf-component="git-settings-view" data-bf-part="error" className="bitfun-git-settings-view__empty-state">
           <Settings size={48} />
           <h3>{t('settingsView.loadFailedTitle')}</h3>
           <p className="bitfun-git-settings-view__error-message">{error}</p>
@@ -340,14 +340,14 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
   }
 
   return (
-    <div className={`bitfun-git-settings-view ${className}`}>
-      <div className="bitfun-git-settings-view__header">
-        <div className="bitfun-git-settings-view__header-left">
+    <div className={`bitfun-git-settings-view ${className}`} data-bf-component="git-settings-view" data-bf-part="root">
+      <div className="bitfun-git-settings-view__header" data-bf-component="git-settings-view" data-bf-part="header">
+        <div data-bf-component="git-settings-view" data-bf-part="headerLeft" className="bitfun-git-settings-view__header-left">
           <Settings size={20} />
           <h3>{t('settingsView.title')}</h3>
         </div>
         
-        <div className="bitfun-git-settings-view__header-right">
+        <div data-bf-component="git-settings-view" data-bf-part="headerRight" className="bitfun-git-settings-view__header-right">
           <IconButton 
             onClick={loadConfig}
             disabled={loading}
@@ -369,7 +369,7 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
       </div>
 
       {error && (
-        <div className="bitfun-git-settings-view__status-banner bitfun-git-settings-view__status-banner--error">
+        <div data-bf-component="git-settings-view" data-bf-part="status" data-bf-state="error" className="bitfun-git-settings-view__status-banner bitfun-git-settings-view__status-banner--error">
           <X size={14} />
           <span>{error}</span>
           <IconButton 
@@ -384,7 +384,7 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
       )}
       
       {success && (
-        <div className="bitfun-git-settings-view__status-banner bitfun-git-settings-view__status-banner--success">
+        <div data-bf-component="git-settings-view" data-bf-part="status" className="bitfun-git-settings-view__status-banner bitfun-git-settings-view__status-banner--success">
           <Check size={14} />
           <span>{success}</span>
           <IconButton 
@@ -398,10 +398,11 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
         </div>
       )}
 
-      <Tabs 
-        activeKey={activeTab} 
-        onChange={(key: string) => setActiveTab(key as 'user' | 'repository' | 'advanced')}
-      >
+      <div data-bf-component="git-settings-view" data-bf-part="tabs">
+        <Tabs
+          activeKey={activeTab}
+          onChange={(key: string) => setActiveTab(key as 'user' | 'repository' | 'advanced')}
+        >
         <TabPane 
           tabKey="user"
           label={
@@ -435,7 +436,8 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
         >
           {renderAdvancedTab()}
         </TabPane>
-      </Tabs>
+        </Tabs>
+      </div>
     </div>
   );
 };

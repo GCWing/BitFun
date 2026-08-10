@@ -24,8 +24,9 @@ use std::sync::{Arc, OnceLock};
 
 pub(crate) use external::external_subagent_runtime_key;
 pub use external::{
-    ExternalSubagentGenerationLease, ExternalSubagentInvocationBinding,
-    ExternalSubagentModelBinding, ExternalSubagentRegistration, ExternalSubagentRoute,
+    ExternalPrimaryAgentTurnBinding, ExternalSubagentGenerationLease,
+    ExternalSubagentInvocationBinding, ExternalSubagentModelBinding, ExternalSubagentRegistration,
+    ExternalSubagentRoute,
 };
 
 /// Full file-backed custom agent definition for editing.

@@ -23,16 +23,23 @@ import {
 } from '../utils/sessionOrdering';
 import { resolveSessionRelationship } from '../utils/sessionMetadata';
 
-import type { FlowChatContext, SessionConfig, DialogTurn } from './flow-chat-manager/types';
+import type {
+  FlowChatContext,
+  SessionConfig,
+  DialogTurn,
+  SessionHistoryHydrationLocation,
+} from './flow-chat-manager/types';
 import {
   saveAllInProgressTurns,
   immediateSaveDialogTurn,
   createChatSession as createChatSessionModule,
+  hydrateSessionHistoryForDetail as hydrateSessionHistoryForDetailModule,
   preloadHistoricalSessionForOpen as preloadHistoricalSessionForOpenModule,
   switchChatSession as switchChatSessionModule,
   deleteChatSession as deleteChatSessionModule,
   archiveChatSession as archiveChatSessionModule,
   renameChatSessionTitle as renameChatSessionTitleModule,
+  reloadSessionTitle as reloadSessionTitleModule,
   forkChatSession as forkChatSessionModule,
   cleanupSaveState,
   cleanupSessionBuffers,
@@ -51,6 +58,9 @@ import {
 } from './flow-chat-manager';
 import { ensureBackendSession } from './flow-chat-manager/SessionModule';
 import { installPeerSessionRefresh } from './flow-chat-manager/PeerSessionRefreshModule';
+import { installDispatchJobObserver } from '../session-drivers/dispatch/install';
+import { driverForSession } from '../session-drivers/registry';
+import { registerDriverSessionLookup } from '../session-drivers/resolve';
 
 const log = createLogger('FlowChatManager');
 
@@ -64,6 +74,7 @@ export class FlowChatManager {
   private initializationRequests = new Map<string, Promise<boolean>>();
   private latestInitializationRequestKey: string | null = null;
   private peerSessionRefreshCleanup: (() => void) | null = null;
+  private dispatchJobObserverCleanup: (() => void) | null = null;
   private disposed = false;
 
   private constructor() {
@@ -75,6 +86,7 @@ export class FlowChatManager {
       }),
       pendingTurnCompletions: new Map(),
       pendingHistoryLoads: new Map(),
+      pendingHistoryLoadCapabilities: new Map(),
       pendingContextRestores: new Map(),
       contentBuffers: new Map(),
       activeTextItems: new Map(),
@@ -83,6 +95,7 @@ export class FlowChatManager {
       lastSaveHashes: new Map(),
       turnSaveInFlight: new Map(),
       turnSavePending: new Set(),
+      deferredStorageIdentitySaves: new Set(),
       runtimeStatusTimers: new Map(),
       userCancelledSessionIds: new Set(),
       handledTerminalTurnEvents: new Set(),
@@ -90,8 +103,12 @@ export class FlowChatManager {
     };
     
     this.agentService = AgentService.getInstance();
+    registerDriverSessionLookup(
+      sessionId => this.context.flowChatStore.getState().sessions.get(sessionId),
+    );
     installPendingQueueDrainListener(this.context);
     this.peerSessionRefreshCleanup = installPeerSessionRefresh(this.context);
+    this.dispatchJobObserverCleanup = installDispatchJobObserver(this.context);
   }
 
   /** Public hook used by the queue panel "send now" fallback to drain head item. */
@@ -422,6 +439,8 @@ export class FlowChatManager {
     this.cleanupEventListeners();
     this.peerSessionRefreshCleanup?.();
     this.peerSessionRefreshCleanup = null;
+    this.dispatchJobObserverCleanup?.();
+    this.dispatchJobObserverCleanup = null;
     this.context.eventBatcher.destroy();
   }
 
@@ -496,6 +515,13 @@ export class FlowChatManager {
     preloadHistoricalSessionForOpenModule(this.context, sessionId);
   }
 
+  async hydrateSessionHistoryForDetail(
+    sessionId: string,
+    location?: SessionHistoryHydrationLocation,
+  ): Promise<void> {
+    await hydrateSessionHistoryForDetailModule(this.context, sessionId, location);
+  }
+
   async deleteChatSession(sessionId: string): Promise<void> {
     return deleteChatSessionModule(this.context, sessionId);
   }
@@ -545,6 +571,10 @@ export class FlowChatManager {
 
   async renameChatSessionTitle(sessionId: string, title: string): Promise<string> {
     return renameChatSessionTitleModule(this.context, sessionId, title);
+  }
+
+  async reloadSessionTitle(sessionId: string): Promise<void> {
+    await reloadSessionTitleModule(this.context, sessionId);
   }
 
   async forkChatSession(sourceSessionId: string, sourceTurnId: string): Promise<string> {
@@ -640,8 +670,11 @@ export class FlowChatManager {
       imageContexts?: import('@/infrastructure/api/service-api/ImageContextTypes').ImageContextData[];
       imageDisplayData?: Array<{ id: string; name: string; dataUrl?: string; imagePath?: string; mimeType?: string }>;
       userMessageMetadata?: Record<string, unknown>;
+      execution?: import('@/infrastructure/api/service-api/AgentAPI').AgentDialogTurnExecution;
       turnId?: string;
       preserveTurnOnStartError?: boolean;
+      onSessionConflictRetryStart?: () => void;
+      onSessionConflictRetrySuccess?: () => void;
     }
   ): Promise<void> {
     const targetSessionId = sessionId || this.context.flowChatStore.getState().activeSessionId;
@@ -667,6 +700,21 @@ export class FlowChatManager {
 
   async cancelSessionTask(sessionId: string): Promise<boolean> {
     return cancelSessionTaskModule(this.context, sessionId);
+  }
+
+  /** Manually compact a session's context through its driver. */
+  async compactSession(sessionId: string): Promise<void> {
+    const session = this.context.flowChatStore.getState().sessions.get(sessionId);
+    return driverForSession(sessionId, session).compactSession(this.context, sessionId);
+  }
+
+  /** Generate and insert the session usage report through its driver. */
+  async runSessionUsageReport(
+    sessionId: string,
+    uiParams: import('../session-drivers/types').UsageReportUiParams,
+  ): Promise<{ inserted: boolean }> {
+    const session = this.context.flowChatStore.getState().sessions.get(sessionId);
+    return driverForSession(sessionId, session).runUsageReport(this.context, sessionId, uiParams);
   }
 
   public async saveAllInProgressTurns(): Promise<void> {

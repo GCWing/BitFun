@@ -26,6 +26,26 @@ export function pickWorkspaceForProjectChatSession(
 }
 
 /**
+ * Resolve the user-selected primary assistant. The built-in assistant remains
+ * a backward-compatible fallback for startup snapshots from older hosts.
+ */
+export function pickPrimaryAssistantWorkspace(
+  assistantWorkspacesList: WorkspaceInfo[],
+  primaryAssistantWorkspaceId?: string | null,
+): WorkspaceInfo | null {
+  if (primaryAssistantWorkspaceId) {
+    return assistantWorkspacesList.find(
+      workspace => workspace.workspaceKind === WorkspaceKind.Assistant && workspace.id === primaryAssistantWorkspaceId
+    ) ?? null;
+  }
+  return assistantWorkspacesList.find(
+    workspace =>
+      workspace.workspaceKind === WorkspaceKind.Assistant &&
+      !workspace.assistantId
+  ) ?? null;
+}
+
+/**
  * Build create_session config from the live workspace. After Peer Device Mode
  * switch, callers must pass this (not `{}`) so the peer host never sees a
  * stale controller path. See `infrastructure/peer-device/README.md`.

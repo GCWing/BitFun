@@ -96,20 +96,20 @@ export const CompleteConfigPageExample: React.FC = () => {
 };
 
  
-export const ThemeConfigExample: React.FC = () => {
+export const AppearanceConfigExample: React.FC = () => {
   const { t } = useTranslation('settings');
   return (
     <ConfigPageLayout>
       <ConfigPageHeader
-        title={t('configPageHeaderExample.theme.title')}
-        subtitle={t('configPageHeaderExample.theme.subtitle')}
+        title={t('configPageHeaderExample.appearance.title')}
+        subtitle={t('configPageHeaderExample.appearance.subtitle')}
         extra={
           <>
             <Button variant="secondary" size="sm">
-              {t('configPageHeaderExample.theme.import')}
+              {t('configPageHeaderExample.appearance.import')}
             </Button>
             <Button variant="secondary" size="sm">
-              {t('configPageHeaderExample.theme.export')}
+              {t('configPageHeaderExample.appearance.export')}
             </Button>
           </>
         }

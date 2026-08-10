@@ -127,7 +127,7 @@ struct FailingReader;
 
 impl Read for FailingReader {
     fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
-        Err(io::Error::new(io::ErrorKind::Other, "source closed"))
+        Err(io::Error::other("source closed"))
     }
 }
 
@@ -135,7 +135,7 @@ struct FailingWriter;
 
 impl Write for FailingWriter {
     fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
-        Err(io::Error::new(io::ErrorKind::Other, "destination closed"))
+        Err(io::Error::other("destination closed"))
     }
 
     fn flush(&mut self) -> io::Result<()> {

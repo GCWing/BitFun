@@ -249,10 +249,12 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
       icon={<Sparkles size={16} />}
       iconClassName="generative-widget-card__icon"
       action={t('toolCards.generativeUI.action')}
-      content={<span className="generative-widget-card__title">{title}</span>}
+      content={<span data-bf-component="generative-widget-tool-card" data-bf-part="title" className="generative-widget-card__title">{title}</span>}
       extra={(
-        <div className="generative-widget-card__extra">
+        <div data-bf-component="generative-widget-tool-card" data-bf-part="extra" className="generative-widget-card__extra">
           <span
+            data-bf-component="generative-widget-tool-card"
+            data-bf-part="status"
             className={`generative-widget-card__status ${isFailed ? 'generative-widget-card__status--error' : ''}`.trim()}
           >
             {statusText}
@@ -262,6 +264,9 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
             placement="top"
           >
             <button
+              data-bf-component="generative-widget-tool-card"
+              data-bf-part="exportAction"
+              data-bf-state={isExporting ? 'exporting' : undefined}
               type="button"
               className="generative-widget-card__export-image-btn"
               onClick={handleExportImage}
@@ -278,11 +283,11 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
   );
 
   const previewInner = isFailed ? (
-    <div className="generative-widget-card__placeholder generative-widget-card__placeholder--error">
+    <div data-bf-component="generative-widget-tool-card" data-bf-part="placeholder" data-bf-state="failed" className="generative-widget-card__placeholder generative-widget-card__placeholder--error">
       {toolResult?.error || t('toolCards.generativeUI.renderFailed')}
     </div>
   ) : widgetCode.trim().length > 0 ? (
-    <div ref={previewRef} className="generative-widget-card__preview">
+    <div data-bf-component="generative-widget-tool-card" data-bf-part="preview" ref={previewRef} className="generative-widget-card__preview">
       <GenerativeWidgetFrame
         widgetId={widgetId}
         title={title}
@@ -293,20 +298,21 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
       />
     </div>
   ) : (
-    <div className="generative-widget-card__placeholder">
+    <div data-bf-component="generative-widget-tool-card" data-bf-part="placeholder" className="generative-widget-card__placeholder">
       {t('toolCards.generativeUI.waitingForContent')}
     </div>
   );
 
   const expandedBody = (
-    <div ref={captureRootRef} className="generative-widget-card__capture-root">
+    <div data-bf-component="generative-widget-tool-card" data-bf-part="captureRoot" ref={captureRootRef} className="generative-widget-card__capture-root">
       {previewInner}
     </div>
   );
 
   return (
     <>
-      <BaseToolCard
+      <div data-bf-component="generative-widget-tool-card" data-bf-part="root" data-bf-state={isFailed ? 'failed' : undefined}>
+        <BaseToolCard
         status={status}
         isExpanded={isCardExpanded}
         onClick={isFailed || isClickable ? handleCardClick : undefined}
@@ -317,9 +323,14 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
         isFailed={isFailed}
         headerExpandAffordance={isClickable || isFailed}
         headerAffordanceKind={isFailed ? 'expand' : 'open-panel-right'}
-      />
+        />
+      </div>
       {shouldRenderExportClone && hasRenderableWidget && (
-        <div className="generative-widget-card__export-stage">
+        <div
+          className="generative-widget-card__export-stage"
+          data-bf-component="generative-widget-tool-card"
+          data-bf-part="exportStage"
+        >
           <div
             ref={exportPreviewRef}
             className="generative-widget-card__export-stage-inner"

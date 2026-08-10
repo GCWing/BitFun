@@ -203,11 +203,11 @@ impl AgentSubmissionPort for FakeOwner {
             .lock()
             .unwrap()
             .push(session_id.clone());
-        Ok(AgentSessionCreateResult {
+        Ok(AgentSessionCreateResult::new(
             session_id,
-            session_name: request.session_name,
-            agent_type: request.agent_type,
-        })
+            request.session_name,
+            request.agent_type,
+        ))
     }
 
     async fn create_session_with_id(
@@ -226,11 +226,11 @@ impl AgentSubmissionPort for FakeOwner {
         if self.panic_after_session_create {
             panic!("fixture panics after creating the transient Session");
         }
-        Ok(AgentSessionCreateResult {
+        Ok(AgentSessionCreateResult::new(
             session_id,
-            session_name: request.session_name,
-            agent_type: request.agent_type,
-        })
+            request.session_name,
+            request.agent_type,
+        ))
     }
 
     async fn create_transient_session_with_id(
@@ -387,6 +387,8 @@ impl AgentSessionManagementPort for FakeOwner {
         Ok(Some(AgentSessionWorkspaceBinding {
             workspace_id: None,
             workspace_path: "D:/workspace/project".to_string(),
+            project_workspace_path: None,
+            execution_target: None,
             remote_connection_id: None,
             remote_ssh_host: None,
         }))
@@ -909,10 +911,12 @@ async fn cancel_close_and_shutdown_use_existing_runtime_owners() {
     })))
     .await;
     while output.recv().await.unwrap()["id"] != "close-1" {}
-    let discard_requests = owner.discard_requests.lock().unwrap();
-    assert_eq!(discard_requests.len(), 1);
-    assert_eq!(discard_requests[0].wait_timeout_ms, 1234);
-    drop(discard_requests);
+    // Scoped so the guard is provably released before the awaits below.
+    {
+        let discard_requests = owner.discard_requests.lock().unwrap();
+        assert_eq!(discard_requests.len(), 1);
+        assert_eq!(discard_requests[0].wait_timeout_ms, 1234);
+    }
 
     let control = host
         .handle_request(request(serde_json::json!({
@@ -1752,11 +1756,13 @@ async fn query_submission_disables_unavailable_interactive_callbacks() {
     .await;
     assert_eq!(output.recv().await.unwrap()["result"]["accepted"], true);
 
-    let metadata = owner.dialog_metadata.lock().unwrap();
-    assert_eq!(metadata.len(), 1);
-    assert_eq!(metadata[0]["user_input_available"], false);
-    assert_eq!(metadata[0]["auto_approve_ask"], false);
-    drop(metadata);
+    // Scoped so the guard is provably released before the await below.
+    {
+        let metadata = owner.dialog_metadata.lock().unwrap();
+        assert_eq!(metadata.len(), 1);
+        assert_eq!(metadata[0]["user_input_available"], false);
+        assert_eq!(metadata[0]["auto_approve_ask"], false);
+    }
     host.shutdown_connection().await;
 }
 
@@ -1781,12 +1787,10 @@ async fn provider_quota_and_billing_keep_distinct_wire_codes() {
             .as_str()
             .unwrap()
             .to_string();
-        owner
-            .queue
-            .lock()
-            .unwrap()
-            .clone()
-            .unwrap()
+        // Cloned out of the guard first: the guard must not survive the
+        // `enqueue` await below.
+        let queue = owner.queue.lock().unwrap().clone().unwrap();
+        queue
             .enqueue(
                 AgenticEvent::DialogTurnFailed {
                     session_id,

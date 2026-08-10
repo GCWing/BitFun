@@ -1,5 +1,6 @@
 import React, { useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { X, CheckCircle, XCircle } from 'lucide-react';
 import { Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
@@ -63,11 +64,16 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
   const fileName = filePath.split(/[/\\]/).pop() || filePath;
 
   const fullscreenContent = (
-    <div className="diff-fullscreen-overlay" onClick={handleBackdropClick}>
-      <div className="diff-fullscreen-container">
+    <div
+      className="diff-fullscreen-overlay"
+      onClick={handleBackdropClick}
+      data-bf-component="diff-fullscreen-viewer"
+      data-bf-part="overlay"
+    >
+      <div className="diff-fullscreen-container" data-bf-component="diff-fullscreen-viewer" data-bf-part="container">
         {/* Top toolbar */}
-        <div className="diff-fullscreen-header">
-          <div className="file-info">
+        <div className="diff-fullscreen-header" data-bf-component="diff-fullscreen-viewer" data-bf-part="header">
+          <div className="file-info" data-bf-component="diff-fullscreen-viewer" data-bf-part="fileInfo">
             <div className="file-icon">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -80,7 +86,7 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
             </div>
           </div>
 
-          <div className="header-actions">
+          <div className="header-actions" data-bf-component="diff-fullscreen-viewer" data-bf-part="actions">
             <Tooltip content={t('diffFullscreen.acceptFileTooltip')}>
               <button
                 className="header-btn accept-btn"
@@ -117,7 +123,7 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
         </div>
 
         {/* Diff content */}
-        <div className="diff-fullscreen-content">
+        <div className="diff-fullscreen-content" data-bf-component="diff-fullscreen-viewer" data-bf-part="content">
           <DiffEditor
             originalContent={originalContent}
             modifiedContent={modifiedContent}
@@ -130,7 +136,7 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
 
         {/* Loading overlay */}
         {loading && (
-          <div className="fullscreen-loading-overlay">
+          <div className="fullscreen-loading-overlay" data-bf-component="diff-fullscreen-viewer" data-bf-part="loading">
             <div className="loading-spinner" />
             <span>{t('diffFullscreen.processing')}</span>
           </div>
@@ -139,6 +145,5 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
     </div>
   );
 
-  // Render via portal to body for top-level stacking.
-  return createPortal(fullscreenContent, document.body);
+  return createPortal(fullscreenContent, getAppearanceOverlayHost());
 };

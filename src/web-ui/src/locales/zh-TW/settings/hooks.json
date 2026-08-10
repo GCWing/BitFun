@@ -1,0 +1,95 @@
+{
+  "title": "Agent Hooks",
+  "subtitle": "在 Agent 生命週期的固定節點執行你自己的命令 —— 工具呼叫前後、權限確認前後，以及工作階段與回合的邊界。",
+  "loading": "正在載入 Hook 設定...",
+  "activation": {
+    "title": "啟用",
+    "description": "每次對應事件觸發時，Hook 都會以你的使用者權限執行。啟用任何非你本人撰寫的 Hook 之前，請先審閱它。"
+  },
+  "fields": {
+    "enabled": {
+      "label": "啟用 Hooks",
+      "description": "總開關。關閉後，任何事件都不會執行 Hook。"
+    },
+    "projectHooks": {
+      "label": "啟用專案 Hook 檔案",
+      "description": "讀取工作區內的 Hook 檔案。它執行的是儲存庫中的命令，請只對你信任的儲存庫開啟。"
+    }
+  },
+  "locations": {
+    "title": "Hook 宣告位置",
+    "description": "Hook 宣告在 hooks.json 檔案中，不在本設定文件裡。兩個層級是疊加關係，使用者層優先執行。修改後無需重新啟動 BitFun。",
+    "userFile": {
+      "label": "使用者 Hook 檔案",
+      "description": "BitFun 使用者設定目錄下的 config/hooks.json（Linux 為 ~/.config/bitfun，macOS 為 ~/Library/Application Support/bitfun，Windows 為 %APPDATA%\\bitfun）。"
+    },
+    "projectFile": {
+      "label": "專案 Hook 檔案",
+      "description": "工作區內的 .bitfun/config/hooks.json。僅在開啟「啟用專案 Hook 檔案」時讀取。"
+    }
+  },
+  "imports": {
+    "title": "已匯入的 Hooks",
+    "description": "先檢閱相容的 Claude Code 和 Codex 命令 Hook，再於此管理 BitFun 的本機快照。",
+    "masterDisabled": "匯入內容會保留，但總開關關閉時不會執行。",
+    "refresh": "重新整理",
+    "remoteUnsupported": "遠端工作區暫不支援匯入 Hooks。",
+    "loading": "正在載入已匯入的 Hooks...",
+    "loadFailed": "無法載入已匯入的 Hooks。",
+    "refreshFailed": "無法重新整理已匯入的 Hooks。",
+    "empty": "目前沒有已匯入的 Hook。可在 hooks.json 中新增，或重新整理以檢查 Claude Code 與 Codex。",
+    "review": "檢閱",
+    "update": "檢閱更新",
+    "remove": "移除",
+    "toggle": "啟用來自 {{name}} 的 Hooks",
+    "state": {
+      "current": "來自 {{location}} 的目前快照",
+      "update_available": "{{location}} 有可用更新",
+      "source_missing": "來源已遺失；已檢閱的快照仍會保留",
+      "update_check_failed": "更新檢查失敗；已檢閱的快照仍會保留",
+      "bundle_missing": "受管理檔案遺失；請重新檢閱來源以修復"
+    },
+    "planFailed": "無法產生 Hook 匯入檢閱計畫。",
+    "reviewTitle": "檢閱來自 {{name}} 的 Hooks",
+    "reviewWarning": "這些命令會以你的帳戶權限執行。請檢查下方每一條命令與相依項目後再確認。",
+    "timeout": "實際逾時：{{seconds}} 秒",
+    "dependency": {
+      "managed": "複製的相依項目",
+      "external": "外部相依項目"
+    },
+    "skipped": "已略過 {{count}} 項：{{reason}}",
+    "cancel": "取消",
+    "confirm": "匯入已檢閱的 Hooks",
+    "confirmUpdate": "套用已檢閱的更新",
+    "stale": "來源已變更。本次未寫入，請重新檢閱更新後的計畫。",
+    "applyFailed": "無法套用已檢閱的 Hook 匯入。",
+    "applied": "匯入的 Hooks 將從下一個符合的事件開始啟用。",
+    "appliedDisabled": "已套用檢閱後的更新；這些匯入 Hooks 仍保持停用。",
+    "appliedMasterDisabled": "Hooks 已匯入，但只有開啟「啟用 Hooks」後才會執行。",
+    "updated": "已更新匯入 Hook 的狀態。",
+    "stateChanged": "匯入 Hook 的狀態已變更。請檢查重新整理後的狀態，再重新操作。",
+    "updateFailed": "無法更新匯入 Hook 的狀態。",
+    "storeInvalid": "匯入 Hook 狀態需要修復",
+    "reset": "重設受管理狀態",
+    "removeTitle": "移除已匯入的 Hooks？",
+    "removeSourceUntouched": "只會移除 BitFun 的受管理副本，不會修改 Claude Code 或 Codex 的來源檔案。",
+    "removeConfirm": "移除受管理副本",
+    "resetTitle": "重設無效的匯入 Hook 狀態？",
+    "resetWarning": "這會移除目前範圍內無效的 BitFun 受管理索引，不會修改來源應用程式的檔案。",
+    "resetConfirm": "重設受管理狀態"
+  },
+  "compatibility": {
+    "title": "Codex 相容",
+    "description": "hooks.json 文件結構、事件名稱、stdin 上的 JSON 載荷、結束碼語義以及 stdout 上的 JSON 決策結構均與 Codex Hooks 一致，因此 Codex 的 Hook 指令碼可以直接在這裡執行。",
+    "reference": {
+      "label": "事件與載荷參考",
+      "description": "事件名稱、載荷欄位和決策結構以 Codex 的 Hooks 文件為準。",
+      "open": "開啟文件"
+    }
+  },
+  "messages": {
+    "saved": "Hook 設定已儲存",
+    "saveFailed": "儲存 Hook 設定失敗",
+    "loadFailed": "載入 Hook 設定失敗"
+  }
+}

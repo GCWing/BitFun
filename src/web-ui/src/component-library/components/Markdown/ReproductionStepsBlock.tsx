@@ -82,9 +82,11 @@ export const ReproductionStepsBlock: React.FC<ReproductionStepsBlockProps> = ({
   const showContent = hasProceeded ? isExpanded : true;
 
   return (
-    <div className={`reproduction-steps-block ${hasProceeded ? 'proceeded' : ''} ${showContent ? 'expanded' : 'collapsed'}`}>
+    <div className={`reproduction-steps-block ${hasProceeded ? 'proceeded' : ''} ${showContent ? 'expanded' : 'collapsed'}`} data-bf-component="markdown" data-bf-part="reproduction" data-bf-state={showContent ? 'expanded' : undefined}>
       <div 
         className={`reproduction-steps-header ${hasProceeded ? 'clickable' : ''}`}
+        data-bf-component="markdown"
+        data-bf-part="reproductionHeader"
         onClick={hasProceeded ? toggleExpand : undefined}
         role={hasProceeded ? 'button' : undefined}
         tabIndex={hasProceeded ? 0 : undefined}
@@ -109,7 +111,7 @@ export const ReproductionStepsBlock: React.FC<ReproductionStepsBlockProps> = ({
       
       {showContent && (
         <>
-          <div className="reproduction-steps-content">
+          <div className="reproduction-steps-content" data-bf-component="markdown" data-bf-part="reproductionContent">
             <ol className="reproduction-steps-list">
               {stepList.map((step, index) => (
                 <li key={index} className="reproduction-step-item">
@@ -120,7 +122,7 @@ export const ReproductionStepsBlock: React.FC<ReproductionStepsBlockProps> = ({
           </div>
           
           {!hasProceeded && (
-            <div className="reproduction-steps-actions">
+            <div className="reproduction-steps-actions" data-bf-component="markdown" data-bf-part="reproductionActions">
               <div className="reproduction-steps-hint">
                 {t('reproductionSteps.instruction')}
               </div>

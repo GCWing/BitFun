@@ -22,8 +22,8 @@ const CONFIG_KEY = 'font';
 export class FontPreferenceService {
   private preference: FontPreference = { ...DEFAULT_FONT_PREFERENCE };
   private listeners: Map<FontPreferenceEventType, Set<FontPreferenceEventListener>> = new Map();
-  /** Only register theme hook once (initialize may run from main + settings). */
-  private themeSyncRegistered = false;
+  /** Only register the appearance hook once (initialize may run from main + settings). */
+  private appearanceSyncRegistered = false;
 
   // ---- Lifecycle ----
 
@@ -38,10 +38,10 @@ export class FontPreferenceService {
     }
     this.applyPreference(this.preference);
 
-    if (!this.themeSyncRegistered) {
-      this.themeSyncRegistered = true;
-      const { themeService } = await import('@/infrastructure/theme');
-      themeService.on('theme:after-change', () => {
+    if (!this.appearanceSyncRegistered) {
+      this.appearanceSyncRegistered = true;
+      const { appearanceService } = await import('@/infrastructure/appearance');
+      appearanceService.subscribe(() => {
         this.applyPreference(this.preference);
       });
     }
@@ -111,14 +111,14 @@ export class FontPreferenceService {
 
     // Apply all UI font-size tokens — overrides tokens.scss :root defaults
     (Object.entries(tokens) as [string, string][]).forEach(([key, value]) => {
-      root.style.setProperty(`--font-size-${key}`, value);
+      root.style.setProperty(`--bf-appearance-token-font-size-${key}`, value);
     });
 
     this.applyExtraFontSizeTokens(root, tokens);
 
     const flowTokens = resolveFlowChatFontSizeTokens(pref);
     (Object.entries(flowTokens) as [string, string][]).forEach(([key, value]) => {
-      root.style.setProperty(`--flowchat-font-size-${key}`, value);
+      root.style.setProperty(`--bf-appearance-token-flowchat-font-size-${key}`, value);
     });
     this.applyFlowChatExtraFontSizeTokens(root, flowTokens);
 
@@ -152,8 +152,8 @@ export class FontPreferenceService {
     if (!Number.isNaN(xsPx)) {
       const twoXs = Math.max(8, xsPx - 1);
       const xxs = Math.max(7, xsPx - 2);
-      root.style.setProperty('--font-size-2xs', `${twoXs}px`);
-      root.style.setProperty('--font-size-xxs', `${xxs}px`);
+      root.style.setProperty('--bf-appearance-token-font-size-2xs', `${twoXs}px`);
+      root.style.setProperty('--bf-appearance-token-font-size-xxs', `${xxs}px`);
     }
   }
 
@@ -162,8 +162,8 @@ export class FontPreferenceService {
     if (!Number.isNaN(xsPx)) {
       const twoXs = Math.max(8, xsPx - 1);
       const xxs = Math.max(7, xsPx - 2);
-      root.style.setProperty('--flowchat-font-size-2xs', `${twoXs}px`);
-      root.style.setProperty('--flowchat-font-size-xxs', `${xxs}px`);
+      root.style.setProperty('--bf-appearance-token-flowchat-font-size-2xs', `${twoXs}px`);
+      root.style.setProperty('--bf-appearance-token-flowchat-font-size-xxs', `${xxs}px`);
     }
   }
 

@@ -44,7 +44,6 @@ export const MEditor = forwardRef<EditorInstance, MEditorProps>((props, ref) => 
     height = '500px',
     width = '100%',
     mode: initialMode = 'ir',
-    theme: initialTheme = 'dark',
     toolbar = false,
     placeholder: placeholderProp,
     readonly = false,
@@ -73,8 +72,6 @@ export const MEditor = forwardRef<EditorInstance, MEditorProps>((props, ref) => 
     setValue,
     mode,
     setMode,
-    theme,
-    setTheme,
     textareaRef,
     editorInstance
   } = useEditor(controlledValue ?? defaultValue, onChange)
@@ -133,12 +130,6 @@ export const MEditor = forwardRef<EditorInstance, MEditorProps>((props, ref) => 
       setMode(initialMode)
     }
   }, [initialMode, setMode])
-
-  useEffect(() => {
-    if (initialTheme) {
-      setTheme(initialTheme)
-    }
-  }, [initialTheme, setTheme])
 
   const handleEditorChange = useCallback((nextValue: string) => {
     currentValueRef.current = nextValue
@@ -249,28 +240,29 @@ export const MEditor = forwardRef<EditorInstance, MEditorProps>((props, ref) => 
     width: typeof width === 'number' ? `${width}px` : width
   }
 
-  const themeClass = theme === 'dark' ? 'm-editor-dark' : 'm-editor-light'
   const modeClass = `m-editor-mode-${effectiveMode}`
 
   return (
     <div
       ref={containerRef}
-      className={`m-editor ${themeClass} ${modeClass} ${className}`}
+      className={`m-editor ${modeClass} ${className}`}
+      data-bf-component="m-editor"
+      data-bf-part="root"
       style={containerStyle}
       onKeyDown={handleKeyDown}
       onFocusCapture={handleFocusCapture}
       onBlurCapture={handleBlurCapture}
       tabIndex={-1}
     >
-      {toolbar && <div className="m-editor-toolbar">{t('editor.meditor.toolbarPlaceholder')}</div>}
+      {toolbar && <div data-bf-component="m-editor" data-bf-part="toolbar" className="m-editor-toolbar">{t('editor.meditor.toolbarPlaceholder')}</div>}
       
-      <div className="m-editor-content">
+      <div data-bf-component="m-editor" data-bf-part="content" className="m-editor-content">
         {effectiveMode === 'preview' && (
           <Preview value={value} basePath={basePath} />
         )}
 
         {effectiveMode === 'edit' && (
-          <div className="m-editor-edit-panel">
+          <div data-bf-component="m-editor" data-bf-part="editPanel" className="m-editor-edit-panel">
             <EditArea
               ref={textareaRef}
               value={value}
@@ -286,7 +278,7 @@ export const MEditor = forwardRef<EditorInstance, MEditorProps>((props, ref) => 
 
         {effectiveMode === 'split' && (
           <>
-            <div className="m-editor-edit-panel">
+            <div data-bf-component="m-editor" data-bf-part="editPanel" className="m-editor-edit-panel">
               <EditArea
                 ref={textareaRef}
                 value={value}
@@ -298,14 +290,14 @@ export const MEditor = forwardRef<EditorInstance, MEditorProps>((props, ref) => 
                 autofocus={autofocus}
               />
             </div>
-            <div className="m-editor-preview-panel">
+            <div data-bf-component="m-editor" data-bf-part="previewPanel" className="m-editor-preview-panel">
               <Preview value={value} basePath={basePath} />
             </div>
           </>
         )}
 
         {effectiveMode === 'ir' && (
-          <div className="m-editor-ir-panel">
+          <div data-bf-component="m-editor" data-bf-part="irPanel" className="m-editor-ir-panel">
             <TiptapEditor
               ref={tiptapEditorRef}
               value={value}

@@ -29,7 +29,7 @@ import {
   WebElementCardRenderer,
 } from './types/WebElementContextImpl';
 import { i18nService } from '@/infrastructure/i18n';
-import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
+import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('ContextRegistry');
@@ -45,7 +45,7 @@ export function registerDefaultContextTypes(): void {
       displayName: i18nService.t('components:contextSystem.contextRegistry.file.name'),
       description: i18nService.t('components:contextSystem.contextRegistry.file.description'),
       icon: React.createElement(FileIcon, { size: 16 }),
-      color: 'var(--color-accent-500)',
+      color: 'var(--bf-appearance-token-color-accent-500)',
       category: 'file',
       transformer: new FileContextTransformer(),
       validator: new FileContextValidator(),
@@ -68,7 +68,7 @@ export function registerDefaultContextTypes(): void {
       displayName: i18nService.t('components:contextSystem.contextRegistry.directory.name'),
       description: i18nService.t('components:contextSystem.contextRegistry.directory.description'),
       icon: React.createElement(FileIcon, { size: 16 }),
-      color: 'var(--color-purple-500)',
+      color: 'var(--bf-appearance-token-color-purple-500)',
       category: 'file',
       transformer: new FileContextTransformer() as any,
       validator: new FileContextValidator() as any,
@@ -90,7 +90,7 @@ export function registerDefaultContextTypes(): void {
       displayName: i18nService.t('components:contextSystem.contextRegistry.codeSnippet.name'),
       description: i18nService.t('components:contextSystem.contextRegistry.codeSnippet.description'),
       icon: React.createElement(Code, { size: 16 }),
-      color: 'var(--color-purple-500)',
+      color: 'var(--bf-appearance-token-color-purple-500)',
       category: 'code',
       transformer: new CodeSnippetContextTransformer(),
       validator: new CodeSnippetContextValidator(),
@@ -113,7 +113,7 @@ export function registerDefaultContextTypes(): void {
       displayName: i18nService.t('components:contextSystem.contextRegistry.mermaidDiagram.name'),
       description: i18nService.t('components:contextSystem.contextRegistry.mermaidDiagram.description'),
       icon: React.createElement(Network, { size: 16 }),
-      color: UI_EXCEPTION_ACCENTS.mermaidDiagram,
+      color: APPEARANCE_DOMAIN_TOKENS.mermaidDiagram,
       category: 'diagram',
       transformer: new MermaidDiagramContextTransformer(),
       validator: new MermaidDiagramContextValidator(),
@@ -136,7 +136,7 @@ export function registerDefaultContextTypes(): void {
       displayName: i18nService.t('components:contextSystem.contextRegistry.image.name'),
       description: i18nService.t('components:contextSystem.contextRegistry.image.description'),
       icon: React.createElement(FileIcon, { size: 16 }),
-      color: 'var(--color-warning)',
+      color: 'var(--bf-appearance-token-color-warning)',
       category: 'media',
       transformer: new ImageContextTransformer(),
       validator: new ImageContextValidator(),
@@ -158,7 +158,7 @@ export function registerDefaultContextTypes(): void {
       displayName: i18nService.t('components:contextSystem.contextRegistry.webElement.name'),
       description: i18nService.t('components:contextSystem.contextRegistry.webElement.description'),
       icon: React.createElement(Code2Icon, { size: 16 }),
-      color: UI_EXCEPTION_ACCENTS.generativeUi,
+      color: APPEARANCE_DOMAIN_TOKENS.generativeUi,
       category: 'reference',
       transformer: new WebElementContextTransformer(),
       validator: new WebElementContextValidator(),

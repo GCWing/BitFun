@@ -46,6 +46,29 @@ pub fn resolve_local_exec_shell(configured_shell: Option<&str>) -> ResolvedLocal
     }
 }
 
+/// Resolves the one-shot shell without starting any candidate executable.
+/// Use this while constructing a user approval plan; execution-time failures
+/// remain the responsibility of the process owner after approval.
+pub fn resolve_local_exec_shell_without_probe(
+    configured_shell: Option<&str>,
+) -> ResolvedLocalExecShell {
+    let configured = configured_shell.and_then(parse_configured_shell_preference);
+    let resolve_without_probe = |shell_type: ShellType| {
+        ShellDetector::resolve_configured_shell_without_probe(shell_type.default_executable()).map(
+            |shell| ResolvedLocalExecShell::new(shell.display_name, shell.path, shell.shell_type),
+        )
+    };
+
+    if cfg!(windows) {
+        resolve_windows_local_exec_shell_with(configured, resolve_without_probe)
+    } else {
+        resolve_non_windows_local_exec_shell_with(configured, resolve_without_probe, || {
+            let shell = ShellDetector::get_default_shell_without_probe();
+            ResolvedLocalExecShell::new(shell.display_name, shell.path, shell.shell_type)
+        })
+    }
+}
+
 pub fn parse_configured_shell_preference(raw: &str) -> Option<ConfiguredShellPreference> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {

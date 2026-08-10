@@ -1,0 +1,48 @@
+import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance/types';
+
+export const workbenchAppearanceDescriptor: AppearanceSurfaceDescriptor = {
+  id: 'workbench',
+  parts: [
+    { id: 'workspace' },
+    { id: 'collapsedNav' },
+    { id: 'navArea' },
+    { id: 'navDivider' },
+    { id: 'sceneArea' },
+    { id: 'viewport' },
+    { id: 'viewportClip' },
+    { id: 'scene' },
+    { id: 'loading' },
+    { id: 'empty' },
+  ],
+  facets: [
+    {
+      id: 'sceneId',
+      attribute: 'data-bf-scene-id',
+      values: [
+        'welcome',
+        'session',
+        'terminal',
+        'git',
+        'settings',
+        'file-viewer',
+        'profile',
+        'agents',
+        'skills',
+        'miniapps',
+        'pages',
+        'browser',
+        'assistant',
+        'insights',
+        'shell',
+        'panel-view',
+      ],
+    },
+  ],
+  states: [
+    { id: 'fullscreen', selector: { kind: 'self', suffix: '[data-bf-state~="fullscreen"]' } },
+    { id: 'toolbar', selector: { kind: 'self', suffix: '[data-bf-state~="toolbar"]' } },
+    { id: 'collapsed', selector: { kind: 'self', suffix: '[data-bf-state~="collapsed"]' } },
+    { id: 'active', selector: { kind: 'self', suffix: '[data-bf-state~="active"]' } },
+    { id: 'empty', selector: { kind: 'self', suffix: '[data-bf-state~="empty"]' } },
+  ],
+};

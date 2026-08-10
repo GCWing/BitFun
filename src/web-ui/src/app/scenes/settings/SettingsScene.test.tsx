@@ -19,7 +19,19 @@ vi.mock('../../../infrastructure/config/components/AcpAgentsConfig', () => ({
 }));
 
 vi.mock('../../../infrastructure/config/components/ExternalSourcesConfig', () => ({
-  default: () => <div data-testid="external-sources-config" />,
+  default: ({
+    initialFocus,
+    focusRequestId,
+  }: {
+    initialFocus?: 'hooks';
+    focusRequestId?: number;
+  }) => (
+    <div
+      data-testid="external-sources-config"
+      data-initial-focus={initialFocus}
+      data-focus-request-id={focusRequestId}
+    />
+  ),
 }));
 
 vi.mock('../../../infrastructure/config/components/EditorConfig', () => ({
@@ -67,7 +79,12 @@ describe('SettingsScene lazy tab routing', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
-    useSettingsStore.setState({ activeTab: 'basics', searchQuery: '' });
+    useSettingsStore.setState({
+      activeTab: 'basics',
+      contentFocus: null,
+      contentFocusRequestId: 0,
+      searchQuery: '',
+    });
   });
 
   afterEach(() => {
@@ -78,6 +95,20 @@ describe('SettingsScene lazy tab routing', () => {
     vi.useRealTimers();
   });
 
+  /**
+   * The scene holds its very first paint until the active tab's lazy chunk and
+   * i18n namespaces are in memory, so a cold entry cannot flash a skeleton and a
+   * frame of raw i18n keys. Both land off a macrotask, past what act() flushes.
+   */
+  async function waitForPanelContent(testId: string) {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      if (container.querySelector(`[data-testid="${testId}"]`)) return;
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+  }
+
   async function renderActiveTab(
     tab: 'mcp-tools' | 'acp-agents' | 'external-sources' | 'voice-input'
   ) {
@@ -85,6 +116,7 @@ describe('SettingsScene lazy tab routing', () => {
     await act(async () => {
       root.render(<SettingsScene />);
     });
+    await waitForPanelContent(`${tab}-config`);
   }
 
   it('renders the lazy MCP tools config tab', async () => {
@@ -105,36 +137,45 @@ describe('SettingsScene lazy tab routing', () => {
     expect(container.querySelector('[data-testid="external-sources-config"]')).not.toBeNull();
   });
 
+  it('passes a legacy Hook deep-link focus into External AI applications', async () => {
+    useSettingsStore.getState().openTab('external-sources', 'hooks');
+    await act(async () => {
+      root.render(<SettingsScene />);
+    });
+    await waitForPanelContent('external-sources-config');
+
+    const externalSources = container.querySelector('[data-testid="external-sources-config"]');
+    expect(externalSources?.getAttribute('data-initial-focus')).toBe('hooks');
+    expect(externalSources?.getAttribute('data-focus-request-id')).toBe('1');
+
+    await act(async () => {
+      useSettingsStore.getState().openTab('external-sources', 'hooks');
+    });
+    expect(externalSources?.getAttribute('data-focus-request-id')).toBe('2');
+  });
+
   it('renders the lazy voice input config tab', async () => {
     await renderActiveTab('voice-input');
 
     expect(container.querySelector('[data-testid="voice-input-config"]')).not.toBeNull();
   });
 
-  it('keeps the previous settings page mounted through the local transition', async () => {
-    vi.useFakeTimers();
+  it('switches settings pages immediately without retaining the outgoing panel', async () => {
     await act(async () => {
       root.render(<SettingsScene />);
     });
+    await waitForPanelContent('basics-config');
 
+    /** Only the cold first paint waits for resources; later switches are synchronous. */
     await act(async () => {
       useSettingsStore.setState({ activeTab: 'appearance' });
       await Promise.resolve();
     });
 
-    const activePanel = container.querySelector('[data-settings-panel-active="true"]');
-    const outgoingPanel = container.querySelector('.bitfun-settings-scene__content-wrapper--outgoing');
-    expect(activePanel?.getAttribute('data-settings-panel')).toBe('appearance');
-    expect(outgoingPanel?.getAttribute('data-settings-panel')).toBe('basics');
-
-    act(() => {
-      vi.advanceTimersByTime(179);
-    });
-    expect(container.querySelector('[data-settings-panel="basics"]')).not.toBeNull();
-
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
-    expect(container.querySelector('[data-settings-panel="basics"]')).toBeNull();
+    const scene = container.querySelector('[data-testid="settings-scene"]');
+    expect(scene?.getAttribute('data-settings-tab')).toBe('appearance');
+    expect(container.querySelector('[data-testid="appearance-config"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="basics-config"]')).toBeNull();
+    expect(container.querySelectorAll('[data-testid="settings-scene-content"]')).toHaveLength(1);
   });
 });

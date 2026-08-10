@@ -17,7 +17,7 @@
 - `src/agentic/`：agents、prompts、tools、sessions、execution、persistence
 - `src/service/`：config、filesystem、terminal、git、LSP、MCP、remote connect、AI memory
 - `src/infrastructure/`：AI clients、app paths、event system、storage、debug log server
-- `src/product_runtime/`：product-full 兼容 adapter 与 runtime service provider wiring
+- `src/product_runtime/`：Core Agent Runtime 兼容 adapter 与 runtime service provider wiring
 
 Agent 运行时心智模型：
 
@@ -44,12 +44,27 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 - Runtime owner 迁移在目标 owner 具备评审过的 port/provider 设计和行为等价测试前，不应移动 concrete lifecycle、IO、event delivery、permission orchestration 或 remote/platform implementation。
 - Product-domain 改动可以在有等价保护时迁移纯产品领域计划；filesystem writes、worker/host side effect、
   Git/AI concrete calls、marker IO 和 path-manager integration 仍留在 core，除非有经过评审的 owner 设计。
-- `plugin_source` 只注入产品目录并保留兼容接口；受管插件包发现与信任持久化归 `services-integrations`，生态适配解析与 Plugin Runtime Host 行为分别归对应的适配器层和执行层。
-- `plugin_runtime` 与 `external_sources` 是经过评审、可分别为对应能力契约选择生态适配器的 `product-full` 组装文件。
-  产品入口只消费产品级视图，不得导入适配器或 Host ABI 类型。
+- `plugin_source` 只注入产品目录并保留兼容接口；受管插件包发现与信任持久化归 `services-integrations`，生态适配解析与 `PluginRuntimeClient` 行为分别归对应的适配器层和执行层。
+- `plugin_runtime`、`external_sources` 与 `instruction_sources` 是经过评审、可分别为对应能力契约选择生态适配器的
+  owner-feature 组装文件。产品入口只消费产品级视图，不得导入适配器或原始插件运行时 client 类型。
 - Remote/service 改动必须保持 external protocol lifecycle、workspace projection、scheduler/session restore、
   terminal pre-warm 和 product execution 边界清晰。
 - Feature 改动必须保持 `product-full` 作为兼容产品组装边界；默认能力选择只有在单独的 product matrix review 后才能变化。
+- `agent-runtime` 负责现有 Core Agent Runtime 兼容 facade，包括 MCP、Remote Connect、
+  workspace-search 与原生 Hook runtime service；`external-sources` 增加第三方发现/导入 adapter，
+  `plugin-runtime` 增加可执行 plugin client wiring，`debug-log` 单独控制调试日志服务。它们都不得启用 `product-full`。
+- CLI/ACP 的闭包检查遵循 Cargo resolver-v2，保持 normal 与 host（build/proc-macro）feature context 相互隔离；
+  但同一 context 内的所有 target-specific 声明都属于同一个已评审架构边界。平台确实需要不同 owner 时，应拆分清晰的
+  package/module 归属；不得用互斥 Cargo `cfg` 隐藏未评审的 Core 能力。
+- 保持轻量兼容 feature 可独立编译。本地服务 profile 为 `dispatch-store`、`lsp`、`terminal`、
+  `workspace-runtime` 和 `workspace-watch`；`remote-workspace` 只增加远程工作区 facade，
+  `ssh-remote` 才增加具体 SSH transport。`announcement`、`file-watch`、`git`、
+  `review-platform` 也保持独立，`service-integrations` 只是其兼容聚合。任何窄 feature 都不得直接或间接启用 `product-full`。
+- `product-full` 必须显式组合自身消费的每个能力，包括 `permission`、`session-git`、
+  `runtime-ownership` 等产品专属 `services-core` feature。不得把这些 feature 写在依赖声明上，
+  否则 Cargo feature union 会迫使所有 core consumer 编译它们。
+- 保持 `cargo check -p bitfun-core --no-default-features` 可用。产品专属模块必须由 owner feature 控制；轻量 facade
+  操作在缺少产品 owner 时若无法安全完成，应明确 fail-closed 并保留持久化恢复状态，不得隐式启用 `product-full`。
 
 ## 归属参考
 
@@ -74,12 +89,14 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 
 ## 验证
 
-按触及行为选择最小检查：
+Core 验证由本指南维护。每次只选择与改动匹配的一种命令模式，不要依次运行所有 feature 变体：
 
 ```bash
-cargo check --workspace
-cargo test -p bitfun-core <test_name> -- --nocapture
-node scripts/check-core-boundaries.mjs
+cargo check -p bitfun-core --no-default-features
+cargo check -p bitfun-core --no-default-features --features <touched-owner-feature>
+cargo test -p bitfun-core --no-default-features --features <minimal-features> --lib <module>::<test>
 ```
 
-仅改文档时运行 `git diff --check`。
+feature-free facade 改动使用第一种，单一 feature 边界改动使用第二种，行为改动使用第三种。
+只有 Cargo feature、依赖方向或 test-target 布局变化时才运行 `pnpm run check:core-boundaries`。
+workspace check 与产品全量测试由 CI 兜底，不是 Core 默认预检。仅改文档时运行 `git diff --check`。

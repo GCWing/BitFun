@@ -8,6 +8,7 @@ import {
 import { ChatSessionCursor, ChatSessionSnapshot } from './ChatSessionController';
 import { ChatTimelineItem, ChatTimelineProjector } from './ChatTimelineProjector';
 import { RemoteUiState } from './RemoteUiState';
+import { ConversationEvent } from './ConversationEvent';
 
 export type ChatSyncPhase =
   | 'idle'
@@ -314,6 +315,80 @@ export class ChatTimelineStore {
     }
   }
 
+  /** Applies transport-neutral conversation events from local or remote adapters. */
+  applyEvent(event: ConversationEvent): void {
+    switch (event.type) {
+      case 'user_message':
+        if (event.persisted) {
+          this.mergePersistedMessages([event.message]);
+        } else {
+          this.appendOptimisticMessage(event.message);
+        }
+        return;
+      case 'turn_started':
+        if (this.acceptsSession(event.sessionId)) {
+          this.setLocalActiveTurn(event.turnId);
+        }
+        return;
+      case 'assistant_delta':
+        if (!this.acceptsSession(event.sessionId)) {
+          return;
+        }
+        this.appendAssistantDelta(event.turnId, event.delta);
+        return;
+      case 'assistant_message':
+        this.mergePersistedMessages([event.message]);
+        this.clearActiveTurn();
+        return;
+      case 'active_turn_updated':
+        if (this.acceptsSession(event.sessionId)) {
+          this.setActiveTurn(event.message);
+        }
+        return;
+      case 'tool_started':
+        if (this.acceptsSession(event.sessionId)) {
+          this.updateActiveTool(event.turnId, event.tool);
+        }
+        return;
+      case 'tool_finished':
+        if (this.acceptsSession(event.sessionId)) {
+          this.updateActiveTool(event.turnId, event.tool);
+        }
+        return;
+      case 'turn_finished':
+        if (event.message) {
+          this.mergePersistedMessages([event.message]);
+          this.clearActiveTurn();
+        } else if (this.acceptsSession(event.sessionId)) {
+          const active = this.state.activeTurn;
+          if (active && active.turnId === event.turnId) {
+            this.setActiveTurn({
+              id: active.id,
+              turnId: active.turnId,
+              role: active.role,
+              text: active.text,
+              status: 'completed',
+              detail: active.detail,
+              timestamp: active.timestamp,
+              thinking: active.thinking,
+              tools: active.tools,
+              items: active.items,
+              images: active.images
+            });
+          }
+        }
+        return;
+      case 'session_updated':
+        if (this.state.sessionId.length === 0 || this.state.sessionId === event.session.sessionId) {
+          return;
+        }
+        return;
+      case 'error':
+        this.setSyncPhase('error');
+        return;
+    }
+  }
+
   activeTurnOrEmpty(): ChatMessage {
     return this.state.activeTurn || RemoteUiState.emptyActiveTurn();
   }
@@ -325,6 +400,63 @@ export class ChatTimelineStore {
       this.activeTurnOrEmpty(),
       hasMoreMessages
     );
+  }
+
+  private acceptsSession(sessionId: string): boolean {
+    return sessionId.length === 0 || this.state.sessionId.length === 0 || this.state.sessionId === sessionId;
+  }
+
+  private appendAssistantDelta(turnId: string, delta: string): void {
+    if (delta.length === 0) {
+      return;
+    }
+    if (!this.state.activeTurn || this.state.activeTurn.turnId !== turnId) {
+      this.setLocalActiveTurn(turnId);
+    }
+    const active = this.state.activeTurn;
+    if (!active) {
+      return;
+    }
+    this.setActiveTurn({
+      id: active.id,
+      turnId: active.turnId,
+      role: active.role,
+      text: `${active.text || ''}${delta}`,
+      status: 'active',
+      detail: active.detail,
+      timestamp: active.timestamp,
+      thinking: active.thinking,
+      tools: active.tools,
+      items: active.items,
+      images: active.images,
+      renderVersion: (active.renderVersion || 0) + delta.length
+    });
+  }
+
+  private updateActiveTool(turnId: string, tool: RemoteToolStatusResponse): void {
+    if (!this.state.activeTurn || this.state.activeTurn.turnId !== turnId) {
+      this.setLocalActiveTurn(turnId);
+    }
+    const active = this.state.activeTurn;
+    if (!active) {
+      return;
+    }
+    const tools = (active.tools || []).filter((item: RemoteToolStatusResponse) => item.id !== tool.id);
+    tools.push(tool);
+    this.setActiveTurn({
+      id: active.id,
+      turnId: active.turnId,
+      role: active.role,
+      text: active.text,
+      status: 'active',
+      detail: active.detail,
+      timestamp: active.timestamp,
+      thinking: active.thinking,
+      tools,
+      items: active.items,
+      images: active.images,
+      renderVersion: (active.renderVersion || 0) + 1
+    });
   }
 
   static optimisticMessagesNotPersisted(optimisticMessages: ChatMessage[], persistedMessages: ChatMessage[]): ChatMessage[] {
@@ -453,18 +585,31 @@ export class ChatTimelineStore {
     if (incomingItems.length === 0) {
       return previousItems;
     }
-    const merged: ChatMessageItemResponse[] = [];
-    incomingItems.forEach((incoming: ChatMessageItemResponse, index: number) => {
-      const previous = previousItems[index];
-      if (previous && ChatTimelineStore.sameActiveItem(previous, incoming)) {
-        merged.push(ChatTimelineStore.mergeActiveItem(previous, incoming));
+    // Poll snapshots can temporarily omit an item while the desktop turn is
+    // being assembled. Keep the existing order and merge tool rows by their
+    // stable id instead of treating the array index as identity.
+    const merged = previousItems.slice();
+    const matched = new Set<number>();
+    incomingItems.forEach((incoming: ChatMessageItemResponse, incomingIndex: number) => {
+      let matchIndex = -1;
+      const incomingToolId = incoming.tool ? (incoming.tool.id || '') : '';
+      if (incomingToolId.length > 0) {
+        matchIndex = previousItems.findIndex((previous: ChatMessageItemResponse, index: number) => {
+          return !matched.has(index) && previous.tool !== undefined &&
+            (previous.tool.id || '') === incomingToolId;
+        });
+      } else if (incomingIndex < previousItems.length &&
+        !matched.has(incomingIndex) &&
+        ChatTimelineStore.sameActiveItem(previousItems[incomingIndex], incoming)) {
+        matchIndex = incomingIndex;
+      }
+      if (matchIndex >= 0) {
+        merged[matchIndex] = ChatTimelineStore.mergeActiveItem(previousItems[matchIndex], incoming);
+        matched.add(matchIndex);
       } else {
         merged.push(incoming);
       }
     });
-    for (let index = incomingItems.length; index < previousItems.length; index++) {
-      merged.push(previousItems[index]);
-    }
     return merged;
   }
 
@@ -534,7 +679,28 @@ export class ChatTimelineStore {
     if (!incoming) {
       return previous;
     }
-    return incoming;
+    if (!previous) {
+      return incoming;
+    }
+    const previousStatus = (previous.status || '').toLowerCase();
+    const incomingStatus = (incoming.status || '').toLowerCase();
+    const rank = (status: string): number => {
+      if (status === 'pending_confirmation' || status === 'needs_confirmation' || status === 'pending') {
+        return 1;
+      }
+      if (status === 'running' || status === 'active') {
+        return 2;
+      }
+      if (status === 'completed' || status === 'success' || status === 'finished') {
+        return 3;
+      }
+      if (status === 'rejected' || status === 'cancelled' || status === 'canceled' || status === 'error' || status === 'failed') {
+        return 4;
+      }
+      return 0;
+    };
+    // A delayed poll must not move a completed tool back to running/pending.
+    return rank(incomingStatus) < rank(previousStatus) ? previous : incoming;
   }
 
   private static isActiveTurnId(id: string): boolean {

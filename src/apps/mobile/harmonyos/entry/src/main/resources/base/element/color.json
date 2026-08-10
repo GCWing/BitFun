@@ -3,6 +3,118 @@
     {
       "name": "start_window_background",
       "value": "#FFFFFF"
+    },
+    {
+      "name": "page_bg",
+      "value": "#FDFDFB"
+    },
+    {
+      "name": "ink",
+      "value": "#171717"
+    },
+    {
+      "name": "muted",
+      "value": "#706F6A"
+    },
+    {
+      "name": "subtle",
+      "value": "#A5A39B"
+    },
+    {
+      "name": "line",
+      "value": "#E9E7E2"
+    },
+    {
+      "name": "card",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "accent",
+      "value": "#111111"
+    },
+    {
+      "name": "file_link",
+      "value": "#2563EB"
+    },
+    {
+      "name": "primary_action",
+      "value": "#111111"
+    },
+    {
+      "name": "primary_action_text",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "connect_hero_bg",
+      "value": "#E6EDFF"
+    },
+    {
+      "name": "connect_hero_accent",
+      "value": "#9DB4FF"
+    },
+    {
+      "name": "connect_hero_secondary",
+      "value": "#C9C5FF"
+    },
+    {
+      "name": "connect_hero_surface",
+      "value": "#F8FAFF"
+    },
+    {
+      "name": "soft",
+      "value": "#F4F3F0"
+    },
+    {
+      "name": "floating_panel_bg",
+      "value": "#F7F7F5"
+    },
+    {
+      "name": "green",
+      "value": "#27C46A"
+    },
+    {
+      "name": "red",
+      "value": "#E04F4F"
+    },
+    {
+      "name": "code_line_number",
+      "value": "#AAA69D"
+    },
+    {
+      "name": "code_keyword",
+      "value": "#8F3F71"
+    },
+    {
+      "name": "code_string",
+      "value": "#477A4A"
+    },
+    {
+      "name": "code_number",
+      "value": "#9A5B13"
+    },
+    {
+      "name": "code_comment",
+      "value": "#7A8078"
+    },
+    {
+      "name": "code_function",
+      "value": "#2C6693"
+    },
+    {
+      "name": "code_type",
+      "value": "#865A20"
+    },
+    {
+      "name": "code_constant",
+      "value": "#A04444"
+    },
+    {
+      "name": "code_property",
+      "value": "#466D78"
+    },
+    {
+      "name": "code_target_bg",
+      "value": "#FFF1BE"
     }
   ]
 }

@@ -54,18 +54,18 @@ Self-Hosted entries must open `RelayDeployWizard`, not an external README.
 
 ## Commands
 
-These are command references, not the default precheck list. Use Verification
-below for PR scope.
+Keep development/build entry points here. Verification commands are maintained
+only in the section below.
 
 ```bash
 pnpm --dir src/web-ui dev
-pnpm --dir src/web-ui run lint
-pnpm --dir src/web-ui run type-check
-pnpm --dir src/web-ui run test:run     # broad suite; prefer focused paths locally
-pnpm run i18n:contract:test
-pnpm run i18n:audit
 pnpm run build:web                     # build-impacting changes / CI reproduction
 ```
+
+`pnpm run build:web` runs type-check and Vite concurrently; either error may
+appear first and their output uses `[type-check]` / `[vite-build]` prefixes.
+Set `VITE_USE_POLLING=1` only when native file events miss changes, typically on
+a network drive or WSL mount.
 
 ## Verification
 

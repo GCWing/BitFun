@@ -94,6 +94,14 @@ Copy-Item -LiteralPath (Join-Path $repoRoot 'src\apps\cli\README.md') `
     -Destination (Join-Path $stageDir 'README.md') -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot 'README.md') `
     -Destination (Join-Path $stageDir 'PROJECT-README.md') -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot 'THIRD_PARTY_NOTICES.md') `
+    -Destination (Join-Path $stageDir 'THIRD_PARTY_NOTICES.md') -Force
+$modelsDevNotices = Join-Path $stageDir 'third-party\models.dev'
+New-Item -ItemType Directory -Path $modelsDevNotices -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $repoRoot 'src\crates\services\services-integrations\assets\models-dev.LICENSE.txt') `
+    -Destination (Join-Path $modelsDevNotices 'LICENSE.txt') -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot 'src\crates\services\services-integrations\assets\models-dev.provenance.json') `
+    -Destination (Join-Path $modelsDevNotices 'provenance.json') -Force
 
 $themes = Join-Path $repoRoot 'src\apps\cli\themes'
 $prompts = Join-Path $repoRoot 'src\apps\cli\prompts'
@@ -123,9 +131,15 @@ try {
     if ($primaryCandidates.Count -ne 1 -or $legacyCandidates.Count -ne 1) {
         throw 'Expected exactly one of each CLI entrypoint in the packaged archive'
     }
-    foreach ($readme in @('README.md', 'PROJECT-README.md')) {
-        if (-not (Test-Path -LiteralPath (Join-Path $primaryCandidates[0].DirectoryName $readme) -PathType Leaf)) {
-            throw "Packaged archive is missing $readme"
+    foreach ($requiredFile in @(
+        'README.md',
+        'PROJECT-README.md',
+        'THIRD_PARTY_NOTICES.md',
+        'third-party\models.dev\LICENSE.txt',
+        'third-party\models.dev\provenance.json'
+    )) {
+        if (-not (Test-Path -LiteralPath (Join-Path $primaryCandidates[0].DirectoryName $requiredFile) -PathType Leaf)) {
+            throw "Packaged archive is missing $requiredFile"
         }
     }
 

@@ -87,6 +87,7 @@
 - 用户界面展示用户可理解的任务状态、摘要、提示和确认。
 - 体验视图层把内部策略画像映射为用户语言，并负责提示合并、延后和降噪。
 - Review 记录是现有只读 child 执行之上的稳定用户投影；复审创建新修订，目标证据、执行器和修复动作继续由原 owner 负责。
+- Review 的完整产品能力由一个主审和按具体问题选择的有界复核能力共同提供；内置规则、Skills 和用户配置的只读审核能力是内部来源，不形成用户可见的固定团队。普通与严格 Review 的额度、证据范围和停止条件由既有 Review 执行 owner 约束，不新增 Harness 调度层。
 - 阶段收益编排约束每次落地必须说明用户可见收益、后台前置、延期边界和质量一致性。
 - 配置化策略面决定内部体验强度、检查建议、证据展示层级和用户覆盖选项。
 - 安全边界负责权限、执行位置、沙箱等级、网络、凭据和高风险动作隔离；权限确认、快照/回滚隔离和运行时沙箱必须分开表达。
@@ -116,6 +117,7 @@
 | 配置化策略画像 | [configurable-policy-profile.md](features/configurable-policy-profile.md) | 决定内部策略画像、检查强度和提示视图 | 是 |
 | 阶段收益编排 | [implementation-plan.md](implementation-plan.md) | 把能力拆成用户收益、技术前置、延期边界和验收切片 | 发布说明/阶段评审中 |
 | Review 生命周期 | [../architecture/review-lifecycle.md](../architecture/review-lifecycle.md) | 在现有 Review 执行之上投影一个可恢复记录及其修订、覆盖、新鲜度和问题连续性 | 是，但默认不展开内部执行详情 |
+| Review 执行 | [../architecture/deep-review.md](../architecture/deep-review.md) | 约束目标证据、只读主审、按问题选择的有界复核能力、文件分包、调用预算和聚合结果 | 仅呈现一个 Review 及自然语言进度 |
 | 安全边界 | [security-boundary.md](architecture/security-boundary.md) | 管执行安全、执行位置、沙箱等级、权限、应急放行 | 是，但低噪音 |
 | 项目画像与集成 | [project-profile-integration.md](architecture/project-profile-integration.md) | 渐进理解项目结构、规则和验证能力 | 部分 |
 | 质量数据面 | [quality-data-plane.md](architecture/quality-data-plane.md) | 记录事件、验证、提示和安全决策 | 否 |

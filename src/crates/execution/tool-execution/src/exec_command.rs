@@ -319,6 +319,37 @@ pub fn exec_command_argv_for_shell(
     }
 }
 
+/// Builds argv for a reviewed one-shot command without loading shell profiles.
+///
+/// This is intentionally separate from [`exec_command_argv_for_shell`]: Agent
+/// Exec keeps its login-shell and pipefail behavior, while reviewed expansion
+/// must not execute undisclosed profile or autorun content before the command
+/// the user approved.
+pub fn exec_command_argv_for_isolated_shell(
+    shell_path: impl Into<String>,
+    shell_kind: ExecCommandShellKind,
+    cmd: &str,
+) -> Vec<String> {
+    let shell = shell_path.into();
+    match shell_kind {
+        ExecCommandShellKind::PowerShell | ExecCommandShellKind::PowerShellCore => vec![
+            shell,
+            "-NoProfile".to_string(),
+            "-NonInteractive".to_string(),
+            "-Command".to_string(),
+            exec_command_powershell_command_with_utf8_output(cmd),
+        ],
+        ExecCommandShellKind::Cmd => vec![
+            shell,
+            "/d".to_string(),
+            "/s".to_string(),
+            "/c".to_string(),
+            cmd.to_string(),
+        ],
+        _ => vec![shell, "-c".to_string(), cmd.to_string()],
+    }
+}
+
 pub fn exec_command_powershell_command_with_utf8_output(cmd: &str) -> String {
     let trimmed = cmd.trim_start();
     if trimmed.starts_with(EXEC_COMMAND_POWERSHELL_UTF8_OUTPUT_PREFIX) {
@@ -940,6 +971,12 @@ fn completion_status_lines(data: &Value) -> Vec<String> {
         status_lines.push(format!(
             "Process is still running. session_id: {session_id}"
         ));
+    } else if completion_status == Some("exited") {
+        // The process finished but the transport never reported a status. Say so
+        // instead of leaving the caller with "Process status unavailable", and
+        // never invent a code — an invented failure reads as a real one.
+        status_lines
+            .push("Process exited, but no exit code was reported by the transport.".to_string());
     }
 
     status_lines
@@ -1019,6 +1056,33 @@ mod tests {
         assert!(rendered.contains("Process is still running. session_id: 7"));
         assert!(rendered.contains("programs may block-buffer pipe output"));
         assert!(rendered.contains("<output>\n\n</output>"));
+    }
+
+    #[test]
+    fn command_response_says_an_exited_process_had_no_reported_exit_code() {
+        let data = json!({
+            "wall_time_seconds": 0.1,
+            "output": "workspace output\n",
+            "tty": false,
+            "session_id": null,
+            "exit_code": null,
+            "completion": {
+                "status": "exited",
+                "source": "process"
+            }
+        });
+
+        let rendered = render_exec_command_response_for_assistant(&data);
+
+        assert!(rendered.contains("Process exited, but no exit code was reported"));
+        assert!(
+            !rendered.contains("Process status unavailable."),
+            "a completed process is not an unknown state"
+        );
+        assert!(
+            !rendered.contains("code -1"),
+            "an unknown status must never be rendered as a failing exit code"
+        );
     }
 
     #[test]
@@ -1119,6 +1183,41 @@ mod tests {
             exec_command_argv_for_shell("pwsh", ExecCommandShellKind::PowerShellCore, &script);
 
         assert_eq!(prefixed[2], script);
+    }
+
+    #[test]
+    fn isolated_shell_policy_does_not_load_profiles() {
+        let powershell = exec_command_argv_for_isolated_shell(
+            "pwsh",
+            ExecCommandShellKind::PowerShellCore,
+            "Write-Output ok",
+        );
+        assert_eq!(
+            &powershell[..4],
+            ["pwsh", "-NoProfile", "-NonInteractive", "-Command"]
+        );
+        assert!(powershell[4].starts_with(EXEC_COMMAND_POWERSHELL_UTF8_OUTPUT_PREFIX));
+
+        assert_eq!(
+            exec_command_argv_for_isolated_shell(
+                "/usr/bin/fish",
+                ExecCommandShellKind::Fish,
+                "echo ok"
+            ),
+            ["/usr/bin/fish", "-c", "echo ok"]
+        );
+        assert_eq!(
+            exec_command_argv_for_isolated_shell(
+                "/usr/bin/nu",
+                ExecCommandShellKind::Custom("nu".to_string()),
+                "echo ok"
+            ),
+            ["/usr/bin/nu", "-c", "echo ok"]
+        );
+        assert_eq!(
+            exec_command_argv_for_isolated_shell("cmd.exe", ExecCommandShellKind::Cmd, "echo ok"),
+            ["cmd.exe", "/d", "/s", "/c", "echo ok"]
+        );
     }
 
     #[test]

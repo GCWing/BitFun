@@ -53,6 +53,28 @@ impl Default for WorktreeTopologyService {
 }
 
 impl WorktreeTopologyService {
+    /// Proves that `candidate` is a live worktree root for the same repository
+    /// as `registered_path`. This deliberately bypasses the cached topology:
+    /// cached `git worktree list` entries can be prunable after their directory
+    /// is deleted and must never authorize a newly-created ordinary directory.
+    pub async fn is_live_worktree_root_in_same_repository(
+        &self,
+        registered_path: &Path,
+        candidate: &Path,
+    ) -> Result<bool, GitError> {
+        let (registered, candidate_repository) = tokio::join!(
+            GitService::resolve_worktree_repository(registered_path),
+            GitService::resolve_worktree_repository(candidate),
+        );
+        let registered = registered?;
+        let candidate_repository = candidate_repository?;
+        let candidate = dunce::canonicalize(candidate)?;
+        let candidate_root = dunce::canonicalize(&candidate_repository.query_path)?;
+        let registered_common_git_dir = dunce::canonicalize(&registered.common_git_dir)?;
+        let candidate_common_git_dir = dunce::canonicalize(&candidate_repository.common_git_dir)?;
+        Ok(candidate == candidate_root && registered_common_git_dir == candidate_common_git_dir)
+    }
+
     pub async fn list_worktrees(
         &self,
         path: &Path,
@@ -342,6 +364,47 @@ mod tests {
             .expect("invalidated topology should reload");
         assert_eq!(after_invalidation.len(), 2);
         assert_eq!(service.query_count(), 3);
+    }
+
+    #[tokio::test]
+    async fn live_repository_identity_rejects_a_recreated_prunable_worktree_path() {
+        let repository = initialized_repository();
+        let linked_name = format!(
+            "{}-live-membership",
+            repository.path().file_name().unwrap().to_string_lossy()
+        );
+        let linked_root = repository.path().parent().unwrap().join(linked_name);
+        git(
+            repository.path(),
+            &[
+                "worktree",
+                "add",
+                "-b",
+                "live-membership-test",
+                linked_root.to_string_lossy().as_ref(),
+            ],
+        );
+        let service = WorktreeTopologyService::default();
+
+        assert!(service
+            .is_live_worktree_root_in_same_repository(repository.path(), &linked_root)
+            .await
+            .unwrap());
+        service
+            .list_worktrees(repository.path(), WorktreeTopologyFreshness::Cached)
+            .await
+            .expect("topology should be cached before the worktree becomes stale");
+
+        std::fs::remove_dir_all(&linked_root).expect("linked worktree should be removed manually");
+        std::fs::create_dir_all(&linked_root)
+            .expect("ordinary directory should replace the stale worktree path");
+
+        assert!(!service
+            .is_live_worktree_root_in_same_repository(repository.path(), &linked_root)
+            .await
+            .unwrap_or(false));
+
+        std::fs::remove_dir_all(&linked_root).expect("replacement directory should be cleaned up");
     }
 
     #[tokio::test]

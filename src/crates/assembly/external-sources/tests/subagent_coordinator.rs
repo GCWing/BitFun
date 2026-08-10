@@ -101,10 +101,12 @@ fn snapshot(
             disabled: false,
             hidden: false,
             requested_model: ExternalSubagentModelRequest::Default,
+            requested_model_profile: None,
             requested_tools: ExternalSubagentToolRequest {
                 selectors: Vec::new(),
                 uses_conservative_default: true,
             },
+            permission_constraints: Default::default(),
             compatibility: ExternalSubagentCompatibilityState::ReadyWithDegradation,
             diagnostic_codes: vec!["fake.default_tools".to_string()],
             behavior_version: ExternalSubagentBehaviorVersion::new(behavior).unwrap(),

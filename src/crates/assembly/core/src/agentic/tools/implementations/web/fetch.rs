@@ -40,6 +40,8 @@ Use this tool to:
 - Download readable content from web pages
 - Access online resources
 
+Best for static pages that need no login. For pages requiring the user's login session or JavaScript rendering, use ControlHub domain="browser" instead: connect -> navigate -> snapshot / read_article. That drives BitFun's managed browser profile, which is separate from the user's everyday browser, so a first-time sign-in by the user may be required. (browser.fetch only works when a session is already connected and the current page is same-origin with the target URL — it runs inside that page and is subject to its CORS policy.)
+
 Supports different output formats:
 - raw: Raw response content (original HTML or text)
 - markdown: Readable content mode. For HTML pages, BitFun extracts the main content and returns markdown when possible, automatically falling back to plain text when markdown conversion is not reliable.

@@ -2,7 +2,7 @@ use bitfun_codex_adapter::{CodexMcpProvider, CodexMcpProviderOptions};
 use bitfun_product_domains::external_sources::{
     ExecutionDomainId, ExternalMcpDiscoveryInput, ExternalMcpRevisionKey,
     ExternalMcpSourceProvider, ExternalMcpStaticStatus, ExternalMcpTransportKind,
-    ExternalSourceContext, ExternalSourceScope,
+    ExternalSourceContext, ExternalSourceScope, PreparedExternalMcpImportTransport,
 };
 use std::collections::BTreeSet;
 use std::fs;
@@ -45,6 +45,17 @@ impl Fixture {
         ExternalMcpDiscoveryInput {
             context: ExternalSourceContext {
                 workspace_root: Some(self.workspace.clone()),
+                execution_domain_id: ExecutionDomainId::new("local-user").unwrap(),
+            },
+            suppressed_sources: BTreeSet::new(),
+            revision_key: ExternalMcpRevisionKey::new([7; 32]),
+        }
+    }
+
+    fn input_without_workspace(&self) -> ExternalMcpDiscoveryInput {
+        ExternalMcpDiscoveryInput {
+            context: ExternalSourceContext {
+                workspace_root: None,
                 execution_domain_id: ExecutionDomainId::new("local-user").unwrap(),
             },
             suppressed_sources: BTreeSet::new(),
@@ -178,6 +189,154 @@ X-Env = "CODEX_MCP_MISSING_HEADER"
 }
 
 #[test]
+fn safe_local_import_preserves_command_arguments_and_ignores_legacy_name() {
+    let fixture = Fixture::new();
+    write(
+        fixture.codex_home.join("config.toml"),
+        r#"[mcp_servers.docs]
+command = "docs-mcp"
+args = ["--stdio"]
+name = "Ignored display label"
+"#,
+    );
+    let provider = fixture.provider();
+    let input = fixture.input_without_workspace();
+    let snapshot = provider.discover(&input).unwrap();
+    let server = &snapshot.servers[0];
+
+    let prepared = provider
+        .prepare_import(&input, &server.id, &server.behavior_version)
+        .unwrap();
+    assert!(matches!(
+        prepared.transport,
+        PreparedExternalMcpImportTransport::Local { ref command, ref args }
+            if command == "docs-mcp" && args == &["--stdio"]
+    ));
+}
+
+#[test]
+fn workspace_implicit_cwd_requires_setup_instead_of_changing_local_behavior() {
+    let fixture = Fixture::new();
+    write(
+        fixture.codex_home.join("config.toml"),
+        r#"[mcp_servers.docs]
+command = "node"
+args = ["./server.js"]
+"#,
+    );
+    let provider = fixture.provider();
+    let input = fixture.input();
+    let snapshot = provider.discover(&input).unwrap();
+    let server = &snapshot.servers[0];
+
+    let error = provider
+        .prepare_import(&input, &server.id, &server.behavior_version)
+        .unwrap_err();
+
+    assert_eq!(error.code, "external_mcp.import_setup_required");
+}
+
+#[test]
+fn safe_remote_import_preserves_a_clean_https_url() {
+    let fixture = Fixture::new();
+    write(
+        fixture.codex_home.join("config.toml"),
+        r#"[mcp_servers.docs]
+url = "https://docs.example.test/mcp"
+"#,
+    );
+    let provider = fixture.provider();
+    let input = fixture.input();
+    let snapshot = provider.discover(&input).unwrap();
+    let server = &snapshot.servers[0];
+
+    let prepared = provider
+        .prepare_import(&input, &server.id, &server.behavior_version)
+        .unwrap();
+    assert!(matches!(
+        prepared.transport,
+        PreparedExternalMcpImportTransport::Remote { ref url }
+            if url == "https://docs.example.test/mcp"
+    ));
+}
+
+#[test]
+fn local_environment_references_and_explicit_cwd_require_setup() {
+    let fixture = Fixture::new();
+    write(
+        fixture.codex_home.join("config.toml"),
+        r#"[mcp_servers.literal_env]
+command = "literal-env"
+env = { TOKEN = "secret" }
+
+[mcp_servers.referenced_env]
+command = "referenced-env"
+env_vars = ["TOKEN"]
+
+[mcp_servers.explicit_cwd]
+command = "cwd-server"
+cwd = "."
+"#,
+    );
+    let provider = fixture.provider();
+    let input = fixture.input();
+    let snapshot = provider.discover(&input).unwrap();
+
+    for name in ["literal_env", "referenced_env", "explicit_cwd"] {
+        let server = snapshot
+            .servers
+            .iter()
+            .find(|server| server.name == name)
+            .unwrap();
+        let error = provider
+            .prepare_import(&input, &server.id, &server.behavior_version)
+            .unwrap_err();
+        assert_eq!(error.code, "external_mcp.import_setup_required");
+        assert!(!error.message.contains("secret"));
+    }
+}
+
+#[test]
+fn remote_headers_bearer_and_unsafe_url_parts_require_setup() {
+    let fixture = Fixture::new();
+    write(
+        fixture.codex_home.join("config.toml"),
+        r#"[mcp_servers.literal_header]
+url = "https://docs.example.test/mcp"
+http_headers = { X-Secret = "secret" }
+
+[mcp_servers.referenced_header]
+url = "https://docs.example.test/mcp"
+env_http_headers = { X-Token = "TOKEN" }
+
+[mcp_servers.bearer]
+url = "https://docs.example.test/mcp"
+bearer_token_env_var = "TOKEN"
+
+[mcp_servers.query]
+url = "https://docs.example.test/mcp?token=secret"
+
+[mcp_servers.fragment]
+url = "https://docs.example.test/mcp#private"
+
+[mcp_servers.userinfo]
+url = "https://user:secret@docs.example.test/mcp"
+"#,
+    );
+    let provider = fixture.provider();
+    let input = fixture.input();
+    let snapshot = provider.discover(&input).unwrap();
+
+    for server in &snapshot.servers {
+        let error = provider
+            .prepare_import(&input, &server.id, &server.behavior_version)
+            .unwrap_err();
+        assert_eq!(error.code, "external_mcp.import_setup_required");
+        assert!(!error.message.contains("secret"));
+    }
+}
+
+#[test]
 fn unsupported_runtime_controls_block_but_required_only_warns() {
     let fixture = Fixture::new();
     write(
@@ -232,6 +391,52 @@ enabled = false
 }
 
 #[test]
+fn codex_timeout_fields_map_to_their_native_mcp_phases() {
+    let fixture = Fixture::new();
+    write(
+        fixture.codex_home.join("config.toml"),
+        r#"[mcp_servers.docs]
+command = "docs-server"
+startup_timeout_sec = 1.25
+startup_timeout_ms = 9000
+tool_timeout_sec = 2.5
+"#,
+    );
+    let provider = fixture.provider();
+    let input = fixture.input();
+
+    let snapshot = provider.discover(&input).unwrap();
+    let server = &snapshot.servers[0];
+    assert_eq!(server.static_status, ExternalMcpStaticStatus::Ready);
+    assert_eq!(server.timeouts.startup_ms, Some(1_250));
+    assert_eq!(server.timeouts.catalog_ms, Some(1_250));
+    assert_eq!(server.timeouts.execution_ms, Some(2_500));
+
+    let prepared = provider
+        .prepare_server(&input, &server.id, &server.behavior_version)
+        .unwrap();
+    assert_eq!(prepared.timeouts, server.timeouts);
+}
+
+#[test]
+fn codex_timeout_that_cannot_cross_product_surfaces_losslessly_is_unsupported() {
+    let fixture = Fixture::new();
+    write(
+        fixture.codex_home.join("config.toml"),
+        r#"[mcp_servers.docs]
+command = "docs-server"
+startup_timeout_ms = 9007199254740992
+"#,
+    );
+
+    let snapshot = fixture.provider().discover(&fixture.input()).unwrap();
+    assert!(matches!(
+        snapshot.servers[0].static_status,
+        ExternalMcpStaticStatus::Unsupported { .. }
+    ));
+}
+
+#[test]
 fn diagnostic_only_required_does_not_change_behavior_version() {
     let fixture = Fixture::new();
     let config = fixture.codex_home.join("config.toml");
@@ -257,23 +462,71 @@ required = false
 }
 
 #[test]
-fn fields_rejected_by_current_codex_are_not_silently_accepted() {
+fn legacy_name_is_ignored_but_invalid_or_runtime_sensitive_fields_stay_unsupported() {
     let fixture = Fixture::new();
     write(
         fixture.codex_home.join("config.toml"),
         r#"[mcp_servers.shared]
 command = "server"
 name = "Invented display label"
+
+[mcp_servers.invalid_name]
+command = "server"
+name = 42
+
+[mcp_servers.runtime_control]
+command = "server"
+tool_timeout_sec = 15
+disabled_tools = ["write"]
 "#,
     );
 
     let snapshot = fixture.provider().discover(&fixture.input()).unwrap();
-
+    let by_name = |name: &str| {
+        snapshot
+            .servers
+            .iter()
+            .find(|server| server.name == name)
+            .unwrap()
+    };
+    assert_eq!(
+        by_name("shared").static_status,
+        ExternalMcpStaticStatus::Ready
+    );
     assert!(matches!(
-        &snapshot.servers[0].static_status,
+        &by_name("invalid_name").static_status,
         ExternalMcpStaticStatus::Unsupported { reason }
-            if reason.contains("field 'name' is not supported")
+            if reason.contains("name must be a string")
     ));
+    assert!(matches!(
+        by_name("runtime_control").static_status,
+        ExternalMcpStaticStatus::Unsupported { .. }
+    ));
+}
+
+#[test]
+fn ignored_legacy_name_does_not_change_behavior_version() {
+    let fixture = Fixture::new();
+    let config = fixture.codex_home.join("config.toml");
+    write(
+        &config,
+        r#"[mcp_servers.shared]
+command = "server"
+name = "First display label"
+"#,
+    );
+    let first = fixture.provider().discover(&fixture.input()).unwrap();
+    let version = first.servers[0].behavior_version.clone();
+
+    write(
+        &config,
+        r#"[mcp_servers.shared]
+command = "server"
+name = "Second display label"
+"#,
+    );
+    let second = fixture.provider().discover(&fixture.input()).unwrap();
+    assert_eq!(second.servers[0].behavior_version, version);
 }
 
 #[test]

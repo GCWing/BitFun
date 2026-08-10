@@ -1,8 +1,7 @@
 use crate::util::string::{shell_single_quote, truncate_string_by_chars};
 use std::collections::VecDeque;
 use std::fs::File;
-use std::io::BufRead;
-use std::io::BufReader;
+use std::io::{BufRead, BufReader, Read};
 
 const REMOTE_TOTAL_LINES_MARKER: &str = "__BITFUN_TOTAL_LINES__=";
 const REMOTE_HIT_TOTAL_CHAR_LIMIT_MARKER: &str = "__BITFUN_HIT_TOTAL_CHAR_LIMIT__=";
@@ -59,6 +58,30 @@ pub fn build_read_file_presentation(
         result_for_assistant,
         lines_read: read_file_lines_read(result),
     }
+}
+
+/// Read a local file only when it fits within `max_bytes`.
+///
+/// The limit is enforced from handle metadata and again while reading so a growing file cannot
+/// make the caller retain an unbounded buffer.
+pub fn read_file_bytes_bounded(
+    file_path: &str,
+    max_bytes: usize,
+) -> Result<Option<Vec<u8>>, String> {
+    let file = File::open(file_path)
+        .map_err(|error| format!("Failed to read file {file_path}: {error}"))?;
+    let metadata = file
+        .metadata()
+        .map_err(|error| format!("Failed to inspect file {file_path}: {error}"))?;
+    if metadata.len() > max_bytes as u64 {
+        return Ok(None);
+    }
+
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    file.take(max_bytes.saturating_add(1) as u64)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("Failed to read file {file_path}: {error}"))?;
+    Ok((bytes.len() <= max_bytes).then_some(bytes))
 }
 
 pub fn build_remote_read_command(
@@ -221,6 +244,45 @@ pub fn read_file(
     max_line_chars: usize,
     max_total_chars: usize,
 ) -> Result<ReadFileResult, String> {
+    let file =
+        File::open(file_path).map_err(|e| format!("Failed to read file {}: {}", file_path, e))?;
+    let source = format!("file {file_path}");
+    read_buffered_text(
+        BufReader::new(file),
+        &source,
+        start_line,
+        limit,
+        max_line_chars,
+        max_total_chars,
+    )
+}
+
+/// Page already-decoded text with the same line numbering and budgets as [`read_file`].
+pub fn read_text(
+    text: &str,
+    start_line: usize,
+    limit: usize,
+    max_line_chars: usize,
+    max_total_chars: usize,
+) -> Result<ReadFileResult, String> {
+    read_buffered_text(
+        BufReader::new(text.as_bytes()),
+        "converted document",
+        start_line,
+        limit,
+        max_line_chars,
+        max_total_chars,
+    )
+}
+
+fn read_buffered_text<R: BufRead>(
+    reader: R,
+    source: &str,
+    start_line: usize,
+    limit: usize,
+    max_line_chars: usize,
+    max_total_chars: usize,
+) -> Result<ReadFileResult, String> {
     if start_line == 0 {
         return Err("`start_line` should start from 1".to_string());
     }
@@ -234,17 +296,13 @@ pub fn read_file(
         .checked_add(limit.saturating_sub(1))
         .ok_or_else(|| "Requested line range is too large".to_string())?;
 
-    let file =
-        File::open(file_path).map_err(|e| format!("Failed to read file {}: {}", file_path, e))?;
-    let reader = BufReader::new(file);
-
     let mut total_lines = 0usize;
     let mut selected_lines = Vec::new();
     let mut selected_chars = 0usize;
     let mut hit_total_char_limit = false;
 
     for line_result in reader.lines() {
-        let line = line_result.map_err(|e| format!("Failed to read file {}: {}", file_path, e))?;
+        let line = line_result.map_err(|e| format!("Failed to read {source}: {e}"))?;
         total_lines += 1;
 
         if total_lines < start_line || total_lines > end_line_inclusive || hit_total_char_limit {
@@ -313,6 +371,41 @@ pub fn read_file_tail(
     max_line_chars: usize,
     max_total_chars: usize,
 ) -> Result<ReadFileResult, String> {
+    let file =
+        File::open(file_path).map_err(|e| format!("Failed to read file {}: {}", file_path, e))?;
+    let source = format!("file {file_path}");
+    read_buffered_text_tail(
+        BufReader::new(file),
+        &source,
+        limit,
+        max_line_chars,
+        max_total_chars,
+    )
+}
+
+/// Read the last lines of already-decoded text with the same budgets as [`read_file_tail`].
+pub fn read_text_tail(
+    text: &str,
+    limit: usize,
+    max_line_chars: usize,
+    max_total_chars: usize,
+) -> Result<ReadFileResult, String> {
+    read_buffered_text_tail(
+        BufReader::new(text.as_bytes()),
+        "converted document",
+        limit,
+        max_line_chars,
+        max_total_chars,
+    )
+}
+
+fn read_buffered_text_tail<R: BufRead>(
+    reader: R,
+    source: &str,
+    limit: usize,
+    max_line_chars: usize,
+    max_total_chars: usize,
+) -> Result<ReadFileResult, String> {
     if limit == 0 {
         return Err("`limit` can't be 0".to_string());
     }
@@ -320,15 +413,11 @@ pub fn read_file_tail(
         return Err("`max_total_chars` can't be 0".to_string());
     }
 
-    let file =
-        File::open(file_path).map_err(|e| format!("Failed to read file {}: {}", file_path, e))?;
-    let reader = BufReader::new(file);
-
     let mut total_lines = 0usize;
     let mut tail_lines = VecDeque::with_capacity(limit);
 
     for line_result in reader.lines() {
-        let line = line_result.map_err(|e| format!("Failed to read file {}: {}", file_path, e))?;
+        let line = line_result.map_err(|e| format!("Failed to read {source}: {e}"))?;
         total_lines += 1;
 
         if tail_lines.len() == limit {
@@ -397,8 +486,8 @@ pub fn read_file_tail(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_read_file_presentation, read_file, read_file_lines_read, read_file_tail,
-        ReadFileResult,
+        build_read_file_presentation, read_file, read_file_bytes_bounded, read_file_lines_read,
+        read_file_tail, read_text, read_text_tail, ReadFileResult,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -448,6 +537,37 @@ mod tests {
         assert_eq!(result.end_line, 3);
         assert!(!result.hit_total_char_limit);
         assert_eq!(result.content, "     1\tone\n     2\ttwo\n     3\tthree");
+    }
+
+    #[test]
+    fn bounded_byte_read_rejects_a_file_before_returning_oversized_content() {
+        let path = write_temp_file("12345");
+
+        let rejected = read_file_bytes_bounded(path.to_str().expect("utf-8 path"), 4)
+            .expect("bounded read should succeed");
+        let accepted = read_file_bytes_bounded(path.to_str().expect("utf-8 path"), 5)
+            .expect("bounded read should succeed");
+
+        fs::remove_file(&path).expect("temp file should be deleted");
+
+        assert!(rejected.is_none());
+        assert_eq!(accepted, Some(b"12345".to_vec()));
+    }
+
+    #[test]
+    fn decoded_text_reuses_normal_window_and_tail_semantics() {
+        let text = "one\ntwo\nthree\nfour\n";
+
+        let window = read_text(text, 2, 2, 50, 100).expect("window should read");
+        let tail = read_text_tail(text, 2, 50, 100).expect("tail should read");
+
+        assert_eq!(window.start_line, 2);
+        assert_eq!(window.end_line, 3);
+        assert_eq!(window.total_lines, 4);
+        assert_eq!(window.content, "     2\ttwo\n     3\tthree");
+        assert_eq!(tail.start_line, 3);
+        assert_eq!(tail.end_line, 4);
+        assert_eq!(tail.content, "     3\tthree\n     4\tfour");
     }
 
     #[test]

@@ -8,10 +8,8 @@ import { GitBranch, AlertTriangle } from 'lucide-react';
 import { CubeLoading } from '../../component-library';
 import type { ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActions';
-import { ToolCommandPreview } from './ToolCommandPreview';
+import { CopyableTextPreview } from '../components/CopyableTextPreview';
 import { createLogger } from '@/shared/utils/logger';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import './GitToolDisplay.scss';
@@ -132,27 +130,16 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
     return t('toolCards.git.executionFailed');
   };
 
-  const [shouldExpand, setShouldExpand] = useState(true);
-
-  const handleMouseDown = useCallback(() => {
-    setShouldExpand(true);
-  }, [hasOutput, isFailed, toggleExpanded, shouldExpand, setShouldExpand]);
-
-    const handleMouseMove = useCallback(() => {
-    setShouldExpand(false);
-  }, [hasOutput, isFailed, toggleExpanded, shouldExpand, setShouldExpand]);
-
   const handleCardClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest('.tool-card-header-actions, .git-action-buttons, .terminal-header-actions')) {
       return;
     }
     
-    if ((hasOutput || isFailed) && shouldExpand) {
+    if (hasOutput || isFailed) {
       toggleExpanded();
     }
-    setShouldExpand(true);
-  }, [hasOutput, isFailed, toggleExpanded, shouldExpand, setShouldExpand]);
+  }, [hasOutput, isFailed, toggleExpanded]);
 
   const renderStatusIcon = () => {
     if (isLoading) {
@@ -165,13 +152,13 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
   };
 
   const renderCommandPreview = (variant: 'expanded' | 'compact') => (
-    <ToolCommandPreview
-      command={commandText}
+    <CopyableTextPreview
+      text={commandText}
       emptyText={t('toolCards.terminal.noCommand')}
       as={variant === 'compact' ? 'span' : 'code'}
       className={
         variant === 'compact'
-          ? 'git-command-preview tool-command-preview--compact'
+          ? 'git-command-preview copyable-text-preview--compact'
           : 'git-command-preview terminal-command'
       }
     />
@@ -179,9 +166,9 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
 
   // Used only for the expanded header (BaseToolCard layout)
   const expandedHeaderExtra = () => (
-    <span className="terminal-header-extra git-header-extra">
+    <span data-bf-component="git-tool-display" data-bf-part="headerExtra" className="terminal-header-extra git-header-extra">
       {!isFailed && outputSummary && status === 'completed' && (
-        <span className="output-summary">{outputSummary}</span>
+        <span className="output-summary" data-bf-component="git-tool-display" data-bf-part="info">{outputSummary}</span>
       )}
       {isFailed && (
         <span className="error-indicator">
@@ -212,41 +199,6 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
     />
   );
 
-  const renderCompactHeader = () => (
-    <CompactToolCardHeader
-      icon={<ToolCardStatusSlot status={status} toolIcon={<GitBranch size={13} strokeWidth={1.5} className="git-card-icon" />} defaultIcon="tool" />}
-      action={isFailed ? t('toolCards.git.commandFailed') : undefined}
-      content={
-        <span className="git-tool-info">
-          {renderCommandPreview('compact')}
-          {!isFailed && outputSummary && status === 'completed' && (
-            <span className="output-summary git-output-summary-inline">{outputSummary}</span>
-          )}
-          {/* Hover-only: error label + copy — inline after the command text */}
-          <span className="compact-extra-on-hover git-hover-actions">
-            {isFailed && (
-              <span className="error-indicator">
-                <span className="error-text">{t('toolCards.git.failed')}</span>
-              </span>
-            )}
-            <ToolCardHeaderActions className="git-action-buttons">
-              <ToolCardCopyAction
-                className="git-copy-btn"
-                getText={getCopyCommandText}
-                tooltip={t('toolCards.git.copyCommand')}
-                copiedTooltip={t('toolCards.git.commandCopied')}
-                successMessage={t('toolCards.git.commandCopied')}
-                failureMessage={t('toolCards.git.copyCommandFailed')}
-                ariaLabel={t('toolCards.git.copyCommand')}
-              />
-            </ToolCardHeaderActions>
-          </span>
-        </span>
-      }
-      rightStatusIcon={renderStatusIcon()}
-    />
-  );
-
   const renderExpandedContent = () => {
     if (!resultData) return null;
 
@@ -259,12 +211,12 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
       Boolean(working_directory?.trim());
 
     return (
-      <div className="git-result-container">
+      <div data-bf-component="git-tool-display" data-bf-part="result" className="git-result-container">
         {(hasStdout || hasStderr) && (
-          <div className="git-result-output">
+          <div data-bf-component="git-tool-display" data-bf-part="output" className="git-result-output">
             {hasStdout && <pre className="git-output-block git-output-stdout">{stdout}</pre>}
             {hasStderr && (
-              <div className="git-stderr-block">
+              <div data-bf-component="git-tool-display" data-bf-part="stderr" className="git-stderr-block">
                 <div className="git-output-label">
                   {resultData.success ? t('toolCards.git.warning') : t('toolCards.git.error')}
                 </div>
@@ -279,7 +231,7 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
         )}
 
         {showFooter && (
-          <div className="git-result-footer">
+          <div data-bf-component="git-tool-display" data-bf-part="footer" className="git-result-footer">
             {working_directory?.trim() && (
               <>
                 <span className="git-result-label">{t('toolCards.terminal.workingDirectory')}</span>
@@ -307,7 +259,7 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
   };
 
   const renderErrorContent = () => (
-    <div className="error-content">
+    <div data-bf-component="git-tool-display" data-bf-part="error" className="error-content">
       <div className="error-message">{getErrorMessage()}</div>
       {inputData?.operation && (
         <div className="error-meta">
@@ -337,29 +289,16 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
   const expandedBody = isExpanded ? renderDetailsWhenExpanded() : null;
 
   return (
-    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
-      {isExpanded ? (
-        <BaseToolCard
-          status={status}
-          isExpanded
-          onClick={handleCardClick}
-          className="git-tool-display terminal-tool-card"
-          header={renderExpandedHeader()}
-          expandedContent={expandedBody}
-          headerExpandAffordance
-        />
-      ) : (
-        <CompactToolCard
-          status={status}
-          isExpanded={false}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleCardClick}
-          className="git-tool-display"
-          clickable
-          header={renderCompactHeader()}
-        />
-      )}
+    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''} data-bf-component="git-tool-display" data-bf-part="root" data-bf-state={isFailed ? 'failed' : undefined}>
+      <BaseToolCard
+        status={status}
+        isExpanded={isExpanded}
+        onClick={handleCardClick}
+        className={`git-tool-display terminal-tool-card${!isExpanded ? ' git-tool-display--compact' : ''}`}
+        header={renderExpandedHeader()}
+        expandedContent={expandedBody}
+        headerExpandAffordance
+      />
     </div>
   );
 };

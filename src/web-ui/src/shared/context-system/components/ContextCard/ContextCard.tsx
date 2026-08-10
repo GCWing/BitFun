@@ -81,23 +81,28 @@ export const ContextCard: React.FC<ContextCardProps> = ({
       `.trim()}
       data-context-id={context.id}
       data-context-type={context.type}
+      data-bf-component="context-list"
+      data-bf-part="card"
+      data-bf-state={validationState ? (validationState.valid ? 'valid' : 'invalid') : undefined}
     >
       
       {definition && (
         <div 
           className="bitfun-context-card__indicator"
           style={{ backgroundColor: definition.color }}
+          data-bf-component="context-list"
+          data-bf-part="cardIndicator"
         />
       )}
       
       
-      <div className="bitfun-context-card__body">
+      <div className="bitfun-context-card__body" data-bf-component="context-list" data-bf-part="cardBody">
         {content}
       </div>
       
       
       {interactive && (
-        <div className="bitfun-context-card__toolbar">
+        <div className="bitfun-context-card__toolbar" data-bf-component="context-list" data-bf-part="cardToolbar">
           
           <div className="bitfun-context-card__validation">
             {isValidating ? (
@@ -131,7 +136,7 @@ export const ContextCard: React.FC<ContextCardProps> = ({
       
       
       {validationState && !validationState.valid && validationState.error && (
-        <div className="bitfun-context-card__error">
+        <div className="bitfun-context-card__error" data-bf-component="context-list" data-bf-part="cardError" data-bf-state="invalid">
           <AlertCircle size={12} />
           <span>{validationState.error}</span>
         </div>

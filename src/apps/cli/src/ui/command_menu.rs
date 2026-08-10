@@ -473,8 +473,8 @@ mod tests {
     fn slash_lists_all_actions_for_the_current_context() {
         let mut chat = CommandMenuState::new(ActionState::chat(false, false));
         chat.update("/", 1);
-        assert!(names(&chat).contains(&"/clear"));
         assert!(names(&chat).contains(&"/new"));
+        assert!(!names(&chat).contains(&"/clear"));
 
         let mut startup = CommandMenuState::new(ActionState::startup(false));
         startup.update("/", 1);
@@ -508,6 +508,12 @@ mod tests {
 
         menu.update("/mcp", 4);
         assert_eq!(names(&menu), vec!["/mcp"]);
+
+        menu.update("/clear", 6);
+        assert_eq!(names(&menu), vec!["/clear"]);
+        let selection = menu.apply_selection_with_name().unwrap();
+        assert_eq!(selection.action_id, "new_session");
+        assert_eq!(selection.command_name, "clear");
     }
 
     #[test]

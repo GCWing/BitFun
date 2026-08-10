@@ -8,6 +8,7 @@ use crate::agentic::tools::framework::{
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
+use bitfun_services_core::markdown::expand_prompt_template_arguments_with_names;
 use log::debug;
 use serde_json::{json, Value};
 
@@ -29,15 +30,16 @@ impl SkillTool {
 When users ask you to perform tasks, check whether any skills listed in the current skill listing can help complete the task more effectively. Skills provide specialized capabilities and domain knowledge.
 
 How to use skills:
-- Invoke skills using this tool with the listed skill name or stable key (no arguments)
+- Invoke skills using this tool with the listed skill name or stable key and optional arguments
+- Pass user-provided invocation text relevant to the skill through `arguments`; never copy an `argument-hint` into arguments
 - The skill's prompt will expand and provide detailed instructions on how to complete the task
 - Examples:
-  - `command: "pdf"` - invoke the pdf skill
-  - `command: "xlsx"` - invoke the xlsx skill
+  - `command: "writing-skills"` - invoke the writing-skills skill
+  - `command: "review", arguments: "src/main.rs carefully"` - invoke a skill with arguments
   - `command: "user::bitfun-system::ppt-design"` - invoke a specific built-in skill by stable key
 
 Important:
-- Only use skills listed in the current skill listing's <available_skills> section, unless a trusted host task explicitly supplies an exact stable key
+- Only use skills listed in the current skill listing's <available_skills> section, unless a trusted host task explicitly supplies an exact stable key or the user's message contains an exact `[$skill-name]` invocation
 - Do not invoke a skill that is already running
 </skills_instructions>"#
             .to_string()
@@ -134,7 +136,11 @@ impl Tool for SkillTool {
             "properties": {
                 "command": {
                     "type": "string",
-                    "description": "The skill name (no arguments). E.g., \"pdf\" or \"xlsx\""
+                    "description": "The skill name or stable key. E.g., \"writing-skills\" or \"user::bitfun-system::ppt-design\""
+                },
+                "arguments": {
+                    "type": "string",
+                    "description": "Optional arguments supplied to the skill prompt"
                 }
             },
             "required": ["command"],
@@ -184,6 +190,17 @@ impl Tool for SkillTool {
                 meta: None,
             };
         }
+        if input
+            .get("arguments")
+            .is_some_and(|value| !value.is_string())
+        {
+            return ValidationResult {
+                result: false,
+                message: Some("arguments must be a string".to_string()),
+                error_code: Some(400),
+                meta: None,
+            };
+        }
 
         ValidationResult {
             result: true,
@@ -216,7 +233,7 @@ impl Tool for SkillTool {
         // Find and load skill through registry
         let registry = get_skill_registry();
         let use_stable_key = skill_name.split("::").count() == 3;
-        let skill_data = if context.is_remote() {
+        let mut skill_data = if context.is_remote() {
             if let Some(ws_fs) = context.ws_fs() {
                 let root = context
                     .workspace
@@ -281,6 +298,13 @@ impl Tool for SkillTool {
             }
         };
 
+        if let Some(arguments) = input.get("arguments").and_then(Value::as_str) {
+            skill_data.content = expand_prompt_template_arguments_with_names(
+                &skill_data.content,
+                arguments,
+                &skill_data.argument_names,
+            );
+        }
         let location_str = skill_data.location.as_str();
         let result_for_assistant = render_loaded_skill_for_assistant(&skill_data, use_stable_key);
 
@@ -321,6 +345,7 @@ mod tests {
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
     use async_trait::async_trait;
     use serde_json::json;
+    use std::fs;
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -400,6 +425,177 @@ Use the remote project skill.
                 timed_out: false,
             })
         }
+    }
+
+    struct ClaudeRemoteFs;
+
+    #[async_trait]
+    impl WorkspaceFileSystem for ClaudeRemoteFs {
+        async fn read_file(&self, path: &str) -> anyhow::Result<Vec<u8>> {
+            Ok(self.read_file_text(path).await?.into_bytes())
+        }
+
+        async fn read_file_text(&self, path: &str) -> anyhow::Result<String> {
+            if path == "/remote/project/.claude/skills/remote-review/SKILL.md" {
+                return Ok(
+                    "---\ndescription: Review a remote target.\narguments: target focus\n---\n\nReview $target for $focus.\n"
+                        .to_string(),
+                );
+            }
+            anyhow::bail!("not found: {}", path)
+        }
+
+        async fn write_file(&self, _path: &str, _contents: &[u8]) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn exists(&self, path: &str) -> anyhow::Result<bool> {
+            Ok(self.is_dir(path).await? || self.is_file(path).await?)
+        }
+
+        async fn is_file(&self, path: &str) -> anyhow::Result<bool> {
+            Ok(path == "/remote/project/.claude/skills/remote-review/SKILL.md")
+        }
+
+        async fn is_dir(&self, path: &str) -> anyhow::Result<bool> {
+            Ok(matches!(
+                path,
+                "/remote/project/.claude/skills" | "/remote/project/.claude/skills/remote-review"
+            ))
+        }
+
+        async fn read_dir(&self, path: &str) -> anyhow::Result<Vec<WorkspaceDirEntry>> {
+            if path == "/remote/project/.claude/skills" {
+                return Ok(vec![WorkspaceDirEntry {
+                    name: "remote-review".to_string(),
+                    path: "/remote/project/.claude/skills/remote-review".to_string(),
+                    is_dir: true,
+                    is_symlink: false,
+                }]);
+            }
+            Ok(vec![])
+        }
+    }
+
+    fn local_context(root: PathBuf) -> crate::agentic::tools::framework::ToolUseContext {
+        crate::agentic::tools::framework::ToolUseContext {
+            tool_call_id: None,
+            agent_type: None,
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: Some(WorkspaceBinding::new(None, root)),
+            loaded_deferred_tool_specs: Vec::new(),
+            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
+            custom_data: Default::default(),
+            computer_use_host: None,
+            runtime_tool_restrictions: Default::default(),
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::new(None, None),
+        }
+    }
+
+    #[test]
+    fn skill_schema_exposes_optional_arguments() {
+        let schema = SkillTool::new().input_schema();
+
+        assert_eq!(schema["properties"]["arguments"]["type"], "string");
+        assert_eq!(schema["required"], json!(["command"]));
+    }
+
+    #[tokio::test]
+    async fn skill_call_expands_arguments_in_loaded_prompt() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let skill_dir = temp.path().join(".bitfun/skills/argument-skill");
+        fs::create_dir_all(&skill_dir).expect("skill directory");
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: argument-skill\ndescription: Argument expansion test.\nargument-hint: \"[file] [focus]\"\n---\n\nReview $0 with $ARGUMENTS[1]. Full: $ARGUMENTS\n",
+        )
+        .expect("skill markdown");
+        let context = local_context(temp.path().to_path_buf());
+
+        let results = SkillTool::new()
+            .call_impl(
+                &json!({
+                    "command": "argument-skill",
+                    "arguments": "\"src/main.rs\" carefully"
+                }),
+                &context,
+            )
+            .await
+            .expect("skill arguments should expand");
+
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = &results[0]
+        else {
+            panic!("expected result payload");
+        };
+        let expected = "Review src/main.rs with carefully. Full: \"src/main.rs\" carefully";
+        assert_eq!(data["content"], expected);
+        assert!(result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .contains(expected));
+    }
+
+    #[tokio::test]
+    async fn local_claude_skill_uses_source_semantics_for_discovery_load_and_arguments() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let skill_dir = temp.path().join(".claude/skills/deploy-service");
+        fs::create_dir_all(&skill_dir).expect("skill directory");
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\ndescription: Deploy a service.\narguments: service environment\n---\n\nDeploy $service to $environment.\n",
+        )
+        .expect("skill markdown");
+        let context = local_context(temp.path().to_path_buf());
+
+        let visible = SkillRegistry::global()
+            .get_resolved_skills_for_workspace(Some(temp.path()), None)
+            .await;
+        assert!(visible
+            .iter()
+            .any(|skill| { skill.name == "deploy-service" && skill.source_slot == "claude" }));
+
+        let results = SkillTool::new()
+            .call_impl(
+                &json!({
+                    "command": "deploy-service",
+                    "arguments": "api staging"
+                }),
+                &context,
+            )
+            .await
+            .expect("Claude skill should load with the discovery dialect");
+        let ToolResult::Result { data, .. } = &results[0] else {
+            panic!("expected result payload");
+        };
+        assert_eq!(data["content"], "Deploy api to staging.");
+    }
+
+    #[tokio::test]
+    async fn remote_claude_skill_uses_the_same_dialect_for_discovery_and_load() {
+        let registry = SkillRegistry::global();
+        let visible = registry
+            .get_resolved_skills_for_remote_workspace(&ClaudeRemoteFs, "/remote/project", None)
+            .await;
+        assert!(visible
+            .iter()
+            .any(|skill| { skill.name == "remote-review" && skill.source_slot == "claude" }));
+
+        let loaded = registry
+            .find_and_load_skill_for_remote_workspace(
+                "remote-review",
+                &ClaudeRemoteFs,
+                "/remote/project",
+                None,
+            )
+            .await
+            .expect("remote Claude skill should load with the discovery dialect");
+        assert_eq!(loaded.name, "remote-review");
+        assert_eq!(loaded.argument_names, ["target", "focus"]);
     }
 
     #[tokio::test]
@@ -561,6 +757,9 @@ Use the remote project skill.
                 "/remote/project/.bitfun/skills/z-last/SKILL.md" => {
                     Ok("---\nname: z-last\ndescription: last\n---\n\nz\n".to_string())
                 }
+                "/remote/project/.bitfun/skills/z-last/agents/openai.yaml" => {
+                    Ok("policy:\n  allow_implicit_invocation: false\n".to_string())
+                }
                 "/remote/project/.bitfun/skills/a-first/SKILL.md" => {
                     Ok("---\nname: A-First\ndescription: first\n---\n\na\n".to_string())
                 }
@@ -586,6 +785,7 @@ Use the remote project skill.
             Ok(matches!(
                 path,
                 "/remote/project/.bitfun/skills/z-last/SKILL.md"
+                    | "/remote/project/.bitfun/skills/z-last/agents/openai.yaml"
                     | "/remote/project/.bitfun/skills/a-first/SKILL.md"
                     | "/remote/project/.bitfun/skills/dup-one/SKILL.md"
                     | "/remote/project/.bitfun/skills/dup-two/SKILL.md"
@@ -657,5 +857,95 @@ Use the remote project skill.
                 .map(|skill| skill.description.as_str()),
             Some("dup one")
         );
+    }
+
+    #[tokio::test]
+    async fn remote_codex_policy_hides_only_the_implicit_model_catalog() {
+        let registry = SkillRegistry::global();
+        let resolved = registry
+            .get_resolved_skills_for_remote_workspace(&OrderingRemoteFs, "/remote/project", None)
+            .await;
+        let implicit = registry
+            .get_implicitly_invocable_skills_for_remote_workspace(
+                &OrderingRemoteFs,
+                "/remote/project",
+                None,
+            )
+            .await;
+
+        assert!(resolved.iter().any(|skill| skill.name == "z-last"));
+        assert!(!implicit.iter().any(|skill| skill.name == "z-last"));
+    }
+
+    #[tokio::test]
+    async fn local_codex_policy_hides_only_the_implicit_model_catalog() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let skill_dir = temp.path().join(".codex/skills/local-explicit-only");
+        fs::create_dir_all(skill_dir.join("agents")).expect("skill directories");
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: local-explicit-only\ndescription: explicit only\n---\n\nRun explicitly.\n",
+        )
+        .expect("skill markdown");
+        fs::write(
+            skill_dir.join("agents/openai.yaml"),
+            "policy:\n  allow_implicit_invocation: false\n",
+        )
+        .expect("skill policy");
+
+        let registry = SkillRegistry::global();
+        let resolved = registry
+            .get_resolved_skills_for_workspace(Some(temp.path()), None)
+            .await;
+        let implicit = registry
+            .get_implicitly_invocable_skills_for_workspace(Some(temp.path()), None)
+            .await;
+        let user_invocable = registry
+            .get_user_invocable_skills_for_workspace(Some(temp.path()), None)
+            .await;
+
+        assert!(resolved
+            .iter()
+            .any(|skill| skill.name == "local-explicit-only"));
+        assert!(!implicit
+            .iter()
+            .any(|skill| skill.name == "local-explicit-only"));
+        assert!(user_invocable
+            .iter()
+            .any(|skill| skill.name == "local-explicit-only"));
+        let loaded = registry
+            .find_and_load_skill_for_workspace("local-explicit-only", Some(temp.path()), None)
+            .await
+            .expect("explicit invocation should remain available");
+        assert_eq!(loaded.name, "local-explicit-only");
+    }
+
+    #[tokio::test]
+    async fn local_user_invocation_metadata_hides_only_the_picker_catalog() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let skill_dir = temp.path().join(".claude/skills/model-only");
+        fs::create_dir_all(&skill_dir).expect("skill directory");
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: model-only\ndescription: model only\nuser-invocable: false\n---\n\nRun when useful.\n",
+        )
+        .expect("skill markdown");
+
+        let registry = SkillRegistry::global();
+        let resolved = registry
+            .get_resolved_skills_for_workspace(Some(temp.path()), None)
+            .await;
+        let implicit = registry
+            .get_implicitly_invocable_skills_for_workspace(Some(temp.path()), None)
+            .await;
+        let user_invocable = registry
+            .get_user_invocable_skills_for_workspace(Some(temp.path()), None)
+            .await;
+
+        assert!(resolved.iter().any(|skill| skill.name == "model-only"));
+        assert!(implicit.iter().any(|skill| skill.name == "model-only"));
+        assert!(!user_invocable
+            .iter()
+            .any(|skill| skill.name == "model-only"));
     }
 }

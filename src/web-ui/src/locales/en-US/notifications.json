@@ -18,7 +18,6 @@
     "snapshotCreated": "Snapshot created",
     "snapshotRestored": "Snapshot restored",
     "languageChanged": "Language changed",
-    "themeChanged": "Theme changed",
     "connectionEstablished": "Connection established"
   },
   "error": {

@@ -18,26 +18,40 @@ mod chat_state;
 mod config;
 mod daemon;
 mod diagnostics;
+mod dispatch;
+mod embedded_app_server;
+mod hook_import;
 mod logging;
 mod management;
+mod mcp_import;
 mod model_selection;
 mod modes;
 mod peer_host;
 mod plugin_diagnostics;
 mod product_assembly;
+mod prompt_stash;
 mod prompts;
 mod root_handlers;
 mod runtime;
 mod self_update;
+mod shared_runtime;
+mod shared_tui_backend;
+mod terminal_attention;
+mod tui_account_management;
+mod tui_backend;
+mod tui_worktree_management;
 mod ui;
 
 use anyhow::{anyhow, Result};
 use bitfun_core::service::remote_connect::DeviceIdentity;
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
+use agent::tui_client::TuiAgentClient;
 use config::CliConfig;
+use hook_import::HookAction;
+use mcp_import::{McpImportCommand, McpImportOutputFormat};
 use modes::chat::ChatMode;
 use modes::exec::{ExecApprovalMode, ExecOutputFormat};
 
@@ -78,6 +92,48 @@ pub fn get_mcp_service() -> Option<&'static std::sync::Arc<bitfun_core::service:
     MCP_SERVICE.get()
 }
 
+fn ensure_cli_mcp_service(
+    config_service: Arc<bitfun_core::service::config::ConfigService>,
+) -> Option<Arc<bitfun_core::service::mcp::MCPService>> {
+    if let Some(service) = get_mcp_service() {
+        return Some(service.clone());
+    }
+
+    let service = match bitfun_core::service::mcp::MCPService::new(config_service) {
+        Ok(service) => Arc::new(service),
+        Err(error) => {
+            tracing::warn!("Failed to create MCP service: {}", error);
+            get_mcp_init_status().store(3, Ordering::Relaxed);
+            return None;
+        }
+    };
+
+    if MCP_SERVICE.set(service.clone()).is_err() {
+        return get_mcp_service().cloned();
+    }
+    bitfun_core::service::mcp::set_global_mcp_service(service.clone());
+    get_mcp_init_status().store(1, Ordering::Relaxed);
+
+    // Shared TUI keeps the pre-migration CLI-local MCP compatibility path. It
+    // is intentionally separate from the MCP manager inside Shared Runtime;
+    // this process must not be mistaken for that Runtime's owner.
+    let initializing = service.clone();
+    tokio::spawn(async move {
+        match initializing.server_manager().initialize_all().await {
+            Ok(_) => {
+                tracing::info!("MCP servers initialized successfully");
+                get_mcp_init_status().store(2, Ordering::Relaxed);
+            }
+            Err(error) => {
+                tracing::warn!("Failed to initialize MCP servers: {}", error);
+                get_mcp_init_status().store(3, Ordering::Relaxed);
+            }
+        }
+    });
+
+    Some(service)
+}
+
 #[derive(Parser)]
 #[command(name = "bitfun")]
 #[command(about = "BitFun CLI - AI agent-driven command-line programming assistant", long_about = None)]
@@ -89,6 +145,37 @@ struct Cli {
     /// Enable verbose logging
     #[arg(short, long, global = true)]
     verbose: bool,
+
+    /// Use the opt-in Shared Runtime for interactive TUI mode
+    /// Multiple TUIs may share one workspace Runtime; each controls a Session at a time.
+    /// Automation, desktop, and remote modes remain unchanged.
+    #[arg(long, verbatim_doc_comment)]
+    shared: bool,
+
+    /// Continue the most recent session (skip startup page)
+    #[arg(long = "continue", conflicts_with = "session")]
+    continue_last: bool,
+
+    /// Open a specific session by ID (or "last" for the most recent)
+    #[arg(long, conflicts_with = "continue_last")]
+    session: Option<String>,
+
+    /// Specify the model ID for this session
+    #[arg(long)]
+    model: Option<String>,
+
+    /// Specify the agent type for this session
+    #[arg(long)]
+    agent: Option<String>,
+}
+
+fn shared_tui_requested(shared: bool, command: &Option<Commands>) -> Result<bool> {
+    if shared && !matches!(command, None | Some(Commands::Chat { .. })) {
+        return Err(anyhow!(
+            "--shared is available only for the interactive TUI (`bitfun --shared` or `bitfun chat --shared`); other commands and applications are unchanged"
+        ));
+    }
+    Ok(shared || matches!(command, Some(Commands::Chat { shared: true, .. })))
 }
 
 #[derive(Subcommand)]
@@ -98,6 +185,18 @@ enum Commands {
         /// Agent type
         #[arg(short, long, default_value = "agentic")]
         agent: String,
+
+        /// Use the opt-in Shared Runtime for this interactive TUI
+        #[arg(long)]
+        shared: bool,
+    },
+
+    #[command(name = "__shared-runtime", hide = true)]
+    SharedRuntime {
+        #[arg(long)]
+        workspace: std::path::PathBuf,
+        #[arg(long)]
+        instance_identity: String,
     },
 
     /// Execute single command
@@ -187,6 +286,12 @@ enum Commands {
         action: Option<PluginAction>,
     },
 
+    /// Review and manage imported Claude Code and Codex command Hooks
+    Hooks {
+        #[command(subcommand)]
+        action: Option<HookAction>,
+    },
+
     /// Usage reporting
     Usage {
         /// Session ID to inspect; defaults to the most recent session in the current workspace
@@ -220,6 +325,12 @@ enum Commands {
     Daemon {
         #[command(subcommand)]
         action: DaemonAction,
+    },
+
+    /// Run and inspect persistent tasks owned by this machine
+    Dispatch {
+        #[command(subcommand)]
+        action: DispatchAction,
     },
 
     /// Start or inspect the Agent Client Protocol (ACP) server
@@ -258,6 +369,39 @@ enum McpAction {
     },
     /// Print the stored MCP JSON config
     Config,
+    /// Preview or explicitly import external MCP declarations
+    Import {
+        /// Apply the current plan; without this flag the command is read-only
+        #[arg(long)]
+        apply: bool,
+        /// Import only this eligible candidate; repeat to select multiple
+        #[arg(long, action = clap::ArgAction::Append, requires = "apply")]
+        candidate: Vec<String>,
+        /// Override the native ID; requires exactly one candidate
+        #[arg(long, requires = "candidate")]
+        native_id: Option<String>,
+        /// Output format for automation
+        #[arg(long, value_enum, default_value_t = McpImportOutputFormat::Text)]
+        format: McpImportOutputFormat,
+    },
+    /// Add an MCP server (three-step wizard: name, type, command/URL)
+    Add {
+        /// Step 1: server name (also used as id; no spaces)
+        #[arg(long)]
+        name: Option<String>,
+        /// Step 2: server type — accepts `local` or `remote`
+        #[arg(long, value_parser = ["local", "remote"])]
+        r#type: Option<String>,
+        /// Step 3: launch command for a local server (e.g. `npx -y @modelcontextprotocol/server-xxx`)
+        #[arg(long)]
+        command: Option<String>,
+        /// Step 3: server URL for a remote server
+        #[arg(long)]
+        url: Option<String>,
+        /// Skip interactive prompts for missing fields; error instead
+        #[arg(long)]
+        non_interactive: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -399,8 +543,15 @@ pub(crate) enum BootstrapProfile {
 }
 
 impl BootstrapProfile {
-    const fn starts_peer_host(self) -> bool {
+    const fn starts_peer_host(
+        self,
+        deployment: bitfun_services_core::runtime_ownership::RuntimeDeployment,
+    ) -> bool {
         matches!(self, Self::Interactive)
+            && matches!(
+                deployment,
+                bitfun_services_core::runtime_ownership::RuntimeDeployment::Embedded
+            )
     }
 
     const fn starts_mcp(self) -> bool {
@@ -511,6 +662,66 @@ enum DaemonAction {
     Uninstall,
     /// Show daemon and auto-start service status
     Status,
+    #[command(name = "__dispatch_identity", hide = true)]
+    DispatchIdentity,
+    #[command(name = "__dispatch_provision", hide = true)]
+    DispatchProvision { request_path: std::path::PathBuf },
+    #[command(name = "__dispatch_deprovision", hide = true)]
+    DispatchDeprovision { device_id: String, user_id: String },
+}
+
+#[derive(Subcommand)]
+pub(crate) enum DispatchAction {
+    /// Report target protocol and local execution readiness
+    Probe,
+    /// Persist and start a detached dispatch job
+    Submit,
+    /// Read job state and incremental events
+    Status,
+    /// Cancel a detached dispatch job
+    Cancel,
+    /// List jobs owned by this machine
+    List,
+    /// Answer a permission request for a remotely supervised job
+    Answer,
+    /// Append a steering message to a queued or running job
+    Append,
+    /// Queue the next turn of a dispatch session whose previous turn finished
+    Continue,
+    /// Read persisted session facts (usage report) without starting a turn
+    Query,
+    #[command(name = "__workspace_provision", hide = true)]
+    WorkspaceProvision,
+    #[command(name = "__workspace_bundle_begin", hide = true)]
+    WorkspaceBundleBegin,
+    #[command(name = "__workspace_bundle_chunk", hide = true)]
+    WorkspaceBundleChunk,
+    #[command(name = "__workspace_bundle_commit", hide = true)]
+    WorkspaceBundleCommit,
+    #[command(name = "__workspace_sync", hide = true)]
+    WorkspaceSync,
+    #[command(name = "__workspace_sync_chunk", hide = true)]
+    WorkspaceSyncChunk,
+    #[command(name = "__workspace_provision_run", hide = true)]
+    WorkspaceProvisionRun {
+        #[arg(long)]
+        job: String,
+    },
+    #[command(name = "__workspace_bundle_commit_run", hide = true)]
+    WorkspaceBundleCommitRun {
+        #[arg(long)]
+        job: String,
+    },
+    #[command(name = "__workspace_sync_run", hide = true)]
+    WorkspaceSyncRun {
+        #[arg(long)]
+        job: String,
+    },
+    #[command(name = "__run", hide = true)]
+    Run {
+        #[arg(long)]
+        job: String,
+    },
 }
 
 // ======================== System Initialization ========================
@@ -575,6 +786,21 @@ async fn initialize_core_services(
     approval_policy: runtime::approval::CliApprovalPolicy,
     bootstrap_profile: BootstrapProfile,
 ) -> Result<std::sync::Arc<runtime::CliRuntimeContext>> {
+    initialize_core_services_for_deployment(
+        workspace_root,
+        approval_policy,
+        bootstrap_profile,
+        bitfun_services_core::runtime_ownership::RuntimeDeployment::Embedded,
+    )
+    .await
+}
+
+async fn initialize_core_services_for_deployment(
+    workspace_root: &std::path::Path,
+    approval_policy: runtime::approval::CliApprovalPolicy,
+    bootstrap_profile: BootstrapProfile,
+    deployment: bitfun_services_core::runtime_ownership::RuntimeDeployment,
+) -> Result<std::sync::Arc<runtime::CliRuntimeContext>> {
     use bitfun_core::infrastructure::ai::AIClientFactory;
 
     agent::agentic_system::select_agentic_system_profile(
@@ -584,6 +810,26 @@ async fn initialize_core_services(
         .await
         .map_err(|error| anyhow!("Failed to initialize global config service: {error}"))?;
     tracing::info!("Global config service initialized");
+    let path_manager = bitfun_core::infrastructure::try_get_path_manager_arc()
+        .map_err(|error| anyhow!(error.to_string()))?;
+    let entrypoint = match (deployment, bootstrap_profile) {
+        (
+            bitfun_services_core::runtime_ownership::RuntimeDeployment::Embedded,
+            BootstrapProfile::Interactive,
+        ) => "cli-interactive",
+        (bitfun_services_core::runtime_ownership::RuntimeDeployment::Embedded, _) => "cli-headless",
+        (bitfun_services_core::runtime_ownership::RuntimeDeployment::Shared, _) => {
+            "shared-tui-runtime"
+        }
+    };
+    let runtime_ownership = bitfun_core::runtime_ownership::CoreRuntimeOwnership::fixed_workspace(
+        path_manager.as_ref(),
+        entrypoint,
+        workspace_root,
+        deployment,
+    )
+    .map_err(|error| anyhow!(error.startup_message(deployment, entrypoint)))?;
+    let runtime_ownership = std::sync::Arc::new(runtime_ownership);
 
     let config_service = bitfun_core::service::config::get_global_config_service()
         .await
@@ -598,6 +844,7 @@ async fn initialize_core_services(
 
     let agentic_system = agent::agentic_system::init_agentic_system(
         bitfun_core::product_assembly::DeliveryProfile::Cli,
+        runtime_ownership,
     )
     .await
     .map_err(|error| anyhow!("Failed to initialize agentic system: {error}"))?;
@@ -625,7 +872,7 @@ async fn initialize_core_services(
         runtime.product().plugin_runtime(),
     );
 
-    if bootstrap_profile.starts_peer_host() {
+    if bootstrap_profile.starts_peer_host(deployment) {
         if let Err(e) = peer_host::ensure_peer_host_ready(runtime.as_ref()).await {
             tracing::warn!("Failed to initialize CLI peer host services: {e}");
         } else {
@@ -633,38 +880,10 @@ async fn initialize_core_services(
         }
     }
 
-    // Initialize MCP service in background (non-blocking)
+    // Initialize MCP service in background (non-blocking).
     if bootstrap_profile.starts_mcp() {
-        if let Some(ref cfg_svc) = config_service {
-            match bitfun_core::service::mcp::MCPService::new(cfg_svc.clone()) {
-                Ok(mcp_service) => {
-                    let mcp_service = std::sync::Arc::new(mcp_service);
-                    MCP_SERVICE.set(mcp_service.clone()).ok();
-                    bitfun_core::service::mcp::set_global_mcp_service(mcp_service.clone());
-
-                    // Mark as in progress
-                    get_mcp_init_status().store(1, Ordering::Relaxed);
-
-                    // Background async initialization
-                    tokio::spawn(async move {
-                        let result = mcp_service.server_manager().initialize_all().await;
-                        match result {
-                            Ok(_) => {
-                                tracing::info!("MCP servers initialized successfully");
-                                get_mcp_init_status().store(2, Ordering::Relaxed);
-                            }
-                            Err(e) => {
-                                tracing::warn!("Failed to initialize MCP servers: {}", e);
-                                get_mcp_init_status().store(3, Ordering::Relaxed);
-                            }
-                        }
-                    });
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to create MCP service: {}", e);
-                    get_mcp_init_status().store(3, Ordering::Relaxed);
-                }
-            }
+        if let Some(config_service) = config_service {
+            ensure_cli_mcp_service(config_service);
         }
     }
 
@@ -689,6 +908,10 @@ async fn run_interactive(
     config: CliConfig,
     default_agent: String,
     _workspace_str: String,
+    shared: bool,
+    agent_override: Option<String>,
+    model_id: Option<String>,
+    session_override: Option<String>,
 ) -> Result<()> {
     use ui::startup::{StartupPage, StartupResult};
 
@@ -704,44 +927,129 @@ async fn run_interactive(
         .or_else(|| std::env::current_dir().ok())
         .unwrap_or_else(|| std::path::PathBuf::from("."));
 
-    // 3. Initialize core services
-    let runtime = initialize_core_services(
-        &workspace_path,
-        runtime::approval::CliApprovalPolicy::Ask,
-        BootstrapProfile::Interactive,
-    )
-    .await?;
+    let runtime = if shared {
+        None
+    } else {
+        Some(
+            initialize_core_services(
+                &workspace_path,
+                runtime::approval::CliApprovalPolicy::Ask,
+                BootstrapProfile::Interactive,
+            )
+            .await?,
+        )
+    };
+    let embedded_app_server = if let Some(runtime) = &runtime {
+        Some(embedded_app_server::EmbeddedAppServerHost::start(runtime).await?)
+    } else {
+        None
+    };
+    let agent = if let Some(runtime) = &runtime {
+        let backend = embedded_app_server
+            .as_ref()
+            .expect("Embedded App Server should be started with the Runtime")
+            .backend();
+        Arc::new(TuiAgentClient::new(
+            backend,
+            Some(workspace_path.clone()),
+            false,
+            runtime.approval_policy(),
+        ))
+    } else {
+        let client = shared_runtime::connect_or_start(&workspace_path).await?;
+        let config_service = bitfun_core::service::config::get_global_config_service()
+            .await
+            .map_err(|error| anyhow!("Failed to load Shared TUI management config: {error}"))?;
+        ensure_cli_mcp_service(config_service);
+        let management = Arc::new(bitfun_app_server::AppManagementService::load().await?);
+        let backend: Arc<dyn tui_backend::TuiBackend> = Arc::new(
+            shared_tui_backend::SharedTuiBackend::new(client, management),
+        );
+        let backend_initialized = backend
+            .initialize(bitfun_app_server_protocol::app::InitializeRequest {
+                protocol_version: bitfun_app_server_protocol::PROTOCOL_VERSION,
+                client: bitfun_app_server_protocol::app::ClientInfo {
+                    name: "bitfun-tui".to_string(),
+                    version: env!("CARGO_PKG_VERSION").to_string(),
+                },
+            })
+            .await?;
+        if backend_initialized.protocol_version != bitfun_app_server_protocol::PROTOCOL_VERSION {
+            anyhow::bail!("Shared TUI Host negotiated an incompatible protocol");
+        }
+        backend.health().await?;
+        Arc::new(TuiAgentClient::new(
+            backend,
+            Some(workspace_path.clone()),
+            true,
+            runtime::approval::CliApprovalPolicy::Ask,
+        ))
+    };
     // 3.5 Restore persisted account session (if any)
-    if let Some(user_id) = account::try_restore_session().await {
-        tracing::info!("Restored account session for user {user_id}");
-        // Re-establish device routing so the CLI becomes RPC-controllable.
-        // The daemon owns device routing when it is running: same-machine
-        // processes share one device_id and last AuthConnect wins.
-        if daemon::is_daemon_running() {
-            tracing::info!(
-                "CLI daemon is running; skipping in-process device routing (daemon owns it)"
-            );
-        } else {
-            let device = DeviceIdentity::from_current_machine()
-                .map_err(|e| anyhow!("detect device: {e}"))?;
-            if let Err(e) = account::restore_device_routing(&device.device_name).await {
-                tracing::warn!("Failed to restore device routing: {e}");
+    if !shared {
+        if let Some(user_id) = account::try_restore_session().await {
+            tracing::info!("Restored account session for user {user_id}");
+            if daemon::is_daemon_running() {
+                tracing::info!(
+                    "CLI daemon is running; skipping in-process device routing (daemon owns it)"
+                );
+            } else {
+                let device = DeviceIdentity::from_current_machine()
+                    .map_err(|e| anyhow!("detect device: {e}"))?;
+                if let Err(e) = account::restore_device_routing(&device.device_name).await {
+                    tracing::warn!("Failed to restore device routing: {e}");
+                }
             }
         }
     }
 
     // 3.6 Continuous account settings sync (30s pull + debounced push).
     // Safe to start before login: cycles skip while logged out.
-    account_sync::start_settings_sync_loop();
+    if !shared {
+        account_sync::start_settings_sync_loop();
+    }
+
+    // Resolve agent override: validate against the agent registry AFTER core services init
+    let effective_agent = if let Some(ref override_val) = agent_override {
+        match resolve_agent_override(override_val).await {
+            Ok(valid_id) => valid_id,
+            Err(warning) => {
+                eprintln!("{warning}");
+                default_agent.clone()
+            }
+        }
+    } else {
+        default_agent.clone()
+    };
+
+    // If --continue or --session was given, skip the startup page and go directly
+    // to chat with the resolved session.
+    if let Some(ref session_spec) = session_override {
+        let restore_session_id = resolve_startup_session_override(&agent, session_spec).await?;
+
+        let mut chat_mode = ChatMode::new(config, effective_agent, workspace, agent)
+            .with_restore_session(restore_session_id);
+        if let Some(mid) = model_id {
+            chat_mode = chat_mode.with_model(mid);
+        }
+        let chat_result = chat_mode.run(Some(terminal));
+
+        if !shared {
+            shutdown_mcp_servers().await;
+        }
+        let _exit_reason = chat_result?;
+        println!("Goodbye!");
+        return Ok(());
+    }
 
     // 4. Show startup page (with full command support)
     let mut startup_page = StartupPage::new(
         config,
-        runtime.agent_runtime().clone(),
-        runtime.compatibility().clone(),
-        default_agent,
+        Arc::clone(&agent),
+        effective_agent,
         workspace.clone(),
     );
+    startup_page.set_model_override(model_id.clone());
     let startup_result = startup_page.run(&mut terminal)?;
 
     if let StartupResult::Exit = startup_result {
@@ -759,15 +1067,25 @@ async fn run_interactive(
     };
 
     let agent_type = startup_page.agent_type().to_string();
+    if matches!(startup_result, StartupResult::NewSession { .. }) {
+        if let Some(model_id) = startup_page.selected_model_id().map(str::to_string) {
+            agent
+                .ensure_session_with_model(&agent_type, Some(model_id))
+                .await?;
+        }
+    }
     // Use the current project workspace selected at process start.
     let workspace = startup_page.workspace();
     let config = startup_page.config().clone();
-    let mut chat_mode = ChatMode::new(config, agent_type, workspace, runtime.clone());
+    let mut chat_mode = ChatMode::new(config, agent_type, workspace, agent);
     if let Some(session_id) = restore_session_id {
         chat_mode = chat_mode.with_restore_session(session_id);
     }
     if let Some(prompt) = initial_prompt {
         chat_mode = chat_mode.with_initial_prompt(prompt);
+    }
+    if let Some(mid) = model_id {
+        chat_mode = chat_mode.with_model(mid);
     }
     let chat_result = chat_mode.run(Some(terminal));
 
@@ -777,6 +1095,40 @@ async fn run_interactive(
     println!("Goodbye!");
 
     Ok(())
+}
+
+/// Resolve a `--session` / `--continue` override to a concrete session ID.
+/// "last" (or empty for --continue) resolves to the most recent session.
+async fn resolve_startup_session_override(
+    agent: &Arc<TuiAgentClient>,
+    session_spec: &str,
+) -> Result<String> {
+    if session_spec == "last" || session_spec.is_empty() {
+        let sessions = agent.list_sessions().await?;
+        return sessions
+            .first()
+            .map(|s| s.session_id.clone())
+            .ok_or_else(|| anyhow!("No history sessions for current project"));
+    }
+    bitfun_agent_runtime::session_control::validate_session_id(session_spec)
+        .map_err(anyhow::Error::msg)?;
+    Ok(session_spec.to_string())
+}
+
+/// Validate an agent override against the agent registry.
+/// Returns the valid agent ID, or an error with a warning message.
+async fn resolve_agent_override(agent_override: &str) -> std::result::Result<String, String> {
+    let registry = bitfun_core::agentic::get_agent_registry();
+    let modes = registry.get_modes_info().await;
+    if modes.iter().any(|m| m.id == agent_override) {
+        Ok(agent_override.to_string())
+    } else {
+        let available: Vec<&str> = modes.iter().map(|m| m.id.as_str()).collect();
+        Err(format!(
+            "Warning: Agent '{agent_override}' not found. Available: {}. Using default.",
+            available.join(", ")
+        ))
+    }
 }
 
 // ======================== Main ========================
@@ -794,9 +1146,23 @@ impl std::fmt::Display for ReportedCliError {
 
 impl std::error::Error for ReportedCliError {}
 
+fn is_dispatch_command(command: &Option<Commands>) -> bool {
+    matches!(command, Some(Commands::Dispatch { .. }))
+}
+
 async fn run_cli() -> Result<()> {
     let raw_args = std::env::args_os().collect::<Vec<_>>();
-    let cli = match Cli::try_parse_from(&raw_args) {
+    let product_binary_name = option_env!("BITFUN_PRODUCT_BINARY_NAME").unwrap_or("bitfun");
+    let product_display_name = option_env!("BITFUN_PRODUCT_DISPLAY_NAME").unwrap_or("BitFun CLI");
+    let parsed = Cli::command()
+        .name(product_binary_name)
+        .bin_name(product_binary_name)
+        .about(format!(
+            "{product_display_name} - AI agent-driven command-line programming assistant"
+        ))
+        .try_get_matches_from(&raw_args)
+        .and_then(|matches| Cli::from_arg_matches(&matches));
+    let cli = match parsed {
         Ok(cli) => cli,
         Err(error)
             if exec_requests_json_output(&raw_args)
@@ -818,7 +1184,17 @@ async fn run_cli() -> Result<()> {
     };
 
     let is_tui_mode = matches!(cli.command, None | Some(Commands::Chat { .. }));
+    let is_shared_service = matches!(cli.command, Some(Commands::SharedRuntime { .. }));
+    let use_shared_runtime = match shared_tui_requested(cli.shared, &cli.command) {
+        Ok(shared) => shared,
+        Err(error) if exec_requests_json_output(&raw_args) => {
+            modes::exec::emit_preflight_json_error(ExecOutputFormat::Json, &error)?;
+            return Err(anyhow::Error::new(ReportedCliError { exit_code: 2 }));
+        }
+        Err(error) => return Err(error),
+    };
     let is_exec_mode = matches!(cli.command, Some(Commands::Exec { .. }));
+    let is_dispatch_mode = is_dispatch_command(&cli.command);
     let is_daemon_run = matches!(
         cli.command,
         Some(Commands::Daemon {
@@ -832,7 +1208,11 @@ async fn run_cli() -> Result<()> {
         tracing::Level::ERROR
     };
 
-    if is_tui_mode || is_exec_mode || is_daemon_run {
+    if is_shared_service {
+        let service_log_dir =
+            logging::resolve_logs_root().join(format!("shared-runtime-{}", std::process::id()));
+        logging::init_file_logging_at(&service_log_dir, file_log_level);
+    } else if is_tui_mode || is_exec_mode || is_daemon_run || is_dispatch_mode {
         logging::init_file_logging(file_log_level);
     } else {
         tracing_subscriber::fmt()
@@ -855,10 +1235,24 @@ async fn run_cli() -> Result<()> {
     }
 
     match cli.command {
-        Some(Commands::Chat { agent }) => {
+        Some(Commands::Chat { agent, .. }) => {
             // Interactive mode with startup page, scoped to the current directory.
-            run_interactive(config, agent, ".".to_string()).await?;
+            run_interactive(
+                config,
+                agent,
+                ".".to_string(),
+                use_shared_runtime,
+                cli.agent.clone(),
+                cli.model.clone(),
+                None,
+            )
+            .await?;
         }
+
+        Some(Commands::SharedRuntime {
+            workspace,
+            instance_identity,
+        }) => shared_runtime::run_service(workspace, instance_identity).await?,
 
         Some(Commands::Exec {
             message,
@@ -939,6 +1333,36 @@ async fn run_cli() -> Result<()> {
             Some(McpAction::Config) => {
                 management::print_mcp_json_config().await?;
             }
+            Some(McpAction::Import {
+                apply,
+                candidate,
+                native_id,
+                format,
+            }) => {
+                management::run_mcp_import(McpImportCommand {
+                    apply,
+                    candidates: candidate,
+                    native_id,
+                    format,
+                })
+                .await?;
+            }
+            Some(McpAction::Add {
+                name,
+                r#type,
+                command,
+                url,
+                non_interactive,
+            }) => {
+                management::add_mcp_server(management::McpAddInput {
+                    name,
+                    r#type,
+                    command,
+                    url,
+                    non_interactive,
+                })
+                .await?;
+            }
         },
 
         Some(Commands::Plugins { action }) => match action {
@@ -975,6 +1399,10 @@ async fn run_cli() -> Result<()> {
             }
         },
 
+        Some(Commands::Hooks { action }) => {
+            hook_import::run(action).await?;
+        }
+
         Some(Commands::Usage { session_id }) => {
             management::print_usage_report(session_id.as_deref()).await?;
         }
@@ -1006,7 +1434,16 @@ async fn run_cli() -> Result<()> {
             DaemonAction::Install => daemon::install_service()?,
             DaemonAction::Uninstall => daemon::uninstall_service()?,
             DaemonAction::Status => daemon::print_status()?,
+            DaemonAction::DispatchIdentity => daemon::print_identity()?,
+            DaemonAction::DispatchProvision { request_path } => daemon::provision(request_path)?,
+            DaemonAction::DispatchDeprovision { device_id, user_id } => {
+                daemon::deprovision(device_id, user_id)?
+            }
         },
+
+        Some(Commands::Dispatch { action }) => {
+            root_handlers::handle_dispatch_action(action).await?;
+        }
 
         Some(Commands::Acp {
             action: None | Some(AcpAction::Serve),
@@ -1070,7 +1507,24 @@ async fn run_cli() -> Result<()> {
             let workspace_str = ".".to_string();
 
             let default_agent = config.behavior.default_agent.clone();
-            run_interactive(config, default_agent, workspace_str).await?;
+
+            // Resolve --continue / --session into a session override spec.
+            let session_override = if cli.continue_last {
+                Some("last".to_string())
+            } else {
+                cli.session.clone()
+            };
+
+            run_interactive(
+                config,
+                default_agent,
+                workspace_str,
+                use_shared_runtime,
+                cli.agent.clone(),
+                cli.model.clone(),
+                session_override,
+            )
+            .await?;
         }
     }
 
@@ -1102,16 +1556,16 @@ async fn run_interactive_with_session(
     let mut terminal = ui::init_terminal()?;
     ui::render_loading(&mut terminal, "Initializing system, please wait...")?;
 
-    let workspace = Some(runtime.workspace_root().to_string_lossy().to_string());
-    let sessions = runtime
-        .agent_runtime()
-        .list_sessions(bitfun_runtime_ports::AgentSessionListRequest {
-            workspace_path: runtime.workspace_root().to_string_lossy().to_string(),
-            remote_connection_id: None,
-            remote_ssh_host: None,
-        })
-        .await
-        .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+    let workspace_path = runtime.workspace_root().to_path_buf();
+    let workspace = Some(workspace_path.to_string_lossy().to_string());
+    let embedded_app_server = embedded_app_server::EmbeddedAppServerHost::start(&runtime).await?;
+    let agent = Arc::new(TuiAgentClient::new(
+        embedded_app_server.backend(),
+        Some(workspace_path),
+        false,
+        runtime.approval_policy(),
+    ));
+    let sessions = agent.list_sessions().await?;
     let agent_type = sessions
         .iter()
         .find(|session| session.session_id == session_id)
@@ -1123,8 +1577,8 @@ async fn run_interactive_with_session(
             )
         })?;
 
-    let mut chat_mode = ChatMode::new(config, agent_type, workspace, runtime.clone())
-        .with_restore_session(session_id);
+    let mut chat_mode =
+        ChatMode::new(config, agent_type, workspace, agent).with_restore_session(session_id);
     let run_result = chat_mode.run(Some(terminal));
 
     shutdown_mcp_servers().await;
@@ -1344,7 +1798,12 @@ mod bootstrap_profile_tests {
         ];
 
         for (profile, starts_peer_host, starts_mcp) in cases {
-            assert_eq!(profile.starts_peer_host(), starts_peer_host);
+            assert_eq!(
+                profile.starts_peer_host(
+                    bitfun_services_core::runtime_ownership::RuntimeDeployment::Embedded,
+                ),
+                starts_peer_host
+            );
             assert_eq!(profile.starts_mcp(), starts_mcp);
         }
     }
@@ -1429,6 +1888,66 @@ mod final_change_verification_cli_tests {
 }
 
 #[cfg(test)]
+mod hook_import_command_tests {
+    use super::{Cli, Commands};
+    use crate::hook_import::{HookAction, HookImportOutputFormat};
+    use clap::Parser;
+
+    #[test]
+    fn hook_import_is_preview_only_without_a_fingerprint() {
+        let cli = Cli::try_parse_from([
+            "bitfun",
+            "hooks",
+            "import",
+            "--source",
+            "6:codex6:global",
+            "--format",
+            "json",
+        ])
+        .expect("parse Hook import preview");
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Hooks {
+                action: Some(HookAction::Import {
+                    confirm: None,
+                    format: HookImportOutputFormat::Json,
+                    ..
+                })
+            })
+        ));
+    }
+
+    #[test]
+    fn hook_remove_requires_explicit_confirmation() {
+        assert!(Cli::try_parse_from(["bitfun", "hooks", "remove", "import-id"]).is_err());
+        let cli = Cli::try_parse_from(["bitfun", "hooks", "remove", "import-id", "--confirm"])
+            .expect("parse confirmed Hook removal");
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Hooks {
+                action: Some(HookAction::Remove { .. })
+            })
+        ));
+    }
+
+    #[test]
+    fn corrupt_hook_store_reset_requires_an_explicit_scope_and_confirmation() {
+        assert!(Cli::try_parse_from(["bitfun", "hooks", "reset", "user"]).is_err());
+        let cli = Cli::try_parse_from(["bitfun", "hooks", "reset", "project", "--confirm"])
+            .expect("parse confirmed project Hook store reset");
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Hooks {
+                action: Some(HookAction::Reset {
+                    scope: crate::hook_import::HookImportResetScope::Project,
+                    ..
+                })
+            })
+        ));
+    }
+}
+
+#[cfg(test)]
 mod sdk_host_command_tests {
     use super::Cli;
     use clap::{CommandFactory, Parser};
@@ -1443,5 +1962,166 @@ mod sdk_host_command_tests {
         let help = Cli::command().render_long_help().to_string();
         assert!(!help.contains("sdk-host"));
         assert!(!include_str!("../Cargo.toml").contains("bitfun-sdk-host"));
+    }
+}
+
+#[cfg(test)]
+mod shared_tui_command_tests {
+    use super::{shared_tui_requested, BootstrapProfile, Cli, Commands};
+    use bitfun_services_core::runtime_ownership::RuntimeDeployment;
+    use clap::{CommandFactory, Parser, Subcommand};
+
+    #[test]
+    fn shared_is_an_opt_in_interactive_tui_flag() {
+        let default_tui = Cli::try_parse_from(["bitfun", "--shared"]).expect("parse default TUI");
+        assert!(default_tui.shared);
+
+        let chat =
+            Cli::try_parse_from(["bitfun", "chat", "--shared"]).expect("parse explicit chat TUI");
+        assert!(matches!(
+            chat.command,
+            Some(Commands::Chat { shared: true, .. })
+        ));
+        let root_chat = Cli::try_parse_from(["bitfun", "--shared", "chat"])
+            .expect("parse root Shared choice before chat");
+        assert!(shared_tui_requested(root_chat.shared, &root_chat.command).unwrap());
+    }
+
+    #[test]
+    fn shared_rejects_non_interactive_surfaces_without_fallback() {
+        assert!(Cli::try_parse_from(["bitfun", "exec", "hello", "--shared"]).is_err());
+        let exec = Cli::try_parse_from(["bitfun", "--shared", "exec", "hello"])
+            .expect("parse root deployment choice");
+        let error = shared_tui_requested(exec.shared, &exec.command)
+            .expect_err("headless exec must remain Embedded");
+        assert!(error.to_string().contains("interactive TUI"));
+    }
+
+    #[test]
+    fn shared_runtime_does_not_start_the_peer_host() {
+        assert!(BootstrapProfile::Interactive.starts_peer_host(RuntimeDeployment::Embedded));
+        assert!(!BootstrapProfile::Interactive.starts_peer_host(RuntimeDeployment::Shared));
+    }
+
+    #[test]
+    fn help_explains_shared_scope_and_hides_internal_process_role() {
+        let help = Cli::command().render_long_help().to_string();
+        assert!(help.contains("one workspace Runtime"));
+        assert!(help.contains("controls a Session at a time"));
+        assert!(help.contains("Automation, desktop, and remote modes"));
+        assert!(!help.contains("__shared-runtime"));
+        let exec_help = Commands::augment_subcommands(Cli::command())
+            .find_subcommand("exec")
+            .expect("exec command")
+            .clone()
+            .render_long_help()
+            .to_string();
+        assert!(!exec_help.contains("--shared"));
+    }
+}
+
+#[cfg(test)]
+mod dispatch_command_tests {
+    use super::{is_dispatch_command, Cli, Commands, DispatchAction};
+    use clap::{CommandFactory, Parser};
+
+    #[test]
+    fn dispatch_commands_parse_and_internal_worker_is_hidden() {
+        let status =
+            Cli::try_parse_from(["bitfun", "dispatch", "status"]).expect("parse dispatch status");
+        assert!(matches!(
+            status.command,
+            Some(Commands::Dispatch {
+                action: DispatchAction::Status
+            })
+        ));
+        assert!(is_dispatch_command(&status.command));
+
+        let worker = Cli::try_parse_from(["bitfun", "dispatch", "__run", "--job", "job-1"])
+            .expect("parse internal dispatch worker");
+        assert!(matches!(
+            worker.command,
+            Some(Commands::Dispatch {
+                action: DispatchAction::Run { ref job }
+            }) if job == "job-1"
+        ));
+        assert!(is_dispatch_command(&worker.command));
+        let provision = Cli::try_parse_from(["bitfun", "dispatch", "__workspace_provision"])
+            .expect("parse internal workspace provision");
+        assert!(matches!(
+            provision.command,
+            Some(Commands::Dispatch {
+                action: DispatchAction::WorkspaceProvision
+            })
+        ));
+        assert!(is_dispatch_command(&provision.command));
+        let unrelated = Cli::try_parse_from(["bitfun", "config", "show"]).expect("parse config");
+        assert!(!is_dispatch_command(&unrelated.command));
+
+        let help = Cli::command().render_long_help().to_string();
+        assert!(help.contains("dispatch"));
+        let dispatch_help = Cli::command()
+            .find_subcommand_mut("dispatch")
+            .expect("dispatch command")
+            .render_long_help()
+            .to_string();
+        assert!(!dispatch_help.contains("__run"));
+    }
+}
+
+#[cfg(test)]
+mod daemon_command_tests {
+    use super::{Cli, Commands, DaemonAction};
+    use clap::{CommandFactory, Parser};
+
+    #[test]
+    fn dispatch_daemon_bootstrap_commands_parse_and_stay_hidden() {
+        let identity = Cli::try_parse_from(["bitfun", "daemon", "__dispatch_identity"])
+            .expect("parse target identity command");
+        assert!(matches!(
+            identity.command,
+            Some(Commands::Daemon {
+                action: DaemonAction::DispatchIdentity
+            })
+        ));
+
+        let provision = Cli::try_parse_from([
+            "bitfun",
+            "daemon",
+            "__dispatch_provision",
+            "/tmp/request.json",
+        ])
+        .expect("parse target provisioning command");
+        assert!(matches!(
+            provision.command,
+            Some(Commands::Daemon {
+                action: DaemonAction::DispatchProvision { ref request_path }
+            }) if request_path == std::path::Path::new("/tmp/request.json")
+        ));
+
+        let rollback = Cli::try_parse_from([
+            "bitfun",
+            "daemon",
+            "__dispatch_deprovision",
+            "device-1",
+            "user-1",
+        ])
+        .expect("parse target rollback command");
+        assert!(matches!(
+            rollback.command,
+            Some(Commands::Daemon {
+                action: DaemonAction::DispatchDeprovision {
+                    ref device_id,
+                    ref user_id,
+                }
+            }) if device_id == "device-1" && user_id == "user-1"
+        ));
+
+        let daemon_help = Cli::command()
+            .find_subcommand_mut("daemon")
+            .expect("daemon command")
+            .render_long_help()
+            .to_string();
+        assert!(!daemon_help.contains("__dispatch_"));
     }
 }

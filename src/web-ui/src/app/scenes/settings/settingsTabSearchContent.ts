@@ -12,6 +12,17 @@ export interface SettingsTabSearchPhrase {
   key: string;
 }
 
+const HOOKS_SEARCH_CONTENT = [
+  { ns: 'settings/hooks', key: 'title' },
+  { ns: 'settings/hooks', key: 'subtitle' },
+  { ns: 'settings/hooks', key: 'activation.title' },
+  { ns: 'settings/hooks', key: 'activation.description' },
+  { ns: 'settings/hooks', key: 'locations.title' },
+  { ns: 'settings/hooks', key: 'locations.description' },
+  { ns: 'settings/hooks', key: 'compatibility.title' },
+  { ns: 'settings/hooks', key: 'compatibility.description' },
+] as const satisfies readonly SettingsTabSearchPhrase[];
+
 /** Phrases resolved at runtime with i18n.getFixedT(lang, ns)(key). */
 export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTabSearchPhrase[]> = {
   basics: [
@@ -49,6 +60,20 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/ai-model', key: 'proxy.enableHint' },
   ],
 
+  worktrees: [
+    { ns: 'worktrees', key: 'settings.title' },
+    { ns: 'worktrees', key: 'settings.description' },
+    { ns: 'worktrees', key: 'settings.isolation.title' },
+    { ns: 'worktrees', key: 'settings.isolation.description' },
+    { ns: 'worktrees', key: 'settings.rootPath.label' },
+    { ns: 'worktrees', key: 'settings.branchPrefix.label' },
+    { ns: 'worktrees', key: 'settings.copyChanges.label' },
+    { ns: 'worktrees', key: 'settings.autoDelete.label' },
+    { ns: 'worktrees', key: 'settings.autoDeleteLimit.label' },
+    { ns: 'worktrees', key: 'management.title' },
+    { ns: 'worktrees', key: 'management.description' },
+  ],
+
   'archived-sessions': [
     { ns: 'common', key: 'nav.sessions.archivedSessions' },
     { ns: 'common', key: 'nav.sessions.noArchivedSessions' },
@@ -72,15 +97,15 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/session-config', key: 'features.workspaceSearch.enable' },
     { ns: 'settings/session-config', key: 'toolExecution.sectionTitle' },
     { ns: 'settings/session-config', key: 'toolExecution.sectionDescription' },
-    // { ns: 'settings/session-config', key: 'deferredToolLoading.sectionTitle' },
-    // { ns: 'settings/session-config', key: 'deferredToolLoading.sectionDescription' },
-    // { ns: 'settings/session-config', key: 'deferredToolLoading.warning' },
-    // { ns: 'settings/session-config', key: 'computerUse.sectionTitle' },
-    // { ns: 'settings/session-config', key: 'computerUse.sectionDescription' },
-    // { ns: 'settings/session-config', key: 'computerUse.enable' },
-    // { ns: 'settings/session-config', key: 'computerUse.enableDesc' },
-    // { ns: 'settings/session-config', key: 'browserControl.sectionTitle' },
-    // { ns: 'settings/session-config', key: 'browserControl.sectionDescription' },
+    { ns: 'settings/session-config', key: 'deferredToolLoading.sectionTitle' },
+    { ns: 'settings/session-config', key: 'deferredToolLoading.sectionDescription' },
+    { ns: 'settings/session-config', key: 'deferredToolLoading.warning' },
+    { ns: 'settings/session-config', key: 'computerUse.sectionTitle' },
+    { ns: 'settings/session-config', key: 'computerUse.sectionDescription' },
+    { ns: 'settings/session-config', key: 'computerUse.enable' },
+    { ns: 'settings/session-config', key: 'computerUse.enableDesc' },
+    { ns: 'settings/session-config', key: 'browserControl.sectionTitle' },
+    { ns: 'settings/session-config', key: 'browserControl.sectionDescription' },
     { ns: 'settings/agentic-tools', key: 'config.autoExecute' },
     { ns: 'settings/agentic-tools', key: 'config.autoExecuteDesc' },
     { ns: 'settings/agentic-tools', key: 'config.confirmTimeout' },
@@ -128,22 +153,25 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/mcp', key: 'section.serverList.description' },
   ],
 
-  // 'external-sources': [
-  //   { ns: 'settings/external-sources', key: 'title' },
-  //   { ns: 'settings/external-sources', key: 'subtitle' },
-  //   { ns: 'settings/external-sources', key: 'sources.title' },
-  //   { ns: 'settings/external-sources', key: 'sources.description' },
-  //   { ns: 'settings/external-sources', key: 'conflicts.title' },
-  //   { ns: 'settings/external-sources', key: 'conflicts.description' },
-  // ],
+  'external-sources': [
+    { ns: 'settings/external-sources', key: 'title' },
+    { ns: 'settings/external-sources', key: 'subtitle' },
+    { ns: 'settings/external-sources', key: 'sources.title' },
+    { ns: 'settings/external-sources', key: 'sources.description' },
+    { ns: 'settings/external-sources', key: 'conflicts.title' },
+    { ns: 'settings/external-sources', key: 'conflicts.description' },
+    ...HOOKS_SEARCH_CONTENT,
+  ],
 
-  // 'acp-agents': [
-  //   { ns: 'settings/acp-agents', key: 'title' },
-  //   { ns: 'settings/acp-agents', key: 'subtitle' },
-  //   { ns: 'settings/acp-agents', key: 'registry.title' },
-  //   { ns: 'settings/acp-agents', key: 'registry.description' },
-  //   { ns: 'settings/acp-agents', key: 'json.title' },
-  // ],
+  hooks: HOOKS_SEARCH_CONTENT,
+
+  'acp-agents': [
+    { ns: 'settings/acp-agents', key: 'title' },
+    { ns: 'settings/acp-agents', key: 'subtitle' },
+    { ns: 'settings/acp-agents', key: 'registry.title' },
+    { ns: 'settings/acp-agents', key: 'registry.description' },
+    { ns: 'settings/acp-agents', key: 'json.title' },
+  ],
 
   editor: [
     { ns: 'settings/editor', key: 'title' },
@@ -182,15 +210,15 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/quick-actions', key: 'sections.custom.title' },
   ],
 
-  // 'voice-input': [
-  //   { ns: 'settings/voice-input', key: 'title' },
-  //   { ns: 'settings/voice-input', key: 'subtitle' },
-  //   { ns: 'settings/voice-input', key: 'sections.composer' },
-  //   { ns: 'settings/voice-input', key: 'sections.model' },
-  //   { ns: 'settings/voice-input', key: 'composer.enabled.label' },
-  //   { ns: 'settings/voice-input', key: 'composer.language.label' },
-  //   { ns: 'settings/voice-input', key: 'model.download' },
-  // ],
+  'voice-input': [
+    { ns: 'settings/voice-input', key: 'title' },
+    { ns: 'settings/voice-input', key: 'subtitle' },
+    { ns: 'settings/voice-input', key: 'sections.composer' },
+    { ns: 'settings/voice-input', key: 'sections.model' },
+    { ns: 'settings/voice-input', key: 'composer.enabled.label' },
+    { ns: 'settings/voice-input', key: 'composer.language.label' },
+    { ns: 'settings/voice-input', key: 'model.download' },
+  ],
 
   // lsp: [ ... ], // nav entry temporarily hidden; omit from search index
 };

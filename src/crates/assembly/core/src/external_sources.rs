@@ -9,6 +9,25 @@ pub use bitfun_product_domains::external_integration_policy::{
     ExternalIntegrationPolicyScope, ExternalIntegrationPolicySnapshot,
     ExternalIntegrationPolicyStatus,
 };
+use bitfun_product_domains::external_source_control::{
+    derive_external_application_status_v2, ExternalApplicationConnectionStateV2,
+    ExternalApplicationControlActionV2, ExternalApplicationControlRequestV2,
+    ExternalApplicationControlResultV2, ExternalApplicationDefaultConnectionPolicyV2,
+    ExternalApplicationDesiredConnectionV2, ExternalApplicationDiscoveryStateV2,
+    ExternalApplicationHealthV2, ExternalApplicationHostCapabilitiesV2,
+    ExternalApplicationOperationOutcomeV2, ExternalApplicationOwnerGenerationV2,
+    ExternalApplicationPrimaryActionV2, ExternalApplicationRecoveryActionV2,
+    ExternalApplicationReviewCategoryCountV2, ExternalApplicationReviewItemKindV2,
+    ExternalApplicationReviewItemRefV2, ExternalApplicationReviewItemResultV2,
+    ExternalApplicationReviewItemV2, ExternalApplicationReviewPageRequestV2,
+    ExternalApplicationReviewPageV2, ExternalApplicationReviewRecommendationSummaryV2,
+    ExternalApplicationReviewSelectionBaselineV2, ExternalApplicationReviewSummaryV2,
+    ExternalApplicationRiskLevelV2, ExternalApplicationRiskSummaryV2,
+    ExternalApplicationSafetyCeilingV2, ExternalApplicationSnapshotV2,
+    ExternalApplicationSummaryV2, ExternalApplicationTargetScopeV2,
+    ExternalApplicationUserDecisionV2, EXTERNAL_APPLICATION_REVIEW_PAGE_MAX_ITEMS,
+    EXTERNAL_APPLICATION_SCHEMA_V2,
+};
 pub use bitfun_product_domains::external_source_control::{
     ExternalCapabilityKindV1, ExternalSourceControlActionV1, ExternalSourceControlRequestV1,
     ExternalSourceControlSnapshotV1, ExternalSourceRuntimeState, ExternalSourceSurfaceSnapshotV1,
@@ -28,13 +47,19 @@ pub use bitfun_product_domains::external_sources::{
     ExternalToolRuntimeKind, NativePromptCommandConflictProjection,
     NativePromptCommandConflictSnapshot, NativePromptCommandDescriptor,
     NativePromptCommandReconfirmationProjection, PromptCommandAvailability,
-    PromptCommandCatalogEntry, PromptCommandDefinition, SourceKey,
+    PromptCommandCatalogEntry, PromptCommandDefinition, PromptCommandExecutionTarget,
+    PromptCommandInvocationOutcome, PromptCommandShellReviewDecision, PromptCommandShellReviewMode,
+    PromptCommandShellReviewPlan, SourceKey,
 };
 pub use bitfun_product_domains::external_subagents::{
     ExternalSubagentActivationState, ExternalSubagentCompatibilityState, ExternalSubagentConflict,
-    ExternalSubagentConflictCandidate, ExternalSubagentSummary,
+    ExternalSubagentConflictCandidate, ExternalSubagentModelBindingGroup,
+    ExternalSubagentModelBindingMethod, ExternalSubagentModelBindingOption,
+    ExternalSubagentModelBindingTarget, ExternalSubagentModelProfileRequest,
+    ExternalSubagentModelRequest, ExternalSubagentSummary,
 };
 
+use crate::agentic::workspace::workspace_route_key;
 use crate::external_mcp::{
     reconcile_external_mcp_catalog, BitFunExternalMcpRuntime, ExternalMcpDecision,
     ExternalMcpDecisions, ExternalMcpProductState, ExternalMcpRuntimePort,
@@ -48,8 +73,8 @@ use crate::external_tools::{
     begin_external_tool_workspace_recovery, external_tool_workspace_requires_recovery,
     invalidate_external_tool_runtime_availability, merge_tool_state,
     project_external_tools_read_only, reconcile_external_tools, release_external_tool_workspace,
-    reset_external_tool_workspace_recovery_budget, workspace_route_key, ExternalToolDecisions,
-    ExternalToolProductState, TOOL_CONFLICT_RESELECTION_REQUIRED, UNRESOLVED_TOOL_CONFLICT_CHOICE,
+    reset_external_tool_workspace_recovery_budget, ExternalToolDecisions, ExternalToolProductState,
+    TOOL_CONFLICT_RESELECTION_REQUIRED, UNRESOLVED_TOOL_CONFLICT_CHOICE,
 };
 use crate::service::config::{subscribe_config_updates, ConfigUpdateEvent};
 use bitfun_claude_code_adapter::{
@@ -59,10 +84,16 @@ use bitfun_codex_adapter::{CodexMcpProvider, CodexSubagentProvider};
 use bitfun_external_sources::{
     DeferredDiscovery, ExternalMcpDiscoveryResult, ExternalSourceControlPlane,
     ExternalSourceCoordinator, ExternalSourceDiscoveryResult, ExternalSubagentDiscoveryResult,
-    ExternalToolDiscoveryResult,
+    ExternalToolDiscoveryResult, ExternalWorkspaceReferenceDiscoveryResult,
 };
 use bitfun_opencode_adapter::{
-    OpenCodeCommandProvider, OpenCodeMcpProvider, OpenCodeSubagentProvider, OpenCodeToolProvider,
+    OpenCodeCommandProvider, OpenCodeMcpProvider, OpenCodeSkillRootProvider,
+    OpenCodeSubagentProvider, OpenCodeToolProvider, OpenCodeWorkspaceReferenceProvider,
+};
+#[cfg(test)]
+use bitfun_opencode_adapter::{
+    OpenCodeCommandProviderOptions, OpenCodeMcpProviderOptions, OpenCodeSkillRootProviderOptions,
+    OpenCodeSubagentProviderOptions,
 };
 use bitfun_product_domains::external_integration_policy::{
     external_integration_policy_snapshot, incompatible_external_integration_policy_snapshot,
@@ -71,11 +102,18 @@ use bitfun_product_domains::external_integration_policy::{
     EXTERNAL_INTEGRATION_POLICY_SCHEMA_MAJOR,
 };
 use bitfun_product_domains::external_sources::{
-    ExecutionDomainId, ExternalMcpRevisionKey, ExternalMcpSourceProvider, ExternalSourceContext,
-    ExternalSourceScope, ExternalToolSourceProvider, PromptCommandSourceProvider,
+    ExecutionDomainId, ExternalMcpRevisionKey, ExternalMcpSourceProvider, ExternalMcpStaticStatus,
+    ExternalSourceContext, ExternalSourceScope, ExternalToolSourceProvider, PromptCommandConflict,
+    PromptCommandExpansion, PromptCommandShellInvocation, PromptCommandShellPreference,
+    PromptCommandSourceProvider,
 };
 use bitfun_product_domains::external_subagents::ExternalSubagentSourceProvider;
+use bitfun_product_domains::workspace_references::{
+    ExternalWorkspaceReferenceSourceProvider, WorkspaceReferenceCatalogEntry,
+    WorkspaceReferenceOrigin, WorkspaceReferenceSnapshot,
+};
 use bitfun_services_core::json_store::JsonFileStore;
+use bitfun_services_core::workspace_text::read_workspace_relative_text_bounded;
 use bitfun_services_integrations::file_watch::{FileWatchService, FileWatcherConfig};
 use dashmap::{mapref::entry::Entry, DashMap};
 use futures::future::join_all;
@@ -86,7 +124,15 @@ use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex, MutexGuard, OnceLock, Weak};
+use terminal_core::exec::{ExecControlAction, ExecControlOrigin, ExecControlRequest};
+use terminal_core::{
+    resolve_local_exec_shell_without_probe, ExecProcessManager, LocalExecCommandRequest,
+    ShellDetector, ShellType,
+};
 use tokio::sync::broadcast;
+use tool_runtime::exec_command::{
+    exec_command_argv_for_isolated_shell, exec_command_noninteractive_env, ExecCommandShellKind,
+};
 
 const PROVIDER_DISCOVERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 const EXTERNAL_SOURCE_PREFERENCES_FILE: &str = "external-sources.json";
@@ -98,7 +144,536 @@ pub const EXTERNAL_CAPABILITY_COMMAND: &str = "command";
 pub const EXTERNAL_CAPABILITY_TOOL: &str = "tool";
 pub const EXTERNAL_CAPABILITY_SUBAGENT: &str = "subagent";
 pub const EXTERNAL_CAPABILITY_MCP: &str = "mcp";
+pub const EXTERNAL_CAPABILITY_REFERENCE: &str = "reference";
 const EXTERNAL_ADAPTER_CONTRACT_MAJOR: u32 = 1;
+const EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION: u32 = 1;
+const MAX_PROMPT_COMMAND_FILE_REFERENCES: usize = 8;
+const MAX_PROMPT_COMMAND_FILE_BYTES: usize = 64 * 1024;
+const MAX_PROMPT_COMMAND_TOTAL_FILE_BYTES: usize = 128 * 1024;
+const MAX_EXPANDED_PROMPT_COMMAND_BYTES: usize = 1024 * 1024;
+const PROMPT_COMMAND_SHELL_REVIEW_SCHEMA_VERSION: u32 = 1;
+const MAX_PROMPT_COMMAND_SHELL_INVOCATIONS: usize = 8;
+const MAX_PROMPT_COMMAND_SHELL_COMMAND_BYTES: usize = 64 * 1024;
+const MAX_PROMPT_COMMAND_SHELL_TOTAL_BYTES: usize = 128 * 1024;
+const MAX_PROMPT_COMMAND_SHELL_OUTPUT_CHARS: usize = 256 * 1024;
+const PROMPT_COMMAND_SHELL_TIMEOUT_MS: u64 = 30_000;
+const PROMPT_COMMAND_SHELL_KILL_YIELD_MS: u64 = 5_000;
+const MAX_APPROVED_PROMPT_COMMAND_SHELL_PLANS: usize = 512;
+/// Awareness records are tiny and bounded by the number of registered
+/// ecosystems, but the cap keeps a corrupted or hostile file from growing
+/// without limit.
+const MAX_ACKNOWLEDGED_ECOSYSTEMS: usize = 256;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ResolvedPromptCommandShell {
+    display_name: String,
+    path: PathBuf,
+    kind: ExecCommandShellKind,
+}
+
+#[derive(Debug, Clone)]
+struct PreparedPromptCommandShellPlan {
+    expansion: PromptCommandExpansion,
+    invocations: Vec<PromptCommandShellInvocation>,
+    working_directory: PathBuf,
+    resolved_shell: ResolvedPromptCommandShell,
+    review: PromptCommandShellReviewPlan,
+}
+
+fn prepare_prompt_command_shell_plan(
+    expansion: PromptCommandExpansion,
+    source_display_name: &str,
+    execution_domain_id: &str,
+    candidate_id: &str,
+    content_version: &str,
+    preference_revision: u64,
+    resolved_shell: ResolvedPromptCommandShell,
+) -> Result<PreparedPromptCommandShellPlan, String> {
+    let shell = expansion
+        .shell
+        .as_ref()
+        .ok_or_else(|| "prompt command does not contain shell directives".to_string())?;
+    if !shell.working_directory.is_absolute() {
+        return Err("prompt command shell working directory must be absolute".to_string());
+    }
+    if shell.invocations.is_empty()
+        || shell.invocations.len() > MAX_PROMPT_COMMAND_SHELL_INVOCATIONS
+    {
+        return Err(format!(
+            "prompt commands may contain at most {MAX_PROMPT_COMMAND_SHELL_INVOCATIONS} shell directives"
+        ));
+    }
+    let mut previous_end = 0usize;
+    let mut total_bytes = 0usize;
+    for invocation in &shell.invocations {
+        let directive = expansion
+            .content
+            .get(invocation.range_start..invocation.range_end)
+            .ok_or_else(|| "prompt command shell directive range is invalid".to_string())?;
+        if invocation.range_start < previous_end
+            || !directive.starts_with("!`")
+            || !directive.ends_with('`')
+            || directive.get(2..directive.len().saturating_sub(1))
+                != Some(invocation.command.as_str())
+        {
+            return Err("prompt command shell directive range is inconsistent".to_string());
+        }
+        if invocation.command.len() > MAX_PROMPT_COMMAND_SHELL_COMMAND_BYTES {
+            return Err(format!(
+                "a prompt command shell directive exceeds the {MAX_PROMPT_COMMAND_SHELL_COMMAND_BYTES} byte limit"
+            ));
+        }
+        total_bytes = total_bytes
+            .checked_add(invocation.command.len())
+            .ok_or_else(|| {
+                "prompt command shell directives exceed the total byte limit".to_string()
+            })?;
+        previous_end = invocation.range_end;
+    }
+    if total_bytes > MAX_PROMPT_COMMAND_SHELL_TOTAL_BYTES {
+        return Err(format!(
+            "prompt command shell directives exceed the {MAX_PROMPT_COMMAND_SHELL_TOTAL_BYTES} byte total limit"
+        ));
+    }
+
+    let plan_fingerprint = prompt_command_shell_plan_fingerprint(
+        execution_domain_id,
+        candidate_id,
+        content_version,
+        &shell.working_directory,
+        &resolved_shell,
+        &shell.invocations,
+    );
+    let review = PromptCommandShellReviewPlan {
+        schema_version: PROMPT_COMMAND_SHELL_REVIEW_SCHEMA_VERSION,
+        plan_fingerprint,
+        source_display_name: source_display_name.to_string(),
+        working_directory: shell.working_directory.to_string_lossy().to_string(),
+        shell_display_name: resolved_shell.display_name.clone(),
+        shell_executable: resolved_shell
+            .path
+            .to_str()
+            .ok_or_else(|| "prompt command shell executable path is not valid Unicode".to_string())?
+            .to_string(),
+        commands: shell
+            .invocations
+            .iter()
+            .map(|invocation| invocation.command.clone())
+            .collect(),
+        can_remember: shell
+            .invocations
+            .iter()
+            .all(|invocation| invocation.can_remember),
+        preference_revision,
+    };
+    Ok(PreparedPromptCommandShellPlan {
+        invocations: shell.invocations.clone(),
+        working_directory: shell.working_directory.clone(),
+        expansion,
+        resolved_shell,
+        review,
+    })
+}
+
+fn prompt_command_shell_plan_fingerprint(
+    execution_domain_id: &str,
+    candidate_id: &str,
+    content_version: &str,
+    working_directory: &Path,
+    shell: &ResolvedPromptCommandShell,
+    invocations: &[PromptCommandShellInvocation],
+) -> String {
+    let mut hasher = Sha256::new();
+    for part in [
+        PROMPT_COMMAND_SHELL_REVIEW_SCHEMA_VERSION.to_string(),
+        execution_domain_id.to_string(),
+        candidate_id.to_string(),
+        content_version.to_string(),
+        prompt_command_shell_kind_id(&shell.kind),
+    ] {
+        update_prompt_command_shell_fingerprint(&mut hasher, part.as_bytes());
+    }
+    update_prompt_command_shell_fingerprint(
+        &mut hasher,
+        &prompt_command_shell_path_bytes(working_directory),
+    );
+    update_prompt_command_shell_fingerprint(
+        &mut hasher,
+        &prompt_command_shell_path_bytes(&shell.path),
+    );
+    for invocation in invocations {
+        update_prompt_command_shell_fingerprint(&mut hasher, invocation.command.as_bytes());
+    }
+    format!("sha256:{}", hex::encode(hasher.finalize()))
+}
+
+fn update_prompt_command_shell_fingerprint(hasher: &mut Sha256, value: &[u8]) {
+    hasher.update((value.len() as u64).to_be_bytes());
+    hasher.update(value);
+}
+
+fn prompt_command_shell_path_bytes(path: &Path) -> Vec<u8> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        return path.as_os_str().as_bytes().to_vec();
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        return path
+            .as_os_str()
+            .encode_wide()
+            .flat_map(u16::to_le_bytes)
+            .collect();
+    }
+    #[cfg(not(any(unix, windows)))]
+    path.to_string_lossy().as_bytes().to_vec()
+}
+
+fn prompt_command_shell_kind_id(kind: &ExecCommandShellKind) -> String {
+    match kind {
+        ExecCommandShellKind::Bash => "bash".to_string(),
+        ExecCommandShellKind::Zsh => "zsh".to_string(),
+        ExecCommandShellKind::Fish => "fish".to_string(),
+        ExecCommandShellKind::PowerShell => "powershell".to_string(),
+        ExecCommandShellKind::PowerShellCore => "powershell_core".to_string(),
+        ExecCommandShellKind::Cmd => "cmd".to_string(),
+        ExecCommandShellKind::Sh => "sh".to_string(),
+        ExecCommandShellKind::Ksh => "ksh".to_string(),
+        ExecCommandShellKind::Csh => "csh".to_string(),
+        ExecCommandShellKind::Custom(name) => format!("custom:{name}"),
+    }
+}
+
+fn apply_prompt_command_shell_outputs(
+    content: &str,
+    invocations: &[PromptCommandShellInvocation],
+    outputs: &[String],
+) -> Result<String, String> {
+    if invocations.len() != outputs.len() {
+        return Err("prompt command shell output count is inconsistent".to_string());
+    }
+    let output_bytes = outputs.iter().map(String::len).sum::<usize>();
+    let removed_bytes = invocations
+        .iter()
+        .map(|invocation| invocation.range_end.saturating_sub(invocation.range_start))
+        .sum::<usize>();
+    let capacity = content
+        .len()
+        .saturating_sub(removed_bytes)
+        .saturating_add(output_bytes);
+    if capacity > MAX_EXPANDED_PROMPT_COMMAND_BYTES {
+        return Err(format!(
+            "expanded external prompt command exceeds the {MAX_EXPANDED_PROMPT_COMMAND_BYTES} byte limit"
+        ));
+    }
+    let mut expanded = String::with_capacity(capacity);
+    let mut cursor = 0usize;
+    for (invocation, output) in invocations.iter().zip(outputs) {
+        let prefix = content
+            .get(cursor..invocation.range_start)
+            .ok_or_else(|| "prompt command shell directive range is invalid".to_string())?;
+        expanded.push_str(prefix);
+        expanded.push_str(output);
+        cursor = invocation.range_end;
+    }
+    expanded.push_str(
+        content
+            .get(cursor..)
+            .ok_or_else(|| "prompt command shell directive range is invalid".to_string())?,
+    );
+    Ok(expanded)
+}
+
+fn resolve_prompt_command_shell(
+    preference: &PromptCommandShellPreference,
+) -> Result<ResolvedPromptCommandShell, String> {
+    let resolved = match preference {
+        PromptCommandShellPreference::HostDefault => {
+            let shell = resolve_local_exec_shell_without_probe(None);
+            return finalize_resolved_prompt_command_shell(
+                shell.display_name,
+                shell.path,
+                shell.shell_type,
+            );
+        }
+        PromptCommandShellPreference::Preferred { executable } => {
+            if let Some(shell) = ShellDetector::resolve_configured_shell_without_probe(executable) {
+                return finalize_resolved_prompt_command_shell(
+                    shell.display_name,
+                    shell.path,
+                    shell.shell_type,
+                );
+            }
+            let fallback = resolve_local_exec_shell_without_probe(None);
+            return finalize_resolved_prompt_command_shell(
+                fallback.display_name,
+                fallback.path,
+                fallback.shell_type,
+            );
+        }
+        PromptCommandShellPreference::Required { executable } => {
+            ShellDetector::resolve_configured_shell_without_probe(executable).ok_or_else(|| {
+                format!("required prompt command shell '{executable}' is unavailable")
+            })?
+        }
+        PromptCommandShellPreference::RequiredOneOf { executables } => {
+            let mut resolved = None;
+            for executable in executables {
+                if let Some(shell) =
+                    ShellDetector::resolve_configured_shell_without_probe(executable)
+                {
+                    resolved = Some(shell);
+                    break;
+                }
+            }
+            resolved.ok_or_else(|| {
+                "none of the required prompt command shell candidates are available".to_string()
+            })?
+        }
+    };
+    finalize_resolved_prompt_command_shell(
+        resolved.display_name,
+        resolved.path,
+        resolved.shell_type,
+    )
+}
+
+fn finalize_resolved_prompt_command_shell(
+    display_name: String,
+    path: PathBuf,
+    shell_type: ShellType,
+) -> Result<ResolvedPromptCommandShell, String> {
+    let path = dunce::canonicalize(&path)
+        .map_err(|_| "prompt command shell executable is unavailable".to_string())?;
+    if path.to_str().is_none() {
+        return Err("prompt command shell executable path is not valid Unicode".to_string());
+    }
+    Ok(ResolvedPromptCommandShell {
+        display_name,
+        path,
+        kind: prompt_command_shell_kind(&shell_type),
+    })
+}
+
+fn prompt_command_shell_kind(shell_type: &ShellType) -> ExecCommandShellKind {
+    match shell_type {
+        ShellType::Bash => ExecCommandShellKind::Bash,
+        ShellType::Zsh => ExecCommandShellKind::Zsh,
+        ShellType::Fish => ExecCommandShellKind::Fish,
+        ShellType::PowerShell => ExecCommandShellKind::PowerShell,
+        ShellType::PowerShellCore => ExecCommandShellKind::PowerShellCore,
+        ShellType::Cmd => ExecCommandShellKind::Cmd,
+        ShellType::Sh => ExecCommandShellKind::Sh,
+        ShellType::Ksh => ExecCommandShellKind::Ksh,
+        ShellType::Csh => ExecCommandShellKind::Csh,
+        ShellType::Custom(name) => ExecCommandShellKind::Custom(name.clone()),
+    }
+}
+
+async fn execute_prompt_command_shell_plan(
+    plan: PreparedPromptCommandShellPlan,
+) -> Result<PromptCommandExpansion, String> {
+    if !plan.working_directory.is_dir() {
+        return Err("prompt command shell working directory is unavailable".to_string());
+    }
+    let manager = Arc::new(ExecProcessManager::default());
+    let tasks = plan
+        .invocations
+        .iter()
+        .enumerate()
+        .map(|(index, invocation)| {
+            let manager = Arc::clone(&manager);
+            let argv = exec_command_argv_for_isolated_shell(
+                plan.resolved_shell
+                    .path
+                    .to_str()
+                    .expect("prepared prompt command shell paths are valid Unicode")
+                    .to_string(),
+                plan.resolved_shell.kind.clone(),
+                &invocation.command,
+            );
+            let cwd = plan.working_directory.clone();
+            async move {
+                let response = manager
+                    .exec_command_stdout(LocalExecCommandRequest {
+                        argv,
+                        cwd,
+                        env: exec_command_noninteractive_env(),
+                        tty: false,
+                        yield_time_ms: Some(PROMPT_COMMAND_SHELL_TIMEOUT_MS),
+                        max_output_chars: Some(MAX_PROMPT_COMMAND_SHELL_OUTPUT_CHARS),
+                        lifecycle_tx: None,
+                        output_capture_tx: None,
+                    })
+                    .await
+                    .map_err(|error| {
+                        format!(
+                            "prompt command shell directive {} failed to start: {error}",
+                            index + 1
+                        )
+                    })?;
+                if let Some(session_id) = response.session_id {
+                    let _ = manager
+                        .control_session(ExecControlRequest {
+                            session_id,
+                            action: ExecControlAction::Kill,
+                            origin: ExecControlOrigin::OutOfBand,
+                            yield_time_ms: Some(PROMPT_COMMAND_SHELL_KILL_YIELD_MS),
+                            max_output_chars: Some(MAX_PROMPT_COMMAND_SHELL_OUTPUT_CHARS),
+                        })
+                        .await;
+                    if response.original_output_chars >= MAX_PROMPT_COMMAND_SHELL_OUTPUT_CHARS {
+                        return Err(format!(
+                            "prompt command shell directive {} exceeded the output limit",
+                            index + 1
+                        ));
+                    }
+                    return Err(format!(
+                        "prompt command shell directive {} exceeded the {} second timeout",
+                        index + 1,
+                        PROMPT_COMMAND_SHELL_TIMEOUT_MS / 1000
+                    ));
+                }
+                if response.original_output_chars > MAX_PROMPT_COMMAND_SHELL_OUTPUT_CHARS {
+                    return Err(format!(
+                        "prompt command shell directive {} exceeded the output limit",
+                        index + 1
+                    ));
+                }
+                Ok(response.output)
+            }
+        })
+        .collect::<Vec<_>>();
+    let outputs = join_all(tasks)
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
+    let content =
+        apply_prompt_command_shell_outputs(&plan.expansion.content, &plan.invocations, &outputs)?;
+    Ok(PromptCommandExpansion {
+        content,
+        workspace_file_references: plan.expansion.workspace_file_references,
+        shell: None,
+    })
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct LocalConfiguredSkillRootContribution {
+    pub path: PathBuf,
+    pub scope: ExternalSourceScope,
+    pub precedence: usize,
+}
+
+pub(crate) fn opencode_configured_skill_roots(
+    workspace_root: Option<&Path>,
+) -> Vec<LocalConfiguredSkillRootContribution> {
+    opencode_configured_skill_roots_with_provider(
+        workspace_root,
+        &OpenCodeSkillRootProvider::default(),
+    )
+}
+
+fn opencode_configured_skill_roots_with_provider(
+    workspace_root: Option<&Path>,
+    provider: &OpenCodeSkillRootProvider,
+) -> Vec<LocalConfiguredSkillRootContribution> {
+    provider
+        .discover(workspace_root)
+        .into_iter()
+        .map(|root| LocalConfiguredSkillRootContribution {
+            path: root.path,
+            scope: root.scope,
+            precedence: root.precedence,
+        })
+        .collect()
+}
+
+async fn finalize_prompt_command_expansion(
+    workspace_root: Option<&Path>,
+    expansion: PromptCommandExpansion,
+) -> Result<ExpandedPromptCommand, String> {
+    if expansion.content.len() > MAX_EXPANDED_PROMPT_COMMAND_BYTES {
+        return Err(format!(
+            "expanded external prompt command exceeds the {MAX_EXPANDED_PROMPT_COMMAND_BYTES} byte limit"
+        ));
+    }
+    if expansion.workspace_file_references.is_empty() {
+        return Ok(ExpandedPromptCommand {
+            content: expansion.content,
+        });
+    }
+
+    let workspace_root = workspace_root.ok_or_else(|| {
+        "external prompt command file reference expansion requires a local workspace".to_string()
+    })?;
+    let mut seen = BTreeSet::new();
+    let references = expansion
+        .workspace_file_references
+        .into_iter()
+        .filter(|reference| seen.insert(reference.clone()))
+        .collect::<Vec<_>>();
+    if references.len() > MAX_PROMPT_COMMAND_FILE_REFERENCES {
+        return Err(format!(
+            "external prompt commands may reference at most {MAX_PROMPT_COMMAND_FILE_REFERENCES} workspace files"
+        ));
+    }
+
+    let mut total_file_bytes = 0usize;
+    let mut files = Vec::with_capacity(references.len());
+    for reference in references {
+        let file = read_workspace_relative_text_bounded(
+            workspace_root,
+            &reference,
+            MAX_PROMPT_COMMAND_FILE_BYTES,
+        )
+        .await
+        .map_err(|error| {
+            format!("failed to read referenced workspace file '{reference}': {error}")
+        })?;
+        total_file_bytes = total_file_bytes
+            .checked_add(file.byte_len)
+            .ok_or_else(|| "referenced workspace files exceed the total byte limit".to_string())?;
+        if total_file_bytes > MAX_PROMPT_COMMAND_TOTAL_FILE_BYTES {
+            return Err(format!(
+                "referenced workspace files exceed the {MAX_PROMPT_COMMAND_TOTAL_FILE_BYTES} byte total limit"
+            ));
+        }
+        files.push(file);
+    }
+
+    let mut content = expansion.content;
+    content.push_str("\n\n## Referenced workspace files");
+    for file in files {
+        let fence = markdown_code_fence(&file.content);
+        content.push_str("\n\n### `");
+        content.push_str(&file.relative_path);
+        content.push_str("`\n\n");
+        content.push_str(&fence);
+        content.push_str("text\n");
+        content.push_str(&file.content);
+        if !file.content.ends_with('\n') {
+            content.push('\n');
+        }
+        content.push_str(&fence);
+    }
+    if content.len() > MAX_EXPANDED_PROMPT_COMMAND_BYTES {
+        return Err(format!(
+            "expanded external prompt command exceeds the {MAX_EXPANDED_PROMPT_COMMAND_BYTES} byte limit"
+        ));
+    }
+    Ok(ExpandedPromptCommand { content })
+}
+
+fn markdown_code_fence(content: &str) -> String {
+    let longest_run = content
+        .split(|character| character != '`')
+        .map(str::len)
+        .max()
+        .unwrap_or_default();
+    "`".repeat(longest_run.saturating_add(1).max(3))
+}
 
 fn external_capability_descriptor(
     capability_id: &str,
@@ -118,12 +693,15 @@ fn external_capability_descriptor(
 #[derive(Clone)]
 struct ExternalEcosystemRegistration {
     descriptor: ExternalIntegrationEcosystemDescriptor,
+    default_connection_policy: ExternalApplicationDefaultConnectionPolicyV2,
+    default_connection_reason: &'static str,
     contract_major: u32,
     upstream_format_revision: &'static str,
     command_provider: Option<Arc<dyn PromptCommandSourceProvider>>,
     tool_provider: Option<Arc<dyn ExternalToolSourceProvider>>,
     subagent_provider: Option<Arc<dyn ExternalSubagentSourceProvider>>,
     mcp_provider: Option<Arc<dyn ExternalMcpSourceProvider>>,
+    workspace_reference_provider: Option<Arc<dyn ExternalWorkspaceReferenceSourceProvider>>,
 }
 
 impl ExternalEcosystemRegistration {
@@ -163,6 +741,12 @@ impl ExternalEcosystemRegistration {
             (
                 EXTERNAL_CAPABILITY_MCP,
                 self.mcp_provider
+                    .as_ref()
+                    .map(|provider| provider.identity().ecosystem_id),
+            ),
+            (
+                EXTERNAL_CAPABILITY_REFERENCE,
+                self.workspace_reference_provider
                     .as_ref()
                     .map(|provider| provider.identity().ecosystem_id),
             ),
@@ -215,14 +799,24 @@ fn default_external_integration_registry() -> Vec<ExternalEcosystemRegistration>
                         ExternalIntegrationAccess::AskBeforeUse,
                         ExternalIntegrationAccess::AskBeforeUse,
                     ),
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_REFERENCE,
+                        ExternalIntegrationAccess::Auto,
+                        ExternalIntegrationAccess::Auto,
+                    ),
                 ],
             },
+            default_connection_policy: ExternalApplicationDefaultConnectionPolicyV2::Connect,
+            default_connection_reason: "mature_declarative_support",
             contract_major: EXTERNAL_ADAPTER_CONTRACT_MAJOR,
             upstream_format_revision: "opencode-config-v1",
             command_provider: Some(Arc::new(OpenCodeCommandProvider::default())),
             tool_provider: Some(Arc::new(OpenCodeToolProvider::default())),
             subagent_provider: Some(Arc::new(OpenCodeSubagentProvider::default())),
             mcp_provider: Some(Arc::new(OpenCodeMcpProvider::default())),
+            workspace_reference_provider: Some(Arc::new(
+                OpenCodeWorkspaceReferenceProvider::default(),
+            )),
         },
         ExternalEcosystemRegistration {
             descriptor: ExternalIntegrationEcosystemDescriptor {
@@ -248,12 +842,15 @@ fn default_external_integration_registry() -> Vec<ExternalEcosystemRegistration>
                     ),
                 ],
             },
+            default_connection_policy: ExternalApplicationDefaultConnectionPolicyV2::DiscoverOnly,
+            default_connection_reason: "explicit_user_connection_required",
             contract_major: EXTERNAL_ADAPTER_CONTRACT_MAJOR,
             upstream_format_revision: "claude-code-config-v1",
             command_provider: Some(Arc::new(ClaudeCodeCommandProvider::default())),
             tool_provider: None,
             subagent_provider: Some(Arc::new(ClaudeCodeSubagentProvider::default())),
             mcp_provider: Some(Arc::new(ClaudeCodeMcpProvider::default())),
+            workspace_reference_provider: None,
         },
         ExternalEcosystemRegistration {
             descriptor: ExternalIntegrationEcosystemDescriptor {
@@ -274,12 +871,15 @@ fn default_external_integration_registry() -> Vec<ExternalEcosystemRegistration>
                     ),
                 ],
             },
+            default_connection_policy: ExternalApplicationDefaultConnectionPolicyV2::DiscoverOnly,
+            default_connection_reason: "explicit_user_connection_required",
             contract_major: EXTERNAL_ADAPTER_CONTRACT_MAJOR,
             upstream_format_revision: "codex-config-v1",
             command_provider: None,
             tool_provider: None,
             subagent_provider: Some(Arc::new(CodexSubagentProvider::default())),
             mcp_provider: Some(Arc::new(CodexMcpProvider::default())),
+            workspace_reference_provider: None,
         },
     ]
 }
@@ -308,9 +908,49 @@ fn default_external_integration_ecosystems() -> Vec<ExternalIntegrationEcosystem
 /// resolve this identity once; capability owners never hard-code it.
 const LEGACY_LOCAL_EXECUTION_DOMAIN_ID: &str = "local-user";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum ExternalSourcesConfigOrigin {
+    FreshV2,
+    LegacyMigration,
+    IncompatibleReset,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum StoredExternalApplicationDesiredConnection {
+    Connected,
+    Disconnected,
+    Deferred,
+    NeedsReview,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum StoredExternalApplicationDecisionOrigin {
+    User,
+    LegacySafety,
+    LegacyActive,
+    LegacyNeedsReview,
+    IncompatibleReset,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct StoredExternalApplicationConnectionDecision {
+    desired_connection: StoredExternalApplicationDesiredConnection,
+    decision_origin: StoredExternalApplicationDecisionOrigin,
+}
+
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 struct ExternalSourcesConfig {
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    connection_schema_migration_version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    config_origin: Option<ExternalSourcesConfigOrigin>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    application_connections: BTreeMap<String, StoredExternalApplicationConnectionDecision>,
     #[serde(default)]
     integration_policy: StoredExternalIntegrationPolicy,
     /// Bounded recovery history for a policy document written by an
@@ -332,6 +972,8 @@ struct ExternalSourcesConfig {
     conflicted_candidate_ids: BTreeSet<String>,
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     approved_tool_targets: BTreeSet<String>,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    approved_prompt_command_shell_plans: BTreeSet<String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     declined_tool_decisions: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -347,9 +989,22 @@ struct ExternalSourcesConfig {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     subagent_conflict_lineage_current_keys: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    subagent_model_bindings: BTreeMap<String, ExternalSubagentModelBindingTarget>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     mcp_server_decisions: BTreeMap<String, ExternalMcpDecision>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     mcp_conflict_choices: BTreeMap<String, String>,
+    /// Ecosystems the user has already been told about, as
+    /// `execution_domain_id` + unit separator + `ecosystem_id`.
+    ///
+    /// This records awareness, not a policy decision: it only suppresses the
+    /// "a new external application was found" hint. It deliberately carries no
+    /// content version, because discovering more commands inside an ecosystem
+    /// the user already knows about is not new information. Awareness is also
+    /// user-wide rather than per workspace, so opening another project does not
+    /// re-announce the same application.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    acknowledged_ecosystems: BTreeSet<String>,
     /// Preserves fields written by a newer preferences schema.
     #[serde(flatten, default, skip_serializing_if = "BTreeMap::is_empty")]
     extensions: BTreeMap<String, serde_json::Value>,
@@ -359,6 +1014,12 @@ impl std::fmt::Debug for ExternalSourcesConfig {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("ExternalSourcesConfig")
+            .field(
+                "connection_schema_migration_version",
+                &self.connection_schema_migration_version,
+            )
+            .field("config_origin", &self.config_origin)
+            .field("application_connections", &self.application_connections)
             .field("integration_policy", &self.integration_policy)
             .field(
                 "integration_policy_backups",
@@ -376,6 +1037,10 @@ impl std::fmt::Debug for ExternalSourcesConfig {
             )
             .field("conflicted_candidate_ids", &self.conflicted_candidate_ids)
             .field("approved_tool_targets", &self.approved_tool_targets)
+            .field(
+                "approved_prompt_command_shell_plans",
+                &self.approved_prompt_command_shell_plans.len(),
+            )
             .field("declined_tool_decisions", &self.declined_tool_decisions)
             .field("tool_conflict_choices", &self.tool_conflict_choices)
             .field("preference_revision", &self.preference_revision)
@@ -392,8 +1057,10 @@ impl std::fmt::Debug for ExternalSourcesConfig {
                 "subagent_conflict_lineage_current_keys",
                 &self.subagent_conflict_lineage_current_keys,
             )
+            .field("subagent_model_bindings", &self.subagent_model_bindings)
             .field("mcp_server_decisions", &self.mcp_server_decisions)
             .field("mcp_conflict_choices", &self.mcp_conflict_choices)
+            .field("acknowledged_ecosystems", &self.acknowledged_ecosystems)
             .field("extensions", &self.extensions)
             .finish()
     }
@@ -520,6 +1187,348 @@ impl ExternalSourcePreferenceStore {
             .await
             .map_err(|error| error.to_string())
     }
+
+    async fn ensure_application_connection_schema(
+        &self,
+        _execution_domain_id: &str,
+    ) -> Result<ExternalSourcesConfig, String> {
+        let json_store = JsonFileStore;
+        let _lock = json_store
+            .acquire_cross_process_lock(&self.path)
+            .await
+            .map_err(|error| error.to_string())?;
+        let existing = json_store
+            .read_optional::<ExternalSourcesConfig>(&self.path)
+            .await
+            .map_err(|error| error.to_string())?;
+        let was_missing = existing.is_none();
+        let mut changed = was_missing;
+
+        let mut config = match existing {
+            Some(config) => config,
+            None => {
+                let mut config = ExternalSourcesConfig::default();
+                apply_fresh_v2_product_defaults(&mut config)?;
+                config.config_origin = Some(ExternalSourcesConfigOrigin::FreshV2);
+                config
+            }
+        };
+        if config.integration_policy.known().is_none() {
+            return Err(format!(
+                "policy_unavailable: external integration policy schema major {} is not supported",
+                config.integration_policy.schema_major()
+            ));
+        }
+        if config.connection_schema_migration_version
+            > EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION
+        {
+            return Err(format!(
+                "policy_unavailable: external application connection schema version {} is not supported",
+                config.connection_schema_migration_version
+            ));
+        }
+        if config.connection_schema_migration_version
+            < EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION
+        {
+            if !was_missing && config.config_origin != Some(ExternalSourcesConfigOrigin::FreshV2) {
+                migrate_legacy_application_connections(&mut config, _execution_domain_id)?;
+            }
+            config.connection_schema_migration_version =
+                EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION;
+            config
+                .config_origin
+                .get_or_insert(ExternalSourcesConfigOrigin::LegacyMigration);
+            changed = true;
+        }
+        changed |= ensure_mcp_revision_secret(&mut config);
+        if changed {
+            json_store
+                .write_atomic_strict(&self.path, &config)
+                .await
+                .map_err(|error| error.to_string())?;
+        }
+        Ok(config)
+    }
+}
+
+fn is_zero_u32(value: &u32) -> bool {
+    *value == 0
+}
+
+fn apply_fresh_v2_product_defaults(config: &mut ExternalSourcesConfig) -> Result<(), String> {
+    let policy = config.integration_policy.known_mut().ok_or_else(|| {
+        "policy_unavailable: external integration policy is incompatible".to_string()
+    })?;
+    policy.user_defaults.enabled = true;
+    for registration in default_external_integration_registry() {
+        let mode = match registration.default_connection_policy {
+            ExternalApplicationDefaultConnectionPolicyV2::Connect => {
+                ExternalIntegrationMode::Recommended
+            }
+            ExternalApplicationDefaultConnectionPolicyV2::DiscoverOnly
+            | ExternalApplicationDefaultConnectionPolicyV2::Unsupported => {
+                ExternalIntegrationMode::DiscoverOnly
+            }
+        };
+        policy
+            .user_defaults
+            .ecosystems
+            .entry(registration.descriptor.ecosystem_id)
+            .or_default()
+            .mode = mode;
+    }
+    Ok(())
+}
+
+fn external_application_connection_key(
+    execution_domain_id: &str,
+    application_id: &str,
+    workspace_scope_id: Option<&str>,
+) -> String {
+    format!(
+        "{execution_domain_id}\u{1f}{application_id}\u{1f}{}",
+        workspace_scope_id.unwrap_or("user_default")
+    )
+}
+
+fn migrate_legacy_application_connections(
+    config: &mut ExternalSourcesConfig,
+    execution_domain_id: &str,
+) -> Result<(), String> {
+    let document = config.integration_policy.known().ok_or_else(|| {
+        "policy_unavailable: external integration policy is incompatible".to_string()
+    })?;
+    let workspace_scope_ids = document
+        .workspace_overrides
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
+    let reset_origin = config.config_origin == Some(ExternalSourcesConfigOrigin::IncompatibleReset);
+    let mut decisions = BTreeMap::new();
+    for workspace_scope_id in std::iter::once(None).chain(
+        workspace_scope_ids
+            .iter()
+            .map(|workspace_scope_id| Some(workspace_scope_id.as_str())),
+    ) {
+        let policy = external_integration_policy_snapshot(
+            document,
+            workspace_scope_id,
+            default_external_integration_ecosystems(),
+        )
+        .map_err(|error| format!("policy_unavailable: {error}"))?;
+        for descriptor in &policy.registered_ecosystems {
+            let (desired_connection, decision_origin) = if reset_origin {
+                (
+                    StoredExternalApplicationDesiredConnection::Disconnected,
+                    StoredExternalApplicationDecisionOrigin::IncompatibleReset,
+                )
+            } else {
+                legacy_application_connection_decision(&policy.effective, &descriptor.ecosystem_id)
+            };
+            decisions.insert(
+                external_application_connection_key(
+                    execution_domain_id,
+                    descriptor.ecosystem_id.as_str(),
+                    workspace_scope_id,
+                ),
+                StoredExternalApplicationConnectionDecision {
+                    desired_connection,
+                    decision_origin,
+                },
+            );
+        }
+    }
+    config.application_connections = decisions;
+    Ok(())
+}
+
+fn legacy_application_connection_decision(
+    policy: &EffectiveExternalIntegrationPolicy,
+    ecosystem_id: &EcosystemId,
+) -> (
+    StoredExternalApplicationDesiredConnection,
+    StoredExternalApplicationDecisionOrigin,
+) {
+    let Some(ecosystem) = policy.ecosystems.get(ecosystem_id) else {
+        return (
+            StoredExternalApplicationDesiredConnection::NeedsReview,
+            StoredExternalApplicationDecisionOrigin::LegacyNeedsReview,
+        );
+    };
+    if !policy.enabled
+        || matches!(
+            ecosystem.mode,
+            ExternalIntegrationMode::Disabled
+                | ExternalIntegrationMode::DiscoverOnly
+                | ExternalIntegrationMode::Unknown(_)
+        )
+    {
+        return (
+            StoredExternalApplicationDesiredConnection::Disconnected,
+            StoredExternalApplicationDecisionOrigin::LegacySafety,
+        );
+    }
+    if ecosystem.capabilities.values().any(|access| {
+        matches!(
+            access,
+            ExternalIntegrationAccess::AskBeforeUse | ExternalIntegrationAccess::Auto
+        )
+    }) {
+        return (
+            StoredExternalApplicationDesiredConnection::Connected,
+            StoredExternalApplicationDecisionOrigin::LegacyActive,
+        );
+    }
+    (
+        StoredExternalApplicationDesiredConnection::NeedsReview,
+        StoredExternalApplicationDecisionOrigin::LegacyNeedsReview,
+    )
+}
+
+fn apply_external_application_connection_decision(
+    config: &mut ExternalSourcesConfig,
+    execution_domain_id: &str,
+    target_scope: ExternalApplicationTargetScopeV2,
+    workspace_scope_id: Option<&str>,
+    application_id: &str,
+    desired_connection: StoredExternalApplicationDesiredConnection,
+    expected_preference_revision: u64,
+) -> Result<bool, String> {
+    if config.preference_revision != expected_preference_revision {
+        return Err(stale_operation_error(
+            "External application preferences changed; refresh before retrying",
+        ));
+    }
+    if config.connection_schema_migration_version != EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION
+    {
+        return Err(incompatible_policy_error(
+            "External application connection preferences require migration",
+        ));
+    }
+    let registration = default_external_integration_registry()
+        .into_iter()
+        .find(|registration| registration.descriptor.ecosystem_id.as_str() == application_id)
+        .ok_or_else(|| {
+            invalid_operation_error(format!(
+                "External application '{application_id}' is not registered"
+            ))
+        })?;
+    match (target_scope, workspace_scope_id) {
+        (ExternalApplicationTargetScopeV2::UserDefault, None)
+        | (ExternalApplicationTargetScopeV2::WorkspaceOverride, Some(_)) => {}
+        (ExternalApplicationTargetScopeV2::UserDefault, Some(_)) => {
+            return Err(invalid_operation_error(
+                "User-default application decisions cannot include a workspace scope",
+            ));
+        }
+        (ExternalApplicationTargetScopeV2::WorkspaceOverride, None) => {
+            return Err(invalid_operation_error(
+                "Workspace application decisions require a workspace scope",
+            ));
+        }
+    }
+    let policy = config.integration_policy.known_mut().ok_or_else(|| {
+        incompatible_policy_error("External integration policy requires a backup and reset")
+    })?;
+    let mode = match desired_connection {
+        StoredExternalApplicationDesiredConnection::Connected => {
+            ExternalIntegrationMode::Recommended
+        }
+        StoredExternalApplicationDesiredConnection::Disconnected
+        | StoredExternalApplicationDesiredConnection::Deferred => ExternalIntegrationMode::Disabled,
+        StoredExternalApplicationDesiredConnection::NeedsReview => {
+            ExternalIntegrationMode::DiscoverOnly
+        }
+    };
+    let policy_changed = match target_scope {
+        ExternalApplicationTargetScopeV2::UserDefault => {
+            let enabled_changed = desired_connection
+                == StoredExternalApplicationDesiredConnection::Connected
+                && !policy.user_defaults.enabled;
+            if enabled_changed {
+                policy.user_defaults.enabled = true;
+            }
+            let ecosystem = policy
+                .user_defaults
+                .ecosystems
+                .entry(registration.descriptor.ecosystem_id.clone())
+                .or_default();
+            let mode_changed = ecosystem.mode != mode;
+            ecosystem.mode = mode;
+            enabled_changed || mode_changed
+        }
+        ExternalApplicationTargetScopeV2::WorkspaceOverride => {
+            let workspace_scope_id = workspace_scope_id
+                .expect("workspace scope was validated before applying its policy");
+            let workspace = policy
+                .workspace_overrides
+                .entry(workspace_scope_id.to_string())
+                .or_default();
+            let enabled_changed = desired_connection
+                == StoredExternalApplicationDesiredConnection::Connected
+                && workspace.enabled != Some(true);
+            if enabled_changed {
+                workspace.enabled = Some(true);
+            }
+            let ecosystem = workspace
+                .ecosystems
+                .entry(registration.descriptor.ecosystem_id.clone())
+                .or_default();
+            let mode_changed = ecosystem.mode.as_ref() != Some(&mode);
+            ecosystem.mode = Some(mode);
+            enabled_changed || mode_changed
+        }
+    };
+    let key = external_application_connection_key(
+        execution_domain_id,
+        application_id,
+        workspace_scope_id,
+    );
+    let decision = StoredExternalApplicationConnectionDecision {
+        desired_connection,
+        decision_origin: StoredExternalApplicationDecisionOrigin::User,
+    };
+    let decision_changed = config.application_connections.get(&key) != Some(&decision);
+    if decision_changed {
+        config.application_connections.insert(key, decision);
+    }
+    let changed = policy_changed || decision_changed;
+    if changed {
+        config.preference_revision = config.preference_revision.saturating_add(1);
+    }
+    Ok(changed)
+}
+
+fn external_application_action_scope_matches(
+    current_workspace_scope_id: Option<&str>,
+    target_scope: ExternalApplicationTargetScopeV2,
+    requested_workspace_scope_id: Option<&str>,
+) -> bool {
+    match target_scope {
+        ExternalApplicationTargetScopeV2::UserDefault => requested_workspace_scope_id.is_none(),
+        ExternalApplicationTargetScopeV2::WorkspaceOverride => {
+            current_workspace_scope_id.is_some()
+                && current_workspace_scope_id == requested_workspace_scope_id
+        }
+    }
+}
+
+fn ensure_mcp_revision_secret(config: &mut ExternalSourcesConfig) -> bool {
+    if config
+        .mcp_revision_secret
+        .as_deref()
+        .and_then(decode_mcp_revision_key)
+        .is_some()
+    {
+        return false;
+    }
+    let first = uuid::Uuid::new_v4();
+    let second = uuid::Uuid::new_v4();
+    let mut bytes = [0_u8; 32];
+    bytes[..16].copy_from_slice(first.as_bytes());
+    bytes[16..].copy_from_slice(second.as_bytes());
+    config.mcp_revision_secret = Some(hex::encode(bytes));
+    true
 }
 
 fn decode_mcp_revision_key(value: &str) -> Option<ExternalMcpRevisionKey> {
@@ -528,37 +1537,38 @@ fn decode_mcp_revision_key(value: &str) -> Option<ExternalMcpRevisionKey> {
     Some(ExternalMcpRevisionKey::new(bytes))
 }
 
-async fn external_sources_config_with_mcp_revision_key(
+fn legacy_config_after_migration_failure(
+    config: ExternalSourcesConfig,
+    migration_error: String,
 ) -> Result<(ExternalSourcesConfig, ExternalMcpRevisionKey), String> {
-    let store = ExternalSourcePreferenceStore::global()?;
-    let config = store.read().await?;
-    if let Some(revision_key) = config
+    let revision_key = config
         .mcp_revision_secret
         .as_deref()
         .and_then(decode_mcp_revision_key)
+        .ok_or(migration_error)?;
+    Ok((config, revision_key))
+}
+
+async fn external_sources_config_with_mcp_revision_key(
+) -> Result<(ExternalSourcesConfig, ExternalMcpRevisionKey), String> {
+    let store = ExternalSourcePreferenceStore::global()?;
+    let config = match store
+        .ensure_application_connection_schema(LEGACY_LOCAL_EXECUTION_DOMAIN_ID)
+        .await
     {
-        return Ok((config, revision_key));
-    }
-    let generated = {
-        let first = uuid::Uuid::new_v4();
-        let second = uuid::Uuid::new_v4();
-        let mut bytes = [0_u8; 32];
-        bytes[..16].copy_from_slice(first.as_bytes());
-        bytes[16..].copy_from_slice(second.as_bytes());
-        bytes
+        Ok(config) => config,
+        Err(migration_error) => {
+            let legacy = store.read().await.map_err(|read_error| {
+                format!("{migration_error}; legacy preferences could not be read: {read_error}")
+            })?;
+            let fallback = legacy_config_after_migration_failure(legacy, migration_error.clone())?;
+            log::warn!(
+                "External application preference migration failed; continuing with legacy V1 preferences reason={}",
+                safe_external_log_token(&migration_error),
+            );
+            return Ok(fallback);
+        }
     };
-    let (_, config) = store
-        .update(|config| {
-            if config
-                .mcp_revision_secret
-                .as_deref()
-                .and_then(decode_mcp_revision_key)
-                .is_none()
-            {
-                config.mcp_revision_secret = Some(hex::encode(generated));
-            }
-        })
-        .await?;
     let revision_key = config
         .mcp_revision_secret
         .as_deref()
@@ -744,6 +1754,67 @@ fn source_ecosystem_id(
         })
 }
 
+fn restrict_prompt_commands_without_active_subagents(
+    commands: &mut [PromptCommandCatalogEntry],
+    conflicts: &mut [PromptCommandConflict],
+    active_subagents: &BTreeSet<(EcosystemId, String)>,
+) {
+    for command in commands {
+        if !matches!(
+            command.definition.availability,
+            PromptCommandAvailability::Available
+        ) {
+            continue;
+        }
+        let PromptCommandExecutionTarget::FreshExternalSubagent {
+            ecosystem_id,
+            logical_id,
+        } = &command.definition.execution_target
+        else {
+            continue;
+        };
+        let key = (ecosystem_id.clone(), logical_id.to_ascii_lowercase());
+        if !active_subagents.contains(&key) {
+            command.definition.availability = PromptCommandAvailability::Restricted {
+                reason: format!(
+                    "External command subagent '{}' is not currently approved and available",
+                    logical_id
+                ),
+                required_capabilities: vec!["command.external_subagent".to_string()],
+            };
+        }
+    }
+    for conflict in conflicts {
+        for candidate in &mut conflict.candidates {
+            if !matches!(candidate.availability, PromptCommandAvailability::Available) {
+                continue;
+            }
+            let PromptCommandExecutionTarget::FreshExternalSubagent {
+                ecosystem_id,
+                logical_id,
+            } = &candidate.execution_target
+            else {
+                continue;
+            };
+            let key = (ecosystem_id.clone(), logical_id.to_ascii_lowercase());
+            if !active_subagents.contains(&key) {
+                candidate.availability = PromptCommandAvailability::Restricted {
+                    reason: format!(
+                        "External command subagent '{}' is not currently approved and available",
+                        logical_id
+                    ),
+                    required_capabilities: vec!["command.external_subagent".to_string()],
+                };
+                if conflict.selected_candidate_id.as_deref()
+                    == Some(candidate.candidate_id.as_str())
+                {
+                    conflict.selected_candidate_id = None;
+                }
+            }
+        }
+    }
+}
+
 fn ensure_source_capability_active(
     snapshot: &ExternalSourceCatalogSnapshot,
     source_key: &SourceKey,
@@ -856,6 +1927,16 @@ impl WorkspaceExternalSourceService {
             .iter()
             .filter_map(|registration| registration.mcp_provider.as_ref().map(Arc::clone))
             .collect();
+        let workspace_reference_providers: Vec<Arc<dyn ExternalWorkspaceReferenceSourceProvider>> =
+            registrations
+                .iter()
+                .filter_map(|registration| {
+                    registration
+                        .workspace_reference_provider
+                        .as_ref()
+                        .map(Arc::clone)
+                })
+                .collect();
         let (preferences, mcp_revision_key) =
             external_sources_config_with_mcp_revision_key().await?;
         let control_plane = Arc::new(ExternalSourceControlPlane::new(
@@ -865,6 +1946,7 @@ impl WorkspaceExternalSourceService {
             tool_providers,
             subagent_providers,
             mcp_providers,
+            workspace_reference_providers,
         )?);
         let suppressed_sources = preferences
             .suppressed_source_keys
@@ -926,6 +2008,57 @@ impl WorkspaceExternalSourceService {
     async fn refresh(self: &Arc<Self>) -> Result<ExternalSourceCatalogSnapshot, String> {
         self.refresh_with_worker_recovery(WorkerRecoveryPolicy::ResetAndAttempt)
             .await
+    }
+
+    async fn refresh_workspace_references(self: &Arc<Self>, force: bool) -> Result<(), String> {
+        sync_service_preferences(self).await?;
+        let _refresh_guard = self.refresh_gate.lock().await;
+        if !force
+            && !lock_workspace_reference_coordinator(&self.control_plane)
+                .snapshot()
+                .discovery_pending
+        {
+            return Ok(());
+        }
+        let preferences = read_external_sources_config().await?;
+        let policy = integration_policy_snapshot(&preferences, self.workspace_root.as_deref())?;
+        let mut requests = Vec::new();
+        let mut disabled_results = Vec::new();
+        for request in
+            lock_workspace_reference_coordinator(&self.control_plane).discovery_requests()
+        {
+            if integration_capability_is_discoverable(
+                &policy,
+                request.ecosystem_id().as_str(),
+                EXTERNAL_CAPABILITY_REFERENCE,
+            ) {
+                requests.push(request);
+            } else {
+                disabled_results.push(request.disabled());
+            }
+        }
+        let mut batch = self
+            .control_plane
+            .discover_workspace_references(requests, PROVIDER_DISCOVERY_TIMEOUT)
+            .await;
+        batch.immediate.append(&mut disabled_results);
+        lock_workspace_reference_coordinator(&self.control_plane)
+            .apply_discovery_results(batch.immediate);
+        for deferred in batch.deferred {
+            self.schedule_deferred_workspace_reference_discovery(deferred);
+        }
+        self.ensure_watch_roots(&policy).await;
+        Ok(())
+    }
+
+    async fn ensure_workspace_reference_refresh(self: &Arc<Self>) -> Result<(), String> {
+        let pending = lock_workspace_reference_coordinator(&self.control_plane)
+            .snapshot()
+            .discovery_pending;
+        if pending {
+            self.refresh_workspace_references(false).await?;
+        }
+        Ok(())
     }
 
     async fn refresh_with_runtime_invalidation(
@@ -1029,7 +2162,22 @@ impl WorkspaceExternalSourceService {
                 disabled_mcp_results.push(request.disabled());
             }
         }
-        let (command_batch, tool_batch, subagent_batch, mcp_batch) = tokio::join!(
+        let mut workspace_reference_requests = Vec::new();
+        let mut disabled_workspace_reference_results = Vec::new();
+        for request in
+            lock_workspace_reference_coordinator(&self.control_plane).discovery_requests()
+        {
+            if integration_capability_is_discoverable(
+                &policy,
+                request.ecosystem_id().as_str(),
+                EXTERNAL_CAPABILITY_REFERENCE,
+            ) {
+                workspace_reference_requests.push(request);
+            } else {
+                disabled_workspace_reference_results.push(request.disabled());
+            }
+        }
+        let (command_batch, tool_batch, subagent_batch, mcp_batch, workspace_reference_batch) = tokio::join!(
             self.control_plane
                 .discover_commands(requests, PROVIDER_DISCOVERY_TIMEOUT),
             self.control_plane
@@ -1038,6 +2186,10 @@ impl WorkspaceExternalSourceService {
                 .discover_subagents(subagent_requests, PROVIDER_DISCOVERY_TIMEOUT),
             self.control_plane
                 .discover_mcp(mcp_requests, PROVIDER_DISCOVERY_TIMEOUT),
+            self.control_plane.discover_workspace_references(
+                workspace_reference_requests,
+                PROVIDER_DISCOVERY_TIMEOUT,
+            ),
         );
         let mut results = command_batch.immediate;
         results.append(&mut disabled_command_results);
@@ -1047,12 +2199,16 @@ impl WorkspaceExternalSourceService {
         subagent_results.append(&mut disabled_subagent_results);
         let mut mcp_results = mcp_batch.immediate;
         mcp_results.append(&mut disabled_mcp_results);
+        let mut workspace_reference_results = workspace_reference_batch.immediate;
+        workspace_reference_results.append(&mut disabled_workspace_reference_results);
         let command_snapshot =
             lock_coordinator(&self.control_plane).apply_discovery_results(results);
         lock_tool_coordinator(&self.control_plane).apply_discovery_results(tool_results);
         let subagent_snapshot = lock_subagent_coordinator(&self.control_plane)
             .apply_discovery_results(subagent_results);
         lock_mcp_coordinator(&self.control_plane).apply_discovery_results(mcp_results);
+        lock_workspace_reference_coordinator(&self.control_plane)
+            .apply_discovery_results(workspace_reference_results);
         for deferred in command_batch.deferred {
             self.schedule_deferred_command_discovery(deferred);
         }
@@ -1064,6 +2220,9 @@ impl WorkspaceExternalSourceService {
         }
         for deferred in mcp_batch.deferred {
             self.schedule_deferred_mcp_discovery(deferred);
+        }
+        for deferred in workspace_reference_batch.deferred {
+            self.schedule_deferred_workspace_reference_discovery(deferred);
         }
         self.schedule_subagent_last_valid_expiry(&subagent_snapshot);
         self.ensure_watch_roots(&policy).await;
@@ -1234,6 +2393,7 @@ impl WorkspaceExternalSourceService {
                 declined_decisions: &preferences.declined_subagent_decisions,
                 conflict_choices: &preferences.subagent_conflict_choices,
                 conflict_lineage_current_keys: &preferences.subagent_conflict_lineage_current_keys,
+                model_bindings: &preferences.subagent_model_bindings,
             },
         )
         .await;
@@ -1267,6 +2427,7 @@ impl WorkspaceExternalSourceService {
                                 conflict_choices: &preferences.subagent_conflict_choices,
                                 conflict_lineage_current_keys: &preferences
                                     .subagent_conflict_lineage_current_keys,
+                                model_bindings: &preferences.subagent_model_bindings,
                             },
                         )
                         .await;
@@ -1288,6 +2449,21 @@ impl WorkspaceExternalSourceService {
             &subagent_snapshot,
             &subagent_state,
             preferences.preference_revision,
+        );
+        let active_subagents = subagent_state
+            .registrations
+            .iter()
+            .map(|registration| {
+                (
+                    registration.ecosystem_id.clone(),
+                    registration.logical_id.to_ascii_lowercase(),
+                )
+            })
+            .collect::<BTreeSet<_>>();
+        restrict_prompt_commands_without_active_subagents(
+            &mut snapshot.commands,
+            &mut snapshot.command_conflicts,
+            &active_subagents,
         );
         if let Some(workspace_root) = self.workspace_root.as_deref() {
             crate::agentic::agents::get_agent_registry().install_external_subagent_routes(
@@ -1453,6 +2629,7 @@ impl WorkspaceExternalSourceService {
                 declined_decisions: &preferences.declined_subagent_decisions,
                 conflict_choices: &preferences.subagent_conflict_choices,
                 conflict_lineage_current_keys: &preferences.subagent_conflict_lineage_current_keys,
+                model_bindings: &preferences.subagent_model_bindings,
             },
         );
         merge_subagent_state(
@@ -1760,6 +2937,47 @@ impl WorkspaceExternalSourceService {
         });
     }
 
+    fn schedule_deferred_workspace_reference_discovery(
+        self: &Arc<Self>,
+        deferred: DeferredDiscovery<ExternalWorkspaceReferenceDiscoveryResult>,
+    ) {
+        let weak = Arc::downgrade(self);
+        let control_plane = Arc::clone(&self.control_plane);
+        tokio::spawn(async move {
+            let mut deferred = deferred;
+            loop {
+                let Some((completed, observer)) =
+                    control_plane.complete_workspace_reference(deferred).await
+                else {
+                    return;
+                };
+                {
+                    let Some(service) = weak.upgrade() else {
+                        return;
+                    };
+                    let _refresh_guard = service.refresh_gate.lock().await;
+                    let Some(result) = control_plane.finalize_workspace_reference(completed).await
+                    else {
+                        return;
+                    };
+                    service
+                        .complete_deferred_workspace_reference_discovery(result)
+                        .await;
+                }
+                let Some(observer) = observer else {
+                    return;
+                };
+                let Some(next) = control_plane
+                    .resume_abandoned_workspace_reference(observer)
+                    .await
+                else {
+                    return;
+                };
+                deferred = next;
+            }
+        });
+    }
+
     async fn complete_deferred_discovery(&self, result: ExternalSourceDiscoveryResult) {
         let provider_id = result.provider_id().clone();
         let Ok(preferences) = read_external_sources_config().await else {
@@ -1878,6 +3096,34 @@ impl WorkspaceExternalSourceService {
         if let Ok(snapshot) = self.rebuild_product_snapshot(command_snapshot).await {
             let _ = self.updates.send(snapshot);
         }
+    }
+
+    async fn complete_deferred_workspace_reference_discovery(
+        &self,
+        result: ExternalWorkspaceReferenceDiscoveryResult,
+    ) {
+        let provider_id = result.provider_id().clone();
+        let Ok(preferences) = read_external_sources_config().await else {
+            return;
+        };
+        let Ok(policy) = integration_policy_snapshot(&preferences, self.workspace_root.as_deref())
+        else {
+            return;
+        };
+        let ecosystem_id = lock_workspace_reference_coordinator(&self.control_plane)
+            .ecosystem_for_provider(&provider_id);
+        if ecosystem_id.is_none_or(|ecosystem_id| {
+            !integration_capability_is_discoverable(
+                &policy,
+                ecosystem_id.as_str(),
+                EXTERNAL_CAPABILITY_REFERENCE,
+            )
+        }) {
+            self.ensure_watch_roots(&policy).await;
+            return;
+        }
+        lock_workspace_reference_coordinator(&self.control_plane).apply_discovery_result(result);
+        self.ensure_watch_roots(&policy).await;
     }
 
     fn schedule_subagent_last_valid_expiry(
@@ -2048,13 +3294,464 @@ impl WorkspaceExternalSourceService {
             &catalog,
             self.execution_domain_id.clone(),
             safe_mode,
-            host_capabilities.clone(),
+            host_capabilities,
         );
         let mut public = ExternalSourcePublicSnapshot::from(catalog);
         public.host_capabilities = host_capabilities;
         ExternalSourceSurfaceSnapshotV1 {
             control,
             catalog: public,
+        }
+    }
+
+    fn application_snapshot_v2(
+        &self,
+        preferences: &ExternalSourcesConfig,
+        host_capabilities: ExternalApplicationHostCapabilitiesV2,
+    ) -> Result<ExternalApplicationSnapshotV2, String> {
+        let catalog = self.snapshot();
+        let workspace_scope_id = workspace_policy_key(self.workspace_root.as_deref());
+        let target_scope = if workspace_scope_id.is_some() {
+            ExternalApplicationTargetScopeV2::WorkspaceOverride
+        } else {
+            ExternalApplicationTargetScopeV2::UserDefault
+        };
+        let source_ecosystems = catalog
+            .sources
+            .iter()
+            .map(|source| {
+                (
+                    source.record.key.clone(),
+                    source.record.ecosystem_id.clone(),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        let subagents_by_candidate_id = catalog
+            .subagents
+            .iter()
+            .map(|subagent| (subagent.candidate_id.as_str(), subagent))
+            .collect::<BTreeMap<_, _>>();
+        let applications = default_external_integration_registry()
+            .into_iter()
+            .map(|registration| {
+                project_external_application_v2(
+                    &catalog,
+                    preferences,
+                    self.execution_domain_id.as_str(),
+                    workspace_scope_id.as_deref(),
+                    registration,
+                    host_capabilities,
+                    &source_ecosystems,
+                    &subagents_by_candidate_id,
+                )
+            })
+            .collect::<Vec<_>>();
+        let review_summary = external_application_review_summary(
+            &catalog,
+            self.execution_domain_id.as_str(),
+            workspace_scope_id.as_deref(),
+            target_scope,
+            preferences.preference_revision,
+            &subagents_by_candidate_id,
+        );
+        let snapshot = ExternalApplicationSnapshotV2 {
+            schema_version: EXTERNAL_APPLICATION_SCHEMA_V2,
+            execution_domain_id: self.execution_domain_id.clone(),
+            workspace_scope_id,
+            effective_connection_scope: target_scope,
+            refresh_generation: catalog.generation,
+            preference_revision: preferences.preference_revision,
+            safe_mode: self.safe_mode_enabled(),
+            host_capabilities,
+            applications,
+            review_summary,
+        };
+        snapshot
+            .validate()
+            .map_err(|error| format!("invalid external application projection: {error}"))?;
+        Ok(snapshot)
+    }
+
+    fn application_review_page_v2(
+        &self,
+        preferences: &ExternalSourcesConfig,
+        request: ExternalApplicationReviewPageRequestV2,
+    ) -> Result<ExternalApplicationReviewPageV2, String> {
+        request
+            .validate()
+            .map_err(|error| invalid_operation_error(error))?;
+        let workspace_scope_id = workspace_policy_key(self.workspace_root.as_deref());
+        let target_scope = if workspace_scope_id.is_some() {
+            ExternalApplicationTargetScopeV2::WorkspaceOverride
+        } else {
+            ExternalApplicationTargetScopeV2::UserDefault
+        };
+        if request.execution_domain_id != self.execution_domain_id
+            || request.workspace_scope_id != workspace_scope_id
+            || request.target_scope != target_scope
+        {
+            return Err(stale_operation_error(
+                "External application review belongs to a different Host or workspace",
+            ));
+        }
+        let catalog = self.snapshot();
+        let plan = external_application_review_plan(
+            &catalog,
+            self.execution_domain_id.as_str(),
+            workspace_scope_id.as_deref(),
+            target_scope,
+            preferences.preference_revision,
+        );
+        let opening_request = request.cursor.is_none() && request.expected_generations.is_empty();
+        if request.preference_revision != preferences.preference_revision
+            || (!opening_request
+                && (request.review_id != plan.review_id
+                    || request.expected_generations != plan.expected_generations))
+        {
+            return Err(stale_operation_error(
+                "External application review changed; refresh before continuing",
+            ));
+        }
+        let offset = match request.cursor.as_deref() {
+            None => 0,
+            Some(cursor) => plan.parse_cursor(cursor)?,
+        };
+        let end = offset
+            .saturating_add(request.page_size)
+            .min(plan.items.len());
+        let items = plan.items[offset..end].to_vec();
+        let next_cursor = (end < plan.items.len()).then(|| plan.cursor(end));
+        let page = ExternalApplicationReviewPageV2 {
+            schema_version: EXTERNAL_APPLICATION_SCHEMA_V2,
+            execution_domain_id: self.execution_domain_id.clone(),
+            workspace_scope_id,
+            target_scope,
+            review_id: plan.review_id,
+            preference_revision: preferences.preference_revision,
+            expected_generations: plan.expected_generations,
+            cursor: request.cursor,
+            next_cursor,
+            total_count: plan.items.len(),
+            items,
+        };
+        page.validate()
+            .map_err(|error| format!("invalid external application review projection: {error}"))?;
+        Ok(page)
+    }
+
+    async fn apply_application_action_v2(
+        self: &Arc<Self>,
+        request: ExternalApplicationControlRequestV2,
+    ) -> Result<ExternalApplicationControlResultV2, String> {
+        request
+            .validate()
+            .map_err(|error| invalid_operation_error(error))?;
+        let workspace_scope_id = workspace_policy_key(self.workspace_root.as_deref());
+        if request.execution_domain_id != self.execution_domain_id
+            || !external_application_action_scope_matches(
+                workspace_scope_id.as_deref(),
+                request.target_scope,
+                request.workspace_scope_id.as_deref(),
+            )
+        {
+            return Err(stale_operation_error(
+                "External application action belongs to a different Host or workspace",
+            ));
+        }
+        let operation_id = request.operation_id;
+        let expected_preference_revision = request.expected_preference_revision;
+        let item_results = match request.action {
+            ExternalApplicationControlActionV2::Refresh => {
+                self.refresh_with_runtime_invalidation().await?;
+                Vec::new()
+            }
+            ExternalApplicationControlActionV2::SetSafeMode { enabled } => {
+                self.set_safe_mode(enabled, Some(expected_preference_revision))
+                    .await?;
+                Vec::new()
+            }
+            ExternalApplicationControlActionV2::SetSourceEnabled {
+                source_key,
+                enabled,
+            } => {
+                self.set_source_enabled(&source_key, enabled, expected_preference_revision)
+                    .await?;
+                Vec::new()
+            }
+            ExternalApplicationControlActionV2::ConnectApplication { application_id } => {
+                self.persist_application_connection(
+                    request.target_scope,
+                    request.workspace_scope_id.as_deref(),
+                    &application_id,
+                    StoredExternalApplicationDesiredConnection::Connected,
+                    expected_preference_revision,
+                )
+                .await?;
+                Vec::new()
+            }
+            ExternalApplicationControlActionV2::DisconnectApplication { application_id } => {
+                self.persist_application_connection(
+                    request.target_scope,
+                    request.workspace_scope_id.as_deref(),
+                    &application_id,
+                    StoredExternalApplicationDesiredConnection::Disconnected,
+                    expected_preference_revision,
+                )
+                .await?;
+                Vec::new()
+            }
+            ExternalApplicationControlActionV2::SetApplicationDeferred { application_id } => {
+                self.persist_application_connection(
+                    request.target_scope,
+                    request.workspace_scope_id.as_deref(),
+                    &application_id,
+                    StoredExternalApplicationDesiredConnection::Deferred,
+                    expected_preference_revision,
+                )
+                .await?;
+                Vec::new()
+            }
+            ExternalApplicationControlActionV2::SubmitApplicationReview {
+                review_id,
+                expected_generations,
+                selection_baseline,
+                selection_overrides,
+            } => {
+                self.apply_application_review_v2(
+                    request.target_scope,
+                    request.workspace_scope_id.as_deref(),
+                    expected_preference_revision,
+                    &review_id,
+                    expected_generations,
+                    selection_baseline,
+                    selection_overrides,
+                )
+                .await?
+            }
+        };
+        let preferences = read_external_sources_config().await?;
+        let outcome = if item_results
+            .iter()
+            .any(|item| item.outcome != ExternalApplicationOperationOutcomeV2::Applied)
+            && !item_results
+                .iter()
+                .any(|item| item.outcome == ExternalApplicationOperationOutcomeV2::Applied)
+        {
+            item_results
+                .iter()
+                .map(|item| item.outcome)
+                .next()
+                .unwrap_or(ExternalApplicationOperationOutcomeV2::Applied)
+        } else {
+            ExternalApplicationOperationOutcomeV2::Applied
+        };
+        let result = ExternalApplicationControlResultV2 {
+            schema_version: EXTERNAL_APPLICATION_SCHEMA_V2,
+            operation_id,
+            preference_revision: preferences.preference_revision,
+            outcome,
+            item_results,
+        };
+        result
+            .validate()
+            .map_err(|error| format!("invalid external application action result: {error}"))?;
+        Ok(result)
+    }
+
+    async fn persist_application_connection(
+        self: &Arc<Self>,
+        target_scope: ExternalApplicationTargetScopeV2,
+        workspace_scope_id: Option<&str>,
+        application_id: &str,
+        desired_connection: StoredExternalApplicationDesiredConnection,
+        expected_preference_revision: u64,
+    ) -> Result<(), String> {
+        let workspace_scope_id = workspace_scope_id.map(str::to_string);
+        let execution_domain_id = self.execution_domain_id.to_string();
+        let application_id = application_id.to_string();
+        let (result, preferences) = ExternalSourcePreferenceStore::global()?
+            .update(move |config| {
+                apply_external_application_connection_decision(
+                    config,
+                    &execution_domain_id,
+                    target_scope,
+                    workspace_scope_id.as_deref(),
+                    &application_id,
+                    desired_connection,
+                    expected_preference_revision,
+                )
+            })
+            .await?;
+        result?;
+        propagate_integration_policy_preferences(&preferences, self);
+        self.refresh_preserving_worker_recovery().await?;
+        Ok(())
+    }
+
+    async fn apply_application_review_v2(
+        &self,
+        target_scope: ExternalApplicationTargetScopeV2,
+        workspace_scope_id: Option<&str>,
+        expected_preference_revision: u64,
+        review_id: &str,
+        expected_generations: Vec<ExternalApplicationOwnerGenerationV2>,
+        selection_baseline: ExternalApplicationReviewSelectionBaselineV2,
+        selection_overrides: Vec<
+            bitfun_product_domains::external_source_control::ExternalApplicationReviewSelectionOverrideV2,
+        >,
+    ) -> Result<Vec<ExternalApplicationReviewItemResultV2>, String> {
+        if selection_overrides.len() > EXTERNAL_APPLICATION_REVIEW_PAGE_MAX_ITEMS {
+            return Err(invalid_operation_error(
+                "External application review has too many selection overrides",
+            ));
+        }
+        let catalog = self.snapshot();
+        let plan = external_application_review_plan(
+            &catalog,
+            self.execution_domain_id.as_str(),
+            workspace_scope_id,
+            target_scope,
+            expected_preference_revision,
+        );
+        if review_id != plan.review_id
+            || expected_generations != plan.expected_generations
+            || expected_preference_revision != catalog.preference_revision
+        {
+            return Err(stale_operation_error(
+                "External application review changed; refresh before applying it",
+            ));
+        }
+        let plan_refs = plan
+            .items
+            .iter()
+            .map(|item| item.item_ref.clone())
+            .collect::<BTreeSet<_>>();
+        let mut overrides = BTreeMap::new();
+        for selection in selection_overrides {
+            if !plan_refs.contains(&selection.item_ref)
+                || overrides
+                    .insert(selection.item_ref, selection.selected)
+                    .is_some()
+            {
+                return Err(stale_operation_error(
+                    "External application review selections no longer match the current plan",
+                ));
+            }
+        }
+        let mut current_revision = expected_preference_revision;
+        let mut results = Vec::with_capacity(plan.items.len());
+        for item in plan.items {
+            if item.safety_ceiling == ExternalApplicationSafetyCeilingV2::Blocked {
+                results.push(ExternalApplicationReviewItemResultV2 {
+                    item_ref: item.item_ref,
+                    outcome: ExternalApplicationOperationOutcomeV2::Blocked,
+                    reason_code: Some("resolve_conflict".to_string()),
+                    recovery_actions: vec![ExternalApplicationRecoveryActionV2::ResolveConflict],
+                });
+                continue;
+            }
+            let selected =
+                overrides
+                    .get(&item.item_ref)
+                    .copied()
+                    .unwrap_or(match selection_baseline {
+                        ExternalApplicationReviewSelectionBaselineV2::Recommended => {
+                            item.recommended
+                        }
+                        ExternalApplicationReviewSelectionBaselineV2::None => false,
+                    });
+            let outcome = self
+                .apply_application_review_item(&catalog, &item.item_ref, selected, current_revision)
+                .await;
+            match outcome {
+                Ok(snapshot) => {
+                    current_revision = snapshot.preference_revision;
+                    results.push(ExternalApplicationReviewItemResultV2 {
+                        item_ref: item.item_ref,
+                        outcome: ExternalApplicationOperationOutcomeV2::Applied,
+                        reason_code: None,
+                        recovery_actions: Vec::new(),
+                    });
+                }
+                Err(error) => {
+                    let (outcome, reason_code, recovery_actions) =
+                        external_application_item_failure(&error);
+                    results.push(ExternalApplicationReviewItemResultV2 {
+                        item_ref: item.item_ref,
+                        outcome,
+                        reason_code: Some(reason_code),
+                        recovery_actions,
+                    });
+                }
+            }
+        }
+        Ok(results)
+    }
+
+    async fn apply_application_review_item(
+        &self,
+        catalog: &ExternalSourceCatalogSnapshot,
+        item_ref: &ExternalApplicationReviewItemRefV2,
+        selected: bool,
+        expected_preference_revision: u64,
+    ) -> Result<ExternalSourceCatalogSnapshot, String> {
+        match item_ref.kind {
+            ExternalApplicationReviewItemKindV2::Tool => {
+                let request = catalog
+                    .tool_approval_requests
+                    .iter()
+                    .find(|request| request.approval_key == item_ref.stable_id)
+                    .ok_or_else(|| {
+                        missing_candidate_error("External tool review item is no longer available")
+                    })?;
+                self.set_tool_target_decision(
+                    &request.approval_key,
+                    &request.decision_key,
+                    selected,
+                    expected_preference_revision,
+                )
+                .await
+            }
+            ExternalApplicationReviewItemKindV2::Mcp => {
+                let request = catalog
+                    .mcp_approval_requests
+                    .iter()
+                    .find(|request| request.decision_key == item_ref.stable_id)
+                    .ok_or_else(|| {
+                        missing_candidate_error("External MCP review item is no longer available")
+                    })?;
+                self.set_mcp_server_decision(
+                    &request.candidate_id,
+                    &request.decision_key,
+                    selected,
+                    catalog.mcp_generation,
+                    expected_preference_revision,
+                )
+                .await
+            }
+            ExternalApplicationReviewItemKindV2::Subagent => {
+                let summary = catalog
+                    .subagents
+                    .iter()
+                    .find(|summary| summary.decision_key == item_ref.stable_id)
+                    .ok_or_else(|| {
+                        missing_candidate_error(
+                            "External subagent review item is no longer available",
+                        )
+                    })?;
+                self.set_subagent_activation(
+                    &summary.candidate_id,
+                    selected,
+                    catalog.subagent_generation,
+                    expected_preference_revision,
+                    &summary.decision_key,
+                )
+                .await
+            }
+            ExternalApplicationReviewItemKindV2::Command
+            | ExternalApplicationReviewItemKindV2::Conflict => Err(conflict_operation_error(
+                "External conflict review requires an explicit owner choice",
+            )),
         }
     }
 
@@ -2240,7 +3937,18 @@ impl WorkspaceExternalSourceService {
             let known = coordinator.set_source_enabled(stable_key, enabled).is_ok();
             (previous, known)
         };
-        if !command_known && !tool_known && !subagent_known && !mcp_known {
+        let (previous_workspace_references, workspace_reference_known) = {
+            let mut coordinator = lock_workspace_reference_coordinator(&self.control_plane);
+            let previous = coordinator.suppressed_sources().clone();
+            let known = coordinator.set_source_enabled(stable_key, enabled).is_ok();
+            (previous, known)
+        };
+        if !command_known
+            && !tool_known
+            && !subagent_known
+            && !mcp_known
+            && !workspace_reference_known
+        {
             return Err(missing_candidate_error(format!(
                 "External source '{stable_key}' is no longer available"
             )));
@@ -2259,6 +3967,8 @@ impl WorkspaceExternalSourceService {
                         .replace_suppressed_sources(previous_subagents);
                     lock_mcp_coordinator(&self.control_plane)
                         .replace_suppressed_sources(previous_mcps);
+                    lock_workspace_reference_coordinator(&self.control_plane)
+                        .replace_suppressed_sources(previous_workspace_references);
                     return Err(error);
                 }
             };
@@ -2268,6 +3978,8 @@ impl WorkspaceExternalSourceService {
         lock_subagent_coordinator(&self.control_plane)
             .replace_suppressed_sources(authoritative.clone());
         lock_mcp_coordinator(&self.control_plane).replace_suppressed_sources(authoritative.clone());
+        lock_workspace_reference_coordinator(&self.control_plane)
+            .replace_suppressed_sources(authoritative.clone());
         propagate_suppressed_sources(&authoritative, self);
         // Refresh acquires the same gate. Release the mutation critical section
         // after the preference and in-memory coordinators agree, then refresh
@@ -2654,6 +4366,30 @@ impl WorkspaceExternalSourceService {
         self.rebuild_product_snapshot(command_snapshot).await
     }
 
+    async fn set_subagent_model_binding(
+        &self,
+        binding_key: &str,
+        target: Option<ExternalSubagentModelBindingTarget>,
+        expected_subagent_generation: u64,
+        expected_preference_revision: u64,
+    ) -> Result<ExternalSourceCatalogSnapshot, String> {
+        let _refresh_guard = self.refresh_gate.lock().await;
+        let snapshot = self.snapshot();
+        validate_subagent_model_binding_mutation(
+            &snapshot,
+            binding_key,
+            target.as_ref(),
+            expected_subagent_generation,
+            expected_preference_revision,
+        )?;
+        let preferences =
+            persist_subagent_model_binding(binding_key, target, expected_preference_revision)
+                .await?;
+        propagate_subagent_preferences(&preferences);
+        let command_snapshot = lock_coordinator(&self.control_plane).snapshot();
+        self.rebuild_product_snapshot(command_snapshot).await
+    }
+
     async fn choose_subagent_conflict(
         &self,
         conflict_key: &str,
@@ -2737,7 +4473,8 @@ impl WorkspaceExternalSourceService {
         expected_content_version: Option<&str>,
         expected_native_conflict_key: Option<&str>,
         expected_preference_revision: Option<u64>,
-    ) -> Result<ExpandedPromptCommand, String> {
+        shell_review_decision: Option<&PromptCommandShellReviewDecision>,
+    ) -> Result<PromptCommandInvocationOutcome, String> {
         // Explicit invocation refreshes first, so a stable deletion cannot be
         // bypassed by an old menu projection.
         let snapshot = self.refresh_preserving_worker_recovery().await?;
@@ -2761,21 +4498,29 @@ impl WorkspaceExternalSourceService {
             expected_native_conflict_key,
             expected_preference_revision,
         )?;
-        let source_key = snapshot
+        let selected_command = snapshot
             .commands
             .iter()
             .find(|entry| entry.definition.name.eq_ignore_ascii_case(name))
-            .map(|entry| entry.definition.id.source.clone())
+            .map(|entry| entry.definition.clone())
             .ok_or_else(|| {
                 missing_candidate_error(format!("External prompt command '{name}' was not found"))
             })?;
+        let source_key = selected_command.id.source.clone();
+        let execution_target = selected_command.execution_target.clone();
         ensure_source_capability_active(&snapshot, &source_key, EXTERNAL_CAPABILITY_COMMAND)?;
+        let source_display_name = snapshot
+            .sources
+            .iter()
+            .find(|source| source.record.key == source_key)
+            .map(|source| source.record.display_name.clone())
+            .unwrap_or_else(|| "External prompt command".to_string());
         let coordinator = Arc::clone(&self.control_plane);
         let name = name.to_string();
         let arguments = arguments.to_string();
         let expected_candidate_id = expected_candidate_id.map(str::to_string);
         let expected_content_version = expected_content_version.map(str::to_string);
-        tokio::task::spawn_blocking(move || {
+        let expansion = tokio::task::spawn_blocking(move || {
             lock_coordinator(&coordinator)
                 .expand_command_guarded(
                     &name,
@@ -2786,7 +4531,77 @@ impl WorkspaceExternalSourceService {
                 .map_err(|error| error.to_string())
         })
         .await
-        .map_err(|error| format!("external command expansion task failed: {error}"))?
+        .map_err(|error| format!("external command expansion task failed: {error}"))??;
+        let Some(shell_expansion) = expansion.shell.as_ref() else {
+            let expanded =
+                finalize_prompt_command_expansion(self.workspace_root.as_deref(), expansion)
+                    .await?;
+            return Ok(PromptCommandInvocationOutcome::Ready {
+                content: expanded.content,
+                execution_target,
+            });
+        };
+        if self.safe_mode_enabled() {
+            return Err(policy_limited_error(
+                "Shell-backed external prompt commands are disabled while External Sources safe mode is active",
+            ));
+        }
+        let resolved_shell = resolve_prompt_command_shell(&shell_expansion.preference)?;
+        let plan = prepare_prompt_command_shell_plan(
+            expansion,
+            &source_display_name,
+            self.execution_domain_id.as_str(),
+            &selected_command.id.stable_key(),
+            &selected_command.content_version,
+            preferences.preference_revision,
+            resolved_shell,
+        )?;
+        let approved = preferences
+            .approved_prompt_command_shell_plans
+            .contains(&plan.review.plan_fingerprint);
+        let run = if approved {
+            true
+        } else if let Some(decision) = shell_review_decision {
+            if decision.plan_fingerprint != plan.review.plan_fingerprint
+                || decision.expected_preference_revision != preferences.preference_revision
+            {
+                return Ok(PromptCommandInvocationOutcome::ReviewRequired {
+                    review: plan.review,
+                });
+            }
+            match decision.mode {
+                PromptCommandShellReviewMode::RunOnce => true,
+                PromptCommandShellReviewMode::Remember => {
+                    if !plan.review.can_remember {
+                        return Err(
+                            "argument-dependent prompt command shell directives cannot be remembered"
+                                .to_string(),
+                        );
+                    }
+                    let updated = persist_prompt_command_shell_plan_approval(
+                        &plan.review.plan_fingerprint,
+                        decision.expected_preference_revision,
+                    )
+                    .await?;
+                    propagate_prompt_command_preferences(&updated);
+                    true
+                }
+            }
+        } else {
+            false
+        };
+        if !run {
+            return Ok(PromptCommandInvocationOutcome::ReviewRequired {
+                review: plan.review,
+            });
+        }
+        let expansion = execute_prompt_command_shell_plan(plan).await?;
+        let expanded =
+            finalize_prompt_command_expansion(self.workspace_root.as_deref(), expansion).await?;
+        Ok(PromptCommandInvocationOutcome::Ready {
+            content: expanded.content,
+            execution_target,
+        })
     }
 
     async fn start_watching(self: &Arc<Self>) {
@@ -2954,6 +4769,12 @@ impl WorkspaceExternalSourceService {
         provider_roots.extend(
             lock_mcp_coordinator(&self.control_plane).watch_roots_for_ecosystems(&mcp_ecosystems),
         );
+        let workspace_reference_ecosystems =
+            ecosystems_with_discoverable_capability(policy, EXTERNAL_CAPABILITY_REFERENCE);
+        provider_roots.extend(
+            lock_workspace_reference_coordinator(&self.control_plane)
+                .watch_roots_for_ecosystems(&workspace_reference_ecosystems),
+        );
         for root in provider_roots {
             roots
                 .entry(root.path)
@@ -2975,6 +4796,763 @@ impl WorkspaceExternalSourceService {
             )
             .collect()
     }
+}
+
+#[derive(Default)]
+struct ExternalApplicationAggregateCounts {
+    enabled: usize,
+    pending_review: usize,
+    blocked: usize,
+    conflicts: usize,
+}
+
+struct ExternalApplicationReviewPlan {
+    review_id: String,
+    expected_generations: Vec<ExternalApplicationOwnerGenerationV2>,
+    items: Vec<ExternalApplicationReviewItemV2>,
+    summary_items: Vec<ExternalApplicationReviewSummaryItem>,
+}
+
+struct ExternalApplicationReviewSummaryItem {
+    item_ref: ExternalApplicationReviewItemRefV2,
+    recommended: bool,
+    safety_ceiling: ExternalApplicationSafetyCeilingV2,
+}
+
+impl ExternalApplicationReviewPlan {
+    fn summary(&self) -> Option<ExternalApplicationReviewSummaryV2> {
+        if self.summary_items.is_empty() {
+            return None;
+        }
+        let mut counts = BTreeMap::new();
+        for item in &self.summary_items {
+            *counts.entry(item.item_ref.kind).or_insert(0usize) += 1;
+        }
+        let recommended_count = self
+            .summary_items
+            .iter()
+            .filter(|item| item.recommended)
+            .count();
+        let blocked_count = self
+            .summary_items
+            .iter()
+            .filter(|item| item.safety_ceiling == ExternalApplicationSafetyCeilingV2::Blocked)
+            .count();
+        Some(ExternalApplicationReviewSummaryV2 {
+            review_id: self.review_id.clone(),
+            total_count: self.summary_items.len(),
+            category_counts: counts
+                .into_iter()
+                .map(|(kind, count)| ExternalApplicationReviewCategoryCountV2 { kind, count })
+                .collect(),
+            max_selection_count: self.summary_items.len().saturating_sub(blocked_count),
+            risk_summary: ExternalApplicationRiskSummaryV2 {
+                highest_level: Some(ExternalApplicationRiskLevelV2::High),
+                reason_codes: vec!["executable_content_requires_review".to_string()],
+            },
+            recommendation_summary: ExternalApplicationReviewRecommendationSummaryV2 {
+                recommended_count,
+                optional_count: self
+                    .summary_items
+                    .len()
+                    .saturating_sub(recommended_count)
+                    .saturating_sub(blocked_count),
+                blocked_count,
+            },
+            safety_ceiling: if blocked_count == self.summary_items.len() {
+                ExternalApplicationSafetyCeilingV2::Blocked
+            } else {
+                ExternalApplicationSafetyCeilingV2::ReviewRequired
+            },
+        })
+    }
+
+    fn cursor(&self, offset: usize) -> String {
+        format!("{}:{offset}", self.review_id)
+    }
+
+    fn parse_cursor(&self, cursor: &str) -> Result<usize, String> {
+        let offset = cursor
+            .strip_prefix(&format!("{}:", self.review_id))
+            .and_then(|offset| offset.parse::<usize>().ok())
+            .filter(|offset| *offset < self.items.len())
+            .ok_or_else(|| {
+                stale_operation_error(
+                    "External application review cursor changed; restart the review",
+                )
+            })?;
+        Ok(offset)
+    }
+}
+
+fn external_application_review_plan(
+    catalog: &ExternalSourceCatalogSnapshot,
+    execution_domain_id: &str,
+    workspace_scope_id: Option<&str>,
+    target_scope: ExternalApplicationTargetScopeV2,
+    preference_revision: u64,
+) -> ExternalApplicationReviewPlan {
+    let subagents_by_candidate_id = catalog
+        .subagents
+        .iter()
+        .map(|subagent| (subagent.candidate_id.as_str(), subagent))
+        .collect::<BTreeMap<_, _>>();
+    external_application_review_plan_internal(
+        catalog,
+        execution_domain_id,
+        workspace_scope_id,
+        target_scope,
+        preference_revision,
+        &subagents_by_candidate_id,
+        true,
+    )
+}
+
+fn external_application_review_summary(
+    catalog: &ExternalSourceCatalogSnapshot,
+    execution_domain_id: &str,
+    workspace_scope_id: Option<&str>,
+    target_scope: ExternalApplicationTargetScopeV2,
+    preference_revision: u64,
+    subagents_by_candidate_id: &BTreeMap<&str, &ExternalSubagentSummary>,
+) -> Option<ExternalApplicationReviewSummaryV2> {
+    external_application_review_plan_internal(
+        catalog,
+        execution_domain_id,
+        workspace_scope_id,
+        target_scope,
+        preference_revision,
+        subagents_by_candidate_id,
+        false,
+    )
+    .summary()
+}
+
+fn push_external_application_review_item<F>(
+    items: &mut Vec<ExternalApplicationReviewItemV2>,
+    summary_items: &mut Vec<ExternalApplicationReviewSummaryItem>,
+    include_item_details: bool,
+    item_ref: ExternalApplicationReviewItemRefV2,
+    recommended: bool,
+    safety_ceiling: ExternalApplicationSafetyCeilingV2,
+    build_item: F,
+) where
+    F: FnOnce(ExternalApplicationReviewItemRefV2) -> ExternalApplicationReviewItemV2,
+{
+    summary_items.push(ExternalApplicationReviewSummaryItem {
+        item_ref: item_ref.clone(),
+        recommended,
+        safety_ceiling,
+    });
+    if include_item_details {
+        items.push(build_item(item_ref));
+    }
+}
+
+fn push_external_application_conflict_review_item<F>(
+    items: &mut Vec<ExternalApplicationReviewItemV2>,
+    summary_items: &mut Vec<ExternalApplicationReviewSummaryItem>,
+    include_item_details: bool,
+    conflict_key: String,
+    build_display: F,
+) where
+    F: FnOnce() -> (String, String),
+{
+    let item_ref = ExternalApplicationReviewItemRefV2 {
+        kind: ExternalApplicationReviewItemKindV2::Conflict,
+        stable_id: conflict_key,
+    };
+    push_external_application_review_item(
+        items,
+        summary_items,
+        include_item_details,
+        item_ref,
+        false,
+        ExternalApplicationSafetyCeilingV2::Blocked,
+        |item_ref| {
+            let (display_name, display_summary) = build_display();
+            ExternalApplicationReviewItemV2 {
+                item_ref,
+                display_name,
+                display_summary,
+                risk_level: ExternalApplicationRiskLevelV2::High,
+                risk_reason_codes: vec!["ambiguous_runtime_route".to_string()],
+                recommended: false,
+                safety_ceiling: ExternalApplicationSafetyCeilingV2::Blocked,
+            }
+        },
+    );
+}
+
+fn external_application_review_plan_internal(
+    catalog: &ExternalSourceCatalogSnapshot,
+    execution_domain_id: &str,
+    workspace_scope_id: Option<&str>,
+    target_scope: ExternalApplicationTargetScopeV2,
+    preference_revision: u64,
+    subagents_by_candidate_id: &BTreeMap<&str, &ExternalSubagentSummary>,
+    include_item_details: bool,
+) -> ExternalApplicationReviewPlan {
+    let mut items = Vec::new();
+    let mut summary_items = Vec::new();
+    for request in &catalog.tool_approval_requests {
+        let item_ref = ExternalApplicationReviewItemRefV2 {
+            kind: ExternalApplicationReviewItemKindV2::Tool,
+            stable_id: request.approval_key.clone(),
+        };
+        push_external_application_review_item(
+            &mut items,
+            &mut summary_items,
+            include_item_details,
+            item_ref,
+            false,
+            ExternalApplicationSafetyCeilingV2::ReviewRequired,
+            |item_ref| ExternalApplicationReviewItemV2 {
+                item_ref,
+                display_name: request.source_display_name.clone(),
+                display_summary: format!(
+                    "{} external tool{} require approval",
+                    request.tool_names.len(),
+                    if request.tool_names.len() == 1 {
+                        ""
+                    } else {
+                        "s"
+                    }
+                ),
+                risk_level: ExternalApplicationRiskLevelV2::High,
+                risk_reason_codes: vec!["process_or_resource_access".to_string()],
+                recommended: false,
+                safety_ceiling: ExternalApplicationSafetyCeilingV2::ReviewRequired,
+            },
+        );
+    }
+    for request in &catalog.mcp_approval_requests {
+        let item_ref = ExternalApplicationReviewItemRefV2 {
+            kind: ExternalApplicationReviewItemKindV2::Mcp,
+            stable_id: request.decision_key.clone(),
+        };
+        push_external_application_review_item(
+            &mut items,
+            &mut summary_items,
+            include_item_details,
+            item_ref,
+            false,
+            ExternalApplicationSafetyCeilingV2::ReviewRequired,
+            |item_ref| ExternalApplicationReviewItemV2 {
+                item_ref,
+                display_name: request.definition.name.clone(),
+                display_summary: "External MCP server requires approval".to_string(),
+                risk_level: ExternalApplicationRiskLevelV2::High,
+                risk_reason_codes: vec!["process_or_network_access".to_string()],
+                recommended: false,
+                safety_ceiling: ExternalApplicationSafetyCeilingV2::ReviewRequired,
+            },
+        );
+    }
+    for candidate_id in &catalog.pending_subagent_approvals {
+        let Some(summary) = subagents_by_candidate_id
+            .get(candidate_id.as_str())
+            .copied()
+        else {
+            continue;
+        };
+        let item_ref = ExternalApplicationReviewItemRefV2 {
+            kind: ExternalApplicationReviewItemKindV2::Subagent,
+            stable_id: summary.decision_key.clone(),
+        };
+        push_external_application_review_item(
+            &mut items,
+            &mut summary_items,
+            include_item_details,
+            item_ref,
+            false,
+            ExternalApplicationSafetyCeilingV2::ReviewRequired,
+            |item_ref| ExternalApplicationReviewItemV2 {
+                item_ref,
+                display_name: summary.display_name.clone(),
+                display_summary: "External subagent and its requested tools require approval"
+                    .to_string(),
+                risk_level: ExternalApplicationRiskLevelV2::High,
+                risk_reason_codes: vec!["delegated_tool_access".to_string()],
+                recommended: false,
+                safety_ceiling: ExternalApplicationSafetyCeilingV2::ReviewRequired,
+            },
+        );
+    }
+    for conflict in catalog
+        .command_conflicts
+        .iter()
+        .filter(|conflict| conflict.selected_candidate_id.is_none())
+    {
+        push_external_application_conflict_review_item(
+            &mut items,
+            &mut summary_items,
+            include_item_details,
+            conflict.conflict_key.clone(),
+            || {
+                (
+                    format!("Resolve command conflict: {}", conflict.command_name),
+                    "Choose one compatible command source".to_string(),
+                )
+            },
+        );
+    }
+    for conflict in catalog
+        .tool_conflicts
+        .iter()
+        .filter(|conflict| conflict.selected_candidate_id.is_none())
+    {
+        push_external_application_conflict_review_item(
+            &mut items,
+            &mut summary_items,
+            include_item_details,
+            conflict.conflict_key.clone(),
+            || {
+                (
+                    format!("Resolve tool conflict: {}", conflict.tool_name),
+                    "Choose one compatible tool source".to_string(),
+                )
+            },
+        );
+    }
+    for conflict in catalog
+        .mcp_conflicts
+        .iter()
+        .filter(|conflict| conflict.selected_candidate_id.is_none())
+    {
+        push_external_application_conflict_review_item(
+            &mut items,
+            &mut summary_items,
+            include_item_details,
+            conflict.conflict_key.clone(),
+            || {
+                (
+                    format!("Resolve MCP conflict: {}", conflict.server_name),
+                    "Choose one compatible MCP server".to_string(),
+                )
+            },
+        );
+    }
+    for conflict in catalog
+        .subagent_conflicts
+        .iter()
+        .filter(|conflict| conflict.selected_candidate_id.is_none())
+    {
+        push_external_application_conflict_review_item(
+            &mut items,
+            &mut summary_items,
+            include_item_details,
+            conflict.conflict_key.clone(),
+            || {
+                (
+                    format!("Resolve subagent conflict: {}", conflict.logical_id),
+                    "Choose one compatible subagent source".to_string(),
+                )
+            },
+        );
+    }
+    items.sort_by(|left, right| left.item_ref.cmp(&right.item_ref));
+    items.dedup_by(|left, right| left.item_ref == right.item_ref);
+    summary_items.sort_by(|left, right| left.item_ref.cmp(&right.item_ref));
+    summary_items.dedup_by(|left, right| left.item_ref == right.item_ref);
+    let expected_generations = vec![
+        ExternalApplicationOwnerGenerationV2 {
+            owner: ExternalApplicationReviewItemKindV2::Command,
+            generation: catalog.generation,
+        },
+        ExternalApplicationOwnerGenerationV2 {
+            owner: ExternalApplicationReviewItemKindV2::Tool,
+            generation: catalog.generation,
+        },
+        ExternalApplicationOwnerGenerationV2 {
+            owner: ExternalApplicationReviewItemKindV2::Subagent,
+            generation: catalog.subagent_generation,
+        },
+        ExternalApplicationOwnerGenerationV2 {
+            owner: ExternalApplicationReviewItemKindV2::Mcp,
+            generation: catalog.mcp_generation,
+        },
+        ExternalApplicationOwnerGenerationV2 {
+            owner: ExternalApplicationReviewItemKindV2::Conflict,
+            generation: catalog.generation,
+        },
+    ];
+    let mut hasher = Sha256::new();
+    hasher.update(execution_domain_id.as_bytes());
+    hasher.update([0]);
+    hasher.update(workspace_scope_id.unwrap_or("<none>").as_bytes());
+    hasher.update([target_scope as u8]);
+    hasher.update(preference_revision.to_le_bytes());
+    for generation in &expected_generations {
+        hasher.update([generation.owner as u8]);
+        hasher.update(generation.generation.to_le_bytes());
+    }
+    for item in &summary_items {
+        hasher.update([item.item_ref.kind as u8]);
+        hasher.update(item.item_ref.stable_id.as_bytes());
+        hasher.update([0]);
+    }
+    let review_id = format!("review:{}", hex::encode(&hasher.finalize()[..16]));
+    ExternalApplicationReviewPlan {
+        review_id,
+        expected_generations,
+        items,
+        summary_items,
+    }
+}
+
+fn external_application_item_failure(
+    error: &str,
+) -> (
+    ExternalApplicationOperationOutcomeV2,
+    String,
+    Vec<ExternalApplicationRecoveryActionV2>,
+) {
+    let code = ExternalSourceOperationError::decode(error)
+        .map(|error| error.code)
+        .unwrap_or(ExternalSourceOperationErrorCode::Internal);
+    match code {
+        ExternalSourceOperationErrorCode::StaleRevision => (
+            ExternalApplicationOperationOutcomeV2::Stale,
+            code.as_str().to_string(),
+            vec![ExternalApplicationRecoveryActionV2::Refresh],
+        ),
+        ExternalSourceOperationErrorCode::Conflict
+        | ExternalSourceOperationErrorCode::PolicyLimited
+        | ExternalSourceOperationErrorCode::TrustRequired
+        | ExternalSourceOperationErrorCode::Unavailable
+        | ExternalSourceOperationErrorCode::RuntimeUnavailable => (
+            ExternalApplicationOperationOutcomeV2::Blocked,
+            code.as_str().to_string(),
+            vec![ExternalApplicationRecoveryActionV2::ViewReason],
+        ),
+        ExternalSourceOperationErrorCode::InvalidRequest
+        | ExternalSourceOperationErrorCode::NotFound => (
+            ExternalApplicationOperationOutcomeV2::Rejected,
+            code.as_str().to_string(),
+            vec![ExternalApplicationRecoveryActionV2::Refresh],
+        ),
+        _ => (
+            ExternalApplicationOperationOutcomeV2::Failed,
+            code.as_str().to_string(),
+            vec![ExternalApplicationRecoveryActionV2::Retry],
+        ),
+    }
+}
+
+fn project_external_application_v2(
+    catalog: &ExternalSourceCatalogSnapshot,
+    preferences: &ExternalSourcesConfig,
+    execution_domain_id: &str,
+    workspace_scope_id: Option<&str>,
+    registration: ExternalEcosystemRegistration,
+    host_capabilities: ExternalApplicationHostCapabilitiesV2,
+    source_ecosystems: &BTreeMap<SourceKey, EcosystemId>,
+    subagents_by_candidate_id: &BTreeMap<&str, &ExternalSubagentSummary>,
+) -> ExternalApplicationSummaryV2 {
+    let ecosystem_id = &registration.descriptor.ecosystem_id;
+    let sources = catalog
+        .sources
+        .iter()
+        .filter(|source| {
+            source.record.ecosystem_id == *ecosystem_id
+                && !matches!(source.lifecycle, ExternalSourceLifecycleState::Removed)
+        })
+        .collect::<Vec<_>>();
+    let discovery = if sources.is_empty() {
+        ExternalApplicationDiscoveryStateV2::NotDiscovered
+    } else {
+        ExternalApplicationDiscoveryStateV2::Discovered
+    };
+    let unavailable_sources = sources
+        .iter()
+        .filter(|source| matches!(source.lifecycle, ExternalSourceLifecycleState::Unavailable))
+        .count();
+    let degraded = sources.iter().any(|source| {
+        matches!(
+            source.lifecycle,
+            ExternalSourceLifecycleState::Degraded
+                | ExternalSourceLifecycleState::Restricted
+                | ExternalSourceLifecycleState::UsingLastValidVersion
+        ) || !source.record.diagnostics.is_empty()
+    });
+    let health = if !sources.is_empty() && unavailable_sources == sources.len() {
+        ExternalApplicationHealthV2::Unavailable
+    } else if degraded || unavailable_sources > 0 {
+        ExternalApplicationHealthV2::Degraded
+    } else {
+        ExternalApplicationHealthV2::Healthy
+    };
+    let explicit = workspace_scope_id
+        .and_then(|workspace_scope_id| {
+            preferences
+                .application_connections
+                .get(&external_application_connection_key(
+                    execution_domain_id,
+                    ecosystem_id.as_str(),
+                    Some(workspace_scope_id),
+                ))
+        })
+        .or_else(|| {
+            preferences
+                .application_connections
+                .get(&external_application_connection_key(
+                    execution_domain_id,
+                    ecosystem_id.as_str(),
+                    None,
+                ))
+        });
+    let (desired_connection, user_decision) = match explicit {
+        Some(decision) => (
+            public_desired_connection(decision.desired_connection),
+            public_user_decision(decision.desired_connection),
+        ),
+        None => (
+            match registration.default_connection_policy {
+                ExternalApplicationDefaultConnectionPolicyV2::Connect => {
+                    ExternalApplicationDesiredConnectionV2::Connected
+                }
+                ExternalApplicationDefaultConnectionPolicyV2::DiscoverOnly
+                | ExternalApplicationDefaultConnectionPolicyV2::Unsupported => {
+                    ExternalApplicationDesiredConnectionV2::Disconnected
+                }
+            },
+            ExternalApplicationUserDecisionV2::None,
+        ),
+    };
+    let connection = if desired_connection == ExternalApplicationDesiredConnectionV2::Connected
+        && discovery == ExternalApplicationDiscoveryStateV2::Discovered
+    {
+        ExternalApplicationConnectionStateV2::Connected
+    } else {
+        ExternalApplicationConnectionStateV2::Disconnected
+    };
+    let counts = external_application_counts(
+        catalog,
+        ecosystem_id,
+        source_ecosystems,
+        subagents_by_candidate_id,
+    );
+    let needs_attention = desired_connection == ExternalApplicationDesiredConnectionV2::NeedsReview
+        || (connection == ExternalApplicationConnectionStateV2::Connected
+            && (counts.pending_review > 0 || counts.conflicts > 0));
+    let temporarily_unavailable = discovery == ExternalApplicationDiscoveryStateV2::Discovered
+        && health == ExternalApplicationHealthV2::Unavailable;
+    let (effective_status, primary_action) = derive_external_application_status_v2(
+        needs_attention,
+        temporarily_unavailable,
+        host_capabilities.can_refresh,
+        connection,
+        discovery,
+    );
+    let recovery_actions = match primary_action {
+        ExternalApplicationPrimaryActionV2::Review => {
+            vec![ExternalApplicationRecoveryActionV2::Review]
+        }
+        ExternalApplicationPrimaryActionV2::Retry => {
+            vec![ExternalApplicationRecoveryActionV2::Retry]
+        }
+        ExternalApplicationPrimaryActionV2::ViewReason => {
+            vec![ExternalApplicationRecoveryActionV2::ViewReason]
+        }
+        _ => Vec::new(),
+    };
+    let acknowledged = preferences
+        .acknowledged_ecosystems
+        .contains(&acknowledged_ecosystem_key(
+            execution_domain_id,
+            ecosystem_id.as_str(),
+        ));
+    ExternalApplicationSummaryV2 {
+        application_id: ecosystem_id.to_string(),
+        ecosystem_id: ecosystem_id.to_string(),
+        display_name: registration.descriptor.display_name,
+        discovery,
+        connection,
+        desired_connection,
+        health,
+        effective_status,
+        primary_action,
+        default_connection_policy: registration.default_connection_policy,
+        default_connection_reason: registration.default_connection_reason.to_string(),
+        enabled_count: counts.enabled,
+        pending_review_count: counts.pending_review,
+        blocked_count: counts.blocked,
+        conflict_count: counts.conflicts,
+        risk_summary: ExternalApplicationRiskSummaryV2 {
+            highest_level: (counts.pending_review > 0 || counts.conflicts > 0)
+                .then_some(ExternalApplicationRiskLevelV2::High),
+            reason_codes: (counts.pending_review > 0 || counts.conflicts > 0)
+                .then(|| vec!["executable_content_requires_review".to_string()])
+                .unwrap_or_default(),
+        },
+        notice_key: (!acknowledged && discovery == ExternalApplicationDiscoveryStateV2::Discovered)
+            .then(|| {
+                format!(
+                    "application_discovered:{}:{}",
+                    ecosystem_id, registration.descriptor.adapter_revision
+                )
+            }),
+        user_decision,
+        recovery_actions,
+    }
+}
+
+fn public_desired_connection(
+    desired: StoredExternalApplicationDesiredConnection,
+) -> ExternalApplicationDesiredConnectionV2 {
+    match desired {
+        StoredExternalApplicationDesiredConnection::Connected => {
+            ExternalApplicationDesiredConnectionV2::Connected
+        }
+        StoredExternalApplicationDesiredConnection::Disconnected => {
+            ExternalApplicationDesiredConnectionV2::Disconnected
+        }
+        StoredExternalApplicationDesiredConnection::Deferred => {
+            ExternalApplicationDesiredConnectionV2::Deferred
+        }
+        StoredExternalApplicationDesiredConnection::NeedsReview => {
+            ExternalApplicationDesiredConnectionV2::NeedsReview
+        }
+    }
+}
+
+fn public_user_decision(
+    desired: StoredExternalApplicationDesiredConnection,
+) -> ExternalApplicationUserDecisionV2 {
+    match desired {
+        StoredExternalApplicationDesiredConnection::Connected => {
+            ExternalApplicationUserDecisionV2::Connected
+        }
+        StoredExternalApplicationDesiredConnection::Disconnected => {
+            ExternalApplicationUserDecisionV2::Disconnected
+        }
+        StoredExternalApplicationDesiredConnection::Deferred => {
+            ExternalApplicationUserDecisionV2::Deferred
+        }
+        StoredExternalApplicationDesiredConnection::NeedsReview => {
+            ExternalApplicationUserDecisionV2::NeedsReview
+        }
+    }
+}
+
+fn external_application_counts(
+    catalog: &ExternalSourceCatalogSnapshot,
+    ecosystem_id: &EcosystemId,
+    source_ecosystems: &BTreeMap<SourceKey, EcosystemId>,
+    subagents_by_candidate_id: &BTreeMap<&str, &ExternalSubagentSummary>,
+) -> ExternalApplicationAggregateCounts {
+    let source_belongs = |source_key: &SourceKey| {
+        source_ecosystems
+            .get(source_key)
+            .is_some_and(|source_ecosystem| source_ecosystem == ecosystem_id)
+    };
+    let mut counts = ExternalApplicationAggregateCounts::default();
+    for command in &catalog.commands {
+        if !source_belongs(&command.definition.id.source) {
+            continue;
+        }
+        match command.definition.availability {
+            PromptCommandAvailability::Available => counts.enabled += 1,
+            PromptCommandAvailability::Restricted { .. }
+            | PromptCommandAvailability::Invalid { .. } => counts.blocked += 1,
+            _ => counts.blocked += 1,
+        }
+    }
+    for tool in &catalog.tools {
+        if !source_belongs(&tool.definition.id.target.source) {
+            continue;
+        }
+        match tool.activation {
+            ExternalToolActivationState::Active => counts.enabled += 1,
+            ExternalToolActivationState::ApprovalRequired => counts.pending_review += 1,
+            ExternalToolActivationState::Conflict => {}
+            ExternalToolActivationState::Unsupported { .. }
+            | ExternalToolActivationState::RuntimeUnavailable { .. }
+            | ExternalToolActivationState::LoadFailed { .. } => counts.blocked += 1,
+            ExternalToolActivationState::Declined | ExternalToolActivationState::Disabled => {}
+            _ => counts.blocked += 1,
+        }
+    }
+    for subagent in &catalog.subagents {
+        if !subagent.source_keys.iter().any(source_belongs) {
+            continue;
+        }
+        match subagent.activation_state {
+            ExternalSubagentActivationState::Active => counts.enabled += 1,
+            ExternalSubagentActivationState::ApprovalRequired => counts.pending_review += 1,
+            ExternalSubagentActivationState::Conflict => {}
+            ExternalSubagentActivationState::Blocked
+            | ExternalSubagentActivationState::Unavailable => counts.blocked += 1,
+            ExternalSubagentActivationState::Declined
+            | ExternalSubagentActivationState::Disabled => {}
+        }
+    }
+    for server in &catalog.mcp_servers {
+        if !source_belongs(&server.definition.id.source) {
+            continue;
+        }
+        match server.activation_state {
+            ExternalMcpActivationState::Active => counts.enabled += 1,
+            ExternalMcpActivationState::ApprovalRequired
+            | ExternalMcpActivationState::ConfigurationChanged => counts.pending_review += 1,
+            ExternalMcpActivationState::Conflict => {}
+            ExternalMcpActivationState::Unsupported { .. }
+            | ExternalMcpActivationState::RuntimeUnavailable { .. }
+            | ExternalMcpActivationState::Removed => counts.blocked += 1,
+            ExternalMcpActivationState::Starting => counts.enabled += 1,
+            ExternalMcpActivationState::Declined
+            | ExternalMcpActivationState::Covered { .. }
+            | ExternalMcpActivationState::SourceDisabled => {}
+            _ => counts.blocked += 1,
+        }
+    }
+    counts.conflicts += catalog
+        .command_conflicts
+        .iter()
+        .filter(|conflict| {
+            conflict.selected_candidate_id.is_none()
+                && conflict
+                    .candidates
+                    .iter()
+                    .any(|candidate| candidate.ecosystem_id == *ecosystem_id)
+        })
+        .count();
+    counts.conflicts += catalog
+        .tool_conflicts
+        .iter()
+        .filter(|conflict| {
+            conflict.selected_candidate_id.is_none()
+                && conflict
+                    .candidates
+                    .iter()
+                    .any(|candidate| candidate.source.as_ref().is_some_and(&source_belongs))
+        })
+        .count();
+    counts.conflicts += catalog
+        .mcp_conflicts
+        .iter()
+        .filter(|conflict| {
+            conflict.selected_candidate_id.is_none()
+                && conflict
+                    .candidates
+                    .iter()
+                    .any(|candidate| candidate.source.as_ref().is_some_and(&source_belongs))
+        })
+        .count();
+    counts.conflicts += catalog
+        .subagent_conflicts
+        .iter()
+        .filter(|conflict| {
+            conflict.selected_candidate_id.is_none()
+                && conflict.candidates.iter().any(|candidate| {
+                    subagents_by_candidate_id
+                        .get(candidate.candidate_id.as_str())
+                        .is_some_and(|subagent| subagent.source_keys.iter().any(&source_belongs))
+                })
+        })
+        .count();
+    counts
 }
 
 fn lock_coordinator(
@@ -2999,6 +5577,12 @@ fn lock_mcp_coordinator(
     control_plane: &ExternalSourceControlPlane,
 ) -> MutexGuard<'_, bitfun_external_sources::ExternalMcpCoordinator> {
     control_plane.lock_mcp()
+}
+
+fn lock_workspace_reference_coordinator(
+    control_plane: &ExternalSourceControlPlane,
+) -> MutexGuard<'_, bitfun_external_sources::ExternalWorkspaceReferenceCoordinator> {
+    control_plane.lock_workspace_references()
 }
 
 fn lock_snapshot(
@@ -3057,7 +5641,7 @@ pub(crate) fn normalize_workspace_root(
         return Err("external source workspace root must be absolute".to_string());
     }
     Ok(Some(
-        dunce::canonicalize(workspace_root).unwrap_or_else(|_| workspace_root.to_path_buf()),
+        crate::agentic::workspace::canonical_local_workspace_path(workspace_root),
     ))
 }
 
@@ -3269,7 +5853,6 @@ fn sanitize_external_snapshot_locations(
             .unwrap_or(ExternalSourceScope::WorkspaceLocal);
         remember_location(scope, directory);
     }
-    drop(remember_location);
     replacements.sort_by(|left, right| right.0.len().cmp(&left.0.len()));
     let sanitize_message = |message: &mut String| {
         for (raw, safe) in &replacements {
@@ -3391,7 +5974,7 @@ fn write_canonical_json(value: &serde_json::Value, output: &mut Vec<u8>) -> serd
         serde_json::Value::Object(values) => {
             output.push(b'{');
             let mut entries = values.iter().collect::<Vec<_>>();
-            entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+            entries.sort_by_key(|(left, _)| *left);
             for (index, (key, value)) in entries.into_iter().enumerate() {
                 if index > 0 {
                     output.push(b',');
@@ -3533,6 +6116,51 @@ async fn service_for(
     service_for_profile(workspace_root, ExternalSourceServiceProfile::LocalExecution).await
 }
 
+pub(crate) async fn collect_external_mcp_import_candidates(
+    workspace_root: Option<&Path>,
+) -> Result<Vec<crate::external_mcp_import::ExternalMcpImportCandidate>, String> {
+    let service = read_only_service_for(workspace_root).await?;
+    service.refresh().await?;
+    let coordinator = lock_mcp_coordinator(&service.control_plane);
+    let snapshot = coordinator.snapshot();
+    let input_candidates = snapshot
+        .servers
+        .iter()
+        .cloned()
+        .map(|definition| {
+            let ecosystem_id = coordinator
+                .ecosystem_for_provider(&definition.id.source.provider_id)
+                .ok_or_else(|| "External MCP provider ecosystem is unavailable".to_string())?;
+            let preparation = if definition.source_enabled
+                && matches!(definition.static_status, ExternalMcpStaticStatus::Ready)
+            {
+                match coordinator
+                    .prepare_import_guarded(&definition.id, &definition.behavior_version)
+                {
+                    Ok(prepared) => {
+                        crate::external_mcp_import::ExternalMcpImportPreparation::Prepared(prepared)
+                    }
+                    Err(error) => {
+                        crate::external_mcp_import::ExternalMcpImportPreparation::Unavailable(
+                            error.code,
+                        )
+                    }
+                }
+            } else {
+                crate::external_mcp_import::ExternalMcpImportPreparation::Unavailable(
+                    "external_mcp.import_candidate_unsupported".to_string(),
+                )
+            };
+            Ok(crate::external_mcp_import::ExternalMcpImportCandidate {
+                definition,
+                ecosystem_id,
+                preparation,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(input_candidates)
+}
+
 async fn read_only_service_for(
     workspace_root: Option<&Path>,
 ) -> Result<Arc<WorkspaceExternalSourceService>, String> {
@@ -3581,6 +6209,24 @@ async fn service_for_profile(
     Ok(service)
 }
 
+async fn existing_service_for_profile(
+    workspace_root: Option<&Path>,
+    profile: ExternalSourceServiceProfile,
+) -> Result<Arc<WorkspaceExternalSourceService>, String> {
+    let workspace_root = normalize_workspace_root(workspace_root)?;
+    let _service_gate = workspace_service_gate().lock().await;
+    let service = workspace_services_for_profile(profile)
+        .get(&workspace_root)
+        .and_then(|service| service.value().upgrade())
+        .ok_or_else(|| {
+            stale_operation_error(
+                "External application snapshot expired; refresh before continuing",
+            )
+        })?;
+    service.touch();
+    Ok(service)
+}
+
 fn epoch_seconds() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -3590,6 +6236,125 @@ fn epoch_seconds() -> u64 {
 
 async fn read_external_sources_config() -> Result<ExternalSourcesConfig, String> {
     ExternalSourcePreferenceStore::global()?.read().await
+}
+
+fn acknowledged_ecosystem_key(execution_domain_id: &str, ecosystem_id: &str) -> String {
+    format!("{execution_domain_id}\u{1f}{ecosystem_id}")
+}
+
+/// Ecosystems that have configuration on this host but have never been
+/// announced to the user.
+///
+/// Both the desktop settings navigation and the TUI read this same result, so
+/// neither surface derives "is there something new" on its own and they cannot
+/// drift apart. An ecosystem only qualifies once discovery actually found a
+/// source for it: a registered adapter with nothing to offer is not news.
+pub async fn unacknowledged_external_ecosystems(
+    workspace_root: Option<&Path>,
+) -> Result<Vec<String>, String> {
+    let service = read_only_service_for(workspace_root).await?;
+    let execution_domain_id = service.execution_domain_id.clone();
+    let discovered = service
+        .snapshot()
+        .sources
+        .iter()
+        .map(|source| source.record.ecosystem_id.to_string())
+        .collect::<BTreeSet<_>>();
+    if discovered.is_empty() {
+        return Ok(Vec::new());
+    }
+    let config = read_external_sources_config().await?;
+    Ok(discovered
+        .into_iter()
+        .filter(|ecosystem_id| {
+            !config
+                .acknowledged_ecosystems
+                .contains(&acknowledged_ecosystem_key(
+                    execution_domain_id.as_str(),
+                    ecosystem_id,
+                ))
+        })
+        .collect())
+}
+
+/// Records that the user has seen the given ecosystems.
+///
+/// Awareness is not part of the preference-revision contract. The set only
+/// grows, insertion is idempotent, and no policy or approval decision reads it,
+/// so concurrent writers cannot lose each other's decisions here. Taking an
+/// expected revision would therefore add fencing failures without protecting
+/// anything, and bumping the revision would invalidate unrelated in-flight
+/// mutations every time a user opens the settings page.
+///
+/// The execution domain is resolved from the workspace's own service so hosts
+/// never pass an identity that disagrees with the one discovery recorded.
+pub async fn acknowledge_external_ecosystems(
+    workspace_root: Option<&Path>,
+    ecosystem_ids: Vec<String>,
+) -> Result<(), String> {
+    if ecosystem_ids.is_empty() {
+        return Ok(());
+    }
+    let execution_domain_id = read_only_service_for(workspace_root)
+        .await?
+        .execution_domain_id
+        .clone();
+    let keys = ecosystem_ids
+        .iter()
+        .map(|ecosystem_id| acknowledged_ecosystem_key(execution_domain_id.as_str(), ecosystem_id))
+        .collect::<Vec<_>>();
+    ExternalSourcePreferenceStore::global()?
+        .update(move |config| {
+            for key in &keys {
+                if config.acknowledged_ecosystems.contains(key) {
+                    continue;
+                }
+                if config.acknowledged_ecosystems.len() >= MAX_ACKNOWLEDGED_ECOSYSTEMS {
+                    break;
+                }
+                config.acknowledged_ecosystems.insert(key.clone());
+            }
+            true
+        })
+        .await
+        .map(|_| ())
+}
+
+async fn persist_prompt_command_shell_plan_approval(
+    fingerprint: &str,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    let fingerprint = fingerprint.to_string();
+    ExternalSourcePreferenceStore::global()?
+        .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            if config
+                .approved_prompt_command_shell_plans
+                .contains(&fingerprint)
+            {
+                return true;
+            }
+            if config.approved_prompt_command_shell_plans.len()
+                >= MAX_APPROVED_PROMPT_COMMAND_SHELL_PLANS
+            {
+                return false;
+            }
+            config
+                .approved_prompt_command_shell_plans
+                .insert(fingerprint);
+            config.preference_revision = config.preference_revision.saturating_add(1);
+            true
+        })
+        .await
+        .and_then(|(applied, config)| {
+            applied.then_some(config).ok_or_else(|| {
+                stale_operation_error(
+                    "Prompt command shell approvals changed or reached their storage limit; refresh before retrying",
+                )
+            })
+        })
 }
 
 pub(crate) async fn external_tool_invocation_is_authorized(
@@ -3749,6 +6514,8 @@ fn merge_subagent_state(
     snapshot.subagent_generation = coordinator_snapshot.generation;
     snapshot.preference_revision = preference_revision;
     snapshot.subagents = state.summaries.clone();
+    snapshot.subagent_model_binding_groups = state.model_binding_groups.clone();
+    snapshot.subagent_model_binding_options = state.model_binding_options.clone();
     snapshot.subagent_conflicts = state.conflicts.clone();
     snapshot.pending_subagent_approvals = state.pending_approvals.clone();
     snapshot
@@ -4036,6 +6803,99 @@ async fn persist_subagent_conflict_choice_with_store(
         })
 }
 
+fn validate_subagent_model_binding_mutation(
+    snapshot: &ExternalSourceCatalogSnapshot,
+    binding_key: &str,
+    target: Option<&ExternalSubagentModelBindingTarget>,
+    expected_subagent_generation: u64,
+    expected_preference_revision: u64,
+) -> Result<(), String> {
+    if snapshot.subagent_generation != expected_subagent_generation
+        || snapshot.preference_revision != expected_preference_revision
+    {
+        return Err(stale_operation_error(
+            "External subagent catalog changed; refresh before retrying",
+        ));
+    }
+    let group = snapshot
+        .subagent_model_binding_groups
+        .iter()
+        .find(|group| group.binding_key == binding_key)
+        .ok_or_else(|| {
+            missing_candidate_error("External subagent model binding is no longer available")
+        })?;
+    if !matches!(
+        group.method,
+        ExternalSubagentModelBindingMethod::BindingRequired
+            | ExternalSubagentModelBindingMethod::Explicit
+            | ExternalSubagentModelBindingMethod::BindingUnavailable
+    ) {
+        return Err(unavailable_operation_error(
+            "External subagent model binding is read-only in its current state",
+        ));
+    }
+    if let Some(target) = target {
+        if !snapshot
+            .subagent_model_binding_options
+            .iter()
+            .any(|option| &option.target == target)
+        {
+            return Err(unavailable_operation_error(
+                "External subagent model binding target is unavailable",
+            ));
+        }
+    }
+    Ok(())
+}
+
+async fn persist_subagent_model_binding(
+    binding_key: &str,
+    target: Option<ExternalSubagentModelBindingTarget>,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    let store = ExternalSourcePreferenceStore::global()?;
+    persist_subagent_model_binding_with_store(
+        &store,
+        binding_key,
+        target,
+        expected_preference_revision,
+    )
+    .await
+}
+
+async fn persist_subagent_model_binding_with_store(
+    store: &ExternalSourcePreferenceStore,
+    binding_key: &str,
+    target: Option<ExternalSubagentModelBindingTarget>,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    let binding_key = binding_key.to_string();
+    store
+        .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            match target {
+                Some(target) => {
+                    config.subagent_model_bindings.insert(binding_key, target);
+                }
+                None => {
+                    config.subagent_model_bindings.remove(&binding_key);
+                }
+            }
+            config.preference_revision = config.preference_revision.saturating_add(1);
+            true
+        })
+        .await
+        .and_then(|(applied, config)| {
+            applied.then_some(config).ok_or_else(|| {
+                stale_operation_error(
+                    "External subagent preferences changed; refresh before retrying",
+                )
+            })
+        })
+}
+
 async fn persist_mcp_server_decision(
     decision_key: &str,
     approved: bool,
@@ -4307,6 +7167,27 @@ fn apply_integration_policy_mutation_to_config(
                 .user_defaults
                 .enabled = false;
             config.integration_policy = reset_policy;
+            config.config_origin = Some(ExternalSourcesConfigOrigin::IncompatibleReset);
+            config.connection_schema_migration_version =
+                EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION;
+            config.application_connections = default_external_integration_registry()
+                .into_iter()
+                .map(|registration| {
+                    (
+                        external_application_connection_key(
+                            LEGACY_LOCAL_EXECUTION_DOMAIN_ID,
+                            registration.descriptor.ecosystem_id.as_str(),
+                            None,
+                        ),
+                        StoredExternalApplicationConnectionDecision {
+                            desired_connection:
+                                StoredExternalApplicationDesiredConnection::Disconnected,
+                            decision_origin:
+                                StoredExternalApplicationDecisionOrigin::IncompatibleReset,
+                        },
+                    )
+                })
+                .collect();
             config.preference_revision = config.preference_revision.saturating_add(1);
             return Ok(true);
         }
@@ -4412,6 +7293,8 @@ fn propagate_suppressed_sources(
         lock_subagent_coordinator(&service.control_plane)
             .replace_suppressed_sources(sources.clone());
         lock_mcp_coordinator(&service.control_plane).replace_suppressed_sources(sources.clone());
+        lock_workspace_reference_coordinator(&service.control_plane)
+            .replace_suppressed_sources(sources.clone());
         tokio::spawn(async move {
             if let Err(error) = service.refresh_preserving_worker_recovery().await {
                 log::warn!(
@@ -4448,6 +7331,14 @@ fn propagate_conflict_preferences(preferences: &ExternalSourcesConfig) {
 }
 
 fn propagate_tool_preferences(_preferences: &ExternalSourcesConfig) {
+    propagate_runtime_preference_revision();
+}
+
+fn propagate_prompt_command_preferences(_preferences: &ExternalSourcesConfig) {
+    propagate_runtime_preference_revision();
+}
+
+fn propagate_runtime_preference_revision() {
     for service in workspace_services().iter() {
         let Some(service) = service.value().upgrade() else {
             continue;
@@ -4462,31 +7353,11 @@ fn propagate_tool_preferences(_preferences: &ExternalSourcesConfig) {
 }
 
 fn propagate_subagent_preferences(_preferences: &ExternalSourcesConfig) {
-    for service in workspace_services().iter() {
-        let Some(service) = service.value().upgrade() else {
-            continue;
-        };
-        tokio::spawn(async move {
-            let command_snapshot = lock_coordinator(&service.control_plane).snapshot();
-            if let Ok(snapshot) = service.rebuild_product_snapshot(command_snapshot).await {
-                let _ = service.updates.send(snapshot);
-            }
-        });
-    }
+    propagate_runtime_preference_revision();
 }
 
 fn propagate_mcp_preferences(_preferences: &ExternalSourcesConfig) {
-    for service in workspace_services().iter() {
-        let Some(service) = service.value().upgrade() else {
-            continue;
-        };
-        tokio::spawn(async move {
-            let command_snapshot = lock_coordinator(&service.control_plane).snapshot();
-            if let Ok(snapshot) = service.rebuild_product_snapshot(command_snapshot).await {
-                let _ = service.updates.send(snapshot);
-            }
-        });
-    }
+    propagate_runtime_preference_revision();
 }
 
 fn propagate_integration_policy_preferences(
@@ -4608,6 +7479,15 @@ async fn sync_service_preferences(service: &WorkspaceExternalSourceService) -> R
             false
         }
     };
+    let workspace_reference_changed = {
+        let mut coordinator = lock_workspace_reference_coordinator(&service.control_plane);
+        if coordinator.suppressed_sources() != &suppressed_sources {
+            coordinator.replace_suppressed_sources(suppressed_sources.clone());
+            true
+        } else {
+            false
+        }
+    };
     let subagent_preferences_changed =
         service.snapshot().preference_revision != preferences.preference_revision;
     let policy_changed = service.snapshot().integration_policy != policy;
@@ -4615,6 +7495,7 @@ async fn sync_service_preferences(service: &WorkspaceExternalSourceService) -> R
         || tool_changed
         || subagent_changed
         || mcp_changed
+        || workspace_reference_changed
         || subagent_preferences_changed
         || policy_changed
     {
@@ -4690,7 +7571,7 @@ fn project_native_prompt_command_conflicts(
     for command in native_commands {
         command
             .validate()
-            .map_err(|error| invalid_operation_error(&error.to_string()))?;
+            .map_err(|error| invalid_operation_error(error.to_string()))?;
     }
     let command_names = native_commands
         .iter()
@@ -4737,14 +7618,15 @@ fn project_native_prompt_command_conflicts(
                 .collect::<Vec<_>>()
         };
         let Some((_, _, source)) = external.first() else {
-            reconfirmations.extend(native.iter().filter_map(|command| {
-                conflicted_candidate_ids
-                    .contains(&command.candidate_id)
-                    .then(|| NativePromptCommandReconfirmationProjection {
+            reconfirmations.extend(
+                native
+                    .iter()
+                    .filter(|&command| conflicted_candidate_ids.contains(&command.candidate_id))
+                    .map(|command| NativePromptCommandReconfirmationProjection {
                         command_name: command_name.clone(),
                         native_candidate_id: command.candidate_id.clone(),
-                    })
-            }));
+                    }),
+            );
             continue;
         };
         let execution_domain = snapshot
@@ -5268,6 +8150,24 @@ pub async fn set_external_subagent_activation(
         .await
 }
 
+pub async fn set_external_subagent_model_binding(
+    workspace_root: Option<&Path>,
+    binding_key: &str,
+    target: Option<ExternalSubagentModelBindingTarget>,
+    expected_subagent_generation: u64,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourceCatalogSnapshot, String> {
+    service_for(workspace_root)
+        .await?
+        .set_subagent_model_binding(
+            binding_key,
+            target,
+            expected_subagent_generation,
+            expected_preference_revision,
+        )
+        .await
+}
+
 pub async fn choose_external_subagent_conflict(
     workspace_root: Option<&Path>,
     conflict_key: &str,
@@ -5299,6 +8199,85 @@ pub async fn external_source_snapshot(
         service.ensure_background_refresh();
         Ok(service.snapshot())
     }
+}
+
+pub async fn workspace_reference_snapshot(
+    workspace_root: &Path,
+    native_related_paths: &[crate::service::workspace::RelatedPath],
+    force_refresh: bool,
+) -> Result<WorkspaceReferenceSnapshot, String> {
+    let service = service_for(Some(workspace_root)).await?;
+    sync_service_preferences(&service).await?;
+    if force_refresh {
+        service.refresh_workspace_references(true).await?;
+    } else {
+        service.ensure_workspace_reference_refresh().await?;
+    }
+    let active_ecosystems = ecosystems_with_active_capability(
+        &service.snapshot().integration_policy,
+        EXTERNAL_CAPABILITY_REFERENCE,
+    );
+    let external = lock_workspace_reference_coordinator(&service.control_plane).snapshot();
+    Ok(compose_workspace_reference_snapshot(
+        native_related_paths,
+        external,
+        &active_ecosystems,
+    ))
+}
+
+fn compose_workspace_reference_snapshot(
+    native_related_paths: &[crate::service::workspace::RelatedPath],
+    external: bitfun_external_sources::ExternalWorkspaceReferenceCoordinatorSnapshot,
+    active_ecosystems: &BTreeSet<EcosystemId>,
+) -> WorkspaceReferenceSnapshot {
+    let external_sources = external
+        .sources
+        .iter()
+        .filter(|source| active_ecosystems.contains(&source.record.ecosystem_id))
+        .map(|source| (source.record.key.clone(), &source.record))
+        .collect::<BTreeMap<_, _>>();
+    let mut references = native_related_paths
+        .iter()
+        .map(|related_path| WorkspaceReferenceCatalogEntry {
+            stable_key: native_workspace_reference_key(related_path),
+            alias: None,
+            path: PathBuf::from(&related_path.path),
+            description: related_path.description.clone(),
+            hidden: false,
+            origin: WorkspaceReferenceOrigin::Native,
+            ecosystem_id: None,
+            source_display_name: None,
+            source_scope: None,
+        })
+        .collect::<Vec<_>>();
+    references.extend(external.references.into_iter().filter_map(|reference| {
+        let source = external_sources.get(&reference.source)?;
+        Some(WorkspaceReferenceCatalogEntry {
+            stable_key: reference.stable_key(),
+            alias: Some(reference.alias),
+            path: reference.path,
+            description: reference.description,
+            hidden: reference.hidden,
+            origin: WorkspaceReferenceOrigin::External,
+            ecosystem_id: Some(source.ecosystem_id.clone()),
+            source_display_name: Some(source.display_name.clone()),
+            source_scope: Some(source.scope),
+        })
+    }));
+    WorkspaceReferenceSnapshot {
+        generation: external.generation,
+        discovery_pending: external.discovery_pending,
+        references,
+        diagnostics: external.diagnostics,
+    }
+}
+
+fn native_workspace_reference_key(related_path: &crate::service::workspace::RelatedPath) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(related_path.path.as_bytes());
+    hasher.update([0]);
+    hasher.update(related_path.description.as_deref().unwrap_or("").as_bytes());
+    format!("native:{}", hex::encode(hasher.finalize()))
 }
 
 /// Resolves an opaque source identity to its host-local location for a host
@@ -5340,6 +8319,59 @@ pub async fn get_external_source_control_snapshot(
         service.ensure_background_refresh();
     }
     Ok(service.surface_snapshot(host_capabilities))
+}
+
+pub async fn get_external_application_snapshot_v2(
+    workspace_root: Option<&Path>,
+    force_refresh: bool,
+    host_capabilities: ExternalApplicationHostCapabilitiesV2,
+) -> Result<ExternalApplicationSnapshotV2, String> {
+    if !host_capabilities.can_read_snapshot {
+        return Err(unavailable_operation_error(
+            "This Host cannot read external application state",
+        ));
+    }
+    let service = if host_capabilities.can_mutate {
+        service_for(workspace_root).await?
+    } else {
+        read_only_service_for(workspace_root).await?
+    };
+    if force_refresh {
+        if host_capabilities.can_refresh && host_capabilities.can_mutate {
+            service.refresh_with_runtime_invalidation().await?;
+        } else {
+            service.refresh().await?;
+        }
+    } else {
+        service.ensure_background_refresh();
+    }
+    let preferences = ExternalSourcePreferenceStore::global()?
+        .ensure_application_connection_schema(service.execution_domain_id.as_str())
+        .await?;
+    service.application_snapshot_v2(&preferences, host_capabilities)
+}
+
+pub async fn get_external_application_review_page_v2(
+    workspace_root: Option<&Path>,
+    request: ExternalApplicationReviewPageRequestV2,
+) -> Result<ExternalApplicationReviewPageV2, String> {
+    let service =
+        existing_service_for_profile(workspace_root, ExternalSourceServiceProfile::LocalExecution)
+            .await?;
+    let preferences = ExternalSourcePreferenceStore::global()?
+        .ensure_application_connection_schema(service.execution_domain_id.as_str())
+        .await?;
+    service.application_review_page_v2(&preferences, request)
+}
+
+pub async fn apply_external_application_action_v2(
+    workspace_root: Option<&Path>,
+    request: ExternalApplicationControlRequestV2,
+) -> Result<ExternalApplicationControlResultV2, String> {
+    service_for(workspace_root)
+        .await?
+        .apply_application_action_v2(request)
+        .await
 }
 
 pub async fn apply_external_source_control_action(
@@ -5574,10 +8606,29 @@ fn incompatible_policy_error(detail: impl Into<String>) -> String {
     )
 }
 
-fn external_integration_error_code(error: &str) -> String {
+pub(crate) fn external_integration_error_code(error: &str) -> String {
     ExternalSourceOperationError::decode(error)
         .map(|error| error.code.as_str().to_string())
         .unwrap_or_else(|| "internal".to_string())
+}
+
+/// Ensure the workspace-scoped static source snapshot has been published once.
+/// This is the shared discovery gate for selectors and execution routing; it
+/// does not start or recover any executable extension runtime.
+pub async fn ensure_external_source_workspace_snapshot(
+    workspace_root: Option<&Path>,
+) -> Result<(), String> {
+    ensure_initial_external_source_workspace_service(workspace_root)
+        .await
+        .map(|_| ())
+}
+
+async fn ensure_initial_external_source_workspace_service(
+    workspace_root: Option<&Path>,
+) -> Result<Arc<WorkspaceExternalSourceService>, String> {
+    let service = service_for(workspace_root).await?;
+    service.ensure_initial_refresh().await?;
+    Ok(service)
 }
 
 /// Keep the external-source runtime aligned with an actively assembled product
@@ -5586,25 +8637,17 @@ fn external_integration_error_code(error: &str) -> String {
 /// exposed to the model. Existing services are only touched; file watchers and
 /// explicit refreshes remain responsible for later source changes.
 pub(crate) async fn ensure_external_source_workspace_runtime(workspace_root: Option<&Path>) {
-    let service = match service_for(workspace_root).await {
+    let service = match ensure_initial_external_source_workspace_service(workspace_root).await {
         Ok(service) => service,
         Err(error) => {
             log::warn!(
-                "Could not retain external source workspace runtime scope={} error_category={}",
+                "Could not initialize external source workspace runtime scope={} error_category={}",
                 external_log_scope(workspace_root),
                 external_log_error_category(&error),
             );
             return;
         }
     };
-    if let Err(error) = service.ensure_initial_refresh().await {
-        log::warn!(
-            "Could not initialize external source workspace runtime scope={} error_category={}",
-            external_log_scope(workspace_root),
-            external_log_error_category(&error),
-        );
-        return;
-    }
     if external_tool_workspace_requires_recovery(workspace_root).await {
         if let Err(error) = service.refresh_worker_loss_once().await {
             log::warn!(
@@ -5637,7 +8680,8 @@ pub async fn expand_external_prompt_command(
     expected_content_version: Option<&str>,
     expected_native_conflict_key: Option<&str>,
     expected_preference_revision: Option<u64>,
-) -> Result<ExpandedPromptCommand, String> {
+    shell_review_decision: Option<&PromptCommandShellReviewDecision>,
+) -> Result<PromptCommandInvocationOutcome, String> {
     service_for(workspace_root)
         .await?
         .expand_command(
@@ -5648,6 +8692,7 @@ pub async fn expand_external_prompt_command(
             expected_content_version,
             expected_native_conflict_key,
             expected_preference_revision,
+            shell_review_decision,
         )
         .await
 }
@@ -5670,6 +8715,12 @@ pub struct ExternalSourceSubscription {
 }
 
 impl ExternalSourceSubscription {
+    pub async fn recv(
+        &mut self,
+    ) -> Result<ExternalSourceCatalogSnapshot, broadcast::error::RecvError> {
+        self.receiver.recv().await
+    }
+
     pub fn try_recv(
         &mut self,
     ) -> Result<ExternalSourceCatalogSnapshot, broadcast::error::TryRecvError> {
@@ -5678,14 +8729,21 @@ impl ExternalSourceSubscription {
 }
 
 #[cfg(test)]
+mod opencode_local_source_order_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::service::mcp::{ConfigLocation, MCPServerConfig, MCPServerType};
+    use bitfun_product_domains::external_source_control::ExternalApplicationEffectiveStatusV2;
     use bitfun_product_domains::external_sources::{
         EcosystemId, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
-        PromptCommandAvailability, PromptCommandDefinition, PromptCommandProviderIdentity,
-        PromptCommandProviderSnapshot, SourceQualifiedCommandId,
+        PromptCommandAvailability, PromptCommandCatalogEntry, PromptCommandConflict,
+        PromptCommandConflictCandidate, PromptCommandDefinition, PromptCommandExecutionTarget,
+        PromptCommandProviderIdentity, PromptCommandProviderSnapshot, PromptCommandShellExpansion,
+        PromptCommandShellInvocation, PromptCommandShellPreference, SourceQualifiedCommandId,
     };
+    use bitfun_product_domains::workspace_references::ExternalWorkspaceReferenceDefinition;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     fn native_mcp_config_with_pin(pin: &str) -> MCPServerConfig {
@@ -5709,7 +8767,321 @@ mod tests {
             oauth: None,
             oauth_enabled: None,
             xaa: None,
+            timeouts: Default::default(),
         }
+    }
+
+    fn prompt_shell_expansion(command: &str, can_remember: bool) -> PromptCommandExpansion {
+        let content = format!("Before !`{command}` after");
+        PromptCommandExpansion {
+            content: content.clone(),
+            workspace_file_references: Vec::new(),
+            shell: Some(PromptCommandShellExpansion {
+                working_directory: std::env::current_dir()
+                    .expect("the test process should have an absolute working directory"),
+                preference: PromptCommandShellPreference::HostDefault,
+                invocations: vec![PromptCommandShellInvocation {
+                    range_start: 7,
+                    range_end: content.len() - 6,
+                    command: command.to_string(),
+                    can_remember,
+                }],
+            }),
+        }
+    }
+
+    fn resolved_test_shell() -> ResolvedPromptCommandShell {
+        ResolvedPromptCommandShell {
+            display_name: "Bash".to_string(),
+            path: PathBuf::from("/bin/bash"),
+            kind: tool_runtime::exec_command::ExecCommandShellKind::Bash,
+        }
+    }
+
+    #[test]
+    fn prompt_shell_review_fingerprint_covers_command_cwd_shell_and_content_version() {
+        let plan = prepare_prompt_command_shell_plan(
+            prompt_shell_expansion("git status", true),
+            "OpenCode",
+            "local-user",
+            "candidate-v1",
+            "content-v1",
+            4,
+            resolved_test_shell(),
+        )
+        .unwrap();
+        assert!(plan.review.can_remember);
+        assert_eq!(plan.review.commands, ["git status"]);
+        assert_eq!(plan.review.shell_executable, "/bin/bash");
+
+        let changed_command = prepare_prompt_command_shell_plan(
+            prompt_shell_expansion("git diff", true),
+            "OpenCode",
+            "local-user",
+            "candidate-v1",
+            "content-v1",
+            4,
+            resolved_test_shell(),
+        )
+        .unwrap();
+        let changed_content = prepare_prompt_command_shell_plan(
+            prompt_shell_expansion("git status", true),
+            "OpenCode",
+            "local-user",
+            "candidate-v1",
+            "content-v2",
+            4,
+            resolved_test_shell(),
+        )
+        .unwrap();
+
+        assert_ne!(
+            plan.review.plan_fingerprint,
+            changed_command.review.plan_fingerprint
+        );
+        assert_ne!(
+            plan.review.plan_fingerprint,
+            changed_content.review.plan_fingerprint
+        );
+    }
+
+    #[test]
+    fn prompt_shell_preference_falls_back_only_when_the_ecosystem_allows_it() {
+        let host =
+            resolve_prompt_command_shell(&PromptCommandShellPreference::HostDefault).unwrap();
+        let preferred = resolve_prompt_command_shell(&PromptCommandShellPreference::Preferred {
+            executable: "bitfun-missing-shell-for-test".to_string(),
+        })
+        .unwrap();
+
+        assert_eq!(preferred.path, host.path);
+        assert!(
+            resolve_prompt_command_shell(&PromptCommandShellPreference::Required {
+                executable: "bitfun-missing-shell-for-test".to_string(),
+            })
+            .is_err()
+        );
+        let required_one_of =
+            resolve_prompt_command_shell(&PromptCommandShellPreference::RequiredOneOf {
+                executables: vec![
+                    "bitfun-missing-shell-for-test".to_string(),
+                    host.path.to_string_lossy().to_string(),
+                ],
+            })
+            .unwrap();
+        assert_eq!(required_one_of.path, host.path);
+    }
+
+    #[test]
+    fn prompt_shell_executable_is_canonical_before_review_and_execution() {
+        let directory = tempfile::tempdir().unwrap();
+        let executable = directory.path().join("reviewed-shell");
+        std::fs::write(&executable, "test").unwrap();
+
+        let resolved = finalize_resolved_prompt_command_shell(
+            "Reviewed shell".to_string(),
+            executable.clone(),
+            ShellType::Custom("reviewed-shell".to_string()),
+        )
+        .unwrap();
+
+        assert!(resolved.path.is_absolute());
+        assert_eq!(resolved.path, dunce::canonicalize(executable).unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn prompt_shell_fingerprint_keeps_non_utf8_path_identity() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+
+        let first = PathBuf::from(OsString::from_vec(b"/tmp/bitfun-\x80".to_vec()));
+        let second = PathBuf::from(OsString::from_vec(b"/tmp/bitfun-\x81".to_vec()));
+        assert_ne!(
+            prompt_command_shell_path_bytes(&first),
+            prompt_command_shell_path_bytes(&second)
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn prompt_shell_fingerprint_keeps_non_unicode_windows_path_identity() {
+        use std::ffi::OsString;
+        use std::os::windows::ffi::OsStringExt;
+
+        let first = PathBuf::from(OsString::from_wide(&[b'C' as u16, b':' as u16, 0xd800]));
+        let second = PathBuf::from(OsString::from_wide(&[b'C' as u16, b':' as u16, 0xd801]));
+        assert_ne!(
+            prompt_command_shell_path_bytes(&first),
+            prompt_command_shell_path_bytes(&second)
+        );
+    }
+
+    #[test]
+    fn dynamic_shell_plans_cannot_be_remembered_and_outputs_replace_in_template_order() {
+        let mut expansion = prompt_shell_expansion("first $ARGUMENTS", false);
+        let second_start = expansion.content.len();
+        expansion.content.push_str(" then !`second`");
+        expansion
+            .shell
+            .as_mut()
+            .unwrap()
+            .invocations
+            .push(PromptCommandShellInvocation {
+                range_start: second_start + 6,
+                range_end: expansion.content.len(),
+                command: "second".to_string(),
+                can_remember: true,
+            });
+        let plan = prepare_prompt_command_shell_plan(
+            expansion,
+            "Claude Code",
+            "local-user",
+            "candidate-v1",
+            "content-v1",
+            1,
+            resolved_test_shell(),
+        )
+        .unwrap();
+
+        assert!(!plan.review.can_remember);
+        assert_eq!(
+            apply_prompt_command_shell_outputs(
+                &plan.expansion.content,
+                &plan.invocations,
+                &["one".to_string(), "two".to_string()],
+            )
+            .unwrap(),
+            "Before one after then two"
+        );
+    }
+
+    #[tokio::test]
+    async fn prompt_shell_plan_uses_stdout_even_after_nonzero_exit_and_preserves_template_order() {
+        let resolved = resolve_prompt_command_shell(&PromptCommandShellPreference::HostDefault)
+            .expect("the host default shell should resolve");
+        let (first, second) = match resolved.kind {
+            ExecCommandShellKind::PowerShell | ExecCommandShellKind::PowerShellCore => (
+                "Write-Output first; [Console]::Error.WriteLine('not-prompt'); exit 7",
+                "Write-Output second",
+            ),
+            ExecCommandShellKind::Cmd => (
+                "echo first & echo not-prompt 1>&2 & exit /b 7",
+                "echo second",
+            ),
+            _ => (
+                "printf first; printf not-prompt >&2; exit 7",
+                "printf second",
+            ),
+        };
+        let content = format!("Before !`{first}` middle !`{second}` after");
+        let invocations = [first, second]
+            .into_iter()
+            .map(|command| {
+                let marker = format!("!`{command}`");
+                let range_start = content.find(&marker).unwrap();
+                PromptCommandShellInvocation {
+                    range_start,
+                    range_end: range_start + marker.len(),
+                    command: command.to_string(),
+                    can_remember: true,
+                }
+            })
+            .collect();
+        let expansion = PromptCommandExpansion {
+            content,
+            workspace_file_references: Vec::new(),
+            shell: Some(PromptCommandShellExpansion {
+                working_directory: tempfile::tempdir().unwrap().keep(),
+                preference: PromptCommandShellPreference::HostDefault,
+                invocations,
+            }),
+        };
+        let plan = prepare_prompt_command_shell_plan(
+            expansion,
+            "OpenCode",
+            "local-user",
+            "candidate-v1",
+            "content-v1",
+            1,
+            resolved,
+        )
+        .unwrap();
+
+        let expanded = execute_prompt_command_shell_plan(plan).await.unwrap();
+
+        assert!(!expanded.content.contains("not-prompt"));
+        let first_index = expanded.content.find("first").unwrap();
+        let second_index = expanded.content.find("second").unwrap();
+        assert!(first_index < second_index);
+        assert!(expanded.content.starts_with("Before "));
+        assert!(expanded.content.ends_with(" after"));
+    }
+
+    #[test]
+    fn effective_workspace_references_keep_native_order_before_external_aliases() {
+        let native = vec![crate::service::workspace::RelatedPath {
+            path: "D:/native-docs".to_string(),
+            description: Some("BitFun workspace setting".to_string()),
+        }];
+        let source_key = SourceKey::new("opencode.references", "project-config").unwrap();
+        let external = bitfun_external_sources::ExternalWorkspaceReferenceCoordinatorSnapshot {
+            generation: 7,
+            discovery_pending: false,
+            sources: vec![ExternalSourceCatalogEntry {
+                stable_key: source_key.stable_key(),
+                presentation_group_id: None,
+                record: ExternalSourceRecord {
+                    key: source_key.clone(),
+                    ecosystem_id: EcosystemId::new("opencode").unwrap(),
+                    display_name: "OpenCode project references".to_string(),
+                    source_kind: "opencode_config".to_string(),
+                    scope: ExternalSourceScope::Project,
+                    location: "D:/workspace/opencode.json".to_string(),
+                    execution_domain_id: ExecutionDomainId::new("local-user").unwrap(),
+                    health:
+                        bitfun_product_domains::external_sources::ExternalSourceHealth::Available,
+                    content_version: "source-v1".to_string(),
+                    diagnostics: Vec::new(),
+                },
+                lifecycle: ExternalSourceLifecycleState::Available,
+            }],
+            references: vec![ExternalWorkspaceReferenceDefinition {
+                source: source_key,
+                alias: "docs".to_string(),
+                path: PathBuf::from("D:/external-docs"),
+                description: Some("OpenCode reference".to_string()),
+                hidden: false,
+                content_version: "reference-v1".to_string(),
+            }],
+            diagnostics: Vec::new(),
+        };
+
+        let inactive =
+            compose_workspace_reference_snapshot(&native, external.clone(), &BTreeSet::new());
+        assert_eq!(inactive.references.len(), 1);
+        assert_eq!(
+            inactive.references[0].origin,
+            WorkspaceReferenceOrigin::Native
+        );
+
+        let active_ecosystems = [EcosystemId::new("opencode").unwrap()]
+            .into_iter()
+            .collect();
+        let snapshot = compose_workspace_reference_snapshot(&native, external, &active_ecosystems);
+
+        assert_eq!(snapshot.generation, 7);
+        assert_eq!(snapshot.references.len(), 2);
+        assert_eq!(
+            snapshot.references[0].origin,
+            WorkspaceReferenceOrigin::Native
+        );
+        assert_eq!(snapshot.references[0].alias, None);
+        assert_eq!(
+            snapshot.references[1].origin,
+            WorkspaceReferenceOrigin::External
+        );
+        assert_eq!(snapshot.references[1].alias.as_deref(), Some("docs"));
     }
 
     #[test]
@@ -5760,14 +9132,203 @@ mod tests {
         assert!(!debug.contains("private-revision-secret"));
     }
 
+    #[tokio::test]
+    async fn external_subagent_model_bindings_share_the_existing_atomic_preference_owner() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let process_a = ExternalSourcePreferenceStore::new(path.clone());
+        let process_b = ExternalSourcePreferenceStore::new(path);
+        let workspace_a = "external_subagent_model_binding:workspace-a";
+        let workspace_b = "external_subagent_model_binding:workspace-b";
+
+        let first = persist_subagent_model_binding_with_store(
+            &process_a,
+            workspace_a,
+            Some(ExternalSubagentModelBindingTarget::Primary),
+            0,
+        )
+        .await
+        .unwrap();
+        assert_eq!(first.preference_revision, 1);
+        assert_eq!(
+            first.subagent_model_bindings.get(workspace_a),
+            Some(&ExternalSubagentModelBindingTarget::Primary)
+        );
+
+        let merged = persist_subagent_model_binding_with_store(
+            &process_b,
+            workspace_b,
+            Some(ExternalSubagentModelBindingTarget::Model {
+                model_id: "glm-project".to_string(),
+            }),
+            first.preference_revision,
+        )
+        .await
+        .unwrap();
+        assert_eq!(merged.preference_revision, 2);
+        assert_eq!(merged.subagent_model_bindings.len(), 2);
+
+        let error = persist_subagent_model_binding_with_store(
+            &process_a,
+            workspace_a,
+            Some(ExternalSubagentModelBindingTarget::Fast),
+            first.preference_revision,
+        )
+        .await
+        .expect_err("a stale process must not overwrite a newer workspace binding");
+        assert_eq!(
+            ExternalSourceOperationError::decode(&error)
+                .expect("stale binding writes use the typed error contract")
+                .code,
+            ExternalSourceOperationErrorCode::StaleRevision
+        );
+
+        let replaced = persist_subagent_model_binding_with_store(
+            &process_a,
+            workspace_a,
+            Some(ExternalSubagentModelBindingTarget::Fast),
+            merged.preference_revision,
+        )
+        .await
+        .unwrap();
+        assert_eq!(replaced.preference_revision, 3);
+        assert_eq!(
+            replaced.subagent_model_bindings.get(workspace_a),
+            Some(&ExternalSubagentModelBindingTarget::Fast)
+        );
+
+        let cleared = persist_subagent_model_binding_with_store(
+            &process_b,
+            workspace_a,
+            None,
+            replaced.preference_revision,
+        )
+        .await
+        .unwrap();
+        assert_eq!(cleared.preference_revision, 4);
+        assert!(!cleared.subagent_model_bindings.contains_key(workspace_a));
+        assert!(cleared.subagent_model_bindings.contains_key(workspace_b));
+    }
+
+    #[test]
+    fn external_subagent_model_binding_mutation_fails_closed_against_the_current_snapshot() {
+        let binding_key = "external_subagent_model_binding:known";
+        let mut snapshot = ExternalSourceCatalogSnapshot {
+            generation: 0,
+            discovery_pending: false,
+            sources: Vec::new(),
+            commands: Vec::new(),
+            command_conflicts: Vec::new(),
+            tools: Vec::new(),
+            tool_approval_requests: Vec::new(),
+            tool_conflicts: Vec::new(),
+            mcp_generation: 0,
+            mcp_servers: Vec::new(),
+            mcp_approval_requests: Vec::new(),
+            mcp_conflicts: Vec::new(),
+            subagent_generation: 7,
+            preference_revision: 11,
+            subagents: Vec::new(),
+            subagent_model_binding_groups: vec![ExternalSubagentModelBindingGroup {
+                binding_key: binding_key.to_string(),
+                request: ExternalSubagentModelRequest::Reference {
+                    provider_hint: Some("openai".to_string()),
+                    model_name: "gpt-project".to_string(),
+                },
+                profile_request: None,
+                scope: ExternalSourceScope::Project,
+                method: ExternalSubagentModelBindingMethod::BindingRequired,
+                selected_target: None,
+                effective_model_label: None,
+                affected_candidate_ids: vec!["review".to_string()],
+            }],
+            subagent_model_binding_options: vec![ExternalSubagentModelBindingOption {
+                target: ExternalSubagentModelBindingTarget::Primary,
+                effective_model_label: "Primary model".to_string(),
+                configured_reasoning_effort: None,
+            }],
+            subagent_conflicts: Vec::new(),
+            pending_subagent_approvals: Vec::new(),
+            integration_policy: Default::default(),
+            diagnostics: Vec::new(),
+        };
+
+        assert!(validate_subagent_model_binding_mutation(
+            &snapshot,
+            binding_key,
+            Some(&ExternalSubagentModelBindingTarget::Primary),
+            7,
+            11,
+        )
+        .is_ok());
+        assert!(
+            validate_subagent_model_binding_mutation(&snapshot, binding_key, None, 7, 11,).is_ok()
+        );
+
+        for (key, target, generation, revision, expected_code) in [
+            (
+                "external_subagent_model_binding:missing",
+                None,
+                7,
+                11,
+                ExternalSourceOperationErrorCode::NotFound,
+            ),
+            (
+                binding_key,
+                Some(&ExternalSubagentModelBindingTarget::Fast),
+                7,
+                11,
+                ExternalSourceOperationErrorCode::Unavailable,
+            ),
+            (
+                binding_key,
+                None,
+                8,
+                11,
+                ExternalSourceOperationErrorCode::StaleRevision,
+            ),
+            (
+                binding_key,
+                None,
+                7,
+                12,
+                ExternalSourceOperationErrorCode::StaleRevision,
+            ),
+        ] {
+            let error = validate_subagent_model_binding_mutation(
+                &snapshot, key, target, generation, revision,
+            )
+            .expect_err("invalid binding mutations must fail closed");
+            assert_eq!(
+                ExternalSourceOperationError::decode(&error).unwrap().code,
+                expected_code
+            );
+        }
+
+        snapshot.subagent_model_binding_groups[0].method =
+            ExternalSubagentModelBindingMethod::Exact;
+        let error = validate_subagent_model_binding_mutation(
+            &snapshot,
+            binding_key,
+            Some(&ExternalSubagentModelBindingTarget::Primary),
+            7,
+            11,
+        )
+        .expect_err("exact source matches are read-only");
+        assert_eq!(
+            ExternalSourceOperationError::decode(&error).unwrap().code,
+            ExternalSourceOperationErrorCode::Unavailable
+        );
+    }
+
     #[test]
     fn only_model_configuration_events_refresh_external_model_bindings() {
         assert!(config_update_refreshes_external_model_bindings(
             &ConfigUpdateEvent::ModelConfigurationUpdated
         ));
         assert!(!config_update_refreshes_external_model_bindings(
-            &ConfigUpdateEvent::ThemeUpdated {
-                theme_id: "dark".to_string(),
+            &ConfigUpdateEvent::AppearanceUpdated {
+                appearance_id: "bitfun-dark".to_string(),
             }
         ));
     }
@@ -5790,6 +9351,8 @@ mod tests {
             name: "review".to_string(),
             description: "Review changes".to_string(),
             template: "Review changes".to_string(),
+            shell_preference: None,
+            execution_target: Default::default(),
             availability: PromptCommandAvailability::Available,
             content_version: "external-v1".to_string(),
         };
@@ -5828,6 +9391,8 @@ mod tests {
             subagents: Vec::new(),
             subagent_conflicts: Vec::new(),
             pending_subagent_approvals: Vec::new(),
+            subagent_model_binding_groups: Vec::new(),
+            subagent_model_binding_options: Vec::new(),
             integration_policy: Default::default(),
             diagnostics: Vec::new(),
         };
@@ -5922,6 +9487,74 @@ mod tests {
             first_conflict.conflict_key
         );
         assert_eq!(changed.conflicts[0].selected_candidate_id, None);
+    }
+
+    #[test]
+    fn delegated_prompt_commands_require_an_active_same_ecosystem_subagent() {
+        let source = SourceKey::new("opencode.commands", "project").unwrap();
+        let definition = |logical_id: &str| PromptCommandDefinition {
+            id: SourceQualifiedCommandId::new(source.clone(), logical_id).unwrap(),
+            name: logical_id.to_string(),
+            description: logical_id.to_string(),
+            template: "Review changes".to_string(),
+            shell_preference: None,
+            execution_target: PromptCommandExecutionTarget::FreshExternalSubagent {
+                ecosystem_id: EcosystemId::new("opencode").unwrap(),
+                logical_id: logical_id.to_string(),
+            },
+            availability: PromptCommandAvailability::Available,
+            content_version: "command-v1".to_string(),
+        };
+        let mut commands = vec![
+            PromptCommandCatalogEntry {
+                definition: definition("reviewer"),
+            },
+            PromptCommandCatalogEntry {
+                definition: definition("missing"),
+            },
+        ];
+        let active = BTreeSet::from([(
+            EcosystemId::new("opencode").unwrap(),
+            "reviewer".to_string(),
+        )]);
+        let missing_candidate_id = commands[1].definition.id.stable_key();
+        let mut conflicts = vec![PromptCommandConflict {
+            conflict_key: "prompt-command-conflict".to_string(),
+            command_name: "missing".to_string(),
+            candidates: vec![PromptCommandConflictCandidate {
+                candidate_id: missing_candidate_id.clone(),
+                source: source.clone(),
+                source_display_name: "OpenCode".to_string(),
+                ecosystem_id: EcosystemId::new("opencode").unwrap(),
+                content_version: "command-v1".to_string(),
+                command_description: "missing".to_string(),
+                source_scope: ExternalSourceScope::Project,
+                source_location: ".opencode/commands/missing.md".to_string(),
+                execution_target: commands[1].definition.execution_target.clone(),
+                availability: PromptCommandAvailability::Available,
+            }],
+            selected_candidate_id: Some(missing_candidate_id),
+        }];
+
+        restrict_prompt_commands_without_active_subagents(&mut commands, &mut conflicts, &active);
+
+        assert_eq!(
+            commands[0].definition.availability,
+            PromptCommandAvailability::Available
+        );
+        let PromptCommandAvailability::Restricted {
+            required_capabilities,
+            ..
+        } = &commands[1].definition.availability
+        else {
+            panic!("missing delegated subagent must restrict the command");
+        };
+        assert_eq!(required_capabilities, &["command.external_subagent"]);
+        assert!(matches!(
+            conflicts[0].candidates[0].availability,
+            PromptCommandAvailability::Restricted { .. }
+        ));
+        assert_eq!(conflicts[0].selected_candidate_id, None);
     }
 
     #[test]
@@ -6137,6 +9770,8 @@ mod tests {
             subagents: Vec::new(),
             subagent_conflicts: Vec::new(),
             pending_subagent_approvals: Vec::new(),
+            subagent_model_binding_groups: Vec::new(),
+            subagent_model_binding_options: Vec::new(),
             integration_policy: Default::default(),
             diagnostics: vec![ExternalSourceDiagnostic::warning(
                 "future.tool.file_read_failed",
@@ -6225,6 +9860,8 @@ mod tests {
             subagents: Vec::new(),
             subagent_conflicts: Vec::new(),
             pending_subagent_approvals: Vec::new(),
+            subagent_model_binding_groups: Vec::new(),
+            subagent_model_binding_options: Vec::new(),
             integration_policy: Default::default(),
             diagnostics: Vec::new(),
         };
@@ -6286,6 +9923,7 @@ mod tests {
         source: SourceKey,
         command_name: String,
         delay: std::time::Duration,
+        release: Option<Arc<StdMutex<std::sync::mpsc::Receiver<()>>>>,
         calls: Arc<AtomicUsize>,
     }
 
@@ -6299,7 +9937,16 @@ mod tests {
             context: &ExternalSourceContext,
         ) -> Result<PromptCommandProviderSnapshot, ExternalSourceProviderError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
-            std::thread::sleep(self.delay);
+            if let Some(release) = &self.release {
+                // A disconnected channel also releases the provider, so a
+                // panicking test cannot strand the blocking worker.
+                let _ = release
+                    .lock()
+                    .expect("provider release gate remains available")
+                    .recv();
+            } else {
+                std::thread::sleep(self.delay);
+            }
             let record = ExternalSourceRecord {
                 key: self.source.clone(),
                 ecosystem_id: self.identity.ecosystem_id.clone(),
@@ -6324,6 +9971,8 @@ mod tests {
                     name: self.command_name.clone(),
                     description: self.command_name.clone(),
                     template: self.command_name.clone(),
+                    shell_preference: None,
+                    execution_target: Default::default(),
                     availability: PromptCommandAvailability::Available,
                     content_version: "command-v1".to_string(),
                 }],
@@ -6334,11 +9983,14 @@ mod tests {
 
         fn expand(
             &self,
+            _context: &ExternalSourceContext,
             command: &PromptCommandDefinition,
             _arguments: &str,
-        ) -> Result<ExpandedPromptCommand, ExternalSourceProviderError> {
-            Ok(ExpandedPromptCommand {
+        ) -> Result<PromptCommandExpansion, ExternalSourceProviderError> {
+            Ok(PromptCommandExpansion {
                 content: command.template.clone(),
+                workspace_file_references: Vec::new(),
+                shell: None,
             })
         }
 
@@ -6360,8 +10012,30 @@ mod tests {
             source: SourceKey::new(id, "global").unwrap(),
             command_name: id.to_string(),
             delay,
+            release: None,
             calls,
         })
+    }
+
+    fn blocked_provider(
+        id: &str,
+        calls: Arc<AtomicUsize>,
+    ) -> (
+        Arc<dyn PromptCommandSourceProvider>,
+        std::sync::mpsc::Sender<()>,
+    ) {
+        let (release, wait_for_release) = std::sync::mpsc::channel();
+        (
+            Arc::new(DelayedProvider {
+                identity: PromptCommandProviderIdentity::new(id, id, id).unwrap(),
+                source: SourceKey::new(id, "global").unwrap(),
+                command_name: id.to_string(),
+                delay: std::time::Duration::ZERO,
+                release: Some(Arc::new(StdMutex::new(wait_for_release))),
+                calls,
+            }),
+            release,
+        )
     }
 
     fn test_service(
@@ -6377,6 +10051,7 @@ mod tests {
                 context,
                 ExternalMcpRevisionKey::new([7; 32]),
                 providers,
+                Vec::new(),
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
@@ -6414,6 +10089,224 @@ mod tests {
             tool_decision_gate_acquired: tokio::sync::Notify::new(),
             subagent_expiry_schedule: AtomicU64::new(0),
         })
+    }
+
+    async fn refresh_test_commands(
+        service: &Arc<WorkspaceExternalSourceService>,
+    ) -> ExternalSourceCatalogSnapshot {
+        let requests = lock_coordinator(&service.control_plane).discovery_requests();
+        let batch = service
+            .control_plane
+            .discover_commands(requests, std::time::Duration::from_millis(25))
+            .await;
+        let snapshot =
+            lock_coordinator(&service.control_plane).apply_discovery_results(batch.immediate);
+        for deferred in batch.deferred {
+            let control_plane = Arc::clone(&service.control_plane);
+            tokio::spawn(async move {
+                let Some((completed, _observer)) = control_plane.complete_command(deferred).await
+                else {
+                    return;
+                };
+                let Some(result) = control_plane.finalize_command(completed).await else {
+                    return;
+                };
+                lock_coordinator(&control_plane).apply_discovery_result(result);
+            });
+        }
+        snapshot
+    }
+
+    #[test]
+    fn composition_projects_opencode_configured_skill_roots_without_leaking_adapter_types() {
+        let temp = tempfile::tempdir().unwrap();
+        let home = temp.path().join("home");
+        let user_config = home.join(".config/opencode");
+        let project = temp.path().join("project");
+        std::fs::create_dir_all(project.join(".git")).unwrap();
+        std::fs::create_dir_all(project.join("shared-skills")).unwrap();
+        std::fs::create_dir_all(&user_config).unwrap();
+        std::fs::write(
+            project.join("opencode.json"),
+            r#"{"skills":["shared-skills"]}"#,
+        )
+        .unwrap();
+        let provider = OpenCodeSkillRootProvider::new(OpenCodeSkillRootProviderOptions {
+            config: OpenCodeCommandProviderOptions {
+                user_config_dir: user_config,
+                legacy_user_config_dir: Some(home.join(".opencode")),
+                explicit_config_file: None,
+                explicit_config_dir: None,
+                inline_config_content: None,
+                project_config_enabled: true,
+            },
+            home_dir: Some(home),
+        });
+
+        let roots = opencode_configured_skill_roots_with_provider(Some(&project), &provider);
+
+        assert_eq!(roots.len(), 1);
+        assert_eq!(
+            roots[0].path,
+            dunce::canonicalize(project.join("shared-skills")).unwrap()
+        );
+        assert_eq!(roots[0].scope, ExternalSourceScope::Project);
+    }
+
+    #[tokio::test]
+    async fn finalizes_prompt_command_files_without_changing_plain_commands() {
+        let workspace = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(workspace.path().join("src")).unwrap();
+        std::fs::write(
+            workspace.path().join("src/lib.rs"),
+            "pub fn answer() -> u8 { 42 }\n``` embedded",
+        )
+        .unwrap();
+        std::fs::write(workspace.path().join("README.md"), "Read me").unwrap();
+
+        let plain = finalize_prompt_command_expansion(
+            None,
+            PromptCommandExpansion {
+                content: "plain prompt".to_string(),
+                workspace_file_references: Vec::new(),
+                shell: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(plain.content, "plain prompt");
+
+        let expanded = finalize_prompt_command_expansion(
+            Some(workspace.path()),
+            PromptCommandExpansion {
+                content: "Review @src/lib.rs and @README.md".to_string(),
+                workspace_file_references: vec![
+                    "src/lib.rs".to_string(),
+                    "README.md".to_string(),
+                    "src/lib.rs".to_string(),
+                ],
+                shell: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(expanded
+            .content
+            .starts_with("Review @src/lib.rs and @README.md"));
+        assert_eq!(expanded.content.matches("### `src/lib.rs`").count(), 1);
+        assert_eq!(expanded.content.matches("### `README.md`").count(), 1);
+        assert!(expanded.content.contains("````text\npub fn answer()"));
+        assert!(expanded.content.contains("\n````"));
+    }
+
+    #[tokio::test]
+    async fn prompt_command_file_limits_and_failures_are_atomic() {
+        let workspace = tempfile::tempdir().unwrap();
+        std::fs::write(
+            workspace.path().join("large.txt"),
+            vec![b'x'; MAX_PROMPT_COMMAND_FILE_BYTES + 1],
+        )
+        .unwrap();
+        for index in 0..=MAX_PROMPT_COMMAND_FILE_REFERENCES {
+            std::fs::write(workspace.path().join(format!("{index}.txt")), "x").unwrap();
+        }
+        for index in 0..3 {
+            std::fs::write(
+                workspace.path().join(format!("total-{index}.txt")),
+                vec![b'x'; 48 * 1024],
+            )
+            .unwrap();
+        }
+
+        let without_workspace = finalize_prompt_command_expansion(
+            None,
+            PromptCommandExpansion {
+                content: "prompt".to_string(),
+                workspace_file_references: vec!["0.txt".to_string()],
+                shell: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(without_workspace.contains("requires a local workspace"));
+
+        let too_many = finalize_prompt_command_expansion(
+            Some(workspace.path()),
+            PromptCommandExpansion {
+                content: "prompt".to_string(),
+                workspace_file_references: (0..=MAX_PROMPT_COMMAND_FILE_REFERENCES)
+                    .map(|index| format!("{index}.txt"))
+                    .collect(),
+                shell: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(too_many.contains("at most 8"));
+
+        let oversized = finalize_prompt_command_expansion(
+            Some(workspace.path()),
+            PromptCommandExpansion {
+                content: "prompt".to_string(),
+                workspace_file_references: vec!["large.txt".to_string()],
+                shell: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(oversized.contains("65536 byte limit"));
+
+        let total_oversized = finalize_prompt_command_expansion(
+            Some(workspace.path()),
+            PromptCommandExpansion {
+                content: "prompt".to_string(),
+                workspace_file_references: (0..3)
+                    .map(|index| format!("total-{index}.txt"))
+                    .collect(),
+                shell: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(total_oversized.contains("131072 byte total limit"));
+
+        let final_oversized = finalize_prompt_command_expansion(
+            Some(workspace.path()),
+            PromptCommandExpansion {
+                content: "x".repeat(MAX_EXPANDED_PROMPT_COMMAND_BYTES),
+                workspace_file_references: vec!["0.txt".to_string()],
+                shell: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(final_oversized.contains("1048576 byte limit"));
+
+        let plain_oversized = finalize_prompt_command_expansion(
+            None,
+            PromptCommandExpansion {
+                content: "x".repeat(MAX_EXPANDED_PROMPT_COMMAND_BYTES + 1),
+                workspace_file_references: Vec::new(),
+                shell: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(plain_oversized.contains("1048576 byte limit"));
+
+        let one_bad_file = finalize_prompt_command_expansion(
+            Some(workspace.path()),
+            PromptCommandExpansion {
+                content: "must not be returned partially".to_string(),
+                workspace_file_references: vec!["0.txt".to_string(), "missing.txt".to_string()],
+                shell: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(one_bad_file.contains("missing.txt"));
+        assert!(!one_bad_file.contains("must not be returned partially"));
     }
 
     #[test]
@@ -6662,6 +10555,622 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn fresh_v2_store_applies_only_the_product_default_connection() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let store = ExternalSourcePreferenceStore::new(path);
+
+        let migrated = store
+            .ensure_application_connection_schema(LEGACY_LOCAL_EXECUTION_DOMAIN_ID)
+            .await
+            .expect("a missing preference file should initialize as fresh v2");
+
+        assert_eq!(
+            migrated.connection_schema_migration_version,
+            EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION
+        );
+        assert_eq!(
+            migrated.config_origin,
+            Some(ExternalSourcesConfigOrigin::FreshV2)
+        );
+        assert!(migrated.application_connections.is_empty());
+
+        let policy = integration_policy_snapshot(&migrated, None).unwrap();
+        assert!(policy.global_effective.enabled);
+        assert_eq!(
+            policy.global_effective.ecosystems[&EcosystemId::new(OPENCODE_ECOSYSTEM_ID).unwrap()]
+                .mode,
+            ExternalIntegrationMode::Recommended
+        );
+        for ecosystem_id in [CLAUDE_CODE_ECOSYSTEM_ID, CODEX_ECOSYSTEM_ID] {
+            assert_eq!(
+                policy.global_effective.ecosystems[&EcosystemId::new(ecosystem_id).unwrap()].mode,
+                ExternalIntegrationMode::DiscoverOnly
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn legacy_disabled_policy_migrates_to_explicit_safe_disconnects() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let store = ExternalSourcePreferenceStore::new(path.clone());
+        let mut legacy = ExternalSourcesConfig::default();
+        legacy.preference_revision = 7;
+        legacy
+            .approved_tool_targets
+            .insert("preserved-approval".to_string());
+        JsonFileStore
+            .write_atomic_strict(&path, &legacy)
+            .await
+            .unwrap();
+
+        let migrated = store
+            .ensure_application_connection_schema(LEGACY_LOCAL_EXECUTION_DOMAIN_ID)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            migrated.config_origin,
+            Some(ExternalSourcesConfigOrigin::LegacyMigration)
+        );
+        assert_eq!(migrated.preference_revision, 7);
+        assert!(migrated
+            .approved_tool_targets
+            .contains("preserved-approval"));
+        for application_id in [
+            OPENCODE_ECOSYSTEM_ID,
+            CLAUDE_CODE_ECOSYSTEM_ID,
+            CODEX_ECOSYSTEM_ID,
+        ] {
+            let key = format!(
+                "{}\u{1f}{}\u{1f}user_default",
+                LEGACY_LOCAL_EXECUTION_DOMAIN_ID, application_id
+            );
+            assert_eq!(
+                migrated.application_connections.get(&key),
+                Some(&StoredExternalApplicationConnectionDecision {
+                    desired_connection: StoredExternalApplicationDesiredConnection::Disconnected,
+                    decision_origin: StoredExternalApplicationDecisionOrigin::LegacySafety,
+                })
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn legacy_enabled_policy_migrates_each_opaque_workspace_scope_independently() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let store = ExternalSourcePreferenceStore::new(path.clone());
+        let workspace_scope_id = "workspace:fedcba9876543210";
+        let mut legacy = ExternalSourcesConfig::default();
+        let policy = legacy.integration_policy.known_mut().unwrap();
+        policy.user_defaults.enabled = true;
+        policy
+            .user_defaults
+            .ecosystems
+            .entry(EcosystemId::new(CLAUDE_CODE_ECOSYSTEM_ID).unwrap())
+            .or_default()
+            .mode = ExternalIntegrationMode::DiscoverOnly;
+        let workspace = policy
+            .workspace_overrides
+            .entry(workspace_scope_id.to_string())
+            .or_default();
+        workspace.enabled = Some(true);
+        workspace
+            .ecosystems
+            .entry(EcosystemId::new(OPENCODE_ECOSYSTEM_ID).unwrap())
+            .or_default()
+            .mode = Some(ExternalIntegrationMode::DiscoverOnly);
+        workspace
+            .ecosystems
+            .entry(EcosystemId::new(CODEX_ECOSYSTEM_ID).unwrap())
+            .or_default()
+            .mode = Some(ExternalIntegrationMode::Recommended);
+        JsonFileStore
+            .write_atomic_strict(&path, &legacy)
+            .await
+            .unwrap();
+
+        let migrated = store
+            .ensure_application_connection_schema(LEGACY_LOCAL_EXECUTION_DOMAIN_ID)
+            .await
+            .unwrap();
+        let decision = |application_id: &str, scope: Option<&str>| {
+            migrated.application_connections[&external_application_connection_key(
+                LEGACY_LOCAL_EXECUTION_DOMAIN_ID,
+                application_id,
+                scope,
+            )]
+                .clone()
+        };
+        assert_eq!(
+            decision(OPENCODE_ECOSYSTEM_ID, None).desired_connection,
+            StoredExternalApplicationDesiredConnection::Connected
+        );
+        assert_eq!(
+            decision(CLAUDE_CODE_ECOSYSTEM_ID, None).desired_connection,
+            StoredExternalApplicationDesiredConnection::Disconnected
+        );
+        assert_eq!(
+            decision(OPENCODE_ECOSYSTEM_ID, Some(workspace_scope_id)).desired_connection,
+            StoredExternalApplicationDesiredConnection::Disconnected
+        );
+        assert_eq!(
+            decision(CODEX_ECOSYSTEM_ID, Some(workspace_scope_id)).desired_connection,
+            StoredExternalApplicationDesiredConnection::Connected
+        );
+    }
+
+    #[tokio::test]
+    async fn future_policy_schema_is_preserved_byte_for_byte_by_the_migration_gate() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let raw = br#"{ "integrationPolicy": { "schemaMajor": 99, "opaque": [3, 2, 1] }, "future": true }"#;
+        std::fs::write(&path, raw).unwrap();
+        let store = ExternalSourcePreferenceStore::new(path.clone());
+
+        let error = store
+            .ensure_application_connection_schema(LEGACY_LOCAL_EXECUTION_DOMAIN_ID)
+            .await
+            .expect_err("future policy schemas must not be migrated");
+
+        assert!(error.contains("schema major 99"));
+        assert_eq!(std::fs::read(path).unwrap(), raw);
+    }
+
+    #[tokio::test]
+    async fn current_v2_schema_snapshot_gate_does_not_rewrite_preferences() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let store = ExternalSourcePreferenceStore::new(path.clone());
+        let mut current = ExternalSourcesConfig::default();
+        current.connection_schema_migration_version =
+            EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION;
+        current.config_origin = Some(ExternalSourcesConfigOrigin::FreshV2);
+        current.mcp_revision_secret = Some("00".repeat(32));
+        let mut raw = serde_json::to_vec_pretty(&current).unwrap();
+        raw.extend_from_slice(b"\r\n");
+        std::fs::write(&path, &raw).unwrap();
+
+        store
+            .ensure_application_connection_schema(LEGACY_LOCAL_EXECUTION_DOMAIN_ID)
+            .await
+            .unwrap();
+
+        assert_eq!(std::fs::read(path).unwrap(), raw);
+    }
+
+    #[test]
+    fn legacy_config_with_a_revision_key_remains_available_after_migration_failure() {
+        let mut legacy = ExternalSourcesConfig::default();
+        legacy.mcp_revision_secret = Some("11".repeat(32));
+
+        let (preserved, revision_key) = legacy_config_after_migration_failure(
+            legacy.clone(),
+            "migration write failed".to_string(),
+        )
+        .unwrap();
+
+        assert_eq!(preserved, legacy);
+        assert!(!revision_key
+            .opaque_revision("test", [b"payload".as_slice()])
+            .is_empty());
+        assert!(legacy_config_after_migration_failure(
+            ExternalSourcesConfig::default(),
+            "migration write failed".to_string(),
+        )
+        .unwrap_err()
+        .contains("migration write failed"));
+    }
+
+    #[tokio::test]
+    async fn review_page_does_not_cold_start_an_external_source_service() {
+        let temp = tempfile::tempdir().unwrap();
+
+        let error = match existing_service_for_profile(
+            Some(temp.path()),
+            ExternalSourceServiceProfile::LocalExecution,
+        )
+        .await
+        {
+            Ok(_) => panic!("review page must not cold-start an external source service"),
+            Err(error) => error,
+        };
+
+        assert!(error.contains("stale_revision"));
+    }
+
+    #[test]
+    fn application_snapshot_uses_registry_defaults_and_shared_status_priority() {
+        let service = test_service(Vec::new());
+        let source_key = SourceKey::new("opencode.commands", "project").unwrap();
+        lock_snapshot(&service.snapshot).sources = vec![ExternalSourceCatalogEntry {
+            stable_key: source_key.stable_key(),
+            presentation_group_id: None,
+            record: ExternalSourceRecord {
+                key: source_key,
+                ecosystem_id: EcosystemId::new(OPENCODE_ECOSYSTEM_ID).unwrap(),
+                display_name: "OpenCode project commands".to_string(),
+                source_kind: "opencode_commands".to_string(),
+                scope: ExternalSourceScope::Project,
+                location: "<workspace>/.opencode/commands".to_string(),
+                execution_domain_id: ExecutionDomainId::new(LEGACY_LOCAL_EXECUTION_DOMAIN_ID)
+                    .unwrap(),
+                health: bitfun_product_domains::external_sources::ExternalSourceHealth::Available,
+                content_version: "v1".to_string(),
+                diagnostics: Vec::new(),
+            },
+            lifecycle: ExternalSourceLifecycleState::Available,
+        }];
+        let mut preferences = ExternalSourcesConfig::default();
+        apply_fresh_v2_product_defaults(&mut preferences).unwrap();
+        preferences.config_origin = Some(ExternalSourcesConfigOrigin::FreshV2);
+        preferences.connection_schema_migration_version =
+            EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION;
+
+        let snapshot = service
+            .application_snapshot_v2(
+                &preferences,
+                ExternalApplicationHostCapabilitiesV2::read_write(),
+            )
+            .unwrap();
+
+        assert_eq!(snapshot.schema_version, EXTERNAL_APPLICATION_SCHEMA_V2);
+        assert_eq!(snapshot.applications.len(), 3);
+        let open_code = snapshot
+            .applications
+            .iter()
+            .find(|application| application.application_id == OPENCODE_ECOSYSTEM_ID)
+            .unwrap();
+        assert_eq!(
+            open_code.default_connection_policy,
+            ExternalApplicationDefaultConnectionPolicyV2::Connect
+        );
+        assert_eq!(
+            open_code.user_decision,
+            ExternalApplicationUserDecisionV2::None
+        );
+        assert_eq!(
+            open_code.desired_connection,
+            ExternalApplicationDesiredConnectionV2::Connected
+        );
+        assert_eq!(
+            open_code.connection,
+            ExternalApplicationConnectionStateV2::Connected
+        );
+        assert_eq!(
+            open_code.effective_status,
+            ExternalApplicationEffectiveStatusV2::Connected
+        );
+        assert_eq!(
+            open_code.primary_action,
+            ExternalApplicationPrimaryActionV2::View
+        );
+        for application_id in [CLAUDE_CODE_ECOSYSTEM_ID, CODEX_ECOSYSTEM_ID] {
+            let application = snapshot
+                .applications
+                .iter()
+                .find(|application| application.application_id == application_id)
+                .unwrap();
+            assert_eq!(
+                application.default_connection_policy,
+                ExternalApplicationDefaultConnectionPolicyV2::DiscoverOnly
+            );
+            assert_eq!(
+                application.effective_status,
+                ExternalApplicationEffectiveStatusV2::NoConfiguration
+            );
+        }
+    }
+
+    #[test]
+    fn workspace_connection_decision_updates_v2_and_v1_projection_together() {
+        let mut preferences = ExternalSourcesConfig::default();
+        apply_fresh_v2_product_defaults(&mut preferences).unwrap();
+        preferences.config_origin = Some(ExternalSourcesConfigOrigin::FreshV2);
+        preferences.connection_schema_migration_version =
+            EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION;
+        preferences.preference_revision = 3;
+        let workspace_scope_id = "workspace:0123456789abcdef";
+
+        assert!(apply_external_application_connection_decision(
+            &mut preferences,
+            LEGACY_LOCAL_EXECUTION_DOMAIN_ID,
+            ExternalApplicationTargetScopeV2::WorkspaceOverride,
+            Some(workspace_scope_id),
+            CODEX_ECOSYSTEM_ID,
+            StoredExternalApplicationDesiredConnection::Connected,
+            3,
+        )
+        .unwrap());
+
+        assert_eq!(preferences.preference_revision, 4);
+        let key = external_application_connection_key(
+            LEGACY_LOCAL_EXECUTION_DOMAIN_ID,
+            CODEX_ECOSYSTEM_ID,
+            Some(workspace_scope_id),
+        );
+        assert_eq!(
+            preferences.application_connections.get(&key),
+            Some(&StoredExternalApplicationConnectionDecision {
+                desired_connection: StoredExternalApplicationDesiredConnection::Connected,
+                decision_origin: StoredExternalApplicationDecisionOrigin::User,
+            })
+        );
+        let document = preferences.integration_policy.known().unwrap();
+        assert_eq!(
+            document.user_defaults.ecosystems[&EcosystemId::new(CODEX_ECOSYSTEM_ID).unwrap()].mode,
+            ExternalIntegrationMode::DiscoverOnly
+        );
+        assert_eq!(
+            document.workspace_overrides[workspace_scope_id].ecosystems
+                [&EcosystemId::new(CODEX_ECOSYSTEM_ID).unwrap()]
+                .mode,
+            Some(ExternalIntegrationMode::Recommended)
+        );
+        assert!(apply_external_application_connection_decision(
+            &mut preferences,
+            LEGACY_LOCAL_EXECUTION_DOMAIN_ID,
+            ExternalApplicationTargetScopeV2::WorkspaceOverride,
+            Some(workspace_scope_id),
+            CODEX_ECOSYSTEM_ID,
+            StoredExternalApplicationDesiredConnection::Disconnected,
+            3,
+        )
+        .is_err());
+        assert_eq!(preferences.preference_revision, 4);
+    }
+
+    #[test]
+    fn application_action_scope_allows_explicit_user_default_from_a_workspace() {
+        let current_workspace_scope = Some("workspace:0123456789abcdef");
+
+        assert!(external_application_action_scope_matches(
+            current_workspace_scope,
+            ExternalApplicationTargetScopeV2::UserDefault,
+            None,
+        ));
+        assert!(external_application_action_scope_matches(
+            current_workspace_scope,
+            ExternalApplicationTargetScopeV2::WorkspaceOverride,
+            current_workspace_scope,
+        ));
+        assert!(!external_application_action_scope_matches(
+            current_workspace_scope,
+            ExternalApplicationTargetScopeV2::WorkspaceOverride,
+            Some("workspace:different"),
+        ));
+        assert!(!external_application_action_scope_matches(
+            None,
+            ExternalApplicationTargetScopeV2::WorkspaceOverride,
+            Some("workspace:0123456789abcdef"),
+        ));
+    }
+
+    #[test]
+    fn application_review_page_is_bounded_and_bound_to_owner_generations() {
+        let service = test_service(Vec::new());
+        let source_key = SourceKey::new("opencode.commands", "project").unwrap();
+        {
+            let mut catalog = lock_snapshot(&service.snapshot);
+            catalog.generation = 7;
+            catalog.subagent_generation = 3;
+            catalog.mcp_generation = 5;
+            catalog.sources = vec![ExternalSourceCatalogEntry {
+                stable_key: source_key.stable_key(),
+                presentation_group_id: None,
+                record: ExternalSourceRecord {
+                    key: source_key.clone(),
+                    ecosystem_id: EcosystemId::new(OPENCODE_ECOSYSTEM_ID).unwrap(),
+                    display_name: "OpenCode project commands".to_string(),
+                    source_kind: "opencode_commands".to_string(),
+                    scope: ExternalSourceScope::Project,
+                    location: "<workspace>/.opencode/commands".to_string(),
+                    execution_domain_id: ExecutionDomainId::new(LEGACY_LOCAL_EXECUTION_DOMAIN_ID)
+                        .unwrap(),
+                    health:
+                        bitfun_product_domains::external_sources::ExternalSourceHealth::Available,
+                    content_version: "v1".to_string(),
+                    diagnostics: Vec::new(),
+                },
+                lifecycle: ExternalSourceLifecycleState::Available,
+            }];
+            catalog.command_conflicts = vec![PromptCommandConflict {
+                conflict_key: "prompt-command-conflict".to_string(),
+                command_name: "review".to_string(),
+                candidates: vec![PromptCommandConflictCandidate {
+                    candidate_id: "opencode.commands:project:review".to_string(),
+                    source: source_key,
+                    source_display_name: "OpenCode".to_string(),
+                    ecosystem_id: EcosystemId::new(OPENCODE_ECOSYSTEM_ID).unwrap(),
+                    content_version: "command-v1".to_string(),
+                    command_description: "Review changes".to_string(),
+                    source_scope: ExternalSourceScope::Project,
+                    source_location: "<workspace>/.opencode/commands/review.md".to_string(),
+                    execution_target: PromptCommandExecutionTarget::Inline,
+                    availability: PromptCommandAvailability::Available,
+                }],
+                selected_candidate_id: None,
+            }];
+        }
+        let mut preferences = ExternalSourcesConfig::default();
+        apply_fresh_v2_product_defaults(&mut preferences).unwrap();
+        preferences.config_origin = Some(ExternalSourcesConfigOrigin::FreshV2);
+        preferences.connection_schema_migration_version =
+            EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION;
+        preferences.preference_revision = 11;
+
+        let snapshot = service
+            .application_snapshot_v2(
+                &preferences,
+                ExternalApplicationHostCapabilitiesV2::read_write(),
+            )
+            .unwrap();
+        let review = snapshot
+            .review_summary
+            .expect("unresolved conflict requires review");
+        assert_eq!(review.total_count, 1);
+        let initial_review_id = review.review_id.clone();
+        let request = ExternalApplicationReviewPageRequestV2 {
+            schema_version: EXTERNAL_APPLICATION_SCHEMA_V2,
+            execution_domain_id: service.execution_domain_id.clone(),
+            workspace_scope_id: None,
+            target_scope: ExternalApplicationTargetScopeV2::UserDefault,
+            review_id: review.review_id,
+            preference_revision: 11,
+            expected_generations: Vec::new(),
+            cursor: None,
+            page_size: EXTERNAL_APPLICATION_REVIEW_PAGE_MAX_ITEMS,
+        };
+        lock_snapshot(&service.snapshot).generation += 1;
+        let mut unbound_follow_up = request.clone();
+        unbound_follow_up.cursor = Some(format!("{}:0", unbound_follow_up.review_id));
+        assert!(service
+            .application_review_page_v2(&preferences, unbound_follow_up)
+            .unwrap_err()
+            .contains("stale_revision"));
+        let page = service
+            .application_review_page_v2(&preferences, request)
+            .unwrap();
+        assert_ne!(page.review_id, initial_review_id);
+        assert_eq!(page.items.len(), 1);
+        assert_eq!(
+            page.items[0].item_ref.kind,
+            ExternalApplicationReviewItemKindV2::Conflict
+        );
+        assert!(!page.items[0].display_summary.contains(".opencode"));
+        assert_eq!(page.expected_generations.len(), 5);
+    }
+
+    #[test]
+    fn application_review_plan_binds_pending_subagent_candidate_to_its_decision() {
+        let service = test_service(Vec::new());
+        let candidate_id = "opencode.subagents:project:reviewer";
+        let decision_key = "subagent-approval:reviewer";
+        let catalog = {
+            let mut catalog = lock_snapshot(&service.snapshot);
+            catalog.subagent_generation = 4;
+            catalog.subagents = vec![ExternalSubagentSummary {
+                candidate_id: candidate_id.to_string(),
+                logical_id: "reviewer".to_string(),
+                display_name: "Code reviewer".to_string(),
+                description: "Reviews the current change".to_string(),
+                provider_label: "OpenCode".to_string(),
+                scope: ExternalSourceScope::Project,
+                source_keys: Vec::new(),
+                source_location_labels: Vec::new(),
+                source_count: 1,
+                mode: Default::default(),
+                requested_model: Default::default(),
+                requested_model_profile: None,
+                model_binding_method: Default::default(),
+                model_binding_key: None,
+                effective_model_label: None,
+                effective_tool_labels: vec!["read".to_string()],
+                unavailable_tool_labels: Vec::new(),
+                supports_follow_up: false,
+                compatibility_state: ExternalSubagentCompatibilityState::Ready,
+                diagnostics: Vec::new(),
+                activation_state: ExternalSubagentActivationState::ApprovalRequired,
+                decision_key: decision_key.to_string(),
+            }];
+            catalog.pending_subagent_approvals = vec![candidate_id.to_string()];
+            catalog.clone()
+        };
+
+        let plan = external_application_review_plan(
+            &catalog,
+            LEGACY_LOCAL_EXECUTION_DOMAIN_ID,
+            None,
+            ExternalApplicationTargetScopeV2::UserDefault,
+            0,
+        );
+
+        assert_eq!(plan.items.len(), 1);
+        assert_eq!(plan.items[0].display_name, "Code reviewer");
+        assert_eq!(plan.items[0].item_ref.stable_id, decision_key);
+
+        let subagents_by_candidate_id = catalog
+            .subagents
+            .iter()
+            .map(|subagent| (subagent.candidate_id.as_str(), subagent))
+            .collect::<BTreeMap<_, _>>();
+        let summary_only = external_application_review_plan_internal(
+            &catalog,
+            LEGACY_LOCAL_EXECUTION_DOMAIN_ID,
+            None,
+            ExternalApplicationTargetScopeV2::UserDefault,
+            0,
+            &subagents_by_candidate_id,
+            false,
+        );
+        assert!(summary_only.items.is_empty());
+        assert_eq!(summary_only.summary(), plan.summary());
+    }
+
+    #[tokio::test]
+    async fn acknowledging_an_ecosystem_survives_a_reload_and_stays_idempotent() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let store = ExternalSourcePreferenceStore::new(path.clone());
+        let key = acknowledged_ecosystem_key(LEGACY_LOCAL_EXECUTION_DOMAIN_ID, "opencode");
+
+        store
+            .update(|config| {
+                config.acknowledged_ecosystems.insert(key.clone());
+            })
+            .await
+            .unwrap();
+        store
+            .update(|config| {
+                config.acknowledged_ecosystems.insert(key.clone());
+            })
+            .await
+            .unwrap();
+
+        // A fresh store proves the record came back from disk, not from memory.
+        let reloaded = ExternalSourcePreferenceStore::new(path)
+            .read()
+            .await
+            .unwrap();
+        assert_eq!(reloaded.acknowledged_ecosystems, BTreeSet::from([key]));
+        // Awareness is not a policy decision, so it must not consume a revision.
+        assert_eq!(reloaded.preference_revision, 0);
+    }
+
+    #[tokio::test]
+    async fn acknowledgement_is_scoped_to_its_execution_domain() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = ExternalSourcePreferenceStore::new(temp.path().join("external-sources.json"));
+        let local = acknowledged_ecosystem_key(LEGACY_LOCAL_EXECUTION_DOMAIN_ID, "opencode");
+        let remote = acknowledged_ecosystem_key("remote-host", "opencode");
+
+        store
+            .update(|config| {
+                config.acknowledged_ecosystems.insert(local.clone());
+            })
+            .await
+            .unwrap();
+
+        let persisted = store.read().await.unwrap();
+        assert!(persisted.acknowledged_ecosystems.contains(&local));
+        assert!(!persisted.acknowledged_ecosystems.contains(&remote));
+    }
+
+    #[test]
+    fn acknowledgement_keys_never_collide_across_domains_or_ecosystems() {
+        assert_ne!(
+            acknowledged_ecosystem_key("local-user", "opencode"),
+            acknowledged_ecosystem_key("local-user", "codex")
+        );
+        assert_ne!(
+            acknowledged_ecosystem_key("local-user", "opencode"),
+            acknowledged_ecosystem_key("remote-host", "opencode")
+        );
+    }
+
     #[test]
     fn opencode_registry_owns_low_friction_defaults_and_safety_ceilings() {
         let mut config = ExternalSourcesConfig::default();
@@ -6699,6 +11208,11 @@ mod tests {
                 ExternalIntegrationAccess::AskBeforeUse,
                 ExternalIntegrationAccess::AskBeforeUse,
             ),
+            (
+                EXTERNAL_CAPABILITY_REFERENCE,
+                ExternalIntegrationAccess::Auto,
+                ExternalIntegrationAccess::Auto,
+            ),
         ] {
             let capability = descriptor
                 .capabilities
@@ -6727,6 +11241,7 @@ mod tests {
                     EXTERNAL_CAPABILITY_TOOL,
                     EXTERNAL_CAPABILITY_SUBAGENT,
                     EXTERNAL_CAPABILITY_MCP,
+                    EXTERNAL_CAPABILITY_REFERENCE,
                 ]),
             ),
             (
@@ -6757,7 +11272,10 @@ mod tests {
             assert_eq!(capabilities, expected[ecosystem]);
             for capability in &registration.descriptor.capabilities {
                 let expected_access = if ecosystem == "opencode"
-                    && capability.capability_id.as_str() == EXTERNAL_CAPABILITY_COMMAND
+                    && matches!(
+                        capability.capability_id.as_str(),
+                        EXTERNAL_CAPABILITY_COMMAND | EXTERNAL_CAPABILITY_REFERENCE
+                    )
                     || ecosystem == "claude-code"
                         && capability.capability_id.as_str() == EXTERNAL_CAPABILITY_COMMAND
                 {
@@ -6816,6 +11334,7 @@ mod tests {
             EXTERNAL_CAPABILITY_TOOL,
             EXTERNAL_CAPABILITY_SUBAGENT,
             EXTERNAL_CAPABILITY_MCP,
+            EXTERNAL_CAPABILITY_REFERENCE,
         ] {
             assert_eq!(
                 ecosystems_with_discoverable_capability(&policy, capability),
@@ -7041,6 +11560,32 @@ mod tests {
             vec![11, 12, 13]
         );
         assert_eq!(config.integration_policy_backups[2], future_policy);
+        assert_eq!(
+            config.config_origin,
+            Some(ExternalSourcesConfigOrigin::IncompatibleReset)
+        );
+        assert_eq!(
+            config.connection_schema_migration_version,
+            EXTERNAL_APPLICATION_CONNECTION_SCHEMA_VERSION
+        );
+        for application_id in [
+            OPENCODE_ECOSYSTEM_ID,
+            CLAUDE_CODE_ECOSYSTEM_ID,
+            CODEX_ECOSYSTEM_ID,
+        ] {
+            let key = external_application_connection_key(
+                LEGACY_LOCAL_EXECUTION_DOMAIN_ID,
+                application_id,
+                None,
+            );
+            assert_eq!(
+                config.application_connections.get(&key),
+                Some(&StoredExternalApplicationConnectionDecision {
+                    desired_connection: StoredExternalApplicationDesiredConnection::Disconnected,
+                    decision_origin: StoredExternalApplicationDecisionOrigin::IncompatibleReset,
+                })
+            );
+        }
     }
 
     #[tokio::test]
@@ -7422,48 +11967,66 @@ mod tests {
     async fn slow_provider_is_not_respawned_while_healthy_sibling_updates() {
         let slow_calls = Arc::new(AtomicUsize::new(0));
         let healthy_calls = Arc::new(AtomicUsize::new(0));
+        let (slow_provider, release_slow_provider) =
+            blocked_provider("slow", Arc::clone(&slow_calls));
         let service = test_service(vec![
-            delayed_provider(
-                "slow",
-                std::time::Duration::from_millis(250),
-                Arc::clone(&slow_calls),
-            ),
+            slow_provider,
             delayed_provider(
                 "healthy",
-                std::time::Duration::ZERO,
+                std::time::Duration::from_millis(50),
                 Arc::clone(&healthy_calls),
             ),
         ]);
 
-        let requests = lock_coordinator(&service.control_plane).discovery_requests();
-        let batch = service
-            .control_plane
-            .discover_commands(requests, std::time::Duration::from_millis(25))
-            .await;
-        let snapshot =
-            lock_coordinator(&service.control_plane).apply_discovery_results(batch.immediate);
-        for deferred in batch.deferred {
-            service.schedule_deferred_command_discovery(deferred);
-        }
-        assert!(snapshot
-            .commands
-            .iter()
-            .any(|command| command.definition.name == "healthy"));
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            loop {
+                let _ = refresh_test_commands(&service).await;
+                if slow_calls.load(Ordering::SeqCst) == 1
+                    && healthy_calls.load(Ordering::SeqCst) >= 1
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("slow and healthy providers must both start");
 
-        let requests = lock_coordinator(&service.control_plane).discovery_requests();
-        let batch = service
-            .control_plane
-            .discover_commands(requests, std::time::Duration::from_millis(25))
-            .await;
-        let snapshot =
-            lock_coordinator(&service.control_plane).apply_discovery_results(batch.immediate);
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            loop {
+                let snapshot = lock_coordinator(&service.control_plane).snapshot();
+                if snapshot
+                    .commands
+                    .iter()
+                    .any(|command| command.definition.name == "healthy")
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("the healthy provider result must be published");
+
+        let healthy_calls_before_refresh = healthy_calls.load(Ordering::SeqCst);
+        let snapshot = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            loop {
+                let snapshot = refresh_test_commands(&service).await;
+                if healthy_calls.load(Ordering::SeqCst) > healthy_calls_before_refresh {
+                    break snapshot;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("healthy provider must refresh while the slow provider is blocked");
 
         assert_eq!(slow_calls.load(Ordering::SeqCst), 1);
-        assert!(healthy_calls.load(Ordering::SeqCst) >= 2);
         assert!(snapshot
             .commands
             .iter()
             .any(|command| command.definition.name == "healthy"));
+        let _ = release_slow_provider.send(());
     }
 
     #[tokio::test]

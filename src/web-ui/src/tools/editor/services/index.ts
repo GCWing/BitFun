@@ -17,9 +17,6 @@ export {
 } from './MonacoModelManager';
 export { default as MonacoModelManager } from './MonacoModelManager';
 
-export { themeManager, type ThemeChangeEvent } from './ThemeManager';
-export { default as ThemeManager } from './ThemeManager';
-
 export {
   buildEditorOptions,
   buildDiffEditorOptions,

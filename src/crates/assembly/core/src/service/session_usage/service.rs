@@ -29,19 +29,39 @@ pub async fn generate_session_usage_report(
         .workspace_path
         .clone()
         .ok_or_else(|| BitFunError::validation("Workspace path is required for usage reports"))?;
-    let turns = persistence_manager
-        .load_session_turns(Path::new(&workspace_path), &request.session_id)
-        .await?;
-    let (session_ids, subagent_scope_complete) = token_usage_session_scope(
+    generate_session_usage_report_from_storage_path(
         persistence_manager,
+        token_usage_service,
         Path::new(&workspace_path),
-        &request,
-        &turns,
+        request,
     )
-    .await;
+    .await
+}
+
+/// Build a usage report after a product adapter has resolved the Session
+/// storage directory. The request workspace remains the source of snapshot
+/// facts and user-facing identity; persisted Session and subagent facts use
+/// `session_storage_path`.
+pub async fn generate_session_usage_report_from_storage_path(
+    persistence_manager: &PersistenceManager,
+    token_usage_service: Option<&TokenUsageService>,
+    session_storage_path: &Path,
+    request: SessionUsageReportRequest,
+) -> BitFunResult<SessionUsageReport> {
+    let revert_boundary = persistence_manager
+        .load_session_revert_state(session_storage_path, &request.session_id)
+        .await?
+        .map(|state| state.boundary_turn);
+    let mut turns = persistence_manager
+        .load_session_turns(session_storage_path, &request.session_id)
+        .await?;
+    retain_usage_turns_before_boundary(&mut turns, revert_boundary);
+    let (session_ids, subagent_scope_complete) =
+        token_usage_session_scope(persistence_manager, session_storage_path, &request, &turns)
+            .await;
     let (token_turn_scope, turn_scope_complete) = token_usage_turn_scope(
         persistence_manager,
-        Path::new(&workspace_path),
+        session_storage_path,
         &request,
         &turns,
         &session_ids,
@@ -58,7 +78,7 @@ pub async fn generate_session_usage_report(
         Vec::new()
     };
 
-    let snapshot_facts = load_snapshot_facts(&request).await;
+    let snapshot_facts = load_snapshot_facts(&request, revert_boundary).await;
 
     Ok(build_session_usage_report_from_sources_with_scope(
         request,
@@ -170,7 +190,7 @@ fn extend_token_usage_turn_scope(
 }
 
 async fn token_usage_turn_scope(
-    persistence_manager: &PersistenceManager,
+    _persistence_manager: &PersistenceManager,
     workspace_path: &Path,
     request: &SessionUsageReportRequest,
     parent_turns: &[DialogTurnData],
@@ -187,10 +207,18 @@ async fn token_usage_turn_scope(
         if session_id == &request.session_id {
             continue;
         }
-        match persistence_manager
-            .load_session_turns(workspace_path, session_id)
-            .await
-        {
+        let turns = match crate::agentic::coordination::get_global_coordinator() {
+            Some(coordinator) => {
+                coordinator
+                    .load_visible_persisted_session_turns(workspace_path, session_id)
+                    .await
+            }
+            None => {
+                complete = false;
+                continue;
+            }
+        };
+        match turns {
             Ok(turns) => extend_token_usage_turn_scope(&mut scope, session_id, &turns),
             Err(_) => complete = false,
         }
@@ -299,7 +327,10 @@ fn build_session_usage_report_from_sources_with_scope(
     report
 }
 
-async fn load_snapshot_facts(request: &SessionUsageReportRequest) -> UsageSnapshotFacts {
+async fn load_snapshot_facts(
+    request: &SessionUsageReportRequest,
+    revert_boundary: Option<usize>,
+) -> UsageSnapshotFacts {
     let Some(workspace_path) = request.workspace_path.as_deref() else {
         return UsageSnapshotFacts::default();
     };
@@ -314,11 +345,23 @@ async fn load_snapshot_facts(request: &SessionUsageReportRequest) -> UsageSnapsh
             operations: session
                 .operations
                 .into_iter()
+                .filter(|operation| usage_index_is_visible(operation.turn_index, revert_boundary))
                 .map(snapshot_operation_from_file_operation)
                 .collect(),
         },
         Err(_) => UsageSnapshotFacts::default(),
     }
+}
+
+fn retain_usage_turns_before_boundary(
+    turns: &mut Vec<DialogTurnData>,
+    revert_boundary: Option<usize>,
+) {
+    turns.retain(|turn| usage_index_is_visible(turn.turn_index, revert_boundary));
+}
+
+fn usage_index_is_visible(turn_index: usize, revert_boundary: Option<usize>) -> bool {
+    revert_boundary.is_none_or(|boundary| turn_index < boundary)
 }
 
 fn is_reportable_usage_turn(turn: &DialogTurnData) -> bool {
@@ -1876,6 +1919,54 @@ mod tests {
         assert_eq!(report.models[0].duration_ms, Some(200));
         assert_eq!(report.tools[0].call_count, 1);
         assert_eq!(report.files.files[0].operation_count, 1);
+    }
+
+    #[test]
+    fn staged_revert_boundary_excludes_hidden_turn_token_tool_and_snapshot_usage() {
+        let request = test_request(None);
+        let mut turns = vec![
+            test_turn("turn-visible", 0, DialogTurnKind::UserDialog),
+            test_turn("turn-hidden", 1, DialogTurnKind::UserDialog),
+        ];
+        retain_usage_turns_before_boundary(&mut turns, Some(1));
+
+        let mut visible_record = test_token_record("model-a", 100, 20, 0);
+        visible_record.turn_id = "turn-visible".to_string();
+        let mut hidden_record = test_token_record("model-a", 900, 100, 0);
+        hidden_record.turn_id = "turn-hidden".to_string();
+        let snapshot_facts = test_snapshot_facts(
+            [
+                test_snapshot_operation(
+                    "op-visible",
+                    0,
+                    "D:/workspace/bitfun/src/visible.rs",
+                    2,
+                    0,
+                ),
+                test_snapshot_operation("op-hidden", 1, "D:/workspace/bitfun/src/hidden.rs", 30, 4),
+            ]
+            .into_iter()
+            .filter(|operation| usage_index_is_visible(operation.turn_index, Some(1)))
+            .collect(),
+        );
+
+        let report = build_session_usage_report_from_sources(
+            request,
+            &turns,
+            &[visible_record, hidden_record],
+            &snapshot_facts,
+            1_778_347_200_000,
+        );
+
+        assert_eq!(report.scope.turn_count, 1);
+        assert_eq!(report.scope.to_turn_id.as_deref(), Some("turn-visible"));
+        assert_eq!(report.tokens.total_tokens, Some(120));
+        assert_eq!(
+            report.tools.iter().map(|tool| tool.call_count).sum::<u64>(),
+            1
+        );
+        assert_eq!(report.files.files.len(), 1);
+        assert_eq!(report.files.files[0].path_label, "src/visible.rs");
     }
 
     #[test]

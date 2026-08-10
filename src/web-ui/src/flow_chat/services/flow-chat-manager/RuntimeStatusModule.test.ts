@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DialogTurn, FlowTextItem, ModelRound } from '../../types/flow-chat';
+import type { DialogTurn, ModelRound } from '../../types/flow-chat';
 import {
   clearRuntimeStatus,
   scheduleModelResponseStatus,
 } from './RuntimeStatusModule';
-import enFlowChat from '@/locales/en-US/flow-chat.json';
-import zhCnFlowChat from '@/locales/zh-CN/flow-chat.json';
-import zhTwFlowChat from '@/locales/zh-TW/flow-chat.json';
+import {
+  getRuntimeStatus,
+  showRuntimeStatus,
+  useRuntimeStatusStore,
+} from '../../store/runtimeStatusStore';
 
 const SESSION_ID = 'session-1';
 const TURN_ID = 'turn-1';
@@ -51,109 +53,95 @@ function createContext(turn = createTurn()): any {
         sessions: new Map([[SESSION_ID, session]]),
         activeSessionId: SESSION_ID,
       }),
-      addModelRoundItem: (_sessionId: string, _turnId: string, item: any, roundId?: string) => {
-        const targetRound = turn.modelRounds.find(round => round.id === roundId);
-        targetRound?.items.push(item);
-      },
-      updateDialogTurn: (_sessionId: string, _turnId: string, updater: (next: DialogTurn) => DialogTurn) => {
-        const next = updater(turn);
-        Object.assign(turn, next);
-      },
     },
   };
-}
-
-function resolveLocalePath(resource: unknown, key: string): unknown {
-  return key.split('.').reduce<unknown>((value, segment) => {
-    if (!value || typeof value !== 'object') {
-      return undefined;
-    }
-    return (value as Record<string, unknown>)[segment];
-  }, resource);
 }
 
 describe('RuntimeStatusModule', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    useRuntimeStatusStore.getState().reset();
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it('delays model response status so fast responses do not create UI noise', () => {
+  it('delays model response status without adding a model round item', () => {
     const turn = createTurn();
     const context = createContext(turn);
 
     scheduleModelResponseStatus(context, SESSION_ID, TURN_ID, ROUND_ID, { delayMs: 1000 });
 
     vi.advanceTimersByTime(999);
-    expect(turn.modelRounds[0].items).toHaveLength(0);
+    expect(getRuntimeStatus(SESSION_ID)).toBeUndefined();
 
     vi.advanceTimersByTime(1);
-    const [statusItem] = turn.modelRounds[0].items as FlowTextItem[];
-    expect(statusItem.runtimeStatus?.phase).toBe('waiting_model');
-    expect(statusItem.runtimeStatus?.scope).toBe('main');
-    expect(statusItem.runtimeStatus?.messageKey).toBe('runtimeStatus.waitingForModelResponse');
-    expect(statusItem.content).toBe('\u200B');
-    expect(context.activeTextItems.get(SESSION_ID)?.get(ROUND_ID)).toBe(statusItem.id);
-  });
-
-  it('uses a runtime status i18n key that exists in every flow-chat locale', () => {
-    const turn = createTurn();
-    const context = createContext(turn);
-
-    scheduleModelResponseStatus(context, SESSION_ID, TURN_ID, ROUND_ID, { delayMs: 1000 });
-    vi.advanceTimersByTime(1000);
-
-    const [statusItem] = turn.modelRounds[0].items as FlowTextItem[];
-    const messageKey = statusItem.runtimeStatus?.messageKey;
-
-    expect(messageKey).toBe('runtimeStatus.waitingForModelResponse');
-    expect(resolveLocalePath(enFlowChat, messageKey!)).toBe('Waiting for model response...');
-    expect(resolveLocalePath(zhCnFlowChat, messageKey!)).toBe('等待模型响应...');
-    expect(resolveLocalePath(zhTwFlowChat, messageKey!)).toBe('等待模型回應...');
-  });
-
-  it('clears a pending status timer before it can render', () => {
-    const turn = createTurn();
-    const context = createContext(turn);
-
-    scheduleModelResponseStatus(context, SESSION_ID, TURN_ID, ROUND_ID, { delayMs: 1000 });
-    clearRuntimeStatus(context, SESSION_ID, TURN_ID, { roundId: ROUND_ID });
-
-    vi.advanceTimersByTime(1000);
+    expect(getRuntimeStatus(SESSION_ID)).toEqual({
+      sessionId: SESSION_ID,
+      turnId: TURN_ID,
+      roundId: ROUND_ID,
+    });
     expect(turn.modelRounds[0].items).toHaveLength(0);
+    expect(context.activeTextItems.size).toBe(0);
   });
 
-  it('removes an already-rendered runtime status item without touching real output', () => {
-    const runtimeItem: FlowTextItem = {
-      id: 'runtime-status',
-      type: 'text',
-      content: '\u200B',
-      timestamp: 1001,
-      status: 'streaming',
-      isStreaming: true,
-      isMarkdown: false,
-      runtimeStatus: {
-        phase: 'waiting_model',
-        scope: 'main',
-      },
-    };
-    const realItem: FlowTextItem = {
-      id: 'real-text',
-      type: 'text',
-      content: 'Hello',
-      timestamp: 1002,
-      status: 'streaming',
-      isStreaming: true,
-      isMarkdown: true,
-    };
-    const turn = createTurn([runtimeItem, realItem]);
+  it('does not show a delayed status after visible round output arrives', () => {
+    const turn = createTurn([{ id: 'text-1', type: 'text' }]);
     const context = createContext(turn);
+
+    scheduleModelResponseStatus(context, SESSION_ID, TURN_ID, ROUND_ID, { delayMs: 1000 });
+    vi.advanceTimersByTime(1000);
+
+    expect(getRuntimeStatus(SESSION_ID)).toBeUndefined();
+  });
+
+  it('clears a pending timer and an already-visible session status', () => {
+    const context = createContext();
+    scheduleModelResponseStatus(context, SESSION_ID, TURN_ID, ROUND_ID, { delayMs: 1000 });
+    clearRuntimeStatus(context, SESSION_ID, TURN_ID, { roundId: ROUND_ID });
+    vi.advanceTimersByTime(1000);
+    expect(getRuntimeStatus(SESSION_ID)).toBeUndefined();
+
+    showRuntimeStatus({
+      sessionId: SESSION_ID,
+      turnId: TURN_ID,
+      roundId: ROUND_ID,
+    });
+    clearRuntimeStatus(context, SESSION_ID, TURN_ID, { roundId: ROUND_ID });
+    expect(getRuntimeStatus(SESSION_ID)).toBeUndefined();
+  });
+
+  it('does not let an older round clear the status owned by a newer round', () => {
+    const context = createContext();
+    showRuntimeStatus({
+      sessionId: SESSION_ID,
+      turnId: TURN_ID,
+      roundId: 'round-2',
+    });
 
     clearRuntimeStatus(context, SESSION_ID, TURN_ID, { roundId: ROUND_ID });
 
-    expect(turn.modelRounds[0].items.map(item => item.id)).toEqual(['real-text']);
+    expect(getRuntimeStatus(SESSION_ID)?.roundId).toBe('round-2');
+  });
+
+  it('cancels an older pending round when a newer round owns the session slot', () => {
+    const turn = createTurn();
+    turn.modelRounds.push({
+      ...turn.modelRounds[0],
+      id: 'round-2',
+      index: 1,
+      items: [],
+    });
+    const context = createContext(turn);
+
+    scheduleModelResponseStatus(context, SESSION_ID, TURN_ID, ROUND_ID, { delayMs: 500 });
+    scheduleModelResponseStatus(context, SESSION_ID, TURN_ID, 'round-2', { delayMs: 1000 });
+
+    vi.advanceTimersByTime(500);
+    expect(getRuntimeStatus(SESSION_ID)).toBeUndefined();
+
+    vi.advanceTimersByTime(500);
+    expect(getRuntimeStatus(SESSION_ID)?.roundId).toBe('round-2');
   });
 });

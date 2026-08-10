@@ -311,8 +311,8 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
       contentClassName="modal__content--fill-flex workspace-session-batch-modal__content-shell"
       closeOnOverlayClick={!isBusy}
     >
-      <div className="workspace-session-batch-modal">
-        <div className="workspace-session-batch-modal__hero">
+      <div data-bf-component="workspace-session-batch-modal" data-bf-part="root" className="workspace-session-batch-modal">
+        <div data-bf-component="workspace-session-batch-modal" data-bf-part="hero" className="workspace-session-batch-modal__hero">
           <div className="workspace-session-batch-modal__hero-icon">
             <FolderKanban size={18} />
           </div>
@@ -324,7 +324,7 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
           </div>
         </div>
 
-        <div className="workspace-session-batch-modal__toolbar">
+        <div data-bf-component="workspace-session-batch-modal" data-bf-part="toolbar" className="workspace-session-batch-modal__toolbar">
           <div className="workspace-session-batch-modal__toolbar-main">
             <Checkbox
               checked={allSelected}
@@ -334,7 +334,7 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
               label={allSelected ? t('actions.deselectAll') : t('actions.selectAll')}
             />
             {selectedCount > 0 ? (
-              <div className="workspace-session-batch-modal__toolbar-actions">
+              <div data-bf-component="workspace-session-batch-modal" data-bf-part="toolbarActions" className="workspace-session-batch-modal__toolbar-actions">
                 <Button
                   type="button"
                   variant="ghost"
@@ -346,7 +346,7 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
                 </Button>
               </div>
             ) : null}
-            <div className="workspace-session-batch-modal__toolbar-summary">
+            <div data-bf-component="workspace-session-batch-modal" data-bf-part="summary" className="workspace-session-batch-modal__toolbar-summary">
               {hasSessions
                 ? t('nav.sessions.batchSelectionSummary', { count: selectedCount, total: sessions.length })
                 : t('nav.sessions.noSessionsToManage')}
@@ -354,21 +354,21 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
           </div>
         </div>
 
-        <div className="workspace-session-batch-modal__list">
+        <div data-bf-component="workspace-session-batch-modal" data-bf-part="list" className="workspace-session-batch-modal__list">
           {isLoading ? (
-            <div className="workspace-session-batch-modal__state">
+            <div data-bf-component="workspace-session-batch-modal" data-bf-part="state" data-bf-state="loading" className="workspace-session-batch-modal__state">
               <Loader2 size={16} className="workspace-session-batch-modal__spinner" />
               <span>{t('nav.sessions.loading')}</span>
             </div>
           ) : loadFailed ? (
-            <div className="workspace-session-batch-modal__state is-error">
+            <div data-bf-component="workspace-session-batch-modal" data-bf-part="state" data-bf-state="error" className="workspace-session-batch-modal__state is-error">
               <span>{t('nav.sessions.batchLoadFailed')}</span>
               <Button type="button" variant="secondary" size="small" onClick={() => { void loadSessions(); }}>
                 {t('actions.retry')}
               </Button>
             </div>
           ) : sessions.length === 0 ? (
-            <div className="workspace-session-batch-modal__state">
+            <div data-bf-component="workspace-session-batch-modal" data-bf-part="state" className="workspace-session-batch-modal__state">
               <span>{t('nav.sessions.noSessionsToManage')}</span>
             </div>
           ) : (
@@ -382,11 +382,12 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
                     ? Bot
                     : Code2;
               return (
-                <label
+                <label data-bf-component="workspace-session-batch-modal" data-bf-part="row"
+                  data-bf-state={[isSelected && 'selected', displayAsChild && 'child'].filter(Boolean).join(' ') || undefined}
                   key={metadata.sessionId}
                   className={`workspace-session-batch-modal__row${displayAsChild ? ' is-child' : ''}${isSelected ? ' is-selected' : ''}`}
                 >
-                  <div className="workspace-session-batch-modal__row-check">
+                  <div data-bf-component="workspace-session-batch-modal" data-bf-part="rowCheck" className="workspace-session-batch-modal__row-check">
                     <Checkbox
                       checked={isSelected}
                       onChange={() => { toggleSessionSelection(metadata.sessionId); }}
@@ -396,7 +397,7 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
                   <div className={`workspace-session-batch-modal__row-icon is-${sessionMode}`}>
                     <SessionIcon size={15} />
                   </div>
-                  <div className="workspace-session-batch-modal__row-content">
+                  <div data-bf-component="workspace-session-batch-modal" data-bf-part="rowContent" className="workspace-session-batch-modal__row-content">
                     <div className="workspace-session-batch-modal__row-head">
                       <div className="workspace-session-batch-modal__row-title">
                         {metadata.sessionName || t('nav.sessions.untitled')}
@@ -428,7 +429,7 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
           )}
         </div>
 
-        <div className="workspace-session-batch-modal__footer">
+        <div data-bf-component="workspace-session-batch-modal" data-bf-part="footer" className="workspace-session-batch-modal__footer">
           <Button type="button" variant="ghost" onClick={onClose} disabled={isBusy}>
             {t('actions.cancel')}
           </Button>

@@ -2,10 +2,19 @@
 
 use crate::api::session_storage_path::desktop_effective_session_storage_path;
 use crate::embedded_relay_host::DesktopEmbeddedRelayHost;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use bitfun_core::agentic::coordination::{
+    get_global_coordinator, get_global_scheduler, ConversationCoordinator,
+};
 use bitfun_core::agentic::persistence::PersistenceManager;
 use bitfun_core::agentic::tools::account_login_capability::set_account_login_available;
 use bitfun_core::agentic::tools::page_deploy_host::set_page_deploy_handler;
 use bitfun_core::agentic::tools::page_publish_host::set_page_publish_handler;
+use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
+use bitfun_core::service::dispatch::{
+    DispatchAccountDaemonIdentity, DispatchAccountDaemonProvisionRequest,
+    DISPATCH_ACCOUNT_DAEMON_PROVISIONING_SCHEMA_VERSION,
+};
 use bitfun_core::service::remote_connect::session_store::{
     clear_credential_hint, load_credential_hint, save_credential_hint, AccountHint,
 };
@@ -16,8 +25,14 @@ use bitfun_core::service::remote_connect::{
     PairingState, RemoteConnectConfig, RemoteConnectService,
 };
 use bitfun_core::service::session::{DialogTurnData, SessionMetadata};
+use bitfun_core::service::workspace::{get_global_workspace_service, WorkspaceKind};
+use bitfun_core::service::workspace_runtime::WorkspaceRuntimeService;
+use bitfun_events::AI_MODEL_CATALOG_UPDATED_EVENT;
 use bitfun_services_integrations::remote_connect::account::{
-    error_indicates_expired_token, validate_relay_base_url,
+    ensure_relay_session_history_exportable, error_indicates_expired_token,
+    mark_relay_session_history_import_complete, mark_relay_session_history_import_pending,
+    relay_session_export_metadata, relay_session_history_import_is_complete,
+    relay_session_history_import_state, validate_relay_base_url,
 };
 use bitfun_services_integrations::remote_connect::{
     deploy_page_version_on_relay, join_relay_url, list_pages_from_relay,
@@ -528,15 +543,21 @@ fn should_fanout_peer_ui_event(event: &str) -> bool {
             | "backend-event-toolawaitinguserinput"
             | "backend-event-toolcallconfirmation"
             | "permission://event"
+            | AI_MODEL_CATALOG_UPDATED_EVENT
     )
+}
+
+/// Whether the given UI event would currently be fanned out to attached Peer
+/// Mode controllers. Callers can use this to avoid cloning/serializing payloads
+/// when no fanout will happen.
+pub fn peer_ui_event_fanout_active(event: &str) -> bool {
+    should_fanout_peer_ui_event(event)
+        && !crate::api::peer_host_invoke::attached_controllers().is_empty()
 }
 
 /// Fan-out non-agentic UI events to attached Peer Mode controllers when needed.
 pub fn maybe_fanout_peer_ui_event(event: &str, payload: serde_json::Value) {
-    if !should_fanout_peer_ui_event(event) {
-        return;
-    }
-    if crate::api::peer_host_invoke::attached_controllers().is_empty() {
+    if !peer_ui_event_fanout_active(event) {
         return;
     }
     fanout_peer_device_event(event.to_string(), payload);
@@ -556,8 +577,14 @@ impl PeerAwareEmitter {
 #[async_trait::async_trait]
 impl bitfun_core::infrastructure::events::EventEmitter for PeerAwareEmitter {
     async fn emit(&self, event_name: &str, payload: serde_json::Value) -> anyhow::Result<()> {
-        self.inner.emit(event_name, payload.clone()).await?;
-        maybe_fanout_peer_ui_event(event_name, payload);
+        // Only clone the payload when a peer fanout will actually happen;
+        // otherwise move it into the inner emitter zero-copy.
+        if peer_ui_event_fanout_active(event_name) {
+            self.inner.emit(event_name, payload.clone()).await?;
+            fanout_peer_device_event(event_name.to_string(), payload);
+        } else {
+            self.inner.emit(event_name, payload).await?;
+        }
         Ok(())
     }
 }
@@ -831,6 +858,113 @@ pub(crate) async fn read_account_context_for_generation(
         return Err("account context changed".to_string());
     }
     Ok(context)
+}
+
+/// Secret-bearing, Rust-only handoff for one SSH target bootstrap. It is never
+/// serialized through Tauri; only its redacted outcome reaches the Web UI.
+pub(crate) struct DispatchAccountDeviceProvisioning {
+    pub(crate) request: DispatchAccountDaemonProvisionRequest,
+    target_session: AccountSession,
+    relay_url: String,
+}
+
+impl DispatchAccountDeviceProvisioning {
+    pub(crate) fn device_id(&self) -> &str {
+        &self.request.device_id
+    }
+
+    pub(crate) fn user_id(&self) -> &str {
+        &self.request.user_id
+    }
+}
+
+/// Mint a distinct full device credential for an SSH host. A finalized local
+/// login is optional: callers receive `None` and skip account/daemon setup when
+/// this Desktop is logged out or still awaiting the cloud/local sync choice.
+pub(crate) async fn provision_dispatch_account_device(
+    identity: &DispatchAccountDaemonIdentity,
+) -> Result<Option<DispatchAccountDeviceProvisioning>, String> {
+    if PENDING_SYNC_CHOICE.load(Ordering::Acquire) {
+        return Ok(None);
+    }
+    let generation = account_context_generation();
+    let Ok(_account_guard) = lock_account_sync(generation).await else {
+        return Ok(None);
+    };
+    let (session, relay_url) = match read_account_context_for_generation(generation).await {
+        Ok(context) => context,
+        Err(error) if error == "not logged in" => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let issued = AccountClient::new()
+        .provision_device_token(
+            &relay_url,
+            &session,
+            &identity.device_id,
+            &identity.device_name,
+            uuid::Uuid::new_v4(),
+        )
+        .await
+        .map_err(|error| format!("provision remote account device: {error}"))?;
+    let target_session = AccountSession {
+        token: issued.token.clone(),
+        user_id: issued.user_id.clone(),
+        master_key: session.master_key,
+    };
+    let provisioning = DispatchAccountDeviceProvisioning {
+        request: DispatchAccountDaemonProvisionRequest {
+            schema_version: DISPATCH_ACCOUNT_DAEMON_PROVISIONING_SCHEMA_VERSION,
+            token: issued.token,
+            user_id: issued.user_id,
+            master_key_base64: BASE64.encode(session.master_key),
+            relay_url: relay_url.clone(),
+            device_id: issued.device_id,
+        },
+        target_session,
+        relay_url,
+    };
+    if !account_context_matches(generation, &session.token).await {
+        let _ = remove_dispatch_account_device(&provisioning).await;
+        return Err("account context changed while provisioning the SSH target".to_string());
+    }
+    Ok(Some(provisioning))
+}
+
+pub(crate) async fn wait_for_dispatch_account_device_online(
+    provisioning: &DispatchAccountDeviceProvisioning,
+) -> Result<(), String> {
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        let devices = AccountClient::new()
+            .list_devices(&provisioning.relay_url, &provisioning.target_session)
+            .await
+            .map_err(|error| format!("verify remote daemon connection: {error}"))?;
+        if devices
+            .iter()
+            .any(|device| device.device_id == provisioning.request.device_id && device.online)
+        {
+            return Ok(());
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(
+                "remote BitFun daemon did not connect to the relay within 30 seconds".to_string(),
+            );
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+}
+
+pub(crate) async fn remove_dispatch_account_device(
+    provisioning: &DispatchAccountDeviceProvisioning,
+) -> Result<(), String> {
+    AccountClient::new()
+        .delete_device(
+            &provisioning.relay_url,
+            &provisioning.target_session,
+            &provisioning.request.device_id,
+        )
+        .await
+        .map_err(|error| format!("remove provisioned account device: {error}"))
 }
 
 async fn account_context_matches(generation: u64, token: &str) -> bool {
@@ -1904,12 +2038,15 @@ pub struct ConfigureBotRequest {
 #[derive(Debug, Deserialize)]
 pub struct WeixinQrStartRequest {
     pub base_url: Option<String>,
+    pub existing_ilink_token: Option<String>,
+    pub existing_bot_account_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct WeixinQrPollRequest {
     pub session_key: String,
     pub base_url: Option<String>,
+    pub verify_code: Option<String>,
 }
 
 #[tauri::command]
@@ -1964,16 +2101,20 @@ pub async fn remote_connect_configure_bot(request: ConfigureBotRequest) -> Resul
 pub async fn remote_connect_weixin_qr_start(
     request: WeixinQrStartRequest,
 ) -> Result<weixin::WeixinQrStartResponse, String> {
-    weixin::weixin_qr_start(request.base_url)
-        .await
-        .map_err(|e| format!("weixin qr start: {e}"))
+    weixin::weixin_qr_start_with_existing(
+        request.base_url,
+        request.existing_ilink_token,
+        request.existing_bot_account_id,
+    )
+    .await
+    .map_err(|e| format!("weixin qr start: {e}"))
 }
 
 #[tauri::command]
 pub async fn remote_connect_weixin_qr_poll(
     request: WeixinQrPollRequest,
 ) -> Result<weixin::WeixinQrPollResponse, String> {
-    weixin::weixin_qr_poll(&request.session_key, request.base_url)
+    weixin::weixin_qr_poll(&request.session_key, request.base_url, request.verify_code)
         .await
         .map_err(|e| format!("weixin qr poll: {e}"))
 }
@@ -2594,7 +2735,7 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                                     session_id,
                                     content,
                                     agent_type,
-                                    workspace_path: _,
+                                    workspace_path,
                                 }) => {
                                     let Some(_routing_effect) =
                                         lock_current_device_routing(&event_owner).await
@@ -2616,7 +2757,17 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                                         let policy = DialogSubmissionPolicy::for_source(
                                             DialogTriggerSource::RemoteRelay,
                                         );
-                                        let wp = resolve_local_workspace_path();
+                                        let wp = match resolve_requested_local_workspace_path(
+                                            workspace_path.as_deref(),
+                                        ) {
+                                            Ok(path) => path,
+                                            Err(error) => {
+                                                log::warn!(
+                                                    "ExecuteOnDevice rejected invalid workspace: {error}"
+                                                );
+                                                continue;
+                                            }
+                                        };
                                         let agent =
                                             agent_type.unwrap_or_else(|| "agentic".to_string());
                                         if let Err(e) = scheduler
@@ -2957,40 +3108,16 @@ pub struct SessionBundle {
     pub source_device_name: Option<String>,
 }
 
-const RELAY_TURNS_IMPORT_STATE_KEY: &str = "relayTurnsImportState";
-const RELAY_TURNS_IMPORT_PENDING: &str = "pending";
-const RELAY_TURNS_IMPORT_COMPLETE: &str = "complete";
-
-fn relay_turns_import_state(metadata: &SessionMetadata) -> Option<&str> {
-    metadata
-        .custom_metadata
-        .as_ref()
-        .and_then(serde_json::Value::as_object)
-        .and_then(|custom| custom.get(RELAY_TURNS_IMPORT_STATE_KEY))
-        .and_then(serde_json::Value::as_str)
-}
-
-fn relay_turns_import_is_complete(metadata: &SessionMetadata, local_turn_count: usize) -> bool {
-    metadata.turn_count == local_turn_count
-        && relay_turns_import_state(metadata) == Some(RELAY_TURNS_IMPORT_COMPLETE)
-}
-
-fn set_relay_turns_import_state(metadata: &mut SessionMetadata, state: &str) {
-    let mut custom = metadata
-        .custom_metadata
-        .as_ref()
-        .and_then(serde_json::Value::as_object)
-        .cloned()
-        .unwrap_or_default();
-    custom.insert(
-        RELAY_TURNS_IMPORT_STATE_KEY.to_string(),
-        serde_json::Value::String(state.to_string()),
-    );
-    metadata.custom_metadata = Some(serde_json::Value::Object(custom));
-}
-
-fn mark_relay_turns_import_complete(metadata: &mut SessionMetadata) {
-    set_relay_turns_import_state(metadata, RELAY_TURNS_IMPORT_COMPLETE);
+async fn load_account_visible_session_turns(
+    storage_path: &std::path::Path,
+    session_id: &str,
+) -> Result<Vec<DialogTurnData>, String> {
+    let coordinator = get_global_coordinator()
+        .ok_or_else(|| "Core coordinator is not initialized for session sync".to_string())?;
+    coordinator
+        .load_visible_persisted_session_turns(storage_path, session_id)
+        .await
+        .map_err(|error| format!("load visible session history: {error}"))
 }
 
 /// Export a single local session as an encrypted blob and upload it to the relay.
@@ -3018,12 +3145,11 @@ pub async fn account_export_local_session(
         .await
         .map_err(|e| format!("load metadata: {e}"))?
         .ok_or_else(|| format!("session not found: {session_id}"))?;
+    ensure_relay_session_history_exportable(&metadata)?;
 
     // Load all turns
-    let turns = manager
-        .load_session_turns(&storage_path, &session_id)
-        .await
-        .map_err(|e| format!("load turns: {e}"))?;
+    let turns = load_account_visible_session_turns(&storage_path, &session_id).await?;
+    let metadata = relay_session_export_metadata(&metadata, turns.len());
 
     // Serialize to bundle
     let metadata_json =
@@ -3082,13 +3208,17 @@ pub async fn account_export_all_sessions(
     let mut state = sync_state::load(&acct_session.user_id);
     let mut pending: Vec<(String, String, String)> = Vec::new();
     for meta in &sessions {
-        let turns = manager
-            .load_session_turns(&storage_path, &meta.session_id)
+        if let Err(error) = ensure_relay_session_history_exportable(meta) {
+            log::debug!("Skipping account session export: {error}");
+            continue;
+        }
+        let turns = load_account_visible_session_turns(&storage_path, &meta.session_id)
             .await
             .map_err(|e| format!("load turns for {}: {e}", meta.session_id))?;
+        let metadata = relay_session_export_metadata(meta, turns.len());
 
         let metadata_json =
-            serde_json::to_value(meta).map_err(|e| format!("serialize metadata: {e}"))?;
+            serde_json::to_value(metadata).map_err(|e| format!("serialize metadata: {e}"))?;
         let turns_json: Vec<serde_json::Value> = turns
             .iter()
             .map(|t| serde_json::to_value(t).unwrap_or(serde_json::Value::Null))
@@ -3149,12 +3279,17 @@ pub async fn account_export_all_sessions(
 #[tauri::command]
 pub async fn account_import_remote_sessions(
     workspace_path: String,
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
     app_state: State<'_, crate::api::app_state::AppState>,
     path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
 ) -> Result<Vec<String>, String> {
     let generation = account_context_generation();
     let _sync_guard = lock_account_sync(generation).await?;
     let (acct_session, relay_url) = read_account_context().await?;
+
+    coordinator
+        .ensure_workspace_runtime_ownership(std::path::Path::new(&workspace_path), None, None)
+        .map_err(|error| error.to_string())?;
 
     let storage_path =
         desktop_effective_session_storage_path(&app_state, &workspace_path, None, None).await;
@@ -3190,7 +3325,7 @@ pub async fn account_import_remote_sessions(
         }
         // Only write metadata — turns are lazy-loaded when the user opens
         // the session (see `account_fetch_session_turns`).
-        set_relay_turns_import_state(&mut metadata, RELAY_TURNS_IMPORT_PENDING);
+        mark_relay_session_history_import_pending(&mut metadata);
         if !manager
             .create_session_metadata_if_absent(&storage_path, &metadata)
             .await
@@ -3222,6 +3357,7 @@ pub async fn account_import_remote_sessions(
 pub async fn account_fetch_session_turns(
     session_id: String,
     workspace_path: String,
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
     app_state: State<'_, crate::api::app_state::AppState>,
     path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
 ) -> Result<bool, String> {
@@ -3233,14 +3369,18 @@ pub async fn account_fetch_session_turns(
         return Ok(false);
     }
 
+    coordinator
+        .ensure_workspace_runtime_ownership(std::path::Path::new(&workspace_path), None, None)
+        .map_err(|error| error.to_string())?;
+
     let storage_path =
         desktop_effective_session_storage_path(&app_state, &workspace_path, None, None).await;
     let manager = PersistenceManager::new(path_manager.inner().clone())
         .map_err(|e| format!("create persistence manager: {e}"))?;
 
     // Ordinary local sessions carry no relay marker and return without an
-    // account or network lookup. A non-empty turn prefix is not proof that an
-    // import completed, so pending or inconsistent imports are retried.
+    // account or network lookup. Only the durable complete marker proves that
+    // the imported turn batch finished; a partial prefix remains pending.
     let Some(metadata) = manager
         .load_session_metadata(&storage_path, &session_id)
         .await
@@ -3248,15 +3388,11 @@ pub async fn account_fetch_session_turns(
     else {
         return Ok(false);
     };
-    if relay_turns_import_state(&metadata).is_none() {
+    if relay_session_history_import_state(&metadata).is_none() {
         return Ok(false);
     }
 
-    let local_turns = manager
-        .load_session_turns(&storage_path, &session_id)
-        .await
-        .map_err(|error| format!("load imported turns: {error}"))?;
-    if relay_turns_import_is_complete(&metadata, local_turns.len()) {
+    if relay_session_history_import_is_complete(&metadata) {
         return Ok(false);
     }
 
@@ -3291,6 +3427,16 @@ pub async fn account_fetch_session_turns(
         return Err("relay session turn identity does not match request".to_string());
     }
 
+    let coordinator = get_global_coordinator()
+        .ok_or_else(|| "Core coordinator is not initialized for session import".to_string())?;
+    let scheduler = get_global_scheduler()
+        .ok_or_else(|| "Core scheduler is not initialized for session import".to_string())?;
+    let compatibility = CoreAgentRuntimeCompatibility::build(coordinator, scheduler);
+    let _history_write = compatibility
+        .begin_external_persisted_history_write(&storage_path, &session_id)
+        .await
+        .map_err(|error| format!("session import is unavailable during undo or redo: {error}"))?;
+
     manager
         .create_session_metadata_if_absent(&storage_path, &metadata)
         .await
@@ -3305,7 +3451,7 @@ pub async fn account_fetch_session_turns(
     }
     manager
         .update_session_metadata(&storage_path, &session_id, |metadata| {
-            mark_relay_turns_import_complete(metadata);
+            mark_relay_session_history_import_complete(metadata);
         })
         .await
         .map_err(|e| format!("mark imported turns complete: {e}"))?;
@@ -3521,7 +3667,7 @@ pub async fn account_delegate_to_paired(correlation_id: String) -> Result<String
         "resp": "delegate_identity",
         "token": delegated.token,
         "user_id": delegated.user_id,
-        "master_key": B64.encode(&session.master_key),
+        "master_key": B64.encode(session.master_key),
         "device_id": device_id,
     });
     let identity_str =
@@ -3715,12 +3861,16 @@ async fn account_auto_sync_inner(
     let mut pending_uploads: Vec<(String, String, String)> = Vec::new();
     for meta in local_sessions.iter() {
         ensure_account_auto_sync_current(sync_operation_id)?;
-        let turns = manager
-            .load_session_turns(&storage_path, &meta.session_id)
+        if let Err(error) = ensure_relay_session_history_exportable(meta) {
+            log::debug!("Skipping account auto-sync export: {error}");
+            continue;
+        }
+        let turns = load_account_visible_session_turns(&storage_path, &meta.session_id)
             .await
             .map_err(|e| format!("load turns: {e}"))?;
+        let metadata = relay_session_export_metadata(meta, turns.len());
         let metadata_json =
-            serde_json::to_value(meta).map_err(|e| format!("serialize metadata: {e}"))?;
+            serde_json::to_value(metadata).map_err(|e| format!("serialize metadata: {e}"))?;
         let turns_json: Vec<serde_json::Value> = turns
             .iter()
             .map(|t| serde_json::to_value(t).unwrap_or(serde_json::Value::Null))
@@ -4156,10 +4306,12 @@ async fn export_and_upload_session(
         .load_session_metadata(&storage_path, session_id)
         .await?
         .ok_or_else(|| anyhow::anyhow!("session not found: {session_id}"))?;
+    ensure_relay_session_history_exportable(&metadata).map_err(anyhow::Error::msg)?;
 
-    let turns = manager
-        .load_session_turns(&storage_path, session_id)
-        .await?;
+    let turns = load_account_visible_session_turns(&storage_path, session_id)
+        .await
+        .map_err(anyhow::Error::msg)?;
+    let metadata = relay_session_export_metadata(&metadata, turns.len());
 
     let metadata_json = serde_json::to_value(&metadata)?;
     let turns_json: Vec<serde_json::Value> = turns
@@ -4185,20 +4337,28 @@ async fn export_and_upload_session(
     Ok(Some(hash))
 }
 
-/// Resolve the local workspace path for task execution. Returns the first
-/// project directory found under ~/.bitfun/projects/, or "/" as fallback.
-fn resolve_local_workspace_path() -> String {
-    let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/"));
-    let projects = home.join(".bitfun").join("projects");
-    if let Ok(entries) = std::fs::read_dir(&projects) {
-        for entry in entries.flatten() {
-            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                // Return the workspace slug dir path as a string
-                return entry.path().to_string_lossy().to_string();
-            }
-        }
+/// The legacy one-way execution command is path-addressed. It must never
+/// silently choose an unrelated local project when the sender omitted or
+/// mistyped the target path.
+fn resolve_requested_local_workspace_path(workspace_path: Option<&str>) -> Result<String, String> {
+    let requested = workspace_path
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .ok_or_else(|| "workspace_path is required".to_string())?;
+    let path = std::path::PathBuf::from(requested);
+    if !path.is_absolute() {
+        return Err("workspace_path must be absolute".to_string());
     }
-    "/".to_string()
+    let canonical = path
+        .canonicalize()
+        .map_err(|error| format!("resolve workspace_path: {error}"))?;
+    if !canonical.is_dir() {
+        return Err("workspace_path is not a directory".to_string());
+    }
+    canonical
+        .to_str()
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| "workspace_path is not valid UTF-8".to_string())
 }
 
 /// Execute a RemoteCommand locally (for RPC requests from other devices).
@@ -4210,6 +4370,19 @@ async fn execute_local_remote_command(
 
     match cmd {
         RemoteCommand::HostInvoke { command, args } => {
+            // Detached jobs are independent of Peer controller attachment.
+            // Route their distinct target command family directly to the
+            // durable dispatch runner before the generic webview bridge.
+            if crate::api::dispatch_host::is_target_command(command) {
+                let result = crate::api::dispatch_host::dispatch(command, args.clone()).await;
+                let (ok, value, error) = match result {
+                    Ok(value) => (true, Some(value), None),
+                    Err(error) => (false, None, Some(format!("{error:#}"))),
+                };
+                return serde_json::to_value(RemoteResponse::HostInvokeResult { ok, value, error })
+                    .map_err(|e| anyhow::anyhow!("serialize response: {e}"));
+            }
+
             // Control-plane peer attach/detach/ping can run without webview bridge.
             if command == "peer_control_attach" {
                 let controller_id = args
@@ -4298,28 +4471,23 @@ async fn import_session_bundle(bundle_json: &str, account_generation: u64) -> an
 
     let path_manager = std::sync::Arc::new(bitfun_core::infrastructure::PathManager::new()?);
     let manager = PersistenceManager::new(path_manager.clone())?;
-
-    // Find the first workspace sessions dir that exists
-    let projects_root = path_manager.projects_root();
-    let entries = std::fs::read_dir(&projects_root)?;
-    let mut target_dir: Option<std::path::PathBuf> = None;
-    for entry in entries.flatten() {
-        if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-            continue;
-        }
-        let sessions = entry.path().join("sessions");
-        if sessions.is_dir() {
-            target_dir = Some(sessions);
-            break;
-        }
+    let workspace = get_global_workspace_service()
+        .ok_or_else(|| anyhow::anyhow!("workspace service is unavailable"))?
+        .get_current_workspace()
+        .await
+        .ok_or_else(|| anyhow::anyhow!("no active workspace is available for session import"))?;
+    if workspace.workspace_kind == WorkspaceKind::Remote {
+        return Err(anyhow::anyhow!(
+            "session import requires an active local workspace"
+        ));
     }
-
-    // If no workspace sessions dir exists, create one under a "synced" workspace
-    let target_dir = target_dir.unwrap_or_else(|| {
-        let dir = projects_root.join("synced").join("sessions");
-        let _ = std::fs::create_dir_all(&dir);
-        dir
-    });
+    get_global_coordinator()
+        .ok_or_else(|| anyhow::anyhow!("Agent Runtime coordinator is unavailable"))?
+        .ensure_workspace_runtime_ownership(&workspace.root_path, None, None)
+        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+    let target_dir = WorkspaceRuntimeService::new(path_manager.clone())
+        .context_for_local_workspace(&workspace.root_path)
+        .sessions_dir;
 
     let mut metadata: SessionMetadata = serde_json::from_value(bundle.metadata.clone())?;
     if metadata.session_id != bundle.session_id {
@@ -4331,7 +4499,7 @@ async fn import_session_bundle(bundle_json: &str, account_generation: u64) -> an
     // Only write metadata — turns are lazy-loaded when the user opens the
     // session. This keeps the import fast and avoids writing potentially
     // large turn data that may never be read.
-    set_relay_turns_import_state(&mut metadata, RELAY_TURNS_IMPORT_PENDING);
+    mark_relay_session_history_import_pending(&mut metadata);
     manager
         .create_session_metadata_if_absent(&target_dir, &metadata)
         .await
@@ -4373,7 +4541,11 @@ async fn pull_and_reconcile(account_generation: u64) {
 mod sync_state_tests {
     use super::*;
 
-    static ACCOUNT_CONTEXT_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    /// Serializes these tests against the process-global account context.
+    /// Async-aware so the guard may be held across each test's awaits; the
+    /// plain `#[test]` cases take it with `blocking_lock`, which cannot stall
+    /// because they run without an ambient runtime.
+    static ACCOUNT_CONTEXT_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     #[test]
     fn relay_url_normalization_removes_all_trailing_slashes() {
@@ -4425,9 +4597,7 @@ mod sync_state_tests {
 
     #[test]
     fn background_sync_is_fail_closed_while_login_choice_is_pending() {
-        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK.blocking_lock();
         set_pending_login_id(Some("pending-a".to_string()));
         assert!(!background_account_sync_is_allowed());
         set_pending_login_id(None);
@@ -4469,9 +4639,7 @@ mod sync_state_tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn account_transition_cancels_an_in_flight_auto_sync_future() {
-        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK.lock().await;
         let operation_id = u64::MAX - 41;
         ACTIVE_ACCOUNT_AUTO_SYNC_OPERATION_ID.store(operation_id, Ordering::Release);
         let waiter = tokio::spawn(async move {
@@ -4490,9 +4658,7 @@ mod sync_state_tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn external_account_reads_are_hidden_during_transition() {
-        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK.lock().await;
         *get_account_context().write().await = Some(AccountContextState {
             session: AccountSession {
                 token: "token-a".to_string(),
@@ -4513,9 +4679,7 @@ mod sync_state_tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn login_event_probe_sees_context_before_transition_mutex_is_released() {
-        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK.lock().await;
         let transition_guard = ACCOUNT_CONTEXT_TRANSITION_LOCK.lock().await;
         let transition = AccountContextTransitionPermit::begin();
         let mut guard = AccountContextTransitionGuard {
@@ -4535,9 +4699,7 @@ mod sync_state_tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn stale_pending_login_id_cannot_finalize_or_cancel_replacement() {
-        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK.lock().await;
         *get_account_context().write().await = Some(AccountContextState {
             session: AccountSession {
                 token: "token-b".to_string(),
@@ -4566,9 +4728,7 @@ mod sync_state_tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn finalize_retry_after_commit_is_idempotent_only_for_the_same_account_owner() {
-        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK.lock().await;
         *get_account_context().write().await = Some(AccountContextState {
             session: AccountSession {
                 token: "token-a".to_string(),
@@ -4596,9 +4756,7 @@ mod sync_state_tests {
 
     #[test]
     fn stale_routing_owner_cannot_clear_or_update_replacement() {
-        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK.blocking_lock();
         clear_device_routing_state();
         let owner_a = DeviceRoutingOwner {
             account_generation: 10,
@@ -4639,9 +4797,7 @@ mod sync_state_tests {
 
     #[test]
     fn routing_presence_is_bound_to_account_generation_and_token() {
-        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK.blocking_lock();
         clear_device_routing_state();
         let owner = DeviceRoutingOwner {
             account_generation: 20,
@@ -4699,7 +4855,7 @@ mod sync_state_tests {
     }
 
     #[test]
-    fn relay_turn_import_requires_an_explicit_complete_marker_and_exact_count() {
+    fn pending_relay_turn_imports_are_never_exportable() {
         let mut metadata = SessionMetadata::new(
             "session".to_string(),
             "Session".to_string(),
@@ -4708,18 +4864,40 @@ mod sync_state_tests {
         );
         metadata.turn_count = 2;
 
-        assert_eq!(relay_turns_import_state(&metadata), None);
-        assert!(!relay_turns_import_is_complete(&metadata, 1));
-        assert!(!relay_turns_import_is_complete(&metadata, 2));
-        set_relay_turns_import_state(&mut metadata, RELAY_TURNS_IMPORT_PENDING);
+        assert_eq!(relay_session_history_import_state(&metadata), None);
+        assert!(!relay_session_history_import_is_complete(&metadata));
+        assert!(ensure_relay_session_history_exportable(&metadata).is_ok());
+        mark_relay_session_history_import_pending(&mut metadata);
         assert_eq!(
-            relay_turns_import_state(&metadata),
-            Some(RELAY_TURNS_IMPORT_PENDING)
+            relay_session_history_import_state(&metadata),
+            Some("pending")
         );
-        assert!(!relay_turns_import_is_complete(&metadata, 2));
-        mark_relay_turns_import_complete(&mut metadata);
-        assert!(!relay_turns_import_is_complete(&metadata, 1));
-        assert!(relay_turns_import_is_complete(&metadata, 2));
+        assert!(!relay_session_history_import_is_complete(&metadata));
+        assert!(ensure_relay_session_history_exportable(&metadata).is_err());
+        mark_relay_session_history_import_complete(&mut metadata);
+        assert!(relay_session_history_import_is_complete(&metadata));
+        assert!(ensure_relay_session_history_exportable(&metadata).is_ok());
+
+        metadata.custom_metadata = Some(serde_json::json!({
+            "relayTurnsImportState": "unknown"
+        }));
+        assert!(ensure_relay_session_history_exportable(&metadata).is_err());
+    }
+
+    #[test]
+    fn account_export_metadata_matches_the_visible_history_projection() {
+        let mut metadata = SessionMetadata::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            "auto".to_string(),
+        );
+        metadata.turn_count = 3;
+
+        let exported = relay_session_export_metadata(&metadata, 2);
+
+        assert_eq!(metadata.turn_count, 3);
+        assert_eq!(exported.turn_count, 2);
     }
 }
 
@@ -4731,5 +4909,10 @@ mod peer_event_tests {
     fn permission_events_are_fanned_out_to_peer_controllers() {
         assert!(should_fanout_peer_ui_event("permission://event"));
         assert!(!should_fanout_peer_ui_event("permission://internal"));
+    }
+
+    #[test]
+    fn model_catalog_updates_are_fanned_out_to_peer_controllers() {
+        assert!(should_fanout_peer_ui_event("ai://model-catalog-updated"));
     }
 }

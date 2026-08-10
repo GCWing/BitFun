@@ -16,8 +16,8 @@ export const MarkdownPreview: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'preview' | 'edit'>('preview');
 
   return (
-    <div className="markdown-preview-page">
-      <header className="markdown-preview-header">
+    <div className="markdown-preview-page" data-bf-component="component-preview" data-bf-part="markdownRoot">
+      <header className="markdown-preview-header" data-bf-component="component-preview" data-bf-part="markdownHeader">
         <div className="header-left">
           <h1>{t('componentLibrary.markdownPreview.title')}</h1>
           <span className="badge">{t('componentLibrary.markdownPreview.badge')}</span>
@@ -33,7 +33,7 @@ export const MarkdownPreview: React.FC = () => {
         </div>
       </header>
 
-      <div className="markdown-controls">
+      <div className="markdown-controls" data-bf-component="component-preview" data-bf-part="markdownControls">
         <div className="control-group">
           <label>{t('componentLibrary.markdownPreview.controls.variantLabel')}</label>
           <div className="button-group">
@@ -94,16 +94,18 @@ export const MarkdownPreview: React.FC = () => {
 
       <div className="markdown-preview-main">
         {activeTab === 'preview' ? (
-          <div className="preview-container">
+          <div className="preview-container" data-bf-component="component-preview" data-bf-part="markdownStage">
             <Markdown content={content} variant={variant} />
           </div>
         ) : (
-          <div className="editor-container">
+          <div className="editor-container" data-bf-component="component-preview" data-bf-part="markdownStage">
             <textarea
               className="markdown-editor"
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder={t('componentLibrary.markdownPreview.editorPlaceholder')}
+              data-bf-component="component-preview"
+              data-bf-part="markdownEditor"
             />
           </div>
         )}

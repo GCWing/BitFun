@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use agent_client_protocol::schema::{
     ContentBlock, ContentChunk, SessionConfigOption, SessionNotification, SessionUpdate, ToolCall,
@@ -50,8 +51,16 @@ pub(super) struct AcpToolCallTracker {
 struct AcpToolCallSnapshot {
     title: String,
     tool_name: String,
-    raw_input: Option<serde_json::Value>,
+    /// Shared to avoid deep-copying potentially large tool inputs (e.g. full
+    /// Edit/Write payloads) on every ToolCall/ToolCallUpdate notification.
+    raw_input: Option<Arc<serde_json::Value>>,
     kind: Option<agent_client_protocol::schema::ToolKind>,
+}
+
+/// Turns a shared raw_input into an owned Value, cloning only when the tracker
+/// still holds another reference.
+fn materialize_raw_input(raw_input: Arc<serde_json::Value>) -> serde_json::Value {
+    Arc::try_unwrap(raw_input).unwrap_or_else(|shared| (*shared).clone())
 }
 
 impl AcpStreamRoundTracker {
@@ -183,7 +192,8 @@ impl AcpToolCallTracker {
         raw_input: Option<serde_json::Value>,
         kind: Option<agent_client_protocol::schema::ToolKind>,
     ) -> AcpToolCallSnapshot {
-        let tool_name = acp_tool_name(&title, raw_input.as_ref(), kind.as_ref());
+        let raw_input = raw_input.map(Arc::new);
+        let tool_name = acp_tool_name(&title, raw_input.as_deref(), kind.as_ref());
         let snapshot = AcpToolCallSnapshot {
             title,
             tool_name,
@@ -201,17 +211,15 @@ impl AcpToolCallTracker {
         raw_input: Option<serde_json::Value>,
         kind: Option<agent_client_protocol::schema::ToolKind>,
     ) -> AcpToolCallSnapshot {
-        let previous = self.calls.get(tool_id).cloned();
+        let previous = self.calls.get(tool_id);
         let title = title
-            .or_else(|| previous.as_ref().map(|snapshot| snapshot.title.clone()))
+            .or_else(|| previous.map(|snapshot| snapshot.title.clone()))
             .unwrap_or_else(|| tool_id.to_string());
-        let raw_input = raw_input.or_else(|| {
-            previous
-                .as_ref()
-                .and_then(|snapshot| snapshot.raw_input.clone())
-        });
-        let kind = kind.or_else(|| previous.as_ref().and_then(|snapshot| snapshot.kind));
-        let tool_name = acp_tool_name(&title, raw_input.as_ref(), kind.as_ref());
+        let raw_input = raw_input
+            .map(Arc::new)
+            .or_else(|| previous.and_then(|snapshot| snapshot.raw_input.clone()));
+        let kind = kind.or_else(|| previous.and_then(|snapshot| snapshot.kind));
+        let tool_name = acp_tool_name(&title, raw_input.as_deref(), kind.as_ref());
         let snapshot = AcpToolCallSnapshot {
             title,
             tool_name,
@@ -231,18 +239,21 @@ fn acp_tool_call_events(
     let snapshot = tracker.upsert_from_call(
         tool_id.clone(),
         tool_call.title.clone(),
-        tool_call.raw_input.clone(),
+        tool_call.raw_input,
         Some(tool_call.kind),
     );
     let tool_name = snapshot.tool_name;
     let params = normalize_tool_params(
         &tool_name,
-        snapshot.raw_input.clone().unwrap_or_else(|| {
-            serde_json::json!({
-                "title": tool_call.title,
-                "kind": format!("{:?}", tool_call.kind),
-            })
-        }),
+        snapshot
+            .raw_input
+            .map(materialize_raw_input)
+            .unwrap_or_else(|| {
+                serde_json::json!({
+                    "title": tool_call.title,
+                    "kind": format!("{:?}", tool_call.kind),
+                })
+            }),
     );
 
     let mut events = vec![AcpClientStreamEvent::ToolEvent(ToolEventData::Started {
@@ -295,7 +306,7 @@ fn acp_tool_call_update_events(
     let snapshot = tracker.update_from_fields(
         &tool_id,
         update.fields.title.clone(),
-        update.fields.raw_input.clone(),
+        update.fields.raw_input,
         update.fields.kind,
     );
     let tool_name = snapshot.tool_name.clone();
@@ -309,7 +320,7 @@ fn acp_tool_call_update_events(
                         tool_id.clone(),
                         tool_name.clone(),
                     ),
-                    params: normalize_tool_params(&tool_name, raw_input),
+                    params: normalize_tool_params(&tool_name, materialize_raw_input(raw_input)),
                     timeout_seconds: None,
                 }));
             }
@@ -338,7 +349,7 @@ fn acp_tool_call_update_events(
                         tool_id.clone(),
                         tool_name.clone(),
                     ),
-                    params: normalize_tool_params(&tool_name, raw_input),
+                    params: normalize_tool_params(&tool_name, materialize_raw_input(raw_input)),
                     timeout_seconds: None,
                 }));
             }
@@ -359,11 +370,14 @@ fn acp_tool_call_update_events(
         Some(ToolCallStatus::InProgress) | Some(ToolCallStatus::Pending) | Some(_) => {
             let params = normalize_tool_params(
                 &tool_name,
-                snapshot.raw_input.unwrap_or_else(|| {
-                    serde_json::json!({
-                        "title": snapshot.title,
-                    })
-                }),
+                snapshot
+                    .raw_input
+                    .map(materialize_raw_input)
+                    .unwrap_or_else(|| {
+                        serde_json::json!({
+                            "title": snapshot.title,
+                        })
+                    }),
             );
             vec![AcpClientStreamEvent::ToolEvent(ToolEventData::Started {
                 identity: bitfun_events::ToolEventIdentity::direct(tool_id, tool_name),
@@ -374,7 +388,7 @@ fn acp_tool_call_update_events(
         None => snapshot
             .raw_input
             .map(|params| {
-                let params = normalize_tool_params(&tool_name, params);
+                let params = normalize_tool_params(&tool_name, materialize_raw_input(params));
                 vec![AcpClientStreamEvent::ToolEvent(ToolEventData::Started {
                     identity: bitfun_events::ToolEventIdentity::direct(tool_id, tool_name),
                     params,

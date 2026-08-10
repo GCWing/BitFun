@@ -32,17 +32,14 @@ crate；`src/crates/assembly/core` 只保留产品装配与兼容桥接。
 
 - 桌面端专属集成留在这里，不要下沉到共享 core
 - 窗口 lifecycle 行为（包括 close/minimize-to-tray 默认值）属于桌面端 surface；修改时必须保留用户已保存偏好。
-- 涉及打包或 release 请求时，参见顶层 `AGENTS.md`
 
 ## 命令
+
+以下命令用于桌面开发循环；验证命令只在下方“验证”章节维护。
 
 ```bash
 pnpm run desktop:dev
 pnpm run desktop:preview:debug
-cargo check -p bitfun-desktop
-cargo test -p bitfun-desktop
-cargo build -p bitfun-desktop
-pnpm run desktop:build:fast
 ```
 
 ## 快速构建
@@ -53,9 +50,12 @@ pnpm run desktop:build:fast
 | `pnpm run desktop:build:release-fast` | 类 Release 构建，降低 LTO；需要 release 行为但无法等待完整 LTO 时使用 |
 | `pnpm run desktop:build:nsis:fast` | Windows 安装器，使用 `release-fast` profile；快速验证安装器 |
 
+需要完整断点调试信息时设置 `CARGO_PROFILE_DEV_DEBUG=2`。默认 dev profile 保留行号信息，
+同时减少 PDB 体积。
+
 ## Target 缓存 GC
 
-`desktop:dev`（退出时）、`desktop:preview:debug`（关闭时）以及 `desktop:build*` 会裁剪过期的 `target/<profile>/incremental`（每个 crate 只留最新根）以及已无对应 `.fingerprint` 的孤儿 `deps`。**不会**按 mtime 删除 fingerprint（否则下次 `desktop:dev` 会冷编译）。手动执行：`pnpm run target:gc -- --profile debug`。禁用：`BITFUN_TARGET_GC=0`；演练：`BITFUN_TARGET_GC_DRY_RUN=1`。
+`desktop:dev`（退出时）、`desktop:preview:debug`（关闭时）以及 `desktop:build*` 会裁剪过期的 `target/<profile>` 缓存代际。`incremental` 每个 crate/session 保留最新项；GC 根据 Cargo fingerprint JSON 区分 lib、test、bin、build-script 等构建单元，每个单元保留最新代际，并保留 Cargo 管理的 `invoked.timestamp` 在最近 24 小时内刷新过的全部代际，随后删除失去 fingerprint 的 `deps` 文件和 `build` 目录。忙碌检测只检查所选 profile 的 Cargo 锁文件，因此其他 worktree 的编译不会再阻止清理。手动执行：`pnpm run target:gc -- --profile debug`。禁用：`BITFUN_TARGET_GC=0`；演练：`BITFUN_TARGET_GC_DRY_RUN=1`；可用 `BITFUN_TARGET_GC_MIN_AGE_HOURS` 调整安全窗口。
 
 `release-fast` profile（`Cargo.toml`）：继承 `release`，但关闭 LTO、`codegen-units` 提高到 16、启用增量编译。编译速度显著提升，代价是二进制体积增大和边际运行时性能下降。
 

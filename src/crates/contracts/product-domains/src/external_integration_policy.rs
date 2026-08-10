@@ -18,7 +18,9 @@ pub const EXTERNAL_INTEGRATION_POLICY_SCHEMA_MAJOR: u32 = 1;
 /// evaluation and are never projected as selectable UI options.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
+#[derive(Default)]
 pub enum ExternalIntegrationMode {
+    #[default]
     Recommended,
     DiscoverOnly,
     Disabled,
@@ -53,11 +55,6 @@ impl ExternalIntegrationMode {
     }
 }
 
-impl Default for ExternalIntegrationMode {
-    fn default() -> Self {
-        Self::Recommended
-    }
-}
 
 impl Serialize for ExternalIntegrationMode {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -82,8 +79,10 @@ impl<'de> Deserialize<'de> for ExternalIntegrationMode {
 /// `Disabled` on Hosts that do not understand them.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
+#[derive(Default)]
 pub enum ExternalIntegrationAccess {
     Disabled,
+    #[default]
     DiscoverOnly,
     AskBeforeUse,
     Auto,
@@ -137,11 +136,6 @@ impl ExternalIntegrationAccess {
     }
 }
 
-impl Default for ExternalIntegrationAccess {
-    fn default() -> Self {
-        Self::DiscoverOnly
-    }
-}
 
 impl Serialize for ExternalIntegrationAccess {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -184,6 +178,7 @@ impl Default for ExternalEcosystemPolicy {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct ExternalIntegrationPolicySettings {
     pub enabled: bool,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -193,15 +188,6 @@ pub struct ExternalIntegrationPolicySettings {
     pub extensions: BTreeMap<String, serde_json::Value>,
 }
 
-impl Default for ExternalIntegrationPolicySettings {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            ecosystems: BTreeMap::new(),
-            extensions: BTreeMap::new(),
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(default, rename_all = "camelCase")]
@@ -360,7 +346,9 @@ impl From<&ExternalIntegrationPolicyOverride> for ExternalIntegrationPolicyOverr
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(Default)]
 pub enum ExternalIntegrationPolicyStatus {
+    #[default]
     Compatible,
     IncompatibleSchema,
     Unknown(String),
@@ -389,11 +377,6 @@ impl ExternalIntegrationPolicyStatus {
     }
 }
 
-impl Default for ExternalIntegrationPolicyStatus {
-    fn default() -> Self {
-        Self::Compatible
-    }
-}
 
 impl Serialize for ExternalIntegrationPolicyStatus {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

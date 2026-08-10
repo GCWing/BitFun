@@ -1,8 +1,8 @@
 //! MiniApp compiler — assemble source (html/css/ui_js) + import map + runtime bridge.
 
 use crate::miniapp::bridge_builder::{
-    build_bridge_script, build_csp_content, build_import_map, build_miniapp_default_theme_css,
-    scroll_boundary_script,
+    build_bridge_script, build_csp_content, build_import_map, build_market_csp_content,
+    build_miniapp_default_appearance_css, scroll_boundary_script,
 };
 use crate::miniapp::lifecycle::workspace_dir_string;
 use crate::miniapp::types::{MiniAppPermissions, MiniAppSource};
@@ -37,7 +37,7 @@ pub struct MiniAppCompileRequest {
     pub app_id: String,
     pub app_data_dir: String,
     pub workspace_dir: String,
-    pub theme: String,
+    pub appearance_mode: String,
 }
 
 impl MiniAppCompileRequest {
@@ -45,13 +45,13 @@ impl MiniAppCompileRequest {
         app_id: impl Into<String>,
         app_data_dir: impl AsRef<Path>,
         workspace_root: Option<&Path>,
-        theme: impl Into<String>,
+        appearance_mode: impl Into<String>,
     ) -> Self {
         Self {
             app_id: app_id.into(),
             app_data_dir: app_data_dir.as_ref().to_string_lossy().to_string(),
             workspace_dir: workspace_dir_string(workspace_root),
-            theme: theme.into(),
+            appearance_mode: appearance_mode.into(),
         }
     }
 }
@@ -63,8 +63,31 @@ pub fn compile(
     app_id: &str,
     app_data_dir: &str,
     workspace_dir: &str,
-    theme: &str,
+    appearance_mode: &str,
 ) -> MiniAppCompileResult<String> {
+    compile_internal(
+        source,
+        permissions,
+        app_id,
+        app_data_dir,
+        workspace_dir,
+        appearance_mode,
+        false,
+    )
+}
+
+fn compile_internal(
+    source: &MiniAppSource,
+    permissions: &MiniAppPermissions,
+    app_id: &str,
+    app_data_dir: &str,
+    workspace_dir: &str,
+    appearance_mode: &str,
+    market_strict: bool,
+) -> MiniAppCompileResult<String> {
+    if market_strict {
+        validate_market_runtime_source(source, permissions)?;
+    }
     let platform = if cfg!(target_os = "windows") {
         "win32"
     } else if cfg!(target_os = "macos") {
@@ -73,14 +96,24 @@ pub fn compile(
         "linux"
     };
 
-    let bridge = build_bridge_script(app_id, app_data_dir, workspace_dir, theme, platform);
-    let csp = build_csp_content(permissions);
+    let bridge = build_bridge_script(
+        app_id,
+        app_data_dir,
+        workspace_dir,
+        appearance_mode,
+        platform,
+    );
+    let csp = if market_strict {
+        build_market_csp_content().to_string()
+    } else {
+        build_csp_content(permissions)
+    };
     let csp_tag = format!(
         "<meta http-equiv=\"Content-Security-Policy\" content=\"{}\">",
         csp.replace('"', "&quot;")
     );
     let scroll = scroll_boundary_script();
-    let theme_default_style = build_miniapp_default_theme_css();
+    let appearance_default_style = build_miniapp_default_appearance_css();
     let import_map = build_import_map(&source.esm_dependencies);
     let style_tag = if source.css.is_empty() {
         String::new()
@@ -96,26 +129,29 @@ pub fn compile(
 
     let head_content = format!(
         "\n{}\n{}\n{}\n{}\n{}\n{}\n",
-        theme_default_style, csp_tag, scroll, import_map, bridge_script_tag, style_tag,
+        appearance_default_style, csp_tag, scroll, import_map, bridge_script_tag, style_tag,
     );
 
     let html = if source.html.trim().is_empty() {
-        let theme_attr = format!(" data-theme-type=\"{}\"", escape_html_attr(theme));
+        let appearance_attr = format!(
+            " data-bf-appearance-mode=\"{}\"",
+            escape_html_attr(appearance_mode)
+        );
         format!(
             r#"<!DOCTYPE html>
-<html{theme_attr}>
+<html{appearance_attr}>
 <head>{head}</head>
 <body>
 {user_script}
 </body>
 </html>"#,
-            theme_attr = theme_attr,
+            appearance_attr = appearance_attr,
             head = head_content,
             user_script = user_script_tag,
         )
     } else {
-        let with_theme = inject_data_theme_type(&source.html, theme);
-        let with_head = inject_into_head(&with_theme, &head_content)?;
+        let with_appearance = inject_data_appearance_mode(&source.html, appearance_mode);
+        let with_head = inject_into_head(&with_appearance, &head_content)?;
         inject_before_body_close(&with_head, &user_script_tag)
     };
 
@@ -133,8 +169,58 @@ pub fn compile_with_request(
         &request.app_id,
         &request.app_data_dir,
         &request.workspace_dir,
-        &request.theme,
+        &request.appearance_mode,
     )
+}
+
+/// Compile a reviewed marketplace package using the strict runtime profile.
+pub fn compile_market_with_request(
+    source: &MiniAppSource,
+    permissions: &MiniAppPermissions,
+    request: &MiniAppCompileRequest,
+) -> MiniAppCompileResult<String> {
+    compile_internal(
+        source,
+        permissions,
+        &request.app_id,
+        &request.app_data_dir,
+        &request.workspace_dir,
+        &request.appearance_mode,
+        true,
+    )
+}
+
+fn validate_market_runtime_source(
+    source: &MiniAppSource,
+    permissions: &MiniAppPermissions,
+) -> MiniAppCompileResult<()> {
+    if permissions.node.as_ref().is_none_or(|node| node.enabled) {
+        return Err(MiniAppCompileError::validation(
+            "marketplace MiniApps must explicitly disable Node",
+        ));
+    }
+    if !source.esm_dependencies.is_empty() || !source.npm_dependencies.is_empty() {
+        return Err(MiniAppCompileError::validation(
+            "marketplace MiniApps cannot declare ESM or npm dependencies",
+        ));
+    }
+    let compact_worker = source
+        .worker_js
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<String>()
+        .replace(char::is_whitespace, "");
+    if !compact_worker.is_empty()
+        && !matches!(
+            compact_worker.as_str(),
+            "module.exports={};" | "module.exports={}" | "export{};" | "export{}"
+        )
+    {
+        return Err(MiniAppCompileError::validation(
+            "marketplace MiniApps cannot run worker code",
+        ));
+    }
+    Ok(())
 }
 
 /// Place content just before </body>. If no </body> found, append before </html> or at end.
@@ -160,18 +246,18 @@ fn escape_html_attr(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
-/// Inject or replace data-theme-type on the first <html> tag.
-fn inject_data_theme_type(html: &str, theme: &str) -> String {
-    let safe = escape_html_attr(theme);
+/// Inject data-bf-appearance-mode on the first <html> tag.
+fn inject_data_appearance_mode(html: &str, appearance_mode: &str) -> String {
+    let safe = escape_html_attr(appearance_mode);
     if let Some(idx) = html.find("<html") {
         let after_html = idx + 5;
         let rest = &html[after_html..];
         if let Some(close) = rest.find('>') {
             let tag = &html[idx..after_html + close + 1];
-            if tag.contains("data-theme-type=") {
+            if tag.contains("data-bf-appearance-mode=") {
                 return html.to_string();
             }
-            let insert = format!(" data-theme-type=\"{}\"", safe);
+            let insert = format!(" data-bf-appearance-mode=\"{}\"", safe);
             return format!(
                 "{}{}>{}",
                 &html[..after_html + close],
@@ -254,7 +340,7 @@ mod tests {
         assert_eq!(request.app_id, "app-1");
         assert_eq!(request.app_data_dir, app_data_dir.to_string_lossy());
         assert_eq!(request.workspace_dir, workspace_root.to_string_lossy());
-        assert_eq!(request.theme, "dark");
+        assert_eq!(request.appearance_mode, "dark");
     }
 
     #[test]
@@ -273,7 +359,7 @@ mod tests {
             app_id: "app-1".to_string(),
             app_data_dir: "/tmp/miniapps/app-1".to_string(),
             workspace_dir: "/tmp/workspace".to_string(),
-            theme: "dark".to_string(),
+            appearance_mode: "dark".to_string(),
         };
 
         let legacy = compile(
@@ -282,21 +368,21 @@ mod tests {
             &request.app_id,
             &request.app_data_dir,
             &request.workspace_dir,
-            &request.theme,
+            &request.appearance_mode,
         )
         .unwrap();
         let compiled = compile_with_request(&source, &permissions, &request).unwrap();
 
         assert_eq!(compiled, legacy);
-        assert!(compiled.contains("data-theme-type=\"dark\""));
+        assert!(compiled.contains("data-bf-appearance-mode=\"dark\""));
         assert!(compiled.contains("console.log('ready');"));
     }
 
     #[test]
-    fn inject_data_theme_type_skips_existing_attribute() {
+    fn inject_data_appearance_mode_skips_existing_attribute() {
         let source = MiniAppSource {
             html:
-                r#"<!DOCTYPE html><html lang="zh-CN" data-theme-type="dark"><body></body></html>"#
+                r#"<!DOCTYPE html><html lang="zh-CN" data-bf-appearance-mode="dark"><body></body></html>"#
                     .to_string(),
             css: String::new(),
             ui_js: String::new(),
@@ -309,10 +395,46 @@ mod tests {
             app_id: "app-1".to_string(),
             app_data_dir: "/tmp/miniapps/app-1".to_string(),
             workspace_dir: "/tmp/workspace".to_string(),
-            theme: "dark".to_string(),
+            appearance_mode: "dark".to_string(),
         };
 
         let compiled = compile_with_request(&source, &permissions, &request).unwrap();
-        assert_eq!(compiled.matches("data-theme-type=\"dark\"").count(), 1);
+        assert_eq!(
+            compiled.matches("data-bf-appearance-mode=\"dark\"").count(),
+            1
+        );
+    }
+
+    #[test]
+    fn market_compile_uses_strict_csp_and_rejects_dependencies() {
+        let mut source = MiniAppSource {
+            html: "<!DOCTYPE html><html><head></head><body></body></html>".to_string(),
+            css: String::new(),
+            ui_js: "window.ready = true;".to_string(),
+            esm_dependencies: vec![],
+            worker_js: String::new(),
+            npm_dependencies: vec![],
+        };
+        let permissions = MiniAppPermissions {
+            node: Some(crate::miniapp::types::NodePermissions {
+                enabled: false,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let request = MiniAppCompileRequest::from_paths("market-app", "/tmp/app", None, "dark");
+
+        let compiled = compile_market_with_request(&source, &permissions, &request).unwrap();
+        assert!(compiled.contains("connect-src 'none'"));
+        assert!(compiled.contains("frame-src 'none'"));
+        assert!(!compiled.contains("'unsafe-eval'"));
+        assert!(!compiled.contains("script-src 'self'"));
+
+        source.esm_dependencies.push(crate::miniapp::types::EsmDep {
+            name: "react".to_string(),
+            version: None,
+            url: None,
+        });
+        assert!(compile_market_with_request(&source, &permissions, &request).is_err());
     }
 }

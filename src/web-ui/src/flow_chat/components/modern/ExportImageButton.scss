@@ -11,9 +11,9 @@
      Padding matches ModelRoundItem (3rem ≈ 48px each side) so the
      effective content width is identical to the live chat. */
   padding: 24px 48px;
-  background: var(--color-bg-scene);
+  background: var(--bf-appearance-token-color-bg-scene);
   box-sizing: border-box;
-  font-family: var(--font-family-sans);
+  font-family: var(--bf-appearance-token-font-family-sans);
   /* Use a fixed 800px layout context so text wraps at exactly the same
      width regardless of the wrapper's position or viewport. */
   container-type: inline-size;
@@ -64,7 +64,7 @@
     gap: 12px;
     margin-bottom: 20px;
     padding-bottom: 16px;
-    border-bottom: 1px solid var(--border-base);
+    border-bottom: 1px solid var(--bf-appearance-token-border-base);
   }
 
   &__logo {
@@ -94,20 +94,20 @@
   &__title {
     font-size: 16px;
     font-weight: 600;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     display: inline-block;
   }
 
   &__subtitle {
-    font-size: var(--flowchat-font-size-xs);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
     display: inline-block;
   }
 
   &__timestamp {
     margin-left: auto;
-    font-size: var(--flowchat-font-size-xs);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
     display: inline-block;
     flex-shrink: 0;
   }
@@ -118,13 +118,13 @@
   }
 
   &__user-bubble {
-    background: var(--element-bg-medium);
-    border: 1px solid var(--border-base);
+    background: var(--bf-appearance-token-element-bg-medium);
+    border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: 12px;
     padding: 14px 16px;
     font-size: 14px;
-    line-height: var(--flowchat-text-line-height);
-    color: var(--color-text-primary);
+    line-height: var(--bf-appearance-token-flowchat-text-line-height);
+    color: var(--bf-appearance-token-color-text-primary);
     white-space: pre-wrap !important;
     word-break: break-word;
     word-wrap: break-word;
@@ -188,13 +188,13 @@
   &__footer {
     margin-top: 20px;
     padding-top: 14px;
-    border-top: 1px solid var(--border-base);
+    border-top: 1px solid var(--bf-appearance-token-border-base);
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
-    font-size: var(--flowchat-font-size-xs);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
     white-space: nowrap;
     
     span {
@@ -206,7 +206,7 @@
 
   &__footer-brand {
     font-weight: 600;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
   }
 }

@@ -1,11 +1,11 @@
 .v-card {
-  --v-card-bg-default: var(--color-overlay-white-04);
-  --v-card-bg-hover: var(--color-overlay-white-08);
-  --v-card-bg-active: var(--color-overlay-white-12);
-  --v-card-bg-accent: var(--color-overlay-white-08);
-  --v-card-bg-accent-hover: var(--color-overlay-white-12);
-  --v-card-bg-purple: var(--color-purple-100);
-  --v-card-bg-purple-hover: var(--color-purple-200);
+  --v-card-bg-default: var(--bf-appearance-token-color-overlay-white-04);
+  --v-card-bg-hover: var(--bf-appearance-token-color-overlay-white-08);
+  --v-card-bg-active: var(--bf-appearance-token-color-overlay-white-12);
+  --v-card-bg-accent: var(--bf-appearance-token-color-overlay-white-08);
+  --v-card-bg-accent-hover: var(--bf-appearance-token-color-overlay-white-12);
+  --v-card-bg-purple: var(--bf-appearance-token-color-purple-100);
+  --v-card-bg-purple-hover: var(--bf-appearance-token-color-purple-200);
 
   display: flex;
   flex-direction: column;
@@ -13,10 +13,10 @@
 
   background: var(--v-card-bg-default);
   border: none;
-  border-radius: var(--size-radius-base);
-  color: var(--color-text-secondary);
+  border-radius: var(--bf-appearance-token-size-radius-base);
+  color: var(--bf-appearance-token-color-text-secondary);
 
-  transition: all var(--motion-base) var(--easing-standard);
+  transition: all var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
 
 
   &--default {
@@ -29,13 +29,14 @@
 
   &--subtle {
     background: transparent;
+    border-color: transparent;
   }
 
   &--accent {
     background: var(--v-card-bg-accent);
 
     .v-card-header__title {
-      color: var(--color-accent-500);
+      color: var(--bf-appearance-token-color-accent-500);
     }
   }
 
@@ -43,7 +44,7 @@
     background: var(--v-card-bg-purple);
 
     .v-card-header__title {
-      color: var(--color-purple-500);
+      color: var(--bf-appearance-token-color-purple-500);
     }
   }
 
@@ -51,28 +52,9 @@
   &--interactive {
     cursor: pointer;
 
-    &:hover {
-      background: var(--v-card-bg-hover);
-    }
-
     &:active {
       background: var(--v-card-bg-active);
-    }
-
-    &.v-card--accent:hover {
-      background: var(--v-card-bg-accent-hover);
-    }
-
-    &.v-card--purple:hover {
-      background: var(--v-card-bg-purple-hover);
-    }
-
-    &.v-card--elevated:hover {
-      background: var(--v-card-bg-active);
-    }
-
-    &.v-card--subtle:hover {
-      background: var(--v-card-bg-default);
+      transform: scale(0.985);
     }
   }
 
@@ -82,28 +64,28 @@
   }
 
   &--padding-small {
-    padding: var(--size-gap-2);
+    padding: var(--bf-appearance-token-size-gap-2);
   }
 
   &--padding-medium {
-    padding: var(--size-gap-4);
+    padding: var(--bf-appearance-token-size-gap-4);
   }
 
   &--padding-large {
-    padding: var(--size-gap-6);
+    padding: var(--bf-appearance-token-size-gap-6);
   }
 
 
   &--radius-small {
-    border-radius: var(--size-radius-sm);
+    border-radius: var(--bf-appearance-token-size-radius-sm);
   }
 
   &--radius-medium {
-    border-radius: var(--size-radius-base);
+    border-radius: var(--bf-appearance-token-size-radius-base);
   }
 
   &--radius-large {
-    border-radius: var(--size-radius-lg);
+    border-radius: var(--bf-appearance-token-size-radius-lg);
   }
 
 
@@ -112,21 +94,21 @@
   }
 }
 
-:root[data-theme-type="light"] .v-card,
-[data-theme-type="light"] .v-card {
-  --v-card-bg-default: var(--color-overlay-black-08);
-  --v-card-bg-hover: var(--color-overlay-black-12);
-  --v-card-bg-active: var(--color-overlay-black-15);
-  --v-card-bg-accent: var(--color-overlay-slate-08);
-  --v-card-bg-accent-hover: var(--color-overlay-slate-12);
-  --v-card-bg-purple: color-mix(in srgb, var(--color-purple-600) 12%, transparent);
+:root[data-bf-appearance-mode="light"] .v-card,
+[data-bf-appearance-mode="light"] .v-card {
+  --v-card-bg-default: var(--bf-appearance-token-color-overlay-black-08);
+  --v-card-bg-hover: var(--bf-appearance-token-color-overlay-black-12);
+  --v-card-bg-active: var(--bf-appearance-token-color-overlay-black-15);
+  --v-card-bg-accent: var(--bf-appearance-token-color-overlay-slate-08);
+  --v-card-bg-accent-hover: var(--bf-appearance-token-color-overlay-slate-12);
+  --v-card-bg-purple: color-mix(in srgb, var(--bf-appearance-token-color-purple-600) 12%, transparent);
 }
 
 .v-card-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--size-gap-3);
+  gap: var(--bf-appearance-token-size-gap-3);
 
   &__content {
     flex: 1;
@@ -134,48 +116,48 @@
   }
 
   &__title {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text-primary);
-    line-height: var(--line-height-tight);
-    margin-bottom: var(--size-gap-1);
+    font-size: var(--bf-appearance-token-font-size-sm);
+    font-weight: var(--bf-appearance-token-font-weight-semibold);
+    color: var(--bf-appearance-token-color-text-primary);
+    line-height: var(--bf-appearance-token-line-height-tight);
+    margin-bottom: var(--bf-appearance-token-size-gap-1);
   }
 
   &__subtitle {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
-    line-height: var(--line-height-base);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
+    line-height: var(--bf-appearance-token-line-height-base);
   }
 
   &__extra {
     flex-shrink: 0;
     display: flex;
     align-items: center;
-    gap: var(--size-gap-2);
+    gap: var(--bf-appearance-token-size-gap-2);
   }
 }
 
 .v-card-body {
   flex: 1;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-relaxed);
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-font-size-sm);
+  line-height: var(--bf-appearance-token-line-height-relaxed);
 
   .v-card-header + & {
-    margin-top: var(--size-gap-3);
-    padding-top: var(--size-gap-3);
-    border-top: 1px dashed var(--border-subtle);
+    margin-top: var(--bf-appearance-token-size-gap-3);
+    padding-top: var(--bf-appearance-token-size-gap-3);
+    border-top: 1px dashed var(--bf-appearance-token-border-subtle);
   }
 }
 
 .v-card-footer {
   display: flex;
   align-items: center;
-  gap: var(--size-gap-2);
+  gap: var(--bf-appearance-token-size-gap-2);
 
   .v-card-body + &,
   .v-card-header + & {
-    margin-top: var(--size-gap-4);
+    margin-top: var(--bf-appearance-token-size-gap-4);
   }
 
   &--left {

@@ -7,7 +7,7 @@
       "domain": "themePreset",
       "key": "#1a1b26 <-> #1c1c1f",
       "decision": "keep",
-      "owner": "src/web-ui/src/infrastructure/theme/presets",
+      "owner": "src/web-ui/src/infrastructure/appearance/builtins",
       "reason": "Tokyo Night primary background uses the canonical Tokyo base hue; #1c1c1f is the default dark/china/slate neutral surface. Merging would flatten cross-theme identity rather than remove an app-level duplicate.",
       "reevaluateWhen": "Only after a visual review proves Tokyo Night no longer needs a distinct primary background identity."
     },
@@ -16,7 +16,7 @@
       "domain": "themePreset",
       "key": "#1c1c1f <-> #212019",
       "decision": "keep",
-      "owner": "src/web-ui/src/infrastructure/theme/presets",
+      "owner": "src/web-ui/src/infrastructure/appearance/builtins",
       "reason": "China Night secondary background also feeds Monaco lineHighlight through the theme projection. Merging it into the primary background removes the visible current-line cue and flattens adjacent ink surfaces.",
       "reevaluateWhen": "Only if China Night gets a separate editor lineHighlight token or visual review proves the current-line cue remains visible."
     },
@@ -25,7 +25,7 @@
       "domain": "themePreset",
       "key": "#f0f4f8 <-> #f3f3f5",
       "decision": "keep",
-      "owner": "src/web-ui/src/infrastructure/theme/presets",
+      "owner": "src/web-ui/src/infrastructure/appearance/builtins",
       "reason": "The pair crosses light primary background and Monaco lineHighlight / button state values. Editor line highlight must remain visibly distinct from base surface roles.",
       "reevaluateWhen": "Only after Monaco-focused light-theme screenshots confirm the line highlight remains readable."
     },
@@ -34,7 +34,7 @@
       "domain": "themePreset",
       "key": "#2b2d30 <-> #313335",
       "decision": "keep",
-      "owner": "src/web-ui/src/infrastructure/theme/presets",
+      "owner": "src/web-ui/src/infrastructure/appearance/builtins",
       "reason": "Midnight background, tertiary surface, and editor lineHighlight are adjacent in the same dark theme. Merging would weaken surface and editor-row separation.",
       "reevaluateWhen": "Only after a Midnight surface-ramp redesign removes the adjacent role split."
     },
@@ -43,45 +43,36 @@
       "domain": "themePreset",
       "key": "#f3f3f5 <-> #faf8f0",
       "decision": "keep",
-      "owner": "src/web-ui/src/infrastructure/theme/presets",
+      "owner": "src/web-ui/src/infrastructure/appearance/builtins",
       "reason": "China Style paper uses a warm first-paint surface while #f3f3f5 is a cool light neutral and button state stop. This is cross-theme identity, not a duplicate role.",
       "reevaluateWhen": "Only after China Style paper identity is intentionally neutralized."
     },
     {
       "root": "src/web-ui/src",
-      "domain": "themeRuntime",
-      "key": "rgba(255, 255, 255, 0.12) <-> rgba(255, 255, 255, 0.15)",
+      "domain": "appearanceProjection",
+      "key": "#0451a5 <-> #0550ae",
       "decision": "keep",
-      "owner": "src/web-ui/src/infrastructure/theme/core/ThemeService.ts",
-      "reason": "The 0.12 and 0.15 white overlay stops separate hover/active/elevated states and must stay aligned with static tokens.",
-      "reevaluateWhen": "Only after the runtime and static overlay ladder are simplified together with visual coverage for affected card, markdown, and shadow states."
+      "owner": "src/web-ui/src/infrastructure/appearance/builtins/buildBuiltinAppearance.ts",
+      "reason": "The first value is the light xterm blue and the second is the light workbench link hover. They belong to different renderer and document interaction semantics.",
+      "reevaluateWhen": "Reevaluate only when terminal ANSI and workbench link roles share a reviewed palette contract."
     },
     {
       "root": "src/web-ui/src",
-      "domain": "themeRuntime",
+      "domain": "appearanceProjection",
       "key": "rgba(0, 0, 0, 0.12) <-> rgba(0, 0, 0, 0.15)",
       "decision": "keep",
-      "owner": "src/web-ui/src/infrastructure/theme/core/ThemeService.ts",
-      "reason": "The 0.12 and 0.15 black overlay stops separate light-theme card/elevated/active states and must stay aligned with static tokens.",
-      "reevaluateWhen": "Only after light-theme surface-state screenshots show no hierarchy loss."
+      "owner": "src/web-ui/src/infrastructure/appearance/builtins/buildBuiltinAppearance.ts",
+      "reason": "The black overlay ladder separates subtle and stronger elevation states in light Appearance packages; both stops are intentional adjacent-state values.",
+      "reevaluateWhen": "Reevaluate when the light Appearance overlay ladder is redesigned with focused surface-state screenshots."
     },
     {
       "root": "src/web-ui/src",
-      "domain": "tokenContract",
+      "domain": "appearanceProjection",
       "key": "rgba(255, 255, 255, 0.12) <-> rgba(255, 255, 255, 0.15)",
       "decision": "keep",
-      "owner": "src/web-ui/src/component-library/styles/tokens.scss",
-      "reason": "Static token stops mirror runtime overlay state levels for first paint. Removing one side without runtime alignment would create early-render drift.",
-      "reevaluateWhen": "Only when the matching runtime overlay pair is also retired."
-    },
-    {
-      "root": "src/web-ui/src",
-      "domain": "tokenContract",
-      "key": "rgba(0, 0, 0, 0.12) <-> rgba(0, 0, 0, 0.15)",
-      "decision": "keep",
-      "owner": "src/web-ui/src/component-library/styles/tokens.scss",
-      "reason": "Static black overlay stops mirror runtime light-theme state levels for first paint. The pair is a state ramp, not an unowned duplicate.",
-      "reevaluateWhen": "Only when the matching runtime overlay pair is also retired."
+      "owner": "src/web-ui/src/infrastructure/appearance/builtins/buildBuiltinAppearance.ts",
+      "reason": "The white overlay ladder separates subtle and stronger elevation states in dark Appearance packages; both stops are intentional adjacent-state values.",
+      "reevaluateWhen": "Reevaluate when the dark Appearance overlay ladder is redesigned with focused surface-state screenshots."
     },
     {
       "root": "BitFun-Installer/src",

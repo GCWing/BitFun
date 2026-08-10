@@ -26,9 +26,9 @@
       "owner": "BitFun-Installer/src/data/modelProviders.ts",
       "description": "Installer model-provider templates resolve nameKey, descriptionKey, and noteKey metadata at render time.",
       "sourceReferences": [
-        "nameKey: 'model.providers.openbitfun.name'",
-        "descriptionKey: 'model.providers.openbitfun.description'",
-        "noteKey: 'model.providers.minimax.urlOptions.default'"
+        "nameKey: `model.providers.${provider.id}.name`",
+        "descriptionKey: `model.providers.${provider.id}.description`",
+        "noteKey: `model.providers.${provider.id}.urlOptions.${endpoint.label}`"
       ],
       "keyPrefixes": [
         "model.providers."

@@ -240,6 +240,9 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   const createTagElement = useCallback((context: ContextItem): HTMLSpanElement => {
     const tag = document.createElement('span');
     tag.className = 'rich-text-tag-pill';
+    tag.dataset.bfComponent = 'rich-text-input';
+    tag.dataset.bfPart = 'contextTag';
+    tag.dataset.bfContextType = context.type;
     tag.contentEditable = 'false';
     tag.dataset.contextId = context.id;
     tag.dataset.contextType = context.type;
@@ -251,17 +254,23 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
       tag.classList.add('rich-text-tag-pill--session-reference');
       const badge = document.createElement('span');
       badge.className = 'rich-text-tag-pill__badge rich-text-tag-pill__badge--icon';
+      badge.dataset.bfComponent = 'rich-text-input';
+      badge.dataset.bfPart = 'tagBadge';
       badge.innerHTML = SESSION_REFERENCE_BADGE_ICON;
       tag.appendChild(badge);
     }
     
     const text = document.createElement('span');
     text.className = 'rich-text-tag-pill__text';
+    text.dataset.bfComponent = 'rich-text-input';
+    text.dataset.bfPart = 'tagText';
     // Show name only, no # prefix
     text.textContent = getContextDisplayName(context);
     
     const remove = document.createElement('button');
     remove.className = 'rich-text-tag-pill__remove';
+    remove.dataset.bfComponent = 'rich-text-input';
+    remove.dataset.bfPart = 'tagRemove';
     remove.textContent = '×';
     remove.title = 'Remove';
     remove.onclick = (e) => {
@@ -292,6 +301,9 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
 
     const tag = document.createElement('span');
     tag.className = 'rich-text-tag-pill rich-text-tag-pill--widget-ref';
+    tag.dataset.bfComponent = 'rich-text-input';
+    tag.dataset.bfPart = 'contextTag';
+    tag.dataset.bfContextType = 'widget-reference';
     tag.contentEditable = 'false';
     tag.dataset.tagFormat = token;
     tag.dataset.inlineTokenType = 'widget-ref';
@@ -299,14 +311,20 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
 
     const badge = document.createElement('span');
     badge.className = 'rich-text-tag-pill__badge';
+    badge.dataset.bfComponent = 'rich-text-input';
+    badge.dataset.bfPart = 'tagBadge';
     badge.textContent = 'UI';
 
     const text = document.createElement('span');
     text.className = 'rich-text-tag-pill__text rich-text-tag-pill__text--widget-ref';
+    text.dataset.bfComponent = 'rich-text-input';
+    text.dataset.bfPart = 'tagText';
     text.textContent = payload.displayText;
 
     const remove = document.createElement('button');
     remove.className = 'rich-text-tag-pill__remove';
+    remove.dataset.bfComponent = 'rich-text-input';
+    remove.dataset.bfPart = 'tagRemove';
     remove.textContent = '×';
     remove.title = 'Remove';
     remove.onclick = (e) => {
@@ -334,6 +352,9 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
 
     const tag = document.createElement('span');
     tag.className = 'rich-text-tag-pill rich-text-tag-pill--skill-ref';
+    tag.dataset.bfComponent = 'rich-text-input';
+    tag.dataset.bfPart = 'contextTag';
+    tag.dataset.bfContextType = 'skill-reference';
     tag.contentEditable = 'false';
     tag.dataset.tagFormat = token;
     tag.dataset.inlineTokenType = 'skill-ref';
@@ -341,14 +362,20 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
 
     const badge = document.createElement('span');
     badge.className = 'rich-text-tag-pill__badge rich-text-tag-pill__badge--icon';
+    badge.dataset.bfComponent = 'rich-text-input';
+    badge.dataset.bfPart = 'tagBadge';
     badge.innerHTML = SKILL_REFERENCE_BADGE_ICON;
 
     const text = document.createElement('span');
     text.className = 'rich-text-tag-pill__text rich-text-tag-pill__text--skill-ref';
+    text.dataset.bfComponent = 'rich-text-input';
+    text.dataset.bfPart = 'tagText';
     text.textContent = payload.skillName;
 
     const remove = document.createElement('button');
     remove.className = 'rich-text-tag-pill__remove';
+    remove.dataset.bfComponent = 'rich-text-input';
+    remove.dataset.bfPart = 'tagRemove';
     remove.textContent = '×';
     remove.title = 'Remove';
     remove.onclick = (e) => {
@@ -1201,6 +1228,9 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
 
   return (
     <div
+      data-bf-component="rich-text-input"
+      data-bf-part="root"
+      data-bf-state={[isFocused ? 'focused' : '', disabled ? 'disabled' : ''].filter(Boolean).join(' ') || undefined}
       {...restProps}
       ref={internalRef}
       className={`rich-text-input ${isFocused ? 'rich-text-input--focused' : ''} ${className}`}

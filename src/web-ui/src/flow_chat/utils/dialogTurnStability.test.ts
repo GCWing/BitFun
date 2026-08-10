@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DialogTurn } from '../types/flow-chat';
 import {
+  normalizeRecoveredTurnFinishReason,
   normalizeRecoveredRoundStatus,
   normalizeRecoveredToolStatus,
   normalizeRecoveredTurnStatus,
@@ -57,6 +58,12 @@ function createDialogTurn(overrides: Partial<DialogTurn> = {}): DialogTurn {
 }
 
 describe('dialogTurnStability', () => {
+  it('preserves application restart provenance for a recovered in-progress turn without tools', () => {
+    expect(normalizeRecoveredTurnFinishReason('processing', undefined)).toBe('interrupted');
+    expect(normalizeRecoveredTurnFinishReason('cancelled', undefined)).toBeUndefined();
+    expect(normalizeRecoveredTurnFinishReason('processing', 'user_cancelled')).toBe('user_cancelled');
+  });
+
   it('normalizes recovered in-progress turns to cancelled', () => {
     expect(normalizeRecoveredTurnStatus('inprogress', { error: null })).toBe('cancelled');
     expect(normalizeRecoveredTurnStatus('processing', { error: null })).toBe('cancelled');

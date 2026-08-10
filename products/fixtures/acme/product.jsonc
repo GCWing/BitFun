@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/product-definition.schema.json",
+  "schemaVersion": 1,
+  "localeRoot": "./locales",
+  "members": {
+    "desktop": {
+      "displayNameKey": "product.desktop.name",
+      "binaryName": "acme-desktop",
+      "bundleId": "com.acme.desktop"
+    },
+    "cli": {
+      "displayNameKey": "product.cli.name",
+      "binaryName": "acme"
+    }
+  }
+}

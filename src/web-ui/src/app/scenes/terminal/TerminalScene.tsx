@@ -33,7 +33,14 @@ const TerminalScene: React.FC<TerminalSceneProps> = ({ isActive = true }) => {
   // would dispose xterm and force replay on return, which can lose scrollback
   // and cursor state after resize-sensitive shell output.
   return (
-    <div className="bitfun-terminal-scene" aria-hidden={!isActive} data-testid="shell-panel">
+    <div
+      className="bitfun-terminal-scene"
+      aria-hidden={!isActive}
+      data-testid="shell-panel"
+      data-bf-scene="terminal"
+      data-bf-part="root"
+      data-bf-state={isActive ? undefined : 'inactive'}
+    >
       {activeSessionId ? (
         <ConnectedTerminal
           key={activeSessionId}
@@ -45,7 +52,7 @@ const TerminalScene: React.FC<TerminalSceneProps> = ({ isActive = true }) => {
           onClose={handleClose}
         />
       ) : (
-        <div className="bitfun-terminal-scene__empty" data-testid="shell-command-list">
+        <div className="bitfun-terminal-scene__empty" data-testid="shell-command-list" data-bf-scene="terminal" data-bf-part="empty">
           <SquareTerminal size={32} className="bitfun-terminal-scene__empty-icon" />
           <p className="bitfun-terminal-scene__empty-hint" data-testid="shell-panel-title">{t('emptyState')}</p>
         </div>

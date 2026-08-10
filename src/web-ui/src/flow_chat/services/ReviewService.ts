@@ -4,6 +4,7 @@ import type {
   ReviewPlatformRepositoryRef,
 } from '@/infrastructure/api/service-api/ReviewPlatformAPI';
 import {
+  buildAdaptiveStandardReviewManifest,
   buildPullRequestReviewTargetEvidence,
   type ReviewTeamChangeStats,
   type ReviewTeamRunManifest,
@@ -57,6 +58,7 @@ export interface PreparedStandardReviewLaunch extends PreparedReviewBase {
   mode: 'standard';
   level: 'l1';
   strategyLevel: 'quick';
+  runManifest: ReviewTeamRunManifest;
 }
 
 export interface PreparedStrictReviewLaunch extends PreparedReviewBase {
@@ -270,6 +272,7 @@ async function prepareFromResolvedTarget(params: {
             managedBatching: true,
             maxCoreReviewers: 0,
             maxExtraReviewers: 0,
+            maxFocusedCalls: 2,
             resolvedTarget: {
               target: params.target,
               changeStats: params.changeStats,
@@ -287,6 +290,7 @@ async function prepareFromResolvedTarget(params: {
             managedBatching: true,
             maxCoreReviewers: 0,
             maxExtraReviewers: 0,
+            maxFocusedCalls: 2,
             resolvedTarget: {
               target: params.target,
               changeStats: params.changeStats,
@@ -306,6 +310,12 @@ async function prepareFromResolvedTarget(params: {
         requiresConsent: false,
       };
     }
+    const runManifest = buildAdaptiveStandardReviewManifest({
+      workspacePath: params.workspacePath,
+      target: params.target,
+      changeStats: params.changeStats,
+      targetEvidence: params.targetEvidence,
+    });
     return {
       mode: 'standard',
       level: 'l1',
@@ -314,6 +324,7 @@ async function prepareFromResolvedTarget(params: {
       targetEvidence: params.targetEvidence,
       requestedFiles: params.requestedFiles,
       prompt: buildStandardReviewPrompt(params),
+      runManifest,
       requiresConsent: false,
     };
   }
@@ -326,6 +337,8 @@ async function prepareFromResolvedTarget(params: {
         strategyOverride: 'deep',
         qualityDecision: { level: 'l3' },
         includeQualityGate: true,
+        maxExtraReviewers: 0,
+        maxFocusedCalls: 3,
         resolvedTarget: {
           target: params.target,
           changeStats: params.changeStats,
@@ -346,6 +359,8 @@ async function prepareFromResolvedTarget(params: {
           targetEvidence: params.targetEvidence,
         },
         includeQualityGate: true,
+        maxExtraReviewers: 0,
+        maxFocusedCalls: 3,
       },
     );
 
@@ -521,6 +536,7 @@ export async function launchPreparedReviewSession(params: {
     addMarker: false,
     reviewTargetEvidence: params.prepared.targetEvidence,
     reviewTargetFilePaths: params.prepared.requestedFiles,
+    deepReviewRunManifest: params.prepared.runManifest,
     requestId,
   });
   let created: Awaited<ReturnType<typeof createBtwChildSession>>;

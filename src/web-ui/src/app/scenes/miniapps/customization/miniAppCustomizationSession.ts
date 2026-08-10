@@ -1,4 +1,6 @@
 import type { CreateSessionRequest } from '@/infrastructure/api/service-api/AgentAPI';
+import type { Session } from '@/flow_chat/types/flow-chat';
+import { isTransientTurnStatus } from '@/flow_chat/utils/dialogTurnStability';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('MiniAppCustomizationSession');
@@ -35,6 +37,13 @@ export function buildMiniAppCustomizationSessionRequest(
 
 export function createMiniAppCustomizationSessionId(appId: string): string {
   return `miniapp-customize-${appId}-${Date.now()}`;
+}
+
+export function isMiniAppCustomizationSessionRunning(
+  session: Pick<Session, 'dialogTurns'> | null | undefined,
+): boolean {
+  const lastTurn = session?.dialogTurns.at(-1);
+  return Boolean(lastTurn && isTransientTurnStatus(lastTurn.status));
 }
 
 export async function launchMiniAppCustomizationSession(params: {

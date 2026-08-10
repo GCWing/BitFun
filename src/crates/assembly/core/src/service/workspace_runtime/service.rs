@@ -2,17 +2,17 @@ use super::types::{
     RuntimeMigrationRecord, WorkspaceRuntimeContext, WorkspaceRuntimeEnsureResult,
     WorkspaceRuntimeTarget, WORKSPACE_RUNTIME_LAYOUT_VERSION,
 };
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::{get_path_manager_arc, PathManager};
-use crate::service::remote_ssh::workspace_state::{
-    normalize_remote_workspace_path, remote_root_to_mirror_subpath,
-    sanitize_ssh_hostname_for_mirror,
-};
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_services_core::session::{
     merge_legacy_session_store, move_legacy_path, SessionStoreMigrationError,
     SessionStoreMigrationRecord,
+};
+use bitfun_services_core::workspace_identity::{
+    normalize_remote_workspace_path, remote_root_to_mirror_subpath,
+    sanitize_ssh_hostname_for_mirror,
 };
 use log::debug;
 use serde::Serialize;
@@ -135,7 +135,7 @@ impl WorkspaceRuntimeService {
         .await
     }
 
-    #[cfg(feature = "product-full")]
+    #[cfg(feature = "agent-runtime")]
     pub async fn ensure_runtime_for_workspace_binding(
         &self,
         workspace: &WorkspaceBinding,
@@ -147,7 +147,7 @@ impl WorkspaceRuntimeService {
             )
             .await
         } else {
-            self.ensure_local_workspace_runtime(workspace.root_path())
+            self.ensure_local_workspace_runtime(workspace.project_root_path())
                 .await
         }
     }

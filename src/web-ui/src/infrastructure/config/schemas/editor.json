@@ -14,43 +14,6 @@
         {
           "type": "select",
           "dataType": "string",
-          "key": "theme",
-          "title": "编辑器主题",
-          "description": "选择编辑器的色彩主题",
-          "default": "vs-dark",
-          "ui": {
-            "options": [
-              {
-                "value": "vs",
-                "label": "浅色主题",
-                "description": "经典的浅色编辑器主题"
-              },
-              {
-                "value": "vs-dark",
-                "label": "深色主题",
-                "description": "经典的深色编辑器主题"
-              },
-              {
-                "value": "hc-black",
-                "label": "高对比度",
-                "description": "高对比度黑色主题"
-              },
-              {
-                "value": "github-light",
-                "label": "GitHub 浅色",
-                "description": "GitHub 风格浅色主题"
-              },
-              {
-                "value": "github-dark",
-                "label": "GitHub 深色",
-                "description": "GitHub 风格深色主题"
-              }
-            ]
-          }
-        },
-        {
-          "type": "select",
-          "dataType": "string",
           "key": "fontFamily",
           "title": "字体",
           "description": "编辑器使用的字体",

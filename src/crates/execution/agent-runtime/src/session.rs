@@ -1,6 +1,10 @@
 use crate::session_state::SessionState;
 pub use bitfun_core_types::SessionKind;
-pub use bitfun_core_types::{SessionContinuationPolicy, SessionModelBindingPolicy};
+pub use bitfun_core_types::{
+    SessionAgentRouteOwner, SessionContinuationPolicy, SessionExecutionTarget,
+    SessionModelBindingPolicy,
+};
+pub use bitfun_runtime_ports::PermissionMode;
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 use uuid::Uuid;
@@ -133,6 +137,18 @@ impl Session {
     }
 }
 
+impl From<Session> for bitfun_runtime_ports::AgentSessionCreateResult {
+    fn from(session: Session) -> Self {
+        let mut result = Self::new(session.session_id, session.session_name, session.agent_type);
+        result.model_id = session.config.model_id;
+        result.workspace_path = session.config.workspace_path;
+        result.workspace_id = session.config.workspace_id;
+        result.project_workspace_path = session.config.project_workspace_path;
+        result.execution_target = session.config.execution_target;
+        result
+    }
+}
+
 /// Session configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionConfig {
@@ -146,6 +162,15 @@ pub struct SessionConfig {
     /// without changing the desktop's foreground workspace.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
+    /// Main project root used for session persistence and project-scoped
+    /// orchestration. For legacy and local sessions this is the same as
+    /// `workspace_path`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_workspace_path: Option<String>,
+    /// Resolved execution target. Legacy sessions omit this and are treated as
+    /// local sessions rooted at `workspace_path`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_target: Option<SessionExecutionTarget>,
     /// Stable workspace id for resolving workspace-scoped metadata such as related directories.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_id: Option<String>,
@@ -161,6 +186,22 @@ pub struct SessionConfig {
     /// Model config ID used by this session (for token usage tracking)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
+    /// Explicit reasoning preset selected for this session. `None` means the
+    /// model's default preset (Auto).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_preset: Option<String>,
+    /// Explicit tool permission mode selected for this session. `None` follows
+    /// the user-level default, so an unset session keeps tracking global
+    /// configuration changes instead of freezing the value it was created with.
+    ///
+    /// Read leniently: a mode written by a newer build must not fail the whole
+    /// persisted session state. See `deserialize_optional_permission_mode`.
+    #[serde(
+        default,
+        deserialize_with = "bitfun_runtime_ports::deserialize_optional_permission_mode",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub permission_mode: Option<PermissionMode>,
     /// Whether this child session accepts another delegated turn.
     #[serde(default, skip_serializing_if = "is_reusable_continuation_policy")]
     pub continuation_policy: SessionContinuationPolicy,
@@ -171,6 +212,10 @@ pub struct SessionConfig {
     /// Mutable sessions leave this unset and continue to resolve selectors.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_binding_fingerprint: Option<String>,
+    /// Durable owner of the logical main-agent route. External ownership is
+    /// revalidated for every turn and never falls back by name alone.
+    #[serde(default, skip_serializing_if = "is_local_agent_route_owner")]
+    pub agent_route_owner: SessionAgentRouteOwner,
 }
 
 fn is_reusable_continuation_policy(policy: &SessionContinuationPolicy) -> bool {
@@ -179,6 +224,10 @@ fn is_reusable_continuation_policy(policy: &SessionContinuationPolicy) -> bool {
 
 fn is_mutable_model_binding_policy(policy: &SessionModelBindingPolicy) -> bool {
     *policy == SessionModelBindingPolicy::Mutable
+}
+
+fn is_local_agent_route_owner(owner: &SessionAgentRouteOwner) -> bool {
+    *owner == SessionAgentRouteOwner::Local
 }
 
 impl Default for SessionConfig {
@@ -191,13 +240,18 @@ impl Default for SessionConfig {
             max_turns: 200,
             enable_context_compression: true,
             workspace_path: None,
+            project_workspace_path: None,
+            execution_target: None,
             workspace_id: None,
             remote_connection_id: None,
             remote_ssh_host: None,
             model_id: None,
+            reasoning_preset: None,
+            permission_mode: None,
             continuation_policy: SessionContinuationPolicy::default(),
             model_binding_policy: SessionModelBindingPolicy::default(),
             model_binding_fingerprint: None,
+            agent_route_owner: SessionAgentRouteOwner::Local,
         }
     }
 }
@@ -209,6 +263,13 @@ pub struct SessionSummary {
     pub session_name: String,
     /// Current/default mode selection for the session.
     pub agent_type: String,
+    /// Runtime-owned model selector currently bound to the session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+    /// Explicit reasoning preset currently bound to the session. `None`
+    /// means the model's canonical default (Auto).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_preset: Option<String>,
     /// Mode of the last surviving user dialog turn in the session history.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_user_dialog_agent_type: Option<String>,
@@ -262,10 +323,59 @@ pub fn sanitize_persisted_session_state(state: &SessionState) -> SessionState {
 #[cfg(test)]
 mod tests {
     use super::{
-        sanitize_persisted_session_state, CompressionState, PersistedSessionStateFile, Session,
-        SessionConfig, SessionContinuationPolicy, SessionModelBindingPolicy,
+        sanitize_persisted_session_state, CompressionState, PermissionMode,
+        PersistedSessionStateFile, Session, SessionAgentRouteOwner, SessionConfig,
+        SessionContinuationPolicy, SessionModelBindingPolicy,
     };
     use crate::session_state::{ProcessingPhase, SessionState};
+
+    fn persisted_state_json(permission_mode: serde_json::Value) -> serde_json::Value {
+        serde_json::json!({
+            "schema_version": 1,
+            "config": {
+                "max_context_tokens": 128128,
+                "auto_compact": true,
+                "enable_tools": true,
+                "safe_mode": true,
+                "max_turns": 200,
+                "enable_context_compression": true,
+                "permission_mode": permission_mode,
+            },
+            "snapshot_session_id": null,
+            "compression_state": { "last_compression_at": null, "compression_count": 0 },
+            "runtime_state": "Idle",
+        })
+    }
+
+    #[test]
+    fn persisted_session_state_survives_a_permission_mode_from_a_newer_build() {
+        let known: PersistedSessionStateFile =
+            serde_json::from_value(persisted_state_json(serde_json::json!("full_access")))
+                .expect("known mode should load");
+        assert_eq!(
+            known.config.permission_mode,
+            Some(PermissionMode::FullAccess)
+        );
+
+        // The whole state file must still load; only the unreadable selection is
+        // dropped, leaving the session on the user-level default.
+        let unknown: PersistedSessionStateFile =
+            serde_json::from_value(persisted_state_json(serde_json::json!("read_only")))
+                .expect("an unknown mode must not fail the state file");
+        assert_eq!(unknown.config.permission_mode, None);
+        assert_eq!(unknown.config.max_context_tokens, 128128);
+        assert!(unknown.config.enable_tools);
+    }
+
+    #[test]
+    fn unset_permission_mode_keeps_persisted_config_bytes_unchanged() {
+        let serialized = serde_json::to_value(SessionConfig::default()).expect("serialize");
+        assert!(serialized.get("permission_mode").is_none());
+    }
+    use bitfun_core_types::{
+        SessionExecutionTarget, SessionExecutionTargetKind, WorktreeLifecycle,
+    };
+    use bitfun_runtime_ports::AgentSessionCreateResult;
     use serde_json::json;
 
     #[test]
@@ -283,6 +393,7 @@ mod tests {
         assert!(config.remote_connection_id.is_none());
         assert!(config.remote_ssh_host.is_none());
         assert!(config.model_id.is_none());
+        assert!(config.reasoning_preset.is_none());
         assert_eq!(
             config.continuation_policy,
             SessionContinuationPolicy::Reusable
@@ -291,6 +402,25 @@ mod tests {
             config.model_binding_policy,
             SessionModelBindingPolicy::Mutable
         );
+        assert_eq!(config.agent_route_owner, SessionAgentRouteOwner::Local);
+    }
+
+    #[test]
+    fn external_agent_route_owner_persists_and_legacy_sessions_default_local() {
+        let config = SessionConfig {
+            agent_route_owner: SessionAgentRouteOwner::External,
+            ..SessionConfig::default()
+        };
+        let mut serialized = serde_json::to_value(&config).expect("serialize session config");
+        assert_eq!(serialized["agent_route_owner"], "external");
+
+        serialized
+            .as_object_mut()
+            .expect("session config object")
+            .remove("agent_route_owner");
+        let restored: SessionConfig =
+            serde_json::from_value(serialized).expect("deserialize legacy session config");
+        assert_eq!(restored.agent_route_owner, SessionAgentRouteOwner::Local);
     }
 
     #[test]
@@ -342,6 +472,49 @@ mod tests {
         assert!(session.last_submitted_agent_type.is_none());
         assert!(session.created_by.is_none());
         assert!(session.snapshot_session_id.is_none());
+    }
+
+    #[test]
+    fn session_create_result_preserves_normalized_workspace_facts() {
+        let execution_target = SessionExecutionTarget {
+            kind: SessionExecutionTargetKind::ManagedWorktree,
+            worktree_id: Some("worktree_1".to_string()),
+            root_path: "/worktrees/session_1".to_string(),
+            base_ref: Some("main".to_string()),
+            base_commit: Some("0123456789abcdef".to_string()),
+            branch: Some("bitfun/session_1".to_string()),
+            lifecycle: Some(WorktreeLifecycle::Managed),
+        };
+        let session = Session::new_with_id(
+            "session_1".to_string(),
+            "Main".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                model_id: Some("provider/model".to_string()),
+                workspace_path: Some("/worktrees/session_1".to_string()),
+                workspace_id: Some("workspace_1".to_string()),
+                project_workspace_path: Some("/workspace/project".to_string()),
+                execution_target: Some(execution_target.clone()),
+                ..SessionConfig::default()
+            },
+        );
+
+        let result = AgentSessionCreateResult::from(session);
+
+        assert_eq!(result.session_id, "session_1");
+        assert_eq!(result.session_name, "Main");
+        assert_eq!(result.agent_type, "agentic");
+        assert_eq!(result.model_id.as_deref(), Some("provider/model"));
+        assert_eq!(
+            result.workspace_path.as_deref(),
+            Some("/worktrees/session_1")
+        );
+        assert_eq!(result.workspace_id.as_deref(), Some("workspace_1"));
+        assert_eq!(
+            result.project_workspace_path.as_deref(),
+            Some("/workspace/project")
+        );
+        assert_eq!(result.execution_target, Some(execution_target));
     }
 
     #[test]

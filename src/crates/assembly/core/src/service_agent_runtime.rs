@@ -7,18 +7,23 @@
 
 use bitfun_agent_runtime::sdk::{
     AgentEventSource, AgentInteractionResponsePort, AgentRuntime, AgentRuntimeBuilder,
-    AgentSessionForkPort, AgentSessionModePort, AgentSessionModelPort,
-    AgentSessionModelUpdateRequest, AgentSessionRestorePort, AgentSessionUsagePort,
+    AgentSessionCompactionPort, AgentSessionForkPort, AgentSessionLineagePort,
+    AgentSessionModePort, AgentSessionModelPort, AgentSessionModelSelection,
+    AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest,
+    AgentSessionRestorePort, AgentSessionRevertPort, AgentSessionUsagePort,
     AgentTurnSettlementPort, RuntimeError,
 };
+use bitfun_events::AgenticEvent;
 use bitfun_runtime_ports::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
     AgentLocalCommandTurnPort, AgentSessionClosePort, AgentSessionCreateRequest,
-    AgentSessionManagementPort, AgentSubmissionPort, AgentSubmissionSource,
-    AgentThreadGoalManagementPort, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    RemoteControlStatePort, RemoteControlStateRequest, RemoteControlStateSnapshot,
-    RemoteSessionWorkspaceIdentity, RuntimeServiceCapability, RuntimeServicePort,
-    SessionStoragePathRequest, SessionStorePort,
+    AgentSessionManagementPort, AgentSessionRevertRequest, AgentSessionRevertResult,
+    AgentSubmissionPort, AgentSubmissionSource, AgentThreadGoalManagementPort,
+    AgentTurnCancellationPort, AgentTurnCancellationRequest, AgentUserShellCommandPort,
+    AgentWorkspaceReferencePort, PermissionPolicyPreset, RemoteControlStatePort,
+    RemoteControlStateRequest, RemoteControlStateSnapshot, RemoteSessionWorkspaceIdentity,
+    RuntimeServiceCapability, RuntimeServicePort, SessionStoragePathRequest, SessionStorePort,
+    ToolPermissionConfig,
 };
 use bitfun_services_integrations::remote_connect::{
     agent_input_attachment_from_remote_image_context, build_remote_chat_messages,
@@ -33,14 +38,14 @@ use bitfun_services_integrations::remote_connect::{
     RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact, RemoteDialogSubmissionPolicy,
     RemoteDialogSubmitOutcome, RemoteDialogWorkspaceBinding, RemoteImageContext,
     RemoteInitialSyncRuntimeHost, RemoteInteractionRuntimeHost, RemoteModelCapabilityFact,
-    RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelFacts, RemotePollRuntimeHost,
-    RemoteReasoningModeFact, RemoteRecentWorkspaceFacts, RemoteSessionMetadata,
-    RemoteSessionRuntimeHost, RemoteSessionStateTracker, RemoteSessionTrackerHost,
-    RemoteTerminalPrewarmRequest, RemoteWorkspaceFacts, RemoteWorkspaceFileRuntimeHost,
-    RemoteWorkspaceKind as RemoteConnectWorkspaceKind, RemoteWorkspaceRuntimeHost,
-    RemoteWorkspaceUpdate,
+    RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelFacts, RemotePermissionMode,
+    RemotePollRuntimeHost, RemoteRecentWorkspaceFacts, RemoteSessionMetadata,
+    RemoteSessionModelSelection, RemoteSessionRuntimeHost, RemoteSessionStateTracker,
+    RemoteSessionTrackerHost, RemoteTerminalPrewarmRequest, RemoteWorkspaceFacts,
+    RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind as RemoteConnectWorkspaceKind,
+    RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
 };
-use log::{debug, error, info};
+use log::{debug, info};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -52,14 +57,30 @@ use crate::agentic::core::{Session, SessionKind};
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::session::session_store_port::CoreSessionStorePort;
 use crate::agentic::workspace::WorkspaceBinding;
+use crate::infrastructure::ai::provider_catalog::resolve_builtin_provider_catalog;
+use crate::infrastructure::ai::reasoning_catalog::{
+    load_models_dev_reasoning_catalog, project_model_reasoning_catalog, resolve_reasoning_preset,
+};
 use crate::service::remote_connect::remote_server::RemoteExecutionDispatcher;
 
-use crate::service::config::types::{AIConfig, GlobalConfig, ModelCapability, ReasoningMode};
+use crate::service::config::types::{AIConfig, GlobalConfig, ModelCapability};
 use crate::service::session::{DialogTurnData, ToolItemIdentityExt, TurnStatus};
 
 fn current_workspace_path() -> Option<std::path::PathBuf> {
     crate::service::workspace::get_global_workspace_service()
         .and_then(|service| service.try_get_current_workspace_path())
+}
+
+fn session_storage_request_from_binding(binding: &WorkspaceBinding) -> SessionStoragePathRequest {
+    SessionStoragePathRequest {
+        workspace_path: binding.logical_workspace_path().to_path_buf(),
+        remote_connection_id: binding.connection_id().map(ToOwned::to_owned),
+        remote_ssh_host: if binding.is_remote() {
+            Some(binding.session_identity.hostname.clone()).filter(|value| !value.trim().is_empty())
+        } else {
+            None
+        },
+    }
 }
 
 fn remote_workspace_kind(
@@ -125,21 +146,20 @@ async fn open_workspace_with_snapshot(
     remote_connection_id: Option<&str>,
     remote_ssh_host: Option<&str>,
 ) -> Result<RemoteWorkspaceUpdate, String> {
+    let coordinator = get_global_coordinator()
+        .ok_or_else(|| "Conversation coordinator not initialized".to_string())?;
     let workspace_service = crate::service::workspace::get_global_workspace_service()
         .ok_or_else(|| "Workspace service not available".to_string())?;
-    let path_buf = std::path::PathBuf::from(path);
-    let info = workspace_service
-        .open_workspace_resolving_known(path_buf, remote_connection_id, remote_ssh_host)
+    let info = coordinator
+        .open_workspace_with_runtime_ownership(
+            workspace_service.as_ref(),
+            std::path::PathBuf::from(path),
+            remote_connection_id,
+            remote_ssh_host,
+            snapshot_log_context,
+        )
         .await
         .map_err(|error| error.to_string())?;
-    if let Err(error) = crate::service::snapshot::initialize_snapshot_manager_for_workspace(
-        info.root_path.clone(),
-        None,
-    )
-    .await
-    {
-        error!("Failed to initialize snapshot after {snapshot_log_context}: {error}");
-    }
     let remote_connection_id = info.remote_ssh_connection_id().map(str::to_string);
     let remote_ssh_host = info
         .metadata
@@ -232,15 +252,6 @@ fn remote_model_capability_fact(capability: ModelCapability) -> RemoteModelCapab
     }
 }
 
-fn remote_reasoning_mode_fact(reasoning_mode: ReasoningMode) -> RemoteReasoningModeFact {
-    match reasoning_mode {
-        ReasoningMode::Default => RemoteReasoningModeFact::Default,
-        ReasoningMode::Enabled => RemoteReasoningModeFact::Enabled,
-        ReasoningMode::Disabled => RemoteReasoningModeFact::Disabled,
-        ReasoningMode::Adaptive => RemoteReasoningModeFact::Adaptive,
-    }
-}
-
 /// Convert persisted turns into mobile ChatMessages.
 /// This is the same data source the desktop frontend uses.
 fn remote_chat_messages_from_turns(turns: &[DialogTurnData]) -> Vec<ChatMessage> {
@@ -315,21 +326,35 @@ fn remote_chat_history_turn_from_core_turn(turn: &DialogTurnData) -> RemoteChatH
     }
 }
 
-async fn resolve_session_model_id(session_id: &str) -> Option<String> {
-    let coordinator = get_global_coordinator()?;
+async fn resolve_session_model_selection(session_id: &str) -> (Option<String>, Option<String>) {
+    let Some(coordinator) = get_global_coordinator() else {
+        return (None, None);
+    };
     let session_manager = coordinator.get_session_manager();
 
     if let Some(session) = session_manager.get_session(session_id) {
-        return normalize_remote_session_model_id(session.config.model_id.as_deref());
+        return (
+            normalize_remote_session_model_id(session.config.model_id.as_deref()),
+            session.config.reasoning_preset.clone(),
+        );
     }
 
-    let session_storage_dir =
-        CoreServiceAgentRuntime::resolve_session_storage_dir(session_id).await?;
+    let Some(session_storage_dir) =
+        CoreServiceAgentRuntime::resolve_session_storage_dir(session_id).await
+    else {
+        return (None, None);
+    };
     coordinator
-        .restore_session_from_storage_path(&session_storage_dir, session_id)
+        .restore_session_view_from_storage_path_timed(&session_storage_dir, session_id)
         .await
         .ok()
-        .and_then(|session| normalize_remote_session_model_id(session.config.model_id.as_deref()))
+        .map(|(session, _, _)| {
+            (
+                normalize_remote_session_model_id(session.config.model_id.as_deref()),
+                session.config.reasoning_preset,
+            )
+        })
+        .unwrap_or_default()
 }
 
 fn core_dialog_submission_policy(policy: RemoteDialogSubmissionPolicy) -> DialogSubmissionPolicy {
@@ -396,10 +421,13 @@ fn agent_input_attachment_from_image_context(context: ImageContextData) -> Agent
 fn core_agent_runtime_builder(
     submission: Arc<dyn AgentSubmissionPort>,
     session_management: Arc<dyn AgentSessionManagementPort>,
+    workspace_references: Arc<dyn AgentWorkspaceReferencePort>,
     session_mode: Arc<dyn AgentSessionModePort>,
     session_model: Arc<dyn AgentSessionModelPort>,
+    session_compaction: Arc<dyn AgentSessionCompactionPort>,
     session_restore: Arc<dyn AgentSessionRestorePort>,
     local_command_turn: Arc<dyn AgentLocalCommandTurnPort>,
+    user_shell_command: Arc<dyn AgentUserShellCommandPort>,
     transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader>,
     thread_goal_management: Arc<dyn AgentThreadGoalManagementPort>,
     cancellation: Arc<dyn AgentTurnCancellationPort>,
@@ -410,10 +438,13 @@ fn core_agent_runtime_builder(
     Ok(AgentRuntimeBuilder::new()
         .with_submission_port(submission)
         .with_session_management_port(session_management)
+        .with_workspace_reference_port(workspace_references)
         .with_session_mode_port(session_mode)
         .with_session_model_port(session_model)
+        .with_session_compaction_port(session_compaction)
         .with_session_restore_port(session_restore)
         .with_local_command_turn_port(local_command_turn)
+        .with_user_shell_command_port(user_shell_command)
         .with_session_transcript_reader(transcript_reader)
         .with_thread_goal_management_port(thread_goal_management)
         .with_cancellation_port(cancellation)
@@ -435,6 +466,114 @@ impl ScheduledSessionManagementPort {
             scheduler,
         }
     }
+
+    async fn apply_session_revert(
+        &self,
+        request: AgentSessionRevertRequest,
+        undo: bool,
+    ) -> bitfun_runtime_ports::PortResult<AgentSessionRevertResult> {
+        bitfun_core_types::validate_session_id(&request.session_id).map_err(|message| {
+            bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+                message,
+            )
+        })?;
+        if request.remote_connection_id.is_some() || request.remote_ssh_host.is_some() {
+            return Err(bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::NotAvailable,
+                "Session undo and redo are unavailable for remote workspaces",
+            ));
+        }
+        self.coordinator
+            .local_revert_workspace(&request.session_id)
+            .map_err(|error| {
+                if matches!(&error, crate::util::errors::BitFunError::Validation(message) if message == "Session undo and redo are unavailable for remote workspaces")
+                {
+                    bitfun_runtime_ports::PortError::new(
+                        bitfun_runtime_ports::PortErrorKind::NotAvailable,
+                        error.to_string(),
+                    )
+                } else {
+                    map_session_close_error(error)
+                }
+            })?;
+        let storage_path = CoreSessionStorePort::default()
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: std::path::PathBuf::from(&request.workspace_path),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .map(|resolution| resolution.effective_storage_path)?;
+        let session_manager = self.coordinator.get_session_manager();
+        session_manager
+            .validate_session_storage_path_binding(&request.session_id, &storage_path)
+            .map_err(map_session_close_error)?;
+        let maintenance = self
+            .scheduler
+            .begin_session_maintenance(&request.session_id, &storage_path, Duration::from_secs(30))
+            .await
+            .map_err(map_session_close_error)?;
+        let _mutation = session_manager
+            .acquire_session_mutation(&request.session_id)
+            .await
+            .map_err(map_session_close_error)?;
+        session_manager
+            .validate_session_storage_path_binding(&request.session_id, &storage_path)
+            .map_err(map_session_close_error)?;
+        let (composer, changed, hidden_turn_count) = self
+            .coordinator
+            .apply_session_revert_locked(&storage_path, &request.session_id, undo)
+            .await
+            .map_err(map_session_close_error)?;
+        if changed {
+            self.coordinator
+                .emit_event(AgenticEvent::SessionHistoryChanged {
+                    session_id: request.session_id.clone(),
+                })
+                .await;
+        }
+        let transcript = self
+            .coordinator
+            .read_session_transcript_locked(bitfun_runtime_ports::SessionTranscriptRequest {
+                session_id: request.session_id.clone(),
+                turn_id: None,
+            })
+            .await
+        .map_err(|error| {
+            bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::OutcomeUnknown,
+                format!(
+                    "Session revert completed but the authoritative transcript could not be read: {error}"
+                ),
+            )
+        })?;
+        Ok(AgentSessionRevertResult {
+            session_id: request.session_id,
+            transcript,
+            composer,
+            retired_turn_ids: maintenance.retired_turn_ids().to_vec(),
+            changed,
+            hidden_turn_count,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentSessionRevertPort for ScheduledSessionManagementPort {
+    async fn undo_session(
+        &self,
+        request: AgentSessionRevertRequest,
+    ) -> bitfun_runtime_ports::PortResult<AgentSessionRevertResult> {
+        self.apply_session_revert(request, true).await
+    }
+
+    async fn redo_session(
+        &self,
+        request: AgentSessionRevertRequest,
+    ) -> bitfun_runtime_ports::PortResult<AgentSessionRevertResult> {
+        self.apply_session_revert(request, false).await
+    }
 }
 
 /// ACP accepts one prompt at a time per session. Keep that protocol-specific
@@ -451,6 +590,13 @@ impl AgentDialogTurnPort for RejectBusyAgentDialogTurnPort {
         self.0
             .submit_agent_dialog_turn_reject_if_busy(request)
             .await
+    }
+
+    async fn steer_dialog_turn(
+        &self,
+        request: bitfun_runtime_ports::AgentDialogSteerRequest,
+    ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::DialogSteerOutcome> {
+        AgentDialogTurnPort::steer_dialog_turn(self.0.as_ref(), request).await
     }
 }
 
@@ -517,6 +663,12 @@ impl AgentSessionManagementPort for ScheduledSessionManagementPort {
                     }
                     crate::util::errors::BitFunError::Cancelled(_) => {
                         bitfun_runtime_ports::PortErrorKind::Cancelled
+                    }
+                    crate::util::errors::BitFunError::SessionInUse { .. } => {
+                        bitfun_runtime_ports::PortErrorKind::SessionInUse
+                    }
+                    crate::util::errors::BitFunError::OutcomeUnknown(_) => {
+                        bitfun_runtime_ports::PortErrorKind::OutcomeUnknown
                     }
                     _ => bitfun_runtime_ports::PortErrorKind::Backend,
                 };
@@ -637,6 +789,12 @@ fn map_session_close_error(
         crate::util::errors::BitFunError::Cancelled(_) => {
             bitfun_runtime_ports::PortErrorKind::Cancelled
         }
+        crate::util::errors::BitFunError::SessionInUse { .. } => {
+            bitfun_runtime_ports::PortErrorKind::SessionInUse
+        }
+        crate::util::errors::BitFunError::OutcomeUnknown(_) => {
+            bitfun_runtime_ports::PortErrorKind::OutcomeUnknown
+        }
         _ => bitfun_runtime_ports::PortErrorKind::Backend,
     };
     bitfun_runtime_ports::PortError::new(kind, error.to_string())
@@ -653,6 +811,13 @@ fn scheduled_session_close_port(
     coordinator: Arc<ConversationCoordinator>,
     scheduler: Arc<DialogScheduler>,
 ) -> Arc<dyn AgentSessionClosePort> {
+    Arc::new(ScheduledSessionManagementPort::new(coordinator, scheduler))
+}
+
+fn scheduled_session_revert_port(
+    coordinator: Arc<ConversationCoordinator>,
+    scheduler: Arc<DialogScheduler>,
+) -> Arc<dyn AgentSessionRevertPort> {
     Arc::new(ScheduledSessionManagementPort::new(coordinator, scheduler))
 }
 
@@ -753,21 +918,15 @@ impl CoreServiceAgentRuntime {
     pub(crate) async fn load_remote_chat_messages(
         session_storage_dir: &std::path::Path,
         session_id: &str,
-    ) -> (Vec<ChatMessage>, bool) {
-        let Ok(pm) = crate::infrastructure::PathManager::new() else {
-            return (vec![], false);
-        };
-        let pm = std::sync::Arc::new(pm);
-        let Ok(store) = crate::agentic::persistence::PersistenceManager::new(pm) else {
-            return (vec![], false);
-        };
-        let Ok(turns) = store
-            .load_session_turns(session_storage_dir, session_id)
+    ) -> Result<(Vec<ChatMessage>, bool), String> {
+        let coordinator = get_global_coordinator().ok_or_else(|| {
+            "Core coordinator is unavailable for remote history reads".to_string()
+        })?;
+        let turns = coordinator
+            .load_visible_persisted_session_turns(session_storage_dir, session_id)
             .await
-        else {
-            return (vec![], false);
-        };
-        (remote_chat_messages_from_turns(&turns), false)
+            .map_err(|error| error.to_string())?;
+        Ok((remote_chat_messages_from_turns(&turns), false))
     }
 
     pub(crate) async fn load_remote_model_catalog(
@@ -781,13 +940,45 @@ impl CoreServiceAgentRuntime {
             .await
             .map_err(|e| format!("Failed to load global config: {e}"))?;
         let ai_config: AIConfig = global_config.ai;
+        let models_dev = load_models_dev_reasoning_catalog().await;
+        let models_dev_reasoning_catalog = models_dev.catalog.as_deref().map(|catalog| {
+            catalog.reasoning_binding_catalog(
+                models_dev.sha256.clone(),
+                match models_dev.source {
+                    bitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Cache => {
+                        bitfun_core_types::ModelsDevCatalogSource::Cache
+                    }
+                    bitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Bundled => {
+                        bitfun_core_types::ModelsDevCatalogSource::Bundle
+                    }
+                    bitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Empty => {
+                        bitfun_core_types::ModelsDevCatalogSource::Empty
+                    }
+                },
+            )
+        });
+        let provider_catalog = resolve_builtin_provider_catalog(
+            models_dev.catalog.as_deref(),
+            models_dev.sha256.clone(),
+            match models_dev.source {
+                bitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Cache => {
+                    bitfun_core_types::ProviderCatalogSource::Cache
+                }
+                bitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Bundled => {
+                    bitfun_core_types::ProviderCatalogSource::Bundle
+                }
+                bitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Empty => {
+                    bitfun_core_types::ProviderCatalogSource::Bitfun
+                }
+            },
+        );
 
         let models: Vec<RemoteModelFacts> = ai_config
             .models
             .into_iter()
             .map(|model| {
-                let reasoning_mode = model.effective_reasoning_mode();
-
+                let reasoning =
+                    project_model_reasoning_catalog(&model, models_dev.catalog.as_deref());
                 RemoteModelFacts {
                     id: model.id,
                     name: model.name,
@@ -801,22 +992,22 @@ impl CoreServiceAgentRuntime {
                         .into_iter()
                         .map(remote_model_capability_fact)
                         .collect(),
-                    enable_thinking_process: model.enable_thinking_process,
-                    reasoning_mode: Some(remote_reasoning_mode_fact(reasoning_mode)),
-                    reasoning_effort: model.reasoning_effort,
-                    thinking_budget_tokens: model.thinking_budget_tokens,
+                    reasoning: Some(reasoning),
                 }
             })
             .collect();
 
-        let session_model_id = if let Some(session_id) = session_id {
-            resolve_session_model_id(session_id).await
+        let (session_model_id, session_reasoning_preset) = if let Some(session_id) = session_id {
+            resolve_session_model_selection(session_id).await
         } else {
-            None
+            (None, None)
         };
         Ok(build_remote_model_catalog(RemoteModelCatalogFacts {
             last_modified_ms: global_config.last_modified.timestamp_millis(),
+            source_version: Some(models_dev.version),
             models,
+            provider_catalog,
+            models_dev_reasoning_catalog,
             default_models: RemoteDefaultModelsConfig {
                 primary: ai_config.default_models.primary,
                 fast: ai_config.default_models.fast,
@@ -826,6 +1017,7 @@ impl CoreServiceAgentRuntime {
                 speech_recognition: ai_config.default_models.speech_recognition,
             },
             session_model_id,
+            session_reasoning_preset,
         }))
     }
 
@@ -834,8 +1026,11 @@ impl CoreServiceAgentRuntime {
         runtime: &AgentRuntime,
         session_id: &str,
         model_id: &str,
-    ) -> Result<String, String> {
-        let ai_config = if remote_model_selection_needs_config(model_id) {
+        reasoning_preset: Option<Option<&str>>,
+    ) -> Result<RemoteSessionModelSelection, String> {
+        let ai_config = if remote_model_selection_needs_config(model_id)
+            || reasoning_preset.is_some_and(|preset| preset.is_some())
+        {
             let config_service = crate::service::config::get_global_config_service()
                 .await
                 .map_err(|_| "Config service not available".to_string())?;
@@ -849,43 +1044,113 @@ impl CoreServiceAgentRuntime {
             None
         };
         let normalized_model_id = normalize_remote_model_selection(model_id, ai_config.as_ref())?;
+        let normalized_reasoning_preset = reasoning_preset.map(|preset| {
+            preset
+                .map(str::trim)
+                .filter(|preset| !preset.is_empty() && !preset.eq_ignore_ascii_case("auto"))
+                .map(ToOwned::to_owned)
+        });
+
+        if let Some(Some(preset_id)) = normalized_reasoning_preset.as_ref() {
+            let ai_config = ai_config
+                .as_ref()
+                .ok_or_else(|| "Config service not available".to_string())?;
+            let concrete_model_id = match normalized_model_id.as_str() {
+                "auto" | "primary" => ai_config.resolve_model_selection("primary"),
+                "fast" => ai_config.resolve_model_selection("fast"),
+                model_id => ai_config.resolve_model_reference(model_id),
+            }
+            .ok_or_else(|| {
+                format!(
+                    "Cannot resolve a concrete model for reasoning preset: {}",
+                    normalized_model_id
+                )
+            })?;
+            let model = ai_config
+                .models
+                .iter()
+                .find(|model| model.enabled && model.id == concrete_model_id)
+                .ok_or_else(|| format!("Model is unavailable: {concrete_model_id}"))?;
+            let models_dev = load_models_dev_reasoning_catalog().await;
+            let reasoning = project_model_reasoning_catalog(model, models_dev.catalog.as_deref());
+            if resolve_reasoning_preset(&reasoning, preset_id).is_none() {
+                return Err(format!(
+                    "Reasoning preset '{preset_id}' is not available for model '{concrete_model_id}'"
+                ));
+            }
+        }
 
         if coordinator
             .get_session_manager()
             .get_session(session_id)
             .is_none()
         {
-            let Some(session_storage_dir) = Self::resolve_session_storage_dir(session_id).await
-            else {
+            let Some(binding) = Self::resolve_session_workspace_binding(session_id).await else {
                 return Err(format!(
-                    "Session storage directory not available for session: {session_id}"
+                    "Session workspace binding not available for session: {session_id}"
                 ));
             };
             coordinator
-                .restore_session_from_storage_path(&session_storage_dir, session_id)
+                .restore_session_for_workspace(
+                    session_storage_request_from_binding(&binding),
+                    session_id,
+                )
                 .await
                 .map_err(|e| format!("Failed to restore session: {e}"))?;
         }
 
-        runtime
-            .update_session_model(AgentSessionModelUpdateRequest {
-                session_id: session_id.to_string(),
-                model_id: normalized_model_id.clone(),
-            })
-            .await
-            .map_err(Self::runtime_error_message)?;
-
-        if coordinator
+        let previous_model_id = coordinator
             .get_session_manager()
             .get_session(session_id)
-            .is_some_and(|session| session_uses_shared_mode_default(&session))
+            .and_then(|session| {
+                normalize_remote_session_model_id(session.config.model_id.as_deref())
+            });
+
+        if reasoning_preset.is_none() {
+            runtime
+                .update_session_model(AgentSessionModelUpdateRequest {
+                    session_id: session_id.to_string(),
+                    model_id: normalized_model_id.clone(),
+                })
+                .await
+                .map_err(Self::runtime_error_message)?;
+        } else {
+            runtime
+                .update_session_model_selection(AgentSessionModelSelectionUpdateRequest {
+                    session_id: session_id.to_string(),
+                    selection: AgentSessionModelSelection {
+                        model_id: normalized_model_id.clone(),
+                        reasoning_preset: normalized_reasoning_preset.clone().flatten(),
+                    },
+                })
+                .await
+                .map_err(Self::runtime_error_message)?;
+        }
+
+        let model_changed = previous_model_id.as_deref().unwrap_or("auto") != normalized_model_id;
+        if model_changed
+            && coordinator
+                .get_session_manager()
+                .get_session(session_id)
+                .is_some_and(|session| session_uses_shared_mode_default(&session))
         {
             // New sessions of every mode share one selector. Delegated
             // subagents intentionally keep their own defaults.
             Self::persist_mode_model(&normalized_model_id).await;
         }
 
-        Ok(normalized_model_id)
+        Ok(coordinator
+            .get_session_manager()
+            .get_session(session_id)
+            .map(|session| RemoteSessionModelSelection {
+                model_id: normalize_remote_session_model_id(session.config.model_id.as_deref())
+                    .unwrap_or_else(|| normalized_model_id.clone()),
+                reasoning_preset: session.config.reasoning_preset.clone(),
+            })
+            .unwrap_or(RemoteSessionModelSelection {
+                model_id: normalized_model_id,
+                reasoning_preset: normalized_reasoning_preset.flatten(),
+            }))
     }
 
     /// Persist the shared selector used by future mode sessions.
@@ -909,22 +1174,28 @@ impl CoreServiceAgentRuntime {
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let workspace_references: Arc<dyn AgentWorkspaceReferencePort> = coordinator.clone();
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
+        let user_shell_command: Arc<dyn AgentUserShellCommandPort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator.clone();
+        let session_compaction: Arc<dyn AgentSessionCompactionPort> = coordinator.clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         core_agent_runtime_builder(
             submission,
             session_management,
+            workspace_references,
             session_mode,
             session_model,
+            session_compaction,
             session_restore,
             local_command_turn,
+            user_shell_command,
             transcript_reader,
             thread_goal_management,
             cancellation,
@@ -941,31 +1212,39 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let workspace_references: Arc<dyn AgentWorkspaceReferencePort> = coordinator.clone();
         let session_close = scheduled_session_close_port(coordinator.clone(), scheduler.clone());
+        let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
+        let user_shell_command: Arc<dyn AgentUserShellCommandPort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator.clone();
+        let session_compaction: Arc<dyn AgentSessionCompactionPort> = coordinator.clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
         core_agent_runtime_builder(
             submission,
             session_management,
+            workspace_references,
             session_mode,
             session_model,
+            session_compaction,
             session_restore,
             local_command_turn,
+            user_shell_command,
             transcript_reader,
             thread_goal_management,
             cancellation,
             interaction_response,
         )?
         .with_session_close_port(session_close)
+        .with_session_revert_port(session_revert)
         .with_dialog_turn_port(dialog_turn)
         .with_lifecycle_delivery_port(lifecycle_delivery)
         .build()
@@ -979,28 +1258,36 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let workspace_references: Arc<dyn AgentWorkspaceReferencePort> = coordinator.clone();
+        let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
+        let user_shell_command: Arc<dyn AgentUserShellCommandPort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator.clone();
+        let session_compaction: Arc<dyn AgentSessionCompactionPort> = coordinator.clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
         core_agent_runtime_builder(
             submission,
             session_management,
+            workspace_references,
             session_mode,
             session_model,
+            session_compaction,
             session_restore,
             local_command_turn,
+            user_shell_command,
             transcript_reader,
             thread_goal_management,
             cancellation,
             interaction_response,
         )?
+        .with_session_revert_port(session_revert)
         .with_lifecycle_delivery_port(lifecycle_delivery)
         .build()
         .map_err(|error| error.to_string())
@@ -1013,11 +1300,17 @@ impl CoreServiceAgentRuntime {
         scheduler: Arc<DialogScheduler>,
         session_fork: Arc<dyn AgentSessionForkPort>,
         session_usage: Arc<dyn AgentSessionUsagePort>,
+        session_lineage: Arc<dyn AgentSessionLineagePort>,
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let workspace_references: Arc<dyn AgentWorkspaceReferencePort> = coordinator.clone();
+        let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
+        let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
+        let session_compaction: Arc<dyn AgentSessionCompactionPort> = coordinator.clone();
+        let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler;
@@ -1025,12 +1318,18 @@ impl CoreServiceAgentRuntime {
         AgentRuntimeBuilder::new()
             .with_submission_port(submission)
             .with_session_management_port(session_management)
+            .with_workspace_reference_port(workspace_references)
+            .with_session_revert_port(session_revert)
+            .with_session_mode_port(session_mode)
             .with_session_model_port(session_model)
+            .with_session_compaction_port(session_compaction)
+            .with_local_command_turn_port(local_command_turn)
             .with_dialog_turn_port(dialog_turn)
             .with_cancellation_port(cancellation)
             .with_interaction_response_port(interaction_response)
             .with_session_fork_port(session_fork)
             .with_session_usage_port(session_usage)
+            .with_session_lineage_port(session_lineage)
             .with_permission_request_manager(
                 crate::product_runtime::core_permission_request_manager()?,
             )
@@ -1045,13 +1344,17 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let workspace_references: Arc<dyn AgentWorkspaceReferencePort> = coordinator.clone();
+        let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
+        let user_shell_command: Arc<dyn AgentUserShellCommandPort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
+        let session_compaction: Arc<dyn AgentSessionCompactionPort> = coordinator.clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler.clone();
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
@@ -1059,15 +1362,19 @@ impl CoreServiceAgentRuntime {
         core_agent_runtime_builder(
             submission,
             session_management,
+            workspace_references,
             session_mode,
             session_model,
+            session_compaction,
             session_restore,
             local_command_turn,
+            user_shell_command,
             transcript_reader,
             thread_goal_management,
             cancellation,
             interaction_response,
         )?
+        .with_session_revert_port(session_revert)
         .with_dialog_turn_port(dialog_turn)
         .with_lifecycle_delivery_port(lifecycle_delivery)
         .build()
@@ -1077,9 +1384,11 @@ impl CoreServiceAgentRuntime {
     pub(crate) fn product_agent_runtime(
         coordinator: Arc<ConversationCoordinator>,
         scheduler: Arc<DialogScheduler>,
+        event_source: Option<AgentEventSource>,
         session_fork: Arc<dyn AgentSessionForkPort>,
         session_usage: Arc<dyn AgentSessionUsagePort>,
         turn_settlement: Arc<dyn AgentTurnSettlementPort>,
+        session_lineage: Arc<dyn AgentSessionLineagePort>,
         services: bitfun_runtime_services::RuntimeServices,
         harness_registry: bitfun_harness::HarnessRegistry,
     ) -> Result<AgentRuntime, String> {
@@ -1088,10 +1397,11 @@ impl CoreServiceAgentRuntime {
             coordinator,
             scheduler,
             dialog_turn,
-            None,
+            event_source,
             Some(session_fork),
             Some(session_usage),
             Some(turn_settlement),
+            Some(session_lineage),
             services,
             harness_registry,
         )
@@ -1111,6 +1421,7 @@ impl CoreServiceAgentRuntime {
             scheduler,
             dialog_turn,
             Some(event_source),
+            None,
             None,
             None,
             None,
@@ -1138,6 +1449,7 @@ impl CoreServiceAgentRuntime {
             Some(session_fork),
             Some(session_usage),
             Some(turn_settlement),
+            None,
             services,
             harness_registry,
         )
@@ -1151,20 +1463,25 @@ impl CoreServiceAgentRuntime {
         session_fork: Option<Arc<dyn AgentSessionForkPort>>,
         session_usage: Option<Arc<dyn AgentSessionUsagePort>>,
         turn_settlement: Option<Arc<dyn AgentTurnSettlementPort>>,
+        session_lineage: Option<Arc<dyn AgentSessionLineagePort>>,
         services: bitfun_runtime_services::RuntimeServices,
         harness_registry: bitfun_harness::HarnessRegistry,
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let workspace_references: Arc<dyn AgentWorkspaceReferencePort> = coordinator.clone();
         let session_close = scheduled_session_close_port(coordinator.clone(), scheduler.clone());
+        let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
+        let user_shell_command: Arc<dyn AgentUserShellCommandPort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
+        let session_compaction: Arc<dyn AgentSessionCompactionPort> = coordinator.clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler.clone();
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
@@ -1172,16 +1489,20 @@ impl CoreServiceAgentRuntime {
         let builder = core_agent_runtime_builder(
             submission,
             session_management,
+            workspace_references,
             session_mode,
             session_model,
+            session_compaction,
             session_restore,
             local_command_turn,
+            user_shell_command,
             transcript_reader,
             thread_goal_management,
             cancellation,
             interaction_response,
         )?
         .with_session_close_port(session_close)
+        .with_session_revert_port(session_revert)
         .with_dialog_turn_port(dialog_turn)
         .with_lifecycle_delivery_port(lifecycle_delivery);
         let builder = match event_source {
@@ -1198,6 +1519,10 @@ impl CoreServiceAgentRuntime {
         };
         let builder = match turn_settlement {
             Some(port) => builder.with_turn_settlement_port(port),
+            None => builder,
+        };
+        let builder = match session_lineage {
+            Some(port) => builder.with_session_lineage_port(port),
             None => builder,
         };
         builder
@@ -1431,26 +1756,18 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
         session_id: &str,
         workspace: RemoteDialogWorkspaceBinding,
     ) -> Result<(), String> {
-        if let Some(session_storage_dir) =
-            CoreServiceAgentRuntime::resolve_session_storage_dir(session_id).await
-        {
-            self.coordinator
-                .restore_session_from_storage_path(&session_storage_dir, session_id)
-                .await
-        } else {
-            self.coordinator
-                .restore_session_for_workspace(
-                    SessionStoragePathRequest {
-                        workspace_path: std::path::PathBuf::from(workspace.workspace_path),
-                        remote_connection_id: workspace.remote_connection_id,
-                        remote_ssh_host: workspace.remote_ssh_host,
-                    },
-                    session_id,
-                )
-                .await
-        }
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+        self.coordinator
+            .restore_session_for_workspace(
+                SessionStoragePathRequest {
+                    workspace_path: std::path::PathBuf::from(workspace.workspace_path),
+                    remote_connection_id: workspace.remote_connection_id,
+                    remote_ssh_host: workspace.remote_ssh_host,
+                },
+                session_id,
+            )
+            .await
+            .map(|_| ())
+            .map_err(|e| e.to_string())
     }
 
     fn prewarm_remote_terminal(&self, request: RemoteTerminalPrewarmRequest) {
@@ -1523,6 +1840,7 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
                 message: submission.content,
                 original_message: None,
                 turn_id: Some(submission.turn_id),
+                execution: Default::default(),
                 agent_type: submission.resolved_agent_type,
                 workspace_path,
                 remote_connection_id,
@@ -1644,12 +1962,8 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
     async fn resolve_default_assistant_workspace_path(&self) -> Result<String, String> {
         let workspace_service = crate::service::workspace::get_global_workspace_service()
             .ok_or_else(|| "Workspace service not available".to_string())?;
-        let workspaces = workspace_service.get_assistant_workspaces().await;
-        if let Some(default_workspace) = workspaces
-            .into_iter()
-            .find(|workspace| workspace.assistant_id.is_none())
-        {
-            return Ok(default_workspace.root_path.to_string_lossy().to_string());
+        if let Some(primary_workspace) = workspace_service.get_primary_assistant_workspace().await {
+            return Ok(primary_workspace.root_path.to_string_lossy().to_string());
         }
 
         workspace_service
@@ -1674,16 +1988,18 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
         CoreServiceAgentRuntime::load_remote_model_catalog(session_id).await
     }
 
-    async fn update_session_model(
+    async fn update_session_model_selection(
         &self,
         session_id: &str,
         model_id: &str,
-    ) -> Result<String, String> {
+        reasoning_preset: Option<Option<&str>>,
+    ) -> Result<RemoteSessionModelSelection, String> {
         CoreServiceAgentRuntime::update_remote_session_model(
             self.coordinator.as_ref(),
             &self.runtime,
             session_id,
             model_id,
+            reasoning_preset,
         )
         .await
     }
@@ -1698,16 +2014,19 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
             return Ok(());
         }
 
-        let Some(session_storage_dir) =
-            CoreServiceAgentRuntime::resolve_session_storage_dir(session_id).await
+        let Some(binding) =
+            CoreServiceAgentRuntime::resolve_session_workspace_binding(session_id).await
         else {
             return Err(format!(
-                "Session storage directory not available for session: {}",
+                "Session workspace binding not available for session: {}",
                 session_id
             ));
         };
         self.coordinator
-            .restore_session_from_storage_path(&session_storage_dir, session_id)
+            .restore_session_for_workspace(
+                session_storage_request_from_binding(&binding),
+                session_id,
+            )
             .await
             .map(|_| ())
             .map_err(|error| format!("Failed to restore session: {error}"))
@@ -1728,7 +2047,7 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
         &self,
         session_storage_dir: &std::path::Path,
         session_id: &str,
-    ) -> (Vec<ChatMessage>, bool) {
+    ) -> Result<(Vec<ChatMessage>, bool), String> {
         CoreServiceAgentRuntime::load_remote_chat_messages(session_storage_dir, session_id).await
     }
 
@@ -1737,6 +2056,22 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
         session_storage_dir: &std::path::Path,
         session_id: &str,
     ) -> Result<(), String> {
+        let binding = CoreServiceAgentRuntime::resolve_session_workspace_binding(session_id)
+            .await
+            .ok_or_else(|| {
+                format!("Session workspace binding not available for session: {session_id}")
+            })?;
+        self.coordinator
+            .ensure_workspace_runtime_ownership(
+                binding.logical_workspace_path(),
+                binding.connection_id(),
+                if binding.is_remote() {
+                    Some(binding.session_identity.hostname.as_str())
+                } else {
+                    None
+                },
+            )
+            .map_err(|error| error.to_string())?;
         self.coordinator
             .delete_session(session_storage_dir, session_id)
             .await
@@ -1756,6 +2091,31 @@ impl RemotePollRuntimeHost for CoreRemotePollRuntimeHost<'_> {
         self.dispatcher.ensure_tracker(session_id)
     }
 
+    fn sync_pending_permissions(&self, session_id: &str, tracker: &RemoteSessionStateTracker) {
+        let Ok(manager) = crate::product_runtime::core_permission_request_manager() else {
+            return;
+        };
+        for request in manager
+            .pending_requests()
+            .into_iter()
+            .filter(|request| request.session_id == session_id)
+        {
+            let tool_id = request
+                .tool_call_id
+                .clone()
+                .unwrap_or_else(|| request.request_id.clone());
+            let tool_name = request.source.identity.clone();
+            let tool_input = Some(serde_json::json!({
+                "action": request.action,
+                "resources": request.resources,
+            }));
+            let input_preview = tool_input
+                .as_ref()
+                .and_then(|input| serde_json::to_string(input).ok());
+            tracker.sync_pending_permission(tool_id, tool_name, input_preview, tool_input);
+        }
+    }
+
     async fn load_model_catalog(&self, session_id: &str) -> Option<RemoteModelCatalog> {
         CoreServiceAgentRuntime::load_remote_model_catalog(Some(session_id))
             .await
@@ -1770,13 +2130,81 @@ impl RemotePollRuntimeHost for CoreRemotePollRuntimeHost<'_> {
         &self,
         session_storage_dir: &std::path::Path,
         session_id: &str,
-    ) -> (Vec<ChatMessage>, bool) {
+    ) -> Result<(Vec<ChatMessage>, bool), String> {
         CoreServiceAgentRuntime::load_remote_chat_messages(session_storage_dir, session_id).await
     }
 }
 
 #[async_trait::async_trait]
 impl RemoteInteractionRuntimeHost for CoreRemoteInteractionRuntimeHost {
+    async fn confirm_tool(&self, tool_id: &str) -> Result<(), String> {
+        self.coordinator()?
+            .reply_to_tool(tool_id, bitfun_agent_runtime::sdk::PermissionReply::Once)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    async fn reject_tool(&self, tool_id: &str, reason: String) -> Result<(), String> {
+        self.coordinator()?
+            .reply_to_tool(
+                tool_id,
+                bitfun_agent_runtime::sdk::PermissionReply::Reject {
+                    feedback: Some(reason),
+                },
+            )
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    async fn get_permission_mode(&self) -> Result<RemotePermissionMode, String> {
+        let service = crate::service::config::global::GlobalConfigManager::get_service()
+            .await
+            .map_err(|error| error.to_string())?;
+        let config: ToolPermissionConfig = service
+            .get_config(Some("tool_permissions"))
+            .await
+            .map_err(|error| error.to_string())?;
+        Ok(match config.policy.preset {
+            PermissionPolicyPreset::FullAccess => RemotePermissionMode::FullAccess,
+            PermissionPolicyPreset::Ask if config.interaction.auto_approve_ask => {
+                RemotePermissionMode::Auto
+            }
+            PermissionPolicyPreset::Ask => RemotePermissionMode::Ask,
+        })
+    }
+
+    async fn set_permission_mode(
+        &self,
+        mode: RemotePermissionMode,
+    ) -> Result<RemotePermissionMode, String> {
+        let service = crate::service::config::global::GlobalConfigManager::get_service()
+            .await
+            .map_err(|error| error.to_string())?;
+        let mut config: ToolPermissionConfig = service
+            .get_config(Some("tool_permissions"))
+            .await
+            .map_err(|error| error.to_string())?;
+        match mode {
+            RemotePermissionMode::Ask => {
+                config.policy.preset = PermissionPolicyPreset::Ask;
+                config.interaction.auto_approve_ask = false;
+            }
+            RemotePermissionMode::Auto => {
+                config.policy.preset = PermissionPolicyPreset::Ask;
+                config.interaction.auto_approve_ask = true;
+            }
+            RemotePermissionMode::FullAccess => {
+                config.policy.preset = PermissionPolicyPreset::FullAccess;
+                config.interaction.auto_approve_ask = false;
+            }
+        }
+        service
+            .set_config("tool_permissions", &config)
+            .await
+            .map_err(|error| error.to_string())?;
+        Ok(mode)
+    }
+
     async fn cancel_tool(&self, tool_id: &str, reason: String) -> Result<(), String> {
         self.coordinator()?
             .cancel_tool(tool_id, reason)
@@ -1817,13 +2245,18 @@ impl RemoteCancelRuntimeHost for CoreRemoteCancelRuntimeHost {
     async fn restore_remote_session(
         &self,
         session_id: &str,
-        restore_path_hint: &str,
+        _restore_path_hint: &str,
     ) -> Result<(), String> {
-        let restore_path = CoreServiceAgentRuntime::resolve_session_storage_dir(session_id)
+        let binding = CoreServiceAgentRuntime::resolve_session_workspace_binding(session_id)
             .await
-            .unwrap_or_else(|| std::path::PathBuf::from(restore_path_hint));
+            .ok_or_else(|| {
+                format!("Session workspace binding not available for session: {session_id}")
+            })?;
         self.coordinator
-            .restore_session_from_storage_path(&restore_path, session_id)
+            .restore_session_for_workspace(
+                session_storage_request_from_binding(&binding),
+                session_id,
+            )
             .await
             .map(|_| ())
             .map_err(|error| error.to_string())
@@ -1838,6 +2271,7 @@ impl RemoteCancelRuntimeHost for CoreRemoteCancelRuntimeHost {
                 requester_session_id: None,
                 reason: None,
                 wait_timeout_ms: None,
+                cancel_descendants: true,
             })
             .await
             .map(|_| ())
@@ -1856,6 +2290,19 @@ mod tests {
         DialogTurnData, DialogTurnKind, ModelRoundData, TextItemData, ThinkingItemData,
         ToolCallData, ToolItemData, TurnStatus, UserMessageData,
     };
+    use crate::BitFunError;
+
+    #[test]
+    fn session_close_preserves_writer_conflicts() {
+        let error = map_session_close_error(BitFunError::SessionInUse {
+            session_id: "session-1".to_string(),
+        });
+
+        assert_eq!(
+            error.kind,
+            bitfun_runtime_ports::PortErrorKind::SessionInUse
+        );
+    }
 
     #[test]
     fn core_service_agent_runtime_owner_keeps_coordinator_port_contracts() {
@@ -1863,6 +2310,7 @@ mod tests {
         where
             T: AgentSubmissionPort
                 + AgentInteractionResponsePort
+                + AgentSessionCompactionPort
                 + AgentSessionManagementPort
                 + AgentThreadGoalManagementPort
                 + AgentTurnCancellationPort
@@ -1872,6 +2320,69 @@ mod tests {
         }
 
         assert_runtime_ports::<ConversationCoordinator>();
+    }
+
+    #[test]
+    fn remote_attach_and_mutation_paths_preserve_workspace_ownership_facts() {
+        let source = include_str!("service_agent_runtime.rs");
+        let open_workspace = source
+            .split("async fn open_workspace_with_snapshot")
+            .nth(1)
+            .and_then(|source| {
+                source
+                    .split("async fn load_remote_session_metadata_for_workspace")
+                    .next()
+            })
+            .expect("remote workspace open helper");
+        assert!(open_workspace.contains("open_workspace_with_runtime_ownership"));
+        assert!(!open_workspace.contains("open_workspace_resolving_known"));
+        assert!(!open_workspace.contains("initialize_snapshot_manager_for_workspace"));
+
+        for (start, end) in [
+            ("pub(crate) async fn update_remote_session_model", "/// Persist the shared selector"),
+            ("async fn restore_remote_session(\n        &self,\n        session_id: &str,\n        workspace: RemoteDialogWorkspaceBinding", "fn prewarm_remote_terminal"),
+            ("async fn ensure_session_loaded(&self, session_id: &str)", "async fn update_session_title"),
+            ("async fn restore_remote_session(\n        &self,\n        session_id: &str,\n        _restore_path_hint: &str", "async fn cancel_remote_turn"),
+        ] {
+            let body = source
+                .split(start)
+                .nth(1)
+                .and_then(|source| source.split(end).next())
+                .expect("reviewed remote runtime method");
+            assert!(
+                body.contains("restore_session_for_workspace"),
+                "remote attach or mutation must use structured workspace facts"
+            );
+            assert!(
+                !body.contains("restore_session_from_storage_path"),
+                "remote attach or mutation must not bypass the Coordinator ownership gate"
+            );
+        }
+
+        let remote_session_host = source
+            .split("impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost")
+            .nth(1)
+            .and_then(|source| source.split("impl RemotePollRuntimeHost").next())
+            .expect("remote session host implementation");
+        let delete = remote_session_host
+            .split("async fn delete_session")
+            .nth(1)
+            .and_then(|source| source.split("fn remove_tracker").next())
+            .expect("remote session delete");
+        assert!(delete.contains("ensure_workspace_runtime_ownership"));
+    }
+
+    #[test]
+    fn remote_model_lookup_keeps_read_only_restore_lock_free() {
+        let source = include_str!("service_agent_runtime.rs");
+        let body = source
+            .split("async fn resolve_session_model_selection")
+            .nth(1)
+            .and_then(|source| source.split("fn core_dialog_submission_policy").next())
+            .expect("remote model lookup");
+
+        assert!(body.contains("restore_session_view_from_storage_path_timed"));
+        assert!(!body.contains("restore_session_from_storage_path"));
     }
 
     #[test]
@@ -1941,6 +2452,28 @@ mod tests {
         let _ = assert_agent_runtime_with_lifecycle_delivery;
         let _ = assert_agent_runtime_with_scheduler_ports;
         let _ = assert_remote_control_port;
+    }
+
+    #[test]
+    fn session_surface_runtime_registers_explicit_session_mutation_ports() {
+        let source = include_str!("service_agent_runtime.rs");
+        let builder = source
+            .split("pub(crate) fn session_surface_agent_runtime")
+            .nth(1)
+            .and_then(|source| {
+                source
+                    .split("pub(crate) fn agent_runtime_with_scheduler_ports")
+                    .next()
+            })
+            .expect("session surface runtime builder");
+
+        assert!(builder.contains(
+            "let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();"
+        ));
+        assert!(builder.contains(".with_local_command_turn_port(local_command_turn)"));
+        assert!(builder
+            .contains("let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();"));
+        assert!(builder.contains(".with_session_mode_port(session_mode)"));
     }
 
     #[test]
@@ -2099,13 +2632,16 @@ mod tests {
     }
 
     #[test]
-    fn core_service_agent_runtime_owner_skips_in_progress_remote_assistant_history() {
+    fn core_service_agent_runtime_owner_preserves_in_progress_remote_assistant_history() {
         let turn = remote_history_test_turn(TurnStatus::InProgress, None);
 
         let messages = remote_chat_messages_from_turns(&[turn]);
 
-        assert_eq!(messages.len(), 1);
+        assert_eq!(messages.len(), 2);
         assert_eq!(messages[0].role, "user");
+        assert_eq!(messages[1].role, "assistant");
+        assert_eq!(messages[1].content, "visible text");
+        assert_eq!(messages[1].tools.as_ref().unwrap()[0].status, "running");
     }
 
     #[test]

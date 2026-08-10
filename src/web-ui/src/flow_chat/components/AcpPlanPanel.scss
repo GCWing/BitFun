@@ -4,10 +4,10 @@
   gap: 4px;
   margin: 0 0 8px;
   padding: 8px 10px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: 8px;
-  background: var(--element-bg-medium);
-  font-size: var(--flowchat-font-size-xs);
+  background: var(--bf-appearance-token-element-bg-medium);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
 
   &__header {
     display: flex;
@@ -16,15 +16,15 @@
   }
 
   &__title {
-    color: var(--color-text-secondary);
-    font-size: var(--flowchat-font-size-2xs);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
     font-weight: 600;
     letter-spacing: 0.4px;
     text-transform: uppercase;
   }
 
   &__progress {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-variant-numeric: tabular-nums;
   }
 
@@ -42,10 +42,10 @@
     align-items: flex-start;
     gap: 6px;
     padding: 2px 0;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
 
     &--completed {
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
 
       .bitfun-acp-plan__content {
         text-decoration: line-through;
@@ -53,7 +53,7 @@
     }
 
     &--pending {
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
   }
 
@@ -62,11 +62,11 @@
     margin-top: 2px;
 
     &--done {
-      color: var(--color-success);
+      color: var(--bf-appearance-token-color-success);
     }
 
     &--active {
-      color: var(--color-accent-500);
+      color: var(--bf-appearance-token-color-accent-500);
       animation: bitfun-acp-plan-spin 1.2s linear infinite;
     }
 

@@ -35,6 +35,8 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
         ),
         openWorkspace: async (path: string) => workspaceManager.openWorkspace(path),
         createAssistantWorkspace: async () => workspaceManager.createAssistantWorkspace(),
+        setPrimaryAssistantWorkspace: async (workspaceId: string) =>
+          workspaceManager.setPrimaryAssistantWorkspace(workspaceId),
         closeWorkspace: async () => workspaceManager.closeWorkspace(),
         closeWorkspaceById: async (workspaceId: string) => workspaceManager.closeWorkspaceById(workspaceId),
         deleteAssistantWorkspace: async (workspaceId: string) =>
@@ -79,6 +81,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
         activeWorkspaceId: null,
         lastUsedWorkspaceId: null,
         recentWorkspaces: [],
+        primaryAssistantWorkspaceId: null,
         loading: false,
         error: null,
         activeWorkspace: null,
@@ -87,6 +90,8 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
         assistantWorkspacesList: [],
         openWorkspace: async (path: string) => workspaceManager.openWorkspace(path),
         createAssistantWorkspace: async () => workspaceManager.createAssistantWorkspace(),
+        setPrimaryAssistantWorkspace: async (workspaceId: string) =>
+          workspaceManager.setPrimaryAssistantWorkspace(workspaceId),
         closeWorkspace: async () => workspaceManager.closeWorkspace(),
         closeWorkspaceById: async (workspaceId: string) => workspaceManager.closeWorkspaceById(workspaceId),
         deleteAssistantWorkspace: async (workspaceId: string) =>
@@ -227,6 +232,13 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
     return await workspaceManager.createAssistantWorkspace();
   }, []);
 
+  const setPrimaryAssistantWorkspace = useCallback(
+    async (workspaceId: string): Promise<WorkspaceInfo> => {
+      return await workspaceManager.setPrimaryAssistantWorkspace(workspaceId);
+    },
+    []
+  );
+
   const closeWorkspace = useCallback(async (): Promise<void> => {
     return await workspaceManager.closeWorkspace();
   }, []);
@@ -311,6 +323,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
       ),
       openWorkspace,
       createAssistantWorkspace,
+      setPrimaryAssistantWorkspace,
       closeWorkspace,
       closeWorkspaceById,
       deleteAssistantWorkspace,
@@ -332,6 +345,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
     state,
     openWorkspace,
     createAssistantWorkspace,
+    setPrimaryAssistantWorkspace,
     closeWorkspace,
     closeWorkspaceById,
     deleteAssistantWorkspace,

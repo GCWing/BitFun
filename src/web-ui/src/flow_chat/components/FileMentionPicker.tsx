@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import {
   File,
@@ -15,6 +16,10 @@ import {
   ChevronLeft,
 } from 'lucide-react';
 import { sessionAPI, workspaceAPI } from '@/infrastructure/api';
+import {
+  externalSourcesAPI,
+  type WorkspaceReferenceEntry,
+} from '@/infrastructure/api/service-api/ExternalSourcesAPI';
 import type {
   ExplorerNodeDto,
   FileSearchResult,
@@ -27,6 +32,12 @@ import type {
 } from '@/shared/types/context';
 import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
+import {
+  workspaceReferenceItems,
+  type FileItem,
+} from './workspaceReferenceItems';
 import './FileMentionPicker.scss';
 
 const log = createLogger('FileMentionPicker');
@@ -37,19 +48,15 @@ export interface FileMentionPickerProps {
   isOpen: boolean;
   searchQuery: string;
   workspacePath?: string;
+  workspaceId?: string;
   /** The composing session itself must not appear as a reference candidate. */
   excludeSessionId?: string;
   onSelect: (context: FileContext | DirectoryContext | SessionReferenceContext) => void;
   onClose: () => void;
+  /** Anchor used by the default portalled overlay mode. */
+  anchorRef?: React.RefObject<HTMLElement | null>;
   position?: { top: number; left: number };
   onNavigate?: (direction: 'up' | 'down' | 'enter' | 'escape') => void;
-}
-
-interface FileItem {
-  path: string;
-  name: string;
-  isDirectory: boolean;
-  relativePath: string;
 }
 
 type MentionItem =
@@ -60,14 +67,17 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   isOpen,
   searchQuery,
   workspacePath,
+  workspaceId,
   excludeSessionId,
   onSelect,
   onClose,
+  anchorRef,
   position,
 }) => {
   const { t } = useTranslation('flow-chat');
   const [results, setResults] = useState<FileItem[]>([]);
   const [sessionResults, setSessionResults] = useState<SessionReferenceCandidate[]>([]);
+  const [workspaceReferences, setWorkspaceReferences] = useState<WorkspaceReferenceEntry[]>([]);
   const [currentFiles, setCurrentFiles] = useState<FileItem[]>([]);
   const [isFileLoading, setIsFileLoading] = useState(false);
   const [isSessionLoading, setIsSessionLoading] = useState(false);
@@ -75,6 +85,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   const [currentPath, setCurrentPath] = useState<string>('');
   const [pathHistory, setPathHistory] = useState<string[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
+  const fallbackAnchorRef = useRef<HTMLElement>(null);
   const fileAbortControllerRef = useRef<AbortController | null>(null);
   const fileSearchDebounceTimerRef = useRef<number | null>(null);
   const sessionSearchDebounceTimerRef = useRef<number | null>(null);
@@ -83,6 +94,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   const directoryLoadRequestIdRef = useRef(0);
   const fileSearchRequestIdRef = useRef(0);
   const sessionSearchRequestIdRef = useRef(0);
+  const workspaceReferenceRequestIdRef = useRef(0);
   const skipNextPathLoadRef = useRef(false);
 
   const getRelativePath = useCallback((fullPath: string): string => {
@@ -166,6 +178,27 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     targetSelectedPathRef.current = null;
     loadDirectory('', null);
   }, [isOpen, workspacePath, loadDirectory]);
+
+  useEffect(() => {
+    if (!isOpen || !workspacePath) {
+      workspaceReferenceRequestIdRef.current += 1;
+      setWorkspaceReferences([]);
+      return;
+    }
+    const requestId = ++workspaceReferenceRequestIdRef.current;
+    void externalSourcesAPI
+      .getWorkspaceReferences(workspacePath, workspaceId)
+      .then(snapshot => {
+        if (requestId === workspaceReferenceRequestIdRef.current) {
+          setWorkspaceReferences(snapshot.references);
+        }
+      })
+      .catch(() => {
+        if (requestId === workspaceReferenceRequestIdRef.current) {
+          setWorkspaceReferences([]);
+        }
+      });
+  }, [isOpen, workspaceId, workspacePath]);
 
   useEffect(() => {
     if (!isOpen || searchQuery.trim()) return;
@@ -292,17 +325,35 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   }, [excludeSessionId, isOpen, searchQuery]);
 
   const isSearchMode = searchQuery.trim().length > 0;
+  const referenceItems = useMemo(
+    () => workspaceReferenceItems(workspaceReferences, isSearchMode ? searchQuery : ''),
+    [isSearchMode, searchQuery, workspaceReferences],
+  );
   const displayItems = useMemo<MentionItem[]>(() => (
     isSearchMode
       ? [
           ...results.map(item => ({ kind: 'file' as const, item })),
+          ...referenceItems.map(item => ({ kind: 'file' as const, item })),
           ...sessionResults.map(item => ({ kind: 'session' as const, item })),
         ]
-      : currentFiles.map(item => ({ kind: 'file' as const, item }))
-  ), [currentFiles, isSearchMode, results, sessionResults]);
+      : [
+          ...currentFiles.map(item => ({ kind: 'file' as const, item })),
+          ...(currentPath ? [] : referenceItems.map(item => ({ kind: 'file' as const, item }))),
+        ]
+  ), [currentFiles, currentPath, isSearchMode, referenceItems, results, sessionResults]);
   const currentDirName = currentPath
     ? currentPath.replace(/\\/g, '/').split('/').pop() || ''
     : workspacePath?.replace(/\\/g, '/').split('/').pop() || t('fileMention.rootDirectory');
+  const isOverlay = Boolean(anchorRef) && !position;
+  const overlayLayout = useAnchoredPopoverPosition({
+    open: isOpen && isOverlay,
+    anchorRef: anchorRef ?? fallbackAnchorRef,
+    popoverRef: containerRef,
+    preferredPlacement: 'top',
+    alignment: 'start',
+    gap: 8,
+    layoutRevision: `${displayItems.length}:${currentPath}:${isSearchMode}`,
+  });
 
   useEffect(() => () => {
     if (fileSearchDebounceTimerRef.current !== null) window.clearTimeout(fileSearchDebounceTimerRef.current);
@@ -425,35 +476,55 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   }, [displayItems.length, selectedIndex]);
 
   if (!isOpen) return null;
-  const style: React.CSSProperties = position ? { position: 'absolute', top: position.top, left: position.left } : {};
+  const style: React.CSSProperties = position
+    ? { position: 'absolute', top: position.top, left: position.left }
+    : isOverlay
+      ? {
+          top: `${overlayLayout?.top ?? 0}px`,
+          left: `${overlayLayout?.left ?? 0}px`,
+          visibility: overlayLayout ? 'visible' : 'hidden',
+        }
+      : {};
   const isLoading = isFileLoading || isSessionLoading;
 
-  return (
-    <div ref={containerRef} className="file-mention-picker" style={style} onMouseDown={event => event.preventDefault()}>
-      <div className="file-mention-picker__header">
+  const picker = (
+    <div
+      data-bf-component="file-mention-picker"
+      data-bf-part="root"
+      data-bf-state={isLoading ? 'loading' : undefined}
+      data-bf-placement={isOverlay ? overlayLayout?.placement ?? 'top' : undefined}
+      ref={containerRef}
+      className={`file-mention-picker${isOverlay ? ' file-mention-picker--overlay' : ''}`}
+      style={style}
+      onMouseDown={event => event.preventDefault()}
+    >
+      <div data-bf-component="file-mention-picker" data-bf-part="header" className="file-mention-picker__header">
         {!isSearchMode && pathHistory.length > 0 && (
           <Tooltip content={t('fileMention.goBack')}>
-            <button className="file-mention-picker__back-btn" onClick={goBack}><ChevronLeft size={12} /></button>
+            <button data-bf-component="file-mention-picker" data-bf-part="back" className="file-mention-picker__back-btn" onClick={goBack}><ChevronLeft size={12} /></button>
           </Tooltip>
         )}
         {isSearchMode ? <><Search size={11} /><span>{t('fileMention.searchResults')}</span></> : (
           <span className="file-mention-picker__dir-name">{currentDirName}</span>
         )}
       </div>
-      <div className="file-mention-picker__content">
+      <div data-bf-component="file-mention-picker" data-bf-part="content" className="file-mention-picker__content">
         {displayItems.length === 0 && isLoading ? (
-          <div className="file-mention-picker__loading"><Loader2 size={14} className="file-mention-picker__spinner" /><span>{t('fileMention.loading')}</span></div>
+          <div data-bf-component="file-mention-picker" data-bf-part="loading" className="file-mention-picker__loading"><Loader2 size={14} className="file-mention-picker__spinner" /><span>{t('fileMention.loading')}</span></div>
         ) : displayItems.length === 0 ? (
-          <div className="file-mention-picker__empty"><span>{isSearchMode ? t('fileMention.noMatchingFiles') : t('fileMention.emptyDirectory')}</span></div>
+          <div data-bf-component="file-mention-picker" data-bf-part="empty" className="file-mention-picker__empty"><span>{isSearchMode ? t('fileMention.noMatchingFiles') : t('fileMention.emptyDirectory')}</span></div>
         ) : (
-          <div className="file-mention-picker__list">
+          <div data-bf-component="file-mention-picker" data-bf-part="list" className="file-mention-picker__list">
             {displayItems.map((mention, index) => {
               const isSession = mention.kind === 'session';
               const file = mention.kind === 'file' ? mention.item : null;
               const session = mention.kind === 'session' ? mention.item : null;
-              const key = isSession ? `session-${session?.sessionId}-${session?.workspacePath}` : `file-${file?.path}`;
+              const key = isSession
+                ? `session-${session?.sessionId}-${session?.workspacePath}`
+                : `file-${file?.referenceStableKey || file?.path}`;
               return (
-                <div
+                <div data-bf-component="file-mention-picker" data-bf-part="item"
+                  data-bf-state={index === selectedIndex ? 'selected' : undefined}
                   key={key}
                   data-index={index}
                   className={`file-mention-picker__item ${index === selectedIndex ? 'file-mention-picker__item--selected' : ''}`}
@@ -465,8 +536,13 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
                   onMouseEnter={() => setSelectedIndex(index)}
                 >
                   {isSession ? <MessageCircle size={13} className="file-mention-picker__icon file-mention-picker__icon--session" /> : file?.isDirectory ? <Folder size={13} className="file-mention-picker__icon file-mention-picker__icon--folder" /> : <File size={13} className="file-mention-picker__icon file-mention-picker__icon--file" />}
-                  <span className="file-mention-picker__item-name">{session?.sessionName ?? file?.name}</span>
-                  {session && <span className="file-mention-picker__item-detail">{session.workspaceLabel}</span>}
+                  <span data-bf-component="file-mention-picker" data-bf-part="itemName" className="file-mention-picker__item-name">{session?.sessionName ?? file?.name}</span>
+                  {session && <span data-bf-component="file-mention-picker" data-bf-part="itemDetail" className="file-mention-picker__item-detail">{session.workspaceLabel}</span>}
+                  {file?.referenceStableKey && (
+                    <span data-bf-component="file-mention-picker" data-bf-part="itemDetail" className="file-mention-picker__item-detail">
+                      {file.referenceDescription || file.path}
+                    </span>
+                  )}
                   {file?.isDirectory && !isSearchMode && <ChevronRight size={12} className="file-mention-picker__expand-icon" />}
                 </div>
               );
@@ -474,7 +550,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
           </div>
         )}
       </div>
-      <div className="file-mention-picker__footer">
+      <div data-bf-component="file-mention-picker" data-bf-part="footer" className="file-mention-picker__footer">
         <span><kbd>↑</kbd><kbd>↓</kbd> {t('fileMention.navHint')}</span>
         <span><kbd>→</kbd> {t('fileMention.enterHint')}</span>
         <span><kbd>←</kbd> {t('fileMention.backHint')}</span>
@@ -482,6 +558,8 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       </div>
     </div>
   );
+
+  return isOverlay ? createPortal(picker, getAppearanceOverlayHost()) : picker;
 };
 
 export default FileMentionPicker;

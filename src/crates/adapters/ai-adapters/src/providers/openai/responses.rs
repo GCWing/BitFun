@@ -4,18 +4,17 @@ use crate::client::{AIClient, StreamResponse};
 use crate::providers::shared;
 use crate::stream::handle_responses_stream;
 use crate::trace::ModelExchangeTraceConfig;
-use crate::types::ReasoningMode;
-use crate::types::{Message, ToolDefinition};
-use anyhow::Result;
+use crate::types::{Message, ReasoningPresetAction, ToolDefinition};
+use anyhow::{anyhow, Result};
 use log::debug;
 
-pub(crate) fn build_request_body(
+pub(crate) fn try_build_request_body(
     client: &AIClient,
     instructions: Option<String>,
     response_input: Vec<serde_json::Value>,
     openai_tools: Option<Vec<serde_json::Value>>,
     extra_body: Option<serde_json::Value>,
-) -> serde_json::Value {
+) -> Result<serde_json::Value> {
     let mut request_body = serde_json::json!({
         "model": client.config.model,
         "input": response_input,
@@ -30,24 +29,35 @@ pub(crate) fn build_request_body(
         request_body["max_output_tokens"] = serde_json::json!(max_tokens);
     }
 
-    let responses_effort = client
-        .config
-        .reasoning_effort
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-        .map(str::to_string)
-        .or_else(|| {
-            if client.config.reasoning_mode == ReasoningMode::Disabled {
-                Some("none".to_string())
-            } else {
-                None
+    let base_reasoning_fields =
+        shared::capture_reasoning_fields(&request_body, &["reasoning"], &[]);
+    let protected_keys = &[
+        "model",
+        "input",
+        "instructions",
+        "stream",
+        "max_output_tokens",
+        "tools",
+    ];
+    let compile = |action: &ReasoningPresetAction, body: &mut serde_json::Value| -> Result<bool> {
+        match action {
+            ReasoningPresetAction::Effort { value } => {
+                if value.trim().is_empty() {
+                    return Err(anyhow!("Responses reasoning effort must not be empty"));
+                }
+                body["reasoning"] = serde_json::json!({ "effort": value });
+                Ok(true)
             }
-        });
-
-    if let Some(effort) = responses_effort {
-        request_body["reasoning"] = serde_json::json!({
-            "effort": effort
-        });
+            ReasoningPresetAction::Toggle { .. } | ReasoningPresetAction::BudgetTokens { .. } => {
+                Ok(false)
+            }
+            ReasoningPresetAction::RequestPatch { .. } => {
+                unreachable!("patches are compiled by shared code")
+            }
+        }
+    };
+    if let Some(preset) = client.model_reasoning_preset.as_ref() {
+        shared::apply_reasoning_actions(preset, &mut request_body, protected_keys, &[], compile)?;
     }
 
     let protected_body = shared::protect_request_body(
@@ -71,6 +81,15 @@ pub(crate) fn build_request_body(
     }
 
     shared::restore_protected_body(&mut request_body, protected_body);
+    if let Some(preset) = client.selected_reasoning_preset.as_ref() {
+        shared::reset_reasoning_fields(
+            &mut request_body,
+            base_reasoning_fields.as_ref(),
+            &["reasoning"],
+            &[],
+        );
+        shared::apply_reasoning_actions(preset, &mut request_body, protected_keys, &[], compile)?;
+    }
 
     shared::log_request_body(
         "ai::responses_stream_request",
@@ -84,7 +103,25 @@ pub(crate) fn build_request_body(
         "ai::responses_stream_request",
     );
 
-    request_body
+    Ok(request_body)
+}
+
+#[cfg(test)]
+pub(crate) fn build_request_body(
+    client: &AIClient,
+    instructions: Option<String>,
+    response_input: Vec<serde_json::Value>,
+    openai_tools: Option<Vec<serde_json::Value>>,
+    extra_body: Option<serde_json::Value>,
+) -> serde_json::Value {
+    try_build_request_body(
+        client,
+        instructions,
+        response_input,
+        openai_tools,
+        extra_body,
+    )
+    .expect("request body should compile")
 }
 
 pub(crate) async fn send_stream(
@@ -116,13 +153,13 @@ pub(crate) async fn send_stream(
     let (instructions, response_input) =
         OpenAIMessageConverter::convert_messages_to_responses_input(messages);
     let openai_tools = common::convert_tools_flat(tools);
-    let request_body = build_request_body(
+    let request_body = try_build_request_body(
         client,
         instructions,
         response_input,
         openai_tools,
         extra_body,
-    );
+    )?;
     let idle_timeout = client.stream_options.idle_timeout;
     let ttft_timeout = client.stream_options.ttft_timeout;
 
@@ -144,7 +181,7 @@ pub(crate) async fn send_stream(
 #[cfg(test)]
 mod tests {
     use super::build_request_body;
-    use crate::types::{ReasoningMode, ToolDefinition};
+    use crate::types::ToolDefinition;
     use crate::{client::AIClient, types::AIConfig};
     use serde_json::json;
 
@@ -160,13 +197,10 @@ mod tests {
             max_tokens: None,
             temperature: None,
             top_p: None,
-            reasoning_mode: ReasoningMode::Default,
             inline_think_in_text: false,
             custom_headers: None,
             custom_headers_mode: None,
             skip_ssl_verify: false,
-            reasoning_effort: None,
-            thinking_budget_tokens: None,
             custom_request_body: None,
             custom_request_body_mode: None,
         })

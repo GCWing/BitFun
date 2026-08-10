@@ -8,7 +8,7 @@ import type * as monaco from 'monaco-editor';
 import type { EditorConfig, EditorConfigPartial, EditorPresetName, EditorPresetConfig } from '../config/types';
 import { DEFAULT_EDITOR_CONFIG, mergeConfig } from '../config/defaults';
 import { getPreset } from '../config/presets';
-import { themeManager } from './ThemeManager';
+import { monacoAppearanceAdapter } from '@/infrastructure/appearance/adapters/MonacoAppearanceAdapter';
 
 export interface EditorOptionsInput {
   config?: EditorConfigPartial;
@@ -24,7 +24,6 @@ export interface EditorOptionsOverrides {
   fontSize?: number;
   tabSize?: number;
   wordWrap?: 'off' | 'on' | 'wordWrapColumn' | 'bounded';
-  theme?: string;
   language?: string;
 }
 
@@ -84,10 +83,6 @@ function applyOverrides(
   if (overrides.wordWrap !== undefined) {
     result.wordWrap = overrides.wordWrap;
   }
-  if (overrides.theme !== undefined) {
-    result.theme = overrides.theme;
-  }
-  
   return result;
 }
 
@@ -100,7 +95,7 @@ function convertToMonacoOptions(
     ? Math.round(config.fontSize * config.lineHeight)
     : 0;
   
-  const themeId = config.theme || themeManager.getCurrentThemeId();
+  const themeId = monacoAppearanceAdapter.getCurrentThemeId();
   
   const options: monaco.editor.IStandaloneEditorConstructionOptions = {
     theme: themeId,

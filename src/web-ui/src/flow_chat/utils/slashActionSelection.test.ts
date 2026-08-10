@@ -18,7 +18,7 @@ describe('resolveSlashActionInputValue', () => {
     ['compact', '/compact'],
     ['usage', '/usage'],
     ['init', '/init'],
-    ['reload-skills', '/reload-skills'],
+    ['reload', '/reload'],
   ] as const)('fills the %s action', (actionId, expected) => {
     expect(resolveSlashActionInputValue(actionId, '/', false)).toBe(expected);
   });

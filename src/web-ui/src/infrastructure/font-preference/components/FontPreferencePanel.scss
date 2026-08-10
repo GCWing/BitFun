@@ -96,12 +96,12 @@
     min-height: 30px;
     min-width: 0;
     padding: $size-gap-1 $size-gap-3;
-    font-size: var(--font-size-sm);
-    font-family: var(--font-family-sans);
+    font-size: var(--bf-appearance-token-font-size-sm);
+    font-family: var(--bf-appearance-token-font-family-sans);
     background: transparent;
-    border: 1px solid var(--border-base);
+    border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: $size-radius-sm;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     transition: background $motion-fast $easing-standard,
       border-color $motion-fast $easing-standard,
@@ -110,21 +110,21 @@
     white-space: nowrap;
 
     &:hover:not(:disabled):not(&--active) {
-      background: var(--element-bg-subtle);
-      border-color: var(--border-strong);
-      color: var(--color-text-primary);
+      background: var(--bf-appearance-token-element-bg-subtle);
+      border-color: var(--bf-appearance-token-border-strong);
+      color: var(--bf-appearance-token-color-text-primary);
     }
 
     &--active {
       @include btn-primary.btn-primary-surface-default;
-      border-color: var(--btn-primary-border);
+      border-color: var(--bf-appearance-token-btn-primary-border);
       font-weight: $font-weight-semibold;
-      box-shadow: var(--btn-primary-shadow);
+      box-shadow: var(--bf-appearance-token-btn-primary-shadow);
 
       &:hover:not(:disabled) {
         @include btn-primary.btn-primary-surface-hover;
-        border-color: var(--btn-primary-hover-border);
-        box-shadow: var(--btn-primary-hover-shadow);
+        border-color: var(--bf-appearance-token-btn-primary-hover-border);
+        box-shadow: var(--bf-appearance-token-btn-primary-hover-shadow);
       }
     }
   }
@@ -140,7 +140,7 @@
     display: flex;
     align-items: center;
     gap: 0;
-    border: 1px solid var(--border-base);
+    border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: $size-radius-sm;
     overflow: hidden;
     width: fit-content;
@@ -153,8 +153,8 @@
   }
 
   &__custom-unit {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-sm);
+    color: var(--bf-appearance-token-color-text-secondary);
     flex-shrink: 0;
   }
 
@@ -166,15 +166,15 @@
     height: 28px;
     background: transparent;
     border: none;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
-    font-size: var(--font-size-base);
+    font-size: var(--bf-appearance-token-font-size-base);
     transition: background $motion-fast $easing-standard;
     flex-shrink: 0;
 
     &:hover:not(:disabled) {
-      background: var(--element-bg-subtle);
-      color: var(--color-text-primary);
+      background: var(--bf-appearance-token-element-bg-subtle);
+      color: var(--bf-appearance-token-color-text-primary);
     }
 
     &:disabled {
@@ -188,11 +188,11 @@
     height: 28px;
     padding: 0 $size-gap-2;
     border: none;
-    border-left: 1px solid var(--border-base);
-    border-right: 1px solid var(--border-base);
-    background: var(--color-bg-primary);
-    color: var(--color-text-primary);
-    font-size: var(--font-size-sm);
+    border-left: 1px solid var(--bf-appearance-token-border-base);
+    border-right: 1px solid var(--bf-appearance-token-border-base);
+    background: var(--bf-appearance-token-color-bg-primary);
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: var(--bf-appearance-token-font-size-sm);
     text-align: center;
     outline: none !important;
     outline-offset: 0 !important;
@@ -217,22 +217,22 @@
     }
 
     &--error {
-      border-left-color: var(--color-error);
-      border-right-color: var(--color-error);
-      color: var(--color-error);
+      border-left-color: var(--bf-appearance-token-color-error);
+      border-right-color: var(--bf-appearance-token-color-error);
+      color: var(--bf-appearance-token-color-error);
     }
   }
 
   &__error {
-    font-size: var(--font-size-xs);
-    color: var(--color-error);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-error);
     width: 100%;
   }
 
   &__custom-hint {
     width: 100%;
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
     line-height: 1.4;
   }
 
@@ -241,10 +241,10 @@
     box-sizing: border-box;
     margin-top: $size-gap-2;
     padding: $size-gap-3 $size-gap-4;
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--border-subtle);
+    background: var(--bf-appearance-token-color-bg-secondary);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: $size-radius-sm;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: 1.6;
     word-wrap: break-word;
     transition: font-size $motion-base $easing-standard;
@@ -253,19 +253,19 @@
   &__reset-btn {
     margin-left: auto;
     padding: $size-gap-2 $size-gap-4;
-    font-size: var(--font-size-sm);
-    font-family: var(--font-family-sans);
+    font-size: var(--bf-appearance-token-font-size-sm);
+    font-family: var(--bf-appearance-token-font-family-sans);
     background: transparent;
-    border: 1px solid var(--border-base);
+    border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: $size-radius-sm;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     transition: all $motion-fast $easing-standard;
 
     &:hover {
-      background: var(--element-bg-subtle);
-      border-color: var(--border-strong);
-      color: var(--color-text-primary);
+      background: var(--bf-appearance-token-element-bg-subtle);
+      border-color: var(--bf-appearance-token-border-strong);
+      color: var(--bf-appearance-token-color-text-primary);
     }
   }
 }

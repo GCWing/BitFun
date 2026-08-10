@@ -13,6 +13,9 @@ import { FlowChatStore } from '../../store/FlowChatStore';
 import { notificationService } from '../../../shared/notification-system/services/NotificationService';
 import type { DialogTurn, FlowToolItem, FlowUserSteeringItem, ModelRound, Session } from '../../types/flow-chat';
 import type { FlowChatContext } from './types';
+import { markOptimisticDispatchTurnMetadata } from '@/features/dispatch/optimisticDispatchTurn';
+
+const { handleCompressionCompleted, handleTokenUsageUpdate } = __test_only__;
 
 vi.mock('../../../shared/notification-system/services/NotificationService', () => ({
   notificationService: {
@@ -47,6 +50,168 @@ describe('resolveDialogTurnDisplayContent', () => {
         { kind: 'background_subagent_result' },
       ),
     ).toBe('Display content chosen by backend');
+  });
+});
+
+describe('dispatch optimistic turn reconciliation', () => {
+  beforeEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  afterEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  it('lets the target DialogTurnStarted event adopt the visible pending turn', () => {
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([[
+        'dispatch-session',
+        {
+          sessionId: 'dispatch-session',
+          title: 'Remote task',
+          dialogTurns: [{
+            id: 'dispatch_pending_job-1',
+            sessionId: 'dispatch-session',
+            agentType: 'agentic',
+            userMessage: {
+              id: 'user-dispatch-1',
+              content: 'Original visible prompt',
+              timestamp: 1000,
+              metadata: markOptimisticDispatchTurnMetadata(
+                { source: 'composer' },
+                'job-1',
+              ),
+            },
+            modelRounds: [],
+            status: 'pending',
+            startTime: 1000,
+          }],
+          status: 'idle',
+          config: {
+            dispatchTarget: {
+              kind: 'ssh',
+              connectionId: 'ssh-1',
+              workspacePath: '/target/repo',
+              displayName: 'build-host',
+            },
+            dispatchJobId: 'job-1',
+          },
+          createdAt: 1000,
+          lastActiveAt: 1000,
+          error: null,
+          sessionKind: 'normal',
+        } as Session,
+      ]]),
+      activeSessionId: 'dispatch-session',
+    }));
+
+    const context = createFlowChatContext();
+    context.deferredStorageIdentitySaves?.add('dispatch-session:dispatch_pending_job-1');
+    __test_only__.handleDialogTurnStarted(context, {
+      sessionId: 'dispatch-session',
+      turnId: 'target-turn-1',
+      turnIndex: 0,
+      userInput: 'Expanded target prompt',
+      userMessageMetadata: { targetFact: true },
+    });
+
+    const turns = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('dispatch-session')
+      ?.dialogTurns;
+    expect(turns).toHaveLength(1);
+    expect(turns?.[0]).toMatchObject({
+      id: 'target-turn-1',
+      userMessage: {
+        content: 'Original visible prompt',
+        metadata: {
+          source: 'composer',
+          targetFact: true,
+        },
+      },
+      backendTurnIndex: 0,
+      status: 'pending',
+    });
+    expect(turns?.[0]?.userMessage.metadata)
+      .not.toHaveProperty('__bitfunOptimisticDispatchJobId');
+    expect(context.deferredStorageIdentitySaves).not.toContain(
+      'dispatch-session:dispatch_pending_job-1',
+    );
+  });
+
+  it('hydrates the real prompt into an audit-only dispatch placeholder', () => {
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([[
+        'dispatch-session',
+        {
+          sessionId: 'dispatch-session',
+          title: 'Remote task title',
+          dialogTurns: [{
+            id: 'dispatch_pending_job-1',
+            sessionId: 'dispatch-session',
+            agentType: 'agentic',
+            userMessage: {
+              id: 'user-dispatch-1',
+              content: '',
+              timestamp: 1000,
+              metadata: markOptimisticDispatchTurnMetadata(undefined, 'job-1'),
+            },
+            modelRounds: [{
+              id: 'dispatch-setup:job-1',
+              index: -1,
+              items: [],
+              isStreaming: false,
+              isComplete: true,
+              status: 'completed',
+              startTime: 1000,
+              endTime: 1000,
+            }],
+            status: 'pending',
+            startTime: 1000,
+          }],
+          status: 'idle',
+          config: {
+            dispatchTarget: {
+              kind: 'ssh',
+              connectionId: 'ssh-1',
+              workspacePath: '/target/repo',
+              displayName: 'build-host',
+            },
+            dispatchJobId: 'job-1',
+          },
+          createdAt: 1000,
+          lastActiveAt: 1000,
+          error: null,
+          sessionKind: 'normal',
+        } as Session,
+      ]]),
+      activeSessionId: 'dispatch-session',
+    }));
+
+    __test_only__.handleDialogTurnStarted(createFlowChatContext(), {
+      sessionId: 'dispatch-session',
+      turnId: 'target-turn-1',
+      turnIndex: 0,
+      userInput: 'Expanded target prompt',
+      originalUserInput: 'Original user prompt',
+      userMessageMetadata: { targetFact: true },
+    });
+
+    const turns = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('dispatch-session')
+      ?.dialogTurns;
+    expect(turns).toHaveLength(1);
+    expect(turns?.[0]).toMatchObject({
+      id: 'target-turn-1',
+      userMessage: {
+        content: 'Original user prompt',
+        metadata: { targetFact: true },
+      },
+      modelRounds: [{ id: 'dispatch-setup:job-1' }],
+    });
   });
 });
 
@@ -136,6 +301,115 @@ describe('subagent parent helpers', () => {
         dialogTurnId: 'parent-turn',
         toolCallId: 'task-2',
       });
+  });
+
+  it('projects a linked Review manifest into the live child session', () => {
+    const task = makeTaskTool('task-review');
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([[
+        'parent-session',
+        {
+          sessionId: 'parent-session',
+          title: 'Parent Session',
+          dialogTurns: [{
+            id: 'parent-turn',
+            sessionId: 'parent-session',
+            userMessage: { id: 'user-1', content: 'Review', timestamp: 900 },
+            modelRounds: [makeRound('round-1', [task])],
+            status: 'processing',
+            startTime: 900,
+          }],
+          status: 'idle',
+          config: { agentType: 'CodeReview' },
+          createdAt: 800,
+          lastActiveAt: 1000,
+          error: null,
+          sessionKind: 'normal',
+          workspacePath: 'D:\\workspace\\repo',
+        } as Session,
+      ]]),
+      activeSessionId: 'parent-session',
+    }));
+    __test_only__.handleSubagentSessionLinked(
+      { currentWorkspacePath: 'D:\\workspace\\repo' } as FlowChatContext,
+      {
+        sessionId: 'review-child',
+        parentSessionId: 'parent-session',
+        parentDialogTurnId: 'parent-turn',
+        parentToolCallId: 'task-review',
+        agentType: 'ReviewWorker',
+        focusedReviewDisplayLabel: 'Authentication boundary',
+      },
+    );
+
+    expect(
+      FlowChatStore.getInstance().getState().sessions.get('review-child')?.focusedReviewDisplayLabel,
+    ).toBe('Authentication boundary');
+  });
+
+  it('stores an absolute parent Turn index when linking from a partial restored tail', () => {
+    const task = makeTaskTool('task-tail');
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([[
+        'parent-session',
+        {
+          sessionId: 'parent-session',
+          title: 'Parent Session',
+          dialogTurns: [{
+            id: 'parent-turn-100',
+            sessionId: 'parent-session',
+            backendTurnIndex: 99,
+            userMessage: { id: 'user-100', content: 'Delegate work', timestamp: 900 },
+            modelRounds: [makeRound('round-100', [task])],
+            status: 'processing',
+            startTime: 900,
+          }],
+          status: 'idle',
+          config: { agentType: 'agentic' },
+          createdAt: 800,
+          lastActiveAt: 1000,
+          error: null,
+          sessionKind: 'normal',
+          isPartial: true,
+          loadedTurnCount: 1,
+          totalTurnCount: 100,
+          turnCatalog: {
+            schemaVersion: 1,
+            sessionId: 'parent-session',
+            revision: 'catalog-1',
+            totalTurnCount: 100,
+            complete: false,
+            entries: [{
+              ordinal: 99,
+              storageTurnIndex: 99,
+              turnId: 'parent-turn-100',
+              preview: 'Delegate work',
+              previewTruncated: false,
+            }],
+          },
+        } as Session,
+      ]]),
+      activeSessionId: 'parent-session',
+    }));
+
+    __test_only__.handleSubagentSessionLinked(
+      { currentWorkspacePath: 'D:\\workspace\\repo' } as FlowChatContext,
+      {
+        sessionId: 'child-session',
+        parentSessionId: 'parent-session',
+        parentDialogTurnId: 'parent-turn-100',
+        parentToolCallId: 'task-tail',
+        agentType: 'Explore',
+      },
+    );
+
+    expect(
+      FlowChatStore.getInstance().getState().sessions.get('child-session')?.btwOrigin,
+    ).toMatchObject({
+      parentSessionId: 'parent-session',
+      parentDialogTurnId: 'parent-turn-100',
+      parentTurnIndex: 100,
+    });
   });
 });
 
@@ -403,6 +677,103 @@ describe('handleDialogTurnFailed', () => {
   });
 });
 
+async function startStreamingMachine(): Promise<void> {
+  await stateMachineManager.transition('session-1', SessionExecutionEvent.START, {
+    taskId: 'session-1',
+    dialogTurnId: 'turn-1',
+  });
+}
+
+describe('handleModelRoundStart', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  afterEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  it('creates a model round even when model identity fields are absent (external ACP agents)', async () => {
+    createSessionWithTurn({
+      id: 'turn-1',
+      sessionId: 'session-1',
+      userMessage: {
+        id: 'user-1',
+        content: 'Initial request',
+        timestamp: 900,
+      },
+      modelRounds: [],
+      status: 'processing',
+      startTime: 900,
+    });
+    await startStreamingMachine();
+    const context = createFlowChatContext();
+
+    expect(() =>
+      __test_only__.handleModelRoundStart(context, {
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        roundId: 'round-1',
+        roundIndex: 0,
+      } as any),
+    ).not.toThrow();
+
+    const turn = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('session-1')
+      ?.dialogTurns.find(item => item.id === 'turn-1');
+
+    expect(turn?.modelRounds).toHaveLength(1);
+    expect(turn?.modelRounds[0]).toMatchObject({
+      id: 'round-1',
+      index: 0,
+      isStreaming: true,
+    });
+    expect(turn?.modelRounds[0]?.modelConfigId).toBeUndefined();
+    expect(turn?.modelRounds[0]?.effectiveModelName).toBeUndefined();
+  });
+
+  it('trims and stores model identity fields when present', async () => {
+    createSessionWithTurn({
+      id: 'turn-1',
+      sessionId: 'session-1',
+      userMessage: {
+        id: 'user-1',
+        content: 'Initial request',
+        timestamp: 900,
+      },
+      modelRounds: [],
+      status: 'processing',
+      startTime: 900,
+    });
+    await startStreamingMachine();
+    const context = createFlowChatContext();
+
+    __test_only__.handleModelRoundStart(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      roundId: 'round-1',
+      roundIndex: 0,
+      modelConfigId: '  config-1  ',
+      effectiveModelName: '  gpt-4o  ',
+    } as any);
+
+    const turn = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('session-1')
+      ?.dialogTurns.find(item => item.id === 'turn-1');
+
+    expect(turn?.modelRounds).toHaveLength(1);
+    expect(turn?.modelRounds[0]).toMatchObject({
+      modelConfigId: 'config-1',
+      effectiveModelName: 'gpt-4o',
+    });
+  });
+});
+
 function resetFlowChatStore(): void {
   FlowChatStore.getInstance().setState(() => ({
     sessions: new Map(),
@@ -497,6 +868,7 @@ function createFlowChatContext(): FlowChatContext {
     lastSaveHashes: new Map(),
     turnSaveInFlight: new Map(),
     turnSavePending: new Set(),
+    deferredStorageIdentitySaves: new Set(),
     runtimeStatusTimers: new Map(),
     userCancelledSessionIds: new Set(),
     handledTerminalTurnEvents: new Set(),
@@ -723,5 +1095,186 @@ describe('handleDialogTurnComplete', () => {
     expect(turn?.status).toBe('finishing');
     expect(turn?.finishReason).toBe('max_rounds');
     expect(turn?.hasFinalResponse).toBe(false);
+  });
+
+  it('preserves the event duration when the quiet completion finalizer runs later', async () => {
+    putFinishingSessionInStore();
+    const context = createFlowChatContext();
+    await setFinishingMachine();
+
+    handleDialogTurnComplete(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      durationMs: 21_206,
+      success: true,
+      finishReason: 'stop',
+      hasFinalResponse: true,
+    }, vi.fn());
+
+    const eventOwnedEndTime = 900 + 21_206;
+    expect(FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('session-1')
+      ?.dialogTurns[0].endTime).toBe(eventOwnedEndTime);
+
+    handleSessionStateChanged(context, {
+      sessionId: 'session-1',
+      newState: 'Idle',
+    });
+
+    const finalizedTurn = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('session-1')
+      ?.dialogTurns[0];
+    expect(finalizedTurn?.status).toBe('completed');
+    expect(finalizedTurn?.endTime).toBe(eventOwnedEndTime);
+  });
+});
+
+describe('handleCompressionCompleted', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  afterEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  it('writes the compacted token count into currentTokenUsage when applied', () => {
+    putFinishingSessionInStore();
+    const context = createFlowChatContext();
+
+    handleCompressionCompleted(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      compressionId: 'compression-1',
+      applied: true,
+      tokensBefore: 90_000,
+      tokensAfter: 15_000,
+      compressionRatio: 0.17,
+      durationMs: 500,
+      hasSummary: true,
+      summarySource: 'model',
+    });
+
+    const session = FlowChatStore.getInstance().getState().sessions.get('session-1');
+    expect(session?.currentTokenUsage).toEqual({
+      inputTokens: 15_000,
+      outputTokens: undefined,
+      totalTokens: 15_000,
+      timestamp: expect.any(Number),
+      turnId: 'turn-1',
+      source: 'context_compression',
+    });
+  });
+
+  it('does not touch currentTokenUsage when the compression was not applied', () => {
+    putFinishingSessionInStore();
+    const context = createFlowChatContext();
+
+    handleCompressionCompleted(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      compressionId: 'compression-1',
+      applied: false,
+      tokensBefore: 90_000,
+      tokensAfter: 90_000,
+    });
+
+    const session = FlowChatStore.getInstance().getState().sessions.get('session-1');
+    expect(session?.currentTokenUsage).toBeUndefined();
+  });
+
+  it('ignores invalid tokensAfter values even when applied', () => {
+    putFinishingSessionInStore();
+    const context = createFlowChatContext();
+
+    handleCompressionCompleted(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      compressionId: 'compression-1',
+      applied: true,
+      tokensAfter: undefined,
+    });
+
+    const session = FlowChatStore.getInstance().getState().sessions.get('session-1');
+    expect(session?.currentTokenUsage).toBeUndefined();
+  });
+
+  it('ignores a delayed successful compression after its source turn was removed', () => {
+    putFinishingSessionInStore();
+    FlowChatStore.getInstance().deleteDialogTurn('session-1', 'turn-1');
+
+    handleCompressionCompleted(createFlowChatContext(), {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      compressionId: 'compression-1',
+      applied: true,
+      tokensBefore: 90_000,
+      tokensAfter: 15_000,
+    });
+
+    const session = FlowChatStore.getInstance().getState().sessions.get('session-1');
+    expect(session?.currentTokenUsage).toBeUndefined();
+  });
+});
+
+describe('handleTokenUsageUpdate', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  afterEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  it('tracks the source turn on current usage without adding provenance to accumulated turn usage', () => {
+    putFinishingSessionInStore();
+
+    handleTokenUsageUpdate(createFlowChatContext(), {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      inputTokens: 1_200,
+      outputTokens: 320,
+      totalTokens: 1_520,
+    });
+
+    const session = FlowChatStore.getInstance().getState().sessions.get('session-1');
+    expect(session?.currentTokenUsage).toMatchObject({
+      inputTokens: 1_200,
+      outputTokens: 320,
+      totalTokens: 1_520,
+      turnId: 'turn-1',
+      source: 'model_request',
+    });
+    expect(session?.dialogTurns[0].tokenUsage).toMatchObject({
+      inputTokens: 1_200,
+      outputTokens: 320,
+      totalTokens: 1_520,
+    });
+    expect(session?.dialogTurns[0].tokenUsage).not.toHaveProperty('turnId');
+    expect(session?.dialogTurns[0].tokenUsage).not.toHaveProperty('source');
+  });
+
+  it('ignores a delayed model usage update after its source turn was removed', () => {
+    putFinishingSessionInStore();
+    FlowChatStore.getInstance().deleteDialogTurn('session-1', 'turn-1');
+
+    handleTokenUsageUpdate(createFlowChatContext(), {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      inputTokens: 1_200,
+      outputTokens: 320,
+      totalTokens: 1_520,
+    });
+
+    const session = FlowChatStore.getInstance().getState().sessions.get('session-1');
+    expect(session?.currentTokenUsage).toBeUndefined();
   });
 });

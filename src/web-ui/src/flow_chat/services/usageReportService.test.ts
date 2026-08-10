@@ -1,11 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
+import type {
+  SessionUsageReport,
+} from '@/infrastructure/api/service-api/SessionAPI';
+import type { DialogTurnData } from '@/shared/types/session-history';
 import type { FlowChatState, Session } from '../types/flow-chat';
 import { flowChatStore } from '../store/FlowChatStore';
 
 const sessionApiMocks = vi.hoisted(() => ({
   getSessionUsageReport: vi.fn(),
   saveSessionTurn: vi.fn(),
+  recordLocalCommandTurn: vi.fn(),
 }));
 
 vi.mock('@/infrastructure/api/service-api/SessionAPI', () => ({
@@ -105,7 +109,28 @@ describe('runUsageReportCommand', () => {
     }));
     sessionApiMocks.getSessionUsageReport.mockReset();
     sessionApiMocks.saveSessionTurn.mockReset();
+    sessionApiMocks.recordLocalCommandTurn.mockReset();
     sessionApiMocks.saveSessionTurn.mockResolvedValue(undefined);
+    sessionApiMocks.recordLocalCommandTurn.mockImplementation(
+      async (turnData: DialogTurnData) => ({
+        turnId: turnData.turnId,
+        storageTurnIndex: 0,
+        totalTurnCount: 1,
+        turnCatalog: {
+          schemaVersion: 1,
+          sessionId: turnData.sessionId,
+          revision: 'catalog-1',
+          totalTurnCount: 1,
+          complete: true,
+          entries: [{
+            ordinal: 0,
+            storageTurnIndex: 0,
+            turnId: turnData.turnId,
+            previewTruncated: false,
+          }],
+        },
+      }),
+    );
   });
 
   afterEach(() => {
@@ -163,7 +188,43 @@ describe('runUsageReportCommand', () => {
       remoteSshHost: undefined,
       includeHiddenSubagents: true,
     });
-    expect(sessionApiMocks.saveSessionTurn).toHaveBeenCalledTimes(1);
+    expect(sessionApiMocks.recordLocalCommandTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        turnId: finalTurn?.id,
+        turnIndex: 0,
+        kind: 'local_command',
+      }),
+      'D:/workspace/BitFun',
+      undefined,
+      undefined,
+    );
+    const persistedTurn = sessionApiMocks.recordLocalCommandTurn.mock.calls[0][0] as DialogTurnData;
+    expect(persistedTurn.userMessage.metadata).not.toHaveProperty('usageReportProvisional');
+    expect(sessionApiMocks.saveSessionTurn).not.toHaveBeenCalled();
+    expect(finalTurn?.backendTurnIndex).toBe(0);
+    expect(finalTurn?.userMessage.metadata?.usageReportProvisional).toBeUndefined();
+    expect(flowChatStore.getState().sessions.get('session-1')).toMatchObject({
+      totalTurnCount: 1,
+      turnCatalog: { totalTurnCount: 1 },
+    });
+  });
+
+  it('removes the provisional report when authoritative persistence fails', async () => {
+    sessionApiMocks.getSessionUsageReport.mockResolvedValue(usageReport());
+    sessionApiMocks.recordLocalCommandTurn.mockRejectedValueOnce(new Error('record failed'));
+    const { runUsageReportCommand } = await import('./usageReportService');
+
+    await expect(runUsageReportCommand({
+      session: createSession(),
+      isProcessing: false,
+      busyMessage: 'busy',
+      noWorkspaceMessage: 'missing workspace',
+      failedTitle: 'failed',
+      unknownErrorMessage: 'unknown',
+      loadingMarkdown: 'Generating usage report...',
+    })).rejects.toThrow('record failed');
+
+    expect(flowChatStore.getState().sessions.get('session-1')?.dialogTurns).toEqual([]);
   });
 
   it('infers legacy model rows from the session model without showing raw missing-model copy', async () => {

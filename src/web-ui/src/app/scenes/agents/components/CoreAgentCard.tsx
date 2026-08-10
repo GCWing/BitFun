@@ -9,7 +9,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { AgentWithCapabilities } from '../agentsStore';
 import { AGENT_ICON_MAP } from '../agentsIcons';
-import { getAlphaColor } from '../agentTheme';
+import { getAlphaColor } from '../agentAppearance';
 import { getAgentDescription } from '../utils';
 import './CoreAgentCard.scss';
 
@@ -51,7 +51,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
   ].join(' ');
 
   return (
-    <div
+    <div data-bf-component="core-agent-card" data-bf-part="root"
       className="core-agent-card"
       style={{
         '--surface-stagger-index': index,
@@ -69,27 +69,27 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
       data-agent-name={agent.name}
       data-agent-kind={agent.agentKind}
     >
-      <div className="core-agent-card__top">
-        <div className="core-agent-card__icon-wrap">
+      <div className="core-agent-card__top" data-bf-component="core-agent-card" data-bf-part="header">
+        <div className="core-agent-card__icon-wrap" data-bf-component="core-agent-card" data-bf-part="icon">
           <Icon size={28} strokeWidth={1.6} />
         </div>
-        <div className="core-agent-card__top-info">
-          <span className="core-agent-card__name" data-testid="agent-list-item-title">{agent.name}</span>
-          <span className="core-agent-card__role">
+        <div className="core-agent-card__top-info" data-bf-component="core-agent-card" data-bf-part="headerInfo">
+          <span className="core-agent-card__name" data-bf-component="core-agent-card" data-bf-part="name" data-testid="agent-list-item-title">{agent.name}</span>
+          <span className="core-agent-card__role" data-bf-component="core-agent-card" data-bf-part="role">
             <Sparkles size={10} strokeWidth={2} />
             {meta.role}
           </span>
         </div>
       </div>
 
-      <div className="core-agent-card__body">
-        <p className="core-agent-card__desc" data-testid="agent-list-item-description">
+      <div className="core-agent-card__body" data-bf-component="core-agent-card" data-bf-part="body">
+        <p className="core-agent-card__desc" data-bf-component="core-agent-card" data-bf-part="description" data-testid="agent-list-item-description">
           {getAgentDescription(t, agent)}
         </p>
       </div>
 
-      <div className="core-agent-card__footer">
-        <div className="core-agent-card__tags">
+      <div className="core-agent-card__footer" data-bf-component="core-agent-card" data-bf-part="footer">
+        <div className="core-agent-card__tags" data-bf-component="core-agent-card" data-bf-part="tags">
           <span className="core-agent-card__tag">
             <strong>{meta.role}</strong>
           </span>
@@ -99,7 +99,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
             </span>
           ) : null}
         </div>
-        <div className="core-agent-card__meta">
+        <div className="core-agent-card__meta" data-bf-component="core-agent-card" data-bf-part="meta">
           <span className="core-agent-card__meta-item">
             <Wrench size={11} />
             {totalTools}

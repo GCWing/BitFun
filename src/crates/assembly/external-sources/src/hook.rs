@@ -4,9 +4,10 @@ use bitfun_product_domains::external_hook_catalog::{
     ExternalHookCatalogSnapshotV1, ExternalHookProviderIdentity, ExternalHookProviderSnapshot,
     ExternalHookSourceProvider, EXTERNAL_HOOK_CATALOG_SCHEMA_V1,
 };
+use bitfun_product_domains::external_hook_import::PreparedExternalHookImport;
 use bitfun_product_domains::external_sources::{
     ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
-    ExternalSourceDiagnosticSeverity, ExternalSourceProviderError, ProviderId,
+    ExternalSourceDiagnosticSeverity, ExternalSourceProviderError, ProviderId, SourceKey,
 };
 use std::collections::BTreeSet;
 use std::fmt;
@@ -149,6 +150,47 @@ impl ExternalHookCatalogCoordinator {
 
     pub fn snapshot(&self) -> ExternalHookCatalogSnapshotV1 {
         lock(&self.state).snapshot.clone()
+    }
+
+    pub fn prepare_import(
+        &self,
+        source: &SourceKey,
+        expected_catalog_content_version: &str,
+    ) -> Result<PreparedExternalHookImport, ExternalSourceProviderError> {
+        let (provider, context) = {
+            let state = lock(&self.state);
+            let generation = state
+                .providers
+                .iter()
+                .find(|candidate| candidate.identity.provider_id == source.provider_id)
+                .ok_or_else(|| {
+                    ExternalSourceProviderError::new(
+                        "external_hook.import_provider_missing",
+                        "The Hook source provider is not registered",
+                        false,
+                    )
+                })?;
+            let current_source = generation
+                .last_success
+                .as_ref()
+                .and_then(|snapshot| snapshot.sources.iter().find(|item| item.key == *source))
+                .ok_or_else(|| {
+                    ExternalSourceProviderError::new(
+                        "external_hook.import_source_missing",
+                        "The Hook source is no longer present in the current catalog",
+                        false,
+                    )
+                })?;
+            if current_source.content_version != expected_catalog_content_version {
+                return Err(ExternalSourceProviderError::new(
+                    "external_hook.import_catalog_stale",
+                    "The Hook source changed after the catalog was reviewed",
+                    false,
+                ));
+            }
+            (Arc::clone(&generation.provider), state.context.clone())
+        };
+        provider.prepare_import(&context, source, expected_catalog_content_version)
     }
 
     pub async fn discover(&self, timeout: Duration) -> DiscoveryBatch<ExternalHookDiscoveryResult> {

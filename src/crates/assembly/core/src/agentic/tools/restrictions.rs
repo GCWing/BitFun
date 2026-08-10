@@ -1,8 +1,10 @@
 use crate::util::errors::{BitFunError, BitFunResult};
 pub use bitfun_agent_tools::{
-    is_miniapp_headless_agent_run, is_remote_posix_path_within_root,
-    miniapp_headless_agent_tool_restrictions, tool_restrictions_for_delegation_policy,
-    ToolPathOperation, ToolPathPolicy, ToolRestrictionError, ToolRuntimeRestrictions,
+    is_miniapp_headless_agent_run, is_miniapp_market_strict_agent_run,
+    is_remote_posix_path_within_root, miniapp_agent_run_tool_restrictions,
+    miniapp_headless_agent_tool_restrictions, miniapp_market_strict_agent_tool_restrictions,
+    tool_restrictions_for_delegation_policy, ToolPathOperation, ToolPathPolicy,
+    ToolRestrictionError, ToolRuntimeRestrictions,
 };
 use std::path::{Path, PathBuf};
 

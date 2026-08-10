@@ -46,7 +46,7 @@ const ScheduledJobsModal: React.FC<ScheduledJobsModalProps> = ({
       title={title || t('nav.scheduledJobs.title')}
       size="xlarge"
     >
-      <div className="scheduled-jobs-modal__body">
+      <div data-bf-component="scheduled-jobs-modal" data-bf-part="body" className="scheduled-jobs-modal__body">
         <ScheduledJobsView
           workspacePath={workspacePath}
           workspaceId={workspaceId}

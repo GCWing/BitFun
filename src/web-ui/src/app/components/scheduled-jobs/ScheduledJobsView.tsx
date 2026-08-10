@@ -758,10 +758,25 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
     : t('nav.scheduledJobs.empty.title');
 
   return (
-    <div className="asv">
-      <div className={`asv__head${hasHeaderContent ? '' : ' asv__head--actions-only'}`}>
+    <div
+      className="asv"
+      data-bf-component="scheduled-jobs-view"
+      data-bf-part="root"
+      data-bf-target={targetKind}
+      data-bf-schedule={draft.scheduleKind}
+    >
+      <div
+        className={`asv__head${hasHeaderContent ? '' : ' asv__head--actions-only'}`}
+        data-bf-component="scheduled-jobs-view"
+        data-bf-part="header"
+      >
         {targetLabel?.trim() ? (
-          <div className="asv__target" title={targetDescription || targetLabel}>
+          <div
+            className="asv__target"
+            title={targetDescription || targetLabel}
+            data-bf-component="scheduled-jobs-view"
+            data-bf-part="target"
+          >
             <span className="asv__target-kind">{targetTypeLabel}</span>
             <span className="asv__target-main">{targetLabel}</span>
             {targetDescription?.trim() ? (
@@ -786,21 +801,24 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
       {expandedJobId === NEW_JOB_ID ? renderEditor() : null}
 
       {loading ? (
-        <div className="asv__empty">
+        <div className="asv__empty" data-bf-component="scheduled-jobs-view" data-bf-part="empty" data-bf-state="loading">
           <RefreshCw size={14} className="asv__spin" />
         </div>
       ) : sortedJobs.length === 0 && expandedJobId !== NEW_JOB_ID ? (
-        <div className="asv__empty">
+        <div className="asv__empty" data-bf-component="scheduled-jobs-view" data-bf-part="empty">
           <p className="asv__empty-title">{emptyTitle}</p>
         </div>
       ) : sortedJobs.length > 0 ? (
-        <div className="asv__list">
+        <div className="asv__list" data-bf-component="scheduled-jobs-view" data-bf-part="list">
           {sortedJobs.map(job => {
             const isExpanded = expandedJobId === job.id;
             return (
               <React.Fragment key={job.id}>
                 <div
                   className={`asv__item${isExpanded ? ' is-expanded' : ''}`}
+                  data-bf-component="scheduled-jobs-view"
+                  data-bf-part="job"
+                  data-bf-state={isExpanded ? 'expanded' : undefined}
                   role="group"
                   tabIndex={0}
                   aria-expanded={isExpanded}
@@ -813,10 +831,10 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                     }
                   }}
                 >
-                  <div className="asv__item-body">
+                  <div className="asv__item-body" data-bf-component="scheduled-jobs-view" data-bf-part="jobBody">
                     <div className="asv__item-top">
                       <span className="asv__item-name">{job.name}</span>
-                      <div className="asv__item-actions">
+                      <div className="asv__item-actions" data-bf-component="scheduled-jobs-view" data-bf-part="jobActions">
                         <div
                           className="asv__switch-wrap"
                           onClick={e => e.stopPropagation()}
@@ -843,7 +861,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                         </IconButton>
                       </div>
                     </div>
-                    <div className="asv__item-meta-row">
+                    <div className="asv__item-meta-row" data-bf-component="scheduled-jobs-view" data-bf-part="jobMeta">
                       <div className="asv__item-meta">
                         {formatJobMetaSummary(job, formatDate, t, {
                           showTarget: assistantWorkspaceMode,
@@ -855,7 +873,9 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                       </div>
                     </div>
                     {job.state.lastError ? (
-                      <div className="asv__item-error">{job.state.lastError}</div>
+                      <div className="asv__item-error" data-bf-component="scheduled-jobs-view" data-bf-part="error">
+                        {job.state.lastError}
+                      </div>
                     ) : null}
                   </div>
                 </div>
@@ -870,7 +890,12 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
 
   function renderEditor() {
     return (
-      <section className="asv__editor" aria-label={t('nav.scheduledJobs.title')}>
+      <section
+        className="asv__editor"
+        aria-label={t('nav.scheduledJobs.title')}
+        data-bf-component="scheduled-jobs-view"
+        data-bf-part="editor"
+      >
         {renderForm()}
       </section>
     );
@@ -878,16 +903,18 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
 
   function renderForm() {
     return (
-      <div className="asv__form">
+      <div className="asv__form" data-bf-component="scheduled-jobs-view" data-bf-part="form">
         {targetKind === 'session' && !assistantWorkspaceMode && !canSave ? (
-          <p className="asv__warning">{t('nav.scheduledJobs.messages.sessionRequired')}</p>
+          <p className="asv__warning" data-bf-component="scheduled-jobs-view" data-bf-part="warning">
+            {t('nav.scheduledJobs.messages.sessionRequired')}
+          </p>
         ) : null}
 
-        <div className="asv__form-row asv__form-row--inline">
-          <div className="asv__field-meta">
+        <div className="asv__form-row asv__form-row--inline" data-bf-component="scheduled-jobs-view" data-bf-part="field">
+          <div className="asv__field-meta" data-bf-component="scheduled-jobs-view" data-bf-part="fieldMeta">
             <span className="asv__field-label">{t('nav.scheduledJobs.fields.name')}</span>
           </div>
-          <div className="asv__field-control">
+          <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
             <Input
               size="small"
               value={draft.name}
@@ -902,11 +929,11 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
           </div>
         </div>
 
-        <div className="asv__form-row asv__form-row--inline">
-          <div className="asv__field-meta">
+        <div className="asv__form-row asv__form-row--inline" data-bf-component="scheduled-jobs-view" data-bf-part="field">
+          <div className="asv__field-meta" data-bf-component="scheduled-jobs-view" data-bf-part="fieldMeta">
             <span className="asv__field-label">{t('nav.scheduledJobs.fields.scheduleKind')}</span>
           </div>
-          <div className="asv__field-control">
+          <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
             <div className="asv__control-grid asv__control-grid--schedule">
               <Select
                 size="small"
@@ -931,7 +958,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                 }}
               />
 
-              <div className="asv__toggle-card">
+              <div className="asv__toggle-card" data-bf-component="scheduled-jobs-view" data-bf-part="toggle">
                 <span className="asv__toggle-label">{t('nav.scheduledJobs.fields.enabled')}</span>
                 <Switch
                   size="small"
@@ -948,11 +975,11 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
         </div>
 
         {draft.scheduleKind === 'at' && (
-          <div className="asv__form-row asv__form-row--inline">
-            <div className="asv__field-meta">
+          <div className="asv__form-row asv__form-row--inline" data-bf-component="scheduled-jobs-view" data-bf-part="field">
+            <div className="asv__field-meta" data-bf-component="scheduled-jobs-view" data-bf-part="fieldMeta">
               <span className="asv__field-label">{t('nav.scheduledJobs.fields.at')}</span>
             </div>
-            <div className="asv__field-control">
+            <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
               <Input
                 size="small"
                 type="datetime-local"
@@ -974,11 +1001,11 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
 
         {draft.scheduleKind === 'every' && (
           <>
-            <div className="asv__form-row asv__form-row--inline">
-              <div className="asv__field-meta">
+            <div className="asv__form-row asv__form-row--inline" data-bf-component="scheduled-jobs-view" data-bf-part="field">
+              <div className="asv__field-meta" data-bf-component="scheduled-jobs-view" data-bf-part="fieldMeta">
                 <span className="asv__field-label">{t('nav.scheduledJobs.fields.everyMs')}</span>
               </div>
-              <div className="asv__field-control">
+              <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
                 <Input
                   size="small"
                   type="number"
@@ -993,11 +1020,11 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                 />
               </div>
             </div>
-            <div className="asv__form-row asv__form-row--inline">
-              <div className="asv__field-meta">
+            <div className="asv__form-row asv__form-row--inline" data-bf-component="scheduled-jobs-view" data-bf-part="field">
+              <div className="asv__field-meta" data-bf-component="scheduled-jobs-view" data-bf-part="fieldMeta">
                 <span className="asv__field-label">{t('nav.scheduledJobs.fields.anchorMs')}</span>
               </div>
-              <div className="asv__field-control">
+              <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
                 <Input
                   size="small"
                   type="datetime-local"
@@ -1015,11 +1042,11 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
 
         {draft.scheduleKind === 'cron' && (
           <>
-            <div className="asv__form-row asv__form-row--inline">
-              <div className="asv__field-meta">
+            <div className="asv__form-row asv__form-row--inline" data-bf-component="scheduled-jobs-view" data-bf-part="field">
+              <div className="asv__field-meta" data-bf-component="scheduled-jobs-view" data-bf-part="fieldMeta">
                 <span className="asv__field-label">{t('nav.scheduledJobs.fields.cronExpr')}</span>
               </div>
-              <div className="asv__field-control">
+              <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
                 <Input
                   size="small"
                   value={draft.expr}
@@ -1036,11 +1063,11 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                 </span>
               </div>
             </div>
-            <div className="asv__form-row asv__form-row--inline">
-              <div className="asv__field-meta">
+            <div className="asv__form-row asv__form-row--inline" data-bf-component="scheduled-jobs-view" data-bf-part="field">
+              <div className="asv__field-meta" data-bf-component="scheduled-jobs-view" data-bf-part="fieldMeta">
                 <span className="asv__field-label">{t('nav.scheduledJobs.fields.timezone')}</span>
               </div>
-              <div className="asv__field-control">
+              <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
                 <Input
                   size="small"
                   value={draft.tz}
@@ -1056,11 +1083,11 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
         )}
 
         {assistantWorkspaceMode ? (
-          <div className="asv__form-row asv__form-row--inline">
-            <div className="asv__field-meta">
+          <div className="asv__form-row asv__form-row--inline" data-bf-component="scheduled-jobs-view" data-bf-part="field">
+            <div className="asv__field-meta" data-bf-component="scheduled-jobs-view" data-bf-part="fieldMeta">
               <span className="asv__field-label">{t('nav.scheduledJobs.fields.session')}</span>
             </div>
-            <div className="asv__field-control">
+            <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
               <Select
                 size="small"
                 options={sessionOptions}
@@ -1070,6 +1097,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                 searchable
                 clearable
                 className="asv__session-select"
+                dropdownClassName="asv__session-select-dropdown"
                 onChange={value => {
                   setValidationErrors(current => ({ ...current, sessionId: false }));
                   setDraft(c => ({ ...c, sessionId: String(value) }));
@@ -1079,11 +1107,11 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
             </div>
           </div>
         ) : targetKind === 'workspace' ? (
-          <div className="asv__form-row asv__form-row--inline">
-            <div className="asv__field-meta">
+          <div className="asv__form-row asv__form-row--inline" data-bf-component="scheduled-jobs-view" data-bf-part="field">
+            <div className="asv__field-meta" data-bf-component="scheduled-jobs-view" data-bf-part="fieldMeta">
               <span className="asv__field-label">{t('nav.scheduledJobs.fields.agentType')}</span>
             </div>
-            <div className="asv__field-control">
+            <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
               <Select
                 size="small"
                 options={workspaceAgentOptions}
@@ -1091,6 +1119,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                 error={validationErrors.agentType}
                 disabled={workspaceKind === WorkspaceKind.Assistant}
                 className="asv__agent-select"
+                dropdownClassName="asv__agent-select-dropdown"
                 renderOption={option => (
                   <div className="asv__agent-option">
                     <span className="asv__agent-option-label">{option.label}</span>
@@ -1109,11 +1138,11 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
             </div>
           </div>
         ) : !lockSessionId ? (
-          <div className="asv__form-row asv__form-row--inline">
-            <div className="asv__field-meta">
+          <div className="asv__form-row asv__form-row--inline" data-bf-component="scheduled-jobs-view" data-bf-part="field">
+            <div className="asv__field-meta" data-bf-component="scheduled-jobs-view" data-bf-part="fieldMeta">
               <span className="asv__field-label">{t('nav.scheduledJobs.fields.session')}</span>
             </div>
-            <div className="asv__field-control">
+            <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
               <Select
                 size="small"
                 options={sessionOptions}
@@ -1131,11 +1160,11 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
           </div>
         ) : null}
 
-        <div className="asv__form-row asv__form-row--inline asv__form-row--prompt">
-          <div className="asv__field-meta">
+        <div className="asv__form-row asv__form-row--inline asv__form-row--prompt" data-bf-component="scheduled-jobs-view" data-bf-part="field">
+          <div className="asv__field-meta" data-bf-component="scheduled-jobs-view" data-bf-part="fieldMeta">
             <span className="asv__field-label">{t('nav.scheduledJobs.fields.prompt')}</span>
           </div>
-          <div className="asv__field-control">
+          <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
             <Textarea
               className="asv__prompt-textarea"
               value={draft.text}
@@ -1153,7 +1182,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
           </div>
         </div>
 
-        <div className="asv__form-actions">
+        <div className="asv__form-actions" data-bf-component="scheduled-jobs-view" data-bf-part="formActions">
           <Button
             size="small"
             className="asv__action-btn asv__action-btn--ghost"

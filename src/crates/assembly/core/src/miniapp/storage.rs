@@ -199,6 +199,29 @@ impl MiniAppStorage {
             .map_err(map_storage_error)
     }
 
+    pub async fn install_market_atomic(
+        &self,
+        app: &MiniApp,
+        metadata: &MiniAppCustomizationMetadata,
+    ) -> BitFunResult<()> {
+        self.inner
+            .install_market_atomic(app, metadata)
+            .await
+            .map_err(map_storage_error)
+    }
+
+    pub async fn replace_market_atomic(
+        &self,
+        previous: &MiniApp,
+        next: &MiniApp,
+        metadata: &MiniAppCustomizationMetadata,
+    ) -> BitFunResult<()> {
+        self.inner
+            .replace_market_atomic(previous, next, metadata)
+            .await
+            .map_err(map_storage_error)
+    }
+
     pub async fn delete(&self, app_id: &str) -> BitFunResult<()> {
         self.inner.delete(app_id).await.map_err(map_storage_error)
     }
@@ -358,6 +381,31 @@ impl MiniAppStoragePort for MiniAppStorage {
     ) -> MiniAppPortFuture<'_, ()> {
         Box::pin(async move {
             self.save_customization_metadata(&app_id, &metadata)
+                .await
+                .map_err(map_miniapp_port_error)
+        })
+    }
+
+    fn install_market_atomic(
+        &self,
+        app: MiniApp,
+        metadata: MiniAppCustomizationMetadata,
+    ) -> MiniAppPortFuture<'_, ()> {
+        Box::pin(async move {
+            MiniAppStorage::install_market_atomic(self, &app, &metadata)
+                .await
+                .map_err(map_miniapp_port_error)
+        })
+    }
+
+    fn replace_market_atomic(
+        &self,
+        previous: MiniApp,
+        next: MiniApp,
+        metadata: MiniAppCustomizationMetadata,
+    ) -> MiniAppPortFuture<'_, ()> {
+        Box::pin(async move {
+            MiniAppStorage::replace_market_atomic(self, &previous, &next, &metadata)
                 .await
                 .map_err(map_miniapp_port_error)
         })

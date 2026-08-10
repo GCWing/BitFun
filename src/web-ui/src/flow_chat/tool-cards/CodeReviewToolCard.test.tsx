@@ -227,12 +227,14 @@ describe('CodeReviewToolCard', () => {
     expect(container.textContent).toContain('Review status');
     expect(container.textContent).toContain('Review scope tailored');
     expect(container.textContent).toContain('Token budget limited review coverage');
-    expect(container.textContent).toContain('2 optional check was outside this run');
-    expect(container.textContent).toContain('Token budget mode kept 1 optional check outside this run');
+    expect(container.textContent).toContain(
+      'Optional review work not run: 2 (applicability, configuration, or budget).',
+    );
+    expect(container.textContent).toContain('Optional review work not run due to token budget: 1.');
     expect(container.textContent).not.toContain('Coverage and cost');
     expect(container.textContent).not.toContain('Target');
     expect(container.textContent).not.toContain('Budget');
-    expect(container.textContent).not.toContain('Estimated review checks');
+    expect(container.textContent).not.toContain('Estimated review work items');
     expect(container.textContent).not.toContain('Recommended strategy');
     expect(container.textContent).not.toContain('Frontend reviewer');
     expect(container.textContent).not.toContain('Not applicable to this target');
@@ -374,7 +376,7 @@ describe('CodeReviewToolCard', () => {
     expect(container.textContent).toContain('1 review result is partial; confidence is limited.');
   });
 
-  it('renders focused-scope reliability status from structured report signals', () => {
+  it('renders limited-scope reliability status from structured report signals', () => {
     const toolItem: FlowToolItem = {
       id: 'tool-1',
       type: 'tool',
@@ -432,7 +434,7 @@ describe('CodeReviewToolCard', () => {
       );
     });
 
-    expect(container.textContent).toContain('Focused review scope');
+    expect(container.textContent).toContain('Limited review scope');
     expect(container.textContent).toContain('High-risk-only pass; changed files remain visible.');
     expect(container.textContent).toContain('Evidence status');
     expect(container.textContent).toContain('limited');

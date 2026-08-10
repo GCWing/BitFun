@@ -11,7 +11,16 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use rand::RngCore;
-use rmcp::transport::auth::{AuthorizationManager, CredentialStore, OAuthState, StoredCredentials};
+use rmcp::transport::auth::OAuthState;
+
+#[doc(hidden)]
+pub mod rmcp_compat {
+    pub use rmcp::transport::auth::{
+        AuthError, AuthorizationManager, CredentialStore, StoredCredentials,
+    };
+}
+
+use rmcp_compat::{AuthError, AuthorizationManager, CredentialStore, StoredCredentials};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -265,28 +274,25 @@ impl MCPRemoteOAuthCredentialStore {
 
 #[async_trait]
 impl CredentialStore for MCPRemoteOAuthCredentialStore {
-    async fn load(&self) -> Result<Option<StoredCredentials>, rmcp::transport::auth::AuthError> {
+    async fn load(&self) -> Result<Option<StoredCredentials>, AuthError> {
         MCPRemoteOAuthCredentialVault::new(self.data_dir.clone())
             .load(&self.server_id)
             .await
-            .map_err(|error| rmcp::transport::auth::AuthError::InternalError(error.to_string()))
+            .map_err(|error| AuthError::InternalError(error.to_string()))
     }
 
-    async fn save(
-        &self,
-        credentials: StoredCredentials,
-    ) -> Result<(), rmcp::transport::auth::AuthError> {
+    async fn save(&self, credentials: StoredCredentials) -> Result<(), AuthError> {
         MCPRemoteOAuthCredentialVault::new(self.data_dir.clone())
             .store(&self.server_id, &credentials)
             .await
-            .map_err(|error| rmcp::transport::auth::AuthError::InternalError(error.to_string()))
+            .map_err(|error| AuthError::InternalError(error.to_string()))
     }
 
-    async fn clear(&self) -> Result<(), rmcp::transport::auth::AuthError> {
+    async fn clear(&self) -> Result<(), AuthError> {
         MCPRemoteOAuthCredentialVault::new(self.data_dir.clone())
             .clear(&self.server_id)
             .await
-            .map_err(|error| rmcp::transport::auth::AuthError::InternalError(error.to_string()))
+            .map_err(|error| AuthError::InternalError(error.to_string()))
     }
 }
 

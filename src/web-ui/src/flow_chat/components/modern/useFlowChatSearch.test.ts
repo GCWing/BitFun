@@ -55,8 +55,40 @@ describe('buildFlowChatSearchMatches', () => {
       turnId: 'turn-1',
       type: 'model-round',
       flowItemId: 'text-2',
+      occurrenceIndex: 0,
       expandableIds: undefined,
     }]);
+  });
+
+  it('reports every occurrence within a single source', () => {
+    const virtualItems = [{
+      type: 'model-round',
+      turnId: 'turn-1',
+      isLastRound: true,
+      isTurnComplete: true,
+      data: {
+        id: 'round-1',
+        items: [
+          { id: 'text-1', type: 'text', content: 'needle one, needle two, needle three' },
+        ],
+      },
+    }] as VirtualItem[];
+
+    expect(buildFlowChatSearchMatches(virtualItems, 'needle')).toEqual([
+      expect.objectContaining({ flowItemId: 'text-1', occurrenceIndex: 0 }),
+      expect.objectContaining({ flowItemId: 'text-1', occurrenceIndex: 1 }),
+      expect.objectContaining({ flowItemId: 'text-1', occurrenceIndex: 2 }),
+    ]);
+  });
+
+  it('counts non-overlapping occurrences only', () => {
+    const virtualItems = [{
+      type: 'user-message',
+      turnId: 'turn-1',
+      data: { id: 'user-1', content: 'aaa' },
+    }] as VirtualItem[];
+
+    expect(buildFlowChatSearchMatches(virtualItems, 'aa')).toHaveLength(1);
   });
 
   it('records collapsed containers from outermost to innermost', () => {
@@ -79,7 +111,7 @@ describe('buildFlowChatSearchMatches', () => {
     });
   });
 
-  it('deduplicates by turn while searching steering messages', () => {
+  it('keeps separate matches for each item in the same turn', () => {
     const virtualItems = [
       {
         type: 'user-steering-message',
@@ -100,11 +132,10 @@ describe('buildFlowChatSearchMatches', () => {
       },
     ] as VirtualItem[];
 
-    expect(buildFlowChatSearchMatches(virtualItems, 'needle')).toHaveLength(1);
-    expect(buildFlowChatSearchMatches(virtualItems, 'needle')[0]).toMatchObject({
-      virtualItemIndex: 0,
-      type: 'user-steering-message',
-    });
+    expect(buildFlowChatSearchMatches(virtualItems, 'needle')).toEqual([
+      expect.objectContaining({ virtualItemIndex: 0, type: 'user-steering-message', occurrenceIndex: 0 }),
+      expect.objectContaining({ virtualItemIndex: 1, type: 'model-round', flowItemId: 'text-1', occurrenceIndex: 0 }),
+    ]);
   });
 });
 

@@ -1,11 +1,14 @@
 //! Types for session persistence
 
 use bitfun_core_types::ToolImageAttachment;
-use bitfun_core_types::{AiErrorDetail, SessionContinuationPolicy, SessionKind};
+use bitfun_core_types::{
+    AiErrorDetail, SessionContinuationPolicy, SessionExecutionTarget, SessionKind,
+};
 use bitfun_events::ModelRoundAttemptDiagnostic;
 use serde::{Deserialize, Serialize};
 
 pub const SESSION_STORAGE_SCHEMA_VERSION: u32 = 2;
+pub const SESSION_TURN_CATALOG_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -179,6 +182,15 @@ pub struct SessionMetadata {
     #[serde(skip_serializing_if = "Option::is_none", alias = "custom_metadata")]
     pub custom_metadata: Option<serde_json::Value>,
 
+    /// Latest authoritative context-usage value for restoring context display
+    /// state across hosts and process restarts.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "current_context_usage"
+    )]
+    pub current_context_usage: Option<SessionContextUsage>,
+
     /// Structured child-session relationship metadata.
     #[serde(
         default,
@@ -235,6 +247,23 @@ pub struct SessionMetadata {
     /// Workspace path this session belongs to (normalized source workspace root, not mirror dir)
     #[serde(skip_serializing_if = "Option::is_none", alias = "workspace_path")]
     pub workspace_path: Option<String>,
+
+    /// Main project path that owns this session's persisted data. Legacy
+    /// sessions omit it and use `workspace_path`.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "project_workspace_path"
+    )]
+    pub project_workspace_path: Option<String>,
+
+    /// Concrete execution target, including managed worktree identity.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "execution_target"
+    )]
+    pub execution_target: Option<SessionExecutionTarget>,
 
     /// Unified hostname for workspace identity: `localhost` for local workspaces,
     /// SSH host for remote workspaces.
@@ -343,6 +372,77 @@ impl Default for SessionList {
                 .unwrap_or_default()
                 .as_millis() as u64,
             version: "1.0".to_string(),
+        }
+    }
+}
+
+/// Lightweight, rebuildable navigation metadata for one persisted dialog turn.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionTurnCatalogEntry {
+    /// Zero-based position in the current catalog projection.
+    pub ordinal: usize,
+    /// Absolute persisted Turn index used by the storage layout.
+    pub storage_turn_index: usize,
+    /// Missing only while a legacy catalog is being reconstructed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<String>,
+    /// Bounded, user-readable input preview. Never contains model or tool output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preview: Option<String>,
+    #[serde(default)]
+    pub preview_truncated: bool,
+}
+
+/// Lightweight navigation catalog for a persisted Session.
+///
+/// This is a derived cache. Persisted Turn files and the staged-revert boundary
+/// remain authoritative and may be used to rebuild this value at any time.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionTurnCatalog {
+    pub schema_version: u32,
+    pub session_id: String,
+    /// Changes only when the visible storage sequence changes. Repairing
+    /// optional Turn ids or previews does not invalidate an in-flight window.
+    pub revision: String,
+    pub total_turn_count: usize,
+    pub complete: bool,
+    pub entries: Vec<SessionTurnCatalogEntry>,
+}
+
+/// Result of loading one bounded, contiguous window around a persisted Turn.
+///
+/// Catalog changes caused by live appends, revert operations, or external
+/// writers are ordinary synchronization outcomes rather than transport errors.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    tag = "status",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+pub enum SessionTurnWindowResponse {
+    Ready {
+        catalog_revision: String,
+        total_turn_count: usize,
+        start_ordinal: usize,
+        end_ordinal_exclusive: usize,
+        target_turn_id: String,
+        turns: Vec<DialogTurnData>,
+    },
+    Stale {
+        catalog: SessionTurnCatalog,
+    },
+    NotFound {
+        catalog: SessionTurnCatalog,
+    },
+}
+
+impl SessionTurnWindowResponse {
+    pub fn ready_turns_mut(&mut self) -> Option<&mut Vec<DialogTurnData>> {
+        match self {
+            Self::Ready { turns, .. } => Some(turns),
+            Self::Stale { .. } | Self::NotFound { .. } => None,
         }
     }
 }
@@ -460,6 +560,44 @@ pub struct DialogTurnTokenUsageData {
     pub timestamp: u64,
 }
 
+/// Source of a persisted session context-usage value.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionContextUsageSource {
+    ModelRequest,
+    ContextCompression,
+}
+
+/// Exact context-usage value owned by the Agent Session runtime.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionContextUsage {
+    /// Dialog turn that produced this value.
+    #[serde(alias = "turn_id")]
+    pub turn_id: String,
+
+    /// Input/prompt tokens for a model request, or the compacted context size.
+    #[serde(alias = "input_tokens")]
+    pub input_tokens: u64,
+
+    /// Output/completion tokens when this value came from a model request.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "output_tokens"
+    )]
+    pub output_tokens: Option<u64>,
+
+    /// Provider total for a model request, or the compacted context size.
+    #[serde(alias = "total_tokens")]
+    pub total_tokens: u64,
+
+    /// Runtime event timestamp in milliseconds since epoch.
+    pub timestamp: u64,
+
+    pub source: SessionContextUsageSource,
+}
+
 /// Persisted dialog turn kind.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -474,6 +612,10 @@ pub enum DialogTurnKind {
 impl DialogTurnKind {
     pub fn is_model_visible(self) -> bool {
         matches!(self, Self::UserDialog)
+    }
+
+    pub fn is_transcript_visible(self) -> bool {
+        matches!(self, Self::UserDialog | Self::ManualCompaction)
     }
 }
 
@@ -901,6 +1043,7 @@ impl SessionMetadata {
             snapshot_session_id: None,
             tags: Vec::new(),
             custom_metadata: None,
+            current_context_usage: None,
             relationship: None,
             todos: None,
             review_action_state: None,
@@ -908,6 +1051,8 @@ impl SessionMetadata {
             review_target_evidence: None,
             deep_review_cache: None,
             workspace_path: None,
+            project_workspace_path: None,
+            execution_target: None,
             workspace_hostname: None,
             unread_completion: None,
             needs_user_attention: None,
@@ -1046,8 +1191,8 @@ impl DialogTurnData {
 mod tests {
     use super::{
         DialogTurnData, DialogTurnKind, ModelRoundData, SessionMemoryMode, SessionMetadata,
-        SessionRelationship, SessionRelationshipKind, TextItemData, ThinkingItemData, ToolItemData,
-        UserMessageData,
+        SessionRelationship, SessionRelationshipKind, SessionTurnWindowResponse, TextItemData,
+        ThinkingItemData, ToolItemData, UserMessageData,
     };
     use bitfun_core_types::{SessionContinuationPolicy, SessionKind};
 
@@ -1089,6 +1234,37 @@ mod tests {
         );
 
         assert_eq!(turn.kind, DialogTurnKind::UserDialog);
+    }
+
+    #[test]
+    fn session_turn_window_response_uses_tagged_camel_case_wire_shape() {
+        let turn = DialogTurnData::new(
+            "turn-4".to_string(),
+            4,
+            "session-1".to_string(),
+            UserMessageData {
+                id: "user-4".to_string(),
+                content: "hello".to_string(),
+                timestamp: 1,
+                metadata: None,
+            },
+        );
+        let serialized = serde_json::to_value(SessionTurnWindowResponse::Ready {
+            catalog_revision: "catalog-1".to_string(),
+            total_turn_count: 20,
+            start_ordinal: 2,
+            end_ordinal_exclusive: 10,
+            target_turn_id: "turn-4".to_string(),
+            turns: vec![turn],
+        })
+        .expect("window response should serialize");
+
+        assert_eq!(serialized["status"], "ready");
+        assert_eq!(serialized["catalogRevision"], "catalog-1");
+        assert_eq!(serialized["totalTurnCount"], 20);
+        assert_eq!(serialized["startOrdinal"], 2);
+        assert_eq!(serialized["endOrdinalExclusive"], 10);
+        assert_eq!(serialized["targetTurnId"], "turn-4");
     }
 
     #[test]
@@ -1138,6 +1314,9 @@ mod tests {
     #[test]
     fn manual_compaction_turn_is_model_invisible() {
         assert!(!DialogTurnKind::ManualCompaction.is_model_visible());
+        assert!(DialogTurnKind::ManualCompaction.is_transcript_visible());
+        assert!(DialogTurnKind::UserDialog.is_transcript_visible());
+        assert!(!DialogTurnKind::LocalCommand.is_transcript_visible());
     }
 
     #[test]

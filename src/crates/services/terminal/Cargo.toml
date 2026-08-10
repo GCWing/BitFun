@@ -13,7 +13,7 @@ path = "src/lib.rs"
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
 
 # Async runtime
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "macros", "process", "rt", "sync", "time"] }
 tokio-stream = { workspace = true }
 futures = { workspace = true }
 

@@ -9,6 +9,7 @@ import { api } from '@/infrastructure/api/service-api/ApiClient';
 
 export type RelayDeployTask = 'install_docker' | 'deploy';
 export type RelayTaskStatus = 'running' | 'succeeded' | 'failed';
+export type RelayMirrorMode = 'auto' | 'cn' | 'global';
 
 export type DockerAccessMode =
   | 'ok'
@@ -76,15 +77,23 @@ export const relayDeployApi = {
   },
 
   /** Stage the interactive Docker-install driver; run scriptPath in a remote PTY. */
-  async installDocker(connectionId: string): Promise<RelayTaskStart> {
-    return api.invoke<RelayTaskStart>('relay_deploy_install_docker', { connectionId });
+  async installDocker(
+    connectionId: string,
+    mirrorMode: RelayMirrorMode = 'auto',
+  ): Promise<RelayTaskStart> {
+    return api.invoke<RelayTaskStart>('relay_deploy_install_docker', { connectionId, mirrorMode });
   },
 
   /** Stage the interactive deploy driver; run scriptPath in a remote PTY. */
-  async startDeploy(connectionId: string, port?: number): Promise<RelayTaskStart> {
+  async startDeploy(
+    connectionId: string,
+    port?: number,
+    mirrorMode: RelayMirrorMode = 'auto',
+  ): Promise<RelayTaskStart> {
     return api.invoke<RelayTaskStart>('relay_deploy_start', {
       connectionId,
       port: port && port > 0 ? port : undefined,
+      mirrorMode,
     });
   },
 

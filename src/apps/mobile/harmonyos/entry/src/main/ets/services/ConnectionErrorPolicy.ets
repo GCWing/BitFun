@@ -114,6 +114,12 @@ export class ConnectionErrorPolicy {
     if (text.indexOf('permission') >= 0 || text.indexOf('denied') >= 0) {
       return RemoteI18n.t('errors.permissionDenied');
     }
+    if (text.indexOf('http 401') >= 0 || text.indexOf('unauthorized') >= 0) {
+      return RemoteI18n.t('remote.settings.accountExpired');
+    }
+    if (text.indexOf('http 404') >= 0 || text.indexOf('http 503') >= 0 || text.indexOf('http 504') >= 0) {
+      return RemoteI18n.t('remote.settings.deviceUnavailable');
+    }
     return raw || RemoteI18n.t('errors.operationFailed');
   }
 }

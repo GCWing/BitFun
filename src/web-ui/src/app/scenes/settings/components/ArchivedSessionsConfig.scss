@@ -12,8 +12,8 @@
     align-items: center;
     justify-content: center;
     padding: 32px 16px;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-sm);
   }
 
   &__empty {
@@ -22,9 +22,9 @@
     align-items: center;
     gap: 10px;
     padding: 32px 16px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     text-align: center;
-    font-size: var(--font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-sm);
   }
 
   &__empty-icon {
@@ -36,7 +36,7 @@
     flex-direction: column;
 
     & + & {
-      border-top: 1px solid var(--border-subtle);
+      border-top: 1px solid var(--bf-appearance-token-border-subtle);
       margin-top: $size-gap-2;
       padding-top: $size-gap-2;
     }
@@ -47,29 +47,29 @@
     align-items: center;
     gap: $size-gap-2;
     padding: 6px 16px;
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     width: 100%;
     border: none;
     background: transparent;
     cursor: pointer;
-    transition: background var(--motion-fast) var(--easing-standard);
+    transition: background var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 
     &:hover {
-      background: var(--element-bg-hover);
+      background: var(--bf-appearance-token-element-bg-hover);
     }
   }
 
   &__group-chevron {
     flex-shrink: 0;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.6;
   }
 
   &__group-name {
-    font-weight: var(--font-weight-medium);
+    font-weight: var(--bf-appearance-token-font-weight-medium);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -84,10 +84,10 @@
     height: 18px;
     padding: 0 5px;
     border-radius: 9px;
-    background: var(--element-bg-soft);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-medium);
-    color: var(--color-text-secondary);
+    background: var(--bf-appearance-token-element-bg-soft);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    font-weight: var(--bf-appearance-token-font-weight-medium);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 
   &__group-list {
@@ -101,10 +101,10 @@
     justify-content: space-between;
     gap: $size-gap-3;
     padding: 8px 16px;
-    transition: background var(--motion-fast) var(--easing-standard);
+    transition: background var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 
     &:hover {
-      background: var(--element-bg-hover);
+      background: var(--bf-appearance-token-element-bg-hover);
 
       .archived-sessions-config__row-actions {
         opacity: 1;
@@ -120,9 +120,9 @@
   }
 
   &__row-name {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    color: var(--color-text-primary);
+    font-size: var(--bf-appearance-token-font-size-sm);
+    font-weight: var(--bf-appearance-token-font-weight-medium);
+    color: var(--bf-appearance-token-color-text-primary);
     line-height: 1.4;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -130,8 +130,8 @@
   }
 
   &__row-date {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
     line-height: 1.4;
   }
 
@@ -141,21 +141,21 @@
     gap: $size-gap-1;
     flex-shrink: 0;
     opacity: 0;
-    transition: opacity var(--motion-fast) var(--easing-standard);
+    transition: opacity var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
   }
 
   &__delete-btn {
     &:hover {
-      color: var(--color-error);
+      color: var(--bf-appearance-token-color-error);
     }
   }
 
   &__delete-all-btn {
-    color: var(--color-error);
+    color: var(--bf-appearance-token-color-error);
 
     &:hover {
-      color: var(--color-error);
-      background: var(--color-error-bg);
+      color: var(--bf-appearance-token-color-error);
+      background: var(--bf-appearance-token-color-error-bg);
     }
   }
 

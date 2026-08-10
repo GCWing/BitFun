@@ -29,9 +29,8 @@ pub(crate) async fn call_deveco_mcp_check(
     files: &[String],
     context: &ToolUseContext,
 ) -> BitFunResult<String> {
-    let mcp_service = get_global_mcp_service().ok_or_else(|| {
-        BitFunError::tool("MCP service is not initialized".to_string())
-    })?;
+    let mcp_service = get_global_mcp_service()
+        .ok_or_else(|| BitFunError::tool("MCP service is not initialized".to_string()))?;
     let server_manager = mcp_service.server_manager();
 
     // Fast path: already connected.
@@ -48,17 +47,23 @@ pub(crate) async fn call_deveco_mcp_check(
         )));
     }
 
-    let connection = server_manager.get_connection(MCP_SERVER_ID).await.ok_or_else(|| {
-        BitFunError::tool(format!(
-            "MCP server '{}' was started but no connection is available.",
-            MCP_SERVER_ID
-        ))
-    })?;
+    let connection = server_manager
+        .get_connection(MCP_SERVER_ID)
+        .await
+        .ok_or_else(|| {
+            BitFunError::tool(format!(
+                "MCP server '{}' was started but no connection is available.",
+                MCP_SERVER_ID
+            ))
+        })?;
 
     call_check_tool(&connection, files).await
 }
 
-async fn call_check_tool(connection: &Arc<MCPConnection>, files: &[String]) -> BitFunResult<String> {
+async fn call_check_tool(
+    connection: &Arc<MCPConnection>,
+    files: &[String],
+) -> BitFunResult<String> {
     let result = connection
         .call_tool("check", Some(json!({ "files": files })))
         .await
@@ -73,9 +78,8 @@ async fn call_check_tool(connection: &Arc<MCPConnection>, files: &[String]) -> B
 /// exists, (re)start it; otherwise provision a runtime-only (ephemeral) server
 /// from `devecocli serve mcp` with `PROJECT_PATH` set to the harmony cwd.
 async fn ensure_deveco_mcp_connected(context: &ToolUseContext) -> BitFunResult<()> {
-    let mcp_service = get_global_mcp_service().ok_or_else(|| {
-        BitFunError::tool("MCP service is not initialized".to_string())
-    })?;
+    let mcp_service = get_global_mcp_service()
+        .ok_or_else(|| BitFunError::tool("MCP service is not initialized".to_string()))?;
     let sm = mcp_service.server_manager();
 
     if sm.get_connection(MCP_SERVER_ID).await.is_some() {
@@ -153,6 +157,7 @@ fn build_config_from_shell(shell_argv: Vec<String>, project_path: String) -> MCP
         oauth: None,
         oauth_enabled: None,
         xaa: None,
+        timeouts: Default::default(),
     }
 }
 
@@ -181,14 +186,24 @@ mod tests {
     #[test]
     fn config_uses_shell_argv_and_project_path() {
         let cfg = build_config_from_shell(
-            vec!["/bin/zsh".to_string(), "-c".to_string(), "devecocli serve mcp".to_string()],
+            vec![
+                "/bin/zsh".to_string(),
+                "-c".to_string(),
+                "devecocli serve mcp".to_string(),
+            ],
             "/home/user/project".to_string(),
         );
         assert_eq!(cfg.id, MCP_SERVER_ID);
         assert_eq!(cfg.server_type, MCPServerType::Local);
         assert_eq!(cfg.command.as_deref(), Some("/bin/zsh"));
-        assert_eq!(cfg.args, vec!["-c".to_string(), "devecocli serve mcp".to_string()]);
-        assert_eq!(cfg.env.get("PROJECT_PATH").map(|s| s.as_str()), Some("/home/user/project"));
+        assert_eq!(
+            cfg.args,
+            vec!["-c".to_string(), "devecocli serve mcp".to_string()]
+        );
+        assert_eq!(
+            cfg.env.get("PROJECT_PATH").map(|s| s.as_str()),
+            Some("/home/user/project")
+        );
         assert!(cfg.enabled);
         assert!(cfg.auto_start);
     }
@@ -204,8 +219,12 @@ mod tests {
     fn extract_text_joins_text_content() {
         let result = MCPToolResult {
             content: Some(vec![
-                MCPToolResultContent::Text { text: "line1".to_string() },
-                MCPToolResultContent::Text { text: "line2".to_string() },
+                MCPToolResultContent::Text {
+                    text: "line1".to_string(),
+                },
+                MCPToolResultContent::Text {
+                    text: "line2".to_string(),
+                },
             ]),
             is_error: false,
             structured_content: None,

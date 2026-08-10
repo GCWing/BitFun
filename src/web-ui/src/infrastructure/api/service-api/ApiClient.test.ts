@@ -122,6 +122,32 @@ describe('ApiClient', () => {
     });
   });
 
+  it('uses the message from plain structured Tauri errors', async () => {
+    const transportError = {
+      code: 'worktree_not_found',
+      message: 'Session not found: history-1',
+    };
+    adapterMocks.request.mockRejectedValueOnce(transportError);
+    const client = new ApiClient({ enableLogging: false, retries: 0 });
+
+    const error = await client.invoke('worktree_bind_session', {
+      request: { sessionId: 'history-1', enabled: true },
+    }).catch((caught: unknown) => caught as {
+      code: string;
+      message: string;
+      details?: { originalError?: unknown };
+    });
+
+    expect(error).toMatchObject({
+      code: 'COMMAND_FAILED',
+      message: 'Session not found: history-1',
+      details: {
+        originalError: transportError,
+      },
+    });
+    expect(error.message).not.toBe('[object Object]');
+  });
+
   it('keeps message-only transport errors parseable by domain adapters', async () => {
     const encoded = JSON.stringify({
       code: 'stale_revision',
@@ -155,6 +181,25 @@ describe('ApiClient', () => {
 
     expect(traceMocks.estimateJsonBytes).toHaveBeenCalledWith(
       { turns: [] },
+      2 * 1024 * 1024
+    );
+  });
+
+  it('uses the Session response estimate cap for Turn windows', async () => {
+    globalThis.__BITFUN_PERF_TRACE_ENABLED__ = true;
+    adapterMocks.request.mockResolvedValueOnce({ status: 'ready', turns: [] });
+    const client = new ApiClient({ enableLogging: false, retries: 0 });
+
+    await client.invoke('load_session_turn_window', {
+      request: {
+        sessionId: 'history-1',
+        workspacePath: 'D:/workspace/BitFun',
+        targetStorageTurnIndex: 4,
+      },
+    });
+
+    expect(traceMocks.estimateJsonBytes).toHaveBeenCalledWith(
+      { status: 'ready', turns: [] },
       2 * 1024 * 1024
     );
   });

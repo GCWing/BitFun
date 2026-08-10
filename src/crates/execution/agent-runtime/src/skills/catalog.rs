@@ -47,8 +47,8 @@ pub(super) const BUILTIN_SKILL_SPECS: &[BuiltinSkillSpec] = &[
         group: BuiltinSkillGroup::Canvas,
     },
     BuiltinSkillSpec {
-        dir_name: "docx",
-        group: BuiltinSkillGroup::Office,
+        dir_name: "create-bitfun-skin",
+        group: BuiltinSkillGroup::Meta,
     },
     BuiltinSkillSpec {
         dir_name: "find-skills",
@@ -119,15 +119,7 @@ pub(super) const BUILTIN_SKILL_SPECS: &[BuiltinSkillSpec] = &[
         group: BuiltinSkillGroup::Gstack,
     },
     BuiltinSkillSpec {
-        dir_name: "pdf",
-        group: BuiltinSkillGroup::Office,
-    },
-    BuiltinSkillSpec {
         dir_name: "ppt-design",
-        group: BuiltinSkillGroup::Office,
-    },
-    BuiltinSkillSpec {
-        dir_name: "pptx",
         group: BuiltinSkillGroup::Office,
     },
     BuiltinSkillSpec {

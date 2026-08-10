@@ -222,9 +222,9 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
           !line.startsWith('--- ') && !line.startsWith('+++ ')) {
         lineNumber++;
         diffLines.push(
-          <div key={index} className={`bitfun-git-diff-view__diff-line bitfun-git-diff-view__diff-line--${lineType}`}>
-            <span className="bitfun-git-diff-view__line-number">{lineNumber}</span>
-            <span className="bitfun-git-diff-view__line-content">{content}</span>
+          <div data-bf-component="git-diff-view" data-bf-part="diffLine" key={index} className={`bitfun-git-diff-view__diff-line bitfun-git-diff-view__diff-line--${lineType}`}>
+            <span data-bf-component="git-diff-view" data-bf-part="lineNumber" className="bitfun-git-diff-view__line-number">{lineNumber}</span>
+            <span data-bf-component="git-diff-view" data-bf-part="lineContent" className="bitfun-git-diff-view__line-content">{content}</span>
           </div>
         );
       }
@@ -242,8 +242,8 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
 
   if (loading) {
     return (
-      <div className={`bitfun-git-diff-view ${className}`}>
-        <div className="bitfun-git-diff-view__loading-state">
+      <div className={`bitfun-git-diff-view ${className}`} data-bf-component="git-diff-view" data-bf-part="root" data-bf-state="loading">
+        <div data-bf-component="git-diff-view" data-bf-part="loading" className="bitfun-git-diff-view__loading-state">
           <div className="bitfun-git-diff-view__loading-spinner" />
           <p>{t('diffView.loading')}</p>
         </div>
@@ -253,8 +253,8 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
 
   if (error) {
     return (
-      <div className={`bitfun-git-diff-view ${className}`}>
-        <div className="bitfun-git-diff-view__error-state">
+      <div className={`bitfun-git-diff-view ${className}`} data-bf-component="git-diff-view" data-bf-part="root" data-bf-state="error">
+        <div data-bf-component="git-diff-view" data-bf-part="error" className="bitfun-git-diff-view__error-state">
           <FileText size={48} />
           <h3>{t('diffView.loadFailedTitle')}</h3>
           <p>{error}</p>
@@ -267,23 +267,29 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
   }
 
   return (
-    <div className={`bitfun-git-diff-view ${className}`}>
-      <div className="bitfun-git-diff-view__header">
-        <div className="bitfun-git-diff-view__header-left">
+    <div className={`bitfun-git-diff-view ${className}`} data-bf-component="git-diff-view" data-bf-part="root">
+      <div className="bitfun-git-diff-view__header" data-bf-component="git-diff-view" data-bf-part="header">
+        <div data-bf-component="git-diff-view" data-bf-part="headerLeft" className="bitfun-git-diff-view__header-left">
           {sourceCommit && targetCommit && (
             <span className="bitfun-git-diff-view__commit-range">
               {sourceCommit.substring(0, 7)}...{targetCommit.substring(0, 7)}
             </span>
           )}
           {!sourceCommit && !targetCommit && (
-            <div className="bitfun-git-diff-view__diff-type-switcher">
+            <div data-bf-component="git-diff-view" data-bf-part="typeSwitcher" className="bitfun-git-diff-view__diff-type-switcher">
               <button 
+                data-bf-component="git-diff-view"
+                data-bf-part="typeOption"
+                data-bf-state={!currentShowStaged ? 'active' : undefined}
                 className={`bitfun-git-diff-view__type-btn ${!currentShowStaged ? 'bitfun-git-diff-view__type-btn--active' : ''}`}
                 onClick={() => setCurrentShowStaged(false)}
               >
                 {t('diffView.workingTree')}
               </button>
               <button 
+                data-bf-component="git-diff-view"
+                data-bf-part="typeOption"
+                data-bf-state={currentShowStaged ? 'active' : undefined}
                 className={`bitfun-git-diff-view__type-btn ${currentShowStaged ? 'bitfun-git-diff-view__type-btn--active' : ''}`}
                 onClick={() => setCurrentShowStaged(true)}
               >
@@ -299,7 +305,7 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
           )}
         </div>
         
-        <div className="bitfun-git-diff-view__header-right">
+        <div data-bf-component="git-diff-view" data-bf-part="headerRight" className="bitfun-git-diff-view__header-right">
           <div className="bitfun-git-diff-view__view-options">
             <IconButton
               onClick={toggleAllExpansion}
@@ -322,9 +328,9 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
         </div>
       </div>
 
-      <div className="bitfun-git-diff-view__content">
+      <div className="bitfun-git-diff-view__content" data-bf-component="git-diff-view" data-bf-part="content">
         {error ? (
-          <div className="bitfun-git-diff-view__error-state">
+          <div data-bf-component="git-diff-view" data-bf-part="error" data-bf-state="error" className="bitfun-git-diff-view__error-state">
             <div className="error-icon">
               <AlertCircle size={20} />
             </div>
@@ -336,19 +342,21 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
             </Button>
           </div>
         ) : loading ? (
-          <div className="bitfun-git-diff-view__loading-state">
+          <div data-bf-component="git-diff-view" data-bf-part="loading" data-bf-state="loading" className="bitfun-git-diff-view__loading-state">
             <div className="bitfun-git-diff-view__loading-spinner" />
             <p>{t('diffView.loadingData')}</p>
           </div>
         ) : diffFiles.length > 0 ? (
-          <div className="bitfun-git-diff-view__file-list">
+          <div data-bf-component="git-diff-view" data-bf-part="fileList" className="bitfun-git-diff-view__file-list">
             {diffFiles.map((file, index) => (
-              <div key={file.path} className="bitfun-git-diff-view__file-item">
+              <div data-bf-component="git-diff-view" data-bf-part="file" data-bf-state={file.expanded ? 'expanded' : undefined} key={file.path} className="bitfun-git-diff-view__file-item">
                 <div 
+                  data-bf-component="git-diff-view"
+                  data-bf-part="fileHeader"
                   className="bitfun-git-diff-view__file-header"
                   onClick={() => toggleFileExpansion(index)}
                 >
-                  <div className="bitfun-git-diff-view__file-info">
+                  <div data-bf-component="git-diff-view" data-bf-part="fileInfo" className="bitfun-git-diff-view__file-info">
                     <span className={`bitfun-git-diff-view__expand-icon ${file.expanded ? 'bitfun-git-diff-view__expand-icon--expanded' : ''}`}>
                       {file.expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                     </span>
@@ -366,7 +374,7 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
                     )}
                   </div>
                   
-                  <div className="bitfun-git-diff-view__file-stats">
+                  <div data-bf-component="git-diff-view" data-bf-part="fileStats" className="bitfun-git-diff-view__file-stats">
                     {file.additions > 0 && (
                       <span className="bitfun-git-diff-view__additions">
                         <Plus size={12} />
@@ -383,7 +391,7 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
                 </div>
                 
                 {file.expanded && (
-                  <div className="bitfun-git-diff-view__diff-content">
+                  <div data-bf-component="git-diff-view" data-bf-part="diffContent" className="bitfun-git-diff-view__diff-content">
                     {renderDiffContent(file.diff)}
                   </div>
                 )}
@@ -391,7 +399,7 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
             ))}
           </div>
         ) : (
-          <div className="bitfun-git-diff-view__empty-state">
+          <div data-bf-component="git-diff-view" data-bf-part="empty" className="bitfun-git-diff-view__empty-state">
             <FileText size={48} />
             <h3>{t('diffView.empty.title')}</h3>
             <p>

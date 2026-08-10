@@ -1,0 +1,59 @@
+import React, { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { JSDOM } from 'jsdom';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { Notification } from '../types';
+import { NotificationItem } from './NotificationItem';
+
+vi.mock('@/infrastructure/i18n', () => ({
+  useI18n: () => ({ t: (key: string) => key }),
+}));
+
+vi.mock('../services/NotificationService', () => ({
+  notificationService: { dismiss: vi.fn() },
+}));
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+describe('NotificationItem accessibility', () => {
+  let dom: JSDOM;
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>');
+    globalThis.window = dom.window as unknown as Window & typeof globalThis;
+    globalThis.document = dom.window.document;
+    container = document.getElementById('root') as HTMLDivElement;
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    dom.window.close();
+  });
+
+  it('announces an actionable error while focus remains in the composer', () => {
+    const notification: Notification = {
+      id: 'session-conflict',
+      type: 'error',
+      variant: 'toast',
+      title: 'Session is in use',
+      message: 'Close the other instance and retry.',
+      timestamp: 1,
+      duration: 0,
+      closable: true,
+      actions: [{ label: 'Retry', onClick: vi.fn() }],
+      status: 'active',
+    };
+
+    act(() => root.render(<NotificationItem notification={notification} />));
+
+    const item = container.querySelector('.notification-item');
+    expect(item?.getAttribute('role')).toBe('alert');
+    expect(item?.getAttribute('aria-live')).toBe('assertive');
+    expect(item?.getAttribute('aria-atomic')).toBe('true');
+    expect(container.querySelector('button.notification-item__action')?.textContent).toBe('Retry');
+  });
+});

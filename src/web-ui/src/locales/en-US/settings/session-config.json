@@ -20,8 +20,8 @@
   },
   "permissionPolicy": {
     "sectionTitle": "Tool permissions",
-    "sectionDescription": "Choose the default tool access policy and how permission prompts are handled.",
-    "mode": "Permission mode",
+    "sectionDescription": "Choose the default tool access policy for sessions and how permission prompts are handled.",
+    "mode": "Default permission mode",
     "ask": "Ask for confirmation",
     "askDescription": "External access, file changes, and command execution require confirmation.",
     "fullAccess": "Full access",
@@ -32,6 +32,8 @@
     "cancel": "Cancel",
     "autoApprove": "Auto approve",
     "autoApproveDescription": "Automatically approve requests that require confirmation.",
+    "showInChatInput": "Show permission mode selector",
+    "showInChatInputDescription": "Show the selector below the chat input, where the mode applies to the current session only. Hiding it does not change any session's permission mode.",
     "globalRules": "Global rules",
     "globalRulesDescription": "Define user-level rules that apply after the selected mode and before project and Agent rules.",
     "manageGlobalRules": "Manage rules",
@@ -49,7 +51,8 @@
     "removeGlobalRule": "Remove rule",
     "discardGlobalRules": "Discard changes",
     "saveGlobalRules": "Save rules",
-    "globalRulesEffects": { "allow": "Allow", "ask": "Ask", "deny": "Deny" }
+    "globalRulesEffects": { "allow": "Allow", "ask": "Ask", "deny": "Deny" },
+    "modeDescription": "Applies to sessions that have not chosen their own mode. Each session can override it from the chat input."
   },
   "projectPermissions": {
     "description": "Always allow decisions are saved as remembered grants for the current project; static project rules apply before a tool runs.",
@@ -96,7 +99,7 @@
     "sectionTitle": "Computer use (desktop)",
     "sectionDescription": "In the BitFun desktop app, the assistant can capture the screen and control the mouse and keyboard; requires a multimodal model for vision.",
     "enable": "Enable Computer use",
-    "enableDesc": "When off, the ComputerUse tool stays disabled in every session mode.",
+    "enableDesc": "When off, the ComputerUse tool stays disabled in every session mode. Browser control (ControlHub) is not yet gated by this switch.",
     "accessibility": "Accessibility",
     "accessibilityDesc": "macOS: lets BitFun read on-screen UI elements and send mouse/keyboard input to other apps. Not applicable on Windows; on Linux this requires an X11 session.",
     "screenCapture": "Screen recording",

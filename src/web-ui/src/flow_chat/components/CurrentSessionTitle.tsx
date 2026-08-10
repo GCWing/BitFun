@@ -52,10 +52,12 @@ const CurrentSessionTitle: React.FC<CurrentSessionTitleProps> = ({ onCreateSessi
   const newSessionLabel = t('session.newCode');
 
   return (
-    <div className="bitfun-current-session-title">
-      <span className="bitfun-current-session-title__text">{title}</span>
+    <div data-bf-component="current-session-title" data-bf-part="root" className="bitfun-current-session-title">
+      <span data-bf-component="current-session-title" data-bf-part="title" className="bitfun-current-session-title__text">{title}</span>
       <Tooltip content={newSessionLabel} placement="bottom">
         <button
+          data-bf-component="current-session-title"
+          data-bf-part="create"
           className="bitfun-current-session-title__create-btn"
           onClick={handleCreateSession}
           aria-label={newSessionLabel}

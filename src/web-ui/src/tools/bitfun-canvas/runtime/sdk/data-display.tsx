@@ -77,11 +77,11 @@ export function Alert({
         display: 'grid',
         gridTemplateColumns: showIcon ? '18px minmax(0, 1fr)' : 'minmax(0, 1fr)',
         gap: 9,
-        border: '1px solid var(--border-subtle)',
+        border: '1px solid var(--bf-appearance-token-border-subtle)',
         borderLeft: `3px solid ${color}`,
         borderRadius: 8,
         padding: '10px 12px',
-        background: 'color-mix(in srgb, var(--element-bg-subtle) 78%, transparent)',
+        background: 'color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 78%, transparent)',
         ...style,
       }}
     >
@@ -104,17 +104,17 @@ export function Alert({
       ) : null}
       <span style={{ minWidth: 0, display: 'grid', gap: 3 }}>
         {title ? (
-          <strong style={{ color: 'var(--color-text-primary)', fontSize: 13, lineHeight: 1.35 }}>
+          <strong style={{ color: 'var(--bf-appearance-token-color-text-primary)', fontSize: 13, lineHeight: 1.35 }}>
             {title}
           </strong>
         ) : null}
         {message || children ? (
-          <span style={{ color: 'var(--color-text-secondary)', fontSize: 12, overflowWrap: 'anywhere' }}>
+          <span style={{ color: 'var(--bf-appearance-token-color-text-secondary)', fontSize: 12, overflowWrap: 'anywhere' }}>
             {message ?? children}
           </span>
         ) : null}
         {description ? (
-          <span style={{ color: 'var(--color-text-muted)', fontSize: 12, overflowWrap: 'anywhere' }}>
+          <span style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 12, overflowWrap: 'anywhere' }}>
             {description}
           </span>
         ) : null}
@@ -136,7 +136,7 @@ export function Stat({ value, label, tone, style, ...props }: CanvasStatProps) {
       >
         {value}
       </strong>
-      <span style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>{label}</span>
+      <span style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 12 }}>{label}</span>
     </div>
   );
 }
@@ -177,7 +177,7 @@ export function Table({
             <tr
               key={rowIndex}
               style={{
-                background: striped && rowIndex % 2 === 1 ? 'var(--element-bg-subtle)' : undefined,
+                background: striped && rowIndex % 2 === 1 ? 'var(--bf-appearance-token-element-bg-subtle)' : undefined,
               }}
             >
               {headers.map((_, index) => (
@@ -202,7 +202,7 @@ export function Table({
           ))
         ) : (
           <tr>
-            <td colSpan={headers.length || 1} style={{ color: 'var(--color-text-muted)' }}>
+            <td colSpan={headers.length || 1} style={{ color: 'var(--bf-appearance-token-color-text-muted)' }}>
               {emptyMessage}
             </td>
           </tr>
@@ -257,7 +257,7 @@ export function CollapsibleSection({
           border: 0,
           padding: '4px 0',
           background: 'transparent',
-          color: 'var(--color-text-primary)',
+          color: 'var(--bf-appearance-token-color-text-primary)',
           font: 'inherit',
           cursor: 'pointer',
           textAlign: 'left',
@@ -271,7 +271,7 @@ export function CollapsibleSection({
             height: 12,
             display: 'inline-grid',
             placeItems: 'center',
-            color: 'var(--color-text-muted)',
+            color: 'var(--bf-appearance-token-color-text-muted)',
             transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
             transition: 'transform 120ms ease',
           }}
@@ -285,7 +285,7 @@ export function CollapsibleSection({
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
-            color: 'var(--color-text-primary)',
+            color: 'var(--bf-appearance-token-color-text-primary)',
             fontSize: 13,
             fontWeight: 650,
           }}
@@ -293,11 +293,11 @@ export function CollapsibleSection({
           {title}
         </span>
         {count !== undefined ? (
-          <span style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>{count}</span>
+          <span style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 12 }}>{count}</span>
         ) : null}
         <span style={{ flex: '1 1 auto', minWidth: 0 }} />
         {trailing ? (
-          <span style={{ flex: '0 0 auto', color: 'var(--color-text-muted)', fontSize: 12 }}>
+          <span style={{ flex: '0 0 auto', color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 12 }}>
             {trailing}
           </span>
         ) : null}
@@ -327,8 +327,8 @@ export function DiffStats({ additions = 0, deletions = 0, style, ...props }: Can
         ...style,
       }}
     >
-      {addCount ? <span style={{ color: 'var(--color-success)' }}>+{addCount}</span> : null}
-      {delCount ? <span style={{ color: 'var(--color-error)' }}>-{delCount}</span> : null}
+      {addCount ? <span style={{ color: 'var(--bf-appearance-token-color-success)' }}>+{addCount}</span> : null}
+      {delCount ? <span style={{ color: 'var(--bf-appearance-token-color-error)' }}>-{delCount}</span> : null}
     </span>
   );
 }
@@ -347,15 +347,15 @@ export function DiffView({
         const type = line?.type;
         const accent =
           type === 'added' || type === 'addition'
-            ? 'var(--color-success)'
+            ? 'var(--bf-appearance-token-color-success)'
             : type === 'removed' || type === 'removal'
-              ? 'var(--color-error)'
+              ? 'var(--bf-appearance-token-color-error)'
               : 'transparent';
         const bg =
-          accent === 'var(--color-success)'
-            ? 'color-mix(in srgb, var(--color-success) 12%, transparent)'
-            : accent === 'var(--color-error)'
-              ? 'color-mix(in srgb, var(--color-error) 12%, transparent)'
+          accent === 'var(--bf-appearance-token-color-success)'
+            ? 'color-mix(in srgb, var(--bf-appearance-token-color-success) 12%, transparent)'
+            : accent === 'var(--bf-appearance-token-color-error)'
+              ? 'color-mix(in srgb, var(--bf-appearance-token-color-error) 12%, transparent)'
               : 'transparent';
         return (
           <div
@@ -372,7 +372,7 @@ export function DiffView({
             {showLineNumbers ? (
               <span
                 style={{
-                  color: coloredLineNumbers && accent !== 'transparent' ? accent : 'var(--color-text-muted)',
+                  color: coloredLineNumbers && accent !== 'transparent' ? accent : 'var(--bf-appearance-token-color-text-muted)',
                   textAlign: 'right',
                   padding: '0 8px',
                   userSelect: 'none',
@@ -383,13 +383,13 @@ export function DiffView({
             ) : null}
             <span
               style={{
-                color: accent === 'transparent' ? 'var(--color-text-muted)' : accent,
+                color: accent === 'transparent' ? 'var(--bf-appearance-token-color-text-muted)' : accent,
                 userSelect: 'none',
               }}
             >
-              {accent === 'var(--color-success)' ? '+' : accent === 'var(--color-error)' ? '-' : ' '}
+              {accent === 'var(--bf-appearance-token-color-success)' ? '+' : accent === 'var(--bf-appearance-token-color-error)' ? '-' : ' '}
             </span>
-            <span style={{ paddingRight: 10, color: 'var(--color-text-primary)' }}>
+            <span style={{ paddingRight: 10, color: 'var(--bf-appearance-token-color-text-primary)' }}>
               {line?.content || ''}
             </span>
           </div>
@@ -437,13 +437,13 @@ export function KeyValueList({
             style={{
               minWidth: 0,
               padding: compact ? '0 0 6px' : '8px 0',
-              borderBottom: '1px solid var(--border-subtle)',
+              borderBottom: '1px solid var(--bf-appearance-token-border-subtle)',
             }}
           >
             <dt
               style={{
                 margin: 0,
-                color: 'var(--color-text-muted)',
+                color: 'var(--bf-appearance-token-color-text-muted)',
                 fontSize: 11,
                 lineHeight: 1.35,
               }}
@@ -465,7 +465,7 @@ export function KeyValueList({
           </div>
         ))
       ) : (
-        <div style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>{emptyMessage}</div>
+        <div style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 12 }}>{emptyMessage}</div>
       )}
     </dl>
   );
@@ -523,17 +523,17 @@ export function Timeline({
                     minWidth: 0,
                   }}
                 >
-                  <strong style={{ minWidth: 0, color: 'var(--color-text-primary)', fontSize: 13 }}>
+                  <strong style={{ minWidth: 0, color: 'var(--bf-appearance-token-color-text-primary)', fontSize: 13 }}>
                     {item.title}
                   </strong>
                   {item.time ? (
-                    <time style={{ flex: '0 0 auto', color: 'var(--color-text-muted)', fontSize: 11 }}>
+                    <time style={{ flex: '0 0 auto', color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 11 }}>
                       {item.time}
                     </time>
                   ) : null}
                 </span>
                 {item.description ? (
-                  <span style={{ color: 'var(--color-text-secondary)', fontSize: 12, overflowWrap: 'anywhere' }}>
+                  <span style={{ color: 'var(--bf-appearance-token-color-text-secondary)', fontSize: 12, overflowWrap: 'anywhere' }}>
                     {item.description}
                   </span>
                 ) : null}
@@ -542,7 +542,7 @@ export function Timeline({
           );
         })
       ) : (
-        <li style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>{emptyMessage}</li>
+        <li style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 12 }}>{emptyMessage}</li>
       )}
     </ol>
   );
@@ -567,14 +567,14 @@ function renderFileTreeItems(items: CanvasFileTreeItem[], depth: number, default
           paddingLeft: depth * 16,
         }}
       >
-        <span style={{ flex: '0 0 auto', width: 14, color: isFolder ? 'var(--color-accent-500)' : 'var(--color-text-muted)' }}>
+        <span style={{ flex: '0 0 auto', width: 14, color: isFolder ? 'var(--bf-appearance-token-color-accent-500)' : 'var(--bf-appearance-token-color-text-muted)' }}>
           {isFolder ? '▸' : '•'}
         </span>
         <span
           style={{
             minWidth: 0,
             color: toneColor(item.tone),
-            fontFamily: 'var(--font-family-mono)',
+            fontFamily: 'var(--bf-appearance-token-font-family-mono)',
             fontSize: 12,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -584,7 +584,7 @@ function renderFileTreeItems(items: CanvasFileTreeItem[], depth: number, default
           {item.name ?? item.path}
         </span>
         {item.meta ? (
-          <span style={{ flex: '0 0 auto', marginLeft: 'auto', color: 'var(--color-text-muted)', fontSize: 11 }}>
+          <span style={{ flex: '0 0 auto', marginLeft: 'auto', color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 11 }}>
             {item.meta}
           </span>
         ) : null}
@@ -618,15 +618,15 @@ export function FileTree({
       style={{
         minWidth: 0,
         overflow: 'auto',
-        border: '1px solid var(--border-subtle)',
+        border: '1px solid var(--bf-appearance-token-border-subtle)',
         borderRadius: 8,
         padding: '8px 10px',
-        background: 'color-mix(in srgb, var(--color-bg-secondary) 70%, transparent)',
+        background: 'color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 70%, transparent)',
         ...style,
       }}
     >
       {items.length ? renderFileTreeItems(items, 0, defaultExpanded) : (
-        <div style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>{emptyMessage}</div>
+        <div style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 12 }}>{emptyMessage}</div>
       )}
     </div>
   );
@@ -654,7 +654,7 @@ export function ProgressBar({
             justifyContent: 'space-between',
             gap: 10,
             marginBottom: 5,
-            color: 'var(--color-text-secondary)',
+            color: 'var(--bf-appearance-token-color-text-secondary)',
             fontSize: 12,
           }}
         >
@@ -671,7 +671,7 @@ export function ProgressBar({
           height: 8,
           overflow: 'hidden',
           borderRadius: 999,
-          background: 'var(--element-bg-medium)',
+          background: 'var(--bf-appearance-token-element-bg-medium)',
         }}
       >
         <div
@@ -703,7 +703,7 @@ export function Swatch({
         height: 12,
         borderRadius: 3,
         background: categoryColor(color),
-        border: '1px solid var(--border-subtle)',
+        border: '1px solid var(--bf-appearance-token-border-subtle)',
         flex: '0 0 auto',
         ...style,
       }}
@@ -742,7 +742,7 @@ export function UsageBar({
             justifyContent: 'space-between',
             gap: 12,
             marginBottom: 6,
-            color: 'var(--color-text-secondary)',
+            color: 'var(--bf-appearance-token-color-text-secondary)',
             fontSize: 12,
             lineHeight: 1.35,
           }}
@@ -762,7 +762,7 @@ export function UsageBar({
           height: 10,
           overflow: 'hidden',
           borderRadius: 999,
-          background: 'var(--element-bg-medium)',
+          background: 'var(--bf-appearance-token-element-bg-medium)',
           padding: 1,
         }}
       >
@@ -788,7 +788,7 @@ export function UsageBar({
               flex: `${remainder} 1 0`,
               minWidth: 2,
               borderRadius: 999,
-              background: 'var(--element-bg-soft)',
+              background: 'var(--bf-appearance-token-element-bg-soft)',
             }}
           />
         ) : null}
@@ -798,10 +798,10 @@ export function UsageBar({
 }
 
 function todoStatusColor(status: CanvasTodoItem['status']) {
-  if (status === 'completed') return 'var(--color-success)';
-  if (status === 'in_progress') return 'var(--color-warning)';
-  if (status === 'cancelled') return 'var(--color-text-muted)';
-  return 'var(--color-text-muted)';
+  if (status === 'completed') return 'var(--bf-appearance-token-color-success)';
+  if (status === 'in_progress') return 'var(--bf-appearance-token-color-warning)';
+  if (status === 'cancelled') return 'var(--bf-appearance-token-color-text-muted)';
+  return 'var(--bf-appearance-token-color-text-muted)';
 }
 
 function todoStatusLabel(status: CanvasTodoItem['status']) {
@@ -832,7 +832,7 @@ function TodoMarker({ status }: { status: CanvasTodoItem['status'] }) {
         borderRadius: status === 'in_progress' ? 999 : 3,
         border: `1.5px solid ${color}`,
         background: isCompleted ? color : 'transparent',
-        color: 'var(--color-bg-primary)',
+        color: 'var(--bf-appearance-token-color-bg-primary)',
         fontSize: 10,
         lineHeight: 1,
         fontWeight: 800,
@@ -876,7 +876,7 @@ export function TodoList({
           borderRadius: 6,
           padding: '6px 7px',
           background: 'transparent',
-          color: 'var(--color-text-primary)',
+          color: 'var(--bf-appearance-token-color-text-primary)',
           font: 'inherit',
           textAlign: 'left' as const,
           opacity: isDimmed ? 0.5 : 1,
@@ -888,7 +888,7 @@ export function TodoList({
             <span style={{ minWidth: 0, display: 'grid', gap: 2 }}>
               <span
                 style={{
-                  color: todo.status === 'completed' ? 'var(--color-text-secondary)' : 'var(--color-text-primary)',
+                  color: todo.status === 'completed' ? 'var(--bf-appearance-token-color-text-secondary)' : 'var(--bf-appearance-token-color-text-primary)',
                   fontSize: 12,
                   lineHeight: 1.45,
                   textDecoration: todo.status === 'completed' ? 'line-through' : undefined,
@@ -940,9 +940,9 @@ export function TodoListCard({
       {...props}
       className={['bf-todo-list-card', props.className].filter(Boolean).join(' ')}
       style={{
-        border: '1px solid var(--border-subtle)',
+        border: '1px solid var(--bf-appearance-token-border-subtle)',
         borderRadius: 8,
-        background: 'var(--color-bg-elevated)',
+        background: 'var(--bf-appearance-token-color-bg-elevated)',
         overflow: 'hidden',
         ...style,
       }}
@@ -958,9 +958,9 @@ export function TodoListCard({
           alignItems: 'center',
           gap: 8,
           border: 0,
-          borderBottom: open ? '1px solid var(--border-subtle)' : 0,
+          borderBottom: open ? '1px solid var(--bf-appearance-token-border-subtle)' : 0,
           background: 'transparent',
-          color: 'var(--color-text-primary)',
+          color: 'var(--bf-appearance-token-color-text-primary)',
           padding: '8px 10px',
           font: 'inherit',
           cursor: 'pointer',
@@ -970,14 +970,14 @@ export function TodoListCard({
         <span
           aria-hidden="true"
           style={{
-            color: 'var(--color-text-muted)',
+            color: 'var(--bf-appearance-token-color-text-muted)',
             transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
           }}
         >
           ›
         </span>
         <span style={{ fontWeight: 650, fontSize: 12 }}>Tasks</span>
-        <span style={{ marginLeft: 'auto', color: 'var(--color-text-muted)', fontSize: 12 }}>
+        <span style={{ marginLeft: 'auto', color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 12 }}>
           {completed}/{todos.length} done
         </span>
       </button>

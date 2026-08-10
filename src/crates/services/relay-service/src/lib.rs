@@ -1188,6 +1188,10 @@ pub fn build_relay_router_with_page_data_origins_and_page_auth(
         .route("/api/auth/login", post(routes::auth::login))
         .route("/api/auth/logout", post(routes::auth::logout))
         .route("/api/auth/delegate", post(routes::auth::delegate))
+        .route(
+            "/api/auth/provision-device",
+            post(routes::auth::provision_device),
+        )
         .route("/api/rooms/{room_id}/pair", post(routes::api::pair))
         .route(
             "/api/rooms/{room_id}/command",

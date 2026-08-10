@@ -542,6 +542,41 @@ pub enum ExternalMcpStaticStatus {
     Invalid { reason: String },
 }
 
+/// Largest timeout that remains exact across Rust, JSON, GUI, and TUI surfaces.
+pub const MAX_EXTERNAL_MCP_TIMEOUT_MS: u64 = 9_007_199_254_740_991;
+
+/// Explicit lifecycle timeout overrides disclosed by an external MCP source.
+/// Missing phases retain the product runtime's existing behavior.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpTimeouts {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub startup_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub catalog_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_ms: Option<u64>,
+}
+
+impl ExternalMcpTimeouts {
+    pub fn is_empty(&self) -> bool {
+        self.startup_ms.is_none() && self.catalog_ms.is_none() && self.execution_ms.is_none()
+    }
+
+    pub fn validate(&self) -> Result<(), ExternalSourceContractError> {
+        if [self.startup_ms, self.catalog_ms, self.execution_ms]
+            .into_iter()
+            .flatten()
+            .any(|timeout| timeout == 0 || timeout > MAX_EXTERNAL_MCP_TIMEOUT_MS)
+        {
+            return Err(ExternalSourceContractError::InvalidIdentifier(
+                "MCP timeout",
+            ));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalMcpServerDefinition {
@@ -566,6 +601,8 @@ pub struct ExternalMcpServerDefinition {
     pub remote_url_preview: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub header_names: Vec<String>,
+    #[serde(default, skip_serializing_if = "ExternalMcpTimeouts::is_empty")]
+    pub timeouts: ExternalMcpTimeouts,
     pub source_enabled: bool,
     pub behavior_version: String,
     pub static_status: ExternalMcpStaticStatus,
@@ -606,6 +643,7 @@ impl ExternalMcpServerDefinition {
         if let Some(url) = &self.remote_url_preview {
             validate_text(url, "MCP remote URL preview")?;
         }
+        self.timeouts.validate()?;
         let mut environment_keys = BTreeSet::new();
         for key in &self.environment_keys {
             validate_id(key, "MCP environment key")?;
@@ -810,7 +848,198 @@ impl fmt::Debug for PreparedExternalMcpTransport {
 pub struct PreparedExternalMcpServer {
     pub id: SourceQualifiedMcpServerId,
     pub behavior_version: String,
+    pub timeouts: ExternalMcpTimeouts,
     pub transport: PreparedExternalMcpTransport,
+}
+
+/// Private, provider-owned projection for copying a supported external MCP
+/// declaration into native user configuration. It is intentionally not
+/// serializable so command arguments and URLs cannot cross the product API.
+#[derive(Clone, PartialEq, Eq)]
+pub enum PreparedExternalMcpImportTransport {
+    Local { command: String, args: Vec<String> },
+    Remote { url: String },
+}
+
+impl fmt::Debug for PreparedExternalMcpImportTransport {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Local { args, .. } => formatter
+                .debug_struct("Local")
+                .field("command", &"[REDACTED]")
+                .field("argument_count", &args.len())
+                .finish(),
+            Self::Remote { .. } => formatter
+                .debug_struct("Remote")
+                .field("url", &"[REDACTED]")
+                .finish(),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct PreparedExternalMcpImportServer {
+    pub id: SourceQualifiedMcpServerId,
+    pub behavior_version: String,
+    pub transport: PreparedExternalMcpImportTransport,
+}
+
+impl fmt::Debug for PreparedExternalMcpImportServer {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PreparedExternalMcpImportServer")
+            .field("id", &self.id)
+            .field("behavior_version", &self.behavior_version)
+            .field("transport", &self.transport)
+            .finish()
+    }
+}
+
+impl PreparedExternalMcpImportServer {
+    pub fn validate(&self) -> Result<(), ExternalSourceContractError> {
+        validate_text(
+            &self.behavior_version,
+            "prepared MCP import behavior version",
+        )?;
+        match &self.transport {
+            PreparedExternalMcpImportTransport::Local { command, args } => {
+                validate_text(command, "prepared MCP import command")?;
+                if args.len() > 256 {
+                    return Err(ExternalSourceContractError::InvalidIdentifier(
+                        "prepared MCP import argument count",
+                    ));
+                }
+                for argument in args {
+                    validate_text(argument, "prepared MCP import argument")?;
+                }
+            }
+            PreparedExternalMcpImportTransport::Remote { url } => {
+                validate_text(url, "prepared MCP import URL")?;
+                let parsed = url::Url::parse(url).map_err(|_| {
+                    ExternalSourceContractError::InvalidIdentifier("prepared MCP import URL")
+                })?;
+                if parsed.scheme() != "https"
+                    || parsed.host_str().is_none()
+                    || !parsed.username().is_empty()
+                    || parsed.password().is_some()
+                    || parsed.query().is_some()
+                    || parsed.fragment().is_some()
+                {
+                    return Err(ExternalSourceContractError::InvalidIdentifier(
+                        "prepared MCP import URL",
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+pub const EXTERNAL_MCP_IMPORT_SCHEMA_V1: u16 = 1;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExternalMcpImportDispositionV1 {
+    Eligible,
+    AutomaticRename,
+    AlreadyImported,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpImportPlanItemV1 {
+    pub candidate_id: String,
+    pub display_name: String,
+    pub transport: ExternalMcpTransportKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proposed_native_id: Option<String>,
+    pub disposition: ExternalMcpImportDispositionV1,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason_code: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpImportPlanV1 {
+    pub schema_version: u16,
+    pub plan_fingerprint: String,
+    pub items: Vec<ExternalMcpImportPlanItemV1>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpImportSelectionV1 {
+    pub candidate_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requested_native_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpImportApplyRequestV1 {
+    pub schema_version: u16,
+    pub plan_fingerprint: String,
+    pub selections: Vec<ExternalMcpImportSelectionV1>,
+}
+
+impl ExternalMcpImportApplyRequestV1 {
+    pub fn validate(&self) -> Result<(), ExternalSourceContractError> {
+        if self.schema_version != EXTERNAL_MCP_IMPORT_SCHEMA_V1
+            || self.selections.is_empty()
+            || self.selections.len() > 256
+        {
+            return Err(ExternalSourceContractError::InvalidIdentifier(
+                "external MCP import request",
+            ));
+        }
+        validate_text(
+            &self.plan_fingerprint,
+            "external MCP import plan fingerprint",
+        )?;
+        let mut candidate_ids = BTreeSet::new();
+        for selection in &self.selections {
+            validate_text(&selection.candidate_id, "external MCP import candidate id")?;
+            if !candidate_ids.insert(&selection.candidate_id) {
+                return Err(ExternalSourceContractError::InvalidIdentifier(
+                    "external MCP import selection",
+                ));
+            }
+            if let Some(native_id) = &selection.requested_native_id {
+                validate_text(native_id, "external MCP native id")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpImportedItemV1 {
+    pub candidate_id: String,
+    pub native_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "status",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum ExternalMcpImportApplyOutcomeV1 {
+    Applied {
+        imported: Vec<ExternalMcpImportedItemV1>,
+    },
+    Stale {
+        refreshed_plan: ExternalMcpImportPlanV1,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpImportApplyResultV1 {
+    pub schema_version: u16,
+    pub outcome: ExternalMcpImportApplyOutcomeV1,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -902,6 +1131,19 @@ pub trait ExternalMcpSourceProvider: Send + Sync {
         server_id: &SourceQualifiedMcpServerId,
         expected_behavior_version: &str,
     ) -> Result<PreparedExternalMcpServer, ExternalSourceProviderError>;
+
+    fn prepare_import(
+        &self,
+        _input: &ExternalMcpDiscoveryInput,
+        _server_id: &SourceQualifiedMcpServerId,
+        _expected_behavior_version: &str,
+    ) -> Result<PreparedExternalMcpImportServer, ExternalSourceProviderError> {
+        Err(ExternalSourceProviderError::new(
+            "external_mcp.import_unsupported",
+            "This MCP provider does not expose an import-safe projection",
+            false,
+        ))
+    }
 
     fn watch_roots(&self, context: &ExternalSourceContext) -> Vec<ExternalWatchRoot>;
 }
@@ -1168,6 +1410,7 @@ pub enum ExternalSourceAssetKind {
     Subagent,
     Mcp,
     Hook,
+    Reference,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1270,6 +1513,81 @@ pub enum PromptCommandAvailability {
     },
 }
 
+/// Provider-neutral shell selection semantics carried by a discovered prompt
+/// command. `Preferred` follows OpenCode's fallback behavior, while `Required`
+/// is used for formats such as Claude Code where a declared shell is part of
+/// the command contract.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "mode", rename_all = "snake_case", deny_unknown_fields)]
+pub enum PromptCommandShellPreference {
+    HostDefault,
+    Preferred { executable: String },
+    Required { executable: String },
+    RequiredOneOf { executables: Vec<String> },
+}
+
+impl PromptCommandShellPreference {
+    fn validate(&self) -> Result<(), ExternalSourceContractError> {
+        match self {
+            Self::HostDefault => Ok(()),
+            Self::Preferred { executable } | Self::Required { executable } => {
+                validate_text(executable, "prompt command shell")
+            }
+            Self::RequiredOneOf { executables } => {
+                if executables.is_empty() || executables.len() > 4 {
+                    return Err(ExternalSourceContractError::InvalidText(
+                        "prompt command shell candidates",
+                    ));
+                }
+                for executable in executables {
+                    validate_text(executable, "prompt command shell")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum PromptCommandExecutionTarget {
+    Inline,
+    FreshExternalSubagent {
+        ecosystem_id: EcosystemId,
+        logical_id: String,
+    },
+}
+
+impl Default for PromptCommandExecutionTarget {
+    fn default() -> Self {
+        Self::Inline
+    }
+}
+
+impl PromptCommandExecutionTarget {
+    pub fn is_inline(&self) -> bool {
+        matches!(self, Self::Inline)
+    }
+
+    fn validate(&self) -> Result<(), ExternalSourceContractError> {
+        match self {
+            Self::Inline => Ok(()),
+            Self::FreshExternalSubagent {
+                ecosystem_id,
+                logical_id,
+            } => {
+                validate_id(ecosystem_id.as_str(), "prompt command subagent ecosystem")?;
+                validate_id(logical_id, "prompt command subagent logical id")
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptCommandDefinition {
@@ -1277,6 +1595,13 @@ pub struct PromptCommandDefinition {
     pub name: String,
     pub description: String,
     pub template: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shell_preference: Option<PromptCommandShellPreference>,
+    #[serde(
+        default,
+        skip_serializing_if = "PromptCommandExecutionTarget::is_inline"
+    )]
+    pub execution_target: PromptCommandExecutionTarget,
     pub availability: PromptCommandAvailability,
     /// Version of this command only. Unrelated edits in the same source must
     /// not invalidate a remembered conflict choice.
@@ -1292,6 +1617,10 @@ impl PromptCommandDefinition {
         if self.template.is_empty() || self.template.len() > 256 * 1024 {
             return Err(ExternalSourceContractError::InvalidText("command template"));
         }
+        if let Some(shell) = &self.shell_preference {
+            shell.validate()?;
+        }
+        self.execution_target.validate()?;
         validate_id(&self.content_version, "command content version")
     }
 }
@@ -1300,6 +1629,111 @@ impl PromptCommandDefinition {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExpandedPromptCommand {
     pub content: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PromptCommandShellReviewMode {
+    RunOnce,
+    Remember,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PromptCommandShellReviewDecision {
+    pub plan_fingerprint: String,
+    pub mode: PromptCommandShellReviewMode,
+    pub expected_preference_revision: u64,
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PromptCommandShellReviewPlan {
+    pub schema_version: u32,
+    pub plan_fingerprint: String,
+    pub source_display_name: String,
+    pub working_directory: String,
+    pub shell_display_name: String,
+    pub shell_executable: String,
+    pub commands: Vec<String>,
+    pub can_remember: bool,
+    pub preference_revision: u64,
+}
+
+impl fmt::Debug for PromptCommandShellReviewPlan {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PromptCommandShellReviewPlan")
+            .field("schema_version", &self.schema_version)
+            .field("plan_fingerprint", &self.plan_fingerprint)
+            .field("source_display_name", &self.source_display_name)
+            .field("working_directory", &"[REDACTED]")
+            .field("shell_display_name", &self.shell_display_name)
+            .field("shell_executable", &"[REDACTED]")
+            .field("command_count", &self.commands.len())
+            .field("can_remember", &self.can_remember)
+            .field("preference_revision", &self.preference_revision)
+            .finish()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "state",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum PromptCommandInvocationOutcome {
+    Ready {
+        content: String,
+        execution_target: PromptCommandExecutionTarget,
+    },
+    ReviewRequired {
+        review: PromptCommandShellReviewPlan,
+    },
+}
+
+impl fmt::Debug for PromptCommandInvocationOutcome {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Ready {
+                content,
+                execution_target,
+            } => formatter
+                .debug_struct("Ready")
+                .field("content_bytes", &content.len())
+                .field("execution_target", execution_target)
+                .finish(),
+            Self::ReviewRequired { review } => formatter
+                .debug_struct("ReviewRequired")
+                .field("review", review)
+                .finish(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PromptCommandShellInvocation {
+    pub range_start: usize,
+    pub range_end: usize,
+    pub command: String,
+    pub can_remember: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PromptCommandShellExpansion {
+    pub working_directory: PathBuf,
+    pub preference: PromptCommandShellPreference,
+    pub invocations: Vec<PromptCommandShellInvocation>,
+}
+
+/// Provider-prepared command content plus the narrow set of local workspace
+/// files that Product Assembly must resolve before sending the final prompt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PromptCommandExpansion {
+    pub content: String,
+    pub workspace_file_references: Vec<String>,
+    pub shell: Option<PromptCommandShellExpansion>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1479,9 +1913,10 @@ pub trait PromptCommandSourceProvider: Send + Sync {
 
     fn expand(
         &self,
+        context: &ExternalSourceContext,
         command: &PromptCommandDefinition,
         arguments: &str,
-    ) -> Result<ExpandedPromptCommand, ExternalSourceProviderError>;
+    ) -> Result<PromptCommandExpansion, ExternalSourceProviderError>;
 
     /// Resolves same-ecosystem overlays after product suppression is applied.
     /// The full snapshot is supplied so a provider can preserve native source
@@ -1734,6 +2169,11 @@ pub struct PromptCommandConflictCandidate {
     pub command_description: String,
     pub source_scope: ExternalSourceScope,
     pub source_location: String,
+    #[serde(
+        default,
+        skip_serializing_if = "PromptCommandExecutionTarget::is_inline"
+    )]
+    pub execution_target: PromptCommandExecutionTarget,
     pub availability: PromptCommandAvailability,
 }
 
@@ -1915,6 +2355,12 @@ pub struct ExternalSourceCatalogSnapshot {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub subagents: Vec<crate::external_subagents::ExternalSubagentSummary>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subagent_model_binding_groups:
+        Vec<crate::external_subagents::ExternalSubagentModelBindingGroup>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subagent_model_binding_options:
+        Vec<crate::external_subagents::ExternalSubagentModelBindingOption>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub subagent_conflicts: Vec<crate::external_subagents::ExternalSubagentConflict>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pending_subagent_approvals: Vec<String>,
@@ -2042,6 +2488,12 @@ pub struct ExternalSourcePublicSnapshot {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub subagents: Vec<crate::external_subagents::ExternalSubagentSummary>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subagent_model_binding_groups:
+        Vec<crate::external_subagents::ExternalSubagentModelBindingGroup>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subagent_model_binding_options:
+        Vec<crate::external_subagents::ExternalSubagentModelBindingOption>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub subagent_conflicts: Vec<crate::external_subagents::ExternalSubagentConflict>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pending_subagent_approvals: Vec<String>,
@@ -2066,8 +2518,14 @@ impl ExternalSourcePublicSnapshot {
             }
         }
         for subagent in &mut self.subagents {
+            subagent.requested_model = Default::default();
+            subagent.requested_model_profile = None;
+            subagent.model_binding_method = Default::default();
+            subagent.model_binding_key = None;
             subagent.unavailable_tool_labels.clear();
         }
+        self.subagent_model_binding_groups.clear();
+        self.subagent_model_binding_options.clear();
         self
     }
 }
@@ -2107,10 +2565,129 @@ impl From<ExternalSourceCatalogSnapshot> for ExternalSourcePublicSnapshot {
             subagent_generation: snapshot.subagent_generation,
             preference_revision: snapshot.preference_revision,
             subagents: snapshot.subagents,
+            subagent_model_binding_groups: snapshot.subagent_model_binding_groups,
+            subagent_model_binding_options: snapshot.subagent_model_binding_options,
             subagent_conflicts: snapshot.subagent_conflicts,
             pending_subagent_approvals: snapshot.pending_subagent_approvals,
             integration_policy: snapshot.integration_policy,
             diagnostics: snapshot.diagnostics,
         }
+    }
+}
+
+#[cfg(test)]
+mod prompt_command_shell_review_tests {
+    use super::{
+        EcosystemId, PromptCommandExecutionTarget, PromptCommandInvocationOutcome,
+        PromptCommandShellReviewDecision, PromptCommandShellReviewMode,
+        PromptCommandShellReviewPlan,
+    };
+
+    #[test]
+    fn ready_outcome_preserves_the_typed_execution_target() {
+        let outcome = PromptCommandInvocationOutcome::Ready {
+            content: "Review this change".to_string(),
+            execution_target: PromptCommandExecutionTarget::FreshExternalSubagent {
+                ecosystem_id: EcosystemId::new("opencode").unwrap(),
+                logical_id: "reviewer".to_string(),
+            },
+        };
+
+        assert_eq!(
+            serde_json::to_value(outcome).unwrap(),
+            serde_json::json!({
+                "state": "ready",
+                "content": "Review this change",
+                "executionTarget": {
+                    "kind": "fresh_external_subagent",
+                    "ecosystemId": "opencode",
+                    "logicalId": "reviewer"
+                }
+            })
+        );
+
+        let invalid = serde_json::from_value::<PromptCommandExecutionTarget>(serde_json::json!({
+            "kind": "fresh_external_subagent",
+            "ecosystemId": "",
+            "logicalId": "reviewer"
+        }))
+        .expect("open ids validate at their owning contract boundary");
+        assert!(invalid.validate().is_err());
+    }
+
+    #[test]
+    fn review_outcome_uses_a_stable_tagged_transport_shape() {
+        let outcome = PromptCommandInvocationOutcome::ReviewRequired {
+            review: PromptCommandShellReviewPlan {
+                schema_version: 1,
+                plan_fingerprint: "sha256:plan".to_string(),
+                source_display_name: "OpenCode".to_string(),
+                working_directory: "D:/workspace/project".to_string(),
+                shell_display_name: "PowerShell 7".to_string(),
+                shell_executable: "C:/Program Files/PowerShell/7/pwsh.exe".to_string(),
+                commands: vec!["git status --short".to_string()],
+                can_remember: true,
+                preference_revision: 7,
+            },
+        };
+
+        assert_eq!(
+            serde_json::to_value(outcome).unwrap(),
+            serde_json::json!({
+                "state": "review_required",
+                "review": {
+                    "schemaVersion": 1,
+                    "planFingerprint": "sha256:plan",
+                    "sourceDisplayName": "OpenCode",
+                    "workingDirectory": "D:/workspace/project",
+                    "shellDisplayName": "PowerShell 7",
+                    "shellExecutable": "C:/Program Files/PowerShell/7/pwsh.exe",
+                    "commands": ["git status --short"],
+                    "canRemember": true,
+                    "preferenceRevision": 7
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn review_decision_requires_the_exact_plan_and_preference_revision() {
+        let decision = PromptCommandShellReviewDecision {
+            plan_fingerprint: "sha256:plan".to_string(),
+            mode: PromptCommandShellReviewMode::Remember,
+            expected_preference_revision: 7,
+        };
+
+        assert_eq!(
+            serde_json::to_value(decision).unwrap(),
+            serde_json::json!({
+                "planFingerprint": "sha256:plan",
+                "mode": "remember",
+                "expectedPreferenceRevision": 7
+            })
+        );
+    }
+
+    #[test]
+    fn debug_output_does_not_disclose_reviewed_shell_commands() {
+        let outcome = PromptCommandInvocationOutcome::ReviewRequired {
+            review: PromptCommandShellReviewPlan {
+                schema_version: 1,
+                plan_fingerprint: "sha256:plan".to_string(),
+                source_display_name: "OpenCode".to_string(),
+                working_directory: "D:/secret/project".to_string(),
+                shell_display_name: "PowerShell 7".to_string(),
+                shell_executable: "C:/secret/pwsh.exe".to_string(),
+                commands: vec!["echo a-sensitive-token".to_string()],
+                can_remember: false,
+                preference_revision: 2,
+            },
+        };
+
+        let debug = format!("{outcome:?}");
+        assert!(!debug.contains("a-sensitive-token"));
+        assert!(!debug.contains("D:/secret/project"));
+        assert!(!debug.contains("C:/secret/pwsh.exe"));
+        assert!(debug.contains("command_count"));
     }
 }

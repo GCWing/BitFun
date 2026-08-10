@@ -47,7 +47,7 @@ pub(super) fn explicit_bash_mutation_targets(command: &str) -> Vec<ShellMutation
         }
 
         for (index, word) in words.iter().enumerate() {
-            let redirection = word.trim_start_matches(|c| matches!(c, '0'..='9'));
+            let redirection = word.trim_start_matches(|c: char| c.is_ascii_digit());
             if matches!(redirection, ">" | ">>" | "1>" | "1>>") {
                 if let Some(path) = words.get(index + 1) {
                     push_bash_target(&mut targets, path, ShellMutationOperation::Write);

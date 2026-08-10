@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, Image as ImageIcon } from 'lucide-react';
 
 import { Modal } from '@/component-library';
@@ -66,7 +66,7 @@ export const ViewImageToolCard: React.FC<ToolCardProps> = ({ toolItem, onExpand 
     toolName: toolItem.toolName,
   });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!source || didAutoExpand.current) return;
     didAutoExpand.current = true;
     applyExpandedState(isExpanded, true, setIsExpanded, { reason: 'auto' });
@@ -98,7 +98,7 @@ export const ViewImageToolCard: React.FC<ToolCardProps> = ({ toolItem, onExpand 
         : viewingText;
 
   return (
-    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
+    <div data-bf-component="view-image-tool-card" data-bf-part="root" data-bf-state={[isExpanded && 'expanded', imageFailed && 'failed'].filter(Boolean).join(' ')} ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
       <CompactToolCard
         status={toolItem.status}
         isExpanded={false}
@@ -124,14 +124,16 @@ export const ViewImageToolCard: React.FC<ToolCardProps> = ({ toolItem, onExpand 
         className="view-image-tool-card__collapse"
       >
         {source ? (
-          <div className="view-image-tool-card__content">
+          <div data-bf-component="view-image-tool-card" data-bf-part="content" className="view-image-tool-card__content">
             {imageFailed ? (
-              <div className="view-image-tool-card__error" role="alert">
+              <div data-bf-component="view-image-tool-card" data-bf-part="error" className="view-image-tool-card__error" role="alert">
                 {t('toolCards.default.failed')}
               </div>
             ) : (
               <button
                 type="button"
+                data-bf-component="view-image-tool-card"
+                data-bf-part="preview"
                 className="view-image-tool-card__preview-button"
                 aria-label={t('toolCards.common.viewDetails')}
                 onClick={(event) => {
@@ -140,6 +142,8 @@ export const ViewImageToolCard: React.FC<ToolCardProps> = ({ toolItem, onExpand 
                 }}
               >
                 <img
+                  data-bf-component="view-image-tool-card"
+                  data-bf-part="image"
                   src={source}
                   alt={title}
                   width={result.width ?? undefined}
@@ -159,7 +163,7 @@ export const ViewImageToolCard: React.FC<ToolCardProps> = ({ toolItem, onExpand 
         title={title}
         size="large"
       >
-        <div className="view-image-tool-card__lightbox">
+        <div data-bf-component="view-image-tool-card" data-bf-part="lightbox" className="view-image-tool-card__lightbox">
           <img src={source ?? ''} alt={title} />
         </div>
       </Modal>

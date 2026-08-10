@@ -37,6 +37,7 @@ pub(super) struct AgentSelectorState {
     visible: bool,
     /// Currently active agent ID (for highlighting)
     current_agent_id: Option<String>,
+    include_management: bool,
     include_external_sources: bool,
     allow_mode_switch: bool,
     last_area: Option<Rect>,
@@ -50,6 +51,7 @@ impl AgentSelectorState {
             list_state: ListState::default(),
             visible: false,
             current_agent_id: None,
+            include_management: true,
             include_external_sources: false,
             allow_mode_switch: true,
             last_area: None,
@@ -65,6 +67,32 @@ impl AgentSelectorState {
         include_external_sources: bool,
         allow_mode_switch: bool,
     ) {
+        self.show_with_options(
+            agents,
+            current_agent_id,
+            true,
+            include_external_sources,
+            allow_mode_switch,
+        );
+    }
+
+    pub(super) fn show_modes_only(
+        &mut self,
+        agents: Vec<AgentItem>,
+        current_agent_id: Option<String>,
+        allow_mode_switch: bool,
+    ) {
+        self.show_with_options(agents, current_agent_id, false, false, allow_mode_switch);
+    }
+
+    fn show_with_options(
+        &mut self,
+        agents: Vec<AgentItem>,
+        current_agent_id: Option<String>,
+        include_management: bool,
+        include_external_sources: bool,
+        allow_mode_switch: bool,
+    ) {
         let initial_idx = current_agent_id
             .as_ref()
             .and_then(|id| agents.iter().position(|a| a.id == *id))
@@ -72,6 +100,7 @@ impl AgentSelectorState {
 
         self.items = agents;
         self.current_agent_id = current_agent_id;
+        self.include_management = include_management;
         self.include_external_sources = include_external_sources;
         self.allow_mode_switch = allow_mode_switch;
         self.list_state.select(Some(initial_idx));
@@ -128,10 +157,12 @@ impl AgentSelectorState {
         if let Some(agent) = self.items.get(idx) {
             return Some(AgentSelectorAction::SwitchMode(agent.clone()));
         }
-        if idx == self.items.len() {
+        if self.include_management && idx == self.items.len() {
             return Some(AgentSelectorAction::ManageSubagents);
         }
-        if self.include_external_sources && idx == self.items.len() + 1 {
+        if self.include_external_sources
+            && idx == self.items.len() + usize::from(self.include_management)
+        {
             return Some(AgentSelectorAction::ReviewExternalSources);
         }
         None
@@ -185,7 +216,7 @@ impl AgentSelectorState {
                 if !self.allow_mode_switch {
                     spans.push(Span::styled(
                         if popup_area.width >= 28 {
-                            "After current turn · "
+                            "Please wait · "
                         } else {
                             "Wait · "
                         },
@@ -203,23 +234,25 @@ impl AgentSelectorState {
                 ListItem::new(line)
             })
             .collect();
-        let mut subagent_spans = vec![
-            Span::raw("  "),
-            Span::styled(
-                "Subagents",
-                theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD),
-            ),
-        ];
-        if !compact {
-            subagent_spans.extend([
+        if self.include_management {
+            let mut subagent_spans = vec![
                 Span::raw("  "),
                 Span::styled(
-                    "List, launch, or configure delegated agents",
-                    theme.style(StyleKind::Muted),
+                    "Subagents",
+                    theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD),
                 ),
-            ]);
+            ];
+            if !compact {
+                subagent_spans.extend([
+                    Span::raw("  "),
+                    Span::styled(
+                        "List, launch, or configure delegated agents",
+                        theme.style(StyleKind::Muted),
+                    ),
+                ]);
+            }
+            list_items.push(ListItem::new(Line::from(subagent_spans)));
         }
-        list_items.push(ListItem::new(Line::from(subagent_spans)));
         if self.include_external_sources {
             let mut external_spans = vec![
                 Span::raw("  "),
@@ -332,7 +365,9 @@ impl AgentSelectorState {
     }
 
     fn len(&self) -> usize {
-        self.items.len() + 1 + usize::from(self.include_external_sources)
+        self.items.len()
+            + usize::from(self.include_management)
+            + usize::from(self.include_external_sources)
     }
 }
 
@@ -395,6 +430,48 @@ mod tests {
     }
 
     #[test]
+    fn mode_only_entry_exposes_no_management_rows() {
+        let mut state = AgentSelectorState::new();
+        state.show_modes_only(modes(), Some("agentic".to_string()), true);
+
+        state.move_down();
+        assert!(matches!(
+            state.confirm_selection(),
+            Some(AgentSelectorAction::SwitchMode(AgentItem { id, .. })) if id == "ask"
+        ));
+        state.move_down();
+        assert!(matches!(
+            state.confirm_selection(),
+            Some(AgentSelectorAction::SwitchMode(AgentItem { id, .. })) if id == "agentic"
+        ));
+    }
+
+    #[test]
+    fn mode_only_entry_renders_no_management_copy() {
+        let mut state = AgentSelectorState::new();
+        state.show_modes_only(modes(), Some("agentic".to_string()), true);
+        let mut terminal = Terminal::new(TestBackend::new(52, 12)).expect("test terminal");
+
+        terminal
+            .draw(|frame| state.render(frame, frame.area(), &Theme::dark_ansi16()))
+            .expect("render mode-only agent selector");
+
+        let buffer = terminal.backend().buffer();
+        let rendered = (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(rendered.contains("General purpose"));
+        assert!(!rendered.contains("Subagents"));
+        assert!(!rendered.contains("External AI applications"));
+    }
+
+    #[test]
     fn processing_turn_keeps_management_available_and_defers_mode_guard_to_dispatch() {
         let mut state = AgentSelectorState::new();
         state.show(modes(), Some("agentic".to_string()), true, false);
@@ -435,8 +512,8 @@ mod tests {
             .join("\n");
 
         assert!(
-            rendered.contains("After current turn"),
-            "narrow popup should explain why mode rows are disabled: {rendered:?}"
+            rendered.contains("Please wait"),
+            "narrow popup should show that mode rows are disabled: {rendered:?}"
         );
     }
 

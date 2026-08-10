@@ -7,7 +7,7 @@
  * Applies typewriter effect during streaming.
  */
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { FlowThinkingItem } from '../types/flow-chat';
@@ -31,7 +31,6 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
 }) => {
   const { t } = useTranslation('flow-chat');
   const { content, isStreaming, status } = thinkingItem;
-  const wrapperRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const shouldFollowTailRef = useRef(true);
   const tailFollowPauseVersionRef = useRef(0);
@@ -48,29 +47,15 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
 
   const [isExpanded, setIsExpanded] = useState(shouldDefaultExpanded);
   const userToggledRef = useRef(false);
-  const { applyExpandedState } = useToolCardHeightContract({
+  const { cardRootRef, applyExpandedState } = useToolCardHeightContract({
     toolId: thinkingItem.id,
     toolName: 'thinking',
-    getCardHeight: () => {
-      const contentScrollHeight = contentRef.current?.scrollHeight ?? null;
-      const wrapperHeight = wrapperRef.current?.getBoundingClientRect().height ?? null;
-      return contentScrollHeight ?? wrapperHeight;
-    },
   });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (userToggledRef.current) return;
     if (isExpanded !== shouldDefaultExpanded) {
       applyExpandedState(isExpanded, shouldDefaultExpanded, setIsExpanded, {
-        reason: 'auto',
-      });
-    }
-  }, [applyExpandedState, isExpanded, shouldDefaultExpanded]);
-
-  useEffect(() => {
-    if (userToggledRef.current) return;
-    if (!shouldDefaultExpanded && isExpanded) {
-      applyExpandedState(isExpanded, false, setIsExpanded, {
         reason: 'auto',
       });
     }
@@ -266,29 +251,40 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
 
   return (
     <div
-      ref={wrapperRef}
+      ref={cardRootRef}
       data-testid="chat-thinking-panel"
       data-tool-card-id={thinkingItem.id}
       data-status={status}
       data-streaming={isActive ? 'true' : 'false'}
       data-expanded={isExpanded ? 'true' : 'false'}
       className={wrapperClassName}
-    >
+     data-bf-component="model-thinking-display" data-bf-part="root" data-bf-context={displayContext} data-bf-state={[isExpanded && 'expanded', isVisuallyStreaming && 'streaming'].filter(Boolean).join(' ')}>
       <div
+        data-bf-component="model-thinking-display"
+        data-bf-part="header"
         data-testid="chat-thinking-toggle"
         className="thinking-collapsed-header"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleToggleClick}
       >
-        <ChevronRight size={14} className="thinking-chevron" />
-        <span className="thinking-label">{headerLabel}</span>
+        <ChevronRight size={14} className="thinking-chevron" data-bf-component="model-thinking-display" data-bf-part="chevron" />
+        <span data-bf-component="model-thinking-display" data-bf-part="label" className="thinking-label">{headerLabel}</span>
       </div>
 
-      <div className={`thinking-expand-container ${isExpanded ? 'thinking-expand-container--open' : ''}`}>
-        <div className={`thinking-content-wrapper ${scrollState.hasScroll ? 'has-scroll' : ''} ${scrollState.atTop ? 'at-top' : ''} ${scrollState.atBottom ? 'at-bottom' : ''}`}>
+      <div
+        className={[
+          'thinking-expand-container',
+          isExpanded ? 'thinking-expand-container--open' : '',
+        ].filter(Boolean).join(' ')}
+        data-bf-component="model-thinking-display"
+        data-bf-part="expandContainer"
+      >
+        <div className={`thinking-content-wrapper ${scrollState.hasScroll ? 'has-scroll' : ''} ${scrollState.atTop ? 'at-top' : ''} ${scrollState.atBottom ? 'at-bottom' : ''}`} data-bf-component="model-thinking-display" data-bf-part="contentWrapper">
           <div
             ref={contentRef}
+            data-bf-component="model-thinking-display"
+            data-bf-part="content"
             data-testid="chat-thinking-content"
             data-status={status}
             data-streaming={isActive ? 'true' : 'false'}

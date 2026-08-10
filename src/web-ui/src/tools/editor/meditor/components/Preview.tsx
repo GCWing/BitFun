@@ -9,7 +9,7 @@ interface PreviewProps {
 
 export const Preview: React.FC<PreviewProps> = ({ value, basePath }) => {
   return (
-    <div className="m-editor-preview">
+    <div className="m-editor-preview" data-bf-component="editor-tool" data-bf-part="meditorPreview">
       <div className="m-editor-preview-content">
         <MarkdownRenderer content={value} basePath={basePath} />
       </div>

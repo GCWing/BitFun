@@ -9,14 +9,14 @@
   --private-diff-fullscreen-accept-color: rgb(var(--private-diff-fullscreen-accept-rgb));
   --private-diff-fullscreen-reject-color: rgb(var(--private-diff-fullscreen-reject-rgb));
   --private-diff-fullscreen-selected-color: rgb(var(--private-diff-fullscreen-selected-rgb));
-  --private-diff-fullscreen-pending-color: var(--color-warning);
+  --private-diff-fullscreen-pending-color: var(--bf-appearance-token-color-warning);
 
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: color-mix(in srgb, var(--color-static-black) 90%, transparent);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-static-black) 90%, transparent);
   z-index: 9999;
   display: flex;
   align-items: center;
@@ -27,13 +27,13 @@
 .snapshot-fullscreen-container {
   width: 95vw;
   height: 95vh;
-  background: var(--color-bg-secondary);
+  background: var(--bf-appearance-token-color-bg-secondary);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--color-overlay-white-12);
-  box-shadow: 0 20px 60px var(--color-overlay-black-80);
+  border: 1px solid var(--bf-appearance-token-color-overlay-white-12);
+  box-shadow: 0 20px 60px var(--bf-appearance-token-color-overlay-black-80);
 }
 
 /* Header toolbar */
@@ -42,8 +42,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  background: var(--color-bg-primary);
-  border-bottom: 1px solid var(--color-overlay-white-12);
+  background: var(--bf-appearance-token-color-bg-primary);
+  border-bottom: 1px solid var(--bf-appearance-token-color-overlay-white-12);
   flex-shrink: 0;
 }
 
@@ -59,9 +59,9 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: color-mix(in srgb, var(--color-accent-600) 10%, transparent);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 10%, transparent);
   border-radius: 6px;
-  color: var(--color-accent-600);
+  color: var(--bf-appearance-token-color-accent-600);
 }
 
 .session-details {
@@ -73,15 +73,15 @@
 .session-title {
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 .session-stats {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: var(--tool-card-action-font-size);
-  color: var(--color-text-secondary);
+  font-size: var(--bf-appearance-token-tool-card-action-font-size);
+  color: var(--bf-appearance-token-color-text-secondary);
 }
 
 .session-stats .additions {
@@ -107,7 +107,7 @@
   padding: 8px 12px;
   border: none;
   border-radius: 6px;
-  font-size: var(--tool-card-action-font-size);
+  font-size: var(--bf-appearance-token-tool-card-action-font-size);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -141,20 +141,20 @@
 }
 
 .header-btn.close-btn {
-  background: var(--color-overlay-white-08);
-  color: var(--color-overlay-white-70);
-  border: 1px solid var(--color-overlay-white-12);
+  background: var(--bf-appearance-token-color-overlay-white-08);
+  color: var(--bf-appearance-token-color-overlay-white-70);
+  border: 1px solid var(--bf-appearance-token-color-overlay-white-12);
 }
 
 .header-btn.close-btn:hover {
-  background: var(--color-overlay-white-12);
-  color: var(--color-overlay-white-90);
+  background: var(--bf-appearance-token-color-overlay-white-12);
+  color: var(--bf-appearance-token-color-overlay-white-90);
 }
 
 .header-divider {
   width: 1px;
   height: 24px;
-  background: var(--color-overlay-white-12);
+  background: var(--bf-appearance-token-color-overlay-white-12);
   margin: 0 4px;
 }
 
@@ -164,8 +164,8 @@
   align-items: center;
   gap: 8px;
   padding: 12px 20px;
-  background: color-mix(in srgb, var(--color-static-black) 93%, var(--color-static-white));
-  border-bottom: 1px solid var(--color-overlay-white-08);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-static-black) 93%, var(--bf-appearance-token-color-static-white));
+  border-bottom: 1px solid var(--bf-appearance-token-color-overlay-white-08);
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -178,16 +178,16 @@
   height: 28px;
   border: none;
   border-radius: 4px;
-  background: var(--color-overlay-white-08);
-  color: var(--color-overlay-white-70);
+  background: var(--bf-appearance-token-color-overlay-white-08);
+  color: var(--bf-appearance-token-color-overlay-white-70);
   cursor: pointer;
   transition: all 0.2s ease;
   flex-shrink: 0;
 }
 
 .nav-btn:hover:not(:disabled) {
-  background: var(--color-overlay-white-12);
-  color: var(--color-overlay-white-90);
+  background: var(--bf-appearance-token-color-overlay-white-12);
+  color: var(--bf-appearance-token-color-overlay-white-90);
 }
 
 .nav-btn:disabled {
@@ -217,18 +217,18 @@
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: var(--color-overlay-white-60);
+  color: var(--bf-appearance-token-color-overlay-white-60);
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
   flex-shrink: 0;
-  font-size: var(--tool-card-action-font-size);
+  font-size: var(--bf-appearance-token-tool-card-action-font-size);
   border: 1px solid transparent;
 }
 
 .file-tab:hover {
-  background: var(--color-overlay-white-08);
-  color: var(--color-overlay-white-80);
+  background: var(--bf-appearance-token-color-overlay-white-08);
+  color: var(--bf-appearance-token-color-overlay-white-80);
 }
 
 .file-tab.active {
@@ -239,11 +239,11 @@
 
 .file-tab .file-name {
   font-family: 'Monaco', 'Menlo', monospace;
-  font-size: var(--flowchat-font-size-xs);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
 }
 
 .file-tab .file-status {
-  font-size: var(--flowchat-font-size-xxs);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
 }
 
 .file-tab .file-status[data-status="pending"] {
@@ -259,7 +259,7 @@
 }
 
 .file-tab .file-status[data-status="partial"] {
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 /* Current file header */
@@ -268,8 +268,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  background: color-mix(in srgb, var(--color-static-black) 96%, var(--color-static-white));
-  border-bottom: 1px solid var(--color-overlay-white-08);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-static-black) 96%, var(--bf-appearance-token-color-static-white));
+  border-bottom: 1px solid var(--bf-appearance-token-color-overlay-white-08);
   flex-shrink: 0;
 }
 
@@ -287,7 +287,7 @@
   justify-content: center;
   width: 24px;
   height: 24px;
-  color: var(--color-overlay-white-60);
+  color: var(--bf-appearance-token-color-overlay-white-60);
   flex-shrink: 0;
 }
 
@@ -302,13 +302,13 @@
 .file-details .file-name {
   font-size: 14px;
   font-weight: 500;
-  color: var(--color-overlay-white-90);
+  color: var(--bf-appearance-token-color-overlay-white-90);
   font-family: 'Monaco', 'Menlo', monospace;
 }
 
 .file-details .file-path-full {
-  font-size: var(--flowchat-font-size-xs);
-  color: color-mix(in srgb, var(--color-static-white) 50%, transparent);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+  color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 50%, transparent);
   font-family: 'Monaco', 'Menlo', monospace;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -329,7 +329,7 @@
   padding: 6px 10px;
   border: none;
   border-radius: 4px;
-  font-size: var(--tool-card-action-font-size);
+  font-size: var(--bf-appearance-token-tool-card-action-font-size);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -368,7 +368,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: color-mix(in srgb, var(--color-static-black) 88%, var(--color-static-white));
+  background: color-mix(in srgb, var(--bf-appearance-token-color-static-black) 88%, var(--bf-appearance-token-color-static-white));
 }
 
 /* Override WebDiffViewer for fullscreen layout */
@@ -397,20 +397,20 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--color-overlay-black-80);
+  background: var(--bf-appearance-token-color-overlay-black-80);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: var(--color-overlay-white-90);
+  color: var(--bf-appearance-token-color-overlay-white-90);
   font-size: 14px;
 }
 
 .loading-spinner {
   width: 24px;
   height: 24px;
-  border: 2px solid var(--color-overlay-white-20);
+  border: 2px solid var(--bf-appearance-token-color-overlay-white-20);
   border-top: 2px solid var(--private-diff-fullscreen-selected-color);
   border-radius: 50%;
   animation: spin 1s linear infinite;
@@ -438,12 +438,12 @@
   }
 
   .session-stats {
-    font-size: var(--tool-card-action-font-size);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
   }
 
   .header-btn {
     padding: 6px 8px;
-    font-size: var(--tool-card-action-font-size);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
   }
 
   .file-navigation {
@@ -455,11 +455,11 @@
   }
 
   .file-details .file-name {
-    font-size: var(--tool-card-action-font-size);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
   }
 
   .file-details .file-path-full {
-    font-size: var(--flowchat-font-size-xxs);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
   }
 
   /* Hide file status text on small screens */
@@ -508,7 +508,7 @@
   color: var(--private-diff-fullscreen-selected-color);
   padding: 2px 6px;
   border-radius: 10px;
-  font-size: var(--flowchat-font-size-xxs);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
   font-weight: 600;
   border: 1px solid rgba(var(--private-diff-fullscreen-selected-rgb), 0.3);
 }

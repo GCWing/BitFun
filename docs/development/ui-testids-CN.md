@@ -141,8 +141,7 @@
 | 工作区创建 ACP 会话 | `nav-workspace-menu-create-acp-session` | 重复项。配合 `data-acp-client-id` 使用。 |
 | 工作区创建 Init 会话 | `nav-workspace-menu-create-init-session` | 启动 AGENTS.md/init 会话。 |
 | 工作区相关路径 | `nav-workspace-menu-related-paths` | 打开相关路径对话框。 |
-| 工作区新建 worktree | `nav-workspace-menu-new-worktree` | 打开 worktree 创建对话框。 |
-| 工作区删除 worktree | `nav-workspace-menu-delete-worktree` | 删除关联 worktree 工作区。 |
+| 会话 worktree 开关 | `chat-input-worktree-toggle` | 会话输入框状态条，切换当前会话的 worktree 隔离。配合 `data-worktree-enabled` 使用。 |
 | 工作区复制路径 | `nav-workspace-menu-copy-path` | 复制工作区路径。 |
 | 工作区 reveal | `nav-workspace-menu-reveal` | 在文件管理器中显示工作区。 |
 | 工作区关闭 | `nav-workspace-menu-close` | 关闭工作区。 |
@@ -191,7 +190,7 @@
 
 | Chat 模型选择按钮 | `chat-model-selector-btn` | 打开当前会话的模型选择器。 |
 | Chat 模型选择菜单 | `chat-model-selector-menu` | 模型选择下拉菜单根节点。 |
-| Chat 模型选择项 | `chat-model-selector-option` | 重复项。配合 `data-option-kind`、`data-model-role`、`data-model-id`、`data-model-name`、`data-provider-id` 和 `data-selected` 使用。别名入口会继续保留 `data-model-id="auto" / "primary" / "fast"`；其中 `primary-alias` 和 `fast-alias` 还会额外提供 `data-resolved-model-id`、`data-resolved-model-name` 和 `data-resolved-provider-id`。 |
+| Chat 模型选择项 | `chat-model-selector-option` | 重复项。配合 `data-model-id`、`data-model-name` 和 `data-selected` 使用。 |
 | Chat 用户消息 | `chat-user-message` | 重复的用户消息。配合 `data-turn-id`、`data-status` 和 `data-failed` 使用。 |
 | Chat 用户消息内容 | `chat-user-message-content` | 用户消息文本内容。配合 `data-turn-id` 使用。 |
 | Chat assistant 消息 | `chat-assistant-message` | 重复的模型轮次容器。配合 `data-turn-id`、`data-round-id`、`data-status`、`data-model-id`、`data-model-alias` 和 `data-streaming` 使用。 |
@@ -237,28 +236,25 @@
 | 模型列表 | `settings-model-list` | 已配置模型行的容器。 |
 | 创建第一个模型配置按钮 | `settings-model-create-first-config-btn` | 从空状态启动第一个模型提供商配置流程。 |
 | 自定义模型配置按钮 | `settings-model-custom-config-btn` | 启动自定义提供商配置。包含 `data-provider-id="custom"`。 |
-| 模型提供商选项 | `settings-model-provider-option` | 重复的提供商卡片。配合 `data-provider-id` 使用，例如 `openbitfun`。 |
+| 模型提供商选项 | `settings-model-provider-option` | 重复的提供商行。配合 `data-provider-id` 使用，例如 `openbitfun`。列表默认只展示前几项，取用列表外的提供商需先经搜索框或下方展开按钮。 |
+| 模型提供商搜索框 | `settings-model-provider-search` | 按提供商名称、id 或模型名称过滤预设提供商列表。 |
+| 模型提供商展开按钮 | `settings-model-provider-expand-btn` | 将截断的预设提供商列表展开为全部提供商，再次点击收起。 |
 | 模型提供商名称输入框 | `settings-model-provider-name-input` | 提供商/配置展示名称字段，例如 mock LLM 提供商名称。 |
 | 模型 API key 输入框 | `settings-model-api-key-input` | 模型配置表单里的 API key 字段。测试中不要硬编码真实 key，应从 local config 读取。 |
 | 模型 Base URL 输入框 | `settings-model-base-url-input` | 自定义/OpenAI-compatible 提供商的 API base URL 字段。 |
 | 模型请求格式选择器 | `settings-model-request-format-select` | 请求格式选择器，例如 OpenAI-compatible 或 Anthropic。 |
 | 模型选择按钮 | `settings-model-select-btn` | 打开模型选择下拉框。 |
 | 模型选择菜单 | `settings-model-select-menu` | 模型选择下拉框根节点。 |
-| 模型选择项 | `settings-model-option` | 重复的下拉项。配合 `data-option-kind="model"`、`data-model-role="normal"`、`data-model-state="selectable"`、`data-model-source`、`data-model-id`、`data-model-name`、`data-provider-id` 和 `data-selected` 使用。 |
+| 模型选择项 | `settings-model-option` | 重复的下拉项。配合 `data-model-id`、`data-model-name` 和 `data-selected` 使用。 |
 | 手动模型名称输入框 | `settings-model-manual-name-input` | 手动/自定义模型名称输入字段。 |
 | 添加自定义模型按钮 | `settings-model-add-custom-btn` | 将手动模型名称加入已选模型列表。 |
 | 已选模型列表 | `settings-model-selected-list` | 已选模型草稿列表。包含 `data-selected-count`。 |
 | 已选模型空状态 | `settings-model-selected-list-empty` | 已选模型草稿为空时的状态。包含 `data-selected-count="0"`。 |
-| 已选模型行 | `settings-model-selected-row` | 重复的已选模型草稿。配合 `data-option-kind="selected-draft"`、`data-model-role="normal"`、`data-model-state="draft"`、`data-model-id`、`data-model-name`、`data-provider-id`、`data-config-id`、`data-selected` 和 `data-expanded` 使用。 |
-| 已选模型移除按钮 | `settings-model-selected-remove-btn` | 移除已选模型草稿。配合 `data-option-kind="selected-draft"`、`data-model-role="normal"`、`data-model-state="draft"`、`data-model-id`、`data-model-name`、`data-provider-id` 和 `data-config-id` 使用。 |
+| 已选模型行 | `settings-model-selected-row` | 重复的已选模型草稿。配合 `data-model-id`、`data-model-name`、`data-selected` 和 `data-expanded` 使用。 |
+| 已选模型移除按钮 | `settings-model-selected-remove-btn` | 移除已选模型草稿。配合 `data-model-id` 和 `data-model-name` 使用。 |
 | 模型保存按钮 | `settings-model-save-btn` | 保存模型提供商/模型配置表单。 |
-| 模型行 | `settings-model-row` | 重复的已保存模型行。配合 `data-option-kind="saved-model"`、`data-model-role="normal"`、`data-model-state="saved"`、`data-model-id`、`data-model-name`、`data-provider-id` 和 `data-config-id` 使用。 |
-| 模型测试状态 | `settings-model-test-status` | 重复的已保存模型测试状态。配合 `data-option-kind="saved-model-status"`、`data-model-role="normal"`、`data-model-state="saved"`、`data-model-id`、`data-model-name`、`data-provider-id`、`data-config-id` 和 `data-status` 使用，`data-status` 可为 `success` 或 `error`。 |
-
-模型定位建议：
-- 在聊天页里，优先使用 `data-option-kind` 和 `data-model-role` 区分 `auto`、`primary-alias`、`fast-alias`、`acp-model` 与真实 `model`，不要只靠展示文案或 `data-model-name`。
-- `data-model-name` 更适合作为展示元数据，不应单独当作唯一键。需要唯一定位时，应与 `data-model-id`、`data-provider-id`，或别名入口专用的 `data-resolved-model-id` 组合使用。
-- 在设置页里，先用 `data-model-state` 区分“下拉可选项 / 草稿已选项 / 已保存项 / 已保存测试状态”，再按 `data-model-id` 或 `data-provider-id` 进一步过滤。
+| 模型行 | `settings-model-row` | 重复的已保存模型行。配合 `data-model-id`、`data-model-name` 和 `data-config-id` 使用。 |
+| 模型测试状态 | `settings-model-test-status` | 重复的已保存模型测试状态。配合 `data-model-id`、`data-model-name`、`data-config-id` 和 `data-status` 使用，`data-status` 可为 `success` 或 `error`。 |
 
 ## Settings Appearance
 
@@ -270,9 +266,9 @@
 | Appearance 语言选择器 | `appearance-language-select` | Appearance 中 language Select 的真实触发节点。 |
 | Appearance 语言选项 | `appearance-language-option` | 重复的语言下拉选项。包含 `data-locale-id`，并带有 Select 组件提供的 `data-selected`。 |
 | Appearance 主题选择器 | `appearance-theme-select` | Appearance 中 theme Select 的真实触发节点。 |
-| Appearance 主题选项 | `appearance-theme-option` | 重复的主题下拉选项。包含 `data-theme-id`，并带有 Select 组件提供的 `data-selected`。 |
-| Appearance 字体大小分组 | `appearance-font-size-group` | Appearance 页面里用于字体大小持久化用例的 UI 预置字号按钮组根节点。 |
-| Appearance 字体大小选项 | `appearance-font-size-option` | 重复的可点击 UI 字体大小选项。包含 `data-size-level`、兼容保留的 `data-font-level`、`data-selected` 和 `aria-pressed`。 |
+| Appearance 外观选项 | `appearance-palette-option` | 重复的外观下拉选项。包含 `data-appearance-id`，并带有 Select 组件提供的 `data-selected`。 |
+| Appearance UI 字号分组 | `appearance-ui-font-level-group` | UI font size 预置级别按钮组根节点。 |
+| Appearance UI 字号按钮 | `appearance-ui-font-level-btn` | 重复的 UI font size 预置级别按钮。包含 `data-font-level` 和 `data-selected`。 |
 | Appearance UI 自定义字号控制区 | `appearance-ui-font-custom-controls` | custom UI 字号控制区根节点，仅在 custom 激活时渲染。 |
 | Appearance UI 自定义字号输入框 | `appearance-ui-font-custom-input` | custom UI 字号 px 输入框。包含 `data-font-level="custom"`。 |
 | Appearance UI 自定义字号减一按钮 | `appearance-ui-font-custom-step-minus` | custom UI 字号减一按钮。 |

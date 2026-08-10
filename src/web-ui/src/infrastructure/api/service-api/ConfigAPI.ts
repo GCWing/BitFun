@@ -5,14 +5,22 @@ import { createTauriCommandError } from '../errors/TauriCommandError';
 import type {
   AgentProfileConfigItem,
   DiagnosticsBundleInfo,
+  GlobalSkillSettings,
   ModeSkillInfo,
   RuntimeLoggingInfo,
+  ConfigValidationResult,
   SkillInfo,
   SkillLevel,
   SkillMarketDownloadResult,
   SkillMarketItem,
   SkillValidationResult,
 } from '../../config/types';
+import type {
+  SaveCloudSpeechConfigRequest,
+  SaveCloudSpeechConfigResult,
+} from '@/generated/api';
+
+export type { SaveCloudSpeechConfigRequest, SaveCloudSpeechConfigResult } from '@/generated/api';
 
 export interface GetSkillConfigsParams {
   forceRefresh?: boolean;
@@ -23,6 +31,11 @@ export interface GetModeSkillConfigsParams {
   modeId: string;
   forceRefresh?: boolean;
   workspacePath?: string;
+}
+
+export interface SetGlobalSkillDisabledParams {
+  skillKey: string;
+  disabled: boolean;
 }
 
 export interface SetModeSkillDisabledParams {
@@ -127,6 +140,27 @@ export class ConfigAPI {
       });
     } catch (error) {
       throw createTauriCommandError('set_config', error, { path, value });
+    }
+  }
+
+  async saveCloudSpeechConfig(
+    request: SaveCloudSpeechConfigRequest
+  ): Promise<SaveCloudSpeechConfigResult> {
+    try {
+      return await api.invoke('save_cloud_speech_config', { request });
+    } catch (error) {
+      throw createTauriCommandError('save_cloud_speech_config', error, {
+        ...request,
+        apiKey: request.apiKey ? '[redacted]' : '',
+      });
+    }
+  }
+
+  async validateConfig(): Promise<ConfigValidationResult> {
+    try {
+      return await api.invoke('validate_config');
+    } catch (error) {
+      throw createTauriCommandError('validate_config', error);
     }
   }
 
@@ -296,6 +330,27 @@ export class ConfigAPI {
       return await api.invoke('get_mode_skill_configs', { modeId, forceRefresh, workspacePath });
     } catch (error) {
       throw createTauriCommandError('get_mode_skill_configs', error, { modeId, forceRefresh, workspacePath });
+    }
+  }
+
+  async getGlobalSkillSettings(): Promise<GlobalSkillSettings> {
+    try {
+      return await api.invoke('get_global_skill_settings');
+    } catch (error) {
+      throw createTauriCommandError('get_global_skill_settings', error);
+    }
+  }
+
+  async setGlobalSkillDisabled({
+    skillKey,
+    disabled,
+  }: SetGlobalSkillDisabledParams): Promise<GlobalSkillSettings> {
+    try {
+      return await api.invoke('set_global_skill_disabled', {
+        request: { skillKey, disabled },
+      });
+    } catch (error) {
+      throw createTauriCommandError('set_global_skill_disabled', error, { skillKey, disabled });
     }
   }
 

@@ -1,6 +1,8 @@
-import { AssistantEntry, AssistantListResponse, ChatMessageItemResponse, ChatMessageResponse, CommandStatusResponse, CreateSessionOptions, CreateSessionResponse, FileInfo, FileInfoResponse, InitialSyncResult, ModelCatalogResponse, PollSessionResponse, PollSessionResult, ReadFileChunkResponse, ReadFileResult, RecentWorkspaceEntry, RecentWorkspaceListResponse, RemoteCommand, RemoteDescriptor, RemoteImageContext, RemoteModelCatalog, RemoteQuestionAnswerPayload, RemoteSession, SendMessageResponse, SessionListResponse, SessionListResult, SessionMessagesResponse, SessionMessagesResult, SessionSummary, SetAssistantResponse, SetSessionModelResponse, SetWorkspaceResponse, WorkspaceInfo, WorkspaceInfoResponse } from '../model/RemoteModels';
+import { AssistantEntry, AssistantListResponse, ChatMessageItemResponse, ChatMessageResponse, CommandStatusResponse, CreateSessionOptions, CreateSessionResponse, FileInfo, FileInfoResponse, InitialSyncResult, ModelCatalogResponse, PermissionModeResponse, PollSessionResponse, PollSessionResult, ReadFileChunkResponse, ReadFileChunkResult, ReadFileResult, RecentWorkspaceEntry, RecentWorkspaceListResponse, RemoteCommand, RemoteDescriptor, RemoteImageContext, RemoteModelCatalog, RemotePermissionMode, RemoteQuestionAnswerPayload, RemoteSession, SendMessageResponse, SessionListResponse, SessionListResult, SessionMessagesResponse, SessionMessagesResult, SessionSummary, SetAssistantResponse, SetSessionModelResponse, SetWorkspaceResponse, WorkspaceInfo, WorkspaceInfoResponse } from '../model/RemoteModels';
 import { Encoding } from './Encoding';
 import { PairIdentity, RelayHttpClient } from './RelayHttpClient';
+import { CloudAccountClient, CloudAccountSession } from './CloudAccountClient';
+import { AccountDeviceCommandTransport, RemoteCommandTransport, RoomRemoteCommandTransport } from './RemoteCommandTransport';
 import { RemoteCommandFactory } from './RemoteCommandFactory';
 import { RemoteCrypto } from './RemoteCrypto';
 import { RemoteChatCommandClient } from './RemoteChatCommandController';
@@ -11,28 +13,81 @@ import { RemoteResponseMapper } from './RemoteResponseMapper';
 import { RemoteSessionClient } from './RemoteSessionController';
 import { RemoteToolActionClient } from './RemoteToolActionController';
 
+export interface DelegatedAccountSession {
+  relayUrl: string;
+  session: CloudAccountSession;
+}
+
 export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFileDownloadClient, RemoteModelClient, RemoteSessionClient, RemoteToolActionClient {
-  private readonly client: RelayHttpClient = new RelayHttpClient();
+  private readonly roomClient: RelayHttpClient = new RelayHttpClient();
+  private transport?: RemoteCommandTransport;
+  private transportGeneration: number = 0;
   private crypto?: RemoteCrypto;
   private workspace?: WorkspaceInfo;
+  private roomRelayUrl: string = '';
 
   reset(): void {
+    this.transportGeneration += 1;
     this.crypto = undefined;
     this.workspace = undefined;
-    this.client.reset();
+    this.roomRelayUrl = '';
+    this.transport?.reset();
+    this.transport = undefined;
+    this.roomClient.reset();
   }
 
   async connect(descriptor: RemoteDescriptor, identity: PairIdentity, deviceId: string): Promise<InitialSyncResult> {
+    this.transportGeneration += 1;
     this.crypto = new RemoteCrypto();
-    this.client.bind(descriptor, this.crypto);
-    const initialSync = await this.client.pair(deviceId, identity);
-    await this.client.requestDelegatedIdentity();
+    this.roomRelayUrl = descriptor.relayUrl;
+    this.roomClient.bind(descriptor, this.crypto);
+    this.transport?.reset();
+    this.transport = new RoomRemoteCommandTransport(this.roomClient);
+    const initialSync = await this.roomClient.pair(deviceId, identity);
+    // Account inheritance is optional for room pairing. A desktop without an
+    // account, or an older desktop build, must not make normal QR control fail.
+    await this.roomClient.requestDelegatedIdentity();
     this.workspace = RemoteResponseMapper.workspaceFromInitialSync(initialSync);
     return {
       workspace: this.workspace,
       sessions: RemoteResponseMapper.sessions(initialSync.sessions || []),
       hasMoreSessions: initialSync.has_more_sessions || false,
       authenticatedUserId: initialSync.authenticated_user_id || ''
+    };
+  }
+
+  delegatedAccountSession(): DelegatedAccountSession | undefined {
+    if (!this.roomClient.hasDelegatedIdentity() || this.roomClient.delegatedUserId.trim().length === 0 ||
+      this.roomRelayUrl.trim().length === 0) {
+      return undefined;
+    }
+    return {
+      relayUrl: this.roomRelayUrl,
+      session: {
+        token: this.roomClient.delegatedToken,
+        userId: this.roomClient.delegatedUserId,
+        masterKey: Encoding.base64ToBytes(this.roomClient.delegatedMasterKey)
+      }
+    };
+  }
+
+  async connectAccountDevice(
+    accountClient: CloudAccountClient,
+    relayUrl: string,
+    session: CloudAccountSession,
+    targetDeviceId: string
+  ): Promise<InitialSyncResult> {
+    this.transportGeneration += 1;
+    this.transport?.reset();
+    this.transport = new AccountDeviceCommandTransport(accountClient, relayUrl, session, targetDeviceId);
+    const workspaceResponse = await this.send<WorkspaceInfoResponse>(RemoteCommandFactory.getWorkspaceInfo());
+    this.workspace = RemoteResponseMapper.workspaceFromResponse(workspaceResponse);
+    const sessions = await this.listSessions(50, 0, '', '');
+    return {
+      workspace: this.workspace,
+      sessions: sessions.sessions,
+      hasMoreSessions: sessions.hasMore,
+      authenticatedUserId: session.userId
     };
   }
 
@@ -127,7 +182,14 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     const command = RemoteCommandFactory.createSession(options, workspacePath);
     const response = await this.send<CreateSessionResponse>(command);
     const sessionId = response.session_id || response.id || '';
-    const title = response.title || `${options.agentType === 'cowork' ? 'Cowork' : 'Code'} Session`;
+    const modelId = options.modelId?.trim() || '';
+    if (modelId.length > 0) {
+      await this.setSessionModel(sessionId, modelId);
+    }
+    const normalizedAgentType = options.agentType.toLowerCase();
+    const fallbackTitle = normalizedAgentType === 'claw' || normalizedAgentType === 'assistant' || normalizedAgentType === 'chat' ?
+      'Assistant Session' : normalizedAgentType === 'cowork' ? 'Cowork Session' : 'Code Session';
+    const title = response.title || fallbackTitle;
     let initialTurnId = '';
     if (options.instruction.trim().length > 0) {
       initialTurnId = await this.sendMessage(sessionId, options.instruction.trim(), options.agentType);
@@ -236,6 +298,16 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     await this.send<CommandStatusResponse>(RemoteCommandFactory.cancelTool(toolId, reason));
   }
 
+  async getPermissionMode(): Promise<RemotePermissionMode> {
+    const response = await this.send<PermissionModeResponse>(RemoteCommandFactory.getPermissionMode());
+    return response.mode || 'ask';
+  }
+
+  async setPermissionMode(mode: RemotePermissionMode): Promise<RemotePermissionMode> {
+    const response = await this.send<PermissionModeResponse>(RemoteCommandFactory.setPermissionMode(mode));
+    return response.mode || mode;
+  }
+
   async answerQuestion(toolId: string, answers: RemoteQuestionAnswerPayload): Promise<void> {
     await this.send<CommandStatusResponse>(RemoteCommandFactory.answerQuestion(toolId, answers));
   }
@@ -249,6 +321,25 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     };
   }
 
+  async readFileChunk(
+    path: string,
+    offset: number,
+    limit: number,
+    sessionId?: string
+  ): Promise<ReadFileChunkResult> {
+    const response = await this.send<ReadFileChunkResponse>(
+      RemoteCommandFactory.readFileChunk(path, offset, limit, sessionId)
+    );
+    return {
+      name: response.name || RemoteResponseMapper.basename(path),
+      contentBase64: response.chunk_base64 || '',
+      offset: response.offset || offset,
+      chunkSize: response.chunk_size || 0,
+      totalSize: response.total_size || 0,
+      mimeType: response.mime_type || 'application/octet-stream'
+    };
+  }
+
   async readFile(path: string, sessionId?: string, onProgress?: (downloaded: number, total: number) => void): Promise<ReadFileResult> {
     const chunkSize = 3 * 1024 * 1024;
     let offset = 0;
@@ -257,14 +348,12 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     let totalSize = 0;
     const chunks: string[] = [];
     while (true) {
-      const command = RemoteCommandFactory.readFileChunk(path, offset, chunkSize, sessionId);
-      const response = await this.send<ReadFileChunkResponse>(command);
-      const chunk = response.chunk_base64 || '';
-      const readSize = response.chunk_size || 0;
-      chunks.push(chunk);
+      const response = await this.readFileChunk(path, offset, chunkSize, sessionId);
+      const readSize = response.chunkSize;
+      chunks.push(response.contentBase64);
       fileName = response.name || fileName;
-      mimeType = response.mime_type || mimeType;
-      totalSize = response.total_size || totalSize;
+      mimeType = response.mimeType || mimeType;
+      totalSize = response.totalSize || totalSize;
       offset += readSize;
       if (onProgress) {
         onProgress(offset, totalSize);
@@ -288,7 +377,16 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
 
   private async send<T extends CommandStatusResponse>(command: RemoteCommand, readTimeoutMs: number = 30000): Promise<T> {
     command._request_id = `req_${Date.now()}_${Encoding.randomId('harmony').slice(0, 20)}`;
-    return this.client.sendCommand<T>(command, readTimeoutMs);
+    if (!this.transport) {
+      throw new Error('Remote transport is not connected.');
+    }
+    const generation = this.transportGeneration;
+    const transport = this.transport;
+    const response = await transport.send<T>(command, readTimeoutMs);
+    if (generation !== this.transportGeneration || transport !== this.transport) {
+      throw new Error('Remote target changed while the request was in flight.');
+    }
+    return response;
   }
 
   private static normalizedSessionFilter(agentType: string): string {

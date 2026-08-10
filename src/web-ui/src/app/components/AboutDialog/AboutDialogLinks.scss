@@ -19,7 +19,7 @@
 
 .bitfun-about-dialog__link {
   font-size: 11px;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   text-decoration: none;
   cursor: pointer;
   transition: color 0.2s ease;
@@ -29,12 +29,12 @@
   font-family: inherit;
 
   &:hover {
-    color: var(--color-accent-400);
+    color: var(--bf-appearance-token-color-accent-400);
     text-decoration: underline;
   }
 }
 
 .bitfun-about-dialog__link-sep {
   font-size: 11px;
-  color: var(--border-subtle);
+  color: var(--bf-appearance-token-border-subtle);
 }

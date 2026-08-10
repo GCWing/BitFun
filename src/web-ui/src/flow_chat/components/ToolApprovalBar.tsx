@@ -23,9 +23,9 @@ export const ToolApprovalBar: React.FC<ToolApprovalBarProps> = ({
   }
 
   return (
-    <div className="tool-approval-bar" role="group" aria-label={t('toolCards.approval.ariaLabel')}>
-      <div className="tool-approval-bar__main">
-        <span className="tool-approval-bar__message">{t('toolCards.approval.waiting')}</span>
+    <div data-bf-component="tool-approval-bar" data-bf-part="root" className="tool-approval-bar" role="group" aria-label={t('toolCards.approval.ariaLabel')}>
+      <div data-bf-component="tool-approval-bar" data-bf-part="main" className="tool-approval-bar__main">
+        <span data-bf-component="tool-approval-bar" data-bf-part="message" className="tool-approval-bar__message">{t('toolCards.approval.waiting')}</span>
         <AcpPermissionActions
           toolItem={toolItem}
           presentation="text"

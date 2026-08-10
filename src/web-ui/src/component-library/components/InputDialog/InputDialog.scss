@@ -13,7 +13,7 @@
     margin: 0 0 12px 0;
     font-size: 12px;
     line-height: 1.5;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__actions {
@@ -22,15 +22,15 @@
     align-items: center;
     gap: 8px;
     padding: 10px 20px 12px;
-    border-top: 1px solid var(--border-subtle);
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
 
     // Give buttons explicit borders for visual consistency with the input field
     .btn {
       min-width: 68px;
-      border: 1px solid var(--border-base);
+      border: 1px solid var(--bf-appearance-token-border-base);
 
       &-primary {
-        border-color: var(--color-accent-400);
+        border-color: var(--bf-appearance-token-color-accent-400);
       }
     }
   }

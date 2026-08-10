@@ -390,6 +390,14 @@ pub async fn dispatch(
             let workspace_path = get_string(&request, "workspacePath")?;
             state
                 .coordinator
+                .ensure_workspace_runtime_ownership(
+                    std::path::Path::new(&workspace_path),
+                    None,
+                    None,
+                )
+                .map_err(|e| anyhow!("{}", e))?;
+            state
+                .coordinator
                 .delete_session(&PathBuf::from(workspace_path), &session_id)
                 .await
                 .map_err(|e| anyhow!("{}", e))?;
@@ -474,12 +482,23 @@ pub async fn dispatch(
         "cancel_session" => {
             let request = extract_request(&params)?;
             let session_id = get_string(&request, "sessionId")?;
-            state
+            let cancel_descendants = request
+                .get("cancelDescendants")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(true);
+            let dialog_turn_id = state
                 .coordinator
-                .cancel_active_turn_for_session(&session_id, Duration::from_secs(5))
+                .cancel_active_turn_for_session_with_descendant_policy(
+                    &session_id,
+                    Duration::from_secs(5),
+                    cancel_descendants,
+                )
                 .await
                 .map_err(|e| anyhow!("{}", e))?;
-            Ok(serde_json::Value::Null)
+            Ok(serde_json::json!({
+                "cancelled": dialog_turn_id.is_some(),
+                "dialogTurnId": dialog_turn_id,
+            }))
         }
         "get_session_messages" => {
             let request = params.get("request").unwrap_or(&params);

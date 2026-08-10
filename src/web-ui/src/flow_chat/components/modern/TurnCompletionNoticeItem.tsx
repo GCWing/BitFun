@@ -25,7 +25,7 @@ export const TurnCompletionNoticeItem: React.FC<TurnCompletionNoticeItemProps> =
   const body = notice.bodyKey ? t(notice.bodyKey) : null;
 
   return (
-    <div
+    <div data-bf-component="turn-completion-notice" data-bf-part="root" data-bf-tone={notice.tone}
       className={[
         'turn-completion-notice',
         `turn-completion-notice--${notice.tone}`,
@@ -33,21 +33,21 @@ export const TurnCompletionNoticeItem: React.FC<TurnCompletionNoticeItemProps> =
       role="note"
       aria-label={t(notice.titleKey)}
     >
-      <div className="turn-completion-notice__icon" aria-hidden="true">
+      <div data-bf-component="turn-completion-notice" data-bf-part="icon" className="turn-completion-notice__icon" aria-hidden="true">
         {getNoticeIcon(notice.tone)}
       </div>
-      <div className="turn-completion-notice__content">
-        <div className="turn-completion-notice__text">
-          <span className="turn-completion-notice__title">{t(notice.titleKey)}</span>
+      <div data-bf-component="turn-completion-notice" data-bf-part="content" className="turn-completion-notice__content">
+        <div data-bf-component="turn-completion-notice" data-bf-part="text" className="turn-completion-notice__text">
+          <span data-bf-component="turn-completion-notice" data-bf-part="title" className="turn-completion-notice__title">{t(notice.titleKey)}</span>
           {body ? (
             <>
               <span className="turn-completion-notice__separator" aria-hidden="true">·</span>
-              <span className="turn-completion-notice__body">{body}</span>
+              <span data-bf-component="turn-completion-notice" data-bf-part="body" className="turn-completion-notice__body">{body}</span>
             </>
           ) : null}
         </div>
-        <span className="turn-completion-notice__reason">
-          <code className="turn-completion-notice__reason-code">{notice.reasonCode}</code>
+        <span data-bf-component="turn-completion-notice" data-bf-part="reason" className="turn-completion-notice__reason">
+          <code data-bf-component="turn-completion-notice" data-bf-part="reasonCode" className="turn-completion-notice__reason-code">{notice.reasonCode}</code>
         </span>
       </div>
     </div>

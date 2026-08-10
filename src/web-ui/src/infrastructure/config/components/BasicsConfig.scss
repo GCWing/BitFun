@@ -1,4 +1,4 @@
-﻿@use '../../../component-library/styles/tokens.scss' as *;
+@use '../../../component-library/styles/tokens.scss' as *;
 
 .bitfun-basics-config__content {
   display: flex;
@@ -12,10 +12,6 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
-  }
-
-  &__select-wrapper {
-    width: 100%;
   }
 
   &__path-row {
@@ -42,18 +38,18 @@
     border: 1px solid transparent;
     border-radius: 6px;
     background: transparent;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     transition: background 0.15s, color 0.15s, border-color 0.15s;
 
     &:hover:not(:disabled) {
-      background: var(--element-bg-base);
-      border-color: var(--border-subtle);
-      color: var(--color-text-primary);
+      background: var(--bf-appearance-token-element-bg-base);
+      border-color: var(--bf-appearance-token-border-subtle);
+      color: var(--bf-appearance-token-color-text-primary);
     }
 
     &:active:not(:disabled) {
-      background: var(--element-bg-medium);
+      background: var(--bf-appearance-token-element-bg-medium);
     }
 
     &:disabled {
@@ -67,9 +63,9 @@
     padding: 10px 12px;
     border-radius: 6px;
     background: transparent;
-    border: 1px dashed var(--border-base);
-    color: var(--color-text-primary);
-    font-family: var(--font-family-mono);
+    border: 1px dashed var(--bf-appearance-token-border-base);
+    color: var(--bf-appearance-token-color-text-primary);
+    font-family: var(--bf-appearance-token-font-family-mono);
     font-size: 12px;
     word-break: break-all;
     overflow-wrap: anywhere;
@@ -84,10 +80,6 @@
     display: flex;
     flex-direction: column;
     gap: $size-gap-6;
-  }
-
-  &__select-wrapper {
-    width: 100%;
   }
 
   &__shell-option,
@@ -113,21 +105,22 @@
   }
 
   &__shell-tooltip-name {
-    font-weight: var(--font-weight-medium);
+    font-weight: var(--bf-appearance-token-font-weight-medium);
   }
 
   &__shell-tooltip-path {
     margin-top: 4px;
     overflow-wrap: anywhere;
-    font-family: var(--font-family-mono);
+    font-family: var(--bf-appearance-token-font-family-mono);
   }
 
   &__no-shells {
+    width: 100%;
     padding: 12px 16px;
-    border: 1px dashed var(--border-base);
+    border: 1px dashed var(--bf-appearance-token-border-base);
     border-radius: $size-radius-sm;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-sm);
   }
 }
 
@@ -158,8 +151,8 @@
 
     &--header {
       .bitfun-env-vars-config__cell {
-        color: var(--color-text-muted);
-        font-size: var(--font-size-xs);
+        color: var(--bf-appearance-token-color-text-muted);
+        font-size: var(--bf-appearance-token-font-size-xs);
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.04em;
@@ -179,10 +172,10 @@
 
   &__empty {
     padding: 12px 16px;
-    border: 1px dashed var(--border-base);
+    border: 1px dashed var(--bf-appearance-token-border-base);
     border-radius: $size-radius-sm;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-sm);
   }
 
   &__footer {

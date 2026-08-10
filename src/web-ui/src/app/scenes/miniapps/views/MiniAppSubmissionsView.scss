@@ -1,0 +1,419 @@
+@use '../../../../component-library/styles/tokens' as *;
+
+// One typographic scale for the whole submission workspace, borrowed from the
+// gallery/form primitives so nothing in here invents its own size:
+//   section title  13px / 600 / primary    — .gallery-zone__title
+//   section hint   12px / 400 / muted      — .gallery-zone__subtitle
+//   field label    13px / 500 / secondary  — .bitfun-input-label
+//   field value    13px / 400 / primary    — .select__value
+//   inline hint    12px / 400 / muted      — .bitfun-input-hint
+.miniapp-submissions {
+  // Label-to-control distance, shared by Input, Select and the textarea fields.
+  --submissions-label-gap: 6px;
+
+  &__header-actions {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+  }
+
+  // Match GalleryLayout's $content-max / $gutter so switching tabs inside the
+  // MiniApp scene doesn't shift content horizontally.
+  &__workspace,
+  &__remote-warning {
+    width: min(100%, 1360px);
+    margin-inline: auto;
+  }
+
+  // The shared Input renders its value at 14px while Select renders 13px; pin
+  // both to 13px so every control in the form reads at the same size.
+  .bitfun-input-container {
+    font-size: var(--bf-appearance-token-font-size-sm);
+  }
+
+  .select__label {
+    margin-bottom: var(--submissions-label-gap);
+  }
+
+  // Select's trigger is shrink-to-fit by default; stretch it so the dropdown
+  // lines up with the inputs above and below it.
+  .select__trigger {
+    width: 100%;
+  }
+
+  &__loading {
+    display: grid;
+    min-height: 360px;
+    place-items: center;
+    color: var(--bf-appearance-token-color-text-muted);
+  }
+
+  &__remote-warning {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    padding: 0 clamp(28px, 4vw, 64px) $size-gap-3;
+    color: var(--bf-appearance-token-color-warning);
+    font-size: var(--bf-appearance-token-font-size-sm);
+
+    svg {
+      flex: 0 0 auto;
+    }
+  }
+
+  &__workspace {
+    display: grid;
+    // Cap the form at a readable measure instead of letting single-line inputs
+    // stretch the full 1360px, and keep the history pinned to the right edge.
+    grid-template-columns: minmax(0, 620px) minmax(280px, 380px);
+    justify-content: space-between;
+    gap: $size-gap-5;
+    padding: $size-gap-3 clamp(28px, 4vw, 64px) 56px;
+  }
+
+  &__form,
+  &__history {
+    align-content: start;
+    display: grid;
+    gap: $size-gap-4;
+  }
+
+  &__history {
+    padding-left: $size-gap-5;
+    border-left: 1px solid var(--bf-appearance-token-border-subtle);
+  }
+
+  &__section-heading {
+    display: grid;
+    gap: 3px;
+
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h3 {
+      display: flex;
+      align-items: center;
+      gap: $size-gap-2;
+      color: var(--bf-appearance-token-color-text-primary);
+      font-size: var(--bf-appearance-token-font-size-sm);
+      font-weight: $font-weight-semibold;
+
+      svg {
+        flex: 0 0 auto;
+        color: var(--bf-appearance-token-color-text-muted);
+      }
+    }
+
+    p {
+      color: var(--bf-appearance-token-color-text-muted);
+      font-size: var(--bf-appearance-token-font-size-xs);
+      line-height: $line-height-relaxed;
+    }
+  }
+
+  &__form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: $size-gap-3;
+  }
+
+  &__field {
+    display: grid;
+    gap: var(--submissions-label-gap);
+
+    > span {
+      color: var(--bf-appearance-token-color-text-secondary);
+      font-size: var(--bf-appearance-token-font-size-sm);
+      font-weight: $font-weight-medium;
+      letter-spacing: 0.2px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 92px;
+      // Same box as .bitfun-input-container so the caret lines up with the
+      // single-line fields above it.
+      padding: 8px 12px;
+      border: 1px solid var(--bf-appearance-token-border-base);
+      border-radius: $size-radius-sm;
+      outline: none;
+      background: transparent;
+      color: var(--bf-appearance-token-color-text-primary);
+      font-family: inherit;
+      font-size: var(--bf-appearance-token-font-size-sm);
+      line-height: $line-height-base;
+      resize: vertical;
+      transition:
+        border-color $motion-fast ease,
+        box-shadow $motion-fast ease;
+
+      &::placeholder {
+        color: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 40%, var(--bf-appearance-token-color-bg-primary));
+      }
+
+      &:hover:not(:disabled) {
+        border-color: var(--bf-appearance-token-border-strong);
+      }
+
+      &:focus {
+        border-color: var(--bf-appearance-token-color-accent-500);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent);
+      }
+
+      &:disabled {
+        cursor: default;
+        opacity: var(--bf-appearance-token-opacity-disabled);
+      }
+    }
+  }
+
+  &__screenshots {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: $size-gap-3;
+    padding-top: $size-gap-3;
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+  }
+
+  &__screenshots-copy {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+
+    span {
+      color: var(--bf-appearance-token-color-text-secondary);
+      font-size: var(--bf-appearance-token-font-size-sm);
+      font-weight: $font-weight-medium;
+      letter-spacing: 0.2px;
+    }
+
+    small {
+      color: var(--bf-appearance-token-color-text-muted);
+      font-size: var(--bf-appearance-token-font-size-xs);
+      line-height: $line-height-relaxed;
+    }
+  }
+
+  &__screenshots-actions {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: $size-gap-2;
+  }
+
+  &__files {
+    display: grid;
+    gap: 6px;
+
+    > div {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: $size-gap-2;
+      padding: 7px 10px;
+      border-radius: $size-radius-sm;
+      background: var(--bf-appearance-token-element-bg-soft);
+      color: var(--bf-appearance-token-color-text-secondary);
+      font-size: var(--bf-appearance-token-font-size-sm);
+
+      svg {
+        color: var(--bf-appearance-token-color-text-muted);
+      }
+
+      span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      button {
+        display: grid;
+        padding: 3px;
+        border: 0;
+        border-radius: $size-radius-sm;
+        background: transparent;
+        color: var(--bf-appearance-token-color-text-muted);
+        cursor: pointer;
+        place-items: center;
+
+        &:hover {
+          background: var(--bf-appearance-token-element-bg-medium);
+          color: var(--bf-appearance-token-color-text-primary);
+        }
+      }
+    }
+  }
+
+  &__advanced-toggle {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-sm);
+    font-weight: $font-weight-medium;
+    cursor: pointer;
+    justify-self: start;
+    max-width: 100%;
+
+    &:hover {
+      color: var(--bf-appearance-token-color-text-primary);
+    }
+
+    svg {
+      flex: 0 0 auto;
+      color: var(--bf-appearance-token-color-text-muted);
+    }
+
+    small {
+      overflow: hidden;
+      color: var(--bf-appearance-token-color-text-muted);
+      font-size: var(--bf-appearance-token-font-size-xs);
+      font-weight: $font-weight-normal;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &__advanced {
+    display: grid;
+    gap: $size-gap-3;
+    padding-left: $size-gap-4;
+    border-left: 1px solid var(--bf-appearance-token-border-subtle);
+  }
+
+  &__progress {
+    display: grid;
+    gap: 7px;
+    padding: 10px 12px;
+    border-radius: $size-radius-sm;
+    background: var(--bf-appearance-token-element-bg-soft);
+
+    > div {
+      display: flex;
+      justify-content: space-between;
+      color: var(--bf-appearance-token-color-text-secondary);
+      font-size: var(--bf-appearance-token-font-size-xs);
+    }
+
+    strong {
+      color: var(--bf-appearance-token-color-text-primary);
+      font-weight: $font-weight-medium;
+      font-variant-numeric: tabular-nums;
+    }
+
+    progress {
+      width: 100%;
+      height: 5px;
+      accent-color: var(--bf-appearance-token-color-accent-500);
+    }
+  }
+
+  &__list {
+    display: grid;
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+
+    article {
+      display: grid;
+      gap: $size-gap-2;
+      padding: $size-gap-3 0;
+      border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    }
+  }
+
+  &__list-head {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+
+    > div {
+      display: grid;
+      min-width: 0;
+      gap: 2px;
+    }
+
+    strong,
+    small {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    strong {
+      color: var(--bf-appearance-token-color-text-primary);
+      font-size: var(--bf-appearance-token-font-size-sm);
+      font-weight: $font-weight-semibold;
+    }
+
+    small {
+      color: var(--bf-appearance-token-color-text-muted);
+      font-size: var(--bf-appearance-token-font-size-xs);
+    }
+  }
+
+  &__app-icon {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    flex: 0 0 auto;
+    border-radius: $size-radius-sm;
+    background: var(--bf-appearance-token-element-bg-soft);
+    color: var(--bf-appearance-token-color-text-primary);
+    place-items: center;
+  }
+
+  &__status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-2;
+  }
+
+  &__rejection {
+    margin: 0;
+    color: var(--bf-appearance-token-color-warning);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    line-height: $line-height-relaxed;
+  }
+
+  &__history-empty {
+    padding: 32px 0;
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-sm);
+    text-align: center;
+  }
+}
+
+@media (max-width: 860px) {
+  .miniapp-submissions {
+    &__workspace {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    &__history {
+      padding-top: $size-gap-5;
+      padding-left: 0;
+      border-top: 1px solid var(--bf-appearance-token-border-subtle);
+      border-left: 0;
+    }
+  }
+}
+
+@media (max-width: 620px) {
+  .miniapp-submissions {
+    &__form-grid {
+      grid-template-columns: 1fr;
+    }
+
+    &__screenshots {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+  }
+}

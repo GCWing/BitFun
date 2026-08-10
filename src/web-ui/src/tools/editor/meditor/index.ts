@@ -16,7 +16,6 @@ export * from './utils/tiptapMarkdown'
 
 export type {
   EditorMode,
-  EditorTheme,
   EditorOptions,
   EditorInstance,
   ToolbarButton,

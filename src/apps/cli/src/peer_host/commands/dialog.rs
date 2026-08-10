@@ -40,7 +40,8 @@ pub(crate) async fn start_dialog_turn(
     let user_input = get_string(request, "userInput")?;
     let original_user_input = optional_string(request, "originalUserInput");
     let agent_type = get_string(request, "agentType")?;
-    let workspace_path = optional_string(request, "workspacePath");
+    let workspace_path = optional_string(request, "projectWorkspacePath")
+        .or_else(|| optional_string(request, "workspacePath"));
     let remote_connection_id = optional_string(request, "remoteConnectionId");
     let remote_ssh_host = optional_string(request, "remoteSshHost");
     let controller_lease = attached_controller_lease()?;
@@ -69,6 +70,7 @@ pub(crate) async fn start_dialog_turn(
             message: user_input,
             original_message: original_user_input,
             turn_id: Some(turn_id.clone()),
+            execution: Default::default(),
             agent_type,
             workspace_path,
             remote_connection_id,
@@ -101,6 +103,7 @@ pub(crate) async fn start_dialog_turn(
                 requester_session_id: None,
                 reason: Some("Peer controller or event stream lost continuity".to_string()),
                 wait_timeout_ms: Some(1_500),
+                cancel_descendants: true,
             })
             .await;
         if let Err(error) = cancellation {
@@ -137,6 +140,7 @@ pub(crate) async fn cancel_dialog_turn(
             requester_session_id: None,
             reason: Some("Peer controller requested cancellation".to_string()),
             wait_timeout_ms: Some(1_500),
+            cancel_descendants: true,
         })
         .await
         .map_err(|error| format!("Failed to cancel dialog turn: {}", error.into_message()))?;

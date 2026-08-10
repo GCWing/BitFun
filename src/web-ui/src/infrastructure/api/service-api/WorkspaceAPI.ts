@@ -517,17 +517,27 @@ export class WorkspaceAPI {
       throw new DOMException('Search aborted', 'AbortError');
     }
 
-    return await Promise.race([
-      resultPromise,
-      new Promise<T>((_, reject) => {
-        const handleAbort = () => {
-          void this.cancelSearch(searchId);
-          reject(new DOMException(`${commandName} aborted`, 'AbortError'));
-        };
+    // Remove the abort listener once the race settles, so a long-lived
+    // AbortSignal does not keep accumulating dead handlers (mirrors the
+    // cleanup pattern in runSearchStream below).
+    let handleAbort: (() => void) | null = null;
 
-        signal.addEventListener('abort', handleAbort, { once: true });
-      })
-    ]);
+    const abortPromise = new Promise<T>((_, reject) => {
+      handleAbort = () => {
+        void this.cancelSearch(searchId);
+        reject(new DOMException(`${commandName} aborted`, 'AbortError'));
+      };
+      signal.addEventListener('abort', handleAbort, { once: true });
+    });
+
+    try {
+      return await Promise.race([resultPromise, abortPromise]);
+    } finally {
+      // No-op if the listener already fired ({ once: true }).
+      if (handleAbort) {
+        signal.removeEventListener('abort', handleAbort);
+      }
+    }
   }
 
   private supportsSearchStreamEvents(): boolean {
@@ -1141,7 +1151,7 @@ export class WorkspaceAPI {
    * - `system` releases the override and the native side returns the real
    *   system color mode (`"light"` or `"dark"`), so the web-ui can resolve a
    *   concrete theme without relying on `prefers-color-scheme` (which the OHOS
-   *   webview does not update live). ThemeService also polls this return value
+   *   webview does not update live). The Appearance runtime also polls this return value
    *   to follow live system theme changes on platforms where matchMedia is inert.
    *
    * Note: this carries only the color mode, not the theme id. The full theme

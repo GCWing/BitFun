@@ -4384,7 +4384,7 @@ mod tests {
         let resp = app
             .oneshot(
                 Request::builder()
-                    .uri(format!("/p/alice/fn/api/hello"))
+                    .uri("/p/alice/fn/api/hello".to_string())
                     .body(axum::body::Body::empty())
                     .unwrap(),
             )

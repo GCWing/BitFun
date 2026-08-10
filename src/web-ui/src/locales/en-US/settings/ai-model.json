@@ -46,7 +46,7 @@
   },
   "subscriptionAuth": {
     "sectionTitle": "Subscription accounts",
-    "sectionDescription": "Sign in to Codex, Antigravity, or OpenCode subscriptions and use them as model APIs",
+    "sectionDescription": "Sign in once to an OpenCode account and use either its Zen or Go API plan, alongside Codex and Antigravity",
     "rescan": "Refresh status",
     "import": "Use as model",
     "login": "Sign in",
@@ -71,8 +71,26 @@
       "apiKey": "API Key",
       "codex": "Codex (ChatGPT subscription)",
       "antigravity": "Antigravity (Google subscription)",
-      "opencode": "OpenCode Zen subscription"
+      "opencodeZen": "OpenCode account · Zen API",
+      "opencodeGo": "OpenCode account · Go API"
     },
+    "openCodePlans": {
+      "zen": {
+        "label": "OpenCode Zen",
+        "description": "Pay-as-you-go and free Zen models available to this OpenCode account"
+      },
+      "go": {
+        "label": "OpenCode Go",
+        "description": "Models billed against the Go subscription on this OpenCode account"
+      }
+    },
+    "openCodeFormats": {
+      "chatCompletions": "Chat Completions",
+      "responses": "Responses",
+      "messages": "Messages"
+    },
+    "useFormat": "Use {{format}}",
+    "useFormatWithCount": "Use {{format}} ({{modelCount}})",
     "detected": "Will use {{label}} ({{account}})",
     "notConnected": "{{kind}} is not signed in; sign in above first",
     "unknownAccount": "current account",
@@ -107,6 +125,10 @@
     "customTitle": "Custom Configuration",
     "customDescription": "Manually configure all parameters, suitable for private deployments or other unlisted providers",
     "getApiKey": "Get API Key",
+    "searchProviders": "Search providers or model names...",
+    "showAllProviders": "Show all {{count}} providers",
+    "collapseProviders": "Collapse the provider list",
+    "noProviderMatches": "No matching providers. Use the custom configuration above.",
     "fetchModels": "Fetch Models",
     "fetchHint": "Fetch the model list from the current provider; if it fails, fall back to common preset models",
     "fetchingModels": "Fetching model list...",
@@ -129,13 +151,19 @@
     "removeModel": "Remove model",
     "expandModelSettings": "Expand settings for {{name}}",
     "collapseModelSettings": "Collapse settings for {{name}}",
+    "unsavedModel": "Unsaved",
+    "unsavedModelHint": "This model has changes that have not been saved. Use Save at the bottom of the model editor to persist them.",
     "urlHint": "Official API URL pre-filled, modify if using proxy or private deployment",
     "formatHint": "Automatically selected based on provider, usually no need to change"
   },
   "providers": {
     "openbitfun": {
       "name": "OpenBitFun",
-      "description": "OpenBitFun Model Platform"
+      "description": "OpenBitFun Model Platform",
+      "urlOptions": {
+        "default": "Anthropic Format - Default",
+        "openai": "OpenAI Compatible Format"
+      }
     },
     "gemini": {
       "name": "Google Gemini",
@@ -147,39 +175,72 @@
     },
     "minimax": {
       "name": "MiniMax",
-      "description": "MiniMax series models"
+      "description": "MiniMax series models",
+      "urlOptions": {
+        "default": "China - Anthropic Format - Default",
+        "openai": "China - OpenAI Compatible",
+        "intl": "Global - Anthropic Format",
+        "intlOpenai": "Global - OpenAI Compatible"
+      }
     },
     "moonshot": {
       "name": "Moonshot AI",
-      "description": "Moonshot Kimi series models"
+      "description": "Moonshot Kimi series models",
+      "urlOptions": {
+        "default": "China - OpenAI Format - Default",
+        "anthropic": "China - Anthropic Format",
+        "intl": "Global - OpenAI Format",
+        "intlAnthropic": "Global - Anthropic Format",
+        "kimiForCoding": "Kimi For Coding plan (models: k3 / kimi-for-coding)"
+      }
     },
     "deepseek": {
       "name": "DeepSeek",
-      "description": "DeepSeek series models"
+      "description": "DeepSeek series models",
+      "urlOptions": {
+        "default": "OpenAI Format - Default",
+        "anthropic": "Anthropic Format"
+      }
     },
     "zhipu": {
       "name": "Zhipu AI",
       "description": "Zhipu AI GLM series models",
       "urlOptions": {
-        "default": "OpenAI Format - Default",
-        "anthropic": "Anthropic Format",
-        "codingPlan": "OpenAI Format - CodingPlan"
+        "default": "China - OpenAI Format - Default",
+        "anthropic": "China - Anthropic Format",
+        "codingPlan": "China - Coding Plan",
+        "intl": "Global (Z.AI) - OpenAI Format",
+        "intlAnthropic": "Global (Z.AI) - Anthropic Format",
+        "intlCodingPlan": "Global (Z.AI) - Coding Plan"
       }
     },
     "qwen": {
       "name": "Qwen",
-      "description": "Alibaba Cloud Bailian Model Platform"
+      "description": "Alibaba Cloud Bailian Model Platform",
+      "urlOptions": {
+        "default": "China - OpenAI Format - Default",
+        "intl": "Global (International) - OpenAI Format",
+        "codingPlan": "China - Coding Plan",
+        "codingPlanAnthropic": "China - Coding Plan - Anthropic Format",
+        "intlCodingPlan": "Global - Coding Plan"
+      }
     },
     "volcengine": {
       "name": "Volcano Engine",
-      "description": "ByteDance Volcano Engine Model Platform"
+      "description": "ByteDance Volcano Engine Model Platform",
+      "urlOptions": {
+        "default": "China - Default",
+        "codingPlan": "China - Coding Plan",
+        "intl": "Global (BytePlus)"
+      }
     },
     "siliconflow": {
       "name": "SiliconFlow",
       "description": "SiliconFlow Model Platform",
       "urlOptions": {
-        "default": "OpenAI Format - Default",
-        "anthropic": "Anthropic Format"
+        "default": "China - OpenAI Format - Default",
+        "anthropic": "China - Anthropic Format",
+        "intl": "Global - OpenAI Format"
       }
     },
     "nvidia": {
@@ -189,6 +250,10 @@
     "openrouter": {
       "name": "OpenRouter",
       "description": "OpenRouter Model Platform"
+    },
+    "tokendance": {
+      "name": "TokenDance",
+      "description": "Unified AI model gateway"
     }
   },
   "tabs": {
@@ -261,6 +326,63 @@
     "label": "Reasoning Effort",
     "hint": "Controls provider-specific reasoning depth for DeepSeek, the Responses API, and supported Claude adaptive reasoning models",
     "placeholder": "Use API default"
+  },
+  "reasoningPresets": {
+    "configTitle": "Reasoning settings",
+    "dialogTitle": "Reasoning settings · {{provider}} · {{model}}",
+    "catalogSource": "Reasoning preset source",
+    "catalogAuto": "Auto-detect",
+    "catalogModelsDev": "Use explicit models.dev model",
+    "catalogDisabled": "Custom presets only",
+    "catalogAutoTooltip": "Automatically detects reasoning presets for supported models on official provider endpoints. Custom presets are also included.",
+    "catalogModelsDevTooltip": "Uses the reasoning presets of a specific models.dev provider and model. Choose this when the configured model name is an alias or a compatible gateway requires an explicit binding.",
+    "catalogDisabledTooltip": "Disables generated presets from models.dev and adapter fallbacks. Only your custom presets remain available.",
+    "catalogSummary": {
+      "auto": "Auto-detect",
+      "modelsDev": "Explicit models.dev",
+      "disabled": "Custom only"
+    },
+    "catalogProvider": "models.dev provider",
+    "catalogModel": "models.dev model",
+    "catalogUnbound": "Not bound",
+    "catalogProviderCustomValueHint": "Use custom provider ID",
+    "catalogModelCustomValueHint": "Use custom model ID",
+    "defaultBehavior": "Default reasoning",
+    "defaultPreset": "Default preset",
+    "auto": "Auto (model default)",
+    "autoShort": "Auto",
+    "generatedTitle": "Generated presets",
+    "customTitle": "Custom presets",
+    "customTooltip": "Custom presets save a set of reasoning parameters as a selectable option in the chat input. Give each preset a unique ID and display name, then add the control supported by the model API: reasoning effort, a reasoning toggle, or a token budget. Add a request JSON patch only when provider-specific parameters are needed.",
+    "add": "Add preset",
+    "addAction": "Add action",
+    "empty": "No custom presets",
+    "id": "Preset ID",
+    "label": "Label",
+    "labelPlaceholder": "Display label",
+    "default": "Default",
+    "enabled": "Preset enabled",
+    "moveUp": "Move preset up",
+    "moveDown": "Move preset down",
+    "remove": "Remove preset",
+    "settingEffort": "Reasoning effort",
+    "effortSearchPlaceholder": "Select or enter an effort value",
+    "effortCustomValueHint": "Use custom effort value",
+    "effortCustomWarning": "Custom value; confirm that the model API supports it.",
+    "settingToggle": "On / off toggle",
+    "settingBudget": "Token budget",
+    "settingPatch": "Request JSON patch",
+    "actionSummaryEffort": "Effort: {{value}}",
+    "actionSummaryEnabled": "Reasoning on",
+    "actionSummaryDisabled": "Reasoning off",
+    "actionSummaryBudget": "Token budget: {{value}}",
+    "actionSummaryPatches": "{{count}} request patches",
+    "noActions": "No actions configured",
+    "invalidJson": "Enter a JSON object for the request patch.",
+    "summary": "{{source}} · Default: {{default}}",
+    "summaryWithCustom": "{{source}} · Default: {{default}} · {{count}} custom presets",
+    "apply": "Apply",
+    "validationError": "Fix the invalid preset source, default, actions, or JSON before applying."
   },
   "details": {
     "basicInfo": "Basic Information",
@@ -349,6 +471,7 @@
     "duplicateModelNameUnderProvider": "This provider already has a model with this name. Use a different name or edit the existing entry.",
     "invalidBaseUrlScheme": "API URL must start with http:// or https://",
     "contextWindowTooSmall": "Context window must be at least 32K tokens",
+    "invalidReasoningPresets": "Fix the reasoning preset IDs, settings, default selection, or JSON before saving.",
     "saveFailed": "Save failed",
     "deleteFailed": "Failed to delete configuration",
     "loadFailed": "Failed to load AI configuration",
@@ -367,6 +490,33 @@
     "cloneName": "{{name}} - Copy",
     "templateName": "{{provider}} - {{modelName}}",
     "templateDescription": "{{description}} - {{modelName}}"
+  },
+  "modelsDevCatalog": {
+    "title": "models.dev model catalog",
+    "detailsTitle": "models.dev catalog details",
+    "viewDetails": "View models.dev catalog details",
+    "description": "Catalog status used for reasoning preset provider and model bindings. It is checked automatically when model settings open.",
+    "activeSource": "Active source",
+    "source": { "cache": "Cache", "bundle": "Built-in snapshot", "empty": "Unavailable" },
+    "catalogSize": "Catalog size",
+    "catalogSizeValue": "{{providers}} providers · {{models}} reasoning models",
+    "cacheUpdatedAt": "Cache write time",
+    "cachePath": "Cache path",
+    "revision": "Revision",
+    "loading": "Loading…",
+    "noCache": "No cache created",
+    "refreshNow": "Update now",
+    "refreshing": "Updating…",
+    "refreshSuccess": "models.dev catalog updated",
+    "alreadyCurrent": "models.dev catalog is already up to date",
+    "refreshThrottled": "models.dev catalog was refreshed recently; please try again later",
+    "refreshFailed": "Failed to update models.dev catalog; continuing with the current catalog",
+    "reveal": "Show in folder",
+    "revealFailed": "Unable to open the cache folder",
+    "offlineTitle": "Updating without network access",
+    "offlineDescription": "On a device with internet access, download the original models.dev file, name it catalog.json, and place it in the cache directory above. Restart BitFun to apply it; Update now may overwrite this file.",
+    "downloadOriginal": "Download original catalog",
+    "openCacheDirectory": "Open cache directory"
   },
   "advancedSettings": {
     "title": "Advanced Settings",

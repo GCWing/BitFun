@@ -84,11 +84,11 @@ export const TurnRollbackButton: React.FC<TurnRollbackButtonProps> = ({
   };
   
   if (isCurrent) {
-    return <span className="turn-rollback-button-current">Current</span>;
+    return <span data-bf-component="turn-rollback-button" data-bf-part="root" data-bf-mode="current" className="turn-rollback-button-current">Current</span>;
   }
   
   return (
-    <button
+    <button data-bf-component="turn-rollback-button" data-bf-part="root" data-bf-mode="action" data-bf-state={loading ? 'loading' : ''}
       className="turn-rollback-button"
       onClick={handleRollback}
       disabled={loading}

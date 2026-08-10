@@ -24,7 +24,7 @@ use crate::client::{AIClient, StreamResponse};
 use crate::providers::shared;
 use crate::stream::handle_responses_stream;
 use crate::trace::ModelExchangeTraceConfig;
-use crate::types::{Message, ReasoningMode, ToolDefinition};
+use crate::types::{Message, ReasoningPresetAction, ToolDefinition};
 use anyhow::Result;
 use log::debug;
 use serde_json::{json, Value};
@@ -67,13 +67,13 @@ fn clamp_reasoning_effort(effort: &str) -> String {
     }
 }
 
-pub(crate) fn build_request_body(
+pub(crate) fn try_build_request_body(
     client: &AIClient,
     instructions: Option<String>,
     response_input: Vec<Value>,
     tools_flat: Option<Vec<Value>>,
     extra_body: Option<Value>,
-) -> Value {
+) -> Result<Value> {
     let mut body = json!({
         "model": client.config.model,
         "input": response_input,
@@ -91,19 +91,47 @@ pub(crate) fn build_request_body(
     // clamp `minimal -> low`, request encrypted reasoning trace for chain
     // continuity. When explicitly disabled, send `include: []` (empty array)
     // so the backend doesn't attach reasoning items it expects to be replayed.
-    if client.config.reasoning_mode != ReasoningMode::Disabled {
-        let effort = client
-            .config
-            .reasoning_effort
-            .as_deref()
-            .map(str::trim)
-            .filter(|v| !v.is_empty())
-            .map(clamp_reasoning_effort)
-            .unwrap_or_else(|| "medium".to_string());
-        body["reasoning"] = json!({ "effort": effort, "summary": "auto" });
-        body["include"] = json!(["reasoning.encrypted_content"]);
-    } else {
-        body["include"] = json!([]);
+    body["reasoning"] = json!({ "effort": "medium", "summary": "auto" });
+    body["include"] = json!(["reasoning.encrypted_content"]);
+    let base_reasoning_fields =
+        shared::capture_reasoning_fields(&body, &["reasoning", "include"], &[]);
+    let protected_keys = &[
+        "model",
+        "input",
+        "instructions",
+        "stream",
+        "store",
+        "include",
+        "tools",
+    ];
+    let compile = |action: &ReasoningPresetAction, body: &mut Value| -> Result<bool> {
+        match action {
+            ReasoningPresetAction::Effort { value } => {
+                body["reasoning"] = json!({
+                    "effort": clamp_reasoning_effort(value.trim()),
+                    "summary": "auto"
+                });
+                body["include"] = json!(["reasoning.encrypted_content"]);
+                Ok(true)
+            }
+            ReasoningPresetAction::Toggle { enabled: false } => {
+                body.as_object_mut().map(|body| body.remove("reasoning"));
+                body["include"] = json!([]);
+                Ok(true)
+            }
+            ReasoningPresetAction::Toggle { enabled: true } => {
+                body["reasoning"] = json!({ "effort": "medium", "summary": "auto" });
+                body["include"] = json!(["reasoning.encrypted_content"]);
+                Ok(true)
+            }
+            ReasoningPresetAction::BudgetTokens { .. } => Ok(false),
+            ReasoningPresetAction::RequestPatch { .. } => {
+                unreachable!("patches are compiled by shared code")
+            }
+        }
+    };
+    if let Some(preset) = client.model_reasoning_preset.as_ref() {
+        shared::apply_reasoning_actions(preset, &mut body, protected_keys, &[], compile)?;
     }
 
     let protected = shared::protect_request_body(
@@ -128,6 +156,15 @@ pub(crate) fn build_request_body(
     }
 
     shared::restore_protected_body(&mut body, protected);
+    if let Some(preset) = client.selected_reasoning_preset.as_ref() {
+        shared::reset_reasoning_fields(
+            &mut body,
+            base_reasoning_fields.as_ref(),
+            &["reasoning", "include"],
+            &[],
+        );
+        shared::apply_reasoning_actions(preset, &mut body, protected_keys, &[], compile)?;
+    }
 
     shared::log_request_body(
         TARGET,
@@ -137,7 +174,7 @@ pub(crate) fn build_request_body(
 
     attach_tools(&mut body, tools_flat);
 
-    body
+    Ok(body)
 }
 
 pub(crate) async fn send_stream(
@@ -158,7 +195,7 @@ pub(crate) async fn send_stream(
         OpenAIMessageConverter::convert_messages_to_responses_input(messages);
     let tools_flat = common::convert_tools_flat(tools);
     let request_body =
-        build_request_body(client, instructions, response_input, tools_flat, extra_body);
+        try_build_request_body(client, instructions, response_input, tools_flat, extra_body)?;
     let idle_timeout = client.stream_options.idle_timeout;
     let ttft_timeout = client.stream_options.ttft_timeout;
 

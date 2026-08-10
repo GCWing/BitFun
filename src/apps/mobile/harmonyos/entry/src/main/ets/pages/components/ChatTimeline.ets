@@ -1,4 +1,4 @@
-import { ChatMessage, ChatMessageItemResponse, RemoteQuestionAnswerPayload } from '../../model/RemoteModels';
+import { ConversationUiMessage, ConversationUiMessageItem, ConversationUiQuestionAnswer, toConversationUiMessage } from './ConversationUiModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ChatTimelineItem } from '../../services/ChatTimelineProjector';
 import { ChatSurface } from './ChatSurface';
@@ -19,15 +19,19 @@ export struct ChatTimeline {
   @Param downloadingFilePath: string = '';
   @Param downloadedFilePath: string = '';
   @Param fileDownloadStatus: string = '';
+  @Param activeFilePreviewPath: string = '';
+  @Param activeFilePreviewLoading: boolean = false;
+  @Param maxContentWidth: number = 0;
   @Event onLoadOlder: () => void = () => {};
   @Event onApproveTool: (toolId: string, updatedInput?: Object) => void =
     (_toolId: string, _updatedInput?: Object) => {};
   @Event onRejectTool: (toolId: string) => void = (_toolId: string) => {};
   @Event onCancelTool: (toolId: string) => void = (_toolId: string) => {};
-  @Event onAnswerQuestion: (toolId: string, answers: RemoteQuestionAnswerPayload) => void =
-    (_toolId: string, _answers: RemoteQuestionAnswerPayload) => {};
+  @Event onAnswerQuestion: (toolId: string, answers: ConversationUiQuestionAnswer) => void =
+    (_toolId: string, _answers: ConversationUiQuestionAnswer) => {};
   @Event onCopyMessage: (text: string) => void = (_text: string) => {};
   @Event onRetryMessage: (text: string) => void = (_text: string) => {};
+  @Event onOpenFilePreview: (path: string, label: string) => void = (_path: string, _label: string) => {};
   @Event onDownloadFile: (path: string) => void = (_path: string) => {};
 
   build() {
@@ -53,15 +57,14 @@ export struct ChatTimeline {
       .width('100%')
       .height('100%')
       .padding({ left: 20, right: 20, top: 0, bottom: 12 })
-      .stackFromEnd(true)
+      .stackFromEnd(false)
       .scrollBar(BarState.Off)
 
       if (this.surface === ChatSurface.Remote && this.timelineItems.length > 2) {
         Stack({ alignContent: Alignment.Center }) {
-          Image($r('app.media.remote_ref_down'))
-            .width(18)
-            .height(18)
-            .objectFit(ImageFit.Contain)
+          SymbolGlyph($r('sys.symbol.chevron_down'))
+            .fontSize(18)
+            .fontColor([INK])
         }
         .width(42)
         .height(42)
@@ -76,6 +79,8 @@ export struct ChatTimeline {
     }
     .layoutWeight(1)
     .width('100%')
+    .constraintSize({ maxWidth: this.maxContentWidth > 0 ? this.maxContentWidth : 10000 })
+    .alignSelf(ItemAlign.Center)
   }
 
   @Builder
@@ -119,7 +124,7 @@ export struct ChatTimeline {
       .onAppear(() => {
         this.logRenderedItem(item);
       })
-    } else if (item.message && this.shouldRenderMessage(item.message)) {
+    } else if (item.message && this.shouldRenderMessage(toConversationUiMessage(item.message))) {
       ListItem() {
         this.MessageBubble(item)
       }
@@ -137,13 +142,16 @@ export struct ChatTimeline {
   @Builder
   MessageBubble(item: ChatTimelineItem) {
     ChatMessageBubble({
-      item: item.message as ChatMessage,
+      item: toConversationUiMessage(item.message!),
       isStreaming: item.isStreaming,
       isFinalizing: item.isFinalizing,
+      showRetryAction: item.showRetryAction === true,
       isBusy: this.isBusy,
       downloadingFilePath: this.downloadingFilePath,
       downloadedFilePath: this.downloadedFilePath,
       fileDownloadStatus: this.fileDownloadStatus,
+      activeFilePreviewPath: this.activeFilePreviewPath,
+      activeFilePreviewLoading: this.activeFilePreviewLoading,
       onApproveTool: (toolId: string, updatedInput?: Object) => {
         this.onApproveTool(toolId, updatedInput);
       },
@@ -153,7 +161,7 @@ export struct ChatTimeline {
       onCancelTool: (toolId: string) => {
         this.onCancelTool(toolId);
       },
-      onAnswerQuestion: (toolId: string, answers: RemoteQuestionAnswerPayload) => {
+      onAnswerQuestion: (toolId: string, answers: ConversationUiQuestionAnswer) => {
         this.onAnswerQuestion(toolId, answers);
       },
       onCopyMessage: (text: string) => {
@@ -162,13 +170,16 @@ export struct ChatTimeline {
       onRetryMessage: (text: string) => {
         this.onRetryMessage(text);
       },
+      onOpenFilePreview: (path: string, label: string) => {
+        this.onOpenFilePreview(path, label);
+      },
       onDownloadFile: (path: string) => {
         this.onDownloadFile(path);
       }
     })
   }
 
-  private shouldRenderMessage(item: ChatMessage): boolean {
+  private shouldRenderMessage(item: ConversationUiMessage): boolean {
     return item.role === 'user' ||
       this.visibleMessageText(item).length > 0 ||
       (item.thinking || '').trim().length > 0 ||
@@ -179,8 +190,8 @@ export struct ChatTimeline {
       item.status === 'failed';
   }
 
-  private hasRenderableItems(items: ChatMessageItemResponse[]): boolean {
-    return items.some((entry: ChatMessageItemResponse) => {
+  private hasRenderableItems(items: ConversationUiMessageItem[]): boolean {
+    return items.some((entry: ConversationUiMessageItem) => {
       if ((entry.content || '').trim().length > 0 || !!entry.tool) {
         return true;
       }
@@ -188,7 +199,7 @@ export struct ChatTimeline {
     });
   }
 
-  private visibleMessageText(item: ChatMessage): string {
+  private visibleMessageText(item: ConversationUiMessage): string {
     const text = item.text.trim();
     if (text === '(空消息)' || text === '(empty message)') {
       return '';

@@ -7,8 +7,8 @@
   position: relative;
   width: 100%;
   background: transparent;
-  font-family: var(--font-family-mono);
-  font-size: var(--flowchat-font-size-sm);
+  font-family: var(--bf-appearance-token-font-family-mono);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
   font-weight: 400;
   
   &__content {
@@ -26,11 +26,11 @@
     }
     
     &::-webkit-scrollbar-thumb {
-      background: var(--scrollbar-thumb);
+      background: var(--bf-appearance-token-scrollbar-thumb);
       border-radius: 3px;
 
       &:hover {
-        background: var(--scrollbar-thumb-hover);
+        background: var(--bf-appearance-token-scrollbar-thumb-hover);
       }
     }
   }
@@ -40,22 +40,22 @@
     align-items: center;
     justify-content: center;
     min-height: 60px;
-    color: var(--color-text-muted);
-    font-size: var(--flowchat-font-size-sm);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
     font-style: italic;
   }
   
   &__placeholder {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-style: italic;
   }
 
   &__truncation-notice {
     padding: 0.25rem 0.625rem;
-    font-size: var(--flowchat-font-size-xs);
-    color: var(--color-text-muted);
-    background: var(--color-bg-tertiary);
-    border-bottom: 1px solid var(--border-subtle);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
+    background: var(--bf-appearance-token-color-bg-tertiary);
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
     font-style: italic;
   }
 }
@@ -64,7 +64,7 @@
   display: flex;
   align-items: stretch;
   min-height: 22px;
-  line-height: var(--flowchat-code-line-height);
+  line-height: var(--bf-appearance-token-flowchat-code-line-height);
   cursor: pointer;
   transition: background-color 0.15s ease;
   
@@ -76,32 +76,32 @@
     background: transparent;
     
     .diff-line__prefix {
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
     }
   }
   
   &--added {
-    background: color-mix(in srgb, var(--git-color-added) 10%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-git-color-added) 10%, transparent);
 
     .diff-line__gutter {
-      background: color-mix(in srgb, var(--git-color-added) 15%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-git-color-added) 15%, transparent);
     }
 
     .diff-line__prefix {
-      color: var(--git-color-added);
+      color: var(--bf-appearance-token-git-color-added);
       font-weight: 500;
     }
   }
 
   &--removed {
-    background: color-mix(in srgb, var(--git-color-deleted) 10%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-git-color-deleted) 10%, transparent);
 
     .diff-line__gutter {
-      background: color-mix(in srgb, var(--git-color-deleted) 15%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-git-color-deleted) 15%, transparent);
     }
 
     .diff-line__prefix {
-      color: var(--git-color-deleted);
+      color: var(--bf-appearance-token-git-color-deleted);
       font-weight: 500;
     }
     
@@ -112,17 +112,17 @@
   
   // Highlighted row (selected).
   &--highlighted {
-    background: var(--color-accent-200) !important;
+    background: var(--bf-appearance-token-color-accent-200) !important;
 
     .diff-line__gutter {
-      background: var(--color-accent-300) !important;
+      background: var(--bf-appearance-token-color-accent-300) !important;
     }
   }
   
   &--separator {
-    background: var(--color-bg-tertiary);
+    background: var(--bf-appearance-token-color-bg-tertiary);
     justify-content: center;
-    padding: var(--flowchat-inline-gap) 0;
+    padding: var(--bf-appearance-token-flowchat-inline-gap) 0;
     cursor: default;
     
     &:hover {
@@ -134,8 +134,8 @@
     }
     
     .diff-line__content--separator {
-      color: var(--color-text-muted);
-      font-size: var(--flowchat-font-size-xs);
+      color: var(--bf-appearance-token-color-text-muted);
+      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
       font-style: italic;
       text-align: center;
     }
@@ -147,9 +147,9 @@
     flex-shrink: 0;
     padding: 0 8px;
     gap: 0.125rem;
-    background: var(--color-bg-secondary);
+    background: var(--bf-appearance-token-color-bg-secondary);
     user-select: none;
-    border-right: 1px solid var(--border-subtle);
+    border-right: 1px solid var(--bf-appearance-token-border-subtle);
 
     &--single {
       padding: 0 4px;
@@ -166,12 +166,12 @@
     min-width: 32px;
     padding: 0 6px;
     text-align: right;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.6;
-    font-size: var(--flowchat-font-size-xs);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
 
     &--original {
-      border-right: 1px solid var(--border-subtle);
+      border-right: 1px solid var(--bf-appearance-token-border-subtle);
       padding-right: 8px;
     }
 
@@ -220,53 +220,53 @@
 }
 
 // Light theme: softer, lower-saturation palette.
-:root[data-theme="light"] .inline-diff-preview,
-:root[data-theme-type="light"] .inline-diff-preview,
+:root[data-bf-appearance-mode="light"] .inline-diff-preview,
+:root[data-bf-appearance-mode="light"] .inline-diff-preview,
 .light .inline-diff-preview {
   .diff-line {
     &--added {
-      background: color-mix(in srgb, var(--git-color-added) 10%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-git-color-added) 10%, transparent);
 
       .diff-line__gutter {
-        background: color-mix(in srgb, var(--git-color-added) 18%, transparent);
+        background: color-mix(in srgb, var(--bf-appearance-token-git-color-added) 18%, transparent);
       }
 
       .diff-line__prefix {
-        color: var(--git-color-added);
+        color: var(--bf-appearance-token-git-color-added);
       }
     }
 
     &--removed {
-      background: color-mix(in srgb, var(--git-color-deleted) 10%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-git-color-deleted) 10%, transparent);
 
       .diff-line__gutter {
-        background: color-mix(in srgb, var(--git-color-deleted) 18%, transparent);
+        background: color-mix(in srgb, var(--bf-appearance-token-git-color-deleted) 18%, transparent);
       }
 
       .diff-line__prefix {
-        color: var(--git-color-deleted);
+        color: var(--bf-appearance-token-git-color-deleted);
       }
     }
 
     &--highlighted {
-      background: var(--color-accent-200) !important;
+      background: var(--bf-appearance-token-color-accent-200) !important;
 
       .diff-line__gutter {
-        background: var(--color-accent-300) !important;
+        background: var(--bf-appearance-token-color-accent-300) !important;
       }
     }
   }
 
   .diff-line__gutter {
-    background: var(--element-bg-subtle);
-    border-right-color: var(--border-subtle);
+    background: var(--bf-appearance-token-element-bg-subtle);
+    border-right-color: var(--bf-appearance-token-border-subtle);
   }
 
   .diff-line__num {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
 
     &--original {
-      border-right-color: var(--border-subtle);
+      border-right-color: var(--bf-appearance-token-border-subtle);
     }
   }
 }

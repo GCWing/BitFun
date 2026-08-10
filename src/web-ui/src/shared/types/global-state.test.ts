@@ -99,6 +99,24 @@ describe('createGlobalStateAPI workspace startup bootstrap', () => {
     expect(globalApiMocks.initializeWorkspaceStartupState).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps MiniApp-owned workspaces out of the recent list', async () => {
+    const snapshot = createWorkspaceSnapshot();
+    const miniAppWorkspace = {
+      ...snapshot.recentWorkspaces[0],
+      id: 'workspace-miniapp',
+      name: 'deck-1785130332234-eilik4',
+      rootPath:
+        '/Users/me/Library/Application Support/bitfun/data/miniapps/builtin-ppt-live/decks/deck-1785130332234-eilik4',
+    };
+    snapshot.recentWorkspaces = [...snapshot.recentWorkspaces, miniAppWorkspace];
+    bootstrapGlobals.__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__ = snapshot;
+
+    const api = createGlobalStateAPI();
+    const state = await api.initializeWorkspaceStartupState();
+
+    expect(state.recentWorkspaces.map(workspace => workspace.id)).toEqual(['workspace-1']);
+  });
+
   it('falls back to the startup command when the bootstrap snapshot is invalid', async () => {
     bootstrapGlobals.__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__ = { recentWorkspaces: [] };
     globalApiMocks.initializeWorkspaceStartupState.mockResolvedValue(createWorkspaceSnapshot());

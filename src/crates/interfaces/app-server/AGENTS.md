@@ -1,0 +1,77 @@
+[中文](AGENTS-CN.md) | **English**
+
+# App Server Server and Wiring Guide
+
+Scope: this guide applies only to `src/crates/interfaces/app-server` and its
+server-side production wiring.
+
+The App Server surface is split across four owners:
+
+| Owner | Responsibility |
+|---|---|
+| `app-server-protocol` | Methods, wire DTOs, wire errors, event envelopes, and schema-free protocol roles |
+| `app-server-client` | Typed requests, typed events, connection behavior, and a host-supplied transport abstraction |
+| `app-server` | Server lifecycle, production handler registration, event forwarding, Runtime/domain-to-wire conversion, and error mapping |
+| Product Host under `src/apps/*` | Concrete transport, authentication, connection scope, capability/limit construction, platform capabilities, process supervision, and shutdown |
+
+Do not add new protocol or client ownership to this crate. Compatibility
+modules and re-exports may remain while consumers migrate, but new methods,
+DTOs, wire errors, and typed client behavior belong in the adjacent protocol
+and client crates.
+
+## Guardrails
+
+- Keep compatibility role and transport helpers schema-free. Do not hard-code
+  domain methods or business behavior into `AppServer` / `AppClient`, stream
+  direction helpers, or in-memory transport constructors.
+- `AppServer` / `AppClient` are custom protocol counterparts. Do not reuse the
+  built-in ACP `Agent` / `Client` roles. Preserve the required per-role
+  `HasPeer` implementation.
+- Transport constructors must pin
+  `ByteStreams::new(outgoing, incoming)` direction; never expose a swap-prone
+  API. The Host chooses and owns the concrete transport.
+- Register only production handlers backed by a real Runtime, Service, or
+  Product Domain owner. A handler validates the wire contract and converts
+  types; it must not hold a second copy of Session, Permission, Config,
+  capability, or lifecycle state.
+- This crate may select only the narrow `bitfun-core` owner features required
+  by registered handlers. `bitfun-core/product-full` is forbidden. Add a new
+  owner feature only with the corresponding boundary verification.
+- Host-specific authentication, identity, workspace/execution scope,
+  capability availability, transport limits, platform providers, process
+  lifecycle, and connection fan-out stay in the Host. Do not infer them from a
+  generic server default or global environment.
+- Handlers must offload Runtime calls or return immediately. Do not call
+  `SentRequest::block_task` inside a handler callback; reply through
+  `responder.respond_with_result`.
+
+## Event Delivery
+
+Runtime events cross the App Server connection; they are not a client-side
+Host subscription:
+
+- The server receives an injected `AgentEventSource` associated with the same
+  Runtime owner and forwards typed Agent, Permission, Config, and stream-state
+  notifications through the connection.
+- The typed client crate receives and fans out those notifications. A Host
+  must not make its App Server client subscribe directly to the Core
+  `EventQueue`, because that creates a protocol bypass.
+- Connection-local sequence/cursor and sync behavior must remain explicit.
+  Do not describe it as persisted cross-connection replay or resume unless
+  such an owner and contract are implemented.
+
+## Error Mapping
+
+Map Runtime and domain failures to protocol-owned wire errors in this server
+adapter. Keep stable kinds and structured data, and do not leak Runtime
+internals. Host transport/auth/scope failures remain Host-owned; owner
+failures use helpers such as `BitfunAppRuntime::runtime_error` and
+`session_runtime_error`.
+
+## Verification
+
+```bash
+cargo check -p bitfun-app-server --offline
+cargo test -p bitfun-app-server --offline
+pnpm run check:core-boundaries
+```

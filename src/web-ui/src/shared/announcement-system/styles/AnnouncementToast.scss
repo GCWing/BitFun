@@ -47,18 +47,18 @@ $toast-width: 320px;
     &--1 {
       z-index: 2;
       transform: rotate(-8deg);
-      background: var(--color-bg-secondary);
-      border: 1px solid var(--border-base);
-      box-shadow: 0 8px 20px var(--color-overlay-black-12);
+      background: var(--bf-appearance-token-color-bg-secondary);
+      border: 1px solid var(--bf-appearance-token-border-base);
+      box-shadow: 0 8px 20px var(--bf-appearance-token-color-overlay-black-12);
     }
 
     // Ghost 2: tilted right  →  fans right on hover
     &--2 {
       z-index: 1;
       transform: rotate(8deg);
-      background: var(--color-bg-tertiary);
-      border: 1px solid var(--border-subtle);
-      box-shadow: 0 6px 16px rgba(var(--color-static-black-rgb), 0.09);
+      background: var(--bf-appearance-token-color-bg-tertiary);
+      border: 1px solid var(--bf-appearance-token-border-subtle);
+      box-shadow: 0 6px 16px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.09);
     }
   }
 
@@ -66,7 +66,7 @@ $toast-width: 320px;
   &:hover {
     > .announcement-toast {
       transform: translateY(-10px) scale(1.025);
-      box-shadow: 0 16px 40px var(--color-overlay-black-20);
+      box-shadow: 0 16px 40px var(--bf-appearance-token-color-overlay-black-20);
     }
 
     .announcement-toast-ghost--1 {
@@ -86,10 +86,10 @@ $toast-width: 320px;
   max-width: $toast-width;
   display: flex;
   flex-direction: column;
-  background: var(--color-bg-primary);
-  border: 1px solid var(--border-base);
+  background: var(--bf-appearance-token-color-bg-primary);
+  border: 1px solid var(--bf-appearance-token-border-base);
   border-radius: $size-radius-lg;
-  box-shadow: 0 6px 24px rgba(var(--color-static-black-rgb), 0.14);
+  box-shadow: 0 6px 24px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.14);
   overflow: hidden;
 
   &--entering {
@@ -117,9 +117,9 @@ $toast-width: 320px;
     flex: 1;
     min-width: 0;
     margin: 0;
-    font-size: var(--font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: $font-weight-semibold;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     line-height: 1.45;
     letter-spacing: -0.01em;
     display: -webkit-box;
@@ -152,13 +152,13 @@ $toast-width: 320px;
 
   &__ring-track {
     fill: none;
-    stroke: var(--border-base);
+    stroke: var(--bf-appearance-token-border-base);
     stroke-width: 1.5;
   }
 
   &__ring-fill {
     fill: none;
-    stroke: var(--color-accent-500);
+    stroke: var(--bf-appearance-token-color-accent-500);
     stroke-width: 1.5;
     stroke-linecap: round;
     stroke-dasharray: $ring-circumference;
@@ -179,7 +179,7 @@ $toast-width: 320px;
     background: transparent;
     border: none;
     border-radius: 50%;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
     transition: background $motion-base $easing-standard, color $motion-base $easing-standard;
 
@@ -189,8 +189,8 @@ $toast-width: 320px;
     }
 
     &:hover {
-      background: var(--color-bg-secondary);
-      color: var(--color-text-primary);
+      background: var(--bf-appearance-token-color-bg-secondary);
+      color: var(--bf-appearance-token-color-text-primary);
     }
   }
 
@@ -198,8 +198,8 @@ $toast-width: 320px;
   &__desc {
     margin: 0;
     padding: 8px 16px 0;
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: 1.55;
     display: -webkit-box;
     -webkit-line-clamp: 3;
@@ -221,7 +221,7 @@ $toast-width: 320px;
   &__btn {
     padding: 5px 14px;
     border-radius: $size-radius-sm;
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
     font-weight: $font-weight-medium;
     border: none;
     cursor: pointer;
@@ -229,8 +229,8 @@ $toast-width: 320px;
     white-space: nowrap;
 
     &--primary {
-      background: var(--color-accent-500);
-      color: var(--color-static-white);
+      background: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-appearance-token-color-static-white);
 
       &:hover { opacity: 0.9; }
       &:active { transform: scale(0.98); }
@@ -238,12 +238,12 @@ $toast-width: 320px;
 
     &--secondary {
       background: transparent;
-      color: var(--color-text-secondary);
-      border: 1px solid var(--border-base);
+      color: var(--bf-appearance-token-color-text-secondary);
+      border: 1px solid var(--bf-appearance-token-border-base);
 
       &:hover {
-        background: var(--color-bg-secondary);
-        color: var(--color-text-primary);
+        background: var(--bf-appearance-token-color-bg-secondary);
+        color: var(--bf-appearance-token-color-text-primary);
       }
     }
   }

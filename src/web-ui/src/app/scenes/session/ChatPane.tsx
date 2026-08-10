@@ -8,6 +8,7 @@
 import React, { useCallback, memo, useEffect, useRef } from 'react';
 import { ModernFlowChatContainer as FlowChatContainer } from '../../../flow_chat/components/modern/ModernFlowChatContainer';
 import { ChatInput } from '../../../flow_chat/components/ChatInput';
+import type { ChatInputRegistration } from '../../../flow_chat/components/chatInputRegistration';
 import { useCanvasStore } from '../../components/panels/content-canvas/stores/canvasStore';
 import type { LineRange } from '@/component-library';
 import path from 'path-browserify';
@@ -29,6 +30,13 @@ interface ChatPaneProps {
   workspacePath?: string;
   isDragging?: boolean;
   showChatInput?: boolean;
+  /** Optional host-owned replacement for the empty-session welcome surface. */
+  emptyState?: React.ReactNode;
+  /**
+   * Content/transport registered into the shared ChatInput. The owner may
+   * customize these bounded extension points but cannot replace the composer.
+   */
+  chatInputRegistration?: ChatInputRegistration;
 }
 
 const ChatPaneInner: React.FC<ChatPaneProps> = ({
@@ -38,6 +46,8 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
   workspacePath,
   isDragging: _isDragging = false,
   showChatInput = false,
+  emptyState,
+  chatInputRegistration,
 }) => {
   const addTab = useCanvasStore(state => state.addTab);
   const deferredTaskDetailTimersRef = useRef<number[]>([]);
@@ -140,7 +150,7 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
   }, [addPanelTab]);
 
   return (
-    <div
+    <div data-bf-component="chat-pane" data-bf-part="root"
       className="bitfun-chat-pane__content"
       data-shortcut-scope="chat"
       data-fullscreen={isFullscreen}
@@ -148,7 +158,9 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
     >
       <FlowChatContainer
         className="bitfun-chat-pane__chat-container"
+        isViewportActive={isSceneActive}
         permissionPanelAboveChatInput={showChatInput}
+        emptyState={emptyState}
         onOpenVisualization={(type, data) => {
           log.info('Opening visualization', { type, data });
         }}
@@ -158,14 +170,14 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
         config={{
           enableMarkdown: true,
           autoScroll: true,
-          showTimestamps: false,
-          theme: 'auto'
+          showTimestamps: false
         }}
       />
       {showChatInput && (
         <ChatInput
           isSceneActive={isSceneActive}
           onSendMessage={(_message: string) => {}}
+          registration={chatInputRegistration}
         />
       )}
     </div>

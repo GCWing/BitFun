@@ -175,13 +175,13 @@
 /* ========== Animation utilities ========== */
 
 /* Base animation classes */
-.anim-fade-in { animation: fadeIn var(--motion-fast) var(--easing-standard); }
-.anim-fade-in-slow { animation: fadeIn var(--motion-base) var(--easing-standard); }
-.anim-fade-in-up { animation: fadeInUp var(--motion-base) var(--easing-standard); }
-.anim-slide-in-up { animation: slideInUp var(--motion-base) var(--easing-standard); }
-.anim-slide-in-left { animation: slideInLeft var(--motion-base) var(--easing-standard); }
-.anim-slide-in-right { animation: slideInRight var(--motion-base) var(--easing-standard); }
-.anim-scale-in { animation: scaleIn var(--motion-fast) var(--easing-standard); }
+.anim-fade-in { animation: fadeIn var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard); }
+.anim-fade-in-slow { animation: fadeIn var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard); }
+.anim-fade-in-up { animation: fadeInUp var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard); }
+.anim-slide-in-up { animation: slideInUp var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard); }
+.anim-slide-in-left { animation: slideInLeft var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard); }
+.anim-slide-in-right { animation: slideInRight var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard); }
+.anim-scale-in { animation: scaleIn var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard); }
 
 /* Interaction animation classes */
 .anim-pulse { animation: pulse 2s ease-in-out infinite; }
@@ -197,24 +197,24 @@
 /* ========== Hover effect classes ========== */
 
 .hover-lift {
-  transition: transform var(--motion-fast) var(--easing-standard);
+  transition: transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 }
 .hover-lift:hover {
   transform: translateY(-2px);
 }
 
 .hover-scale {
-  transition: transform var(--motion-fast) var(--easing-standard);
+  transition: transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 }
 .hover-scale:hover {
   transform: scale(1.05);
 }
 
 .hover-glow {
-  transition: box-shadow var(--motion-fast) var(--easing-standard);
+  transition: box-shadow var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 }
 .hover-glow:hover {
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--bf-appearance-token-shadow-lg);
 }
 
 /* Glow sweep effect */
@@ -231,7 +231,7 @@
   height: 100%;
   background: linear-gradient(90deg,
     transparent,
-    var(--color-overlay-white-20),
+    var(--bf-appearance-token-color-overlay-white-20),
     transparent);
   transition: left 0.5s ease;
   pointer-events: none;
@@ -246,29 +246,29 @@
 /* Static utility effect; themed components should use their owning surface tokens. */
 /* Base glass effect */
 .glass-base {
-  background: var(--glass-bg-base);
-  border: 1px solid var(--glass-border-base);
+  background: var(--bf-appearance-token-glass-bg-base);
+  border: 1px solid var(--bf-appearance-token-glass-border-base);
   backdrop-filter: blur(8px) saturate(1.1);
   -webkit-backdrop-filter: blur(8px) saturate(1.1);
-  box-shadow: var(--shadow-base);
+  box-shadow: var(--bf-appearance-token-shadow-base);
 }
 
 /* Enhanced glass effect on hover */
 .glass-hover {
-  transition: all var(--motion-base) var(--easing-standard);
+  transition: all var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
 }
 .glass-hover:hover {
-  background: var(--glass-bg-hover);
-  border-color: var(--glass-border-hover);
-  box-shadow: var(--shadow-lg);
+  background: var(--bf-appearance-token-glass-bg-hover);
+  border-color: var(--bf-appearance-token-glass-border-hover);
+  box-shadow: var(--bf-appearance-token-shadow-lg);
   transform: translateY(-1px);
 }
 
 /* Active glass effect */
 .glass-active {
-  background: var(--glass-bg-active);
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-xl);
+  background: var(--bf-appearance-token-glass-bg-active);
+  border-color: var(--bf-appearance-token-border-strong);
+  box-shadow: var(--bf-appearance-token-shadow-xl);
 }
 
 /* ========== Decorative effects ========== */
@@ -284,9 +284,9 @@
   height: 2px;
   background: linear-gradient(90deg,
     transparent 0%,
-    var(--color-overlay-white-20) 20%,
-    rgba(var(--color-static-white-rgb), 0.3) 50%,
-    var(--color-overlay-white-20) 80%,
+    var(--bf-appearance-token-color-overlay-white-20) 20%,
+    rgba(var(--bf-appearance-token-color-static-white-rgb), 0.3) 50%,
+    var(--bf-appearance-token-color-overlay-white-20) 80%,
     transparent 100%);
   border-radius: 2px;
   opacity: 0.4;
@@ -304,9 +304,9 @@
   right: 0;
   bottom: 0;
   background: linear-gradient(135deg,
-    var(--color-overlay-white-04) 0%,
+    var(--bf-appearance-token-color-overlay-white-04) 0%,
     transparent 50%,
-    color-mix(in srgb, var(--color-static-white) 1%, transparent) 100%);
+    color-mix(in srgb, var(--bf-appearance-token-color-static-white) 1%, transparent) 100%);
   pointer-events: none;
   z-index: 1;
   border-radius: inherit;
@@ -347,8 +347,8 @@
 /* High-performance mode - mobile optimization */
 @media (max-width: 768px) {
   .glass-base {
-    backdrop-filter: var(--blur-subtle);
-    -webkit-backdrop-filter: var(--blur-subtle);
+    backdrop-filter: var(--bf-appearance-token-blur-subtle);
+    -webkit-backdrop-filter: var(--bf-appearance-token-blur-subtle);
   }
 
   .anim-glass-shine,

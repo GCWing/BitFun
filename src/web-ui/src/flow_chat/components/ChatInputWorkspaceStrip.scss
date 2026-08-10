@@ -27,12 +27,12 @@
   /* Room for descenders (g, y, p) */
   /* Collapsed capsule uses 18px horizontal padding on `.bitfun-chat-input__box`; match so strip text lines up with pill content */
   padding: 3px 18px 4px;
-  font-family: var(--font-family-sans);
-  font-size: var(--flowchat-font-size-xxs);
-  line-height: var(--flowchat-support-line-height);
+  font-family: var(--bf-appearance-token-font-family-sans);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+  line-height: var(--bf-appearance-token-flowchat-support-line-height);
   font-weight: 400;
   letter-spacing: 0.01em;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   user-select: text;
   pointer-events: auto;
 
@@ -73,6 +73,46 @@
     flex: none;
   }
 
+  // One-click branch sync is a primary recovery/review path for remote work,
+  // so it gets accent treatment rather than the muted default of other controls.
+  &__dispatch-result {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 18px;
+    max-width: 140px;
+    padding: 0 5px;
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 45%, transparent);
+    border-radius: $size-radius-sm;
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent);
+    color: var(--bf-appearance-token-color-accent-500);
+    font: inherit;
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    line-height: 1;
+    cursor: pointer;
+    transition:
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard;
+
+    &:hover {
+      border-color: var(--bf-appearance-token-color-accent-500);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 22%, transparent);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--bf-appearance-token-color-accent-500);
+      outline-offset: 1px;
+    }
+
+    > span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
   &__permission-trigger {
     box-sizing: border-box;
     display: inline-flex;
@@ -86,9 +126,9 @@
     border: 1px solid transparent;
     border-radius: $size-radius-sm;
     background: transparent;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font: inherit;
-    font-size: var(--flowchat-font-size-xxs);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
     line-height: 1;
     letter-spacing: 0;
     cursor: pointer;
@@ -99,12 +139,12 @@
 
     &:hover:not(:disabled),
     &--open:not(:disabled) {
-      background: var(--element-bg-medium);
-      color: var(--color-text-secondary);
+      background: var(--bf-appearance-token-element-bg-medium);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--color-accent-500);
+      outline: 2px solid var(--bf-appearance-token-color-accent-500);
       outline-offset: 1px;
     }
 
@@ -119,41 +159,41 @@
     }
 
     &--ask {
-      border-color: var(--color-success-border);
-      background: var(--color-success-bg);
-      color: var(--color-success);
+      border-color: var(--bf-appearance-token-color-success-border);
+      background: var(--bf-appearance-token-color-success-bg);
+      color: var(--bf-appearance-token-color-success);
 
       &:hover:not(:disabled),
       &.bitfun-chat-input-workspace-strip__permission-trigger--open {
-        border-color: color-mix(in srgb, var(--color-success) 62%, transparent);
-        background: color-mix(in srgb, var(--color-success) 17%, transparent);
-        color: var(--color-success);
+        border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 62%, transparent);
+        background: color-mix(in srgb, var(--bf-appearance-token-color-success) 17%, transparent);
+        color: var(--bf-appearance-token-color-success);
       }
     }
 
     &--auto {
-      border-color: color-mix(in srgb, var(--color-warning) 42%, transparent);
-      background: color-mix(in srgb, var(--color-warning) 11%, transparent);
-      color: var(--color-warning);
+      border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 42%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 11%, transparent);
+      color: var(--bf-appearance-token-color-warning);
 
       &:hover:not(:disabled),
       &.bitfun-chat-input-workspace-strip__permission-trigger--open {
-        border-color: color-mix(in srgb, var(--color-warning) 62%, transparent);
-        background: color-mix(in srgb, var(--color-warning) 17%, transparent);
-        color: var(--color-warning);
+        border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 62%, transparent);
+        background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 17%, transparent);
+        color: var(--bf-appearance-token-color-warning);
       }
     }
 
     &--full_access {
-      border-color: var(--color-error-border);
-      background: var(--color-error-bg);
-      color: var(--color-error);
+      border-color: var(--bf-appearance-token-color-error-border);
+      background: var(--bf-appearance-token-color-error-bg);
+      color: var(--bf-appearance-token-color-error);
 
       &:hover:not(:disabled),
       &.bitfun-chat-input-workspace-strip__permission-trigger--open {
-        border-color: color-mix(in srgb, var(--color-error) 56%, transparent);
-        background: color-mix(in srgb, var(--color-error) 15%, transparent);
-        color: var(--color-error);
+        border-color: color-mix(in srgb, var(--bf-appearance-token-color-error) 56%, transparent);
+        background: color-mix(in srgb, var(--bf-appearance-token-color-error) 15%, transparent);
+        color: var(--bf-appearance-token-color-error);
       }
     }
 
@@ -169,19 +209,189 @@
     white-space: nowrap;
   }
 
+  // Scope is chosen per click: the row body writes the session, the trailing
+  // button arms the same mode for one submission only.
+  // The row owns the background so hover and selection cover the trailing
+  // controls as well; the inner button stays transparent.
+  &__permission-option-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding-right: 8px;
+    border-radius: $size-radius-sm;
+
+    &:hover,
+    &:focus-within {
+      background: var(--bf-appearance-token-element-bg-medium);
+    }
+
+    &--selected {
+      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 9%, transparent);
+
+      &:hover,
+      &:focus-within {
+        background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent);
+      }
+    }
+  }
+
+  &__permission-option-trailing {
+    display: flex;
+    flex: none;
+    align-items: center;
+    min-width: 16px;
+    justify-content: flex-end;
+  }
+
+  &__permission-option-check {
+    flex: none;
+    color: var(--bf-appearance-token-color-accent-500);
+  }
+
+  // Session state and a temporary override share one slot, so the checkmark
+  // steps aside exactly when the one-off control claims it.
+  &__permission-option-row:hover &__permission-option-check,
+  &__permission-option-row:focus-within &__permission-option-check,
+  &__permission-option-row--armed &__permission-option-check {
+    display: none;
+  }
+
+  &__permission-option-icon {
+    flex: none;
+
+    &--ask {
+      color: var(--bf-appearance-token-color-success);
+    }
+
+    &--auto {
+      color: var(--bf-appearance-token-color-warning);
+    }
+
+    &--full_access {
+      color: var(--bf-appearance-token-color-error);
+    }
+  }
+
+  // Hidden until the row is hovered or focused so the menu stays compact; an
+  // armed one stays visible because a pending override must not be invisible.
+  &__permission-option-next-turn {
+    flex: none;
+    display: none;
+    padding: 1px 5px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-muted);
+    font: inherit;
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    line-height: 1.4;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover:not(:disabled),
+    &:focus-visible {
+      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-appearance-token-element-bg-medium);
+      outline: none;
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.5;
+    }
+
+    &--armed {
+      display: inline-flex;
+      color: var(--bf-appearance-token-color-accent-500);
+      font-weight: 600;
+    }
+  }
+
+  &__permission-option-row:hover &__permission-option-next-turn,
+  &__permission-option-row:focus-within &__permission-option-next-turn {
+    display: inline-flex;
+  }
+
+  // Marks a pending one-off override. A session-level choice is not dotted:
+  // the trigger label already names it, and it is not waiting to expire.
+  &__permission-next-turn-dot {
+    flex: none;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--bf-appearance-token-color-accent-500);
+  }
+
+  // The reset row keeps a trailing shortcut into the settings page that owns
+  // the default it follows, revealed on hover so the menu stays quiet.
+  &__permission-action-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding-right: 6px;
+    border-radius: $size-radius-sm;
+
+    &:hover,
+    &:focus-within {
+      background: var(--bf-appearance-token-element-bg-medium);
+    }
+
+    .bitfun-chat-input-workspace-strip__permission-visibility-action {
+      flex: 1 1 auto;
+      padding-right: 0;
+
+      &:hover,
+      &:focus-visible {
+        background: transparent;
+      }
+    }
+  }
+
+  &__permission-action-settings {
+    flex: none;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-muted);
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-appearance-token-element-bg-strong);
+      outline: none;
+    }
+  }
+
+  &__permission-action-row:hover &__permission-action-settings,
+  &__permission-action-row:focus-within &__permission-action-settings {
+    display: inline-flex;
+  }
+
   &__permission-menu {
-    position: absolute;
-    right: 0;
-    bottom: calc(100% + 7px);
-    z-index: 10;
+    position: fixed;
+    z-index: $z-popover;
     box-sizing: border-box;
-    width: min(286px, calc(100vw - 24px));
+    // Sized to the widest row now that mode descriptions are tooltips: the
+    // header's scope label (longest for dispatched sessions) rather than the
+    // option rows, which are single-line.
+    width: min(240px, calc(100vw - 16px));
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
     padding: 6px;
-    border: 1px solid var(--border-subtle);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: $size-radius-base;
-    background: var(--color-bg-elevated);
-    box-shadow: var(--shadow-lg);
-    color: var(--color-text-primary);
+    background: var(--bf-appearance-token-color-bg-elevated);
+    box-shadow: var(--bf-appearance-token-shadow-lg);
+    color: var(--bf-appearance-token-color-text-primary);
+    font-family: var(--bf-appearance-token-font-family-sans);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
     user-select: none;
   }
 
@@ -192,13 +402,26 @@
     gap: 8px;
     min-height: 24px;
     padding: 0 7px 4px;
-    color: var(--color-text-secondary);
-    font-size: var(--flowchat-font-size-xxs);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
     font-weight: 600;
     letter-spacing: 0;
 
+    // A longer localized scope label truncates instead of wrapping the header
+    // onto a second line and reopening the width the tooltips just reclaimed.
+    span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    span:first-child {
+      flex: none;
+    }
+
     span:last-child {
-      color: var(--color-text-muted);
+      min-width: 0;
+      color: var(--bf-appearance-token-color-text-muted);
       font-weight: 400;
     }
   }
@@ -209,35 +432,31 @@
     gap: 2px;
   }
 
+  &__permission-menu-divider {
+    height: 1px;
+    margin: 6px 2px;
+    background: var(--bf-appearance-token-border-subtle);
+  }
+
   &__permission-option {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 16px;
+    display: flex;
+    flex: 1 1 auto;
     align-items: center;
-    gap: 10px;
-    width: 100%;
-    min-height: 48px;
-    padding: 7px 8px;
+    gap: 7px;
+    min-width: 0;
+    min-height: 30px;
+    padding: 5px 0 5px 8px;
     border: 0;
     border-radius: $size-radius-sm;
     background: transparent;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     font: inherit;
     letter-spacing: 0;
     text-align: left;
     cursor: pointer;
 
-    &:hover:not(:disabled),
     &:focus-visible {
-      background: var(--element-bg-medium);
       outline: none;
-    }
-
-    &--selected {
-      background: color-mix(in srgb, var(--color-accent-500) 9%, transparent);
-
-      > svg {
-        color: var(--color-accent-500);
-      }
     }
 
     &:disabled {
@@ -246,26 +465,40 @@
     }
   }
 
-  &__permission-option-copy {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
   &__permission-option-label {
-    color: var(--color-text-primary);
-    font-size: var(--flowchat-font-size-xs);
+    min-width: 0;
+    overflow: hidden;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
     font-weight: 500;
     line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  &__permission-option-description {
-    color: var(--color-text-muted);
-    font-size: var(--flowchat-font-size-xxs);
-    font-weight: 400;
-    line-height: 1.35;
-    white-space: normal;
+  &__permission-visibility-action {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    min-height: 32px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-secondary);
+    font: inherit;
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    letter-spacing: 0;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--bf-appearance-token-element-bg-medium);
+      color: var(--bf-appearance-token-color-text-primary);
+      outline: none;
+    }
   }
 
   &__goal-btn.icon-btn {
@@ -281,38 +514,38 @@
   }
 
   &__goal-btn--none.icon-btn {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.72;
 
     &:hover:not(:disabled) {
       transform: none;
       border-radius: 50%;
-      background: color-mix(in srgb, var(--color-text-muted) 12%, var(--element-bg-medium));
-      color: var(--color-text-secondary);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 12%, var(--bf-appearance-token-element-bg-medium));
+      color: var(--bf-appearance-token-color-text-secondary);
       opacity: 1;
     }
   }
 
   &__goal-btn--active.icon-btn {
-    color: var(--color-warning);
+    color: var(--bf-appearance-token-color-warning);
 
     &:hover:not(:disabled) {
       transform: none;
       border-radius: 50%;
-      background: color-mix(in srgb, var(--color-warning) 12%, var(--element-bg-medium));
-      color: var(--color-warning);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 12%, var(--bf-appearance-token-element-bg-medium));
+      color: var(--bf-appearance-token-color-warning);
       opacity: 1;
     }
   }
 
   &__goal-btn--complete.icon-btn {
-    color: var(--color-success);
+    color: var(--bf-appearance-token-color-success);
 
     &:hover:not(:disabled) {
       transform: none;
       border-radius: 50%;
-      background: color-mix(in srgb, var(--color-success) 12%, var(--element-bg-medium));
-      color: var(--color-success);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 12%, var(--bf-appearance-token-element-bg-medium));
+      color: var(--bf-appearance-token-color-success);
       opacity: 1;
     }
   }
@@ -324,13 +557,13 @@
     min-width: 16px;
     border-radius: 50%;
     opacity: 0.86;
-    color: color-mix(in srgb, var(--color-accent-500) 62%, var(--color-text-secondary));
+    color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 62%, var(--bf-appearance-token-color-text-secondary));
 
     &:hover:not(:disabled) {
       transform: none;
       border-radius: 50%;
-      background: color-mix(in srgb, var(--color-accent-500) 10%, var(--element-bg-medium));
-      color: color-mix(in srgb, var(--color-accent-500) 86%, var(--color-text-primary));
+      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, var(--bf-appearance-token-element-bg-medium));
+      color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 86%, var(--bf-appearance-token-color-text-primary));
       opacity: 1;
     }
 
@@ -356,7 +589,7 @@
     cursor: default;
 
     &:hover {
-      background: var(--element-bg-medium);
+      background: var(--bf-appearance-token-element-bg-medium);
     }
 
     &--workspace {
@@ -371,6 +604,69 @@
       max-width: 35%;
       gap: 3px;
     }
+
+    /* Checkbox-style chip: reads as a control without competing with the branch. */
+    &--worktree {
+      align-items: center;
+      flex: none;
+      gap: 4px;
+      margin-left: 4px;
+      border: 1px solid var(--bf-appearance-token-border-subtle);
+      background: transparent;
+      color: var(--bf-appearance-token-color-text-muted);
+      font: inherit;
+      font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+      line-height: 1;
+      white-space: nowrap;
+      cursor: pointer;
+
+      &:hover:not(:disabled) {
+        background: var(--bf-appearance-token-element-bg-medium);
+        color: var(--bf-appearance-token-color-text-secondary);
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--bf-appearance-token-color-accent-500);
+        outline-offset: 1px;
+      }
+
+      &:disabled {
+        cursor: default;
+        opacity: 0.55;
+      }
+    }
+
+    &--worktree-on {
+      border-color: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-appearance-token-color-accent-500);
+
+      &:hover:not(:disabled) {
+        color: var(--bf-appearance-token-color-accent-500);
+      }
+    }
+  }
+
+  /*
+   * The UI font (Noto Sans SC) has CJK vertical metrics — 1.16em ascent against
+   * 0.32em descent — so `align-items: center` centers a line box whose glyphs sit
+   * ~0.06em below its middle. Beside the checkbox icon, which centers exactly,
+   * the label reads as low. The 1px bottom pad lifts the glyphs by half of it,
+   * matching what `__workspace` and `__branch` already carry; the icon still
+   * sets the 11px content box, so the chip's height is unchanged.
+   */
+  &__worktree-label {
+    padding-bottom: 1px;
+  }
+
+  &__worktree-icon {
+    flex-shrink: 0;
+    width: 11px;
+    height: 11px;
+    color: inherit;
+
+    &.is-spinning {
+      animation: bitfun-chat-input-workspace-strip-spin 0.9s linear infinite;
+    }
   }
 
   &__workspace {
@@ -382,14 +678,14 @@
     text-overflow: ellipsis;
     padding-bottom: 1px;
     max-width: 100%;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__branch-icon {
     flex-shrink: 0;
     width: 11px;
     height: 11px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.9;
   }
 
@@ -402,13 +698,13 @@
     overflow: hidden;
     text-overflow: ellipsis;
     padding-bottom: 1px;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__sep {
     flex: none;
     padding: 0 3px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-weight: 400;
   }
 }
@@ -424,5 +720,11 @@
     &__permission-label {
       display: none;
     }
+  }
+}
+
+@keyframes bitfun-chat-input-workspace-strip-spin {
+  to {
+    transform: rotate(360deg);
   }
 }

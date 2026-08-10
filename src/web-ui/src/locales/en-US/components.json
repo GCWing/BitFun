@@ -269,19 +269,19 @@
           "label": "disabled: ",
           "text": "use the disabled attribute; opacity is reduced to 0.5"
         },
-        "theme": {
-          "label": "theme support: ",
-          "text": "the primary variant supports theming via CSS variables"
+        "appearance": {
+          "label": "appearance support: ",
+          "text": "the primary variant follows Appearance variables"
         }
       }
     },
     "previewApp": {
       "title": "BitFun Component Library",
-      "themeLabel": "Theme",
-      "themeTypeLight": "Light",
-      "themeTypeDark": "Dark",
-      "themeDescriptionLight": "Light theme",
-      "themeDescriptionDark": "Dark theme",
+      "appearanceLabel": "Appearance",
+      "appearanceModeLight": "Light",
+      "appearanceModeDark": "Dark",
+      "appearanceDescriptionLight": "Light appearance",
+      "appearanceDescriptionDark": "Dark appearance",
       "sidebarTitle": "Component Navigation",
       "expandSidebar": "Expand navigation",
       "collapseSidebar": "Collapse navigation",

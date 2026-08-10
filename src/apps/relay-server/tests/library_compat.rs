@@ -20,7 +20,9 @@ fn legacy_library_path_exposes_supported_relay_api() {
     let _ = RoomManager::new;
     let _ = relay::room::RoomManager::new;
     let _ = routes::api::health_check;
-    let _ = routes::api::server_info();
+    // Pin the symbol, not a call: `server_info` is async, and `let _ =` on the
+    // returned future would drop it unpolled.
+    let _ = routes::api::server_info;
     let _: Option<ResponsePayload> = None;
     let _ = std::mem::size_of::<AppState>();
     let _ = AppState {
@@ -37,6 +39,7 @@ fn legacy_library_path_exposes_supported_relay_api() {
         login_rate_limiter: Arc::new(routes::auth::LoginRateLimiter::new()),
         device_manager: relay::DeviceManager::new(),
         cors_allow_origins: Arc::new(Vec::new()),
+        page_browser_auth: None,
     };
 
     fn require_store<T: WebAssetStore>() {}

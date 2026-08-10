@@ -7,36 +7,36 @@ describe('Canvas runtime installer', () => {
   it('keeps iframe-local shape, spacing, and type fallbacks out of the host payload contract', () => {
     const runtimeCss = readFileSync(new URL('./styles/canvas-runtime.scss', import.meta.url), 'utf8');
     const iframeFallbackVars = [
-      '--font-size-xs',
-      '--font-size-sm',
-      '--font-size-base',
-      '--font-size-lg',
-      '--font-size-2xl',
-      '--font-weight-medium',
-      '--font-weight-semibold',
-      '--size-radius-sm',
-      '--size-radius-base',
-      '--size-radius-md',
-      '--size-radius-lg',
-      '--size-radius-xl',
-      '--size-radius-2xl',
-      '--size-radius-full',
-      '--size-gap-1',
-      '--size-gap-2',
-      '--size-gap-3',
-      '--size-gap-4',
-      '--size-gap-5',
-      '--size-gap-6',
-      '--size-gap-8',
-      '--size-gap-10',
-      '--size-gap-12',
-      '--size-gap-16',
+      '--bf-appearance-token-font-size-xs',
+      '--bf-appearance-token-font-size-sm',
+      '--bf-appearance-token-font-size-base',
+      '--bf-appearance-token-font-size-lg',
+      '--bf-appearance-token-font-size-2xl',
+      '--bf-appearance-token-font-weight-medium',
+      '--bf-appearance-token-font-weight-semibold',
+      '--bf-appearance-token-size-radius-sm',
+      '--bf-appearance-token-size-radius-base',
+      '--bf-appearance-token-size-radius-md',
+      '--bf-appearance-token-size-radius-lg',
+      '--bf-appearance-token-size-radius-xl',
+      '--bf-appearance-token-size-radius-2xl',
+      '--bf-appearance-token-size-radius-full',
+      '--bf-appearance-token-size-gap-1',
+      '--bf-appearance-token-size-gap-2',
+      '--bf-appearance-token-size-gap-3',
+      '--bf-appearance-token-size-gap-4',
+      '--bf-appearance-token-size-gap-5',
+      '--bf-appearance-token-size-gap-6',
+      '--bf-appearance-token-size-gap-8',
+      '--bf-appearance-token-size-gap-10',
+      '--bf-appearance-token-size-gap-12',
+      '--bf-appearance-token-size-gap-16',
     ];
 
     for (const name of iframeFallbackVars) {
       expect(runtimeCss).toContain(`${name}:`);
     }
-    const smallFontSizeValues = [...runtimeCss.matchAll(/--font-size-sm:\s*([^;]+);/g)].map(
+    const smallFontSizeValues = [...runtimeCss.matchAll(/--bf-appearance-token-font-size-sm:\s*([^;]+);/g)].map(
       (match) => match[1]?.trim()
     );
 
@@ -64,11 +64,11 @@ describe('Canvas runtime installer', () => {
     expect(script).not.toContain('function DependencyGraph');
   });
 
-  it('syncs browser color scheme when the host theme changes', () => {
+  it('syncs browser color scheme when the host appearance changes', () => {
     const script = buildCanvasRuntimeInstallerScript('rev_test');
 
-    expect(script).toContain('nextTheme.type === "dark" || nextTheme.type === "light"');
-    expect(script).toContain('document.documentElement.style.colorScheme = nextTheme.type');
+    expect(script).toContain('nextAppearance.type === "dark" || nextAppearance.type === "light"');
+    expect(script).toContain('document.documentElement.style.colorScheme = nextAppearance.type');
   });
 
   it('installs design-mode element selection handlers', () => {

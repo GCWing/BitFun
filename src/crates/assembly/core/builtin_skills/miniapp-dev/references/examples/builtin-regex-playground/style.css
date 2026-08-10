@@ -70,7 +70,7 @@ body, html { margin: 0; padding: 0; height: 100%; }
 /* Light-theme local overrides — host already swaps --bitfun-* tokens, but a
  * few decorative pieces (rgba accent washes, capture-group badge, code chips)
  * benefit from sturdier alpha / hue picks against a near-white surface. */
-[data-theme-type="light"] {
+[data-bf-appearance-mode="light"] {
   --rx-accent-soft: rgba(71,85,105,0.10);
   --rx-match-soft:  rgba(192,140,66,0.18);
   --rx-group:       #6b5a89;
@@ -711,21 +711,21 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 }
 
 /* ── Light theme adaptation ─────────────────────────────────────────────
- * The host (see bridge_builder.rs) writes [data-theme-type="light"] on <html>
+ * The host (see bridge_builder.rs) writes [data-bf-appearance-mode="light"] on <html>
  * AND repaints all --bitfun-* CSS variables. Because every --rx-* token above
  * already proxies through var(--bitfun-…), most of the playground re-tints
  * automatically. Only a handful of decorative pieces — page wash, frosted
  * topbar tint — need an explicit ivory pass. */
-[data-theme-type="light"] .rx {
+[data-bf-appearance-mode="light"] .rx {
   background:
     radial-gradient(1000px 500px at 90% -10%, rgba(71,85,105,0.05), transparent 60%),
     radial-gradient(900px 500px at -10% 110%, rgba(124,58,237,0.04), transparent 55%),
     var(--rx-bg);
 }
-[data-theme-type="light"] .topbar {
+[data-bf-appearance-mode="light"] .topbar {
   background: color-mix(in srgb, var(--rx-bg) 85%, transparent);
   border-bottom-color: var(--rx-border);
 }
-[data-theme-type="light"] .pattern-error {
+[data-bf-appearance-mode="light"] .pattern-error {
   color: #b91c1c;
 }

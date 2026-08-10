@@ -103,6 +103,21 @@ const PRESETS: AcpClientPreset[] = [
 
 const PRESET_BY_ID = new Map(PRESETS.map(preset => [preset.id, preset]));
 
+interface SelfManagedInstallInfo extends Record<string, string> {
+  name: string;
+  command: string;
+}
+
+function selfManagedInstallInfoForPreset(preset?: AcpClientPreset): SelfManagedInstallInfo | null {
+  if (!preset || !SELF_MANAGED_INSTALL_PRESET_IDS.has(preset.id)) {
+    return null;
+  }
+  return {
+    name: preset.name,
+    command: preset.command,
+  };
+}
+
 function loadRequirementProbes(options: { force?: boolean } = {}): Promise<AcpClientRequirementProbe[]> {
   return ACPClientAPI.probeClientRequirements({ force: options.force });
 }
@@ -344,7 +359,7 @@ function AgentStatusBadge({
 
 const AcpAgentsConfig: React.FC = () => {
   const { t } = useTranslation('settings/acp-agents');
-  const { error: notifyError, success: notifySuccess } = useNotification();
+  const { error: notifyError, info: notifyInfo, success: notifySuccess } = useNotification();
   const jsonEditorRef = useRef<HTMLTextAreaElement>(null);
 
   const [config, setConfig] = useState<AcpClientConfigFile>({ acpClients: {} });
@@ -682,7 +697,10 @@ const AcpAgentsConfig: React.FC = () => {
     ),
   });
 
-  const saveConfig = async (nextConfig = config, options: { mergeEnvDrafts?: boolean } = {}) => {
+  const saveConfig = async (
+    nextConfig = config,
+    options: { mergeEnvDrafts?: boolean; successMessage?: string } = {}
+  ) => {
     savingConfigRef.current = true;
     try {
       setSaving(true);
@@ -698,7 +716,7 @@ const AcpAgentsConfig: React.FC = () => {
       await refreshRequirementProbes({ force: true, notifyOnError: false });
       loadedRemoteProbeIdsRef.current.clear();
       setRemoteProbeRefreshNonce(prev => prev + 1);
-      notifySuccess(t('notifications.saveSuccess'));
+      notifySuccess(options.successMessage ?? t('notifications.saveSuccess'));
     } catch (error) {
       log.error('Failed to save ACP agent config', error);
       notifyError(error instanceof Error ? error.message : String(error), {
@@ -710,7 +728,10 @@ const AcpAgentsConfig: React.FC = () => {
     }
   };
 
-  const addPresetClient = async (preset: AcpClientPreset) => {
+  const addPresetClient = async (
+    preset: AcpClientPreset,
+    options: { manualCliRequired?: boolean } = {}
+  ) => {
     const nextClient = defaultConfigForPreset(preset);
     const next = {
       ...config,
@@ -726,7 +747,15 @@ const AcpAgentsConfig: React.FC = () => {
       [preset.id]: formatEnv(nextClient.env),
     }));
     setDirty(true);
-    await saveConfig(next, { mergeEnvDrafts: false });
+    await saveConfig(next, {
+      mergeEnvDrafts: false,
+      successMessage: options.manualCliRequired
+        ? t('notifications.configAddedManualCliRequired', {
+          name: preset.name,
+          command: preset.command,
+        })
+        : t('notifications.configAdded'),
+    });
   };
 
   const saveJsonConfig = async () => {
@@ -824,8 +853,9 @@ const AcpAgentsConfig: React.FC = () => {
     issueKind: RequirementIssueKind;
     probe?: AcpClientRequirementProbe;
     requiresAdapter: boolean;
+    selfManagedInstallInfo?: SelfManagedInstallInfo | null;
   }) => {
-    const { status, issueKind, probe, requiresAdapter } = args;
+    const { status, issueKind, probe, requiresAdapter, selfManagedInstallInfo } = args;
     const lines: string[] = [];
     if (status === 'enabled') {
       lines.push(t('registry.enabled'));
@@ -848,7 +878,11 @@ const AcpAgentsConfig: React.FC = () => {
     } else if (issueKind === 'adapter_missing' || (requiresAdapter && probe?.adapter && !probe.adapter.installed)) {
       lines.push(t('registry.acpMissingDetail'));
     } else if (issueKind === 'cli_missing' || probe?.tool.installed === false) {
-      lines.push(t('registry.cliMissingDetail'));
+      lines.push(
+        selfManagedInstallInfo
+          ? t('registry.selfManagedCliMissingDetail', selfManagedInstallInfo)
+          : t('registry.cliMissingDetail')
+      );
     } else if (status === 'invalid') {
       lines.push(t('registry.configInvalidDetail'));
     }
@@ -874,6 +908,12 @@ const AcpAgentsConfig: React.FC = () => {
   const getRemoteSummary = useCallback((available: number, total: number) => {
     return t('remote.summary', { available, total });
   }, [t]);
+
+  const showSelfManagedInstallInfo = useCallback((info: SelfManagedInstallInfo) => {
+    notifyInfo(t('registry.selfManagedCliMissingDetail', info), {
+      title: t('registry.cliMissing'),
+    });
+  }, [notifyInfo, t]);
 
   const openLearnMore = useCallback(() => {
     void systemAPI.openExternal('https://agentclientprotocol.com/get-started/introduction').catch((error) => {
@@ -902,15 +942,28 @@ const AcpAgentsConfig: React.FC = () => {
   }, [config.acpClients]);
 
   return (
-    <ConfigPageLayout className="bitfun-acp-agents">
+    <ConfigPageLayout
+      className="bitfun-acp-agents"
+      data-bf-component="acp-agents-config"
+      data-bf-part="root"
+      data-bf-view={showJsonEditor ? 'json' : 'registry'}
+    >
       <ConfigPageHeader
         title={t('title')}
         subtitle={t('subtitle')}
       />
 
-      <ConfigPageContent>
-        <ConfigPageSectionStack className="bitfun-acp-agents__manager">
-          <div className="bitfun-acp-agents__toolbar">
+      <ConfigPageContent data-bf-component="acp-agents-config" data-bf-part="content">
+        <ConfigPageSectionStack
+          className="bitfun-acp-agents__manager"
+          data-bf-component="acp-agents-config"
+          data-bf-part="manager"
+        >
+          <div
+            className="bitfun-acp-agents__toolbar"
+            data-bf-component="acp-agents-config"
+            data-bf-part="toolbar"
+          >
             <Input
               className="bitfun-acp-agents__search"
               value={registrySearch}
@@ -975,6 +1028,8 @@ const AcpAgentsConfig: React.FC = () => {
               <Textarea
                 ref={jsonEditorRef}
                 className="bitfun-acp-agents__json-textarea"
+                data-bf-component="acp-agents-config"
+                data-bf-part="jsonEditor"
                 value={jsonConfig}
                 onChange={(event) => {
                   setJsonConfig(event.target.value);
@@ -997,7 +1052,11 @@ const AcpAgentsConfig: React.FC = () => {
                 rows={16}
                 spellCheck={false}
               />
-              <div className="bitfun-acp-agents__json-actions">
+              <div
+                className="bitfun-acp-agents__json-actions"
+                data-bf-component="acp-agents-config"
+                data-bf-part="jsonActions"
+              >
                 <Button variant="secondary" size="small" onClick={() => setJsonConfig(formatConfig(config))}>
                   {t('actions.revert')}
                 </Button>
@@ -1010,11 +1069,19 @@ const AcpAgentsConfig: React.FC = () => {
 
           <ConfigPageSection title={t('registry.title')} description={t('registry.description')}>
           {loading ? (
-            <div className="bitfun-acp-agents__empty">{t('clients.loading')}</div>
+            <div className="bitfun-acp-agents__empty" data-bf-component="acp-agents-config" data-bf-part="empty">
+              {t('clients.loading')}
+            </div>
           ) : registryPresets.length === 0 && visibleCustomClientRows.length === 0 ? (
-            <div className="bitfun-acp-agents__empty">{t('registry.empty')}</div>
+            <div className="bitfun-acp-agents__empty" data-bf-component="acp-agents-config" data-bf-part="empty">
+              {t('registry.empty')}
+            </div>
           ) : (
-            <div className="bitfun-acp-agents__registry-list">
+            <div
+              className="bitfun-acp-agents__registry-list"
+              data-bf-component="acp-agents-config"
+              data-bf-part="registryList"
+            >
               {registryPresets.map(preset => {
                 const clientConfig = config.acpClients[preset.id] ?? defaultConfigForPreset(preset);
                 const requirementProbe = probesById.get(preset.id);
@@ -1022,8 +1089,9 @@ const AcpAgentsConfig: React.FC = () => {
                 const hasConfigEntry = Boolean(config.acpClients[preset.id]);
                 const configured = hasConfigEntry;
                 const enabled = clientConfig.enabled;
-                const requiresAdapter = preset.id !== 'opencode' || Boolean(requirementProbe?.adapter);
+                const requiresAdapter = Boolean(requirementProbe?.adapter || !NATIVE_ACP_PRESET_IDS.has(preset.id));
                 const issueKind = getIssueKind({ probe: requirementProbe, requiresAdapter });
+                const selfManagedInstallInfo = selfManagedInstallInfoForPreset(preset);
                 const status = getAgentRowStatus({
                   configured,
                   enabled,
@@ -1039,11 +1107,15 @@ const AcpAgentsConfig: React.FC = () => {
                   probe: requirementProbe,
                   requiresAdapter,
                 });
+                const selfManagedCliMissing = Boolean(selfManagedInstallInfo)
+                  && status === 'not_installed'
+                  && (issueKind === 'cli_missing' || requirementProbe?.tool.installed === false);
                 const statusTitle = getStatusTitle({
                   status,
                   issueKind,
                   probe: requirementProbe,
                   requiresAdapter,
+                  selfManagedInstallInfo,
                 });
                 const installing = installingClientIds.has(preset.id);
                 const configuring = installingClientIds.has(preset.id);
@@ -1061,8 +1133,17 @@ const AcpAgentsConfig: React.FC = () => {
                   || issueKind === 'version_mismatch';
 
                 return (
-                  <div key={preset.id} className="bitfun-acp-agents__registry-row">
-                    <div className="bitfun-acp-agents__registry-main">
+                  <div
+                    key={preset.id}
+                    className="bitfun-acp-agents__registry-row"
+                    data-bf-component="acp-agents-config"
+                    data-bf-part="registryRow"
+                  >
+                    <div
+                      className="bitfun-acp-agents__registry-main"
+                      data-bf-component="acp-agents-config"
+                      data-bf-part="registryMain"
+                    >
                       <span className="bitfun-acp-agents__registry-icon">
                         <Bot size={16} />
                       </span>
@@ -1071,7 +1152,11 @@ const AcpAgentsConfig: React.FC = () => {
                         <p className="bitfun-acp-agents__registry-description">{preset.description}</p>
                       </div>
                     </div>
-                    <div className="bitfun-acp-agents__capabilities">
+                    <div
+                      className="bitfun-acp-agents__capabilities"
+                      data-bf-component="acp-agents-config"
+                      data-bf-part="capabilities"
+                    >
                       <CapabilityBadge
                         icon={<Terminal size={12} />}
                         item={requirementProbe?.tool}
@@ -1082,10 +1167,18 @@ const AcpAgentsConfig: React.FC = () => {
                         checkingText={t('requirements.checking')}
                       />
                     </div>
-                    <div className="bitfun-acp-agents__status-cell">
+                    <div
+                      className="bitfun-acp-agents__status-cell"
+                      data-bf-component="acp-agents-config"
+                      data-bf-part="status"
+                    >
                       <AgentStatusBadge status={status} label={statusLabel} title={statusTitle} />
                     </div>
-                    <div className="bitfun-acp-agents__confirmation-cell">
+                    <div
+                      className="bitfun-acp-agents__confirmation-cell"
+                      data-bf-component="acp-agents-config"
+                      data-bf-part="confirmation"
+                    >
                       {showSelect ? (
                         <Select
                           className="bitfun-acp-agents__confirmation-select"
@@ -1118,6 +1211,16 @@ const AcpAgentsConfig: React.FC = () => {
                           <FileJson size={14} />
                           {t('actions.configureAcp')}
                         </Button>
+                      ) : selfManagedCliMissing && hasConfigEntry && selfManagedInstallInfo ? (
+                        <Button
+                          className="bitfun-acp-agents__add-button"
+                          variant="secondary"
+                          size="small"
+                          onClick={() => showSelfManagedInstallInfo(selfManagedInstallInfo)}
+                        >
+                          <CircleAlert size={14} />
+                          {t('actions.viewInstructions')}
+                        </Button>
                       ) : canViewError ? (
                         <Button
                           className="bitfun-acp-agents__add-button"
@@ -1133,16 +1236,20 @@ const AcpAgentsConfig: React.FC = () => {
                           <CircleAlert size={14} />
                           {t('actions.viewError')}
                         </Button>
-                      ) : (
+                      ) : !hasConfigEntry ? (
                         <Button
                           className="bitfun-acp-agents__add-button"
                           variant="secondary"
                           size="small"
-                          onClick={() => addPresetClient(preset)}
+                          onClick={() => addPresetClient(preset, {
+                            manualCliRequired: selfManagedCliMissing,
+                          })}
                         >
                           <Plus size={14} />
-                          {t('actions.add')}
+                          {selfManagedCliMissing ? t('actions.addConfig') : t('actions.add')}
                         </Button>
+                      ) : (
+                        null
                       )}
                     </div>
                   </div>
@@ -1189,8 +1296,14 @@ const AcpAgentsConfig: React.FC = () => {
                   <div
                     key={clientId}
                     className="bitfun-acp-agents__registry-row"
+                    data-bf-component="acp-agents-config"
+                    data-bf-part="registryRow"
                   >
-                    <div className="bitfun-acp-agents__registry-main">
+                    <div
+                      className="bitfun-acp-agents__registry-main"
+                      data-bf-component="acp-agents-config"
+                      data-bf-part="registryMain"
+                    >
                       <span className="bitfun-acp-agents__registry-icon">
                         <Bot size={16} />
                       </span>
@@ -1201,7 +1314,11 @@ const AcpAgentsConfig: React.FC = () => {
                         </p>
                       </div>
                     </div>
-                    <div className="bitfun-acp-agents__capabilities">
+                    <div
+                      className="bitfun-acp-agents__capabilities"
+                      data-bf-component="acp-agents-config"
+                      data-bf-part="capabilities"
+                    >
                       <CapabilityBadge
                         icon={<Terminal size={12} />}
                         item={requirementProbe?.tool}
@@ -1212,10 +1329,18 @@ const AcpAgentsConfig: React.FC = () => {
                         checkingText={t('requirements.checking')}
                       />
                     </div>
-                    <div className="bitfun-acp-agents__status-cell">
+                    <div
+                      className="bitfun-acp-agents__status-cell"
+                      data-bf-component="acp-agents-config"
+                      data-bf-part="status"
+                    >
                       <AgentStatusBadge status={status} label={statusLabel} title={statusTitle} />
                     </div>
-                    <div className="bitfun-acp-agents__confirmation-cell">
+                    <div
+                      className="bitfun-acp-agents__confirmation-cell"
+                      data-bf-component="acp-agents-config"
+                      data-bf-part="confirmation"
+                    >
                       {status === 'enabled' || status === 'ready' ? (
                         <Select
                           className="bitfun-acp-agents__confirmation-select"
@@ -1252,9 +1377,15 @@ const AcpAgentsConfig: React.FC = () => {
 
           <ConfigPageSection title={t('remote.title')} description={t('remote.description')}>
             {remoteConnectionRows.length === 0 ? (
-              <div className="bitfun-acp-agents__empty">{t('remote.empty')}</div>
+              <div className="bitfun-acp-agents__empty" data-bf-component="acp-agents-config" data-bf-part="empty">
+                {t('remote.empty')}
+              </div>
             ) : (
-              <div className="bitfun-acp-agents__remote-list">
+              <div
+                className="bitfun-acp-agents__remote-list"
+                data-bf-component="acp-agents-config"
+                data-bf-part="remoteList"
+              >
                 {remoteConnectionRows.map(connection => {
                   const hostLabel = [connection.username, connection.host]
                     .filter(Boolean)
@@ -1274,8 +1405,11 @@ const AcpAgentsConfig: React.FC = () => {
                     const hasConfigEntry = Boolean(clientConfig);
                     const effectiveConfig = clientConfig ?? (preset ? defaultConfigForPreset(preset) : undefined);
                     const enabled = effectiveConfig?.enabled ?? true;
-                    const requiresAdapter = Boolean(requirementProbe?.adapter || preset?.id !== 'opencode');
+                    const requiresAdapter = Boolean(
+                      requirementProbe?.adapter || (preset && !NATIVE_ACP_PRESET_IDS.has(preset.id))
+                    );
                     const issueKind = getIssueKind({ probe: requirementProbe, requiresAdapter });
+                    const selfManagedInstallInfo = selfManagedInstallInfoForPreset(preset);
                     const status = getAgentRowStatus({
                       configured: hasConfigEntry,
                       enabled,
@@ -1300,6 +1434,7 @@ const AcpAgentsConfig: React.FC = () => {
                       enabled,
                       requiresAdapter,
                       issueKind,
+                      selfManagedInstallInfo,
                       status,
                       displayName,
                       description,
@@ -1314,9 +1449,22 @@ const AcpAgentsConfig: React.FC = () => {
                   )).length;
 
                   return (
-                    <div key={connection.id} className="bitfun-acp-agents__remote-server">
-                      <div className="bitfun-acp-agents__remote-head">
-                        <div className="bitfun-acp-agents__registry-main">
+                    <div
+                      key={connection.id}
+                      className="bitfun-acp-agents__remote-server"
+                      data-bf-component="acp-agents-config"
+                      data-bf-part="remoteServer"
+                    >
+                      <div
+                        className="bitfun-acp-agents__remote-head"
+                        data-bf-component="acp-agents-config"
+                        data-bf-part="remoteHeader"
+                      >
+                        <div
+                          className="bitfun-acp-agents__registry-main"
+                          data-bf-component="acp-agents-config"
+                          data-bf-part="registryMain"
+                        >
                           <span className="bitfun-acp-agents__registry-icon">
                             <Server size={16} />
                           </span>
@@ -1356,7 +1504,11 @@ const AcpAgentsConfig: React.FC = () => {
                           </Button>
                         </div>
                       </div>
-                      <div className="bitfun-acp-agents__remote-agent-list">
+                      <div
+                        className="bitfun-acp-agents__remote-agent-list"
+                        data-bf-component="acp-agents-config"
+                        data-bf-part="remoteAgents"
+                      >
                         {remoteRows.map(row => {
                           const statusLabel = getStatusLabel({
                             status: row.status,
@@ -1369,9 +1521,13 @@ const AcpAgentsConfig: React.FC = () => {
                             issueKind: row.issueKind,
                             probe: row.requirementProbe,
                             requiresAdapter: row.requiresAdapter,
+                            selfManagedInstallInfo: row.selfManagedInstallInfo,
                           });
                           const canInstallCli = row.preset && row.status === 'not_installed' && row.issueKind === 'cli_missing'
                             && !SELF_MANAGED_INSTALL_PRESET_IDS.has(row.preset.id);
+                          const selfManagedCliMissing = Boolean(row.selfManagedInstallInfo)
+                            && row.status === 'not_installed'
+                            && (row.issueKind === 'cli_missing' || row.requirementProbe?.tool.installed === false);
                           const canViewError = row.status === 'invalid' || row.status === 'partial'
                             || row.issueKind === 'connection_failed'
                             || row.issueKind === 'permission_denied'
@@ -1380,8 +1536,17 @@ const AcpAgentsConfig: React.FC = () => {
                             || row.issueKind === 'adapter_missing';
 
                           return (
-                            <div key={row.clientId} className="bitfun-acp-agents__registry-row bitfun-acp-agents__registry-row--remote">
-                              <div className="bitfun-acp-agents__registry-main">
+                            <div
+                              key={row.clientId}
+                              className="bitfun-acp-agents__registry-row bitfun-acp-agents__registry-row--remote"
+                              data-bf-component="acp-agents-config"
+                              data-bf-part="registryRow"
+                            >
+                              <div
+                                className="bitfun-acp-agents__registry-main"
+                                data-bf-component="acp-agents-config"
+                                data-bf-part="registryMain"
+                              >
                                 <span className="bitfun-acp-agents__registry-icon">
                                   <Bot size={16} />
                                 </span>
@@ -1390,7 +1555,11 @@ const AcpAgentsConfig: React.FC = () => {
                                   <p className="bitfun-acp-agents__registry-description">{row.description}</p>
                                 </div>
                               </div>
-                              <div className="bitfun-acp-agents__capabilities">
+                              <div
+                                className="bitfun-acp-agents__capabilities"
+                                data-bf-component="acp-agents-config"
+                                data-bf-part="capabilities"
+                              >
                                 <CapabilityBadge
                                   icon={<Terminal size={12} />}
                                   item={row.requirementProbe?.tool}
@@ -1412,10 +1581,18 @@ const AcpAgentsConfig: React.FC = () => {
                                   />
                                 )}
                               </div>
-                              <div className="bitfun-acp-agents__status-cell">
+                              <div
+                                className="bitfun-acp-agents__status-cell"
+                                data-bf-component="acp-agents-config"
+                                data-bf-part="status"
+                              >
                                 <AgentStatusBadge status={row.status} label={statusLabel} title={statusTitle} />
                               </div>
-                              <div className="bitfun-acp-agents__confirmation-cell">
+                              <div
+                                className="bitfun-acp-agents__confirmation-cell"
+                                data-bf-component="acp-agents-config"
+                                data-bf-part="confirmation"
+                              >
                                 {canInstallCli ? (
                                   <Button
                                     className="bitfun-acp-agents__add-button"
@@ -1430,6 +1607,16 @@ const AcpAgentsConfig: React.FC = () => {
                                   >
                                     <Download size={14} />
                                     {t('actions.installCli')}
+                                  </Button>
+                                ) : selfManagedCliMissing && row.selfManagedInstallInfo ? (
+                                  <Button
+                                    className="bitfun-acp-agents__add-button"
+                                    variant="secondary"
+                                    size="small"
+                                    onClick={() => showSelfManagedInstallInfo(row.selfManagedInstallInfo!)}
+                                  >
+                                    <CircleAlert size={14} />
+                                    {t('actions.viewInstructions')}
                                   </Button>
                                 ) : row.status === 'enabled' || row.status === 'ready' ? (
                                   row.clientConfig ? (

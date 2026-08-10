@@ -5,6 +5,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import {
   ArrowLeft,
   Folder,
@@ -180,27 +181,54 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
   }, [currentPath, onSelect, selectedPath]);
 
   return createPortal(
-    <div className="peer-directory-browser-overlay" role="dialog" aria-modal="true">
-      <div className="peer-directory-browser" data-testid="peer-directory-browser">
-        <div className="peer-directory-browser__header">
-          <h2 className="peer-directory-browser__header-title">{title}</h2>
+    <div
+      className="peer-directory-browser-overlay"
+      role="dialog"
+      aria-modal="true"
+      data-bf-component="peer-device"
+      data-bf-part="overlay"
+    >
+      <div
+        className="peer-directory-browser"
+        data-testid="peer-directory-browser"
+        data-bf-component="peer-device"
+        data-bf-part="dialog"
+      >
+        <div
+          className="peer-directory-browser__header"
+          data-bf-component="peer-device"
+          data-bf-part="header"
+        >
+          <h2
+            className="peer-directory-browser__header-title"
+            data-bf-component="peer-device"
+            data-bf-part="title"
+          >{title}</h2>
           <button
             type="button"
             className="peer-directory-browser__close-btn"
             aria-label={t('peerDirectoryPicker.cancel')}
             onClick={onCancel}
+            data-bf-component="peer-device"
+            data-bf-part="closeButton"
           >
             <X size={16} />
           </button>
         </div>
 
-        <div className="peer-directory-browser__toolbar">
+        <div
+          className="peer-directory-browser__toolbar"
+          data-bf-component="peer-device"
+          data-bf-part="toolbar"
+        >
           <button
             type="button"
             className="peer-directory-browser__tool-btn"
             disabled={!parentPath || loading}
             onClick={handleGoParent}
             title={t('peerDirectoryPicker.parent')}
+            data-bf-component="peer-device"
+            data-bf-part="toolButton"
           >
             <ArrowLeft size={14} />
           </button>
@@ -210,6 +238,8 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
             disabled={loading}
             onClick={handleGoHome}
             title={t('peerDirectoryPicker.home')}
+            data-bf-component="peer-device"
+            data-bf-part="toolButton"
           >
             <Home size={14} />
           </button>
@@ -219,10 +249,16 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
             disabled={loading}
             onClick={handleRefresh}
             title={t('peerDirectoryPicker.refresh')}
+            data-bf-component="peer-device"
+            data-bf-part="toolButton"
           >
             <RefreshCw size={14} />
           </button>
-          <div className="peer-directory-browser__path">
+          <div
+            className="peer-directory-browser__path"
+            data-bf-component="peer-device"
+            data-bf-part="path"
+          >
             {isEditingPath ? (
               <input
                 ref={pathInputRef}
@@ -230,6 +266,8 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
                 value={pathInputValue}
                 onChange={(event) => setPathInputValue(event.target.value)}
                 onBlur={handleCommitPathInput}
+                data-bf-component="peer-device"
+                data-bf-part="pathInput"
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
                     event.preventDefault();
@@ -247,6 +285,8 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
                 className="peer-directory-browser__path-display"
                 onClick={() => setIsEditingPath(true)}
                 title={currentPath}
+                data-bf-component="peer-device"
+                data-bf-part="pathDisplay"
               >
                 {currentPath}
               </button>
@@ -254,22 +294,45 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
           </div>
         </div>
 
-        <div className="peer-directory-browser__body">
+        <div
+          className="peer-directory-browser__body"
+          data-bf-component="peer-device"
+          data-bf-part="body"
+        >
           {loading ? (
-            <div className="peer-directory-browser__state">
+            <div
+              className="peer-directory-browser__state"
+              data-bf-component="peer-device"
+              data-bf-part="status"
+              data-bf-state="loading"
+            >
               <Loader2 size={16} className="peer-directory-browser__spinner" />
               <span>{t('peerDirectoryPicker.loading')}</span>
             </div>
           ) : error ? (
-            <div className="peer-directory-browser__state peer-directory-browser__state--error">
+            <div
+              className="peer-directory-browser__state peer-directory-browser__state--error"
+              data-bf-component="peer-device"
+              data-bf-part="status"
+              data-bf-state="error"
+            >
               <span>{error}</span>
             </div>
           ) : entries.length === 0 ? (
-            <div className="peer-directory-browser__state">
+            <div
+              className="peer-directory-browser__state"
+              data-bf-component="peer-device"
+              data-bf-part="status"
+              data-bf-state="empty"
+            >
               <span>{t('peerDirectoryPicker.empty')}</span>
             </div>
           ) : (
-            <ul className="peer-directory-browser__list">
+            <ul
+              className="peer-directory-browser__list"
+              data-bf-component="peer-device"
+              data-bf-part="list"
+            >
               {entries.map((entry) => (
                 <li key={entry.path}>
                   <button
@@ -279,6 +342,9 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
                     }`}
                     onClick={() => setSelectedPath(entry.path)}
                     onDoubleClick={() => handleOpenEntry(entry)}
+                    data-bf-component="peer-device"
+                    data-bf-part="item"
+                    data-bf-state={selectedPath === entry.path ? 'selected' : undefined}
                   >
                     <Folder size={14} />
                     <span>{entry.name}</span>
@@ -289,11 +355,24 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
           )}
         </div>
 
-        <div className="peer-directory-browser__footer">
-          <div className="peer-directory-browser__selected" title={selectedPath || currentPath}>
+        <div
+          className="peer-directory-browser__footer"
+          data-bf-component="peer-device"
+          data-bf-part="footer"
+        >
+          <div
+            className="peer-directory-browser__selected"
+            title={selectedPath || currentPath}
+            data-bf-component="peer-device"
+            data-bf-part="selection"
+          >
             {t('peerDirectoryPicker.selected', { path: selectedPath || currentPath })}
           </div>
-          <div className="peer-directory-browser__actions">
+          <div
+            className="peer-directory-browser__actions"
+            data-bf-component="peer-device"
+            data-bf-part="actions"
+          >
             <Button type="button" variant="ghost" size="small" onClick={onCancel}>
               {t('peerDirectoryPicker.cancel')}
             </Button>
@@ -310,7 +389,7 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
         </div>
       </div>
     </div>,
-    document.body,
+    getAppearanceOverlayHost(),
   );
 };
 

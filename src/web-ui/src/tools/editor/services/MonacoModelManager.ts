@@ -9,7 +9,8 @@
  * One Model can be used by multiple Editors.
  */
 
-import * as monaco from 'monaco-editor';
+import type * as monaco from 'monaco-editor';
+import { getMonacoRuntime, monacoApi } from './monacoRuntime';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('MonacoModelManager');
@@ -79,37 +80,47 @@ class MonacoModelManager {
   private modelDisposedListeners: Array<EventListener<ModelDisposedEvent>> = [];
   private modelContentReadyListeners: Array<EventListener<ModelContentReadyEvent>> = [];
   
-  private constructor() {
-    this.setupGlobalListeners();
-  }
-  
+  private globalListenersInstalled = false;
+
+  private constructor() {}
+
   public static getInstance(): MonacoModelManager {
     if (!MonacoModelManager.instance) {
       MonacoModelManager.instance = new MonacoModelManager();
     }
     return MonacoModelManager.instance;
   }
-  
-  private setupGlobalListeners(): void {
+
+  /**
+   * Install global Monaco listeners lazily (Monaco is loaded at runtime via the
+   * AMD loader, so this must not run at module-evaluation time).
+   */
+  private ensureGlobalListeners(): void {
+    if (this.globalListenersInstalled) {
+      return;
+    }
+    this.globalListenersInstalled = true;
     // Sync cleanup when Model is disposed externally
-    monaco.editor.onWillDisposeModel((model) => {
+    monacoApi.editor.onWillDisposeModel((model) => {
       const uri = model.uri.toString();
       this.cleanupMetadata(uri);
     });
   }
-  
+
   public getOrCreateModel(
     filePath: string,
     language: string,
     initialContent: string = '',
     workspacePath?: string
   ): monaco.editor.ITextModel {
+    this.ensureGlobalListeners();
+
     const uri = this.normalizeUri(filePath);
     const uriString = uri.toString();
-    
+
     this.cancelDisposalTimer(uriString);
-    
-    let model = monaco.editor.getModel(uri);
+
+    let model = monacoApi.editor.getModel(uri);
     
     if (model) {
       const metadata = this.modelMetadata.get(uriString);
@@ -145,7 +156,7 @@ class MonacoModelManager {
       return model;
     }
     
-    model = monaco.editor.createModel(initialContent, language, uri);
+    model = monacoApi.editor.createModel(initialContent, language, uri);
     
     this.createMetadata(uriString, filePath, language, initialContent, workspacePath, model);
     this.setupContentChangeListener(uriString, model);
@@ -268,7 +279,7 @@ class MonacoModelManager {
   
   private disposeModel(uriString: string): void {
     const metadata = this.modelMetadata.get(uriString);
-    const model = monaco.editor.getModel(monaco.Uri.parse(uriString));
+    const model = monacoApi.editor.getModel(monacoApi.Uri.parse(uriString));
     
     if (!model) {
       log.warn('Model already disposed', { uri: uriString });
@@ -306,7 +317,7 @@ class MonacoModelManager {
   ): void {
     const uri = this.normalizeUri(filePath);
     const uriString = uri.toString();
-    const model = monaco.editor.getModel(uri);
+    const model = monacoApi.editor.getModel(uri);
     
     if (!model) {
       log.warn('Cannot update non-existent model', { filePath });
@@ -346,7 +357,7 @@ class MonacoModelManager {
   public markAsSaved(filePath: string): void {
     const uri = this.normalizeUri(filePath);
     const uriString = uri.toString();
-    const model = monaco.editor.getModel(uri);
+    const model = monacoApi.editor.getModel(uri);
     const metadata = this.modelMetadata.get(uriString);
     
     if (model && metadata) {
@@ -366,20 +377,26 @@ class MonacoModelManager {
   }
   
   public getModelMetadata(filePath: string): ModelMetadata | undefined {
+    if (!getMonacoRuntime()) {
+      return undefined;
+    }
     const uri = this.normalizeUri(filePath);
     const uriString = uri.toString();
     return this.modelMetadata.get(uriString);
   }
   
   public getModel(filePath: string): monaco.editor.ITextModel | null {
+    if (!getMonacoRuntime()) {
+      return null;
+    }
     const uri = this.normalizeUri(filePath);
-    return monaco.editor.getModel(uri);
+    return monacoApi.editor.getModel(uri);
   }
   
   public async waitForModelContent(filePath: string, timeout: number = 5000): Promise<void> {
     const uri = this.normalizeUri(filePath);
     const uriString = uri.toString();
-    const model = monaco.editor.getModel(uri);
+    const model = monacoApi.editor.getModel(uri);
     
     if (!model) {
       throw new Error(`Model not found: ${filePath}`);
@@ -434,7 +451,7 @@ class MonacoModelManager {
       normalizedPath = normalizedPath.charAt(0).toLowerCase() + normalizedPath.slice(1);
     }
     
-    return monaco.Uri.file(normalizedPath);
+    return monacoApi.Uri.file(normalizedPath);
   }
   
   public getStatistics(): {

@@ -13,15 +13,15 @@
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
-    background: var(--color-bg-primary);
-    border: 1px solid var(--border-subtle);
+    background: var(--bf-appearance-token-color-bg-primary);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: 6px;
     font-size: 13px;
     transition: all 0.2s ease;
 
     &:hover {
-      background: var(--color-bg-secondary);
-      border-color: var(--border-medium);
+      background: var(--bf-appearance-token-color-bg-secondary);
+      border-color: var(--bf-appearance-token-border-medium);
     }
 
   }
@@ -35,12 +35,12 @@
 
   &__action {
     font-weight: 500;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
 
   &__query {
-    color: var(--color-static-white);
+    color: var(--bf-appearance-token-color-static-white);
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -49,7 +49,7 @@
 
 
   &__count {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: 12px;
     margin-left: auto;
   }
@@ -64,7 +64,7 @@
     align-items: flex-start;
     gap: 8px;
     padding: 6px 0;
-    border-bottom: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
 
     &:last-child {
       border-bottom: none;
@@ -74,13 +74,13 @@
   &__label {
     font-size: 12px;
     font-weight: 600;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     min-width: 80px;
   }
 
   &__value {
     font-size: 13px;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -98,18 +98,18 @@
     gap: 8px;
     width: 100%;
     padding: 10px 12px;
-    background: var(--color-bg-primary);
-    border: 1px solid var(--border-subtle);
+    background: var(--bf-appearance-token-color-bg-primary);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: 4px;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
 
     &:hover {
-      background: var(--color-bg-primary);
-      border-color: var(--border-medium);
+      background: var(--bf-appearance-token-color-bg-primary);
+      border-color: var(--bf-appearance-token-border-medium);
     }
 
     svg:first-child {
@@ -122,15 +122,15 @@
     }
 
     svg:last-child {
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
     }
   }
 
   &__results-list {
     margin-top: 8px;
     padding: 8px;
-    background: var(--color-bg-primary);
-    border: 1px solid var(--border-subtle);
+    background: var(--bf-appearance-token-color-bg-primary);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: 4px;
     max-height: 400px;
     overflow-y: auto;
@@ -144,11 +144,11 @@
 
     &:not(:last-child) {
       margin-bottom: 8px;
-      border-bottom: 1px solid var(--border-subtle);
+      border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
     }
 
     &:hover {
-      background: var(--color-bg-primary);
+      background: var(--bf-appearance-token-color-bg-primary);
     }
   }
 
@@ -163,7 +163,7 @@
     flex: 1;
     font-size: 14px;
     font-weight: 600;
-    color: var(--color-static-white);
+    color: var(--bf-appearance-token-color-static-white);
   }
 
   &__result-link {
@@ -182,14 +182,14 @@
 
   &__result-snippet {
     font-size: 13px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     line-height: 1.5;
     margin-bottom: 6px;
   }
 
   &__result-url {
     font-size: 11px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -201,10 +201,10 @@
     margin-top: 12px;
     padding: 24px;
     text-align: center;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: 13px;
-    background: var(--color-bg-primary);
-    border: 1px solid var(--border-subtle);
+    background: var(--bf-appearance-token-color-bg-primary);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: 4px;
   }
 

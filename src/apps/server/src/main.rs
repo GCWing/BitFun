@@ -1,3 +1,17 @@
+// The app-server's `Builder::on_receive_request(...)` chain monomorphizes
+// into a deeply nested `ChainedHandler<ChainedHandler<…>>` (~20 request
+// handlers plus a dispatch handler). Computing the resulting connection
+// future's layout pushes the trait solver past the default 128 limit, so bump
+// it. Matches the compiler's own suggestion in the overflow diagnostic.
+#![recursion_limit = "256"]
+
+//! Legacy Web Server entrypoint.
+//!
+//! This host was already deprecated before the current App Server refactor.
+//! Refactor work in this app validates protocol and host boundaries; it is not
+//! expected to preserve or complete every legacy Web/Desktop capability, and
+//! it must not be treated as a production-readiness claim.
+
 use anyhow::Result;
 /// BitFun Server
 ///
@@ -15,13 +29,25 @@ use serde::Serialize;
 use std::{collections::HashSet, net::SocketAddr, path::PathBuf, sync::Arc};
 use tower_http::cors::CorsLayer;
 
+mod app_server;
+mod bootstrap;
 mod routes;
+
+pub(crate) struct DispatchHostState {
+    path_manager: Arc<bitfun_core::infrastructure::PathManager>,
+    ssh_manager: Arc<bitfun_core::service::remote_ssh::SSHConnectionManager>,
+}
 
 /// Application state
 #[derive(Clone)]
 pub struct AppState {
+    // NOTE(Step 2a): only read by the external_sources dispatch path, which is
+    // temporarily dead under browser-direct ACP-over-WS. Kept for the follow-up
+    // that brings external_sources onto the app-server schema.
+    #[allow(dead_code)]
     external_workspace_root: Option<PathBuf>,
     allowed_browser_origins: Arc<HashSet<String>>,
+    dispatch_host: Option<Arc<DispatchHostState>>,
 }
 
 const DEFAULT_ALLOWED_BROWSER_ORIGINS: [&str; 2] =
@@ -76,6 +102,43 @@ async fn main() -> Result<()> {
                 .map_err(|error| anyhow::anyhow!("Could not open Server workspace: {error}"))
         })
         .transpose()?;
+
+    // Initialize the full agentic stack (coordinator, scheduler, token usage,
+    // MCP/config/filesystem services, event queue). This binding is held alive
+    // for the lifetime of the server so its services outlive every websocket
+    // connection; the app-server client and spawned tasks hold their own Arc
+    // clones of the coordinator, scheduler, and event queue.
+    let server_state = bootstrap::initialize(
+        external_workspace_root
+            .as_ref()
+            .map(|path| path.to_string_lossy().into_owned()),
+    )
+    .await?;
+
+    // Build the agent runtime the same way the Desktop session application does,
+    // then build an in-process `BitfunAppServer` for it. Each WebSocket
+    // connection is handed straight to `BitfunAppServer::serve` over a WS-bridged
+    // `Lines` transport (browser-direct ACP-over-WS, Step 2), so the browser
+    // connects directly to the in-process app-server over native JSON-RPC — no
+    // shared in-process client, no custom WS envelope.
+    let agent_runtime =
+        bitfun_core::product_runtime::CoreProductAgentRuntime::build_session_surface(
+            server_state.coordinator.clone(),
+            server_state.scheduler.clone(),
+            server_state.token_usage_service.clone(),
+        )
+        .map_err(|error| anyhow::anyhow!("Failed to build agent runtime: {error}"))?;
+    // The event source wraps the same `EventQueue` the coordinator publishes to;
+    // each connection's `serve` main loop subscribes independently and projects
+    // runtime events to the frontend shape before pushing them to the browser.
+    let event_source =
+        bitfun_agent_runtime::sdk::AgentEventSource::new(server_state.event_queue.clone());
+    let bitfun_app_server = app_server::build(agent_runtime, event_source);
+
+    tracing::info!(
+        "App-server ready; each WebSocket connection drives one in-process serve over native JSON-RPC"
+    );
+
     let configured_origins = if args.allowed_origins.is_empty() {
         DEFAULT_ALLOWED_BROWSER_ORIGINS
             .iter()
@@ -95,9 +158,32 @@ async fn main() -> Result<()> {
                 .map_err(|_| anyhow::anyhow!("--allowed-origin contains an invalid header value"))
         })
         .collect::<Result<Vec<_>>>()?;
+
+    // This is a narrow controller/observer capability. It deliberately does
+    // not initialize the Server Host's dormant Agent Runtime: authoritative
+    // sessions and execution stay inside the target-side `bitfun dispatch`
+    // worker.
+    let path_manager = Arc::new(bitfun_core::infrastructure::PathManager::new()?);
+    let ssh_data_dir = dirs::data_local_dir()
+        .ok_or_else(|| anyhow::anyhow!("Could not resolve the local data directory"))?
+        .join("BitFun")
+        .join("ssh");
+    let ssh_manager = Arc::new(bitfun_core::service::remote_ssh::SSHConnectionManager::new(
+        ssh_data_dir,
+    ));
+    if let Err(error) = ssh_manager.load_saved_connections().await {
+        tracing::warn!(error = %error, "Failed to load saved SSH connections");
+    }
+    if let Err(error) = ssh_manager.load_known_hosts().await {
+        tracing::warn!(error = %error, "Failed to load SSH known hosts");
+    }
     let app_state = AppState {
         external_workspace_root,
         allowed_browser_origins: Arc::new(allowed_browser_origins),
+        dispatch_host: Some(Arc::new(DispatchHostState {
+            path_manager,
+            ssh_manager,
+        })),
     };
 
     let app = Router::new()
@@ -110,6 +196,10 @@ async fn main() -> Result<()> {
                 .allow_methods([Method::GET])
                 .allow_origin(cors_origins),
         )
+        // The BitFunAppServer is cloned per WebSocket connection through an axum
+        // Extension (cheap Arc clone); each connection spawns its own `serve`
+        // over a WS-bridged `Lines` transport.
+        .layer(axum::Extension(bitfun_app_server))
         .with_state(app_state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
@@ -174,5 +264,40 @@ mod tests {
         ] {
             assert!(normalize_browser_origin(invalid).is_err(), "{invalid}");
         }
+    }
+
+    #[test]
+    fn agent_bootstrap_reuses_core_ownership_without_activating_the_http_shell() {
+        let bootstrap = include_str!("bootstrap.rs");
+        assert!(bootstrap.contains("CoreRuntimeOwnership::embedded"));
+        let coordinator = bootstrap
+            .split("ConversationCoordinator::new")
+            .nth(1)
+            .and_then(|source| source.split(");").next())
+            .expect("Server agent bootstrap Coordinator assembly");
+        assert!(coordinator.contains("runtime_ownership"));
+        assert!(bootstrap.contains("open_workspace_with_runtime_ownership"));
+        assert!(!bootstrap.contains("initialize_snapshot_manager_for_workspace"));
+
+        let rpc = include_str!("rpc_dispatcher.rs");
+        let delete = rpc
+            .split("\"delete_session\" =>")
+            .nth(1)
+            .and_then(|source| source.split("\"start_dialog_turn\" =>").next())
+            .expect("Server delete RPC");
+        assert!(delete.contains("ensure_workspace_runtime_ownership"));
+
+        let main_source = include_str!("main.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("Server production entrypoint");
+        assert!(
+            !main_source.contains("bootstrap::initialize"),
+            "the current read-only HTTP shell must not silently start an Agent Runtime"
+        );
+        assert!(
+            main_source.contains("DispatchHostState"),
+            "the lightweight Server Host should expose dispatch without booting an Agent Runtime"
+        );
     }
 }

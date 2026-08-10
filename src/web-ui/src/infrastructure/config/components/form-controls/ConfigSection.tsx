@@ -68,7 +68,7 @@ export const ConfigSection: React.FC<ConfigSectionProps> = ({
                     transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
                     transition: 'transform 0.2s ease',
                     fontSize: '14px',
-                    color: 'var(--color-text-muted)'
+                    color: 'var(--bf-appearance-token-color-text-muted)'
                   }}
                 >
                   ▼

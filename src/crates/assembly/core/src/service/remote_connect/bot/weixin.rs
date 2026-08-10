@@ -45,14 +45,28 @@ pub struct WeixinBot {
 }
 
 pub async fn weixin_qr_start(base_url_override: Option<String>) -> Result<WeixinQrStartResponse> {
-    weixin_provider::weixin_qr_start(base_url_override).await
+    weixin_provider::weixin_qr_start(base_url_override, None, None).await
+}
+
+pub async fn weixin_qr_start_with_existing(
+    base_url_override: Option<String>,
+    existing_ilink_token: Option<String>,
+    existing_bot_account_id: Option<String>,
+) -> Result<WeixinQrStartResponse> {
+    weixin_provider::weixin_qr_start(
+        base_url_override,
+        existing_ilink_token,
+        existing_bot_account_id,
+    )
+    .await
 }
 
 pub async fn weixin_qr_poll(
     session_key: &str,
     base_url_override: Option<String>,
+    verify_code: Option<String>,
 ) -> Result<WeixinQrPollResponse> {
-    weixin_provider::weixin_qr_poll(session_key, base_url_override).await
+    weixin_provider::weixin_qr_poll(session_key, base_url_override, verify_code).await
 }
 
 impl WeixinBot {
@@ -61,11 +75,12 @@ impl WeixinBot {
     }
 
     pub(crate) fn new_fenced(config: WeixinConfig, runtime_fence: BotRuntimeFence) -> Self {
+        let context_tokens = weixin_provider::load_context_tokens(&config.bot_account_id);
         Self {
             api: Arc::new(WeixinProviderClient::new(config)),
             pending_pairings: Arc::new(RwLock::new(HashMap::new())),
             chat_states: Arc::new(RwLock::new(HashMap::new())),
-            context_tokens: Arc::new(RwLock::new(HashMap::new())),
+            context_tokens: Arc::new(RwLock::new(context_tokens)),
             runtime_fence,
         }
     }
@@ -137,6 +152,10 @@ impl WeixinBot {
                     .unwrap_or(false)
                 {
                     tokens.remove(peer_id);
+                    weixin_provider::save_context_tokens(
+                        &self.api.config().bot_account_id,
+                        &tokens,
+                    );
                     warn!(
                         "weixin: dropped stale context_token for peer {peer_id} after send error: {err}"
                     );
@@ -145,6 +164,23 @@ impl WeixinBot {
             return Err(err);
         }
         Ok(())
+    }
+
+    async fn remember_context_token(&self, peer_id: &str, token: String) {
+        if !self.runtime_fence.is_lifecycle_current() {
+            return;
+        }
+        let mut tokens = self.context_tokens.write().await;
+        tokens.insert(peer_id.to_string(), token);
+        weixin_provider::save_context_tokens(&self.api.config().bot_account_id, &tokens);
+    }
+
+    pub async fn notify_start(&self) -> Result<()> {
+        self.api.notify_start().await
+    }
+
+    pub async fn notify_stop(&self) -> Result<()> {
+        self.api.notify_stop().await
     }
 
     async fn context_token_for_peer(&self, peer_id: &str) -> Result<String> {
@@ -306,6 +342,7 @@ impl WeixinBot {
     ) -> Result<String> {
         info!("Weixin bot waiting for pairing code (getupdates)...");
         let mut buf = weixin_provider::load_sync_buf(&self.api.config().bot_account_id);
+        let mut long_poll_timeout = Duration::from_secs(LONG_POLL_TIMEOUT_SECS);
 
         loop {
             if *stop_rx.borrow() {
@@ -318,7 +355,7 @@ impl WeixinBot {
                 }
                 result = self.api.get_updates_once(
                     &buf,
-                    Duration::from_secs(LONG_POLL_TIMEOUT_SECS),
+                    long_poll_timeout,
                 ) => result,
             };
 
@@ -330,6 +367,8 @@ impl WeixinBot {
                     continue;
                 }
             };
+            long_poll_timeout =
+                weixin_provider::suggested_long_poll_timeout(&resp, long_poll_timeout);
 
             let ret = resp["ret"].as_i64().unwrap_or(0);
             let errcode = resp["errcode"].as_i64().unwrap_or(0);
@@ -361,10 +400,7 @@ impl WeixinBot {
                         continue;
                     };
                     if let Some(token) = weixin_provider::context_token(msg) {
-                        self.context_tokens
-                            .write()
-                            .await
-                            .insert(peer.clone(), token);
+                        self.remember_context_token(&peer, token).await;
                     }
                     let text = weixin_provider::body_from_message(msg).trim().to_string();
                     let language = current_bot_language().await;
@@ -425,6 +461,7 @@ impl WeixinBot {
         info!("Weixin message loop started");
         let mut stop = stop_rx;
         let mut buf = weixin_provider::load_sync_buf(&self.api.config().bot_account_id);
+        let mut long_poll_timeout = Duration::from_secs(LONG_POLL_TIMEOUT_SECS);
 
         loop {
             if *stop.borrow() {
@@ -435,7 +472,7 @@ impl WeixinBot {
                 _ = stop.changed() => break,
                 result = self.api.get_updates_once(
                     &buf,
-                    Duration::from_secs(LONG_POLL_TIMEOUT_SECS),
+                    long_poll_timeout,
                 ) => result,
             };
 
@@ -447,6 +484,8 @@ impl WeixinBot {
                     continue;
                 }
             };
+            long_poll_timeout =
+                weixin_provider::suggested_long_poll_timeout(&resp, long_poll_timeout);
 
             let ret = resp["ret"].as_i64().unwrap_or(0);
             let errcode = resp["errcode"].as_i64().unwrap_or(0);
@@ -480,10 +519,7 @@ impl WeixinBot {
                     continue;
                 };
                 if let Some(token) = weixin_provider::context_token(msg) {
-                    self.context_tokens
-                        .write()
-                        .await
-                        .insert(peer.clone(), token);
+                    self.remember_context_token(&peer, token).await;
                 }
                 let msg_value = msg.clone();
                 let bot = self.clone();

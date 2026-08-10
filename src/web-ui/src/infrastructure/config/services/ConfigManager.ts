@@ -603,6 +603,22 @@ class ConfigManagerImpl implements IConfigManager {
     }
   }
 
+  async saveCloudSpeechConfig(
+    request: import('@/infrastructure/api/service-api/ConfigAPI').SaveCloudSpeechConfigRequest
+  ): Promise<import('@/infrastructure/api/service-api/ConfigAPI').SaveCloudSpeechConfigResult> {
+    let result: import('@/infrastructure/api/service-api/ConfigAPI').SaveCloudSpeechConfigResult | undefined;
+    await this.runMutation(undefined, async () => {
+      result = await configAPI.saveCloudSpeechConfig(request);
+    }, () => {
+      this.notifyConfigChange('ai', undefined, undefined);
+      this.notifyConfigChange('app.ai_experience', undefined, undefined);
+    });
+    if (!result) {
+      throw new Error('Cloud speech configuration save returned no result');
+    }
+    return result;
+  }
+
   async resetConfig(path?: string): Promise<void> {
     try {
       await this.runMutation(path, () => configAPI.resetConfig(path));
@@ -614,10 +630,7 @@ class ConfigManagerImpl implements IConfigManager {
 
   async validateConfig(): Promise<ConfigValidationResult> {
     try {
-      
-      const { invoke } = await import('@tauri-apps/api/core');
-      const result = await invoke<ConfigValidationResult>('validate_config');
-      return result;
+      return await configAPI.validateConfig();
     } catch (error) {
       log.error('Failed to validate config', error);
       return {

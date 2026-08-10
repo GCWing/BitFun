@@ -132,8 +132,7 @@
   --studio-slide-tip-text: #475569;
 }
 
-[data-theme="light"],
-[data-theme-type="light"] {
+[data-bf-appearance-mode="light"] {
   color-scheme: light;
   --studio-bg: var(--bitfun-bg, #f6f7fb);
   --studio-surface: var(--bitfun-bg-elevated, #ffffff);
@@ -168,8 +167,7 @@
    2. DARK THEME OVERRIDE
    ============================================ */
 
-[data-theme="dark"],
-[data-theme-type="dark"] {
+[data-bf-appearance-mode="dark"] {
   color-scheme: dark;
   --studio-bg: #0a0a0a;
   --studio-surface: #141414;
@@ -215,7 +213,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme]):not([data-theme-type]) {
+  :root:not([data-bf-appearance-mode]) {
     color-scheme: dark;
     --studio-bg: #0a0a0a;
     --studio-surface: #141414;
@@ -969,12 +967,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .generation-pipeline li.is-done { border-color: var(--studio-chip-done-border); }
 .generation-pipeline small { display: block; margin-top: 2px; color: var(--studio-muted); font-size: 10px; }
 
-/* Agent sidebar — prompt / style-layout / process-outline each ~1/3 */
+/* Agent sidebar — style settings on top, bubble hint anchored below.
+   No composer here: requests come from the host's floating session bubble. */
 .agent-sidebar {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   border-left: 1px solid var(--studio-line);
   background: var(--studio-sidebar-bg);
   overflow: hidden;
@@ -986,26 +985,117 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   overflow: hidden;
 }
 
-.agent-card--prompt {
+.agent-card--bubble-hint {
   position: relative;
   z-index: 3;
+  grid-row: 2;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
   gap: 10px;
-  border-bottom: 1px solid var(--studio-line);
+  min-height: 184px;
+  padding: 18px 16px 76px;
+  box-sizing: border-box;
+  border-top: 1px solid var(--studio-line);
+  background: linear-gradient(
+    180deg,
+    transparent,
+    color-mix(in srgb, var(--studio-text) 3%, transparent)
+  );
   overflow: hidden;
 }
 
-.agent-card--tabs {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  min-height: 0;
-  overflow: hidden;
+.bubble-hint__heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.bubble-hint__heading-copy {
+  min-width: 0;
+}
+
+.bubble-hint__eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--studio-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.agent-card--bubble-hint h2 {
+  margin: 0;
+  color: var(--studio-text);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.agent-card--bubble-hint p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--studio-muted);
+}
+
+.bubble-hint__icon {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid var(--studio-line);
+  background: var(--studio-control-muted);
+  color: var(--studio-soft);
+}
+
+.bubble-hint__body {
+  max-width: 34ch;
+}
+
+.bubble-hint__pointer {
+  position: absolute;
+  left: 16px;
+  right: 84px;
+  bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  width: max-content;
+  max-width: calc(100% - 100px);
+  padding: 6px 9px;
+  border: 1px solid var(--studio-line);
+  border-radius: 999px;
+  background: var(--studio-control-muted);
+  color: var(--studio-soft);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.bubble-hint__arrow {
+  color: var(--studio-muted);
+  font-size: 14px;
+  line-height: 1;
+  animation: bubble-hint-nudge 2.2s ease-in-out infinite;
+}
+
+@keyframes bubble-hint-nudge {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(3px, 3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble-hint__arrow { animation: none; }
 }
 
 .agent-card--properties {
   position: relative;
   z-index: 1;
+  grid-row: 1;
   display: grid;
   grid-template-rows: auto;
   align-content: start;
@@ -1015,19 +1105,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   /* Reserve the scrollbar track so the content width never jumps when the
      scrollbar appears or disappears (e.g. while a dropdown is open). */
   scrollbar-gutter: stable;
-  border-bottom: 1px solid var(--studio-line);
-}
-
-.agent-card__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.agent-card__header h2 {
-  margin: 0;
-  font-size: 13px;
 }
 
 .pill {
@@ -1036,37 +1113,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   border-radius: 999px;
   color: var(--studio-soft);
   font-size: 10px;
-}
-
-.pill.is-busy {
-  color: var(--studio-accent-text);
-  background: var(--studio-warning);
-  border-color: var(--studio-warning);
-}
-
-.onebox-label {
-  min-height: 0;
-  display: grid;
-  grid-template-rows: minmax(0, 1fr);
-}
-
-.onebox-input {
-  width: 100%;
-  min-height: 0;
-  height: 100%;
-  border: 1px solid var(--studio-border);
-  border-radius: 10px;
-  padding: 10px 12px;
-  resize: none;
-  color: var(--studio-text);
-  background: var(--studio-input-bg);
-  font-family: var(--app-font);
-  line-height: 1.45;
-  outline: none;
-}
-
-.onebox-input:focus {
-  outline: 2px solid var(--studio-focus);
 }
 
 .style-row {
@@ -1253,17 +1299,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   color: var(--studio-primary);
 }
 
-.onebox-model {
-  display: grid;
-  gap: 4px;
-}
-
-.onebox-model .property-label {
-  margin: 0;
-}
-
-.onebox-submit { min-height: 40px; width: 100%; }
-
 .prompt-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1286,44 +1321,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 11px;
   cursor: pointer;
 }
-
-.sidebar-tabs {
-  display: flex;
-  gap: 4px;
-  padding-bottom: 8px;
-}
-
-.sidebar-tab {
-  flex: 1;
-  min-height: 30px;
-  border: 1px solid var(--studio-line);
-  border-radius: 8px;
-  color: var(--studio-muted);
-  background: transparent;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.sidebar-tab.is-active {
-  color: var(--studio-text);
-  border-color: var(--studio-chip-active-border);
-  background: var(--studio-chip-active-bg);
-}
-
-.sidebar-tab-panel {
-  min-height: 0;
-  display: none;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 8px;
-  overflow: hidden;
-}
-
-.sidebar-tab-panel[data-sidebar-panel="outline"] {
-  grid-template-rows: minmax(0, 1fr);
-}
-
-.sidebar-tab-panel.is-active { display: grid; }
 
 .generation-progress {
   display: grid;
@@ -2818,7 +2815,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   min-height: 28px;
   min-width: 0;
   overflow: hidden;
-  padding: 0 var(--space-4);
+  /* The Agentic MiniApp launcher occupies the bottom-right corner. Keep
+     status copy out of that fixed host-owned hit area. */
+  padding: 0 84px 0 var(--space-4);
   border-top: 1px solid var(--studio-line);
   color: var(--studio-muted);
   font-size: var(--text-xs);
@@ -3055,22 +3054,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .agent-sidebar {
     height: 100%;
     max-height: none;
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
     border-left: 1px solid var(--studio-line);
     border-top: 0;
   }
 
   .agent-card--properties {
     display: none;
-  }
-
-  .agent-card--prompt {
-    gap: 8px;
-  }
-
-  .onebox-input {
-    min-height: 88px;
-    max-height: 18vh;
   }
 
   .canvas-zoom-bar { display: none; }
@@ -3097,12 +3087,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     overflow: auto;
   }
 
-  .agent-card--prompt {
-    border-bottom: 0;
-  }
-
-  .agent-card--tabs {
-    display: none;
+  .agent-card--bubble-hint {
+    grid-row: 1;
+    border-top: 0;
   }
 
   .onebox-input {

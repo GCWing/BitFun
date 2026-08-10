@@ -39,7 +39,7 @@ const CSS_VAR_INLINE_STYLE_PATTERN = /['"`](--[a-zA-Z0-9_-]+)['"`]\s*:/g;
 const CSS_VAR_DYNAMIC_SET_PATTERN = /\.setProperty\(\s*`(--[a-zA-Z0-9_-]*)\$\{/g;
 const CSS_VAR_COLOR_RAMP_PATTERN = /colorRamp\(\s*['"`](--[a-zA-Z0-9_-]+)['"`]/g;
 const CSS_VAR_LITERAL_PATTERN = /['"`](--[a-zA-Z0-9_-]+)['"`]/g;
-const GENERATED_WIDGET_THEME_PAYLOAD_PATH = 'tools/generative-widget/themePayload.ts';
+const GENERATED_WIDGET_APPEARANCE_PAYLOAD_PATH = 'infrastructure/appearance/adapters/widgetAppearanceVariables.ts';
 const REPORT_ROW_LIMIT = 100;
 const COLOR_DOMAIN_CONTRACT_BY_KEY = new Map(COLOR_DOMAIN_CONTRACTS.map(contract => [contract.key, contract]));
 const FALLBACK_VAR_CONTRACT_BY_KEY = new Map(FALLBACK_VAR_CONTRACTS.map(contract => [contract.key, contract]));
@@ -207,50 +207,18 @@ function isExceptionFile(relativePath) {
   return EXCEPTION_PATH_PARTS.some(part => relativePath.toLowerCase().includes(part.toLowerCase()));
 }
 
-function isGeneratedWidgetThemePayloadFile(relativePath) {
-  return relativePath.endsWith(GENERATED_WIDGET_THEME_PAYLOAD_PATH);
+function isGeneratedWidgetAppearancePayloadFile(relativePath) {
+  return relativePath.endsWith(GENERATED_WIDGET_APPEARANCE_PAYLOAD_PATH);
 }
 
 function collectGeneratedWidgetPayloadVarNames(content) {
-  const fallbackVars = new Map();
-  const fallbackBlock = /const FALLBACK_VAR = \{([\s\S]*?)\} as const;/.exec(content)?.[1];
-  if (fallbackBlock) {
-    for (const match of collectMatches(fallbackBlock, /\s+(\w+): ['"`](--[a-zA-Z0-9_-]+)['"`]/g)) {
-      fallbackVars.set(match[1], match[2]);
-    }
+  const namesBlock = /export const WIDGET_APPEARANCE_VARIABLE_NAMES = \[([\s\S]*?)\] as const;/.exec(content)?.[1];
+  if (!namesBlock) {
+    throw new Error('Unable to parse WIDGET_APPEARANCE_VARIABLE_NAMES; refusing to audit a partial payload contract.');
   }
-
-  const hasGroupsDeclaration = content.includes('WIDGET_THEME_VAR_GROUPS');
-  const groupsBlock = /const WIDGET_THEME_VAR_GROUPS = \{([\s\S]*?)\n\} as const;/.exec(content)?.[1];
-  if (!groupsBlock) {
-    if (hasGroupsDeclaration) {
-      throw new Error('Unable to parse generated widget WIDGET_THEME_VAR_GROUPS; refusing to audit a partial payload contract.');
-    }
-    return collectMatches(content, CSS_VAR_LITERAL_PATTERN).map(match => match[1]);
-  }
-
-  const names = [];
-  const groups = collectMatches(groupsBlock, /\n\s+\w+: \[([\s\S]*?)\n\s+\]/g);
-  if (groups.length === 0) {
-    throw new Error('Unable to parse generated widget WIDGET_THEME_VAR_GROUPS entries; refusing to audit a partial payload contract.');
-  }
-  for (const group of groups) {
-    for (const line of group[1].split(/\r?\n/)) {
-      const fallbackRef = /FALLBACK_VAR\.(\w+)/.exec(line);
-      if (fallbackRef) {
-        const name = fallbackVars.get(fallbackRef[1]);
-        if (name) {
-          names.push(name);
-        } else {
-          throw new Error(`Unable to resolve generated widget payload fallback var ${fallbackRef[1]}.`);
-        }
-        continue;
-      }
-      const literal = /['"`](--[a-zA-Z0-9_-]+)['"`]/.exec(line);
-      if (literal) {
-        names.push(literal[1]);
-      }
-    }
+  const names = collectMatches(namesBlock, CSS_VAR_LITERAL_PATTERN).map(match => match[1]);
+  if (names.length === 0) {
+    throw new Error('WIDGET_APPEARANCE_VARIABLE_NAMES must not be empty.');
   }
   return names;
 }
@@ -947,10 +915,14 @@ function audit(options) {
       addToSetMap(dynamicDefinitionFiles, prefix, relativePath);
     }
 
-    if (isGeneratedWidgetThemePayloadFile(relativePath)) {
+    if (isGeneratedWidgetAppearancePayloadFile(relativePath)) {
       for (const name of collectGeneratedWidgetPayloadVarNames(content)) {
         incrementMap(generatedWidgetPayloadVarCounts, name);
         addToSetMap(generatedWidgetPayloadVarFiles, name, relativePath);
+        incrementMap(varDefinitionCounts, name);
+        addToSetMap(varDefinitionKinds, name, 'widget-host-contract');
+        addToSetMap(varDefinitionFiles, name, relativePath);
+        contractVarDefinitions.add(name);
       }
     }
 

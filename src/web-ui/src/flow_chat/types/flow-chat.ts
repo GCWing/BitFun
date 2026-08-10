@@ -6,7 +6,9 @@
 import type {
   DialogTurnKind,
   SessionKind,
+  SessionContextUsageSource,
   SessionTitleSource,
+  SessionTurnCatalog,
 } from '@/shared/types/session-history';
 import type { AiErrorDetail } from '@/shared/ai-errors/aiErrorPresenter';
 import type { ReviewTargetEvidence, ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
@@ -24,7 +26,7 @@ export interface FlowItem {
 
   /**
    * Session-scoped subagent linkage.
-   * Used by parent Task tools and subagent-targeted runtime status markers.
+   * Used by parent Task tools and projected subagent output.
    */
   subagentSessionId?: string;
 }
@@ -34,15 +36,6 @@ export interface FlowTextItem extends FlowItem {
   content: string;
   isStreaming: boolean;
   isMarkdown?: boolean;
-  /**
-   * Transient runtime status rendered in the current conversation only.
-   * It is not persisted as assistant content.
-   */
-  runtimeStatus?: {
-    phase: 'waiting_model' | 'streaming' | 'waiting_tool' | 'running_tool' | 'waiting_permission' | 'saving' | 'recovering';
-    scope: 'main' | 'subagent' | 'tool';
-    messageKey?: string;
-  };
 }
 
 export interface FlowThinkingItem extends FlowItem {
@@ -207,6 +200,10 @@ export interface TokenUsage {
   outputTokens?: number;
   totalTokens: number;
   timestamp: number;
+  /** Persisted source turn used to invalidate usage after history rewrites. */
+  turnId?: string;
+  /** Runtime provenance for restored session-level context usage. */
+  source?: SessionContextUsageSource;
 }
 
 export interface AcpContextUsage {
@@ -262,6 +259,9 @@ export interface DialogTurn {
   errorDetail?: AiErrorDetail;
   tokenUsage?: TokenUsage;
   todos?: TodoItem[];
+  /** Backend persistence slot. It may be sparse and must not be used as ordinal. */
+  storageTurnIndex?: number;
+  /** @deprecated Compatibility for older restored projections. Use `storageTurnIndex`. */
   backendTurnIndex?: number;
   /** Whether the turn completed successfully. */
   success?: boolean;
@@ -269,6 +269,23 @@ export interface DialogTurn {
   finishReason?: string;
   /** Whether the turn produced a final assistant response visible to the user. */
   hasFinalResponse?: boolean;
+}
+
+declare const localTurnIndexBrand: unique symbol;
+declare const turnOrdinalBrand: unique symbol;
+declare const storageTurnIndexBrand: unique symbol;
+
+/** Position inside the currently loaded `dialogTurns` array. */
+export type LocalTurnIndex = number & { readonly [localTurnIndexBrand]: 'LocalTurnIndex' };
+/** Zero-based visible Turn position inside the complete Session history. */
+export type TurnOrdinal = number & { readonly [turnOrdinalBrand]: 'TurnOrdinal' };
+/** Opaque backend persistence slot. It may be sparse and differ from ordinal. */
+export type StorageTurnIndex = number & { readonly [storageTurnIndexBrand]: 'StorageTurnIndex' };
+
+export interface DialogTurnIdentity {
+  ordinal: TurnOrdinal;
+  storageTurnIndex?: StorageTurnIndex;
+  state: 'optimistic' | 'persisted';
 }
 
 export interface FlowChatState {
@@ -289,6 +306,36 @@ export type SessionHistoryState =
   | 'ready'
   | 'failed';
 
+export type LoadedTurnRangeSource = 'initial-tail' | 'target' | 'prefetch' | 'live';
+
+export interface LoadedTurnRange {
+  startOrdinal: number;
+  endOrdinalExclusive: number;
+  turns: DialogTurn[];
+  lastAccessedAt: number;
+  source: LoadedTurnRangeSource;
+}
+
+export interface ActiveTurnRenderRange {
+  startOrdinal: number;
+  endOrdinalExclusive: number;
+  targetTurnId: string | null;
+  mode: 'tail' | 'history-window';
+}
+
+export interface SessionHistoryViewState {
+  catalog: SessionTurnCatalog | null;
+  loadedRanges: LoadedTurnRange[];
+  activeRange: ActiveTurnRenderRange | null;
+  pendingTargetOrdinal: number | null;
+  navigationGeneration: number;
+}
+
+export interface SessionHistoryPresentation {
+  range: ActiveTurnRenderRange;
+  turns: DialogTurn[];
+}
+
 export type SessionContextRestoreState =
   | 'ready'
   | 'pending'
@@ -306,6 +353,18 @@ export interface Session {
   titleI18nKey?: string;
   titleI18nParams?: Record<string, unknown>;
   titleStatus?: 'generating' | 'generated' | 'failed';
+  /**
+   * In-memory canonical working set for this session.
+   *
+   * Live and fully hydrated sessions normally contain all canonical Turns.
+   * When `isPartial` is true, this contains only the restored live tail;
+   * older paged windows remain in `SessionHistoryViewState.loadedRanges`.
+   *
+   * This array may temporarily contain provisional frontend Turns that have
+   * not been persisted. Never derive a backend storage index from its length
+   * or local array position; use `DialogTurn.storageTurnIndex` and
+   * `turnCatalog` for persisted identity and ordinals.
+   */
   dialogTurns: DialogTurn[];
   
   // Derived status from deriveSessionStatus():
@@ -353,6 +412,7 @@ export interface Session {
   isPartial?: boolean;
   loadedTurnCount?: number;
   totalTurnCount?: number;
+  turnCatalog?: SessionTurnCatalog;
   
   todos?: TodoItem[];
   
@@ -381,6 +441,9 @@ export interface Session {
   // Sessions are always kept in store for event processing; only display is filtered.
   workspacePath?: string;
 
+  /** Main project that owns this session when `workspacePath` is a linked worktree. */
+  projectWorkspacePath?: string;
+
   /** Stable backend id — always set for new sessions; do not infer workspace from path alone. */
   workspaceId?: string;
 
@@ -389,6 +452,9 @@ export interface Session {
 
   /** SSH config host for `~/.bitfun/remote_ssh/{host}/...` session paths when disconnected. */
   remoteSshHost?: string;
+
+  /** Persisted workspace identity host; `localhost` is the local-workspace sentinel. */
+  workspaceHostname?: string;
 
   /**
    * Optional parent session id for hierarchical sessions.
@@ -469,6 +535,9 @@ export interface Session {
   /** Per-run reviewer manifest for Deep Review child sessions. */
   deepReviewRunManifest?: ReviewTeamRunManifest;
 
+  /** Runtime-admitted live projection of a focused Review label. */
+  focusedReviewDisplayLabel?: string;
+
   /** Immutable target identity used to associate Review results with a PR or Git target. */
   reviewTargetEvidence?: ReviewTargetEvidence;
 
@@ -487,9 +556,51 @@ export interface Session {
 
 export interface SessionConfig {
   modelName?: string;
+  /** Explicit reasoning preset for the next turn; omitted means model default. */
+  reasoningPreset?: string;
   agentType?: string;
   context?: Record<string, string>;
   workspacePath?: string;
+  /** Main project scope used for persistence when execution happens in a worktree. */
+  projectWorkspacePath?: string;
+  /** Requested target used only while creating a new session. */
+  executionTargetRequest?: import('@/infrastructure/api/service-api/WorktreeAPI').SessionExecutionTargetRequest;
+  /** Resolved target returned and persisted by the backend. */
+  executionTarget?: import('@/infrastructure/api/service-api/WorktreeAPI').SessionExecutionTarget;
+  /** Requested device on which a new session will execute. */
+  dispatchTargetRequest?: import('@/features/dispatch/types').DispatchTargetRequest;
+  /** Immutable resolved target for an observer-only dispatched session. */
+  dispatchTarget?: import('@/features/dispatch/types').DispatchTarget;
+  /** Durable target-side job observed by this projection. */
+  dispatchJobId?: string;
+  /** Explicit unattended permission behavior selected before submission. */
+  dispatchApprovalPolicy?: import('@/features/dispatch/types').DispatchApprovalPolicy;
+  /** Carry the baseline worktree's uncommitted changes into the base commit. */
+  dispatchIncludeUncommitted?: boolean;
+  /** Git revision used to create the immutable dispatch baseline. */
+  dispatchBaseRef?: string;
+  /** Target model explicitly selected during preflight; omitted to use the target default. */
+  dispatchModel?: string;
+  /** Target-owned canonical reasoning projection reported during preflight. */
+  dispatchModelCatalog?: import('@/infrastructure/api/service-api/AIApi').AIModelCatalog;
+  /** Target reasoning preset. `auto` explicitly clears a prior override. */
+  dispatchReasoningPreset?: string;
+  /** Model ids reported by the selected target during dispatch preflight. */
+  dispatchAvailableModels?: string[];
+  /** Target-owned default model reported during dispatch preflight. */
+  dispatchDefaultModel?: string;
+  /** Last target-side job state applied by the observer. */
+  dispatchJobState?: import('@/features/dispatch/types').DispatchJobState;
+  /** Byte cursor applied successfully from the target-side event log. */
+  dispatchCursor?: number;
+  /** Last target-side job error, if any. */
+  dispatchLastError?: string;
+  /**
+   * Composer-only preference for an empty session. The concrete worktree is
+   * materialized after the first prompt is submitted, not when the checkbox
+   * is clicked.
+   */
+  worktreeIsolationRequested?: boolean;
   /** Binds session to `WorkspaceInfo.id` (path alone is insufficient for remotes). */
   workspaceId?: string;
   /** Disambiguates sessions when multiple remote workspaces share the same `workspacePath`. */
@@ -571,6 +682,12 @@ export interface ToolCardProps {
   sessionId?: string;
   turnId?: string;
   displayContext?: ToolCardDisplayContext;
+  /**
+   * Whether this card is the current visual tail of the conversation.
+   * Live cards use this to keep their final result visible until a newer
+   * action arrives, instead of collapsing in the same frame as completion.
+   */
+  isLastItem?: boolean;
   /** Callback for MCP App ui/message requests. Returns whether the message was handled successfully. */
   onMcpAppMessage?: (params: import('@/infrastructure/api/service-api/MCPAPI').McpUiMessageParams) => Promise<import('@/infrastructure/api/service-api/MCPAPI').McpUiMessageResult>;
 }
@@ -611,5 +728,4 @@ export interface FlowChatConfig {
   showTimestamps: boolean;
   maxHistoryRounds: number;
   enableVirtualScroll: boolean;
-  theme: 'light' | 'dark' | 'auto';
 }

@@ -12,6 +12,9 @@ use crate::PortResult;
 pub struct LocalWorkspaceSnapshotSessionRequest {
     pub workspace_path: PathBuf,
     pub session_id: String,
+    /// Exclusive visible turn end supplied by the session lifecycle owner.
+    /// `None` exposes the complete snapshot history.
+    pub max_turn_exclusive: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,6 +68,7 @@ mod tests {
         let session = LocalWorkspaceSnapshotSessionRequest {
             workspace_path: PathBuf::from("workspace"),
             session_id: "session-1".to_string(),
+            max_turn_exclusive: Some(5),
         };
         let turn = LocalWorkspaceSnapshotTurnRequest {
             workspace_path: session.workspace_path.clone(),

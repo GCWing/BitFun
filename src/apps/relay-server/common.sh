@@ -33,6 +33,17 @@ resolve_compose() {
   exit 1
 }
 
+# POSIX single-quote each argument. `sg -c` takes a single string that the shell
+# re-parses, so an unquoted "$*" loses argument boundaries — a path with a space
+# or a `-f '{{.State.Running}}'` format string arrives mangled.
+shell_join() {
+  local out="" arg
+  for arg in "$@"; do
+    out="$out'$(printf '%s' "$arg" | sed "s/'/'\\\\''/g")' "
+  done
+  printf '%s' "$out"
+}
+
 compose() {
   if [ "${#COMPOSE[@]}" -eq 0 ]; then
     resolve_compose
@@ -47,7 +58,7 @@ compose() {
       ;;
     sg)
       if sg docker -c 'docker compose version' >/dev/null 2>&1; then
-        sg docker -c "docker compose $*"
+        sg docker -c "$(shell_join docker compose "$@")"
         return
       fi
       ;;
@@ -57,10 +68,41 @@ compose() {
 
 # Resolve how to talk to the Docker daemon for the current shell.
 # Sets BITFUN_DOCKER_MODE to: direct | sg | sudo
-resolve_docker_access() {
-  check_command docker
+# Make DOCKER_CONFIG usable by the current user.
+#
+# A root-run Docker install (or an earlier `sudo -E docker`) can leave
+# ~/.bitfun/docker-config and its config.json owned by root, and every later
+# unprivileged docker call then reports
+#   WARNING: Error loading config file: .../config.json: permission denied
+# before misbehaving. Repair it, or fall back to a per-uid dir we can read.
+fix_docker_config() {
   export DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.bitfun/docker-config}"
   mkdir -p "$DOCKER_CONFIG" 2>/dev/null || true
+  docker_config_usable() {
+    [ -r "$DOCKER_CONFIG" ] && [ -w "$DOCKER_CONFIG" ] &&
+      { [ ! -e "$DOCKER_CONFIG/config.json" ] || [ -r "$DOCKER_CONFIG/config.json" ]; }
+  }
+  if [ "$(id -u)" = "0" ] || docker_config_usable; then
+    chmod 700 "$DOCKER_CONFIG" 2>/dev/null || true
+    return 0
+  fi
+  echo "Warning: $DOCKER_CONFIG is not usable by $(id -un) (root-owned by an earlier install)."
+  if [ "$(id -u)" != "0" ]; then
+    sudo -n chown -R "$(id -un):$(id -gn)" "$DOCKER_CONFIG" 2>/dev/null ||
+      sudo chown -R "$(id -un):$(id -gn)" "$DOCKER_CONFIG" 2>/dev/null || true
+  fi
+  if ! docker_config_usable; then
+    DOCKER_CONFIG="$HOME/.bitfun/docker-config-$(id -u)"
+    export DOCKER_CONFIG
+    mkdir -p "$DOCKER_CONFIG"
+    echo "         Using DOCKER_CONFIG=$DOCKER_CONFIG instead."
+  fi
+  chmod 700 "$DOCKER_CONFIG" 2>/dev/null || true
+}
+
+resolve_docker_access() {
+  check_command docker
+  fix_docker_config
 
   if [ -e "$HOME/.docker" ] && [ ! -w "$HOME/.docker" ]; then
     echo "Warning: $HOME/.docker is not writable (often root-owned after sudo docker)."
@@ -102,7 +144,7 @@ resolve_docker_access() {
 
 docker_cmd() {
   case "${BITFUN_DOCKER_MODE:-direct}" in
-    sg) sg docker -c "docker $*" ;;
+    sg) sg docker -c "$(shell_join docker "$@")" ;;
     sudo) sudo docker "$@" ;;
     *) docker "$@" ;;
   esac

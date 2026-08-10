@@ -13,31 +13,31 @@
   }
 
   &__path-hint {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__validating {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
     font-style: italic;
   }
 
   &__validation {
     padding: $size-gap-2 $size-gap-3;
     border-radius: $size-radius-base;
-    font-size: var(--font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-sm);
 
     &.is-valid {
-      background: color-mix(in srgb, var(--color-success) 8%, transparent);
-      border: 1px solid color-mix(in srgb, var(--color-success) 30%, transparent);
-      color: var(--color-success);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-success) 30%, transparent);
+      color: var(--bf-appearance-token-color-success);
     }
 
     &.is-invalid {
-      background: color-mix(in srgb, var(--color-error) 8%, transparent);
-      border: 1px solid color-mix(in srgb, var(--color-error) 30%, transparent);
-      color: var(--color-error);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 30%, transparent);
+      color: var(--bf-appearance-token-color-error);
     }
   }
 
@@ -46,7 +46,7 @@
   }
 
   &__validation-desc {
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
     opacity: 0.8;
     margin-top: 2px;
   }
@@ -56,37 +56,37 @@
   }
 
   &__form-hint {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__path-value {
     font-family: $font-family-mono;
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-secondary);
     word-break: break-all;
   }
 
   &__source-badge {
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 
   &__covered-badge {
-    color: var(--color-warning);
-    border-color: color-mix(in srgb, var(--color-warning) 32%, var(--border-subtle));
-    background: color-mix(in srgb, var(--color-warning) 10%, var(--element-bg-medium));
+    color: var(--bf-appearance-token-color-warning);
+    border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 32%, var(--bf-appearance-token-border-subtle));
+    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 10%, var(--bf-appearance-token-element-bg-medium));
   }
 
   &__item--covered {
     .bitfun-collection-item__name {
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
       text-decoration: line-through;
     }
 
   }
 
   &__coverage-detail {
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 
   &__market-toolbar {
@@ -95,31 +95,31 @@
     .search__wrapper {
       background: linear-gradient(
         180deg,
-        var(--color-overlay-white-08) 0%,
-        var(--color-overlay-white-04) 100%
+        var(--bf-appearance-token-color-overlay-white-08) 0%,
+        var(--bf-appearance-token-color-overlay-white-04) 100%
       );
-      border: 1px solid var(--border-subtle);
+      border: 1px solid var(--bf-appearance-token-border-subtle);
       border-radius: $size-radius-lg;
     }
   }
 
   &__market-state {
     padding: $size-gap-4;
-    border: 1px dashed var(--border-base);
+    border: 1px dashed var(--bf-appearance-token-border-base);
     border-radius: $size-radius-lg;
     background: linear-gradient(
       180deg,
-      var(--color-overlay-white-04) 0%,
-      var(--color-overlay-white-04) 100%
+      var(--bf-appearance-token-color-overlay-white-04) 0%,
+      var(--bf-appearance-token-color-overlay-white-04) 100%
     );
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-sm);
     line-height: $line-height-relaxed;
   }
 
   &__market-state--error {
-    border-color: color-mix(in srgb, var(--color-error) 40%, transparent);
-    color: var(--color-error);
+    border-color: color-mix(in srgb, var(--bf-appearance-token-color-error) 40%, transparent);
+    color: var(--bf-appearance-token-color-error);
   }
 
   &__market-list {
@@ -131,12 +131,12 @@
   &__market-item {
     position: relative;
     overflow: hidden;
-    border: 1px solid var(--border-subtle);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: $size-radius-lg;
     background: linear-gradient(
       180deg,
-      var(--color-overlay-white-08) 0%,
-      var(--color-overlay-white-04) 100%
+      var(--bf-appearance-token-color-overlay-white-08) 0%,
+      var(--bf-appearance-token-color-overlay-white-04) 100%
     );
     box-shadow: $shadow-xs;
     transition:
@@ -151,21 +151,21 @@
       top: 0;
       bottom: 0;
       width: 3px;
-      background: color-mix(in srgb, var(--color-accent-500) 60%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 60%, transparent);
       opacity: 0.75;
     }
 
     &:hover {
-      border-color: var(--border-medium);
+      border-color: var(--bf-appearance-token-border-medium);
       box-shadow: $shadow-sm;
       transform: translateY(-1px);
     }
 
     &.is-installed {
-      border-color: color-mix(in srgb, var(--color-success) 35%, transparent);
+      border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 35%, transparent);
 
       &::before {
-        background: color-mix(in srgb, var(--color-success) 78%, transparent);
+        background: color-mix(in srgb, var(--bf-appearance-token-color-success) 78%, transparent);
       }
     }
 
@@ -173,7 +173,7 @@
       pointer-events: none;
 
       &:hover {
-        border-color: var(--border-subtle);
+        border-color: var(--bf-appearance-token-border-subtle);
         box-shadow: $shadow-xs;
         transform: none;
       }
@@ -210,9 +210,9 @@
   }
 
   &__market-item-name {
-    font-size: var(--font-size-lg);
+    font-size: var(--bf-appearance-token-font-size-lg);
     font-weight: $font-weight-semibold;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     line-height: $line-height-tight;
   }
 
@@ -222,22 +222,22 @@
     gap: 4px;
     padding: 2px 8px;
     border-radius: $size-radius-full;
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
     font-weight: $font-weight-medium;
-    border: 1px solid var(--border-subtle);
-    background: var(--element-bg-soft);
-    color: var(--color-text-muted);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    background: var(--bf-appearance-token-element-bg-soft);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__market-item-badge--installed {
-    border-color: color-mix(in srgb, var(--color-success) 35%, transparent);
-    background: color-mix(in srgb, var(--color-success) 14%, transparent);
-    color: var(--color-success);
+    border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 35%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 14%, transparent);
+    color: var(--bf-appearance-token-color-success);
   }
 
   &__market-item-description {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-sm);
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: $line-height-relaxed;
     margin-bottom: $size-gap-3;
     display: -webkit-box;
@@ -260,20 +260,20 @@
     max-width: 100%;
     padding: 2px 10px;
     border-radius: $size-radius-full;
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
     line-height: 1.35;
-    border: 1px solid var(--border-subtle);
-    background: var(--element-bg-soft);
-    color: var(--color-text-muted);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    background: var(--bf-appearance-token-element-bg-soft);
+    color: var(--bf-appearance-token-color-text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   &__market-item-source {
-    color: var(--color-accent-500);
-    background: color-mix(in srgb, var(--color-accent-500) 10%, transparent);
-    border-color: color-mix(in srgb, var(--color-accent-500) 25%, transparent);
+    color: var(--bf-appearance-token-color-accent-500);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, transparent);
+    border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 25%, transparent);
   }
 
   &__market-item-installs {
@@ -283,11 +283,11 @@
     flex-shrink: 0;
     padding: 2px 10px;
     border-radius: $size-radius-full;
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
     font-weight: $font-weight-medium;
-    color: var(--color-text-muted);
-    border: 1px solid var(--border-subtle);
-    background: var(--color-overlay-white-08);
+    color: var(--bf-appearance-token-color-text-muted);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    background: var(--bf-appearance-token-color-overlay-white-08);
   }
 
   &__market-item-action {
@@ -314,8 +314,8 @@
   &__market-skeleton-btn {
     position: relative;
     overflow: hidden;
-    background: var(--color-overlay-white-08);
-    border: 1px solid var(--color-overlay-white-08);
+    background: var(--bf-appearance-token-color-overlay-white-08);
+    border: 1px solid var(--bf-appearance-token-color-overlay-white-08);
     border-radius: $size-radius-sm;
 
     &::after {
@@ -325,9 +325,9 @@
       transform: translateX(-100%);
       background: linear-gradient(
         90deg,
-        rgba(var(--color-static-white-rgb), 0) 0%,
-        rgba(var(--color-static-white-rgb), 0.18) 48%,
-        rgba(var(--color-static-white-rgb), 0) 100%
+        rgba(var(--bf-appearance-token-color-static-white-rgb), 0) 0%,
+        rgba(var(--bf-appearance-token-color-static-white-rgb), 0.18) 48%,
+        rgba(var(--bf-appearance-token-color-static-white-rgb), 0) 100%
       );
       animation: bitfun-market-skeleton-shimmer 1.3s $easing-standard infinite;
     }
@@ -403,7 +403,7 @@
     }
 
     &__market-item-name {
-      font-size: var(--font-size-base);
+      font-size: var(--bf-appearance-token-font-size-base);
     }
 
     &__market-item-description {

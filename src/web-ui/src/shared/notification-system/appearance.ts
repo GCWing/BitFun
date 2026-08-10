@@ -1,0 +1,29 @@
+import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
+
+export const notificationAppearanceDescriptor: AppearanceSurfaceDescriptor = {
+  id: 'notification',
+  parts: [
+    { id: 'container' },
+    { id: 'item' },
+    { id: 'itemIcon' },
+    { id: 'itemContent' },
+    { id: 'itemTitle' },
+    { id: 'itemMessage' },
+    { id: 'itemActions' },
+    { id: 'itemClose' },
+    { id: 'progressItem' },
+    { id: 'progressBar' },
+    { id: 'progressFill' },
+    { id: 'loadingItem' },
+    { id: 'centerRoot' },
+    { id: 'centerHeader' },
+    { id: 'centerList' },
+    { id: 'centerItem' },
+  ],
+  states: [
+    { id: 'success', selector: { kind: 'self', suffix: '[data-bf-state~="success"]' } },
+    { id: 'error', selector: { kind: 'self', suffix: '[data-bf-state~="error"]' } },
+    { id: 'unread', selector: { kind: 'self', suffix: '[data-bf-state~="unread"]' } },
+    { id: 'expanded', selector: { kind: 'self', suffix: '[data-bf-state~="expanded"]' } },
+  ],
+};

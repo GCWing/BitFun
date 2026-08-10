@@ -1,20 +1,42 @@
 import React from 'react';
-import { Bot, MessageSquarePlus, Trash2 } from 'lucide-react';
+import {
+  Bot,
+  ChevronRight,
+  LoaderCircle,
+  MessageSquarePlus,
+  Pin,
+  Settings2,
+  Trash2,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge, Tooltip } from '@/component-library';
 import type { WorkspaceInfo } from '@/shared/types';
-import { getCardGradient } from '@/shared/utils/cardGradients';
 
 interface AssistantCardProps {
   workspace: WorkspaceInfo;
   onClick: () => void;
   onNewSession?: () => void;
   onDelete?: () => void;
+  onSetPrimary?: () => void;
   isPrimary?: boolean;
+  isDeleting?: boolean;
+  isStartingSession?: boolean;
+  isSettingPrimary?: boolean;
   style?: React.CSSProperties;
 }
 
-const AssistantCard: React.FC<AssistantCardProps> = ({ workspace, onClick, onNewSession, onDelete, isPrimary, style }) => {
+const AssistantCard: React.FC<AssistantCardProps> = ({
+  workspace,
+  onClick,
+  onNewSession,
+  onDelete,
+  onSetPrimary,
+  isPrimary,
+  isDeleting = false,
+  isStartingSession = false,
+  isSettingPrimary = false,
+  style,
+}) => {
   const { t } = useTranslation('scenes/profile');
   const identity = workspace.identity;
 
@@ -23,106 +45,142 @@ const AssistantCard: React.FC<AssistantCardProps> = ({ workspace, onClick, onNew
   const creature = identity?.creature?.trim() || '';
   const vibe = identity?.vibe?.trim() || '';
 
-  const gradient = getCardGradient(workspace.id || name);
-
-  const handleCardKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onClick();
-    }
-  };
-
   return (
-    <div
-      className="assistant-card"
-      role="button"
-      tabIndex={0}
-      onClick={onClick}
-      onKeyDown={handleCardKeyDown}
-      aria-label={name}
-      style={{
-        ...style,
-        '--assistant-card-gradient': gradient,
-      } as React.CSSProperties}
+    <article
+      data-bf-component="assistant-card"
+      data-bf-part="root"
+      data-bf-primary={isPrimary ? 'true' : 'false'}
+      data-bf-state={isDeleting || isStartingSession || isSettingPrimary ? 'busy' : undefined}
+      className={['assistant-card', (isDeleting || isSettingPrimary) && 'assistant-card--busy'].filter(Boolean).join(' ')}
+      role="listitem"
+      style={style}
     >
-      {/* Header: avatar + name + badges */}
-      <div className="assistant-card__header">
-        <div className="assistant-card__avatar">
-          {emoji ? (
-            <span className="assistant-card__emoji">{emoji}</span>
-          ) : (
-            <Bot className="assistant-card__avatar-icon" size={20} strokeWidth={1.6} aria-hidden />
-          )}
-        </div>
-        <div className="assistant-card__header-info">
-          <div className="assistant-card__title-row">
-            <span className="assistant-card__name">{name}</span>
-            {isPrimary && (
-              <span className="assistant-card__primary-badge">
-                {t('nursery.card.primaryBadge')}
-              </span>
+      <button
+        data-bf-component="assistant-card"
+        data-bf-part="main"
+        type="button"
+        className="assistant-card__main"
+        onClick={onClick}
+        aria-label={`${t('nursery.card.configure')}: ${name}`}
+        disabled={isDeleting || isSettingPrimary}
+      >
+        <span className="assistant-card__header" data-bf-component="assistant-card" data-bf-part="header">
+          <span className="assistant-card__avatar" data-bf-component="assistant-card" data-bf-part="avatar">
+            {emoji ? (
+              <span className="assistant-card__emoji">{emoji}</span>
+            ) : (
+              <Bot className="assistant-card__avatar-icon" size={20} strokeWidth={1.6} aria-hidden="true" />
             )}
-          </div>
-          <div className="assistant-card__badges">
-            {creature && <Badge variant="neutral">{creature}</Badge>}
-          </div>
-        </div>
-      </div>
-
-      {/* Body: vibe / description */}
-      <div className="assistant-card__body">
-        {vibe ? (
-          <p className="assistant-card__vibe">{vibe}</p>
-        ) : (
-          <p className="assistant-card__vibe assistant-card__vibe--empty">
-            {t('nursery.card.noVibe')}
-          </p>
-        )}
-      </div>
-
-      {/* Footer */}
-      <div className="assistant-card__footer">
-        <div className="assistant-card__footer-inner">
-          <span className="assistant-card__footer-hint">
-            {t('nursery.card.configure')}
           </span>
-          {(onNewSession || onDelete) ? (
-            <div className="assistant-card__footer-actions">
-              {onNewSession && (
-                <Tooltip content={t('nursery.card.newSession')} placement="top">
-                  <button
-                    type="button"
-                    className="assistant-card__new-session-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onNewSession();
-                    }}
-                    aria-label={t('nursery.card.newSession')}
-                  >
-                    <MessageSquarePlus size={15} strokeWidth={2} aria-hidden />
-                  </button>
-                </Tooltip>
+          <span className="assistant-card__header-info" data-bf-component="assistant-card" data-bf-part="headerInfo">
+            <span className="assistant-card__title-row">
+              <span className="assistant-card__name" data-bf-component="assistant-card" data-bf-part="name">{name}</span>
+              {isPrimary && (
+                <span className="assistant-card__primary-badge" data-bf-component="assistant-card" data-bf-part="primaryBadge">
+                  {t('nursery.card.primaryBadge')}
+                </span>
               )}
-              {onDelete && (
-                <Tooltip content={t('nursery.card.delete')} placement="top">
-                  <button
-                    type="button"
-                    className="assistant-card__delete-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete();
-                    }}
-                    aria-label={t('nursery.card.delete')}
-                  >
-                    <Trash2 size={14} strokeWidth={2} aria-hidden />
-                  </button>
-                </Tooltip>
-              )}
-            </div>
+            </span>
+            {creature ? (
+              <span className="assistant-card__badges" data-bf-component="assistant-card" data-bf-part="badges">
+                <Badge variant="neutral">{creature}</Badge>
+              </span>
+            ) : null}
+          </span>
+          <ChevronRight
+            data-bf-component="assistant-card"
+            data-bf-part="chevron"
+            className="assistant-card__chevron"
+            size={16}
+            strokeWidth={1.7}
+            aria-hidden="true"
+          />
+        </span>
+
+        <span className="assistant-card__body" data-bf-component="assistant-card" data-bf-part="body">
+          {vibe ? (
+            <span className="assistant-card__vibe" data-bf-component="assistant-card" data-bf-part="vibe">{vibe}</span>
+          ) : (
+            <span className="assistant-card__vibe assistant-card__vibe--empty" data-bf-component="assistant-card" data-bf-part="vibe">
+              {t('nursery.card.noVibe')}
+            </span>
+          )}
+        </span>
+
+        <span className="assistant-card__configure" data-bf-component="assistant-card" data-bf-part="configure">
+          <Settings2 size={13} strokeWidth={1.8} aria-hidden="true" />
+          <span>{t('nursery.card.configure')}</span>
+        </span>
+      </button>
+
+      <footer className="assistant-card__footer" data-bf-component="assistant-card" data-bf-part="footer">
+        {onNewSession ? (
+          <button
+            data-bf-component="assistant-card"
+            data-bf-part="newSession"
+            type="button"
+            className="assistant-card__new-session-btn"
+            onClick={onNewSession}
+            disabled={isStartingSession || isDeleting || isSettingPrimary}
+            aria-busy={isStartingSession}
+          >
+            {isStartingSession ? (
+              <LoaderCircle className="nursery-spinning" size={14} strokeWidth={1.8} aria-hidden="true" />
+            ) : (
+              <MessageSquarePlus size={14} strokeWidth={1.8} aria-hidden="true" />
+            )}
+            <span>
+              {t(isStartingSession ? 'nursery.card.startingSession' : 'nursery.card.newSession')}
+            </span>
+          </button>
+        ) : (
+          <span />
+        )}
+
+        <span className="assistant-card__footer-actions">
+          {onSetPrimary ? (
+            <Tooltip content={t('nursery.card.setPrimary')} placement="top">
+              <button
+                data-bf-component="assistant-card"
+                data-bf-part="setPrimary"
+                type="button"
+                className="assistant-card__set-primary-btn"
+                onClick={onSetPrimary}
+                aria-label={t('nursery.card.setPrimary')}
+                aria-busy={isSettingPrimary}
+                disabled={isDeleting || isStartingSession || isSettingPrimary}
+              >
+                {isSettingPrimary ? (
+                  <LoaderCircle className="nursery-spinning" size={14} strokeWidth={1.8} aria-hidden="true" />
+                ) : (
+                  <Pin size={14} strokeWidth={1.8} aria-hidden="true" />
+                )}
+              </button>
+            </Tooltip>
           ) : null}
-        </div>
-      </div>
-    </div>
+
+          {onDelete ? (
+            <Tooltip content={t('nursery.card.delete')} placement="top">
+              <button
+                data-bf-component="assistant-card"
+                data-bf-part="delete"
+                type="button"
+                className="assistant-card__delete-btn"
+                onClick={onDelete}
+                aria-label={t('nursery.card.delete')}
+                disabled={isDeleting || isStartingSession || isSettingPrimary}
+              >
+                {isDeleting ? (
+                  <LoaderCircle className="nursery-spinning" size={14} strokeWidth={1.8} aria-hidden="true" />
+                ) : (
+                  <Trash2 size={14} strokeWidth={1.8} aria-hidden="true" />
+                )}
+              </button>
+            </Tooltip>
+          ) : null}
+        </span>
+      </footer>
+    </article>
   );
 };
 

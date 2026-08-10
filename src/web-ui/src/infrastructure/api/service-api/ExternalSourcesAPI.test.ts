@@ -3,6 +3,7 @@ import { ExternalSourceApiError, externalSourcesAPI } from './ExternalSourcesAPI
 import { webSocketResponseError } from '../adapters/websocket-adapter';
 import { PeerProductCommandError } from '../adapters/peer-device-adapter';
 import { ApiClient } from './ApiClient';
+import { globalEventBus } from '@/infrastructure/event-bus';
 
 const invokeMock = vi.hoisted(() => vi.fn());
 const adapterMocks = vi.hoisted(() => ({
@@ -42,6 +43,48 @@ function surface(catalog: Record<string, unknown>) {
   };
 }
 
+function applicationSurfaceV2(overrides: Record<string, unknown> = {}) {
+  return {
+    schemaVersion: 2,
+    executionDomainId: 'host-a',
+    workspaceScopeId: 'workspace:0123456789abcdef',
+    effectiveConnectionScope: 'workspace_override',
+    refreshGeneration: 7,
+    preferenceRevision: 11,
+    safeMode: false,
+    hostCapabilities: {
+      canReadSnapshot: true,
+      canReadReview: true,
+      canMutate: true,
+      canManageUserDefault: true,
+      canManageWorkspaceOverride: true,
+      canRefresh: true,
+      canSetSafeMode: true,
+    },
+    applications: [{
+      applicationId: 'opencode',
+      ecosystemId: 'opencode',
+      displayName: 'OpenCode',
+      discovery: 'discovered',
+      connection: 'connected',
+      desiredConnection: 'connected',
+      health: 'healthy',
+      effectiveStatus: 'connected',
+      primaryAction: 'view',
+      defaultConnectionPolicy: 'connect',
+      defaultConnectionReason: 'supported_by_product',
+      enabledCount: 2,
+      pendingReviewCount: 0,
+      blockedCount: 0,
+      conflictCount: 0,
+      riskSummary: { reasonCodes: [] },
+      userDecision: 'connected',
+      recoveryActions: [],
+    }],
+    ...overrides,
+  };
+}
+
 vi.mock('../adapters', async importOriginal => ({
   ...await importOriginal<typeof import('../adapters')>(),
   getTransportAdapter: () => adapterMocks,
@@ -65,12 +108,363 @@ describe('ExternalSourcesAPI', () => {
     adapterMocks.isConnected.mockReturnValue(true);
   });
 
+  it('provides an application-level V2 negotiation read', () => {
+    expect('getApplicationSurface' in externalSourcesAPI).toBe(true);
+  });
+
+  it('prefers a strict Host-authoritative V2 application snapshot', async () => {
+    invokeMock.mockResolvedValueOnce(applicationSurfaceV2());
+
+    await expect(externalSourcesAPI.getApplicationSurface(' D:/workspace/project ', true))
+      .resolves.toMatchObject({
+        protocol: 'v2',
+        snapshot: {
+          schemaVersion: 2,
+          executionDomainId: 'host-a',
+          applications: [{
+            effectiveStatus: 'connected',
+            primaryAction: 'view',
+          }],
+        },
+      });
+    expect(invokeMock).toHaveBeenCalledWith('get_external_application_snapshot_v2', {
+      request: { workspacePath: 'D:/workspace/project', forceRefresh: true },
+    });
+  });
+
+  it('fails closed for an unknown V2 application status without falling back to V1', async () => {
+    invokeMock.mockResolvedValueOnce(applicationSurfaceV2({
+      applications: [{
+        ...applicationSurfaceV2().applications[0],
+        effectiveStatus: 'future_status',
+      }],
+    }));
+
+    await expect(externalSourcesAPI.getApplicationSurface()).rejects.toMatchObject({
+      code: 'invalid_response',
+    });
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('normalizes risk reason codes omitted by the Rust empty-vector wire format', async () => {
+    invokeMock.mockResolvedValueOnce(applicationSurfaceV2({
+      applications: [{
+        ...applicationSurfaceV2().applications[0],
+        riskSummary: {},
+      }],
+      reviewSummary: {
+        reviewId: 'review-a',
+        totalCount: 0,
+        categoryCounts: [],
+        maxSelectionCount: 0,
+        riskSummary: {},
+        recommendationSummary: { recommendedCount: 0, optionalCount: 0, blockedCount: 0 },
+        safetyCeiling: 'automatic',
+      },
+    }));
+
+    await expect(externalSourcesAPI.getApplicationSurface()).resolves.toMatchObject({
+      protocol: 'v2',
+      snapshot: {
+        applications: [{ riskSummary: { reasonCodes: [] } }],
+        reviewSummary: { riskSummary: { reasonCodes: [] } },
+      },
+    });
+  });
+
+  it('accepts a workspace context whose effective decision is inherited from the user default', async () => {
+    invokeMock.mockResolvedValueOnce(applicationSurfaceV2({
+      effectiveConnectionScope: 'user_default',
+    }));
+
+    await expect(externalSourcesAPI.getApplicationSurface()).resolves.toMatchObject({
+      protocol: 'v2',
+      snapshot: {
+        workspaceScopeId: 'workspace:0123456789abcdef',
+        effectiveConnectionScope: 'user_default',
+      },
+    });
+  });
+
+  it('falls back to the unchanged V1 surface only when the V2 method is unavailable', async () => {
+    invokeMock
+      .mockRejectedValueOnce(
+        "command 'get_external_application_snapshot_v2' is not supported on CLI peer host",
+      )
+      .mockResolvedValueOnce(surface({
+        generation: 3,
+        discoveryPending: false,
+        preferenceRevision: 2,
+        sources: [],
+        commands: [],
+        integrationPolicy: {
+          schemaMajor: 1,
+          status: 'compatible',
+          userDefaults: { enabled: false, ecosystems: {} },
+          globalEffective: { enabled: false, ecosystems: {} },
+          effective: { enabled: false, ecosystems: {} },
+          registeredEcosystems: [],
+        },
+      }));
+
+    await expect(externalSourcesAPI.getApplicationSurface('D:/workspace/project'))
+      .resolves.toMatchObject({
+        protocol: 'v1',
+        snapshot: { generation: 3 },
+      });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, 'get_external_source_control_snapshot', {
+      request: { workspacePath: 'D:/workspace/project', forceRefresh: false },
+    });
+  });
+
+  it('reads a strict bounded V2 review page with the Host scope kept outside the domain request', async () => {
+    const request = {
+      schemaVersion: 2 as const,
+      executionDomainId: 'host-a',
+      workspaceScopeId: 'workspace:0123456789abcdef',
+      targetScope: 'workspace_override' as const,
+      reviewId: 'review-a',
+      preferenceRevision: 11,
+      expectedGenerations: [{ owner: 'tool' as const, generation: 7 }],
+      pageSize: 64,
+    };
+    invokeMock.mockResolvedValueOnce({
+      schemaVersion: 2,
+      executionDomainId: 'host-a',
+      workspaceScopeId: 'workspace:0123456789abcdef',
+      targetScope: 'workspace_override',
+      reviewId: 'review-a',
+      preferenceRevision: 11,
+      expectedGenerations: [{ owner: 'tool', generation: 7 }],
+      nextCursor: 'page-2',
+      totalCount: 2,
+      items: [{
+        itemRef: { kind: 'tool', stableId: 'tool-a' },
+        displayName: 'Tool A',
+        displaySummary: 'Read repository files',
+        riskLevel: 'moderate',
+        riskReasonCodes: ['reads_workspace'],
+        recommended: true,
+        safetyCeiling: 'review_required',
+      }],
+    });
+
+    await expect(externalSourcesAPI.getApplicationReviewPage(
+      ' D:/workspace/project ',
+      request,
+    )).resolves.toMatchObject({
+      nextCursor: 'page-2',
+      items: [{ riskLevel: 'moderate', recommended: true }],
+    });
+    expect(invokeMock).toHaveBeenCalledWith('get_external_application_review_page_v2', {
+      request: { workspacePath: 'D:/workspace/project', request },
+    });
+  });
+
+  it('accepts an authoritative review rebind only when opening the first page', async () => {
+    invokeMock.mockResolvedValueOnce({
+      schemaVersion: 2,
+      executionDomainId: 'host-a',
+      workspaceScopeId: 'workspace:0123456789abcdef',
+      targetScope: 'workspace_override',
+      reviewId: 'review-current',
+      preferenceRevision: 11,
+      expectedGenerations: [{ owner: 'tool', generation: 8 }],
+      totalCount: 1,
+      items: [{
+        itemRef: { kind: 'tool', stableId: 'tool-current' },
+        displayName: 'Current Tool',
+        displaySummary: 'Current item',
+        riskLevel: 'low',
+        riskReasonCodes: [],
+        recommended: true,
+        safetyCeiling: 'automatic',
+      }],
+    });
+
+    await expect(externalSourcesAPI.getApplicationReviewPage('D:/workspace/project', {
+      schemaVersion: 2,
+      executionDomainId: 'host-a',
+      workspaceScopeId: 'workspace:0123456789abcdef',
+      targetScope: 'workspace_override',
+      reviewId: 'review-stale',
+      preferenceRevision: 11,
+      expectedGenerations: [],
+      pageSize: 64,
+    })).resolves.toMatchObject({
+      reviewId: 'review-current',
+      expectedGenerations: [{ owner: 'tool', generation: 8 }],
+    });
+  });
+
+  it('fails closed when a V2 review page contains an unknown risk level', async () => {
+    invokeMock.mockResolvedValueOnce({
+      schemaVersion: 2,
+      executionDomainId: 'host-a',
+      targetScope: 'user_default',
+      reviewId: 'review-a',
+      preferenceRevision: 11,
+      expectedGenerations: [],
+      totalCount: 1,
+      items: [{
+        itemRef: { kind: 'command', stableId: 'command-a' },
+        displayName: 'Command A',
+        displaySummary: 'Run command A',
+        riskLevel: 'medium',
+        riskReasonCodes: [],
+        recommended: true,
+        safetyCeiling: 'automatic',
+      }],
+    });
+
+    await expect(externalSourcesAPI.getApplicationReviewPage(undefined, {
+      schemaVersion: 2,
+      executionDomainId: 'host-a',
+      targetScope: 'user_default',
+      reviewId: 'review-a',
+      preferenceRevision: 11,
+      expectedGenerations: [],
+      pageSize: 64,
+    })).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
+  it('rejects a validly shaped review page from a different execution domain', async () => {
+    invokeMock.mockResolvedValueOnce({
+      schemaVersion: 2,
+      executionDomainId: 'host-b',
+      targetScope: 'user_default',
+      reviewId: 'review-a',
+      preferenceRevision: 11,
+      expectedGenerations: [],
+      totalCount: 0,
+      items: [],
+    });
+
+    await expect(externalSourcesAPI.getApplicationReviewPage(undefined, {
+      schemaVersion: 2,
+      executionDomainId: 'host-a',
+      targetScope: 'user_default',
+      reviewId: 'review-a',
+      preferenceRevision: 11,
+      expectedGenerations: [],
+      pageSize: 64,
+    })).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
+  it('applies a V2 action and preserves typed partial or stale item feedback', async () => {
+    const request = {
+      schemaVersion: 2 as const,
+      executionDomainId: 'host-a',
+      workspaceScopeId: 'workspace:0123456789abcdef',
+      targetScope: 'workspace_override' as const,
+      operationId: 'operation-a',
+      expectedPreferenceRevision: 11,
+      action: {
+        type: 'submit_application_review' as const,
+        reviewId: 'review-a',
+        expectedGenerations: [{ owner: 'tool' as const, generation: 7 }],
+        selectionBaseline: 'recommended' as const,
+        selectionOverrides: [{
+          itemRef: { kind: 'tool' as const, stableId: 'tool-a' },
+          selected: false,
+        }],
+      },
+    };
+    invokeMock.mockResolvedValueOnce({
+      schemaVersion: 2,
+      operationId: 'operation-a',
+      preferenceRevision: 12,
+      outcome: 'stale',
+      itemResults: [{
+        itemRef: { kind: 'tool', stableId: 'tool-a' },
+        outcome: 'stale',
+        reasonCode: 'owner_generation_changed',
+        recoveryActions: [{ type: 'refresh' }],
+      }],
+    });
+
+    await expect(externalSourcesAPI.applyApplicationAction(
+      'D:/workspace/project',
+      request,
+    )).resolves.toMatchObject({
+      outcome: 'stale',
+      itemResults: [{ recoveryActions: [{ type: 'refresh' }] }],
+    });
+    expect(invokeMock).toHaveBeenCalledWith('apply_external_application_action_v2', {
+      request: { workspacePath: 'D:/workspace/project', request },
+    });
+  });
+
+  it('rejects a V2 action result for a different idempotency operation', async () => {
+    invokeMock.mockResolvedValueOnce({
+      schemaVersion: 2,
+      operationId: 'operation-b',
+      preferenceRevision: 12,
+      outcome: 'applied',
+      itemResults: [],
+    });
+
+    await expect(externalSourcesAPI.applyApplicationAction(undefined, {
+      schemaVersion: 2,
+      executionDomainId: 'host-a',
+      targetScope: 'user_default',
+      operationId: 'operation-a',
+      expectedPreferenceRevision: 11,
+      action: { type: 'refresh' },
+    })).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
+  it('reads and acknowledges backend-owned ecosystem awareness', async () => {
+    invokeMock
+      .mockResolvedValueOnce({ unacknowledgedEcosystemIds: ['opencode', 'codex'] })
+      .mockResolvedValueOnce(undefined);
+
+    await expect(externalSourcesAPI.getEcosystemAwareness('D:/workspace/project'))
+      .resolves.toEqual(['opencode', 'codex']);
+    await externalSourcesAPI.acknowledgeEcosystems(
+      'D:/workspace/project',
+      ['opencode', 'codex'],
+    );
+
+    expect(invokeMock).toHaveBeenNthCalledWith(1, 'get_external_ecosystem_awareness_command', {
+      request: { workspacePath: 'D:/workspace/project' },
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, 'acknowledge_external_ecosystems_command', {
+      request: {
+        workspacePath: 'D:/workspace/project',
+        ecosystemIds: ['opencode', 'codex'],
+      },
+    });
+  });
+
   it('keeps workspace ownership and refresh intent in the public snapshot request', async () => {
     await externalSourcesAPI.getSnapshot('D:/workspace/project', true);
 
     expect(invokeMock).toHaveBeenCalledWith('get_external_source_control_snapshot', {
       request: {
         workspacePath: 'D:/workspace/project',
+        forceRefresh: true,
+      },
+    });
+  });
+
+  it('keeps the execution root and workspace metadata identity in reference discovery', async () => {
+    invokeMock.mockResolvedValueOnce({
+      generation: 3,
+      discoveryPending: false,
+      references: [],
+    });
+
+    await externalSourcesAPI.getWorkspaceReferences(
+      'D:/workspace/project/.bitfun/worktrees/task',
+      'workspace-1',
+      true,
+    );
+
+    expect(invokeMock).toHaveBeenCalledWith('get_workspace_reference_snapshot', {
+      request: {
+        workspacePath: 'D:/workspace/project/.bitfun/worktrees/task',
+        workspaceId: 'workspace-1',
         forceRefresh: true,
       },
     });
@@ -83,6 +477,28 @@ describe('ExternalSourcesAPI', () => {
       request: {
         workspacePath: undefined,
         forceRefresh: false,
+      },
+    });
+  });
+
+  it('sends only typed selection intent when applying an MCP import plan', async () => {
+    const plan = {
+      schemaVersion: 1 as const,
+      planFingerprint: 'sha256:plan-v1',
+      items: [],
+    };
+    await externalSourcesAPI.applyMcpImport('D:/workspace/project', plan, [{
+      candidateId: 'opencode:mcp:docs',
+    }]);
+
+    expect(invokeMock).toHaveBeenCalledWith('apply_external_mcp_import_command', {
+      request: {
+        workspacePath: 'D:/workspace/project',
+        importRequest: {
+          schemaVersion: 1,
+          planFingerprint: 'sha256:plan-v1',
+          selections: [{ candidateId: 'opencode:mcp:docs' }],
+        },
       },
     });
   });
@@ -102,9 +518,17 @@ describe('ExternalSourcesAPI', () => {
   });
 
   it('expands a prompt command only with the selected candidate and behavior version', async () => {
-    invokeMock.mockResolvedValueOnce({ content: 'expanded prompt' });
+    invokeMock.mockResolvedValueOnce({
+      state: 'ready',
+      content: 'expanded prompt',
+      executionTarget: {
+        kind: 'fresh_external_subagent',
+        ecosystemId: 'opencode',
+        logicalId: 'reviewer',
+      },
+    });
 
-    await externalSourcesAPI.expandPromptCommand(
+    const outcome = await externalSourcesAPI.expandPromptCommand(
       'D:/workspace/project',
       'review',
       'focus on auth',
@@ -119,7 +543,21 @@ describe('ExternalSourcesAPI', () => {
         conflictKey: 'native:prompt_command:local-user:review:v1',
         expectedPreferenceRevision: 7,
       },
+      {
+        planFingerprint: 'sha256:shell-plan',
+        mode: 'run_once',
+        expectedPreferenceRevision: 7,
+      },
     );
+
+    expect(outcome).toMatchObject({
+      state: 'ready',
+      executionTarget: {
+        kind: 'fresh_external_subagent',
+        ecosystemId: 'opencode',
+        logicalId: 'reviewer',
+      },
+    });
 
     expect(invokeMock).toHaveBeenCalledWith('expand_external_prompt_command_command', {
       request: {
@@ -135,7 +573,35 @@ describe('ExternalSourcesAPI', () => {
         expectedContentVersion: 'behavior-v1',
         expectedNativeConflictKey: 'native:prompt_command:local-user:review:v1',
         expectedPreferenceRevision: 7,
+        shellReviewDecision: {
+          planFingerprint: 'sha256:shell-plan',
+          mode: 'run_once',
+          expectedPreferenceRevision: 7,
+        },
       },
+    });
+  });
+
+  it.each([
+    ['a missing execution target', { state: 'ready', content: 'expanded prompt' }],
+    ['an unknown execution target', {
+      state: 'ready',
+      content: 'expanded prompt',
+      executionTarget: { kind: 'future_target' },
+    }],
+  ])('rejects prompt command expansion with %s', async (_label, response) => {
+    invokeMock.mockResolvedValueOnce(response);
+
+    await expect(externalSourcesAPI.expandPromptCommand(
+      'D:/workspace/project',
+      'review',
+      '',
+      'opencode.commands:project:review',
+      'behavior-v1',
+      [],
+    )).rejects.toMatchObject({
+      code: 'invalid_response',
+      retryable: false,
     });
   });
 
@@ -340,6 +806,9 @@ describe('ExternalSourcesAPI', () => {
   });
 
   it('sends policy scope and optimistic revision as one atomic mutation', async () => {
+    const catalogUpdated = vi.fn();
+    const unsubscribe = globalEventBus.on('mode:config:updated', catalogUpdated);
+
     await externalSourcesAPI.updateIntegrationPolicy('D:/workspace/project', {
       expectedPreferenceRevision: 8,
       scope: 'workspace',
@@ -366,6 +835,11 @@ describe('ExternalSourcesAPI', () => {
         },
       },
     });
+    expect(catalogUpdated).toHaveBeenCalledWith({
+      reason: 'external-agent-catalog-updated',
+      workspacePath: 'D:/workspace/project',
+    });
+    unsubscribe();
   });
 
   it('normalizes typed host errors without matching user-visible strings', async () => {
@@ -477,6 +951,90 @@ describe('ExternalSourcesAPI', () => {
     );
   });
 
+  it('normalizes legacy subagent role and model-binding fields at the API boundary', async () => {
+    invokeMock.mockResolvedValue(surface({
+      generation: 2,
+      discoveryPending: false,
+      sources: [],
+      commands: [],
+      subagents: [{
+        candidateId: 'opencode-review',
+        logicalId: 'review',
+        displayName: 'Review',
+        description: 'Review changes',
+        providerLabel: 'OpenCode',
+        scope: 'project',
+        sourceKeys: [],
+        sourceLocationLabels: [],
+        sourceCount: 1,
+        effectiveToolLabels: [],
+        unavailableToolLabels: [],
+        supportsFollowUp: false,
+        compatibilityState: 'ready',
+        diagnostics: [],
+        activationState: { state: 'approval_required' },
+        decisionKey: 'decision-v1',
+      }],
+    }));
+
+    const result = await externalSourcesAPI.getSnapshot();
+
+    expect(result.subagentModelBindingGroups).toEqual([]);
+    expect(result.subagentModelBindingOptions).toEqual([]);
+    expect(result.subagents?.[0]).toMatchObject({
+      mode: 'subagent',
+      requestedModel: { kind: 'default' },
+      modelBindingMethod: 'default',
+    });
+  });
+
+  it('sends typed subagent model bindings and clears them through the same command', async () => {
+    await externalSourcesAPI.setSubagentModelBinding(
+      'D:/workspace/project',
+      'external_subagent_model_binding:review',
+      { kind: 'model', modelId: 'anthropic/claude-sonnet-4' },
+      5,
+      8,
+    );
+
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      1,
+      'set_external_subagent_model_binding_command',
+      {
+        request: {
+          workspacePath: 'D:/workspace/project',
+          bindingKey: 'external_subagent_model_binding:review',
+          target: { kind: 'model', modelId: 'anthropic/claude-sonnet-4' },
+          expectedSubagentGeneration: 5,
+          expectedPreferenceRevision: 8,
+        },
+      },
+    );
+
+    invokeMock.mockClear();
+    await externalSourcesAPI.setSubagentModelBinding(
+      'D:/workspace/project',
+      'external_subagent_model_binding:review',
+      undefined,
+      6,
+      9,
+    );
+
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      1,
+      'set_external_subagent_model_binding_command',
+      {
+        request: {
+          workspacePath: 'D:/workspace/project',
+          bindingKey: 'external_subagent_model_binding:review',
+          target: undefined,
+          expectedSubagentGeneration: 6,
+          expectedPreferenceRevision: 9,
+        },
+      },
+    );
+  });
+
   it('restores omitted empty MCP collections at the API boundary', async () => {
     invokeMock.mockResolvedValue(surface({
       generation: 3,
@@ -510,6 +1068,12 @@ describe('ExternalSourcesAPI', () => {
           name: 'docs',
           transport: 'streamable_http',
           argumentCount: 0,
+          timeouts: {
+            startupMs: 9007199254740992,
+            catalogMs: 'invalid',
+            executionMs: 3000,
+            futurePhaseMs: 4000,
+          },
           sourceEnabled: true,
           behaviorVersion: '1',
           staticStatus: { state: 'ready' },
@@ -525,7 +1089,9 @@ describe('ExternalSourcesAPI', () => {
       environmentKeys: [],
       environmentReferenceNames: [],
       headerNames: [],
+      timeouts: { executionMs: 3000 },
     });
+    expect(result.mcpServers?.[0].definition.timeouts).toEqual({ executionMs: 3000 });
     expect(result.mcpApprovalRequests).toEqual([]);
     expect(result.toolConflicts).toEqual([]);
     expect(result.pendingSubagentApprovals).toEqual([]);

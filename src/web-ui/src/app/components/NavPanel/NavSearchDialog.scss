@@ -1,33 +1,35 @@
 @use '../../../component-library/styles/tokens.scss' as *;
 @use '../../styles/nav-panel-font-scope.scss' as nav-font;
 
+// Search is commonly opened from the keyboard, so the command surface appears
+// immediately with no entrance or stagger animation.
 .bitfun-nav-search-dialog__overlay {
   @include nav-font.nav-panel-font-token-scope;
 
   position: fixed;
   inset: 0;
   z-index: 600;
-  background: transparent;
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding-top: 80px;
+  padding: clamp(56px, 9vh, 92px) $size-gap-4 $size-gap-4;
+  background: var(--bf-appearance-token-color-overlay-black-12);
 }
 
-// ── Card — matches .bitfun-scene-viewport surface (--color-bg-scene)
+// ── Card — matches .bitfun-scene-viewport surface (--bf-appearance-token-color-bg-scene)
 
 .bitfun-nav-search-dialog__card {
   width: 520px;
   max-width: calc(100vw - 32px);
-  background: var(--color-bg-scene);
+  background: var(--bf-appearance-token-color-bg-scene);
   border-radius: calc(#{$size-radius-base} + 2px);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--color-text-primary) 4%, transparent),
-    0 2px 4px var(--color-overlay-slate-04),
-    0 8px 24px var(--color-overlay-slate-08),
-    0 24px 56px -12px rgba(var(--color-overlay-slate-rgb), 0.22),
-    0 48px 80px -24px var(--color-overlay-slate-12);
+    0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 4%, transparent),
+    0 2px 4px var(--bf-appearance-token-color-overlay-slate-04),
+    0 8px 24px var(--bf-appearance-token-color-overlay-slate-08),
+    0 24px 56px -12px rgba(var(--bf-appearance-token-color-overlay-slate-rgb), 0.22),
+    0 48px 80px -24px var(--bf-appearance-token-color-overlay-slate-12);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -35,104 +37,78 @@
   animation: bitfun-nav-search-card-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-:root[data-theme-type='light'] .bitfun-nav-search-dialog__card {
-  border-color: var(--border-medium);
+:root[data-bf-appearance-mode='light'] .bitfun-nav-search-dialog__card {
+  border-color: var(--bf-appearance-token-border-medium);
 }
 
-:root[data-theme-type='dark'] .bitfun-nav-search-dialog__card {
+:root[data-bf-appearance-mode='dark'] .bitfun-nav-search-dialog__card {
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--color-static-white) 6%, transparent),
-    0 1px 0 color-mix(in srgb, var(--color-static-white) 5%, transparent),
-    0 4px 12px rgba(var(--color-static-black-rgb), 0.35),
-    0 20px 48px -8px rgba(var(--color-static-black-rgb), 0.65),
-    0 40px 72px -20px rgba(var(--color-static-black-rgb), 0.45);
+    0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-static-white) 6%, transparent),
+    0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-static-white) 5%, transparent),
+    0 4px 12px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.35),
+    0 20px 48px -8px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.65),
+    0 40px 72px -20px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.45);
 }
-
-@keyframes bitfun-nav-search-card-in {
-  from {
-    opacity: 0;
-    transform: translateY(-12px) scale(0.982);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-// ── Input row ────────────────────────────────────────────────────────────────
 
 .bitfun-nav-search-dialog__input-row {
-  padding: $size-gap-2;
-  border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
-  background: var(--color-bg-scene);
+  padding: $size-gap-2;
+  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  flex-shrink: 0;
+  background: var(--bf-appearance-token-color-bg-scene);
 }
 
-// Real search field in dialog (capsule). Nav trigger is a plain button — styles differ on purpose.
 .bitfun-nav-search-dialog__search {
   width: 100%;
 
   .search__wrapper {
-    height: 32px;
-    min-height: 32px;
-    padding: 0 $size-gap-2;
+    min-height: 36px;
+    height: 36px;
     gap: $size-gap-2;
     border: none;
     border-radius: $size-radius-full;
-    background: var(--color-bg-scene);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-subtle) 65%, transparent);
+    background: var(--bf-appearance-token-color-bg-scene);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-border-subtle) 65%, transparent);
     transition:
-      background 0.2s ease,
-      box-shadow 0.2s ease;
+      border-color 120ms ease,
+      background 120ms ease;
 
     &:hover {
-      background: color-mix(in srgb, var(--color-bg-scene) 88%, var(--element-bg-medium));
-      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-medium) 55%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 88%, var(--bf-appearance-token-element-bg-medium));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-border-medium) 55%, transparent);
     }
 
     &:focus-within {
-      background: color-mix(in srgb, var(--color-bg-scene) 82%, var(--element-bg-medium));
-      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-medium) 68%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 82%, var(--bf-appearance-token-element-bg-medium));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-border-medium) 68%, transparent);
     }
   }
 
   &.search .search__input {
-    font-size: var(--font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-sm);
 
     &::placeholder {
-      color: var(--color-text-disabled);
+      color: var(--bf-appearance-token-color-text-disabled);
     }
 
     &:focus::placeholder {
-      color: color-mix(in srgb, var(--color-text-disabled) 72%, transparent);
+      color: color-mix(in srgb, var(--bf-appearance-token-color-text-disabled) 72%, transparent);
     }
   }
 }
 
-@keyframes bitfun-nav-search-fade-rise {
-  from {
-    opacity: 0;
-    transform: translateY(5px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-// ── Results ──────────────────────────────────────────────────────────────────
-
 .bitfun-nav-search-dialog__results {
-  overflow-y: auto;
   flex: 1;
-  padding: $size-gap-1 $size-gap-2 $size-gap-2;
+  padding: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 
   &::-webkit-scrollbar {
-    width: 3px;
+    width: 4px;
   }
 
   &::-webkit-scrollbar-thumb {
-    background: var(--border-subtle);
+    background: var(--bf-appearance-token-border-subtle);
     border-radius: 2px;
   }
 
@@ -144,157 +120,153 @@
 .bitfun-nav-search-dialog__empty {
   padding: $size-gap-4 $size-gap-2;
   text-align: center;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-sm);
   animation: bitfun-nav-search-fade-rise 0.32s cubic-bezier(0.22, 1, 0.36, 1) 0.06s both;
 }
 
-// ── Groups ───────────────────────────────────────────────────────────────────
-
 .bitfun-nav-search-dialog__group {
-  animation: bitfun-nav-search-fade-rise 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
-
-  &:nth-of-type(1) {
-    animation-delay: 0.04s;
-  }
-
-  &:nth-of-type(2) {
-    animation-delay: 0.08s;
-  }
-
-  &:nth-of-type(3) {
-    animation-delay: 0.12s;
-  }
+  padding: 2px 0;
 
   & + & {
     margin-top: $size-gap-1;
-    border-top: 1px solid var(--border-subtle);
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
     padding-top: $size-gap-1;
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
   }
 }
 
 .bitfun-nav-search-dialog__group-label {
   padding: $size-gap-1 $size-gap-1 $size-gap-1 2px;
-  font-size: var(--font-size-xxs);
+  font-size: var(--bf-appearance-token-font-size-xxs);
   font-weight: 700;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
   user-select: none;
-  opacity: 0.88;
 }
 
-// Default (no query): sessions column — label only, no rows; hint below label.
 .bitfun-nav-search-dialog__session-hint {
   padding: $size-gap-2 $size-gap-2 $size-gap-1 2px;
-  font-size: var(--font-size-xs);
+  font-size: var(--bf-appearance-token-font-size-xs);
   line-height: 1.45;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   user-select: none;
 }
-
-// ── Result item ──────────────────────────────────────────────────────────────
 
 .bitfun-nav-search-dialog__item {
   display: flex;
   align-items: center;
   gap: $size-gap-2;
   width: 100%;
-  padding: 6px $size-gap-2;
+  min-height: 42px;
+  padding: 5px $size-gap-2;
   border: none;
-  border-radius: 4px;
+  border-radius: $size-radius-base;
   background: transparent;
   cursor: pointer;
   text-align: left;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   transition: background 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 
+  &--active,
   &:hover {
-    background: var(--element-bg-soft);
+    background: var(--bf-appearance-token-element-bg-soft);
   }
 
   &--active {
-    background: var(--element-bg-medium);
+    background: var(--bf-appearance-token-element-bg-medium);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
+    outline-offset: -2px;
   }
 }
 
 .bitfun-nav-search-dialog__item-icon {
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   display: flex;
   align-items: center;
-  flex-shrink: 0;
-  opacity: 0.82;
-  transition: opacity 0.2s ease;
+  justify-content: center;
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  border-radius: $size-radius-sm;
+  background: var(--bf-appearance-token-element-bg-subtle);
+  color: var(--bf-appearance-token-color-text-muted);
 
-  .bitfun-nav-search-dialog__item:hover &,
   .bitfun-nav-search-dialog__item--active & {
-    opacity: 1;
+    color: var(--bf-appearance-token-color-text-primary);
   }
 }
 
 .bitfun-nav-search-dialog__item-content {
-  flex: 1;
-  min-width: 0;
   display: flex;
+  flex: 1;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bitfun-nav-search-dialog__item-label,
+.bitfun-nav-search-dialog__item-sublabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bitfun-nav-search-dialog__item-label {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-primary);
+  font-size: var(--bf-appearance-token-font-size-sm);
+  color: var(--bf-appearance-token-color-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .bitfun-nav-search-dialog__item-sublabel {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-xs);
+  color: var(--bf-appearance-token-color-text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-// ── Trigger button (NavPanel brand-header) ───────────────────────────────────
-// Opens the search dialog — capsule + scene surface (matches .bitfun-scene-viewport / dialog search).
-
 .bitfun-nav-panel__search-trigger {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: $size-gap-2;
   width: 100%;
-  height: 32px;
-  min-height: 32px;
+  min-height: 34px;
+  height: 34px;
   padding: 0 $size-gap-2;
   border: none;
   border-radius: $size-radius-full;
-  background: var(--color-bg-scene);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-subtle) 65%, transparent);
+  background: var(--bf-appearance-token-color-bg-scene);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-border-subtle) 65%, transparent);
   cursor: text;
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: var(--bf-appearance-token-font-size-sm);
   font-weight: 500;
   text-align: left;
-  box-sizing: border-box;
+  cursor: text;
   transition:
     background $motion-fast $easing-standard,
     box-shadow $motion-fast $easing-standard,
     color $motion-fast $easing-standard;
 
   &:hover {
-    background: color-mix(in srgb, var(--color-bg-scene) 88%, var(--element-bg-medium));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-medium) 55%, transparent);
-    color: var(--color-text-primary);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 88%, var(--bf-appearance-token-element-bg-medium));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-border-medium) 55%, transparent);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &:active {
-    background: color-mix(in srgb, var(--color-bg-scene) 82%, var(--element-bg-medium));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-medium) 68%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 82%, var(--bf-appearance-token-element-bg-medium));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-border-medium) 68%, transparent);
   }
 
   &:focus-visible {
-    outline: 1px solid var(--color-accent-500);
+    outline: 1px solid var(--bf-appearance-token-color-accent-500);
     outline-offset: 1px;
   }
 
@@ -306,13 +278,7 @@
     width: 22px;
     min-width: 22px;
     height: 22px;
-    transform: scale(1);
-    transform-origin: center;
-    transition: transform $motion-fast $easing-standard;
-  }
-
-  &:hover &__icon {
-    transform: scale(1.07);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__icon-inner {
@@ -326,40 +292,16 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  white-space: nowrap;
+  color: inherit;
   text-overflow: ellipsis;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-nav-search-dialog__card,
-  .bitfun-nav-search-dialog__group,
-  .bitfun-nav-search-dialog__empty {
-    animation: none !important;
-  }
-
-  .bitfun-nav-search-dialog__group {
-    animation-delay: 0s !important;
-    opacity: 1;
-    transform: none;
-  }
-
-  .bitfun-nav-search-dialog__empty {
-    opacity: 1;
-    transform: none;
-  }
-
-  .bitfun-nav-search-dialog__item {
-    transition: background 0.12s ease;
-  }
-
+  .bitfun-nav-search-dialog__search .search__wrapper,
+  .bitfun-nav-search-dialog__item,
   .bitfun-nav-panel__search-trigger {
-    transition:
-      background 0.15s ease,
-      color 0.15s ease;
-
-    &:hover .bitfun-nav-panel__search-trigger__icon {
-      transform: none;
-    }
+    transition: none;
+    transform: none;
   }
 }

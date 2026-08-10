@@ -14,7 +14,7 @@
   width: 18px;
   height: 18px;
   border-radius: 4px;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 
   svg {
     width: 12px;
@@ -23,9 +23,9 @@
 }
 
 .tool-card-copy-action {
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 
   &.copied {
-    color: var(--color-success);
+    color: var(--bf-appearance-token-color-success);
   }
 }

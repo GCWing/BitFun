@@ -1,0 +1,34 @@
+import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
+
+export const aboutDialogAppearanceDescriptor: AppearanceSurfaceDescriptor = {
+  id: 'about-dialog',
+  parts: [
+    { id: 'root', visualRole: 'dialog', continuityGroup: 'about-dialog' },
+    { id: 'hero', visualRole: 'content', continuityGroup: 'about-dialog' },
+    { id: 'title', propertyProfile: 'paint', visualRole: 'content' },
+    { id: 'version', propertyProfile: 'paint', visualRole: 'content' },
+    { id: 'decoration', propertyProfile: 'paint', visualRole: 'decoration' },
+    { id: 'content', visualRole: 'content', continuityGroup: 'about-dialog' },
+    { id: 'updateCard', visualRole: 'card' },
+    { id: 'updateHeader', visualRole: 'toolbar' },
+    { id: 'updateFeedback', propertyProfile: 'paint', visualRole: 'content' },
+    { id: 'updateActions', visualRole: 'toolbar' },
+    { id: 'progress', propertyProfile: 'control', visualRole: 'control' },
+    { id: 'progressFill', propertyProfile: 'paint', visualRole: 'decoration' },
+    { id: 'infoCard', visualRole: 'card' },
+    { id: 'infoRow', visualRole: 'content' },
+    { id: 'infoLabel', propertyProfile: 'paint', visualRole: 'content' },
+    { id: 'infoValue', propertyProfile: 'paint', visualRole: 'content' },
+    { id: 'copyButton', propertyProfile: 'control', visualRole: 'control' },
+    { id: 'footer', visualRole: 'toolbar', continuityGroup: 'about-dialog' },
+    { id: 'license', propertyProfile: 'paint', visualRole: 'content' },
+    { id: 'copyright', propertyProfile: 'paint', visualRole: 'content' },
+  ],
+  states: [
+    { id: 'checking', selector: { kind: 'ancestorPart', part: 'updateCard', suffix: '[data-bf-state~="checking"]' } },
+    { id: 'latest', selector: { kind: 'ancestorPart', part: 'updateCard', suffix: '[data-bf-state~="latest"]' } },
+    { id: 'downloading', selector: { kind: 'ancestorPart', part: 'updateCard', suffix: '[data-bf-state~="downloading"]' } },
+    { id: 'installed', selector: { kind: 'ancestorPart', part: 'updateCard', suffix: '[data-bf-state~="installed"]' } },
+    { id: 'error', selector: { kind: 'ancestorPart', part: 'updateCard', suffix: '[data-bf-state~="error"]' } },
+  ],
+};

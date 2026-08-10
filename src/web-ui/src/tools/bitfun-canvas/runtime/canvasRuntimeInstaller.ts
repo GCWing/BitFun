@@ -21,7 +21,7 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
   const rootElement = document.getElementById('bitfun-canvas-root');
   let reactRoot: ReturnType<RuntimeReactDOM['createRoot']> | null = null;
   let renderComponent: any = null;
-  let hostTheme = makeTheme({
+  let hostAppearance = makeAppearance({
     type: 'auto',
     bg: 'var(--bitfun-canvas-bg)',
     panel: 'var(--bitfun-canvas-panel)',
@@ -50,7 +50,7 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
     return;
   }
 
-  function makeTheme(tokens: CanvasRuntimeRecord): CanvasRuntimeRecord {
+  function makeAppearance(tokens: CanvasRuntimeRecord): CanvasRuntimeRecord {
     const readToken = (value: unknown, fallback: string): string =>
       value === undefined || value === null || value === '' ? fallback : String(value);
     const bg = readToken(tokens.bg, 'var(--bitfun-canvas-bg)');
@@ -75,7 +75,7 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
       });
     const semanticBg = {
       editor: bg,
-      chrome: 'var(--element-bg-subtle)',
+      chrome: 'var(--bf-appearance-token-element-bg-subtle)',
       elevated: panel,
     };
     const semanticText = {
@@ -84,18 +84,18 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
       tertiary: muted,
       quaternary: muted,
       link: accent,
-      onAccent: 'var(--color-static-white)',
+      onAccent: 'var(--bf-appearance-token-color-static-white)',
     };
     const semanticFill = {
       primary: panel,
-      secondary: 'var(--element-bg-base)',
-      tertiary: 'var(--element-bg-soft)',
-      quaternary: 'var(--element-bg-subtle)',
+      secondary: 'var(--bf-appearance-token-element-bg-base)',
+      tertiary: 'var(--bf-appearance-token-element-bg-soft)',
+      quaternary: 'var(--bf-appearance-token-element-bg-subtle)',
     };
     const semanticStroke = {
       primary: border,
-      secondary: 'var(--border-base)',
-      tertiary: 'var(--border-subtle)',
+      secondary: 'var(--bf-appearance-token-border-base)',
+      tertiary: 'var(--bf-appearance-token-border-subtle)',
       focused: accent,
     };
     const semanticAccent = {
@@ -118,8 +118,8 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
       orange: warning,
     };
     const diff = {
-      insertedLine: 'color-mix(in srgb, var(--color-success) 12%, transparent)',
-      removedLine: 'color-mix(in srgb, var(--color-error) 12%, transparent)',
+      insertedLine: 'color-mix(in srgb, var(--bf-appearance-token-color-success) 12%, transparent)',
+      removedLine: 'color-mix(in srgb, var(--bf-appearance-token-color-error) 12%, transparent)',
       stripAdded: success,
       stripRemoved: danger,
     };
@@ -155,31 +155,31 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
     };
   }
 
-  function applyTheme(nextTheme: CanvasRuntimeRecord): void {
-    if (!nextTheme || typeof nextTheme !== 'object') return;
+  function applyAppearance(nextAppearance: CanvasRuntimeRecord): void {
+    if (!nextAppearance || typeof nextAppearance !== 'object') return;
     const allowed = ['bg', 'panel', 'fg', 'muted', 'border', 'accent', 'success', 'warning', 'danger', 'info'];
     const rootStyle = document.documentElement.style;
-    if (nextTheme.vars && typeof nextTheme.vars === 'object') {
-      for (const [name, value] of Object.entries(nextTheme.vars)) {
+    if (nextAppearance.vars && typeof nextAppearance.vars === 'object') {
+      for (const [name, value] of Object.entries(nextAppearance.vars)) {
         if (/^--[a-zA-Z0-9_-]+$/.test(name) && typeof value === 'string' && value.trim()) {
           rootStyle.setProperty(name, value.trim());
         }
       }
     }
     for (const key of allowed) {
-      const value = nextTheme[key];
+      const value = nextAppearance[key];
       if (typeof value === 'string' && value.trim()) {
         rootStyle.setProperty(`--bitfun-canvas-${key}`, value.trim());
       }
     }
-    if (nextTheme.type === 'dark' || nextTheme.type === 'light') {
-      document.documentElement.style.colorScheme = nextTheme.type;
+    if (nextAppearance.type === 'dark' || nextAppearance.type === 'light') {
+      document.documentElement.style.colorScheme = nextAppearance.type;
     }
-    hostTheme = makeTheme({ ...hostTheme, ...nextTheme });
+    hostAppearance = makeAppearance({ ...hostAppearance, ...nextAppearance });
     rerender();
   }
 
-  function useHostTheme(): CanvasRuntimeRecord {
+  function useHostAppearance(): CanvasRuntimeRecord {
     const [, force] = React.useState(0);
     React.useEffect(() => {
       const listener = () => force((value: number) => value + 1);
@@ -188,7 +188,7 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
         stateListeners.delete(listener);
       };
     }, []);
-    return hostTheme;
+    return hostAppearance;
   }
 
   function useCanvasState(key: string, defaultValue: unknown): [unknown, (nextValue: unknown) => void] {
@@ -362,7 +362,7 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
   }
 
   function ErrorPanel({ error }: CanvasRuntimeRecord = {}) {
-    return React.createElement('main', { style: { maxWidth: 860, margin: '0 auto', padding: 12, border: '1px solid var(--border-base)', borderRadius: 8 } }, [
+    return React.createElement('main', { style: { maxWidth: 860, margin: '0 auto', padding: 12, border: '1px solid var(--bf-appearance-token-border-base)', borderRadius: 8 } }, [
       React.createElement('h1', { key: 'title', style: { fontSize: 18, margin: '0 0 8px' } }, 'Canvas runtime error'),
       React.createElement('pre', { key: 'error', style: { whiteSpace: 'pre-wrap', color: 'var(--bitfun-canvas-danger)' } }, errorText(error)),
     ]);
@@ -410,7 +410,7 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
   function reportRuntimeError(error: unknown): void {
     if (rootElement) {
       rootElement.innerHTML =
-        '<main style="max-width:860px;margin:0 auto;padding:12px;border:1px solid var(--border-base);border-radius:8px"><h1 style="font-size:18px;margin:0 0 8px">Canvas runtime error</h1><pre style="white-space:pre-wrap;color:var(--bitfun-canvas-danger)"></pre></main>';
+        '<main style="max-width:860px;margin:0 auto;padding:12px;border:1px solid var(--bf-appearance-token-border-base);border-radius:8px"><h1 style="font-size:18px;margin:0 0 8px">Canvas runtime error</h1><pre style="white-space:pre-wrap;color:var(--bitfun-canvas-danger)"></pre></main>';
       const pre = rootElement.querySelector('pre');
       if (pre) pre.textContent = errorText(error);
     }
@@ -420,8 +420,8 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
   window.addEventListener('message', event => {
     const data = event.data;
     if (!data || typeof data !== 'object') return;
-    if (data.type === 'bitfun-canvas-theme') {
-      applyTheme(data.theme);
+    if (data.type === 'bitfun-canvas-appearance') {
+      applyAppearance(data.appearance);
       stateListeners.forEach(listener => listener());
     } else if (data.type === 'bitfun-canvas-design-mode') {
       setDesignMode(Boolean(data.enabled));
@@ -459,7 +459,7 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
   }
 
   runtimeWindow.BitfunCanvasRuntimeHooks = {
-    useHostTheme,
+    useHostAppearance,
     useCanvasState<T>(key: string, defaultValue: T) {
       return useCanvasState(key, defaultValue) as [T, (value: T | ((previous: T) => T)) => void];
     },

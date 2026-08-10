@@ -13,7 +13,10 @@ crate-type = ["rlib"]
 bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, features = ["external-sources"] }
 futures = { workspace = true }
 log = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros"] }
 
 [lints]
 workspace = true

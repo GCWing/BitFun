@@ -662,6 +662,37 @@ impl TokenUsageService {
     }
 }
 
+fn records_date_key(date: DateTime<Utc>) -> String {
+    date.format("%Y-%m-%d").to_string()
+}
+
+fn is_token_usage_record_path(path: &Path) -> bool {
+    if path.extension().and_then(|value| value.to_str()) != Some("json") {
+        return false;
+    }
+
+    path.file_stem()
+        .and_then(|value| value.to_str())
+        .is_some_and(|stem| NaiveDate::parse_from_str(stem, "%Y-%m-%d").is_ok())
+}
+
+async fn read_records_batch(path: &Path) -> Result<RecordsBatch, String> {
+    if !fs::try_exists(path).await.unwrap_or(false) {
+        return Ok(RecordsBatch {
+            records: Vec::new(),
+        });
+    }
+
+    let content = fs::read_to_string(path)
+        .await
+        .map_err(|e| format!("Failed to read token usage records: {}", e))?;
+    Ok(
+        serde_json::from_str::<RecordsBatch>(&content).unwrap_or_else(|_| RecordsBatch {
+            records: Vec::new(),
+        }),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -720,35 +751,4 @@ mod tests {
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].session_id, "parent-session");
     }
-}
-
-fn records_date_key(date: DateTime<Utc>) -> String {
-    date.format("%Y-%m-%d").to_string()
-}
-
-fn is_token_usage_record_path(path: &Path) -> bool {
-    if path.extension().and_then(|value| value.to_str()) != Some("json") {
-        return false;
-    }
-
-    path.file_stem()
-        .and_then(|value| value.to_str())
-        .is_some_and(|stem| NaiveDate::parse_from_str(stem, "%Y-%m-%d").is_ok())
-}
-
-async fn read_records_batch(path: &Path) -> Result<RecordsBatch, String> {
-    if !fs::try_exists(path).await.unwrap_or(false) {
-        return Ok(RecordsBatch {
-            records: Vec::new(),
-        });
-    }
-
-    let content = fs::read_to_string(path)
-        .await
-        .map_err(|e| format!("Failed to read token usage records: {}", e))?;
-    Ok(
-        serde_json::from_str::<RecordsBatch>(&content).unwrap_or_else(|_| RecordsBatch {
-            records: Vec::new(),
-        }),
-    )
 }

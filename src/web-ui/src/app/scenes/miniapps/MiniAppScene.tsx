@@ -7,7 +7,7 @@ import { RefreshCw, Loader2, AlertTriangle, CheckCircle2, X } from 'lucide-react
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import type { MiniApp, MiniAppDraft } from '@/infrastructure/api/service-api/MiniAppAPI';
-import { useTheme } from '@/infrastructure/theme/hooks/useTheme';
+import { useAppearance } from '@/infrastructure/appearance';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
 import { IconButton, Button } from '@/component-library';
@@ -40,7 +40,8 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
   const closeApp = useMiniAppStore((state) => state.closeApp);
   const markCustomizationActive = useMiniAppStore((state) => state.markCustomizationActive);
   const markCustomizationIdle = useMiniAppStore((state) => state.markCustomizationIdle);
-  const { themeType } = useTheme();
+  const { current: appearance } = useAppearance();
+  const appearanceMode = appearance?.mode ?? 'dark';
   const { workspace, workspacePath } = useCurrentWorkspace();
   const { closeScene } = useSceneManager();
   const { t, currentLanguage } = useI18n('scenes/miniapp');
@@ -48,6 +49,7 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
   const [app, setApp] = useState<MiniApp | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [strictRuntime, setStrictRuntime] = useState(false);
   const [key, setKey] = useState(0);
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [customizeNotice, setCustomizeNotice] = useState<string | null>(null);
@@ -81,14 +83,14 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
     setLoading(true);
     setError(null);
     try {
-      const theme = themeType ?? 'dark';
-      const loaded = await miniAppAPI.getMiniApp(id, theme, workspacePath || undefined);
+      const loaded = await miniAppAPI.getMiniApp(id, appearanceMode, workspacePath || undefined);
       if (!loaded.compiled_html?.trim()) {
         log.error('MiniApp loaded without compiled_html', { appId: id });
         setError('MiniApp compiled_html is empty');
         setApp(null);
         return;
       }
+      setStrictRuntime(loaded.runtime_profile === 'market_strict');
       setApp(loaded);
     } catch (err) {
       log.error('Failed to load app', err);
@@ -96,7 +98,7 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
     } finally {
       setLoading(false);
     }
-  }, [themeType, workspacePath]);
+  }, [appearanceMode, workspacePath]);
 
   useEffect(() => {
     if (appId) {
@@ -151,8 +153,13 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
   const appName = app ? pickLocalizedString(app, currentLanguage, 'name') : 'Mini App';
 
   return (
-    <div className="miniapp-scene">
-      <div className="miniapp-scene__header">
+    <div
+      className="miniapp-scene"
+      data-bf-scene="miniapp"
+      data-bf-part="root"
+      data-bf-state={customizeOpen ? 'customizing' : undefined}
+    >
+      <div className="miniapp-scene__header" data-bf-scene="miniapp" data-bf-part="header">
         <div className="miniapp-scene__header-center">
           {app ? (
             <span className="miniapp-scene__title">{appName}</span>
@@ -183,15 +190,15 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
       <div className={[
         'miniapp-scene__content',
         customizeOpen && app && 'miniapp-scene__content--customizing',
-      ].filter(Boolean).join(' ')}>
+      ].filter(Boolean).join(' ')} data-bf-scene="miniapp" data-bf-part="content">
         {loading && !app && (
-          <div className="miniapp-scene__loading">
+          <div className="miniapp-scene__loading" data-bf-scene="miniapp" data-bf-part="loading">
             <Loader2 size={28} className="miniapp-scene__spinning" strokeWidth={1.5} />
             <span>{t('scene.loading')}</span>
           </div>
         )}
         {error && !app && (
-          <div className="miniapp-scene__error">
+          <div className="miniapp-scene__error" data-bf-scene="miniapp" data-bf-part="error">
             <AlertTriangle size={32} strokeWidth={1.5} />
             <p>{t('scene.loadFailed', { error })}</p>
             <Button variant="secondary" size="small" onClick={() => void load(appId)}>
@@ -200,15 +207,19 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
           </div>
         )}
         {app && (
-          <div className="miniapp-scene__runner-shell">
+          <div className="miniapp-scene__runner-shell" data-bf-scene="miniapp" data-bf-part="runner">
             {loading && (
               <div className="miniapp-scene__refresh-overlay" role="status" aria-live="polite">
                 <Loader2 size={20} className="miniapp-scene__spinning" strokeWidth={1.5} />
               </div>
             )}
-            <MiniAppRunner key={`${app.id}-${key}`} app={app} />
+            <MiniAppRunner
+              key={`${app.id}-${key}`}
+              app={app}
+              strictRuntime={strictRuntime}
+            />
             {customizePreview && (
-              <div className="miniapp-scene__preview-stage" role="region" aria-label={t('customize.previewTitle')}>
+              <div className="miniapp-scene__preview-stage" role="region" aria-label={t('customize.previewTitle')} data-bf-scene="miniapp" data-bf-part="preview">
                 <div className="miniapp-scene__preview-stage-header">
                   <div>
                     <span>{t('customize.previewTitle')}</span>
@@ -228,6 +239,7 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
                   <MiniAppDraftPreview
                     draft={customizePreview.draft}
                     previewKey={customizePreview.previewKey}
+                    strictRuntime={strictRuntime}
                   />
                 </div>
               </div>
@@ -235,7 +247,7 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
           </div>
         )}
         {customizeNotice && (
-          <div className="miniapp-scene__customize-notice" role="status">
+          <div className="miniapp-scene__customize-notice" role="status" data-bf-scene="miniapp" data-bf-part="notice">
             <CheckCircle2 size={16} />
             <span>{customizeNotice}</span>
           </div>
@@ -245,7 +257,7 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
             open={customizeOpen}
             app={app}
             appName={appName}
-            themeType={themeType ?? 'dark'}
+            appearanceMode={appearanceMode}
             workspacePath={workspacePath || undefined}
             remoteConnectionId={workspace?.connectionId}
             remoteSshHost={workspace?.sshHost}

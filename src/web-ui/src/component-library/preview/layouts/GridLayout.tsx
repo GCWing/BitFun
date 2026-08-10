@@ -23,22 +23,27 @@ export const GridLayout: React.FC<GridLayoutProps> = ({
   const gridClass = `grid-layout grid-cols-${columns}`;
   
   return (
-    <div className={gridClass}>
+    <div
+      className={gridClass}
+      data-bf-component="component-preview"
+      data-bf-part="gridRoot"
+      data-bf-columns={String(columns)}
+    >
       {components.map((component) => (
-        <div key={component.id} className="grid-card">
-          <div className="grid-card-header">
+        <div key={component.id} className="grid-card" data-bf-component="component-preview" data-bf-part="gridCard">
+          <div className="grid-card-header" data-bf-component="component-preview" data-bf-part="gridHeader">
             <h3 className="grid-card-title">{component.name}</h3>
             <p className="grid-card-description">{component.description}</p>
           </div>
           
-          <div className="grid-card-preview">
+          <div className="grid-card-preview" data-bf-component="component-preview" data-bf-part="gridPreview">
             <div className="preview-label">{t('componentLibrary.layouts.previewLabel')}</div>
-            <div className="preview-canvas">
+            <div className="preview-canvas" data-bf-component="component-preview" data-bf-part="gridCanvas">
               <component.component />
             </div>
           </div>
           
-          <div className="grid-card-info">
+          <div className="grid-card-info" data-bf-component="component-preview" data-bf-part="gridInfo">
             <dl className="info-list">
               <dt>{t('componentLibrary.layouts.idLabel')}</dt>
               <dd>{component.id}</dd>

@@ -8,6 +8,8 @@ pub mod mode_overrides;
 pub mod policy;
 pub mod registry;
 pub mod resolver;
+#[cfg(feature = "file-watch")]
+mod source_cache;
 pub mod types;
 
 pub use registry::SkillRegistry;

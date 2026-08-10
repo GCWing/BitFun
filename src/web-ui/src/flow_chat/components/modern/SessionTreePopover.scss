@@ -1,0 +1,289 @@
+@use '../../../component-library/styles/tokens' as *;
+
+.session-tree-popover {
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  &__trigger {
+    flex: 0 0 auto;
+
+    &:not(:disabled):hover,
+    &--active {
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 82%, transparent);
+    }
+
+    &--has-activity {
+      color: color-mix(in srgb, var(--bf-appearance-token-color-success) 86%, var(--bf-appearance-token-color-text-primary));
+
+      &:not(:disabled):hover,
+      &.session-tree-popover__trigger--active {
+        color: var(--bf-appearance-token-color-success);
+        background: color-mix(in srgb, var(--bf-appearance-token-color-success) 12%, transparent);
+      }
+    }
+  }
+
+  &__trigger-inner {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__status-dot {
+    position: absolute;
+    right: -2px;
+    bottom: -1px;
+    width: 4px;
+    height: 4px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 92%, white 8%);
+    box-shadow: 0 0 0 1px var(--bf-appearance-token-color-bg-elevated);
+  }
+
+  &__panel {
+    position: fixed;
+    width: min(380px, calc(100vw - 16px));
+    max-height: min(440px, calc(100vh - 16px));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--bf-appearance-token-border-base);
+    border-radius: $size-radius-lg;
+    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 94%, transparent);
+    box-shadow: var(--bf-appearance-token-shadow-lg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    z-index: $z-popover;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-family: var(--bf-appearance-token-font-family-sans);
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-2;
+    padding: $size-gap-2 $size-gap-3;
+    border-bottom: 1px solid var(--bf-appearance-token-border-base);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+  }
+
+  &__body {
+    min-height: 42px;
+    max-height: min(390px, calc(100vh - 64px));
+    padding: $size-gap-1;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+
+  &__node {
+    display: flex;
+    align-items: center;
+    min-height: 34px;
+    border-radius: $size-radius-base;
+
+    &:hover {
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
+    }
+
+    &--root {
+      font-weight: 500;
+    }
+
+    &--cancelling {
+      opacity: 0.72;
+    }
+  }
+
+  &__expand,
+  &__expand-spacer {
+    width: 20px;
+    height: 28px;
+    flex: 0 0 20px;
+  }
+
+  &__expand {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-muted);
+    cursor: pointer;
+
+    &:hover {
+      color: var(--bf-appearance-token-color-text-primary);
+    }
+  }
+
+  &__node-main {
+    min-width: 0;
+    min-height: 32px;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    padding: 3px $size-gap-2 3px 0;
+    border: 0;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-primary);
+    text-align: left;
+    cursor: pointer;
+
+    > svg {
+      flex: 0 0 auto;
+      color: var(--bf-appearance-token-color-text-secondary);
+    }
+  }
+
+  &__node-actions {
+    flex: 0 0 auto;
+    margin-right: 2px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity $motion-base $easing-standard;
+  }
+
+  &__node:hover &__node-actions,
+  &__node:focus-within &__node-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  &__action-menu-button {
+    flex: 0 0 auto;
+    color: var(--bf-appearance-token-color-text-secondary);
+
+    &:not(:disabled):hover {
+      color: var(--bf-appearance-token-color-text-primary);
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
+    }
+  }
+
+  &__action-menu {
+    position: fixed;
+    top: auto;
+    right: auto;
+    width: max-content;
+    min-width: 0;
+    max-width: min(200px, calc(100vw - 48px));
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid var(--bf-appearance-token-border-base);
+    border-radius: $size-radius-base;
+    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 98%, transparent);
+    box-shadow: var(--bf-appearance-token-shadow-base);
+    z-index: 10000;
+  }
+
+  &__action-menu-item {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    width: 100%;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: calc($size-radius-base - 2px);
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+
+    svg {
+      flex: 0 0 auto;
+      color: var(--bf-appearance-token-color-text-secondary);
+    }
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
+    }
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+
+    &--danger:hover:not(:disabled) {
+      color: var(--bf-appearance-token-color-error);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 12%, transparent);
+
+      svg {
+        color: var(--bf-appearance-token-color-error);
+      }
+    }
+  }
+
+  &__node-copy {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  &__node-title,
+  &__node-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__node-title {
+    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  }
+
+  &__node-meta {
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-weight: 400;
+  }
+
+  &__status {
+    width: 7px;
+    height: 7px;
+    flex: 0 0 7px;
+    border-radius: 50%;
+    background: var(--bf-appearance-token-color-text-muted);
+
+    &--running,
+    &--finishing {
+      background: var(--bf-appearance-token-color-success);
+    }
+
+    &--waiting {
+      background: var(--bf-appearance-token-color-warning);
+    }
+
+    &--error,
+    &--cancelled {
+      background: var(--bf-appearance-token-color-error);
+    }
+
+    &--completed {
+      background: var(--bf-appearance-token-color-info);
+    }
+  }
+
+  &__state {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: $size-gap-2;
+    padding: $size-gap-3;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+
+    &--error {
+      color: var(--bf-appearance-token-color-error);
+    }
+  }
+}

@@ -83,7 +83,7 @@ fn decoy_login_challenge(username: &str) -> LoginChallengeResponse {
     LoginChallengeResponse {
         salt: BASE64.encode(&salt_material[..16]),
         kdf_salt: BASE64.encode(&kdf_salt_material[..16]),
-        argon2_params: r#"{"m":65536,"t":3,"p":4}"#.to_string(),
+        argon2_params: r#"{"m":16384,"t":3,"p":4}"#.to_string(),
         wrapped_master_key: format!(
             "{}.{}",
             BASE64.encode(ciphertext),
@@ -219,6 +219,20 @@ pub struct LoginRequest {
     pub device_name: String,
     #[serde(default)]
     pub request_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct ProvisionDeviceRequest {
+    pub device_id: String,
+    pub device_name: String,
+    pub request_id: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ProvisionDeviceResponse {
+    pub token: String,
+    pub user_id: String,
+    pub device_id: String,
 }
 
 #[derive(Serialize)]
@@ -593,6 +607,84 @@ pub async fn delegate(
     }))
 }
 
+/// `POST /api/auth/provision-device` — mint a full device credential for a
+/// distinct machine during an authenticated one-click SSH bootstrap.
+///
+/// Only a full device token can perform this operation. The endpoint never
+/// receives the account master key; the controller sends that end-to-end over
+/// its already trusted SSH channel after this call succeeds.
+pub async fn provision_device(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<ProvisionDeviceRequest>,
+) -> Result<Json<ProvisionDeviceResponse>, (StatusCode, Json<ErrorResponse>)> {
+    if body.device_id.len() != 32
+        || !body
+            .device_id
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+        || !valid_bounded_text(&body.device_name, MAX_DEVICE_NAME_BYTES)
+        || !valid_login_request_id(&body.request_id)
+    {
+        return Err(err(
+            "invalid device provisioning parameters",
+            StatusCode::BAD_REQUEST,
+        ));
+    }
+
+    let db = state
+        .db
+        .as_ref()
+        .ok_or_else(|| err("account features disabled", StatusCode::NOT_IMPLEMENTED))?;
+    let token = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| err("unauthorized", StatusCode::UNAUTHORIZED))?;
+    let auth = AuthToken::find(db, token)
+        .await
+        .map_err(|error| {
+            tracing::error!(%error, "Failed to authenticate device provisioning");
+            err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
+        })?
+        .ok_or_else(|| err("unauthorized", StatusCode::UNAUTHORIZED))?;
+    if !auth.is_device_token() {
+        return Err(err("forbidden", StatusCode::FORBIDDEN));
+    }
+
+    let provisioned = AuthToken::provision_new_device(
+        db,
+        &auth.user_id,
+        &body.device_id,
+        body.device_name.trim(),
+        &body.request_id,
+    )
+    .await
+    .map_err(|error| {
+        tracing::error!(%error, "Failed to provision account device");
+        err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
+    })?
+    .ok_or_else(|| {
+        err(
+            "device is already registered on this account",
+            StatusCode::CONFLICT,
+        )
+    })?;
+
+    tracing::info!(
+        user_id = %auth.user_id,
+        device_id = %body.device_id,
+        "Provisioned account device over authenticated SSH bootstrap"
+    );
+    Ok(Json(ProvisionDeviceResponse {
+        token: provisioned.token,
+        user_id: auth.user_id,
+        device_id: body.device_id,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -653,6 +745,95 @@ mod tests {
             )
             .await
             .unwrap()
+    }
+
+    async fn post_json(
+        app: &axum::Router,
+        path: &str,
+        token: &str,
+        body: serde_json::Value,
+    ) -> axum::response::Response {
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(path)
+                    .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn device_provisioning_is_full_scope_idempotent_and_device_only() {
+        let (app, db, device_token) = setup_app().await;
+        let request_id = uuid::Uuid::new_v4().to_string();
+        let device_id = "ab".repeat(16);
+        let request = serde_json::json!({
+            "device_id": device_id,
+            "device_name": "SSH Build Host",
+            "request_id": request_id,
+        });
+
+        let first = post_json(
+            &app,
+            "/api/auth/provision-device",
+            &device_token,
+            request.clone(),
+        )
+        .await;
+        assert_eq!(first.status(), StatusCode::OK);
+        let first_body = to_bytes(first.into_body(), 16 * 1024).await.unwrap();
+        let first: ProvisionDeviceResponse = serde_json::from_slice(&first_body).unwrap();
+        assert_eq!(first.user_id, "owner");
+        assert_eq!(first.device_id, device_id);
+        let issued = AuthToken::find(&db, &first.token).await.unwrap().unwrap();
+        assert!(issued.is_device_token());
+        assert_eq!(issued.device_id, device_id);
+
+        let replay = post_json(&app, "/api/auth/provision-device", &device_token, request).await;
+        assert_eq!(replay.status(), StatusCode::OK);
+        let replay_body = to_bytes(replay.into_body(), 16 * 1024).await.unwrap();
+        let replay: ProvisionDeviceResponse = serde_json::from_slice(&replay_body).unwrap();
+        assert_eq!(replay.token, first.token);
+
+        let conflict = post_json(
+            &app,
+            "/api/auth/provision-device",
+            &device_token,
+            serde_json::json!({
+                "device_id": device_id,
+                "device_name": "SSH Build Host",
+                "request_id": uuid::Uuid::new_v4().to_string(),
+            }),
+        )
+        .await;
+        assert_eq!(conflict.status(), StatusCode::CONFLICT);
+
+        let delegated_response = post(&app, "/api/auth/delegate", &device_token).await;
+        let delegated_body = to_bytes(delegated_response.into_body(), 16 * 1024)
+            .await
+            .unwrap();
+        let delegated_token = serde_json::from_slice::<serde_json::Value>(&delegated_body).unwrap()
+            ["token"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let forbidden = post_json(
+            &app,
+            "/api/auth/provision-device",
+            &delegated_token,
+            serde_json::json!({
+                "device_id": "cd".repeat(16),
+                "device_name": "Another Host",
+                "request_id": uuid::Uuid::new_v4().to_string(),
+            }),
+        )
+        .await;
+        assert_eq!(forbidden.status(), StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]
@@ -724,6 +905,10 @@ mod tests {
         let first_body = to_bytes(first.into_body(), 16 * 1024).await.unwrap();
         let first_json: LoginChallengeResponse = serde_json::from_slice(&first_body).unwrap();
         assert!(first_json.login_idempotency_supported);
+        let params: serde_json::Value = serde_json::from_str(&first_json.argon2_params).unwrap();
+        assert_eq!(params["m"], 16 * 1024);
+        assert_eq!(params["t"], 3);
+        assert_eq!(params["p"], 4);
         assert_eq!(BASE64.decode(&first_json.salt).unwrap().len(), 16);
         assert_eq!(BASE64.decode(&first_json.kdf_salt).unwrap().len(), 16);
         let (ciphertext, nonce) = first_json.wrapped_master_key.split_once('.').unwrap();

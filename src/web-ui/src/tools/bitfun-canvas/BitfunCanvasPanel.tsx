@@ -9,8 +9,8 @@ import { fileTabManager } from '@/shared/services/FileTabManager';
 import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
 import { createLogger } from '@/shared/utils/logger';
 import type { WebElementContext } from '@/shared/types/context';
-import { WIDGET_IFRAME_FALLBACK_COLOR } from '@/shared/theme/themeBoundaryFallbacks';
-import { readWidgetThemePayload } from '@/tools/generative-widget/themePayload';
+import { readWidgetAppearancePayload } from '@/tools/generative-widget/appearancePayload';
+import { canvasAppearanceAdapter } from '@/infrastructure/appearance/adapters/CanvasAppearanceAdapter';
 import { exportCanvasHtml } from './canvasHtmlExportService';
 import { buildReactCanvasHtmlResult } from './reactRuntime';
 import {
@@ -59,7 +59,7 @@ interface CanvasActionRecord {
   lineEnd?: unknown;
 }
 
-interface CanvasHostThemePayload {
+interface CanvasHostAppearancePayload {
   type: 'light' | 'dark' | 'auto';
   id?: string;
   vars?: Record<string, string>;
@@ -141,30 +141,23 @@ function canvasAutoRepairPrompt(params: {
   return lines.join('\n');
 }
 
-function cssVar(styles: CSSStyleDeclaration, name: string, fallback: string): string {
-  return styles.getPropertyValue(name).trim() || fallback;
-}
-
-function readHostThemePayload(): CanvasHostThemePayload {
-  const root = document.documentElement;
-  const styles = getComputedStyle(root);
-  const typeAttribute = root.getAttribute('data-theme-type');
-  const widgetTheme = readWidgetThemePayload();
-  const type = typeAttribute === 'light' || typeAttribute === 'dark' ? typeAttribute : 'auto';
+function readHostAppearancePayload(): CanvasHostAppearancePayload {
+  const settings = canvasAppearanceAdapter.getSettings();
+  const widgetAppearance = readWidgetAppearancePayload();
   return {
-    type,
-    id: widgetTheme?.id,
-    vars: widgetTheme?.vars,
-    bg: cssVar(styles, '--color-bg-primary', 'transparent'),
-    panel: cssVar(styles, '--color-bg-secondary', WIDGET_IFRAME_FALLBACK_COLOR.bgSecondary),
-    fg: cssVar(styles, '--color-text-primary', WIDGET_IFRAME_FALLBACK_COLOR.textPrimary),
-    muted: cssVar(styles, '--color-text-muted', WIDGET_IFRAME_FALLBACK_COLOR.textMuted),
-    border: cssVar(styles, '--border-base', WIDGET_IFRAME_FALLBACK_COLOR.borderBase),
-    accent: cssVar(styles, '--color-accent-500', WIDGET_IFRAME_FALLBACK_COLOR.accent500),
-    success: cssVar(styles, '--color-success', WIDGET_IFRAME_FALLBACK_COLOR.success),
-    warning: cssVar(styles, '--color-warning', WIDGET_IFRAME_FALLBACK_COLOR.warning),
-    danger: cssVar(styles, '--color-error', WIDGET_IFRAME_FALLBACK_COLOR.error),
-    info: cssVar(styles, '--color-info', WIDGET_IFRAME_FALLBACK_COLOR.accent500),
+    type: settings.mode,
+    id: settings.id,
+    vars: widgetAppearance?.vars,
+    bg: settings.bg,
+    panel: settings.panel,
+    fg: settings.fg,
+    muted: settings.muted,
+    border: settings.border,
+    accent: settings.accent,
+    success: settings.success,
+    warning: settings.warning,
+    danger: settings.danger,
+    info: settings.info,
   };
 }
 
@@ -320,8 +313,8 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
     win.postMessage(message, '*');
   }, []);
 
-  const postThemeToIframe = useCallback(() => {
-    postToIframe({ type: 'bitfun-canvas-theme', theme: readHostThemePayload() });
+  const postAppearanceToIframe = useCallback(() => {
+    postToIframe({ type: 'bitfun-canvas-appearance', appearance: readHostAppearancePayload() });
   }, [postToIframe]);
 
   const postDesignModeToIframe = useCallback((enabled: boolean) => {
@@ -515,7 +508,7 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
       revision: renderedCanvas.revision,
       reason,
     });
-    postThemeToIframe();
+    postAppearanceToIframe();
     postDesignModeToIframe(designMode);
     if (artifactReference) {
       const state = await loadState();
@@ -527,7 +520,7 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
     hasHtml,
     loadState,
     postDesignModeToIframe,
-    postThemeToIframe,
+    postAppearanceToIframe,
     postToIframe,
     renderedCanvas.revision,
     renderedCanvas.runtime,
@@ -892,7 +885,7 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
     loadState,
     postDesignModeToIframe,
     postToIframe,
-    postThemeToIframe,
+    postAppearanceToIframe,
     reportRuntimeError,
     renderedHtml,
     renderedHtmlKey,
@@ -958,14 +951,9 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
 
   useEffect(() => {
     if (!hasHtml) return;
-    postThemeToIframe();
-    const observer = new MutationObserver(() => postThemeToIframe());
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-theme', 'data-theme-type', 'style'],
-    });
-    return () => observer.disconnect();
-  }, [hasHtml, postThemeToIframe]);
+    postAppearanceToIframe();
+    return canvasAppearanceAdapter.subscribe(postAppearanceToIframe);
+  }, [hasHtml, postAppearanceToIframe]);
 
   useEffect(() => {
     if (!hasSourceDialogText && sourceVisible) {
@@ -975,8 +963,8 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
 
   if (!hasHtml) {
     return (
-      <div className="bitfun-canvas-panel bitfun-canvas-panel--empty">
-        <div className="bitfun-canvas-panel__message">
+      <div className="bitfun-canvas-panel bitfun-canvas-panel--empty" data-bf-component="canvas-tool" data-bf-part="empty" data-bf-state="empty">
+        <div className="bitfun-canvas-panel__message" data-bf-component="canvas-tool" data-bf-part="message">
           <AlertTriangle size={18} />
           <div>
             <h3>{resolvedTitle}</h3>
@@ -985,7 +973,7 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
           </div>
         </div>
         {resolvedDiagnostics.length > 0 && (
-          <ul className="bitfun-canvas-panel__diagnostics">
+          <ul className="bitfun-canvas-panel__diagnostics" data-bf-component="canvas-tool" data-bf-part="diagnostics">
             {resolvedDiagnostics.map((diagnostic, index) => (
               <li key={`${diagnostic.code || diagnostic.message || 'diagnostic'}-${index}`}>
                 {diagnostic.message || diagnostic.code || 'Canvas diagnostic'}
@@ -993,14 +981,14 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
             ))}
           </ul>
         )}
-        {sourcePreview && <pre className="bitfun-canvas-panel__source">{sourcePreview}</pre>}
+        {sourcePreview && <pre className="bitfun-canvas-panel__source" data-bf-component="canvas-tool" data-bf-part="source">{sourcePreview}</pre>}
       </div>
     );
   }
 
   return (
-    <div className="bitfun-canvas-panel">
-      <div className="bitfun-canvas-panel__toolbar">
+    <div className="bitfun-canvas-panel" data-bf-component="canvas-tool" data-bf-part="root">
+      <div className="bitfun-canvas-panel__toolbar" data-bf-component="canvas-tool" data-bf-part="toolbar">
         <button
           type="button"
           className={`bitfun-canvas-panel__toolbar-button${sourceVisible ? ' bitfun-canvas-panel__toolbar-button--active' : ''}`}
@@ -1037,6 +1025,8 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
           key={frameDocumentKey}
           ref={iframeRef}
           className="bitfun-canvas-panel__frame"
+          data-bf-component="canvas-tool"
+          data-bf-part="frame"
           title={resolvedTitle}
           src="about:blank"
           sandbox="allow-scripts allow-same-origin"
@@ -1054,8 +1044,8 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
         />
       )}
       {sourceVisible && (
-        <div className="bitfun-canvas-panel__source-overlay" role="dialog" aria-modal="true">
-          <div className="bitfun-canvas-panel__source-dialog">
+        <div className="bitfun-canvas-panel__source-overlay" role="dialog" aria-modal="true" data-bf-component="canvas-tool" data-bf-part="sourceOverlay">
+          <div className="bitfun-canvas-panel__source-dialog" data-bf-component="canvas-tool" data-bf-part="sourceDialog">
             <div className="bitfun-canvas-panel__source-editor">
               <Suspense fallback={<div className="bitfun-canvas-panel__source-loading">Loading editor...</div>}>
                 <CanvasSourceCodeEditor

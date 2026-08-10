@@ -3,7 +3,6 @@
  */
 
 export { useEditorConfig } from './useEditorConfig';
-export { useEditorTheme } from './useEditorTheme';
 export {
   useEditorOptions,
   useSimpleEditorOptions,

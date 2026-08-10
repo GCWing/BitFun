@@ -102,7 +102,7 @@ export const SplitHandle: React.FC<SplitHandleProps> = ({
 
   return (
     <Tooltip content={t('canvas.dragToResize')}>
-      <div
+      <div data-bf-component="content-canvas" data-bf-part="splitHandle" data-bf-direction={direction} data-bf-state={isDragging ? 'dragging' : ''}
         className={`canvas-split-handle canvas-split-handle--${direction} ${
           isDragging ? 'is-dragging' : ''
         }`}

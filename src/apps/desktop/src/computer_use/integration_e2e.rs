@@ -208,12 +208,14 @@ mod tests {
     fn crosshair_annotation_produces_valid_jpeg() {
         use super::super::debug_overlay::annotate_screenshot_with_click;
 
-        // Create a simple 100x100 white JPEG.
+        // Create a simple 100x100 white JPEG. image 0.25's JPEG encoder
+        // rejects Rgba8 input, so flatten to RGB first.
         let img = image::RgbaImage::from_pixel(100, 100, image::Rgba([255, 255, 255, 255]));
+        let rgb = image::DynamicImage::ImageRgba8(img).to_rgb8();
         let mut jpeg_buf = Vec::new();
         let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg_buf, 80);
         encoder
-            .encode(img.as_raw(), 100, 100, image::ColorType::Rgba8)
+            .encode(rgb.as_raw(), 100, 100, image::ExtendedColorType::Rgb8)
             .expect("JPEG encode should succeed");
 
         // Annotate with a crosshair at (50, 50).

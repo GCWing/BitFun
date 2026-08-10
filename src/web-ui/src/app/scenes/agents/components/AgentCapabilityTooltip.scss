@@ -8,16 +8,16 @@
   }
 
   &__title {
-    color: var(--color-text-primary);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold);
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    font-weight: var(--bf-appearance-token-font-weight-semibold);
     line-height: 1.4;
     overflow-wrap: anywhere;
   }
 
   &__description {
     margin-top: tokens.$size-gap-1;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: 1.45;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -28,7 +28,7 @@
     gap: tokens.$size-gap-1;
     margin: tokens.$size-gap-2 0 0;
     padding-top: tokens.$size-gap-2;
-    border-top: 1px solid var(--border-subtle);
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
   }
 
   &__field {
@@ -38,16 +38,16 @@
     align-items: baseline;
 
     dt {
-      color: var(--color-text-muted);
-      font-size: var(--font-size-xs);
+      color: var(--bf-appearance-token-color-text-muted);
+      font-size: var(--bf-appearance-token-font-size-xs);
       line-height: 1.4;
     }
 
     dd {
       min-width: 0;
       margin: 0;
-      color: var(--color-text-primary);
-      font-size: var(--font-size-xs);
+      color: var(--bf-appearance-token-color-text-primary);
+      font-size: var(--bf-appearance-token-font-size-xs);
       line-height: 1.4;
       overflow-wrap: anywhere;
       text-align: right;
@@ -55,6 +55,6 @@
   }
 
   .is-monospace {
-    font-family: var(--font-family-mono);
+    font-family: var(--bf-appearance-token-font-family-mono);
   }
 }

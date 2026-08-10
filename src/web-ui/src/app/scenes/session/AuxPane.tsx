@@ -40,15 +40,14 @@ const AuxPane = forwardRef<AuxPaneRef, AuxPaneProps>(
     const { workspace } = useCurrentWorkspace();
     const workspaceId = workspace?.id;
 
-    const {
-      addTab,
-      switchToTab,
-      findTabByMetadata,
-      updateTabContent,
-      closeAllTabs,
-      primaryGroup,
-      secondaryGroup,
-    } = useCanvasStore();
+    // Fine-grained selectors so unrelated store changes do not re-render.
+    const addTab = useCanvasStore(state => state.addTab);
+    const switchToTab = useCanvasStore(state => state.switchToTab);
+    const findTabByMetadata = useCanvasStore(state => state.findTabByMetadata);
+    const updateTabContent = useCanvasStore(state => state.updateTabContent);
+    const closeAllTabs = useCanvasStore(state => state.closeAllTabs);
+    const primaryGroup = useCanvasStore(state => state.primaryGroup);
+    const secondaryGroup = useCanvasStore(state => state.secondaryGroup);
 
     const convertContent = useCallback((oldContent: OldPanelContent): PanelContent => {
       return {
@@ -131,7 +130,7 @@ const AuxPane = forwardRef<AuxPaneRef, AuxPaneProps>(
     }, []);
 
     return (
-      <div className="bitfun-aux-pane">
+      <div data-bf-component="aux-pane" data-bf-part="root" className="bitfun-aux-pane">
         <ContentCanvas
           workspacePath={workspacePath}
           mode="agent"

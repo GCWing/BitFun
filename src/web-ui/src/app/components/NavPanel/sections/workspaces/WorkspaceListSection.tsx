@@ -4,6 +4,8 @@ import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext'
 import { notificationService } from '@/shared/notification-system';
 import type { WorkspaceInfo } from '@/shared/types';
 import WorkspaceItem from './WorkspaceItem';
+import { isLinkedWorktreeWorkspace } from '@/shared/types';
+import { isSamePath } from '@/shared/utils/pathUtils';
 import './WorkspaceListSection.scss';
 
 interface WorkspaceListSectionProps {
@@ -45,9 +47,26 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
   const windowMouseDownHandlerRef = useRef<(() => void) | null>(null);
   const documentMouseMoveHandlerRef = useRef<(() => void) | null>(null);
 
-  const workspaces = variant === 'assistants'
+  const sectionWorkspaces = variant === 'assistants'
     ? assistantWorkspacesList
     : normalWorkspacesList;
+  const projectRoots = variant === 'projects'
+    ? sectionWorkspaces
+        .filter(workspace => !isLinkedWorktreeWorkspace(workspace))
+        .map(workspace => workspace.rootPath)
+    : [];
+  const workspaces = variant === 'projects'
+    ? sectionWorkspaces.filter(workspace => (
+        !isLinkedWorktreeWorkspace(workspace)
+        || !projectRoots.some(projectRoot => (
+          isSamePath(projectRoot, workspace.worktree?.mainRepoPath || '')
+        ))
+      ))
+    : sectionWorkspaces;
+  const activeWorkspace = openedWorkspacesList.find(workspace => workspace.id === activeWorkspaceId);
+  const activeProjectPath = activeWorkspace?.worktree && !activeWorkspace.worktree.isMain
+    ? activeWorkspace.worktree.mainRepoPath
+    : activeWorkspace?.rootPath;
   const emptyLabel = variant === 'assistants'
     ? t('nav.workspaces.emptyAssistants')
     : t('nav.workspaces.emptyProjects');
@@ -150,7 +169,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
 
   const handleDragOver = useCallback((workspaceId: string) => (event: React.DragEvent<HTMLDivElement>) => {
     // Browsers block reading dataTransfer data during dragover for security.
-    // Check event.dataTransfer.types instead — it IS readable during dragover.
+    // Check event.dataTransfer.types instead 閳?it IS readable during dragover.
     const isWorkspaceDrag = event.dataTransfer.types.includes(WORKSPACE_DRAG_MIME_TYPE);
     const currentDraggedId = draggedWorkspaceIdRef.current;
 
@@ -228,7 +247,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
     event.preventDefault();
     event.stopPropagation();
 
-    // Reuse the position already determined by dragover — avoid recalculating
+    // Reuse the position already determined by dragover 閳?avoid recalculating
     // on the wrapper whose height may have changed due to the drop-line element.
     const position =
       dropTargetRef.current?.workspaceId === workspaceId
@@ -253,13 +272,15 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
   }, [reorderOpenedWorkspacesInSection, t, variant, cleanupDrag, removeDragArtifacts]);
 
   return (
-    <div
+    <div data-bf-component="workspace-list-section" data-bf-part="root" data-bf-state={draggedWorkspaceId ? 'dragging' : undefined}
       className={`bitfun-nav-panel__workspace-list${draggedWorkspaceId ? ' is-dragging' : ''}`}
       data-testid="nav-workspace-list"
       data-workspace-list={variant}
     >
       {workspaces.length === 0 ? (
         <div
+          data-bf-component="workspace-list-section"
+          data-bf-part="empty"
           className="bitfun-nav-panel__workspace-list-empty"
           data-testid="nav-workspace-list-empty"
           data-workspace-list={variant}
@@ -269,6 +290,9 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
       ) : (
         workspaces.map(workspace => (
           <div
+            data-bf-component="workspace-list-section"
+            data-bf-part="item"
+            data-bf-state={workspace.id === activeWorkspaceId ? 'selected' : undefined}
             key={workspace.id}
             className={[
               'bitfun-nav-panel__workspace-drop-target',
@@ -285,12 +309,15 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
             onDrop={(event) => { void handleDrop(workspace.id)(event); }}
           >
             {dropTarget?.workspaceId === workspace.id && dropTarget.position === 'before' ? (
-              <div className="bitfun-nav-panel__workspace-drop-line" aria-hidden="true" />
+              <div data-bf-component="workspace-list-section" data-bf-part="dropLine" className="bitfun-nav-panel__workspace-drop-line" aria-hidden="true" />
             ) : null}
             <WorkspaceItem
               workspace={workspace}
-              isActive={workspace.id === activeWorkspaceId}
-              isSingle={openedWorkspacesList.length === 1}
+              isActive={
+                workspace.id === activeWorkspaceId ||
+                Boolean(activeProjectPath && isSamePath(workspace.rootPath, activeProjectPath))
+              }
+              isSingle={workspaces.length === 1}
               draggable={workspaces.length > 1}
               isDragging={draggedWorkspaceId === workspace.id}
               onDragStart={handleDragStart(workspace)}
@@ -298,7 +325,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
               onDragEnd={handleDragEnd}
             />
             {dropTarget?.workspaceId === workspace.id && dropTarget.position === 'after' ? (
-              <div className="bitfun-nav-panel__workspace-drop-line" aria-hidden="true" />
+              <div data-bf-component="workspace-list-section" data-bf-part="dropLine" className="bitfun-nav-panel__workspace-drop-line" aria-hidden="true" />
             ) : null}
           </div>
         ))

@@ -9,9 +9,10 @@ BitFun 是一个由 Rust workspace 与 React 前端组成的项目。
 ## 快速开始
 
 1. 在修改架构敏感代码前，先阅读 `README.md` 和 `CONTRIBUTING.md`。
-2. 桌面端开发优先使用 `pnpm run desktop:dev` — 提供完整热更新（Vite HMR + Rust 自动重编译并重启）。仅在需要更快冷启动且只迭代前端时使用 `pnpm run desktop:preview:debug`（Rust 改动不会自动重编译）。
+2. 日常开发使用下方主要产品循环；surface 专属的替代命令由最近的应用指南维护。
 3. 修改 Rust 文件后，优先使用 `pnpm run fmt:rs`，只格式化已改动或已暂存的 `.rs` 文件。只有在你明确需要更大范围格式化时才使用 `cargo fmt`。
-4. 改完后按下方表格执行与改动范围匹配的最小验证。
+4. 改完后从离改动最近的 `AGENTS.md` 选择 focused 验证命令；下方仓库级验证章节只维护跨模块检查原则。
+5. Rust workspace 依赖应在根清单中统一版本，而由消费 crate 按自身职责声明所需 feature；仅测试所需的 feature 应放入 `dev-dependencies`，受 crate feature 控制的服务能力应只在对应 feature 中启用。禁止使用 `tokio/full` 绕过依赖边界设计。
 
 ## 分层模块索引
 
@@ -23,11 +24,11 @@ Stable Contracts and Security Control Plane 的边界以
 
 | # | 层级 | 路径 | 职责 | 模块 / 入口 | 层级文档 |
 |---|---|---|---|---|---|
-| 1 | 接口与入口层 | `src/apps/*`, `src/web-ui`, `src/mobile-web`, `BitFun-Installer`, `tests/e2e`, `src/crates/interfaces` | 产品宿主、命令、UI 入口、协议接口和跨形态测试 | desktop、CLI、server、relay、Web UI、mobile web、installer、E2E、`acp` | 最近的本地 `AGENTS.md`；[interfaces](src/crates/interfaces/AGENTS.md) |
-| 2 | 产品组装层 | `src/crates/assembly` | 兼容导出、产品能力选择、product-full 接线和 adapter/service 注册 | `core`, `product-capabilities` | [AGENTS.md](src/crates/assembly/AGENTS.md) |
-| 3 | 适配层 | `src/crates/adapters` | AI/transport/WebDriver/OpenCode 协议 adapter 和外部 provider 转换 | `ai-adapters`, `opencode-adapter`, `transport`, `webdriver` | [AGENTS.md](src/crates/adapters/AGENTS.md) |
+| 1 | 接口与入口层 | `src/apps/*`, `src/web-ui`, `src/mobile-web`, `BitFun-Installer`, `tests/e2e`, `src/crates/interfaces` | 产品宿主、命令、UI 入口、协议接口和跨形态测试 | desktop、CLI、server、relay、Web UI、mobile web、installer、E2E、`acp`、`sdk-host` | 最近的本地 `AGENTS.md`；[interfaces](src/crates/interfaces/AGENTS.md) |
+| 2 | 产品组装层 | `src/crates/assembly` | 兼容导出、产品能力选择、product-full 接线、不可变内置 Agent 内容、adapter/service 注册和生态无关的来源协调 | `agent-content`, `core`, `external-sources`, `product-capabilities` | [AGENTS.md](src/crates/assembly/AGENTS.md) |
+| 3 | 适配层 | `src/crates/adapters` | AI/transport/WebDriver 协议 adapter、外部 AI work source adapter（OpenCode/Claude Code/Codex）和外部 provider 转换 | `agent-runtime-ipc`、`ai-adapters`, `opencode-adapter`, `claude-code-adapter`, `codex-adapter`, `static-hook-support`, `transport`, `webdriver` | [AGENTS.md](src/crates/adapters/AGENTS.md) |
 | 4 | 服务实现层 | `src/crates/services` | 可复用 OS、filesystem、terminal、MCP、remote、git、watch、process、LSP plugin registry、session persistence primitives、network 和 MiniApp runtime IO 实现 | `services-core`, `services-integrations`, `relay-service`, `page-function-runtime`, `terminal` | [AGENTS.md](src/crates/services/AGENTS.md) |
-| 5 | 执行原语层 | `src/crates/execution` | 可移植 agent、harness、stream、DeepReview policy/report、plugin host 边界、typed-service、tool-contract、tool-group 和 tool-execution 构件 | `agent-runtime`, `agent-stream`, `tool-contracts`, `harness`, `plugin-runtime-host`, `runtime-services`, `tool-provider-groups`, `tool-execution` | [AGENTS.md](src/crates/execution/AGENTS.md) |
+| 5 | 执行原语层 | `src/crates/execution` | 可移植 agent、harness、stream、DeepReview policy/report、插件运行时客户端、typed-service、tool-contract、tool-group 和 tool-execution 构件 | `agent-runtime`, `agent-stream`, `tool-contracts`, `harness`, `plugin-runtime-client`, `runtime-services`, `tool-provider-groups`, `tool-execution`, `tool-call-jsonrepair` | [AGENTS.md](src/crates/execution/AGENTS.md) |
 | 6 | 稳定契约与产品领域层 | `src/crates/contracts` | 跨层共享 DTO、事件形状、runtime port、LSP protocol/plugin DTO、产品领域契约和策略 | `core-types`, `events`, `runtime-ports`, `product-domains` | [AGENTS.md](src/crates/contracts/AGENTS.md) |
 
 边界规则：
@@ -43,49 +44,30 @@ Stable Contracts and Security Control Plane 的边界以
 
 ## 常用命令
 
-这些是命令参考，不是 PR 前置检查清单。预检请按下方“验证”表选择最小本地检查；
-大范围测试和构建主要用于复现 CI 或验证构建相关改动。
+这里只保留稳定的仓库级入口。具体 surface/crate 的测试命令由最近的本地 `AGENTS.md` 维护，
+不要在根文档重复抄写。
 
 ```bash
-# 安装
+# 安装与主要产品开发循环
 pnpm install
-
-# 开发
 pnpm run desktop:dev               # 完整热更新：Vite HMR + Rust 自动重编译并重启
-pnpm run desktop:preview:debug     # 复用预构建二进制 + Vite HMR；无 Rust 自动重编译
-pnpm run dev:web                   # 纯浏览器前端
-pnpm run cli:dev                   # CLI 运行时
-pnpm run cli:install               # release 编译并安装 bitfun（Windows/macOS/Linux；含废弃兼容入口 bitfun-cli）
 
-# 检查
-pnpm run fmt:rs                     # 只格式化已改动 / 已暂存的 Rust 文件
-pnpm run lint:web
-pnpm run type-check:web
-pnpm --dir src/mobile-web run type-check
-pnpm run i18n:contract:test          # 仅 i18n contract / resources
-pnpm run i18n:audit                  # 仅 i18n contract / resources
-pnpm run check:repo-hygiene
-pnpm run check:github-config
-cargo check --workspace
-
-# 测试（本地优先用精确测试路径；大范围测试由 CI 兜底）
-pnpm --dir src/web-ui run test:run      # 大范围测试；本地优先用精确测试路径
-cargo test --workspace                  # 大范围测试；CI 兜底
-
-# 构建（仅构建相关改动或复现 CI 时运行）
-cargo build -p bitfun-desktop           # 构建相关改动 / 复现 CI
-pnpm run build:web                      # 构建相关改动 / 复现 CI
-pnpm run build:mobile-web               # 构建相关改动 / 复现 CI
-
-# 快速构建（手动构建 / 调试流程）
-pnpm run desktop:build:fast           # debug 构建，不打包
-pnpm run desktop:build:release-fast   # release 但降低 LTO
-pnpm run desktop:build:nsis:fast      # Windows 安装器，release-fast profile
+# 仓库级检查
+pnpm run fmt:rs                    # 只格式化已改动 / 已暂存的 Rust 文件
+pnpm run check:repo-hygiene        # 仓库内容与文件名规则
+pnpm run check:github-config       # GitHub workflow / 配置规则
+pnpm run check:core-boundaries     # Cargo / 模块 owner 边界
 ```
 
-完整脚本列表见 [`package.json`](package.json)。
+Web UI、mobile、CLI、Desktop、Installer、打包及 focused test 命令由最近的本地指南维护；
+完整脚本注册表仍见 [`package.json`](package.json)。
 
 ## 全局规则
+
+### 流程产物
+
+- 不要新增或更新 `docs/superpowers/**` 下的文件。临时计划、设计和实现过程文档仅保留在本地；
+  需要长期维护的架构或功能事实应合并到对应的已有文档，用户使用说明应放到所属应用的 README。
 
 ### 国际化
 
@@ -159,6 +141,12 @@ await api.invoke('your_command', { request: { ... } });
 - 不要把硬编码限制或模式判断作为处理 agent loop 循环问题的第一反应，例如仅按字符串或次数阻止重复工具调用。
 - 过多硬编码会把 agent loop 变成脆弱的 workflow。应先定位根因：工具行为、模型交互、会话上下文封装、prompt/tool schema 设计，或状态同步问题。
 
+### Agent Hooks
+
+- BitFun 实现的是 Codex Hook 契约，因此 <https://learn.chatgpt.com/docs/hooks> 是事件、载荷字段与决策结构的参考来源，不要另起炉灶。[`docs/features/agent-hooks.zh-CN.md`](docs/features/agent-hooks.zh-CN.md)（[English](docs/features/agent-hooks.md)）只覆盖 BitFun 特有部分 —— 文件位置、`app.hooks` 开关和差异表 —— 新增或消除差异时必须同步更新。
+- 可移植引擎（配置解析、载荷构造、进程执行、决策合并）位于 `bitfun-agent-runtime::native_hooks`。`bitfun-core::native_hooks` 负责配置发现、开关门控和按事件的分发辅助函数；各分发点调用这些辅助函数，不要就地执行 Hook。
+- 有三类不同的东西共用 "hook" 一词：本文所述的原生用户 Hooks、内部编译期 `post_call_hooks`，以及其他 AI 应用的只读外部 Hook 目录（`external_hooks`）。三者必须保持区分。
+
 ## 架构
 
 ### 产品架构护栏
@@ -173,6 +161,11 @@ await api.invoke('your_command', { request: { ... } });
 - 不要把 DTO / contract 抽取误判为 runtime owner 已迁移。
 - 产品表面可以有差异；共享稳定 facts 或 ports，不共享 UI、protocol、lifecycle 或平台实现。
 - 迁移 runtime owner 必须有评审过的 port/provider 设计、旧路径兼容、行为等价测试；如果可能改变行为边界，还需要先确认。
+
+涉及 Agent Runtime 部署、多 GUI/TUI/Remote 实例、共享 Session 控制或进程拓扑时，还必须阅读
+[`docs/architecture/agent-runtime-deployment-design.md`](docs/architecture/agent-runtime-deployment-design.md)。
+Rust Runtime 或 Node/Bun Plugin Host 不得默认按 Client、workspace、session 或 plugin 分进程；进程边界必须来自真实状态
+owner、execution/security domain、可兼容的安全条件和测量后的容量事实。
 
 ### CLI 产品线护栏
 
@@ -217,23 +210,18 @@ OpenCode 兼容或目标项目治理的变更，先阅读
 
 ## 验证
 
-按触及文件选择最小本地预检。完整构建和大范围测试默认由 CI 保护；只有改动直接影响构建、
-打包，或 CI 无法覆盖对应路径时，才在本地运行更重的命令。
+验证范围由 owner 决定，不在根文档维护全仓测试矩阵：
 
-| 改动类型 | 最低验证要求 |
-|---|---|
-| 不涉及 i18n 资源/契约的前端 UI、状态或适配层 | `pnpm run type-check:web`；行为变化时再加最近的 focused test |
-| 仅 locale 资源改动 | `pnpm run i18n:audit` |
-| Locale contract 或 shared terms | `pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit` |
-| Web UI i18n runtime、namespace loading 或直接 `i18nService.t(...)` 调用 | `pnpm run i18n:contract:test && pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts` |
-| Mobile web UI、状态、配对、断开或重连行为 | `pnpm --dir src/mobile-web run type-check`；行为变化还需要在 PR 中说明手动配对 / 重连验证 |
-| `core`、`transport`、adapter 或共享服务中的 Rust 逻辑 | `cargo check --workspace`；行为变化时再加最近的 focused `cargo test` |
-| 桌面端集成、Tauri API、browser/computer-use 或桌面专属行为 | `cargo check -p bitfun-desktop`；行为变化时再加 focused desktop tests |
-| 被桌面端 smoke/functional 流覆盖的行为 | 优先运行最近的 focused E2E/smoke check；除非改动影响构建，否则 broad build/test 交给 CI |
-| `src/crates/adapters/ai-adapters` | 运行上面相关 Rust 检查；只有 stream contract 改动时再加 `cargo test -p bitfun-agent-stream` |
-| 不涉及打包的安装器前端或 i18n runtime | `pnpm --dir BitFun-Installer run type-check` |
-| 安装器 Tauri/Rust 改动 | `cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml` |
-| 安装器打包、payload、安装/卸载流程或 native bundling | `pnpm run installer:build` |
+1. 阅读离改动最近的本地 `AGENTS.md`，运行能够覆盖该行为的最窄命令。
+2. 优先选择单 package、单 test target 或 module filter，并使用最小 feature；不要把
+   `product-full`、`all-features` 或 workspace 全量测试当成捷径。
+3. 只有对应契约变化时才运行仓库级检查：布局/内容规则使用 repository hygiene，
+   workflow 变更使用 GitHub config，Cargo feature、依赖方向或 test-target 布局使用 core boundaries。
+4. 大范围 build、workspace suite、打包和平台矩阵默认交给现有 CI；只有改动影响这些路径或需要复现
+   CI 故障时才在本地运行。
+
+如果某个模块缺少有效的 focused 命令，应补充到该模块自己的指南，而不是继续扩张根文档。
+不要预先对齐所有模块的 test 清单；只有真实开发流程需要时才记录命令。
 
 ## Agent 文档优先级
 

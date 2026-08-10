@@ -42,8 +42,23 @@ pub(crate) enum PaletteAction {
 const DEFAULT_ITEM_ORDER: &[&str] = &[
     "new_session",
     "sessions",
+    "view_subagents",
+    "timeline",
+    "toggle_timestamps",
+    "toggle_thinking",
+    "toggle_tool_details",
+    "fork_session",
+    "workspace_diff",
+    "compact_session",
     "usage",
+    "editor",
+    "prompt_stash",
+    "prompt_stash_pop",
+    "prompt_stash_list",
+    "copy_transcript",
+    "export_transcript",
     "toggle_auto_approve",
+    "toggle_worktree",
     "skills",
     "select_model",
     "add_model",
@@ -53,8 +68,10 @@ const DEFAULT_ITEM_ORDER: &[&str] = &[
     "mcp_servers",
     "extensions",
     "hooks",
+    "hooks_external",
     "login",
     "logout",
+    "status",
     "help",
     "exit",
 ];
@@ -766,6 +783,7 @@ mod tests {
         assert!(ids.iter().any(|id| id == "switch_agent"));
         assert!(!ids.iter().any(|id| id == "new_session"));
         assert!(!ids.iter().any(|id| id == "toggle_auto_approve"));
+        assert!(!ids.iter().any(|id| id == "toggle_worktree"));
         assert!(ids.iter().any(|id| id == "help"));
     }
 

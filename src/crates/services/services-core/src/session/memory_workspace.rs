@@ -1,6 +1,5 @@
-use std::collections::BTreeSet;
+use git2::{Delta, Diff, DiffFormat, DiffOptions, IndexAddOption, Repository, Signature};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use thiserror::Error;
 
 const MEMORY_BASELINE_COMMIT_MESSAGE: &str = "Memory workspace baseline";
@@ -26,52 +25,24 @@ pub enum MemoryWorkspaceGitError {
         #[source]
         source: std::io::Error,
     },
-    #[error("Failed to read memory workspace directory {path}: {source}")]
-    ReadDirectory {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
-    #[error("Failed to read memory workspace directory entry {path}: {source}")]
-    ReadDirectoryEntry {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
-    #[error("Failed to inspect memory workspace entry {path}: {source}")]
-    InspectEntry {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
-    #[error("Failed to normalize memory workspace path {path} under {root}: {source}")]
-    NormalizePath {
-        root: PathBuf,
-        path: PathBuf,
-        #[source]
-        source: std::path::StripPrefixError,
-    },
     #[error("Failed to read added memory workspace file {path}: {source}")]
     ReadAddedFile {
         path: PathBuf,
         #[source]
         source: std::io::Error,
     },
-    #[error("Failed to run memory workspace git command in {root}: {source}")]
-    RunGit {
+    #[error("Memory workspace git operation {operation} failed in {root}: {source}")]
+    GitOperation {
         root: PathBuf,
+        operation: &'static str,
         #[source]
-        source: std::io::Error,
+        source: git2::Error,
     },
-    #[error("Memory workspace git command failed in {root}: {stderr}")]
-    GitFailed { root: PathBuf, stderr: String },
-    #[error("Memory workspace git output was not UTF-8: {source}")]
-    GitOutputUtf8 {
+    #[error("Memory workspace diff output was not UTF-8: {source}")]
+    DiffOutputUtf8 {
         #[source]
         source: std::string::FromUtf8Error,
     },
-    #[error("Unsupported memory workspace git status '{status}': {line}")]
-    UnsupportedGitStatus { status: char, line: String },
     #[error("Memory workspace git task failed: {source}")]
     Join {
         #[source]
@@ -121,9 +92,12 @@ pub async fn ensure_memory_workspace_git_baseline(
     tokio::task::spawn_blocking(move || {
         create_root(&root)?;
 
-        if root.join(".git").is_dir() && run_git(&root, &["rev-parse", "--verify", "HEAD"]).is_ok()
-        {
-            return Ok(());
+        if root.join(".git").is_dir() {
+            if let Ok(repository) = Repository::open(&root) {
+                if repository.head().is_ok() {
+                    return Ok(());
+                }
+            }
         }
 
         reset_memory_workspace_git_baseline_sync(&root)
@@ -181,17 +155,35 @@ fn create_root(root: &Path) -> Result<(), MemoryWorkspaceGitError> {
 fn reset_memory_workspace_git_baseline_sync(root: &Path) -> Result<(), MemoryWorkspaceGitError> {
     create_root(root)?;
     remove_git_metadata(root)?;
-    run_git_raw(root, &["init"])?;
-    run_git(root, &["add", "-A"])?;
-    run_git(
-        root,
-        &[
-            "commit",
-            "--allow-empty",
-            "-m",
+    let repository = Repository::init(root)
+        .map_err(|source| git_operation(root, "initialize repository", source))?;
+    let mut index = repository
+        .index()
+        .map_err(|source| git_operation(root, "open repository index", source))?;
+    index
+        .add_all(["*"].iter(), IndexAddOption::DEFAULT, None)
+        .map_err(|source| git_operation(root, "stage workspace files", source))?;
+    index
+        .write()
+        .map_err(|source| git_operation(root, "write repository index", source))?;
+    let tree_id = index
+        .write_tree()
+        .map_err(|source| git_operation(root, "write baseline tree", source))?;
+    let tree = repository
+        .find_tree(tree_id)
+        .map_err(|source| git_operation(root, "load baseline tree", source))?;
+    let signature = Signature::now("BitFun", "bitfun@localhost")
+        .map_err(|source| git_operation(root, "create baseline signature", source))?;
+    repository
+        .commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
             MEMORY_BASELINE_COMMIT_MESSAGE,
-        ],
-    )?;
+            &tree,
+            &[],
+        )
+        .map_err(|source| git_operation(root, "commit baseline", source))?;
     Ok(())
 }
 
@@ -215,36 +207,32 @@ fn remove_git_metadata(root: &Path) -> Result<(), MemoryWorkspaceGitError> {
 }
 
 fn memory_workspace_diff_sync(root: &Path) -> Result<MemoryWorkspaceDiff, MemoryWorkspaceGitError> {
-    run_git(root, &["rev-parse", "--verify", "HEAD"])?;
-
-    let tracked_status = git_stdout(
-        root,
-        &["diff", "--name-status", "--no-renames", "HEAD", "--"],
-    )?;
-    let mut changes = parse_git_name_status(&tracked_status)?;
-    let head_paths = git_z_stdout(root, &["ls-tree", "-r", "--name-only", "-z", "HEAD"])?;
-    let head_paths = parse_nul_paths(&head_paths);
-    let current_paths = collect_current_memory_paths(root)?;
-
-    for path in current_paths.difference(&head_paths) {
-        changes.push(MemoryWorkspaceChange {
-            status: MemoryWorkspaceChangeStatus::Added,
-            path: path.clone(),
-        });
-    }
-
-    changes.sort_by(|left, right| left.path.cmp(&right.path));
-    changes.dedup_by(|left, right| left.path == right.path);
-
-    let mut unified_diff = git_stdout(
-        root,
-        &["diff", "--no-ext-diff", "--no-renames", "HEAD", "--"],
-    )?;
-    for change in changes
-        .iter()
-        .filter(|change| change.status == MemoryWorkspaceChangeStatus::Added)
-    {
-        unified_diff.push_str(&render_added_file_diff(root, &change.path)?);
+    let repository =
+        Repository::open(root).map_err(|source| git_operation(root, "open repository", source))?;
+    let head = repository
+        .head()
+        .map_err(|source| git_operation(root, "resolve baseline HEAD", source))?;
+    let baseline = head
+        .peel_to_tree()
+        .map_err(|source| git_operation(root, "load baseline tree", source))?;
+    let mut options = DiffOptions::new();
+    options
+        .include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .include_ignored(true)
+        .recurse_ignored_dirs(true)
+        .show_untracked_content(true)
+        .include_typechange(true);
+    let diff = repository
+        .diff_tree_to_workdir_with_index(Some(&baseline), Some(&mut options))
+        .map_err(|source| git_operation(root, "compute workspace diff", source))?;
+    let changes = collect_workspace_changes(&diff);
+    let mut unified_diff = render_workspace_diff(&diff, root)?;
+    for path in ignored_workspace_paths(&diff) {
+        // libgit2 reports ignored entries but does not render their content as a
+        // patch, while the previous filesystem scan included every file except
+        // `.git`. Append an equivalent added-file patch to preserve that input.
+        unified_diff.push_str(&render_added_file_diff(root, &path)?);
     }
 
     Ok(MemoryWorkspaceDiff {
@@ -253,94 +241,50 @@ fn memory_workspace_diff_sync(root: &Path) -> Result<MemoryWorkspaceDiff, Memory
     })
 }
 
-fn collect_current_memory_paths(root: &Path) -> Result<BTreeSet<String>, MemoryWorkspaceGitError> {
-    let mut paths = BTreeSet::new();
-    collect_current_memory_paths_inner(root, root, &mut paths)?;
-    Ok(paths)
-}
-
-fn collect_current_memory_paths_inner(
-    root: &Path,
-    dir: &Path,
-    paths: &mut BTreeSet<String>,
-) -> Result<(), MemoryWorkspaceGitError> {
-    for entry in
-        std::fs::read_dir(dir).map_err(|source| MemoryWorkspaceGitError::ReadDirectory {
-            path: dir.to_path_buf(),
-            source,
-        })?
-    {
-        let entry = entry.map_err(|source| MemoryWorkspaceGitError::ReadDirectoryEntry {
-            path: dir.to_path_buf(),
-            source,
-        })?;
-        let path = entry.path();
-        if path.file_name().and_then(|name| name.to_str()) == Some(".git") {
-            continue;
-        }
-        let metadata =
-            entry
-                .metadata()
-                .map_err(|source| MemoryWorkspaceGitError::InspectEntry {
-                    path: path.clone(),
-                    source,
-                })?;
-        if metadata.is_dir() {
-            collect_current_memory_paths_inner(root, &path, paths)?;
-        } else if metadata.is_file() {
-            paths.insert(relative_memory_path(root, &path)?);
-        }
-    }
-    Ok(())
-}
-
-fn relative_memory_path(root: &Path, path: &Path) -> Result<String, MemoryWorkspaceGitError> {
-    let relative =
-        path.strip_prefix(root)
-            .map_err(|source| MemoryWorkspaceGitError::NormalizePath {
-                root: root.to_path_buf(),
-                path: path.to_path_buf(),
-                source,
-            })?;
-    Ok(relative.to_string_lossy().replace('\\', "/"))
-}
-
-fn parse_git_name_status(
-    output: &str,
-) -> Result<Vec<MemoryWorkspaceChange>, MemoryWorkspaceGitError> {
+fn collect_workspace_changes(diff: &Diff<'_>) -> Vec<MemoryWorkspaceChange> {
     let mut changes = Vec::new();
-    for line in output.lines().filter(|line| !line.trim().is_empty()) {
-        let mut parts = line.splitn(2, char::is_whitespace);
-        let status = parts.next().unwrap_or_default();
-        let path = parts.next().unwrap_or_default().trim();
-        let status = match status.chars().next() {
-            Some('A') => MemoryWorkspaceChangeStatus::Added,
-            Some('M') => MemoryWorkspaceChangeStatus::Modified,
-            Some('D') => MemoryWorkspaceChangeStatus::Deleted,
-            Some(status) => {
-                return Err(MemoryWorkspaceGitError::UnsupportedGitStatus {
-                    status,
-                    line: line.to_string(),
-                });
+    for delta in diff.deltas() {
+        let (status, path) = match delta.status() {
+            Delta::Added | Delta::Untracked | Delta::Ignored => {
+                (MemoryWorkspaceChangeStatus::Added, delta.new_file().path())
             }
-            None => continue,
+            Delta::Deleted => (
+                MemoryWorkspaceChangeStatus::Deleted,
+                delta.old_file().path(),
+            ),
+            Delta::Modified
+            | Delta::Renamed
+            | Delta::Copied
+            | Delta::Typechange
+            | Delta::Unreadable
+            | Delta::Conflicted => (
+                MemoryWorkspaceChangeStatus::Modified,
+                delta.new_file().path().or_else(|| delta.old_file().path()),
+            ),
+            Delta::Unmodified => continue,
         };
-        if !path.is_empty() {
+        if let Some(path) = path {
             changes.push(MemoryWorkspaceChange {
                 status,
-                path: path.replace('\\', "/"),
+                path: path.to_string_lossy().replace('\\', "/"),
             });
         }
     }
-    Ok(changes)
+    changes.sort_by(|left, right| left.path.cmp(&right.path));
+    changes.dedup_by(|left, right| left.path == right.path);
+    changes
 }
 
-fn parse_nul_paths(output: &[u8]) -> BTreeSet<String> {
-    output
-        .split(|byte| *byte == 0)
-        .filter(|part| !part.is_empty())
-        .map(|part| String::from_utf8_lossy(part).replace('\\', "/"))
-        .collect()
+fn ignored_workspace_paths(diff: &Diff<'_>) -> Vec<String> {
+    let mut paths = diff
+        .deltas()
+        .filter(|delta| delta.status() == Delta::Ignored)
+        .filter_map(|delta| delta.new_file().path())
+        .map(|path| path.to_string_lossy().replace('\\', "/"))
+        .collect::<Vec<_>>();
+    paths.sort();
+    paths.dedup();
+    paths
 }
 
 fn render_added_file_diff(root: &Path, path: &str) -> Result<String, MemoryWorkspaceGitError> {
@@ -368,6 +312,19 @@ fn render_added_file_diff(root: &Path, path: &str) -> Result<String, MemoryWorks
         rendered.push('\n');
     }
     Ok(rendered)
+}
+
+fn render_workspace_diff(diff: &Diff<'_>, root: &Path) -> Result<String, MemoryWorkspaceGitError> {
+    let mut rendered = Vec::new();
+    diff.print(DiffFormat::Patch, |_, _, line| {
+        if matches!(line.origin(), ' ' | '+' | '-') {
+            rendered.push(line.origin() as u8);
+        }
+        rendered.extend_from_slice(line.content());
+        true
+    })
+    .map_err(|source| git_operation(root, "render workspace diff", source))?;
+    String::from_utf8(rendered).map_err(|source| MemoryWorkspaceGitError::DiffOutputUtf8 { source })
 }
 
 fn append_bounded_diff(rendered: &mut String, diff: &str) {
@@ -401,47 +358,15 @@ fn previous_char_boundary(value: &str, max_bytes: usize) -> usize {
     index
 }
 
-fn git_stdout(root: &Path, args: &[&str]) -> Result<String, MemoryWorkspaceGitError> {
-    let output = run_git(root, args)?;
-    String::from_utf8(output.stdout)
-        .map_err(|source| MemoryWorkspaceGitError::GitOutputUtf8 { source })
-}
-
-fn git_z_stdout(root: &Path, args: &[&str]) -> Result<Vec<u8>, MemoryWorkspaceGitError> {
-    run_git(root, args).map(|output| output.stdout)
-}
-
-fn run_git(root: &Path, args: &[&str]) -> Result<std::process::Output, MemoryWorkspaceGitError> {
-    let mut full_args = vec![
-        "-c",
-        "user.name=BitFun",
-        "-c",
-        "user.email=bitfun@localhost",
-    ];
-    full_args.extend_from_slice(args);
-    run_git_raw(root, &full_args)
-}
-
-fn run_git_raw(
+fn git_operation(
     root: &Path,
-    args: &[&str],
-) -> Result<std::process::Output, MemoryWorkspaceGitError> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(args)
-        .output()
-        .map_err(|source| MemoryWorkspaceGitError::RunGit {
-            root: root.to_path_buf(),
-            source,
-        })?;
-    if output.status.success() {
-        Ok(output)
-    } else {
-        Err(MemoryWorkspaceGitError::GitFailed {
-            root: root.to_path_buf(),
-            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-        })
+    operation: &'static str,
+    source: git2::Error,
+) -> MemoryWorkspaceGitError {
+    MemoryWorkspaceGitError::GitOperation {
+        root: root.to_path_buf(),
+        operation,
+        source,
     }
 }
 
@@ -485,8 +410,38 @@ mod tests {
             status: MemoryWorkspaceChangeStatus::Added,
             path: "rollout_summaries/new.md".to_string(),
         }));
+        assert!(diff.unified_diff.contains("diff --git"));
+        assert!(diff.unified_diff.contains("+new index"));
+        assert!(diff.unified_diff.contains("-old summary"));
         assert!(diff.unified_diff.contains("new index"));
         assert!(diff.unified_diff.contains("new summary"));
+    }
+
+    #[tokio::test]
+    async fn memory_workspace_diff_includes_ignored_ad_hoc_notes() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::write(
+            root.join(".gitignore"),
+            "extensions/ad_hoc/notes/ignored-note.md\n",
+        )
+        .unwrap();
+        reset_memory_workspace_git_baseline(root).await.unwrap();
+
+        let note_path = root.join("extensions/ad_hoc/notes/ignored-note.md");
+        std::fs::create_dir_all(note_path.parent().unwrap()).unwrap();
+        std::fs::write(&note_path, "Durable ignored memory note\n").unwrap();
+
+        let diff = memory_workspace_diff(root).await.unwrap();
+
+        assert!(diff.changes.contains(&MemoryWorkspaceChange {
+            status: MemoryWorkspaceChangeStatus::Added,
+            path: "extensions/ad_hoc/notes/ignored-note.md".to_string(),
+        }));
+        assert!(diff
+            .unified_diff
+            .contains("extensions/ad_hoc/notes/ignored-note.md"));
+        assert!(diff.unified_diff.contains("+Durable ignored memory note"));
     }
 
     #[test]

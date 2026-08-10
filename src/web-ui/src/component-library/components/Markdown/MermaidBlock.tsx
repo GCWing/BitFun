@@ -5,7 +5,8 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { MermaidService, MERMAID_THEME_CHANGE_EVENT } from '../../../tools/mermaid-editor/services/MermaidService';
+import { MermaidService } from '../../../tools/mermaid-editor/services/MermaidService';
+import { mermaidAppearanceAdapter } from '@/infrastructure/appearance/adapters/MermaidAppearanceAdapter';
 import { Loader2, AlertCircle, Code2, Copy, Check } from 'lucide-react';
 import { createLogger } from '@/shared/utils/logger';
 import './MermaidBlock.scss';
@@ -14,27 +15,17 @@ const log = createLogger('MermaidBlock');
 
 const svgCache = new Map<string, string>();
 
-let themeVersion = 0;
-
-const getThemeType = (): 'dark' | 'light' => {
-  const themeType = document.documentElement.getAttribute('data-theme-type');
-  if (themeType === 'light' || themeType === 'dark') return themeType;
-  return 'dark';
-};
+let appearanceRevision = 0;
 
 const getCacheKey = (code: string): string => {
-  return `${getThemeType()}:${code.trim()}`;
+  return `${appearanceRevision}:${code.trim()}`;
 };
 
 const clearCache = () => {
   svgCache.clear();
-  themeVersion++;
-  log.debug('Cache cleared', { version: themeVersion });
+  appearanceRevision = mermaidAppearanceAdapter.getRevision();
+  log.debug('Cache cleared', { revision: appearanceRevision });
 };
-
-if (typeof window !== 'undefined') {
-  window.addEventListener(MERMAID_THEME_CHANGE_EVENT, clearCache);
-}
 
 export interface MermaidBlockProps {
   code: string;
@@ -70,7 +61,9 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
   const [showCode, setShowCode] = useState(false);
   const [copied, setCopied] = useState(false);
   
-  const [currentThemeVersion, setCurrentThemeVersion] = useState(themeVersion);
+  const [currentAppearanceRevision, setCurrentAppearanceRevision] = useState(
+    mermaidAppearanceAdapter.getRevision(),
+  );
   
   const mermaidService = useRef(MermaidService.getInstance());
   const renderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -146,20 +139,15 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
         clearTimeout(renderTimeoutRef.current);
       }
     };
-  }, [code, isStreaming, renderDiagram, currentThemeVersion]);
+  }, [code, isStreaming, renderDiagram, currentAppearanceRevision]);
 
   useEffect(() => {
-    const handleThemeChange = () => {
-      log.debug('Theme changed, triggering re-render');
-      setCurrentThemeVersion(themeVersion);
+    return mermaidAppearanceAdapter.subscribe(() => {
+      clearCache();
+      setCurrentAppearanceRevision(mermaidAppearanceAdapter.getRevision());
       setSvgContent('');
       setState('loading');
-    };
-
-    window.addEventListener(MERMAID_THEME_CHANGE_EVENT, handleThemeChange);
-    return () => {
-      window.removeEventListener(MERMAID_THEME_CHANGE_EVENT, handleThemeChange);
-    };
+    });
   }, []);
 
   const handleCopy = useCallback(async () => {
@@ -176,9 +164,9 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
     switch (state) {
       case 'streaming':
         return (
-          <div className="mermaid-block__streaming">
-            <div className="mermaid-block__code-preview">
-              <pre className="mermaid-code">
+          <div data-bf-component="mermaid-block" data-bf-part="streaming" className="mermaid-block__streaming">
+            <div data-bf-component="mermaid-block" data-bf-part="codePreview" className="mermaid-block__code-preview">
+              <pre data-bf-component="mermaid-block" data-bf-part="code" className="mermaid-code">
                 <code>{code}</code>
                 <span className="streaming-cursor">█</span>
               </pre>
@@ -189,12 +177,12 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
       case 'incomplete':
         return (
           <div className="mermaid-block__incomplete">
-            <div className="mermaid-block__code-preview">
-              <pre className="mermaid-code">
+            <div data-bf-component="mermaid-block" data-bf-part="codePreview" className="mermaid-block__code-preview">
+              <pre data-bf-component="mermaid-block" data-bf-part="code" className="mermaid-code">
                 <code>{code}</code>
               </pre>
             </div>
-            <div className="mermaid-block__hint">
+            <div data-bf-component="mermaid-block" data-bf-part="hint" className="mermaid-block__hint">
               <AlertCircle size={14} />
               <span>{t('mermaidBlock.codeIncomplete')}</span>
             </div>
@@ -203,7 +191,7 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
 
       case 'loading':
         return (
-          <div className="mermaid-block__loading">
+          <div data-bf-component="mermaid-block" data-bf-part="loading" className="mermaid-block__loading">
             <div className="mermaid-block__loading-indicator">
               <Loader2 size={20} className="spinning" />
               <span>{t('mermaidBlock.rendering')}</span>
@@ -213,14 +201,18 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
 
       case 'rendered':
         return (
-          <div className="mermaid-block__rendered">
+          <div data-bf-component="mermaid-block" data-bf-part="rendered" className="mermaid-block__rendered">
             <div 
               className="mermaid-block__diagram"
+              data-bf-component="mermaid-block"
+              data-bf-part="diagram"
               dangerouslySetInnerHTML={{ __html: svgContent }}
             />
             
-            <div className="mermaid-block__actions">
+            <div data-bf-component="mermaid-block" data-bf-part="actions" className="mermaid-block__actions">
               <button
+                data-bf-component="mermaid-block"
+                data-bf-part="action"
                 className="mermaid-icon-btn"
                 onClick={() => setShowCode(!showCode)}
                 title={showCode ? t('mermaidBlock.hideCode') : t('mermaidBlock.showCode')}
@@ -228,6 +220,9 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
                 <Code2 size={14} />
               </button>
               <button
+                data-bf-component="mermaid-block"
+                data-bf-part="action"
+                data-bf-state={copied ? 'copied' : undefined}
                 className={`mermaid-icon-btn ${copied ? 'copied' : ''}`}
                 onClick={handleCopy}
                 title={t('mermaidBlock.copyCode')}
@@ -237,8 +232,8 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
             </div>
 
             {showCode && (
-              <div className="mermaid-block__source">
-                <pre className="mermaid-code">
+              <div data-bf-component="mermaid-block" data-bf-part="source" className="mermaid-block__source">
+                <pre data-bf-component="mermaid-block" data-bf-part="code" className="mermaid-code">
                   <code>{code}</code>
                 </pre>
               </div>
@@ -248,18 +243,21 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
 
       case 'error':
         return (
-          <div className="mermaid-block__error">
+          <div data-bf-component="mermaid-block" data-bf-part="error" className="mermaid-block__error">
             <div className="mermaid-block__error-message">
               <AlertCircle size={16} />
               <span>{t('mermaidBlock.renderFailed')}: {error}</span>
             </div>
-            <div className="mermaid-block__code-preview">
-              <pre className="mermaid-code">
+            <div data-bf-component="mermaid-block" data-bf-part="codePreview" className="mermaid-block__code-preview">
+              <pre data-bf-component="mermaid-block" data-bf-part="code" className="mermaid-code">
                 <code>{code}</code>
               </pre>
             </div>
-            <div className="mermaid-block__actions">
+            <div data-bf-component="mermaid-block" data-bf-part="actions" className="mermaid-block__actions">
               <button
+                data-bf-component="mermaid-block"
+                data-bf-part="action"
+                data-bf-state={copied ? 'copied' : undefined}
                 className={`mermaid-icon-btn ${copied ? 'copied' : ''}`}
                 onClick={handleCopy}
                 title={t('mermaidBlock.copyCode')}
@@ -276,7 +274,7 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
   };
 
   return (
-    <div className={`mermaid-block mermaid-block--${state} ${className}`}>
+    <div className={`mermaid-block mermaid-block--${state} ${className}`} data-bf-component="mermaid-block" data-bf-part="root" data-bf-state={state === 'error' ? 'error' : state === 'streaming' ? 'streaming' : state === 'loading' ? 'loading' : undefined}>
       {renderContent()}
     </div>
   );

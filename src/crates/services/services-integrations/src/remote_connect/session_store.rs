@@ -7,7 +7,8 @@
 //! requiring a fresh password entry while keeping copied session ciphertext
 //! unusable without the separate install key.
 //!
-//! File location: `~/.bitfun/account_session.enc`
+//! File location: `<BITFUN_HOME>/account_session.enc` when configured,
+//! otherwise `~/.bitfun/account_session.enc`.
 //! Format: base64(nonce || ciphertext) where the plaintext is a JSON
 //! payload `{ token, user_id, master_key_b64, relay_url }`.
 
@@ -48,8 +49,7 @@ fn session_store_directory() -> Result<PathBuf> {
         return Ok(path.clone());
     }
     drop(override_path);
-    let home = dirs::home_dir().ok_or_else(|| anyhow!("cannot determine home directory"))?;
-    Ok(home.join(".bitfun"))
+    super::bitfun_home_dir().ok_or_else(|| anyhow!("cannot determine BitFun home directory"))
 }
 
 /// The on-disk JSON payload (plaintext before encryption).

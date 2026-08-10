@@ -37,6 +37,7 @@ import {
   type DeepReviewLaunchStep,
   type FailedDeepReviewCleanupResult,
 } from './launchErrors';
+import { sessionProjectWorkspacePath } from '../../utils/sessionWorkspace';
 
 export {
   DEEP_REVIEW_SLASH_COMMAND,
@@ -72,6 +73,7 @@ export interface DeepReviewLaunchBuildOptions {
   maxExtraReviewers?: number;
   includeQualityGate?: boolean;
   managedBatching?: boolean;
+  maxFocusedCalls?: number;
 }
 
 export interface DeepReviewLaunchPrompt {
@@ -85,7 +87,9 @@ async function cleanupFailedDeepReviewLaunch(
 ): Promise<FailedDeepReviewCleanupResult> {
   const cleanupIssues: string[] = [];
   const childSession = flowChatStore.getState().sessions.get(childSessionId);
-  const workspacePath = childSession?.workspacePath;
+  const workspacePath = childSession
+    ? sessionProjectWorkspacePath(childSession)
+    : undefined;
   const remoteConnectionId = childSession?.remoteConnectionId;
   const remoteSshHost = childSession?.remoteSshHost;
 
@@ -197,6 +201,9 @@ export async function buildDeepReviewLaunchFromSessionFiles(
     ...(options.managedBatching !== undefined
       ? { managedBatching: options.managedBatching }
       : {}),
+    ...(options.maxFocusedCalls !== undefined
+      ? { maxFocusedCalls: options.maxFocusedCalls }
+      : {}),
   });
   const prompt = formatSessionFilesLaunchPrompt({
     extraContext,
@@ -268,6 +275,9 @@ export async function buildDeepReviewLaunchFromSlashCommand(
       : {}),
     ...(options.managedBatching !== undefined
       ? { managedBatching: options.managedBatching }
+      : {}),
+    ...(options.maxFocusedCalls !== undefined
+      ? { maxFocusedCalls: options.maxFocusedCalls }
       : {}),
   });
   const prompt = formatSlashCommandLaunchPrompt({

@@ -4,10 +4,8 @@
  * batched EventBatcher text updates. Supports a streaming cursor indicator.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MarkdownRenderer } from '@/component-library';
-import { DotMatrixLoader } from '@/component-library';
 import type { MarkdownTraceContext } from '@/component-library';
 import type { FlowTextItem } from '../types/flow-chat';
 import { useFlowChatContext } from './modern/FlowChatContext';
@@ -22,39 +20,17 @@ const CONTENT_IDLE_TIMEOUT = 500;
 interface FlowTextBlockProps {
   textItem: FlowTextItem;
   className?: string;
+  /**
+   * Replay the whole text through the typewriter on mount. Off by default: the
+   * message list is virtualized, so a streaming block that scrolls out and back
+   * would otherwise restart from an empty string and re-grow, which reads as the
+   * conversation refreshing itself. Only newly appended text is revealed.
+   */
   replayStreamingOnMount?: boolean;
   traceContext?: MarkdownTraceContext;
   testId?: string;
   testAttributes?: Record<`data-${string}`, string | number | boolean | undefined>;
 }
-
-const RuntimeStatusBlock: React.FC<Pick<FlowTextBlockProps, 'textItem' | 'className' | 'testId' | 'testAttributes'>> = ({
-  textItem,
-  className = '',
-  testId,
-  testAttributes,
-}) => {
-  const { t } = useTranslation('flow-chat/processing-hints');
-  const rawHints = t('items', { returnObjects: true });
-  const hints = Array.isArray(rawHints)
-    ? rawHints.filter((item): item is string => typeof item === 'string')
-    : [];
-  const hintIndex = hints.length > 0
-    ? Math.abs(textItem.id.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0)) % hints.length
-    : 0;
-  const hint = hints[hintIndex] ?? '';
-
-  return (
-    <div
-      className={`flow-text-block flow-text-block--runtime-status ${className}`}
-      data-testid={testId}
-      {...testAttributes}
-    >
-      <DotMatrixLoader size="small" className="flow-text-block__runtime-status-icon" />
-      {hint && <span className="flow-text-block__runtime-status-text">{hint}</span>}
-    </div>
-  );
-};
 
 /**
  * Use React.memo to avoid unnecessary re-renders.
@@ -63,7 +39,7 @@ const RuntimeStatusBlock: React.FC<Pick<FlowTextBlockProps, 'textItem' | 'classN
 export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   textItem,
   className = '',
-  replayStreamingOnMount = true,
+  replayStreamingOnMount = false,
   traceContext,
   testId,
   testAttributes,
@@ -74,11 +50,20 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
     onHttpLinkClick,
     onOpenVisualization,
     activeSessionOverride,
+    workspacePath: contextWorkspacePath,
+    remoteConnectionId: contextRemoteConnectionId,
   } = useFlowChatContext();
   const markdownBasePath = activeSessionOverride?.workspacePath
-    || activeSessionOverride?.config?.workspacePath;
+    || activeSessionOverride?.config?.workspacePath
+    || contextWorkspacePath;
   const markdownRemoteConnectionId = activeSessionOverride?.remoteConnectionId
-    || activeSessionOverride?.config?.remoteConnectionId;
+    || activeSessionOverride?.config?.remoteConnectionId
+    || contextRemoteConnectionId;
+  // Stable callback so the memoized Markdown component is not re-rendered
+  // (and re-parsed) just because this block re-rendered.
+  const handleOpenVisualization = useCallback((visualization: any) => {
+    onOpenVisualization?.(visualization?.type, visualization?.data);
+  }, [onOpenVisualization]);
 
   // Normalize content to a string.
   const content = typeof textItem.content === 'string'
@@ -154,19 +139,8 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   const isActivelyStreaming = (isStreaming && isContentGrowing) || isRevealing;
   const markdownTraceContext = isStartupRenderTraceEnabled() ? traceContext : undefined;
 
-  if (textItem.runtimeStatus) {
-    return (
-      <RuntimeStatusBlock
-        textItem={textItem}
-        className={className}
-        testId={testId}
-        testAttributes={testAttributes}
-      />
-    );
-  }
-
   return (
-    <div
+    <div data-bf-component="flow-text-block" data-bf-part="root" data-bf-mode={textItem.isMarkdown ? 'markdown' : 'text'} data-bf-state={isActivelyStreaming ? 'streaming' : ''}
       className={`flow-text-block ${className} ${isActivelyStreaming ? 'streaming flow-text-block--streaming' : ''}`}
       data-testid={testId}
       data-flow-item-id={textItem.id}
@@ -185,13 +159,11 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
           onFileViewRequest={onFileViewRequest}
           onTabOpen={onTabOpen}
           onHttpLinkClick={onHttpLinkClick}
-          onOpenVisualization={(visualization) => {
-            onOpenVisualization?.(visualization?.type, visualization?.data);
-          }}
+          onOpenVisualization={handleOpenVisualization}
           traceContext={markdownTraceContext}
         />
       ) : (
-        <div className="text-content">
+        <div data-bf-component="flow-text-block" data-bf-part="textContent" className="text-content">
           {displayContent}
         </div>
       )}

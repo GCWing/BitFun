@@ -212,8 +212,8 @@ export class ModelProviderGeneralChatAdapter implements GeneralChatPort {
   }
 
   async generateTitle(firstMessage: string, assistantMessage: string): Promise<string> {
-    const config = await this.configStore.snapshot();
-    const apiKey = (await this.configStore.accessToken()).trim();
+    const config = await this.configStore.activeSnapshot();
+    const apiKey = (await this.configStore.activeAccessToken()).trim();
     if (config.apiUrl.length === 0 || config.modelName.length === 0 || apiKey.length === 0) {
       return '';
     }
@@ -230,7 +230,13 @@ export class ModelProviderGeneralChatAdapter implements GeneralChatPort {
     const response = await this.transport.postStream(
       ModelProviderGeneralChatAdapter.resolveRequestUrl(config.apiUrl, protocol),
       apiKey,
-      ModelProviderGeneralChatAdapter.buildTitleRequestBody(config.modelName, prompt, protocol),
+      ModelProviderGeneralChatAdapter.buildRequestBody(
+        config.modelName,
+        [{ role: 'user', content: prompt }],
+        protocol,
+        40,
+        'You create short conversation titles and output only the title.'
+      ),
       protocol,
       (chunk: string): void => {
         parser.feed(chunk).forEach((delta: string) => {
@@ -258,8 +264,8 @@ export class ModelProviderGeneralChatAdapter implements GeneralChatPort {
     if (images.length > 0) {
       throw new Error(RemoteI18n.t('generalChat.imageNotSupported'));
     }
-    const config = await this.configStore.snapshot();
-    const apiKey = (await this.configStore.accessToken()).trim();
+    const config = await this.configStore.activeSnapshot();
+    const apiKey = (await this.configStore.activeAccessToken()).trim();
     if (config.apiUrl.length === 0 || config.modelName.length === 0 || apiKey.length === 0) {
       throw new Error(RemoteI18n.t('generalChat.modelNotConfigured'));
     }
@@ -336,6 +342,41 @@ export class ModelProviderGeneralChatAdapter implements GeneralChatPort {
     };
   }
 
+  static async probeConfiguration(
+    baseUrl: string,
+    apiKey: string,
+    modelName: string,
+    transport: ModelProviderHttpTransport = new HarmonyModelProviderHttpTransport()
+  ): Promise<void> {
+    const protocol = ModelProviderGeneralChatAdapter.resolveProtocol(baseUrl);
+    const parser = new ModelProviderSseParser(protocol);
+    let receivedText = '';
+    const response = await transport.postStream(
+      ModelProviderGeneralChatAdapter.resolveRequestUrl(baseUrl, protocol),
+      apiKey.trim(),
+      ModelProviderGeneralChatAdapter.buildRequestBody(
+        modelName.trim(),
+        [{ role: 'user', content: 'ping' }],
+        protocol,
+        1,
+        'You verify whether a model endpoint is reachable. Reply with one short word.'
+      ),
+      protocol,
+      (chunk: string): void => {
+        parser.feed(chunk).forEach((delta: string) => {
+          receivedText += delta;
+        });
+      }
+    );
+    ModelProviderGeneralChatAdapter.ensureSuccess(response.statusCode);
+    parser.finish().forEach((delta: string) => {
+      receivedText += delta;
+    });
+    if (receivedText.trim().length === 0) {
+      throw new Error(RemoteI18n.t('generalChat.emptyResponse'));
+    }
+  }
+
   cancelCurrentRequest(): void {
     this.transport.cancel();
   }
@@ -362,55 +403,30 @@ export class ModelProviderGeneralChatAdapter implements GeneralChatPort {
   static buildRequestBody(
     modelName: string,
     messages: ModelProviderMessage[],
-    protocol: ModelProviderProtocol
+    protocol: ModelProviderProtocol,
+    maxTokens: number = 4096,
+    systemPrompt: string = GENERAL_CHAT_SYSTEM_PROMPT
   ): string {
     if (protocol === ModelProviderProtocol.Anthropic) {
       const request: AnthropicRequestBody = {
         model: modelName,
-        max_tokens: 4096,
+        max_tokens: maxTokens,
         stream: true,
-        system: GENERAL_CHAT_SYSTEM_PROMPT,
+        system: systemPrompt,
         messages
       };
       return JSON.stringify(request);
     }
     const openAiMessages: ModelProviderMessage[] = [];
-    openAiMessages.push({ role: 'system', content: GENERAL_CHAT_SYSTEM_PROMPT });
+    openAiMessages.push({ role: 'system', content: systemPrompt });
     messages.forEach((message: ModelProviderMessage) => {
       openAiMessages.push(message);
     });
     const request: OpenAiRequestBody = {
       model: modelName,
-      max_tokens: 4096,
+      max_tokens: maxTokens,
       stream: true,
       messages: openAiMessages
-    };
-    return JSON.stringify(request);
-  }
-
-  private static buildTitleRequestBody(
-    modelName: string,
-    prompt: string,
-    protocol: ModelProviderProtocol
-  ): string {
-    if (protocol === ModelProviderProtocol.Anthropic) {
-      const request: AnthropicRequestBody = {
-        model: modelName,
-        max_tokens: 40,
-        stream: true,
-        system: 'You create short conversation titles and output only the title.',
-        messages: [{ role: 'user', content: prompt }]
-      };
-      return JSON.stringify(request);
-    }
-    const request: OpenAiRequestBody = {
-      model: modelName,
-      max_tokens: 40,
-      stream: true,
-      messages: [
-        { role: 'system', content: 'You create short conversation titles and output only the title.' },
-        { role: 'user', content: prompt }
-      ]
     };
     return JSON.stringify(request);
   }

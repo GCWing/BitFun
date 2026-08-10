@@ -1,7 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
-import { join, relative } from 'path';
+import { dirname, join, relative } from 'path';
 import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 
 import {
   dependencyProfileRules,
@@ -14,12 +13,12 @@ import {
   crateLayoutRules,
   cratePathForName,
 } from './rules/crate-layout.mjs';
+import { checkTuiLegacyBackendRatchet } from './tui-boundary-ratchet.mjs';
 import {
+  coreClosedFeatureProfileRules,
   coreProductFullFeatureAssemblyRule,
   optionalDependencyFeatureOwnerRules,
   ownerCrateFeatureAssemblyRules,
-  productCoreFeatureAssemblyRules,
-  productCoreFeatureAssemblyScanRoots,
 } from './rules/feature-rules.mjs';
 import {
   facadeOnlyFiles,
@@ -34,8 +33,16 @@ import {
   featureReferencesDependency,
   featureReferencesFeature,
   unexpectedDependencyOwnerFeatures,
+  unexpectedReachableLocalFeatures,
 } from './manifest-feature-helpers.mjs';
-import { checkCargoDependencyLayersSafely } from './cargo-dependency-boundaries.mjs';
+import { checkCargoDependencyBoundariesSafely } from './cargo-dependency-boundaries.mjs';
+import {
+  agentRuntimeIntegrationTestTargets,
+  checkAgentRuntimeIntegrationTestTopology,
+  checkCliIntegrationTestTopology,
+  cliIntegrationTestTargets,
+  validateExplicitIntegrationTestTopology,
+} from './explicit-test-topology.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
@@ -117,6 +124,17 @@ function isDependencyListHeader(trimmedLine, options = {}) {
   return new RegExp(`^\\[(?:target\\.[^\\]]+\\.)?${workspacePrefix}(?:dependencies|dev-dependencies|build-dependencies)\\]$`).test(trimmedLine);
 }
 
+function dependencyKindForHeader(trimmedLine, options = {}) {
+  const workspacePrefix = options.includeWorkspace ? '(?:workspace\\.)?' : '';
+  const match = trimmedLine.match(
+    new RegExp(`^\\[(?:target\\.[^\\]]+\\.)?${workspacePrefix}(dependencies|dev-dependencies|build-dependencies)(?:\\.|\\])`),
+  );
+  if (!match || match[1] === 'dependencies') {
+    return 'normal';
+  }
+  return match[1] === 'dev-dependencies' ? 'dev' : 'build';
+}
+
 function dependencyTablePattern(options = {}) {
   const workspacePrefix = options.includeWorkspace ? '(?:workspace\\.)?' : '';
   return new RegExp(`^\\[(?:target\\.[^\\]]+\\.)?${workspacePrefix}(?:dependencies|dev-dependencies|build-dependencies)\\.([A-Za-z0-9_-]+|"[A-Za-z0-9_-]+")\\]$`);
@@ -125,6 +143,7 @@ function dependencyTablePattern(options = {}) {
 function parseManifestDependencies(lines, options = {}) {
   const deps = [];
   let inDependencyList = false;
+  let dependencyListKind = 'normal';
   let currentTable = null;
   let currentInline = null;
   const tablePattern = dependencyTablePattern(options);
@@ -149,12 +168,14 @@ function parseManifestDependencies(lines, options = {}) {
     const headerMatch = trimmed.match(/^\[(.+)]$/);
     if (headerMatch) {
       inDependencyList = isDependencyListHeader(trimmed, options);
+      dependencyListKind = dependencyKindForHeader(trimmed, options);
       currentTable = null;
       const dependencyTableMatch = trimmed.match(tablePattern);
       if (dependencyTableMatch) {
         currentTable = {
           name: dependencyTableMatch[1].replace(/^"|"$/g, ''),
           line: index + 1,
+          kind: dependencyListKind,
           optional: false,
           text: [trimmed],
         };
@@ -181,6 +202,7 @@ function parseManifestDependencies(lines, options = {}) {
       deps.push({
         name,
         line: index + 1,
+        kind: dependencyListKind,
         optional: /\boptional\s*=\s*true\b/.test(trimmed),
         text: [trimmed],
       });
@@ -197,48 +219,6 @@ function parseManifestDependencies(lines, options = {}) {
 
 function manifestDependencyText(dep) {
   return dep?.text?.join('\n') ?? '';
-}
-
-function manifestDependencyDisablesDefaultFeatures(dep) {
-  return /\bdefault-features\s*=\s*false\b/.test(manifestDependencyText(dep));
-}
-
-function parseManifestDependencyFeatureNames(dep) {
-  const features = new Set();
-  const text = manifestDependencyText(dep);
-  for (const match of text.matchAll(/\bfeatures\s*=\s*\[([\s\S]*?)\]/g)) {
-    for (const featureMatch of match[1].matchAll(/"([^"]+)"/g)) {
-      features.add(featureMatch[1]);
-    }
-  }
-  return features;
-}
-
-function collectProductCoreDependencyManifestPaths(manifestEntries) {
-  return manifestEntries
-    .filter((entry) => {
-      const deps = parseManifestDependencies(entry.text.split(/\r?\n/));
-      return deps.some((dep) => dep.name === 'bitfun-core');
-    })
-    .map((entry) => entry.manifestPath)
-    .sort();
-}
-
-function collectProductCoreDependencyManifests(scanRoots = productCoreFeatureAssemblyScanRoots) {
-  const manifestEntries = [];
-  for (const repoDir of scanRoots) {
-    const dir = join(ROOT, ...repoDir.split('/'));
-    walkFiles(dir, (path) => {
-      if (!path.endsWith('Cargo.toml')) {
-        return;
-      }
-      manifestEntries.push({
-        manifestPath: toRepoPath(path),
-        text: readText(path),
-      });
-    });
-  }
-  return collectProductCoreDependencyManifestPaths(manifestEntries);
 }
 
 function parseManifestFeatures(lines) {
@@ -427,38 +407,37 @@ function checkCargoManifest(crateDir) {
 
 function checkForbiddenManifestDeps(crateDir, forbiddenDeps, messageForDep) {
   const manifestPath = join(crateDir, 'Cargo.toml');
-  const lines = readText(manifestPath).split(/\r?\n/);
-  lines.forEach((line, index) => {
-    const trimmed = line.trim();
-    if (trimmed.startsWith('#')) {
-      return;
+  const deps = parseManifestDependencies(readText(manifestPath).split(/\r?\n/));
+  for (const dep of deps) {
+    const forbidden = matchingForbiddenDependency(dep, forbiddenDeps);
+    if (forbidden) {
+      failures.push({
+        path: manifestPath,
+        line: dep.line,
+        message: messageForDep(forbidden),
+      });
     }
-    for (const dep of forbiddenDeps) {
-      if (isManifestDependencyDeclaration(trimmed, dep)) {
-        failures.push({
-          path: manifestPath,
-          line: index + 1,
-          message: messageForDep(dep),
-        });
-      }
-    }
-  });
+  }
 }
 
 function checkForbiddenNonOptionalManifestDeps(crateDir, forbiddenDeps, messageForDep) {
   const manifestPath = join(crateDir, 'Cargo.toml');
   const deps = parseManifestDependencies(readText(manifestPath).split(/\r?\n/));
   for (const dep of deps) {
-    if (!dep.optional && forbiddenDeps.includes(dep.name)) {
+    const forbidden = matchingForbiddenDependency(dep, forbiddenDeps);
+    if (!dep.optional && forbidden) {
       failures.push({
         path: manifestPath,
         line: dep.line,
-        message: messageForDep(dep.name),
+        message: messageForDep(forbidden),
       });
     }
   }
 }
 
+function matchingForbiddenDependency(dep, forbiddenDeps) {
+  return forbiddenDeps.find((dependencyName) => manifestDependencyMatches(dep, dependencyName));
+}
 function manifestDependencyMatches(dep, dependencyName) {
   const text = manifestDependencyText(dep);
   return dep.name === dependencyName || new RegExp(`\\bpackage\\s*=\\s*["']${escapeRegex(dependencyName)}["']`).test(text);
@@ -533,7 +512,8 @@ function checkOptionalDependencyFeatureOwners(crateDir, rule) {
   const manifestPath = join(crateDir, 'Cargo.toml');
   const lines = readText(manifestPath).split(/\r?\n/);
   const deps = parseManifestDependencies(lines);
-  const depsByName = new Map(deps.map((dep) => [dep.name, dep]));
+  const normalDeps = deps.filter((dep) => dep.kind === 'normal');
+  const depsByName = new Map(normalDeps.map((dep) => [dep.name, dep]));
   const features = parseManifestFeatures(lines);
   const declaredOwnerDeps = new Set(rule.dependencies.map((dependency) => dependency.depName));
 
@@ -584,7 +564,7 @@ function checkOptionalDependencyFeatureOwners(crateDir, rule) {
   const profileRule = dependencyProfileRules.find((profile) => profile.crateName === rule.crateName);
   const depsRequiringOwner = new Set(profileRule?.forbiddenNonOptionalDeps ?? []);
   const uncoveredDeps = new Map();
-  for (const dep of deps) {
+  for (const dep of normalDeps) {
     if (!dep.optional || !depsRequiringOwner.has(dep.name) || declaredOwnerDeps.has(dep.name)) {
       continue;
     }
@@ -598,53 +578,6 @@ function checkOptionalDependencyFeatureOwners(crateDir, rule) {
       line: dep.line,
       message: `${rule.reason}; optional runtime dependency must declare owner feature coverage: ${depName}`,
     });
-  }
-}
-
-function checkProductCoreFeatureAssembly(rule) {
-  const manifestPath = repoPathToFsPath(rule.manifestPath);
-  const deps = parseManifestDependencies(readText(manifestPath).split(/\r?\n/));
-  const dep = deps.find((candidate) => candidate.name === rule.dependencyName);
-  if (!dep) {
-    failures.push({
-      path: manifestPath,
-      line: 1,
-      message: `${rule.reason}; missing dependency: ${rule.dependencyName}`,
-    });
-    return;
-  }
-
-  if (!manifestDependencyDisablesDefaultFeatures(dep)) {
-    failures.push({
-      path: manifestPath,
-      line: dep.line,
-      message: `${rule.reason}; ${rule.dependencyName} must set default-features = false`,
-    });
-  }
-
-  const enabledFeatures = parseManifestDependencyFeatureNames(dep);
-  for (const featureName of rule.requiredFeatures) {
-    if (!enabledFeatures.has(featureName)) {
-      failures.push({
-        path: manifestPath,
-        line: dep.line,
-        message: `${rule.reason}; ${rule.dependencyName} must enable feature ${featureName}`,
-      });
-    }
-  }
-}
-
-function checkProductCoreFeatureAssemblyCoverage() {
-  const rulePaths = new Set(productCoreFeatureAssemblyRules.map((rule) => rule.manifestPath));
-  for (const manifestPath of collectProductCoreDependencyManifests()) {
-    if (!rulePaths.has(manifestPath)) {
-      failures.push({
-        path: join(ROOT, ...manifestPath.split('/')),
-        line: 1,
-        message:
-          'product entry crate depends on bitfun-core but is not covered by product-full assembly rules',
-      });
-    }
   }
 }
 
@@ -681,6 +614,64 @@ function checkCoreProductFullFeatureAssembly(rule) {
         message: `${rule.reason}; ${rule.featureName} must explicitly enable ${featureName}`,
       });
     }
+  }
+}
+
+function checkClosedFeatureProfile(rule) {
+  const manifestPath = repoPathToFsPath(rule.manifestPath);
+  const features = parseManifestFeatures(readText(manifestPath).split(/\r?\n/));
+  const feature = features.get(rule.featureName);
+  if (!feature) {
+    failures.push({
+      path: manifestPath,
+      line: 1,
+      message: `${rule.reason}; missing ${rule.featureName} feature declaration`,
+    });
+    return;
+  }
+
+  for (const reference of rule.requiredFeatureRefs) {
+    if (!feature.refs.includes(reference)) {
+      failures.push({
+        path: manifestPath,
+        line: feature.line,
+        message: `${rule.reason}; ${rule.featureName} must explicitly enable ${reference}`,
+      });
+    }
+  }
+
+  if (!rule.exact) {
+    return;
+  }
+  const allowedReferences = new Set(rule.requiredFeatureRefs);
+  for (const reference of feature.refs) {
+    if (!allowedReferences.has(reference)) {
+      failures.push({
+        path: manifestPath,
+        line: feature.line,
+        message: `${rule.reason}; ${rule.featureName} must not enable ${reference}`,
+      });
+    }
+  }
+
+  const allowedLocalFeatures = new Set(
+    [
+      ...rule.requiredFeatureRefs,
+      ...(rule.allowedTransitiveFeatureRefs ?? []),
+    ].filter((reference) => features.has(reference)),
+  );
+  for (const unexpected of unexpectedReachableLocalFeatures(
+    features,
+    rule.featureName,
+    allowedLocalFeatures,
+  )) {
+    failures.push({
+      path: manifestPath,
+      line: features.get(unexpected.featureName)?.line ?? feature.line,
+      message:
+        `${rule.reason}; ${rule.featureName} must not reach local feature `
+        + `${unexpected.featureName} via ${unexpected.path.join(' -> ')}`,
+    });
   }
 }
 
@@ -1095,11 +1086,9 @@ export function runCoreBoundaryCheck() {
       isManifestDependencyDeclaration,
       parseManifestDependencies,
       manifestDependencyMatches,
-      manifestDependencyDisablesDefaultFeatures,
-      parseManifestDependencyFeatureNames,
-      productCoreFeatureAssemblyRules,
+      matchingForbiddenDependency,
+      coreClosedFeatureProfileRules,
       coreProductFullFeatureAssemblyRule,
-      collectProductCoreDependencyManifestPaths,
       ownerCrateFeatureAssemblyRules,
       parseManifestFeatures,
       optionalDependencyFeatureOwnerRules,
@@ -1120,13 +1109,19 @@ export function runCoreBoundaryCheck() {
       hasPluginWildcardReexport,
       createFacadeLineChecker,
       escapeRegex,
+      validateExplicitIntegrationTestTopology,
+      agentRuntimeIntegrationTestTargets,
+      cliIntegrationTestTargets,
     });
     console.log('Core boundary check self-test passed.');
     return;
   }
 
   checkCrateLayoutRules();
-  failures.push(...checkCargoDependencyLayersSafely({ root: ROOT, crateLayoutRules }));
+  failures.push(...checkTuiLegacyBackendRatchet(ROOT));
+  failures.push(...checkCargoDependencyBoundariesSafely({ root: ROOT, crateLayoutRules }));
+  failures.push(...checkAgentRuntimeIntegrationTestTopology(ROOT));
+  failures.push(...checkCliIntegrationTestTopology(ROOT));
 
   for (const rule of forbiddenManifestDependencyRules) {
     checkForbiddenManifestDependencyRule(rule);
@@ -1157,12 +1152,11 @@ export function runCoreBoundaryCheck() {
     checkOptionalDependencyFeatureOwners(crateDir, rule);
   }
 
-  for (const rule of productCoreFeatureAssemblyRules) {
-    checkProductCoreFeatureAssembly(rule);
-  }
-  checkProductCoreFeatureAssemblyCoverage();
   checkCoreDefaultProductFullFeature();
   checkCoreProductFullFeatureAssembly(coreProductFullFeatureAssemblyRule);
+  for (const rule of coreClosedFeatureProfileRules) {
+    checkClosedFeatureProfile(rule);
+  }
   for (const rule of ownerCrateFeatureAssemblyRules) {
     checkOwnerCrateFeatureAssembly(rule);
   }

@@ -159,9 +159,9 @@ async fn tray_toggle_desktop_pet(app: &AppHandle) -> Result<(), String> {
 
     let show = desktop_pet_should_show(&exp);
     if show {
-        crate::theme::show_agent_companion_desktop_pet(app.clone()).await?;
+        crate::appearance::show_agent_companion_desktop_pet(app.clone()).await?;
     } else {
-        crate::theme::hide_agent_companion_desktop_pet(app.clone()).await?;
+        crate::appearance::hide_agent_companion_desktop_pet(app.clone()).await?;
     }
 
     Ok(())
@@ -220,6 +220,7 @@ pub fn setup_tray(
             } else if id == "quit" {
                 log::info!("Quit requested from tray menu");
                 crate::crash_diagnostics::mark_clean_shutdown("tray_quit");
+                crate::save_main_window_state(app);
                 crate::perform_process_exit_cleanup();
                 app.exit(0);
             } else if id == "toggle_desktop_pet" {
@@ -276,9 +277,16 @@ pub fn setup_tray(
 
 pub fn show_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
+        if let Err(error) = window.show() {
+            log::warn!("Failed to show main window via tray: {}", error);
+            return;
+        }
+        if let Err(error) = window.unminimize() {
+            log::warn!("Failed to unminimize main window via tray: {}", error);
+        }
+        if let Err(error) = window.set_focus() {
+            log::warn!("Failed to focus main window via tray: {}", error);
+        }
         log::info!("Main window shown via tray");
     } else {
         log::warn!("Tray: show_main_window called but main window not found");
@@ -287,15 +295,23 @@ pub fn show_main_window(app: &tauri::AppHandle) {
 
 fn toggle_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
-        let visible = window.is_visible().unwrap_or(false);
+        let visible = match window.is_visible() {
+            Ok(visible) => visible,
+            Err(error) => {
+                log::warn!("Failed to query main window visibility via tray: {}", error);
+                return;
+            }
+        };
         if visible {
-            let _ = window.hide();
+            if let Err(error) = window.hide() {
+                log::warn!("Failed to hide main window via tray toggle: {}", error);
+                return;
+            }
             log::info!("Main window hidden via tray toggle");
         } else {
-            let _ = window.show();
-            let _ = window.unminimize();
-            let _ = window.set_focus();
-            log::info!("Main window shown via tray toggle");
+            show_main_window(app);
         }
+    } else {
+        log::warn!("Tray toggle requested but main window not found");
     }
 }

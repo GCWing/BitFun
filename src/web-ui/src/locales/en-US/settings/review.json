@@ -12,10 +12,10 @@
   },
   "capacity": {
     "title": "Capacity",
-    "description": "Limit parallel Review work and how long it may wait for provider capacity.",
+    "description": "Choose whether additional Review work runs one or two at a time, and how long it may wait for provider capacity.",
     "maxParallelReviewers": {
-      "label": "Max parallel review work",
-      "description": "Maximum strict Review work to run at the same time. Higher values may start more model requests in parallel, hit provider rate limits sooner, and increase token spend."
+      "label": "Review parallelism",
+      "description": "Controls whether additional review work runs one or two at a time. It changes concurrency, not review scope."
     },
     "maxQueueWaitSeconds": {
       "label": "Capacity wait window",

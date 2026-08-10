@@ -62,7 +62,6 @@ export interface EditorConfig {
   fontWeight: 'normal' | 'bold';
   /** Line height multiplier */
   lineHeight: number;
-  theme: string;
   cursorStyle: 'line' | 'block' | 'underline' | 'line-thin' | 'block-outline' | 'underline-thin';
   cursorBlinking: 'blink' | 'smooth' | 'phase' | 'expand' | 'solid';
   renderWhitespace: 'none' | 'boundary' | 'selection' | 'trailing' | 'all';

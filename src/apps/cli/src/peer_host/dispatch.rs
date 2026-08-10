@@ -56,6 +56,16 @@ async fn handle_host_invoke_inner(command: &str, args: Value) -> HostInvokeBridg
         return HostInvokeBridgeResult::err("HostInvoke command is empty");
     }
 
+    // Detached dispatch is target-owned and must not acquire a Peer controller
+    // lease. Route the distinct target command family directly to the durable
+    // CLI runner before applying the generic HostInvoke deny list.
+    if let Some(verb) = dispatch_target_verb(command) {
+        return match crate::dispatch::run_dispatch_verb(verb, args).await {
+            Ok(value) => HostInvokeBridgeResult::ok_value(value),
+            Err(error) => HostInvokeBridgeResult::err(format!("{error:#}")),
+        };
+    }
+
     // Control plane — same special-case path as desktop execute_local_remote_command.
     if command == "peer_control_attach" {
         let controller_id = parse_controller_device_id(&args);
@@ -109,6 +119,27 @@ async fn handle_host_invoke_inner(command: &str, args: Value) -> HostInvokeBridg
     }
 }
 
+fn dispatch_target_verb(command: &str) -> Option<&'static str> {
+    match command {
+        "dispatch_target_probe" => Some("probe"),
+        "dispatch_target_submit" => Some("submit"),
+        "dispatch_target_status" => Some("status"),
+        "dispatch_target_cancel" => Some("cancel"),
+        "dispatch_target_list" => Some("list"),
+        "dispatch_target_answer" => Some("answer"),
+        "dispatch_target_append" => Some("append"),
+        "dispatch_target_continue" => Some("continue"),
+        "dispatch_target_query" => Some("query"),
+        "dispatch_target_workspace_provision" => Some("workspace-provision"),
+        "dispatch_target_workspace_bundle_begin" => Some("workspace-bundle-begin"),
+        "dispatch_target_workspace_bundle_chunk" => Some("workspace-bundle-chunk"),
+        "dispatch_target_workspace_bundle_commit" => Some("workspace-bundle-commit"),
+        "dispatch_target_workspace_sync" => Some("workspace-sync"),
+        "dispatch_target_workspace_sync_chunk" => Some("workspace-sync-chunk"),
+        _ => None,
+    }
+}
+
 /// Peer-side DeviceEvent is a no-op ack (controller is the consumer).
 pub(crate) fn handle_device_event_command() -> RemoteResponse {
     RemoteResponse::DeviceEventAccepted
@@ -148,6 +179,16 @@ mod tests {
             }
             other => panic!("unexpected response: {other:?}"),
         }
+    }
+
+    #[test]
+    fn detached_dispatch_uses_a_distinct_target_command_family() {
+        assert_eq!(
+            dispatch_target_verb("dispatch_target_submit"),
+            Some("submit")
+        );
+        assert_eq!(dispatch_target_verb("dispatch_submit"), None);
+        assert_eq!(dispatch_target_verb("dispatch_target_unknown"), None);
     }
 
     #[tokio::test]

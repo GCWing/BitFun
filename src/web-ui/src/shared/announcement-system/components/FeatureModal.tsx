@@ -56,16 +56,20 @@ const FeatureModal: React.FC = () => {
     <div
       ref={backdropRef}
       className={`feature-modal-backdrop${exiting ? ' feature-modal-backdrop--exiting' : ''}`}
+      data-bf-component="announcement"
+      data-bf-part="modalBackdrop"
       onClick={handleBackdropClick}
       role="dialog"
       aria-modal="true"
     >
-      <div className={`feature-modal ${sizeClass}${exiting ? ' feature-modal--exiting' : ''}`}>
+      <div className={`feature-modal ${sizeClass}${exiting ? ' feature-modal--exiting' : ''}`} data-bf-component="announcement" data-bf-part="modal">
         {/* Close button */}
         {modal.closable && (
           <button
             type="button"
             className="feature-modal__close"
+            data-bf-component="announcement"
+            data-bf-part="modalClose"
             onClick={() => triggerClose()}
             aria-label={t('announcements.common.close')}
           >
@@ -74,7 +78,7 @@ const FeatureModal: React.FC = () => {
         )}
 
         {/* Page viewport */}
-        <div className="feature-modal__pages">
+        <div className="feature-modal__pages" data-bf-component="announcement" data-bf-part="modalPages">
           {pages.map((page, i) => (
             <div
               key={i}
@@ -86,7 +90,7 @@ const FeatureModal: React.FC = () => {
         </div>
 
         {/* Footer navigation */}
-        <div className="feature-modal__footer">
+        <div className="feature-modal__footer" data-bf-component="announcement" data-bf-part="modalFooter">
           {/* Dot indicators */}
           <div className="feature-modal__dots" aria-label="Page navigation">
             {pages.map((_, i) => (
@@ -101,7 +105,7 @@ const FeatureModal: React.FC = () => {
           </div>
 
           {/* Navigation buttons */}
-          <div className="feature-modal__nav">
+          <div className="feature-modal__nav" data-bf-component="announcement" data-bf-part="modalNavigation">
             {modal.completion_action === 'never_show_again' && isLast && (
               <button
                 type="button"
