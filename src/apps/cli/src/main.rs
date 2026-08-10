@@ -87,6 +87,11 @@ struct Cli {
     /// Disable file logging (stderr logging will still be used)
     #[arg(long, global = true)]
     no_log_file: bool,
+
+    /// Override the per-dialog-turn round limit (overrides ai.max_rounds /
+    /// ai.max_turns config). 0 = unlimited.
+    #[arg(long, global = true)]
+    max_rounds: Option<usize>,
 }
 
 #[derive(Subcommand)]
@@ -404,6 +409,7 @@ async fn initialize_core_services(
     skip_tool_confirmation: bool,
     suppress_title_generation: bool,
     disable_persistence: bool,
+    max_rounds_override: Option<usize>,
 ) -> Result<(agent::agentic_system::AgenticSystem, bool, bool)> {
     use bitfun_core::infrastructure::ai::AIClientFactory;
 
@@ -458,11 +464,11 @@ async fn initialize_core_services(
             enable_persistence: false,
             ..Default::default()
         };
-        agent::agentic_system::init_agentic_system_with_config(session_config)
+        agent::agentic_system::init_agentic_system_with_options(session_config, max_rounds_override)
             .await
             .expect("Failed to initialize agentic system")
     } else {
-        agent::agentic_system::init_agentic_system()
+        agent::agentic_system::init_agentic_system_for_cli_with_options(max_rounds_override)
             .await
             .expect("Failed to initialize agentic system")
     };
@@ -544,6 +550,7 @@ async fn run_interactive(
     _config: CliConfig,
     default_agent: String,
     _workspace_str: String,
+    max_rounds_override: Option<usize>,
 ) -> Result<()> {
     use ui::startup::{StartupPage, StartupResult};
 
@@ -556,7 +563,7 @@ async fn run_interactive(
 
     // 3. Initialize core services
     let (agentic_system, original_skip_confirmation, original_title_generation) =
-        initialize_core_services(true, false, false).await?;
+        initialize_core_services(true, false, false, max_rounds_override).await?;
 
     // 4. Show startup page (with full command support)
     let mut startup_page = StartupPage::new(
@@ -643,7 +650,7 @@ async fn run_cli() -> Result<()> {
     match cli.command {
         Some(Commands::Chat { agent }) => {
             // Interactive mode with startup page, scoped to the current directory.
-            run_interactive(config, agent, ".".to_string()).await?;
+            run_interactive(config, agent, ".".to_string(), cli.max_rounds).await?;
         }
 
         Some(Commands::Exec {
@@ -681,6 +688,7 @@ async fn run_cli() -> Result<()> {
                     confirm,
                     no_title,
                     no_persist,
+                    max_rounds: cli.max_rounds,
                 },
             )
             .await?;
@@ -688,7 +696,7 @@ async fn run_cli() -> Result<()> {
 
         Some(Commands::Sessions { action }) => {
             if let Some(session_id) = root_handlers::handle_session_action(action).await? {
-                run_interactive_with_session(config, session_id).await?;
+                run_interactive_with_session(config, session_id, cli.max_rounds).await?;
             }
         }
 
@@ -802,20 +810,24 @@ async fn run_cli() -> Result<()> {
             let workspace_str = ".".to_string();
 
             let default_agent = config.behavior.default_agent.clone();
-            run_interactive(config, default_agent, workspace_str).await?;
+            run_interactive(config, default_agent, workspace_str, cli.max_rounds).await?;
         }
     }
 
     Ok(())
 }
 
-async fn run_interactive_with_session(config: CliConfig, session_id: String) -> Result<()> {
+async fn run_interactive_with_session(
+    config: CliConfig,
+    session_id: String,
+    max_rounds_override: Option<usize>,
+) -> Result<()> {
     let mut terminal = ui::init_terminal()?;
     ui::render_loading(&mut terminal, "Initializing system, please wait...")?;
 
     let workspace = setup_workspace();
     let (agentic_system, original_skip_confirmation, original_title_generation) =
-        initialize_core_services(true, false, false).await?;
+        initialize_core_services(true, false, false, max_rounds_override).await?;
     let workspace_path = workspace
         .clone()
         .map(PathBuf::from)
@@ -900,5 +912,32 @@ mod cli_tests {
         let (verify, no_verify) =
             parse_exec_verification(&["bitfun", "exec", "--no-verify-final-changes", "task"]);
         assert!(!final_change_verification_enabled(verify, no_verify));
+    }
+
+    #[test]
+    fn max_rounds_parses_after_subcommand() {
+        let cli = Cli::try_parse_from(&["bitfun", "exec", "task", "--max-rounds", "500"])
+            .expect("CLI arguments should parse");
+        assert_eq!(cli.max_rounds, Some(500));
+    }
+
+    #[test]
+    fn max_rounds_zero_parses_as_unlimited() {
+        let cli = Cli::try_parse_from(&["bitfun", "exec", "task", "--max-rounds", "0"])
+            .expect("CLI arguments should parse");
+        assert_eq!(cli.max_rounds, Some(0));
+    }
+
+    #[test]
+    fn max_rounds_parses_before_subcommand() {
+        let cli = Cli::try_parse_from(&["bitfun", "--max-rounds", "0", "exec", "task"])
+            .expect("CLI arguments should parse");
+        assert_eq!(cli.max_rounds, Some(0));
+    }
+
+    #[test]
+    fn max_rounds_absent_is_none() {
+        let cli = Cli::try_parse_from(&["bitfun", "exec", "task"]).expect("CLI arguments should parse");
+        assert_eq!(cli.max_rounds, None);
     }
 }
