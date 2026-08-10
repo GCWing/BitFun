@@ -216,7 +216,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("archive_session", RemoteWorkspacePolicy::LegacyUnaudited),
     (
-        "browser_control_create_launcher",
+        "browser_control_enable_default_cdp",
         RemoteWorkspacePolicy::LocalOnly,
     ),
     (

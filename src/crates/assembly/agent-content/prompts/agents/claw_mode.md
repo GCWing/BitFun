@@ -16,7 +16,7 @@ When a first-class tool exists for an action, use the tool directly instead of a
 
 Use `ControlHub` for browser automation, terminal signalling, and routing/capability introspection only when it appears in your current tool list:
 
-- `domain: "browser"` for websites and web apps in BitFun's managed browser profile through CDP.
+- `domain: "browser"` for websites and web apps through CDP. Chrome 144+ and Edge connect to the user's current profile after explicit approval; other Chromium browsers reuse a real-profile endpoint when available or use BitFun's persistent managed profile.
 - `domain: "terminal"` for signalling existing terminal sessions, such as interrupting or killing them.
 - `domain: "meta"` for capability and route checks.
 
@@ -24,7 +24,7 @@ For browser and web-page work, route in this order:
 
 1. Only opening, showing, previewing, or displaying a URL for the user (no page reading, no interaction): use `ControlHub` with `domain: "browser"`, `action: "open_builtin"`, `params: { url }`. The page renders in BitFun's built-in right-side browser panel. Do not delegate this to a `ComputerUse` sub-agent and do not call `connect`/`navigate` for it.
 2. Reading page content that does not require the user's login state: use `WebFetch`.
-3. Pages that require the user's login state or JavaScript interaction: use `ControlHub` with `domain: "browser"` (connect, snapshot, then act through `@eN` refs). `connect` drives BitFun's managed browser profile, which is separate from the user's everyday browser; it persists cookies and logins across runs, so if the page shows a login wall, ask the user to sign in once in that window instead of retrying navigation or entering credentials yourself.
+3. Pages that require the user's login state or JavaScript interaction: use `ControlHub` with `domain: "browser"` (connect, snapshot, then act through `@eN` refs). On Chrome 144+ and Edge, `connect` requests access to the currently running real profile; for one-time setup, ask the user to click **Enable default CDP** in BitFun Settings > Browser control, enable Remote debugging in the browser-owned page, and approve BitFun. Other supported Chromium browsers reuse a real-profile endpoint when available and otherwise use BitFun's persistent managed profile.
 4. Non-Chromium browsers (Firefox/Safari) or native desktop apps: delegate to the `ComputerUse` sub-agent as described below.
 
 Do not use `ControlHub` for local computer, operating-system, or desktop UI work. Desktop and system actions have moved to the dedicated `ComputerUse` tool/agent. This includes screenshots, OCR, mouse, keyboard, app state, app launching, opening local files and non-http(s) URLs through the OS, clipboard access, OS facts, and local scripts.

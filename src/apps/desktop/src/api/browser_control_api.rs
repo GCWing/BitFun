@@ -91,6 +91,8 @@ pub async fn browser_control_list_browsers() -> Result<BrowserControlBrowsersRes
 #[serde(rename_all = "camelCase")]
 pub struct BrowserControlStatusResponse {
     pub cdp_available: bool,
+    pub default_cdp_supported: bool,
+    pub default_cdp_enabled: bool,
     pub browser_kind: String,
     pub browser_version: Option<String>,
     pub port: u16,
@@ -103,11 +105,40 @@ pub async fn browser_control_get_status(
     request: BrowserControlStatusRequest,
 ) -> Result<BrowserControlStatusResponse, String> {
     let port = request.port;
-    let available = BrowserLauncher::is_cdp_available(port).await;
     let configured_kind = selected_browser_kind().await?;
+    let default_cdp_supported = BrowserLauncher::supports_default_cdp(&configured_kind);
+    let default_cdp_enabled = BrowserLauncher::is_default_cdp_enabled(&configured_kind);
+    let user_profile_connection =
+        CdpClient::browser_connection_for_kind(port, &configured_kind).await;
+    let legacy_version =
+        if user_profile_connection.is_none() && BrowserLauncher::is_cdp_available(port).await {
+            CdpClient::get_version(port).await.ok()
+        } else {
+            None
+        };
+    // Chrome and Edge share the logical 9222 slot in Settings. Do not report
+    // the selected browser as connected merely because the other one owns a
+    // legacy fixed-port endpoint left from an earlier selection.
+    let legacy_matches_selection = legacy_version.as_ref().is_some_and(|version| {
+        let detected = version
+            .browser
+            .as_deref()
+            .and_then(BrowserLauncher::browser_kind_from_cdp_version);
+        match &configured_kind {
+            BrowserKind::Chrome | BrowserKind::Edge => {
+                detected.map(|kind| kind == configured_kind).unwrap_or(true)
+            }
+            _ => true,
+        }
+    });
+    let available = user_profile_connection.is_some() || legacy_matches_selection;
 
     let (version, page_count, actual_kind) = if available {
-        let ver_info = CdpClient::get_version(port).await.ok();
+        let ver_info = if let Some(connection) = &user_profile_connection {
+            connection.client.browser_version().await.ok()
+        } else {
+            legacy_version
+        };
         let ver = ver_info.as_ref().and_then(|v| v.browser.clone());
         // Identify the actual browser from CDP version response.
         let kind = ver
@@ -116,15 +147,17 @@ pub async fn browser_control_get_status(
             .unwrap_or_else(|| configured_kind.clone());
         // Only count targets of type "page" (real browser tabs),
         // not service workers, browser targets, etc.
-        let pages = CdpClient::list_pages(port)
-            .await
-            .ok()
-            .map(|p| {
-                p.iter()
-                    .filter(|t| t.page_type.as_deref() == Some("page"))
-                    .count()
-            })
-            .unwrap_or(0);
+        let pages = if let Some(connection) = &user_profile_connection {
+            connection.client.browser_pages().await.ok()
+        } else {
+            CdpClient::list_pages(port).await.ok()
+        }
+        .map(|p| {
+            p.iter()
+                .filter(|t| t.page_type.as_deref() == Some("page"))
+                .count()
+        })
+        .unwrap_or(0);
         (ver, pages, kind)
     } else {
         (None, 0, configured_kind)
@@ -132,6 +165,8 @@ pub async fn browser_control_get_status(
 
     Ok(BrowserControlStatusResponse {
         cdp_available: available,
+        default_cdp_supported,
+        default_cdp_enabled,
         browser_kind: actual_kind.to_string(),
         browser_version: version,
         port,
@@ -169,6 +204,20 @@ fn to_launch_response(kind: &BrowserKind, result: LaunchResult) -> BrowserContro
             message: None,
             browser_kind: kind.to_string(),
         },
+        LaunchResult::UserProfileReady { .. } => BrowserControlLaunchResponse {
+            success: false,
+            status: "user_profile_ready".into(),
+            message: None,
+            browser_kind: kind.to_string(),
+        },
+        LaunchResult::UserProfileSetupRequired { instructions, .. } => {
+            BrowserControlLaunchResponse {
+                success: false,
+                status: "requires_user_profile_setup".into(),
+                message: Some(instructions),
+                browser_kind: kind.to_string(),
+            }
+        }
         LaunchResult::LaunchedButCdpNotReady { message, .. } => BrowserControlLaunchResponse {
             success: false,
             status: "cdp_not_ready".into(),
@@ -186,6 +235,39 @@ fn to_launch_response(kind: &BrowserKind, result: LaunchResult) -> BrowserContro
     }
 }
 
+async fn complete_launch(
+    kind: &BrowserKind,
+    logical_port: u16,
+    result: LaunchResult,
+) -> Result<BrowserControlLaunchResponse, String> {
+    match result {
+        LaunchResult::UserProfileReady { endpoint } => {
+            let connection = CdpClient::connect_user_profile_browser(
+                logical_port,
+                endpoint.port,
+                kind,
+                &endpoint.web_socket_url,
+            )
+            .await;
+            if let Err(error) = connection {
+                return Ok(BrowserControlLaunchResponse {
+                    success: false,
+                    status: "user_profile_connection_failed".into(),
+                    message: Some(error.to_string()),
+                    browser_kind: kind.to_string(),
+                });
+            }
+            Ok(BrowserControlLaunchResponse {
+                success: true,
+                status: "connected_user_profile".into(),
+                message: None,
+                browser_kind: kind.to_string(),
+            })
+        }
+        other => Ok(to_launch_response(kind, other)),
+    }
+}
+
 /// Launch the user's default browser with CDP debug port.
 #[tauri::command]
 pub async fn browser_control_launch(
@@ -194,11 +276,63 @@ pub async fn browser_control_launch(
     let port = request.port;
     let kind = selected_browser_kind().await?;
 
+    if CdpClient::browser_connection_for_kind(port, &kind)
+        .await
+        .is_some()
+    {
+        return Ok(to_launch_response(&kind, LaunchResult::AlreadyConnected));
+    }
+
+    // The logical port is shared across browser choices. Drop only the lookup
+    // entry when the user switches browsers; any already-attached page session
+    // keeps its transport alive, but new actions cannot accidentally reuse it.
+    if CdpClient::browser_connection(port).await.is_some() {
+        CdpClient::remove_browser_connection(port).await;
+    }
+
     let result = BrowserLauncher::launch_with_cdp(&kind, port)
         .await
         .map_err(|e| e.to_string())?;
 
-    Ok(to_launch_response(&kind, result))
+    complete_launch(&kind, port, result).await
+}
+
+/// Open the selected browser's persistent guarded-CDP setting and wait for the
+/// user-owned consent toggle. Once enabled, immediately request and retain the
+/// real-profile connection so the Settings action is one continuous flow.
+#[tauri::command]
+pub async fn browser_control_enable_default_cdp(
+    request: BrowserControlLaunchRequest,
+) -> Result<BrowserControlLaunchResponse, String> {
+    let port = request.port;
+    let kind = selected_browser_kind().await?;
+
+    if !BrowserLauncher::supports_default_cdp(&kind) {
+        return Ok(BrowserControlLaunchResponse {
+            success: false,
+            status: "default_cdp_unsupported".into(),
+            message: Some(format!(
+                "{} does not expose a supported persistent guarded-CDP setting",
+                kind
+            )),
+            browser_kind: kind.to_string(),
+        });
+    }
+
+    if CdpClient::browser_connection_for_kind(port, &kind)
+        .await
+        .is_some()
+    {
+        return Ok(to_launch_response(&kind, LaunchResult::AlreadyConnected));
+    }
+    if CdpClient::browser_connection(port).await.is_some() {
+        CdpClient::remove_browser_connection(port).await;
+    }
+
+    let result = BrowserLauncher::enable_default_cdp(&kind, port)
+        .await
+        .map_err(|e| e.to_string())?;
+    complete_launch(&kind, port, result).await
 }
 
 /// Restart the user's default browser with CDP debug port enabled.
@@ -213,19 +347,5 @@ pub async fn browser_control_restart_with_cdp(
         .await
         .map_err(|e| e.to_string())?;
 
-    Ok(to_launch_response(&kind, result))
-}
-
-/// Create a macOS .app wrapper for the browser with CDP enabled.
-#[tauri::command]
-pub async fn browser_control_create_launcher() -> Result<String, String> {
-    #[cfg(target_os = "macos")]
-    {
-        let kind = selected_browser_kind().await?;
-        BrowserLauncher::create_cdp_launcher_app(&kind, DEFAULT_CDP_PORT).map_err(|e| e.to_string())
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        Err("CDP launcher app creation is only supported on macOS".into())
-    }
+    complete_launch(&kind, port, result).await
 }

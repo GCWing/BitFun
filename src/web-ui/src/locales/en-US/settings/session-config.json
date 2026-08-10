@@ -140,7 +140,7 @@
   },
   "browserControl": {
     "sectionTitle": "Browser control",
-    "sectionDescription": "Choose a browser and start CDP control.",
+    "sectionDescription": "Choose a browser and enable CDP control. Chrome and Edge can persist guarded CDP and reuse your current profile after approval.",
     "desktopOnly": "Browser control is only available in the BitFun desktop app.",
     "preferredBrowser": "Browser",
     "preferredBrowserDesc": "Choose which browser BitFun controls through CDP. Default follows the system default browser.",
@@ -150,8 +150,17 @@
     "notConnected": "Not connected",
     "refreshStatus": "Refresh status",
     "connect": "Connect",
+    "defaultCdp": "Default CDP",
+    "defaultCdpDesc": "Enable once and Chrome or Edge will expose guarded CDP on every normal start. BitFun discovers your real user profile instead of launching an empty one.",
+    "defaultCdpEnabled": "Enabled",
+    "defaultCdpDisabled": "Not enabled",
+    "enableDefaultCdp": "Enable default CDP",
+    "defaultCdpEnablePrompt": "Opened {{browser}}'s remote debugging page. Select “Allow remote debugging”; BitFun will detect it and continue automatically, then choose “Allow” in the browser connection prompt.",
+    "defaultCdpConnectPrompt": "Connecting to your real {{browser}} profile. Choose “Allow” in the browser connection prompt.",
     "connectSuccess": "Connected to {{browser}}",
     "connectFailed": "Failed to connect to browser",
+    "userProfileSetupRequired": "{{browser}} opened Remote debugging settings, but the switch was not detected before the wait ended. Select “Allow remote debugging”, then click Enable default CDP again; your current tabs and login state are preserved.",
+    "userProfileConnectionFailed": "{{browser}} did not approve the connection, or the request timed out. Make sure the browser is running and Remote debugging is enabled, then connect again and choose Allow in the browser.",
     "restartSuccess": "Restarted {{browser}} with debug mode enabled",
     "restartFailed": "Failed to restart browser with debug mode enabled",
     "restartModal": {
@@ -162,10 +171,6 @@
       "confirm": "Restart and enable debug",
       "restarting": "Restarting..."
     },
-    "createLauncher": "Create launcher",
-    "createLauncherSuccess": "Launcher created at {{path}}",
-    "createLauncherFailed": "Failed to create launcher",
-    "createLauncherDesc": "Create a browser shortcut with the debug port enabled.",
     "tabs": "tabs"
   },
   "common": {

@@ -1803,8 +1803,8 @@ pub async fn run() {
             api::browser_control_api::browser_control_list_browsers,
             api::browser_control_api::browser_control_get_status,
             api::browser_control_api::browser_control_launch,
+            api::browser_control_api::browser_control_enable_default_cdp,
             api::browser_control_api::browser_control_restart_with_cdp,
-            api::browser_control_api::browser_control_create_launcher,
             // Insights API
             api::insights_api::generate_insights,
             api::insights_api::get_latest_insights,

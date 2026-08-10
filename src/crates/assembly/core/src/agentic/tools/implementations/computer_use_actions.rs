@@ -160,10 +160,10 @@ impl ComputerUseActions {
         )
         .with_hints([
             "If your target is NOT the browser: the guard only looks at the app this action would drive, so switch focus with `key_chord` [\"alt\",\"tab\"] / [\"command\",\"tab\"] (never guarded) or `open_app`, or skip focus entirely and pass an explicit non-browser `app` selector ({pid|bundle_id|name}, from `list_apps`) to `app_click` / `app_type_text` / `app_scroll` / `app_key_chord`",
-            "Page content: call ControlHub browser.connect first — it starts/attaches BitFun's managed browser profile with CDP enabled — then drive the page with snapshot/click/fill/press_key",
+            "Page content: call ControlHub browser.connect first — Chrome 144+ and Edge use a user-approved connection to the current real profile; other supported Chromium browsers reuse a real-profile endpoint when available and otherwise fall back to BitFun's persistent managed profile — then drive the page with snapshot/click/fill/press_key",
             "Browser chrome (address bar, tabs, back/forward, reload, downloads): use browser.navigate / tab_new / switch_page / back / forward / reload / close instead of mouse+keyboard",
             "File picker or <input type=file>: do NOT drive the native dialog — use browser.set_file_input_files { selector, files: [\"/abs/path\"] }. For JS alert/confirm/prompt use browser.dialog",
-            "For login/cookies/extensions keep using the CDP browser path; do not ask the user to enable a debug port on their everyday browser profile",
+            "For Chrome or Edge login/cookies/extensions, keep using the guarded CDP path; for one-time setup, ask the user to click Enable default CDP in BitFun Settings > Browser control, enable Remote debugging in the browser-owned page, and approve BitFun",
             "For isolated project Web UI testing, use the headless browser flow instead of desktop automation",
         ])
     }
@@ -2008,12 +2008,14 @@ mod tests {
 
     /// The rejection must lead somewhere: a non-browser escape route, the
     /// ControlHub actions that own browser chrome / file pickers / dialogs, and
-    /// no contradiction with `browser.connect`'s "never ask for a debug port".
+    /// no contradiction with `browser.connect`'s guarded approval flow.
     #[test]
     fn browser_guard_hints_offer_an_executable_way_out() {
         let error = ComputerUseActions::desktop_browser_guard_error("click", None);
         assert!(
-            error.message.contains("not because your task is browser-related"),
+            error
+                .message
+                .contains("not because your task is browser-related"),
             "{}",
             error.message
         );
@@ -2026,7 +2028,7 @@ mod tests {
         assert!(hints.contains("app_click"), "{hints}");
         assert!(
             !hints.contains("test port enabled") && !hints.contains("--remote-debugging-port"),
-            "must not contradict browser.connect's managed-profile rule: {hints}"
+            "must not teach the unsafe legacy default-profile debug-port flow: {hints}"
         );
     }
 

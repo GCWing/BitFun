@@ -7,7 +7,8 @@
 
 use bitfun_services_integrations::browser_control::launcher as provider;
 pub use provider::{
-    BrowserInfo, BrowserKind, BrowserLaunchOptions, LaunchResult, DEFAULT_CDP_PORT,
+    BrowserDebugEndpoint, BrowserInfo, BrowserKind, BrowserLaunchOptions, LaunchResult,
+    DEFAULT_CDP_PORT,
 };
 use std::path::PathBuf;
 
@@ -52,6 +53,14 @@ impl BrowserLauncher {
         provider::BrowserLauncher::browser_executable(kind)
     }
 
+    pub fn supports_default_cdp(kind: &BrowserKind) -> bool {
+        provider::BrowserLauncher::supports_default_cdp(kind)
+    }
+
+    pub fn is_default_cdp_enabled(kind: &BrowserKind) -> bool {
+        provider::BrowserLauncher::is_default_cdp_enabled(kind)
+    }
+
     pub async fn launch_with_cdp(kind: &BrowserKind, port: u16) -> BitFunResult<LaunchResult> {
         Ok(provider::BrowserLauncher::launch_with_cdp_options(
             kind,
@@ -78,17 +87,20 @@ impl BrowserLauncher {
         Self::launch_with_cdp(kind, port).await
     }
 
-    #[cfg(target_os = "macos")]
-    pub fn create_cdp_launcher_app(kind: &BrowserKind, port: u16) -> BitFunResult<String> {
-        Ok(provider::BrowserLauncher::create_cdp_launcher_app(
-            kind, port,
-        )?)
+    /// Explicit Settings flow: keep the browser settings page open long enough
+    /// for the user-owned consent toggle, then continue with the guarded
+    /// real-profile connection as soon as the endpoint appears.
+    pub async fn enable_default_cdp(kind: &BrowserKind, port: u16) -> BitFunResult<LaunchResult> {
+        let mut options = Self::launch_options(None);
+        options.wait_for_user_profile_setup = true;
+        Ok(provider::BrowserLauncher::launch_with_cdp_options(kind, port, options).await?)
     }
 
     fn launch_options(user_data_dir: Option<&str>) -> BrowserLaunchOptions {
         BrowserLaunchOptions {
             user_data_dir: user_data_dir.map(PathBuf::from),
             managed_profile_root: Some(get_path_manager_arc().user_data_dir()),
+            wait_for_user_profile_setup: false,
         }
     }
 }
