@@ -90,8 +90,10 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   `mcp-runtime` layers the Core MCP tool bridge on the Agent lifecycle; and
   `remote-connect` layers its phone relay on the Agent lifecycle and model
   catalog. None of these relationships may be hidden in the `agent-runtime`
-  baseline. `scheduled-jobs` is only the additive dependency/source modifier
-  used with that baseline; it is not a standalone service profile.
+  baseline. `scheduled-jobs`, `document-read`, and `subscription-auth` are
+  additive dependency/source modifiers, not standalone runtime profiles. The
+  latter two use Cargo weak dependency forwarding so they refine an already
+  selected tool or adapter owner without activating that owner by themselves.
   Product-owned managed worktree lifecycle is available only when the Agent
   lifecycle and Git service owners are both selected; it is not a tool-pack owner.
   Function Agent adapters use the independent `function-agents` owner;

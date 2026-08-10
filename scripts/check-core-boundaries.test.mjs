@@ -414,8 +414,29 @@ test('Core Agent Runtime baseline excludes concrete capability unions', () => {
   }
 });
 
+test('Core optional document and subscription capabilities have independent modifiers', () => {
+  const ruleByFeature = new Map(
+    coreClosedFeatureProfileRules.map((rule) => [rule.featureName, rule]),
+  );
+  assert.deepEqual(ruleByFeature.get('document-read')?.requiredFeatureRefs, [
+    'tool-runtime?/document-read',
+  ]);
+  assert.deepEqual(ruleByFeature.get('subscription-auth')?.requiredFeatureRefs, [
+    'bitfun-ai-adapters?/subscription-auth',
+  ]);
+  assert.deepEqual(ruleByFeature.get('ai-adapter-runtime')?.requiredFeatureRefs, [
+    'dep:bitfun-ai-adapters',
+  ]);
+  assert.ok(
+    !ruleByFeature.get('tools-basic')?.requiredFeatureRefs.includes('tool-runtime/document-read'),
+    'baseline tools must not activate document conversion',
+  );
+});
+
 test('Core product-full explicitly assembles service and tool capability owners', () => {
   for (const required of [
+    'document-read',
+    'subscription-auth',
     'model-catalog',
     'mcp-runtime',
     'remote-connect',
@@ -487,6 +508,8 @@ test('explicit product entrypoint bitfun-core feature selections pass', () => {
 
 const ACP_REVIEWED_CORE_FEATURES = [
   'agent-runtime',
+  'document-read',
+  'subscription-auth',
   'deep-research',
   'lsp',
   'external-sources',
@@ -1399,7 +1422,7 @@ test('services integrations Reqwest policy uses Cargo-decoded feature references
 reqwest = ["dep:reqwest"]
 announcement = ["reqwest", "reqwest/rustls"]
 file-watch = ["reqwest?/__native-tls"]
-mcp = ["reqwest"]
+mcp = ["reqwest", "reqwest/rustls", "reqwest/json"]
 models-dev = ["reqwest", "reqwest/rustls", "reqwest/system-proxy"]
 speech = ["reqwest", "reqwest/rustls", "reqwest/http3"]
 `);
@@ -1407,8 +1430,9 @@ speech = ["reqwest", "reqwest/rustls", "reqwest/http3"]
   const messages = findServicesIntegrationsReqwestFeatureViolations(pkg)
     .map((violation) => violation.message)
     .join('\n');
+  assert.match(messages, /announcement.*missing Reqwest feature reference reqwest\/json/);
   assert.match(messages, /file-watch.*outside its reviewed owner features/);
-  assert.match(messages, /mcp.*missing reqwest\/rustls/);
+  assert.match(messages, /mcp.*missing Reqwest feature reference reqwest\/stream/);
   assert.doesNotMatch(messages, /models-dev.*system-proxy/);
   assert.match(messages, /speech.*unreviewed Reqwest feature reference reqwest\/http3/);
 });
@@ -1422,11 +1446,7 @@ test('direct Reqwest clients reject extra decoded dependency and package feature
       uses_default_features: false,
       features: [
         'http2',
-        'json',
         'stream',
-        'multipart',
-        'query',
-        'form',
         'rustls',
         '__native-tls',
       ],
@@ -1449,15 +1469,19 @@ test('direct Reqwest clients reject extra decoded dependency and package feature
 });
 
 test('AI adapters Reqwest profile owns the supported SOCKS transport', () => {
-  const baseFeatures = ['http2', 'json', 'stream', 'multipart', 'query', 'form'];
-  const valid = packageAt('bitfun-ai-adapters', 'src/crates/adapters/ai-adapters/Cargo.toml', [{
-    name: 'reqwest',
-    kind: null,
-    optional: false,
-    uses_default_features: false,
-    features: [...baseFeatures, 'rustls', 'socks'],
-  }]);
-  const missingSocks = packageAt(
+  const baseFeatures = ['http2', 'json', 'stream'];
+  const valid = {
+    ...packageAt('bitfun-ai-adapters', 'src/crates/adapters/ai-adapters/Cargo.toml', [{
+      name: 'reqwest',
+      kind: null,
+      optional: false,
+      uses_default_features: false,
+      features: [...baseFeatures, 'rustls', 'socks'],
+    }]),
+    features: { 'subscription-auth': ['reqwest/form'] },
+  };
+  const missingSocks = {
+    ...packageAt(
     'bitfun-ai-adapters',
     'src/crates/adapters/ai-adapters/Cargo.toml',
     [{
@@ -1467,7 +1491,9 @@ test('AI adapters Reqwest profile owns the supported SOCKS transport', () => {
       uses_default_features: false,
       features: [...baseFeatures, 'rustls'],
     }],
-  );
+    ),
+    features: { 'subscription-auth': ['reqwest/form'] },
+  };
 
   assert.deepEqual(findReqwestDependencyFeatureViolations([valid]), []);
   const messages = findReqwestDependencyFeatureViolations([missingSocks])
@@ -1477,14 +1503,14 @@ test('AI adapters Reqwest profile owns the supported SOCKS transport', () => {
 });
 
 test('Reqwest metadata policy covers URL-only and future dependency owners', () => {
-  const baseFeatures = ['http2', 'json', 'stream', 'multipart', 'query', 'form'];
+  const coreFeatures = [];
   const core = {
     ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml', [{
       name: 'reqwest',
       kind: null,
       optional: true,
       uses_default_features: false,
-      features: baseFeatures,
+      features: coreFeatures,
     }]),
     features: { product: ['dep:reqwest', 'reqwest/__native-tls'] },
   };
@@ -1493,7 +1519,7 @@ test('Reqwest metadata policy covers URL-only and future dependency owners', () 
     kind: null,
     optional: false,
     uses_default_features: false,
-    features: [...baseFeatures, 'rustls'],
+    features: ['http2', 'rustls', 'stream'],
   }]);
   const duplicate = packageAt(
     'bitfun-services-integrations',
@@ -1504,7 +1530,7 @@ test('Reqwest metadata policy covers URL-only and future dependency owners', () 
         kind: null,
         optional: true,
         uses_default_features: false,
-        features: baseFeatures,
+        features: ['http2'],
       },
       {
         name: 'reqwest',
@@ -1513,7 +1539,7 @@ test('Reqwest metadata policy covers URL-only and future dependency owners', () 
         optional: true,
         target: 'cfg(windows)',
         uses_default_features: false,
-        features: [...baseFeatures, '__native-tls'],
+        features: ['http2', '__native-tls'],
       },
     ],
   );
@@ -1524,6 +1550,22 @@ test('Reqwest metadata policy covers URL-only and future dependency owners', () 
   assert.match(messages, /bitfun-core:product.*reqwest\/__native-tls/);
   assert.match(messages, /future-client.*missing a reviewed owner profile/);
   assert.match(messages, /bitfun-services-integrations.*exactly one normal Reqwest dependency/);
+});
+
+test('Reqwest consumers inherit the workspace version without duplicating feature rules', async () => {
+  const { requiredContentRules } = await import(
+    './core-boundaries/rules/source/required-rules.mjs'
+  );
+  const rules = requiredContentRules.filter((rule) =>
+    rule.reason.includes('Reqwest consumers must inherit the workspace-owned compatible version')
+  );
+
+  assert.equal(rules.length, 7);
+  for (const rule of rules) {
+    const pattern = rule.patterns[0].regex;
+    assert.match('reqwest = { workspace = true, features = ["rustls"] }', pattern);
+    assert.doesNotMatch('reqwest = { version = "99", features = ["rustls"] }', pattern);
+  }
 });
 
 test('resolved Reqwest feature union rejects every native TLS backend alias', () => {
@@ -1980,7 +2022,10 @@ test('split core boundary check keeps self-test and default execution behavior',
 });
 
 test('optional dependency ownership rejects undeclared direct feature owners', async () => {
-  const { unexpectedDependencyOwnerFeatures } = await import(
+  const {
+    featureReferencesOptionalDependencyOwner,
+    unexpectedDependencyOwnerFeatures,
+  } = await import(
     './core-boundaries/manifest-feature-helpers.mjs'
   );
   const features = new Map([
@@ -1996,8 +2041,11 @@ test('optional dependency ownership rejects undeclared direct feature owners', a
       depName: 'example',
       ownerFeatures: ['declared'],
     }).map(([featureName]) => featureName),
-    ['missing', 'feature-ref'],
+    ['missing', 'feature-ref', 'weak-ref'],
   );
+  assert.equal(featureReferencesOptionalDependencyOwner(features.get('declared'), 'example'), true);
+  assert.equal(featureReferencesOptionalDependencyOwner(features.get('weak-ref'), 'example'), true);
+  assert.equal(featureReferencesOptionalDependencyOwner(features.get('unrelated'), 'example'), false);
 });
 
 test('services-core capability profiles keep heavy owners out of the empty profile', async () => {

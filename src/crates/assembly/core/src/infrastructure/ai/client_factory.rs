@@ -12,13 +12,14 @@ use crate::infrastructure::ai::reasoning_catalog::{
     resolve_default_reasoning_preset,
 };
 use crate::infrastructure::ai::{build_stream_options_for_model, AIClient};
+#[cfg(feature = "subscription-auth")]
 use crate::infrastructure::subscription_auth::{
     self, OpenCodePlan as AdapterOpenCodePlan, SubscriptionHttpOptions,
     SubscriptionProvider as AdapterProvider,
 };
-use crate::service::config::types::{
-    model_runtime_binding_fingerprint, AuthConfig, OpenCodePlan, SubscriptionProvider,
-};
+use crate::service::config::types::{model_runtime_binding_fingerprint, AuthConfig};
+#[cfg(feature = "subscription-auth")]
+use crate::service::config::types::{OpenCodePlan, SubscriptionProvider};
 use crate::service::config::{get_global_config_service, ConfigService};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::AIConfig;
@@ -37,8 +38,8 @@ struct CachedAIClient {
     configuration_fingerprint: String,
     default_reasoning_preset: Option<bitfun_core_types::ReasoningPresetDescriptor>,
     client: Arc<AIClient>,
-    /// Unix seconds when the resolved subscription credential expires;
-    /// `None` for API-key auth or non-expiring credentials.
+    /// Unix seconds when the resolved subscription credential expires.
+    #[cfg(feature = "subscription-auth")]
     credential_expires_at: Option<i64>,
 }
 
@@ -46,8 +47,10 @@ struct CachedAIClient {
 /// client is rebuilt so subscription authentication refreshes the token. Kept
 /// equal to the providers' refresh leeway so the rebuilt client always gets a
 /// fresh token.
+#[cfg(feature = "subscription-auth")]
 const SUBSCRIPTION_CREDENTIAL_STALE_LEEWAY_SECS: i64 = 5 * 60;
 
+#[cfg(feature = "subscription-auth")]
 fn now_unix_secs() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -55,6 +58,7 @@ fn now_unix_secs() -> i64 {
         .unwrap_or(0)
 }
 
+#[cfg(feature = "subscription-auth")]
 fn subscription_credential_stale(auth: &AuthConfig, cached: &CachedAIClient) -> bool {
     if !matches!(auth, AuthConfig::Subscription { .. }) {
         return false;
@@ -62,6 +66,11 @@ fn subscription_credential_stale(auth: &AuthConfig, cached: &CachedAIClient) -> 
     cached.credential_expires_at.is_some_and(|expires_at| {
         expires_at <= now_unix_secs() + SUBSCRIPTION_CREDENTIAL_STALE_LEEWAY_SECS
     })
+}
+
+#[cfg(not(feature = "subscription-auth"))]
+fn subscription_credential_stale(auth: &AuthConfig, _cached: &CachedAIClient) -> bool {
+    matches!(auth, AuthConfig::Subscription { .. })
 }
 
 fn functional_agent_model_selector<'a>(
@@ -317,14 +326,15 @@ impl AIClientFactory {
         } else {
             None
         };
-        let subscription_options =
-            SubscriptionHttpOptions::new(proxy_config.clone(), skip_ssl_verify);
-        let credential_expires_at = apply_subscription_auth_with_options(
+        let credential_expires_at = apply_configured_auth(
             &model_config.auth,
             &mut ai_config,
-            &subscription_options,
+            proxy_config.clone(),
+            skip_ssl_verify,
         )
         .await?;
+        #[cfg(not(feature = "subscription-auth"))]
+        let _ = credential_expires_at;
 
         let stream_options = build_stream_options_for_model(&global_config.ai, Some(model_config));
         let client = apply_default_reasoning_preset(
@@ -349,6 +359,7 @@ impl AIClientFactory {
                     configuration_fingerprint,
                     default_reasoning_preset,
                     client: client.clone(),
+                    #[cfg(feature = "subscription-auth")]
                     credential_expires_at,
                 },
             );
@@ -434,6 +445,7 @@ pub async fn initialize_global_ai_client_factory() -> BitFunResult<()> {
     AIClientFactory::initialize_global().await
 }
 
+#[cfg(feature = "subscription-auth")]
 fn to_adapter_provider(provider: SubscriptionProvider) -> AdapterProvider {
     match provider {
         SubscriptionProvider::Codex => AdapterProvider::Codex,
@@ -442,6 +454,7 @@ fn to_adapter_provider(provider: SubscriptionProvider) -> AdapterProvider {
     }
 }
 
+#[cfg(feature = "subscription-auth")]
 fn to_adapter_opencode_plan(plan: OpenCodePlan) -> AdapterOpenCodePlan {
     match plan {
         OpenCodePlan::Zen => AdapterOpenCodePlan::Zen,
@@ -457,10 +470,49 @@ pub async fn apply_subscription_auth(
     auth: &AuthConfig,
     ai_config: &mut AIConfig,
 ) -> Result<Option<i64>> {
-    apply_subscription_auth_with_options(auth, ai_config, &SubscriptionHttpOptions::default()).await
+    #[cfg(feature = "subscription-auth")]
+    return apply_subscription_auth_with_options(
+        auth,
+        ai_config,
+        &SubscriptionHttpOptions::default(),
+    )
+    .await;
+
+    #[cfg(not(feature = "subscription-auth"))]
+    {
+        let _ = ai_config;
+        match auth {
+            AuthConfig::ApiKey => Ok(None),
+            AuthConfig::Subscription { .. } => Err(anyhow!(
+                "Subscription authentication is not available in this product build"
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "subscription-auth")]
+async fn apply_configured_auth(
+    auth: &AuthConfig,
+    ai_config: &mut AIConfig,
+    proxy_config: Option<bitfun_core_types::ProxyConfig>,
+    skip_ssl_verify: bool,
+) -> Result<Option<i64>> {
+    let options = SubscriptionHttpOptions::new(proxy_config, skip_ssl_verify);
+    apply_subscription_auth_with_options(auth, ai_config, &options).await
+}
+
+#[cfg(not(feature = "subscription-auth"))]
+async fn apply_configured_auth(
+    auth: &AuthConfig,
+    ai_config: &mut AIConfig,
+    _proxy_config: Option<bitfun_core_types::ProxyConfig>,
+    _skip_ssl_verify: bool,
+) -> Result<Option<i64>> {
+    apply_subscription_auth(auth, ai_config).await
 }
 
 /// Resolves subscription authentication with an explicit transport policy.
+#[cfg(feature = "subscription-auth")]
 pub async fn apply_subscription_auth_with_options(
     auth: &AuthConfig,
     ai_config: &mut AIConfig,
@@ -527,15 +579,20 @@ pub async fn apply_subscription_auth_with_options(
 }
 
 /// List subscription accounts (Codex / Antigravity / OpenCode).
+#[cfg(feature = "subscription-auth")]
 pub async fn list_subscription_accounts() -> Vec<subscription_auth::SubscriptionAccount> {
     subscription_auth::list_accounts().await
 }
 
 #[cfg(test)]
 mod tests {
+    use super::apply_subscription_auth;
+    #[cfg(not(feature = "subscription-auth"))]
+    use crate::service::config::types::SubscriptionProvider;
     use crate::service::config::types::{
-        model_runtime_binding_fingerprint, AIModelConfig, GlobalConfig,
+        model_runtime_binding_fingerprint, AIModelConfig, AuthConfig, GlobalConfig,
     };
+    use crate::util::types::AIConfig;
     use bitfun_ai_adapters::{
         classify_model_selector, resolve_required_model_selector, ModelSelectorKind,
     };
@@ -549,6 +606,60 @@ mod tests {
             enabled: true,
             ..Default::default()
         }
+    }
+
+    fn test_runtime_ai_config() -> AIConfig {
+        AIConfig {
+            name: "test".to_string(),
+            base_url: "https://example.test".to_string(),
+            request_url: String::new(),
+            api_key: "unchanged".to_string(),
+            model: "test-model".to_string(),
+            format: "openai".to_string(),
+            context_window: 4096,
+            max_tokens: None,
+            temperature: None,
+            top_p: None,
+            inline_think_in_text: false,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            custom_request_body: None,
+            custom_request_body_mode: None,
+        }
+    }
+
+    #[cfg(feature = "subscription-auth")]
+    #[tokio::test]
+    async fn api_key_auth_remains_a_noop_when_subscription_support_is_compiled() {
+        let mut config = test_runtime_ai_config();
+
+        let expires_at = apply_subscription_auth(&AuthConfig::ApiKey, &mut config)
+            .await
+            .expect("API-key auth");
+
+        assert_eq!(expires_at, None);
+        assert_eq!(config.api_key, "unchanged");
+        assert_eq!(config.base_url, "https://example.test");
+    }
+
+    #[cfg(not(feature = "subscription-auth"))]
+    #[tokio::test]
+    async fn subscription_auth_fails_closed_when_not_compiled() {
+        let auth = AuthConfig::Subscription {
+            provider: SubscriptionProvider::Codex,
+            plan: None,
+        };
+        let mut config = test_runtime_ai_config();
+
+        let error = apply_subscription_auth(&auth, &mut config)
+            .await
+            .expect_err("subscription auth must not degrade to an API-key client");
+
+        assert!(error
+            .to_string()
+            .contains("Subscription authentication is not available"));
+        assert_eq!(config.api_key, "unchanged");
     }
 
     #[test]

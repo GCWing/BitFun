@@ -32,6 +32,8 @@ path = "tests/terminal_process_contracts.rs"
 # Internal crates
 bitfun-core = { path = "../../crates/assembly/core", default-features = false, features = [
     "agent-runtime",
+    "document-read",
+    "subscription-auth",
     "remote-connect",
     "deep-research",
     "lsp",
@@ -119,7 +121,7 @@ fs2 = { workspace = true }
 base64 = { workspace = true }
 image = { workspace = true }
 minisign-verify = "0.2"
-reqwest = { workspace = true, features = ["rustls"] }
+reqwest = { workspace = true, features = ["http2", "rustls", "stream"] }
 sha2 = { workspace = true }
 tar = { workspace = true }
 tempfile = "3"

@@ -149,6 +149,8 @@ ts = [
 ]
 product-full = [
     "agent-runtime",
+    "document-read",
+    "subscription-auth",
     "model-catalog",
     "mcp-runtime",
     "remote-connect",
@@ -278,12 +280,15 @@ scheduled-jobs = [
     "dep:chrono-tz",
     "dep:cron",
 ]
+# Additive dependency modifiers. Weak dependency feature references preserve
+# the owning runtime boundary instead of activating that runtime by themselves.
+document-read = ["tool-runtime?/document-read"]
+subscription-auth = ["bitfun-ai-adapters?/subscription-auth"]
 
 # Tool groups mirror the provider-neutral groups in bitfun-tool-packs. They
 # compose concrete service owners but never form a product-shaped umbrella.
 tools-basic = [
     "bitfun-tool-packs/basic",
-    "tool-runtime/document-read",
     "workspace-search",
 ]
 tools-git = [
@@ -336,8 +341,6 @@ debug-log = [
 ]
 ai-adapter-runtime = [
     "dep:bitfun-ai-adapters",
-    "bitfun-ai-adapters/subscription-auth",
-    "dep:reqwest",
 ]
 product-capabilities = ["dep:bitfun-product-capabilities"]
 plugin-source = [

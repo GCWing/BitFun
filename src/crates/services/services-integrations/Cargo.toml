@@ -49,7 +49,7 @@ notify = { workspace = true, optional = true }
 oxc = { workspace = true, optional = true }
 qrcode = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
-reqwest = { workspace = true, optional = true }
+reqwest = { workspace = true, features = ["http2"], optional = true }
 semver = { workspace = true, optional = true }
 rmcp = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
@@ -100,7 +100,7 @@ default = []
 # feature group (e.g. `git`) only derive `TS` when that group is also enabled;
 # app-server's `ts` feature enables `product-full` which pulls `git`.
 ts = ["dep:ts-rs"]
-announcement = ["reqwest", "reqwest/rustls", "tokio/fs", "tokio/sync"]
+announcement = ["reqwest", "reqwest/json", "reqwest/rustls", "tokio/fs", "tokio/sync"]
 models-dev = [
     "reqwest",
     "reqwest/rustls",
@@ -111,7 +111,7 @@ models-dev = [
     "tokio/time",
     "windows",
 ]
-browser-control = ["anyhow", "bitfun-services-core/process-runtime", "dirs", "reqwest", "reqwest/rustls", "thiserror", "tokio/time"]
+browser-control = ["anyhow", "bitfun-services-core/process-runtime", "dirs", "reqwest", "reqwest/json", "reqwest/rustls", "thiserror", "tokio/time"]
 canvas-runtime = [
     "dep:bitfun-product-domains",
     "oxc",
@@ -120,7 +120,7 @@ canvas-runtime = [
     "urlencoding",
     "uuid",
 ]
-debug-log = ["anyhow", "chrono", "reqwest", "reqwest/rustls", "tokio/rt", "uuid"]
+debug-log = ["anyhow", "chrono", "reqwest", "reqwest/json", "reqwest/rustls", "tokio/rt", "uuid"]
 deep-research = ["bitfun-agent-runtime", "tokio/fs"]
 git = [
     "async-trait",
@@ -152,7 +152,9 @@ mcp = [
     "hex",
     "rand",
     "reqwest",
+    "reqwest/json",
     "reqwest/rustls",
+    "reqwest/stream",
     "rmcp",
     "rmcp/transport-streamable-http-client-reqwest",
     "sha2",
@@ -175,6 +177,7 @@ miniapp-runtime = [
     "dirs",
     "reqwest",
     "reqwest/rustls",
+    "reqwest/stream",
     "tokio/fs",
     "tokio/io-util",
     "tokio/net",
@@ -196,7 +199,10 @@ miniapp-market = [
     "image",
     "miniapp-runtime",
     "reqwest",
+    "reqwest/json",
+    "reqwest/query",
     "reqwest/rustls",
+    "reqwest/stream",
     "semver",
     "sha2",
     "thiserror",
@@ -255,6 +261,9 @@ remote-connect = [
     "qrcode",
     "rand",
     "reqwest",
+    "reqwest/json",
+    "reqwest/multipart",
+    "reqwest/query",
     "reqwest/rustls",
     "rustls",
     "rustls-native-certs",
@@ -306,6 +315,7 @@ remote-ssh-concrete = [
     "rand",
     "reqwest",
     "reqwest/rustls",
+    "reqwest/stream",
     "russh",
     "russh-sftp",
     "russh-keys",
@@ -322,7 +332,10 @@ review-platform = [
     "chrono",
     "futures",
     "reqwest",
+    "reqwest/json",
+    "reqwest/query",
     "reqwest/rustls",
+    "reqwest/stream",
     "sha2",
     "thiserror",
     "tokio/fs",
@@ -340,6 +353,7 @@ speech = [
     "futures-util",
     "reqwest",
     "reqwest/rustls",
+    "reqwest/stream",
     "sha2",
     "sherpa-onnx",
     "tar",
@@ -376,7 +390,7 @@ script-tool-runtime = [
     "tokio/time",
     "which",
 ]
-web-tools = ["reqwest", "reqwest/rustls", "thiserror"]
+web-tools = ["reqwest", "reqwest/json", "reqwest/rustls", "thiserror"]
 product-full = [
     "announcement",
     "models-dev",
