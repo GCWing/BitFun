@@ -84,7 +84,8 @@ pub fn enabled_feature_groups() -> Vec<ToolPackFeatureGroup> {
 pub fn tool_feature_group(tool_name: &str) -> Option<ToolPackFeatureGroup> {
     match tool_name {
         "LS" | "Read" | "Glob" | "Grep" | "Write" | "Edit" | "Delete" | "ExecCommand"
-        | "WriteStdin" | "ExecControl" | "GetTime" | "ListModels" => {
+        | "WriteStdin" | "ExecControl" | "GetTime" | "ListModels" | "WorkspaceScan"
+        | "KnowledgeBaseSearch" => {
             Some(ToolPackFeatureGroup::Basic)
         }
         "Git" | "Worktree" | "ReviewPlatform" | "GetFileDiff" => Some(ToolPackFeatureGroup::Git),
@@ -102,9 +103,10 @@ pub fn tool_feature_group(tool_name: &str) -> Option<ToolPackFeatureGroup> {
             Some(ToolPackFeatureGroup::Canvas)
         }
         "Task" | "AgentWait" | "LaunchReviewAgent" | "Skill" | "AskUserQuestion" | "TodoWrite"
-        | "get_goal" | "create_goal" | "update_goal" | "CreatePlan" | "submit_code_review"
-        | "GetToolSpec" | "CallDeferredTool" | "SessionControl" | "SessionMessage"
-        | "SessionHistory" | "Cron" => Some(ToolPackFeatureGroup::AgentControl),
+        | "get_goal" | "create_goal" | "update_goal" | "CreatePlan" | "PlanList" | "PlanRead"
+        | "PlanUpdate" | "LegionControl" | "acp_control" | "acp_message" | "acp_history"
+        | "submit_code_review" | "GetToolSpec" | "CallDeferredTool" | "SessionControl"
+        | "SessionMessage" | "SessionHistory" | "Cron" => Some(ToolPackFeatureGroup::AgentControl),
         _ => None,
     }
 }
