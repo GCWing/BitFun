@@ -337,9 +337,25 @@ pub struct SessionManager {
     /// cannot resurrect as a ghost "Recovered Session".
     deleted_session_ids: Arc<DashMap<String, ()>>,
 
+    /// Snapshot flush scheduler (PERF-01): hot-path context mutations
+    /// (`add_message` / `replace_context_messages`) mark the session dirty
+    /// instead of synchronously rewriting the whole turn-context snapshot. A
+    /// single background task drains dirty sessions on a short debounce
+    /// window, turning N message appends into one atomic write per turn.
+    /// Turn-start / turn-end / compression / rollback paths still flush
+    /// synchronously so crash-recovery semantics are preserved.
+    snapshot_flush_dirty: Arc<DashMap<String, ()>>,
+    snapshot_flush_locks: KeyedAsyncLock,
+
     /// Configuration
     config: SessionManagerConfig,
 }
+
+/// Debounce window (PERF-01): dirty sessions are flushed after this much idle
+/// time. Batching turns per-message atomic writes into at most one write per
+/// window while keeping the snapshot close enough to live context for crash
+/// recovery (the synchronous turn-boundary flush is the durability backstop).
+const CONTEXT_SNAPSHOT_FLUSH_DEBOUNCE: Duration = Duration::from_millis(200);
 
 #[allow(clippy::too_many_arguments)]
 fn clear_session_runtime_stores(
@@ -1828,6 +1844,13 @@ impl SessionManager {
     /// This is still a best-effort multi-file persistence flow, not a transactional commit.
     /// `session.json`, `turns/turn-*.json`, and `snapshots/context-*.json` may be briefly out of
     /// sync if the process crashes between writes, so restore logic must tolerate partial updates.
+    ///
+    /// PERF-01: the hot append path (`add_message`, `replace_context_messages`) is debounced
+    /// through [`Self::schedule_current_turn_snapshot_flush`] so N rapid appends coalesce into
+    /// one full-context write (O(N²) -> O(N)). Turn-boundary callers still pass
+    /// `force = true` (see [`Self::persist_current_turn_context_snapshot_forced`]) to retain
+    /// the crash-recovery guarantee: a crash mid-turn loses at most the last debounce window
+    /// of context, and the turn-start / turn-end snapshots are always synchronous.
     async fn persist_context_snapshot_for_turn_best_effort(
         &self,
         session_id: &str,
@@ -1859,25 +1882,116 @@ impl SessionManager {
         }
     }
 
-    async fn persist_current_turn_context_snapshot_best_effort(
+    /// PERF-01: synchronous flush of the current turn snapshot. Used at
+    /// turn-boundary / compression / rollback points where the snapshot must be
+    /// durable before the caller proceeds; hot append paths use the debounced
+    /// variant instead.
+    async fn persist_current_turn_context_snapshot_forced(
         &self,
         session_id: &str,
         reason: &str,
     ) {
+        // Take the per-session flush lock so an in-flight debounced flush
+        // cannot interleave with this synchronous write (the background task
+        // and the forced path share the same lock).
+        let _flush_guard = self.snapshot_flush_locks.lock(session_id).await;
+        // A forced flush supersedes any pending debounced flush for the same
+        // session: the snapshot written here is strictly newer, so the dirty
+        // marker (and thus a duplicate background write) is dropped.
+        self.snapshot_flush_dirty.remove(session_id);
         let Some(turn_index) = self
             .sessions
             .get(session_id)
             .and_then(|session| session.dialog_turn_ids.len().checked_sub(1))
         else {
             debug!(
-                "Skipping current-turn context snapshot because no turn is active: session_id={}, reason={}",
+                "Skipping forced current-turn context snapshot because no turn is active: session_id={}, reason={}",
                 session_id, reason
             );
             return;
         };
-
         self.persist_context_snapshot_for_turn_best_effort(session_id, turn_index, reason)
             .await;
+    }
+
+    /// PERF-01: mark the current turn snapshot dirty. Returns immediately (no
+    /// I/O on the hot path); the single background flush task drains the dirty
+    /// set after the debounce window, coalescing N rapid appends into one
+    /// atomic write per session per window.
+    fn schedule_current_turn_snapshot_flush(&self, session_id: &str) {
+        if !self.should_persist_session_id(session_id) {
+            return;
+        }
+        self.snapshot_flush_dirty.insert(session_id.to_string(), ());
+    }
+
+    /// PERF-01: single background task that drains the dirty snapshot set on a
+    /// short debounce. Started once per process (when persistence is enabled);
+    /// it polls the dirty set, and each poll flushes every currently-dirty
+    /// session under its per-session flush lock, so at most one full-context
+    /// write per session per debounce window. Turn-boundary forced flushes use
+    /// the same lock and clear the dirty marker, so they cannot be re-ordered
+    /// behind a stale background write.
+    fn spawn_context_snapshot_flush_task(&self) {
+        let dirty = self.snapshot_flush_dirty.clone();
+        let locks = self.snapshot_flush_locks.clone();
+        let sessions = self.sessions.clone();
+        let context_store = self.context_store.clone();
+        let persistence_manager = self.persistence_manager.clone();
+
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(CONTEXT_SNAPSHOT_FLUSH_DEBOUNCE).await;
+                if dirty.is_empty() {
+                    continue;
+                }
+                let sessions_to_flush: Vec<String> =
+                    dirty.iter().map(|entry| entry.key().clone()).collect();
+                for session_id in sessions_to_flush {
+                    let _flush_guard = locks.lock(&session_id).await;
+                    // Skip if a forced flush already superseded this marker.
+                    if dirty.remove(&session_id).is_none() {
+                        continue;
+                    }
+                    let Some(turn_index) = sessions
+                        .get(&session_id)
+                        .and_then(|session| session.dialog_turn_ids.len().checked_sub(1))
+                    else {
+                        // Session was unloaded/deleted before the flush; the
+                        // marker is already consumed and nothing needs writing.
+                        continue;
+                    };
+                    let Some(config) = sessions.get(&session_id).map(|s| s.config.clone()) else {
+                        continue;
+                    };
+                    let Some(workspace_path) = SessionManager::effective_storage_path_for_config_with_persistence(
+                        persistence_manager.as_ref(),
+                        &config,
+                    )
+                    .await
+                    else {
+                        continue;
+                    };
+                    let context_messages = context_store.get_context_messages(&session_id);
+                    if let Err(err) = persistence_manager
+                        .save_turn_context_snapshot(
+                            &workspace_path,
+                            &session_id,
+                            turn_index,
+                            &context_messages,
+                        )
+                        .await
+                    {
+                        warn!(
+                            "failed to flush debounced context snapshot: session_id={}, turn_index={}, err={}",
+                            session_id, turn_index, err
+                        );
+                    }
+                }
+            }
+        });
+
+        debug!("Context snapshot flush task started");
     }
 
     async fn ensure_prompt_cache_loaded(&self, session_id: &str) {
@@ -2164,6 +2278,8 @@ impl SessionManager {
             subagent_children_dirty: Arc::new(std::sync::atomic::AtomicBool::new(true)),
             disk_removed_loaded_ids: Arc::new(DashMap::new()),
             deleted_session_ids: Arc::new(DashMap::new()),
+            snapshot_flush_dirty: Arc::new(DashMap::new()),
+            snapshot_flush_locks: KeyedAsyncLock::default(),
             config,
         };
 
@@ -2173,7 +2289,7 @@ impl SessionManager {
         }
         manager.spawn_cleanup_task();
         manager.spawn_model_reconciliation_listener();
-
+        manager.spawn_context_snapshot_flush_task();
         manager
     }
 
@@ -2535,6 +2651,8 @@ impl SessionManager {
                 subagent_children_dirty: Arc::new(std::sync::atomic::AtomicBool::new(true)),
                 disk_removed_loaded_ids: Arc::new(DashMap::new()),
                 deleted_session_ids,
+                snapshot_flush_dirty: Arc::new(DashMap::new()),
+                snapshot_flush_locks: KeyedAsyncLock::default(),
                 config: manager_config,
             };
 
@@ -3529,7 +3647,7 @@ impl SessionManager {
 
         self.context_store
             .replace_context(session_id, filtered_messages);
-        self.persist_current_turn_context_snapshot_best_effort(
+        self.persist_current_turn_context_snapshot_forced(
             session_id,
             "listing_diff_internal_reminders_removed",
         )
@@ -7346,6 +7464,38 @@ impl SessionManager {
         Ok(ordered_session_ids)
     }
 
+    /// Count the persisted legion node sessions in a workspace (UX-P1-5).
+    ///
+    /// The cross-deployment aggregate cap is workspace-dimensional, not
+    /// creator-subtree-dimensional: nested legions deploy their children as
+    /// independent creators, so counting only the immediate creator's subtree
+    /// would let recursive fission accumulate more legion sessions than the
+    /// configured `ai.legion_max_total_nodes`. A legion node session is one
+    /// whose custom metadata carries the `legionNodeId` marker written by
+    /// LegionControl at deployment time. Counting the whole workspace (all
+    /// sessions, including hidden subagents) makes the cap hold across every
+    /// nested layer for the same deployment workspace.
+    pub async fn count_workspace_legion_node_sessions(
+        &self,
+        workspace_path: &Path,
+    ) -> BitFunResult<usize> {
+        let metadata_list = self
+            .persistence_manager
+            .list_session_metadata_including_internal(workspace_path)
+            .await?;
+        let legion_node_marker = "legionNodeId";
+        Ok(metadata_list
+            .iter()
+            .filter(|metadata| {
+                metadata
+                    .custom_metadata
+                    .as_ref()
+                    .and_then(|value| value.get(legion_node_marker))
+                    .is_some()
+            })
+            .count())
+    }
+
     async fn ensure_subagent_children_cache(&self, workspace_path: &Path) -> BitFunResult<()> {
         if !self
             .subagent_children_dirty
@@ -7568,7 +7718,7 @@ impl SessionManager {
                 .await?;
         }
 
-        self.persist_context_snapshot_for_turn_best_effort(session_id, turn_index, "turn_started")
+        self.persist_current_turn_context_snapshot_forced(session_id, "turn_started")
             .await;
 
         Ok(turn_id)
@@ -7877,9 +8027,8 @@ impl SessionManager {
                 .await?;
         }
 
-        self.persist_context_snapshot_for_turn_best_effort(
+        self.persist_current_turn_context_snapshot_forced(
             session_id,
-            turn_index,
             "local_command_turn_persisted",
         )
         .await;
@@ -8200,9 +8349,8 @@ impl SessionManager {
         turn.duration_ms = Some(stats.duration_ms);
         turn.end_time = Some(completion_timestamp);
 
-        self.persist_context_snapshot_for_turn_best_effort(
+        self.persist_current_turn_context_snapshot_forced(
             session_id,
-            turn.turn_index,
             "turn_completed",
         )
         .await;
@@ -8266,9 +8414,8 @@ impl SessionManager {
                 .as_millis() as u64,
         );
 
-        self.persist_context_snapshot_for_turn_best_effort(
+        self.persist_current_turn_context_snapshot_forced(
             session_id,
-            turn.turn_index,
             "turn_failed",
         )
         .await;
@@ -8328,9 +8475,8 @@ impl SessionManager {
                 .as_millis() as u64,
         );
 
-        self.persist_context_snapshot_for_turn_best_effort(
+        self.persist_current_turn_context_snapshot_forced(
             session_id,
-            turn.turn_index,
             "turn_cancelled",
         )
         .await;
@@ -8430,9 +8576,8 @@ impl SessionManager {
         turn.duration_ms = Some(duration_ms);
         turn.end_time = Some(completion_timestamp);
 
-        self.persist_context_snapshot_for_turn_best_effort(
+        self.persist_current_turn_context_snapshot_forced(
             session_id,
-            turn.turn_index,
             snapshot_reason,
         )
         .await;
@@ -8530,9 +8675,8 @@ impl SessionManager {
         turn.duration_ms = Some(completion_timestamp.saturating_sub(turn.start_time));
         turn.end_time = Some(completion_timestamp);
 
-        self.persist_context_snapshot_for_turn_best_effort(
+        self.persist_current_turn_context_snapshot_forced(
             session_id,
-            turn.turn_index,
             snapshot_reason,
         )
         .await;
@@ -8645,8 +8789,7 @@ impl SessionManager {
                 );
             }
         }
-        self.persist_current_turn_context_snapshot_best_effort(session_id, "context_message_added")
-            .await;
+        self.schedule_current_turn_snapshot_flush(session_id);
         Ok(())
     }
 
@@ -8658,7 +8801,11 @@ impl SessionManager {
         self.file_read_state_store.clear_session(session_id);
         self.prune_token_anchors_to_messages(session_id, &messages)
             .await;
-        self.persist_current_turn_context_snapshot_best_effort(session_id, "context_replaced")
+        // Compression replaces the whole model-visible context, so the snapshot
+        // must be durable before the next model request reads it back after a
+        // crash: flush synchronously (PERF-01 keeps the hot append path
+        // debounced; this is a cold, semantic replacement).
+        self.persist_current_turn_context_snapshot_forced(session_id, "context_replaced")
             .await;
     }
 
@@ -9018,6 +9165,8 @@ impl SessionManager {
                 subagent_children_dirty: subagent_children_dirty.clone(),
                 disk_removed_loaded_ids: disk_removed_loaded_ids.clone(),
                 deleted_session_ids: deleted_session_ids.clone(),
+                snapshot_flush_dirty: Arc::new(DashMap::new()),
+                snapshot_flush_locks: KeyedAsyncLock::default(),
                 config: manager_config,
             };
             let mut ticker = time::interval(Duration::from_secs(60));
@@ -9164,6 +9313,8 @@ impl SessionManager {
             subagent_children_dirty: self.subagent_children_dirty.clone(),
             disk_removed_loaded_ids: self.disk_removed_loaded_ids.clone(),
             deleted_session_ids: self.deleted_session_ids.clone(),
+            snapshot_flush_dirty: self.snapshot_flush_dirty.clone(),
+            snapshot_flush_locks: self.snapshot_flush_locks.clone(),
             config: self.config.clone(),
         }
     }
@@ -9225,12 +9376,13 @@ mod tests {
     use super::{
         should_auto_migrate_session_model, CoreSessionStorePort, PermissionMode,
         SessionExecutionBindingError, SessionExecutionBindingUpdate, SessionManager,
-        SessionManagerConfig, TEST_MODEL_RESOLUTION_AI_CONFIG, DELETED_SESSION_IDS_FILE_NAME,
+        SessionManagerConfig, TEST_MODEL_RESOLUTION_AI_CONFIG, CONTEXT_SNAPSHOT_FLUSH_DEBOUNCE,
+        DELETED_SESSION_IDS_FILE_NAME,
     };
     use crate::agentic::core::{
-        CompressionState, Message, MessageContent, MessageRole, ProcessingPhase, Session,
-        SessionAgentRouteOwner, SessionConfig, SessionModelBindingPolicy, SessionState, ToolCall,
-        ToolResult,
+        CompressionState, InternalReminderKind, Message, MessageContent, MessageRole,
+        ProcessingPhase, Session, SessionAgentRouteOwner, SessionConfig, SessionModelBindingPolicy,
+        SessionState, ToolCall, ToolResult,
     };
     use crate::agentic::persistence::PersistenceManager;
     use crate::agentic::session::{
@@ -14438,6 +14590,165 @@ mod tests {
             .expect("session should remain in memory");
         assert_eq!(active.agent_type, "Plan");
         assert_eq!(active.last_user_dialog_agent_type, None);
+    }
+
+    #[tokio::test]
+    async fn debounced_context_snapshot_flush_coalesces_rapid_message_appends() {
+        // PERF-01 regression: the hot append path must not synchronously
+        // rewrite the full turn-context snapshot per message. Instead,
+        // `add_message` marks the session dirty and the background flush task
+        // coalesces rapid appends into a single write after the debounce
+        // window. A mid-turn snapshot read before the flush must reflect the
+        // pre-append state (no write happened), and after the flush it must
+        // contain every appended message.
+        let workspace = TestWorkspace::new();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(workspace.path_manager()).expect("persistence"));
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Debounced flush".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        let turn_id = manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "first user input".to_string(),
+                Some("debounce-turn".to_string()),
+                None,
+                None,
+            )
+            .await
+            .expect("turn should start");
+
+        // The turn-start snapshot is written synchronously (forced flush).
+        let snapshot_before = persistence_manager
+            .load_turn_context_snapshot(workspace.path(), &session.session_id, 0)
+            .await
+            .expect("snapshot load should succeed")
+            .expect("snapshot should exist");
+        assert_eq!(snapshot_before.len(), 1);
+
+        // Rapidly append several messages via the hot path; none of them may
+        // synchronously rewrite the snapshot.
+        for index in 0..5 {
+            manager
+                .add_message(
+                    &session.session_id,
+                    Message::internal_reminder(
+                        InternalReminderKind::Generic,
+                        format!("debounced append {index}"),
+                    )
+                    .with_turn_id(turn_id.clone()),
+                )
+                .await
+                .expect("append should succeed");
+        }
+
+        let snapshot_mid = persistence_manager
+            .load_turn_context_snapshot(workspace.path(), &session.session_id, 0)
+            .await
+            .expect("snapshot load should succeed")
+            .expect("snapshot should exist");
+        assert_eq!(
+            snapshot_mid.len(),
+            1,
+            "hot-path appends must not synchronously rewrite the snapshot"
+        );
+
+        // Wait out the debounce window so the background flush drains the
+        // dirty marker, then verify the snapshot contains every appended
+        // message (the coalesced write preserved all of them).
+        tokio::time::sleep(CONTEXT_SNAPSHOT_FLUSH_DEBOUNCE * 3).await;
+        let snapshot_after = persistence_manager
+            .load_turn_context_snapshot(workspace.path(), &session.session_id, 0)
+            .await
+            .expect("snapshot load should succeed")
+            .expect("snapshot should exist");
+        assert_eq!(snapshot_after.len(), 6);
+        assert!(snapshot_after
+            .iter()
+            .any(|message| matches!(
+                &message.content,
+                MessageContent::Text(text) if text.contains("debounced append 4")
+            )));
+    }
+
+    #[tokio::test]
+    async fn forced_turn_end_snapshot_flush_supersedes_pending_debounced_flush() {
+        // PERF-01 regression: the synchronous turn-end flush must win over a
+        // still-pending debounced background flush, and the final snapshot must
+        // contain the complete context (no lost appends, no stale overwrite).
+        let workspace = TestWorkspace::new();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(workspace.path_manager()).expect("persistence"));
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Forced supersede".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        let turn_id = manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "input".to_string(),
+                Some("forced-turn".to_string()),
+                None,
+                None,
+            )
+            .await
+            .expect("turn should start");
+
+        // Mark dirty, then force-flush before the debounce window elapses.
+        manager
+            .add_message(
+                &session.session_id,
+                Message::assistant("final assistant text".to_string())
+                    .with_turn_id(turn_id.clone()),
+            )
+            .await
+            .expect("append should succeed");
+        manager
+            .persist_current_turn_context_snapshot_forced(&session.session_id, "test_forced")
+            .await;
+
+        let snapshot = persistence_manager
+            .load_turn_context_snapshot(workspace.path(), &session.session_id, 0)
+            .await
+            .expect("snapshot load should succeed")
+            .expect("snapshot should exist");
+        assert_eq!(snapshot.len(), 2);
+        assert!(snapshot
+            .iter()
+            .any(|message| matches!(
+                &message.content,
+                MessageContent::Text(text) if text == "final assistant text"
+            )));
+
+        // Let any stale background flush fire; it must not regress the file.
+        tokio::time::sleep(CONTEXT_SNAPSHOT_FLUSH_DEBOUNCE * 3).await;
+        let snapshot_after = persistence_manager
+            .load_turn_context_snapshot(workspace.path(), &session.session_id, 0)
+            .await
+            .expect("snapshot load should succeed")
+            .expect("snapshot should exist");
+        assert_eq!(snapshot_after.len(), 2);
     }
 
     #[tokio::test]
