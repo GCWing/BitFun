@@ -499,6 +499,65 @@ impl BrowserLauncher {
             .is_some_and(|contents| Self::default_cdp_preference_enabled(&contents))
     }
 
+    /// Open the browser's Remote debugging settings page.
+    ///
+    /// Chromium drops `chrome://` URLs handed to it on the command line and
+    /// silently substitutes the New Tab Page, so spawning the executable with
+    /// the settings URL looks to the user like "the browser opened and nothing
+    /// happened". macOS can route the URL through the browser's own AppleScript
+    /// `open location` handler, which is not subject to that filter; other
+    /// platforms have no equivalent, so the caller must hand the URL to the
+    /// user instead. Returns whether the page was actually opened.
+    fn open_user_profile_debugging_setup(kind: &BrowserKind, setup_url: &str) -> bool {
+        #[cfg(target_os = "macos")]
+        {
+            let Some(app_name) = Self::launch_app_name(kind) else {
+                return false;
+            };
+            let script = format!(
+                "tell application \"{}\" to open location \"{}\"",
+                app_name.replace('"', "\\\""),
+                setup_url
+            );
+            match silent_command("osascript").args(["-e", &script]).output() {
+                Ok(output) if output.status.success() => true,
+                Ok(output) => {
+                    debug!(
+                        "Failed to open {} remote debugging settings: {}",
+                        kind,
+                        String::from_utf8_lossy(&output.stderr).trim()
+                    );
+                    false
+                }
+                Err(error) => {
+                    debug!(
+                        "Failed to run osascript for {} remote debugging settings: {}",
+                        kind, error
+                    );
+                    false
+                }
+            }
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = setup_url;
+            // Start the browser when it is not up yet so the user has somewhere
+            // to paste the URL. Passing the URL itself would only reach the New
+            // Tab Page, which is what made this flow look broken.
+            if !Self::is_browser_running(kind) {
+                let exe = Self::browser_executable(kind);
+                if let Err(error) = silent_command(&exe).spawn() {
+                    debug!(
+                        "Failed to start {} for remote debugging setup: {}",
+                        kind, error
+                    );
+                }
+            }
+            false
+        }
+    }
+
     async fn prepare_user_profile_connection(
         kind: &BrowserKind,
         wait_for_user_setup: bool,
@@ -509,17 +568,7 @@ impl BrowserLauncher {
 
         let setup_url = Self::user_profile_debugging_setup_url(kind)
             .ok_or_else(|| anyhow!("{} does not support guarded user-profile CDP", kind))?;
-        let exe = Self::browser_executable(kind);
-        silent_command(&exe)
-            .arg(setup_url)
-            .spawn()
-            .map_err(|error| {
-                anyhow!(
-                    "Failed to open {} remote debugging settings: {}",
-                    kind,
-                    error
-                )
-            })?;
+        let opened = Self::open_user_profile_debugging_setup(kind, setup_url);
 
         // An explicit Settings action waits up to one minute so the user can
         // tick the browser-owned consent checkbox; an ordinary agent connect
@@ -532,13 +581,21 @@ impl BrowserLauncher {
             }
         }
 
+        let instructions = if opened {
+            format!(
+                "{kind} opened its Remote debugging settings. Turn on \"Allow remote debugging for this browser instance\" there; the browser remembers this preference for normal future starts. Then connect again and approve BitFun's connection request. This guarded flow uses your current browser profile, including its existing tabs and login state."
+            )
+        } else {
+            format!(
+                "Open {setup_url} in {kind} and turn on \"Allow remote debugging for this browser instance\"; the browser remembers this preference for normal future starts. Then connect again and approve BitFun's connection request. This guarded flow uses your current browser profile, including its existing tabs and login state."
+            )
+        };
+
         Ok(LaunchResult::UserProfileSetupRequired {
             browser: kind.to_string(),
             setup_url: setup_url.to_string(),
-            instructions: format!(
-                "{} opened its Remote debugging settings. Enable remote debugging there; the browser remembers this preference for normal future starts. Then connect again and approve BitFun's connection request. This guarded flow uses your current browser profile, including its existing tabs and login state.",
-                kind
-            ),
+            opened,
+            instructions,
         })
     }
 
@@ -985,6 +1042,9 @@ pub enum LaunchResult {
     UserProfileSetupRequired {
         browser: String,
         setup_url: String,
+        /// Whether the settings page could be opened for the user. Platforms
+        /// without a browser automation entry point can only show the URL.
+        opened: bool,
         instructions: String,
     },
     LaunchedButCdpNotReady {

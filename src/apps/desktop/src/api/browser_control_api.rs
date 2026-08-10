@@ -188,6 +188,10 @@ pub struct BrowserControlLaunchResponse {
     pub status: String,
     pub message: Option<String>,
     pub browser_kind: String,
+    /// Remote debugging settings URL, sent when the user has to open it
+    /// themselves because the platform cannot open a `chrome://` URL for them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub setup_url: Option<String>,
 }
 
 fn to_launch_response(kind: &BrowserKind, result: LaunchResult) -> BrowserControlLaunchResponse {
@@ -197,32 +201,47 @@ fn to_launch_response(kind: &BrowserKind, result: LaunchResult) -> BrowserContro
             status: "already_connected".into(),
             message: None,
             browser_kind: kind.to_string(),
+            setup_url: None,
         },
         LaunchResult::Launched => BrowserControlLaunchResponse {
             success: true,
             status: "launched".into(),
             message: None,
             browser_kind: kind.to_string(),
+            setup_url: None,
         },
         LaunchResult::UserProfileReady { .. } => BrowserControlLaunchResponse {
             success: false,
             status: "user_profile_ready".into(),
             message: None,
             browser_kind: kind.to_string(),
+            setup_url: None,
         },
-        LaunchResult::UserProfileSetupRequired { instructions, .. } => {
-            BrowserControlLaunchResponse {
-                success: false,
-                status: "requires_user_profile_setup".into(),
-                message: Some(instructions),
-                browser_kind: kind.to_string(),
-            }
-        }
+        LaunchResult::UserProfileSetupRequired {
+            instructions,
+            setup_url,
+            opened,
+            ..
+        } => BrowserControlLaunchResponse {
+            success: false,
+            // The two cases need different guidance: one asks the user to
+            // finish on a page that is already in front of them, the other
+            // asks them to open that page first.
+            status: if opened {
+                "requires_user_profile_setup".into()
+            } else {
+                "requires_manual_user_profile_setup".into()
+            },
+            message: Some(instructions),
+            browser_kind: kind.to_string(),
+            setup_url: Some(setup_url),
+        },
         LaunchResult::LaunchedButCdpNotReady { message, .. } => BrowserControlLaunchResponse {
             success: false,
             status: "cdp_not_ready".into(),
             message: Some(message),
             browser_kind: kind.to_string(),
+            setup_url: None,
         },
         LaunchResult::BrowserRunningWithoutCdp { instructions, .. } => {
             BrowserControlLaunchResponse {
@@ -230,6 +249,7 @@ fn to_launch_response(kind: &BrowserKind, result: LaunchResult) -> BrowserContro
                 status: "needs_restart".into(),
                 message: Some(instructions),
                 browser_kind: kind.to_string(),
+                setup_url: None,
             }
         }
     }
@@ -255,6 +275,7 @@ async fn complete_launch(
                     status: "user_profile_connection_failed".into(),
                     message: Some(error.to_string()),
                     browser_kind: kind.to_string(),
+                    setup_url: None,
                 });
             }
             Ok(BrowserControlLaunchResponse {
@@ -262,6 +283,7 @@ async fn complete_launch(
                 status: "connected_user_profile".into(),
                 message: None,
                 browser_kind: kind.to_string(),
+                setup_url: None,
             })
         }
         other => Ok(to_launch_response(kind, other)),
@@ -316,6 +338,7 @@ pub async fn browser_control_enable_default_cdp(
                 kind
             )),
             browser_kind: kind.to_string(),
+            setup_url: None,
         });
     }
 

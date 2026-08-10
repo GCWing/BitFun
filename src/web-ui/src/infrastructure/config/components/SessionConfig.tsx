@@ -71,6 +71,7 @@ type BrowserControlLaunchResponse = {
   status: string;
   message: string | null;
   browserKind: string;
+  setupUrl?: string;
 };
 
 type BrowserControlBrowserOption = {
@@ -655,6 +656,16 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       notificationService.info(
         t('browserControl.userProfileSetupRequired', { browser: result.browserKind }),
         { duration: 12000 }
+      );
+    } else if (result.status === 'requires_manual_user_profile_setup') {
+      // The platform could not open the settings page, so the URL itself is
+      // the actionable part of the message.
+      notificationService.info(
+        t('browserControl.userProfileSetupManual', {
+          browser: result.browserKind,
+          url: result.setupUrl ?? '',
+        }),
+        { duration: 20000 }
       );
     } else if (result.status === 'user_profile_connection_failed') {
       notificationService.info(
