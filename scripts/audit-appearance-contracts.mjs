@@ -80,10 +80,15 @@ if (fs.existsSync(retiredOwnershipFile)) {
   failures.push(`${relative(retiredOwnershipFile)}: directory-level Appearance source ownership is forbidden`);
 }
 
+const ignoredWalkDirectories = new Set(['node_modules', 'dist', 'build']);
+
 function walk(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
     const absolute = path.join(directory, entry.name);
-    if (entry.isDirectory()) return walk(absolute);
+    if (entry.isDirectory()) {
+      if (ignoredWalkDirectories.has(entry.name)) return [];
+      return walk(absolute);
+    }
     return /\.(?:css|scss|ts|tsx)$/.test(entry.name) ? [absolute] : [];
   });
 }
@@ -91,7 +96,10 @@ function walk(directory) {
 function walkContractSources(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
     const absolute = path.join(directory, entry.name);
-    if (entry.isDirectory()) return walkContractSources(absolute);
+    if (entry.isDirectory()) {
+      if (ignoredWalkDirectories.has(entry.name)) return [];
+      return walkContractSources(absolute);
+    }
     return /\.(?:css|d\.ts|html|js|json|md|rs|scss|ts|tsx)$/.test(entry.name) ? [absolute] : [];
   });
 }
