@@ -681,6 +681,80 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn legion_thresholds_are_top_level_keys_not_thresholds_subdomain() {
+        // UX-P1-1 配置契约：legion 三项阈值是 `ai.legion_*` 顶层键（与
+        // `ai.thresholds.*` 平级），消费方 resolve_* 通过点路径读取。断言：
+        // 1) 顶层键经配置服务 set/get 路径写入后读回一致（前端 BasicsConfig
+        //    写路径就是这一条）；2) 按 `ai.thresholds.legion.*` 写值**不生效**
+        //    （静默忽略，这正是顶层键语义要文档化的原因）。
+        let (service, _dir) = test_service("config-legion-top-level").await;
+
+        // 顶层键 set/get 生效（默认 20/60/10，显式覆盖）。
+        service
+            .set_config("ai.legion_max_nodes", 5usize)
+            .await
+            .expect("set ai.legion_max_nodes");
+        service
+            .set_config("ai.legion_max_total_nodes", 30usize)
+            .await
+            .expect("set ai.legion_max_total_nodes");
+        service
+            .set_config("ai.legion_deploy_frequency_per_hour", 0usize)
+            .await
+            .expect("set ai.legion_deploy_frequency_per_hour");
+
+        let max_nodes: usize = service
+            .get_config(Some("ai.legion_max_nodes"))
+            .await
+            .expect("read ai.legion_max_nodes");
+        let max_total: usize = service
+            .get_config(Some("ai.legion_max_total_nodes"))
+            .await
+            .expect("read ai.legion_max_total_nodes");
+        let frequency: usize = service
+            .get_config(Some("ai.legion_deploy_frequency_per_hour"))
+            .await
+            .expect("read ai.legion_deploy_frequency_per_hour");
+        assert_eq!(max_nodes, 5);
+        assert_eq!(max_total, 30);
+        assert_eq!(frequency, 0);
+
+        // 顶层键在完整 ai 文档序列化中可见（消费方 resolve_* 读的就是这里）。
+        let ai_doc: serde_json::Value = service.get_config(Some("ai")).await.unwrap();
+        assert_eq!(ai_doc["legion_max_nodes"], 5);
+        assert_eq!(ai_doc["legion_max_total_nodes"], 30);
+        assert_eq!(ai_doc["legion_deploy_frequency_per_hour"], 0);
+        // thresholds 域不存在 legion 子域（防止有人误写 ai.thresholds.legion.*）。
+        assert!(ai_doc["thresholds"].get("legion").is_none());
+
+        // 误写 ai.thresholds.legion.* 不生效：set 时父路径 `ai.thresholds.legion`
+        // 不存在（thresholds 无 legion 子域），配置服务返回 NotFound——这就是
+        // 契约要求前端用顶层键的原因，避免任何静默写值/读回失效。
+        let misplaced_set = service
+            .set_config("ai.thresholds.legion.max_nodes", 99usize)
+            .await;
+        assert!(
+            misplaced_set.is_err(),
+            "ai.thresholds.legion.max_nodes 不是合法配置键（顶层键语义），set 必须失败"
+        );
+        let threshold_legion: Result<usize, _> = service
+            .get_config::<usize>(Some("ai.thresholds.legion.max_nodes"))
+            .await;
+        assert!(
+            threshold_legion.is_err(),
+            "ai.thresholds.legion.max_nodes 不是合法配置键（顶层键语义），get 必须失败"
+        );
+        let max_nodes_after: usize = service
+            .get_config(Some("ai.legion_max_nodes"))
+            .await
+            .unwrap();
+        assert_eq!(
+            max_nodes_after, 5,
+            "误写 thresholds 子域不得影响顶层键"
+        );
+    }
+
+    #[tokio::test]
     async fn startup_repairs_speech_sentinels_and_creates_a_backup() {
         let dir = tempfile::tempdir().expect("tempdir");
         let user_root = dir.path().join("speech-startup-repair");
