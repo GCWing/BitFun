@@ -465,6 +465,14 @@ fn runtime_tool_restrictions_for_session_lifetime(
             "ControlHub",
             "ControlHub is unavailable in connection-scoped transient Sessions.",
         ),
+        (
+            // UX-P2-3: transient sessions must not deploy persistent legion
+            // nodes — a connection-scoped transient session has no durable
+            // home, so letting it fork the legion tree would leak persistent
+            // children out of a throwaway scope.
+            "LegionControl",
+            "LegionControl is unavailable in connection-scoped transient Sessions.",
+        ),
     ] {
         restrictions.denied_tool_names.insert(tool_name.to_string());
         restrictions
@@ -16641,6 +16649,7 @@ mod tests {
             "SessionHistory",
             "Cron",
             "ControlHub",
+            "LegionControl",
         ] {
             assert!(
                 !transient.is_tool_allowed(tool_name),
@@ -16657,6 +16666,7 @@ mod tests {
             "SessionHistory",
             "Cron",
             "ControlHub",
+            "LegionControl",
         ] {
             assert!(durable.is_tool_allowed(tool_name));
         }

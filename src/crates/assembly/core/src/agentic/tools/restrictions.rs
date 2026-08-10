@@ -1,5 +1,5 @@
 use crate::agentic::agents::subagent_default_tools;
-use crate::agentic::warden::SHAME_WALL_FILENAME;
+use crate::agentic::warden::{SHAME_WALL_FILENAME, WARDEN_AUDIT_WRITE_ROOT};
 use crate::util::errors::{BitFunError, BitFunResult};
 pub use bitfun_agent_tools::{
     classify_tool_call, is_miniapp_headless_agent_run, is_miniapp_market_strict_agent_run,
@@ -26,7 +26,16 @@ pub enum AgentRole {
     Reviewer,
     /// Guardian: ReadOnly + WriteFile + Communicate + ExecuteCode + SessionHistory
     Warden,
-    /// Punishment executor: Write (shame-wall) + SessionControl (lock)
+    /// Punishment executor: Write (shame-wall) + SessionControl
+    ///
+    /// P2-S1: under R-25 (reminder-only discipline) the SessionControl
+    /// allowlist entry is effectively list/inspect-only:
+    /// - `list` needs no target scope (summary-only, no content).
+    /// - `create` registers a new session under the caller tree (delegation
+    ///   validated, inherited role).
+    /// - `cancel`/`delete` still pass `resolve_session_mutation_authorization`
+    ///   (owner/created-by/ancestor gate) before touching any target session.
+    /// There is deliberately no freeze/role-change surface (R-25 removed it).
     PunishmentExecutor,
 }
 
@@ -215,6 +224,12 @@ fn build_default_role_permissions() -> RolePermissionMap {
     // Allowed tool names: SessionHistory (extra, for cross-session inspection),
     //                     ExecCommand (for gbrain search/query across full knowledge base),
     //                     Write/Edit (audit report landing)
+    // P2-S2 纵深收敛：Write/Edit 落盘收敛到审计目录（.bitfun/warden/ 写根，
+    // 与 SHAME_WALL_FILENAME 同族；相对路径经 workspace runtime root 解析，
+    // 绝对路径经 resolve_tool_path 解析后仍须落在写根内）——提示注入即使
+    // 拿到 Write/Edit 也只能写审计目录，不能写任意文件。ExecCommand 保留
+    // （gbrain 知识库查询是 Warden 审计能力的一部分），其 ExecuteCode 面由
+    // 写根收敛 + Warden 会话为 daemon 白名单形态双重约束。
     {
         let mut allowed_ops = BTreeSet::new();
         allowed_ops.insert(OperationClass::ReadOnly);
@@ -226,11 +241,17 @@ fn build_default_role_permissions() -> RolePermissionMap {
         allowed_tools.insert("ExecCommand".to_string());
         allowed_tools.insert("Write".to_string());
         allowed_tools.insert("Edit".to_string());
+        let path_policy = ToolPathPolicy {
+            write_roots: vec![WARDEN_AUDIT_WRITE_ROOT.to_string()],
+            edit_roots: vec![WARDEN_AUDIT_WRITE_ROOT.to_string()],
+            ..Default::default()
+        };
         map.insert(
             AgentRole::Warden,
             ToolRuntimeRestrictions {
                 allowed_operation_classes: allowed_ops,
                 allowed_tool_names: allowed_tools,
+                path_policy,
                 ..Default::default()
             },
         );
@@ -239,7 +260,13 @@ fn build_default_role_permissions() -> RolePermissionMap {
     // ── PunishmentExecutor ─────────────────────────────────────────
     // Allowed tool names: Write (path-policy restricted to
     //                     ~/.bitfun/warden/violation-registry.json via SHAME_WALL_FILENAME),
-    //                     SessionControl (lock capability)
+    //                     SessionControl (list/inspect scope, P2-S1)
+    // P2-S1 范围约束文档（R-25 reminder-only 纪律下实际仅 list/inspect）：
+    //   - list：无需目标会话范围（仅摘要，不含内容）；
+    //   - create：在调用者树内注册新会话（委托校验 + 继承角色）；
+    //   - cancel/delete：仍过 resolve_session_mutation_authorization
+    //     （owner/created-by/祖先授权门）才可触碰目标会话；
+    //   - 无 freeze/role-change 面（R-25 已移除）。
     {
         let mut allowed_tools = BTreeSet::new();
         allowed_tools.insert("Write".to_string());
@@ -1181,6 +1208,23 @@ mod tests {
         assert!(
             permissions.allowed_tool_names.contains("Edit"),
             "Warden should allow Edit tool for audit report landing"
+        );
+        // P2-S2: Write/Edit path_policy restricted to the warden audit write root.
+        assert!(
+            permissions
+                .path_policy
+                .write_roots
+                .contains(&WARDEN_AUDIT_WRITE_ROOT.to_string()),
+            "Warden write_roots should contain {}",
+            WARDEN_AUDIT_WRITE_ROOT
+        );
+        assert!(
+            permissions
+                .path_policy
+                .edit_roots
+                .contains(&WARDEN_AUDIT_WRITE_ROOT.to_string()),
+            "Warden edit_roots should contain {}",
+            WARDEN_AUDIT_WRITE_ROOT
         );
     }
 

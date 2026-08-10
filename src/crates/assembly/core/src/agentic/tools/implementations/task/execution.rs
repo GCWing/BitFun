@@ -322,7 +322,21 @@ async fn persist_background_acp_turn(
             Ok(Some(_)) => {
                 turn_index += 1;
             }
-            _ => break,
+            Ok(None) => {
+                // P2-S6: index is genuinely free (no turn at this index) —
+                // this is the slot to append into. Do not `break` here: that
+                // would silently reuse a damaged/absent index inside the
+                // known_turn_count range after a `_ => break` earlier could
+                // only have been a read error.
+                break;
+            }
+            Err(_) => {
+                // P2-S6: a read error (corrupt index, IO failure) is
+                // different from an idle slot. Keep scanning forward for a
+                // truly free index instead of overwriting the damaged one,
+                // which would mask the corrupt turn and drop the reply.
+                turn_index += 1;
+            }
         }
     }
     use crate::service::session::{DialogTurnData, ModelRoundData, TextItemData, UserMessageData};

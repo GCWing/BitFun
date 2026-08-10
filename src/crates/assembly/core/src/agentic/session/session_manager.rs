@@ -1065,7 +1065,14 @@ impl SessionManager {
         session_storage_path: &Path,
     ) -> BitFunResult<Vec<String>> {
         let Some(workspace_runtime_path) = session_storage_path.parent() else {
-            return Ok(Vec::new());
+            // P2-S4: a path without a parent (e.g. a volume root) can never
+            // resolve a sibling tombstone; silently returning an empty list
+            // would silently disable ghost protection. Align with the
+            // corrupt/IO Err propagation (d4-P1-1 family).
+            return Err(BitFunError::Service(format!(
+                "Cannot resolve the workspace runtime directory for tombstone '{}': the sessions storage path has no parent directory",
+                session_storage_path.display()
+            )));
         };
         let tombstone_path = workspace_runtime_path.join(DELETED_SESSION_IDS_FILE_NAME);
         let raw = match tokio::fs::read_to_string(&tombstone_path).await {
@@ -1107,7 +1114,14 @@ impl SessionManager {
         session_id: &str,
     ) -> BitFunResult<()> {
         let Some(workspace_runtime_path) = session_storage_path.parent() else {
-            return Ok(());
+            // P2-S4: aligned with list_deleted_session_ids — a parentless
+            // storage path cannot host a sibling tombstone, so Err instead of
+            // silently skipping the record (which would let the id slip past
+            // ghost protection).
+            return Err(BitFunError::Service(format!(
+                "Cannot resolve the workspace runtime directory for tombstone '{}': the sessions storage path has no parent directory",
+                session_storage_path.display()
+            )));
         };
         let tombstone_path = workspace_runtime_path.join(DELETED_SESSION_IDS_FILE_NAME);
         // Serialize the tombstone read-modify-write with any concurrent

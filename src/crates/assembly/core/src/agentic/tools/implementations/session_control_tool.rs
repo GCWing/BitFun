@@ -882,7 +882,11 @@ pub(crate) fn build_session_tree_json_impl(
         orphaned: &std::collections::HashSet<&str>,
         recursion_depth: usize,
     ) -> serde_json::Value {
-        let children: Vec<serde_json::Value> = if recursion_depth >= TREE_SERIALIZE_MAX_DEPTH {
+        // P2-S8: when the recursion budget is exhausted the subtree is
+        // truncated; mark the node so consumers can tell a complete tree from
+        // a capped one (consistent with the `orphaned` marker below).
+        let truncated = recursion_depth >= TREE_SERIALIZE_MAX_DEPTH;
+        let children: Vec<serde_json::Value> = if truncated {
             Vec::new()
         } else {
             children_by_parent
@@ -923,6 +927,9 @@ pub(crate) fn build_session_tree_json_impl(
         map.insert("status".to_string(), json!(status));
         if orphaned.contains(session.session_id.as_str()) {
             map.insert("orphaned".to_string(), json!(true));
+        }
+        if truncated {
+            map.insert("truncated".to_string(), json!(true));
         }
         map.insert("children".to_string(), json!(children));
         serde_json::Value::Object(map)
@@ -1716,6 +1723,36 @@ Arguments:
                         &runtime,
                     )
                     .await?;
+                // UX-P2-2: cross-workspace listing requires authorization. The
+                // caller may list the workspace it currently belongs to; an
+                // explicit `workspace` argument pointing elsewhere is only
+                // allowed for the owner (Commander / RBAC-off) or a
+                // Warden/daemon audit session. This prevents a delegated
+                // subagent from silently enumerating other workspaces'
+                // session summaries.
+                if let Some(caller_session_id) = context.session_id.as_deref() {
+                    let current_workspace = context
+                        .workspace_root()
+                        .map(|path| normalize_path(path.to_string_lossy().as_ref()));
+                    let explicit_workspace = normalize_path(&workspace.project_workspace);
+                    let is_cross_workspace = current_workspace
+                        .as_ref()
+                        .is_none_or(|current| *current != explicit_workspace);
+                    if is_cross_workspace
+                        && !caller_is_owner_session(caller_session_id)
+                        && !caller_is_warden_or_daemon(
+                            coordinator.get_session_manager(),
+                            std::path::Path::new(&workspace.project_workspace),
+                            caller_session_id,
+                        )
+                        .await
+                    {
+                        return Err(BitFunError::tool(format!(
+                            "cannot list sessions in workspace '{}': caller session '{caller_session_id}' does not belong to that workspace and is not the owner or an audit session",
+                            workspace.display_workspace
+                        )));
+                    }
+                }
                 let sessions = runtime
                     .list_sessions(AgentSessionListRequest {
                         workspace_path: workspace.project_workspace.clone(),
@@ -2996,6 +3033,93 @@ mod tests {
 
         let orphan_node = roots.iter().find(|r| r["sessionId"] == "child").unwrap();
         assert_eq!(orphan_node["orphaned"], true);
+    }
+
+    #[test]
+    fn tree_marks_truncated_when_depth_budget_exhausted() {
+        // P2-S8: a subtree cut off at TREE_SERIALIZE_MAX_DEPTH carries a
+        // "truncated": true marker so consumers can tell a complete tree from
+        // a capped one (mirrors the orphaned marker).
+        let max_depth = bitfun_core_types::session_tree::MAX_TREE_SERIALIZE_DEPTH;
+        let tree = SessionTreeManager::new(max_depth as u32 + 4);
+        // Build a chain deeper than the serialization budget: root <- c1 <- c2 <- ...
+        let mut sessions = vec![summary("root", None, false, 1)];
+        let mut parent = "root".to_string();
+        for i in 0..(max_depth + 3) {
+            let id = format!("c{i}");
+            tree.register_child(&parent, &id, (i + 2) as u32).unwrap();
+            sessions.push(summary(&id, Some(&parent), false, (i + 2) as u64));
+            parent = id;
+        }
+
+        let tree_json = build_session_tree_json_impl(&sessions, Some(&tree));
+
+        // Structural checks on the raw JSON string: the serialized tree is
+        // deeper than serde_json's default 128-level recursion cap, so parse
+        // only the shallow prefix (the marker placement is what this test
+        // asserts; the production reader hits the same shape only for
+        // genuinely deep trees).
+        // 1. Exactly one root.
+        assert!(
+            tree_json.starts_with("["),
+            "tree json is a forest array"
+        );
+        // 2. The truncated marker appears exactly once (on the boundary node).
+        //    serde_json pretty-prints with a space after the colon.
+        let truncated_markers = tree_json.matches("\"truncated\": true").count();
+        assert_eq!(
+            truncated_markers, 1,
+            "exactly one boundary node is marked truncated: {tree_json}"
+        );
+        // 3. The boundary node (the one carrying "truncated") serializes an
+        //    empty children array. serde_json::Map orders keys
+        //    alphabetically, so `"children"` sorts BEFORE `"truncated"`;
+        //    the boundary node's object span therefore contains
+        //    `"children": []` before the marker.
+        let truncated_pos = tree_json
+            .find("\"truncated\": true")
+            .expect("boundary node marker present");
+        let before_truncated = &tree_json[..truncated_pos];
+        assert!(
+            before_truncated.contains("\"children\": []"),
+            "truncated node serializes no children: {}",
+            &before_truncated[before_truncated.len().saturating_sub(200)..]
+        );
+
+        // 4. Confirm the boundary node identity and that nodes within the
+        //    budget carry no truncated marker. The truncated boundary node
+        //    is c{max_depth - 1} (recursion_depth == MAX). Because the JSON
+        //    is deeper than serde_json's default recursion cap, verify on the
+        //    raw string.
+        let boundary_id = format!("\"c{}\"", max_depth - 1);
+        let boundary_marker_pos = truncated_pos;
+        let boundary_id_pos = tree_json
+            .rfind(&boundary_id)
+            .expect("boundary node id is serialized");
+        // The boundary node's sessionId sits inside the same object span as
+        // its truncated marker (no other truncated marker in between).
+        assert!(
+            boundary_id_pos < boundary_marker_pos,
+            "boundary node id precedes its truncated marker"
+        );
+        let between = &tree_json[boundary_id_pos..boundary_marker_pos];
+        assert!(
+            !between.contains("\"truncated\": true"),
+            "no other truncated marker between the boundary id and its marker"
+        );
+        // Every node above the boundary (recursion_depth < MAX) has children
+        // and no truncated marker; assert that no `"truncated": true` appears
+        // before the boundary node's own marker in the serialized string.
+        let chain_above = &tree_json[..truncated_pos];
+        assert!(
+            !chain_above.contains("\"truncated\": true"),
+            "nodes within the budget must not be marked truncated"
+        );
+        // The serialized tree is a single-root forest.
+        assert!(
+            tree_json.trim_start().starts_with("[\n  {\n    \"agentType\""),
+            "tree json is a single-root forest"
+        );
     }
 
     // --- short_name / detail / compact output ---

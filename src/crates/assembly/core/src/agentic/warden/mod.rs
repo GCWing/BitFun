@@ -438,6 +438,15 @@ pub const RBAC_ROLE_REMINDER_KIND: &str = "RbacRoleReminder";
 /// enforced via [`ToolRuntimeRestrictions::path_policy`].
 pub const SHAME_WALL_FILENAME: &str = ".bitfun/warden/violation-registry.json";
 
+/// Relative write root (resolved against the workspace runtime root) for
+/// Warden audit-report landing (P2-S2).
+///
+/// Warden's Write/Edit path_policy is restricted to this directory so a
+/// prompt-injected Warden session can only land audit reports inside the
+/// warden runtime area, never arbitrary files. Same family as
+/// [`SHAME_WALL_FILENAME`] (`.bitfun/warden/`).
+pub const WARDEN_AUDIT_WRITE_ROOT: &str = ".bitfun/warden";
+
 // ---------------------------------------------------------------------------
 // 8. Poke-First Protocol (challenge before intervention)
 // ---------------------------------------------------------------------------

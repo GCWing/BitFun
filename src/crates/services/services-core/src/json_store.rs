@@ -300,6 +300,45 @@ impl JsonFileStore {
             if let Err(source) = fs::write(&tmp_path, &bytes).await {
                 return Err(JsonFileStoreError::WriteTemp { source });
             }
+            // UX-P2-4: session artifacts carry full prompt/output and must not
+            // be world-readable on multi-user hosts. The temp file inherits
+            // the process umask by default; force owner-only (0o600) on Unix
+            // before the rename publishes it. Best-effort: a set_permissions
+            // failure is logged, not fatal — the file is still written.
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mode = fs::metadata(&tmp_path)
+                    .await
+                    .map(|metadata| metadata.permissions().mode());
+                match mode {
+                    Ok(previous_mode) => {
+                        // Preserve the owner read/write bits, clear group/other
+                        // access so the published file is 0o600-equivalent
+                        // regardless of the process umask.
+                        let restricted = previous_mode & 0o700;
+                        if let Err(error) = fs::set_permissions(
+                            &tmp_path,
+                            std::fs::Permissions::from_mode(restricted),
+                        )
+                        .await
+                        {
+                            warn!(
+                                "Failed to restrict permissions on temporary file {}: {} (continuing; the file may be readable by other local users)",
+                                tmp_path.display(),
+                                error
+                            );
+                        }
+                    }
+                    Err(error) => {
+                        warn!(
+                            "Failed to read permissions of temporary file {}: {} (continuing)",
+                            tmp_path.display(),
+                            error
+                        );
+                    }
+                }
+            }
 
             let replacement = match policy {
                 AtomicWritePolicy::BestEffortReplace => {
