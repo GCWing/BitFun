@@ -986,7 +986,7 @@ function BasicsNotificationsSection() {
 }
 
 /**
- * Legion deployment thresholds (legion 阈值参数配置化）。
+ * Legion deployment thresholds (configurable via the unified threshold settings).
  *
  * Front-end entry for `ai.legion_max_nodes` (per-topology node cap, default 20),
  * `ai.legion_max_total_nodes` (cross-deployment total cap, default 60) and

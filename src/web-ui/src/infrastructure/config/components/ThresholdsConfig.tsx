@@ -20,10 +20,11 @@ import {
 const log = createLogger('ThresholdsConfig');
 
 /**
- * ai.thresholds.* — 阈值参数配置化统一入口。
+ * ai.thresholds.* — unified entry point for threshold configuration.
  *
- * 每个子域对应一个分组；默认值 = 后端 legacy 硬编码（未配置时行为不变）。
- * 写入路径：configManager.setConfig('ai.thresholds.<domain>.<field>', value)。
+ * Each subdomain maps to one group; defaults mirror the backend legacy
+ * hardcoded values (behavior is unchanged when unconfigured).
+ * Write path: configManager.setConfig('ai.thresholds.<domain>.<field>', value).
  */
 
 interface ThresholdsShape {
