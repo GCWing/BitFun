@@ -368,6 +368,8 @@
     "planning": "Planning",
     "saved": "Legion preset \"{{name}}\" saved",
     "saveFailed": "Failed to save legion preset",
+    "roleAnnotation": "display only",
+    "roleAnnotationTooltip": "This role label is orchestration metadata for organizing the legion. The deployed session's actual permissions are always resolved by the standard subagent role (Executor), never by this label.",
     "meta": {
       "gate": "gates"
     },

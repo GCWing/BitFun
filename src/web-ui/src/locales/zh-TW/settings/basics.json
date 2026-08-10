@@ -237,6 +237,27 @@
       "saveFailed": "儲存通知設置失敗"
     }
   },
+  "knowledgeBase": {
+    "sections": {
+      "title": "知識庫",
+      "hint": "KnowledgeBaseSearch 工具使用的本機知識庫根目錄。桌面端與 CLI 啟動時將其注入 BITFUN_KNOWLEDGE_BASE_ROOT。"
+    },
+    "rootLabel": "知識庫根目錄",
+    "rootDescription": "存放 L0/L1/L3/L4 知識層的目錄。留空則 KnowledgeBaseSearch 保持停用。",
+    "rootPlaceholder": "例如 C:/path/to/knowledge-base",
+    "actions": {
+      "saveLabel": "儲存",
+      "saveDescription": "持久化根目錄；下次宿主啟動時注入環境變數。",
+      "save": "儲存"
+    },
+    "messages": {
+      "loading": "載入中…",
+      "loadFailed": "無法讀取知識庫根目錄",
+      "saved": "知識庫根目錄已儲存",
+      "cleared": "知識庫根目錄已清除",
+      "saveFailed": "儲存知識庫根目錄失敗"
+    }
+  },
   "legion": {
     "sections": {
       "title": "軍團部署參數",

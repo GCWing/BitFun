@@ -368,6 +368,8 @@
     "planning": "规划中",
     "saved": "军团编排模式「{{name}}」已保存",
     "saveFailed": "保存军团编排模式失败",
+    "roleAnnotation": "仅展示",
+    "roleAnnotationTooltip": "该角色标签仅用于军团编排的组织语义。部署出的会话实际权限恒由标准子代理角色解析（Executor）决定，绝不依据此标签。",
     "meta": {
       "gate": "个闸门"
     },

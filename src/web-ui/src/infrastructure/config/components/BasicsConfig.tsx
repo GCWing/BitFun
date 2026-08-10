@@ -4,6 +4,7 @@ import { Archive, FolderOpen } from 'lucide-react';
 import {
   Alert,
   Button,
+  Input,
   NumberInput,
   Select,
   Switch,
@@ -986,6 +987,121 @@ function BasicsNotificationsSection() {
 }
 
 /**
+ * Knowledge base root directory (UX-P1-3).
+ *
+ * Front-end entry for `ai.knowledge_base_root`. The desktop and CLI hosts
+ * inject this value into the `BITFUN_KNOWLEDGE_BASE_ROOT` environment
+ * variable at startup so the KnowledgeBaseSearch tool can resolve its root at
+ * call time (L6-P0-1). Saving writes the config key directly; the next host
+ * startup picks it up.
+ */
+function BasicsKnowledgeBaseSection() {
+  const { t } = useTranslation('settings/basics');
+  const [root, setRoot] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        setLoading(true);
+        const value = await configManager.getConfig<string>('ai.knowledge_base_root');
+        if (!cancelled) {
+          setRoot(value ?? '');
+        }
+      } catch (error) {
+        log.error('Failed to load knowledge base root config', error);
+        if (!cancelled) {
+          setMessage({ type: 'error', text: t('knowledgeBase.messages.loadFailed') });
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    const previous = root;
+    const next = root.trim();
+    try {
+      if (next.length === 0) {
+        await configManager.setConfig('ai.knowledge_base_root', '');
+        configManager.clearCache();
+        setMessage({ type: 'info', text: t('knowledgeBase.messages.cleared') });
+        return;
+      }
+      await configManager.setConfig('ai.knowledge_base_root', next);
+      configManager.clearCache();
+      setRoot(next);
+      setMessage({ type: 'success', text: t('knowledgeBase.messages.saved') });
+    } catch (error) {
+      setRoot(previous);
+      log.error('Failed to save knowledge base root', { root: next, error });
+      setMessage({ type: 'error', text: t('knowledgeBase.messages.saveFailed') });
+    } finally {
+      setSaving(false);
+    }
+  }, [root, t]);
+
+  if (loading) {
+    return <ConfigPageLoading text={t('knowledgeBase.messages.loading')} />;
+  }
+
+  return (
+    <div className="bitfun-knowledge-base-config" data-bf-component="basics-config" data-bf-part="knowledgeBase">
+      <div className="bitfun-knowledge-base-config__content">
+        <ConfigPageMessage message={message} />
+        <ConfigPageSection
+          title={t('knowledgeBase.sections.title')}
+          description={t('knowledgeBase.sections.hint')}
+        >
+          <ConfigPageRow
+            label={t('knowledgeBase.rootLabel')}
+            description={t('knowledgeBase.rootDescription')}
+            align="center"
+          >
+            <Input
+              value={root}
+              onChange={(e) => setRoot(e.target.value)}
+              placeholder={t('knowledgeBase.rootPlaceholder')}
+              size="small"
+              disabled={saving}
+              data-testid="basics-knowledge-base-root"
+              aria-label={t('knowledgeBase.rootLabel')}
+            />
+          </ConfigPageRow>
+          <ConfigPageRow
+            label={t('knowledgeBase.actions.saveLabel')}
+            description={t('knowledgeBase.actions.saveDescription')}
+            align="center"
+          >
+            <Button
+              type="button"
+              variant="primary"
+              size="small"
+              onClick={() => void handleSave()}
+              isLoading={saving}
+              disabled={saving}
+              data-testid="basics-knowledge-base-save"
+            >
+              {t('knowledgeBase.actions.save')}
+            </Button>
+          </ConfigPageRow>
+        </ConfigPageSection>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Legion deployment thresholds (configurable via the unified threshold settings).
  *
  * Front-end entry for `ai.legion_max_nodes` (per-topology node cap, default 20),
@@ -1180,6 +1296,7 @@ const BasicsConfig: React.FC = () => {
         <BasicsLoggingSection />
         <BasicsTerminalSection />
         <BasicsNotificationsSection />
+        <BasicsKnowledgeBaseSection />
         <BasicsLegionThresholdsSection />
       </ConfigPageContent>
     </ConfigPageLayout>

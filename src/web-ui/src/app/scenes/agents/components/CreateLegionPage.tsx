@@ -72,7 +72,18 @@ const CreateLegionPage: React.FC<CreateLegionPageProps> = ({ onBack }) => {
         <div key={node.id} className="legion-node-item">
           <span className="legion-node-index">{i + 1}</span>
           <div className="legion-node-info">
-            <span className="legion-node-role">{node.role}</span>
+            <span className="legion-node-role">
+              {node.role}
+              {/* UX-P1-6: legionRole is orchestration metadata only — the
+                  deployed session's RBAC role is always resolved by the
+                  standard subagent role resolution (Executor for
+                  subagent-marked sessions), never by legionRole. Annotate the
+                  UI so the displayed role cannot be mistaken for the runtime
+                  permission template. */}
+              <span className="legion-node-role-annotation" title={t('legionPattern.roleAnnotationTooltip')}>
+                {t('legionPattern.roleAnnotation')}
+              </span>
+            </span>
             <span className="legion-node-agent">{node.agent}</span>
           </div>
           {node.gate ? <span className="legion-node-gate">{t('legionPattern.gate')}</span> : null}

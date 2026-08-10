@@ -368,6 +368,8 @@
     "planning": "規劃中",
     "saved": "軍團編排模式「{{name}}」已儲存",
     "saveFailed": "儲存軍團編排模式失敗",
+    "roleAnnotation": "僅展示",
+    "roleAnnotationTooltip": "該角色標籤僅用於軍團編排的組織語義。部署出的會話實際權限恆由標準子代理角色解析（Executor）決定，絕不依據此標籤。",
     "meta": {
       "gate": "個閘門"
     },

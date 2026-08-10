@@ -144,9 +144,23 @@
 }
 
 .legion-node-role {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--bf-appearance-token-flowchat-font-size-sm);
   font-weight: $font-weight-medium;
   color: var(--bf-appearance-token-color-text-primary);
+
+  .legion-node-role-annotation {
+    padding: 1px 6px;
+    border-radius: 999px;
+    border: 1px dashed var(--bf-appearance-token-border-strong);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-weight: $font-weight-regular;
+    cursor: help;
+    white-space: nowrap;
+  }
 }
 
 .legion-node-agent {

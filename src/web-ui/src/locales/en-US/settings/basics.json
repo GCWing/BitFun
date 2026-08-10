@@ -251,6 +251,27 @@
       "saveFailed": "Failed to save notification settings"
     }
   },
+  "knowledgeBase": {
+    "sections": {
+      "title": "Knowledge Base",
+      "hint": "Local knowledge base root used by the KnowledgeBaseSearch tool. The desktop and CLI hosts inject it into BITFUN_KNOWLEDGE_BASE_ROOT at startup."
+    },
+    "rootLabel": "Knowledge base root",
+    "rootDescription": "Directory containing the L0/L1/L3/L4 knowledge layers. Empty keeps KnowledgeBaseSearch disabled.",
+    "rootPlaceholder": "e.g. C:/path/to/knowledge-base",
+    "actions": {
+      "saveLabel": "Save",
+      "saveDescription": "Persist the root directory; the next host startup injects it into the environment.",
+      "save": "Save"
+    },
+    "messages": {
+      "loading": "Loading...",
+      "loadFailed": "Failed to load knowledge base root",
+      "saved": "Knowledge base root saved",
+      "cleared": "Knowledge base root cleared",
+      "saveFailed": "Failed to save knowledge base root"
+    }
+  },
   "legion": {
     "sections": {
       "title": "Legion deployment limits",
