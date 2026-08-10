@@ -150,26 +150,26 @@ export const usePanelTabCoordinator = (options: UsePanelTabCoordinatorOptions = 
     // tertiary plus the grid9 extension slots slot4..slot16). Counting only the
     // first three groups let grid9 windows be wrongly auto-collapsed while
     // their tabs were still open (d7-P1-1).
-    const groupStates = {
-      primary: primaryGroup,
-      secondary: secondaryGroup,
-      tertiary: tertiaryGroup,
-      slot4: slot4Group,
-      slot5: slot5Group,
-      slot6: slot6Group,
-      slot7: slot7Group,
-      slot8: slot8Group,
-      slot9: slot9Group,
-      slot10: slot10Group,
-      slot11: slot11Group,
-      slot12: slot12Group,
-      slot13: slot13Group,
-      slot14: slot14Group,
-      slot15: slot15Group,
-      slot16: slot16Group,
+    const tabsByGroup = {
+      primary: primaryGroup.tabs,
+      secondary: secondaryGroup.tabs,
+      tertiary: tertiaryGroup.tabs,
+      slot4: slot4Group.tabs,
+      slot5: slot5Group.tabs,
+      slot6: slot6Group.tabs,
+      slot7: slot7Group.tabs,
+      slot8: slot8Group.tabs,
+      slot9: slot9Group.tabs,
+      slot10: slot10Group.tabs,
+      slot11: slot11Group.tabs,
+      slot12: slot12Group.tabs,
+      slot13: slot13Group.tabs,
+      slot14: slot14Group.tabs,
+      slot15: slot15Group.tabs,
+      slot16: slot16Group.tabs,
     };
     const visibleCount = EDITOR_GROUP_IDS.reduce(
-      (sum, gid) => sum + groupStates[gid].tabs.filter((tab) => !tab.isHidden).length,
+      (sum, gid) => sum + tabsByGroup[gid].filter((tab) => !tab.isHidden).length,
       0,
     );
     

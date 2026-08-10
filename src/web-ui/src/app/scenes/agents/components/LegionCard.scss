@@ -3,19 +3,19 @@
   flex-direction: column;
   gap: 12px;
   padding: 16px;
-  border: 1px solid var(--bf-appearance-token-color-bg-secondary, transparent);
+  border: 1px solid var(--bf-appearance-token-color-bg-secondary);
   border-radius: 10px;
-  background: var(--bf-appearance-token-color-bg-secondary, transparent);
+  background: var(--bf-appearance-token-color-bg-secondary);
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease;
 
   &:hover {
-    background: var(--bf-appearance-token-element-bg-hover, transparent);
-    border-color: var(--bf-appearance-token-color-accent-500, transparent);
+    background: var(--bf-appearance-token-element-bg-hover);
+    border-color: var(--bf-appearance-token-color-accent-500);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-accent-500, transparent);
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
     outline-offset: 2px;
   }
 }
@@ -33,8 +33,8 @@
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: var(--bf-appearance-token-element-bg-elevated, transparent);
-  color: var(--bf-appearance-token-color-accent-500, currentColor);
+  background: var(--bf-appearance-token-color-bg-elevated);
+  color: var(--bf-appearance-token-color-accent-500);
   flex-shrink: 0;
 }
 

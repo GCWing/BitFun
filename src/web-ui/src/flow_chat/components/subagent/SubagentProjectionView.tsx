@@ -308,7 +308,7 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
       unsubscribeState();
       setIsHydratingMetadataOnlySession(false);
     };
-  }, [items.length, itemsProp, parentSessionId, parentToolIds, resolvedSubagentSessionId, sessionId]);
+  }, [flowChatStore, items.length, itemsProp, parentSessionId, parentToolIds, resolvedSubagentSessionId, sessionId]);
 
   // Tail position, not active status, controls live completion retention.
   // Otherwise a newer settled action can collapse while an older item still
