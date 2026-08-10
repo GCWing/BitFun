@@ -436,6 +436,9 @@ function reviewSessionLifecycle(session: Session): LinkedReviewSession['lifecycl
 }
 
 function getSessionTitle(session?: Session, fallback = 'Review session'): string {
+  if (session?.titleSource === 'i18n' && session.titleI18nKey) {
+    return i18nService.t(session.titleI18nKey, session.titleI18nParams ?? {}) || fallback;
+  }
   return session?.title?.trim() || fallback;
 }
 
@@ -1852,7 +1855,9 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       workspacePath: linked.childSession.workspacePath,
       expand: true,
       sessionKind: linked.kind,
-      sessionTitle: linked.title,
+      sessionTitle: linked.childSession.titleSource === 'i18n' && linked.childSession.titleI18nKey
+        ? (i18nService.t(linked.childSession.titleI18nKey, linked.childSession.titleI18nParams ?? {}) || linked.title)
+        : linked.title,
       agentType: linked.childSession.config.agentType ?? (linked.kind === 'deep_review' ? 'DeepReview' : 'CodeReview'),
     });
   };

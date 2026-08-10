@@ -22,7 +22,7 @@ import type {
   SessionHistoryHydrationLocation,
 } from './types';
 import type { Session } from '../../types/flow-chat';
-import { touchSessionActivity } from './PersistenceModule';
+import { touchSessionActivity, updateSessionMetadata } from './PersistenceModule';
 import {
   createTextSessionTitleDescriptor,
   createDefaultSessionTitleDescriptor,
@@ -606,7 +606,7 @@ export async function createChatSession(
       );
       const sessionName = titleDescriptor.text;
 
-      return driverForCreation(config).createSession(context, {
+      const sessionId = await driverForCreation(config).createSession(context, {
         config,
         agentType,
         sessionName,
@@ -617,6 +617,14 @@ export async function createChatSession(
         remoteConnectionId,
         remoteSshHost,
       });
+
+      // Persist the title metadata (incl. the i18n title key/params) at creation
+      // so an empty session can re-localize its default name on a later reload +
+      // locale switch. createSession only stored the localized sessionName string;
+      // without this, empty sessions have no title key on disk and can't re-localize.
+      await updateSessionMetadata(context, sessionId);
+
+      return sessionId;
     });
 
     pendingSessionCreations.set(creationKey, createPromise);

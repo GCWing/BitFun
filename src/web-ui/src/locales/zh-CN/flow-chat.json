@@ -2564,7 +2564,9 @@
     }
   },
   "errors": {
-    "sendFailed": "发送消息失败"
+    "sendFailed": "发送消息失败",
+    "thinkingProcessError": "思考过程错误",
+    "workspaceNotResolvable": "工作区文件夹不存在或已被移动"
   },
   "actions": {
     "send": "发送"

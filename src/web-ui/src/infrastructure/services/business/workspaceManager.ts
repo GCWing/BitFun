@@ -14,6 +14,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { startupTrace } from '@/shared/utils/startupTrace';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { listen } from '@tauri-apps/api/event';
+import { i18nService } from '@/infrastructure/i18n';
 
 const log = createLogger('WorkspaceManager');
 
@@ -632,7 +633,12 @@ class WorkspaceManager {
       return workspace;
     } catch (error) {
       log.error('Failed to open workspace', { path, error });
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const rawMessage = error instanceof Error ? error.message : String(error);
+      // Map the common "folder moved/deleted" backend error to a localized
+      // message; other errors pass through verbatim (callers log the raw error).
+      const errorMessage = /does not exist|not a directory/i.test(rawMessage)
+        ? i18nService.t('common:newProject.errorPathNotFound')
+        : rawMessage;
       this.updateState({ loading: false, error: errorMessage }, { type: 'workspace:error', error: errorMessage });
       throw error;
     }
