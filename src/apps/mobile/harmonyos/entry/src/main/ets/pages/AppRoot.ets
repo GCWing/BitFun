@@ -1,9 +1,9 @@
 import { AppRootPresentation } from './components/AppRootPresentation';
 import { ArkUiAppRootHostAdapter } from './host/AppRootHostAdapter';
-import { AppRootRuntime } from './state/AppRootRuntime';
+import { AppRootRuntime } from './runtime/AppRootRuntime';
 
 @Entry
-@Component
+@ComponentV2
 struct AppRoot {
   private readonly hostAdapter: ArkUiAppRootHostAdapter = new ArkUiAppRootHostAdapter();
   private readonly runtime: AppRootRuntime = new AppRootRuntime(this.hostAdapter);
@@ -38,7 +38,7 @@ struct AppRoot {
         remoteCreateState: this.runtime.remoteCreateState,
         generalPageState: this.runtime.generalChatPageState,
         filePreviewState: this.runtime.filePreviewState,
-        deviceId: this.runtime.remoteConnectionViewModel.getDeviceId(),
+        deviceId: this.runtime.remoteConnectionController.getDeviceId(),
         actions: this.runtime.presentationActions
       })
     }

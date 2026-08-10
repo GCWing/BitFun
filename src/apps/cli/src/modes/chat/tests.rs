@@ -11,8 +11,7 @@ mod tests {
         command_route, consume_selected_native_command_once, context_compression_tool_event,
         extension_command_help_request, external_agent_attention, external_agent_diagnostic_lines,
         external_agent_pending_notice_key, external_agent_result_is_stale,
-        external_agent_review_text, external_command_projections,
-        external_control_read_only_review_text, external_control_review_text,
+        external_agent_review_text, external_command_projections, external_control_status_text,
         external_hook_help_text, external_integration_policy_lines,
         external_operation_error_status, external_tool_mutation_result_label,
         external_tool_pending_notice_key, external_tool_result_is_stale, external_tool_review_text,
@@ -164,21 +163,25 @@ mod tests {
             ExternalControlUiAction::SetSafeMode(false)
         );
         assert_eq!(
-            parse_external_control_action("source disable opencode.commands:project").unwrap(),
+            parse_external_control_action("disable 1").unwrap(),
             ExternalControlUiAction::SetSourceEnabled {
-                source_key: "opencode.commands:project".to_string(),
+                source_index: 0,
                 enabled: false,
             }
         );
         assert_eq!(
-            parse_external_control_action("source enable opencode.commands:project").unwrap(),
+            parse_external_control_action("enable 2").unwrap(),
             ExternalControlUiAction::SetSourceEnabled {
-                source_key: "opencode.commands:project".to_string(),
+                source_index: 1,
                 enabled: true,
             }
         );
         assert!(parse_external_control_action("safe-mode toggle").is_err());
         assert!(parse_external_control_action("enable-everything").is_err());
+        assert!(parse_external_control_action("review").is_err());
+        let usage = parse_external_control_action("unknown").unwrap_err();
+        assert!(!usage.contains("safe-mode"));
+        assert!(!usage.contains("review"));
     }
 
     #[test]
@@ -224,23 +227,36 @@ mod tests {
         }))
         .unwrap();
 
-        let text = external_control_review_text(&control);
-        assert!(text.contains("Safe Mode: on"));
-        assert!(text.contains("Generation: 9"));
-        assert!(text.contains("Execution domain: local-user"));
-        assert!(text.contains("New external Tool, Agent, and MCP calls are blocked"));
-        assert!(text.contains("restarting the Host turns it off"));
-        assert!(text.contains("Source opencode.commands:project"));
-        assert!(text.contains("source disable <source-key>"));
-        assert!(text.contains("Tools: 2 items, 1 review, 0 conflicts, inactive"));
-        assert!(text.contains("/extensions safe-mode off"));
+        let text = external_control_status_text(&control);
+        assert!(text.contains("Extensions"));
+        assert!(text.contains("1. OpenCode project commands - Available"));
+        assert!(text.contains("Disable: /extensions disable 1"));
+        assert!(text.contains("Refresh: /extensions refresh"));
+        assert!(text.contains("External access is paused. Resume: /extensions safe-mode off"));
+        for hidden in [
+            "Generation",
+            "Execution domain",
+            "opencode.commands:project",
+            "review",
+            "items",
+            "conflicts",
+            "<source-key>",
+        ] {
+            assert!(!text.contains(hidden), "leaked {hidden}:\n{text}");
+        }
 
-        let read_only = external_control_read_only_review_text(&control);
-        assert!(read_only.contains("Read-only compatibility status"));
-        assert!(read_only.contains("/extensions refresh"));
-        assert!(!read_only.contains("/extensions safe-mode"));
-        assert!(!read_only.contains("source enable <source-key>"));
-        assert!(!read_only.contains("source disable <source-key>"));
+        let mut read_only = control.clone();
+        read_only.host_capabilities.can_manage_sources = false;
+        let read_only_text = external_control_status_text(&read_only);
+        assert!(read_only_text.contains("This connection can only show extension status."));
+        assert!(!read_only_text.contains("/extensions disable 1"));
+
+        let mut permission_needed = control.clone();
+        permission_needed.sources[0].effective_status =
+            bitfun_product_domains::external_source_control::ExternalSourceEffectiveStatus::ReviewRequired;
+        let permission_text = external_control_status_text(&permission_needed);
+        assert!(permission_text.contains("Needs permission"));
+        assert!(permission_text.contains("Manage permissions: /tools, /agent, /mcp, or /hooks"));
     }
 
     #[test]
@@ -282,11 +298,11 @@ mod tests {
         }))
         .unwrap();
 
-        let text = external_control_review_text(&control);
-        assert!(text.contains("Tools: 0 items, 0 review, 0 conflicts, inactive, support: partial"));
-        assert!(text.contains("Issues"));
-        assert!(text.contains("[external_tool.runtime_unavailable]"));
-        assert!(text.contains("Recovery"));
+        let text = external_control_status_text(&control);
+        assert!(text.contains("No extensions found."));
+        assert!(!text.contains("External access is paused"));
+        assert!(text.contains("Needs attention"));
+        assert!(!text.contains("external_tool.runtime_unavailable"));
         assert!(text.contains("/extensions refresh"));
         assert!(text.contains("install or repair the required runtime"));
     }

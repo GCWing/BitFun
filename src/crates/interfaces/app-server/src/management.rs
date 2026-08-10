@@ -1,11 +1,9 @@
 //! Host-injected management service and capability boundary.
 
-use async_trait::async_trait;
-use bitfun_app_server_protocol::account::*;
 use bitfun_app_server_protocol::app::{CapabilityAvailability, CapabilityDescriptor};
-use bitfun_app_server_protocol::worktree::*;
 
 mod service;
+mod worktree;
 
 pub use service::AppManagementService;
 
@@ -20,58 +18,6 @@ pub const EXTERNAL_HOOKS_CAPABILITY: &str = "tui.externalHooks";
 pub const ACCOUNT_CAPABILITY: &str = "tui.account";
 pub const SETTINGS_SYNC_CAPABILITY: &str = "tui.settingsSync";
 pub const WORKTREES_CAPABILITY: &str = "tui.worktrees";
-
-#[async_trait]
-pub trait WorktreeManagementHost: Send + Sync {
-    async fn repository_status(
-        &self,
-        request: WorktreeRepositoryStatusRequest,
-    ) -> AppManagementResult<WorktreeRepositoryStatusResponse>;
-    async fn bind_session(
-        &self,
-        request: WorktreeBindSessionRequest,
-    ) -> AppManagementResult<WorktreeBindingResponse>;
-    async fn release_session(
-        &self,
-        request: WorktreeReleaseSessionRequest,
-    ) -> AppManagementResult<WorktreeBindingResponse>;
-}
-
-#[async_trait]
-pub trait AccountManagementHost: Send + Sync {
-    async fn account_snapshot(
-        &self,
-        request: AccountSnapshotRequest,
-    ) -> AppManagementResult<AccountSnapshotResponse>;
-    async fn account_login(
-        &self,
-        request: AccountLoginRequest,
-    ) -> AppManagementResult<AccountLoginResponse>;
-    async fn account_finalize_login(
-        &self,
-        request: AccountFinalizeLoginRequest,
-    ) -> AppManagementResult<AccountSnapshotResponse>;
-    async fn account_logout(
-        &self,
-        request: AccountLogoutRequest,
-    ) -> AppManagementResult<AccountSnapshotResponse>;
-    async fn settings_sync_start(
-        &self,
-        request: SettingsSyncStartRequest,
-    ) -> AppManagementResult<SettingsSyncResponse>;
-    async fn settings_sync_snapshot(
-        &self,
-        request: SettingsSyncSnapshotRequest,
-    ) -> AppManagementResult<SettingsSyncResponse>;
-    async fn settings_sync_cancel(
-        &self,
-        request: SettingsSyncCancelRequest,
-    ) -> AppManagementResult<SettingsSyncResponse>;
-    async fn settings_sync_local_changed(
-        &self,
-        request: SettingsSyncLocalChangedRequest,
-    ) -> AppManagementResult<SettingsSyncResponse>;
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppManagementCapabilities {
@@ -397,35 +343,5 @@ mod tests {
                 "worktree/releaseSession",
             ]
         );
-    }
-
-    #[test]
-    fn external_source_capability_does_not_advertise_unwired_shared_v2_methods() {
-        let external_sources = AppManagementCapabilities::available()
-            .descriptors()
-            .into_iter()
-            .find(|descriptor| descriptor.id == EXTERNAL_SOURCES_CAPABILITY)
-            .expect("external source capability");
-
-        for method in [
-            "externalSource/snapshot",
-            "externalSource/control",
-            "externalSource/review",
-        ] {
-            assert!(
-                external_sources.methods.iter().any(|item| item == method),
-                "missing {method}"
-            );
-        }
-        for method in [
-            "externalSource/applicationSnapshotV2",
-            "externalSource/applicationReviewPageV2",
-            "externalSource/applicationActionV2",
-        ] {
-            assert!(
-                !external_sources.methods.iter().any(|item| item == method),
-                "shared capability must not advertise unwired method {method}"
-            );
-        }
     }
 }

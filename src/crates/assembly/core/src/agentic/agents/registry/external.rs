@@ -16,8 +16,10 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock, Weak};
 
+#[cfg(feature = "external-sources")]
 pub(crate) const EXTERNAL_SUBAGENT_RUNTIME_KEY_PREFIX: &str = "external_subagent_runtime:";
 
+#[cfg(feature = "external-sources")]
 pub(crate) fn external_subagent_runtime_key(digest: &str) -> String {
     format!("{EXTERNAL_SUBAGENT_RUNTIME_KEY_PREFIX}{digest}")
 }
@@ -654,7 +656,10 @@ fn external_agent_info(
     projection: ExternalAgentProjection,
 ) -> AgentInfo {
     let agent = entry.registration.agent.as_ref();
-    let default_tools = agent.default_tools();
+    let mut default_tools = agent.default_tools();
+    if matches!(projection, ExternalAgentProjection::Primary) {
+        bitfun_agent_runtime::thread_goal_tools::ensure_thread_goal_tools(&mut default_tools);
+    }
     AgentInfo {
         key: format!(
             "external::{}::{}",

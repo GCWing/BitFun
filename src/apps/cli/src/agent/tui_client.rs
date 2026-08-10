@@ -22,11 +22,7 @@ use bitfun_app_server_protocol::workspace::*;
 use bitfun_app_server_protocol::worktree::*;
 use bitfun_core_types::SessionUsageReport;
 use bitfun_events::{AgenticEvent, AgenticEventEnvelope, AgenticEventPriority};
-use bitfun_product_domains::external_source_control::{
-    ExternalApplicationControlRequestV2, ExternalApplicationControlResultV2,
-    ExternalApplicationReviewPageRequestV2, ExternalApplicationReviewPageV2,
-    ExternalApplicationSnapshotV2, ExternalSourceControlRequestV1,
-};
+use bitfun_product_domains::external_source_control::ExternalSourceControlRequestV1;
 use bitfun_product_domains::external_sources::{
     ExternalSourceOperationError, ExternalSourceOperationErrorCode, ExternalSourcePublicSnapshot,
     NativePromptCommandDescriptor, PromptCommandShellReviewDecision,
@@ -465,49 +461,6 @@ impl TuiAgentClient {
             })
             .await
             .map_err(external_source_backend_error)
-    }
-
-    pub(crate) async fn external_application_snapshot_v2(
-        &self,
-        force_refresh: bool,
-    ) -> std::result::Result<ExternalApplicationSnapshotV2, ExternalSourceOperationError> {
-        self.backend
-            .external_application_snapshot_v2(ExternalApplicationSnapshotRequestV2 {
-                workspace_path: Some(self.workspace_path_string()),
-                force_refresh,
-            })
-            .await
-            .map(|response| response.0)
-            .map_err(external_source_backend_error)
-    }
-
-    pub(crate) async fn external_application_review_page_v2(
-        &self,
-        request: ExternalApplicationReviewPageRequestV2,
-    ) -> std::result::Result<ExternalApplicationReviewPageV2, ExternalSourceOperationError> {
-        self.backend
-            .external_application_review_page_v2(ExternalApplicationReviewPageRequest {
-                workspace_path: Some(self.workspace_path_string()),
-                request,
-            })
-            .await
-            .map(|response| response.0)
-            .map_err(external_source_backend_error)
-    }
-
-    pub(crate) async fn apply_external_application_action_v2(
-        &self,
-        request: ExternalApplicationControlRequestV2,
-    ) -> std::result::Result<ExternalApplicationControlResultV2, ExternalSourceOperationError> {
-        let operation_id = request.operation_id.clone();
-        self.backend
-            .apply_external_application_action_v2(ExternalApplicationActionRequest {
-                workspace_path: Some(self.workspace_path_string()),
-                request,
-            })
-            .await
-            .map(|response| response.0)
-            .map_err(|error| external_source_backend_error_with_id(error, Some(&operation_id)))
     }
 
     pub(crate) fn subscribe_external_source_updates(

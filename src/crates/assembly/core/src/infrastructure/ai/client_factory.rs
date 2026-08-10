@@ -13,7 +13,8 @@ use crate::infrastructure::ai::reasoning_catalog::{
 };
 use crate::infrastructure::ai::{build_stream_options_for_model, AIClient};
 use crate::infrastructure::subscription_auth::{
-    self, OpenCodePlan as AdapterOpenCodePlan, SubscriptionProvider as AdapterProvider,
+    self, OpenCodePlan as AdapterOpenCodePlan, SubscriptionHttpOptions,
+    SubscriptionProvider as AdapterProvider,
 };
 use crate::service::config::types::{
     model_runtime_binding_fingerprint, AuthConfig, OpenCodePlan, SubscriptionProvider,
@@ -42,7 +43,7 @@ struct CachedAIClient {
 }
 
 /// Once a cached subscription credential is within this window of expiry, the
-/// client is rebuilt so `apply_subscription_auth` refreshes the token. Kept
+/// client is rebuilt so subscription authentication refreshes the token. Kept
 /// equal to the providers' refresh leeway so the rebuilt client always gets a
 /// fresh token.
 const SUBSCRIPTION_CREDENTIAL_STALE_LEEWAY_SECS: i64 = 5 * 60;
@@ -310,14 +311,20 @@ impl AIClientFactory {
 
         let mut ai_config = AIConfig::try_from(model_config.clone())
             .map_err(|e| anyhow!("AI configuration conversion failed: {}", e))?;
-        let credential_expires_at =
-            apply_subscription_auth(&model_config.auth, &mut ai_config).await?;
-
+        let skip_ssl_verify = ai_config.skip_ssl_verify;
         let proxy_config = if global_config.ai.proxy.enabled {
             Some(global_config.ai.proxy.clone())
         } else {
             None
         };
+        let subscription_options =
+            SubscriptionHttpOptions::new(proxy_config.clone(), skip_ssl_verify);
+        let credential_expires_at = apply_subscription_auth_with_options(
+            &model_config.auth,
+            &mut ai_config,
+            &subscription_options,
+        )
+        .await?;
 
         let stream_options = build_stream_options_for_model(&global_config.ai, Some(model_config));
         let client = apply_default_reasoning_preset(
@@ -450,18 +457,31 @@ pub async fn apply_subscription_auth(
     auth: &AuthConfig,
     ai_config: &mut AIConfig,
 ) -> Result<Option<i64>> {
+    apply_subscription_auth_with_options(auth, ai_config, &SubscriptionHttpOptions::default()).await
+}
+
+/// Resolves subscription authentication with an explicit transport policy.
+pub async fn apply_subscription_auth_with_options(
+    auth: &AuthConfig,
+    ai_config: &mut AIConfig,
+    options: &SubscriptionHttpOptions,
+) -> Result<Option<i64>> {
     let resolved = match auth {
         AuthConfig::ApiKey => return Ok(None),
         AuthConfig::Subscription { provider, plan } => {
             let resolved = match (*provider, *plan) {
                 (SubscriptionProvider::Opencode, Some(plan)) => {
-                    subscription_auth::resolve_opencode(
+                    subscription_auth::resolve_opencode_with_options(
                         to_adapter_opencode_plan(plan),
                         &ai_config.format,
+                        options,
                     )
                     .await
                 }
-                (_, None) => subscription_auth::resolve(to_adapter_provider(*provider)).await,
+                (_, None) => {
+                    subscription_auth::resolve_with_options(to_adapter_provider(*provider), options)
+                        .await
+                }
                 (_, Some(plan)) => Err(anyhow!(
                     "OpenCode plan {plan:?} cannot be used with provider {provider:?}"
                 )),

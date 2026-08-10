@@ -7,7 +7,7 @@ import {
   ConversationUiModelCatalog,
   ConversationUiSelectedImage
 } from './ConversationUiModels';
-import { ConversationModelPresentationPolicy } from '../state/ConversationModelPresentationPolicy';
+import { ConversationModelPresentationPolicy } from '../policy/ConversationModelPresentationPolicy';
 import { CARD, FLOATING_PANEL_BG, GREEN, INK, LINE, MUTED, RED, SOFT } from './Theme';
 
 export enum ComposerPresentation {

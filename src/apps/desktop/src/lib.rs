@@ -41,6 +41,7 @@ use bitfun_core::infrastructure::{get_path_manager_arc, try_get_path_manager_arc
 use bitfun_core::service::search::get_global_workspace_search_service;
 use bitfun_core::service::workspace::get_global_workspace_service;
 use bitfun_core::util::{elapsed_ms, TimingCollector};
+use bitfun_events::AgenticEvent;
 use bitfun_transport::{TauriTransportAdapter, TransportAdapter};
 use serde::Deserialize;
 use std::sync::{
@@ -553,6 +554,16 @@ pub async fn _run() {
     bitfun_core::service::remote_connect::ensure_rustls_crypto_provider();
 
     eprintln!("=== BitFun Desktop Starting ===");
+
+    if let Err(error) = bitfun_core::agentic::system::select_agentic_system_profile(
+        bitfun_core::agentic::system::DeliveryProfile::Desktop,
+    ) {
+        log::error!("Failed to select Desktop agent profile: {}", error);
+        show_fatal_startup_error(&format!(
+            "BitFun could not select its Desktop agent profile and cannot continue.\n\n{error}\n\nSee early-startup.log for details."
+        ));
+        return;
+    }
 
     let step_started = Instant::now();
     if let Err(e) = bitfun_core::service::config::initialize_global_config().await {
@@ -1323,9 +1334,6 @@ pub async fn _run() {
             apply_external_hook_import_command,
             mutate_external_hook_import_command,
             get_external_source_snapshot,
-            get_external_application_snapshot_v2,
-            get_external_application_review_page_v2,
-            apply_external_application_action_v2,
             get_workspace_reference_snapshot,
             plan_external_mcp_import_command,
             apply_external_mcp_import_command,
@@ -2301,45 +2309,228 @@ fn configure_workspace_search_daemon_env() -> Option<std::path::PathBuf> {
     path
 }
 
+/// Deliver one event to the WebView and, when peer controllers are attached,
+/// fan it out to paired devices. Text chunks arrive here already coalesced by
+/// `TextChunkCoalescer`.
+async fn deliver_event_to_webview(transport: &TauriTransportAdapter, event: AgenticEvent) {
+    if let Err(e) = transport.emit_event(event.clone()).await {
+        log::error!("Failed to emit event: {:?}", e);
+    }
+
+    if !api::peer_host_invoke::attached_controllers().is_empty() {
+        if let Some(projected) = bitfun_events::project_agentic_frontend_event(event) {
+            api::remote_connect_api::fanout_peer_device_event(
+                projected.event_name,
+                projected.payload,
+            );
+        }
+    }
+}
+
+/// Update the rate EMA from a flush that produced `flushed_chars` characters.
+///
+/// `arm_time` is when the flushed window was armed (the first buffered chunk).
+/// When there is a recorded previous flush, the elapsed interval is measured
+/// from that point so that an idle gap longer than `RATE_EMA_RESET_MS` resets
+/// the estimate instead of blending the old stream's rate into the new one.
+fn update_rate_after_flush(
+    rate_ema: &mut f64,
+    flushed_chars: usize,
+    arm_time: tokio::time::Instant,
+    last_flush_time: &mut Option<tokio::time::Instant>,
+) {
+    let now = tokio::time::Instant::now();
+    let elapsed = last_flush_time
+        .map(|t| now - t)
+        .unwrap_or_else(|| arm_time.elapsed());
+    *rate_ema = crate::api::event_coalescer::update_rate_ema(*rate_ema, flushed_chars, elapsed);
+    *last_flush_time = Some(now);
+}
+
+/// Flush all buffered chunks as merged events and feed the flushed content
+/// volume back into the rate estimate that sizes the next window.
+async fn flush_coalesced<D, F>(
+    deliver: &mut D,
+    coalescer: &mut crate::api::event_coalescer::TextChunkCoalescer,
+    rate_ema: &mut f64,
+    arm_time: tokio::time::Instant,
+    last_flush_time: &mut Option<tokio::time::Instant>,
+) where
+    D: FnMut(AgenticEvent) -> F,
+    F: std::future::Future<Output = ()>,
+{
+    let flushed_chars = coalescer.buffered_chars();
+    update_rate_after_flush(rate_ema, flushed_chars, arm_time, last_flush_time);
+    for event in coalescer.flush() {
+        deliver(event).await;
+    }
+}
+
+/// Drive the agentic event queue: route raw events to internal subscribers,
+/// coalesce streamed text chunks, and deliver merged events through `deliver`.
+///
+/// Scheduling contract:
+/// - The coalescing window is armed as soon as the first chunk is buffered
+///   (even while the queue is still being drained), so the window counts from
+///   the first chunk, not from the end of the drain.
+/// - The window timer is only polled at the outer `select!`. Under sustained
+///   load the queue may stay non-empty and the drain loop never exits, so an
+///   expired deadline is also honored inside the drain: the buffered text is
+///   flushed in place before processing continues. Text therefore waits at
+///   most one window regardless of queue pressure.
+async fn event_loop_driver<D, F>(
+    event_queue: Arc<bitfun_core::agentic::events::EventQueue>,
+    event_router: Arc<bitfun_core::agentic::events::EventRouter>,
+    mut deliver: D,
+) where
+    D: FnMut(AgenticEvent) -> F,
+    F: std::future::Future<Output = ()>,
+{
+    use crate::api::event_coalescer::{
+        next_flush_deadline, next_window, TextChunkCoalescer, INITIAL_RATE_EMA_CPS,
+    };
+    use tokio::time::{sleep_until, Instant};
+
+    let mut coalescer = TextChunkCoalescer::new();
+    let mut flush_deadline: Option<Instant> = None;
+    // Instant at which the current `flush_deadline` was armed. Kept in sync
+    // with the deadline so flushes can measure the actual window elapsed.
+    let mut flush_arm_time: Option<Instant> = None;
+    // Instant of the previous flush. Used to detect idle gaps that should
+    // reset the stream-rate EMA.
+    let mut last_flush_time: Option<Instant> = None;
+    // Measured stream rate (chars/sec), blended per window flush. Starts at
+    // the reference rate so the first window matches the previous fixed
+    // 50ms behavior.
+    let mut rate_ema = INITIAL_RATE_EMA_CPS;
+    let mut last_window = next_window(rate_ema);
+
+    loop {
+        let window_timer = async {
+            match flush_deadline {
+                Some(deadline) => sleep_until(deadline).await,
+                // No buffered chunks: wait for the queue without a timer.
+                None => std::future::pending::<()>().await,
+            }
+        };
+
+        tokio::select! {
+            _ = event_queue.wait_for_events() => {
+                loop {
+                    let batch = event_queue.dequeue_configured_batch().await;
+                    if batch.is_empty() {
+                        break;
+                    }
+
+                    for envelope in batch {
+                        // Route to internal subscribers (e.g. RemoteSessionStateTracker)
+                        // sequentially so that text chunks are appended in order.
+                        // Internal routing stays on the raw events; only the
+                        // WebView / peer delivery below is coalesced.
+                        if let Err(e) = event_router.route(envelope.clone()).await {
+                            log::warn!("Internal event routing failed: {:?}", e);
+                        }
+
+                        // A non-chunk event flushes pending text immediately.
+                        // Capture the flushed volume and the arm time before the
+                        // coalescer drains, then feed it into the rate estimate
+                        // through the same path as a timer-driven flush.
+                        let pre_flush_chars = coalescer.buffered_chars();
+                        let arm_time = flush_arm_time;
+                        let pushed = coalescer.push(envelope.event);
+                        let did_flush = !pushed.is_empty();
+
+                        for event in pushed {
+                            deliver(event).await;
+                        }
+
+                        if did_flush && pre_flush_chars > 0 {
+                            if let Some(arm) = arm_time {
+                                update_rate_after_flush(
+                                    &mut rate_ema,
+                                    pre_flush_chars,
+                                    arm,
+                                    &mut last_flush_time,
+                                );
+                            }
+                        }
+
+                        // Arm the coalescing window as soon as the first chunk
+                        // is buffered so the window counts while the drain is
+                        // still running; clear a stale deadline when a flush
+                        // (e.g. a non-chunk event) drained the buffer.
+                        if coalescer.is_pending() && flush_deadline.is_none() {
+                            last_window = next_window(rate_ema);
+                        }
+                        let now = Instant::now();
+                        let new_deadline = next_flush_deadline(
+                            coalescer.is_pending(),
+                            flush_deadline,
+                            now,
+                            last_window,
+                        );
+                        // Keep the arm time in sync with the deadline: record
+                        // it when the window is armed, clear it when drained.
+                        match (flush_deadline, new_deadline) {
+                            (None, Some(_)) => flush_arm_time = Some(now),
+                            (Some(_), None) => flush_arm_time = None,
+                            _ => {}
+                        }
+                        flush_deadline = new_deadline;
+                    }
+
+                    // The window timer is only polled at the outer select, but
+                    // the queue may stay non-empty under sustained load. Honor
+                    // an expired deadline here so the throttle semantics hold
+                    // (text waits at most one window) no matter how busy the
+                    // queue is.
+                    if flush_deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+                        let arm_time = flush_arm_time
+                            .expect("arm_time must be set when a deadline is armed");
+                        flush_deadline = None;
+                        flush_arm_time = None;
+                        flush_coalesced(
+                            &mut deliver,
+                            &mut coalescer,
+                            &mut rate_ema,
+                            arm_time,
+                            &mut last_flush_time,
+                        )
+                        .await;
+                    }
+                }
+            }
+            _ = window_timer => {
+                let arm_time = flush_arm_time
+                    .expect("arm_time must be set when a deadline is armed");
+                flush_deadline = None;
+                flush_arm_time = None;
+                flush_coalesced(
+                    &mut deliver,
+                    &mut coalescer,
+                    &mut rate_ema,
+                    arm_time,
+                    &mut last_flush_time,
+                )
+                .await;
+            }
+        }
+    }
+}
+
 fn start_event_loop_with_transport(
     event_queue: Arc<bitfun_core::agentic::events::EventQueue>,
     event_router: Arc<bitfun_core::agentic::events::EventRouter>,
     transport: Arc<TauriTransportAdapter>,
 ) {
-    tauri::async_runtime::spawn(async move {
-        loop {
-            event_queue.wait_for_events().await;
-            loop {
-                let batch = event_queue.dequeue_configured_batch().await;
-                if batch.is_empty() {
-                    break;
-                }
-
-                for envelope in batch {
-                    // Route to internal subscribers (e.g. RemoteSessionStateTracker)
-                    // sequentially so that text chunks are appended in order.
-                    if let Err(e) = event_router.route(envelope.clone()).await {
-                        log::warn!("Internal event routing failed: {:?}", e);
-                    }
-
-                    let event_for_fanout = envelope.event.clone();
-                    if let Err(e) = transport.emit_event(envelope.event).await {
-                        log::error!("Failed to emit event: {:?}", e);
-                    }
-
-                    if !api::peer_host_invoke::attached_controllers().is_empty() {
-                        if let Some(projected) =
-                            bitfun_events::project_agentic_frontend_event(event_for_fanout)
-                        {
-                            api::remote_connect_api::fanout_peer_device_event(
-                                projected.event_name,
-                                projected.payload,
-                            );
-                        }
-                    }
-                }
+    tokio::spawn(async move {
+        event_loop_driver(event_queue, event_router, |event| {
+            let transport = transport.clone();
+            async move {
+                deliver_event_to_webview(&transport, event).await;
             }
-        }
+        })
+        .await;
     });
 }
 
@@ -2654,3 +2845,178 @@ fn spawn_ingest_server_with_config_listener() {
 }
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[cfg(test)]
+mod event_loop_driver_tests {
+    use super::*;
+    use bitfun_core::agentic::events::{EventQueue, EventQueueConfig, EventRouter};
+
+    fn text_chunk(text: &str) -> AgenticEvent {
+        AgenticEvent::TextChunk {
+            session_id: "s".to_string(),
+            turn_id: "t".to_string(),
+            round_id: "r".to_string(),
+            attempt_id: None,
+            attempt_index: None,
+            text: text.to_string(),
+        }
+    }
+
+    /// Regression test for the P1 scheduling issue: the window timer is only
+    /// polled at the outer `select!`, so a drain loop that never finds an
+    /// empty queue (sustained producer load) must still honor the deadline
+    /// in place. The first flush must happen ~one window after the first
+    /// chunk, and further windows must keep firing while the queue stays
+    /// non-empty.
+    ///
+    /// Setup: the producer enqueues one chunk per millisecond and delivery
+    /// stalls one millisecond per event, so the drain loop never sees an
+    /// empty queue. The paused clock steps 1ms at a time so producer and
+    /// driver advance deterministically.
+    #[tokio::test(start_paused = true)]
+    async fn flush_timer_fires_while_queue_stays_non_empty() {
+        let queue = Arc::new(EventQueue::new(EventQueueConfig {
+            max_queue_size: 10000,
+            batch_size: 10,
+        }));
+        let router = Arc::new(EventRouter::new());
+        let received: Arc<tokio::sync::Mutex<Vec<AgenticEvent>>> =
+            Arc::new(tokio::sync::Mutex::new(Vec::new()));
+
+        let producer_queue = queue.clone();
+        let producer = tokio::spawn(async move {
+            for i in 0..1000 {
+                producer_queue
+                    .enqueue(text_chunk(&format!("chunk{i} ")), None)
+                    .await
+                    .expect("enqueue should succeed");
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+        });
+
+        let driver_queue = queue.clone();
+        let driver_received = received.clone();
+        let driver = tokio::spawn(async move {
+            event_loop_driver(driver_queue, router, |event| {
+                let received = driver_received.clone();
+                async move {
+                    received.lock().await.push(event);
+                    // Slow delivery down so the drain never finds the queue
+                    // empty while the producer keeps enqueueing.
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                }
+            })
+            .await;
+        });
+
+        let mut first_flush_at_ms: Option<u128> = None;
+        for step in 0..300 {
+            tokio::time::advance(Duration::from_millis(1)).await;
+            tokio::task::yield_now().await;
+            tokio::task::yield_now().await;
+            tokio::task::yield_now().await;
+            if first_flush_at_ms.is_none() && !received.lock().await.is_empty() {
+                first_flush_at_ms = Some(step as u128 + 1);
+            }
+        }
+
+        let first = first_flush_at_ms.expect(
+            "expected a flush within the first window; with the drain loop never \
+             exiting, the deadline must still be honored in place",
+        );
+        // First chunk lands at ~1ms; the initial window is 50ms, so the first
+        // flush must land around 51ms. 40..=120 is a generous bound that still
+        // fails if the deadline only starts after the drain loop exits.
+        assert!(
+            (40..=120).contains(&first),
+            "first flush at {first}ms, expected ~50ms after the first chunk"
+        );
+
+        let total = received.lock().await.len();
+        assert!(
+            total >= 3,
+            "expected multiple window flushes during sustained drain, got {total}"
+        );
+
+        driver.abort();
+        producer.abort();
+    }
+
+    /// Under sustained drain, merged text must stay a growing prefix of the
+    /// produced stream: no chunk is dropped and none is duplicated.
+    #[tokio::test(start_paused = true)]
+    async fn sustained_drain_does_not_lose_or_duplicate_text() {
+        let queue = Arc::new(EventQueue::new(EventQueueConfig {
+            max_queue_size: 10000,
+            batch_size: 10,
+        }));
+        let router = Arc::new(EventRouter::new());
+        let received: Arc<tokio::sync::Mutex<Vec<AgenticEvent>>> =
+            Arc::new(tokio::sync::Mutex::new(Vec::new()));
+
+        let producer_queue = queue.clone();
+        let producer = tokio::spawn(async move {
+            for i in 0..1000 {
+                producer_queue
+                    .enqueue(text_chunk(&format!("x{i} ")), None)
+                    .await
+                    .expect("enqueue should succeed");
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+        });
+
+        let driver_queue = queue.clone();
+        let driver_received = received.clone();
+        let driver = tokio::spawn(async move {
+            event_loop_driver(driver_queue, router, |event| {
+                let received = driver_received.clone();
+                async move {
+                    received.lock().await.push(event);
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                }
+            })
+            .await;
+        });
+
+        for _ in 0..300 {
+            tokio::time::advance(Duration::from_millis(1)).await;
+            tokio::task::yield_now().await;
+            tokio::task::yield_now().await;
+            tokio::task::yield_now().await;
+        }
+
+        let events = received.lock().await;
+        assert!(
+            events.len() >= 3,
+            "expected multiple flushes, got {}",
+            events.len()
+        );
+        // Each merged event carries only the chunks of its own window; the
+        // frontend appends them to the same text item. Concatenated, they must
+        // reproduce the producer's chunk sequence exactly: contiguous, no
+        // loss, no duplication, no reordering.
+        let mut joined = String::new();
+        for event in events.iter() {
+            if let AgenticEvent::TextChunk { text, .. } = event {
+                joined.push_str(text);
+            }
+        }
+        let numbers: Vec<u32> = joined
+            .split_whitespace()
+            .map(|word| {
+                word.strip_prefix('x')
+                    .and_then(|n| n.parse::<u32>().ok())
+                    .unwrap_or_else(|| panic!("unexpected chunk payload: {word:?}"))
+            })
+            .collect();
+        for (index, number) in numbers.iter().enumerate() {
+            assert_eq!(
+                *number as usize, index,
+                "chunk sequence must be contiguous: got x{number} at position {index}"
+            );
+        }
+
+        driver.abort();
+        producer.abort();
+    }
+}

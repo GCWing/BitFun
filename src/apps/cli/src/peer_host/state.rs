@@ -901,6 +901,9 @@ pub(crate) struct PeerHostState {
     pub(crate) agent_runtime: AgentRuntime,
     pub(crate) local_workspace_snapshot: Arc<dyn bitfun_runtime_ports::LocalWorkspaceSnapshotPort>,
     pub(crate) compatibility: CoreAgentRuntimeCompatibility,
+    pub(crate) account_runtime:
+        Arc<bitfun_core::service::remote_connect::account_runtime::AccountRuntime>,
+    pub(crate) account_routing: Arc<crate::account::CliAccountRoutingHost>,
     pub(crate) turns: PeerTurnTracker,
     pub(crate) workspace_service: Arc<WorkspaceService>,
     pub(crate) filesystem_service: Arc<FileSystemService>,

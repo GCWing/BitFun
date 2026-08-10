@@ -27,10 +27,9 @@
   "sessionTitle": {
     "title": "会话标题自动生成",
     "subtitle": "新对话时 AI 自动生成简洁标题",
-    "enable": "启用",
     "loadFailed": "加载会话标题配置失败",
     "model": {
-      "label": "模型",
+      "label": "会话标题生成模型",
       "primary": "主力模型",
       "fast": "快速模型"
     },

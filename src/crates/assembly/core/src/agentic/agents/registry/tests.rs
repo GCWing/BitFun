@@ -9,7 +9,9 @@ use crate::agentic::agents::registry::types::{
 use crate::agentic::agents::registry::visibility::{
     BuiltinSubagentExposure, SubagentVisibilityPolicy,
 };
-use crate::agentic::agents::{resolve_mode_config_profile_id, Agent, UserContextPolicy};
+use crate::agentic::agents::{
+    builtin_agent_specs, resolve_mode_config_profile_id, Agent, UserContextPolicy,
+};
 use crate::agentic::workspace::session_execution_workspace_root;
 use crate::service::config::types::AgentSubagentOverrideState;
 use async_trait::async_trait;
@@ -19,6 +21,7 @@ use bitfun_agent_runtime::custom_agent::{
 };
 use bitfun_agent_runtime::sdk::{RuntimeAgentRegistry, RuntimeAgentRegistryQuery};
 use bitfun_agent_runtime::session::SessionConfig;
+use bitfun_agent_runtime::thread_goal_tools::THREAD_GOAL_TOOL_NAMES;
 use bitfun_product_domains::external_sources::EcosystemId;
 use bitfun_product_domains::external_subagents::ExternalSubagentMode;
 use std::collections::{BTreeMap, HashMap};
@@ -316,6 +319,25 @@ async fn computer_use_is_builtin_subagent_not_mode() {
         computer_use.visibility.as_ref().map(|value| value.exposure),
         Some(BuiltinSubagentExposure::Restricted)
     );
+}
+
+#[test]
+fn every_builtin_primary_mode_defaults_to_the_thread_goal_lifecycle() {
+    for spec in builtin_agent_specs()
+        .iter()
+        .filter(|spec| spec.category == AgentCategory::Mode)
+    {
+        let mode = (spec.factory)();
+        let default_tools = mode.default_tools();
+        for tool_name in THREAD_GOAL_TOOL_NAMES {
+            assert!(
+                default_tools.iter().any(|tool| tool == tool_name),
+                "builtin primary mode {} is missing {}",
+                mode.id(),
+                tool_name
+            );
+        }
+    }
 }
 
 #[test]
@@ -803,10 +825,11 @@ async fn explicit_custom_mode_load_exposes_user_mode_metadata_in_modes_info() {
     assert_eq!(mode.source, AgentSource::User);
     assert_eq!(mode.path, Some(mode_path.to_string_lossy().to_string()));
     assert_eq!(mode.model, Some("primary".to_string()));
-    assert_eq!(
-        mode.default_tools,
-        vec!["Read".to_string(), "Grep".to_string()]
-    );
+    assert!(mode.default_tools.contains(&"Read".to_string()));
+    assert!(mode.default_tools.contains(&"Grep".to_string()));
+    for tool_name in THREAD_GOAL_TOOL_NAMES {
+        assert!(mode.default_tools.iter().any(|tool| tool == tool_name));
+    }
     assert!(mode.is_readonly);
 }
 
@@ -1443,11 +1466,15 @@ async fn external_agent_role_controls_main_and_task_projection() {
         )],
         route("external::primary"),
     );
-    assert!(registry
+    let primary = registry
         .get_modes_info_for_workspace(Some(&workspace), true)
         .await
-        .iter()
-        .any(|agent| agent.id == logical_id));
+        .into_iter()
+        .find(|agent| agent.id == logical_id)
+        .expect("external primary projection should be visible");
+    for tool_name in THREAD_GOAL_TOOL_NAMES {
+        assert!(primary.default_tools.iter().any(|tool| tool == tool_name));
+    }
     assert!(!registry
         .get_subagents_for_query(&SubagentQueryContext {
             parent_agent_type: Some("agentic"),
@@ -1473,7 +1500,7 @@ async fn external_agent_role_controls_main_and_task_projection() {
         .await
         .iter()
         .any(|agent| agent.id == logical_id));
-    assert!(registry
+    let subagent = registry
         .get_subagents_for_query(&SubagentQueryContext {
             parent_agent_type: Some("agentic"),
             workspace_root: Some(&workspace),
@@ -1482,8 +1509,12 @@ async fn external_agent_role_controls_main_and_task_projection() {
             external_sources_supported: true,
         })
         .await
-        .iter()
-        .any(|agent| agent.id == logical_id));
+        .into_iter()
+        .find(|agent| agent.id == logical_id)
+        .expect("external subagent projection should be visible");
+    for tool_name in THREAD_GOAL_TOOL_NAMES {
+        assert!(!subagent.default_tools.iter().any(|tool| tool == tool_name));
+    }
 }
 
 #[test]

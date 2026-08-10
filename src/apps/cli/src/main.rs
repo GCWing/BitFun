@@ -9,7 +9,6 @@
 /// - Single command execution
 /// - Batch task processing
 mod account;
-mod account_sync;
 mod acp_cli;
 mod actions;
 mod agent;
@@ -37,9 +36,7 @@ mod self_update;
 mod shared_runtime;
 mod shared_tui_backend;
 mod terminal_attention;
-mod tui_account_management;
 mod tui_backend;
-mod tui_worktree_management;
 mod ui;
 
 use anyhow::{anyhow, Result};
@@ -987,7 +984,10 @@ async fn run_interactive(
     };
     // 3.5 Restore persisted account session (if any)
     if !shared {
-        if let Some(user_id) = account::try_restore_session().await {
+        let runtime = runtime
+            .as_ref()
+            .expect("Embedded account startup requires the CLI Runtime");
+        if let Some(user_id) = runtime.account_runtime().try_restore_session().await {
             tracing::info!("Restored account session for user {user_id}");
             if daemon::is_daemon_running() {
                 tracing::info!(
@@ -996,7 +996,11 @@ async fn run_interactive(
             } else {
                 let device = DeviceIdentity::from_current_machine()
                     .map_err(|e| anyhow!("detect device: {e}"))?;
-                if let Err(e) = account::restore_device_routing(&device.device_name).await {
+                if let Err(e) = runtime
+                    .account_runtime()
+                    .restore_device_routing(&device.device_name)
+                    .await
+                {
                     tracing::warn!("Failed to restore device routing: {e}");
                 }
             }
@@ -1006,7 +1010,11 @@ async fn run_interactive(
     // 3.6 Continuous account settings sync (30s pull + debounced push).
     // Safe to start before login: cycles skip while logged out.
     if !shared {
-        account_sync::start_settings_sync_loop();
+        runtime
+            .as_ref()
+            .expect("Embedded settings sync requires the CLI Runtime")
+            .account_runtime()
+            .start_settings_sync_loop();
     }
 
     // Resolve agent override: validate against the agent registry AFTER core services init

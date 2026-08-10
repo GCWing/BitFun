@@ -84,6 +84,7 @@ export const ExternalSourceSection: React.FC<ExternalSourceSectionProps> = ({
                 data-bf-component="external-sources-config"
                 data-bf-part="notice"
                 data-external-attention="true"
+                data-external-ecosystem={group.ecosystemId}
               >
                 <summary>
                   {t('diagnostics.sourceSummary', {

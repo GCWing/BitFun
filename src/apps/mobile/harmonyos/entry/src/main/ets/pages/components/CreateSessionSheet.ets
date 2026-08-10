@@ -1,17 +1,19 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CARD, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, SOFT, SUBTLE } from './Theme';
 
-@Component
+@ComponentV2
 export struct CreateSessionSheet {
-  @Prop createAgentType: string = 'code';
-  @Prop workspaceName: string = '';
-  @Prop workspaceBranch: string = '';
-  @Prop isBusy: boolean = false;
-  @Link sessionTitle: string;
-  @Link instruction: string;
-  onClose: () => void = () => {};
-  onChooseWorkspace: () => void = () => {};
-  onStart: () => void = () => {};
+  @Param createAgentType: string = 'code';
+  @Param workspaceName: string = '';
+  @Param workspaceBranch: string = '';
+  @Param isBusy: boolean = false;
+  @Param sessionTitle: string = '';
+  @Param instruction: string = '';
+  @Event onSessionTitleChange: (value: string) => void = (_value: string) => {};
+  @Event onInstructionChange: (value: string) => void = (_value: string) => {};
+  @Event onClose: () => void = () => {};
+  @Event onChooseWorkspace: () => void = () => {};
+  @Event onStart: () => void = () => {};
 
   build() {
     Column() {
@@ -123,7 +125,7 @@ export struct CreateSessionSheet {
         .border({ width: 1, color: LINE })
         .defaultFocus(false)
         .onChange((value: string) => {
-          this.sessionTitle = value;
+          this.onSessionTitleChange(value);
         })
     }
     .width('100%')
@@ -146,7 +148,7 @@ export struct CreateSessionSheet {
         .border({ width: 1, color: LINE })
         .defaultFocus(false)
         .onChange((value: string) => {
-          this.instruction = value;
+          this.onInstructionChange(value);
         })
     }
     .width('100%')

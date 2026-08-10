@@ -17,33 +17,6 @@ pub(in crate::server) fn builder(
             management_handler!(
                 management,
                 EXTERNAL_SOURCES_CAPABILITY,
-                ExternalApplicationSnapshotRequestV2,
-                external_application_snapshot_v2
-            ),
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_request(
-            management_handler!(
-                management,
-                EXTERNAL_SOURCES_CAPABILITY,
-                ExternalApplicationReviewPageRequest,
-                external_application_review_page_v2
-            ),
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_request(
-            management_handler!(
-                management,
-                EXTERNAL_SOURCES_CAPABILITY,
-                ExternalApplicationActionRequest,
-                apply_external_application_action_v2
-            ),
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_request(
-            management_handler!(
-                management,
-                EXTERNAL_SOURCES_CAPABILITY,
                 ExternalSourceSnapshotRequest,
                 external_source_snapshot
             ),

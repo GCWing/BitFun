@@ -94,8 +94,18 @@ export class RemoteCreateSessionState {
     this.errorText = '';
   }
 
+  /**
+   * The desktop binds every Claw session to its assistant workspace and ignores
+   * the requested workspace_path, so a picked workspace only holds when it is
+   * paired with the code agent. No workspace means the chat option, which is
+   * what Claw is for.
+   */
   submissionContext(): RemoteCreateSessionContext {
-    return new RemoteCreateSessionContext(this.selectedDeviceId, this.selectedWorkspacePath);
+    return new RemoteCreateSessionContext(
+      this.selectedDeviceId,
+      this.selectedWorkspacePath,
+      this.selectedWorkspacePath.length > 0 ? 'code' : 'Claw'
+    );
   }
 
   clearWorkspace(): void {

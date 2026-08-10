@@ -913,7 +913,7 @@ impl SessionManager {
                 .context_for_local_workspace(Path::new(project_workspace_path))
                 .sessions_dir
         } else if identity.hostname == "_unresolved" {
-            bitfun_services_integrations::remote_ssh::unresolved_remote_session_storage_dir(
+            bitfun_services_core::workspace_identity::unresolved_remote_session_storage_dir(
                 runtime_service.path_manager().remote_ssh_mirror_root_dir(),
                 identity.remote_connection_id.as_deref().unwrap_or_default(),
                 identity.logical_workspace_path(),
@@ -10397,6 +10397,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "model-catalog")]
     #[tokio::test]
     async fn reasoning_preset_normalization_uses_the_updated_model() {
         let ai_config = ServiceAIConfig {
@@ -10428,6 +10429,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "model-catalog")]
     #[tokio::test]
     async fn reasoning_preset_reconciliation_persists_auto_state() {
         let workspace = TestWorkspace::new();
@@ -11243,6 +11245,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "remote-workspace")]
     #[tokio::test]
     async fn core_session_store_port_resolves_unresolved_remote_storage_path() {
         use bitfun_runtime_ports::{
@@ -11272,6 +11275,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "remote-workspace")]
     #[tokio::test]
     async fn core_session_store_port_resolved_remote_sessions_dir_passes_through_only_sessions_root(
     ) {

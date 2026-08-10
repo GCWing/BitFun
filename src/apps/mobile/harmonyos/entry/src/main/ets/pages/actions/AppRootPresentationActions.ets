@@ -1,0 +1,152 @@
+import { RemotePermissionMode, RemoteSession } from '../../model/RemoteModels';
+import { CloudAccountDevice } from '../../services/CloudAccountClient';
+import { ConversationIntent } from './ConversationIntent';
+import { AppRoute, ConversationSource } from '../navigation/AppRouteContract';
+
+export interface AppRootPresentationActions {
+  readonly onNavigationBack: (route: AppRoute) => boolean;
+  readonly onConversationIntent: (route: AppRoute, intent: ConversationIntent) => void;
+  readonly onCloseSidebar: () => void;
+  readonly onWideConversationSource: (source: ConversationSource) => void;
+  readonly onCompactConversationSource: (source: ConversationSource) => void;
+  readonly onCompactLayoutEntered: () => void;
+  readonly onLayoutModeChanged: (wideLayout: boolean) => void;
+  readonly onRemoteHome: RemoteHomePresentationActions;
+  readonly onRemoteCreate: RemoteCreatePresentationActions;
+  readonly onSidebar: SidebarPresentationActions;
+  readonly onSettings: SettingsPresentationActions;
+  readonly onConnect: ConnectPresentationActions;
+  readonly onFilePreview: FilePreviewPresentationActions;
+  readonly generalStatus: () => string;
+}
+
+export interface FilePreviewPresentationActions {
+  readonly close: () => void;
+  readonly refresh: () => void;
+  readonly download: (path: string) => void;
+  readonly openLink: (reference: string, label: string) => void;
+}
+
+export interface RemoteCreatePresentationActions {
+  readonly back: () => void;
+  readonly toggleDevices: () => void;
+  readonly toggleWorkspaces: () => void;
+  readonly selectDevice: (device: CloudAccountDevice) => void;
+  readonly selectWorkspace: (path: string) => void;
+  readonly draftChanged: (value: string) => void;
+  readonly voiceInput: () => void;
+  readonly selectModel: (modelId: string) => void;
+  readonly send: () => void;
+}
+
+export interface RemoteHomePresentationActions {
+  readonly openSidebar: () => void;
+  readonly connectWorkspace: () => void;
+  readonly addConnection: () => void;
+  readonly openSettings: () => void;
+  readonly refresh: () => void;
+  readonly showWorkspaces: () => void;
+  readonly showAssistants: () => void;
+  readonly selectWorkspace: (path: string) => void;
+  readonly selectAssistant: (path: string) => void;
+  readonly cancelWorkspace: () => void;
+  readonly cancelAssistant: () => void;
+  readonly queryChanged: (query: string) => void;
+  readonly search: () => void;
+  readonly loadMore: () => void;
+  readonly reconnect: () => void;
+  readonly disconnect: () => void;
+  readonly clearPairing: () => void;
+  readonly create: (agentType: string) => void;
+  readonly createInPlace: (agentType: string) => void;
+  readonly createAssistant: () => void;
+  readonly createInWorkspace: (path: string, agentType: string) => void;
+  readonly createInWorkspaceInPlace: (path: string, agentType: string) => void;
+  readonly openSession: (session: RemoteSession) => void;
+  readonly openSessionInPlace: (session: RemoteSession) => void;
+  readonly deleteSession: (session: RemoteSession) => void;
+}
+
+export interface SidebarPresentationActions {
+  readonly close: () => void;
+  readonly newChat: () => void;
+  readonly enterCode: () => void;
+  readonly settings: () => void;
+  readonly openAccount: () => void;
+  readonly openSession: (session: RemoteSession) => void;
+  readonly archive: (session: RemoteSession, archived: boolean) => void;
+  readonly exportSession: (session: RemoteSession) => void;
+  readonly deleteSession: (session: RemoteSession) => void;
+}
+
+export interface SettingsPresentationActions {
+  readonly close: () => void;
+  readonly addConnection: () => void;
+  readonly disconnect: () => void;
+  readonly reconnect: () => void;
+  readonly openAccount: () => void;
+  readonly cloudLogin: (relayUrl: string, username: string, password: string) => Promise<string>;
+  readonly cloudSync: () => Promise<string>;
+  readonly cloudLogout: () => Promise<void>;
+  readonly cloudListDevices: () => Promise<CloudAccountDevice[]>;
+  readonly getPermissionMode: () => Promise<RemotePermissionMode>;
+  readonly setPermissionMode: (mode: RemotePermissionMode) => Promise<RemotePermissionMode>;
+  readonly testGeneral: (url: string, key: string, model: string, clear: boolean) => Promise<string>;
+  readonly saveGeneral: (url: string, key: string, model: string, clear: boolean) => Promise<string>;
+}
+
+export interface ConnectPresentationActions {
+  readonly back: () => void;
+  readonly connect: (password?: string) => void;
+  readonly clearPairing: () => void;
+  readonly urlChanged: (url: string) => void;
+  readonly userChanged: (user: string) => void;
+  readonly detected: (url: string) => boolean;
+  readonly inputVisible: (visible: boolean) => void;
+  readonly paste: () => void;
+  readonly scan: () => void;
+  readonly cloudListDevices: () => Promise<CloudAccountDevice[]>;
+  readonly cloudSelectDevice: (device: CloudAccountDevice) => Promise<void>;
+}
+
+export function emptyAppRootPresentationActions(): AppRootPresentationActions {
+  return {
+    onNavigationBack: () => false,
+    onConversationIntent: () => {},
+    onCloseSidebar: () => {},
+    onWideConversationSource: () => {},
+    onCompactConversationSource: () => {},
+    onCompactLayoutEntered: () => {},
+    onLayoutModeChanged: () => {},
+    onRemoteHome: {
+      openSidebar: () => {}, connectWorkspace: () => {}, addConnection: () => {}, openSettings: () => {},
+      refresh: () => {}, showWorkspaces: () => {}, showAssistants: () => {}, selectWorkspace: () => {},
+      selectAssistant: () => {}, cancelWorkspace: () => {}, cancelAssistant: () => {}, queryChanged: () => {},
+      search: () => {}, loadMore: () => {}, reconnect: () => {}, disconnect: () => {}, clearPairing: () => {},
+      create: () => {}, createInPlace: () => {}, createAssistant: () => {}, createInWorkspace: () => {},
+      createInWorkspaceInPlace: () => {}, openSession: () => {}, openSessionInPlace: () => {}, deleteSession: () => {}
+    },
+    onRemoteCreate: {
+      back: () => {}, toggleDevices: () => {}, toggleWorkspaces: () => {}, selectDevice: () => {},
+      selectWorkspace: () => {}, draftChanged: () => {}, voiceInput: () => {}, selectModel: () => {}, send: () => {}
+    },
+    onSidebar: {
+      close: () => {}, newChat: () => {}, enterCode: () => {}, settings: () => {}, openAccount: () => {},
+      openSession: () => {}, archive: () => {}, exportSession: () => {}, deleteSession: () => {}
+    },
+    onSettings: {
+      close: () => {}, addConnection: () => {}, disconnect: () => {}, reconnect: () => {}, openAccount: () => {},
+      cloudLogin: async () => '', cloudSync: async () => '', cloudLogout: async () => {},
+      cloudListDevices: async () => [], getPermissionMode: async () => 'ask',
+      setPermissionMode: async (mode: RemotePermissionMode) => mode,
+      testGeneral: async () => '', saveGeneral: async () => ''
+    },
+    onConnect: {
+      back: () => {}, connect: () => {}, clearPairing: () => {}, urlChanged: () => {}, userChanged: () => {},
+      detected: () => false, inputVisible: () => {}, paste: () => {}, scan: () => {},
+      cloudListDevices: async () => [], cloudSelectDevice: async () => {}
+    },
+    onFilePreview: { close: () => {}, refresh: () => {}, download: () => {}, openLink: () => {} },
+    generalStatus: () => ''
+  };
+}

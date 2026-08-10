@@ -1390,19 +1390,22 @@ impl<Tool: ToolRegistryItem + ?Sized> ToolRuntimeAssembly<Tool> {
         Ok(self.create_registry_from_static_providers(&providers))
     }
 
-    pub fn create_registry_from_static_provider_entries<Entries, Factory>(
+    pub fn create_registry_from_static_provider_entries<Entries, ToolNames, Factory>(
         &self,
         entries: Entries,
         factory: &Factory,
     ) -> Result<ToolRegistry<Tool>, StaticToolMaterializationError>
     where
-        Entries: IntoIterator<Item = (&'static str, &'static [&'static str])>,
+        Entries: IntoIterator<Item = (&'static str, ToolNames)>,
+        ToolNames: IntoIterator,
+        ToolNames::Item: std::borrow::Borrow<&'static str>,
         Factory: StaticToolProviderFactory<Tool> + ?Sized,
     {
         let mut providers = Vec::new();
         for (provider_id, tool_names) in entries {
             let mut tools = Vec::new();
             for tool_name in tool_names {
+                let tool_name = *std::borrow::Borrow::borrow(&tool_name);
                 let tool = factory.materialize_tool(tool_name).ok_or(
                     StaticToolMaterializationError::UnknownTool {
                         provider_id,

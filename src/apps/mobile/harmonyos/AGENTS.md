@@ -2,6 +2,44 @@
 
 These rules apply to all changes under `src/apps/mobile/harmonyos`.
 
+## MVVM Refactor Boundaries
+
+This app has one `entry` module, so MVVM is the file-organization boundary for
+the module. Keep the official responsibilities explicit:
+
+- Model/services own data access, persistence, transport, and business logic;
+  they do not import views or page components.
+- Views own presentation and user input; they consume projected state and emit
+  intents/events rather than calling services directly.
+- ViewModels bridge services and views by owning feature state, projecting data,
+  and handling intents. ViewModels must not import components.
+
+The following constraints are enforced incrementally by
+`pnpm run harmony:architecture` (the runtime behavior checks remain in
+`entry/src/test/ArchitectureUnit.test.ets`):
+
+1. `services/**` must not import `../pages/`.
+2. `pages/components/**` must not import `pages/viewmodel/`; imports of
+   `pages/state/` and `pages/policy/` are allowed for observable state and pure
+   policies.
+3. The page dependency graph must remain acyclic; ViewModels must not depend on
+   components.
+4. Actions and Hooks use typed interfaces with object literals. Do not add
+   position-dependent callback constructors.
+5. New components use `@ComponentV2`; do not add V1 `@Component`, `@State`,
+   `@Prop`, `@Link`, or `@Watch` declarations. `@BuilderParam` remains supported.
+6. General Chat and Remote Chat shared observable fields belong to
+   `pages/state/ConversationCoreState.ets`. Page-specific state objects compose
+   that core and must not redeclare the shared `@Trace` fields.
+
+The current local HarmonyOS verification loop is:
+
+```bash
+source scripts/ohos-env.sh
+"$HVIGORW" --mode module -p product=default -p module=entry@default assembleHap --no-daemon
+"$HVIGORW" --mode module -p module=entry@default -p ohos.test.type=LocalTest test --no-daemon
+```
+
 ## Visual reference fidelity
 
 - Before drawing a system glyph, text approximation, or new bitmap, search the existing HarmonyOS media resources and the approved desktop reference images. Reuse the established asset when one exists.

@@ -20,6 +20,7 @@ import { GeneralChatCommandClient, GeneralChatCommandController } from '../main/
 import {
   GeneralChatConfigSnapshot,
   GeneralChatConfigStore,
+  GeneralChatConfigUpdate,
   GeneralChatConfigValidator,
   GeneralChatModelSelectionPolicy
 } from '../main/ets/services/general-chat/GeneralChatConfigStore';
@@ -84,6 +85,7 @@ import {
 import { VoiceInputCallbacks, VoiceInputService } from '../main/ets/services/VoiceInputService';
 import { AppShellState } from '../main/ets/pages/state/AppShellState';
 import { GeneralChatPageState } from '../main/ets/pages/state/GeneralChatPageState';
+import { SettingsController } from '../main/ets/pages/viewmodel/SettingsController';
 import { RemotePageState } from '../main/ets/pages/state/RemotePageState';
 import { ConversationViewState } from '../main/ets/pages/state/ConversationViewState';
 import {
@@ -215,6 +217,54 @@ function modelProviderRecordedResponse(statusCode: number, body: string): ModelP
   response.statusCode = statusCode;
   response.body = body;
   return response;
+}
+
+class InMemorySettingsConfigStore extends GeneralChatConfigStore {
+  snapshotResult: GeneralChatConfigSnapshot = {
+    apiUrl: '',
+    modelName: '',
+    hasApiKey: false
+  };
+  accessTokenResult: string = '';
+  modelCatalogResults: RemoteModelCatalog[] = [];
+  modelCatalogCalls: number = 0;
+  saveRequests: GeneralChatConfigUpdate[] = [];
+  selectLocalModelCalls: number = 0;
+
+  async snapshot(): Promise<GeneralChatConfigSnapshot> {
+    return this.snapshotResult;
+  }
+
+  async save(update: GeneralChatConfigUpdate): Promise<GeneralChatConfigSnapshot> {
+    this.saveRequests.push(update);
+    this.snapshotResult = {
+      apiUrl: update.apiUrl.trim(),
+      modelName: update.modelName.trim(),
+      hasApiKey: !update.clearApiKey
+    };
+    return this.snapshotResult;
+  }
+
+  async accessToken(): Promise<string> {
+    return this.accessTokenResult;
+  }
+
+  async modelCatalog(): Promise<RemoteModelCatalog> {
+    const index = Math.min(this.modelCatalogCalls, this.modelCatalogResults.length - 1);
+    this.modelCatalogCalls += 1;
+    if (index >= 0) {
+      return this.modelCatalogResults[index];
+    }
+    return { version: 1, models: [], default_models: {} };
+  }
+
+  async selectLocalModel(): Promise<void> {
+    this.selectLocalModelCalls += 1;
+  }
+
+  async activeSnapshot(): Promise<GeneralChatConfigSnapshot> {
+    return this.snapshotResult;
+  }
 }
 
 export default function transportAndGeneralChatUnitTest() {
@@ -745,6 +795,66 @@ export default function transportAndGeneralChatUnitTest() {
       }, false);
       expect(urlError).assertEqual('API URL 必须以 http:// 或 https:// 开头。');
       expect(keyError).assertEqual('请输入 API Key。');
+    });
+  });
+
+  describe('SettingsController', () => {
+    it('tests model configuration with the stored key when the form keeps it unchanged', 0, async () => {
+      const store = new InMemorySettingsConfigStore();
+      store.snapshotResult = {
+        apiUrl: 'https://chat.example.com',
+        modelName: 'model-a',
+        hasApiKey: true
+      };
+      store.accessTokenResult = ' stored-key ';
+      let probedApiKey = '';
+      const controller = new SettingsController(store, new GeneralChatPageState(), {
+        probeConfiguration: async (_apiUrl: string, apiKey: string, _modelName: string): Promise<void> => {
+          probedApiKey = apiKey;
+        }
+      });
+
+      const error = await controller.test('https://chat.example.com', '', 'model-a', false);
+
+      expect(error).assertEqual('');
+      expect(probedApiKey).assertEqual('stored-key');
+    });
+
+    it('saves the first local model and projects its catalog into page state', 0, async () => {
+      const store = new InMemorySettingsConfigStore();
+      store.modelCatalogResults = [
+        { version: 1, models: [], default_models: {} },
+        {
+          version: 2,
+          models: [{
+            id: 'local-general-chat',
+            name: 'model-a',
+            provider: 'local',
+            base_url: 'https://chat.example.com',
+            model_name: 'model-a',
+            enabled: true,
+            capabilities: ['text_chat']
+          }],
+          default_models: { primary: 'local-general-chat' },
+          session_model_id: 'local-general-chat'
+        }
+      ];
+      const state = new GeneralChatPageState();
+      const controller = new SettingsController(store, state, {
+        probeConfiguration: async (_apiUrl: string, _apiKey: string, _modelName: string): Promise<void> => {
+        }
+      });
+
+      const error = await controller.save(
+        'https://chat.example.com', 'new-key', 'model-a', false
+      );
+
+      expect(error).assertEqual('');
+      expect(store.saveRequests.length).assertEqual(1);
+      expect(store.selectLocalModelCalls).assertEqual(1);
+      expect(state.apiUrl).assertEqual('https://chat.example.com');
+      expect(state.conversation.selectedModelId).assertEqual('local-general-chat');
+      expect(state.serviceState).assertEqual(GeneralChatServiceState.Ready);
     });
   });
 

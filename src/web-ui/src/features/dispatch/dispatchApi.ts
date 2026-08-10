@@ -79,6 +79,14 @@ export const dispatchApi = {
     });
   },
 
+  /**
+   * Push this device's model configuration, API keys included, to an SSH
+   * target.
+   *
+   * Submission does this on its own whenever the target cannot serve the
+   * chosen model, so this is the explicit form of an otherwise automatic
+   * step — kept for callers that want to re-push without starting a job.
+   */
   async syncModelConfig(connectionId: string): Promise<void> {
     return api.invoke<void>('dispatch_sync_model_config', {
       request: { connectionId },

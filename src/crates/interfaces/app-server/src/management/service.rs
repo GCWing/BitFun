@@ -16,17 +16,20 @@ use bitfun_app_server_protocol::model::*;
 use bitfun_app_server_protocol::skill::*;
 use bitfun_app_server_protocol::subagent::*;
 use bitfun_app_server_protocol::worktree::*;
+use bitfun_core::service::remote_connect::account_runtime::{
+    AccountRuntime, AccountSyncProgress, AccountSyncStatus,
+};
 
 use super::{
-    AccountManagementHost, AppManagementCapabilities, AppManagementError, AppManagementResult,
-    WorktreeManagementHost, ACCOUNT_CAPABILITY, SETTINGS_SYNC_CAPABILITY, WORKTREES_CAPABILITY,
+    AppManagementCapabilities, AppManagementError, AppManagementResult, ACCOUNT_CAPABILITY,
+    SETTINGS_SYNC_CAPABILITY, WORKTREES_CAPABILITY,
 };
 
 /// App Server adapter shared by Embedded and local Shared compatibility Hosts.
 ///
 /// The service delegates to the existing config, registry, MCP, and external
-/// source owners. Hosts must inject it explicitly; constructing an App Server
-/// does not make local management capabilities available by default.
+/// source owners. Local-only capabilities must be enabled through the local
+/// Host constructor; constructing an App Server does not enable them by default.
 pub struct AppManagementService {
     config: Arc<bitfun_core::service::config::ConfigService>,
     mcp: Option<Arc<bitfun_core::service::mcp::MCPService>>,
@@ -35,24 +38,22 @@ pub struct AppManagementService {
         bitfun_product_domains::external_sources::ExternalSourcePublicSnapshot,
     )>,
     external_source_subscriptions: Arc<Mutex<HashSet<String>>>,
-    account: Option<Arc<dyn AccountManagementHost>>,
-    worktree: Option<Arc<dyn WorktreeManagementHost>>,
+    account: Option<Arc<AccountRuntime>>,
+    local_worktrees_enabled: bool,
 }
 
 impl AppManagementService {
     pub async fn load() -> Result<Self> {
-        Self::load_with_hosts(None, None).await
+        Self::load_inner(None, false).await
     }
 
-    pub async fn load_with_account_host(
-        account: Option<Arc<dyn AccountManagementHost>>,
-    ) -> Result<Self> {
-        Self::load_with_hosts(account, None).await
+    pub async fn load_for_local_host(account: Option<Arc<AccountRuntime>>) -> Result<Self> {
+        Self::load_inner(account, true).await
     }
 
-    pub async fn load_with_hosts(
-        account: Option<Arc<dyn AccountManagementHost>>,
-        worktree: Option<Arc<dyn WorktreeManagementHost>>,
+    async fn load_inner(
+        account: Option<Arc<AccountRuntime>>,
+        local_worktrees_enabled: bool,
     ) -> Result<Self> {
         let config = bitfun_core::service::config::get_global_config_service()
             .await
@@ -64,20 +65,24 @@ impl AppManagementService {
             external_source_updates,
             external_source_subscriptions: Arc::new(Mutex::new(HashSet::new())),
             account,
-            worktree,
+            local_worktrees_enabled,
         })
     }
 
-    fn account_host(&self, capability: &str) -> AppManagementResult<&dyn AccountManagementHost> {
+    fn account_runtime(&self, capability: &str) -> AppManagementResult<&Arc<AccountRuntime>> {
         self.account
-            .as_deref()
+            .as_ref()
             .ok_or_else(|| AppManagementError::unsupported(format!("{capability} is unavailable")))
     }
 
-    fn worktree_host(&self) -> AppManagementResult<&dyn WorktreeManagementHost> {
-        self.worktree.as_deref().ok_or_else(|| {
-            AppManagementError::unsupported(format!("{WORKTREES_CAPABILITY} is unavailable"))
-        })
+    fn require_local_worktrees(&self) -> AppManagementResult<()> {
+        if self.local_worktrees_enabled {
+            Ok(())
+        } else {
+            Err(AppManagementError::unsupported(format!(
+                "{WORKTREES_CAPABILITY} is unavailable"
+            )))
+        }
     }
 
     async fn model_config(
@@ -192,7 +197,8 @@ fn external_source_string_error_with_id(error: String, operation_id: &str) -> Ap
 }
 
 fn validate_external_operation(operation_id: &str) -> AppManagementResult<()> {
-    validate_operation_id(operation_id).map_err(AppManagementError::invalid_request)
+    bitfun_app_server_protocol::external_source::validate_operation_id(operation_id)
+        .map_err(AppManagementError::invalid_request)
 }
 
 const MAX_NATIVE_HOOK_COMMAND_CHARS: usize = 200;
@@ -849,10 +855,10 @@ impl AppManagementService {
             capabilities.settings_sync =
                 bitfun_app_server_protocol::app::CapabilityAvailability::Unavailable { reason };
         }
-        if self.worktree.is_none() {
+        if !self.local_worktrees_enabled {
             capabilities.worktrees =
                 bitfun_app_server_protocol::app::CapabilityAvailability::Unavailable {
-                    reason: "The Host did not provide a Worktree owner".to_string(),
+                    reason: "The Host did not enable local Worktree management".to_string(),
                 };
         }
         capabilities
@@ -862,93 +868,158 @@ impl AppManagementService {
         &self,
         request: WorktreeRepositoryStatusRequest,
     ) -> AppManagementResult<WorktreeRepositoryStatusResponse> {
-        self.worktree_host()?.repository_status(request).await
+        self.require_local_worktrees()?;
+        super::worktree::repository_status(request).await
     }
 
     pub async fn worktree_bind_session(
         &self,
         request: WorktreeBindSessionRequest,
     ) -> AppManagementResult<WorktreeBindingResponse> {
-        self.worktree_host()?.bind_session(request).await
+        self.require_local_worktrees()?;
+        super::worktree::bind_session(request).await
     }
 
     pub async fn worktree_release_session(
         &self,
         request: WorktreeReleaseSessionRequest,
     ) -> AppManagementResult<WorktreeBindingResponse> {
-        self.worktree_host()?.release_session(request).await
+        self.require_local_worktrees()?;
+        super::worktree::release_session(request).await
     }
 
     pub async fn account_snapshot(
         &self,
         request: AccountSnapshotRequest,
     ) -> AppManagementResult<AccountSnapshotResponse> {
-        self.account_host(ACCOUNT_CAPABILITY)?
-            .account_snapshot(request)
-            .await
+        let _ = request.workspace_path;
+        Ok(project_account_snapshot(
+            self.account_runtime(ACCOUNT_CAPABILITY)?.snapshot().await,
+        ))
     }
 
     pub async fn account_login(
         &self,
         request: AccountLoginRequest,
     ) -> AppManagementResult<AccountLoginResponse> {
-        self.account_host(ACCOUNT_CAPABILITY)?
-            .account_login(request)
+        validate_account_operation_id(&request.operation_id)?;
+        let result = self
+            .account_runtime(ACCOUNT_CAPABILITY)?
+            .login_with_credentials(&request.relay_url, &request.username, &request.password)
             .await
+            .map_err(|error| account_error(error, &request))?;
+        let status_message = account_login_status_message(&result);
+        Ok(AccountLoginResponse {
+            user_id: result.user_id,
+            relay_url: result.relay_url,
+            has_cloud_settings: result.has_cloud_settings,
+            status_message,
+        })
     }
 
     pub async fn account_finalize_login(
         &self,
         request: AccountFinalizeLoginRequest,
     ) -> AppManagementResult<AccountSnapshotResponse> {
-        self.account_host(ACCOUNT_CAPABILITY)?
-            .account_finalize_login(request)
+        validate_account_operation_id(&request.operation_id)?;
+        let account = self.account_runtime(ACCOUNT_CAPABILITY)?;
+        account
+            .finalize_login_after_sync_choice()
             .await
+            .map_err(internal_account_error)?;
+        if !account
+            .start_auto_sync_background(
+                request.operation_id,
+                request.choice == AccountSyncChoice::Local,
+                PathBuf::from(request.workspace_path),
+            )
+            .await
+        {
+            return Err(AppManagementError::invalid_request(
+                "Account settings sync is already in progress",
+            ));
+        }
+        Ok(project_account_snapshot(account.snapshot().await))
     }
 
     pub async fn account_logout(
         &self,
         request: AccountLogoutRequest,
     ) -> AppManagementResult<AccountSnapshotResponse> {
-        self.account_host(ACCOUNT_CAPABILITY)?
-            .account_logout(request)
-            .await
+        validate_account_operation_id(&request.operation_id)?;
+        let account = self.account_runtime(ACCOUNT_CAPABILITY)?;
+        account.logout().await.map_err(internal_account_error)?;
+        account.mark_sync_cancelled(request.operation_id).await;
+        Ok(project_account_snapshot(account.snapshot().await))
     }
 
     pub async fn settings_sync_start(
         &self,
         request: SettingsSyncStartRequest,
     ) -> AppManagementResult<SettingsSyncResponse> {
-        self.account_host(SETTINGS_SYNC_CAPABILITY)?
-            .settings_sync_start(request)
+        validate_account_operation_id(&request.operation_id)?;
+        let account = self.account_runtime(SETTINGS_SYNC_CAPABILITY)?;
+        if !account.is_logged_in().await {
+            return Err(AppManagementError::invalid_request(
+                "Account login must be finalized before settings sync starts",
+            ));
+        }
+        if !account
+            .start_auto_sync_background(
+                request.operation_id,
+                request.is_first_login,
+                PathBuf::from(request.workspace_path),
+            )
             .await
+        {
+            return Err(AppManagementError::invalid_request(
+                "Account settings sync is already in progress",
+            ));
+        }
+        Ok(SettingsSyncResponse {
+            progress: project_sync_progress(account.current_sync_progress().await),
+        })
     }
 
     pub async fn settings_sync_snapshot(
         &self,
         request: SettingsSyncSnapshotRequest,
     ) -> AppManagementResult<SettingsSyncResponse> {
-        self.account_host(SETTINGS_SYNC_CAPABILITY)?
-            .settings_sync_snapshot(request)
-            .await
+        let _ = request;
+        let progress = self
+            .account_runtime(SETTINGS_SYNC_CAPABILITY)?
+            .current_sync_progress()
+            .await;
+        Ok(SettingsSyncResponse {
+            progress: project_sync_progress(progress),
+        })
     }
 
     pub async fn settings_sync_cancel(
         &self,
         request: SettingsSyncCancelRequest,
     ) -> AppManagementResult<SettingsSyncResponse> {
-        self.account_host(SETTINGS_SYNC_CAPABILITY)?
-            .settings_sync_cancel(request)
+        validate_account_operation_id(&request.operation_id)?;
+        let progress = self
+            .account_runtime(SETTINGS_SYNC_CAPABILITY)?
+            .cancel_sync(request.operation_id)
             .await
+            .map_err(internal_account_error)?;
+        Ok(SettingsSyncResponse {
+            progress: project_sync_progress(progress),
+        })
     }
 
     pub async fn settings_sync_local_changed(
         &self,
         request: SettingsSyncLocalChangedRequest,
     ) -> AppManagementResult<SettingsSyncResponse> {
-        self.account_host(SETTINGS_SYNC_CAPABILITY)?
-            .settings_sync_local_changed(request)
-            .await
+        validate_account_operation_id(&request.operation_id)?;
+        let account = self.account_runtime(SETTINGS_SYNC_CAPABILITY)?;
+        account.notify_local_settings_changed();
+        Ok(SettingsSyncResponse {
+            progress: project_sync_progress(account.current_sync_progress().await),
+        })
     }
 
     pub async fn native_hook_overview(
@@ -1023,55 +1094,6 @@ impl AppManagementService {
         let workspace = Path::new(&request.workspace_path);
         self.ensure_external_source_subscription(workspace).await?;
         external_source_snapshot_response(workspace, request.force_refresh).await
-    }
-
-    pub async fn external_application_snapshot_v2(
-        &self,
-        request: ExternalApplicationSnapshotRequestV2,
-    ) -> AppManagementResult<ExternalApplicationSnapshotResponseV2> {
-        bitfun_core::external_sources::get_external_application_snapshot_v2(
-            request.workspace_path.as_deref().map(Path::new),
-            request.force_refresh,
-            bitfun_product_domains::external_source_control::ExternalApplicationHostCapabilitiesV2::read_write(),
-        )
-        .await
-        .map(ExternalApplicationSnapshotResponseV2)
-        .map_err(external_source_string_error)
-    }
-
-    pub async fn external_application_review_page_v2(
-        &self,
-        request: ExternalApplicationReviewPageRequest,
-    ) -> AppManagementResult<ExternalApplicationReviewPageResponseV2> {
-        request
-            .request
-            .validate()
-            .map_err(AppManagementError::invalid_request)?;
-        bitfun_core::external_sources::get_external_application_review_page_v2(
-            request.workspace_path.as_deref().map(Path::new),
-            request.request,
-        )
-        .await
-        .map(ExternalApplicationReviewPageResponseV2)
-        .map_err(external_source_string_error)
-    }
-
-    pub async fn apply_external_application_action_v2(
-        &self,
-        request: ExternalApplicationActionRequest,
-    ) -> AppManagementResult<ExternalApplicationActionResponseV2> {
-        request
-            .request
-            .validate()
-            .map_err(AppManagementError::invalid_request)?;
-        let operation_id = request.request.operation_id.clone();
-        bitfun_core::external_sources::apply_external_application_action_v2(
-            request.workspace_path.as_deref().map(Path::new),
-            request.request,
-        )
-        .await
-        .map(ExternalApplicationActionResponseV2)
-        .map_err(|error| external_source_string_error_with_id(error, &operation_id))
     }
 
     pub async fn external_source_control(
@@ -1739,6 +1761,114 @@ impl AppManagementService {
         .map_err(|error| AppManagementError::internal(sanitize_management_error(error)))?;
         Ok(McpConflictChoiceResponse {})
     }
+}
+
+fn project_account_snapshot(
+    snapshot: bitfun_core::service::remote_connect::account_runtime::AccountSnapshot,
+) -> AccountSnapshotResponse {
+    AccountSnapshotResponse {
+        logged_in: snapshot.logged_in,
+        pending_sync_choice: snapshot.pending_sync_choice,
+        info: snapshot.info.map(|info| AccountInfo {
+            user_id: info.user_id,
+            relay_url: info.relay_url,
+            device_id: info.device_id,
+            device_name: info.device_name,
+        }),
+        devices: snapshot
+            .devices
+            .into_iter()
+            .map(|device| AccountDevice {
+                device_id: device.device_id,
+                device_name: device.device_name,
+                online: device.online,
+            })
+            .collect(),
+        sync: project_sync_progress(snapshot.sync),
+    }
+}
+
+fn project_sync_progress(progress: AccountSyncProgress) -> SettingsSyncProgress {
+    SettingsSyncProgress {
+        operation_id: progress.operation_id,
+        status: match progress.status {
+            AccountSyncStatus::Idle => SettingsSyncStatus::Idle,
+            AccountSyncStatus::Syncing => SettingsSyncStatus::Syncing,
+            AccountSyncStatus::Done => SettingsSyncStatus::Done,
+            AccountSyncStatus::Failed => SettingsSyncStatus::Failed,
+            AccountSyncStatus::Cancelled => SettingsSyncStatus::Cancelled,
+        },
+        phase: progress.phase,
+        percent: progress.percent,
+        current: progress.current,
+        total: progress.total,
+        detail: progress.detail,
+        error: progress.error,
+        settings_synced: progress.settings_synced,
+        sessions_exported: progress.sessions_exported,
+    }
+}
+
+fn account_login_status_message(
+    result: &bitfun_core::service::remote_connect::account_runtime::AccountLoginResult,
+) -> String {
+    if result.has_cloud_settings {
+        return format!(
+            "Authenticated as user {} on {}. Choose cloud or local settings to finish login.",
+            result.user_id, result.relay_url
+        );
+    }
+    if result.routing_connected {
+        format!(
+            "Logged in as user {} on {}. Device routing connected.",
+            result.user_id, result.relay_url
+        )
+    } else if let Some(error) = &result.routing_error {
+        format!(
+            "Logged in as user {} on {}. Device routing failed: {}",
+            result.user_id,
+            result.relay_url,
+            bounded_error(error.clone())
+        )
+    } else {
+        format!(
+            "Logged in as user {} on {}.",
+            result.user_id, result.relay_url
+        )
+    }
+}
+
+fn validate_account_operation_id(operation_id: &str) -> AppManagementResult<()> {
+    let valid = !operation_id.trim().is_empty()
+        && operation_id.len() <= 128
+        && operation_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'));
+    valid
+        .then_some(())
+        .ok_or_else(|| AppManagementError::invalid_request("Account operation ID is invalid"))
+}
+
+fn account_error(error: anyhow::Error, request: &AccountLoginRequest) -> AppManagementError {
+    let mut message = error.to_string();
+    for secret in [&request.relay_url, &request.username, &request.password] {
+        if !secret.is_empty() {
+            message = message.replace(secret, "<redacted>");
+        }
+    }
+    AppManagementError::internal(bounded_error(message))
+}
+
+fn internal_account_error(error: anyhow::Error) -> AppManagementError {
+    AppManagementError::internal(bounded_error(error.to_string()))
+}
+
+fn bounded_error(message: String) -> String {
+    message
+        .chars()
+        .filter(|character| !character.is_control())
+        .take(500)
+        .collect()
 }
 
 #[cfg(test)]

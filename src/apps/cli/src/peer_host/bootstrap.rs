@@ -40,6 +40,8 @@ pub(crate) async fn ensure_peer_host_ready(runtime: &CliRuntimeContext) -> Resul
         agent_runtime: runtime.agent_runtime().clone(),
         local_workspace_snapshot: runtime.local_workspace_snapshot().clone(),
         compatibility: runtime.compatibility().clone(),
+        account_runtime: runtime.account_runtime().clone(),
+        account_routing: runtime.account_routing().clone(),
         turns: PeerTurnTracker::new(),
         workspace_service,
         filesystem_service,

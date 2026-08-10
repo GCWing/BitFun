@@ -74,7 +74,7 @@
       "region": "cn",
       "name": "Qwen (Alibaba)",
       "description": "Alibaba Qwen series",
-      "help_url": "https://dashscope.console.aliyun.com/apiKey",
+      "help_url": "https://bailian.console.aliyun.com",
       "requires_api_key": true,
       "catalog_provider_ids": ["alibaba"],
       "endpoints": [
