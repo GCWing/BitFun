@@ -628,7 +628,8 @@ pub struct AIConfig {
     pub browser_control_preferred_browser: String,
 
     /// Maximum number of rounds per dialog turn before soft-pausing.
-    #[serde(default = "default_max_rounds")]
+    /// `max_turns` is accepted as an alias in config files.
+    #[serde(default = "default_max_rounds", alias = "max_turns")]
     pub max_rounds: usize,
 }
 

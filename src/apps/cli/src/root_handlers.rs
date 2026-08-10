@@ -25,6 +25,8 @@ pub struct ExecCommandArgs {
     pub confirm: bool,
     pub no_title: bool,
     pub no_persist: bool,
+    /// Per-dialog-turn round-limit override (`0` = unlimited).
+    pub max_rounds: Option<usize>,
 }
 
 pub async fn handle_exec_command(config: CliConfig, args: ExecCommandArgs) -> Result<()> {
@@ -56,9 +58,14 @@ pub async fn handle_exec_command(config: CliConfig, args: ExecCommandArgs) -> Re
 
     let skip_confirmation = !args.confirm;
     let (agentic_system, original_skip_confirmation, original_title_generation) =
-        crate::initialize_core_services(skip_confirmation, args.no_title, args.no_persist)
-            .await
-            .map_err(|error| {
+        crate::initialize_core_services(
+            skip_confirmation,
+            args.no_title,
+            args.no_persist,
+            args.max_rounds,
+        )
+        .await
+        .map_err(|error| {
                 emit_exit_diagnostic(
                     ExitKind::ExecError,
                     &error.to_string(),
