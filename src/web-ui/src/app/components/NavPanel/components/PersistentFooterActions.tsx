@@ -24,7 +24,6 @@ import { useCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/ToolbarModeContext';
 import { useNotification } from '@/shared/notification-system';
 import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
-import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import NotificationButton from '../../TitleBar/NotificationButton';
 import GithubStarButton from './GithubStarButton';
 import { usePrivacy } from '../../Privacy/PrivacyContext';

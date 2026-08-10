@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useCallback, useRef } from 'react';
+import { Image, Loader2 } from 'lucide-react';
 import { createRoot } from 'react-dom/client';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { notificationService } from '@/shared/notification-system';
@@ -22,6 +23,7 @@ import { withTimeout } from '@/shared/utils/timing';
 import { downloadDir, join } from '@tauri-apps/api/path';
 import { writeFile } from '@tauri-apps/plugin-fs';
 import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
+import { Tooltip } from '@/component-library';
 import './ExportImageButton.scss';
 
 const log = createLogger('ExportImageButton');

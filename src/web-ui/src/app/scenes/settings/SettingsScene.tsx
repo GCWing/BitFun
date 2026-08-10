@@ -85,12 +85,12 @@ const SettingsScene: React.FC = () => {
   const setActiveTab = useSettingsStore(s => s.setActiveTab);
 
   const resolvedTab: ConfigTab =
-    (activeTab as string) === 'session-config' ? 'session-personalization' : activeTab;
+    (activeTab as string) === 'session-config' ? 'session-permissions' : activeTab;
 
   useEffect(() => {
     /** Legacy merged session settings tab removed in favor of two panels. */
     if ((activeTab as string) === 'session-config') {
-      setActiveTab('session-personalization');
+      setActiveTab('session-permissions');
     }
   }, [activeTab, setActiveTab]);
 
