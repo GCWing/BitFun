@@ -5202,9 +5202,11 @@ impl ExecutionEngine {
                 // an empty-reply / non-progress storm cannot turn the finalize
                 // step itself into an unbounded token sink; when the budget is
                 // exhausted, synthesize a local final response instead.
-                let mut finalize_rounds_completed = 0usize;
+                // finalize 路径是直线结构：首请求 + 至多一次重试，天然受
+                // DEFAULT_FINALIZE_ROUND_LIMIT=2 约束（gate 边界 0/1 用字面量
+                // 显式表达），无需运行时计数（消除「写后未读」死代码）。
                 let finalize_allowed = Self::should_allow_finalize_round(
-                    finalize_rounds_completed,
+                    0,
                     DEFAULT_FINALIZE_ROUND_LIMIT,
                 );
                 let finalize_round_group_id = Some(format!(
@@ -5213,7 +5215,7 @@ impl ExecutionEngine {
                 ));
                 info!(
                     "Finalizing dialog turn: session_id={}, turn_id={}, reason={}, finalize_rounds_completed={}, finalize_allowed={}",
-                    context.session_id, context.dialog_turn_id, reason, finalize_rounds_completed, finalize_allowed
+                    context.session_id, context.dialog_turn_id, reason, 0usize, finalize_allowed
                 );
 
                 let finalize_static_prepended_reminders = turn_prompt_scaffold
@@ -5247,7 +5249,7 @@ impl ExecutionEngine {
                 } else {
                     warn!(
                         "Finalize round budget exhausted ({} >= {}); synthesizing local final response: session_id={}, turn_id={}, reason={}",
-                        finalize_rounds_completed,
+                        0usize,
                         DEFAULT_FINALIZE_ROUND_LIMIT,
                         context.session_id,
                         context.dialog_turn_id,
@@ -5255,7 +5257,8 @@ impl ExecutionEngine {
                     );
                     crate::agentic::execution::types::RoundResult::local_fallback()
                 };
-                finalize_rounds_completed += 1;
+                // 首请求完成；重试门控（1 < 2）为后续唯一读取点，
+                // 修复前此处的 += 1 是「写后未读」死代码，已移除。
 
                 let mut accepted = final_round_result.had_assistant_text
                     && !Self::assistant_has_tool_calls(&final_round_result.assistant_message);
@@ -5271,7 +5274,7 @@ impl ExecutionEngine {
                         context.session_id, context.dialog_turn_id
                     );
                     let retry_allowed = Self::should_allow_finalize_round(
-                        finalize_rounds_completed,
+                        1,
                         DEFAULT_FINALIZE_ROUND_LIMIT,
                     );
                     let retry_result = if retry_allowed {
@@ -5296,14 +5299,13 @@ impl ExecutionEngine {
                     } else {
                         warn!(
                             "Finalize retry budget exhausted ({} >= {}); synthesizing local final response: session_id={}, turn_id={}",
-                            finalize_rounds_completed,
+                            1usize,
                             DEFAULT_FINALIZE_ROUND_LIMIT,
                             context.session_id,
                             context.dialog_turn_id
                         );
                         crate::agentic::execution::types::RoundResult::local_fallback()
                     };
-                    finalize_rounds_completed += 1;
                     if !retry_result.had_assistant_text
                         || Self::assistant_has_tool_calls(&retry_result.assistant_message)
                     {
