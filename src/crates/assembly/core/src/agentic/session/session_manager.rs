@@ -1553,18 +1553,69 @@ impl SessionManager {
             }
         }
 
-        for workspace in self.tracked_workspace_candidates().await? {
-            let Some(session_storage_path) =
-                Self::session_storage_path_for_workspace_info(&workspace).await
-            else {
-                continue;
-            };
+        // Third pass: registered workspaces. A workspace that was never opened
+        // in this process (a cross-workspace session created by another host or
+        // another runtime scope) is absent from the registry, so this pass alone
+        // cannot resolve it. It is kept as the preferred path because it also
+        // supplies remote identity (connection id / ssh host) from WorkspaceInfo.
+        if let Some(workspaces) = self.tracked_workspace_candidates().await {
+            for workspace in workspaces {
+                let Some(session_storage_path) =
+                    Self::session_storage_path_for_workspace_info(&workspace).await
+                else {
+                    continue;
+                };
 
+                if let Some(binding) = self
+                    .resolve_persisted_session_workspace_binding(
+                        session_id,
+                        &session_storage_path,
+                        Some(&workspace),
+                    )
+                    .await
+                {
+                    if let Err(error) =
+                        self.ensure_session_storage_path(session_id, &session_storage_path)
+                    {
+                        debug!(
+                            "Ignoring conflicting persisted session workspace binding: session_id={}, storage_path={}, error={}",
+                            session_id,
+                            session_storage_path.display(),
+                            error
+                        );
+                        continue;
+                    }
+                    return Some(binding);
+                }
+            }
+        }
+
+        // Fourth pass: all persisted workspace runtime directories under the
+        // user-level projects root. This is the cross-workspace fallback: a
+        // session created for a workspace that is not registered in this
+        // process is still persisted under ~/.bitfun/projects/<slug>/sessions,
+        // so scanning that directory by slug recovers the binding from the
+        // session's own metadata. The scan is bounded to directories that
+        // actually contain a `sessions` subdirectory; it is best-effort (a
+        // read failure degrades to None like the other passes).
+        let path_manager = self.persistence_manager.path_manager().clone();
+        let projects_root = path_manager.projects_root();
+        let Ok(mut project_dirs) = tokio::fs::read_dir(&projects_root).await else {
+            return None;
+        };
+        while let Ok(Some(entry)) = project_dirs.next_entry().await {
+            if !entry.file_type().await.map(|kind| kind.is_dir()).unwrap_or(false) {
+                continue;
+            }
+            let session_storage_path = entry.path().join("sessions");
+            if !session_storage_path.is_dir() {
+                continue;
+            }
             if let Some(binding) = self
                 .resolve_persisted_session_workspace_binding(
                     session_id,
                     &session_storage_path,
-                    Some(&workspace),
+                    None,
                 )
                 .await
             {
@@ -1611,7 +1662,7 @@ impl SessionManager {
         };
 
         let config = self
-            .session_config_from_persisted_metadata(&metadata, workspace_hint)
+            .session_config_from_persisted_metadata(session_storage_path, &metadata, workspace_hint)
             .await?;
 
         ConversationCoordinator::build_workspace_binding(&config).await
@@ -1619,6 +1670,7 @@ impl SessionManager {
 
     async fn session_config_from_persisted_metadata(
         &self,
+        session_storage_path: &Path,
         metadata: &SessionMetadata,
         workspace_hint: Option<&WorkspaceInfo>,
     ) -> Option<SessionConfig> {
@@ -1632,12 +1684,33 @@ impl SessionManager {
                 workspace_hint.map(|workspace| workspace.root_path.to_string_lossy().to_string())
             })?;
 
-        let mut config = SessionConfig {
-            workspace_path: Some(workspace_path.clone()),
-            project_workspace_path: metadata.project_workspace_path.clone(),
-            execution_target: metadata.execution_target.clone(),
-            ..SessionConfig::default()
-        };
+        // Prefer the stored session state file: it carries the full SessionConfig
+        // (workspace_id, execution_target, remote identity, …) that the metadata
+        // schema does not include. Metadata remains the fallback for legacy
+        // sessions written before the state file existed.
+        let mut config = self
+            .persistence_manager
+            .load_stored_session_state(session_storage_path, &metadata.session_id)
+            .await
+            .ok()
+            .flatten()
+            .map(|state| state.config)
+            .unwrap_or_default();
+        if config.workspace_path.is_none() {
+            config.workspace_path = Some(workspace_path.clone());
+        }
+        if config.project_workspace_path.is_none() {
+            config.project_workspace_path = metadata.project_workspace_path.clone();
+        }
+        if config.execution_target.is_none() {
+            config.execution_target = metadata.execution_target.clone();
+        }
+        if config.workspace_id.is_none() {
+            // Legacy state files (and metadata-only sessions) carry no
+            // workspace_id; recover it from the workspace registry when the
+            // session's workspace is tracked by this process.
+            config.workspace_id = workspace_hint.map(|workspace| workspace.id.clone());
+        }
 
         let remote_hostname = metadata
             .workspace_hostname
@@ -1656,7 +1729,9 @@ impl SessionManager {
         };
 
         if let Some(workspace) = matched_workspace.as_ref() {
-            config.workspace_id = Some(workspace.id.clone());
+            if config.workspace_id.is_none() {
+                config.workspace_id = Some(workspace.id.clone());
+            }
             if workspace.workspace_kind == WorkspaceKind::Remote {
                 config.remote_connection_id =
                     workspace.remote_ssh_connection_id().map(ToOwned::to_owned);
@@ -9884,6 +9959,98 @@ mod tests {
             Some(target_path.to_string_lossy().as_ref())
         );
         assert_eq!(restored.config.workspace_id.as_deref(), Some("workspace-2"));
+    }
+
+    #[tokio::test]
+    async fn cross_workspace_session_resolves_binding_from_projects_root_scan() {
+        // A session persisted for a workspace that is not registered in this
+        // process (a cross-workspace session) must still resolve its workspace
+        // binding through the user-level projects root scan, so SessionMessage /
+        // SessionControl can locate the target session storage.
+        let workspace = TestWorkspace::new();
+        let path_manager = workspace.path_manager();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(path_manager.clone()).expect("persistence manager"));
+        let manager = test_manager(persistence_manager.clone());
+
+        // The test PathManager pins the bitfun home to
+        // {test}/home/.bitfun, so the projects root is a dedicated test dir.
+        let projects_root = path_manager.projects_root();
+        assert!(
+            projects_root.starts_with(workspace.path()),
+            "test projects root must stay inside the isolated test root"
+        );
+
+        // Simulate the cross-workspace session: it lives under a different
+        // project slug and is never created/loaded through this manager.
+        let foreign_workspace_path = workspace
+            .path()
+            .join("foreign-workspace")
+            .join("code");
+        std::fs::create_dir_all(&foreign_workspace_path).expect("foreign workspace");
+        // Persist the session under its own slug's sessions directory, exactly
+        // as a real cross-workspace session would be stored on disk.
+        let foreign_storage = path_manager
+            .project_runtime_root(&foreign_workspace_path)
+            .join("sessions");
+        std::fs::create_dir_all(&foreign_storage).expect("foreign storage dir");
+        let foreign_session_id = Uuid::new_v4().to_string();
+        let foreign_session = Session::new_with_id(
+            foreign_session_id.clone(),
+            "Cross-workspace session".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                workspace_path: Some(
+                    foreign_workspace_path.to_string_lossy().into_owned(),
+                ),
+                project_workspace_path: Some(
+                    foreign_workspace_path.to_string_lossy().into_owned(),
+                ),
+                workspace_id: Some("workspace-foreign".to_string()),
+                execution_target: Some(SessionExecutionTarget::local(
+                    foreign_workspace_path.to_string_lossy().into_owned(),
+                )),
+                ..SessionConfig::default()
+            },
+        );
+        persistence_manager
+            .save_session(&foreign_storage, &foreign_session)
+            .await
+            .expect("foreign session should persist under its own slug");
+
+        // The manager must not know the session in memory nor via the storage
+        // path index — otherwise the first two passes would mask the scan.
+        assert!(manager.get_session(&foreign_session_id).is_none());
+        assert!(manager
+            .session_storage_path_index
+            .get(&foreign_session_id)
+            .is_none());
+
+        let binding = manager
+            .resolve_session_workspace_binding(&foreign_session_id)
+            .await
+            .expect("cross-workspace session must resolve its workspace binding");
+        assert_eq!(
+            Path::new(&binding.root_path_string()),
+            foreign_workspace_path.as_path()
+        );
+        assert_eq!(
+            Path::new(&binding.project_root_path_string()),
+            foreign_workspace_path.as_path()
+        );
+        assert_eq!(binding.workspace_id.as_deref(), Some("workspace-foreign"));
+        assert_eq!(
+            binding.execution_target.as_ref(),
+            Some(&SessionExecutionTarget::local(
+                foreign_workspace_path.to_string_lossy().into_owned()
+            ))
+        );
+        // Resolving a cross-workspace session claims its storage path so later
+        // restore/delete paths can use the binding.
+        assert!(manager
+            .session_storage_path_index
+            .get(&foreign_session_id)
+            .is_some());
     }
 
     #[tokio::test]
