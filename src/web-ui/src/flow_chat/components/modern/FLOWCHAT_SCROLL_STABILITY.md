@@ -71,11 +71,14 @@ alignment, so opening is its own phase with its own rules.
 
 **While opening, the transcript is hidden and the follow target is
 authoritative.** It tracks the content end exactly — no remembered offset, no
-gap tolerance, and no accommodation of a foreign `scrollTop` write. Virtuoso
-writes during this window too (it compensates a history prepend from the item
-index before the prepended heights reach the DOM); fighting it is invisible
-because nothing is painted, and accommodating it would be permanent once paging
-stops.
+gap tolerance, and no accommodation of a foreign `scrollTop` write. The
+virtualizer writes during this window too, as items measure and it corrects for
+the ones above the viewport; fighting it is invisible because nothing is
+painted, and accommodating it would be permanent once paging stops.
+
+Nothing places the opening viewport by aligning to an item. The end of *real
+content* is above the resident tail spacer, and no item knows where that is, so
+the follow target writes the offset and the reveal waits for it.
 
 **After the reveal, the follow target is cooperative.** The gap tolerance
 applies again, because from then on a shrinking content end means a card
@@ -83,7 +86,7 @@ collapsed, not that measurement is still catching up.
 
 The reveal waits for a *semantic* signal — the last virtual item rendered with
 its end inside the viewport, plus the viewport in position — not for geometry to
-stop changing. Before Virtuoso renders anything, `scrollHeight` and the content
+stop changing. Before the virtualizer renders anything, `scrollHeight` and the
 end sit unchanged at their unmeasured values, which is indistinguishable from
 having finished; a stability test reveals on frame 3 and shows the whole settle.
 
@@ -102,25 +105,23 @@ position is therefore recorded as a **Turn and its offset from the viewport
 top**, and restored as a relationship rather than replayed as a delta. That
 makes the correction idempotent — when nothing moved it is zero.
 
-**The virtualizer's own compensation is not usable, and is intercepted rather
-than merely overruled.** `scrollBy` is the only channel react-virtuoso uses for
-it, and nothing in FlowChat calls `scrollBy`, so the interception catches
-exactly those corrections. Two measured properties rule them out, both on a
-27-Turn session:
+**The anchor does not replace the virtualizer's own correction, it survives it.**
+TanStack adjusts for a re-measured item only when that item is above the
+viewport, and only by that item's own delta. The anchor composes with that
+rather than competing, because restoring a relationship is idempotent: a
+correction already applied leaves it with nothing to do.
 
-- **The amount answers a different question.** It is the change in *total* list
-  height, which assumes the change happened above the viewport. Scrolling up
-  into a freshly paged block guarantees it did not: one item measuring 38px ->
-  1003px moved the viewport 965px, across a whole Turn.
-- **It is skipped exactly when it is needed.** The correction is gated on scroll
-  direction, and the virtualizer's own prepend compensation sets that direction
-  to `down` — disabling the correction for the measurements that follow it.
-  Measured: `scrollHeight` went 8393 -> 10073 with `scrollTop` held at 1133 and
-  no correction at all, sliding the transcript down by the full 1680px.
-
-The request itself is still worth having — the virtualizer knows something moved
-that it could not place — so it is answered by re-anchoring. With no anchor to
-work from, the original correction is let through: coarse beats none.
+This was not always true, and what happened when it was not is why the rule is
+written down. react-virtuoso corrected by the change in *total* list height,
+which assumes the change happened above the viewport — scrolling up into a
+freshly paged block guarantees it did not, and one item measuring 38px -> 1003px
+moved the viewport 965px, across a whole Turn. Worse, the correction was gated
+on scroll direction, and its own prepend compensation set that direction to
+`down`, disabling it for exactly the measurements that followed: `scrollHeight`
+went 8393 -> 10073 with `scrollTop` held at 1133 and no correction at all,
+sliding the transcript down by the full 1680px. Those corrections had to be
+intercepted at `scrollBy` and answered by re-anchoring. **Do not reintroduce a
+compensator whose amount is a total rather than a delta.**
 
 **Capture is qualified by intent, not by geometry.** A scroll event cannot say
 whether the user moved or the transcript moved under them, so the anchor is
@@ -154,10 +155,8 @@ padding.
 `flowChatViewportAnchor.ts` (geometry and the DOM contract for the anchor
 element) and `useFlowChatViewportAnchor.ts` (capture, restore, and the settle
 window), and it talks to a scroller element and the Turns rendered inside it and
-to nothing else. Only the *interception* above is virtualizer-specific, and it
-stays in `VirtualMessageList.tsx` next to the rest of the react-virtuoso
-plumbing. A headless virtualizer would delete the interceptor and keep the
-keeper unchanged.
+to nothing else. That is what let the virtualizer underneath it be replaced
+without the keeper changing at all.
 
 One consequence of the refresh rule is worth stating plainly: a frame that finds
 the anchor already in place still counts as answered, so an open transcript that
@@ -165,15 +164,11 @@ no other writer owns holds one animation frame in flight indefinitely. The cost
 is a `querySelectorAll` and two rect reads per frame. The window only winds down
 once there is no anchor to keep.
 
-**What this does not fix.** The reserve for an unmeasured item is a single
-scalar (`lastSize`), and this transcript alternates 38px user messages with
-model rounds up to 5012px. So the scroll range stays wrong by an order of
-magnitude, scrolling into a paged block still forces a burst of measurement —
-measured stalls of 119ms and 295ms with no animation frame at all — and the
-correction that follows can be 11705px in one step. `heightEstimates` fixes only
-the opening range: it is gated on an empty size tree, so a prepend still takes
-`lastSize`. Per-item estimates for unmeasured items are the missing capability,
-and `estimateVirtualMessageItemHeight` already exists to supply them.
+**What the anchor cannot fix on its own** is a scroll range that was wrong to
+begin with. Holding the reading position across a burst of measurement is worth
+nothing if the burst blocks the main thread for 295ms. That is a property of how
+unmeasured items are reserved, not of the anchor, and it is why the virtualizer
+underneath it takes a per-item estimate.
 
 ## Reading History Is About the Transcript, Not the Intent
 
@@ -287,9 +282,9 @@ The two halves are not equally capable, and the difference is the useful part:
   handler ahead of recomputing it.
 
 **One correction is not enough.** A width change reflows every item and a height
-change makes Virtuoso render a different number of them; either way it
-re-measures and re-estimates over the following passes, so the content end keeps
-moving after the first callback. The correction therefore repeats over
+change makes the virtualizer render a different number of them; either way it
+re-measures over the following passes, so the content end keeps moving after the
+first callback. The correction therefore repeats over
 `TAIL_REALIGN_RESIZE_CALLBACKS`, a window opened only by a change to the
 scroller's own box. Streaming content growth arrives through the same observer
 and must never inherit that window — it moves the content end away from a
@@ -352,17 +347,17 @@ coordinator, and the reasons there is no coordinator are unchanged (see below).
   the browser did this for free by clamping at the end of the scroll range.
 - The clamp branches on what is *knowable*, not on where the Turn is. A rendered
   Turn resolves its own offset, so the decision is made before anything moves
-  and the requested `behavior` survives. An unrendered one is known only to
-  Virtuoso, so it is placed with `behavior: 'auto'` and the landing read back;
+  and the requested `behavior` survives. An unrendered one is known only to the
+  virtualizer, so it is placed with `behavior: 'auto'` and the landing read back;
   an animated placement would not have arrived yet, so there would be nothing to
   read. Both writes land in the same task, so the correction costs a second
   scroll but not a second visible movement.
-- A navigation correcting its own `scrollToIndex` must re-issue through
-  Virtuoso, never by writing the scroller. Virtuoso re-aims at its original
-  target for up to a second after the list changes under it (`retrying to scroll
-  to`), and only another `scrollToIndex` replaces that pending retry. Writing
-  the scroller directly is what left the tail Turn top-aligning, being pulled to
-  the content end, and being re-aimed at the top again.
+- A navigation correcting its own scroll must re-issue through the virtualizer,
+  never by writing the scroller. The virtualizer keeps re-aiming at its last
+  target for as long as the measurements under it move, and only another scroll
+  issued through it replaces that. Writing the scroller directly is what left
+  the tail Turn top-aligning, being pulled to the content end, and being
+  re-aimed at the top again.
 - Session open enters follow-output as `session-open`, even with nothing
   streaming. The frame loop then runs on a `SETTLE_FRAMES` budget that refreshes
   whenever the target actually moves, so it tracks measurement and paging and
@@ -397,8 +392,9 @@ coordinator, and the reasons there is no coordinator are unchanged (see below).
   reserved blank under a sleeping loop is stranded, and nothing else was watching
   for it. This is the half of the scrollbar problem that is fixed everywhere,
   including where the drag itself cannot be recognised.
-- The pinned Turn's offset is re-resolved from live layout every frame. Virtuoso
-  re-estimates unrendered item heights, so a cached absolute offset would drift.
+- The pinned Turn's offset is re-resolved from live layout every frame. Items
+  above it are estimates until they are measured, so a cached absolute offset
+  would drift.
 - When streaming stops, `hold-tail` settles any remaining blank with one smooth
   scroll. A pinned Turn does not settle.
 - Tool-card expansion and collapse use normal layout reflow and dispatch only
@@ -407,8 +403,9 @@ coordinator, and the reasons there is no coordinator are unchanged (see below).
 - "At bottom" is a band, not a point: from the end of real content down to
   whatever the follow rule owns. A pinned Turn and a held collapse gap are both
   inside it, so neither raises the jump-to-latest affordance; the reserved blank
-  is outside it, so parking there does. Virtuoso's own `atBottomStateChange`
-  remains unused.
+  is outside it, so parking there does. No virtualizer-reported "at bottom" can
+  express this: the end of the scroll range is the bottom of the reserved blank,
+  not the end of content.
 - The band is recomputed on scroll, on resize, **and when follow ownership
   changes** — its lower edge is the follow target, which can move while the
   viewport is perfectly still. A snap back completes at rest by construction,
@@ -417,45 +414,58 @@ coordinator, and the reasons there is no coordinator are unchanged (see below).
   visible over a viewport that was at the tail, and clicking it then had nothing
   to do — an inert button is worse than a missing one.
 
-## Virtuoso Footer Coupling
-
-react-virtuoso adds the **entire** footer height when it scrolls to the *last*
-index with `align: 'end'` (`dist/index.mjs`: `ft === wt && (St += O)`, where `O`
-is `footerHeight`). FlowChat relies on that for the input-stack clearance on
-session open, but the tail spacer lives in the same footer, so an uncorrected
-end-alignment opens the session on a screen of reserved blank.
-
-Every `align: 'end'` scroll therefore passes
-`endAlignedTailOffsetPx(index, itemCount, tailSpacerPx)`, which cancels the
-spacer's share and only the spacer's share. The affected call sites are
-`initialTopMostItemIndex`, `scrollToTurnEnd`, and the `scrollToContentEnd`
-fallback. `align: 'start'` and `align: 'center'` are unaffected — Virtuoso adds
-footer height for the last index only.
-
-If a future Virtuoso upgrade changes that rule, sessions will open one viewport
-too high or too low. Re-check the offset math before bumping the dependency.
-
 ## What Belongs to the Virtualizer
 
-Two things leak out of a virtualizer, and neither is portable: **the index space
-it counts in**, and **the corrections it applies on its own behalf**. Both live
-in `flowChatVirtuosoBridge.ts` — the `firstItemIndex` cursor and its prepend
-arithmetic, the translation out of that index space, the end-align footer
-correction above, and the session-open placement. A different virtualizer
-deletes that file rather than reimplementing it.
+FlowChat virtualizes with **TanStack Virtual**, behind `useFlowChatVirtualizer.ts`.
+Nothing else imports it. The rest of FlowChat asks for offsets in scroller
+coordinates and gets them back; there is no index space of the virtualizer's own
+to convert at the edges, because measurements are cached against **item keys**,
+so a history prepend leaves every measured item exactly where it was.
 
-Two things that look like they belong there do not:
+The reason it is TanStack and not react-virtuoso is one line of its measurement
+pass: `size = measured ?? estimateSize(i)`. A per-item estimate for everything
+unmeasured. react-virtuoso reserves a single scalar (`lastSize`) for all of
+them, and this transcript alternates 38px user messages with model rounds up to
+5012px, so the scroll range was wrong by an order of magnitude until an item was
+actually measured. `estimateVirtualMessageItemHeight` now feeds it directly.
 
-- **Positions in `virtualItems`.** That array is FlowChat's own projection, not
-  the virtualizer's, so an index into it means the same thing under any of them.
-  `scrollToIndex`, `scrollToSearchMatch`, and `data-virtual-index` all carry one
-  and are left alone. The Virtuoso index space is converted at both edges —
-  `rangeChanged` on the way in, `itemContent` on the way out — so it never
-  reaches them.
+**Items stay in normal flow inside a padded window**, not absolutely positioned.
+Everything outside the window stands in as `padding-top` and `padding-bottom`
+(`virtualWindowPaddingPx`). This matters for more than tidiness: when an item
+inside the window changes height, the browser reflows the ones below it in the
+same layout pass, so there is no frame where the scroll has been corrected but
+the items have not moved yet.
+
+**Compensation is no longer contested.** TanStack adjusts the scroll for a
+re-measured item only when that item is genuinely above the viewport, and only
+by that item's own delta — which is the question worth answering, and the one
+react-virtuoso's total-height correction was not asking. The viewport anchor
+still runs on top of it: the two compose rather than fight, because the anchor
+restores a relationship, so a correction that has already been applied leaves it
+with nothing to do. The `scrollBy` interceptor that used to take compensation
+away from the virtualizer is gone.
+
+**Alignment is asked for, not computed, wherever it fits.** `scrollItemIntoView`
+goes through the virtualizer so that its re-aim keeps chasing the item while the
+measurements under it move; an offset computed once is already stale by then.
+The gap above a top-aligned Turn is the virtualizer's `scrollPaddingStart`, for
+the same reason. Only two places compute an offset by hand, and both do it
+because the target is not an item: the end of *real content*, which is above the
+resident tail spacer, and the end of a Turn.
+
+Two things that look like they belong here do not:
+
+- **Positions in `virtualItems`.** That array is FlowChat's own projection, so
+  an index into it means the same thing under any virtualizer. `scrollToIndex`,
+  `scrollToSearchMatch`, and `data-virtual-index` all carry one and are left
+  alone.
 - **When to page.** `historyBoundariesForVisibleRange` decides that a boundary
-  is worth asking about from a visible item range and nothing else. Its two
+  is worth asking about from a rendered item range and nothing else. Its two
   thresholds are the ones that decide where a junction happens, which is why
   they are named and tested rather than inline.
+
+react-virtuoso remains a dependency: the file tree (`VirtualFileTree.tsx`) still
+uses it. Nothing under `flow_chat/` does.
 
 ## Known Gaps
 
@@ -484,17 +494,12 @@ Two things that look like they belong there do not:
 - The opening reveal has a hard frame cap. A session that pages for longer than
   the cap is revealed mid-settle; raising the cap trades that against a longer
   blank on open.
-- **Scrolling up through freshly paged history still flickers, and the cause is
-  upstream of anything the anchor can do.** Unmeasured items are reserved a
-  single `lastSize`, so a page of history occupies a small fraction of the range
-  it needs; reaching it forces a burst of measurement that blocks the main
-  thread — 119ms and 295ms measured, with no animation frame in between — and
-  the correction that follows can be 11705px in one step. The anchor holds the
-  reading position across it (measured: zero displacement on essentially every
-  sampled frame), but a stall of that length is visible on its own. Closing this
-  needs per-item estimates for unmeasured items, which react-virtuoso does not
-  expose; `estimateVirtualMessageItemHeight` is written and waiting for a
-  virtualizer that accepts one.
+- **Estimates are still estimates.** A page of history is now reserved per item
+  rather than at one scalar, so the range it takes up is close instead of wrong
+  by an order of magnitude — but `estimateVirtualMessageItemHeight` cannot know
+  how a model round wraps. Corrections shrink; they do not reach zero. And the
+  cost of rendering a heavy item is a separate axis: less measurement is forced
+  at once, but the work each one costs is unchanged.
 
 ## Diagnosing History Paging
 
@@ -540,11 +545,12 @@ cancels a window that was already fetched.
 ## Why There Is No Viewport Coordinator
 
 There was one — `FlowChatViewportCoordinator.ts`, removed alongside the
-compensation engine. Single-writer semantics are not reachable here: Virtuoso
-writes `scrollTop` from inside the library (`initialTopMostItemIndex`, the
-`firstItemIndex` prepend compensation, `scrollToIndex`), so a coordinator can
-only serialise *our* writes and the conflicts observed in practice were with
-that third writer.
+compensation engine. Single-writer semantics are not reachable here: the
+virtualizer writes `scrollTop` from inside the library — its own re-aim, and its
+adjustment for a re-measured item above the viewport — so a coordinator can only
+serialise *our* writes, and the conflicts observed in practice were with that
+third writer. What made those conflicts survivable was not serialising them but
+making our correction idempotent; see the viewport anchor.
 
 What works instead is a single *source of truth*. Read the live viewport, and
 make each phase's rule idempotent with respect to a foreign write: authoritative
@@ -552,7 +558,7 @@ while hidden, cooperative once painted.
 
 ## Viewport Ownership
 
-Keep `followOutput={false}` on Virtuoso. Continuous movement belongs to
+The virtualizer never follows output. Continuous movement belongs to
 `useFlowChatFollowOutput`; one-shot navigation belongs to
 `VirtualMessageList`. Card renderers and tool cards must not write the outer
 FlowChat `scrollTop`.
@@ -567,7 +573,8 @@ timer, or add mount-triggered motion that changes transcript geometry.
 
 ## Footer Contract
 
-The Virtuoso footer holds two independent pieces, and they must stay separate:
+The footer below the items holds two independent pieces, and they must stay
+separate:
 
 ```text
 message-list-footer      = current input-stack height + bottom inset + clearance
@@ -589,8 +596,8 @@ pnpm --dir src/web-ui run lint
 pnpm --dir src/web-ui run test:run \
   src/flow_chat/components/modern/flowChatTailFollow.test.ts \
   src/flow_chat/components/modern/flowChatLiveTailWindow.test.ts \
-  src/flow_chat/components/modern/flowChatVirtuosoBridge.test.ts \
   src/flow_chat/components/modern/flowChatHistoryBoundary.test.ts \
+  src/flow_chat/components/modern/useFlowChatVirtualizer.test.ts \
   src/flow_chat/components/modern/flowChatViewportAnchor.test.ts \
   src/flow_chat/components/modern/useFlowChatViewportAnchor.test.tsx \
   src/flow_chat/components/modern/useFlowChatFollowOutput.test.tsx \
@@ -661,12 +668,21 @@ confirm:
 19. During that scroll, check that a paging junction does not leave the viewport
     stuck: keep scrolling past it, then wheel back down, and confirm the
     transcript still tracks the gesture in both directions.
+20. Open a long session and check the scrollbar thumb: its size should be close
+    to right on the first painted frame, and it should not jump as items
+    measure. This is the per-item estimate doing its job, and it is the single
+    most visible symptom if the estimate ever regresses.
+21. Scroll to the very bottom and confirm the transcript ends where content
+    ends, with the reserved blank below it reachable but not where the session
+    opens.
+22. Expand and collapse a tall tool card near the top of the viewport, and one
+    below it, and confirm earlier content stays put in both cases.
 
 ## Related Files
 
 - `flowChatTailFollow.ts`
 - `flowChatLiveTailWindow.ts`
-- `flowChatVirtuosoBridge.ts`
+- `useFlowChatVirtualizer.ts`
 - `flowChatHistoryBoundary.ts`
 - `flowChatViewportAnchor.ts`
 - `useFlowChatViewportAnchor.ts`

@@ -72,7 +72,7 @@ const BOTTOM_EPSILON_PX = 2;
 
 /**
  * Frames a pinned Turn may stay unmeasurable before the pin is abandoned.
- * Virtuoso renders the tail immediately, so this only guards against a Turn
+ * The virtualizer renders the tail immediately, so this only guards against a Turn
  * that never mounts at all.
  */
 const PIN_RESOLVE_MAX_ATTEMPTS = 30;
@@ -173,8 +173,8 @@ export function useFlowChatFollowOutput({
 
   /**
    * Resolve the pinned Turn's offset from live layout every frame rather than
-   * caching it once. Virtuoso re-estimates the height of unrendered items while
-   * it scrolls, which shifts absolute offsets; a cached pin would drift.
+   * caching it once. Unrendered items are estimates until measured, and every
+   * measurement shifts the absolute offsets below it; a cached pin would drift.
    */
   const readPinScrollTop = useCallback((): number | null => {
     const pinTurnId = pinTurnIdRef.current;
@@ -244,7 +244,7 @@ export function useFlowChatFollowOutput({
     /*
      * While the transcript is opening it is still hidden, so nothing is gained
      * by remembering an earlier offset: drop the memory and track the content
-     * end exactly. Virtuoso writes `scrollTop` too during this window — it
+     * end exactly. The virtualizer writes `scrollTop` too during this window — it
      * compensates a history prepend from the item index before the prepended
      * heights reach the DOM — and any accommodation of that is both invisible
      * and, once paging stops, permanent. The gap tolerance is a *streaming*

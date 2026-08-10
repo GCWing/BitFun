@@ -34,7 +34,7 @@ describe('useToolCardHeightContract', () => {
     container.remove();
   });
 
-  it('notifies Virtuoso after an expanded-state change', () => {
+  it('notifies the virtualizer after an expanded-state change', () => {
     const handleToggle = vi.fn();
     window.addEventListener('tool-card-toggle', handleToggle);
     act(() => root.render(<Harness expanded />));

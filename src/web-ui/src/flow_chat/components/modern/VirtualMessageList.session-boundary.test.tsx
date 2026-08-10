@@ -3,7 +3,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FLOWCHAT_TURN_TOP_GAP_PX, tailSpacerPxForViewport } from './flowChatTailFollow';
+import { tailSpacerPxForViewport } from './flowChatTailFollow';
 import { VirtualMessageList, type VirtualMessageListRef } from './VirtualMessageList';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -11,14 +11,13 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const mocks = vi.hoisted(() => ({
   items: [] as Array<Record<string, unknown>>,
   activeSession: null as Record<string, unknown> | null,
-  scrollToIndex: vi.fn(),
-  scrollTo: vi.fn(),
-  virtuosoProps: null as Record<string, unknown> | null,
+  scrollItemIntoView: vi.fn(),
+  scrollToOffset: vi.fn(),
   setVisibleTurnInfo: vi.fn(),
   enterFollowOutput: vi.fn(),
   exitFollowOutput: vi.fn(),
   handleUserScrollIntent: vi.fn(),
-  /** False stands in for a Turn Virtuoso can place but the DOM cannot resolve. */
+  /** False stands in for a Turn the virtualizer can place but the DOM cannot. */
   renderItemMetadata: true,
 }));
 
@@ -62,39 +61,32 @@ function fakeLayout(options: {
   };
 }
 
-vi.mock('react-virtuoso', async () => {
-  const ReactModule = await import('react');
-  return {
-    Virtuoso: ReactModule.forwardRef((props: Record<string, any>, ref) => {
-      mocks.virtuosoProps = props;
-      ReactModule.useImperativeHandle(ref, () => ({
-        scrollToIndex: mocks.scrollToIndex,
-        scrollTo: mocks.scrollTo,
-      }));
-      const scrollerRef = ReactModule.useRef<HTMLDivElement>(null);
-      ReactModule.useLayoutEffect(() => {
-        props.scrollerRef?.(scrollerRef.current);
-        return () => props.scrollerRef?.(null);
-      }, [props.scrollerRef]);
-      const Header = props.components?.Header;
-      const Footer = props.components?.Footer;
-      const firstItemIndex = props.firstItemIndex ?? 0;
-      return (
-        <div ref={scrollerRef} data-virtuoso-scroller="true">
-          {Header ? <Header context={props.context} /> : null}
-          <div data-testid="virtuoso-item-list">
-            {props.data.map((item: unknown, index: number) => (
-              <ReactModule.Fragment key={index}>
-                {props.itemContent(firstItemIndex + index, item)}
-              </ReactModule.Fragment>
-            ))}
-          </div>
-          {Footer ? <Footer context={props.context} /> : null}
-        </div>
-      );
-    }),
-  };
-});
+/*
+ * The virtualizer is mocked at FlowChat's own seam rather than at the library.
+ * These tests are about which scroll the list decides to ask for, and the seam
+ * is where that decision is expressed; the library's own behaviour belongs to
+ * the library. Every item is rendered, which is what a list shorter than the
+ * viewport would do anyway.
+ */
+vi.mock('./useFlowChatVirtualizer', () => ({
+  useFlowChatVirtualizer: (options: {
+    items: Array<Record<string, unknown>>;
+    getItemKey: (item: Record<string, unknown>) => string;
+  }) => ({
+    rows: options.items.map((item, index) => ({
+      index,
+      key: options.getItemKey(item),
+      startPx: index * 40,
+      endPx: index * 40 + 40,
+    })),
+    paddingTopPx: 0,
+    paddingBottomPx: 0,
+    measureRowElement: () => {},
+    getItemBounds: (index: number) => ({ startPx: index * 40, endPx: index * 40 + 40 }),
+    scrollItemIntoView: mocks.scrollItemIntoView,
+    scrollToOffset: mocks.scrollToOffset,
+  }),
+}));
 
 vi.mock('../../store/modernFlowChatStore', () => {
   const useModernFlowChatStore = Object.assign(
@@ -137,8 +129,13 @@ vi.mock('./useFlowChatFollowOutput', () => ({
 }));
 
 vi.mock('./VirtualItemRenderer', () => ({
-  VirtualItemRenderer: ({ item, index }: { item: any; index: number }) => (
+  VirtualItemRenderer: ({ item, index, measureRef }: {
+    item: any;
+    index: number;
+    measureRef?: (element: HTMLElement | null) => void;
+  }) => (
     <div
+      ref={measureRef}
       className="virtual-item-wrapper"
       data-item-type={mocks.renderItemMetadata ? item.type : undefined}
       data-turn-id={item.turnId}
@@ -186,13 +183,12 @@ describe('VirtualMessageList natural scroll contract', () => {
       sessionId: 'session-1',
       dialogTurns: [],
     };
-    mocks.scrollToIndex.mockReset();
-    mocks.scrollTo.mockReset();
+    mocks.scrollItemIntoView.mockReset();
+    mocks.scrollToOffset.mockReset();
     mocks.enterFollowOutput.mockReset();
     mocks.exitFollowOutput.mockReset();
     mocks.handleUserScrollIntent.mockReset();
     mocks.setVisibleTurnInfo.mockReset();
-    mocks.virtuosoProps = null;
     mocks.renderItemMetadata = true;
     vi.stubGlobal('ResizeObserver', class {
       observe() {}
@@ -213,18 +209,10 @@ describe('VirtualMessageList natural scroll contract', () => {
     expect(footer?.style.minHeight).toBe('168px');
   });
 
-  it('starts bottom-aligned on the last item, with nothing to cancel yet', () => {
-    act(() => root.render(<VirtualMessageList />));
-    expect(mocks.virtuosoProps?.initialTopMostItemIndex).toEqual({
-      index: 1,
-      align: 'end',
-      offset: 0,
-    });
-  });
-
-  it('cancels the resident tail spacer in the initial bottom alignment', () => {
-    // Virtuoso reveals the whole footer when end-aligning the last item, so
-    // without this the session would open on a screen of reserved blank.
+  it('reserves a tail spacer sized from the viewport and nothing else', () => {
+    // The session opens on the end of *real content*, which is above this
+    // reservation. Nothing aligns to the last item any more: the end of the
+    // scroll range is reserved blank, and opening there is opening on nothing.
     const originalClientHeight = Object.getOwnPropertyDescriptor(
       HTMLElement.prototype,
       'clientHeight',
@@ -237,15 +225,8 @@ describe('VirtualMessageList natural scroll contract', () => {
     try {
       act(() => root.render(<VirtualMessageList />));
 
-      // Sized to put a bare new Turn on the top edge, which is less than the
-      // viewport — the end of the scroll range must not be a blank screen.
-      const expectedSpacerPx = tailSpacerPxForViewport(600, 168);
+      const expectedSpacerPx = tailSpacerPxForViewport(600, BOTTOM_INSET);
       expect(expectedSpacerPx).toBeLessThan(600);
-      expect(mocks.virtuosoProps?.initialTopMostItemIndex).toEqual({
-        index: 1,
-        align: 'end',
-        offset: -expectedSpacerPx,
-      });
       const spacer = container.querySelector<HTMLElement>('.message-list-tail-spacer');
       expect(spacer?.style.height).toBe(`${expectedSpacerPx}px`);
       // The input-stack footer stays a separate reservation. It feeds the
@@ -270,12 +251,10 @@ describe('VirtualMessageList natural scroll contract', () => {
     });
     expect(accepted).toBe(true);
     expect(mocks.exitFollowOutput).toHaveBeenCalledWith('scroll-to-turn');
-    expect(mocks.scrollToIndex).toHaveBeenCalledWith({
-      index: 1,
+    // The breathing gap above a top-aligned Turn is the virtualizer's
+    // `scrollPaddingStart`, so an aim re-taken while items measure keeps it.
+    expect(mocks.scrollItemIntoView).toHaveBeenCalledWith(1, {
       align: 'start',
-      // The same breathing gap the Virtuoso header gives the first Turn, so a
-      // navigated Turn and the first one are aligned identically.
-      offset: -FLOWCHAT_TURN_TOP_GAP_PX,
       behavior: 'auto',
     });
     expect(container.querySelector('.message-list-footer')?.getAttribute('style')).toContain('168px');
@@ -293,11 +272,9 @@ describe('VirtualMessageList natural scroll contract', () => {
       act(() => root.render(<VirtualMessageList ref={listRef} />));
       act(() => { listRef.current?.navigateToTurn('turn-2', { behavior: 'smooth' }); });
 
-      expect(mocks.scrollToIndex).toHaveBeenCalledTimes(1);
-      expect(mocks.scrollToIndex).toHaveBeenCalledWith({
-        index: 1,
+      expect(mocks.scrollItemIntoView).toHaveBeenCalledTimes(1);
+      expect(mocks.scrollItemIntoView).toHaveBeenCalledWith(1, {
         align: 'start',
-        offset: -FLOWCHAT_TURN_TOP_GAP_PX,
         // A resolvable Turn is clamped before anything moves, so the requested
         // animation survives.
         behavior: 'smooth',
@@ -320,19 +297,20 @@ describe('VirtualMessageList natural scroll contract', () => {
       act(() => root.render(<VirtualMessageList ref={listRef} />));
       act(() => { listRef.current?.navigateToTurn('turn-2', { behavior: 'smooth' }); });
 
-      expect(mocks.scrollToIndex).toHaveBeenCalledTimes(1);
-      expect(mocks.scrollToIndex).toHaveBeenCalledWith({
-        index: 1,
-        align: 'end',
-        offset: -tailSpacerPxForViewport(600, BOTTOM_INSET),
-        behavior: 'smooth',
-      });
+      // Aimed at the end of real content, read off live geometry — not at the
+      // last item, whose end is the bottom of the reserved blank.
+      expect(mocks.scrollItemIntoView).not.toHaveBeenCalled();
+      expect(mocks.scrollToOffset).toHaveBeenCalledTimes(1);
+      expect(mocks.scrollToOffset).toHaveBeenCalledWith(
+        1000 - tailSpacerPxForViewport(600, BOTTOM_INSET) - 600,
+        'smooth',
+      );
     } finally {
       restoreLayout();
     }
   });
 
-  it('reads an unrendered Turn back from Virtuoso, and corrects through it', () => {
+  it('reads an unrendered Turn back from the virtualizer, and corrects through it', () => {
     const listRef = React.createRef<VirtualMessageListRef>();
     const restoreLayout = fakeLayout({
       clientHeight: 600,
@@ -342,34 +320,28 @@ describe('VirtualMessageList natural scroll contract', () => {
     try {
       mocks.renderItemMetadata = false;
       act(() => root.render(<VirtualMessageList ref={listRef} />));
-      const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller]')!;
+      const scroller = container.querySelector<HTMLElement>('[data-flowchat-scroller]')!;
       Object.defineProperty(scroller, 'scrollTop', {
         configurable: true,
         writable: true,
         value: 0,
       });
-      // Only Virtuoso knows where the Turn is; it lands the viewport in the blank.
-      mocks.scrollToIndex.mockImplementation(() => { scroller.scrollTop = 900; });
+      // Only the virtualizer knows where the Turn is; it lands the viewport in
+      // the reserved blank.
+      mocks.scrollItemIntoView.mockImplementation(() => { scroller.scrollTop = 900; });
 
       act(() => { listRef.current?.navigateToTurn('turn-2', { behavior: 'smooth' }); });
 
-      expect(mocks.scrollToIndex).toHaveBeenCalledTimes(2);
       // Placed instantly, because an animation would not have arrived yet and
       // there would be nothing to read back.
-      expect(mocks.scrollToIndex).toHaveBeenNthCalledWith(1, {
-        index: 1,
-        align: 'start',
-        offset: -FLOWCHAT_TURN_TOP_GAP_PX,
-        behavior: 'auto',
-      });
-      // Corrected through Virtuoso, not the scroller: a direct write would
-      // leave the first call's retry pending, and it re-aims at the top.
-      expect(mocks.scrollToIndex).toHaveBeenNthCalledWith(2, {
-        index: 1,
-        align: 'end',
-        offset: -tailSpacerPxForViewport(600, BOTTOM_INSET),
-        behavior: 'auto',
-      });
+      expect(mocks.scrollItemIntoView).toHaveBeenCalledTimes(1);
+      expect(mocks.scrollItemIntoView).toHaveBeenCalledWith(1, { align: 'start' });
+      // Corrected through the virtualizer, not the scroller: a direct write
+      // would leave the first call's re-aim pending, and it aims at the top.
+      expect(mocks.scrollToOffset).toHaveBeenCalledWith(
+        1000 - tailSpacerPxForViewport(600, BOTTOM_INSET) - 600,
+        'auto',
+      );
     } finally {
       restoreLayout();
     }
@@ -380,7 +352,7 @@ describe('VirtualMessageList natural scroll contract', () => {
     const CONTENT_BOX_WIDTH = 1384;
 
     function pressAt(clientX: number) {
-      const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller]')!;
+      const scroller = container.querySelector<HTMLElement>('[data-flowchat-scroller]')!;
       Object.defineProperty(scroller, 'clientWidth', {
         configurable: true,
         value: CONTENT_BOX_WIDTH,
@@ -411,139 +383,13 @@ describe('VirtualMessageList natural scroll contract', () => {
       pressAt(CONTENT_BOX_WIDTH + 6);
       mocks.handleUserScrollIntent.mockClear();
 
-      const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller]')!;
+      const scroller = container.querySelector<HTMLElement>('[data-flowchat-scroller]')!;
       act(() => {
         window.dispatchEvent(new MouseEvent('pointerup'));
         scroller.dispatchEvent(new Event('scroll'));
       });
 
       expect(mocks.handleUserScrollIntent).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('the viewport anchor keeps the reading position', () => {
-    const originalScrollBy = HTMLElement.prototype.scrollBy;
-    let nowMs = 10_000;
-    let frames: FrameRequestCallback[] = [];
-
-    /** Places each Turn by id; the scroller itself sits at 0. */
-    function anchorLayout(turnTops: Record<string, number>) {
-      const original = HTMLElement.prototype.getBoundingClientRect;
-      HTMLElement.prototype.getBoundingClientRect = function getRect(this: HTMLElement) {
-        const turnId = this.dataset?.turnId;
-        const top = turnId !== undefined && turnTops[turnId] !== undefined ? turnTops[turnId] : 0;
-        return { ...new DOMRect(0, top, 0, 40), top, bottom: top + 40 } as DOMRect;
-      };
-      return () => { HTMLElement.prototype.getBoundingClientRect = original; };
-    }
-
-    function runFrames(count: number) {
-      for (let index = 0; index < count; index += 1) {
-        frames.splice(0, frames.length).forEach(frame => frame(0));
-      }
-    }
-
-    /** Renders, settles the opening reveal, and returns a writable scroller. */
-    function mountSettled() {
-      act(() => root.render(<VirtualMessageList />));
-      act(() => runFrames(48));
-      const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller]')!;
-      const position = { scrollTop: 1000 };
-      Object.defineProperty(scroller, 'scrollTop', {
-        configurable: true,
-        get: () => position.scrollTop,
-        set: (value: number) => { position.scrollTop = value; },
-      });
-      return { scroller, position };
-    }
-
-    beforeEach(() => {
-      nowMs = 10_000;
-      frames = [];
-      vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
-      HTMLElement.prototype.scrollBy = vi.fn();
-      vi.stubGlobal('requestAnimationFrame', (frame: FrameRequestCallback) => {
-        frames.push(frame);
-        return frames.length;
-      });
-      vi.stubGlobal('cancelAnimationFrame', () => {});
-    });
-
-    afterEach(() => {
-      HTMLElement.prototype.scrollBy = originalScrollBy;
-      vi.restoreAllMocks();
-    });
-
-    it('answers a virtualizer correction by re-anchoring, not by the offset it asked for', () => {
-      const tops: Record<string, number> = { 'turn-1': -200, 'turn-2': 100 };
-      const restoreLayout = anchorLayout(tops);
-      try {
-        const { scroller, position } = mountSettled();
-        // A wheel, then the scroll it caused: turn-2 is the reading position.
-        act(() => {
-          scroller.dispatchEvent(new Event('wheel'));
-          scroller.dispatchEvent(new Event('scroll'));
-        });
-
-        // 400px of transcript resolves above it, and the virtualizer asks for a
-        // correction of its own — computed from the change in total list height,
-        // which is not the same question.
-        tops['turn-2'] = 500;
-        act(() => { scroller.scrollBy({ top: 4000 }); });
-
-        expect(position.scrollTop).toBe(1400);
-        expect(HTMLElement.prototype.scrollBy).not.toHaveBeenCalled();
-      } finally {
-        restoreLayout();
-      }
-    });
-
-    it('lets the virtualizer correct when there is no anchor to work from', () => {
-      const restoreLayout = anchorLayout({});
-      try {
-        const { scroller, position } = mountSettled();
-        // No scroll has happened, so nothing has been anchored yet. A coarse
-        // correction beats none.
-        act(() => { scroller.scrollBy({ top: 120 }); });
-
-        expect(HTMLElement.prototype.scrollBy).toHaveBeenCalledWith({ top: 120 });
-        expect(position.scrollTop).toBe(1000);
-      } finally {
-        restoreLayout();
-      }
-    });
-
-    it('re-anchors on a scroll the user drove, and not on one they did not', () => {
-      const tops: Record<string, number> = { 'turn-1': -200, 'turn-2': 100 };
-      const restoreLayout = anchorLayout(tops);
-      try {
-        const { scroller, position } = mountSettled();
-        act(() => {
-          scroller.dispatchEvent(new Event('wheel'));
-          scroller.dispatchEvent(new Event('scroll'));
-        });
-
-        // A scroll arriving well after the last gesture is the transcript
-        // moving, not the user. Adopting it would make the displacement the new
-        // reading position and leave nothing to correct back to.
-        tops['turn-2'] = 500;
-        nowMs += 5_000;
-        act(() => { scroller.dispatchEvent(new Event('scroll')); });
-        act(() => { scroller.scrollBy({ top: 4000 }); });
-        expect(position.scrollTop).toBe(1400);
-
-        // The same scroll under a live gesture is the user, and moves the anchor
-        // with them: there is then nothing for a correction to undo.
-        tops['turn-2'] = 900;
-        act(() => {
-          scroller.dispatchEvent(new Event('wheel'));
-          scroller.dispatchEvent(new Event('scroll'));
-        });
-        act(() => { scroller.scrollBy({ top: 4000 }); });
-        expect(position.scrollTop).toBe(1400);
-      } finally {
-        restoreLayout();
-      }
     });
   });
 

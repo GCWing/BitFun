@@ -29,24 +29,31 @@
   }
   
   
-  // Ensure the Virtuoso container has correct sizing.
-  > div:first-child {
+  /*
+   * The scroller. It spans the full panel width even though message content
+   * inside it is max-width constrained, and `overflow-anchor: none` keeps the
+   * browser from adding a second opinion about where the viewport belongs —
+   * the viewport anchor is the only one.
+   */
+  &__scroller {
     width: 100%;
     height: 100%;
     position: relative;
     z-index: 1; // Keep scroll content below overlays.
-    overflow-x: hidden; // Disable horizontal scrolling.
-  }
-
-  // Ensure the real scroller always spans the full panel width,
-  // even when inner message content is max-width constrained.
-  [data-virtuoso-scroller='true'],
-  [data-virtuoso-scroller] {
-    width: 100% !important;
-    max-width: none !important;
-    margin: 0 !important;
+    overflow-y: auto;
+    overflow-x: hidden;
     overflow-anchor: none;
     scrollbar-gutter: stable;
+  }
+
+  /*
+   * The rendered window. Everything outside it stands in as padding, so this
+   * element's height is the whole transcript's and it is what the resize
+   * observer watches for a content change.
+   */
+  &__items {
+    width: 100%;
+    overflow-anchor: none;
   }
   
   /*
@@ -75,6 +82,11 @@
   // breathing gap is needed before the first item. Its height is supplied
   // inline from `FLOWCHAT_TURN_TOP_GAP_PX`, which every top-aligned Turn also
   // scrolls to — the gap must be one number, not two that happen to match.
+  .message-list-header-block {
+    flex-shrink: 0;
+    overflow-anchor: none;
+  }
+
   .message-list-header {
     flex-shrink: 0;
   }

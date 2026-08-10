@@ -154,7 +154,7 @@ describe('useFlowChatFollowOutput', () => {
   });
 
   it('tracks the content end exactly while the transcript is still opening', () => {
-    // Virtuoso compensates a history prepend by writing scrollTop before the
+    // The virtualizer compensates a history prepend by writing scrollTop before the
     // prepended heights reach the DOM. While opening, the transcript is hidden
     // and we are authoritative — accommodating that write would be invisible
     // now and permanent once paging stops.

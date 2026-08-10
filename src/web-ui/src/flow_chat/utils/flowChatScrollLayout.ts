@@ -15,7 +15,7 @@ export const SCROLL_TO_LATEST_INPUT_CLEARANCE_PX = 6;
 const NORMAL_INPUT_BLOCK_SAFE_PX = 96;
 
 /**
- * Height of the Virtuoso footer spacer needed so the last message clears the floating input.
+ * Height of the footer spacer needed so the last message clears the floating input.
  * `measuredInputHeight` is the drop-zone `offsetHeight` from ChatInput (excluding the viewport bottom inset in `CHAT_INPUT_DROP_ZONE_BOTTOM_PX`).
  *
  * The footer reflects only the current layout. It does not retain an earlier

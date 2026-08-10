@@ -116,7 +116,7 @@ describe('FlowChat collapse spacing', () => {
 });
 
 describe('FlowChat initial projection alignment', () => {
-  it('reserves the Virtuoso scrollbar gutter in the handoff overlay', () => {
+  it('reserves the scroller gutter in the handoff overlay', () => {
     const stylesheet = readSource('./VirtualMessageList.scss');
 
     expect(stylesheet).toMatch(

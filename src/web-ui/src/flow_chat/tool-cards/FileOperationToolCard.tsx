@@ -3,7 +3,7 @@
  * Supports Write/Edit/Delete file operations
  *
  * Card height changes reflow naturally. Expanded-state changes use
- * `useToolCardHeightContract.applyExpandedState(...)` only to notify Virtuoso
+ * `useToolCardHeightContract.applyExpandedState(...)` only to notify the virtualizer
  * that it should remeasure the card after the transition.
  */
 

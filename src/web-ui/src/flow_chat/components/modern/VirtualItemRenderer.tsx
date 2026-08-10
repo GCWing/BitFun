@@ -18,10 +18,17 @@ import './VirtualItemRenderer.scss';
 interface VirtualItemRendererProps {
   item: VirtualItem;
   index: number;
+  /**
+   * Ref callback the virtualizer measures this item through.
+   *
+   * It reads `data-virtual-index` back off the element, so the attribute below
+   * and this callback have to land on the same node.
+   */
+  measureRef?: (element: HTMLElement | null) => void;
 }
 
 export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
-  ({ item, index }) => {
+  ({ item, index, measureRef }) => {
     const { searchMatchIndices, searchCurrentMatchVirtualIndex } = useFlowChatVolatileContext();
     const isSearchMatch = searchMatchIndices != null && searchMatchIndices.size > 0
       ? searchMatchIndices.has(index)
@@ -109,6 +116,7 @@ export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
 
     return (
       <div
+        ref={measureRef}
         data-bf-component="virtual-item"
         data-bf-part="root"
         data-bf-state={[isSearchMatch && 'searchMatch', isSearchCurrent && 'searchCurrent'].filter(Boolean).join(' ')}
@@ -125,7 +133,8 @@ export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
   },
   (prev, next) => (
     prev.item === next.item &&
-    prev.index === next.index
+    prev.index === next.index &&
+    prev.measureRef === next.measureRef
   )
 );
 VirtualItemRenderer.displayName = 'VirtualItemRenderer';

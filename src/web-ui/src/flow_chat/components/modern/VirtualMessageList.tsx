@@ -17,13 +17,6 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import {
-  Virtuoso,
-  type Components,
-  type ContextProp,
-  type ListRange,
-  type VirtuosoHandle,
-} from 'react-virtuoso';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useActiveSessionState } from '../../hooks/useActiveSessionState';
@@ -60,15 +53,7 @@ import {
   tailSpacerPxForViewport,
   turnTopAlignmentEntersReservedBlank,
 } from './flowChatTailFollow';
-import {
-  advanceVirtuosoIndexCursor,
-  createVirtuosoIndexCursor,
-  endAlignedTailOffsetPx,
-  initialTopMostItemForSessionOpen,
-  normalizeVirtuosoBehavior,
-  toLocalItemRange,
-  type VirtuosoIndexCursor,
-} from './flowChatVirtuosoBridge';
+import { useFlowChatVirtualizer } from './useFlowChatVirtualizer';
 import { historyBoundariesForVisibleRange } from './flowChatHistoryBoundary';
 import { VirtualItemRenderer } from './VirtualItemRenderer';
 import {
@@ -79,7 +64,6 @@ import { warnHistoryPagingRefusedWithPendingTurns } from '../../services/history
 import './VirtualMessageList.scss';
 
 const SEARCH_NAVIGATION_MAX_ATTEMPTS = 24;
-const FLOW_CHAT_VIRTUOSO_OVERSCAN = { main: 600, reverse: 600 } as const;
 /** Consecutive quiet frames that mark the opening viewport as settled. */
 const OPEN_REVEAL_QUIET_FRAMES = 2;
 /** Hard cap so the transcript is always revealed, settled or not. */
@@ -97,14 +81,13 @@ const SCROLL_SETTLE_FALLBACK_MS = 140;
  * the scroller's own box changes.
  *
  * One correction is not enough. A width change reflows every item, and a height
- * change makes Virtuoso render a different number of them; either way it
- * re-measures and re-estimates over the following passes, so the content end
- * keeps moving after the first callback. The window closes on its own so that
+ * change makes the virtualizer render a different number of them; either way it
+ * re-measures over the following passes, so the content end keeps moving after
+ * the first callback. The window closes on its own so that
  * streaming content growth, which arrives through the same observer, never
  * inherits it.
  */
 const TAIL_REALIGN_RESIZE_CALLBACKS = 6;
-const FLOW_CHAT_VIRTUOSO_VIEWPORT_INCREASE = { top: 600, bottom: 600 } as const;
 const IDLE_HISTORY_WINDOW_BOUNDARY_STATE: Record<
   SessionHistoryWindowDirection,
   'idle' | 'loading' | 'error'
@@ -175,26 +158,26 @@ export interface VirtualMessageListProps {
   onUserScrollIntent?: () => void;
 }
 
-type FlowChatVirtuosoContext = {
-  bottomLayoutInsetPx: number;
-  tailSpacerPx: number;
-  previousHistoryBoundaryStatusNode: React.ReactNode;
-  nextHistoryBoundaryStatusNode: React.ReactNode;
-  runtimeStatusSessionId: string | null;
-};
-
 type PreparedTurnNavigation = {
   turnId: string;
   behavior: ScrollBehavior;
 };
 
-const FlowChatVirtuosoHeader = ({ context }: ContextProp<FlowChatVirtuosoContext>) => (
-  <>
-    {/*
-      The gap the first Turn sits below. Every other Turn is top-aligned to the
-      same gap explicitly, so this height is the shared constant rather than a
-      style of its own.
-    */}
+/**
+ * The gap the first Turn sits below.
+ *
+ * Every other Turn is top-aligned to the same gap explicitly, so this height is
+ * the shared constant rather than a style of its own. It is also what the
+ * virtualizer's `scrollPaddingStart` reserves, so an aim that is re-taken while
+ * items measure keeps the same gap.
+ *
+ * Anything else rendered here is above the items in the scroll range, which is
+ * why the virtualizer measures this element rather than assuming its height.
+ */
+const FlowChatListHeader = forwardRef<HTMLDivElement, {
+  previousHistoryBoundaryStatusNode: React.ReactNode;
+}>(({ previousHistoryBoundaryStatusNode }, ref) => (
+  <div ref={ref} className="message-list-header-block">
     <div
       className="message-list-header"
       data-bf-component="virtual-message-list"
@@ -204,23 +187,34 @@ const FlowChatVirtuosoHeader = ({ context }: ContextProp<FlowChatVirtuosoContext
         minHeight: `${FLOWCHAT_TURN_TOP_GAP_PX}px`,
       }}
     />
-    {context.previousHistoryBoundaryStatusNode}
-  </>
-);
+    {previousHistoryBoundaryStatusNode}
+  </div>
+));
+FlowChatListHeader.displayName = 'FlowChatListHeader';
 
-const FlowChatVirtuosoFooter = ({ context }: ContextProp<FlowChatVirtuosoContext>) => (
+const FlowChatListFooter = ({
+  bottomLayoutInsetPx,
+  tailSpacerPx,
+  nextHistoryBoundaryStatusNode,
+  runtimeStatusSessionId,
+}: {
+  bottomLayoutInsetPx: number;
+  tailSpacerPx: number;
+  nextHistoryBoundaryStatusNode: React.ReactNode;
+  runtimeStatusSessionId: string | null;
+}) => (
   <>
     <div
       className="message-list-footer"
       data-bf-component="virtual-message-list"
       data-bf-part="footer"
       style={{
-        height: `${context.bottomLayoutInsetPx}px`,
-        minHeight: `${context.bottomLayoutInsetPx}px`,
+        height: `${bottomLayoutInsetPx}px`,
+        minHeight: `${bottomLayoutInsetPx}px`,
       }}
     >
-      {context.nextHistoryBoundaryStatusNode}
-      <RuntimeStatusSlot sessionId={context.runtimeStatusSessionId} placement="footer" />
+      {nextHistoryBoundaryStatusNode}
+      <RuntimeStatusSlot sessionId={runtimeStatusSessionId} placement="footer" />
     </div>
     {/*
       Resident tail reservation of roughly one viewport. Its height tracks the
@@ -233,17 +227,12 @@ const FlowChatVirtuosoFooter = ({ context }: ContextProp<FlowChatVirtuosoContext
       data-bf-part="tailSpacer"
       aria-hidden="true"
       style={{
-        height: `${context.tailSpacerPx}px`,
-        minHeight: `${context.tailSpacerPx}px`,
+        height: `${tailSpacerPx}px`,
+        minHeight: `${tailSpacerPx}px`,
       }}
     />
   </>
 );
-
-const FLOW_CHAT_VIRTUOSO_COMPONENTS: Components<VirtualItem, FlowChatVirtuosoContext> = {
-  Header: FlowChatVirtuosoHeader,
-  Footer: FlowChatVirtuosoFooter,
-};
 
 const FlowChatHistoryPagingSentinel = ({
   state,
@@ -315,49 +304,6 @@ function isElementVisibleInScroller(element: HTMLElement, scroller: HTMLElement)
   return elementRect.bottom > scrollerRect.top && elementRect.top < scrollerRect.bottom;
 }
 
-/**
- * Take scroll compensation away from the virtualizer.
- *
- * `scrollBy` is how react-virtuoso applies every correction it makes for
- * content it mis-sized — the upward-scrolling compensation, the prepend
- * deviation, and the group shift. It is the only thing it uses `scrollBy` for,
- * and nothing in FlowChat calls `scrollBy` at all, so intercepting it catches
- * exactly those corrections and nothing else.
- *
- * They have to be intercepted rather than merely overruled. Two of their
- * properties make them unusable here, both measured on a 27-Turn session:
- *
- * - The amount is the change in *total* list height, which assumes the change
- *   happened above the viewport. Scrolling up into a freshly paged block
- *   guarantees it did not, and a single item measuring 38px -> 1003px then
- *   moved the viewport 965px across a whole Turn.
- * - It arrives a frame late, in the virtualizer's own animation frame, as a
- *   scroll with no accompanying layout change. Nothing observes that frame —
- *   no resize callback, no render — so a correction of ours cannot be
- *   scheduled against it. Five such corrections in one reproduction, up to
- *   5384px, went entirely unopposed.
- *
- * The *signal* is still worth having: the virtualizer knows something moved
- * that it cannot place. So the request is answered by re-anchoring instead of
- * by the offset it asked for. `compensate` returns false when there is no
- * anchor to work from, and the original correction is let through as the
- * fallback — a coarse correction beats none.
- */
-function interceptVirtualizerScrollCompensation(
-  scroller: HTMLElement,
-  compensate: () => boolean,
-): void {
-  const patched = scroller as HTMLElement & { __flowChatCompensationIntercepted?: boolean };
-  if (patched.__flowChatCompensationIntercepted) return;
-  patched.__flowChatCompensationIntercepted = true;
-  if (typeof scroller.scrollBy !== 'function') return;
-  const originalScrollBy = scroller.scrollBy.bind(scroller);
-  scroller.scrollBy = ((...args: Parameters<HTMLElement['scrollBy']>) => {
-    if (compensate()) return;
-    originalScrollBy(...args);
-  }) as typeof scroller.scrollBy;
-}
-
 const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessageListProps>(({
   items,
   isViewportActive = true,
@@ -377,8 +323,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const activeSessionState = useActiveSessionState();
   const activeSessionId = activeSession?.sessionId ?? null;
   const latestTurnId = virtualItems.at(-1)?.turnId ?? null;
-  const virtuosoRef = useRef<VirtuosoHandle>(null);
   const scrollerElementRef = useRef<HTMLElement | null>(null);
+  const headerElementRef = useRef<HTMLDivElement | null>(null);
   const [scrollerElement, setScrollerElement] = useState<HTMLElement | null>(null);
   const [viewportHeightPx, setViewportHeightPx] = useState(0);
   /** Last scroller box the resize observer saw, to tell it apart from a content change. */
@@ -403,16 +349,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const searchNavigationRequestIdRef = useRef(0);
   const visibleTurnUpdateFrameRef = useRef<number | null>(null);
 
-  const virtuosoIndexCursorRef = useRef<VirtuosoIndexCursor<VirtualItem> | null>(null);
-  virtuosoIndexCursorRef.current = virtuosoIndexCursorRef.current === null
-    ? createVirtuosoIndexCursor(activeSessionId, virtualItems)
-    : advanceVirtuosoIndexCursor(
-      virtuosoIndexCursorRef.current,
-      activeSessionId,
-      virtualItems,
-      getVirtualItemStableKey,
-    );
-  const virtuosoFirstItemIndex = virtuosoIndexCursorRef.current.firstItemIndex;
+  const virtualizer = useFlowChatVirtualizer({
+    items: virtualItems,
+    scrollerRef: scrollerElementRef,
+    headerRef: headerElementRef,
+    getItemKey: getVirtualItemStableKey,
+    estimateItemHeightPx: estimateVirtualMessageItemHeight,
+    scrollPaddingStartPx: FLOWCHAT_TURN_TOP_GAP_PX,
+  });
 
   const userMessageItems = useMemo(() => virtualItems
     .map((item, index) => ({ item, index }))
@@ -447,7 +391,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   /*
    * The paging diagnostics need a few session facts, but `activeSession` is a
    * fresh object on every streaming flush: depending on it would rebuild
-   * `requestHistoryBoundary` and therefore Virtuoso's `rangeChanged` many times
+   * `requestHistoryBoundary` and therefore the rendered-range effect many times
    * a second. Hold the session itself by reference — one assignment per render,
    * no allocation — and read the fields only on the rare diagnostic path.
    */
@@ -471,23 +415,23 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   ), []);
 
   /**
-   * The content-end scroll, issued *through Virtuoso*.
+   * The content-end scroll, issued *through the virtualizer*.
    *
-   * Writing the scroller directly is cheaper, but it leaves any pending
-   * `scrollToIndex` retry in place — Virtuoso re-aims at its original target
-   * for up to a second after the list changes under it. A caller correcting
-   * one of its own `scrollToIndex` calls has to replace that retry rather than
-   * outrun it, and only another `scrollToIndex` does.
+   * Writing the scroller directly is cheaper, but it leaves any pending re-aim
+   * in place — the virtualizer keeps chasing its last target for as long as the
+   * measurements under it move. A caller correcting one of its own scrolls has
+   * to replace that chase rather than outrun it, and only another scroll issued
+   * through the virtualizer does.
+   *
+   * The target is read off live geometry rather than aligned to the last item,
+   * because the end of *real content* is above the resident tail spacer and no
+   * item knows where that is.
    */
-  const scrollVirtuosoToContentEnd = useCallback((behavior: 'auto' | 'smooth') => {
-    const lastIndex = Math.max(0, virtualItems.length - 1);
-    virtuosoRef.current?.scrollToIndex({
-      index: lastIndex,
-      align: 'end',
-      offset: endAlignedTailOffsetPx(lastIndex, virtualItems.length, tailSpacerPxRef.current),
-      behavior,
-    });
-  }, [virtualItems.length]);
+  const scrollToContentEndThroughVirtualizer = useCallback((behavior: 'auto' | 'smooth') => {
+    const scroller = scrollerElementRef.current;
+    if (!scroller) return;
+    virtualizer.scrollToOffset(readContentEndScrollTop(scroller), behavior);
+  }, [readContentEndScrollTop, virtualizer]);
 
   const scrollToContentEnd = useCallback((behavior: ScrollBehavior) => {
     const scroller = scrollerElementRef.current;
@@ -495,22 +439,17 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       scroller.scrollTo({ top: readContentEndScrollTop(scroller), behavior });
       return;
     }
-    scrollVirtuosoToContentEnd(normalizeVirtuosoBehavior(behavior));
-  }, [readContentEndScrollTop, scrollVirtuosoToContentEnd]);
+    scrollToContentEndThroughVirtualizer(behavior === 'smooth' ? 'smooth' : 'auto');
+  }, [readContentEndScrollTop, scrollToContentEndThroughVirtualizer]);
 
   const scrollTurnToTop = useCallback((turnId: string) => {
     const targetIndex = virtualItems.findIndex(item => (
       item.turnId === turnId && item.type === 'user-message'
     ));
-    if (targetIndex < 0 || !virtuosoRef.current) return false;
-    virtuosoRef.current.scrollToIndex({
-      index: targetIndex,
-      align: 'start',
-      offset: -FLOWCHAT_TURN_TOP_GAP_PX,
-      behavior: 'auto',
-    });
+    if (targetIndex < 0) return false;
+    virtualizer.scrollItemIntoView(targetIndex, { align: 'start' });
     return true;
-  }, [virtualItems]);
+  }, [virtualItems, virtualizer]);
 
   // Must agree with `scrollTurnToTop` down to the pixel: this is the offset the
   // follow loop re-asserts every frame, so a disagreement is a fight.
@@ -657,7 +596,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     const check = () => {
       frame += 1;
       /*
-       * Geometry stability is not a settle signal on its own: before Virtuoso
+       * Geometry stability is not a settle signal on its own: before the virtualizer
        * renders anything, `scrollHeight` and the content end sit unchanged at
        * their unmeasured values, which is indistinguishable from having
        * finished. Require the last item to actually be rendered with its end
@@ -885,7 +824,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
      * the element that grows, and its padding is where the virtualizer parks
      * item space, which the content box does not include.
      */
-    const content = scrollerElement.querySelector('[data-testid="virtuoso-item-list"]')
+    const content = scrollerElement.querySelector('[data-testid="flowchat-item-list"]')
       ?? scrollerElement.firstElementChild;
     if (content) observer.observe(content, { box: 'border-box' });
     observer.observe(scrollerElement);
@@ -905,7 +844,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
    * The branch is on what is *knowable*, not on where the Turn is. A rendered
    * Turn has a resolvable offset, so the clamp is decided before anything
    * moves and the requested behaviour survives. An unrendered one is known
-   * only to Virtuoso, so it is placed instantly and the answer read back —
+   * only to the virtualizer, so it is placed instantly and the answer read back —
    * both writes land in the same task, so the correction costs a second scroll
    * but not a second visible movement.
    */
@@ -916,14 +855,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     const targetIndex = virtualItems.findIndex(item => (
       item.turnId === turnId && item.type === 'user-message'
     ));
-    if (targetIndex < 0 || !virtuosoRef.current) return 'rejected';
+    if (targetIndex < 0) return 'rejected';
     exitFollowOutput('scroll-to-turn');
 
-    const behavior = normalizeVirtuosoBehavior(options?.behavior ?? 'auto');
-    const alignTurnToTop = () => virtuosoRef.current?.scrollToIndex({
-      index: targetIndex,
+    const behavior = options?.behavior === 'smooth' ? 'smooth' : 'auto';
+    const alignTurnToTop = () => virtualizer.scrollItemIntoView(targetIndex, {
       align: 'start',
-      offset: -FLOWCHAT_TURN_TOP_GAP_PX,
       behavior,
     });
     const scroller = scrollerElementRef.current;
@@ -934,7 +871,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         turnTopScrollTop: renderedTurnTopScrollTop,
         contentEndScrollTop: readContentEndScrollTop(scroller),
       })) {
-        scrollVirtuosoToContentEnd(behavior);
+        scrollToContentEndThroughVirtualizer(behavior);
       } else {
         alignTurnToTop();
       }
@@ -944,27 +881,23 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     // Placed instantly on purpose: an animated scroll has not arrived yet, so
     // there would be nothing to read back. The requested behaviour is spent on
     // the placement, which is what turn-rail navigation already asks for.
-    virtuosoRef.current.scrollToIndex({
-      index: targetIndex,
-      align: 'start',
-      offset: -FLOWCHAT_TURN_TOP_GAP_PX,
-      behavior: 'auto',
-    });
+    virtualizer.scrollItemIntoView(targetIndex, { align: 'start' });
     if (scroller && turnTopAlignmentEntersReservedBlank({
       turnTopScrollTop: scroller.scrollTop,
       // Re-read: placing the viewport renders items, which re-measures the
       // transcript and moves the content end with it.
       contentEndScrollTop: readContentEndScrollTop(scroller),
     })) {
-      scrollVirtuosoToContentEnd('auto');
+      scrollToContentEndThroughVirtualizer('auto');
     }
     return 'settled';
   }, [
     exitFollowOutput,
     readContentEndScrollTop,
     resolveTurnTopScrollTop,
-    scrollVirtuosoToContentEnd,
+    scrollToContentEndThroughVirtualizer,
     virtualItems,
+    virtualizer,
   ]);
 
   const navigateToTurn = useCallback((turnId: string, options?: TurnNavigationOptions) => (
@@ -997,10 +930,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   }, [navigateToTurn, userMessageItems]);
 
   const scrollToIndex = useCallback((index: number) => {
-    if (!virtuosoRef.current || index < 0 || index >= virtualItems.length) return;
+    if (index < 0 || index >= virtualItems.length) return;
     exitFollowOutput('scroll-to-index');
-    virtuosoRef.current.scrollToIndex({ index, align: 'center', behavior: 'auto' });
-  }, [exitFollowOutput, virtualItems.length]);
+    virtualizer.scrollItemIntoView(index, { align: 'center' });
+  }, [exitFollowOutput, virtualItems.length, virtualizer]);
 
   const scrollToTurnEnd = useCallback((turnId: string) => {
     let targetIndex = -1;
@@ -1010,19 +943,20 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         break;
       }
     }
-    if (targetIndex < 0 || !virtuosoRef.current) return false;
+    const scroller = scrollerElementRef.current;
+    const bounds = targetIndex < 0 ? null : virtualizer.getItemBounds(targetIndex);
+    if (!bounds || !scroller) return false;
     // Deliberately does not exit follow-output. This is the session-open
     // placement, which wants the same position the tail follow is settling on;
     // releasing ownership here strands the viewport wherever this one early
     // shot landed, before item measurement and history paging have finished.
-    virtuosoRef.current.scrollToIndex({
-      index: targetIndex,
-      align: 'end',
-      offset: endAlignedTailOffsetPx(targetIndex, virtualItems.length, tailSpacerPxRef.current),
-      behavior: 'auto',
-    });
+    //
+    // Aligned by hand rather than by asking for the last item's end: the
+    // virtualizer's own end alignment runs to the bottom of the scroll range,
+    // and the resident tail spacer lives down there.
+    virtualizer.scrollToOffset(bounds.endPx - scroller.clientHeight);
     return true;
-  }, [virtualItems]);
+  }, [virtualItems, virtualizer]);
 
   const isTurnRenderedInViewport = useCallback((turnId: string) => {
     const scroller = scrollerElementRef.current;
@@ -1056,11 +990,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     clearSearchMatch();
     exitFollowOutput('scroll-to-index');
     const requestId = searchNavigationRequestIdRef.current;
-    virtuosoRef.current?.scrollToIndex({
-      index: target.virtualItemIndex,
-      align: 'center',
-      behavior: 'auto',
-    });
+    virtualizer.scrollItemIntoView(target.virtualItemIndex, { align: 'center' });
     let attempts = 0;
     const resolve = () => {
       if (searchNavigationRequestIdRef.current !== requestId) return;
@@ -1101,7 +1031,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       );
     };
     requestAnimationFrame(resolve);
-  }, [clearSearchMatch, exitFollowOutput]);
+  }, [clearSearchMatch, exitFollowOutput, virtualizer]);
 
   useEffect(() => () => setFlowChatSearchHighlight(null), []);
 
@@ -1145,17 +1075,34 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     boundaryRequestRef.current[direction] = request;
   }, [onHistoryWindowBoundaryIntent]);
 
-  const handleRangeChanged = useCallback((range: ListRange) => {
+  /*
+   * Paging follows the rendered window rather than a callback of the
+   * virtualizer's, because the window is the state — a scroll and a prepend
+   * both reach here through the same value, and only when it actually changed.
+   */
+  const renderedRange = useMemo(() => {
+    const first = virtualizer.rows[0];
+    const last = virtualizer.rows[virtualizer.rows.length - 1];
+    return first && last ? { startIndex: first.index, endIndex: last.index } : null;
+  }, [virtualizer.rows]);
+
+  useEffect(() => {
+    if (!renderedRange) return;
     scheduleVisibleTurnInfoUpdate();
-    const visibleRange = toLocalItemRange(range, virtuosoFirstItemIndex);
     for (const direction of historyBoundariesForVisibleRange(
-      visibleRange,
+      renderedRange,
       virtualItems.length,
       presentationMode,
     )) {
       requestHistoryBoundary(direction);
     }
-  }, [presentationMode, requestHistoryBoundary, scheduleVisibleTurnInfoUpdate, virtualItems.length, virtuosoFirstItemIndex]);
+  }, [
+    presentationMode,
+    renderedRange,
+    requestHistoryBoundary,
+    scheduleVisibleTurnInfoUpdate,
+    virtualItems.length,
+  ]);
 
   useLayoutEffect(() => {
     scheduleVisibleTurnInfoUpdate();
@@ -1167,18 +1114,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     }
   }, [userMessageItems.length]);
 
-  const handleScrollerRef = useCallback((element: HTMLElement | Window | null) => {
-    const scroller = element instanceof HTMLElement ? element : null;
+  const handleScrollerRef = useCallback((element: HTMLElement | null) => {
+    const scroller = element;
     scrollerElementRef.current = scroller;
     setScrollerElement(scroller);
     if (scroller) {
-      interceptVirtualizerScrollCompensation(scroller, () => {
-        // The virtualizer only asks for a correction when something moved that
-        // it could not place, so the request is also the signal that a settle
-        // is under way.
-        viewportAnchor.openSettleWindow();
-        return viewportAnchor.restoreAnchor();
-      });
       setViewportHeightPx(scroller.clientHeight);
       // Seed the box so the observer's first callback is not read as a resize.
       observedViewportBoxRef.current = {
@@ -1186,7 +1126,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         height: scroller.clientHeight,
       };
     }
-  }, [viewportAnchor]);
+  }, []);
 
   const scrollToPhysicalBottom = useCallback(() => {
     enterFollowOutput('jump-to-latest');
@@ -1266,44 +1206,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       />
     ) : null
   ), [historyBoundaryState.after, presentationMode, t]);
-  const virtuosoContext = useMemo<FlowChatVirtuosoContext>(() => ({
-    bottomLayoutInsetPx,
-    tailSpacerPx,
-    previousHistoryBoundaryStatusNode,
-    nextHistoryBoundaryStatusNode,
-    runtimeStatusSessionId: activeSessionId,
-  }), [
-    activeSessionId,
-    bottomLayoutInsetPx,
-    nextHistoryBoundaryStatusNode,
-    previousHistoryBoundaryStatusNode,
-    tailSpacerPx,
-  ]);
-  const initialTopMostItemIndex = useMemo(() => (
-    initialTopMostItemForSessionOpen(virtualItems.length, tailSpacerPx)
-  ), [tailSpacerPx, virtualItems.length]);
-  const computeVirtuosoItemKey = useCallback((_: number, item: VirtualItem) => (
-    `${activeSessionId ?? 'no-active-session'}:${getVirtualItemStableKey(item)}`
-  ), [activeSessionId]);
-  /*
-   * Per-item size estimates, used to build the size tree before anything has
-   * been measured. Without them the virtualizer probes one item and applies
-   * that height to every unmeasured item, and this transcript alternates
-   * 38px user messages with model rounds two orders of magnitude taller — so
-   * the opening scroll range, and the scrollbar with it, was wrong by
-   * thousands of pixels.
-   *
-   * Seeded once rather than recomputed: the virtualizer only consults this
-   * while its size tree is still empty, and the component is keyed by session,
-   * so a session change reseeds it by remounting.
-   */
-  const heightEstimatesRef = useRef<number[] | null>(null);
-  if (heightEstimatesRef.current === null) {
-    heightEstimatesRef.current = virtualItems.map(estimateVirtualMessageItemHeight);
-  }
-  const renderVirtuosoItem = useCallback((index: number, item: VirtualItem) => (
-    <VirtualItemRenderer item={item} index={index - virtuosoFirstItemIndex} />
-  ), [virtuosoFirstItemIndex]);
 
   if (virtualItems.length === 0) {
     return (
@@ -1332,24 +1234,45 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       data-streaming-output={isStreamingOutput ? 'true' : 'false'}
       data-open-viewport-settled={isOpenViewportSettled ? 'true' : 'false'}
     >
-      <Virtuoso
-        key={activeSessionId ?? 'no-active-session'}
-        ref={virtuosoRef}
-        data={virtualItems}
-        firstItemIndex={virtuosoFirstItemIndex}
-        initialTopMostItemIndex={initialTopMostItemIndex}
-        heightEstimates={heightEstimatesRef.current}
-        computeItemKey={computeVirtuosoItemKey}
-        itemContent={renderVirtuosoItem}
-        followOutput={false}
-        alignToBottom={false}
-        overscan={FLOW_CHAT_VIRTUOSO_OVERSCAN}
-        increaseViewportBy={FLOW_CHAT_VIRTUOSO_VIEWPORT_INCREASE}
-        rangeChanged={handleRangeChanged}
-        scrollerRef={handleScrollerRef}
-        context={virtuosoContext}
-        components={FLOW_CHAT_VIRTUOSO_COMPONENTS}
-      />
+      <div
+        ref={handleScrollerRef}
+        className="virtual-message-list__scroller"
+        data-flowchat-scroller="true"
+        data-testid="flowchat-scroller"
+      >
+        <FlowChatListHeader
+          ref={headerElementRef}
+          previousHistoryBoundaryStatusNode={previousHistoryBoundaryStatusNode}
+        />
+        {/*
+          The window of rendered items, with the rest of the transcript standing
+          in as padding above and below. Items stay in normal flow so that one
+          growing reflows the ones under it in the same layout pass.
+        */}
+        <div
+          className="virtual-message-list__items"
+          data-testid="flowchat-item-list"
+          style={{
+            paddingTop: `${virtualizer.paddingTopPx}px`,
+            paddingBottom: `${virtualizer.paddingBottomPx}px`,
+          }}
+        >
+          {virtualizer.rows.map(row => (
+            <VirtualItemRenderer
+              key={row.key}
+              item={virtualItems[row.index]}
+              index={row.index}
+              measureRef={virtualizer.measureRowElement}
+            />
+          ))}
+        </div>
+        <FlowChatListFooter
+          bottomLayoutInsetPx={bottomLayoutInsetPx}
+          tailSpacerPx={tailSpacerPx}
+          nextHistoryBoundaryStatusNode={nextHistoryBoundaryStatusNode}
+          runtimeStatusSessionId={activeSessionId}
+        />
+      </div>
 
       <ScrollToTurnHeaderButton
         visible={shouldShowTurnHeaderButton}
