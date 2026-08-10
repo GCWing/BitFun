@@ -82,11 +82,13 @@ vi.mock('react-virtuoso', async () => {
       return (
         <div ref={scrollerRef} data-virtuoso-scroller="true">
           {Header ? <Header context={props.context} /> : null}
-          {props.data.map((item: unknown, index: number) => (
-            <ReactModule.Fragment key={index}>
-              {props.itemContent(firstItemIndex + index, item)}
-            </ReactModule.Fragment>
-          ))}
+          <div data-testid="virtuoso-item-list">
+            {props.data.map((item: unknown, index: number) => (
+              <ReactModule.Fragment key={index}>
+                {props.itemContent(firstItemIndex + index, item)}
+              </ReactModule.Fragment>
+            ))}
+          </div>
           {Footer ? <Footer context={props.context} /> : null}
         </div>
       );
@@ -416,6 +418,132 @@ describe('VirtualMessageList natural scroll contract', () => {
       });
 
       expect(mocks.handleUserScrollIntent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('the viewport anchor keeps the reading position', () => {
+    const originalScrollBy = HTMLElement.prototype.scrollBy;
+    let nowMs = 10_000;
+    let frames: FrameRequestCallback[] = [];
+
+    /** Places each Turn by id; the scroller itself sits at 0. */
+    function anchorLayout(turnTops: Record<string, number>) {
+      const original = HTMLElement.prototype.getBoundingClientRect;
+      HTMLElement.prototype.getBoundingClientRect = function getRect(this: HTMLElement) {
+        const turnId = this.dataset?.turnId;
+        const top = turnId !== undefined && turnTops[turnId] !== undefined ? turnTops[turnId] : 0;
+        return { ...new DOMRect(0, top, 0, 40), top, bottom: top + 40 } as DOMRect;
+      };
+      return () => { HTMLElement.prototype.getBoundingClientRect = original; };
+    }
+
+    function runFrames(count: number) {
+      for (let index = 0; index < count; index += 1) {
+        frames.splice(0, frames.length).forEach(frame => frame(0));
+      }
+    }
+
+    /** Renders, settles the opening reveal, and returns a writable scroller. */
+    function mountSettled() {
+      act(() => root.render(<VirtualMessageList />));
+      act(() => runFrames(48));
+      const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller]')!;
+      const position = { scrollTop: 1000 };
+      Object.defineProperty(scroller, 'scrollTop', {
+        configurable: true,
+        get: () => position.scrollTop,
+        set: (value: number) => { position.scrollTop = value; },
+      });
+      return { scroller, position };
+    }
+
+    beforeEach(() => {
+      nowMs = 10_000;
+      frames = [];
+      vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
+      HTMLElement.prototype.scrollBy = vi.fn();
+      vi.stubGlobal('requestAnimationFrame', (frame: FrameRequestCallback) => {
+        frames.push(frame);
+        return frames.length;
+      });
+      vi.stubGlobal('cancelAnimationFrame', () => {});
+    });
+
+    afterEach(() => {
+      HTMLElement.prototype.scrollBy = originalScrollBy;
+      vi.restoreAllMocks();
+    });
+
+    it('answers a virtualizer correction by re-anchoring, not by the offset it asked for', () => {
+      const tops: Record<string, number> = { 'turn-1': -200, 'turn-2': 100 };
+      const restoreLayout = anchorLayout(tops);
+      try {
+        const { scroller, position } = mountSettled();
+        // A wheel, then the scroll it caused: turn-2 is the reading position.
+        act(() => {
+          scroller.dispatchEvent(new Event('wheel'));
+          scroller.dispatchEvent(new Event('scroll'));
+        });
+
+        // 400px of transcript resolves above it, and the virtualizer asks for a
+        // correction of its own — computed from the change in total list height,
+        // which is not the same question.
+        tops['turn-2'] = 500;
+        act(() => { scroller.scrollBy({ top: 4000 }); });
+
+        expect(position.scrollTop).toBe(1400);
+        expect(HTMLElement.prototype.scrollBy).not.toHaveBeenCalled();
+      } finally {
+        restoreLayout();
+      }
+    });
+
+    it('lets the virtualizer correct when there is no anchor to work from', () => {
+      const restoreLayout = anchorLayout({});
+      try {
+        const { scroller, position } = mountSettled();
+        // No scroll has happened, so nothing has been anchored yet. A coarse
+        // correction beats none.
+        act(() => { scroller.scrollBy({ top: 120 }); });
+
+        expect(HTMLElement.prototype.scrollBy).toHaveBeenCalledWith({ top: 120 });
+        expect(position.scrollTop).toBe(1000);
+      } finally {
+        restoreLayout();
+      }
+    });
+
+    it('re-anchors on a scroll the user drove, and not on one they did not', () => {
+      const tops: Record<string, number> = { 'turn-1': -200, 'turn-2': 100 };
+      const restoreLayout = anchorLayout(tops);
+      try {
+        const { scroller, position } = mountSettled();
+        act(() => {
+          scroller.dispatchEvent(new Event('wheel'));
+          scroller.dispatchEvent(new Event('scroll'));
+        });
+
+        // A scroll arriving well after the last gesture is the transcript
+        // moving, not the user. Adopting it would make the displacement the new
+        // reading position and leave nothing to correct back to.
+        tops['turn-2'] = 500;
+        nowMs += 5_000;
+        act(() => { scroller.dispatchEvent(new Event('scroll')); });
+        act(() => { scroller.scrollBy({ top: 4000 }); });
+        expect(position.scrollTop).toBe(1400);
+
+        // The same scroll under a live gesture is the user, and moves the anchor
+        // with them: there is then nothing for a correction to undo.
+        tops['turn-2'] = 900;
+        act(() => {
+          scroller.dispatchEvent(new Event('wheel'));
+          scroller.dispatchEvent(new Event('scroll'));
+        });
+        act(() => { scroller.scrollBy({ top: 4000 }); });
+        expect(position.scrollTop).toBe(1400);
+      } finally {
+        restoreLayout();
+      }
     });
   });
 

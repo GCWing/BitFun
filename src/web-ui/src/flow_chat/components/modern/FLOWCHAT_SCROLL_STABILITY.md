@@ -92,6 +92,74 @@ tolerable only because more output is about to fill it. Do not reuse it to
 absorb anything else — applied to a foreign forward move it parks the content
 end mid-viewport permanently, since nothing pulls the target back down.
 
+## The Viewport Anchor Owns Scroll Compensation
+
+A virtualizer places items in the scroll range before it knows how tall they
+are, so every late measurement rewrites the offset of everything below it.
+Correcting for that is unavoidable. Doing it with `scrollTop` is not possible:
+the same number means a different place after every measurement. The reading
+position is therefore recorded as a **Turn and its offset from the viewport
+top**, and restored as a relationship rather than replayed as a delta. That
+makes the correction idempotent — when nothing moved it is zero.
+
+**The virtualizer's own compensation is not usable, and is intercepted rather
+than merely overruled.** `scrollBy` is the only channel react-virtuoso uses for
+it, and nothing in FlowChat calls `scrollBy`, so the interception catches
+exactly those corrections. Two measured properties rule them out, both on a
+27-Turn session:
+
+- **The amount answers a different question.** It is the change in *total* list
+  height, which assumes the change happened above the viewport. Scrolling up
+  into a freshly paged block guarantees it did not: one item measuring 38px ->
+  1003px moved the viewport 965px, across a whole Turn.
+- **It is skipped exactly when it is needed.** The correction is gated on scroll
+  direction, and the virtualizer's own prepend compensation sets that direction
+  to `down` — disabling the correction for the measurements that follow it.
+  Measured: `scrollHeight` went 8393 -> 10073 with `scrollTop` held at 1133 and
+  no correction at all, sliding the transcript down by the full 1680px.
+
+The request itself is still worth having — the virtualizer knows something moved
+that it could not place — so it is answered by re-anchoring. With no anchor to
+work from, the original correction is let through: coarse beats none.
+
+**Capture is qualified by intent, not by geometry.** A scroll event cannot say
+whether the user moved or the transcript moved under them, so the anchor is
+re-taken only within `USER_DRIVEN_SCROLL_WINDOW_MS` of a wheel, touch, key, or
+scrollbar press — the same distinction follow-output draws. Two rules were tried
+and measured first, and both failed in ways worth recording:
+
+- Capturing at the intent event itself records the position *before* the scroll
+  it causes, which drags a scrolling viewport backwards.
+- Gating on "the content height did not change" blocks almost every capture,
+  because lazy measurement changes it on nearly every frame: 1075 blocked
+  captures against 8 accepted ones, and a 1037px correction issued against the
+  user's own gesture.
+
+**Restoring needs a window, not a callback.** A prepend settles over several
+frames — a margin holds the position, the real heights land in padding, then the
+margin is released — and *a margin change fires no ResizeObserver at all*, so no
+single callback covers it. Every signal that the transcript moved therefore
+opens `ANCHOR_SETTLE_FRAMES`, and a frame that had to correct refreshes it.
+Measured before the window existed: four consecutive painted frames displaced by
+896px.
+
+The observer feeding this had to be repointed. `scrollerRef.firstElementChild`
+is a viewport-sized box that stays at the scroller's height no matter how much
+transcript there is — it never reported a content change at all, despite a
+comment claiming it watched content. The item list is the element that grows,
+and `border-box` is required because the virtualizer parks item space in
+padding.
+
+**What this does not fix.** The reserve for an unmeasured item is a single
+scalar (`lastSize`), and this transcript alternates 38px user messages with
+model rounds up to 5012px. So the scroll range stays wrong by an order of
+magnitude, scrolling into a paged block still forces a burst of measurement —
+measured stalls of 119ms and 295ms with no animation frame at all — and the
+correction that follows can be 11705px in one step. `heightEstimates` fixes only
+the opening range: it is gated on an empty size tree, so a prepend still takes
+`lastSize`. Per-item estimates for unmeasured items are the missing capability,
+and `estimateVirtualMessageItemHeight` already exists to supply them.
+
 ## Reading History Is About the Transcript, Not the Intent
 
 `viewportMode: 'history-reading'` does two things — it suppresses streaming
@@ -379,6 +447,17 @@ too high or too low. Re-check the offset math before bumping the dependency.
 - The opening reveal has a hard frame cap. A session that pages for longer than
   the cap is revealed mid-settle; raising the cap trades that against a longer
   blank on open.
+- **Scrolling up through freshly paged history still flickers, and the cause is
+  upstream of anything the anchor can do.** Unmeasured items are reserved a
+  single `lastSize`, so a page of history occupies a small fraction of the range
+  it needs; reaching it forces a burst of measurement that blocks the main
+  thread — 119ms and 295ms measured, with no animation frame in between — and
+  the correction that follows can be 11705px in one step. The anchor holds the
+  reading position across it (measured: zero displacement on essentially every
+  sampled frame), but a stall of that length is visible on its own. Closing this
+  needs per-item estimates for unmeasured items, which react-virtuoso does not
+  expose; `estimateVirtualMessageItemHeight` is written and waiting for a
+  virtualizer that accepts one.
 
 ## Diagnosing History Paging
 
@@ -531,6 +610,16 @@ confirm:
     those are the rendered and unrendered branches, and they take different
     paths. Then click a final Turn whose answer is longer than the viewport: it
     must still top-align.
+18. Open a long `isPartial` session and scroll up slowly through several paging
+    junctions. The Turn under the cursor must not move — not backwards, not
+    forwards, and not for a single frame. A stall while a page is measured is a
+    known gap and reads differently from a jump: the picture freezes and
+    resumes in place, rather than showing different content and snapping back.
+    Then scroll up fast through the same junctions, which is where the anchor
+    and the user's gesture are most likely to disagree.
+19. During that scroll, check that a paging junction does not leave the viewport
+    stuck: keep scrolling past it, then wheel back down, and confirm the
+    transcript still tracks the gesture in both directions.
 
 ## Related Files
 
