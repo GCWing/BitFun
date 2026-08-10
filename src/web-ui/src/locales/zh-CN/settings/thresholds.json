@@ -16,7 +16,10 @@
       "__title": "子代理",
       "max_hard_cap": "子代理并发硬上限",
       "timeout_grace_secs": "子代理取消宽限（秒）",
-      "session_references_per_turn": "每轮会话引用上限"
+      "session_references_per_turn": "每轮会话引用上限",
+      "max_dispatch_per_parent_window": "每父会话窗口内派发上限",
+      "dispatch_window_secs": "派发统计窗口（秒）",
+      "dispatch_cooldown_secs": "触发上限后的冷却时间（秒）"
     },
     "compression": {
       "__title": "上下文压缩",

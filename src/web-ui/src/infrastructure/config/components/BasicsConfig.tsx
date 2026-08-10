@@ -993,6 +993,12 @@ function BasicsNotificationsSection() {
  * `ai.legion_deploy_frequency_per_hour` (deployments per creator per hour,
  * default 10, 0 = unlimited). Saving writes the config keys directly so the
  * LegionControl tool picks them up at the next call (hot, no restart needed).
+ *
+ * NOTE (UX-P1-1): these three keys are TOP-LEVEL `ai.legion_*` keys — they are
+ * intentionally NOT part of the `ai.thresholds.*` subdomain (there is no
+ * `ai.thresholds.legion.*`). Writing `ai.thresholds.legion_*`/`legion.*` is
+ * silently ignored by the config service, so keep this section on the
+ * `ai.legion_*` top-level keys.
  */
 function BasicsLegionThresholdsSection() {
   const { t } = useTranslation('settings/basics');

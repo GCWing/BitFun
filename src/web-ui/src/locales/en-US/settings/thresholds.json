@@ -16,7 +16,10 @@
       "__title": "Subagents",
       "max_hard_cap": "Subagent concurrency hard cap",
       "timeout_grace_secs": "Subagent cancellation grace (s)",
-      "session_references_per_turn": "Session references per turn"
+      "session_references_per_turn": "Session references per turn",
+      "max_dispatch_per_parent_window": "Max dispatches per parent per window",
+      "dispatch_window_secs": "Dispatch window length (s)",
+      "dispatch_cooldown_secs": "Dispatch cooldown after cap (s)"
     },
     "compression": {
       "__title": "Context compression",

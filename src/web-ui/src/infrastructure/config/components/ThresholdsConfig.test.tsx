@@ -127,6 +127,44 @@ describe('ThresholdsConfig', () => {
     expect(container.querySelector('input[type="number"]')).not.toBeNull();
   });
 
+  it('renders and persists the subagent dispatch fields (前端-P1-1)', async () => {
+    getConfigMock.mockResolvedValue({
+      subagent: {
+        max_hard_cap: 32,
+        timeout_grace_secs: 10,
+        session_references_per_turn: 5,
+        max_dispatch_per_parent_window: 20,
+        dispatch_window_secs: 3600,
+        dispatch_cooldown_secs: 300,
+      },
+    });
+    setConfigMock.mockResolvedValue(undefined);
+    await renderConfig();
+
+    // All three dispatch fields are rendered with their i18n label keys.
+    expect(container.textContent).toContain('fields.subagent.max_dispatch_per_parent_window');
+    expect(container.textContent).toContain('fields.subagent.dispatch_window_secs');
+    expect(container.textContent).toContain('fields.subagent.dispatch_cooldown_secs');
+
+    // Editing the first dispatch input writes the ai.thresholds.subagent.* path.
+    const inputs = [...container.querySelectorAll('input[type="number"]')] as HTMLInputElement[];
+    expect(inputs.length).toBeGreaterThanOrEqual(6);
+    const dispatchInput = inputs[3];
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      )!.set!;
+      setter.call(dispatchInput, '48');
+      dispatchInput.dispatchEvent(new Event('input', { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(setConfigMock).toHaveBeenCalledWith(
+      expect.stringContaining('ai.thresholds.subagent.max_dispatch_per_parent_window'),
+      48,
+    );
+  });
+
   it('falls back to defaults when the config read fails', async () => {
     getConfigMock.mockRejectedValue(new Error('config unavailable'));
     await renderConfig();

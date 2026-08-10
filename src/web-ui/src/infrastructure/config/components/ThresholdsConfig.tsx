@@ -28,7 +28,14 @@ const log = createLogger('ThresholdsConfig');
  */
 
 interface ThresholdsShape {
-  subagent: { max_hard_cap: number; timeout_grace_secs: number; session_references_per_turn: number };
+  subagent: {
+    max_hard_cap: number;
+    timeout_grace_secs: number;
+    session_references_per_turn: number;
+    max_dispatch_per_parent_window: number;
+    dispatch_window_secs: number;
+    dispatch_cooldown_secs: number;
+  };
   compression: {
     safety_reserve_tokens: number;
     overflow_attempts: number;
@@ -112,7 +119,14 @@ interface ThresholdsShape {
 }
 
 const DEFAULT_THRESHOLDS: ThresholdsShape = {
-  subagent: { max_hard_cap: 64, timeout_grace_secs: 10, session_references_per_turn: 5 },
+  subagent: {
+    max_hard_cap: 64,
+    timeout_grace_secs: 10,
+    session_references_per_turn: 5,
+    max_dispatch_per_parent_window: 20,
+    dispatch_window_secs: 3600,
+    dispatch_cooldown_secs: 300,
+  },
   compression: {
     safety_reserve_tokens: 10_000,
     overflow_attempts: 4,
@@ -306,6 +320,9 @@ export default function ThresholdsConfig() {
       renderField('subagent', 'max_hard_cap', 1),
       renderField('subagent', 'timeout_grace_secs', 1),
       renderField('subagent', 'session_references_per_turn', 1),
+      renderField('subagent', 'max_dispatch_per_parent_window', 0),
+      renderField('subagent', 'dispatch_window_secs', 1),
+      renderField('subagent', 'dispatch_cooldown_secs', 0),
     ]);
     add('compression', [
       renderField('compression', 'safety_reserve_tokens', 1, 100),
