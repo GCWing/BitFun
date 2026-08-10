@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { notificationService } from '@/shared/notification-system';
@@ -39,6 +39,12 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
   // Refs for values that must be read inside event handlers without stale closures
   const draggedWorkspaceIdRef = useRef<string | null>(null);
   const dropTargetRef = useRef<{ workspaceId: string; position: WorkspaceDragPosition } | null>(null);
+  // Drag-state safety nets (window dragend/mousedown + reset timeout) to clear
+  // stuck is-drag-active state when dragend doesn't fire normally.
+  const dragSafetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const windowDragEndHandlerRef = useRef<(() => void) | null>(null);
+  const windowMouseDownHandlerRef = useRef<(() => void) | null>(null);
+  const documentMouseMoveHandlerRef = useRef<(() => void) | null>(null);
 
   const sectionWorkspaces = variant === 'assistants'
     ? assistantWorkspacesList
@@ -64,6 +70,54 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
     ? t('nav.workspaces.emptyAssistants')
     : t('nav.workspaces.emptyProjects');
 
+  const removeDragArtifacts = useCallback(() => {
+    if (dragSafetyTimeoutRef.current !== null) {
+      clearTimeout(dragSafetyTimeoutRef.current);
+      dragSafetyTimeoutRef.current = null;
+    }
+    if (windowDragEndHandlerRef.current !== null) {
+      window.removeEventListener('dragend', windowDragEndHandlerRef.current);
+      windowDragEndHandlerRef.current = null;
+    }
+    if (windowMouseDownHandlerRef.current !== null) {
+      window.removeEventListener('mousedown', windowMouseDownHandlerRef.current);
+      windowMouseDownHandlerRef.current = null;
+    }
+    if (documentMouseMoveHandlerRef.current !== null) {
+      document.removeEventListener('mousemove', documentMouseMoveHandlerRef.current);
+      documentMouseMoveHandlerRef.current = null;
+    }
+  }, []);
+
+  const clearDragState = useCallback(() => {
+    draggedWorkspaceIdRef.current = null;
+    dropTargetRef.current = null;
+    setDraggedWorkspaceId(null);
+    setDropTarget(null);
+  }, []);
+
+  const cleanupDrag = useCallback(() => {
+    removeDragArtifacts();
+    clearDragState();
+  }, [removeDragArtifacts, clearDragState]);
+
+  useEffect(() => {
+    return () => {
+      if (dragSafetyTimeoutRef.current !== null) {
+        clearTimeout(dragSafetyTimeoutRef.current);
+      }
+      if (windowDragEndHandlerRef.current !== null) {
+        window.removeEventListener('dragend', windowDragEndHandlerRef.current);
+      }
+      if (windowMouseDownHandlerRef.current !== null) {
+        window.removeEventListener('mousedown', windowMouseDownHandlerRef.current);
+      }
+      if (documentMouseMoveHandlerRef.current !== null) {
+        document.removeEventListener('mousemove', documentMouseMoveHandlerRef.current);
+      }
+    };
+  }, []);
+
   const handleDragStart = useCallback((workspaceId: string) => (event: React.DragEvent<HTMLDivElement>) => {
     const payload: WorkspaceDragPayload = { workspaceId, variant };
     const serializedPayload = JSON.stringify(payload);
@@ -72,14 +126,44 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
     event.dataTransfer.setData('text/plain', serializedPayload);
     draggedWorkspaceIdRef.current = workspaceId;
     setDraggedWorkspaceId(workspaceId);
-  }, [variant]);
+
+    // Native drag ghost is used (no setDragImage / no custom preview). The
+    // drag-state safety nets below clear stuck is-drag-active state if dragend
+    // doesn't fire normally.
+    const windowDragEndHandler = () => { cleanupDrag(); };
+    windowDragEndHandlerRef.current = windowDragEndHandler;
+    window.addEventListener('dragend', windowDragEndHandler, { once: true });
+
+    const windowMouseDownHandler = () => { cleanupDrag(); };
+    windowMouseDownHandlerRef.current = windowMouseDownHandler;
+    window.addEventListener('mousedown', windowMouseDownHandler, { once: true });
+
+    // mousemove is suppressed during an active HTML5 drag (per spec) and resumes
+    // when the drag ends — even if dragend is swallowed. So it's a safe instant
+    // cleanup signal that never interrupts a normal drag.
+    const documentMouseMoveHandler = () => { cleanupDrag(); };
+    documentMouseMoveHandlerRef.current = documentMouseMoveHandler;
+    document.addEventListener('mousemove', documentMouseMoveHandler, { once: true });
+
+    dragSafetyTimeoutRef.current = setTimeout(() => {
+      cleanupDrag();
+    }, 1500);
+  }, [variant, cleanupDrag]);
+
+  const handleDrag = useCallback(() => {
+    // Refresh the stuck-state safety timeout on each drag event so a long drag
+    // doesn't trip the fallback. (Native ghost is used; no custom preview.)
+    if (dragSafetyTimeoutRef.current !== null) {
+      clearTimeout(dragSafetyTimeoutRef.current);
+      dragSafetyTimeoutRef.current = setTimeout(() => {
+        cleanupDrag();
+      }, 1500);
+    }
+  }, [cleanupDrag]);
 
   const handleDragEnd = useCallback(() => {
-    draggedWorkspaceIdRef.current = null;
-    dropTargetRef.current = null;
-    setDraggedWorkspaceId(null);
-    setDropTarget(null);
-  }, []);
+    cleanupDrag();
+  }, [cleanupDrag]);
 
   const handleDragOver = useCallback((workspaceId: string) => (event: React.DragEvent<HTMLDivElement>) => {
     // Browsers block reading dataTransfer data during dragover for security.
@@ -94,6 +178,13 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = 'move';
+
+    if (dragSafetyTimeoutRef.current !== null) {
+      clearTimeout(dragSafetyTimeoutRef.current);
+      dragSafetyTimeoutRef.current = setTimeout(() => {
+        cleanupDrag();
+      }, 1500);
+    }
 
     // Measure only the workspace card, not the wrapper that includes the drop-line.
     const itemEl = event.currentTarget.querySelector<HTMLElement>(
@@ -115,7 +206,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
       dropTargetRef.current = next;
       return next;
     });
-  }, []); // Intentionally empty: reads from refs, not closed-over state
+  }, [cleanupDrag]); // cleanupDrag is stable; reads refs for the rest
 
   const handleDragLeave = useCallback((workspaceId: string) => (event: React.DragEvent<HTMLDivElement>) => {
     if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
@@ -133,16 +224,23 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
       event.dataTransfer.getData(WORKSPACE_DRAG_MIME_TYPE) ||
       event.dataTransfer.getData('text/plain');
 
-    if (!payloadText) return;
+    if (!payloadText) {
+      cleanupDrag();
+      return;
+    }
 
     let payload: WorkspaceDragPayload;
     try {
       payload = JSON.parse(payloadText) as WorkspaceDragPayload;
     } catch {
+      cleanupDrag();
       return;
     }
 
-    if (!payload.workspaceId || payload.variant !== variant) return;
+    if (!payload.workspaceId || payload.variant !== variant) {
+      cleanupDrag();
+      return;
+    }
 
     event.preventDefault();
     event.stopPropagation();
@@ -154,6 +252,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
         ? dropTargetRef.current.position
         : 'after';
 
+    removeDragArtifacts();
     draggedWorkspaceIdRef.current = null;
     dropTargetRef.current = null;
     setDropTarget(null);
@@ -168,7 +267,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
     } finally {
       setDraggedWorkspaceId(null);
     }
-  }, [reorderOpenedWorkspacesInSection, t, variant]);
+  }, [reorderOpenedWorkspacesInSection, t, variant, cleanupDrag, removeDragArtifacts]);
 
   return (
     <div data-bf-component="workspace-list-section" data-bf-part="root" data-bf-state={draggedWorkspaceId ? 'dragging' : undefined}
@@ -220,6 +319,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
               draggable={workspaces.length > 1}
               isDragging={draggedWorkspaceId === workspace.id}
               onDragStart={handleDragStart(workspace.id)}
+              onDrag={handleDrag}
               onDragEnd={handleDragEnd}
             />
             {dropTarget?.workspaceId === workspace.id && dropTarget.position === 'after' ? (
