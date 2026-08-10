@@ -227,3 +227,241 @@ fn now_millis() -> u64 {
         .map(|duration| duration.as_millis() as u64)
         .unwrap_or(0)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_instance(parent_session_id: &str) -> SubagentInstance {
+        SubagentInstance::new(
+            SubagentInstance::generate_instance_id(),
+            parent_session_id.to_string(),
+            format!("child-session-{}", uuid::Uuid::new_v4()),
+            "general".to_string(),
+        )
+    }
+
+    #[test]
+    fn register_and_get_returns_instance() {
+        let registry = SubagentInstanceRegistry::new();
+        let instance = test_instance("parent-1");
+        let instance_id = instance.instance_id.clone();
+
+        registry.register(instance);
+
+        let fetched = registry.get(&instance_id).expect("instance should exist");
+        assert_eq!(fetched.instance_id, instance_id);
+        assert_eq!(fetched.parent_session_id, "parent-1");
+        assert_eq!(fetched.status, SubagentInstanceStatus::Running);
+        assert_eq!(fetched.created_at, fetched.last_active_at);
+    }
+
+    #[test]
+    fn get_missing_instance_returns_none() {
+        let registry = SubagentInstanceRegistry::new();
+        assert!(registry.get("missing").is_none());
+    }
+
+    #[test]
+    fn set_running_from_idle_succeeds() {
+        let registry = SubagentInstanceRegistry::new();
+        let instance = test_instance("parent-1");
+        let instance_id = instance.instance_id.clone();
+        registry.register(instance);
+        registry.set_idle(&instance_id).unwrap();
+
+        registry
+            .set_running(&instance_id)
+            .expect("Idle -> Running should succeed");
+
+        assert_eq!(
+            registry.get(&instance_id).unwrap().status,
+            SubagentInstanceStatus::Running
+        );
+    }
+
+    #[test]
+    fn set_running_from_running_fails() {
+        let registry = SubagentInstanceRegistry::new();
+        let instance = test_instance("parent-1");
+        let instance_id = instance.instance_id.clone();
+        registry.register(instance);
+
+        let err = registry
+            .set_running(&instance_id)
+            .expect_err("Running -> Running should fail");
+        assert!(
+            err.contains(&instance_id),
+            "error should mention instance id: {}",
+            err
+        );
+
+        assert_eq!(
+            registry.get(&instance_id).unwrap().status,
+            SubagentInstanceStatus::Running
+        );
+    }
+
+    #[test]
+    fn set_running_missing_instance_fails() {
+        let registry = SubagentInstanceRegistry::new();
+        assert!(registry.set_running("missing").is_err());
+    }
+
+    #[test]
+    fn set_idle_from_running_succeeds() {
+        let registry = SubagentInstanceRegistry::new();
+        let instance = test_instance("parent-1");
+        let instance_id = instance.instance_id.clone();
+        registry.register(instance);
+
+        registry
+            .set_idle(&instance_id)
+            .expect("Running -> Idle should succeed");
+
+        let fetched = registry.get(&instance_id).unwrap();
+        assert_eq!(fetched.status, SubagentInstanceStatus::Idle);
+        assert!(fetched.last_active_at >= fetched.created_at);
+    }
+
+    #[test]
+    fn set_idle_from_idle_fails() {
+        let registry = SubagentInstanceRegistry::new();
+        let instance = test_instance("parent-1");
+        let instance_id = instance.instance_id.clone();
+        registry.register(instance);
+        registry.set_idle(&instance_id).unwrap();
+
+        let err = registry
+            .set_idle(&instance_id)
+            .expect_err("Idle -> Idle should fail");
+        assert!(
+            err.contains(&instance_id),
+            "error should mention instance id: {}",
+            err
+        );
+
+        assert_eq!(
+            registry.get(&instance_id).unwrap().status,
+            SubagentInstanceStatus::Idle
+        );
+    }
+
+    #[test]
+    fn set_idle_missing_instance_fails() {
+        let registry = SubagentInstanceRegistry::new();
+        assert!(registry.set_idle("missing").is_err());
+    }
+
+    #[test]
+    fn destroy_removes_instance() {
+        let registry = SubagentInstanceRegistry::new();
+        let instance = test_instance("parent-1");
+        let instance_id = instance.instance_id.clone();
+        registry.register(instance);
+        assert_eq!(registry.active_count(), 1);
+
+        registry.destroy(&instance_id, "test cleanup");
+
+        assert!(registry.get(&instance_id).is_none());
+        assert_eq!(registry.active_count(), 0);
+    }
+
+    #[test]
+    fn destroy_missing_instance_is_noop() {
+        let registry = SubagentInstanceRegistry::new();
+        registry.destroy("missing", "test cleanup");
+        assert_eq!(registry.active_count(), 0);
+    }
+
+    #[test]
+    fn destroy_all_for_parent_only_destroys_matching_parent() {
+        let registry = SubagentInstanceRegistry::new();
+        let instance_a1 = test_instance("parent-a");
+        let instance_a2 = test_instance("parent-a");
+        let instance_b1 = test_instance("parent-b");
+        let id_a1 = instance_a1.instance_id.clone();
+        let id_b1 = instance_b1.instance_id.clone();
+        registry.register(instance_a1);
+        registry.register(instance_a2);
+        registry.register(instance_b1);
+
+        let destroyed = registry.destroy_all_for_parent("parent-a");
+
+        assert_eq!(destroyed, 2);
+        assert!(registry.get(&id_a1).is_none());
+        assert!(registry.get(&id_b1).is_some());
+        assert_eq!(registry.active_count(), 1);
+    }
+
+    #[test]
+    fn destroy_all_for_parent_with_no_matches_destroys_nothing() {
+        let registry = SubagentInstanceRegistry::new();
+        registry.register(test_instance("parent-a"));
+
+        let destroyed = registry.destroy_all_for_parent("parent-unknown");
+
+        assert_eq!(destroyed, 0);
+        assert_eq!(registry.active_count(), 1);
+    }
+
+    #[test]
+    fn list_for_parent_returns_only_matching_instance_ids() {
+        let registry = SubagentInstanceRegistry::new();
+        let instance_a1 = test_instance("parent-a");
+        let instance_a2 = test_instance("parent-a");
+        let instance_b1 = test_instance("parent-b");
+        let id_a1 = instance_a1.instance_id.clone();
+        let id_a2 = instance_a2.instance_id.clone();
+        registry.register(instance_a1);
+        registry.register(instance_a2);
+        registry.register(instance_b1);
+
+        let mut ids = registry.list_for_parent("parent-a");
+        ids.sort();
+
+        let mut expected = vec![id_a1, id_a2];
+        expected.sort();
+        assert_eq!(ids, expected);
+    }
+
+    #[test]
+    fn can_resume_depends_on_status() {
+        let registry = SubagentInstanceRegistry::new();
+        let instance = test_instance("parent-1");
+        let instance_id = instance.instance_id.clone();
+        registry.register(instance);
+
+        assert!(!registry.get(&instance_id).unwrap().can_resume());
+
+        registry.set_idle(&instance_id).unwrap();
+        assert!(registry.get(&instance_id).unwrap().can_resume());
+    }
+
+    #[test]
+    fn generate_instance_id_returns_unique_ids() {
+        let first = SubagentInstance::generate_instance_id();
+        let second = SubagentInstance::generate_instance_id();
+        assert_ne!(first, second);
+        assert!(
+            first.starts_with("subagent-instance-"),
+            "unexpected prefix: {}",
+            first
+        );
+    }
+
+    #[test]
+    fn active_count_tracks_non_destroyed_instances() {
+        let registry = SubagentInstanceRegistry::new();
+        assert_eq!(registry.active_count(), 0);
+
+        registry.register(test_instance("parent-a"));
+        registry.register(test_instance("parent-a"));
+        registry.register(test_instance("parent-b"));
+        assert_eq!(registry.active_count(), 3);
+
+        let victim = registry.list_for_parent("parent-a").pop().unwrap();
+        registry.destroy(&victim, "test cleanup");
+        assert_eq!(registry.active_count(), 2);
+    }
+}
