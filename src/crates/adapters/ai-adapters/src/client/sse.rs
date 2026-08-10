@@ -105,6 +105,77 @@ fn is_retryable_http_status(status: StatusCode) -> bool {
     status.is_server_error() || matches!(status.as_u16(), 408 | 409 | 425 | 429)
 }
 
+fn is_retryable_error_category(category: &ErrorCategory) -> bool {
+    matches!(
+        category,
+        ErrorCategory::Network
+            | ErrorCategory::RateLimit
+            | ErrorCategory::Timeout
+            | ErrorCategory::ProviderUnavailable
+    )
+}
+
+fn provider_error_message(body: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(body).ok()?;
+    let error = value.get("error").unwrap_or(&value);
+    error
+        .get("message")
+        .or_else(|| error.get("error"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
+}
+
+/// Some OpenAI-compatible gateways occasionally lose their resolved model
+/// while routing an otherwise valid request, then report `model=None` or
+/// `model=null` as a 400. Treat that response as transient only when it
+/// contradicts the concrete model BitFun actually sent. A genuine invalid
+/// model name still remains a non-retryable client error.
+fn provider_lost_request_model(
+    status: StatusCode,
+    request_body: &serde_json::Value,
+    error_text: &str,
+) -> bool {
+    if status != StatusCode::BAD_REQUEST {
+        return false;
+    }
+
+    let has_concrete_model = request_body
+        .get("model")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|model| {
+            !model.is_empty()
+                && !model.eq_ignore_ascii_case("none")
+                && !model.eq_ignore_ascii_case("null")
+        })
+        .is_some();
+    if !has_concrete_model {
+        return false;
+    }
+
+    let Some(message) = provider_error_message(error_text) else {
+        return false;
+    };
+    let message = message.to_ascii_lowercase();
+    let reports_missing_model = ["model=none", "model = none", "model=null", "model = null"]
+        .iter()
+        .any(|marker| message.contains(marker));
+
+    reports_missing_model
+        && (message.contains("invalid model") || message.contains("missing model"))
+}
+
+fn is_retryable_http_failure(
+    status: StatusCode,
+    request_body: &serde_json::Value,
+    error_text: &str,
+    provider_error: &AiProviderError,
+) -> bool {
+    is_retryable_http_status(status)
+        || is_retryable_error_category(&provider_error.category)
+        || provider_lost_request_model(status, request_body, error_text)
+}
+
 fn provider_error_code(body: &str) -> Option<String> {
     let value: serde_json::Value = serde_json::from_str(body).ok()?;
     let error = value.get("error").unwrap_or(&value);
@@ -272,26 +343,6 @@ where
                 let http_version = resp.version();
                 let headers = resp.headers().clone();
 
-                if status.is_client_error() && !is_retryable_http_status(status) {
-                    let error_text = resp
-                        .text()
-                        .await
-                        .unwrap_or_else(|e| format!("Failed to read error response: {}", e));
-                    let provider_error =
-                        http_provider_error(label, status, &error_text, "client error");
-                    if let Some(trace) = trace.as_ref() {
-                        trace
-                            .sink
-                            .request_attempt_failed(
-                                trace_handle.as_ref(),
-                                &provider_error.to_string(),
-                            )
-                            .await;
-                    }
-                    error!("{}", provider_error);
-                    return Err(anyhow!(provider_error));
-                }
-
                 if status.is_success() {
                     debug!(
                         "{} request connected: {}ms, status: {}, protocol: {:?}, transport_attempt: {}/{}",
@@ -308,8 +359,21 @@ where
                         .text()
                         .await
                         .unwrap_or_else(|e| format!("Failed to read error response: {}", e));
-                    let provider_error = http_provider_error(label, status, &error_text, "error");
-                    if provider_error.category == ErrorCategory::ContextOverflow {
+                    let error_kind =
+                        if status.is_client_error() && !is_retryable_http_status(status) {
+                            "client error"
+                        } else {
+                            "error"
+                        };
+                    let provider_error =
+                        http_provider_error(label, status, &error_text, error_kind);
+                    let retryable = is_retryable_http_failure(
+                        status,
+                        request_body,
+                        &error_text,
+                        &provider_error,
+                    );
+                    if provider_error.category == ErrorCategory::ContextOverflow || !retryable {
                         if let Some(trace) = trace.as_ref() {
                             trace
                                 .sink
@@ -458,11 +522,43 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::extract::State;
+    use axum::response::IntoResponse;
+    use axum::routing::post;
+    use axum::{Json, Router};
     use reqwest::header::HeaderValue;
     use std::sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
     };
+
+    #[derive(Clone)]
+    struct RetryFixtureState {
+        attempts: Arc<AtomicUsize>,
+    }
+
+    async fn invalid_model_then_success(
+        State(state): State<RetryFixtureState>,
+        Json(body): Json<serde_json::Value>,
+    ) -> impl IntoResponse {
+        assert_eq!(body["model"], "configured-model");
+        if state.attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": {
+                        "message": "/chat/completions: Invalid model name passed in model=None. Call `/v1/models` to view available models for your key.",
+                        "type": "None",
+                        "param": "None",
+                        "code": "400"
+                    }
+                })),
+            )
+                .into_response()
+        } else {
+            StatusCode::OK.into_response()
+        }
+    }
 
     #[test]
     fn http_error_uses_structured_code_before_generic_message() {
@@ -547,6 +643,101 @@ mod tests {
         assert!(!is_retryable_http_status(StatusCode::UNAUTHORIZED));
         assert!(!is_retryable_http_status(StatusCode::BAD_REQUEST));
         assert!(!is_retryable_http_status(StatusCode::NOT_FOUND));
+    }
+
+    #[test]
+    fn provider_model_loss_requires_a_contradictory_concrete_request_model() {
+        let error_text = serde_json::json!({
+            "error": {
+                "message": "Invalid model name passed in model=None",
+                "code": "400"
+            }
+        })
+        .to_string();
+
+        assert!(provider_lost_request_model(
+            StatusCode::BAD_REQUEST,
+            &serde_json::json!({"model": "configured-model"}),
+            &error_text,
+        ));
+        assert!(!provider_lost_request_model(
+            StatusCode::BAD_REQUEST,
+            &serde_json::json!({"model": "None"}),
+            &error_text,
+        ));
+        assert!(!provider_lost_request_model(
+            StatusCode::BAD_REQUEST,
+            &serde_json::json!({}),
+            &error_text,
+        ));
+        assert!(!provider_lost_request_model(
+            StatusCode::NOT_FOUND,
+            &serde_json::json!({"model": "configured-model"}),
+            &error_text,
+        ));
+    }
+
+    #[test]
+    fn structured_transient_code_overrides_a_nonstandard_client_status() {
+        let error_text =
+            r#"{"error":{"code":"server_error","message":"temporary routing failure"}}"#;
+        let provider_error = http_provider_error(
+            "OpenAI Streaming API",
+            StatusCode::BAD_REQUEST,
+            error_text,
+            "client error",
+        );
+
+        assert_eq!(provider_error.category, ErrorCategory::ProviderUnavailable);
+        assert!(is_retryable_http_failure(
+            StatusCode::BAD_REQUEST,
+            &serde_json::json!({"model": "configured-model"}),
+            error_text,
+            &provider_error,
+        ));
+    }
+
+    #[tokio::test]
+    async fn contradictory_missing_model_response_uses_existing_retry_loop() {
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let app = Router::new()
+            .route("/chat/completions", post(invalid_model_then_success))
+            .with_state(RetryFixtureState {
+                attempts: Arc::clone(&attempts),
+            });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind retry fixture");
+        let address = listener.local_addr().expect("retry fixture address");
+        let server_task = tokio::spawn(async move {
+            axum::serve(listener, app)
+                .await
+                .expect("retry fixture should run");
+        });
+        let url = format!("http://{address}/chat/completions");
+        let client = reqwest::Client::new();
+        let request_body = serde_json::json!({"model": "configured-model"});
+
+        let result = execute_sse_request(
+            "OpenAI Streaming API",
+            &url,
+            &request_body,
+            2,
+            None,
+            None,
+            || client.post(&url),
+            |_response, tx, _tx_raw, _remaining_ttft_timeout| async move {
+                drop(tx);
+            },
+        )
+        .await;
+
+        server_task.abort();
+        assert!(
+            result.is_ok(),
+            "the second transport attempt should succeed"
+        );
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
     }
 
     #[test]

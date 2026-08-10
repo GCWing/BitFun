@@ -25,12 +25,12 @@ pub mod external_sources;
 mod external_subagents;
 #[cfg(feature = "external-sources")]
 mod external_tools;
-#[cfg(feature = "product-domains")]
+#[cfg(feature = "function-agents")]
 pub mod function_agents; // Function-based agents
 pub mod infrastructure; // AI clients, storage, logging, events
 #[cfg(feature = "external-sources")]
 mod instruction_sources;
-#[cfg(feature = "product-domains")]
+#[cfg(feature = "tools-miniapp")]
 pub mod miniapp; // AI-generated instant apps (Zero-Dialect Runtime)
 #[cfg(feature = "agent-runtime")]
 pub mod native_hooks;
@@ -38,13 +38,13 @@ pub mod native_hooks;
 mod native_hooks_tests;
 #[cfg(feature = "plugin-runtime")]
 pub mod plugin_runtime;
-#[cfg(any(feature = "plugin-source", feature = "product-domains"))]
+#[cfg(feature = "plugin-source")]
 pub mod plugin_source;
 #[cfg(feature = "agent-runtime")]
 pub mod product_assembly;
-#[cfg(all(test, feature = "agent-runtime"))]
+#[cfg(all(test, feature = "product-full"))]
 mod product_assembly_tests;
-#[cfg(feature = "product-domains")]
+#[cfg(any(feature = "function-agents", feature = "tools-miniapp"))]
 pub(crate) mod product_domain_runtime;
 #[cfg(feature = "agent-runtime")]
 pub mod product_runtime;
@@ -61,7 +61,7 @@ pub mod util; // General types, errors, helper functions
 #[cfg(feature = "debug-log")]
 pub use infrastructure::debug_log as debug;
 
-#[cfg(feature = "agent-runtime")]
+#[cfg(feature = "remote-connect")]
 pub use bitfun_services_integrations::remote_connect::RemoteModelCatalog as AIModelCatalog;
 
 #[cfg(feature = "agent-runtime")]
@@ -73,17 +73,17 @@ pub fn get_builtin_ai_provider_catalog() -> bitfun_core_types::ProviderCatalog {
     )
 }
 
-#[cfg(feature = "agent-runtime")]
+#[cfg(feature = "remote-connect")]
 pub async fn get_ai_model_catalog() -> Result<AIModelCatalog, String> {
     service_agent_runtime::CoreServiceAgentRuntime::load_remote_model_catalog(None).await
 }
 
-#[cfg(feature = "agent-runtime")]
+#[cfg(feature = "model-catalog")]
 pub async fn get_models_dev_catalog_status() -> bitfun_core_types::ModelsDevCatalogStatus {
     infrastructure::ai::reasoning_catalog::get_models_dev_catalog_status().await
 }
 
-#[cfg(feature = "agent-runtime")]
+#[cfg(feature = "model-catalog")]
 pub async fn refresh_models_dev_catalog_now(
 ) -> Result<bitfun_core_types::ModelsDevRefreshResult, String> {
     infrastructure::ai::reasoning_catalog::refresh_models_dev_catalog_now().await

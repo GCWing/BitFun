@@ -184,9 +184,10 @@ mod tests {
         assert!(description.contains("connect -> navigate -> snapshot"));
         assert!(description.contains("same-origin"));
         assert!(description.contains("CORS"));
-        // connect drives BitFun's managed profile, not the user's everyday
-        // browser, so the description must not promise their login state.
-        assert!(description.contains("managed browser profile"));
+        // Guarded Chrome/Edge connections preserve the current profile while
+        // other browsers may use a persistent managed profile.
+        assert!(description.contains("current profile"));
+        assert!(description.contains("managed profile"));
     }
 
     #[test]

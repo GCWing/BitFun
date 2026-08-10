@@ -547,7 +547,7 @@ hdc -t 5ZU0226202001116 file recv /data/local/tmp/s.jpeg ./s.jpeg
 
 设备侧注意事项（已踩过的坑）：
 
-- bundle 名是 **`com.example.bitfun_mobile`**，不是 `com.bitfun.mobile`；
+- bundle 名是 **`com.bitfun.app`**，和手表端共用一个 bundle。2026-08-10 从脚手架遗留的 `com.example.bitfun_mobile` 改过来的，原因是 `distributedKVStore` 按 bundleName + storeId 隔离，跨设备同步的前提是同一个 app —— bundle 不一致时手机和手表各自建的是两个互不相干的库，手机↔手表的凭证交接物理上跑不通。改动的代价是已装的旧包等于另一个 app，数据不通、要重新登录；
 - `hdc` 必须带 `-t <serial>`，否则报 `[Fail]ExecuteCommand need connect-key`（列出了两个 target）；
 - 外屏分辨率 1080×2444；点击用 `hdc -t <id> shell uinput -T -c X Y`。
 

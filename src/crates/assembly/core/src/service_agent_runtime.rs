@@ -8,23 +8,30 @@
 use bitfun_agent_runtime::sdk::{
     AgentEventSource, AgentInteractionResponsePort, AgentRuntime, AgentRuntimeBuilder,
     AgentSessionCompactionPort, AgentSessionForkPort, AgentSessionLineagePort,
-    AgentSessionModePort, AgentSessionModelPort, AgentSessionModelSelection,
-    AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest,
-    AgentSessionRestorePort, AgentSessionRevertPort, AgentSessionUsagePort,
-    AgentTurnSettlementPort, RuntimeError,
+    AgentSessionModePort, AgentSessionModelPort, AgentSessionRestorePort, AgentSessionRevertPort,
+    AgentSessionUsagePort, AgentTurnSettlementPort, RuntimeError,
+};
+#[cfg(feature = "remote-connect")]
+use bitfun_agent_runtime::sdk::{
+    AgentSessionModelSelection, AgentSessionModelSelectionUpdateRequest,
+    AgentSessionModelUpdateRequest,
 };
 use bitfun_events::AgenticEvent;
 use bitfun_runtime_ports::{
-    AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
-    AgentLocalCommandTurnPort, AgentSessionClosePort, AgentSessionCreateRequest,
-    AgentSessionManagementPort, AgentSessionRevertRequest, AgentSessionRevertResult,
-    AgentSubmissionPort, AgentSubmissionSource, AgentThreadGoalManagementPort,
-    AgentTurnCancellationPort, AgentTurnCancellationRequest, AgentUserShellCommandPort,
-    AgentWorkspaceReferencePort, PermissionPolicyPreset, RemoteControlStatePort,
-    RemoteControlStateRequest, RemoteControlStateSnapshot, RemoteSessionWorkspaceIdentity,
-    RuntimeServiceCapability, RuntimeServicePort, SessionStoragePathRequest, SessionStorePort,
-    ToolPermissionConfig,
+    AgentDialogTurnPort, AgentDialogTurnRequest, AgentLifecycleDeliveryPort,
+    AgentLocalCommandTurnPort, AgentSessionClosePort, AgentSessionManagementPort,
+    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSubmissionPort,
+    AgentThreadGoalManagementPort, AgentTurnCancellationPort, AgentUserShellCommandPort,
+    AgentWorkspaceReferencePort, SessionStoragePathRequest, SessionStorePort,
 };
+#[cfg(feature = "remote-connect")]
+use bitfun_runtime_ports::{
+    AgentInputAttachment, AgentSessionCreateRequest, AgentSubmissionSource,
+    AgentTurnCancellationRequest, PermissionPolicyPreset, RemoteControlStatePort,
+    RemoteControlStateRequest, RemoteControlStateSnapshot, RemoteSessionWorkspaceIdentity,
+    RuntimeServiceCapability, RuntimeServicePort, ToolPermissionConfig,
+};
+#[cfg(feature = "remote-connect")]
 use bitfun_services_integrations::remote_connect::{
     agent_input_attachment_from_remote_image_context, build_remote_chat_messages,
     build_remote_model_catalog,
@@ -45,32 +52,46 @@ use bitfun_services_integrations::remote_connect::{
     RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind as RemoteConnectWorkspaceKind,
     RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
 };
+#[cfg(feature = "remote-connect")]
 use log::{debug, info};
 use std::sync::Arc;
 use std::time::Duration;
 
 use crate::agentic::coordination::{
-    get_global_coordinator, get_global_scheduler, ConversationCoordinator, DialogQueuePriority,
-    DialogScheduler, DialogSubmissionPolicy, DialogSubmitOutcome, DialogTriggerSource,
+    get_global_coordinator, get_global_scheduler, ConversationCoordinator, DialogScheduler,
+    DialogSubmitOutcome,
 };
+#[cfg(feature = "remote-connect")]
+use crate::agentic::coordination::{
+    DialogQueuePriority, DialogSubmissionPolicy, DialogTriggerSource,
+};
+#[cfg(feature = "remote-connect")]
 use crate::agentic::core::{Session, SessionKind};
+#[cfg(feature = "remote-connect")]
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::session::session_store_port::CoreSessionStorePort;
 use crate::agentic::workspace::WorkspaceBinding;
+#[cfg(feature = "remote-connect")]
 use crate::infrastructure::ai::provider_catalog::resolve_builtin_provider_catalog;
+#[cfg(feature = "remote-connect")]
 use crate::infrastructure::ai::reasoning_catalog::{
     load_models_dev_reasoning_catalog, project_model_reasoning_catalog, resolve_reasoning_preset,
 };
+#[cfg(feature = "remote-connect")]
 use crate::service::remote_connect::remote_server::RemoteExecutionDispatcher;
 
+#[cfg(feature = "remote-connect")]
 use crate::service::config::types::{AIConfig, GlobalConfig, ModelCapability};
+#[cfg(feature = "remote-connect")]
 use crate::service::session::{DialogTurnData, ToolItemIdentityExt, TurnStatus};
 
+#[cfg(feature = "remote-connect")]
 fn current_workspace_path() -> Option<std::path::PathBuf> {
     crate::service::workspace::get_global_workspace_service()
         .and_then(|service| service.try_get_current_workspace_path())
 }
 
+#[cfg(feature = "remote-connect")]
 fn session_storage_request_from_binding(binding: &WorkspaceBinding) -> SessionStoragePathRequest {
     SessionStoragePathRequest {
         workspace_path: binding.logical_workspace_path().to_path_buf(),
@@ -83,6 +104,7 @@ fn session_storage_request_from_binding(binding: &WorkspaceBinding) -> SessionSt
     }
 }
 
+#[cfg(feature = "remote-connect")]
 fn remote_workspace_kind(
     kind: crate::service::workspace::WorkspaceKind,
 ) -> RemoteConnectWorkspaceKind {
@@ -95,6 +117,7 @@ fn remote_workspace_kind(
     }
 }
 
+#[cfg(feature = "remote-connect")]
 fn git_branch_for_workspace_path(path: &std::path::Path) -> Option<String> {
     let path_str = path.to_string_lossy();
     bitfun_services_integrations::git::execute_git_command_sync(
@@ -106,6 +129,7 @@ fn git_branch_for_workspace_path(path: &std::path::Path) -> Option<String> {
     .filter(|s| !s.is_empty() && s != "HEAD")
 }
 
+#[cfg(feature = "remote-connect")]
 fn workspace_metadata_string(
     metadata: &std::collections::HashMap<String, serde_json::Value>,
     key: &str,
@@ -118,6 +142,7 @@ fn workspace_metadata_string(
         .map(ToOwned::to_owned)
 }
 
+#[cfg(feature = "remote-connect")]
 async fn current_remote_workspace_facts() -> Option<RemoteWorkspaceFacts> {
     let workspace_service = crate::service::workspace::get_global_workspace_service()?;
     workspace_service
@@ -140,6 +165,7 @@ async fn current_remote_workspace_facts() -> Option<RemoteWorkspaceFacts> {
         })
 }
 
+#[cfg(feature = "remote-connect")]
 async fn open_workspace_with_snapshot(
     path: &str,
     snapshot_log_context: &str,
@@ -176,6 +202,7 @@ async fn open_workspace_with_snapshot(
     })
 }
 
+#[cfg(feature = "remote-connect")]
 async fn load_remote_session_metadata_for_workspace(
     workspace_path: &std::path::Path,
     workspace_identity: RemoteSessionWorkspaceIdentity,
@@ -222,6 +249,7 @@ async fn load_remote_session_metadata_for_workspace(
         .collect())
 }
 
+#[cfg(feature = "remote-connect")]
 fn normalize_remote_model_selection(
     requested_model_id: &str,
     ai_config: Option<&AIConfig>,
@@ -235,10 +263,12 @@ fn normalize_remote_model_selection(
     })
 }
 
+#[cfg(feature = "remote-connect")]
 fn session_uses_shared_mode_default(session: &Session) -> bool {
     session.kind == SessionKind::Standard
 }
 
+#[cfg(feature = "remote-connect")]
 fn remote_model_capability_fact(capability: ModelCapability) -> RemoteModelCapabilityFact {
     match capability {
         ModelCapability::TextChat => RemoteModelCapabilityFact::TextChat,
@@ -254,6 +284,7 @@ fn remote_model_capability_fact(capability: ModelCapability) -> RemoteModelCapab
 
 /// Convert persisted turns into mobile ChatMessages.
 /// This is the same data source the desktop frontend uses.
+#[cfg(feature = "remote-connect")]
 fn remote_chat_messages_from_turns(turns: &[DialogTurnData]) -> Vec<ChatMessage> {
     let projected_turns = turns
         .iter()
@@ -263,6 +294,7 @@ fn remote_chat_messages_from_turns(turns: &[DialogTurnData]) -> Vec<ChatMessage>
     build_remote_chat_messages(projected_turns)
 }
 
+#[cfg(feature = "remote-connect")]
 fn remote_chat_history_turn_from_core_turn(turn: &DialogTurnData) -> RemoteChatHistoryTurn {
     let prompt_visible_content =
         crate::agentic::core::strip_prompt_markup(&turn.user_message.content);
@@ -326,6 +358,7 @@ fn remote_chat_history_turn_from_core_turn(turn: &DialogTurnData) -> RemoteChatH
     }
 }
 
+#[cfg(feature = "remote-connect")]
 async fn resolve_session_model_selection(session_id: &str) -> (Option<String>, Option<String>) {
     let Some(coordinator) = get_global_coordinator() else {
         return (None, None);
@@ -357,6 +390,7 @@ async fn resolve_session_model_selection(session_id: &str) -> (Option<String>, O
         .unwrap_or_default()
 }
 
+#[cfg(feature = "remote-connect")]
 fn core_dialog_submission_policy(policy: RemoteDialogSubmissionPolicy) -> DialogSubmissionPolicy {
     let trigger_source = match policy.source {
         RemoteConnectSubmissionSource::Relay => DialogTriggerSource::RemoteRelay,
@@ -371,6 +405,7 @@ fn core_dialog_submission_policy(policy: RemoteDialogSubmissionPolicy) -> Dialog
     DialogSubmissionPolicy::new(trigger_source, queue_priority)
 }
 
+#[cfg(feature = "remote-connect")]
 fn remote_dialog_scheduler_outcome_fact(
     outcome: DialogSubmitOutcome,
 ) -> RemoteDialogSchedulerOutcomeFact {
@@ -392,6 +427,7 @@ fn remote_dialog_scheduler_outcome_fact(
     }
 }
 
+#[cfg(feature = "remote-connect")]
 fn remote_image_context_from_image_context(context: ImageContextData) -> RemoteImageContext {
     RemoteImageContext {
         id: context.id,
@@ -402,6 +438,7 @@ fn remote_image_context_from_image_context(context: ImageContextData) -> RemoteI
     }
 }
 
+#[cfg(feature = "remote-connect")]
 fn image_context_from_remote_image_context(context: RemoteImageContext) -> ImageContextData {
     ImageContextData {
         id: context.id,
@@ -412,6 +449,7 @@ fn image_context_from_remote_image_context(context: RemoteImageContext) -> Image
     }
 }
 
+#[cfg(feature = "remote-connect")]
 fn agent_input_attachment_from_image_context(context: ImageContextData) -> AgentInputAttachment {
     agent_input_attachment_from_remote_image_context(remote_image_context_from_image_context(
         context,
@@ -846,6 +884,7 @@ impl CoreServiceAgentRuntime {
             })
     }
 
+    #[cfg(feature = "remote-connect")]
     pub(crate) async fn resolve_session_storage_dir(
         session_id: &str,
     ) -> Option<std::path::PathBuf> {
@@ -854,6 +893,7 @@ impl CoreServiceAgentRuntime {
             .map(|(_, storage_dir)| storage_dir)
     }
 
+    #[cfg(feature = "remote-connect")]
     pub(crate) async fn resolve_session_logical_workspace_path(
         session_id: &str,
     ) -> Option<std::path::PathBuf> {
@@ -862,6 +902,7 @@ impl CoreServiceAgentRuntime {
             .map(|(workspace_path, _)| workspace_path)
     }
 
+    #[cfg(feature = "remote-connect")]
     pub(crate) async fn resolve_remote_file_workspace_root(
         session_id: Option<&str>,
     ) -> Option<std::path::PathBuf> {
@@ -876,46 +917,56 @@ impl CoreServiceAgentRuntime {
         current_workspace_path()
     }
 
+    #[cfg(feature = "remote-connect")]
     pub(crate) fn remote_dialog_host(
         dispatcher: &RemoteExecutionDispatcher,
     ) -> Result<CoreRemoteDialogRuntimeHost<'_>, String> {
         CoreRemoteDialogRuntimeHost::new(dispatcher)
     }
 
+    #[cfg(feature = "remote-connect")]
     pub(crate) fn remote_cancel_host() -> Result<CoreRemoteCancelRuntimeHost, String> {
         CoreRemoteCancelRuntimeHost::new()
     }
 
+    #[cfg(feature = "remote-connect")]
     pub(crate) fn remote_workspace_file_host() -> CoreRemoteWorkspaceFileRuntimeHost {
         CoreRemoteWorkspaceFileRuntimeHost::new()
     }
 
+    #[cfg(feature = "remote-connect")]
     pub(crate) fn remote_workspace_host() -> CoreRemoteWorkspaceRuntimeHost {
         CoreRemoteWorkspaceRuntimeHost::new()
     }
 
+    #[cfg(feature = "remote-connect")]
     pub(crate) fn remote_initial_sync_host() -> CoreRemoteWorkspaceRuntimeHost {
         CoreRemoteWorkspaceRuntimeHost::new()
     }
 
+    #[cfg(feature = "remote-connect")]
     pub(crate) fn remote_session_host() -> Result<CoreRemoteSessionRuntimeHost, String> {
         CoreRemoteSessionRuntimeHost::new()
     }
 
+    #[cfg(feature = "remote-connect")]
     pub(crate) fn remote_poll_host(
         dispatcher: &RemoteExecutionDispatcher,
     ) -> CoreRemotePollRuntimeHost<'_> {
         CoreRemotePollRuntimeHost::new(dispatcher)
     }
 
+    #[cfg(feature = "remote-connect")]
     pub(crate) fn remote_interaction_host() -> CoreRemoteInteractionRuntimeHost {
         CoreRemoteInteractionRuntimeHost::new()
     }
 
+    #[cfg(feature = "remote-connect")]
     pub(crate) fn remote_image_context(context: RemoteImageContext) -> ImageContextData {
         image_context_from_remote_image_context(context)
     }
 
+    #[cfg(feature = "remote-connect")]
     pub(crate) async fn load_remote_chat_messages(
         session_storage_dir: &std::path::Path,
         session_id: &str,
@@ -930,6 +981,7 @@ impl CoreServiceAgentRuntime {
         Ok((remote_chat_messages_from_turns(&turns), false))
     }
 
+    #[cfg(feature = "remote-connect")]
     pub(crate) async fn load_remote_model_catalog(
         session_id: Option<&str>,
     ) -> Result<RemoteModelCatalog, String> {
@@ -1022,6 +1074,7 @@ impl CoreServiceAgentRuntime {
         }))
     }
 
+    #[cfg(feature = "remote-connect")]
     pub(crate) async fn update_remote_session_model(
         coordinator: &ConversationCoordinator,
         runtime: &AgentRuntime,
@@ -1155,6 +1208,7 @@ impl CoreServiceAgentRuntime {
     }
 
     /// Persist the shared selector used by future mode sessions.
+    #[cfg(feature = "remote-connect")]
     async fn persist_mode_model(model_id: &str) {
         let Ok(config_service) = crate::service::config::get_global_config_service().await else {
             return;
@@ -1164,6 +1218,7 @@ impl CoreServiceAgentRuntime {
             .await;
     }
 
+    #[cfg(feature = "remote-connect")]
     pub(crate) fn remote_control_state_port(
         coordinator: &ConversationCoordinator,
     ) -> &(dyn RemoteControlStatePort + '_) {
@@ -1549,10 +1604,13 @@ impl CoreServiceAgentRuntime {
     }
 }
 
+#[cfg(feature = "remote-connect")]
 pub(crate) struct CoreRemoteSessionTrackerHost;
 
+#[cfg(feature = "remote-connect")]
 struct CoreRemoteSessionStateTrackerSubscriber(Arc<RemoteSessionStateTracker>);
 
+#[cfg(feature = "remote-connect")]
 #[async_trait::async_trait]
 impl crate::agentic::events::EventSubscriber for CoreRemoteSessionStateTrackerSubscriber {
     async fn on_event(
@@ -1564,6 +1622,7 @@ impl crate::agentic::events::EventSubscriber for CoreRemoteSessionStateTrackerSu
     }
 }
 
+#[cfg(feature = "remote-connect")]
 impl RemoteSessionTrackerHost for CoreRemoteSessionTrackerHost {
     fn subscribe_tracker(&self, session_id: &str, tracker: Arc<RemoteSessionStateTracker>) {
         if let Some(coordinator) = get_global_coordinator() {
@@ -1600,12 +1659,14 @@ impl RemoteSessionTrackerHost for CoreRemoteSessionTrackerHost {
     }
 }
 
+#[cfg(feature = "remote-connect")]
 pub(crate) struct CoreRemoteDialogRuntimeHost<'a> {
     dispatcher: &'a RemoteExecutionDispatcher,
     coordinator: Arc<ConversationCoordinator>,
     runtime: AgentRuntime,
 }
 
+#[cfg(feature = "remote-connect")]
 impl<'a> CoreRemoteDialogRuntimeHost<'a> {
     pub(crate) fn new(dispatcher: &'a RemoteExecutionDispatcher) -> Result<Self, String> {
         let coordinator = get_global_coordinator()
@@ -1625,11 +1686,13 @@ impl<'a> CoreRemoteDialogRuntimeHost<'a> {
     }
 }
 
+#[cfg(feature = "remote-connect")]
 pub(crate) struct CoreRemoteCancelRuntimeHost {
     coordinator: Arc<ConversationCoordinator>,
     runtime: AgentRuntime,
 }
 
+#[cfg(feature = "remote-connect")]
 impl CoreRemoteCancelRuntimeHost {
     pub(crate) fn new() -> Result<Self, String> {
         let coordinator = get_global_coordinator()
@@ -1642,39 +1705,47 @@ impl CoreRemoteCancelRuntimeHost {
     }
 }
 
+#[cfg(feature = "remote-connect")]
 pub(crate) struct CoreRemoteWorkspaceFileRuntimeHost;
 
+#[cfg(feature = "remote-connect")]
 impl CoreRemoteWorkspaceFileRuntimeHost {
     pub(crate) fn new() -> Self {
         Self
     }
 }
 
+#[cfg(feature = "remote-connect")]
 pub(crate) struct CoreRemoteWorkspaceRuntimeHost;
 
+#[cfg(feature = "remote-connect")]
 impl CoreRemoteWorkspaceRuntimeHost {
     pub(crate) fn new() -> Self {
         Self
     }
 }
 
+#[cfg(feature = "remote-connect")]
 impl RuntimeServicePort for CoreRemoteWorkspaceFileRuntimeHost {
     fn capability(&self) -> RuntimeServiceCapability {
         RuntimeServiceCapability::RemoteProjection
     }
 }
 
+#[cfg(feature = "remote-connect")]
 impl RuntimeServicePort for CoreRemoteWorkspaceRuntimeHost {
     fn capability(&self) -> RuntimeServiceCapability {
         RuntimeServiceCapability::RemoteWorkspace
     }
 }
 
+#[cfg(feature = "remote-connect")]
 pub(crate) struct CoreRemoteSessionRuntimeHost {
     coordinator: Arc<ConversationCoordinator>,
     runtime: AgentRuntime,
 }
 
+#[cfg(feature = "remote-connect")]
 impl CoreRemoteSessionRuntimeHost {
     pub(crate) fn new() -> Result<Self, String> {
         let coordinator = get_global_coordinator()
@@ -1687,20 +1758,24 @@ impl CoreRemoteSessionRuntimeHost {
     }
 }
 
+#[cfg(feature = "remote-connect")]
 pub(crate) struct CoreRemotePollRuntimeHost<'a> {
     dispatcher: &'a RemoteExecutionDispatcher,
 }
 
+#[cfg(feature = "remote-connect")]
 impl<'a> CoreRemotePollRuntimeHost<'a> {
     pub(crate) fn new(dispatcher: &'a RemoteExecutionDispatcher) -> Self {
         Self { dispatcher }
     }
 }
 
+#[cfg(feature = "remote-connect")]
 pub(crate) struct CoreRemoteInteractionRuntimeHost {
     coordinator: Option<Arc<ConversationCoordinator>>,
 }
 
+#[cfg(feature = "remote-connect")]
 impl CoreRemoteInteractionRuntimeHost {
     pub(crate) fn new() -> Self {
         Self {
@@ -1715,10 +1790,12 @@ impl CoreRemoteInteractionRuntimeHost {
     }
 }
 
+#[cfg(feature = "remote-connect")]
 fn generate_remote_turn_id() -> String {
     format!("turn_{}", uuid::Uuid::new_v4())
 }
 
+#[cfg(feature = "remote-connect")]
 #[async_trait::async_trait]
 impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
     type ImageContext = ImageContextData;
@@ -1862,6 +1939,7 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
     }
 }
 
+#[cfg(feature = "remote-connect")]
 #[async_trait::async_trait]
 impl RemoteWorkspaceFileRuntimeHost for CoreRemoteWorkspaceFileRuntimeHost {
     async fn resolve_remote_file_workspace_root(
@@ -1872,6 +1950,7 @@ impl RemoteWorkspaceFileRuntimeHost for CoreRemoteWorkspaceFileRuntimeHost {
     }
 }
 
+#[cfg(feature = "remote-connect")]
 #[async_trait::async_trait]
 impl RemoteWorkspaceRuntimeHost for CoreRemoteWorkspaceRuntimeHost {
     async fn current_workspace(&self) -> Option<RemoteWorkspaceFacts> {
@@ -1938,6 +2017,7 @@ impl RemoteWorkspaceRuntimeHost for CoreRemoteWorkspaceRuntimeHost {
     }
 }
 
+#[cfg(feature = "remote-connect")]
 #[async_trait::async_trait]
 impl RemoteInitialSyncRuntimeHost for CoreRemoteWorkspaceRuntimeHost {
     async fn current_workspace(&self) -> Option<RemoteWorkspaceFacts> {
@@ -1953,6 +2033,7 @@ impl RemoteInitialSyncRuntimeHost for CoreRemoteWorkspaceRuntimeHost {
     }
 }
 
+#[cfg(feature = "remote-connect")]
 #[async_trait::async_trait]
 impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
     async fn list_session_metadata(
@@ -2089,6 +2170,7 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
     }
 }
 
+#[cfg(feature = "remote-connect")]
 #[async_trait::async_trait]
 impl RemotePollRuntimeHost for CoreRemotePollRuntimeHost<'_> {
     fn ensure_tracker(&self, session_id: &str) -> Arc<RemoteSessionStateTracker> {
@@ -2139,6 +2221,7 @@ impl RemotePollRuntimeHost for CoreRemotePollRuntimeHost<'_> {
     }
 }
 
+#[cfg(feature = "remote-connect")]
 #[async_trait::async_trait]
 impl RemoteInteractionRuntimeHost for CoreRemoteInteractionRuntimeHost {
     async fn confirm_tool(&self, tool_id: &str) -> Result<(), String> {
@@ -2224,6 +2307,7 @@ impl RemoteInteractionRuntimeHost for CoreRemoteInteractionRuntimeHost {
     }
 }
 
+#[cfg(feature = "remote-connect")]
 #[async_trait::async_trait]
 impl RemoteCancelRuntimeHost for CoreRemoteCancelRuntimeHost {
     async fn resolve_session_storage_dir(&self, session_id: &str) -> Option<String> {
@@ -2283,7 +2367,7 @@ impl RemoteCancelRuntimeHost for CoreRemoteCancelRuntimeHost {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "remote-connect"))]
 mod tests {
     use std::collections::HashSet;
 

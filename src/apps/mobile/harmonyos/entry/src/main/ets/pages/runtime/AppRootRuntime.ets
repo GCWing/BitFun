@@ -27,11 +27,26 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     await this.settingsController.initializeCloudAccount(this.host.context());
     await this.settingsController.refreshModelCatalog();
     await this.restoreIdentity();
+    await this.startWatchProvisioning();
+  }
+
+  /**
+   * Only ask for distributed data sync once the phone actually has a desktop
+   * to relay to. A fresh install has nothing to provision a watch with, and a
+   * permission prompt at first launch would have no explanation behind it.
+   */
+  private async startWatchProvisioning(): Promise<void> {
+    if (!this.hasRemoteBindingForResume()) {
+      return;
+    }
+    await this.watchProvisionController.start(this.host.context());
   }
 
   onPageShow(): void {
     RemoteLogger.info(`page show state=${(this.remotePageState.connectionState as ConnectionState)} route=${this.appShellViewModel.currentRoute()}`);
     this.remoteActivityViewModel.resume();
+    // Idempotent: covers the pairing that happened after the last cold start.
+    void this.startWatchProvisioning();
   }
 
   onPageHide(): void {
@@ -43,6 +58,7 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
   }
 
   aboutToDisappear(): void {
+    this.watchProvisionController.stop();
     this.remoteActivityViewModel.invalidate();
     this.remoteConnectionCoordinator.invalidate();
     this.remotePageState.setBusy(false);

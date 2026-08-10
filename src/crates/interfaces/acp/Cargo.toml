@@ -12,9 +12,19 @@ name = "bitfun_acp"
 [dependencies]
 bitfun-core = { path = "../../assembly/core", default-features = false, features = [
     "agent-runtime",
-    "canvas-runtime",
+    "deep-research",
+    "lsp",
     "external-sources",
     "ssh-remote",
+    "tools-basic",
+    "tools-git",
+    "tools-mcp",
+    "tools-browser-web",
+    "tools-computer-use",
+    "tools-image-analysis",
+    "tools-miniapp",
+    "tools-canvas",
+    "tools-agent-control",
 ] }
 bitfun-agent-runtime = { path = "../../execution/agent-runtime" }
 bitfun-agent-tools = { path = "../../execution/tool-contracts" }

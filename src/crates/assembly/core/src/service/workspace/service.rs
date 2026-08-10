@@ -2901,6 +2901,7 @@ mod tests {
         assert!(service.get_opened_workspaces().await.is_empty());
     }
 
+    #[cfg(feature = "remote-workspace")]
     #[tokio::test]
     async fn open_workspace_resolving_known_reopens_remote_without_local_exists() {
         let env = TestEnvironment::new();

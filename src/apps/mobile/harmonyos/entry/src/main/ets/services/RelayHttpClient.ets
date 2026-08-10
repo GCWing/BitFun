@@ -1,12 +1,34 @@
 import { http } from '@kit.NetworkKit';
 import { RemoteI18n } from '../i18n/RemoteI18n';
+import { RemoteCommandFactory } from './RemoteCommandFactory';
 import { RemoteCrypto } from './RemoteCrypto';
 import { RemoteLogger } from './RemoteLogger';
-import { ChallengeCommand, CommandStatusResponse, DelegatedIdentityResponse, EncryptedPayload, InitialSyncResponse, PairChallengeResponse, PairRequest, RemoteCommand, RemoteDescriptor } from '../model/RemoteModels';
+import { ChallengeCommand, CommandStatusResponse, DelegatedIdentityResponse, EncryptedPayload, InitialSyncResponse, PairChallengeResponse, PairRequest, PeerDeviceProvisionedResponse, RemoteCommand, RemoteDescriptor } from '../model/RemoteModels';
 
 export interface PairIdentity {
   userId: string;
   password?: string;
+}
+
+/**
+ * Result of a `provision_peer_device` round trip, reported rather than thrown
+ * because the caller has to tell two failures apart and an `Error` cannot
+ * carry that distinction back through the transport's error collapsing.
+ *
+ * `desktopReported` means the desktop answered and refused, and its message is
+ * worth showing verbatim. Everything else — no answer at all — covers both a
+ * desktop that is offline and a desktop too old to know the command: an older
+ * build decrypts the payload, fails to deserialize the unknown variant, and
+ * replies with nothing, which on this side is indistinguishable from silence.
+ */
+export interface PeerDeviceProvisionOutcome {
+  ok: boolean;
+  token: string;
+  userId: string;
+  masterKeyBase64: string;
+  deviceId: string;
+  failure: string;
+  desktopReported: boolean;
 }
 
 export class RelayHttpClient {
@@ -95,6 +117,60 @@ export class RelayHttpClient {
     return false;
   }
 
+  /**
+   * Mint a full account device credential for a device that cannot type a
+   * password. Pinned to the room channel on purpose: only the desktop's room
+   * loop holds the trusted pairing identity that authorizes provisioning, so
+   * the account-device transport would answer "not available on this host".
+   */
+  async provisionPeerDevice(
+    deviceId: string,
+    deviceName: string,
+    requestId: string,
+    readTimeoutMs: number = 45000
+  ): Promise<PeerDeviceProvisionOutcome> {
+    const command: RemoteCommand = RemoteCommandFactory.provisionPeerDevice(deviceId, deviceName, requestId);
+    command._request_id = `req_provision_${requestId}`;
+    let response: PeerDeviceProvisionedResponse;
+    try {
+      response = await this.sendCommand<PeerDeviceProvisionedResponse>(command, readTimeoutMs, false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : JSON.stringify(err);
+      RemoteLogger.error(`provision peer device transport failure: ${message}`);
+      return RelayHttpClient.provisionFailure(message, false);
+    }
+    if (response.resp === 'error') {
+      return RelayHttpClient.provisionFailure(response.message || '', true);
+    }
+    const token = response.token || '';
+    const userId = response.user_id || '';
+    const masterKey = response.master_key || '';
+    const provisionedDeviceId = response.device_id || '';
+    if (response.resp !== 'peer_device_provisioned' || token.length === 0 || userId.length === 0 ||
+      masterKey.length === 0) {
+      // A well-formed reply that is missing the credential is a desktop we do
+      // not understand, not a desktop that refused. Treat it as silence.
+      RemoteLogger.error(`provision peer device unexpected response resp=${response.resp || 'unknown'}`);
+      return RelayHttpClient.provisionFailure('', false);
+    }
+    if (provisionedDeviceId !== deviceId) {
+      // The desktop already checks this, so reaching here means the reply did
+      // not come from the desktop we asked. Refuse rather than hand the watch
+      // a credential minted for some other device.
+      RemoteLogger.error('provision peer device returned a mismatched device id');
+      return RelayHttpClient.provisionFailure('', false);
+    }
+    return {
+      ok: true,
+      token,
+      userId,
+      masterKeyBase64: masterKey,
+      deviceId: provisionedDeviceId,
+      failure: '',
+      desktopReported: false
+    };
+  }
+
   clearDelegatedIdentity(): void {
     this.delegatedToken = '';
     this.delegatedMasterKey = '';
@@ -105,7 +181,11 @@ export class RelayHttpClient {
     return this.delegatedToken.length > 0 && this.delegatedMasterKey.length > 0;
   }
 
-  async sendCommand<T extends CommandStatusResponse>(command: RemoteCommand, readTimeoutMs: number = 30000): Promise<T> {
+  async sendCommand<T extends CommandStatusResponse>(
+    command: RemoteCommand,
+    readTimeoutMs: number = 30000,
+    throwOnRemoteError: boolean = true
+  ): Promise<T> {
     const descriptor = this.requireDescriptor();
     const crypto = this.requireCrypto();
     const commandName = command.cmd || 'unknown';
@@ -134,7 +214,10 @@ export class RelayHttpClient {
       RemoteLogger.info(`command decrypt done cmd=${commandName} request=${requestId} resp=${response.resp || 'unknown'} ms=${Date.now() - decryptStartedAt}`);
       if (response.resp === 'error') {
         RemoteLogger.error(`command remote error cmd=${commandName} request=${requestId} message=${response.message || 'unknown'}`);
-        throw new Error(response.message || 'Remote command failed.');
+        if (throwOnRemoteError) {
+          throw new Error(response.message || 'Remote command failed.');
+        }
+        return response;
       }
       RemoteLogger.info(`command complete cmd=${commandName} request=${requestId} ms=${Date.now() - startedAt}`);
       return response;
@@ -228,6 +311,18 @@ export class RelayHttpClient {
       throw new Error('Remote crypto is not configured.');
     }
     return this.crypto;
+  }
+
+  private static provisionFailure(message: string, desktopReported: boolean): PeerDeviceProvisionOutcome {
+    return {
+      ok: false,
+      token: '',
+      userId: '',
+      masterKeyBase64: '',
+      deviceId: '',
+      failure: message,
+      desktopReported
+    };
   }
 
   private static shortRequestId(requestId: string): string {

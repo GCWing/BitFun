@@ -2250,6 +2250,27 @@ pub enum RemoteCommand {
     /// relay device APIs directly. Answered by the host runtime; other hosts
     /// return an error response.
     GetDelegatedIdentity,
+    /// Ask the paired desktop to mint a *full* account device credential for a
+    /// separate device that cannot type a password (a watch). The desktop calls
+    /// the relay's `/api/auth/provision-device` with its own device token, then
+    /// returns the minted credential together with the account master key over
+    /// this already-encrypted room channel. The relay never sees the master key.
+    ///
+    /// Unlike `GetDelegatedIdentity` this yields a 30-day full credential rather
+    /// than a 24-hour delegated one, because the provisioned device is a primary
+    /// surface and cannot re-authenticate on its own when the token lapses.
+    ///
+    /// `request_id` is minted by the device being provisioned, not by the
+    /// desktop, so that a retry anywhere along the watch → phone → desktop chain
+    /// replays one idempotent relay request instead of registering a second
+    /// device. Answered by the host runtime; other hosts return an error
+    /// response.
+    ProvisionPeerDevice {
+        /// 32 lowercase hex characters; the relay rejects any other shape.
+        device_id: String,
+        device_name: String,
+        request_id: String,
+    },
     Ping,
 
     // ── Device-to-device distributed control ──────────────────────────────
@@ -2474,6 +2495,16 @@ pub enum RemoteResponse {
         master_key: String,
         device_id: String,
     },
+    /// A full account device credential minted for a paired client's peer
+    /// device. `master_key` is base64-encoded; `device_id` echoes the *newly
+    /// provisioned* device, not the delegating host — the opposite of
+    /// `DelegateIdentity`, whose `device_id` names the desktop.
+    PeerDeviceProvisioned {
+        token: String,
+        user_id: String,
+        master_key: String,
+        device_id: String,
+    },
     Error {
         message: String,
     },
@@ -2602,6 +2633,12 @@ where
         // for hosts that cannot delegate an account identity.
         RemoteCommand::GetDelegatedIdentity => RemoteResponse::Error {
             message: "Delegated identity is not available on this host".to_string(),
+        },
+
+        // Same contract as GetDelegatedIdentity above: the host runtime owns the
+        // account credentials and answers before dispatch reaches this router.
+        RemoteCommand::ProvisionPeerDevice { .. } => RemoteResponse::Error {
+            message: "Device provisioning is not available on this host".to_string(),
         },
 
         RemoteCommand::SendSessionToDevice { .. }

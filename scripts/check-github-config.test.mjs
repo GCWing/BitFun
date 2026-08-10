@@ -251,6 +251,15 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
     assert.equal(cache?.with?.['cache-on-failure'], trustedMain);
   }
 
+  const rustCache = rustJob.steps.find((step) =>
+    step.uses?.startsWith('swatinem/rust-cache@'),
+  );
+  assert.equal(
+    rustCache?.with?.['cache-directories'],
+    'target/sherpa-onnx-prebuilt\n',
+    'Rust CI must restore sherpa native libraries with the Cargo fingerprints that reference them',
+  );
+
   const commandByStep = new Map(
     rustJob.steps.map((step) => [step.name, step.run]),
   );
@@ -317,4 +326,32 @@ test('passes the verification key when signing the versioned Windows installer',
     '${{ secrets.TAURI_UPDATER_PUBKEY }}',
     'release signatures must be self-verified with the configured public key',
   );
+});
+
+test('stages unique release asset names before publishing', () => {
+  const workflow = yaml.parse(
+    readFileSync(
+      path.join(repoRoot, '.github/workflows/desktop-package.yml'),
+      'utf8',
+    ),
+  );
+  const steps = workflow.jobs['upload-release-assets'].steps;
+  const stagingIndex = steps.findIndex(
+    (step) => step.name === 'Stage uniquely named release assets',
+  );
+  const uploadIndex = steps.findIndex((step) => step.name === 'Upload to release');
+
+  assert.notEqual(stagingIndex, -1);
+  assert.notEqual(uploadIndex, -1);
+  assert.ok(stagingIndex < uploadIndex);
+  assert.match(
+    steps[stagingIndex].run,
+    /node scripts\/stage-github-release-assets\.mjs/,
+  );
+  assert.doesNotMatch(
+    steps[stagingIndex].run,
+    /release-assets\/\*\*\/\*\.sig(?:\s|\\)/,
+    'raw updater signatures have colliding names across macOS architectures',
+  );
+  assert.equal(steps[uploadIndex].with.files, 'release-upload-assets/*');
 });

@@ -75,6 +75,49 @@ test('latest.json keeps the updater URL separate from the manual installer URL',
   assert.equal(verified.status, 0, verified.stderr);
 });
 
+test('stages GitHub release assets in a flat directory', () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'bitfun-release-assets-'));
+  const first = path.join(temp, 'updater', 'latest.json');
+  const second = path.join(temp, 'manual', 'installer.exe');
+  const out = path.join(temp, 'staged');
+  fs.mkdirSync(path.dirname(first), { recursive: true });
+  fs.mkdirSync(path.dirname(second), { recursive: true });
+  fs.writeFileSync(first, 'manifest');
+  fs.writeFileSync(second, 'installer');
+
+  const result = run('scripts/stage-github-release-assets.mjs', [
+    '--out-dir', out,
+    first,
+    second,
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.readFileSync(path.join(out, 'latest.json'), 'utf8'), 'manifest');
+  assert.equal(fs.readFileSync(path.join(out, 'installer.exe'), 'utf8'), 'installer');
+});
+
+test('rejects duplicate GitHub release asset names before upload', () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'bitfun-release-duplicates-'));
+  const first = path.join(temp, 'macos-x64', 'BitFun.app.tar.gz.sig');
+  const second = path.join(temp, 'macos-arm64', 'BitFun.app.tar.gz.sig');
+  const out = path.join(temp, 'staged');
+  fs.mkdirSync(path.dirname(first), { recursive: true });
+  fs.mkdirSync(path.dirname(second), { recursive: true });
+  fs.writeFileSync(first, 'x64-signature');
+  fs.writeFileSync(second, 'arm64-signature');
+
+  const result = run('scripts/stage-github-release-assets.mjs', [
+    '--out-dir', out,
+    first,
+    second,
+  ]);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Duplicate release asset name BitFun\.app\.tar\.gz\.sig/);
+  assert.match(result.stderr, /macos-x64/);
+  assert.match(result.stderr, /macos-arm64/);
+});
+
 function run(script, args) {
   return spawnSync(process.execPath, [script, ...args], {
     cwd: root,

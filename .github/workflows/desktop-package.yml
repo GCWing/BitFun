@@ -594,30 +594,41 @@ jobs:
           # can fetch a key for is not verifiable.
           printf '%s' "${BITFUN_SIGNING_PUBKEY}" | base64 -d >release-assets/minisign.pub
 
+      - name: Stage uniquely named release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s globstar
+          node scripts/stage-github-release-assets.mjs \
+            --out-dir release-upload-assets \
+            release-updater-assets/* \
+            release-manual-assets/*.exe \
+            release-manual-assets/*.exe.sig \
+            release-assets/**/*.AppImage \
+            release-assets/**/*.AppImage.sig \
+            release-assets/**/*.deb \
+            release-assets/**/*.deb.sig \
+            release-assets/**/*.dmg \
+            release-assets/**/*.dmg.sig \
+            release-assets/**/*.rpm \
+            release-assets/**/*.rpm.sig \
+            release-assets/minisign.pub \
+            linux-release-assets/bitfun-cli-*.tar.gz \
+            linux-release-assets/bitfun-cli-*.tar.gz.sha256 \
+            linux-release-assets/bitfun-relay-server-*.tar.gz \
+            linux-release-assets/bitfun-relay-server-*.tar.gz.sha256 \
+            linux-release-assets/*.tar.gz.sig \
+            linux-release-assets/*.tar.gz.sha256.sig \
+            linux-release-assets/linux-binaries.json \
+            relay-image-assets/relay-image.json \
+            relay-image-assets/relay-image.json.sig
+
       - name: Upload to release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.prepare.outputs.release_tag }}
           generate_release_notes: true
-          files: |
-            release-updater-assets/*
-            release-manual-assets/*.exe
-            release-manual-assets/*.exe.sig
-            release-assets/**/*.AppImage
-            release-assets/**/*.deb
-            release-assets/**/*.dmg
-            release-assets/**/*.rpm
-            release-assets/**/*.sig
-            release-assets/minisign.pub
-            linux-release-assets/bitfun-cli-*.tar.gz
-            linux-release-assets/bitfun-cli-*.tar.gz.sha256
-            linux-release-assets/bitfun-relay-server-*.tar.gz
-            linux-release-assets/bitfun-relay-server-*.tar.gz.sha256
-            linux-release-assets/*.tar.gz.sig
-            linux-release-assets/*.tar.gz.sha256.sig
-            linux-release-assets/linux-binaries.json
-            relay-image-assets/relay-image.json
-            relay-image-assets/relay-image.json.sig
+          files: release-upload-assets/*
           fail_on_unmatched_files: true
 
       - name: Verify published updater manifest

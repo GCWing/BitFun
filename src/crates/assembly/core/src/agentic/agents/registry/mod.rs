@@ -22,6 +22,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use tokio::sync::RwLock;
 
+#[cfg(feature = "external-sources")]
 pub(crate) use external::external_subagent_runtime_key;
 pub use external::{
     ExternalPrimaryAgentTurnBinding, ExternalSubagentGenerationLease,

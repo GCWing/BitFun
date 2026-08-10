@@ -229,8 +229,13 @@ jobs:
 
       - uses: swatinem/rust-cache@v2
         with:
-          shared-key: "ci-check-v3-${{ runner.os }}-no-cargo-bin-v1"
+          shared-key: "ci-check-v4-${{ runner.os }}-no-cargo-bin-v1-sherpa-native-v1"
           cache-bin: false
+          # sherpa-onnx-sys stores downloaded native archives beside Cargo's
+          # normal artifacts. Preserve that directory with the build-script
+          # fingerprints that reference it, or restored test builds cannot link.
+          cache-directories: |
+            target/sherpa-onnx-prebuilt
           # PR caches are scoped to merge refs; trusted main pushes own shared
           # refreshes and retain completed dependency builds after late test failures.
           save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}

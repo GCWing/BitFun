@@ -534,12 +534,12 @@ enum PermissionPlanDraft {
 }
 
 pub fn permission_project_id_for_workspace_identity(
-    identity: &crate::service::remote_ssh::workspace_state::WorkspaceSessionIdentity,
+    identity: &bitfun_services_core::workspace_identity::WorkspaceSessionIdentity,
     is_remote: bool,
 ) -> BitFunResult<String> {
     if !is_remote {
         return Ok(
-            bitfun_services_integrations::remote_ssh::paths::local_workspace_stable_storage_id(
+            bitfun_services_core::workspace_identity::local_workspace_stable_storage_id(
                 identity.logical_workspace_path(),
             ),
         );
@@ -551,16 +551,15 @@ pub fn permission_project_id_for_workspace_identity(
                 "Unresolved remote workspace permission identity has no connection id".to_string(),
             )
         })?;
-        let key =
-            bitfun_services_integrations::remote_ssh::paths::unresolved_remote_session_storage_key(
-                connection_id,
-                identity.logical_workspace_path(),
-            );
+        let key = bitfun_services_core::workspace_identity::unresolved_remote_session_storage_key(
+            connection_id,
+            identity.logical_workspace_path(),
+        );
         return Ok(format!("remote_unresolved_{key}"));
     }
 
     Ok(
-        bitfun_services_integrations::remote_ssh::paths::remote_workspace_stable_id(
+        bitfun_services_core::workspace_identity::remote_workspace_stable_id(
             &identity.hostname,
             identity.logical_workspace_path(),
         ),

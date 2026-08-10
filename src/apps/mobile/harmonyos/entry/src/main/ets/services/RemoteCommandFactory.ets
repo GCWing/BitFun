@@ -197,4 +197,19 @@ export class RemoteCommandFactory {
   static ping(): RemoteCommand {
     return { cmd: 'ping' };
   }
+
+  /**
+   * Ask the paired desktop to register a keyboard-less device on the account.
+   * `requestId` comes from that device rather than from here, so a retry
+   * anywhere along the watch → phone → desktop chain replays one idempotent
+   * relay request instead of registering a second device.
+   */
+  static provisionPeerDevice(deviceId: string, deviceName: string, requestId: string): RemoteCommand {
+    return {
+      cmd: 'provision_peer_device',
+      device_id: deviceId,
+      device_name: deviceName,
+      request_id: requestId
+    };
+  }
 }

@@ -5,6 +5,7 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 description = "BitFun integration service owner crate"
+autotests = false
 
 [lib]
 name = "bitfun_services_integrations"
@@ -415,54 +416,62 @@ tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "test-
 
 [[test]]
 name = "debug_log_owner_contracts"
+path = "tests/debug_log_owner_contracts.rs"
 required-features = ["debug-log"]
 
 [[test]]
 name = "script_tool_runtime"
+path = "tests/script_tool_runtime.rs"
 required-features = ["script-tool-runtime"]
 
 [[test]]
 name = "announcement_contracts"
+path = "tests/announcement_contracts.rs"
 required-features = ["announcement"]
 
 [[test]]
 name = "file_watch_contracts"
+path = "tests/file_watch_contracts.rs"
 required-features = ["file-watch"]
 
 [[test]]
 name = "function_agent_contracts"
+path = "tests/function_agent_contracts.rs"
 required-features = ["function-agents"]
 
 [[test]]
 name = "git_contracts"
+path = "tests/git_contracts.rs"
 required-features = ["git"]
 
 [[test]]
 name = "mcp_contracts"
+path = "tests/mcp_contracts.rs"
 required-features = ["mcp"]
 
 [[test]]
 name = "mcp_streamable_http_contracts"
+path = "tests/mcp_streamable_http_contracts.rs"
 required-features = ["mcp"]
 
 [[test]]
 name = "remote_connect_contracts"
+path = "tests/remote_connect_contracts.rs"
 required-features = ["remote-connect"]
 
 [[test]]
 name = "remote_ssh_contracts"
-required-features = ["remote-ssh"]
-
-[[test]]
-name = "remote_ssh_disabled_contracts"
+path = "tests/remote_ssh_contracts.rs"
 required-features = ["remote-ssh"]
 
 [[test]]
 name = "remote_workspace_search_disabled_contracts"
+path = "tests/remote_workspace_search_disabled_contracts.rs"
 required-features = ["remote-ssh", "workspace-search"]
 
 [[test]]
 name = "workspace_search_contracts"
+path = "tests/workspace_search_contracts.rs"
 required-features = ["workspace-search"]
 
 [lints]

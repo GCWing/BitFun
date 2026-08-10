@@ -78,9 +78,11 @@ pub use round_preempt::{
 pub use session::*;
 pub use side_question::*;
 pub use skill_agent_snapshot::*;
+#[cfg(feature = "product-full")]
+pub use system::init_agentic_system;
 pub use system::{
-    init_agentic_system, init_agentic_system_for_profile,
-    init_agentic_system_for_profile_with_runtime_ownership, AgenticSystem,
+    init_agentic_system_for_profile, init_agentic_system_for_profile_with_runtime_ownership,
+    AgenticSystem,
 };
 pub use warden::*;
 pub use workspace::{WorkspaceBackend, WorkspaceBinding};

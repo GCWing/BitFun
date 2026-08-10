@@ -565,6 +565,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "tools-browser-web")]
     #[tokio::test]
     async fn product_catalog_facade_resolves_manifest_from_same_provider_owner() {
         let allowed_tools = vec!["Read".to_string(), "WebFetch".to_string()];
@@ -630,6 +631,7 @@ mod tests {
         assert!(!deferred_names.iter().any(|name| name == "WebFetch"));
     }
 
+    #[cfg(feature = "tools-browser-web")]
     #[tokio::test]
     async fn product_resolved_manifest_owner_matches_legacy_shape() {
         let allowed_tools = vec!["Read".to_string(), "WebFetch".to_string()];
@@ -738,6 +740,7 @@ mod tests {
         );
     }
 
+    #[cfg(all(feature = "tools-browser-web", feature = "tools-mcp"))]
     #[tokio::test]
     async fn disabled_deferred_tool_loading_exposes_builtin_and_mcp_tools_directly() {
         let registry = create_tool_registry();
@@ -814,6 +817,7 @@ mod tests {
         assert_eq!(mcp_tool.parameters["required"], json!(["query"]));
     }
 
+    #[cfg(feature = "tools-browser-web")]
     #[tokio::test]
     async fn product_resolved_visible_tools_owner_matches_registry_visibility() {
         let visible = resolve_product_resolved_visible_tools(
@@ -845,6 +849,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "tools-browser-web")]
     #[tokio::test]
     async fn product_catalog_facade_resolves_get_tool_spec_results_from_same_provider_owner() {
         let results = resolve_product_get_tool_spec_results(
@@ -865,6 +870,7 @@ mod tests {
         assert!(data["catalog_generation"].as_u64().is_some());
     }
 
+    #[cfg(feature = "tools-browser-web")]
     #[tokio::test]
     async fn product_get_tool_spec_returns_assistant_hint_for_direct_webfetch_in_agentic_mode() {
         let results = resolve_product_get_tool_spec_results(
@@ -896,6 +902,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "product-full")]
     #[tokio::test]
     async fn product_agentic_manifest_exposes_default_product_tools() {
         let policy = crate::agentic::agents::get_agent_registry()
@@ -988,6 +995,7 @@ mod tests {
             .any(|tool| tool.name == GET_TOOL_SPEC_TOOL_NAME));
     }
 
+    #[cfg(feature = "tools-image-analysis")]
     #[tokio::test]
     async fn product_manifest_keeps_view_image_for_multimodal_anthropic_context() {
         let allowed_tools = vec!["Read".to_string(), "view_image".to_string()];
@@ -1006,6 +1014,7 @@ mod tests {
             .any(|tool| tool.name == "view_image"));
     }
 
+    #[cfg(feature = "tools-browser-web")]
     #[tokio::test]
     async fn product_manifest_snapshot_preserves_deferred_tool_discovery_contract() {
         let allowed_tools = vec![
@@ -1050,6 +1059,7 @@ mod tests {
         );
     }
 
+    #[cfg(all(feature = "tools-browser-web", feature = "tools-git"))]
     #[tokio::test]
     async fn product_manifest_guard_preserves_deferred_gateway_surface() {
         let allowed_tools = vec![
@@ -1108,6 +1118,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "tools-browser-web")]
     #[tokio::test]
     async fn product_manifest_preserves_explicit_get_tool_spec_runtime_contract() {
         let allowed_tools = vec![GET_TOOL_SPEC_TOOL_NAME.to_string(), "WebFetch".to_string()];
@@ -1139,6 +1150,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "tools-browser-web")]
     #[tokio::test]
     async fn product_manifest_expands_tool_when_agent_override_requests_it() {
         let allowed_tools = vec!["Read".to_string(), "WebFetch".to_string()];

@@ -22,7 +22,7 @@ use bitfun_core::service::remote_connect::{
     bot::{self, weixin, BotConfig},
     lan, session_store, sync_state, AccountClient, AccountPairingVerification, AccountSession,
     ConnectionMethod, ConnectionResult, DelegatedIdentityAuthorization, DeviceIdentity,
-    PairingState, RemoteConnectConfig, RemoteConnectService,
+    PairingState, ProvisionedDeviceAuthorization, RemoteConnectConfig, RemoteConnectService,
 };
 use bitfun_core::service::session::{DialogTurnData, SessionMetadata};
 use bitfun_core::service::workspace::{get_global_workspace_service, WorkspaceKind};
@@ -1216,6 +1216,61 @@ async fn register_delegated_identity_providers() {
                             None
                         }
                     }
+                })
+            })
+            .await;
+
+        // Room-channel provider that adds a keyboard-less device (a watch) to
+        // this account. Same lease discipline as delegation above; the errors
+        // are returned rather than swallowed because a provisioning failure is
+        // shown to someone standing there waiting for it.
+        let account_context = get_account_context().clone();
+        service
+            .set_peer_device_provisioner(move |device_id, device_name, request_id| {
+                let account_context = account_context.clone();
+                Box::pin(async move {
+                    // Minted by the device being provisioned so a retry anywhere
+                    // along the chain replays one idempotent relay request.
+                    let request_id = uuid::Uuid::parse_str(&request_id)
+                        .map_err(|_| "Request id must be a UUID".to_string())?;
+                    let generation = account_context_generation();
+                    if !account_context_is_current(generation) {
+                        return Err("Desktop account changed; try again".to_string());
+                    }
+                    let account_lease = lock_account_sync(generation)
+                        .await
+                        .map_err(|_| "Desktop account changed; try again".to_string())?;
+                    let context = account_context
+                        .read()
+                        .await
+                        .clone()
+                        .ok_or_else(|| "Desktop is not logged into a BitFun account".to_string())?;
+                    if !account_context_matches(generation, &context.session.token).await {
+                        return Err("Desktop account changed; try again".to_string());
+                    }
+                    let provisioned = AccountClient::new()
+                        .provision_device_token(
+                            &context.relay_url,
+                            &context.session,
+                            &device_id,
+                            &device_name,
+                            request_id,
+                        )
+                        .await
+                        .map_err(|e| {
+                            log::warn!("Provision device token failed: {e}");
+                            format!("Could not add the device to your account: {e}")
+                        })?;
+                    if !account_context_matches(generation, &context.session.token).await {
+                        return Err("Desktop account changed; try again".to_string());
+                    }
+                    Ok(ProvisionedDeviceAuthorization::with_host_lease(
+                        provisioned.token,
+                        provisioned.user_id,
+                        context.session.master_key,
+                        provisioned.device_id,
+                        account_lease,
+                    ))
                 })
             })
             .await;

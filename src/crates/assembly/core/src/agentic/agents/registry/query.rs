@@ -21,6 +21,7 @@ impl AgentRegistry {
     /// product-level external-source conflict resolution. Main-agent modes and
     /// subagents share one logical id namespace in external ecosystems, so a
     /// same-name local definition in either role must prevent silent takeover.
+    #[cfg(feature = "external-sources")]
     pub(crate) async fn get_local_agents_for_external_resolution(
         &self,
         workspace_root: Option<&Path>,
@@ -480,6 +481,7 @@ impl AgentRegistry {
     }
 }
 
+#[cfg(feature = "external-sources")]
 fn local_conflict_info(
     entry: &AgentEntry,
     parent_agent_type: Option<&str>,

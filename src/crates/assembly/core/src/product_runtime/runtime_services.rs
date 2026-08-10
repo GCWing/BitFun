@@ -6,20 +6,32 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use bitfun_runtime_ports::PortResult;
 #[cfg(feature = "ssh-remote")]
-use bitfun_runtime_ports::{PortError, PortErrorKind, PortResult, RemoteExecPort};
-use bitfun_runtime_ports::{
-    RemoteProjectionPort, RemoteWorkspacePort, SessionStorePort, TerminalPort,
-};
+use bitfun_runtime_ports::{PortError, PortErrorKind, RemoteExecPort};
+#[cfg(feature = "remote-connect")]
+use bitfun_runtime_ports::{RemoteProjectionPort, RemoteWorkspacePort};
+use bitfun_runtime_ports::{SessionStorePort, TerminalPort};
+#[cfg(any(
+    feature = "model-catalog",
+    feature = "mcp-runtime",
+    feature = "remote-connect",
+    feature = "browser-control",
+    feature = "web-tools",
+    feature = "deep-research",
+    feature = "tools-miniapp",
+    feature = "git"
+))]
+use bitfun_runtime_services::RuntimeServiceMarkerPort;
 use bitfun_runtime_services::{
-    RuntimeServiceMarkerPort, RuntimeServices, RuntimeServicesBuilder, RuntimeServicesProvider,
-    RuntimeServicesRegistry,
+    RuntimeServices, RuntimeServicesBuilder, RuntimeServicesProvider, RuntimeServicesRegistry,
 };
 use bitfun_services_core::local_runtime_ports::LocalRuntimePorts;
 use terminal_core::TerminalRuntimePort;
 
 use crate::agentic::session::CoreSessionStorePort;
 
+#[cfg(feature = "remote-connect")]
 use crate::service_agent_runtime::{
     CoreRemoteWorkspaceFileRuntimeHost, CoreRemoteWorkspaceRuntimeHost,
 };
@@ -81,22 +93,42 @@ impl RuntimeServicesProvider for CoreRuntimeServicesProvider {
         let terminal = Self::terminal_port();
         let builder = builder
             .with_session_store(session_store)
-            .with_optional_terminal(Some(terminal))
-            .with_optional_network(Some(RuntimeServiceMarkerPort::network_port()))
-            .with_optional_git(Some(RuntimeServiceMarkerPort::git_port()))
-            .with_optional_mcp_catalog(Some(RuntimeServiceMarkerPort::mcp_catalog_port()));
+            .with_optional_terminal(Some(terminal));
+
+        #[cfg(any(
+            feature = "model-catalog",
+            feature = "mcp-runtime",
+            feature = "remote-connect",
+            feature = "browser-control",
+            feature = "web-tools",
+            feature = "deep-research",
+            feature = "tools-miniapp"
+        ))]
+        let builder = builder.with_optional_network(Some(RuntimeServiceMarkerPort::network_port()));
+
+        #[cfg(feature = "git")]
+        let builder = builder.with_optional_git(Some(RuntimeServiceMarkerPort::git_port()));
+
+        #[cfg(feature = "mcp-runtime")]
+        let builder =
+            builder.with_optional_mcp_catalog(Some(RuntimeServiceMarkerPort::mcp_catalog_port()));
 
         #[cfg(feature = "ssh-remote")]
         let builder = builder.with_optional_remote_exec(Some(Self::remote_exec_port()));
 
+        #[cfg(feature = "remote-connect")]
         let remote_workspace: Arc<dyn RemoteWorkspacePort> =
             Arc::new(CoreRemoteWorkspaceRuntimeHost::new());
+        #[cfg(feature = "remote-connect")]
         let remote_projection: Arc<dyn RemoteProjectionPort> =
             Arc::new(CoreRemoteWorkspaceFileRuntimeHost::new());
 
-        builder
+        #[cfg(feature = "remote-connect")]
+        let builder = builder
             .with_optional_remote_workspace(Some(remote_workspace))
-            .with_optional_remote_projection(Some(remote_projection))
+            .with_optional_remote_projection(Some(remote_projection));
+
+        builder
     }
 }
 
@@ -172,14 +204,13 @@ mod local_runtime_tests {
             RuntimeServiceCapability::Events,
             RuntimeServiceCapability::Clock,
             RuntimeServiceCapability::Terminal,
-            RuntimeServiceCapability::Network,
-            RuntimeServiceCapability::Git,
         ] {
             assert!(services.has_capability(capability), "missing {capability}");
         }
         assert!(services.clock.now_unix_millis() > 0);
     }
 
+    #[cfg(feature = "git")]
     #[tokio::test]
     async fn local_runtime_services_bind_git_queries_to_the_canonical_workspace() {
         let workspace = tempfile::tempdir().expect("workspace");

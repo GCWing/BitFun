@@ -156,9 +156,7 @@ const SERVICES_CORE_TOKIO_FEATURES = new Map([
 ]);
 const SERVICES_CORE_BASE_TOKIO_FEATURES = ['rt', 'time'];
 
-// The installer is an excluded standalone workspace with its own Rust checks
-// and packaging lifecycle; this policy governs the root product workspace.
-const TOKIO_DEPENDENCY_POLICY_EXCLUDED_PACKAGES = new Set(['bitfun-installer']);
+const TOKIO_DEPENDENCY_POLICY_EXCLUDED_PACKAGES = new Set();
 
 function effectiveTokioCapabilities(feature, featureGraph, visiting = new Set()) {
   if (visiting.has(feature)) {
@@ -254,11 +252,6 @@ const REQWEST_TRANSPORT_FEATURES = [
   'stream',
 ];
 const REQWEST_PACKAGE_PROFILES = new Map([
-  ['bitfun-installer', {
-    dependencyFeatures: ['json', 'rustls-tls', 'stream'],
-    optional: false,
-    allowedPackageFeatureRefs: new Set(['reqwest/rustls-tls']),
-  }],
   ['bitfun-core', { dependencyFeatures: REQWEST_TRANSPORT_FEATURES, optional: true }],
   ['bitfun-services-integrations', {
     dependencyFeatures: REQWEST_TRANSPORT_FEATURES,
@@ -780,44 +773,112 @@ export function findProductEntrypointCoreFeatureViolations(
   const reviewedCoreFeatureClosures = new Map([
     ['bitfun-cli', [
       'agent-runtime',
-      'canvas-runtime',
+      'remote-connect',
+      'deep-research',
+      'lsp',
       'external-sources',
       'plugin-runtime',
       'ssh-remote',
+      'tools-basic',
+      'tools-git',
+      'tools-mcp',
+      'tools-browser-web',
+      'tools-computer-use',
+      'tools-image-analysis',
+      'tools-miniapp',
+      'tools-canvas',
+      'tools-agent-control',
     ]],
     ['bitfun-acp', [
       'agent-runtime',
-      'canvas-runtime',
+      'deep-research',
+      'lsp',
       'external-sources',
       'ssh-remote',
+      'tools-basic',
+      'tools-git',
+      'tools-mcp',
+      'tools-browser-web',
+      'tools-computer-use',
+      'tools-image-analysis',
+      'tools-miniapp',
+      'tools-canvas',
+      'tools-agent-control',
+    ]],
+    ['bitfun-app-server', [
+      'external-sources',
+      'git',
+      'remote-connect',
     ]],
   ]);
   const acpActiveCoreFeatures = [
     'agent-runtime',
     'ai-adapter-runtime',
+    'browser-control',
     'canvas-runtime',
+    'deep-research',
     'external-sources',
     'file-watch',
     'filesystem',
     'git',
     'lsp',
     'local-storage',
+    'mcp-runtime',
+    'model-catalog',
     'plugin-source',
     'process-runtime',
     'product-capabilities',
-    'product-domains',
     'remote-workspace',
     'review-platform',
     'runtime-services',
+    'scheduled-jobs',
+    'script-tool-runtime',
     'ssh-remote',
     'terminal',
     'tool-packs',
+    'tools-agent-control',
+    'tools-basic',
+    'tools-browser-web',
+    'tools-canvas',
+    'tools-computer-use',
+    'tools-git',
+    'tools-image-analysis',
+    'tools-mcp',
+    'tools-miniapp',
+    'web-tools',
+    'workspace-search',
     'workspace-runtime',
     'workspace-watch',
   ];
   const reviewedActiveCoreFeatureClosures = new Map([
-    ['bitfun-cli', [...acpActiveCoreFeatures, 'plugin-runtime']],
+    ['bitfun-cli', [...acpActiveCoreFeatures, 'plugin-runtime', 'remote-connect']],
     ['bitfun-acp', acpActiveCoreFeatures],
+    ['bitfun-app-server', [
+      'agent-runtime',
+      'ai-adapter-runtime',
+      'external-sources',
+      'file-watch',
+      'filesystem',
+      'git',
+      'local-storage',
+      'mcp-runtime',
+      'model-catalog',
+      'plugin-source',
+      'process-runtime',
+      'product-capabilities',
+      'remote-connect',
+      'runtime-services',
+      'scheduled-jobs',
+      'script-tool-runtime',
+      'terminal',
+      'tool-packs',
+      'tools-agent-control',
+      'tools-basic',
+      'ts',
+      'workspace-search',
+      'workspace-runtime',
+      'workspace-watch',
+    ]],
   ]);
   const packageByManifest = new Map(
     packages.map((pkg) => [normalizedPath(pkg.manifest_path), pkg]),
@@ -902,7 +963,11 @@ export function findProductEntrypointCoreFeatureViolations(
       );
       const rootSelectedFeatures = Object.keys(rootPackage.features ?? {})
         .filter((feature) => feature !== 'default');
-      const rootLabel = rootName === 'bitfun-cli' ? 'CLI' : 'ACP';
+      const rootLabel = new Map([
+        ['bitfun-cli', 'CLI'],
+        ['bitfun-acp', 'ACP'],
+        ['bitfun-app-server', 'App Server'],
+      ]).get(rootName) ?? rootName;
 
       const packageStates = new Map();
       const pending = [];

@@ -76,7 +76,7 @@ For browser and web-page work, route in this order:
 
 1. Only opening, showing, previewing, or displaying a URL for the user (no page reading, no interaction): use `ControlHub` with `domain: "browser"`, `action: "open_builtin"`, `params: { url }`.
 2. Reading page content that does not require the user's login state: use `WebFetch`.
-3. Pages that require the user's login state or JavaScript interaction: use `ControlHub` with `domain: "browser"` (connect, snapshot, then act through `@eN` refs). `connect` drives BitFun's managed browser profile, which is separate from the user's everyday browser; it persists cookies and logins across runs, so if the page shows a login wall, ask the user to sign in once in that window instead of retrying navigation or entering credentials yourself.
+3. Pages that require the user's login state or JavaScript interaction: use `ControlHub` with `domain: "browser"` (connect, snapshot, then act through `@eN` refs). On Chrome 144+ and Edge, ask the user to click **Enable default CDP** in BitFun Settings > Browser control, enable Remote debugging in the browser-owned page, and approve BitFun if prompted; this preserves the current profile's tabs and login state. Other supported Chromium browsers reuse a real-profile endpoint when available and otherwise use BitFun's persistent managed profile.
 4. Non-Chromium browsers (Firefox/Safari) or native desktop apps: Cowork cannot drive these — explain the limitation and suggest Computer Use mode instead.
 
 Do not use `ControlHub` for local computer, operating-system, or desktop UI work, and do not substitute a browser-automation skill for it.

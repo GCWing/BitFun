@@ -1,5 +1,4 @@
 use crate::agentic::core::SessionConfig;
-use crate::service::remote_ssh::workspace_state::WorkspaceSessionIdentity;
 use crate::service::workspace_runtime::WorkspaceRuntimeService;
 use bitfun_core_types::SessionExecutionTarget;
 pub use bitfun_runtime_ports::{
@@ -9,6 +8,10 @@ pub use bitfun_runtime_ports::{
 pub use bitfun_services_core::workspace::{
     local_workspace_services, LocalWorkspaceFs, LocalWorkspaceShell,
 };
+use bitfun_services_core::workspace_identity::{
+    workspace_session_identity, WorkspaceSessionIdentity, LOCAL_WORKSPACE_SSH_HOST,
+};
+#[cfg(feature = "remote-workspace")]
 pub use bitfun_services_integrations::remote_ssh::{
     remote_workspace_services, RemoteWorkspaceFs, RemoteWorkspaceShell,
 };
@@ -24,7 +27,8 @@ pub(crate) fn canonical_local_workspace_path(path: &Path) -> PathBuf {
     dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
-/// Stable local workspace identity shared by per-workspace runtime routers.
+/// Stable local workspace identity shared by external-source and MCP routers.
+#[cfg(any(feature = "external-sources", feature = "mcp-runtime"))]
 pub(crate) fn workspace_route_key(workspace_root: Option<&Path>) -> String {
     workspace_root
         .map(|path| {
@@ -80,15 +84,9 @@ pub struct WorkspaceBinding {
 impl WorkspaceBinding {
     pub fn new(workspace_id: Option<String>, root_path: PathBuf) -> Self {
         let logical_workspace_path = root_path.to_string_lossy().to_string();
-        let session_identity =
-            crate::service::remote_ssh::workspace_state::workspace_session_identity(
-                &logical_workspace_path,
-                None,
-                None,
-            )
+        let session_identity = workspace_session_identity(&logical_workspace_path, None, None)
             .unwrap_or(WorkspaceSessionIdentity {
-                hostname: crate::service::remote_ssh::workspace_state::LOCAL_WORKSPACE_SSH_HOST
-                    .to_string(),
+                hostname: LOCAL_WORKSPACE_SSH_HOST.to_string(),
                 logical_workspace_path,
                 remote_connection_id: None,
             });
@@ -185,7 +183,8 @@ impl WorkspaceBinding {
         if self.is_remote() {
             if self.session_identity.hostname == "_unresolved" {
                 if let Some(connection_id) = self.session_identity.remote_connection_id.as_deref() {
-                    return crate::service::remote_ssh::workspace_state::unresolved_remote_session_storage_dir(
+                    return bitfun_services_core::workspace_identity::unresolved_remote_session_storage_dir(
+                        crate::infrastructure::get_path_manager_arc().remote_ssh_mirror_root_dir(),
                         connection_id,
                         self.session_identity.logical_workspace_path(),
                     );
@@ -209,12 +208,12 @@ impl WorkspaceBinding {
 mod tests {
     use super::{session_execution_workspace_root, WorkspaceBackend, WorkspaceBinding};
     use crate::agentic::core::SessionConfig;
-    use crate::service::remote_ssh::workspace_state::{
-        remote_workspace_session_mirror_dir, workspace_session_identity,
-    };
     use crate::service::workspace_runtime::WorkspaceRuntimeService;
     use bitfun_core_types::{
         SessionExecutionTarget, SessionExecutionTargetKind, WorktreeLifecycle,
+    };
+    use bitfun_services_core::workspace_identity::{
+        remote_workspace_session_mirror_dir, workspace_session_identity,
     };
     use std::path::PathBuf;
 
@@ -260,7 +259,11 @@ mod tests {
         assert!(matches!(binding.backend, WorkspaceBackend::Remote { .. }));
         assert_eq!(
             binding.session_storage_dir(),
-            remote_workspace_session_mirror_dir("127.0.0.1", "/home/wsp/projects/test")
+            remote_workspace_session_mirror_dir(
+                crate::infrastructure::get_path_manager_arc().remote_ssh_mirror_root_dir(),
+                "127.0.0.1",
+                "/home/wsp/projects/test"
+            )
         );
     }
 

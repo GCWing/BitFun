@@ -97,10 +97,7 @@ bitfun-services-integrations = { path = "../../services/services-integrations", 
 bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, optional = true }
 
 # Tool runtime
-tool-runtime = { path = "../../execution/tool-execution", default-features = false, optional = true, features = [
-    "document-read",
-    "web-readable",
-] }
+tool-runtime = { path = "../../execution/tool-execution", default-features = false, optional = true }
 
 # terminal
 terminal-core = { path = "../../services/terminal", optional = true }
@@ -154,6 +151,24 @@ ts = [
 ]
 product-full = [
     "agent-runtime",
+    "model-catalog",
+    "mcp-runtime",
+    "remote-connect",
+    "workspace-search",
+    "browser-control",
+    "web-tools",
+    "deep-research",
+    "scheduled-jobs",
+    "tools-basic",
+    "tools-git",
+    "tools-mcp",
+    "tools-browser-web",
+    "tools-computer-use",
+    "tools-image-analysis",
+    "tools-miniapp",
+    "tools-canvas",
+    "tools-agent-control",
+    "function-agents",
     "canvas-runtime",
     "external-sources",
     "plugin-runtime",
@@ -173,7 +188,6 @@ product-full = [
     "terminal",
     "workspace-runtime",
     "product-capabilities",
-    "product-domains",
     "runtime-services",
     "tool-packs",
     "warden-poke",
@@ -194,8 +208,6 @@ agent-runtime = [
     "dep:bitfun-agent-content",
     "dep:bitfun-agent-stream",
     "dep:bitfun-harness",
-    "dep:chrono-tz",
-    "dep:cron",
     "dep:dashmap",
     "dep:filetime",
     "dep:flate2",
@@ -204,50 +216,128 @@ agent-runtime = [
     "dep:indexmap",
     "dep:image",
     "dep:md5",
+    # Warden Challenge-Poke Poisson scheduling compiles unconditionally under
+    # agent-runtime and needs rand (customization: upstream moved rand to
+    # services-integrations, but core warden keeps it owned by agent-runtime).
     "dep:rand",
-    "dep:reqwest",
-    "dep:semver",
     "dep:rusqlite",
     "dep:similar",
-    "dep:tokio-tungstenite",
     "dep:tool-runtime",
-    "dep:axum",
-    "bitfun-services-integrations/browser-control",
-    "bitfun-services-integrations/deep-research",
-    "bitfun-services-integrations/mcp",
-    "bitfun-services-integrations/models-dev",
-    "bitfun-services-integrations/remote-connect",
-    "bitfun-services-integrations/script-tool-runtime",
-    "bitfun-services-integrations/web-tools",
-    "bitfun-services-integrations/workspace-search",
-    "tokio/rt-multi-thread",
-    "bitfun-services-core/dispatch-workspace",
     "bitfun-services-core/permission",
     "bitfun-services-core/runtime-ownership",
     "bitfun-services-core/session-git",
     "filesystem",
-    "lsp",
     "local-storage",
     "process-runtime",
-    "remote-workspace",
     "terminal",
     "workspace-runtime",
     "product-capabilities",
-    "product-domains",
+    "dep:bitfun-product-domains",
+    "bitfun-product-domains/external-sources",
     "runtime-services",
-    "git",
-    "review-platform",
     "tool-packs",
+    "tools-basic",
+    "tools-agent-control",
 ]
 external-sources = [
     "agent-runtime",
+    "model-catalog",
+    "mcp-runtime",
+    "script-tool-runtime",
     "dep:bitfun-opencode-adapter",
     "dep:bitfun-claude-code-adapter",
     "dep:bitfun-codex-adapter",
     "dep:bitfun-external-sources",
     "bitfun-services-integrations/hook-import",
+    "plugin-source",
     "file-watch",
     "workspace-watch",
+]
+
+# Concrete service capabilities are selected independently from the portable
+# Agent lifecycle. Product entrypoints compose only the owners they expose.
+model-catalog = [
+    "ai-adapter-runtime",
+    "bitfun-services-integrations/models-dev",
+    "runtime-services",
+]
+mcp-runtime = [
+    "agent-runtime",
+    "dep:axum",
+    "dep:reqwest",
+    "bitfun-services-integrations/mcp",
+    "tokio/rt-multi-thread",
+]
+remote-connect = [
+    "agent-runtime",
+    "git",
+    "model-catalog",
+    "bitfun-services-integrations/remote-connect",
+]
+workspace-search = [
+    "workspace-runtime",
+    "bitfun-services-integrations/workspace-search",
+]
+browser-control = [
+    "dep:tokio-tungstenite",
+    "bitfun-services-integrations/browser-control",
+]
+web-tools = [
+    "bitfun-services-integrations/web-tools",
+    "tool-runtime/web-readable",
+]
+deep-research = ["bitfun-services-integrations/deep-research"]
+script-tool-runtime = ["bitfun-services-integrations/script-tool-runtime"]
+scheduled-jobs = [
+    "dep:chrono-tz",
+    "dep:cron",
+]
+
+# Tool groups mirror the provider-neutral groups in bitfun-tool-packs. They
+# compose concrete service owners but never form a product-shaped umbrella.
+tools-basic = [
+    "bitfun-tool-packs/basic",
+    "tool-runtime/document-read",
+    "workspace-search",
+]
+tools-git = [
+    "bitfun-tool-packs/git",
+    "git",
+    "review-platform",
+]
+tools-mcp = [
+    "bitfun-tool-packs/mcp",
+    "mcp-runtime",
+]
+tools-browser-web = [
+    "bitfun-tool-packs/browser-web",
+    "browser-control",
+    "web-tools",
+]
+tools-computer-use = [
+    "bitfun-tool-packs/computer-use",
+]
+tools-image-analysis = [
+    "bitfun-tool-packs/image-analysis",
+]
+tools-miniapp = [
+    "bitfun-tool-packs/miniapp",
+    "dep:bitfun-product-domains",
+    "bitfun-product-domains/appearance-market",
+    "bitfun-product-domains/miniapp",
+    "bitfun-services-integrations/miniapp-runtime",
+    "bitfun-services-integrations/miniapp-market",
+    "runtime-services",
+    "dep:reqwest",
+    "dep:semver",
+]
+tools-canvas = [
+    "bitfun-tool-packs/canvas",
+    "canvas-runtime",
+]
+tools-agent-control = [
+    "bitfun-tool-packs/agent-control",
+    "scheduled-jobs",
 ]
 plugin-runtime = [
     "external-sources",
@@ -265,20 +355,19 @@ ai-adapter-runtime = [
 ]
 product-capabilities = ["dep:bitfun-product-capabilities"]
 plugin-source = [
+    "dep:bitfun-product-domains",
+    "bitfun-product-domains/plugin-source",
     "bitfun-services-integrations/plugin-source",
 ]
-product-domains = [
+function-agents = [
     "ai-adapter-runtime",
     "dep:bitfun-product-domains",
-    "plugin-source",
+    "bitfun-product-domains/function-agents",
     "bitfun-services-integrations/function-agents",
-    "bitfun-services-integrations/miniapp-runtime",
-    "bitfun-services-integrations/miniapp-market",
-    "bitfun-product-domains/product-full",
     "runtime-services",
 ]
 canvas-runtime = [
-    "product-domains",
+    "dep:bitfun-product-domains",
     "bitfun-services-integrations/canvas-runtime",
 ]
 runtime-services = ["dep:bitfun-runtime-services"]
@@ -287,7 +376,7 @@ file-watch = ["bitfun-services-integrations/file-watch"]
 git = ["bitfun-services-integrations/git"]
 review-platform = ["bitfun-services-integrations/review-platform"]
 service-integrations = ["announcement", "file-watch", "git", "review-platform"]
-dispatch-store = ["local-storage"]
+dispatch-store = ["local-storage", "bitfun-services-core/dispatch-workspace"]
 filesystem = ["bitfun-services-core/filesystem"]
 local-storage = ["bitfun-services-core/local-storage"]
 process-runtime = ["bitfun-services-core/process-runtime"]
@@ -309,7 +398,7 @@ remote-workspace = [
     "dep:bitfun-services-integrations",
     "bitfun-services-integrations/remote-ssh",
 ]
-tool-packs = ["dep:bitfun-tool-packs", "bitfun-tool-packs/product-full", "dep:image"]
+tool-packs = ["dep:bitfun-tool-packs"]
 # Deprecated compatibility feature. Tauri integration is desktop-owned now;
 # keep the public feature name as a no-op for downstream manifests.
 tauri-support = []

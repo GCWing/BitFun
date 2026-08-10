@@ -21,11 +21,13 @@ use tokio::sync::RwLock;
 /// External subagents are registered under this namespace to avoid collisions with
 /// built-in agents (`builtin:`, `custom:`, etc.). The module itself is intentionally
 /// minimal — routing and lifecycle logic lives in `external_subagents.rs`.
+#[cfg(feature = "external-sources")]
 pub(crate) const EXTERNAL_SUBAGENT_RUNTIME_KEY_PREFIX: &str = "external_subagent_runtime:";
 
 /// Formats a stable runtime key for an external subagent given its content digest.
 /// Used by `install_active_candidate` to register generation-specific agent entries
 /// without re-parsing ecosystem manifests on every restart.
+#[cfg(feature = "external-sources")]
 pub(crate) fn external_subagent_runtime_key(digest: &str) -> String {
     format!("{EXTERNAL_SUBAGENT_RUNTIME_KEY_PREFIX}{digest}")
 }

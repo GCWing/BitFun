@@ -10,5 +10,6 @@ pub mod launcher;
 
 pub use cdp::{CdpEndpointProvider, CdpPageInfo, CdpVersionInfo};
 pub use launcher::{
-    BrowserKind, BrowserLaunchOptions, BrowserLauncher, LaunchResult, DEFAULT_CDP_PORT,
+    BrowserDebugEndpoint, BrowserKind, BrowserLaunchOptions, BrowserLauncher, LaunchResult,
+    DEFAULT_CDP_PORT,
 };

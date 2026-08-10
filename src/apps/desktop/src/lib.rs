@@ -494,6 +494,16 @@ pub async fn run() {
 
     eprintln!("=== BitFun Desktop Starting ===");
 
+    if let Err(error) = bitfun_core::agentic::system::select_agentic_system_profile(
+        bitfun_core::agentic::system::DeliveryProfile::Desktop,
+    ) {
+        log::error!("Failed to select Desktop agent profile: {}", error);
+        show_fatal_startup_error(&format!(
+            "BitFun could not select its Desktop agent profile and cannot continue.\n\n{error}\n\nSee early-startup.log for details."
+        ));
+        return;
+    }
+
     let step_started = Instant::now();
     if let Err(e) = bitfun_core::service::config::initialize_global_config().await {
         log::error!("Failed to initialize global config service: {}", e);
@@ -1108,6 +1118,16 @@ pub async fn run() {
             startup_trace.record_elapsed_step(
                 "native_setup",
                 "remote_connect_init_on_startup",
+                step_started,
+            );
+
+            // Reattach to a browser that is already running with remote
+            // debugging on, so a BitFun restart does not drop the connection.
+            let step_started = Instant::now();
+            api::browser_control_api::init_on_startup();
+            startup_trace.record_elapsed_step(
+                "native_setup",
+                "browser_control_init_on_startup",
                 step_started,
             );
 
@@ -1848,8 +1868,8 @@ pub async fn run() {
             api::browser_control_api::browser_control_list_browsers,
             api::browser_control_api::browser_control_get_status,
             api::browser_control_api::browser_control_launch,
+            api::browser_control_api::browser_control_enable_default_cdp,
             api::browser_control_api::browser_control_restart_with_cdp,
-            api::browser_control_api::browser_control_create_launcher,
             // Insights API
             api::insights_api::generate_insights,
             api::insights_api::get_latest_insights,

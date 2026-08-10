@@ -1,7 +1,8 @@
 //! Concrete tool-pack owner crate.
 //!
-//! The feature scaffold is intentionally behavior-neutral until the core
-//! `ToolUseContext` and registry boundaries are split into portable ports.
+//! This crate owns compile-time availability facts and the stable product
+//! provider plan. Concrete implementations, registry ordering, permissions,
+//! and runtime materialization remain in Core.
 
 use std::collections::HashSet;
 use std::fmt;
@@ -80,6 +81,45 @@ pub fn enabled_feature_groups() -> Vec<ToolPackFeatureGroup> {
     .collect()
 }
 
+pub fn tool_feature_group(tool_name: &str) -> Option<ToolPackFeatureGroup> {
+    match tool_name {
+        "LS" | "Read" | "Glob" | "Grep" | "Write" | "Edit" | "Delete" | "ExecCommand"
+        | "WriteStdin" | "ExecControl" | "GetTime" | "ListModels" => {
+            Some(ToolPackFeatureGroup::Basic)
+        }
+        "Git" | "Worktree" | "ReviewPlatform" | "GetFileDiff" => Some(ToolPackFeatureGroup::Git),
+        "ListMCPResources" | "ReadMCPResource" | "ListMCPPrompts" | "GetMCPPrompt" => {
+            Some(ToolPackFeatureGroup::Mcp)
+        }
+        "WebSearch" | "WebFetch" | "ControlHub" => Some(ToolPackFeatureGroup::BrowserWeb),
+        "ComputerUse" => Some(ToolPackFeatureGroup::ComputerUse),
+        "view_image" | "analyze_image" => Some(ToolPackFeatureGroup::ImageAnalysis),
+        "GenerativeUI" | "InitMiniApp" | "FinalizeMiniApp" | "PublishMiniApp"
+        | "PublishAppearance" | "PageDeploy" | "PagePublish" | "Playbook" => {
+            Some(ToolPackFeatureGroup::MiniApp)
+        }
+        "CreateCanvas" | "ReadCanvas" | "UpdateCanvas" | "PatchCanvas" => {
+            Some(ToolPackFeatureGroup::Canvas)
+        }
+        "Task" | "AgentWait" | "LaunchReviewAgent" | "Skill" | "AskUserQuestion" | "TodoWrite"
+        | "get_goal" | "create_goal" | "update_goal" | "CreatePlan" | "submit_code_review"
+        | "GetToolSpec" | "CallDeferredTool" | "SessionControl" | "SessionMessage"
+        | "SessionHistory" | "Cron" => Some(ToolPackFeatureGroup::AgentControl),
+        _ => None,
+    }
+}
+
+pub fn unavailable_feature_groups(requested: &[ToolPackFeatureGroup]) -> Vec<ToolPackFeatureGroup> {
+    let enabled = enabled_feature_groups().into_iter().collect::<HashSet<_>>();
+    let mut seen = HashSet::new();
+    requested
+        .iter()
+        .copied()
+        .filter(|group| !enabled.contains(group))
+        .filter(|group| seen.insert(*group))
+        .collect()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ToolProviderGroupPlan {
     provider_id: &'static str,
@@ -101,8 +141,14 @@ impl ToolProviderGroupPlan {
     }
 }
 
-const CORE_BASIC_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::Basic];
-const CORE_AGENT_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::AgentControl];
+const CORE_BASIC_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[
+    ToolPackFeatureGroup::Basic,
+    ToolPackFeatureGroup::ImageAnalysis,
+];
+const CORE_AGENT_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[
+    ToolPackFeatureGroup::AgentControl,
+    ToolPackFeatureGroup::Git,
+];
 const CORE_CANVAS_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::Canvas];
 const CORE_SESSION_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::AgentControl];
 const CORE_INTEGRATION_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[
@@ -111,8 +157,6 @@ const CORE_INTEGRATION_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[
     ToolPackFeatureGroup::Git,
     ToolPackFeatureGroup::MiniApp,
     ToolPackFeatureGroup::ComputerUse,
-    ToolPackFeatureGroup::ImageAnalysis,
-    ToolPackFeatureGroup::AgentControl,
 ];
 
 const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
@@ -255,10 +299,12 @@ pub fn try_product_tool_provider_group_plan_for_ids(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::{
         all_feature_groups, enabled_feature_groups, product_tool_provider_group_plan,
-        try_product_tool_provider_group_plan_for_ids, ToolPackFeatureGroup,
-        ToolProviderGroupPlanSelectionError,
+        tool_feature_group, try_product_tool_provider_group_plan_for_ids,
+        unavailable_feature_groups, ToolPackFeatureGroup, ToolProviderGroupPlanSelectionError,
     };
 
     #[test]
@@ -324,6 +370,65 @@ mod tests {
             groups.contains(&ToolPackFeatureGroup::AgentControl),
             cfg!(feature = "agent-control")
         );
+    }
+
+    #[test]
+    fn provider_plan_reports_every_requested_group_missing_from_the_binary() {
+        let unavailable = unavailable_feature_groups(all_feature_groups());
+        for group in all_feature_groups() {
+            assert_eq!(
+                unavailable.contains(group),
+                !enabled_feature_groups().contains(group),
+                "{} availability must reflect the compiled tool-pack feature",
+                group.id(),
+            );
+        }
+    }
+
+    #[test]
+    fn every_builtin_tool_has_one_compile_time_owner_group() {
+        for tool_name in product_tool_provider_group_plan()
+            .iter()
+            .flat_map(|group| group.tool_names())
+        {
+            assert!(
+                tool_feature_group(tool_name).is_some(),
+                "{tool_name} must have a compile-time feature owner"
+            );
+        }
+    }
+
+    #[test]
+    fn every_provider_declares_exactly_its_tool_owner_groups() {
+        for provider in product_tool_provider_group_plan() {
+            let declared = provider
+                .feature_groups()
+                .iter()
+                .copied()
+                .collect::<HashSet<_>>();
+            let actual = provider
+                .tool_names()
+                .iter()
+                .map(|tool_name| {
+                    tool_feature_group(tool_name).unwrap_or_else(|| {
+                        panic!("{tool_name} must have a compile-time feature owner")
+                    })
+                })
+                .collect::<HashSet<_>>();
+
+            assert_eq!(
+                declared,
+                actual,
+                "{} feature groups must match its tool owners",
+                provider.provider_id()
+            );
+            assert_eq!(
+                provider.feature_groups().len(),
+                declared.len(),
+                "{} must not declare duplicate feature groups",
+                provider.provider_id()
+            );
+        }
     }
 
     #[test]
@@ -455,21 +560,13 @@ mod tests {
         assert_eq!(
             feature_groups,
             vec![
-                ("core.basic", vec!["basic"]),
-                ("core.agent", vec!["agent-control"]),
+                ("core.basic", vec!["basic", "image-analysis"]),
+                ("core.agent", vec!["agent-control", "git"]),
                 ("core.canvas", vec!["canvas"]),
                 ("core.session", vec!["agent-control"]),
                 (
                     "core.integration",
-                    vec![
-                        "browser-web",
-                        "mcp",
-                        "git",
-                        "miniapp",
-                        "computer-use",
-                        "image-analysis",
-                        "agent-control",
-                    ]
+                    vec!["browser-web", "mcp", "git", "miniapp", "computer-use",]
                 ),
             ]
         );

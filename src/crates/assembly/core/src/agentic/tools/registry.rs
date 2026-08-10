@@ -72,11 +72,15 @@ impl Default for ToolRegistry {
 impl ToolRegistry {
     /// Create a new tool registry
     pub fn new() -> Self {
-        ProductToolRuntime::default().create_registry()
+        ProductToolRuntime::default()
+            .create_registry()
+            .expect("the default tool runtime feature closure must be complete")
     }
 
-    pub(in crate::agentic) fn for_profile(profile: DeliveryProfile) -> Self {
-        ProductToolRuntime::for_profile(profile).create_registry()
+    pub(in crate::agentic) fn for_profile(profile: DeliveryProfile) -> Result<Self, String> {
+        ProductToolRuntime::for_profile(profile)
+            .create_registry()
+            .map_err(|error| error.to_string())
     }
 
     /// Create a registry with an injected decoration boundary.
@@ -85,7 +89,9 @@ impl ToolRegistry {
     /// allowing future owner crates to replace this concrete service coupling
     /// through the `bitfun-runtime-ports` interface.
     pub fn with_tool_decorator(tool_decorator: ProductToolDecoratorRef) -> Self {
-        ProductToolRuntime::with_tool_decorator(tool_decorator).create_registry()
+        ProductToolRuntime::with_tool_decorator(tool_decorator)
+            .create_registry()
+            .expect("the decorated default tool runtime feature closure must be complete")
     }
 
     pub(in crate::agentic::tools) fn from_inner(inner: AgentToolRegistry<dyn Tool>) -> Self {
@@ -283,7 +289,7 @@ use std::sync::OnceLock;
 use tokio::sync::RwLock as TokioRwLock;
 
 struct GlobalToolRegistry {
-    profile: DeliveryProfile,
+    profile: Option<DeliveryProfile>,
     registry: Arc<TokioRwLock<ToolRegistry>>,
 }
 
@@ -293,28 +299,36 @@ pub(in crate::agentic) fn initialize_global_tool_registry_for_profile(
     profile: DeliveryProfile,
 ) -> Result<Arc<TokioRwLock<ToolRegistry>>, String> {
     if let Some(global) = GLOBAL_TOOL_REGISTRY.get() {
-        return if global.profile == profile {
+        return if global.profile == Some(profile) {
             Ok(global.registry.clone())
         } else {
             Err(format!(
-                "Global tool registry already uses delivery profile {}; cannot replace it with {}",
-                global.profile, profile
+                "Global tool registry already uses {}; cannot replace it with {}",
+                global
+                    .profile
+                    .map(|selected| selected.to_string())
+                    .unwrap_or_else(|| "the Agent Runtime baseline".to_string()),
+                profile
             ))
         };
     }
 
     let candidate = GlobalToolRegistry {
-        profile,
-        registry: Arc::new(TokioRwLock::new(ToolRegistry::for_profile(profile))),
+        profile: Some(profile),
+        registry: Arc::new(TokioRwLock::new(ToolRegistry::for_profile(profile)?)),
     };
     let _ = GLOBAL_TOOL_REGISTRY.set(candidate);
     let global = GLOBAL_TOOL_REGISTRY
         .get()
         .expect("global tool registry must be initialized");
-    if global.profile != profile {
+    if global.profile != Some(profile) {
         return Err(format!(
-            "Global tool registry concurrently selected delivery profile {}; requested {}",
-            global.profile, profile
+            "Global tool registry concurrently selected {}; requested {}",
+            global
+                .profile
+                .map(|selected| selected.to_string())
+                .unwrap_or_else(|| "the Agent Runtime baseline".to_string()),
+            profile
         ));
     }
     Ok(global.registry.clone())
@@ -326,7 +340,10 @@ pub fn get_global_tool_registry() -> Arc<TokioRwLock<ToolRegistry>> {
         .get_or_init(|| {
             info!("Initializing global tool registry");
             GlobalToolRegistry {
-                profile: DeliveryProfile::ProductFull,
+                #[cfg(feature = "product-full")]
+                profile: Some(DeliveryProfile::ProductFull),
+                #[cfg(not(feature = "product-full"))]
+                profile: None,
                 registry: Arc::new(TokioRwLock::new(ToolRegistry::new())),
             }
         })
@@ -520,6 +537,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "tools-browser-web")]
     #[test]
     fn registry_includes_webfetch_tool() {
         let registry = create_tool_registry();
@@ -532,6 +550,7 @@ mod tests {
         assert!(registry.get_tool("Cron").is_some());
     }
 
+    #[cfg(feature = "product-full")]
     #[test]
     fn registry_preserves_builtin_tool_manifest_for_owner_migration() {
         let registry = create_tool_registry();
@@ -619,6 +638,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "product-full")]
     #[test]
     fn product_capability_provider_plan_covers_registry_manifest_in_order() {
         let assembly = bitfun_product_capabilities::default_product_capability_assembly();
@@ -661,7 +681,9 @@ mod tests {
     #[test]
     fn product_tool_runtime_preserves_core_owned_registry_contract() {
         let runtime = ProductToolRuntime::default();
-        let assembled_registry = runtime.create_registry();
+        let assembled_registry = runtime
+            .create_registry()
+            .expect("the default runtime plan must materialize");
         let compatibility_registry = create_tool_registry();
 
         assert_eq!(
@@ -694,7 +716,9 @@ mod tests {
     #[test]
     fn product_tool_runtime_owner_preserves_registry_contract() {
         let runtime = ProductToolRuntime::default();
-        let owner_registry = runtime.create_registry();
+        let owner_registry = runtime
+            .create_registry()
+            .expect("the default runtime plan must materialize");
         let compatibility_registry = create_tool_registry();
 
         assert_eq!(
@@ -712,7 +736,8 @@ mod tests {
     #[test]
     fn product_tool_runtime_keeps_custom_decorator_provider_contract() {
         let registry = ProductToolRuntime::with_tool_decorator(Arc::new(MarkerToolDecorator))
-            .create_registry();
+            .create_registry()
+            .expect("the decorated default runtime plan must materialize");
         let compatibility_registry = create_tool_registry();
 
         assert_eq!(
@@ -726,7 +751,7 @@ mod tests {
             "custom decorator assembly must keep deferred exposure stable"
         );
 
-        for tool_name in ["Write", "GetToolSpec", "WebFetch"] {
+        for tool_name in ["Write", "GetToolSpec", "SessionControl"] {
             let tool = registry
                 .get_tool(tool_name)
                 .unwrap_or_else(|| panic!("{tool_name} tool should be registered"));
@@ -738,6 +763,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "product-full")]
     #[test]
     fn registry_marks_deferred_tools_for_get_tool_spec() {
         let registry = create_tool_registry();
@@ -758,6 +784,7 @@ mod tests {
         assert!(!registry.is_tool_deferred("PublishAppearance"));
     }
 
+    #[cfg(feature = "product-full")]
     #[test]
     fn registry_preserves_deferred_tool_manifest_for_owner_migration() {
         let registry = create_tool_registry();
@@ -793,6 +820,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "product-full")]
     #[tokio::test]
     async fn registry_preserves_readonly_tool_manifest_for_owner_migration() {
         let readonly_names = super::get_readonly_tools()
@@ -1019,6 +1047,7 @@ mod tests {
         assert!(error.to_string().contains("loaded spec for deferred tool"));
         assert!(error.to_string().contains("is stale"));
     }
+    #[cfg(all(feature = "tools-browser-web", feature = "tools-computer-use"))]
     #[test]
     fn registry_exposes_controlhub_and_computer_use() {
         let registry = create_tool_registry();
