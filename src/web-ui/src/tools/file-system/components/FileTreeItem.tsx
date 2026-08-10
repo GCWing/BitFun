@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { ChevronRight, ChevronDown, FolderOpen, FileText } from 'lucide-react';
 import { Input } from '../../../component-library/components/Input';
 import { dragManager } from '../../../shared/services/DragManager';
@@ -179,7 +180,7 @@ const RenameInput: React.FC<RenameInputProps> = ({ node, siblings, isRemote, onR
         >
           {error}
         </div>,
-        document.body,
+        getAppearanceOverlayHost(),
       )
     : null;
 

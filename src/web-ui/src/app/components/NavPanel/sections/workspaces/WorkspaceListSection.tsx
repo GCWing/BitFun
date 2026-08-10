@@ -106,9 +106,9 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
     preview.style.left = `${event.clientX + 12}px`;
     preview.style.top = `${event.clientY + 8}px`;
     preview.style.padding = '6px 10px';
-    preview.style.background = 'var(--color-bg-elevated)';
-    preview.style.color = 'var(--color-text-primary)';
-    preview.style.border = '1px solid var(--border-subtle)';
+    preview.style.background = 'var(--bf-appearance-token-color-bg-elevated)';
+    preview.style.color = 'var(--bf-appearance-token-color-text-primary)';
+    preview.style.border = '1px solid var(--bf-appearance-token-border-subtle)';
     preview.style.borderRadius = '6px';
     preview.style.fontSize = '12px';
     preview.style.maxWidth = '240px';
@@ -146,7 +146,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
 
   const handleDragOver = useCallback((workspaceId: string) => (event: React.DragEvent<HTMLDivElement>) => {
     // Browsers block reading dataTransfer data during dragover for security.
-    // Check event.dataTransfer.types instead — it IS readable during dragover.
+    // Check event.dataTransfer.types instead 閳?it IS readable during dragover.
     const isWorkspaceDrag = event.dataTransfer.types.includes(WORKSPACE_DRAG_MIME_TYPE);
     const currentDraggedId = draggedWorkspaceIdRef.current;
 
@@ -210,7 +210,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
     event.preventDefault();
     event.stopPropagation();
 
-    // Reuse the position already determined by dragover — avoid recalculating
+    // Reuse the position already determined by dragover 閳?avoid recalculating
     // on the wrapper whose height may have changed due to the drop-line element.
     const position =
       dropTargetRef.current?.workspaceId === workspaceId

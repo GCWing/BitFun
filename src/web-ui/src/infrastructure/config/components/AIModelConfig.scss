@@ -232,7 +232,7 @@
 
     & + & {
       &::before {
-        content: '·';
+        content: '路';
         margin-right: 4px;
         opacity: 0.5;
       }
@@ -454,7 +454,7 @@
     
     border: 1px dashed var(--bf-appearance-token-border-base);
     border-radius: $size-radius-sm;
-    background: var(--element-bg-subtle);
+    background: var(--bf-appearance-token-element-bg-subtle);
 
     svg {
       opacity: 0.5;
@@ -927,7 +927,7 @@
       max-width: 100%;
       border: none;
       border-radius: 0;
-      /* No horizontal padding here — footer bar must span full modal content width; inset lives on scrollable only. */
+      /* No horizontal padding here 鈥?footer bar must span full modal content width; inset lives on scrollable only. */
       padding: $size-gap-5 0 0;
       margin: 0;
       display: flex;

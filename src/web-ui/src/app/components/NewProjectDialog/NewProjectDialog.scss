@@ -135,16 +135,16 @@
     // on light backgrounds.
     .bitfun-input-wrapper .bitfun-input-container {
       width: 100%;
-      background: var(--color-overlay-white-04);
-      border: 1px dashed var(--border-subtle);
+      background: var(--bf-appearance-token-color-overlay-white-04);
+      border: 1px dashed var(--bf-appearance-token-border-subtle);
       border-radius: 8px;
       padding: 10px 12px;
       transition: border-color 0.2s ease;
 
       &:focus-within {
         border-style: solid;
-        border-color: var(--border-base);
-        background: var(--color-overlay-white-04);
+        border-color: var(--bf-appearance-token-border-base);
+        background: var(--bf-appearance-token-color-overlay-white-04);
       }
     }
 
@@ -152,7 +152,7 @@
       cursor: default;
       user-select: none;
       font-size: 12px;
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
 
       &::placeholder {
         color: var(--bf-appearance-token-color-text-muted);
@@ -214,22 +214,22 @@
     // full width and the border (here solid) renders as intended.
     .bitfun-input-wrapper .bitfun-input-container {
       width: 100%;
-      background: var(--color-overlay-white-04);
-      border: 1px solid var(--border-subtle);
+      background: var(--bf-appearance-token-color-overlay-white-04);
+      border: 1px solid var(--bf-appearance-token-border-subtle);
       border-radius: 8px;
       padding: 10px 12px;
       transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
       &:focus-within {
-        border-color: color-mix(in srgb, var(--color-accent-500) 45%, transparent);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 10%, transparent);
-        background: var(--color-overlay-white-04);
+        border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 45%, transparent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, transparent);
+        background: var(--bf-appearance-token-color-overlay-white-04);
       }
     }
 
     input {
       font-size: 12px;
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
 
       &::placeholder {
         color: var(--bf-appearance-token-color-text-muted);

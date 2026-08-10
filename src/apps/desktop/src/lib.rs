@@ -31,7 +31,6 @@ pub mod macos_menubar;
 pub mod runtime;
 pub mod sleep_prevention;
 pub mod startup_trace;
-pub mod theme;
 #[cfg(not(target_env = "ohos"))]
 pub mod tray;
 mod webview_recovery;
@@ -334,8 +333,16 @@ fn main_window_state_flags() -> StateFlags {
 }
 
 fn persist_main_window_state(app: &tauri::AppHandle) -> Result<(), String> {
-    app.save_window_state(main_window_state_flags())
-        .map_err(|error| error.to_string())
+    #[cfg(not(target_env = "ohos"))]
+    {
+        app.save_window_state(main_window_state_flags())
+            .map_err(|error| error.to_string())
+    }
+
+    #[cfg(target_env = "ohos")]
+    {
+        Err("Unable to save main window state".to_string())
+    }
 }
 
 pub(crate) fn save_main_window_state(app: &tauri::AppHandle) {
@@ -386,6 +393,7 @@ fn has_standard_main_window_size(width: f64, height: f64) -> bool {
     width >= MAIN_WINDOW_MIN_WIDTH && height >= MAIN_WINDOW_MIN_HEIGHT
 }
 
+#[cfg(not(target_env = "ohos"))]
 pub(crate) fn restore_main_window_state(window: &tauri::WebviewWindow) {
     if let Err(error) = window.restore_state(main_window_state_flags()) {
         log::warn!("Failed to restore main window state: {}", error);
@@ -577,18 +585,6 @@ pub async fn _run() {
         (startup_log_level, log_level_duration_ms),
         (ai_factory_result, ai_factory_duration_ms),
     ) = {
-    let step_started = Instant::now();
-    let startup_log_level = resolve_runtime_log_level(log_config.level).await;
-    log::set_max_level(startup_log_level);
-    let log_targets = logging::build_log_targets(&log_config);
-    startup_trace.record_elapsed_step(
-        "native_pre_tauri",
-        "resolve_runtime_log_level",
-        step_started,
-    );
-
-    // Initialize global I18nService so bot/remote-connect language is always in sync.
-    {
         use bitfun_core::service::config::get_global_config_service;
         use bitfun_core::service::i18n::initialize_global_i18n_service;
 
@@ -632,23 +628,25 @@ pub async fn _run() {
     );
     startup_trace.record_step(
         "native_step_end",
-        let step_started = Instant::now();
-        match get_global_config_service().await {
-            Ok(config_service) => {
-                if let Err(e) = initialize_global_i18n_service(Some(config_service)).await {
-                    log::error!("Failed to initialize global I18nService: {}", e);
-                }
-            }
-            Err(e) => {
-                log::error!("Failed to get config service for I18nService init: {}", e);
-            }
-        }
-        startup_timings.record_elapsed("initialize_global_i18n_service", step_started);
-        startup_trace.record_elapsed_step(
-            "native_pre_tauri",
-            "initialize_global_i18n_service",
-            step_started,
-        );
+        "native_pre_tauri",
+        "resolve_runtime_log_level",
+        log_level_duration_ms,
+    );
+    log::set_max_level(startup_log_level);
+    let log_targets = logging::build_log_targets(&log_config);
+    startup_timings.push_duration(
+        "initialize_global_ai_client_factory",
+        ai_factory_duration_ms,
+    );
+    startup_trace.record_step(
+        "native_step_end",
+        "native_pre_tauri",
+        "initialize_global_ai_client_factory",
+        ai_factory_duration_ms,
+    );
+    if let Err(e) = ai_factory_result {
+        log::error!("Failed to initialize global AIClientFactory: {}", e);
+        return;
     }
 
     #[cfg(target_env = "ohos")]
@@ -691,28 +689,6 @@ pub async fn _run() {
 
     #[cfg(not(target_env = "ohos"))]
     let feedback_service_state = api::feedback_api::FeedbackServiceState::disabled();
-
-    let step_started = Instant::now();
-    let startup_log_level = resolve_runtime_log_level(log_config.level).await;
-    startup_trace.record_elapsed_step(
-        "native_pre_tauri",
-        "resolve_runtime_log_level",
-        log_level_duration_ms,
-    );
-    startup_timings.push_duration(
-        "initialize_global_ai_client_factory",
-        ai_factory_duration_ms,
-    );
-    startup_trace.record_step(
-        "native_step_end",
-        "native_pre_tauri",
-        "initialize_global_ai_client_factory",
-        ai_factory_duration_ms,
-    );
-    if let Err(e) = ai_factory_result {
-        log::error!("Failed to initialize global AIClientFactory: {}", e);
-        return;
-    }
 
     let step_started = Instant::now();
     let (coordinator, scheduler, event_queue, event_router, ai_client_factory, token_usage_service) =
@@ -800,7 +776,6 @@ pub async fn _run() {
     let app = builder
         .plugin(logging::build_log_command_plugin())
         .plugin(logging::build_log_handoff_plugin(log_targets))
-        .plugin(logging::build_log_plugin(log_targets, startup_log_level))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .manage(app_state)
@@ -1078,30 +1053,9 @@ pub async fn _run() {
                     window_duration_ms,
                 );
                 log::debug!(
-                            error
-                        })
-                        .ok()
-                })
-            };
-            let window_started = Instant::now();
-            startup_trace.record_phase("main_window_create_start", "native_window");
-            appearance::create_main_window(
-                &app_handle,
-                &startup_trace_id,
-                &startup_trace,
-                workspace_startup_bootstrap_snapshot,
-            );
-            let window_duration_ms = elapsed_ms(window_started);
-            startup_trace.record_step(
-                "native_step_end",
-                "native_window",
-                "create_main_window",
-                window_duration_ms,
-            );
-            log::debug!(
-                "Desktop startup step completed: step=create_main_window, duration_ms={}",
-                window_duration_ms
-            );
+                    "Desktop startup step completed: step=create_main_window, duration_ms={}",
+                    window_duration_ms
+                );
                 let webdriver_started = Instant::now();
                 bitfun_webdriver::maybe_start(app_handle.clone());
                 startup_trace.record_elapsed_step(
@@ -2086,12 +2040,8 @@ async fn init_agentic_system() -> anyhow::Result<(
     set_computer_use_desktop_available(false);
 
     let tool_pipeline = Arc::new(
-        tools::pipeline::ToolPipeline::new(
-            tool_registry,
-            tool_state_manager,
-            None,
-        )
-        .with_permission_request_manager(permission_request_manager),
+        tools::pipeline::ToolPipeline::new(tool_registry, tool_state_manager, None)
+            .with_permission_request_manager(permission_request_manager),
     );
 
     let stream_processor = Arc::new(execution::StreamProcessor::new(event_queue.clone()));

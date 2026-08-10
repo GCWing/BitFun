@@ -111,6 +111,8 @@ import { settingsAppearanceDescriptor } from '@/app/scenes/settings/appearance';
 import { skillsAppearanceDescriptor } from '@/app/scenes/skills/appearance';
 import { terminalAppearanceDescriptor } from '@/app/scenes/terminal/appearance';
 import { aboutDialogAppearanceDescriptor } from '@/app/components/AboutDialog/appearance';
+import { feedbackDialogAppearanceDescriptor } from '@/app/components/FeedbackDialog/FeedbackDialog.appearance';
+import { privacyGateAppearanceDescriptor } from '@/app/components/Privacy/PrivacyGate.appearance';
 import { navPanelAppearanceDescriptor } from '@/app/components/NavPanel/appearance';
 import { sessionsSectionAppearanceDescriptor } from '@/app/components/NavPanel/sections/sessions/appearance';
 import { contentCanvasAppearanceDescriptor } from '@/app/components/panels/content-canvas/appearance';
@@ -400,6 +402,8 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(marketAccountControlsAppearanceDescriptor)
     .registerComponent(sshRemoteAppearanceDescriptor)
     .registerComponent(aboutDialogAppearanceDescriptor)
+    .registerComponent(feedbackDialogAppearanceDescriptor)
+    .registerComponent(privacyGateAppearanceDescriptor)
     .registerComponent(navPanelAppearanceDescriptor)
     .registerComponent(sessionsSectionAppearanceDescriptor)
     .registerComponent(contentCanvasAppearanceDescriptor)

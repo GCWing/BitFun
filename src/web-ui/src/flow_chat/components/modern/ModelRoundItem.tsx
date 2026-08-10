@@ -759,33 +759,18 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
               >
                 {usageMetaItems.map(item => (
                   <span key={item.key} className="model-round-item__meta-item" data-bf-component="model-round-item" data-bf-part="metaItem">
-        {hasDeferredLaterGroups && (
-          <div className="model-round-item__history-loader">
-            {t('modelRound.loadingMoreHistory')}
-          </div>
-        )}
-
-        {isTurnComplete && isLastRound && hasContent && (
-            <div className="model-round-item__footer">
-              {usageMetaItems.length > 0 && (
-                  <div
-                      className="model-round-item__meta"
-                      aria-label={t('modelRound.meta.label')}
-                  >
-                    {usageMetaItems.map(item => (
-                        <span key={item.key} className="model-round-item__meta-item">
                     <span className="model-round-item__meta-label">{item.label}</span>
                     <span className="model-round-item__meta-value">{item.value}</span>
                   </span>
-                    ))}
-                  </div>
-              )}
+                ))}
+              </div>
+            )}
 
-              <span className="model-round-item__ai-disclaimer">
-                {t('modelRound.aiDisclaimer', { defaultValue: '以上内容均由 AI 生成，仅供参考' })}
-              </span>
+            <span className="model-round-item__ai-disclaimer">
+              {t('modelRound.aiDisclaimer', { defaultValue: '以上内容均由 AI 生成，仅供参考' })}
+            </span>
 
-              <ForkSessionButton sessionId={sessionId} turnId={turnId} />
+            <ForkSessionButton sessionId={sessionId} turnId={turnId} />
 
             {allowTranscriptExport && <div className="model-round-item__copy-menu-anchor">
               <Tooltip content={copied ? t('modelRound.copiedDialog') : t('modelRound.copyDialog')} placement="top">
@@ -841,19 +826,6 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
             </div>}
 
             {allowTranscriptExport && <ExportImageButton turnId={turnId} />}
-            <Tooltip content={copied ? t('modelRound.copiedDialog') : t('modelRound.copyDialog')} placement="top">
-              <button
-                ref={copyButtonRef}
-                className={`model-round-item__action-btn model-round-item__copy-btn ${copied ? 'copied' : ''}`}
-                onClick={handleCopy}
-                tabIndex={shouldRevealFooter ? 0 : -1}
-                disabled={!shouldRevealFooter}
-              >
-                {copied ? <Check size={14} /> : <Copy size={14} />}
-              </button>
-            </Tooltip>
-
-            <ExportImageButton turnId={turnId} />
           </div>
         )}
       </div>

@@ -344,27 +344,27 @@ $_indent-width: 8px;
       color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 85%, transparent);
     }
 
-    // 校验失败时给输入框加红框。Input.scss 的 --error 红框被 wrapper 的
-    // `border: none` 覆盖，这里在 wrapper 上下文里补回。
+    // 閺嶏繝鐛欐径杈Е閺冨墎绮版潏鎾冲弳濡楀棗濮炵痪銏☆攱閵嗕痉nput.scss 閻?--error 缁俱垺顢嬬悮?wrapper 閻?
+    // `border: none` 鐟曞棛娲婇敍宀冪箹闁插苯婀?wrapper 娑撳﹣绗呴弬鍥櫡鐞涖儱娲栭妴?
     &.bitfun-input-wrapper--error .bitfun-input-container {
       border: none !important;
       box-shadow:
-        0 0 0 1px var(--color-error),
-        0 2px 8px color-mix(in srgb, var(--color-error) 18%, transparent);
+        0 0 0 1px var(--bf-appearance-token-color-error),
+        0 2px 8px color-mix(in srgb, var(--bf-appearance-token-color-error) 18%, transparent);
     }
   }
 }
 
-// 重命名校验报错浮层（portal 挂到 body，避免被树容器 overflow 裁剪）。
+// 闁插秴鎳￠崥宥嗙墡妤犲本濮ら柨娆愯癁鐏炲偊绱檖ortal 閹稿倸鍩?body閿涘矂浼╅崗宥堫潶閺嶆垵顔愰崳?overflow 鐟佷礁澹€閿涘鈧?
 .bitfun-file-explorer__rename-error {
   position: fixed;
   z-index: 10000;
   max-width: min(280px, calc(100vw - 16px));
   padding: 4px 8px;
   border-radius: 4px;
-  background: var(--color-overlay-black-80, rgba(0, 0, 0, 0.8));
-  color: var(--color-static-white, #fff);
-  font-size: var(--font-size-xs);
+  background: var(--bf-appearance-token-color-overlay-black-80, rgba(0, 0, 0, 0.8));
+  color: var(--bf-appearance-token-color-static-white, #fff);
+  font-size: var(--bf-appearance-token-font-size-xs);
   line-height: 1.4;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   pointer-events: none;

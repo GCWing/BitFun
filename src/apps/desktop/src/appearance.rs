@@ -320,13 +320,13 @@ impl AppearanceConfig {
 
     /// Resolves the selected appearance for splash and window chrome.
     fn resolve_builtin_appearance_id(appearance_id: &str) -> &str {
-        if appearance_id == "system" {
-            let manifest = Self::startup_appearance_bootstrap_manifest();
-            return match dark_light::detect() {
-                Mode::Dark => manifest.default_dark_appearance_id.as_str(),
-                Mode::Light | Mode::Default => manifest.default_light_appearance_id.as_str(),
-            };
-        }
+        // if appearance_id == "system" {
+        //     let manifest = Self::startup_appearance_bootstrap_manifest();
+        //     return match dark_light::detect() {
+        //         Mode::Dark => manifest.default_dark_appearance_id.as_str(),
+        //         Mode::Light | Mode::Default => manifest.default_light_appearance_id.as_str(),
+        //     };
+        // }
         appearance_id
     }
 
@@ -621,6 +621,7 @@ pub fn create_main_window(
     let build_started_at = Instant::now();
     match builder.build() {
         Ok(window) => {
+            #[cfg(not(target_env = "ohos"))]
             crate::restore_main_window_state(&window);
             crate::webview_recovery::install(&window);
             startup_trace.record_elapsed_step("native_window", "webview_build", build_started_at);

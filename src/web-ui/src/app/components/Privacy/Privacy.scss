@@ -9,7 +9,7 @@
 
   p {
     max-width: 560px;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     font-size: 13px;
     line-height: 1.6;
   }
@@ -21,19 +21,19 @@
   position: fixed;
   inset: auto 16px 16px auto;
   z-index: 10001;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 .bitfun-privacy-dialog__metadata {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 20px;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   font-size: 12px;
 }
 
 .bitfun-privacy-dialog__metadata strong {
-  color: var(--color-accent-500);
+  color: var(--bf-appearance-token-color-accent-500);
   font-weight: 600;
 }
 
@@ -41,7 +41,7 @@
   display: grid;
   gap: 4px;
   padding: 12px 20px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
 
   strong {
     font-size: 13px;
@@ -49,7 +49,7 @@
   }
 
   span {
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     font-size: 12px;
     line-height: 1.5;
   }
@@ -57,8 +57,8 @@
 
 .bitfun-privacy-consent-dialog__intro {
   padding: 12px 20px;
-  border-bottom: 1px solid var(--border-subtle);
-  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  color: var(--bf-appearance-token-color-text-secondary);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -67,7 +67,7 @@
   display: grid;
   gap: 12px;
   padding: 14px 20px;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--bf-appearance-token-border-subtle);
 }
 
 .bitfun-privacy-gate__consent-row {
@@ -85,14 +85,14 @@
 }
 
 .bitfun-privacy-gate__configuration-error {
-  color: var(--color-error);
+  color: var(--bf-appearance-token-color-error);
   font-size: 12px;
 }
 
 .bitfun-privacy-document {
   width: min(100%, 860px);
   margin: 0 auto;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   font-size: 14px;
   line-height: 1.75;
   overflow-wrap: anywhere;
@@ -112,7 +112,7 @@
   ul,
   ol { margin: 0.75em 0; }
   code {
-    font-family: var(--font-family-mono);
+    font-family: var(--bf-appearance-token-font-family-mono);
     overflow-wrap: anywhere;
   }
 }
@@ -126,8 +126,8 @@
 
 .bitfun-privacy-dialog__metadata {
   padding: 14px 20px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--element-bg-subtle);
+  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  background: var(--bf-appearance-token-element-bg-subtle);
 }
 
 .bitfun-privacy-dialog__document {
@@ -139,12 +139,12 @@
 
 .bitfun-privacy-dialog__actions {
   padding: 14px 20px;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--bf-appearance-token-border-subtle);
 }
 
 .bitfun-privacy-dialog__error {
   padding: 10px 20px 0;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--bf-appearance-token-border-subtle);
 }
 
 .bitfun-privacy-dialog__consent {
@@ -158,7 +158,7 @@
 .bitfun-privacy-updated {
   display: inline-flex;
   margin-left: 5px;
-  color: var(--color-accent-500);
+  color: var(--bf-appearance-token-color-accent-500);
   font-size: 10px;
 }
 

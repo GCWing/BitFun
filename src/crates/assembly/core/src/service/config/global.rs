@@ -251,10 +251,10 @@ pub async fn load_terminal_env_vars() -> std::collections::HashMap<String, Strin
         return std::collections::HashMap::new();
     };
     match config_service
-        .get_config::<super::types::TerminalConfig>(Some("terminal"))
+        .get_config::<std::collections::HashMap<String, String>>(Some("terminal.env_vars"))
         .await
     {
-        Ok(cfg) => cfg.env_vars,
+        Ok(env_vars) => env_vars,
         Err(_) => std::collections::HashMap::new(),
     }
 }

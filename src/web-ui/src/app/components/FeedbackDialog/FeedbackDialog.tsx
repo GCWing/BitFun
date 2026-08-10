@@ -317,6 +317,7 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({ isOpen, onClose 
         closeOnOverlayClick={!submitting && !replyState.sending}
         testId="feedback-dialog"
       >
+        <div data-bf-component="feedback-dialog" data-bf-part="root">
         {completed ? (
           <div className="bitfun-feedback__complete" role="status">
             <CheckCircle2 size={34} aria-hidden="true" />
@@ -326,7 +327,7 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({ isOpen, onClose 
           </div>
         ) : (
           <div ref={containerRef} className="bitfun-feedback__center">
-            <div className="bitfun-feedback__view-switch" role="tablist">
+            <div className="bitfun-feedback__view-switch" role="tablist" data-bf-component="feedback-dialog" data-bf-part="viewSwitch">
               <button
                 type="button"
                 role="tab"
@@ -351,7 +352,7 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({ isOpen, onClose 
               </button>
             </div>
             {activeView === 'create' ? (
-              <form className="bitfun-feedback__form" onSubmit={handleSubmit}>
+              <form className="bitfun-feedback__form" onSubmit={handleSubmit} data-bf-component="feedback-dialog" data-bf-part="form">
             <div className="bitfun-feedback__field">
               <label>{t('feedback.category')}<span aria-hidden="true">*</span></label>
               <Select
@@ -424,7 +425,7 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({ isOpen, onClose 
                 {t('feedback.errors.gitcode')}
               </div>
             ) : null}
-            <div className="bitfun-feedback__actions">
+            <div className="bitfun-feedback__actions" data-bf-component="feedback-dialog" data-bf-part="actions">
               <Button type="button" variant="ghost" onClick={openGitCode}>
                 <ExternalLink size={15} aria-hidden="true" />
                 {t('feedback.actions.gitcode')}
@@ -463,6 +464,7 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({ isOpen, onClose 
             )}
           </div>
         )}
+        </div>
       </Modal>
       <ConfirmDialog
         isOpen={showDiscardConfirm}

@@ -151,8 +151,8 @@
 
     &--header {
       .bitfun-env-vars-config__cell {
-        color: var(--color-text-muted);
-        font-size: var(--font-size-xs);
+        color: var(--bf-appearance-token-color-text-muted);
+        font-size: var(--bf-appearance-token-font-size-xs);
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.04em;
@@ -172,10 +172,10 @@
 
   &__empty {
     padding: 12px 16px;
-    border: 1px dashed var(--border-base);
+    border: 1px dashed var(--bf-appearance-token-border-base);
     border-radius: $size-radius-sm;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-sm);
   }
 
   &__footer {

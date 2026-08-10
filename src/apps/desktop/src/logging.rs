@@ -533,33 +533,33 @@ pub fn build_log_targets(config: &LogConfig) -> Vec<Target> {
                         && !target.starts_with("webview")
                         && !is_flashgrep_target(target)
                 })
-                .format(|out, message, record| {
-                    let target = record.target();
-                    let simplified_target = if target.starts_with("webview:") {
-                        "webview"
-                    } else {
-                        target
-                    };
-
-                    let (level_color, reset) = match record.level() {
-                        log::Level::Error => ("\x1b[31m", "\x1b[0m"), // Red
-                        log::Level::Warn => ("\x1b[33m", "\x1b[0m"),  // Yellow
-                        log::Level::Info => ("\x1b[32m", "\x1b[0m"),  // Green
-                        log::Level::Debug => ("\x1b[36m", "\x1b[0m"), // Cyan
-                        log::Level::Trace => ("\x1b[90m", "\x1b[0m"), // Gray
-                    };
-
-                    out.finish(format_args!(
-                        "[{}][tid:{}][{}{}{}][{}] {}",
-                        chrono::Local::now().format("%Y-%m-%dT%H:%M:%S%.3f"),
-                        get_thread_id(),
-                        level_color,
-                        record.level(),
-                        reset,
-                        simplified_target,
-                        message
-                    ))
-                }),
+                // .format(|out, message, record| {
+                //     let target = record.target();
+                //     let simplified_target = if target.starts_with("webview:") {
+                //         "webview"
+                //     } else {
+                //         target
+                //     };
+                //
+                //     let (level_color, reset) = match record.level() {
+                //         log::Level::Error => ("\x1b[31m", "\x1b[0m"), // Red
+                //         log::Level::Warn => ("\x1b[33m", "\x1b[0m"),  // Yellow
+                //         log::Level::Info => ("\x1b[32m", "\x1b[0m"),  // Green
+                //         log::Level::Debug => ("\x1b[36m", "\x1b[0m"), // Cyan
+                //         log::Level::Trace => ("\x1b[90m", "\x1b[0m"), // Gray
+                //     };
+                //
+                //     out.finish(format_args!(
+                //         "[{}][tid:{}][{}{}{}][{}] {}",
+                //         chrono::Local::now().format("%Y-%m-%dT%H:%M:%S%.3f"),
+                //         get_thread_id(),
+                //         level_color,
+                //         record.level(),
+                //         reset,
+                //         simplified_target,
+                //         message
+                //     ))
+                // }),
         );
     }
 
@@ -609,9 +609,9 @@ pub fn build_log_targets(config: &LogConfig) -> Vec<Target> {
     targets
 }
 
-pub fn build_log_plugin<R: Runtime>(log_targets: Vec<Target>, initial_level: log::LevelFilter) -> TauriPlugin<R> {
+fn configured_log_builder(log_targets: Vec<Target>) -> tauri_plugin_log::Builder {
     tauri_plugin_log::Builder::new()
-        .level(initial_level)
+        .level(log::LevelFilter::Trace)
         .level_for("ignore", log::LevelFilter::Off)
         .level_for("ignore::walk", log::LevelFilter::Off)
         .level_for("globset", log::LevelFilter::Off)
@@ -646,8 +646,8 @@ pub fn build_log_plugin<R: Runtime>(log_targets: Vec<Target>, initial_level: log
         .rotation_strategy(RotationStrategy::KeepSome(2)) // 1 active + 2 backups
         .max_file_size(10 * 1024 * 1024)
         .timezone_strategy(TimezoneStrategy::UseLocal)
+        // .clear_format()
 }
-
 pub fn build_log_command_plugin<R: Runtime>() -> TauriPlugin<R> {
     tauri_plugin_log::Builder::new().skip_logger().build()
 }

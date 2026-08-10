@@ -579,68 +579,77 @@ pub async fn miniapp_market_capture_window(
     app: AppHandle,
     window: WebviewWindow,
 ) -> Result<String, String> {
-    let position = window
-        .outer_position()
-        .map_err(|error| format!("Could not read the BitFun window position: {error}"))?;
-    let size = window
-        .outer_size()
-        .map_err(|error| format!("Could not read the BitFun window size: {error}"))?;
-    if size.width < 320 || size.height < 240 {
-        return Err("The BitFun window is too small to capture a review screenshot.".to_string());
-    }
-
-    let capture_dir = app
-        .path()
-        .app_cache_dir()
-        .map_err(|error| format!("Could not resolve the private cache directory: {error}"))?
-        .join("miniapp-market-captures");
-    tokio::fs::create_dir_all(&capture_dir)
-        .await
-        .map_err(|error| format!("Could not create the screenshot directory: {error}"))?;
-    #[cfg(unix)]
+    #[cfg(not(target_env = "ohos"))]
     {
-        use std::os::unix::fs::PermissionsExt;
-        tokio::fs::set_permissions(&capture_dir, std::fs::Permissions::from_mode(0o700))
+        let position = window
+            .outer_position()
+            .map_err(|error| format!("Could not read the BitFun window position: {error}"))?;
+        let size = window
+            .outer_size()
+            .map_err(|error| format!("Could not read the BitFun window size: {error}"))?;
+        if size.width < 320 || size.height < 240 {
+            return Err("The BitFun window is too small to capture a review screenshot.".to_string());
+        }
+
+        let capture_dir = app
+            .path()
+            .app_cache_dir()
+            .map_err(|error| format!("Could not resolve the private cache directory: {error}"))?
+            .join("miniapp-market-captures");
+        tokio::fs::create_dir_all(&capture_dir)
             .await
-            .map_err(|error| format!("Could not secure the screenshot directory: {error}"))?;
+            .map_err(|error| format!("Could not create the screenshot directory: {error}"))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            tokio::fs::set_permissions(&capture_dir, std::fs::Permissions::from_mode(0o700))
+                .await
+                .map_err(|error| format!("Could not secure the screenshot directory: {error}"))?;
+        }
+        let path = capture_dir.join(format!("{}.jpg", uuid::Uuid::new_v4()));
+        let output_path = path.clone();
+
+        tokio::task::spawn_blocking(move || -> Result<(), String> {
+            let center_x = position.x.saturating_add((size.width / 2) as i32);
+            let center_y = position.y.saturating_add((size.height / 2) as i32);
+            let screen = screenshots::Screen::from_point(center_x, center_y)
+                .map_err(|error| format!("Could not access the current display: {error}"))?;
+            let relative_x = position.x.saturating_sub(screen.display_info.x);
+            let relative_y = position.y.saturating_sub(screen.display_info.y);
+            let captured = screen
+                .capture_area(relative_x, relative_y, size.width, size.height)
+                .map_err(|error| {
+                    format!(
+                        "Window capture failed. On macOS, grant BitFun Screen Recording permission: {error}"
+                    )
+                })?;
+            let (width, height) = captured.dimensions();
+            let rgba = image::RgbaImage::from_raw(width, height, captured.into_raw())
+                .ok_or_else(|| "The captured window had an invalid pixel buffer.".to_string())?;
+            let image = image::DynamicImage::ImageRgba8(rgba);
+            let resized = if width > 1600 || height > 1200 {
+                image.resize(1600, 1200, image::imageops::FilterType::Lanczos3)
+            } else {
+                image
+            };
+            let file = std::fs::File::create(&output_path)
+                .map_err(|error| format!("Could not create the screenshot: {error}"))?;
+            let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(file, 88);
+            encoder
+                .encode_image(&resized)
+                .map_err(|error| format!("Could not encode the screenshot: {error}"))
+        })
+            .await
+            .map_err(|error| format!("Screenshot capture task failed: {error}"))??;
+
+        Ok(path.to_string_lossy().into_owned())
     }
-    let path = capture_dir.join(format!("{}.jpg", uuid::Uuid::new_v4()));
-    let output_path = path.clone();
 
-    tokio::task::spawn_blocking(move || -> Result<(), String> {
-        let center_x = position.x.saturating_add((size.width / 2) as i32);
-        let center_y = position.y.saturating_add((size.height / 2) as i32);
-        let screen = screenshots::Screen::from_point(center_x, center_y)
-            .map_err(|error| format!("Could not access the current display: {error}"))?;
-        let relative_x = position.x.saturating_sub(screen.display_info.x);
-        let relative_y = position.y.saturating_sub(screen.display_info.y);
-        let captured = screen
-            .capture_area(relative_x, relative_y, size.width, size.height)
-            .map_err(|error| {
-                format!(
-                    "Window capture failed. On macOS, grant BitFun Screen Recording permission: {error}"
-                )
-            })?;
-        let (width, height) = captured.dimensions();
-        let rgba = image::RgbaImage::from_raw(width, height, captured.into_raw())
-            .ok_or_else(|| "The captured window had an invalid pixel buffer.".to_string())?;
-        let image = image::DynamicImage::ImageRgba8(rgba);
-        let resized = if width > 1600 || height > 1200 {
-            image.resize(1600, 1200, image::imageops::FilterType::Lanczos3)
-        } else {
-            image
-        };
-        let file = std::fs::File::create(&output_path)
-            .map_err(|error| format!("Could not create the screenshot: {error}"))?;
-        let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(file, 88);
-        encoder
-            .encode_image(&resized)
-            .map_err(|error| format!("Could not encode the screenshot: {error}"))
-    })
-    .await
-    .map_err(|error| format!("Screenshot capture task failed: {error}"))??;
+    #[cfg(target_env = "ohos")]
+    {
+        Err("Unable to support the ohos".to_string())
+    }
 
-    Ok(path.to_string_lossy().into_owned())
 }
 
 #[tauri::command]

@@ -643,7 +643,6 @@ export function useComposerVoiceInput({
   // Keep the idle control clickable when capture is unavailable so the
   // start handler can explain the unsupported state instead of silently
   // presenting a disabled button.
-  const disabled = phase === 'preparing' || phase === 'transcribing';
   const disabled = phase === 'recording'
     ? false
     : !settings?.enabled || !speechRuntimeSupported || (!isTauriRuntime() && !isMediaCaptureSupported()) || phase === 'preparing' || phase === 'transcribing';

@@ -1,5 +1,5 @@
 /**
- * NavPanel styles — categorized sidebar navigation.
+ * NavPanel styles 鈥?categorized sidebar navigation.
  *
  * Root class: .bitfun-nav-panel
  * Fixed width 240px, always visible.
@@ -15,9 +15,9 @@ $_nav-width: 240px;
 $_item-height: 32px;
 $_section-header-height: 24px;
 
-// ──────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 // Root
-// ──────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 .bitfun-nav-panel {
   @include nav-font.nav-panel-font-token-scope;
@@ -33,7 +33,7 @@ $_section-header-height: 24px;
   overflow: visible;
   user-select: none;
 
-  // ── Container ──────────────────────────────
+  // 鈹€鈹€ Container 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
   &__content {
     flex: 1 1 auto;
     min-height: 0;
@@ -41,7 +41,7 @@ $_section-header-height: 24px;
     max-width: 100%;
     display: flex;
     flex-direction: column;
-    // Dynamic clip-path origin — set via JS from anchor element measurement.
+    // Dynamic clip-path origin 鈥?set via JS from anchor element measurement.
     // Fallback: ~20% from top (roughly the "Files" item in a typical layout).
     position: relative;
     overflow: visible;
@@ -50,14 +50,14 @@ $_section-header-height: 24px;
     --clip-origin-bottom: 80%;
   }
 
-  // ── Layers ─────────────────────────────────
+  // 鈹€鈹€ Layers 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
   &__layer {
     display: flex;
     flex-direction: column;
     min-height: 0;
 
-    // ── MainNav layer ──
+    // 鈹€鈹€ MainNav layer 鈹€鈹€
     &--main {
       flex: 1 1 auto;
       min-width: 0;
@@ -71,7 +71,7 @@ $_section-header-height: 24px;
       }
     }
 
-    // ── SceneNav overlay ──
+    // 鈹€鈹€ SceneNav overlay 鈹€鈹€
     &--scene {
       clip-path: inset(var(--clip-origin-top) 0 var(--clip-origin-bottom) 0);
       transition: clip-path $motion-base $easing-decelerate,
@@ -444,9 +444,9 @@ $_section-header-height: 24px;
     }
   }
 
-  // ──────────────────────────────────────────────
+  // 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
   // Session mode dropdown
-  // ──────────────────────────────────────────────
+  // 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
   &__mode-dropdown {
     position: fixed;
@@ -512,9 +512,9 @@ $_section-header-height: 24px;
     margin-left: auto;
   }
 
-  // ──────────────────────────────────────────────
+  // 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
   // Scrollable sections area
-  // ──────────────────────────────────────────────
+  // 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
   &__sections {
     flex: 1 1 auto;
@@ -523,7 +523,7 @@ $_section-header-height: 24px;
     overflow-y: auto;
     overflow-x: hidden;
     // No padding-top: separation from top-actions is only .bitfun-nav-panel__top-actions padding-bottom.
-    // Top padding here stacked with that and read as “extra” gap above the first section header.
+    // Top padding here stacked with that and read as 鈥渆xtra鈥?gap above the first section header.
     padding: 0 0 $size-gap-3 0;
 
     &::-webkit-scrollbar { width: 3px; }
@@ -539,9 +539,9 @@ $_section-header-height: 24px;
     }
   }
 
-  // ──────────────────────────────────────────────
+  // 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
   // Section
-  // ──────────────────────────────────────────────
+  // 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
   &__section-header {
     display: flex;
@@ -1224,9 +1224,9 @@ $_section-header-height: 24px;
     overscroll-behavior: contain;
   }
 
-  // ──────────────────────────────────────────────
-  // Collapsible wrapper (grid-template-rows 0fr→1fr)
-  // ──────────────────────────────────────────────
+  // 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+  // Collapsible wrapper (grid-template-rows 0fr鈫?fr)
+  // 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
   &__collapsible {
     display: grid;
@@ -1254,9 +1254,9 @@ $_section-header-height: 24px;
     max-width: 100%;
   }
 
-  // ──────────────────────────────────────────────
+  // 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
   // Items list
-  // ──────────────────────────────────────────────
+  // 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
   &__items {
     display: flex;
@@ -1278,16 +1278,16 @@ $_section-header-height: 24px;
     -webkit-appearance: none;
   }
 
-  // ──────────────────────────────────────────────
+  // 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
   // Split-departure animation
   //
   // When scene-nav opens, MainNav items & sections receive directional
   // classes based on their position relative to the anchor item:
-  //   .is-departing-up     → items above anchor slide up + fade
-  //   .is-departing-anchor → the anchor item itself (brief scale pulse)
-  //   .is-departing-down   → items below anchor slide down + fade
+  //   .is-departing-up     鈫?items above anchor slide up + fade
+  //   .is-departing-anchor 鈫?the anchor item itself (brief scale pulse)
+  //   .is-departing-down   鈫?items below anchor slide down + fade
   // These play on top of the grid-row collapse for a "split-open" feel.
-  // ──────────────────────────────────────────────
+  // 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
   $_depart-distance: 28px;
   $_depart-duration: 0.24s;
@@ -1439,9 +1439,9 @@ $_section-header-height: 24px;
     line-height: 1;
   }
 
-  // ──────────────────────────────────────────────
+  // 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
   // Badge (e.g. git branch name)
-  // ──────────────────────────────────────────────
+  // 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
   &__item-badge {
     flex-shrink: 0;
@@ -1571,9 +1571,9 @@ $_section-header-height: 24px;
   }
 }
 
-// ──────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 // Footer: Notification + More-options menu
-// ──────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 // Sections tied to button ripple: fade out then slide in from the opposite side
 @keyframes bitfun-nav-sections-mode-switch {
@@ -1716,7 +1716,7 @@ $_section-header-height: 24px;
   opacity: 0;
 }
 
-// is-hover-open: multimodal submenu is open but pointer may be over the menu, not the button — keep “hover” icon
+// is-hover-open: multimodal submenu is open but pointer may be over the menu, not the button 鈥?keep 鈥渉over鈥?icon
 .bitfun-nav-panel__footer-btn--icon:hover .bitfun-nav-panel__footer-btn-icon-swap,
 .bitfun-nav-panel__footer-btn--icon:focus-visible .bitfun-nav-panel__footer-btn-icon-swap,
 .bitfun-nav-panel__footer-btn--icon.is-hover-open .bitfun-nav-panel__footer-btn-icon-swap,
@@ -1731,9 +1731,9 @@ $_section-header-height: 24px;
   }
 }
 
-// ──────────────────────────────────────────────
-// GitHub star invite — retires itself after one click
-// ──────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// GitHub star invite 鈥?retires itself after one click
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 .bitfun-nav-panel__footer-star {
   display: flex;
@@ -1792,9 +1792,9 @@ $_section-header-height: 24px;
   white-space: nowrap;
 }
 
-// ──────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 // More-options popup menu
-// ──────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 .bitfun-nav-panel__footer-more-wrap {
   position: relative;
@@ -1811,14 +1811,14 @@ $_section-header-height: 24px;
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--color-error);
-  box-shadow: 0 0 0 2px var(--color-bg-primary);
+  background: var(--bf-appearance-token-color-error);
+  box-shadow: 0 0 0 2px var(--bf-appearance-token-color-bg-primary);
   pointer-events: none;
 }
 
-// ──────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 // Multimodal tools picker (Browser + Mermaid)
-// ──────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 @keyframes bitfun-multimodal-menu-in {
   from {
@@ -2041,8 +2041,8 @@ $_section-header-height: 24px;
   height: 7px;
   margin-left: auto;
   border-radius: 50%;
-  background: var(--color-error);
-  box-shadow: 0 0 0 2px var(--color-bg-elevated);
+  background: var(--bf-appearance-token-color-error);
+  box-shadow: 0 0 0 2px var(--bf-appearance-token-color-bg-elevated);
 }
 
 .bitfun-nav-panel__remote-disclaimer {
@@ -2115,9 +2115,9 @@ $_section-header-height: 24px;
   }
 }
 
-// ──────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 // Reduced motion
-// ──────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 @media (prefers-reduced-motion: reduce) {
   .bitfun-nav-panel {
@@ -2158,7 +2158,7 @@ $_section-header-height: 24px;
   }
 }
 
-// ── Nav workspace search ─────────────────────────
+// 鈹€鈹€ Nav workspace search 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 .bitfun-nav-panel__brand-header {
   display: flex;
@@ -2172,7 +2172,7 @@ $_section-header-height: 24px;
   min-width: 0;
 }
 
-// ── Top action strip ─────────────────────────────
+// 鈹€鈹€ Top action strip 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 .bitfun-nav-panel__top-actions {
   display: flex;
@@ -2186,7 +2186,7 @@ $_section-header-height: 24px;
   display: flex;
   flex-direction: column;
   gap: 1px;
-  // Divider below 扩展 (main row + optional Agents / Skills sublist) → scrollable sections
+  // Divider below 鎵╁睍 (main row + optional Agents / Skills sublist) 鈫?scrollable sections
   padding-bottom: $size-gap-2;
   margin-bottom: $size-gap-1;
   border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
@@ -2208,7 +2208,7 @@ $_section-header-height: 24px;
   }
 }
 
-// Align with section headers: __section-header margin-x 8 + padding-x 8 → label starts 16px from panel; __top-actions pad-x 8 + button pl 8 → icon column starts at 16px.
+// Align with section headers: __section-header margin-x 8 + padding-x 8 鈫?label starts 16px from panel; __top-actions pad-x 8 + button pl 8 鈫?icon column starts at 16px.
 .bitfun-nav-panel__top-action-btn {
   display: flex;
   align-items: center;
@@ -2248,7 +2248,7 @@ $_section-header-height: 24px;
     justify-content: center;
   }
 
-  // 助理行：前导 icon 悬停微微放大（与 __top-action-icon-circle 一致；排除 --sub 的 Agents / Skills）
+  // 鍔╃悊琛岋細鍓嶅 icon 鎮仠寰井鏀惧ぇ锛堜笌 __top-action-icon-circle 涓€鑷达紱鎺掗櫎 --sub 鐨?Agents / Skills锛?
   &:not(.bitfun-nav-panel__top-action-btn--sub) .bitfun-nav-panel__top-action-icon-slot {
     transform: scale(1);
     transform-origin: center;
@@ -2279,7 +2279,7 @@ $_section-header-height: 24px;
   }
 }
 
-// 扩展：默认 Blocks，悬停时图标位切换为 Chevron；展开时箭头朝上
+// 鎵╁睍锛氶粯璁?Blocks锛屾偓鍋滄椂鍥炬爣浣嶅垏鎹负 Chevron锛涘睍寮€鏃剁澶存湞涓?
 .bitfun-nav-panel__top-action-expand-icons {
   position: relative;
   width: 22px;
@@ -2345,9 +2345,9 @@ $_section-header-height: 24px;
   }
 }
 
-// ──────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 // Desktop navigation refinement
-// ──────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 // This final layer consolidates geometry and interaction behavior across the
 // older navigation subsections without changing their information architecture.
 

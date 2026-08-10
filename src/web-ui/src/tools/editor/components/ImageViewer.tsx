@@ -363,7 +363,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
         )}
 
         {!error && imageUrl && (
-          <div className="bitfun-image-viewer__image-wrapper">
+          <div className="bitfun-image-viewer__image-wrapper" data-bf-component="image-viewer" data-bf-part="imageWrapper">
             <img
               src={imageUrl}
               alt={fileName || filePath}

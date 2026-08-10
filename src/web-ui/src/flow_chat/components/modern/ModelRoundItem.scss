@@ -4,13 +4,13 @@
 
 .model-round-item {
   /*
-   * No bottom margin — the inter-round gap is covered by the same line-height rhythm
-   * as inter-item gaps inside a round, so flow text → tool / tool → thinking / cross-
+   * No bottom margin 閳?the inter-round gap is covered by the same line-height rhythm
+   * as inter-item gaps inside a round, so flow text 閳?tool / tool 閳?thinking / cross-
    * round transitions all read as one continuous, evenly-spaced text column.
    *
    * No mount / enter animation lives here on purpose. The list is virtualized:
    * any animation keyed off mount replays whenever an item scrolls back into
-   * view, and any animation keyed off `--streaming` → `--complete` replays when
+   * view, and any animation keyed off `--streaming` 閳?`--complete` replays when
    * the typewriter finishes. Both read as the whole chat refreshing.
    */
   margin-bottom: 0;
@@ -25,7 +25,7 @@
     animation: none;
   }
 
-  // Complete state — keep opacity stable; do not attach an animation here.
+  // Complete state 閳?keep opacity stable; do not attach an animation here.
   &--complete {
     opacity: 1;
   }
@@ -111,8 +111,8 @@
 
 .model-round-item__ai-disclaimer {
   margin-right: 12px;
-  font-size: var(--flowchat-font-size-xs);
-  color: var(--color-text-muted);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+  color: var(--bf-appearance-token-color-text-muted);
   opacity: 0.55;
   text-align: left;
 }
