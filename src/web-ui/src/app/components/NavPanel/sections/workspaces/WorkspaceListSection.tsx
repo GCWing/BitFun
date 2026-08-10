@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { notificationService } from '@/shared/notification-system';
@@ -38,12 +38,12 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
   // Refs for values that must be read inside event handlers without stale closures
   const draggedWorkspaceIdRef = useRef<string | null>(null);
   const dropTargetRef = useRef<{ workspaceId: string; position: WorkspaceDragPosition } | null>(null);
-  // Custom drag preview (a regular DOM element following the cursor) + a 1x1
-  // transparent element used as the native drag image to hide the default ghost.
-  // The default ghost gets a white webview/OS halo that no CSS on the drag image
-  // can remove; rendering the preview as a normal DOM element avoids it.
-  const dragPreviewRef = useRef<HTMLDivElement | null>(null);
-  const dragHideRef = useRef<HTMLDivElement | null>(null);
+  // Drag-state safety nets (window dragend/mousedown + reset timeout) to clear
+  // stuck is-drag-active state when dragend doesn't fire normally.
+  const dragSafetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const windowDragEndHandlerRef = useRef<(() => void) | null>(null);
+  const windowMouseDownHandlerRef = useRef<(() => void) | null>(null);
+  const documentMouseMoveHandlerRef = useRef<(() => void) | null>(null);
 
   const workspaces = variant === 'assistants'
     ? assistantWorkspacesList
@@ -51,6 +51,54 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
   const emptyLabel = variant === 'assistants'
     ? t('nav.workspaces.emptyAssistants')
     : t('nav.workspaces.emptyProjects');
+
+  const removeDragArtifacts = useCallback(() => {
+    if (dragSafetyTimeoutRef.current !== null) {
+      clearTimeout(dragSafetyTimeoutRef.current);
+      dragSafetyTimeoutRef.current = null;
+    }
+    if (windowDragEndHandlerRef.current !== null) {
+      window.removeEventListener('dragend', windowDragEndHandlerRef.current);
+      windowDragEndHandlerRef.current = null;
+    }
+    if (windowMouseDownHandlerRef.current !== null) {
+      window.removeEventListener('mousedown', windowMouseDownHandlerRef.current);
+      windowMouseDownHandlerRef.current = null;
+    }
+    if (documentMouseMoveHandlerRef.current !== null) {
+      document.removeEventListener('mousemove', documentMouseMoveHandlerRef.current);
+      documentMouseMoveHandlerRef.current = null;
+    }
+  }, []);
+
+  const clearDragState = useCallback(() => {
+    draggedWorkspaceIdRef.current = null;
+    dropTargetRef.current = null;
+    setDraggedWorkspaceId(null);
+    setDropTarget(null);
+  }, []);
+
+  const cleanupDrag = useCallback(() => {
+    removeDragArtifacts();
+    clearDragState();
+  }, [removeDragArtifacts, clearDragState]);
+
+  useEffect(() => {
+    return () => {
+      if (dragSafetyTimeoutRef.current !== null) {
+        clearTimeout(dragSafetyTimeoutRef.current);
+      }
+      if (windowDragEndHandlerRef.current !== null) {
+        window.removeEventListener('dragend', windowDragEndHandlerRef.current);
+      }
+      if (windowMouseDownHandlerRef.current !== null) {
+        window.removeEventListener('mousedown', windowMouseDownHandlerRef.current);
+      }
+      if (documentMouseMoveHandlerRef.current !== null) {
+        document.removeEventListener('mousemove', documentMouseMoveHandlerRef.current);
+      }
+    };
+  }, []);
 
   const handleDragStart = useCallback((workspace: WorkspaceInfo) => (event: React.DragEvent<HTMLDivElement>) => {
     const payload: WorkspaceDragPayload = { workspaceId: workspace.id, variant };
@@ -61,69 +109,44 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
     draggedWorkspaceIdRef.current = workspace.id;
     setDraggedWorkspaceId(workspace.id);
 
-    // Hide the native drag ghost with a 1x1 fully-transparent element so the
-    // platform does not render the default item snapshot (which carries a white
-    // webview/OS halo no CSS on the drag image can remove).
-    const hideEl = document.createElement('div');
-    hideEl.style.width = '1px';
-    hideEl.style.height = '1px';
-    hideEl.style.position = 'absolute';
-    hideEl.style.top = '-1000px';
-    hideEl.style.background = 'transparent';
-    document.body.appendChild(hideEl);
-    dragHideRef.current = hideEl;
-    void hideEl.offsetWidth;
-    event.dataTransfer.setDragImage(hideEl, 0, 0);
+    // Native drag ghost is used (no setDragImage / no custom preview). The
+    // drag-state safety nets below clear stuck is-drag-active state if dragend
+    // doesn't fire normally.
+    const windowDragEndHandler = () => { cleanupDrag(); };
+    windowDragEndHandlerRef.current = windowDragEndHandler;
+    window.addEventListener('dragend', windowDragEndHandler, { once: true });
 
-    // Render the visible drag preview as a regular DOM element following the
-    // cursor. Because it is NOT the native drag image, it has no platform halo,
-    // so rounded corners / borders are safe.
-    const label = variant === 'assistants'
-      ? (workspace.identity?.name?.trim() || workspace.name)
-      : workspace.name;
-    const preview = document.createElement('div');
-    preview.textContent = label;
-    preview.style.position = 'fixed';
-    preview.style.left = `${event.clientX + 12}px`;
-    preview.style.top = `${event.clientY + 8}px`;
-    preview.style.padding = '6px 10px';
-    preview.style.background = 'var(--color-bg-elevated)';
-    preview.style.color = 'var(--color-text-primary)';
-    preview.style.border = '1px solid var(--border-subtle)';
-    preview.style.borderRadius = '6px';
-    preview.style.fontSize = '12px';
-    preview.style.maxWidth = '240px';
-    preview.style.whiteSpace = 'nowrap';
-    preview.style.overflow = 'hidden';
-    preview.style.textOverflow = 'ellipsis';
-    preview.style.pointerEvents = 'none';
-    preview.style.zIndex = '10000';
-    preview.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
-    document.body.appendChild(preview);
-    dragPreviewRef.current = preview;
-  }, [variant]);
+    const windowMouseDownHandler = () => { cleanupDrag(); };
+    windowMouseDownHandlerRef.current = windowMouseDownHandler;
+    window.addEventListener('mousedown', windowMouseDownHandler, { once: true });
 
-  const handleDrag = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-    const preview = dragPreviewRef.current;
-    if (!preview) return;
-    preview.style.left = `${event.clientX + 12}px`;
-    preview.style.top = `${event.clientY + 8}px`;
-  }, []);
+    // mousemove is suppressed during an active HTML5 drag (per spec) and resumes
+    // when the drag ends — even if dragend is swallowed. So it's a safe instant
+    // cleanup signal that never interrupts a normal drag (no matter how long the
+    // user pauses mid-drag).
+    const documentMouseMoveHandler = () => { cleanupDrag(); };
+    documentMouseMoveHandlerRef.current = documentMouseMoveHandler;
+    document.addEventListener('mousemove', documentMouseMoveHandler, { once: true });
+
+    dragSafetyTimeoutRef.current = setTimeout(() => {
+      cleanupDrag();
+    }, 1500);
+  }, [variant, cleanupDrag]);
+
+  const handleDrag = useCallback(() => {
+    // Refresh the stuck-state safety timeout on each drag event so a long drag
+    // doesn't trip the fallback. (Native ghost is used; no custom preview.)
+    if (dragSafetyTimeoutRef.current !== null) {
+      clearTimeout(dragSafetyTimeoutRef.current);
+      dragSafetyTimeoutRef.current = setTimeout(() => {
+        cleanupDrag();
+      }, 1500);
+    }
+  }, [cleanupDrag]);
 
   const handleDragEnd = useCallback(() => {
-    if (dragPreviewRef.current && document.body.contains(dragPreviewRef.current)) {
-      document.body.removeChild(dragPreviewRef.current);
-    }
-    dragPreviewRef.current = null;
-    if (dragHideRef.current && document.body.contains(dragHideRef.current)) {
-      document.body.removeChild(dragHideRef.current);
-    }
-    dragHideRef.current = null;
-    draggedWorkspaceIdRef.current = null;
-    dropTargetRef.current = null;
-    setDraggedWorkspaceId(null);
-    setDropTarget(null);
-  }, []);
+    cleanupDrag();
+  }, [cleanupDrag]);
 
   const handleDragOver = useCallback((workspaceId: string) => (event: React.DragEvent<HTMLDivElement>) => {
     // Browsers block reading dataTransfer data during dragover for security.
@@ -138,6 +161,13 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = 'move';
+
+    if (dragSafetyTimeoutRef.current !== null) {
+      clearTimeout(dragSafetyTimeoutRef.current);
+      dragSafetyTimeoutRef.current = setTimeout(() => {
+        cleanupDrag();
+      }, 1500);
+    }
 
     // Measure only the workspace card, not the wrapper that includes the drop-line.
     const itemEl = event.currentTarget.querySelector<HTMLElement>(
@@ -159,7 +189,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
       dropTargetRef.current = next;
       return next;
     });
-  }, []); // Intentionally empty: reads from refs, not closed-over state
+  }, [cleanupDrag]); // cleanupDrag is stable; reads refs for the rest
 
   const handleDragLeave = useCallback((workspaceId: string) => (event: React.DragEvent<HTMLDivElement>) => {
     if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
@@ -177,16 +207,23 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
       event.dataTransfer.getData(WORKSPACE_DRAG_MIME_TYPE) ||
       event.dataTransfer.getData('text/plain');
 
-    if (!payloadText) return;
+    if (!payloadText) {
+      cleanupDrag();
+      return;
+    }
 
     let payload: WorkspaceDragPayload;
     try {
       payload = JSON.parse(payloadText) as WorkspaceDragPayload;
     } catch {
+      cleanupDrag();
       return;
     }
 
-    if (!payload.workspaceId || payload.variant !== variant) return;
+    if (!payload.workspaceId || payload.variant !== variant) {
+      cleanupDrag();
+      return;
+    }
 
     event.preventDefault();
     event.stopPropagation();
@@ -198,6 +235,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
         ? dropTargetRef.current.position
         : 'after';
 
+    removeDragArtifacts();
     draggedWorkspaceIdRef.current = null;
     dropTargetRef.current = null;
     setDropTarget(null);
@@ -212,7 +250,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
     } finally {
       setDraggedWorkspaceId(null);
     }
-  }, [reorderOpenedWorkspacesInSection, t, variant]);
+  }, [reorderOpenedWorkspacesInSection, t, variant, cleanupDrag, removeDragArtifacts]);
 
   return (
     <div
