@@ -82,6 +82,11 @@ vi.mock('./useFlowChatFollowOutput', () => ({
     scheduleFollowToLatest: vi.fn(),
     handleUserScrollIntent: vi.fn(),
     handleScroll: vi.fn(),
+    handleScrollSettled: vi.fn(),
+    handleViewportResize: vi.fn(),
+    // Follow owns nothing here, which is what the real hook returns when
+    // `isFollowingOutput` is false.
+    getFollowTargetScrollTop: () => null,
   }),
 }));
 

@@ -64,6 +64,48 @@ tolerable only because more output is about to fill it. Do not reuse it to
 absorb anything else — applied to a foreign forward move it parks the content
 end mid-viewport permanently, since nothing pulls the target back down.
 
+## Reading History Is About the Transcript, Not the Intent
+
+`viewportMode: 'history-reading'` does two things — it suppresses streaming
+follow, and it pins the jump-to-latest bar open and routes it through a
+presentation reset. Both are asking one question: **does the transcript on
+screen still reach the newest Turn?**
+
+A turn-navigation viewport intent used to answer that faithfully, because turn
+navigation was the only thing that activated a history window. It is not any
+more. A session whose loaded tail is shorter than the viewport pages older Turns
+in the moment it opens, with nobody navigating, and the first paging step has to
+set a turn intent — `isShowingHistoryPresentation` requires one, so without it
+the paged-in Turns would not render at all. The viewport sitting on the newest
+output was therefore reported as reading history: the bar was visible from the
+moment the session opened, clicking it dropped the window and paged it straight
+back in, and streaming output was not followed at all.
+
+`flowChatLiveTailWindow.ts` answers it from the window's own ordinals instead.
+These are ledger numbers, not measurements — the rule against inferring intent
+from geometry is about ambiguous quantities like `scrollTop`, and does not
+apply. The answer also keeps up on its own: a Turn arriving past the end of the
+window flips it back with no help, where a flag recorded at activation time
+would go stale and leave no way to the live tail.
+
+`isReadingTurnViewport` keeps its old meaning for the auto-tail placement, which
+asks a third question again — who owns the viewport. Merging those two is the
+mistake this separates.
+
+**A tail-anchored window must grow with the session.** It stops at the newest
+Turn that existed when it was cut, and nothing moves its end afterwards, so an
+appended Turn is simply not rendered. That is worse than it sounds: `latestTurnId`
+is read off the rendered items, so follow-output never learns the Turn exists —
+no pin, no follow, and nothing to scroll to. `resolveTailWindowGrowth` is
+level-triggered for that reason. An edge — "it reached the tail last render and
+does not now" — is consumed whether or not the extension succeeded, stranding
+the window permanently on one failure; the current state stays `'extend'` until
+the window is actually repaired. A window the user navigated to has a different
+end, so the session growing says nothing about it and it is left alone. When the
+store cannot extend far enough, the fallback drops back to the canonical tail:
+that costs a visible re-page of the history above, which is why it is the
+fallback, but it is the only branch that always shows the message just sent.
+
 ## Snapping Back Out of the Reserved Blank
 
 The spacer is a full viewport the user can scroll into, and under slow streaming
@@ -172,7 +214,15 @@ coordinator, and the reasons there is no coordinator are unchanged (see below).
 ## Current Behavior
 
 - A newly submitted Turn scrolls to the viewport top and enters follow-output.
-  Every other entry reason resumes at the end of real content.
+  Every other entry reason resumes at the end of real content, with one
+  exception: a jump to latest while the **newest** Turn is still pinned returns
+  to the pin. That mode only holds while the Turn's answer is shorter than one
+  viewport, so everything it has produced is already on screen, and aiming at
+  the content end would scroll *up* and shove the message the user just sent
+  into the middle. It is also the landing place the snap back picks for the same
+  viewport state — having the two disagree would be worse than either choice.
+  The exemption therefore outlives the Turn: a short Turn stays pinned until a
+  newer one replaces it.
 - Session open enters follow-output as `session-open`, even with nothing
   streaming. The frame loop then runs on a `SETTLE_FRAMES` budget that refreshes
   whenever the target actually moves, so it tracks measurement and paging and
@@ -202,6 +252,13 @@ coordinator, and the reasons there is no coordinator are unchanged (see below).
   inside it, so neither raises the jump-to-latest affordance; the reserved blank
   is outside it, so parking there does. Virtuoso's own `atBottomStateChange`
   remains unused.
+- The band is recomputed on scroll, on resize, **and when follow ownership
+  changes** — its lower edge is the follow target, which can move while the
+  viewport is perfectly still. A snap back completes at rest by construction,
+  and a jump to latest that lands on a pin the viewport already sits on writes
+  nothing at all. Driving the band from scroll events alone left the affordance
+  visible over a viewport that was at the tail, and clicking it then had nothing
+  to do — an inert button is worse than a missing one.
 
 ## Virtuoso Footer Coupling
 
@@ -334,6 +391,7 @@ pnpm run type-check:web
 pnpm --dir src/web-ui run lint
 pnpm --dir src/web-ui run test:run \
   src/flow_chat/components/modern/flowChatTailFollow.test.ts \
+  src/flow_chat/components/modern/flowChatLiveTailWindow.test.ts \
   src/flow_chat/components/modern/useFlowChatFollowOutput.test.tsx \
   src/flow_chat/components/modern/VirtualMessageList.session-boundary.test.tsx \
   src/flow_chat/components/modern/ModernFlowChatContainer.history-state.test.tsx \
@@ -364,10 +422,20 @@ confirm:
     more history above, shorter does not cut the last lines off, and narrower
     does not push them off screen as the text rewraps. Repeat while reading
     history: nothing should move.
+12. Open a session long enough to be `isPartial` — the loaded tail is shorter
+    than the viewport, so it pages older Turns in on its own. No jump-to-latest
+    bar should appear, and streaming output should be followed. Then send a
+    message: it must appear immediately and pin to the viewport top, with the
+    history above neither moving nor reloading.
+13. With a short Turn pinned, scroll up, jump to latest, then scroll down into
+    the blank and let go. After the snap back the jump-to-latest affordance must
+    be gone — this is the one path where the viewport arrives at the tail
+    without a scroll event to notice it.
 
 ## Related Files
 
 - `flowChatTailFollow.ts`
+- `flowChatLiveTailWindow.ts`
 - `useFlowChatFollowOutput.ts`
 - `VirtualMessageList.tsx`
 - `ModernFlowChatContainer.tsx`

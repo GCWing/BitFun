@@ -93,6 +93,10 @@ import {
   warnHistoryPagingRefusedWithPendingTurns,
   warnHistorySessionLoadingLayerStalled,
 } from '../../services/historySessionDiagnostics';
+import {
+  resolveTailWindowGrowth,
+  transcriptReachesLatestTurn,
+} from './flowChatLiveTailWindow';
 import './ModernFlowChatContainer.scss';
 import { PermissionRequestPanel } from './PermissionRequestPanel';
 import { pendingPermissionToolCallIdsForSession } from './permissionRequestRouting';
@@ -385,6 +389,35 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       ? canonicalizedHistoryPresentation
       : null;
   const isRenderingHistoryProjection = Boolean(renderedHistoryPresentation);
+  /*
+   * Whether the transcript on screen still reaches the newest Turn.
+   *
+   * Both consumers of `history-reading` — suppressing streaming follow, and the
+   * jump-to-latest affordance — are asking this, not "did the user navigate".
+   * A turn intent used to answer it faithfully because only navigation ever
+   * activated a history window. Automatic tail paging activates one with nobody
+   * navigating: a session whose loaded tail is shorter than the viewport pages
+   * on open, and the viewport sitting on the newest output was then reported as
+   * reading history, which pinned the jump-to-latest bar open and routed it
+   * through a presentation reset that dropped the window and paged it back in.
+   *
+   * The window's own ordinal bookkeeping answers it exactly — these are ledger
+   * numbers, not measurements — and keeps answering it as the session grows: a
+   * Turn arriving past the end of the window flips this back on its own, where
+   * a provenance flag recorded at activation time would stay stale and leave no
+   * way back to the live tail.
+   *
+   * `isReadingTurnViewport` deliberately keeps its old meaning for the auto-tail
+   * placement below, which asks a different question again: who owns the
+   * viewport. Merging those two is the mistake this fixes.
+   */
+  const renderedTranscriptReachesLatestTurn = transcriptReachesLatestTurn({
+    windowEndOrdinalExclusive: renderedHistoryPresentation?.range.endOrdinalExclusive ?? null,
+    knownTurnCount: activeSessionKnownTurnCount,
+  });
+  const isViewportDetachedFromLiveTail = (
+    isReadingTurnViewport && !renderedTranscriptReachesLatestTurn
+  );
   const virtualItems = useMemo(() => {
     if (!activeSession || !renderedHistoryPresentation) {
       return canonicalVirtualItems;
@@ -1394,6 +1427,65 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     return true;
   }, [activeSession?.sessionId, switchToLiveTailForSession]);
 
+  /*
+   * Keep a tail-anchored history window anchored as the session grows.
+   *
+   * A window paged in from the tail stops at the newest Turn that existed when
+   * it was cut. The session then appends a Turn and nothing moves the window's
+   * end, so the transcript on screen silently stops at the previous Turn: the
+   * message the user just sent is not rendered at all, and because
+   * `latestTurnId` is read off the rendered items, follow-output never even
+   * learns a new Turn exists — no pin, no follow, and no way to scroll to it.
+   *
+   * `resolveTailWindowGrowth` carries the reasoning and the reason it is not
+   * edge-triggered; this effect is only the plumbing.
+   */
+  const tailAnchoredWindowEndRef = useRef<number | null>(null);
+  useEffect(() => {
+    const sessionId = activeSession?.sessionId;
+    const windowEndOrdinalExclusive = sessionId
+      ? renderedHistoryPresentation?.range.endOrdinalExclusive ?? null
+      : null;
+    const growth = resolveTailWindowGrowth({
+      windowEndOrdinalExclusive,
+      knownTurnCount: activeSessionKnownTurnCount,
+      tailAnchoredWindowEnd: tailAnchoredWindowEndRef.current,
+    });
+
+    if (growth === 'release') {
+      tailAnchoredWindowEndRef.current = null;
+      return;
+    }
+    if (growth === 'anchor') {
+      tailAnchoredWindowEndRef.current = windowEndOrdinalExclusive;
+      return;
+    }
+    if (growth === 'none' || !sessionId || windowEndOrdinalExclusive === null) {
+      return;
+    }
+
+    const extended = flowChatStore.extendSessionHistoryWindow(sessionId, 'after');
+    // Requiring real growth keeps a store that declines to extend from being
+    // re-applied under an ever-rising revision forever.
+    if (extended && extended.range.endOrdinalExclusive > windowEndOrdinalExclusive) {
+      tailAnchoredWindowEndRef.current = extended.range.endOrdinalExclusive;
+      applyHistoryPresentation(sessionId, extended, { completedBoundary: 'after' });
+      return;
+    }
+
+    // The newest Turn is not inside the loaded range this window was cut from.
+    // Dropping back to the canonical tail costs a visible re-page of the
+    // history above, which is why it is the fallback and not the rule — but it
+    // is the only branch that always shows the message the user just sent.
+    restoreTailPresentation();
+  }, [
+    activeSession?.sessionId,
+    activeSessionKnownTurnCount,
+    applyHistoryPresentation,
+    renderedHistoryPresentation,
+    restoreTailPresentation,
+  ]);
+
   const jumpToLiveTail = useCallback(() => {
     return restoreTailPresentation({ followLatest: true });
   }, [restoreTailPresentation]);
@@ -2318,7 +2410,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
                   items={virtualItems}
                   isViewportActive={isViewportActive}
                   presentationMode={isRenderingHistoryProjection ? 'history-window' : 'tail'}
-                  viewportMode={isReadingTurnViewport ? 'history-reading' : 'live-tail'}
+                  viewportMode={isViewportDetachedFromLiveTail ? 'history-reading' : 'live-tail'}
                   historyWindow={isShowingHistoryPresentation ? activeHistoryPresentation?.range ?? null : null}
                   presentationRevision={isShowingHistoryPresentation ? activeHistoryPresentation?.revision ?? 0 : 0}
                   historyBoundaryState={historyBoundaryState}

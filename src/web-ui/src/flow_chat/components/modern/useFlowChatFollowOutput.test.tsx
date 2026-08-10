@@ -487,6 +487,110 @@ describe('useFlowChatFollowOutput', () => {
     expect(scroller.scrollTop).toBe(0);
   });
 
+  describe('jumping to latest while the newest Turn is pinned', () => {
+    /** Pins `turn-2` at 900 with real content ending at 1200 (tail target 700). */
+    function pinLatestTurn(overrides?: { resolveTurnTopScrollTop?: () => number | null }) {
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1200 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 900,
+      });
+      const props = {
+        scroller,
+        scrollTurnToTop: () => true,
+        resolveTurnTopScrollTop: overrides?.resolveTurnTopScrollTop ?? (() => 900),
+        onController: (next: Controller) => { controller = next; },
+      };
+      act(() => {
+        root.render(<Harness {...props} latestTurnId="turn-1" isStreaming={false} />);
+      });
+      act(() => {
+        root.render(<Harness {...props} latestTurnId="turn-2" isStreaming={false} />);
+      });
+    }
+
+    it('returns to the pin rather than the end of content', () => {
+      // Restoring the tail presentation asks for a jump to latest one frame
+      // after the Turn that caused it got pinned, which used to overwrite the
+      // pin. Aiming at the content end here also scrolls *up*, shoving the
+      // message the user just sent into the middle of the viewport.
+      const scrollToContentEnd = vi.fn();
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1200 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 900,
+      });
+      const props = {
+        scroller,
+        scrollToContentEnd,
+        scrollTurnToTop: () => true,
+        resolveTurnTopScrollTop: () => 900,
+        onController: (next: Controller) => { controller = next; },
+      };
+      act(() => {
+        root.render(<Harness {...props} latestTurnId="turn-1" isStreaming={false} />);
+      });
+      scrollToContentEnd.mockClear();
+      act(() => {
+        root.render(<Harness {...props} latestTurnId="turn-2" isStreaming={false} />);
+      });
+
+      act(() => controller?.enterFollowOutput('jump-to-latest'));
+
+      expect(scrollToContentEnd).not.toHaveBeenCalled();
+      scroller.scrollTop = 0;
+      runNextFrame();
+      expect(scroller.scrollTop).toBe(900);
+    });
+
+    it('animates back to the pin instead of jumping', () => {
+      // The frame loop assigns scrollTop outright, so without the yield budget
+      // this branch was an instant move where every other jump to latest is
+      // animated.
+      pinLatestTurn();
+      scroller.scrollTop = 0;
+      scrollTo.mockClear();
+
+      act(() => controller?.enterFollowOutput('jump-to-latest'));
+
+      expect(scrollTo).toHaveBeenCalledWith({ top: 900, behavior: 'smooth' });
+      runNextFrame();
+      // jsdom does not animate, so the loop must have left the viewport alone.
+      expect(scroller.scrollTop).toBe(0);
+    });
+
+    it('resumes at the content end once the pin has been retired', () => {
+      // The exemption is only for a Turn whose answer still fits one viewport.
+      // Past the crossover the pin is gone and the ordinary rule applies.
+      const scrollToContentEnd = vi.fn();
+      setScrollerMetrics(scroller, {
+        scrollHeight: 2000 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 900,
+      });
+      const props = {
+        scroller,
+        scrollToContentEnd,
+        scrollTurnToTop: () => true,
+        resolveTurnTopScrollTop: () => 900,
+        onController: (next: Controller) => { controller = next; },
+      };
+      act(() => {
+        root.render(<Harness {...props} latestTurnId="turn-1" isStreaming={false} />);
+      });
+      act(() => {
+        root.render(<Harness {...props} latestTurnId="turn-2" isStreaming={false} />);
+      });
+      // Content end (1500) has overtaken the pin, which retires it.
+      runNextFrame();
+      scrollToContentEnd.mockClear();
+
+      act(() => controller?.enterFollowOutput('jump-to-latest'));
+
+      expect(scrollToContentEnd).toHaveBeenCalledWith('smooth');
+    });
+  });
+
   describe('snapping back out of the reserved blank', () => {
     /** Places the viewport where a gesture into the tail spacer would leave it. */
     function restInBlank(scrollTop: number) {

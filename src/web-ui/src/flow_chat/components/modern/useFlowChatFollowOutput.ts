@@ -343,6 +343,35 @@ export function useFlowChatFollowOutput({
       return;
     }
 
+    /*
+     * A pin on the newest Turn already satisfies "show me the latest output".
+     * The mode only holds while that Turn's answer is shorter than one
+     * viewport, so everything it has produced is on screen; re-aiming at the
+     * content end would scroll *up* and shove the message the user just sent
+     * into the middle of the viewport.
+     *
+     * This fires for real: restoring the tail presentation asks for a jump to
+     * latest one frame after the Turn that caused it got pinned, which
+     * overwrote the pin every time.
+     */
+    if (
+      reason === 'jump-to-latest' &&
+      pinTurnIdRef.current !== null &&
+      pinTurnIdRef.current === latestTurnIdRef.current
+    ) {
+      const pinTarget = readPinScrollTop() ?? scroller?.scrollTop ?? contentEnd;
+      followStateRef.current = { mode: 'pin-turn-top', target: pinTarget };
+      // Animated like every other jump to latest. The frame loop would cancel
+      // the animation on its next tick, so hand it the same yield budget
+      // `runContentEndScroll` uses.
+      if (scroller && Math.abs(scroller.scrollTop - pinTarget) > BOTTOM_EPSILON_PX) {
+        smoothScrollFramesRef.current = SMOOTH_SCROLL_YIELD_FRAMES;
+        scroller.scrollTo({ top: pinTarget, behavior: 'smooth' });
+      }
+      startFollowFrame();
+      return;
+    }
+
     // A newly submitted Turn opens at the viewport top; every other entry
     // reason resumes at the end of real content.
     const pinTurnId = reason === 'new-turn' ? latestTurnIdRef.current : null;
@@ -361,6 +390,7 @@ export function useFlowChatFollowOutput({
     startFollowFrame();
   }, [
     readContentEndScrollTop,
+    readPinScrollTop,
     retirePin,
     runContentEndScroll,
     scrollTurnToTop,

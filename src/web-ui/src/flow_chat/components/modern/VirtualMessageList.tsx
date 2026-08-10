@@ -624,6 +624,19 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   }, [getFollowTargetScrollTop, readContentEndScrollTop]);
 
   /*
+   * The band's lower edge is whatever the follow rule owns, so it moves when
+   * ownership changes — and that can happen with the viewport perfectly still.
+   * A snap back completes at rest by construction, and a jump to latest that
+   * lands on a pin the viewport is already on writes nothing. Neither produces
+   * a scroll event, so without this the affordance stays as the last scroll
+   * left it: visible, over a viewport that is already at the tail, and inert
+   * because clicking it has nothing left to do.
+   */
+  useEffect(() => {
+    updateIsAtBottom();
+  }, [isFollowingOutput, updateIsAtBottom]);
+
+  /*
    * Snap out of the reserved blank once a gesture is over.
    *
    * `scrollend` is the accurate signal — it knows when momentum has actually
@@ -1026,12 +1039,16 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
   const scrollToPhysicalBottom = useCallback(() => {
     enterFollowOutput('jump-to-latest');
-  }, [enterFollowOutput]);
+    updateIsAtBottom();
+  }, [enterFollowOutput, updateIsAtBottom]);
 
   const scrollToLatestEndPosition = useCallback(() => {
     onUserScrollIntent?.();
     enterFollowOutput('jump-to-latest');
-  }, [enterFollowOutput, onUserScrollIntent]);
+    // Entering follow can leave the viewport exactly where it is, which
+    // produces no scroll event to recompute the band from.
+    updateIsAtBottom();
+  }, [enterFollowOutput, onUserScrollIntent, updateIsAtBottom]);
 
   useImperativeHandle(ref, () => ({
     scrollToTurn,
