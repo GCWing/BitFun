@@ -50,6 +50,8 @@ import {
 import { RuntimeStatusSlot } from './RuntimeStatusSlot';
 import { StickyTaskIndicator } from '../StickyTaskIndicator';
 import { useFlowChatFollowOutput } from './useFlowChatFollowOutput';
+import { findRenderedTurnAnchorElement } from './flowChatViewportAnchor';
+import { useFlowChatViewportAnchor } from './useFlowChatViewportAnchor';
 import {
   contentEndScrollTop,
   endAlignedTailOffsetPx,
@@ -84,22 +86,6 @@ const OPEN_REVEAL_MAX_FRAMES = 40;
  */
 const SCROLL_SETTLE_FALLBACK_MS = 140;
 /**
- * How long after a wheel, touch, key, or scrollbar press the scrolling it
- * causes still counts as the user's.
- *
- * The anchor has to distinguish "the user went somewhere" from "the transcript
- * moved underneath them", and a scroll event says nothing about which. Intent
- * events do — but they fire *before* the scroll they cause, so the position
- * worth recording is the one that arrives shortly after, not the one at the
- * moment of the gesture. Recording at the gesture instead is what drags a
- * scrolling viewport backwards.
- *
- * Long enough to cover a wheel notch's smooth scroll and the gap between
- * notches of a continuous gesture; short enough that a mutation arriving in a
- * pause is not mistaken for the user.
- */
-const USER_DRIVEN_SCROLL_WINDOW_MS = 200;
-/**
  * Resize callbacks over which a viewport resting at the end is re-aligned after
  * the scroller's own box changes.
  *
@@ -111,20 +97,6 @@ const USER_DRIVEN_SCROLL_WINDOW_MS = 200;
  * inherits it.
  */
 const TAIL_REALIGN_RESIZE_CALLBACKS = 6;
-/**
- * Frames the viewport anchor keeps being re-asserted after the transcript moves.
- *
- * The virtualizer settles a prepend over several frames — a margin holds the
- * position, then the real item heights land in padding, then the margin is
- * released — and a margin change fires no ResizeObserver at all. There is
- * therefore no single callback that can catch every step, so the anchor is
- * re-asserted for a window instead. Measured: four consecutive painted frames
- * displaced by 896px before the correction arrived, which is the flicker.
- *
- * Refreshed whenever a correction is actually needed, so a long settle keeps
- * the window open rather than running out halfway through it.
- */
-const ANCHOR_SETTLE_FRAMES = 20;
 const FLOW_CHAT_VIRTUOSO_VIEWPORT_INCREASE = { top: 600, bottom: 600 } as const;
 const IDLE_HISTORY_WINDOW_BOUNDARY_STATE: Record<
   SessionHistoryWindowDirection,
@@ -207,18 +179,6 @@ type FlowChatVirtuosoContext = {
 type PreparedTurnNavigation = {
   turnId: string;
   behavior: ScrollBehavior;
-};
-
-/**
- * Where the user is reading, expressed as a Turn rather than an offset.
- *
- * `scrollTop` is not a stable description of a reading position in a list whose
- * item heights are discovered lazily: every late measurement rewrites the offset
- * of everything below it, so the same number means a different place.
- */
-type ViewportAnchor = {
-  turnId: string;
-  offsetFromScrollerTop: number;
 };
 
 const FlowChatVirtuosoHeader = ({ context }: ContextProp<FlowChatVirtuosoContext>) => (
@@ -429,12 +389,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [isOpenViewportSettled, setIsOpenViewportSettled] = useState(false);
   const preparedTurnNavigationRef = useRef<PreparedTurnNavigation | null>(null);
-  const viewportAnchorRef = useRef<ViewportAnchor | null>(null);
-  /** When the user last did something that scrolls, by their own hand. */
-  const lastUserScrollIntentAtRef = useRef(0);
-  /** Frames left in which the anchor is still being re-asserted. */
-  const anchorSettleFramesRef = useRef(0);
-  const anchorSettleFrameRef = useRef<number | null>(null);
   const boundaryRequestRef = useRef<Record<SessionHistoryWindowDirection, Promise<void> | null>>({
     before: null,
     after: null,
@@ -515,11 +469,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const isOpeningViewport = useCallback(() => !isOpenViewportSettledRef.current, []);
 
   const getRenderedUserMessageElement = useCallback((turnId: string) => (
-    Array.from(
-      scrollerElementRef.current?.querySelectorAll<HTMLElement>(
-        '.virtual-item-wrapper[data-item-type="user-message"]',
-      ) ?? [],
-    ).find(element => element.dataset.turnId === turnId) ?? null
+    findRenderedTurnAnchorElement(scrollerElementRef.current, turnId)
   ), []);
 
   const readContentEndScrollTop = useCallback((scroller: HTMLElement) => (
@@ -614,134 +564,24 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const isFollowingOutputRef = useRef(isFollowingOutput);
   isFollowingOutputRef.current = isFollowingOutput;
 
-  /*
-   * Element-anchored viewport keeper.
-   *
-   * The virtualizer places items in the scroll range before it knows how tall
-   * they are, so every late measurement rewrites the offset of everything below
-   * it. Its own correction for that is a scroll by the change in *total* list
-   * height, which assumes the change happened above the viewport, and it is
-   * gated on scroll direction and on no programmatic scroll being in flight.
-   * Measured on a 27-Turn session: one item measuring 38px -> 1003px produced a
-   * 965px scroll across a whole Turn, and a 1680px growth that really was above
-   * the viewport produced no correction at all — `scrollTop` held at 1133 while
-   * `scrollHeight` went 8393 -> 10073, sliding the transcript down by the full
-   * amount.
-   *
-   * So the correction cannot be delegated. This restores a *relationship* — a
-   * Turn at an offset from the viewport top — which makes it idempotent: when
-   * the virtualizer got it right the correction is zero, and when it got it
-   * wrong or skipped it, this is what makes it right. It is also why the pair
-   * below is not the "capture once per prepend" scheme it replaced: that one
-   * ran in the commit that changed the item list, which is a frame before the
-   * heights it was supposed to compensate reach the DOM. Measured corrections
-   * over three reproductions: +1, 0, 0.
-   */
-  const captureViewportAnchor = useCallback(() => {
-    const scroller = scrollerElementRef.current;
-    if (!scroller) return;
-    const scrollerRect = scroller.getBoundingClientRect();
-    const anchor = Array.from(
-      scroller.querySelectorAll<HTMLElement>(
-        '.virtual-item-wrapper[data-item-type="user-message"]',
-      ),
-    ).find(element => element.getBoundingClientRect().bottom > scrollerRect.top);
-    if (!anchor?.dataset.turnId) {
-      viewportAnchorRef.current = null;
-      return;
-    }
-    viewportAnchorRef.current = {
-      turnId: anchor.dataset.turnId,
-      offsetFromScrollerTop: anchor.getBoundingClientRect().top - scrollerRect.top,
-    };
-  }, []);
+  const isViewportOwnedElsewhere = useCallback(() => (
+    isFollowingOutputRef.current || isOpeningViewport()
+  ), [isOpeningViewport]);
 
-  /**
-   * Put the anchored Turn back where it was.
-   *
-   * Runs where a correction can still beat the paint: the ResizeObserver
-   * callback, which the browser delivers after layout and before painting, and
-   * the layout effect that follows an item-list change.
-   */
-  const restoreViewportAnchor = useCallback((): boolean => {
-    const scroller = scrollerElementRef.current;
-    const anchor = viewportAnchorRef.current;
-    // Follow-output writes its own target every frame, and the opening reveal
-    // is still walking the viewport down to the tail. Neither wants a second
-    // opinion about where the viewport belongs.
-    if (!scroller || !anchor || isFollowingOutputRef.current || isOpeningViewport()) {
-      return false;
-    }
-    const element = getRenderedUserMessageElement(anchor.turnId);
-    // The anchored Turn can leave the rendered window entirely. Nothing can be
-    // restored from it then, so drop it and let the next scroll pick a Turn
-    // that is actually on screen.
-    if (!element) {
-      viewportAnchorRef.current = null;
-      return false;
-    }
-    const correction = element.getBoundingClientRect().top
-      - scroller.getBoundingClientRect().top
-      - anchor.offsetFromScrollerTop;
-    // Already where it belongs, which still counts as answered.
-    if (Math.abs(correction) < 0.5) return true;
-    scroller.scrollTop += correction;
-    return true;
-  }, [getRenderedUserMessageElement, isOpeningViewport]);
-
-  /*
-   * The interceptor and the settle loop are both installed once, so neither
-   * can close over a callback that changes identity. They read it from here.
-   */
-  const restoreViewportAnchorRef = useRef(restoreViewportAnchor);
-  restoreViewportAnchorRef.current = restoreViewportAnchor;
-
-  /*
-   * Hold the anchor across a settle.
-   *
-   * One callback per change is not enough, and no callback covers all of it:
-   * the virtualizer moves a prepend through a margin, then padding, then
-   * releases the margin, and a margin change fires no ResizeObserver. So every
-   * signal that the transcript moved opens a window, and the anchor is
-   * re-asserted on each frame of it. A frame that had to correct refreshes the
-   * window, so a settle that runs long is followed to its end rather than
-   * abandoned partway.
-   */
-  const openAnchorSettleWindow = useCallback(() => {
-    anchorSettleFramesRef.current = ANCHOR_SETTLE_FRAMES;
-    if (anchorSettleFrameRef.current !== null) return;
-    const step = () => {
-      anchorSettleFrameRef.current = null;
-      anchorSettleFramesRef.current -= 1;
-      if (restoreViewportAnchorRef.current()) {
-        anchorSettleFramesRef.current = ANCHOR_SETTLE_FRAMES;
-      }
-      if (anchorSettleFramesRef.current > 0) {
-        anchorSettleFrameRef.current = requestAnimationFrame(step);
-      }
-    };
-    anchorSettleFrameRef.current = requestAnimationFrame(step);
-  }, []);
-
-  useEffect(() => () => {
-    if (anchorSettleFrameRef.current !== null) {
-      cancelAnimationFrame(anchorSettleFrameRef.current);
-      anchorSettleFrameRef.current = null;
-    }
-  }, []);
-
-  const openAnchorSettleWindowRef = useRef<() => void>(() => {});
-  openAnchorSettleWindowRef.current = openAnchorSettleWindow;
+  const viewportAnchor = useFlowChatViewportAnchor({
+    scrollerRef: scrollerElementRef,
+    isViewportOwnedElsewhere,
+  });
 
   useLayoutEffect(() => {
-    openAnchorSettleWindow();
-  }, [openAnchorSettleWindow, virtualItems]);
+    viewportAnchor.openSettleWindow();
+  }, [viewportAnchor, virtualItems]);
 
   const notifyUserScrollIntent = useCallback(() => {
-    lastUserScrollIntentAtRef.current = performance.now();
+    viewportAnchor.markUserScrollIntent();
     handleUserScrollIntent();
     onUserScrollIntent?.();
-  }, [handleUserScrollIntent, onUserScrollIntent]);
+  }, [handleUserScrollIntent, onUserScrollIntent, viewportAnchor]);
 
   const updateVisibleTurnInfoFromViewport = useCallback(() => {
     const scroller = scrollerElementRef.current;
@@ -943,25 +783,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       updateIsAtBottom();
       handleScroll();
       /*
-       * Re-anchor to wherever the user has arrived, and only there.
-       *
-       * A scroll event alone cannot say whether the user moved or the
-       * transcript moved under them, so the qualifier is a recent intent
-       * event — the same distinction follow-output draws. Keying off "did the
-       * content height change" instead does not work here: lazy measurement
-       * changes it on almost every frame, so the anchor froze seconds in the
-       * past and the keeper spent its corrections dragging a scrolling
-       * viewport backwards. Measured: 1075 blocked captures against 8 accepted
-       * ones, and a 1037px correction against the user's own gesture.
-       *
-       * Having no anchor overrides the window, which is also what bootstraps
-       * the very first one.
+       * Re-anchor to wherever the user has arrived, and only there. The rule
+       * for "was this scroll the user's" lives with the anchor.
        */
-      const isUserDrivenScroll = performance.now() - lastUserScrollIntentAtRef.current
-        <= USER_DRIVEN_SCROLL_WINDOW_MS;
-      if (viewportAnchorRef.current === null || isUserDrivenScroll) {
-        captureViewportAnchor();
-      }
+      viewportAnchor.captureAnchorForScroll();
       scheduleVisibleTurnInfoUpdate();
     };
     const handleWheel = () => notifyUserScrollIntent();
@@ -1001,12 +826,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       window.removeEventListener('pointercancel', handlePointerRelease);
     };
   }, [
-    captureViewportAnchor,
     handleScroll,
     notifyUserScrollIntent,
     scheduleVisibleTurnInfoUpdate,
     scrollerElement,
     updateIsAtBottom,
+    viewportAnchor,
   ]);
 
   useEffect(() => {
@@ -1040,9 +865,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
        * genuine resize re-anchors instead of correcting.
        */
       if (viewportBoxChanged) {
-        captureViewportAnchor();
+        viewportAnchor.captureAnchor();
       } else {
-        openAnchorSettleWindow();
+        viewportAnchor.openSettleWindow();
       }
 
       if (tailRealignCallbacksRef.current > 0) {
@@ -1076,13 +901,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     observer.observe(scrollerElement);
     return () => observer.disconnect();
   }, [
-    captureViewportAnchor,
     handleViewportResize,
-    openAnchorSettleWindow,
     scheduleFollowToLatest,
     scheduleVisibleTurnInfoUpdate,
     scrollerElement,
     updateIsAtBottom,
+    viewportAnchor,
   ]);
 
   /**
@@ -1360,8 +1184,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         // The virtualizer only asks for a correction when something moved that
         // it could not place, so the request is also the signal that a settle
         // is under way.
-        openAnchorSettleWindowRef.current();
-        return restoreViewportAnchorRef.current();
+        viewportAnchor.openSettleWindow();
+        return viewportAnchor.restoreAnchor();
       });
       setViewportHeightPx(scroller.clientHeight);
       // Seed the box so the observer's first callback is not read as a resize.
@@ -1370,7 +1194,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         height: scroller.clientHeight,
       };
     }
-  }, []);
+  }, [viewportAnchor]);
 
   const scrollToPhysicalBottom = useCallback(() => {
     enterFollowOutput('jump-to-latest');

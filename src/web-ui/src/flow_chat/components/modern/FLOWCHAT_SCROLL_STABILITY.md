@@ -150,6 +150,21 @@ comment claiming it watched content. The item list is the element that grows,
 and `border-box` is required because the virtualizer parks item space in
 padding.
 
+**The keeper does not know there is a virtualizer.** It lives in
+`flowChatViewportAnchor.ts` (geometry and the DOM contract for the anchor
+element) and `useFlowChatViewportAnchor.ts` (capture, restore, and the settle
+window), and it talks to a scroller element and the Turns rendered inside it and
+to nothing else. Only the *interception* above is virtualizer-specific, and it
+stays in `VirtualMessageList.tsx` next to the rest of the react-virtuoso
+plumbing. A headless virtualizer would delete the interceptor and keep the
+keeper unchanged.
+
+One consequence of the refresh rule is worth stating plainly: a frame that finds
+the anchor already in place still counts as answered, so an open transcript that
+no other writer owns holds one animation frame in flight indefinitely. The cost
+is a `querySelectorAll` and two rect reads per frame. The window only winds down
+once there is no anchor to keep.
+
 **What this does not fix.** The reserve for an unmeasured item is a single
 scalar (`lastSize`), and this transcript alternates 38px user messages with
 model rounds up to 5012px. So the scroll range stays wrong by an order of
@@ -552,6 +567,8 @@ pnpm --dir src/web-ui run lint
 pnpm --dir src/web-ui run test:run \
   src/flow_chat/components/modern/flowChatTailFollow.test.ts \
   src/flow_chat/components/modern/flowChatLiveTailWindow.test.ts \
+  src/flow_chat/components/modern/flowChatViewportAnchor.test.ts \
+  src/flow_chat/components/modern/useFlowChatViewportAnchor.test.tsx \
   src/flow_chat/components/modern/useFlowChatFollowOutput.test.tsx \
   src/flow_chat/components/modern/VirtualMessageList.session-boundary.test.tsx \
   src/flow_chat/components/modern/ModernFlowChatContainer.history-state.test.tsx \
@@ -625,6 +642,8 @@ confirm:
 
 - `flowChatTailFollow.ts`
 - `flowChatLiveTailWindow.ts`
+- `flowChatViewportAnchor.ts`
+- `useFlowChatViewportAnchor.ts`
 - `useFlowChatFollowOutput.ts`
 - `VirtualMessageList.tsx`
 - `ModernFlowChatContainer.tsx`

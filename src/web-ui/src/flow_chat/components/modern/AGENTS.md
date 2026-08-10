@@ -26,6 +26,10 @@ Also follow the repository and Web UI instructions in the parent guides.
 - `scheduleFollowToLatest` must not force the content end — the hold rule is
   what keeps a collapse from moving the viewport.
 - `useFlowChatFollowOutput` is the only continuous outer viewport writer.
+- The viewport anchor lives in `flowChatViewportAnchor.ts` and
+  `useFlowChatViewportAnchor.ts` and must stay independent of the virtualizer:
+  it may read the scroller and the Turns rendered inside it, and nothing else.
+  Virtualizer-specific compensation stays in `VirtualMessageList`.
 - Keep Virtuoso `followOutput={false}`. "At bottom" is measured against the end
   of real content, so Virtuoso's `atBottomStateChange` stays unused.
 - One-shot Turn/search/history navigation remains inside `VirtualMessageList`.
@@ -49,6 +53,8 @@ pnpm --dir src/web-ui run test:run <focused-test-files>
 Relevant tests include:
 
 - `flowChatTailFollow.test.ts`
+- `flowChatViewportAnchor.test.ts`
+- `useFlowChatViewportAnchor.test.tsx`
 - `useFlowChatFollowOutput.test.tsx`
 - `VirtualMessageList.layout.test.ts`
 - `VirtualMessageList.session-boundary.test.tsx`
