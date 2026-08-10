@@ -7830,6 +7830,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .session_manager
             .restore_session(workspace_path, session_id)
             .await?;
+        // P1-S2：legacy workspace 入口同样补角色重注册（与 restore_session_for_workspace 对齐）。
+        self.restore_session_role_best_effort(workspace_path, session_id)
+            .await;
         self.reconcile_restored_session(session_id, session).await
     }
 
@@ -8308,6 +8311,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .session_manager
             .restore_session_from_storage_path(session_storage_path, session_id)
             .await?;
+        // P1-S2：storage-path 系 restore 变体与 workspace 版对齐，恢复后
+        // 重注册持久化 RBAC 角色（R-14 B2）。进程重启后 desktop 生产入口
+        // （agentic_api/session_application）走 storage-path 版，缺这步会
+        // 导致子代理角色静默丢失、回落到 context 级空模板全放行。
+        // 已解析 sessions 目录可直接作为 workspace_path（metadata store
+        // 对 resolved dir 原样使用），见 persistence `project_sessions_dir`。
+        self.restore_session_role_best_effort(session_storage_path, session_id)
+            .await;
         self.reconcile_restored_session(session_id, session).await
     }
 
@@ -8320,6 +8331,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .session_manager
             .restore_internal_session_from_storage_path(session_storage_path, session_id)
             .await?;
+        // P1-S2：与 workspace 版 restore_internal_session_for_workspace 对齐
+        // （:8361 已调 restore_session_role_best_effort）。
+        self.restore_session_role_best_effort(session_storage_path, session_id)
+            .await;
         self.reconcile_restored_session(session_id, session).await
     }
 
@@ -8403,6 +8418,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .session_manager
             .restore_session_with_turns_from_storage_path(session_storage_path, session_id)
             .await?;
+        // P1-S2：与 workspace 版 restore_session_with_turns_for_workspace 对齐
+        // （:8436 已调 restore_session_role_best_effort）。
+        self.restore_session_role_best_effort(session_storage_path, session_id)
+            .await;
         self.reconcile_restored_session(session_id, restored).await
     }
 
@@ -8415,6 +8434,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .session_manager
             .restore_internal_session_with_turns_from_storage_path(session_storage_path, session_id)
             .await?;
+        // P1-S2：与 workspace 版 restore_internal_session_with_turns_for_workspace
+        // 对齐（:8456 已调 restore_session_role_best_effort）。
+        self.restore_session_role_best_effort(session_storage_path, session_id)
+            .await;
         self.reconcile_restored_session(session_id, restored).await
     }
 
@@ -8502,9 +8525,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Vec<crate::service::session::DialogTurnData>,
         crate::agentic::session::session_manager::SessionViewRestoreTiming,
     )> {
-        self.session_manager
+        let restored = self
+            .session_manager
             .restore_session_view_timed(workspace_path, session_id)
-            .await
+            .await?;
+        // P1-S2：workspace-path 系 view restore 变体同样补角色重注册
+        // （与 restore_session_view 对齐，S-31 根因级封死同根分叉）。
+        self.restore_session_role_best_effort(workspace_path, session_id)
+            .await;
+        Ok(restored)
     }
 
     pub async fn restore_session_view_for_workspace_timed(
@@ -8516,9 +8545,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Vec<crate::service::session::DialogTurnData>,
         crate::agentic::session::session_manager::SessionViewRestoreTiming,
     )> {
-        self.session_manager
+        let workspace_path = request.workspace_path.clone();
+        let restored = self
+            .session_manager
             .restore_session_view_for_workspace_timed(request, session_id)
-            .await
+            .await?;
+        // P1-S2：workspace-path 系 view restore 变体同样补角色重注册。
+        self.restore_session_role_best_effort(&workspace_path, session_id)
+            .await;
+        Ok(restored)
     }
 
     pub async fn restore_session_view_from_storage_path_timed(
@@ -8530,9 +8565,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Vec<crate::service::session::DialogTurnData>,
         crate::agentic::session::session_manager::SessionViewRestoreTiming,
     )> {
-        self.session_manager
+        let restored = self
+            .session_manager
             .restore_session_view_from_storage_path_timed(session_storage_path, session_id)
-            .await
+            .await?;
+        // P1-S2：与 workspace 版 restore_session_view（:8491，desktop 主入口
+        // restore_session_view 走 storage-path 版）对齐，恢复后重注册 RBAC 角色。
+        self.restore_session_role_best_effort(session_storage_path, session_id)
+            .await;
+        Ok(restored)
     }
 
     pub async fn restore_session_view_tail(
@@ -8541,9 +8582,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: &str,
         tail_turn_count: usize,
     ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>, usize)> {
-        self.session_manager
+        let restored = self
+            .session_manager
             .restore_session_view_tail(workspace_path, session_id, tail_turn_count)
-            .await
+            .await?;
+        // P1-S2：workspace-path 系 view restore 变体同样补角色重注册。
+        self.restore_session_role_best_effort(workspace_path, session_id)
+            .await;
+        Ok(restored)
     }
 
     pub async fn restore_session_view_tail_timed(
@@ -8557,9 +8603,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         usize,
         crate::agentic::session::session_manager::SessionViewRestoreTiming,
     )> {
-        self.session_manager
+        let restored = self
+            .session_manager
             .restore_session_view_tail_timed(workspace_path, session_id, tail_turn_count)
-            .await
+            .await?;
+        // P1-S2：workspace-path 系 view restore 变体同样补角色重注册。
+        self.restore_session_role_best_effort(workspace_path, session_id)
+            .await;
+        Ok(restored)
     }
 
     pub async fn restore_session_view_from_storage_path_tail_timed(
@@ -8573,13 +8624,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         usize,
         crate::agentic::session::session_manager::SessionViewRestoreTiming,
     )> {
-        self.session_manager
+        let restored = self
+            .session_manager
             .restore_session_view_from_storage_path_tail_timed(
                 session_storage_path,
                 session_id,
                 tail_turn_count,
             )
-            .await
+            .await?;
+        // P1-S2：与 workspace 版 restore_session_view 对齐，恢复后重注册 RBAC 角色。
+        self.restore_session_role_best_effort(session_storage_path, session_id)
+            .await;
+        Ok(restored)
     }
 
     pub async fn restore_internal_session_view(
@@ -8587,9 +8643,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
-        self.session_manager
+        let restored = self
+            .session_manager
             .restore_internal_session_view(workspace_path, session_id)
-            .await
+            .await?;
+        // P1-S2：workspace-path 系 view restore 变体同样补角色重注册。
+        self.restore_session_role_best_effort(workspace_path, session_id)
+            .await;
+        Ok(restored)
     }
 
     pub async fn restore_internal_session_view_timed(
@@ -8601,9 +8662,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Vec<crate::service::session::DialogTurnData>,
         crate::agentic::session::session_manager::SessionViewRestoreTiming,
     )> {
-        self.session_manager
+        let restored = self
+            .session_manager
             .restore_internal_session_view_timed(workspace_path, session_id)
-            .await
+            .await?;
+        // P1-S2：workspace-path 系 view restore 变体同样补角色重注册。
+        self.restore_session_role_best_effort(workspace_path, session_id)
+            .await;
+        Ok(restored)
     }
 
     pub async fn restore_internal_session_view_for_workspace_timed(
@@ -8615,9 +8681,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Vec<crate::service::session::DialogTurnData>,
         crate::agentic::session::session_manager::SessionViewRestoreTiming,
     )> {
-        self.session_manager
+        let workspace_path = request.workspace_path.clone();
+        let restored = self
+            .session_manager
             .restore_internal_session_view_for_workspace_timed(request, session_id)
-            .await
+            .await?;
+        // P1-S2：workspace-path 系 view restore 变体同样补角色重注册。
+        self.restore_session_role_best_effort(&workspace_path, session_id)
+            .await;
+        Ok(restored)
     }
 
     pub async fn restore_internal_session_view_from_storage_path_timed(
@@ -8629,9 +8701,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Vec<crate::service::session::DialogTurnData>,
         crate::agentic::session::session_manager::SessionViewRestoreTiming,
     )> {
-        self.session_manager
+        let restored = self
+            .session_manager
             .restore_internal_session_view_from_storage_path_timed(session_storage_path, session_id)
-            .await
+            .await?;
+        // P1-S2：与 workspace 版 restore_internal_session_view_for_workspace_timed
+        // 对齐（内部会话同样需要角色重注册），恢复后重注册 RBAC 角色。
+        self.restore_session_role_best_effort(session_storage_path, session_id)
+            .await;
+        Ok(restored)
     }
 
     pub async fn restore_internal_session_view_tail(
@@ -8640,9 +8718,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: &str,
         tail_turn_count: usize,
     ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>, usize)> {
-        self.session_manager
+        let restored = self
+            .session_manager
             .restore_internal_session_view_tail(workspace_path, session_id, tail_turn_count)
-            .await
+            .await?;
+        // P1-S2：workspace-path 系 view restore 变体同样补角色重注册。
+        self.restore_session_role_best_effort(workspace_path, session_id)
+            .await;
+        Ok(restored)
     }
 
     pub async fn restore_internal_session_view_tail_timed(
@@ -8656,9 +8739,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         usize,
         crate::agentic::session::session_manager::SessionViewRestoreTiming,
     )> {
-        self.session_manager
+        let restored = self
+            .session_manager
             .restore_internal_session_view_tail_timed(workspace_path, session_id, tail_turn_count)
-            .await
+            .await?;
+        // P1-S2：workspace-path 系 view restore 变体同样补角色重注册。
+        self.restore_session_role_best_effort(workspace_path, session_id)
+            .await;
+        Ok(restored)
     }
 
     pub async fn restore_internal_session_view_from_storage_path_tail_timed(
@@ -8672,13 +8760,19 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         usize,
         crate::agentic::session::session_manager::SessionViewRestoreTiming,
     )> {
-        self.session_manager
+        let restored = self
+            .session_manager
             .restore_internal_session_view_from_storage_path_tail_timed(
                 session_storage_path,
                 session_id,
                 tail_turn_count,
             )
-            .await
+            .await?;
+        // P1-S2：与 workspace 版 restore_internal_session_view_for_workspace_timed
+        // 对齐（内部会话同样需要角色重注册），恢复后重注册 RBAC 角色。
+        self.restore_session_role_best_effort(session_storage_path, session_id)
+            .await;
+        Ok(restored)
     }
 
     /// List all sessions
@@ -15059,6 +15153,133 @@ mod tests {
             "restore_session_view must keep the main-session exemption (no template landed)"
         );
         clear_session_role(&main_session_id);
+    }
+
+    #[tokio::test]
+    async fn storage_path_restore_registers_persisted_role() {
+        // P1-S2 断言：storage-path 系 restore 变体（desktop 生产主入口）必须
+        // 与 workspace 版对齐，恢复后重注册持久化 RBAC 角色——否则进程重启后
+        // 子代理角色静默丢失、回落到 context 级空模板全放行。
+        use crate::agentic::tools::{clear_session_role, get_session_restrictions, get_session_role, AgentRole};
+        let (coordinator, session_manager) = test_persistent_coordinator();
+        let workspace = tempfile::tempdir().expect("workspace");
+        let workspace_path = workspace.path().to_string_lossy().into_owned();
+
+        // 主会话：restore_session_from_storage_path 后 Commander 角色必须重注册。
+        let main_session_id = format!("storage-main-{}", uuid::Uuid::new_v4());
+        coordinator
+            .create_session_with_workspace_and_creator_internal(
+                Some(main_session_id.clone()),
+                "main".to_string(),
+                "agentic".to_string(),
+                SessionConfig::default(),
+                workspace_path.clone(),
+                None,
+                false,
+                false,
+                None,
+                None,
+            )
+            .await
+            .expect("create main session");
+        let storage_path = session_manager
+            .effective_session_storage_path(&main_session_id)
+            .await
+            .expect("resolve storage path");
+        clear_session_role(&main_session_id);
+        let restored = coordinator
+            .restore_session_from_storage_path(&storage_path, &main_session_id)
+            .await
+            .expect("restore from storage path");
+        assert_eq!(restored.session_id, main_session_id);
+        assert_eq!(
+            get_session_role(&main_session_id),
+            Some(AgentRole::Commander),
+            "restore_session_from_storage_path must re-register the commander role"
+        );
+        clear_session_role(&main_session_id);
+
+        // 子代理：storage-path restore 后 Executor 角色 + 默认模板必须落地。
+        let sub_session_id = format!("storage-sub-{}", uuid::Uuid::new_v4());
+        coordinator
+            .create_session_with_workspace_and_creator_internal(
+                Some(sub_session_id.clone()),
+                "subagent".to_string(),
+                "agentic".to_string(),
+                SessionConfig::default(),
+                workspace_path.clone(),
+                Some("parent-session".to_string()),
+                false,
+                true,
+                Some("parent-session".to_string()),
+                Some("TestSubagent".to_string()),
+            )
+            .await
+            .expect("create subagent session");
+        let storage_path = session_manager
+            .effective_session_storage_path(&sub_session_id)
+            .await
+            .expect("resolve storage path");
+        clear_session_role(&sub_session_id);
+        let (restored, _turns) = coordinator
+            .restore_internal_session_with_turns_from_storage_path(
+                &storage_path,
+                &sub_session_id,
+            )
+            .await
+            .expect("restore subagent from storage path");
+        assert_eq!(restored.session_id, sub_session_id);
+        assert_eq!(
+            get_session_role(&sub_session_id),
+            Some(AgentRole::Executor),
+            "storage-path restore must re-register the executor role for a subagent"
+        );
+        assert!(
+            get_session_restrictions(&sub_session_id)
+                .expect("subagent must land the Executor template")
+                .ensure_operation_allowed(
+                    bitfun_agent_tools::OperationClass::ExecuteCode,
+                    "ExecCommand"
+                )
+                .is_ok(),
+            "storage-path restore must land the Executor template"
+        );
+        clear_session_role(&sub_session_id);
+
+        // view 系 storage-path 变体（desktop restore_session_view 主入口）
+        // 同样必须重注册角色。
+        let view_session_id = format!("storage-view-{}", uuid::Uuid::new_v4());
+        coordinator
+            .create_session_with_workspace_and_creator_internal(
+                Some(view_session_id.clone()),
+                "view".to_string(),
+                "agentic".to_string(),
+                SessionConfig::default(),
+                workspace_path.clone(),
+                None,
+                false,
+                false,
+                None,
+                None,
+            )
+            .await
+            .expect("create view session");
+        let storage_path = session_manager
+            .effective_session_storage_path(&view_session_id)
+            .await
+            .expect("resolve storage path");
+        clear_session_role(&view_session_id);
+        let (restored, _turns, _timing) = coordinator
+            .restore_session_view_from_storage_path_timed(&storage_path, &view_session_id)
+            .await
+            .expect("restore view from storage path");
+        assert_eq!(restored.session_id, view_session_id);
+        assert_eq!(
+            get_session_role(&view_session_id),
+            Some(AgentRole::Commander),
+            "restore_session_view_from_storage_path_timed must re-register the role"
+        );
+        clear_session_role(&view_session_id);
     }
 
     #[tokio::test]

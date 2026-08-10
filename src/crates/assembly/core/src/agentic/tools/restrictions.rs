@@ -122,12 +122,19 @@ fn build_default_role_permissions() -> RolePermissionMap {
     //   SessionMessage/SessionControl/LegionControl 等会话内通信与任务跟踪
     //   工具归类 Communicate（framework.rs classify_tool_call），缺失会被
     //   ensure_operation_allowed 拦截，导致执行者无法建任务清单/协调子会话）
+    // 显式白名单（P1-S1 安全收敛）：Executor 模板不再依赖"白名单空 = 全放行"。
+    // 工具白名单 = subagent_default_tools()（agentic 全工具，单源同步）∪
+    //   GetToolSpec/CallDeferredTool（deferred 工具链解锁）∪ GetTime +
+    //   review 核心工具 GetFileDiff/submit_code_review（review 形态
+    //   CodeReview/DeepReview/ReviewWorker/ReviewJudge 走默认 Executor 模板，
+    //   白名单缺这两个会让审查流程不可用）。
     // 注意：merge subagent_tool_restrictions()（与 GeneralPurpose 专属模板一致）——
     // 所有 Executor 子代理（含非 GeneralPurpose/agentic 形态：CodeReview/
     // DeepReview/Explore/FileFinder/ResearchSpecialist 等）必须带 subagent deny
     // list（ControlHub/GenerativeUI/ReviewPlatform/MiniApp 生命周期/AgentWait），
     // 否则 session_override 优先时 deny 被绕过（ReviewPlatform 已进 review 全家桶
-    // default_tools，实际可触达 = 安全边界缺口）。
+    // default_tools，实际可触达 = 安全边界缺口）。白名单 + deny 双保险：
+    // 新增工具默认不在白名单 → 子代理侧默认禁止（与 MiniApp 白名单哲学对齐）。
     {
         let mut allowed_ops = BTreeSet::new();
         allowed_ops.insert(OperationClass::ReadOnly);
@@ -135,8 +142,31 @@ fn build_default_role_permissions() -> RolePermissionMap {
         allowed_ops.insert(OperationClass::DeleteFile);
         allowed_ops.insert(OperationClass::ExecuteCode);
         allowed_ops.insert(OperationClass::Communicate);
+        let mut allowed_tools = BTreeSet::new();
+        for name in subagent_default_tools() {
+            allowed_tools.insert(name);
+        }
+        // Deferred 工具链核心：GetToolSpec/CallDeferredTool 不在
+        // subagent_default_tools()，但缺失会导致全部 deferred 工具
+        // （SessionControl/SessionMessage/Git/Plan 等）无法解锁——与
+        // Commander 模板同源补充（执行者形态同样需要 deferred 解锁）。
+        allowed_tools.insert("GetToolSpec".to_string());
+        allowed_tools.insert("CallDeferredTool".to_string());
+        // GetTime 不在 subagent_default_tools()，但执行者常用（时间/日期事实，
+        // 无参数只读），与 Commander 模板同源。
+        allowed_tools.insert("GetTime".to_string());
+        // review 核心工具（形态分流：review 形态不命中 is_executor_agent_type，
+        // 走默认 Executor 模板；白名单必须显式包含，否则 GetFileDiff/
+        // submit_code_review 被 ensure_tool_allowed 拦截，DeepReview 流程不可用）。
+        allowed_tools.insert("GetFileDiff".to_string());
+        allowed_tools.insert("submit_code_review".to_string());
+        // review/探索形态附加只读工具（不在 subagent_default_tools() 内）：
+        // LaunchReviewAgent（review 编排入口，deferred）+ LS（目录形态只读）。
+        allowed_tools.insert("LaunchReviewAgent".to_string());
+        allowed_tools.insert("LS".to_string());
         let mut restrictions = ToolRuntimeRestrictions {
             allowed_operation_classes: allowed_ops,
+            allowed_tool_names: allowed_tools,
             ..Default::default()
         };
         restrictions.merge(&subagent_tool_restrictions());
@@ -149,18 +179,34 @@ fn build_default_role_permissions() -> RolePermissionMap {
     // Reviewers must be able to inspect and reproduce findings; the signature
     // now intentionally overlaps Executor, so role identity must come from the
     // persisted session role (SESSION_ROLES), never from template inference.
+    // 显式白名单（P1-S1 安全收敛）：与 Executor 同源（subagent_default_tools()
+    // ∪ 专有），新增工具默认禁止；deny 双保险（subagent_tool_restrictions）。
     {
         let mut allowed_ops = BTreeSet::new();
         allowed_ops.insert(OperationClass::ReadOnly);
         allowed_ops.insert(OperationClass::WriteFile);
         allowed_ops.insert(OperationClass::ExecuteCode);
-        map.insert(
-            AgentRole::Reviewer,
-            ToolRuntimeRestrictions {
-                allowed_operation_classes: allowed_ops,
-                ..Default::default()
-            },
-        );
+        let mut allowed_tools = BTreeSet::new();
+        for name in subagent_default_tools() {
+            allowed_tools.insert(name);
+        }
+        // review 核心工具（GetFileDiff/submit_code_review 不在共享工具集）。
+        allowed_tools.insert("GetFileDiff".to_string());
+        allowed_tools.insert("submit_code_review".to_string());
+        // review/探索形态附加只读工具（与 Executor 同源）。
+        allowed_tools.insert("LaunchReviewAgent".to_string());
+        allowed_tools.insert("LS".to_string());
+        // Deferred 工具链核心（与 Executor/Commander 同源）。
+        allowed_tools.insert("GetToolSpec".to_string());
+        allowed_tools.insert("CallDeferredTool".to_string());
+        allowed_tools.insert("GetTime".to_string());
+        let mut restrictions = ToolRuntimeRestrictions {
+            allowed_operation_classes: allowed_ops,
+            allowed_tool_names: allowed_tools,
+            ..Default::default()
+        };
+        restrictions.merge(&subagent_tool_restrictions());
+        map.insert(AgentRole::Reviewer, restrictions);
     }
 
     // ── Warden ─────────────────────────────────────────────────────
@@ -722,27 +768,84 @@ mod tests {
     fn default_executor_template_review_shapes_keep_review_tools_visible() {
         // 形态分流（P2 回归修复）：review 形态（CodeReview/DeepReview/
         // ReviewWorker/ReviewJudge/ReviewFixer）不命中 is_executor_agent_type →
-        // 走默认 Executor 模板。默认模板 allowed_tool_names 为空（白名单空 =
-        // 所有工具允许），因此 review 核心工具 GetFileDiff/submit_code_review
-        // 不被白名单过滤（模型可见 + 可调用）；同时 P1 的 deny list merge
-        // 保证 ReviewPlatform 仍被拦截（安全边界保留）。
+        // 走默认 Executor 模板。默认模板**显式白名单**（P1-S1 收敛）必须包含
+        // review 核心工具 GetFileDiff/submit_code_review（模型可见 + 可调用），
+        // 同时 P1 的 deny list merge 保证 ReviewPlatform 仍被拦截（安全边界保留）。
         let permissions = get_default_permissions(AgentRole::Executor);
         assert!(
-            permissions.allowed_tool_names.is_empty(),
-            "默认 Executor 模板白名单应为空（review 形态依赖白名单空 = 全允许）"
+            !permissions.allowed_tool_names.is_empty(),
+            "默认 Executor 模板白名单必须非空（P1-S1：空 = 全放行已废除）"
         );
         assert!(
             permissions.ensure_tool_allowed("GetFileDiff").is_ok(),
-            "review 形态 GetFileDiff 必须可见可用（白名单空不拦）"
+            "review 形态 GetFileDiff 必须可见可用（显式白名单包含）"
         );
         assert!(
             permissions.ensure_tool_allowed("submit_code_review").is_ok(),
-            "review 形态 submit_code_review 必须可见可用（白名单空不拦）"
+            "review 形态 submit_code_review 必须可见可用（显式白名单包含）"
         );
         assert!(
             permissions.ensure_tool_allowed("ReviewPlatform").is_err(),
             "review 形态 ReviewPlatform 仍被 deny（P1 deny list 生效）"
         );
+        assert!(
+            permissions.ensure_tool_allowed("ControlHub").is_err(),
+            "Executor 模板 ControlHub 必须被 deny"
+        );
+        assert!(
+            permissions.ensure_tool_allowed("GenerativeUI").is_err(),
+            "Executor 模板 GenerativeUI 必须被 deny"
+        );
+        assert!(
+            permissions.ensure_tool_allowed("InitMiniApp").is_err(),
+            "Executor 模板 InitMiniApp 必须被 deny"
+        );
+        assert!(
+            permissions.ensure_tool_allowed("ExecCommand").is_ok(),
+            "Executor 模板必须允许 ExecCommand"
+        );
+        assert!(
+            permissions.ensure_tool_allowed("Read").is_ok(),
+            "Executor 模板必须允许 Read"
+        );
+    }
+
+    #[test]
+    fn executor_and_reviewer_templates_deny_new_tools_by_default() {
+        // P1-S1 回归：显式白名单 = 新增工具默认禁止（与 MiniApp 白名单
+        // 「默认关闭」哲学对齐）。任何不在 subagent_default_tools() ∪ 专有
+        // 补充集的工具名都必须在 Executor/Reviewer 模板上被拒绝。
+        let unknown_tool = "FutureNewAgenticTool";
+        let executor = get_default_permissions(AgentRole::Executor);
+        assert!(
+            executor.ensure_tool_allowed(unknown_tool).is_err(),
+            "Executor 模板必须拒绝不在白名单的新增工具"
+        );
+        let reviewer = get_default_permissions(AgentRole::Reviewer);
+        assert!(
+            reviewer.ensure_tool_allowed(unknown_tool).is_err(),
+            "Reviewer 模板必须拒绝不在白名单的新增工具"
+        );
+        // 白名单与 deny 双保险：即便未来有人把新工具加进白名单，
+        // deny 面（subagent deny 列表）仍必须把高危宿主面关死。
+        for permissions in [executor, reviewer] {
+            for denied in [
+                "ControlHub",
+                "GenerativeUI",
+                "ReviewPlatform",
+                "InitMiniApp",
+                "FinalizeMiniApp",
+                "PublishMiniApp",
+                "PageDeploy",
+                "PagePublish",
+                "AgentWait",
+            ] {
+                assert!(
+                    permissions.ensure_tool_allowed(denied).is_err(),
+                    "{denied} 必须在 Executor/Reviewer 模板被 deny"
+                );
+            }
+        }
     }
 
     #[test]
