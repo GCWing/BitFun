@@ -7,6 +7,10 @@ mod coordination_store;
 pub mod coordinator;
 pub mod scheduler;
 pub mod state_manager;
+// Phase 1 of persistent subagents: types are not yet wired into production
+// call paths (Phase 2 registers the registry in the Coordinator).
+#[allow(dead_code)]
+mod subagent_instance;
 pub mod turn_outcome;
 mod turn_settlement;
 
@@ -18,6 +22,12 @@ pub use turn_outcome::*;
 pub(crate) use background_outcomes::{
     BackgroundSubagentOutcome, BackgroundSubagentOutcomeStore, BackgroundSubagentWaitMode,
     BackgroundSubagentWaitResult,
+};
+
+// Re-exported for Phase 2 wiring into the Coordinator; currently unused.
+#[expect(unused_imports)]
+pub(crate) use subagent_instance::{
+    SubagentInstance, SubagentInstanceRegistry, SubagentInstanceStatus,
 };
 
 pub use coordinator::get_global_coordinator;
