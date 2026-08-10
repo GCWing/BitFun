@@ -7,12 +7,12 @@
 //! `PluginDisplayStatus` types and the operations exposed here, never
 //! importing bitfun-core directly.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use bitfun_core::plugin_runtime::{activate_managed_plugin, deactivate_managed_plugin};
 use bitfun_core::plugin_source::{
-    refresh_managed_plugin_sources, ManagedPluginPackageView, ManagedPluginSourceSnapshot,
-    ManagedPluginTrustLevel,
+    managed_plugin_install_dirs, refresh_managed_plugin_sources, ManagedPluginPackageView,
+    ManagedPluginSourceSnapshot, ManagedPluginTrustLevel,
 };
 
 /// Three-state display status for a plugin, mirroring the deveco-code
@@ -169,14 +169,215 @@ pub(crate) async fn toggle_managed_plugin(
 
 /// Install a managed plugin from a package specifier.
 ///
-/// TODO: replace with `bitfun_core::plugin_source::install_managed_plugin`
-/// once the core install API lands. This skeleton placeholder reports the
-/// operation as not yet implemented so the install UI flow can be exercised
-/// without crashing the TUI.
+/// `spec` accepts:
+/// - a local directory or `.tgz` path (optionally `file://`-prefixed), or
+/// - an npm package name (`pkg`, `@scope/pkg`, `pkg@version`).
+///
+/// The package is fetched/staged in a temp dir, validated for a
+/// `bitfun.plugin.json` manifest, then placed at
+/// `<plugins_dir>/<package_id>/` in the chosen scope's plugin root. An
+/// existing install of the same id is replaced (reinstall). Dir resolution
+/// stays in core; the host-specific fetch (npm spawn / tarball extract / copy)
+/// lives here in the CLI-local backend.
 pub(crate) async fn install_managed_plugin(
-    _workspace: &Path,
-    _spec: &str,
-    _scope: PluginInstallScope,
+    workspace: &Path,
+    spec: &str,
+    scope: PluginInstallScope,
 ) -> Result<(), String> {
-    Err("plugin install is not yet implemented (TODO: wire core install API)".to_string())
+    let spec = spec.trim();
+    if spec.is_empty() {
+        return Err("plugin spec is empty".to_string());
+    }
+    let (user_dir, project_dir) = managed_plugin_install_dirs(workspace)
+        .map_err(|error| format!("failed to resolve plugin dirs: {error}"))?;
+    let target_root = match scope {
+        PluginInstallScope::User => user_dir,
+        PluginInstallScope::Project => project_dir,
+    };
+
+    let stage = tempfile::tempdir().map_err(|e| format!("failed to create staging dir: {e}"))?;
+    let package_dir = fetch_package(spec, stage.path()).await?;
+    let manifest_path = package_dir.join("bitfun.plugin.json");
+    let package_id = read_manifest_id(&manifest_path)
+        .map_err(|e| format!("installed package is not a valid BitFun plugin: {e}"))?;
+    validate_package_id(&package_id)?;
+
+    std::fs::create_dir_all(&target_root)
+        .map_err(|e| format!("failed to create plugin dir {}: {e}", target_root.display()))?;
+    let dest = target_root.join(&package_id);
+    if dest.exists() {
+        std::fs::remove_dir_all(&dest)
+            .map_err(|e| format!("failed to remove existing plugin '{}': {e}", package_id))?;
+    }
+    let result = rename_or_copy_dir(&package_dir, &dest)
+        .map_err(|e| format!("failed to place plugin '{}': {e}", package_id));
+    // `stage` drops here and cleans any leftover staging files.
+    let _ = stage;
+    result?;
+    Ok(())
+}
+
+/// Fetch a plugin package into `stage`, returning the dir that holds
+/// `bitfun.plugin.json`. Auto-detects local path vs npm name.
+async fn fetch_package(spec: &str, stage: &Path) -> Result<PathBuf, String> {
+    let local = spec.strip_prefix("file://").unwrap_or(spec);
+    if std::path::Path::new(local).exists() {
+        fetch_local(local, stage).await
+    } else {
+        fetch_npm(spec, stage).await
+    }
+}
+
+async fn fetch_local(src: &str, stage: &Path) -> Result<PathBuf, String> {
+    let src_path = std::path::Path::new(src);
+    if src_path.is_dir() {
+        let out = stage.join("package");
+        copy_dir_recursive(src_path, &out)?;
+        Ok(out)
+    } else if src_path.is_file() {
+        let extract_dir = stage.join("extract");
+        std::fs::create_dir_all(&extract_dir)
+            .map_err(|e| format!("failed to create extract dir: {e}"))?;
+        extract_tgz_into(src_path, &extract_dir)?;
+        locate_package_dir(&extract_dir)
+    } else {
+        Err(format!(
+            "local spec must be a directory or .tgz file: {src}"
+        ))
+    }
+}
+
+async fn fetch_npm(spec: &str, stage: &Path) -> Result<PathBuf, String> {
+    let output = tokio::process::Command::new("npm")
+        .args(["pack", spec])
+        .current_dir(stage)
+        .output()
+        .await
+        .map_err(|e| format!("failed to spawn `npm pack` (is npm on PATH?): {e}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "`npm pack {spec}` failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let tgz = find_single_tgz(stage)?;
+    let extract_dir = stage.join("extract");
+    std::fs::create_dir_all(&extract_dir)
+        .map_err(|e| format!("failed to create extract dir: {e}"))?;
+    extract_tgz_into(&tgz, &extract_dir)?;
+    locate_package_dir(&extract_dir)
+}
+
+fn extract_tgz_into(tgz: &Path, out_dir: &Path) -> Result<(), String> {
+    let f = std::fs::File::open(tgz)
+        .map_err(|e| format!("failed to open tarball {}: {e}", tgz.display()))?;
+    let gz = flate2::read::GzDecoder::new(f);
+    let mut archive = tar::Archive::new(gz);
+    archive
+        .unpack(out_dir)
+        .map_err(|e| format!("failed to extract tarball: {e}"))?;
+    Ok(())
+}
+
+fn find_single_tgz(dir: &Path) -> Result<PathBuf, String> {
+    let mut found = Vec::new();
+    for entry in std::fs::read_dir(dir).map_err(|e| format!("failed to read staging dir: {e}"))? {
+        let entry = entry.map_err(|e| format!("failed to read staging entry: {e}"))?;
+        let p = entry.path();
+        if p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("tgz") {
+            found.push(p);
+        }
+    }
+    match found.len() {
+        0 => Err("`npm pack` produced no .tgz file".to_string()),
+        1 => Ok(found.remove(0)),
+        _ => Err(format!(
+            "`npm pack` produced multiple .tgz files: {:?}",
+            found
+        )),
+    }
+}
+
+/// Locate the extracted dir that actually contains `bitfun.plugin.json`.
+/// npm tarballs extract to `<extract_dir>/package/`; BitFun tarballs may
+/// extract directly or one level deep.
+fn locate_package_dir(extract_dir: &Path) -> Result<PathBuf, String> {
+    let inner = extract_dir.join("package");
+    if inner.is_dir() && inner.join("bitfun.plugin.json").exists() {
+        return Ok(inner);
+    }
+    if extract_dir.join("bitfun.plugin.json").exists() {
+        return Ok(extract_dir.to_path_buf());
+    }
+    for entry in std::fs::read_dir(extract_dir)
+        .map_err(|e| format!("failed to read extracted package: {e}"))?
+    {
+        let entry = entry.map_err(|e| format!("failed to read extract entry: {e}"))?;
+        let p = entry.path();
+        if p.is_dir() && p.join("bitfun.plugin.json").exists() {
+            return Ok(p);
+        }
+    }
+    Err("installed package is missing bitfun.plugin.json".to_string())
+}
+
+fn read_manifest_id(manifest_path: &Path) -> Result<String, String> {
+    if !manifest_path.exists() {
+        return Err("missing bitfun.plugin.json".to_string());
+    }
+    let bytes = std::fs::read(manifest_path)
+        .map_err(|e| format!("failed to read bitfun.plugin.json: {e}"))?;
+    let value: serde_json::Value = serde_json::from_slice(&bytes)
+        .map_err(|e| format!("bitfun.plugin.json is not valid JSON: {e}"))?;
+    value
+        .get("id")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "bitfun.plugin.json missing non-empty string 'id' field".to_string())
+}
+
+/// Reject manifest ids that would escape the plugin root (path traversal).
+fn validate_package_id(id: &str) -> Result<(), String> {
+    if id.is_empty()
+        || id.contains('/')
+        || id.contains('\\')
+        || id == "."
+        || id == ".."
+        || id.contains('\0')
+    {
+        return Err(format!("invalid plugin id from manifest: `{id}`"));
+    }
+    Ok(())
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(dst).map_err(|e| format!("failed to create {}: {e}", dst.display()))?;
+    for entry in
+        std::fs::read_dir(src).map_err(|e| format!("failed to read {}: {e}", src.display()))?
+    {
+        let entry = entry.map_err(|e| format!("failed to read entry: {e}"))?;
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        if from.is_dir() {
+            copy_dir_recursive(&from, &to)?;
+        } else {
+            std::fs::copy(&from, &to)
+                .map_err(|e| format!("failed to copy {}: {e}", from.display()))?;
+        }
+    }
+    Ok(())
+}
+
+/// Move `src` to `dst`, falling back to recursive copy+remove across volumes.
+fn rename_or_copy_dir(src: &Path, dst: &Path) -> Result<(), String> {
+    match std::fs::rename(src, dst) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            copy_dir_recursive(src, dst)?;
+            std::fs::remove_dir_all(src)
+                .map_err(|e| format!("failed to clean staging {}: {e}", src.display()))?;
+            Ok(())
+        }
+    }
 }
