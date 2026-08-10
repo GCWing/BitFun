@@ -124,6 +124,47 @@ too high or too low. Re-check the offset math before bumping the dependency.
   the cap is revealed mid-settle; raising the cap trades that against a longer
   blank on open.
 
+## Diagnosing History Paging
+
+Older Turns are paged in when the viewport reaches the head of the loaded
+window. Every way that handshake can fail is **silent and identical in the UI**:
+the boundary status returns to `idle` and no indicator is shown, so "declined to
+load" is indistinguishable from "there is no more history". The failure is also
+intermittent, so it is traced permanently rather than reproduced on demand.
+
+`historySessionDiagnostics` keeps a per-session ring buffer shared with the
+hydration timeline, and the two log channels carry different things:
+
+| | `flowchat.log` | `webview.log` |
+|---|---|---|
+| carries | the full paging step stream | the refusal alarm + its trail |
+| enabled by | `app.logging.flow_chat_diagnostics` | always on |
+| written via | `flowChatDiagnostics.trace` | `log.warn` |
+
+The in-memory trail is kept regardless of the flag, so
+`warnHistoryPagingRefusedWithPendingTurns` is **self-sufficient** — the recent
+events travel with the warning and no one has to reproduce the fault with
+diagnostics turned on first. It warns once per session, so scrolling against a
+dead boundary cannot flood the log. Turn the flag on only when the trail's
+30-event cap is not enough.
+
+Two detectors raise it:
+
+- `exhausted` returned for `beyond-known-total`. That result **latches the
+  direction off for the rest of the session** and only `applied` clears it, so
+  reaching it on an unknown or contradictory total is how history goes
+  permanently missing rather than merely late.
+- A `before` request blocked by that latch while the session is still
+  `isPartial`. This fires at the moment the user scrolls up and nothing happens.
+
+When the report is "scrolling up shows no history, but the Turn Rail can still
+load those Turns", search the log for `declined to page older Turns`. Turn Rail
+navigation goes through `loadSessionTurnWindow` directly and bypasses the
+boundary latch entirely, which is why it keeps working. The accompanying
+`FlowChat history paging trail` warning carries the preceding events, including
+`anchor_capture_failed` — `captureHistoryPrependAnchor` returning `false`
+cancels a window that was already fetched.
+
 ## Why There Is No Viewport Coordinator
 
 There was one — `FlowChatViewportCoordinator.ts`, removed alongside the

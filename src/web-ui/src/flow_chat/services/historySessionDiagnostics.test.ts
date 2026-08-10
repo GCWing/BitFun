@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   beginHistorySessionDiagnostics,
+  recordHistoryPagingEvent,
   recordHistorySessionDiagnosticEvent,
   resetHistorySessionDiagnosticsForTests,
+  warnHistoryPagingRefusedWithPendingTurns,
   warnHistorySessionLoadingLayerStalled,
 } from './historySessionDiagnostics';
 
@@ -13,6 +15,12 @@ const loggerMock = vi.hoisted(() => ({
 
 vi.mock('@/shared/utils/logger', () => ({
   createLogger: () => loggerMock,
+}));
+
+const flowChatDiagnosticsMock = vi.hoisted(() => ({ trace: vi.fn() }));
+
+vi.mock('@/infrastructure/diagnostics/flowChatDiagnostics', () => ({
+  flowChatDiagnostics: flowChatDiagnosticsMock,
 }));
 
 describe('historySessionDiagnostics', () => {
@@ -92,5 +100,113 @@ describe('historySessionDiagnostics', () => {
         ]),
       }),
     );
+  });
+});
+
+describe('history paging diagnostics', () => {
+  beforeEach(() => {
+    loggerMock.debug.mockReset();
+    loggerMock.warn.mockReset();
+    resetHistorySessionDiagnosticsForTests();
+  });
+
+  it('warns once with the paging trail when older Turns are refused', () => {
+    recordHistoryPagingEvent('paging-1', 'requested', {
+      direction: 'before',
+      resolvedTotalTurnCount: 0,
+      loadedTurnCount: 3,
+    });
+    recordHistoryPagingEvent('paging-1', 'outcome_exhausted', {
+      direction: 'before',
+      reason: 'beyond-known-total',
+      targetOrdinal: 2,
+      totalTurnCount: 0,
+    });
+
+    warnHistoryPagingRefusedWithPendingTurns('paging-1', {
+      direction: 'before',
+      reason: 'exhausted-on-unknown-total',
+      isPartial: true,
+      loadedTurnCount: 3,
+      totalTurnCount: 0,
+      targetOrdinal: 2,
+    });
+
+    expect(loggerMock.warn).toHaveBeenCalledTimes(2);
+    const [refusal, trail] = loggerMock.warn.mock.calls;
+    expect(refusal[0]).toContain('declined to page older Turns');
+    expect(refusal[1]).toMatchObject({
+      sessionId: 'paging-1',
+      reason: 'exhausted-on-unknown-total',
+      isPartial: true,
+      totalTurnCount: 0,
+    });
+    // The decisive prior step travels with the warning.
+    expect(refusal[1].lastOutcome).toBe('history_paging_outcome_exhausted');
+    expect(refusal[1].lastOutcomeData).toMatchObject({ reason: 'beyond-known-total' });
+    expect(trail[1].events.map((event: { event: string }) => event.event)).toEqual([
+      'history_paging_requested',
+      'history_paging_outcome_exhausted',
+      'history_paging_refused_with_pending_turns',
+    ]);
+  });
+
+  it('stays quiet on repeat refusals so scrolling cannot flood the log', () => {
+    const snapshot = {
+      direction: 'before',
+      reason: 'latched-exhausted-while-partial',
+      isPartial: true,
+      loadedTurnCount: 3,
+      totalTurnCount: 22,
+    };
+    warnHistoryPagingRefusedWithPendingTurns('paging-2', snapshot);
+    warnHistoryPagingRefusedWithPendingTurns('paging-2', snapshot);
+    warnHistoryPagingRefusedWithPendingTurns('paging-2', snapshot);
+
+    expect(loggerMock.warn).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the latch per session', () => {
+    const snapshot = { direction: 'before', reason: 'latched-exhausted-while-partial' };
+    warnHistoryPagingRefusedWithPendingTurns('paging-3', snapshot);
+    warnHistoryPagingRefusedWithPendingTurns('paging-4', snapshot);
+
+    expect(loggerMock.warn).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe('history paging log routing', () => {
+  beforeEach(() => {
+    loggerMock.debug.mockReset();
+    loggerMock.warn.mockReset();
+    flowChatDiagnosticsMock.trace.mockReset();
+    resetHistorySessionDiagnosticsForTests();
+  });
+
+  it('streams paging steps to flowchat.log and keeps them out of webview.log', () => {
+    recordHistoryPagingEvent('routing-1', 'requested', { direction: 'before' });
+
+    expect(loggerMock.debug).not.toHaveBeenCalled();
+    expect(flowChatDiagnosticsMock.trace).toHaveBeenCalledTimes(1);
+    const probe = flowChatDiagnosticsMock.trace.mock.calls[0][0];
+    expect(probe.hypothesis).toBe('history-paging');
+    expect(probe.location).toBe('historySessionDiagnostics.requested');
+    // Payload stays behind a thunk so a disabled channel costs nothing.
+    expect(typeof probe.data).toBe('function');
+    expect(probe.data()).toMatchObject({ sessionId: 'routing-1', direction: 'before' });
+  });
+
+  it('reports the refusal on both channels', () => {
+    warnHistoryPagingRefusedWithPendingTurns('routing-2', {
+      direction: 'before',
+      reason: 'latched-exhausted-while-partial',
+    });
+
+    // Always-on alarm, independent of the diagnostics flag.
+    expect(loggerMock.warn).toHaveBeenCalledTimes(2);
+    // Mirrored so the flowchat.log stream is self-contained.
+    expect(flowChatDiagnosticsMock.trace).toHaveBeenCalledTimes(1);
+    expect(flowChatDiagnosticsMock.trace.mock.calls[0][0].location)
+      .toBe('historySessionDiagnostics.refusedWithPendingTurns');
   });
 });

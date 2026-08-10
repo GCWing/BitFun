@@ -58,6 +58,10 @@ import {
 import { VirtualItemRenderer } from './VirtualItemRenderer';
 import { getLeadingVirtualItemIndexDelta } from './virtualMessageListLayout';
 import { resolveVisibleFlowChatTurnIds } from './flowChatVisibleTurns';
+import {
+  recordHistoryPagingEvent,
+  warnHistoryPagingRefusedWithPendingTurns,
+} from '../../services/historySessionDiagnostics';
 import './VirtualMessageList.scss';
 
 const VIRTUOSO_FIRST_ITEM_INDEX_BASE = 1_000_000;
@@ -354,6 +358,16 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     tailSpacerPxRef.current = tailSpacerPx;
   }, [tailSpacerPx]);
   const getTailSpacerPx = useCallback(() => tailSpacerPxRef.current, []);
+
+  /*
+   * The paging diagnostics need a few session facts, but `activeSession` is a
+   * fresh object on every streaming flush: depending on it would rebuild
+   * `requestHistoryBoundary` and therefore Virtuoso's `rangeChanged` many times
+   * a second. Hold the session itself by reference — one assignment per render,
+   * no allocation — and read the fields only on the rare diagnostic path.
+   */
+  const activeSessionRef = useRef(activeSession);
+  activeSessionRef.current = activeSession;
 
   const isOpenViewportSettledRef = useRef(isOpenViewportSettled);
   isOpenViewportSettledRef.current = isOpenViewportSettled;
@@ -785,7 +799,21 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         '.virtual-item-wrapper[data-item-type="user-message"]',
       ),
     ).find(element => element.getBoundingClientRect().bottom > scrollerRect.top);
-    if (!anchor?.dataset.turnId) return false;
+    if (!anchor?.dataset.turnId) {
+      // Returning false cancels the load that was already fetched, so record
+      // why the anchor could not be taken.
+      const { sessionId } = activeSessionRef.current ?? {};
+      if (sessionId) {
+        recordHistoryPagingEvent(sessionId, 'anchor_capture_failed', {
+          renderedUserMessages: scroller.querySelectorAll(
+            '.virtual-item-wrapper[data-item-type="user-message"]',
+          ).length,
+          renderedItems: scroller.querySelectorAll('.virtual-item-wrapper').length,
+          scrollTop: Math.round(scroller.scrollTop),
+        });
+      }
+      return false;
+    }
     historyPrependAnchorRef.current = {
       turnId: anchor.dataset.turnId,
       offsetFromScrollerTop: anchor.getBoundingClientRect().top - scrollerRect.top,
@@ -806,11 +834,31 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   }, [getRenderedUserMessageElement, virtualItems]);
 
   const requestHistoryBoundary = useCallback((direction: SessionHistoryWindowDirection) => {
+    const latchedExhausted = exhaustedBoundaryRef.current[direction];
     if (
       !onHistoryWindowBoundaryIntent ||
       boundaryRequestRef.current[direction] ||
-      exhaustedBoundaryRef.current[direction]
-    ) return;
+      latchedExhausted
+    ) {
+      /*
+       * The user has reached the head of the loaded window and we are declining
+       * to fetch more. That is correct once history really is exhausted, and a
+       * silent data loss when it is not — the boundary status stays idle either
+       * way, so the transcript looks like it simply has no earlier Turns.
+       */
+      const session = activeSessionRef.current;
+      if (latchedExhausted && session?.sessionId && session.isPartial === true) {
+        warnHistoryPagingRefusedWithPendingTurns(session.sessionId, {
+          direction,
+          reason: 'latched-exhausted-while-partial',
+          isPartial: true,
+          latchedExhausted: true,
+          loadedTurnCount: session.dialogTurns.length,
+          totalTurnCount: session.totalTurnCount ?? 0,
+        });
+      }
+      return;
+    }
     const request = Promise.resolve(onHistoryWindowBoundaryIntent(direction, direction === 'before' ? {
       prepareViewportForPresentationCommit: captureHistoryPrependAnchor,
       cancelViewportPresentationCommit: () => {

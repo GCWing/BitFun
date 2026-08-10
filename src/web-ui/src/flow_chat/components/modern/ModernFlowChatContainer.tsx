@@ -88,7 +88,9 @@ import {
   type HistorySessionOpenIntentDetail,
 } from '../../services/sessionOpenIntent';
 import {
+  recordHistoryPagingEvent,
   recordHistorySessionDiagnosticEvent,
+  warnHistoryPagingRefusedWithPendingTurns,
   warnHistorySessionLoadingLayerStalled,
 } from '../../services/historySessionDiagnostics';
 import './ModernFlowChatContainer.scss';
@@ -1675,6 +1677,20 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         historyView?.catalog?.totalTurnCount ?? 0,
         session?.totalTurnCount ?? 0,
       );
+      const loadedTurnCount = session?.dialogTurns.length ?? 0;
+      recordHistoryPagingEvent(sessionId, 'requested', {
+        direction,
+        hasPresentation: presentation !== null,
+        isPartial: session?.isPartial,
+        historyState: session?.historyState,
+        turnCatalogMatches: session?.turnCatalog?.sessionId === sessionId,
+        catalogTotalTurnCount: historyView?.catalog?.totalTurnCount ?? null,
+        sessionTotalTurnCount: session?.totalTurnCount ?? null,
+        resolvedTotalTurnCount: totalTurnCount,
+        loadedTurnCount,
+        loadedRangeCount: historyView?.loadedRanges.length ?? null,
+      });
+
       let targetOrdinal: number;
       if (presentation) {
         targetOrdinal = direction === 'before'
@@ -1686,15 +1702,50 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           || session?.isPartial !== true
           || session.turnCatalog?.sessionId !== sessionId
         ) {
+          recordHistoryPagingEvent(sessionId, 'outcome_cancelled', {
+            direction,
+            reason: 'precondition',
+            isPartial: session?.isPartial,
+            turnCatalogMatches: session?.turnCatalog?.sessionId === sessionId,
+          });
           return 'cancelled';
         }
         const canonicalTailRange = flowChatStore.getSessionCanonicalTailRange(sessionId);
         if (!canonicalTailRange) {
+          recordHistoryPagingEvent(sessionId, 'outcome_not_ready', {
+            direction,
+            reason: 'no-canonical-tail-range',
+          });
           return 'not-ready';
         }
         targetOrdinal = canonicalTailRange.startOrdinal - 1;
+        recordHistoryPagingEvent(sessionId, 'target_resolved', {
+          direction,
+          canonicalTailStartOrdinal: canonicalTailRange.startOrdinal,
+          targetOrdinal,
+        });
       }
       if (targetOrdinal < 0 || targetOrdinal >= totalTurnCount) {
+        const reason = targetOrdinal < 0 ? 'reached-start' : 'beyond-known-total';
+        recordHistoryPagingEvent(sessionId, 'outcome_exhausted', {
+          direction,
+          reason,
+          targetOrdinal,
+          totalTurnCount,
+        });
+        // `exhausted` latches the direction off for the rest of the session, so
+        // reaching it on an unknown or contradictory total is how history goes
+        // silently missing rather than merely late.
+        if (reason === 'beyond-known-total') {
+          warnHistoryPagingRefusedWithPendingTurns(sessionId, {
+            direction,
+            reason: totalTurnCount <= 0 ? 'exhausted-on-unknown-total' : 'exhausted-beyond-total',
+            isPartial: session?.isPartial,
+            loadedTurnCount,
+            totalTurnCount,
+            targetOrdinal,
+          });
+        }
         return 'exhausted';
       }
 
@@ -1735,6 +1786,26 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           || !activeSessionIsCurrent
           || !presentationOwnerIsCurrent
         ) {
+          recordHistoryPagingEvent(sessionId, 'outcome_cancelled', {
+            direction,
+            reason: 'viewport-preparation',
+            preparationResult: preparationResult ?? null,
+            activeSessionIsCurrent,
+            presentationOwnerIsCurrent,
+          });
+          if (preparationResult === false && activeSessionIsCurrent) {
+            // The window was fetched and then thrown away: the Turns exist but
+            // never reach the transcript, and the boundary status goes back to
+            // idle exactly as if there were none.
+            warnHistoryPagingRefusedWithPendingTurns(sessionId, {
+              direction,
+              reason: 'viewport-preparation-declined',
+              isPartial: session?.isPartial,
+              loadedTurnCount,
+              totalTurnCount,
+              targetOrdinal,
+            });
+          }
           if (viewportPreparationStarted) {
             options?.cancelViewportPresentationCommit?.();
           }
@@ -1751,6 +1822,11 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           if (viewportPreparationStarted) {
             options?.cancelViewportPresentationCommit?.();
           }
+          recordHistoryPagingEvent(sessionId, 'outcome_not_ready', {
+            direction,
+            reason: 'no-next-presentation',
+            targetOrdinal,
+          });
           setHistoryBoundaryState(previous => ({ ...previous, [direction]: 'error' }));
           return 'not-ready';
         }
@@ -1764,6 +1840,12 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
               ]?.id ?? null,
             },
           } : {}),
+        });
+        recordHistoryPagingEvent(sessionId, 'outcome_applied', {
+          direction,
+          targetOrdinal,
+          startOrdinal: nextPresentation.range.startOrdinal,
+          endOrdinalExclusive: nextPresentation.range.endOrdinalExclusive,
         });
         return 'applied';
       } catch (error) {
