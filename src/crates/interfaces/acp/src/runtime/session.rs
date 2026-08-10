@@ -448,6 +448,7 @@ impl BitfunAcpRuntime {
                 workspace_path: cwd.to_string_lossy().to_string(),
                 remote_connection_id: None,
                 remote_ssh_host: None,
+                include_hidden: false,
             })
             .await
             .map_err(Self::runtime_error)?;

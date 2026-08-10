@@ -1,0 +1,122 @@
+{
+  "title": "AI 閾值",
+  "subtitle": "統一調節 AI 行為閾值：壓縮預算、重試退避、工具輸出上限與逾時、知識庫搜尋、ACP 逾時、記憶與目標續接等。預設值與內建行為一致。",
+  "actions": {
+    "resetToDefaults": "恢復預設值"
+  },
+  "messages": {
+    "loading": "載入閾值設定…",
+    "saved": "閾值設定已儲存",
+    "saveFailed": "儲存閾值設定失敗",
+    "settingsReset": "閾值設定已恢復預設",
+    "settingsResetFailed": "恢復閾值設定失敗"
+  },
+  "fields": {
+    "subagent": {
+      "__title": "子代理",
+      "max_hard_cap": "子代理並發硬上限",
+      "timeout_grace_secs": "子代理取消寬限（秒）",
+      "session_references_per_turn": "每輪會話引用上限"
+    },
+    "compression": {
+      "__title": "上下文壓縮",
+      "safety_reserve_tokens": "自動壓縮安全預留（token）",
+      "overflow_attempts": "壓縮溢位重試次數",
+      "main_context_overflow_recoveries": "主上下文溢位恢復次數",
+      "consecutive_failures": "連續壓縮失敗上限",
+      "failed_tool_recovery_attempts": "工具失敗恢復次數",
+      "stop_hook_continuations": "Stop Hook 續接次數",
+      "same_round_passes": "同輪壓縮輪數",
+      "recent_context_tokens": "保留近期上下文（token）",
+      "retry_step_tokens": "壓縮重試步長（token）",
+      "max_retained_user_tokens": "保留使用者訊息上限（token）",
+      "image_bearing_messages": "圖片訊息輪次上限"
+    },
+    "model_retry": {
+      "__title": "模型流重試",
+      "max_attempts": "模型流最大嘗試次數",
+      "base_delay_ms": "重試基礎延遲（毫秒）",
+      "rate_limit_base_delay_ms": "限流重試基礎延遲（毫秒）",
+      "max_exponential_delay_ms": "指數退避上限（毫秒）",
+      "max_rate_limit_delay_ms": "限流延遲上限（毫秒）",
+      "max_exponent_shift": "重試指數上限"
+    },
+    "tool_output_cap": {
+      "__title": "工具輸出上限",
+      "default_chars": "單工具結果預設上限（字元）",
+      "per_round_chars": "每輪結果合計上限（字元）",
+      "preview_chars": "持久化結果預覽（字元）",
+      "read_chars": "Read 工具結果上限（字元）",
+      "shell_chars": "Bash/Shell 結果上限（字元）"
+    },
+    "tool_timeout": {
+      "__title": "工具逾時",
+      "bash_default_ms": "Bash 預設逾時（毫秒）",
+      "bash_max_ms": "Bash 最大逾時（毫秒）",
+      "exec_command_yield_ms": "ExecCommand 預設產出等待（毫秒）",
+      "remote_shell_probe_ms": "遠端 Shell 探測逾時（毫秒）",
+      "document_conversion_secs": "文件轉換逾時（秒）",
+      "web_fetch_secs": "WebFetch 逾時（秒）",
+      "exa_secs": "Exa 搜尋逾時（秒）",
+      "agent_wait_default_ms": "AgentWait 預設逾時（毫秒）",
+      "agent_wait_max_ms": "AgentWait 最大逾時（毫秒）",
+      "mcp_render_chars": "MCP 渲染字元上限",
+      "diff_page_chars": "Diff 分頁預算（字元）",
+      "diff_total_chars": "Diff 總預算（字元）",
+      "diff_new_file_bytes": "Diff 新檔案上限（位元組）"
+    },
+    "knowledge_search": {
+      "__title": "知識庫搜尋",
+      "max_scan_file_bytes": "知識庫單檔掃描上限（位元組）",
+      "max_scan_depth": "知識庫掃描深度",
+      "default_max_results": "搜尋結果預設上限",
+      "max_results_cap": "搜尋結果硬上限"
+    },
+    "acp_timeout": {
+      "__title": "ACP 逾時",
+      "client_startup_secs": "ACP 用戶端啟動逾時（秒）",
+      "permission_secs": "ACP 權限請求逾時（秒）",
+      "session_close_secs": "ACP 會話關閉逾時（秒）",
+      "cli_detect_secs": "CLI 探測逾時（秒）",
+      "handshake_secs": "ACP 握手逾時（秒）",
+      "try_connect_total_secs": "連線嘗試總逾時（秒）",
+      "requirement_probe_secs": "依賴探測逾時（秒）",
+      "adapter_download_secs": "介面卡下載逾時（秒）",
+      "cli_install_secs": "CLI 安裝逾時（秒）",
+      "direct_secs": "直通投遞視窗（秒）",
+      "task_secs": "任務委派視窗（秒）"
+    },
+    "warden": {
+      "__title": "Warden 催辦",
+      "max_defer_count": "連續延遲上限",
+      "max_rate": "催辦頻率上限",
+      "judgement_timeout_secs": "判定逾時（秒）"
+    },
+    "deep_review": {
+      "__title": "深度審查",
+      "diff_max_chars_per_turn": "每輪 Diff 字元預算",
+      "diff_max_acquisitions_per_turn": "每輪 Diff 取得次數上限",
+      "max_parallel_instances": "並行審查實例上限",
+      "max_queue_wait_secs": "審查佇列等待（秒）",
+      "auto_retry_elapsed_guard_secs": "自動重試守衛（秒）"
+    },
+    "memories": {
+      "__title": "記憶 token 上限",
+      "summary_token_limit": "記憶摘要 token 上限",
+      "message_content_token_limit": "轉錄訊息 token 上限",
+      "tool_input_token_limit": "轉錄工具入參 token 上限",
+      "tool_result_token_limit": "轉錄工具結果 token 上限",
+      "tool_error_token_limit": "轉錄工具錯誤 token 上限",
+      "rollout_token_limit": "滾動提取 token 上限"
+    },
+    "output_tokens": {
+      "__title": "輸出 token 檔位",
+      "ratio_percent": "輸出 token 佔視窗比例（%）"
+    },
+    "goal": {
+      "__title": "目標續接",
+      "idle_wakeup_delay_ms": "目標閒置喚醒延遲（毫秒）",
+      "max_auto_continuations": "目標自動續接上限"
+    }
+  }
+}

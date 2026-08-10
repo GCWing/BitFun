@@ -1,4 +1,5 @@
 [package]
+license.workspace = true
 name = "bitfun-events"
 version.workspace = true
 edition.workspace = true

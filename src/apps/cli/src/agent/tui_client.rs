@@ -305,13 +305,6 @@ impl TuiAgentClient {
             .map_err(|error| anyhow::anyhow!(error))
     }
 
-    pub(crate) async fn delete_model(&self, model_id: String) -> Result<DeleteModelResponse> {
-        self.backend
-            .delete_model(DeleteModelRequest { model_id })
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
-    }
-
     pub(crate) async fn set_model_default(
         &self,
         request: SetModelDefaultRequest,
@@ -892,6 +885,7 @@ impl TuiAgentClient {
                 workspace_path: self.project_workspace_path_string(),
                 remote_connection_id: None,
                 remote_ssh_host: None,
+                include_hidden: false,
             }))
             .await?
             .sessions)
@@ -1196,6 +1190,9 @@ impl TuiAgentClient {
         Ok(())
     }
 
+    /// Local TUI turn-settlement waiter, retained for the shared-runtime path
+    /// after the upstream app-server CLI refactor dropped its call sites.
+    #[allow(dead_code)]
     pub(crate) async fn wait_for_turn_settlement(
         &self,
         session_id: &str,
@@ -1429,6 +1426,7 @@ impl TuiAgentClient {
                 turn_id,
                 content,
                 display_content,
+                prepended_reminders: Vec::new(),
             }))
             .await?
             .steering_id)

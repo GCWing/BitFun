@@ -15,6 +15,9 @@
 
 #![cfg(target_os = "windows")]
 #![allow(dead_code)]
+// All unsafe blocks are single Win32/UIA COM calls through the windows crate;
+// COM pointers are validated by the windows crate wrappers before invocation.
+#![allow(clippy::undocumented_unsafe_blocks)]
 
 use crate::computer_use::windows_ax_ui::build_updated_cache_with_retry;
 use bitfun_core::agentic::tools::computer_use_host::{

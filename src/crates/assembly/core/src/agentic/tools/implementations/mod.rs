@@ -1,5 +1,6 @@
 //! Tool implementation module
 
+pub mod acp_tools;
 pub mod agent_wait_tool;
 pub mod analyze_image_tool;
 pub mod appearance_publish_tool;
@@ -26,8 +27,13 @@ pub mod get_time_tool;
 pub mod git_tool;
 pub mod glob_tool;
 pub mod grep_tool;
+pub mod legion_control_tool;
+pub mod knowledge_base_search_tool;
 pub mod list_models_tool;
 pub mod ls_tool;
+pub mod plan_list_tool;
+pub mod plan_read_tool;
+pub mod plan_update_tool;
 pub mod mcp_tools;
 pub mod miniapp_finalize_tool;
 pub mod miniapp_init_tool;
@@ -48,10 +54,12 @@ pub mod todo_write_tool;
 pub mod util;
 pub mod view_image_tool;
 pub mod web;
+pub mod workspace_scan_tool;
 pub mod worktree_tool;
 
 #[deprecated(note = "GetToolSpecTool is owned by the product tool runtime boundary")]
 pub use crate::agentic::tools::product_runtime::GetToolSpecTool;
+pub use acp_tools::{AcpControlTool, AcpHistoryTool, AcpMessageTool};
 pub use agent_wait_tool::AgentWaitTool;
 pub use analyze_image_tool::AnalyzeImageTool;
 pub use appearance_publish_tool::PublishAppearanceTool;
@@ -75,6 +83,8 @@ pub use get_time_tool::GetTimeTool;
 pub use git_tool::GitTool;
 pub use glob_tool::GlobTool;
 pub use grep_tool::GrepTool;
+pub use legion_control_tool::LegionControlTool;
+pub use knowledge_base_search_tool::KnowledgeBaseSearchTool;
 pub use list_models_tool::ListModelsTool;
 pub use ls_tool::LSTool;
 pub use mcp_tools::{
@@ -85,6 +95,9 @@ pub use miniapp_init_tool::InitMiniAppTool;
 pub use miniapp_publish_tool::PublishMiniAppTool;
 pub use page_deploy_tool::PageDeployTool;
 pub use page_publish_tool::PagePublishTool;
+pub use plan_list_tool::PlanListTool;
+pub use plan_read_tool::PlanReadTool;
+pub use plan_update_tool::PlanUpdateTool;
 pub use playbook_tool::PlaybookTool;
 pub use review_platform_tool::ReviewPlatformTool;
 pub use session_control_tool::SessionControlTool;
@@ -97,4 +110,5 @@ pub use thread_goal_tools::{CreateGoalTool, GetGoalTool, UpdateGoalTool};
 pub use todo_write_tool::TodoWriteTool;
 pub use view_image_tool::ViewImageTool;
 pub use web::{WebFetchTool, WebSearchTool};
+pub use workspace_scan_tool::WorkspaceScanTool;
 pub use worktree_tool::WorktreeTool;

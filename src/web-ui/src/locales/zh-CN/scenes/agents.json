@@ -11,7 +11,8 @@
     "title": "专业智能体",
     "subtitle": "查看与管理核心模式、Agent 与 Sub-Agent，配置工具与 Skills。",
     "searchPlaceholder": "搜索 Agent 名称或描述…",
-    "newAgent": "新建 Agent"
+    "newAgent": "新建 Agent",
+    "newLegion": "新建军团"
   },
   "nav": {
     "coreAgents": "核心智能体",
@@ -345,5 +346,39 @@
     "Debug": "调试模式：系统性地诊断和修复代码中的错误",
     "Claw": "抓取模式：从外部源提取和整合信息",
     "Team": "团队模式：协调多个智能体协同完成复杂任务"
+  },
+  "legionsZone": {
+    "title": "军团",
+    "subtitle": "已保存的军团预设",
+    "loadFailed": "加载军团预设失败："
+  },
+  "legionPattern": {
+    "gate": "闸门",
+    "back": "返回",
+    "choosePattern": "选择编排模式",
+    "orchestrationPatterns": "军团编排模式",
+    "overview": "概览",
+    "complexity": "复杂度 L{{level}}",
+    "nodesCount": "{{count}} 个节点",
+    "edgesCount": "{{count}} 条连线",
+    "nodes": "节点（{{count}}）",
+    "edges": "连线（{{count}}）",
+    "noEdges": "无连线",
+    "usePattern": "使用此模式",
+    "planning": "规划中",
+    "saved": "军团编排模式「{{name}}」已保存",
+    "saveFailed": "保存军团编排模式失败",
+    "meta": {
+      "gate": "个闸门"
+    },
+    "complexityLabel": {
+      "l1": "L1",
+      "l2": "L2",
+      "l3": "L3",
+      "l4": "L4",
+      "l5": "L5",
+      "l6": "L6",
+      "l7": "L7"
+    }
   }
 }

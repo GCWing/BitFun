@@ -250,5 +250,31 @@
       "saveSuccess": "Notification settings saved",
       "saveFailed": "Failed to save notification settings"
     }
+  },
+  "legion": {
+    "sections": {
+      "title": "Legion deployment limits",
+      "hint": "Node caps and deployment frequency for LEGION deployments. Changes apply immediately."
+    },
+    "maxNodes": {
+      "label": "Max nodes per topology",
+      "description": "Maximum nodes a single LegionControl deployment may contain (default 20)."
+    },
+    "maxTotalNodes": {
+      "label": "Max total nodes across deployments",
+      "description": "Maximum total legion node sessions a single creator session may own (default 60)."
+    },
+    "frequency": {
+      "label": "Max deployments per hour",
+      "description": "Maximum deployments allowed per creator session within a 1-hour sliding window (default 10; 0 disables the limit)."
+    },
+    "messages": {
+      "loading": "Loading...",
+      "loadFailed": "Failed to load legion deployment limits",
+      "saved": "Legion deployment limits saved",
+      "saveFailed": "Failed to save legion deployment limits",
+      "invalidNodeCap": "Max nodes per topology must be at least 1",
+      "invalidTotalCap": "Max total nodes must be at least 1"
+    }
   }
 }

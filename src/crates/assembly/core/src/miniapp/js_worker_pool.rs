@@ -101,6 +101,7 @@ impl JsWorkerPool {
             .map_err(map_worker_pool_error)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn call_with_app_dir(
         &self,
         worker_key: &str,

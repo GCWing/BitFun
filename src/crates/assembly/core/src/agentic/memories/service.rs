@@ -2,7 +2,7 @@ use crate::agentic::memories::db::{MemoryDatabase, MemoryPhase1ClaimOutcome, Mem
 use crate::agentic::memories::external_context::session_uses_external_context;
 use crate::agentic::memories::session_roots::collect_local_session_storage_roots;
 use crate::agentic::memories::transcript::{
-    redact_memory_secrets, render_memory_phase1_transcript,
+    redact_memory_secrets, render_memory_phase1_transcript_with_limits,
 };
 use crate::agentic::memories::types::{
     MemoryExtractionRecord, MemoryPhase1RunStats, MemorySourceSession,
@@ -510,11 +510,15 @@ async fn process_single_session(
     }
 
     let stage_one_max_tokens = stage_one_output_max_tokens(&ai_client.config);
-    let rollout_token_limit = stage_one_rollout_token_limit(&ai_client.config);
-    let transcript = render_memory_phase1_transcript(
+    let configured_rollout_limit = configured_memory_rollout_token_limit().await;
+    let rollout_token_limit =
+        stage_one_rollout_token_limit_with_fallback(&ai_client.config, configured_rollout_limit);
+    let transcript_limits = configured_memory_transcript_limits().await;
+    let transcript = render_memory_phase1_transcript_with_limits(
         &turns,
         rollout_token_limit,
         config.external_context_policy,
+        &transcript_limits,
     )?;
     if transcript.trim().is_empty() {
         record_success_no_output(&db, &source, &ownership_token).await?;
@@ -634,15 +638,24 @@ fn current_unix_secs() -> i64 {
 }
 
 fn stage_one_rollout_token_limit(config: &bitfun_ai_adapters::AIConfig) -> usize {
+    stage_one_rollout_token_limit_with_fallback(config, DEFAULT_ROLLOUT_TOKEN_LIMIT)
+}
+
+/// Same as [`stage_one_rollout_token_limit`] but with an explicit fallback
+/// (阈值参数配置化：`ai.thresholds.memories.rollout_token_limit`).
+fn stage_one_rollout_token_limit_with_fallback(
+    config: &bitfun_ai_adapters::AIConfig,
+    fallback_limit: usize,
+) -> usize {
     let context_window = config.context_window as usize;
     if context_window == 0 {
-        return DEFAULT_ROLLOUT_TOKEN_LIMIT;
+        return fallback_limit;
     }
 
     let output_reserve = stage_one_output_max_tokens(config);
     let input_window = context_window.saturating_sub(output_reserve);
     if input_window == 0 {
-        return DEFAULT_ROLLOUT_TOKEN_LIMIT;
+        return fallback_limit;
     }
 
     (input_window * STAGE_ONE_CONTEXT_WINDOW_PERCENT / 100).max(1)
@@ -653,6 +666,50 @@ fn stage_one_output_max_tokens(config: &bitfun_ai_adapters::AIConfig) -> usize {
         .max_tokens
         .map(|tokens| tokens as usize)
         .unwrap_or(STAGE_ONE_DEFAULT_MAX_TOKENS)
+}
+
+/// Resolve the configured memory rollout token limit
+/// (`ai.thresholds.memories.rollout_token_limit`), falling back to
+/// `DEFAULT_ROLLOUT_TOKEN_LIMIT = 120_000` when unset or invalid.
+async fn configured_memory_rollout_token_limit() -> usize {
+    let Ok(config_service) = crate::service::config::get_global_config_service().await else {
+        return DEFAULT_ROLLOUT_TOKEN_LIMIT;
+    };
+    let Ok(thresholds) = config_service
+        .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+        .await
+    else {
+        return DEFAULT_ROLLOUT_TOKEN_LIMIT;
+    };
+    let limit = thresholds.memories.rollout_token_limit;
+    if limit == 0 {
+        return DEFAULT_ROLLOUT_TOKEN_LIMIT;
+    }
+    limit
+}
+
+/// Resolve the configured memory transcript token limits
+/// (`ai.thresholds.memories.message_content_token_limit` /
+/// `tool_input_token_limit` / `tool_result_token_limit` /
+/// `tool_error_token_limit`), falling back to the legacy constants.
+async fn configured_memory_transcript_limits(
+) -> crate::agentic::memories::transcript::MemoryTranscriptTokenLimits {
+    let Ok(config_service) = crate::service::config::get_global_config_service().await else {
+        return Default::default();
+    };
+    let Ok(thresholds) = config_service
+        .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+        .await
+    else {
+        return Default::default();
+    };
+    let m = &thresholds.memories;
+    crate::agentic::memories::transcript::MemoryTranscriptTokenLimits {
+        message_content: m.message_content_token_limit.max(1),
+        tool_input: m.tool_input_token_limit.max(1),
+        tool_result: m.tool_result_token_limit.max(1),
+        tool_error: m.tool_error_token_limit.max(1),
+    }
 }
 
 fn format_unix_secs(unix_secs: u64) -> String {

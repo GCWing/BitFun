@@ -249,5 +249,31 @@
       "saveSuccess": "通知设置已保存",
       "saveFailed": "保存通知设置失败"
     }
+  },
+  "legion": {
+    "sections": {
+      "title": "军团部署参数",
+      "hint": "LEGION 军团部署的节点上限与频率限制，修改后立即生效"
+    },
+    "maxNodes": {
+      "label": "单拓扑节点上限",
+      "description": "单次 LegionControl 部署最多允许的节点数（默认 20）。"
+    },
+    "maxTotalNodes": {
+      "label": "跨部署总量上限",
+      "description": "同一创建者会话名下所有军团节点会话的总量上限（默认 60）。"
+    },
+    "frequency": {
+      "label": "每小时部署次数上限",
+      "description": "同一创建者会话在 1 小时滑动窗口内最多允许的部署次数（默认 10；设为 0 表示不限制）。"
+    },
+    "messages": {
+      "loading": "加载中…",
+      "loadFailed": "无法读取军团部署参数",
+      "saved": "军团部署参数已保存",
+      "saveFailed": "保存军团部署参数失败",
+      "invalidNodeCap": "单拓扑节点上限必须至少为 1",
+      "invalidTotalCap": "跨部署总量上限必须至少为 1"
+    }
   }
 }

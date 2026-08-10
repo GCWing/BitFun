@@ -153,6 +153,29 @@ pub fn record_review_read_receipt(
     );
 }
 
+/// Clear the review-spin counters (`repeat_served` / `file_served`) for a
+/// file after the Read tool force-serves real content (d5-P1-2).
+///
+/// The counters only reset when a receipt exists for the path; remote
+/// workspaces and non-review contexts have no receipts and return false.
+pub fn reset_review_read_spin_counters(
+    context: &ToolUseContext,
+    resolved: &ToolPathResolution,
+) -> bool {
+    if resolved.uses_remote_workspace_backend() || !review_read_receipts_enabled(context) {
+        return false;
+    }
+    let Some(session_id) = context.session_id.as_deref() else {
+        return false;
+    };
+    let Some(coordinator) = get_global_coordinator() else {
+        return false;
+    };
+    coordinator
+        .get_session_manager()
+        .reset_review_read_spin_counters(session_id, &resolved.logical_path)
+}
+
 pub fn get_stored_file_read_state(
     context: &ToolUseContext,
     resolved: &ToolPathResolution,

@@ -550,6 +550,7 @@ pub(crate) async fn print_usage_report(session_id: Option<&str>) -> Result<()> {
                 workspace_path: workspace_path.to_string_lossy().to_string(),
                 remote_connection_id: None,
                 remote_ssh_host: None,
+                include_hidden: false,
             })
             .await?
             .first()

@@ -818,6 +818,902 @@ pub struct AIConfig {
     /// Maximum number of rounds per dialog turn before soft-pausing.
     #[serde(default = "default_max_rounds")]
     pub max_rounds: usize,
+
+    /// User-controllable master switch for the RBAC/Warden mechanism (R-26).
+    ///
+    /// When `false`, the RBAC tool-restriction checks and the Warden runtime
+    /// (turn/tool failure tracking, violation records, reminders) are fully
+    /// bypassed. Defaults to `true` (mechanism on). Users can turn it off in
+    /// the settings document under `ai.rbac_enabled`.
+    #[serde(default = "default_true")]
+    pub rbac_enabled: bool,
+
+    /// Master switch for loading external user instruction sources
+    /// (`~/.claude/CLAUDE.md` + `rules/`, OpenCode `AGENTS.md`, Codex
+    /// `AGENTS.md`) into the User Context.
+    ///
+    /// When `false`, the runtime does not read any external instruction file:
+    /// workspace instruction files (`AGENTS.md` inside the project, project
+    /// `.claude/rules`) are unaffected. Defaults to `true` (load), preserving
+    /// the historical behavior. Users can turn it off in the settings document
+    /// under `ai.external_instruction_sources`.
+    #[serde(default = "default_true")]
+    pub external_instruction_sources: bool,
+
+    /// Root directory of the knowledge base used by the KnowledgeBaseSearch
+    /// tool. When set, the desktop host injects it into the
+    /// `BITFUN_KNOWLEDGE_BASE_ROOT` environment variable at startup so the
+    /// tool can resolve it at call time (L6-P0-1). Empty/absent keeps the
+    /// tool disabled with its fail-closed configuration error.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub knowledge_base_root: String,
+
+    /// Maximum number of legion nodes in a single LegionControl topology
+    /// (legion 阈值参数配置化：前端可配置，默认 20 保持现语义）。
+    ///
+    /// Replaces the hard-coded `MAX_LEGION_NODES = 20` in legion_control_tool.rs.
+    /// `0` is not a meaningful value for a per-topology cap: the tool clamps it
+    /// to `DEFAULT_LEGION_MAX_NODES` when unset (see legion_control_tool.rs).
+    #[serde(default = "default_legion_max_nodes")]
+    pub legion_max_nodes: usize,
+
+    /// Maximum total number of legion node sessions a single creator may own
+    /// across deployments (legion 阈值参数配置化：前端可配置，默认 60 保持现语义）。
+    ///
+    /// Replaces the hard-coded `MAX_LEGION_TOTAL_NODES = 3 * MAX_LEGION_NODES`
+    /// in legion_control_tool.rs. A value below 1 is meaningless (it would
+    /// reject every deployment) and falls back to the default.
+    #[serde(default = "default_legion_max_total_nodes")]
+    pub legion_max_total_nodes: usize,
+
+    /// Maximum number of LegionControl `load` deployments allowed per creator
+    /// session within a one-hour sliding window (legion 阈值参数配置化：前端
+    /// 可配置，默认 10 次/小时）。
+    ///
+    /// The tool records a `legionDeployTime` timestamp on the creator session
+    /// metadata after each successful load and rejects a new load when the
+    /// window is exceeded. `0` (or unset) disables the frequency limit.
+    #[serde(default = "default_legion_deploy_frequency_per_hour")]
+    pub legion_deploy_frequency_per_hour: usize,
+
+    /// Tunable AI behavior thresholds (阈值参数配置化统一入口).
+    ///
+    /// Every hard-coded user-visible threshold (compression budgets, retry
+    /// backoffs, tool output caps, timeouts, ACP windows, Warden poke pacing,
+    /// deep-review budgets, memory token limits, output-token tiers and goal
+    /// continuations) is surfaced here under `ai.thresholds.<domain>.*`.
+    /// Defaults reproduce the legacy hard-coded values exactly, so an
+    /// unconfigured document behaves identically to before.
+    #[serde(default)]
+    pub thresholds: AiThresholdsConfig,
+}
+
+/// Tunable AI behavior thresholds, grouped by functional domain
+/// (阈值参数配置化统一入口：`ai.thresholds.*`).
+///
+/// Every field carries a `#[serde(default = "...")]` mirror of the legacy
+/// hard-coded constant so unconfigured documents preserve prior behavior.
+/// Runtime consumers apply their own `clamp` on top (defense in depth), so a
+/// maliciously extreme configured value still cannot exhaust resources.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AiThresholdsConfig {
+    /// Subagent scheduling thresholds.
+    #[serde(default)]
+    pub subagent: SubagentThresholds,
+    /// Context-compression token budgets and recovery counts.
+    #[serde(default)]
+    pub compression: CompressionThresholds,
+    /// Model-stream retry attempts and exponential-backoff windows.
+    #[serde(default)]
+    pub model_retry: ModelRetryThresholds,
+    /// Per-tool / per-round character caps for oversized tool results.
+    #[serde(default)]
+    pub tool_output_cap: ToolOutputCapThresholds,
+    /// Default timeouts applied by tools that own their execution timeout.
+    #[serde(default)]
+    pub tool_timeout: ToolTimeoutThresholds,
+    /// Knowledge-base search scan and result caps.
+    #[serde(default)]
+    pub knowledge_search: KnowledgeSearchThresholds,
+    /// External ACP client timeouts.
+    #[serde(default)]
+    pub acp_timeout: AcpTimeoutThresholds,
+    /// Warden challenge-poke pacing and judgement timeouts.
+    #[serde(default)]
+    pub warden: WardenThresholds,
+    /// Deep-review execution budgets.
+    #[serde(default)]
+    pub deep_review: DeepReviewThresholds,
+    /// Memory roll-out/transcript token limits not covered by `memories.*`.
+    #[serde(default)]
+    pub memories: MemoryThresholds,
+    /// Automatic output-token tiering for model context windows.
+    #[serde(default)]
+    pub output_tokens: OutputTokensThresholds,
+    /// Goal idle-wakeup and auto-continuation budgets.
+    #[serde(default)]
+    pub goal: GoalThresholds,
+}
+
+impl Default for AiThresholdsConfig {
+    fn default() -> Self {
+        Self {
+            subagent: SubagentThresholds::default(),
+            compression: CompressionThresholds::default(),
+            model_retry: ModelRetryThresholds::default(),
+            tool_output_cap: ToolOutputCapThresholds::default(),
+            tool_timeout: ToolTimeoutThresholds::default(),
+            knowledge_search: KnowledgeSearchThresholds::default(),
+            acp_timeout: AcpTimeoutThresholds::default(),
+            warden: WardenThresholds::default(),
+            deep_review: DeepReviewThresholds::default(),
+            memories: MemoryThresholds::default(),
+            output_tokens: OutputTokensThresholds::default(),
+            goal: GoalThresholds::default(),
+        }
+    }
+}
+
+/// Subagent scheduling thresholds (`ai.thresholds.subagent.*`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SubagentThresholds {
+    /// Hard cap on subagent concurrency. Mirrors legacy `MAX_SUBAGENT_MAX_CONCURRENCY = 64`.
+    #[serde(default = "default_subagent_max_hard_cap")]
+    pub max_hard_cap: usize,
+    /// Grace period (seconds) granted while awaiting subagent cancellation.
+    #[serde(default = "default_subagent_timeout_grace_secs")]
+    pub timeout_grace_secs: u64,
+    /// Maximum session references a single message may carry.
+    #[serde(default = "default_session_references_per_turn")]
+    pub session_references_per_turn: usize,
+    /// Sliding-window cap on the cumulative number of subagent deployments
+    /// per parent session per window (`ai.thresholds.subagent.max_dispatch_per_parent_window`).
+    ///
+    /// The concurrency limiter only bounds *simultaneously running* subagents;
+    /// a runaway dispatch loop can still create an unbounded cumulative fleet
+    /// (observed: 865 executor subagents in 49 minutes, each burning a full
+    /// first-round model request). This cumulative gate rejects new dispatches
+    /// once the window cap is reached. `0` disables the limit.
+    #[serde(default = "default_subagent_max_dispatch_per_parent_window")]
+    pub max_dispatch_per_parent_window: usize,
+    /// Sliding window length (seconds) for the cumulative dispatch cap.
+    #[serde(default = "default_subagent_dispatch_window_secs")]
+    pub dispatch_window_secs: u64,
+    /// Cooldown (seconds) applied when the dispatch cap is hit: further
+    /// dispatches from the same parent are rejected until the window rolls
+    /// over. `0` disables the cooldown (rejection is instantaneous).
+    #[serde(default = "default_subagent_dispatch_cooldown_secs")]
+    pub dispatch_cooldown_secs: u64,
+}
+
+impl Default for SubagentThresholds {
+    fn default() -> Self {
+        Self {
+            max_hard_cap: default_subagent_max_hard_cap(),
+            timeout_grace_secs: default_subagent_timeout_grace_secs(),
+            session_references_per_turn: default_session_references_per_turn(),
+            max_dispatch_per_parent_window: default_subagent_max_dispatch_per_parent_window(),
+            dispatch_window_secs: default_subagent_dispatch_window_secs(),
+            dispatch_cooldown_secs: default_subagent_dispatch_cooldown_secs(),
+        }
+    }
+}
+
+fn default_subagent_max_hard_cap() -> usize {
+    64
+}
+
+fn default_subagent_timeout_grace_secs() -> u64 {
+    10
+}
+
+fn default_session_references_per_turn() -> usize {
+    5
+}
+
+fn default_subagent_max_dispatch_per_parent_window() -> usize {
+    20
+}
+
+fn default_subagent_dispatch_window_secs() -> u64 {
+    3600
+}
+
+fn default_subagent_dispatch_cooldown_secs() -> u64 {
+    300
+}
+
+/// Context-compression budgets and recovery counts (`ai.thresholds.compression.*`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CompressionThresholds {
+    /// Automatic-compression safety reserve (tokens). Legacy `AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS = 10_000`.
+    #[serde(default = "default_compression_safety_reserve_tokens")]
+    pub safety_reserve_tokens: usize,
+    /// Max compression overflow retries. Legacy `MAX_COMPRESSION_OVERFLOW_ATTEMPTS = 4`.
+    #[serde(default = "default_compression_overflow_attempts")]
+    pub overflow_attempts: usize,
+    /// Max main-context overflow recoveries. Legacy `MAX_MAIN_CONTEXT_OVERFLOW_RECOVERIES = 2`.
+    #[serde(default = "default_compression_overflow_recoveries")]
+    pub main_context_overflow_recoveries: usize,
+    /// Max consecutive compression failures before giving up. Legacy `MAX_CONSECUTIVE_COMPRESSION_FAILURES = 3`.
+    #[serde(default = "default_compression_consecutive_failures")]
+    pub consecutive_failures: usize,
+    /// Max failed-tool recovery attempts. Legacy `MAX_FAILED_TOOL_RECOVERY_ATTEMPTS = 3`.
+    #[serde(default = "default_compression_failed_tool_recovery_attempts")]
+    pub failed_tool_recovery_attempts: usize,
+    /// Max stop-hook continuations per turn. Legacy `MAX_STOP_HOOK_CONTINUATIONS = 3`.
+    #[serde(default = "default_compression_stop_hook_continuations")]
+    pub stop_hook_continuations: usize,
+    /// Max same-round compression passes. Legacy `MAX_SAME_ROUND_COMPRESSION_PASSES = 2`.
+    #[serde(default = "default_compression_same_round_passes")]
+    pub same_round_passes: usize,
+    /// Max image-bearing messages whose images are kept for the API.
+    /// Legacy `MAX_IMAGE_BEARING_MESSAGE_ROUNDS = 2`.
+    #[serde(default = "default_compression_image_bearing_messages")]
+    pub image_bearing_messages: usize,
+    /// Recent-context tokens preserved by the compressor. Legacy `DEFAULT_RECENT_CONTEXT_TOKENS = 10_000`.
+    #[serde(default = "default_compression_recent_context_tokens")]
+    pub recent_context_tokens: usize,
+    /// Retry step when a compression pass overflows. Legacy `RECENT_CONTEXT_RETRY_STEP_TOKENS = 10_000`.
+    #[serde(default = "default_compression_retry_step_tokens")]
+    pub retry_step_tokens: usize,
+    /// Maximum retained user tokens. Legacy `MAX_RETAINED_USER_TOKENS = 20_000`.
+    #[serde(default = "default_compression_max_retained_user_tokens")]
+    pub max_retained_user_tokens: usize,
+}
+
+impl Default for CompressionThresholds {
+    fn default() -> Self {
+        Self {
+            safety_reserve_tokens: default_compression_safety_reserve_tokens(),
+            overflow_attempts: default_compression_overflow_attempts(),
+            main_context_overflow_recoveries: default_compression_overflow_recoveries(),
+            consecutive_failures: default_compression_consecutive_failures(),
+            failed_tool_recovery_attempts: default_compression_failed_tool_recovery_attempts(),
+            stop_hook_continuations: default_compression_stop_hook_continuations(),
+            same_round_passes: default_compression_same_round_passes(),
+            image_bearing_messages: default_compression_image_bearing_messages(),
+            recent_context_tokens: default_compression_recent_context_tokens(),
+            retry_step_tokens: default_compression_retry_step_tokens(),
+            max_retained_user_tokens: default_compression_max_retained_user_tokens(),
+        }
+    }
+}
+
+fn default_compression_safety_reserve_tokens() -> usize {
+    10_000
+}
+
+fn default_compression_overflow_attempts() -> usize {
+    4
+}
+
+fn default_compression_overflow_recoveries() -> usize {
+    2
+}
+
+fn default_compression_consecutive_failures() -> usize {
+    3
+}
+
+fn default_compression_failed_tool_recovery_attempts() -> usize {
+    3
+}
+
+fn default_compression_stop_hook_continuations() -> usize {
+    3
+}
+
+fn default_compression_same_round_passes() -> usize {
+    2
+}
+
+fn default_compression_image_bearing_messages() -> usize {
+    2
+}
+
+fn default_compression_recent_context_tokens() -> usize {
+    10_000
+}
+
+fn default_compression_retry_step_tokens() -> usize {
+    10_000
+}
+
+fn default_compression_max_retained_user_tokens() -> usize {
+    20_000
+}
+
+/// Model-stream retry backoff parameters (`ai.thresholds.model_retry.*`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ModelRetryThresholds {
+    /// Max stream attempts. Legacy `MAX_STREAM_ATTEMPTS = 10`.
+    #[serde(default = "default_model_retry_max_attempts")]
+    pub max_attempts: usize,
+    /// Base retry delay (ms). Legacy `RETRY_BASE_DELAY_MS = 500`.
+    #[serde(default = "default_model_retry_base_delay_ms")]
+    pub base_delay_ms: u64,
+    /// Rate-limit retry base delay (ms). Legacy `RATE_LIMIT_RETRY_BASE_DELAY_MS = 2000`.
+    #[serde(default = "default_model_retry_rate_limit_base_delay_ms")]
+    pub rate_limit_base_delay_ms: u64,
+    /// Exponential-delay cap (ms). Legacy `MAX_EXPONENTIAL_DELAY_MS = 30_000`.
+    #[serde(default = "default_model_retry_max_exponential_delay_ms")]
+    pub max_exponential_delay_ms: u64,
+    /// Rate-limit delay cap (ms). Legacy `MAX_RATE_LIMIT_DELAY_MS = 60_000`.
+    #[serde(default = "default_model_retry_max_rate_limit_delay_ms")]
+    pub max_rate_limit_delay_ms: u64,
+    /// Max retry exponent shift. Legacy `MAX_RETRY_EXPONENT_SHIFT = 6`.
+    #[serde(default = "default_model_retry_max_exponent_shift")]
+    pub max_exponent_shift: u32,
+}
+
+impl Default for ModelRetryThresholds {
+    fn default() -> Self {
+        Self {
+            max_attempts: default_model_retry_max_attempts(),
+            base_delay_ms: default_model_retry_base_delay_ms(),
+            rate_limit_base_delay_ms: default_model_retry_rate_limit_base_delay_ms(),
+            max_exponential_delay_ms: default_model_retry_max_exponential_delay_ms(),
+            max_rate_limit_delay_ms: default_model_retry_max_rate_limit_delay_ms(),
+            max_exponent_shift: default_model_retry_max_exponent_shift(),
+        }
+    }
+}
+
+fn default_model_retry_max_attempts() -> usize {
+    10
+}
+
+fn default_model_retry_base_delay_ms() -> u64 {
+    500
+}
+
+fn default_model_retry_rate_limit_base_delay_ms() -> u64 {
+    2_000
+}
+
+fn default_model_retry_max_exponential_delay_ms() -> u64 {
+    30_000
+}
+
+fn default_model_retry_max_rate_limit_delay_ms() -> u64 {
+    60_000
+}
+
+fn default_model_retry_max_exponent_shift() -> u32 {
+    6
+}
+
+/// Per-tool / per-round character caps for oversized tool results
+/// (`ai.thresholds.tool_output_cap.*`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ToolOutputCapThresholds {
+    /// Default per-tool result cap (chars). Legacy `DEFAULT_MAX_TOOL_RESULT_CHARS = 50_000`.
+    #[serde(default = "default_tool_output_default_chars")]
+    pub default_chars: usize,
+    /// Per-round aggregate cap (chars). Legacy `MAX_TOOL_RESULTS_PER_ROUND_CHARS = 200_000`.
+    #[serde(default = "default_tool_output_per_round_chars")]
+    pub per_round_chars: usize,
+    /// Persisted-output preview (chars). Legacy `TOOL_RESULT_PREVIEW_CHARS = 2_000`.
+    #[serde(default = "default_tool_output_preview_chars")]
+    pub preview_chars: usize,
+    /// Read tool result cap (chars). Legacy `READ_MAX_TOOL_RESULT_CHARS = 72_000`.
+    #[serde(default = "default_tool_output_read_chars")]
+    pub read_chars: usize,
+    /// Bash/shell result cap (chars). Legacy `SHELL_MAX_TOOL_RESULT_CHARS = 30_000`.
+    #[serde(default = "default_tool_output_shell_chars")]
+    pub shell_chars: usize,
+}
+
+impl Default for ToolOutputCapThresholds {
+    fn default() -> Self {
+        Self {
+            default_chars: default_tool_output_default_chars(),
+            per_round_chars: default_tool_output_per_round_chars(),
+            preview_chars: default_tool_output_preview_chars(),
+            read_chars: default_tool_output_read_chars(),
+            shell_chars: default_tool_output_shell_chars(),
+        }
+    }
+}
+
+fn default_tool_output_default_chars() -> usize {
+    50_000
+}
+
+fn default_tool_output_per_round_chars() -> usize {
+    200_000
+}
+
+fn default_tool_output_preview_chars() -> usize {
+    2_000
+}
+
+fn default_tool_output_read_chars() -> usize {
+    72_000
+}
+
+fn default_tool_output_shell_chars() -> usize {
+    30_000
+}
+
+/// Default timeouts (ms) for tools that own their execution timeout
+/// (`ai.thresholds.tool_timeout.*`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ToolTimeoutThresholds {
+    /// Bash tool default timeout (ms). Legacy `DEFAULT_TIMEOUT_MS = 120_000`.
+    #[serde(default = "default_tool_timeout_bash_default_ms")]
+    pub bash_default_ms: u64,
+    /// Bash tool max timeout (ms). Legacy `MAX_TIMEOUT_MS = 600_000`.
+    #[serde(default = "default_tool_timeout_bash_max_ms")]
+    pub bash_max_ms: u64,
+    /// ExecCommand default yield (ms). Legacy `EXEC_COMMAND_DEFAULT_YIELD_TIME_MS = 30_000`.
+    #[serde(default = "default_tool_timeout_exec_command_yield_ms")]
+    pub exec_command_yield_ms: u64,
+    /// Remote shell probe timeout (ms). Legacy `REMOTE_EXEC_SHELL_PROBE_TIMEOUT_MS = 3_000`.
+    #[serde(default = "default_tool_timeout_remote_shell_probe_ms")]
+    pub remote_shell_probe_ms: u64,
+    /// Document-conversion timeout (secs). Legacy `DOCUMENT_CONVERSION_TIMEOUT = 30`.
+    #[serde(default = "default_tool_timeout_document_conversion_secs")]
+    pub document_conversion_secs: u64,
+    /// Web fetch timeout (secs). Legacy `WEB_FETCH_TIMEOUT_SECS = 30`.
+    #[serde(default = "default_tool_timeout_web_fetch_secs")]
+    pub web_fetch_secs: u64,
+    /// Exa web-search timeout (secs). Legacy `EXA_TIMEOUT_SECS = 25`.
+    #[serde(default = "default_tool_timeout_exa_secs")]
+    pub exa_secs: u64,
+    /// AgentWait default timeout (ms). Legacy `DEFAULT_TIMEOUT_MS = 600_000`.
+    #[serde(default = "default_tool_timeout_agent_wait_default_ms")]
+    pub agent_wait_default_ms: u64,
+    /// AgentWait max timeout (ms). Legacy `MAX_TIMEOUT_MS = 3_600_000`.
+    #[serde(default = "default_tool_timeout_agent_wait_max_ms")]
+    pub agent_wait_max_ms: u64,
+    /// MCP tool default render cap (chars). Legacy `DEFAULT_RENDER_CHAR_LIMIT = 32_000`.
+    #[serde(default = "default_tool_timeout_mcp_render_chars")]
+    pub mcp_render_chars: usize,
+    /// GetFileDiff prepared diff page budget (chars). Legacy `PREPARED_REVIEW_DIFF_PAGE_CHARS = 40_000`.
+    #[serde(default = "default_tool_timeout_diff_page_chars")]
+    pub diff_page_chars: usize,
+    /// GetFileDiff prepared diff total budget (chars). Legacy `PREPARED_REVIEW_DIFF_TOTAL_CHARS = 80_000`.
+    #[serde(default = "default_tool_timeout_diff_total_chars")]
+    pub diff_total_chars: usize,
+    /// GetFileDiff new-file content limit (bytes). Legacy `REVIEW_NEW_FILE_CONTENT_LIMIT = 16 KiB`.
+    #[serde(default = "default_tool_timeout_diff_new_file_bytes")]
+    pub diff_new_file_bytes: u64,
+}
+
+impl Default for ToolTimeoutThresholds {
+    fn default() -> Self {
+        Self {
+            bash_default_ms: default_tool_timeout_bash_default_ms(),
+            bash_max_ms: default_tool_timeout_bash_max_ms(),
+            exec_command_yield_ms: default_tool_timeout_exec_command_yield_ms(),
+            remote_shell_probe_ms: default_tool_timeout_remote_shell_probe_ms(),
+            document_conversion_secs: default_tool_timeout_document_conversion_secs(),
+            web_fetch_secs: default_tool_timeout_web_fetch_secs(),
+            exa_secs: default_tool_timeout_exa_secs(),
+            agent_wait_default_ms: default_tool_timeout_agent_wait_default_ms(),
+            agent_wait_max_ms: default_tool_timeout_agent_wait_max_ms(),
+            mcp_render_chars: default_tool_timeout_mcp_render_chars(),
+            diff_page_chars: default_tool_timeout_diff_page_chars(),
+            diff_total_chars: default_tool_timeout_diff_total_chars(),
+            diff_new_file_bytes: default_tool_timeout_diff_new_file_bytes(),
+        }
+    }
+}
+
+fn default_tool_timeout_bash_default_ms() -> u64 {
+    120_000
+}
+
+fn default_tool_timeout_bash_max_ms() -> u64 {
+    600_000
+}
+
+fn default_tool_timeout_exec_command_yield_ms() -> u64 {
+    30_000
+}
+
+fn default_tool_timeout_remote_shell_probe_ms() -> u64 {
+    3_000
+}
+
+fn default_tool_timeout_document_conversion_secs() -> u64 {
+    30
+}
+
+fn default_tool_timeout_web_fetch_secs() -> u64 {
+    30
+}
+
+fn default_tool_timeout_exa_secs() -> u64 {
+    25
+}
+
+fn default_tool_timeout_agent_wait_default_ms() -> u64 {
+    600_000
+}
+
+fn default_tool_timeout_agent_wait_max_ms() -> u64 {
+    60 * 60 * 1_000
+}
+
+fn default_tool_timeout_mcp_render_chars() -> usize {
+    32_000
+}
+
+fn default_tool_timeout_diff_page_chars() -> usize {
+    40_000
+}
+
+fn default_tool_timeout_diff_total_chars() -> usize {
+    80_000
+}
+
+fn default_tool_timeout_diff_new_file_bytes() -> u64 {
+    16 * 1024
+}
+
+/// Knowledge-base search scan and result caps (`ai.thresholds.knowledge_search.*`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct KnowledgeSearchThresholds {
+    /// Max scanned file size (bytes). Legacy `MAX_SCAN_FILE_SIZE = 2 MiB`.
+    #[serde(default = "default_knowledge_search_max_file_bytes")]
+    pub max_scan_file_bytes: u64,
+    /// Max directory scan depth. Legacy `MAX_SCAN_DEPTH = 16`.
+    #[serde(default = "default_knowledge_search_max_depth")]
+    pub max_scan_depth: usize,
+    /// Default result cap. Legacy `DEFAULT_MAX_RESULTS = 50`.
+    #[serde(default = "default_knowledge_search_default_max_results")]
+    pub default_max_results: usize,
+    /// Hard cap for `max_results`. Legacy `MAX_RESULTS_CAP = 200`.
+    #[serde(default = "default_knowledge_search_max_results_cap")]
+    pub max_results_cap: usize,
+}
+
+impl Default for KnowledgeSearchThresholds {
+    fn default() -> Self {
+        Self {
+            max_scan_file_bytes: default_knowledge_search_max_file_bytes(),
+            max_scan_depth: default_knowledge_search_max_depth(),
+            default_max_results: default_knowledge_search_default_max_results(),
+            max_results_cap: default_knowledge_search_max_results_cap(),
+        }
+    }
+}
+
+fn default_knowledge_search_max_file_bytes() -> u64 {
+    2 * 1024 * 1024
+}
+
+fn default_knowledge_search_max_depth() -> usize {
+    16
+}
+
+fn default_knowledge_search_default_max_results() -> usize {
+    50
+}
+
+fn default_knowledge_search_max_results_cap() -> usize {
+    200
+}
+
+/// External ACP client timeouts (`ai.thresholds.acp_timeout.*`, seconds).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AcpTimeoutThresholds {
+    /// Client startup timeout (secs). Legacy `CLIENT_STARTUP_TIMEOUT_SECS = 60`.
+    #[serde(default = "default_acp_client_startup_secs")]
+    pub client_startup_secs: u64,
+    /// Permission request timeout (secs). Legacy `PERMISSION_TIMEOUT = 600`.
+    #[serde(default = "default_acp_permission_secs")]
+    pub permission_secs: u64,
+    /// Session-close timeout (secs). Legacy `SESSION_CLOSE_TIMEOUT = 5`.
+    #[serde(default = "default_acp_session_close_secs")]
+    pub session_close_secs: u64,
+    /// CLI detect probe timeout (secs). Legacy `CLI_DETECT_TIMEOUT_SECS = 5`.
+    #[serde(default = "default_acp_cli_detect_secs")]
+    pub cli_detect_secs: u64,
+    /// ACP handshake timeout (secs). Legacy `ACP_HANDSHAKE_TIMEOUT_SECS = 30`.
+    #[serde(default = "default_acp_handshake_secs")]
+    pub handshake_secs: u64,
+    /// Total try-connect probe timeout (secs). Legacy `TRY_CONNECT_TOTAL_TIMEOUT_SECS = 35`.
+    #[serde(default = "default_acp_try_connect_total_secs")]
+    pub try_connect_total_secs: u64,
+    /// Requirement probe timeout (secs). Legacy `REQUIREMENT_PROBE_TIMEOUT = 3`.
+    #[serde(default = "default_acp_requirement_probe_secs")]
+    pub requirement_probe_secs: u64,
+    /// Adapter download timeout (secs). Legacy `ADAPTER_DOWNLOAD_TIMEOUT = 120`.
+    #[serde(default = "default_acp_adapter_download_secs")]
+    pub adapter_download_secs: u64,
+    /// CLI install timeout (secs). Legacy `CLI_INSTALL_TIMEOUT = 600`.
+    #[serde(default = "default_acp_cli_install_secs")]
+    pub cli_install_secs: u64,
+    /// Background ACP direct delivery window (secs). Legacy `ACP_DIRECT_TIMEOUT_SECONDS = 1800`.
+    #[serde(default = "default_acp_direct_secs")]
+    pub direct_secs: u64,
+    /// ACP Task-tool bounded window (secs). Legacy `ACP_TASK_TIMEOUT_SECONDS = 600`.
+    #[serde(default = "default_acp_task_secs")]
+    pub task_secs: u64,
+}
+
+impl Default for AcpTimeoutThresholds {
+    fn default() -> Self {
+        Self {
+            client_startup_secs: default_acp_client_startup_secs(),
+            permission_secs: default_acp_permission_secs(),
+            session_close_secs: default_acp_session_close_secs(),
+            cli_detect_secs: default_acp_cli_detect_secs(),
+            handshake_secs: default_acp_handshake_secs(),
+            try_connect_total_secs: default_acp_try_connect_total_secs(),
+            requirement_probe_secs: default_acp_requirement_probe_secs(),
+            adapter_download_secs: default_acp_adapter_download_secs(),
+            cli_install_secs: default_acp_cli_install_secs(),
+            direct_secs: default_acp_direct_secs(),
+            task_secs: default_acp_task_secs(),
+        }
+    }
+}
+
+fn default_acp_client_startup_secs() -> u64 {
+    60
+}
+
+fn default_acp_permission_secs() -> u64 {
+    600
+}
+
+fn default_acp_session_close_secs() -> u64 {
+    5
+}
+
+fn default_acp_cli_detect_secs() -> u64 {
+    5
+}
+
+fn default_acp_handshake_secs() -> u64 {
+    30
+}
+
+fn default_acp_try_connect_total_secs() -> u64 {
+    35
+}
+
+fn default_acp_requirement_probe_secs() -> u64 {
+    3
+}
+
+fn default_acp_adapter_download_secs() -> u64 {
+    120
+}
+
+fn default_acp_cli_install_secs() -> u64 {
+    600
+}
+
+fn default_acp_direct_secs() -> u64 {
+    1800
+}
+
+fn default_acp_task_secs() -> u64 {
+    600
+}
+
+/// Warden challenge-poke pacing and judgement timeouts
+/// (`ai.thresholds.warden.*`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WardenThresholds {
+    /// Max consecutive deferrals before a forced work turn. Legacy `MAX_DEFER_COUNT = 3`.
+    #[serde(default = "default_warden_max_defer_count")]
+    pub max_defer_count: u32,
+    /// Max accepted average inter-poke interval rate. Legacy `MAX_RATE = 1000.0`.
+    #[serde(default = "default_warden_max_rate")]
+    pub max_rate: f64,
+    /// Warden model-judgement timeout (secs). Legacy `WARDEN_JUDGEMENT_TIMEOUT = 8`.
+    #[serde(default = "default_warden_judgement_timeout_secs")]
+    pub judgement_timeout_secs: u64,
+}
+
+impl Default for WardenThresholds {
+    fn default() -> Self {
+        Self {
+            max_defer_count: default_warden_max_defer_count(),
+            max_rate: default_warden_max_rate(),
+            judgement_timeout_secs: default_warden_judgement_timeout_secs(),
+        }
+    }
+}
+
+fn default_warden_max_defer_count() -> u32 {
+    3
+}
+
+fn default_warden_max_rate() -> f64 {
+    1000.0
+}
+
+fn default_warden_judgement_timeout_secs() -> u64 {
+    8
+}
+
+/// Deep-review execution budgets (`ai.thresholds.deep_review.*`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DeepReviewThresholds {
+    /// Per-review-turn diff budget (chars). Legacy `REVIEW_DIFF_MAX_CHARS_PER_TURN = 240_000`.
+    #[serde(default = "default_deep_review_diff_max_chars_per_turn")]
+    pub diff_max_chars_per_turn: usize,
+    /// Max provider-diff acquisitions per turn. Legacy `REVIEW_PROVIDER_DIFF_MAX_ACQUISITIONS_PER_TURN = 128`.
+    #[serde(default = "default_deep_review_diff_max_acquisitions_per_turn")]
+    pub diff_max_acquisitions_per_turn: usize,
+    /// Default max parallel reviewer instances. Legacy `DEFAULT_MAX_PARALLEL_INSTANCES = 4`.
+    #[serde(default = "default_deep_review_max_parallel_instances")]
+    pub max_parallel_instances: usize,
+    /// Max queue wait before a reviewer launch is skipped (secs). Legacy `DEFAULT_MAX_QUEUE_WAIT_SECONDS = 1200`.
+    #[serde(default = "default_deep_review_max_queue_wait_secs")]
+    pub max_queue_wait_secs: u64,
+    /// Auto-retry elapsed guard (secs). Legacy `DEFAULT_AUTO_RETRY_ELAPSED_GUARD_SECONDS = 180`.
+    #[serde(default = "default_deep_review_auto_retry_elapsed_guard_secs")]
+    pub auto_retry_elapsed_guard_secs: u64,
+}
+
+impl Default for DeepReviewThresholds {
+    fn default() -> Self {
+        Self {
+            diff_max_chars_per_turn: default_deep_review_diff_max_chars_per_turn(),
+            diff_max_acquisitions_per_turn: default_deep_review_diff_max_acquisitions_per_turn(),
+            max_parallel_instances: default_deep_review_max_parallel_instances(),
+            max_queue_wait_secs: default_deep_review_max_queue_wait_secs(),
+            auto_retry_elapsed_guard_secs: default_deep_review_auto_retry_elapsed_guard_secs(),
+        }
+    }
+}
+
+fn default_deep_review_diff_max_chars_per_turn() -> usize {
+    240_000
+}
+
+fn default_deep_review_diff_max_acquisitions_per_turn() -> usize {
+    128
+}
+
+fn default_deep_review_max_parallel_instances() -> usize {
+    4
+}
+
+fn default_deep_review_max_queue_wait_secs() -> u64 {
+    1200
+}
+
+fn default_deep_review_auto_retry_elapsed_guard_secs() -> u64 {
+    180
+}
+
+/// Memory token limits not covered by `memories.*` (`ai.thresholds.memories.*`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MemoryThresholds {
+    /// Memory summary token limit. Legacy `MEMORY_SUMMARY_TOKEN_LIMIT = 2_500`.
+    #[serde(default = "default_memory_summary_token_limit")]
+    pub summary_token_limit: usize,
+    /// Transcript user-message token limit. Legacy `MESSAGE_CONTENT_TOKEN_LIMIT = 8_000`.
+    #[serde(default = "default_memory_message_content_token_limit")]
+    pub message_content_token_limit: usize,
+    /// Transcript tool-input token limit. Legacy `TOOL_INPUT_TOKEN_LIMIT = 6_000`.
+    #[serde(default = "default_memory_tool_input_token_limit")]
+    pub tool_input_token_limit: usize,
+    /// Transcript tool-result token limit. Legacy `TOOL_RESULT_TOKEN_LIMIT = 12_000`.
+    #[serde(default = "default_memory_tool_result_token_limit")]
+    pub tool_result_token_limit: usize,
+    /// Transcript tool-error token limit. Legacy `TOOL_ERROR_TOKEN_LIMIT = 1_000`.
+    #[serde(default = "default_memory_tool_error_token_limit")]
+    pub tool_error_token_limit: usize,
+    /// Phase-1 rollout token limit. Legacy `DEFAULT_ROLLOUT_TOKEN_LIMIT = 120_000`.
+    #[serde(default = "default_memory_rollout_token_limit")]
+    pub rollout_token_limit: usize,
+}
+
+impl Default for MemoryThresholds {
+    fn default() -> Self {
+        Self {
+            summary_token_limit: default_memory_summary_token_limit(),
+            message_content_token_limit: default_memory_message_content_token_limit(),
+            tool_input_token_limit: default_memory_tool_input_token_limit(),
+            tool_result_token_limit: default_memory_tool_result_token_limit(),
+            tool_error_token_limit: default_memory_tool_error_token_limit(),
+            rollout_token_limit: default_memory_rollout_token_limit(),
+        }
+    }
+}
+
+fn default_memory_summary_token_limit() -> usize {
+    2_500
+}
+
+fn default_memory_message_content_token_limit() -> usize {
+    8_000
+}
+
+fn default_memory_tool_input_token_limit() -> usize {
+    6_000
+}
+
+fn default_memory_tool_result_token_limit() -> usize {
+    12_000
+}
+
+fn default_memory_tool_error_token_limit() -> usize {
+    1_000
+}
+
+fn default_memory_rollout_token_limit() -> usize {
+    120_000
+}
+
+/// Automatic output-token tiering (`ai.thresholds.output_tokens.*`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct OutputTokensThresholds {
+    /// Automatic output-token tiers (largest tier first). Legacy `AUTOMATIC_MAX_OUTPUT_TOKEN_TIERS = [8k,16k,24k,32k,64k]`.
+    #[serde(default = "default_output_token_tiers")]
+    pub automatic_tiers: Vec<u32>,
+    /// Max configured output-token ratio (percent of context window). Legacy `MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT = 40`.
+    #[serde(default = "default_output_tokens_ratio_percent")]
+    pub ratio_percent: u32,
+}
+
+impl Default for OutputTokensThresholds {
+    fn default() -> Self {
+        Self {
+            automatic_tiers: default_output_token_tiers(),
+            ratio_percent: default_output_tokens_ratio_percent(),
+        }
+    }
+}
+
+fn default_output_token_tiers() -> Vec<u32> {
+    vec![8_000, 16_000, 24_000, 32_000, 64_000]
+}
+
+fn default_output_tokens_ratio_percent() -> u32 {
+    40
+}
+
+/// Goal idle-wakeup and auto-continuation budgets (`ai.thresholds.goal.*`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GoalThresholds {
+    /// Goal idle-wakeup delay (ms). Legacy `GOAL_IDLE_WAKEUP_DELAY_MS = 600_000`.
+    #[serde(default = "default_goal_idle_wakeup_delay_ms")]
+    pub idle_wakeup_delay_ms: u64,
+    /// Max automatic goal continuations. Legacy `MAX_THREAD_GOAL_AUTO_CONTINUATIONS = 10`.
+    #[serde(default = "default_goal_max_auto_continuations")]
+    pub max_auto_continuations: u32,
+}
+
+impl Default for GoalThresholds {
+    fn default() -> Self {
+        Self {
+            idle_wakeup_delay_ms: default_goal_idle_wakeup_delay_ms(),
+            max_auto_continuations: default_goal_max_auto_continuations(),
+        }
+    }
+}
+
+fn default_goal_idle_wakeup_delay_ms() -> u64 {
+    600_000
+}
+
+fn default_goal_max_auto_continuations() -> u32 {
+    10
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -1088,6 +1984,28 @@ fn default_subagent_batch_execution_policy() -> SubagentBatchExecutionPolicy {
     SubagentBatchExecutionPolicy::ForceParallel
 }
 
+/// Default single-topology legion node cap (legion 阈值参数配置化）。
+///
+/// Keeps the legacy hard-coded `MAX_LEGION_NODES = 20` semantics when the user
+/// does not configure `ai.legion_max_nodes`.
+pub fn default_legion_max_nodes() -> usize {
+    20
+}
+
+/// Default cross-deployment legion node cap (legion 阈值参数配置化）。
+///
+/// Keeps the legacy hard-coded `MAX_LEGION_TOTAL_NODES = 3 * 20 = 60` semantics
+/// when the user does not configure `ai.legion_max_total_nodes`.
+pub fn default_legion_max_total_nodes() -> usize {
+    3 * default_legion_max_nodes()
+}
+
+/// Default legion deployment frequency cap: 10 loads per hour per creator
+/// (legion 阈值参数配置化）。`0` disables the limit.
+pub fn default_legion_deploy_frequency_per_hour() -> usize {
+    10
+}
+
 pub const DEFAULT_MAX_ROUNDS: usize = 200;
 
 fn default_max_rounds() -> usize {
@@ -1325,7 +2243,7 @@ pub enum AgentSubagentOverrideState {
 pub type ParentSubagentOverrideConfig = HashMap<String, AgentSubagentOverrideState>;
 pub type AgentSubagentOverrideConfig = HashMap<String, ParentSubagentOverrideConfig>;
 
-pub const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS: u32 = 128_128;
+pub const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS: u32 = 1_048_576;
 pub const MIN_MODEL_CONTEXT_WINDOW_TOKENS: u32 = 32_000;
 pub const MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT: u32 = 40;
 const AUTOMATIC_MAX_OUTPUT_TOKEN_TIERS: [u32; 5] = [8_000, 16_000, 24_000, 32_000, 64_000];
@@ -1342,11 +2260,75 @@ pub fn automatic_max_output_tokens(context_window: u32) -> u32 {
         .unwrap_or(quarter_context)
 }
 
+/// Same as [`automatic_max_output_tokens`] but honoring the configured tiers
+/// (阈值参数配置化：`ai.thresholds.output_tokens.automatic_tiers`).
+pub async fn automatic_max_output_tokens_configured(context_window: u32) -> u32 {
+    let tiers = configured_output_token_tiers().await;
+    let quarter_context = context_window / 4;
+    tiers
+        .iter()
+        .rev()
+        .copied()
+        .find(|tier| *tier <= quarter_context)
+        .unwrap_or(quarter_context)
+}
+
+/// Resolve the configured output-token tiers
+/// (`ai.thresholds.output_tokens.automatic_tiers`), falling back to the legacy
+/// `AUTOMATIC_MAX_OUTPUT_TOKEN_TIERS` when unset or empty.
+async fn configured_output_token_tiers() -> Vec<u32> {
+    let Ok(config_service) = crate::service::config::get_global_config_service().await else {
+        return AUTOMATIC_MAX_OUTPUT_TOKEN_TIERS.to_vec();
+    };
+    let Ok(thresholds) = config_service
+        .get_config::<AiThresholdsConfig>(Some("ai.thresholds"))
+        .await
+    else {
+        return AUTOMATIC_MAX_OUTPUT_TOKEN_TIERS.to_vec();
+    };
+    let tiers = &thresholds.output_tokens.automatic_tiers;
+    if tiers.is_empty() {
+        return AUTOMATIC_MAX_OUTPUT_TOKEN_TIERS.to_vec();
+    }
+    tiers.clone()
+}
+
 /// A configured output cap may use up to 40% of the model context window.
 pub fn is_valid_configured_max_output_tokens(context_window: u32, max_tokens: u32) -> bool {
     max_tokens > 0
         && u64::from(max_tokens) * 100
             <= u64::from(context_window) * u64::from(MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT)
+}
+
+/// Same as [`is_valid_configured_max_output_tokens`] but honoring the
+/// configured ratio (阈值参数配置化：`ai.thresholds.output_tokens.ratio_percent`).
+pub async fn is_valid_configured_max_output_tokens_configured(
+    context_window: u32,
+    max_tokens: u32,
+) -> bool {
+    let ratio_percent = configured_output_tokens_ratio_percent().await;
+    max_tokens > 0
+        && u64::from(max_tokens) * 100 <= u64::from(context_window) * u64::from(ratio_percent)
+}
+
+/// Resolve the configured output-token ratio percent
+/// (`ai.thresholds.output_tokens.ratio_percent`), falling back to the legacy
+/// `MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT = 40` when unset or zero.
+pub(crate) async fn configured_output_tokens_ratio_percent() -> u32 {
+    let Ok(config_service) = crate::service::config::get_global_config_service().await else {
+        return MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT;
+    };
+    let Ok(thresholds) = config_service
+        .get_config::<AiThresholdsConfig>(Some("ai.thresholds"))
+        .await
+    else {
+        return MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT;
+    };
+    let ratio = thresholds.output_tokens.ratio_percent;
+    if ratio == 0 {
+        return MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT;
+    }
+    ratio
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1843,6 +2825,13 @@ impl Default for AIConfig {
             computer_use_enabled: false,
             browser_control_preferred_browser: String::new(),
             max_rounds: default_max_rounds(),
+            rbac_enabled: true,
+            external_instruction_sources: true,
+            knowledge_base_root: String::new(),
+            legion_max_nodes: default_legion_max_nodes(),
+            legion_max_total_nodes: default_legion_max_total_nodes(),
+            legion_deploy_frequency_per_hour: default_legion_deploy_frequency_per_hour(),
+            thresholds: AiThresholdsConfig::default(),
         }
     }
 }
@@ -2998,5 +3987,50 @@ mod tests {
         let serialized =
             serde_json::to_value(&config).expect("review team auxiliary config should serialize");
         assert!(serialized["review_teams"]["rate_limit_status"].is_null());
+    }
+
+    #[test]
+    fn legion_thresholds_default_to_legacy_hardcoded_values() {
+        let config = AIConfig::default();
+        assert_eq!(config.legion_max_nodes, 20);
+        assert_eq!(config.legion_max_total_nodes, 60);
+        assert_eq!(config.legion_deploy_frequency_per_hour, 10);
+
+        // Unset config (empty AIConfig) must deserialize to the same defaults —
+        // this is what keeps the default path behavior identical to the old
+        // hard-coded constants (legion 阈值参数配置化零回归).
+        let empty: AIConfig =
+            serde_json::from_value(serde_json::json!({})).expect("empty ai config should default");
+        assert_eq!(empty.legion_max_nodes, 20);
+        assert_eq!(empty.legion_max_total_nodes, 60);
+        assert_eq!(empty.legion_deploy_frequency_per_hour, 10);
+    }
+
+    #[test]
+    fn legion_thresholds_round_trip_explicit_values() {
+        let config: AIConfig = serde_json::from_value(serde_json::json!({
+            "models": [],
+            "func_agent_models": {},
+            "default_models": {},
+            "agent_profiles": {},
+            "legion_max_nodes": 5,
+            "legion_max_total_nodes": 30,
+            "legion_deploy_frequency_per_hour": 0,
+            "proxy": {
+                "enabled": false,
+                "url": ""
+            }
+        }))
+        .expect("legion thresholds config should deserialize");
+
+        assert_eq!(config.legion_max_nodes, 5);
+        assert_eq!(config.legion_max_total_nodes, 30);
+        // 0 = frequency limit disabled.
+        assert_eq!(config.legion_deploy_frequency_per_hour, 0);
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert_eq!(serialized["legion_max_nodes"], 5);
+        assert_eq!(serialized["legion_max_total_nodes"], 30);
+        assert_eq!(serialized["legion_deploy_frequency_per_hour"], 0);
     }
 }

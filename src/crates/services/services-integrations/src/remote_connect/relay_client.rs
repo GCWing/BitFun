@@ -690,6 +690,7 @@ mod tests {
 }
 
 #[cfg(windows)]
+#[allow(clippy::items_after_test_module)] // windows-only connector builder lives after the test module for file scoping
 fn build_windows_rustls_connector() -> Result<Connector> {
     // Install the ring CryptoProvider as the process-level default.
     // Required by rustls 0.23+ when `default-features = false`.

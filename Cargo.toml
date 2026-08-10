@@ -57,6 +57,7 @@ resolver = "2"
 version = "0.2.17" # x-release-please-version
 authors = ["BitFun Team"]
 edition = "2021"
+license = "MIT"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "warn"

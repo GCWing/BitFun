@@ -47,14 +47,16 @@ pub(crate) async fn maybe_persist_large_tool_result_for_tool(
     effective_tool_name: &str,
     context: &ToolUseContext,
 ) -> ToolResult {
-    let policy = ToolResultStoragePolicy::default();
+    let policy = resolved_tool_result_storage_policy().await;
     if should_skip_tool_result(&result, effective_tool_name)
         || visible_content_is_compacted(&result)
     {
         return result;
     }
 
-    let per_tool_limit = effective_per_tool_limit(effective_tool_name, policy);
+    let (read_chars, shell_chars) = resolved_read_shell_output_caps().await;
+    let per_tool_limit =
+        effective_per_tool_limit_resolved(effective_tool_name, policy, read_chars, shell_chars);
     let visible_chars = result_visible_content(&result).chars().count();
     let content_override =
         content_override_if_oversized(&result, effective_tool_name, per_tool_limit);
@@ -84,7 +86,7 @@ pub(crate) async fn apply_round_tool_result_budget(
     mut results: Vec<ToolResult>,
     context: &ToolUseContext,
 ) -> Vec<ToolResult> {
-    let policy = ToolResultStoragePolicy::default();
+    let policy = resolved_tool_result_storage_policy().await;
     let candidates = collect_round_budget_candidates(&results);
     let total_visible_chars = candidates
         .iter()
@@ -283,6 +285,63 @@ fn effective_per_tool_limit(tool_name: &str, policy: ToolResultStoragePolicy) ->
         BASH_TOOL_NAME => SHELL_MAX_TOOL_RESULT_CHARS,
         _ => policy.per_tool_limit_chars,
     }
+}
+
+/// Resolve the effective per-tool limit, honoring the configured caps for the
+/// Read / Bash tools (阈值参数配置化：`ai.thresholds.tool_output_cap.*`).
+fn effective_per_tool_limit_resolved(
+    tool_name: &str,
+    policy: ToolResultStoragePolicy,
+    read_chars: usize,
+    shell_chars: usize,
+) -> usize {
+    match tool_name {
+        READ_TOOL_NAME => read_chars.max(1),
+        BASH_TOOL_NAME => shell_chars.max(1),
+        _ => policy.per_tool_limit_chars.max(1),
+    }
+}
+
+/// Resolve the configured tool-result storage policy
+/// (`ai.thresholds.tool_output_cap.*`), falling back to the legacy defaults
+/// when the config service is unavailable.
+async fn resolved_tool_result_storage_policy() -> ToolResultStoragePolicy {
+    use crate::service::config::get_global_config_service;
+    let Ok(config_service) = get_global_config_service().await else {
+        return ToolResultStoragePolicy::default();
+    };
+    let Ok(thresholds) = config_service
+        .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+        .await
+    else {
+        return ToolResultStoragePolicy::default();
+    };
+    let caps = &thresholds.tool_output_cap;
+    ToolResultStoragePolicy {
+        per_tool_limit_chars: caps.default_chars.max(1),
+        per_round_limit_chars: caps.per_round_chars.max(1),
+        preview_chars: caps.preview_chars.max(1),
+    }
+}
+
+/// Resolve the configured Read / Bash per-tool output caps
+/// (`ai.thresholds.tool_output_cap.read_chars` / `shell_chars`).
+async fn resolved_read_shell_output_caps() -> (usize, usize) {
+    use crate::service::config::get_global_config_service;
+    let Ok(config_service) = get_global_config_service().await else {
+        return (READ_MAX_TOOL_RESULT_CHARS, SHELL_MAX_TOOL_RESULT_CHARS);
+    };
+    let Ok(thresholds) = config_service
+        .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+        .await
+    else {
+        return (READ_MAX_TOOL_RESULT_CHARS, SHELL_MAX_TOOL_RESULT_CHARS);
+    };
+    let caps = &thresholds.tool_output_cap;
+    (
+        caps.read_chars.max(1),
+        caps.shell_chars.max(1),
+    )
 }
 
 fn content_override_if_oversized(

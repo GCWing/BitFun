@@ -31,6 +31,25 @@ pub enum WorkspaceType {
     Other,
 }
 
+impl WorkspaceType {
+    /// Lowercase wire form, matching the `WorkspaceScan` input contract
+    /// (d6-P2-3): the tool emits `status`/`workspaceType` in lowercase so the
+    /// output can be fed straight back into `scope`/`by_status:` without a
+    /// separate casing conversion.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            WorkspaceType::RustProject => "rust_project",
+            WorkspaceType::NodeProject => "node_project",
+            WorkspaceType::PythonProject => "python_project",
+            WorkspaceType::JavaProject => "java_project",
+            WorkspaceType::CppProject => "cpp_project",
+            WorkspaceType::WebProject => "web_project",
+            WorkspaceType::MobileProject => "mobile_project",
+            WorkspaceType::Other => "other",
+        }
+    }
+}
+
 /// Workspace status.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum WorkspaceStatus {
@@ -39,6 +58,20 @@ pub enum WorkspaceStatus {
     Loading,
     Error,
     Archived,
+}
+
+impl WorkspaceStatus {
+    /// Lowercase wire form, matching `WorkspaceScan`'s `parse_status` input
+    /// contract (d6-P2-3).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            WorkspaceStatus::Active => "active",
+            WorkspaceStatus::Inactive => "inactive",
+            WorkspaceStatus::Loading => "loading",
+            WorkspaceStatus::Error => "error",
+            WorkspaceStatus::Archived => "archived",
+        }
+    }
 }
 
 /// Workspace lifecycle kind.

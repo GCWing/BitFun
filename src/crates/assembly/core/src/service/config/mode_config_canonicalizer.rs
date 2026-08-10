@@ -128,6 +128,7 @@ pub fn resolve_effective_tools(
     effective
 }
 
+#[allow(clippy::too_many_arguments)]
 fn stored_agent_profile_from_tool_selection(
     agent_id: &str,
     enabled_tools: Vec<String>,

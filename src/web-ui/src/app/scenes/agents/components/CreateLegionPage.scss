@@ -1,0 +1,202 @@
+/**
+ * CreateLegionPage — legion orchestration pattern picker page.
+ * Minimal styles for the create-agent-page shell and legion-* list/grid blocks.
+ */
+
+@use '../../../../component-library/styles/tokens' as *;
+
+.create-agent-page {
+  width: min(100%, 1200px);
+  margin-inline: auto;
+  padding: clamp(16px, 2.2vw, 28px);
+  display: flex;
+  flex-direction: column;
+  gap: $size-gap-4;
+}
+
+.create-agent-page__header {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-3;
+  padding-bottom: $size-gap-3;
+  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+}
+
+.create-agent-page__title {
+  font-size: var(--bf-appearance-token-flowchat-font-size-xl);
+  font-weight: $font-weight-semibold;
+  color: var(--bf-appearance-token-color-text-primary);
+  margin: 0;
+  line-height: $line-height-tight;
+}
+
+.create-agent-page__section {
+  display: flex;
+  flex-direction: column;
+  gap: $size-gap-3;
+}
+
+.create-agent-page__section-title {
+  font-size: var(--bf-appearance-token-flowchat-font-size-base);
+  font-weight: $font-weight-semibold;
+  color: var(--bf-appearance-token-color-text-primary);
+  margin: 0;
+}
+
+.create-agent-page__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: $size-gap-3;
+  padding-top: $size-gap-3;
+  border-top: 1px solid var(--bf-appearance-token-border-subtle);
+}
+
+// ─── Pattern selector ───────────────────────────────────────
+.legion-pattern-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: $size-gap-3;
+}
+
+.legion-pattern-chip {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-2;
+  padding: $size-gap-3;
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: 8px;
+  background: var(--bf-appearance-token-color-bg-primary);
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+
+  &:hover {
+    border-color: var(--bf-appearance-token-border-strong);
+    background: var(--bf-appearance-token-element-bg-hover);
+  }
+
+  &--active {
+    border-color: var(--bf-appearance-token-color-accent-500);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, var(--bf-appearance-token-color-bg-primary));
+  }
+}
+
+// ─── Summary ────────────────────────────────────────────────
+.legion-summary-desc {
+  margin: 0;
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  line-height: $line-height-relaxed;
+}
+
+.legion-summary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $size-gap-3;
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+
+  span {
+    padding: 2px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+  }
+}
+
+// ─── Node list ──────────────────────────────────────────────
+.legion-node-list {
+  display: flex;
+  flex-direction: column;
+  gap: $size-gap-2;
+}
+
+.legion-node-item {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-3;
+  padding: $size-gap-3;
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: 8px;
+  background: var(--bf-appearance-token-color-bg-primary);
+}
+
+.legion-node-index {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--bf-appearance-token-color-bg-tertiary);
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+  font-weight: $font-weight-semibold;
+}
+
+.legion-node-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.legion-node-role {
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  font-weight: $font-weight-medium;
+  color: var(--bf-appearance-token-color-text-primary);
+}
+
+.legion-node-agent {
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+  color: var(--bf-appearance-token-color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legion-node-gate {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--bf-appearance-token-border-strong);
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+}
+
+// ─── Edge list ──────────────────────────────────────────────
+.legion-edge-list {
+  display: flex;
+  flex-direction: column;
+  gap: $size-gap-2;
+}
+
+.legion-edge-item {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-2;
+  padding: $size-gap-2 $size-gap-3;
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: 8px;
+  background: var(--bf-appearance-token-color-bg-primary);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  color: var(--bf-appearance-token-color-text-primary);
+}
+
+.legion-edge-arrow {
+  flex-shrink: 0;
+  color: var(--bf-appearance-token-color-text-muted);
+}
+
+.legion-edge-condition {
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+}
+
+.legion-empty-hint {
+  margin: 0;
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+}

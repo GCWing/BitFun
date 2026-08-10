@@ -306,6 +306,8 @@ static mut GLOBAL_EVENT_EMITTER: Option<Arc<tokio::sync::RwLock<SnapshotEmitterA
 
 /// Initializes the global event emitter.
 pub fn initialize_snapshot_event_emitter(emitter: Arc<dyn EventEmitter>) {
+    // SAFETY: the global emitter is written exactly once during process startup
+    // before any concurrent reader (get_event_emitter) can observe it.
     unsafe {
         GLOBAL_EVENT_EMITTER = Some(Arc::new(tokio::sync::RwLock::new(
             SnapshotEmitterAdapter::new(Some(emitter)),
@@ -317,6 +319,8 @@ pub fn initialize_snapshot_event_emitter(emitter: Arc<dyn EventEmitter>) {
 /// Gets the global event emitter.
 #[allow(static_mut_refs)]
 pub fn get_event_emitter() -> Option<Arc<tokio::sync::RwLock<SnapshotEmitterAdapter>>> {
+    // SAFETY: the emitter is initialized before any concurrent access and never
+    // mutated afterwards, so a shared read of the static is sound.
     unsafe { GLOBAL_EVENT_EMITTER.clone() }
 }
 

@@ -442,6 +442,7 @@ async fn list_cli_sessions(
             workspace_path: workspace_path.to_string_lossy().to_string(),
             remote_connection_id: None,
             remote_ssh_host: None,
+            include_hidden: false,
         })
         .await
         .map_err(|error| anyhow::anyhow!(error.into_message()))
@@ -749,10 +750,10 @@ async fn update_external_policy(
         &change,
         ExternalIntegrationPolicyOperation::ResetIncompatiblePolicy
     );
-    if !snapshot.integration_policy.status.is_compatible()
-        && !(reset_incompatible
+    if !(snapshot.integration_policy.status.is_compatible()
+        || (reset_incompatible
             && snapshot.integration_policy.status
-                == ExternalIntegrationPolicyStatus::IncompatibleSchema)
+                == ExternalIntegrationPolicyStatus::IncompatibleSchema))
     {
         return Err(anyhow::anyhow!(
             "External compatibility policy is unsupported and safely off; upgrade BitFun or reset an incompatible policy before changing it"

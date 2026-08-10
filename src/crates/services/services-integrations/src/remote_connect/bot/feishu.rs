@@ -397,14 +397,12 @@ impl FeishuWsConnection {
                 return Ok(None);
             };
             match frame.method {
-                FRAME_TYPE_DATA => {
-                    if frame.get_header("type").unwrap_or("") == "event" {
-                        let response = FeishuFrame::new_response(&frame, 200);
-                        return Ok(Some(FeishuWsEvent {
-                            payload: frame.payload,
-                            response,
-                        }));
-                    }
+                FRAME_TYPE_DATA if frame.get_header("type").unwrap_or("") == "event" => {
+                    let response = FeishuFrame::new_response(&frame, 200);
+                    return Ok(Some(FeishuWsEvent {
+                        payload: frame.payload,
+                        response,
+                    }));
                 }
                 FRAME_TYPE_CONTROL => {
                     debug!(

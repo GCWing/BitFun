@@ -1,4 +1,5 @@
 [package]
+license.workspace = true
 name = "bitfun-relay-server"
 version = "0.2.17" # x-release-please-version
 authors = ["BitFun Team"]

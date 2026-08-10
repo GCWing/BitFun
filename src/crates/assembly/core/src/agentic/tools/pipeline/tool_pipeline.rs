@@ -5,14 +5,22 @@
 
 use super::state_manager::{tool_task_state_kind, ToolStateManager};
 use super::types::*;
-use crate::agentic::core::{ToolCall, ToolExecutionState, ToolResult as ModelToolResult};
+use crate::agentic::core::{Message, ToolCall, ToolExecutionState, ToolResult as ModelToolResult};
 use crate::agentic::events::types::ToolEventData;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::framework::ToolResult as FrameworkToolResult;
-use crate::agentic::tools::registry::ToolRegistry;
+use crate::agentic::tools::product_runtime::{
+    collect_product_loaded_deferred_tool_specs, resolve_product_get_tool_spec_results,
+};
+use crate::agentic::tools::registry::{ToolRef, ToolRegistry};
+use crate::agentic::tools::restrictions::get_session_restrictions;
 use crate::agentic::tools::tool_context_runtime;
 use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use crate::agentic::tools::tool_result_storage;
+use crate::agentic::warden::runtime::{
+    resolve_audit_poke_from_judgement, summarize_judgement_tool_args, tool_failure_scene_key,
+    WardenRuntime, WardenToolOutcome,
+};
 use crate::native_hooks::{self, NativeHookSessionFacts};
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -28,17 +36,19 @@ use bitfun_agent_tools::{
     build_tool_execution_timeout_presentation,
     build_user_rejected_tool_presentation_with_instruction,
     build_user_steering_interrupted_presentation, build_write_tail_closure_notice,
-    render_tool_result_for_assistant, validate_tool_execution_admission, PermissionIntent,
-    ResolvedToolInvocation, ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest,
-    ToolExecutionErrorPresentation, GET_TOOL_SPEC_TOOL_NAME, USER_STEERING_INTERRUPTED_MESSAGE,
+    render_tool_result_for_assistant, validate_tool_execution_admission, LoadedDeferredToolSpec,
+    PokeMessage, PokeType, PermissionIntent, ResolvedToolInvocation, ToolExecutionAdmissionRejection,
+    ToolExecutionAdmissionRequest, ToolExecutionErrorPresentation, ToolRuntimeRestrictions,
+    GET_TOOL_SPEC_TOOL_NAME, USER_STEERING_INTERRUPTED_MESSAGE,
 };
 use bitfun_runtime_ports::{
     PermissionReply, PermissionRequest, PermissionRequestSource, PermissionRequestSourceKind,
-    PermissionResourceCaseSensitivity, RoundInjectionToolPreemption,
+    PermissionResourceCaseSensitivity, RoundInjectionToolPreemption, WardenAuditJudgementRequest,
+    WardenModelJudgementPort,
 };
 use futures::future::join_all;
 use log::{debug, error, info, warn};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
@@ -75,6 +85,58 @@ fn persisted_effective_tool_name(
     effective_tool_name: &str,
 ) -> Option<String> {
     (wire_tool_name != effective_tool_name).then(|| effective_tool_name.to_string())
+}
+
+/// Resolve the effective tool runtime restrictions for a session.
+///
+/// Warden-registered per-session restrictions (e.g. after a demotion) fully
+/// replace the context-level restrictions, matching the precedence of
+/// [`ToolUseContext::enforce_tool_runtime_restrictions`]: a session override
+/// wins, otherwise the context-level template applies.
+fn effective_runtime_tool_restrictions(
+    session_id: &str,
+    context_level: &ToolRuntimeRestrictions,
+) -> ToolRuntimeRestrictions {
+    get_session_restrictions(session_id).unwrap_or_else(|| context_level.clone())
+}
+
+/// Merge freshly collected deferred-tool specs into the existing set. A fresh
+/// entry replaces the entry with the same tool name, mirroring the upsert
+/// semantics of the loaded-spec collection channel.
+fn merge_loaded_deferred_tool_specs(
+    existing: &[LoadedDeferredToolSpec],
+    fresh: &[LoadedDeferredToolSpec],
+) -> Vec<LoadedDeferredToolSpec> {
+    let mut merged: BTreeMap<String, LoadedDeferredToolSpec> = existing
+        .iter()
+        .map(|spec| (spec.tool_name.clone(), spec.clone()))
+        .collect();
+    for spec in fresh {
+        merged.insert(spec.tool_name.clone(), spec.clone());
+    }
+    merged.into_values().collect()
+}
+
+/// Maximum auto-reload attempts for one stale deferred-tool spec invocation.
+/// Each attempt re-runs GetToolSpec and re-checks admission; the loop ends
+/// early as soon as admission passes or the tool is not reloadable.
+const MAX_STALE_SPEC_RELOAD_ATTEMPTS: usize = 3;
+
+/// Defensive upper bound for the session-scoped auto-reload cache. Entries are
+/// small and only referenced while their session stays active, so this guard
+/// simply prevents unbounded growth after very long-lived hosts.
+const MAX_CACHED_SESSIONS_WITH_RELOADED_SPECS: usize = 1024;
+
+/// Outcome of a stale deferred-tool spec reload attempt.
+enum StaleSpecReloadOutcome {
+    /// The reload observed a fresh spec and produced the merged loaded-
+    /// spec set (existing entries plus the refreshed one).
+    Reloaded(Vec<LoadedDeferredToolSpec>),
+    /// The tool cannot be reloaded through the GetToolSpec runtime path —
+    /// the execution call failed, returned no usable result, or the tool
+    /// is no longer part of the contextual deferred catalog. The caller
+    /// keeps the original admission rejection.
+    NotReloadable(&'static str),
 }
 
 /// Convert framework::ToolResult to core::ToolResult
@@ -601,6 +663,69 @@ pub struct ToolPipeline {
     /// Tool task ids a PreToolUse hook approved. The approval waives the
     /// interactive permission prompt only; policy denials still apply.
     hook_preapprovals: Arc<TokioMutex<HashSet<String>>>,
+    /// Optional Warden runtime for tool-level audit. Injected after
+    /// construction via [`ToolPipeline::set_warden_runtime`] on a custom
+    /// point outside the hook dispatch channel (never gated by
+    /// `app.hooks.enabled`).
+    warden_runtime: std::sync::OnceLock<Arc<TokioMutex<WardenRuntime>>>,
+    /// Optional model-backed Warden judgement provider for Audit-Poke
+    /// decisions. Injected after construction via
+    /// [`ToolPipeline::set_warden_model_judgement`] (batch-2 warden rework);
+    /// when absent or failing, the mechanical rule ladder decides.
+    warden_model_judgement: std::sync::OnceLock<Arc<dyn WardenModelJudgementPort>>,
+    /// WARDEN-02: short-window debounce for model Audit-Poke judgements, keyed
+    /// by `(session_id, scene_key)` where the scene is the tool plus its
+    /// argument fingerprint. Repeated destructive calls of the same scene
+    /// within a turn are judged by the model once; later occurrences fall
+    /// back to the mechanical poke so the turn is not blocked on repeated
+    /// model round-trips. Distinct scenes of the same tool are judged
+    /// separately — each argument shape owns its own escalation ladder (see
+    /// `tool_failure_scene_key`).
+    warden_audit_debounce: Arc<TokioMutex<HashMap<(String, String), Instant>>>,
+    /// WARDEN-08: short-lived per-session goal-gate cache, written by the
+    /// Audit-Poke path and reused by the tool-outcome gate so a destructive
+    /// call performs at most one `get_thread_goal` lookup. Values carry a
+    /// short TTL to bound staleness across turns.
+    warden_goal_gate_cache: Arc<TokioMutex<HashMap<String, (bool, Instant)>>>,
+    /// Tool task ids whose admission was rejected before execution (stale
+    /// tool catalog, deferred-tool gateway, runtime restrictions). Such
+    /// rejections are protocol-layer outcomes, not execution violations
+    /// (F3): they are reported to the Warden as `AdmissionRejected` and
+    /// never count toward the tool-failure penalty ladder.
+    admission_rejected_tasks: Arc<TokioMutex<HashSet<String>>>,
+    /// Session-scoped auto-reloaded deferred-tool specs (F2). A stale spec
+    /// reloaded by [`Self::reload_stale_deferred_tool_spec`] is recorded here
+    /// so later rounds that reconstruct loaded specs from the message history
+    /// (the synthesized GetToolSpec result never becomes part of the
+    /// conversation) can merge the refreshed generation back instead of
+    /// re-triggering the reload every round.
+    session_loaded_deferred_specs: Arc<TokioMutex<HashMap<String, Vec<LoadedDeferredToolSpec>>>>,
+}
+
+/// WARDEN-02: within this window the same scene (tool + argument fingerprint)
+/// of a session is judged by the model at most once; later occurrences of the
+/// same destructive scene fall back to the mechanical poke message so the
+/// turn is not blocked on repeated model round-trips. Distinct scenes of the
+/// same tool are judged independently.
+const WARDEN_AUDIT_DEBOUNCE_WINDOW: Duration = Duration::from_secs(30);
+
+/// WARDEN-08: TTL for the goal-gate cache entry written by the Audit-Poke
+/// path. Covers the sub-second gap between the audit hook and the outcome
+/// reporting of one tool call without letting stale goal state persist across
+/// turns.
+const WARDEN_GOAL_GATE_CACHE_TTL: Duration = Duration::from_secs(10);
+
+/// Outcome of the Audit-Poke goal gate (WARDEN-06/08): the gate runs on a
+/// single goal lookup that doubles as the judgement evidence.
+enum WardenGoalContext {
+    /// The session holds an active goal; `serde_json::Value` carries its
+    /// objective/status/reference-files evidence.
+    Active(serde_json::Value),
+    /// Goal lookup unavailable (no coordinator, no workspace, or store
+    /// error): fail-open, consistent with the tool-outcome gate.
+    FailOpen,
+    /// Goal absent or present-but-not-active: the Audit-Poke opts out.
+    Inactive,
 }
 
 impl ToolPipeline {
@@ -617,6 +742,12 @@ impl ToolPipeline {
             permission_request_manager: None,
             permission_plans: Arc::new(TokioMutex::new(HashMap::new())),
             hook_preapprovals: Arc::new(TokioMutex::new(HashSet::new())),
+            warden_runtime: std::sync::OnceLock::new(),
+            warden_model_judgement: std::sync::OnceLock::new(),
+            warden_audit_debounce: Arc::new(TokioMutex::new(HashMap::new())),
+            warden_goal_gate_cache: Arc::new(TokioMutex::new(HashMap::new())),
+            admission_rejected_tasks: Arc::new(TokioMutex::new(HashSet::new())),
+            session_loaded_deferred_specs: Arc::new(TokioMutex::new(HashMap::new())),
         }
     }
 
@@ -630,6 +761,135 @@ impl ToolPipeline {
 
     pub fn computer_use_host(&self) -> Option<ComputerUseHostRef> {
         self.computer_use_host.clone()
+    }
+
+    /// Inject the Warden runtime for tool-level audit.
+    ///
+    /// Called once after construction (the pipeline is built before the
+    /// scheduler that owns the runtime). A second set is logged and ignored.
+    pub fn set_warden_runtime(&self, warden_runtime: Arc<TokioMutex<WardenRuntime>>) {
+        if self.warden_runtime.set(warden_runtime).is_err() {
+            warn!("tool pipeline: warden runtime already set, ignoring duplicate");
+        }
+    }
+
+    /// Inject the model-backed Warden judgement provider for Audit-Poke
+    /// decisions (batch-2 warden rework).
+    ///
+    /// Called once after construction by the host assembly (desktop), which
+    /// owns the concrete provider. A second set is logged and ignored.
+    pub fn set_warden_model_judgement(&self, port: Arc<dyn WardenModelJudgementPort>) {
+        if self.warden_model_judgement.set(port).is_err() {
+            warn!("tool pipeline: warden model judgement already set, ignoring duplicate");
+        }
+    }
+
+    /// Report one finished tool call to the Warden runtime on a custom point
+    /// outside the hook dispatch channel.
+    ///
+    /// Only fires when a runtime was injected and the session currently has
+    /// an active thread goal (batch-2 goal switch: Warden tool-level
+    /// enforcement applies only to goal-driven sessions). A missing task
+    /// lookup is a benign no-op (the task may already be gone). The failure
+    /// scene is fingerprinted from the effective tool name plus effective
+    /// arguments so repeated failures of the same argument shape escalate
+    /// while a first failure of a new shape stays exploratory.
+    ///
+    /// WARDEN-05: subagent sessions are exempt outright (thread goals are
+    /// main-only) regardless of the goal lookup result.
+    ///
+    /// WARDEN-08: the goal-gate decision computed by the Audit-Poke path is
+    /// reused from a short-lived cache so a destructive call performs at most
+    /// one `get_thread_goal` lookup.
+    async fn notify_warden_tool_outcome(
+        &self,
+        task_id: &str,
+        failure_kind: WardenToolOutcome,
+        error_summary: Option<&str>,
+    ) {
+        let Some(warden_runtime) = self.warden_runtime.get() else {
+            return;
+        };
+        let Some(task) = self.state_manager.get_task(task_id) else {
+            return;
+        };
+        let session_id = task.context.session_id.clone();
+        if task.context.subagent_parent_info.is_some() {
+            return;
+        }
+        let workspace_root = task.context.workspace.as_ref().map(|workspace| workspace.root_path());
+        let active_goal = {
+            let mut cache = self.warden_goal_gate_cache.lock().await;
+            match cache.get(&session_id) {
+                Some(&(active, fetched_at)) if fetched_at.elapsed() < WARDEN_GOAL_GATE_CACHE_TTL => {
+                    active
+                }
+                Some(_) => {
+                    cache.remove(&session_id);
+                    self.session_has_active_goal(&session_id, workspace_root).await
+                }
+                None => self.session_has_active_goal(&session_id, workspace_root).await,
+            }
+        };
+        if !active_goal {
+            // WARDEN-01: the goal left the active state (or the session is
+            // non-main) — clear stale tool-failure counts here so a later,
+            // new goal generation starts from a clean ladder.
+            warden_runtime.lock().await.clear_failure_counts(&session_id);
+            return;
+        }
+        let tool_name = task.invocation.effective_tool_name;
+        let scene_key = tool_failure_scene_key(&tool_name, &task.invocation.effective_arguments);
+        let mut guard = warden_runtime.lock().await;
+        guard
+            .on_tool_outcome(&session_id, &tool_name, &scene_key, failure_kind)
+            .await;
+        // WARDEN-03: keep the failure's error summary as judgement evidence
+        // so a later Audit-Poke of the same scene shows the real failure
+        // context instead of a bare counter.
+        if matches!(failure_kind, WardenToolOutcome::ExecutionFailed) {
+            if let Some(summary) = error_summary {
+                guard.record_tool_error(&session_id, &scene_key, summary);
+            }
+        }
+    }
+
+    /// Batch-2 goal switch: whether Warden tool-level enforcement applies for
+    /// the session of a tool call.
+    ///
+    /// Only sessions with an active thread goal are under Warden
+    /// enforcement; a goal-less or non-active-goal session skips the
+    /// consecutive tool-failure accounting. A goal lookup failure keeps
+    /// enforcement enabled (fail-open) so a transient store error cannot
+    /// silently disable discipline.
+    ///
+    /// WARDEN-05: subagent sessions are exempted by the *callers* before this
+    /// gate runs (`notify_warden_tool_outcome` returns early on
+    /// `subagent_parent_info`), so a non-main session never reaches the
+    /// fail-open branch; only main sessions query the goal store here.
+    async fn session_has_active_goal(
+        &self,
+        session_id: &str,
+        workspace_root: Option<&Path>,
+    ) -> bool {
+        let Some(coordinator) = crate::agentic::coordination::get_global_coordinator() else {
+            return true;
+        };
+        let Some(workspace_path) = workspace_root else {
+            return true;
+        };
+        match coordinator.get_thread_goal(session_id, workspace_path).await {
+            Ok(goal) => crate::agentic::warden::runtime::warden_enforcement_for_goal(
+                goal.as_ref(),
+            ),
+            Err(error) => {
+                debug!(
+                    "Warden goal gate lookup failed; keeping tool enforcement enabled: session_id={}, error={}",
+                    session_id, error
+                );
+                true
+            }
+        }
     }
 
     async fn draft_permission_plan(
@@ -889,6 +1149,64 @@ impl ToolPipeline {
         for context in decision.additional_context {
             hook_sections.push(format!("PostToolUse hook context: {context}"));
         }
+
+        // Poke audit check: for write/destructive tool calls, classify the
+        // operation and send an Audit-Poke through the model-visible channel
+        // (the appended result text is delivered to the model on the next
+        // turn, the same delivery path as prepended_reminders). With a model
+        // judgement port injected the mechanical classifier only supplies
+        // candidate rules; the model verdict decides whether the poke is sent
+        // and which rules/evidence apply. Port failures (unavailable,
+        // timeout, unparseable response) fall back to the mechanical rule
+        // ladder so the audit loop never depends on the model.
+        // WARDEN-06: the Audit-Poke path runs under the same RBAC master
+        // switch as the Warden runtime, and subagent sessions are exempt
+        // (thread goals are main-only). The goal gate itself is evaluated
+        // inside `warden_audit_poke_decision` through the same single goal
+        // lookup that supplies the judgement evidence (WARDEN-08), so the
+        // Audit-Poke trigger here stays cheap (no extra goal query).
+        if !tool_result.is_error
+            && crate::service::config::rbac_enabled()
+            && task.context.subagent_parent_info.is_none()
+        {
+            use bitfun_agent_tools::classify_tool_call;
+            let op_class = classify_tool_call(tool_name, &task.invocation.effective_arguments);
+            match op_class {
+                bitfun_agent_tools::OperationClass::WriteFile
+                | bitfun_agent_tools::OperationClass::DeleteFile
+                | bitfun_agent_tools::OperationClass::ExecuteCode => {
+                    debug!(
+                        "Poke audit triggered for destructive tool call: tool_name={}, tool_id={}, class={:?}",
+                        tool_name, tool_id, op_class
+                    );
+                    // Warden protocol (SKILL.md): event-triggered Audit-Poke
+                    // after Write/Edit/Delete/Exec, 3-turn deadline, with
+                    // requested evidence for the self-check.
+                    let mechanical = Self::build_audit_poke(tool_id, &op_class);
+                    if let Some(poke) = self
+                        .warden_audit_poke_decision(task, tool_name, &mechanical)
+                        .await
+                    {
+                        let poke_json = match serde_json::to_string(&poke) {
+                            Ok(json) => json,
+                            Err(_) => poke.poke_id.clone(),
+                        };
+                        hook_sections.push(format!(
+                            "[Warden Audit-Poke] Tool `{}` performed a {} operation and is subject to audit self-check (deadline: 3 turns). PokeMessage: {}",
+                            tool_name,
+                            match op_class {
+                                bitfun_agent_tools::OperationClass::WriteFile => "write",
+                                bitfun_agent_tools::OperationClass::DeleteFile => "delete",
+                                _ => "execute",
+                            },
+                            poke_json
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+
         if hook_sections.is_empty() {
             return;
         }
@@ -899,6 +1217,242 @@ impl ToolPipeline {
         } else {
             format!("{original}\n\n{appended}")
         });
+    }
+
+    /// Build an Audit-Poke message for a destructive tool call, following the
+    /// Warden protocol (SKILL.md): event-triggered after Write/Edit/Delete/Exec,
+    /// 3-turn deadline, with requested evidence for the self-check.
+    fn build_audit_poke(
+        tool_id: &str,
+        op_class: &bitfun_agent_tools::OperationClass,
+    ) -> PokeMessage {
+        let (rule_ids, _) = match op_class {
+            bitfun_agent_tools::OperationClass::WriteFile
+            | bitfun_agent_tools::OperationClass::DeleteFile => (
+                vec![
+                    "R1: no_destructive_write".to_string(),
+                    "R3: path_whitelist".to_string(),
+                ],
+                (),
+            ),
+            bitfun_agent_tools::OperationClass::ExecuteCode => {
+                (vec!["R2: execution_safety".to_string()], ())
+            }
+            _ => (Vec::new(), ()),
+        };
+        PokeMessage {
+            poke_id: format!("audit-{tool_id}"),
+            poke_type: PokeType::Audit,
+            rule_ids,
+            deadline_turns: 3,
+            evidence_required: Some(vec![
+                "tool_call_log".to_string(),
+                "phase_summary".to_string(),
+            ]),
+        }
+    }
+
+    /// Decide the final Audit-Poke for a destructive tool call.
+    ///
+    /// Without an injected judgement port the mechanical rule ladder is the
+    /// decision. With a port, the request carries the tool name, a summarized
+    /// form of the effective arguments (WARDEN-08), the mechanical candidate
+    /// rule ids, and goal + scene evidence (WARDEN-03); the model verdict
+    /// then decides whether the poke is sent and which rules/evidence apply.
+    /// Any port error (unavailable, timeout, unparseable response) falls back
+    /// to the mechanical message unchanged.
+    ///
+    /// WARDEN-06: this is also the goal gate for the Audit-Poke path — the
+    /// single `get_thread_goal` lookup both gates the poke and supplies the
+    /// judgement evidence (WARDEN-08: one goal query per destructive call).
+    /// WARDEN-02: the same tool+session within a short window is judged once.
+    async fn warden_audit_poke_decision(
+        &self,
+        task: &ToolTask,
+        tool_name: &str,
+        mechanical: &PokeMessage,
+    ) -> Option<PokeMessage> {
+        let session_id = task.context.session_id.clone();
+        let workspace_root = task
+            .context
+            .workspace
+            .as_ref()
+            .map(|workspace| workspace.root_path());
+
+        // Single goal lookup shared by the gate and the evidence.
+        let goal_ctx = self
+            .warden_audit_goal_context(&session_id, workspace_root)
+            .await;
+        let active = !matches!(goal_ctx, WardenGoalContext::Inactive);
+        {
+            let mut cache = self.warden_goal_gate_cache.lock().await;
+            cache.insert(session_id.clone(), (active, Instant::now()));
+        }
+        if !active {
+            return None;
+        }
+
+        // Scene failure evidence (WARDEN-03): the model must see the scene's
+        // consecutive tool-failure count and last error instead of guessing
+        // whether this is an exploratory first failure or a repeated one.
+        let scene_key = tool_failure_scene_key(tool_name, &task.invocation.effective_arguments);
+        let scene_evidence = self
+            .warden_audit_scene_evidence(&session_id, &scene_key)
+            .await;
+        let consecutive_tool_failures = scene_evidence
+            .as_ref()
+            .and_then(|value| value.get("consecutiveToolFailures"))
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0);
+
+        let Some(port) = self.warden_model_judgement.get() else {
+            return Some(mechanical.clone());
+        };
+
+        // WARDEN-02: within the debounce window the same scene (tool +
+        // argument fingerprint) is judged by the model only once; later
+        // occurrences apply the same must-poke floor as a fresh judgement
+        // instead of another round-trip. Distinct scenes of the same tool are
+        // judged separately.
+        if self.warden_audit_debounced(&session_id, &scene_key).await {
+            return (consecutive_tool_failures >= 1).then(|| mechanical.clone());
+        }
+
+        let request = WardenAuditJudgementRequest {
+            session_id,
+            tool_name: tool_name.to_string(),
+            tool_args: summarize_judgement_tool_args(&task.invocation.effective_arguments),
+            rule_ids: mechanical.rule_ids.clone(),
+            evidence: Self::merge_warden_evidence(goal_ctx, scene_evidence),
+        };
+        match port.judge_audit(request).await {
+            Ok(judgement) => {
+                // WARDEN-03 must-poke floor: the model may add rules/evidence
+                // but cannot cancel a poke on a scene with repeated failures.
+                if !judgement.should_poke && consecutive_tool_failures >= 1 {
+                    return Some(mechanical.clone());
+                }
+                resolve_audit_poke_from_judgement(mechanical, &judgement)
+            }
+            Err(error) => {
+                debug!(
+                    "Warden model judgement unavailable, falling back to mechanical rules: {}",
+                    error
+                );
+                Some(mechanical.clone())
+            }
+        }
+    }
+
+    /// Outcome of the Audit-Poke goal gate: the gate runs on a single goal
+    /// lookup that doubles as the judgement evidence. Defined at module scope
+    /// so the gate methods can reference it by name.
+    ///
+    /// Goal context for a Warden model judgement: the session's active
+    /// thread-goal objective, status and reference files when resolvable,
+    /// plus the gate verdict (WARDEN-06/08).
+    ///
+    /// The goal context is resolved through the global coordinator so the
+    /// model can judge the tool call against the actual goal scope. A
+    /// missing or failed lookup fails open (`FailOpen`) — the judgement still
+    /// runs on the tool facts alone rather than silently disabling the poke.
+    async fn warden_audit_goal_context(
+        &self,
+        session_id: &str,
+        workspace_root: Option<&Path>,
+    ) -> WardenGoalContext {
+        let Some(coordinator) = crate::agentic::coordination::get_global_coordinator() else {
+            return WardenGoalContext::FailOpen;
+        };
+        let Some(workspace_path) = workspace_root else {
+            return WardenGoalContext::FailOpen;
+        };
+        match coordinator.get_thread_goal(session_id, workspace_path).await {
+            Ok(Some(goal)) => {
+                if goal.is_active() {
+                    WardenGoalContext::Active(serde_json::json!({
+                        "goalObjective": goal.objective,
+                        "goalStatus": goal.status.as_str(),
+                        "referenceFiles": goal.reference_files,
+                    }))
+                } else {
+                    WardenGoalContext::Inactive
+                }
+            }
+            Ok(None) => WardenGoalContext::Inactive,
+            Err(error) => {
+                debug!(
+                    "Warden audit goal context lookup failed; treating as fail-open: session_id={}, error={}",
+                    session_id, error
+                );
+                WardenGoalContext::FailOpen
+            }
+        }
+    }
+
+    /// Scene failure evidence for a Warden model judgement: the scene's
+    /// consecutive tool-failure count and last recorded error summary
+    /// (WARDEN-03). Returns `None` when the scene has no recorded failures.
+    async fn warden_audit_scene_evidence(
+        &self,
+        session_id: &str,
+        scene_key: &str,
+    ) -> Option<serde_json::Value> {
+        let warden_runtime = self.warden_runtime.get()?;
+        let guard = warden_runtime.lock().await;
+        let failures = guard.tool_failures_for_scene(session_id, scene_key);
+        let last_error = guard
+            .last_tool_error(session_id, scene_key)
+            .map(str::to_string);
+        if failures == 0 && last_error.is_none() {
+            return None;
+        }
+        Some(serde_json::json!({
+            "consecutiveToolFailures": failures,
+            "lastToolError": last_error,
+        }))
+    }
+
+    /// WARDEN-02: claim (or reject) the model-judgement debounce slot for a
+    /// (session, scene). Returns `true` when the same scene was judged within
+    /// [`WARDEN_AUDIT_DEBOUNCE_WINDOW`]; otherwise records the claim and
+    /// returns `false`.
+    async fn warden_audit_debounced(&self, session_id: &str, scene_key: &str) -> bool {
+        let mut recent = self.warden_audit_debounce.lock().await;
+        let key = (session_id.to_string(), scene_key.to_string());
+        if let Some(last) = recent.get(&key) {
+            if last.elapsed() < WARDEN_AUDIT_DEBOUNCE_WINDOW {
+                return true;
+            }
+        }
+        recent.insert(key, Instant::now());
+        false
+    }
+
+    /// Combine the goal-context evidence with the scene-failure evidence into
+    /// one judgement-evidence object; `None` when both are empty.
+    fn merge_warden_evidence(
+        goal_ctx: WardenGoalContext,
+        scene: Option<serde_json::Value>,
+    ) -> Option<serde_json::Value> {
+        let mut merged = serde_json::Map::new();
+        if let WardenGoalContext::Active(goal) = &goal_ctx {
+            if let serde_json::Value::Object(map) = goal {
+                for (key, value) in map {
+                    merged.insert(key.clone(), value.clone());
+                }
+            }
+        }
+        if let Some(serde_json::Value::Object(map)) = scene {
+            for (key, value) in map {
+                merged.insert(key.clone(), value.clone());
+            }
+        }
+        if merged.is_empty() {
+            None
+        } else {
+            Some(serde_json::Value::Object(merged))
+        }
     }
 
     async fn prepare_permission_plans(&self, task_ids: &[String]) -> BitFunResult<()> {
@@ -929,10 +1483,24 @@ impl ToolPipeline {
             }
             let tool = {
                 let registry = self.tool_registry.read().await;
+                // R-26: when the RBAC master switch is off, the runtime
+                // restriction gate is bypassed (empty restrictions allow all
+                // tools/operations); the mode-level allowed-tools list and
+                // deferred-tool loading checks still apply.
+                let effective_restrictions = if crate::service::config::rbac_enabled() {
+                    effective_runtime_tool_restrictions(
+                        &task.context.session_id,
+                        &task.context.runtime_tool_restrictions,
+                    )
+                } else {
+                    ToolRuntimeRestrictions::default()
+                };
                 if validate_tool_execution_admission(ToolExecutionAdmissionRequest {
                     tool_name: &tool_name,
                     allowed_tools: &task.context.allowed_tools,
-                    runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
+                    runtime_tool_restrictions: &effective_restrictions,
+                    user_enabled_tools: &task.context.user_enabled_tools,
+                    tool_arguments: &task.invocation.effective_arguments,
                     invocation_is_deferred: task.invocation.is_deferred(),
                     deferred_tools: &task.context.deferred_tools,
                     loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
@@ -1242,16 +1810,44 @@ impl ToolPipeline {
         results
     }
 
-    fn append_execution_result(
+    async fn append_execution_result(
         &self,
         task_id: &str,
         result: BitFunResult<ToolExecutionResult>,
         all_results: &mut Vec<ToolExecutionResult>,
     ) {
         match result {
-            Ok(execution_result) => all_results.push(execution_result),
+            Ok(execution_result) => {
+                self.notify_warden_tool_outcome(task_id, WardenToolOutcome::Success, None)
+                    .await;
+                all_results.push(execution_result);
+            }
             Err(error) => {
                 error!("Tool execution failed: error={}", error);
+                // F3: an admission rejection (stale catalog, deferred gate,
+                // runtime restriction) is a protocol-layer outcome, not an
+                // execution violation — the Warden must not count it toward
+                // the tool-failure penalty ladder.
+                let admission_rejected = {
+                    let mut rejected = self.admission_rejected_tasks.lock().await;
+                    rejected.remove(task_id)
+                };
+                let failure_kind = if admission_rejected {
+                    WardenToolOutcome::AdmissionRejected
+                } else {
+                    WardenToolOutcome::ExecutionFailed
+                };
+                // WARDEN-03: carry the real error text as judgement evidence
+                // for a genuine execution failure (admission rejections carry
+                // none — they are protocol-layer, not violations).
+                let error_text = error.to_string();
+                let error_summary = if matches!(failure_kind, WardenToolOutcome::ExecutionFailed) {
+                    Some(error_text.as_str())
+                } else {
+                    None
+                };
+                self.notify_warden_tool_outcome(task_id, failure_kind, error_summary)
+                    .await;
                 let error_result = build_error_execution_result(
                     task_id,
                     self.state_manager.get_task(task_id),
@@ -1313,6 +1909,21 @@ impl ToolPipeline {
     ) -> BitFunResult<Vec<ToolExecutionResult>> {
         if tool_calls.is_empty() {
             return Ok(vec![]);
+        }
+
+        // F2: merge the session-scoped auto-reload cache into the caller-
+        // provided loaded-spec set. Each round reconstructs loaded specs from
+        // the conversation history, which never contains the synthesized
+        // GetToolSpec result produced by an auto-reload, so without this merge
+        // a spec refreshed in an earlier round would be stale again on the
+        // next round and re-trigger the reload.
+        let mut context = context;
+        let cached_specs = self.cached_session_loaded_deferred_specs(&context.session_id).await;
+        if !cached_specs.is_empty() {
+            context.loaded_deferred_tool_specs = merge_loaded_deferred_tool_specs(
+                &context.loaded_deferred_tool_specs,
+                &cached_specs,
+            );
         }
 
         info!("Executing tools: count={}", tool_calls.len());
@@ -1501,7 +2112,7 @@ impl ToolPipeline {
         let mut all_results = Vec::new();
         for (idx, result) in results.into_iter().enumerate() {
             let task_id = &task_ids[idx];
-            self.append_execution_result(task_id, result, &mut all_results);
+            self.append_execution_result(task_id, result, &mut all_results).await;
         }
 
         Ok(all_results)
@@ -1537,10 +2148,174 @@ impl ToolPipeline {
                 handle.abort();
                 let _ = handle.await;
             }
-            self.append_execution_result(&task_id, result, &mut results);
+            self.append_execution_result(&task_id, result, &mut results).await;
         }
 
         Ok(results)
+    }
+
+    /// Resolve the admission gate and registered tool for one invocation.
+    ///
+    /// The runtime restriction gate is bypassed when the RBAC master switch
+    /// is off (empty restrictions allow all tools/operations); the mode-level
+    /// allowed-tools list and deferred-tool loading checks still apply.
+    async fn resolve_tool_admission(
+        &self,
+        task: &ToolTask,
+        tool_name: &str,
+        tool_args: &serde_json::Value,
+    ) -> (
+        Result<(), ToolExecutionAdmissionRejection>,
+        Option<ToolRef>,
+    ) {
+        let registry = self.tool_registry.read().await;
+        let effective_restrictions = if crate::service::config::rbac_enabled() {
+            effective_runtime_tool_restrictions(
+                &task.context.session_id,
+                &task.context.runtime_tool_restrictions,
+            )
+        } else {
+            ToolRuntimeRestrictions::default()
+        };
+        let admission = validate_tool_execution_admission(ToolExecutionAdmissionRequest {
+            tool_name,
+            allowed_tools: &task.context.allowed_tools,
+            runtime_tool_restrictions: &effective_restrictions,
+            user_enabled_tools: &task.context.user_enabled_tools,
+            tool_arguments: tool_args,
+            invocation_is_deferred: task.invocation.is_deferred(),
+            deferred_tools: &task.context.deferred_tools,
+            loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
+            current_catalog_generation: registry.current_snapshot_generation(),
+            get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
+        });
+        (admission, registry.get_tool(tool_name))
+    }
+
+    /// Reload a stale deferred-tool spec through the GetToolSpec runtime path.
+    ///
+    /// Returns [`StaleSpecReloadOutcome::Reloaded`] with the refreshed
+    /// loaded-spec set (existing entries merged with the reloaded one) when a
+    /// fresh spec was observed, or [`StaleSpecReloadOutcome::NotReloadable`]
+    /// with a classified reason when the reload cannot succeed — the caller
+    /// then keeps the original admission rejection.
+    async fn reload_stale_deferred_tool_spec(
+        &self,
+        task: &ToolTask,
+        stale_tool_name: &str,
+    ) -> StaleSpecReloadOutcome {
+        let cancellation_token = task
+            .options
+            .parent_cancellation_token
+            .as_ref()
+            .map(CancellationToken::child_token)
+            .unwrap_or_default();
+        let tool_context = self.build_tool_use_context(task, cancellation_token);
+        let input = serde_json::json!({ "tool_name": stale_tool_name });
+        let results = match resolve_product_get_tool_spec_results(
+            &input,
+            &tool_context,
+            GET_TOOL_SPEC_TOOL_NAME,
+        )
+        .await
+        {
+            Ok(results) => results,
+            Err(error) => {
+                warn!(
+                    "Stale deferred-tool spec reload failed during GetToolSpec execution: tool_name={}, session_id={}, error={}",
+                    stale_tool_name, task.context.session_id, error
+                );
+                return StaleSpecReloadOutcome::NotReloadable(
+                    "GetToolSpec execution failed",
+                );
+            }
+        };
+        let Some(result) = results.into_iter().next() else {
+            warn!(
+                "Stale deferred-tool spec reload returned no GetToolSpec result: tool_name={}, session_id={}",
+                stale_tool_name, task.context.session_id
+            );
+            return StaleSpecReloadOutcome::NotReloadable("GetToolSpec returned no result");
+        };
+        let FrameworkToolResult::Result {
+            data,
+            result_for_assistant,
+            image_attachments,
+        } = result
+        else {
+            warn!(
+                "Stale deferred-tool spec reload received a non-result GetToolSpec outcome: tool_name={}, session_id={}",
+                stale_tool_name, task.context.session_id
+            );
+            return StaleSpecReloadOutcome::NotReloadable(
+                "GetToolSpec returned an error result",
+            );
+        };
+        // Synthesize a GetToolSpec ToolResult message and feed it through the
+        // loaded-spec state collection channel so the refreshed generation is
+        // observed by the same path that tracks model-initiated loads.
+        let message = Message::tool_result(ModelToolResult {
+            tool_id: task.tool_call.tool_id.clone(),
+            tool_name: GET_TOOL_SPEC_TOOL_NAME.to_string(),
+            effective_tool_name: None,
+            result: data,
+            result_for_assistant,
+            is_error: false,
+            duration_ms: Some(0),
+            image_attachments,
+        });
+        let refreshed = collect_product_loaded_deferred_tool_specs(
+            &[message],
+            &task.context.deferred_tools,
+        );
+        if refreshed.is_empty() {
+            warn!(
+                "Stale deferred-tool spec is not reloadable: tool_name={}, session_id={} — the tool is no longer part of the contextual deferred catalog or the GetToolSpec result lacks a catalog generation",
+                stale_tool_name, task.context.session_id
+            );
+            return StaleSpecReloadOutcome::NotReloadable(
+                "tool is not reloadable: not in the deferred catalog or result lacks catalog_generation",
+            );
+        }
+        StaleSpecReloadOutcome::Reloaded(merge_loaded_deferred_tool_specs(
+            &task.context.loaded_deferred_tool_specs,
+            &refreshed,
+        ))
+    }
+
+    /// Record freshly reloaded deferred-tool specs for a session so later
+    /// rounds merge them back into the message-history-derived loaded-spec
+    /// set instead of re-triggering the reload. Entries upsert by tool name.
+    async fn record_session_loaded_deferred_specs(
+        &self,
+        session_id: &str,
+        specs: &[LoadedDeferredToolSpec],
+    ) {
+        let mut cache = self.session_loaded_deferred_specs.lock().await;
+        if cache.len() >= MAX_CACHED_SESSIONS_WITH_RELOADED_SPECS {
+            // Defensive upper bound: drop the whole cache rather than letting
+            // stale sessions accumulate unboundedly. Losing a session entry
+            // only forces one extra auto-reload for that session.
+            cache.clear();
+        }
+        let merged = merge_loaded_deferred_tool_specs(
+            cache.get(session_id).map(Vec::as_slice).unwrap_or_default(),
+            specs,
+        );
+        cache.insert(session_id.to_string(), merged);
+    }
+
+    /// Read the recorded auto-reloaded deferred-tool specs of a session.
+    async fn cached_session_loaded_deferred_specs(
+        &self,
+        session_id: &str,
+    ) -> Vec<LoadedDeferredToolSpec> {
+        self.session_loaded_deferred_specs
+            .lock()
+            .await
+            .get(session_id)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Execute single tool
@@ -1550,7 +2325,7 @@ impl ToolPipeline {
         debug!("Starting tool execution: tool_id={}", tool_id);
 
         // Get task
-        let task = self
+        let mut task = self
             .state_manager
             .get_task(&tool_id)
             .ok_or_else(|| BitFunError::NotFound(format!("Tool task not found: {}", tool_id)))?;
@@ -1631,19 +2406,78 @@ impl ToolPipeline {
         // Repetition alone is not execution failure: polling and status checks
         // may legitimately reuse identical arguments. The execution engine
         // evaluates repeated patterns only after observing actual tool results.
-        let (admission, tool) = {
-            let registry = self.tool_registry.read().await;
-            let admission = validate_tool_execution_admission(ToolExecutionAdmissionRequest {
-                tool_name: &tool_name,
-                allowed_tools: &task.context.allowed_tools,
-                runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
-                invocation_is_deferred: task.invocation.is_deferred(),
-                deferred_tools: &task.context.deferred_tools,
-                loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
-                current_catalog_generation: registry.current_snapshot_generation(),
-                get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
-            });
-            (admission, registry.get_tool(&tool_name))
+        let (admission, tool) = self.resolve_tool_admission(&task, &tool_name, &tool_args).await;
+
+        // F2: stale deferred-tool specs are refreshed automatically instead of
+        // surfacing a protocol-layer admission failure. The GetToolSpec reload
+        // goes through the same runtime path a model-initiated load uses, and
+        // the refreshed spec is fed back through the loaded-spec state
+        // collection channel before admission is re-run. Reloads are retried
+        // in a loop (bounded by `MAX_STALE_SPEC_RELOAD_ATTEMPTS`) so a catalog
+        // refresh racing the reload cannot leave the invocation stale, and
+        // each successful reload is recorded in the session-scoped cache so
+        // later rounds do not re-trigger the recovery. `RequiresGetToolSpec`
+        // is intentionally not auto-recovered: the model must still unlock the
+        // tool explicitly.
+        let (admission, tool) = if let Err(err) = &admission {
+            match err {
+                ToolExecutionAdmissionRejection::Deferred(stale)
+                    if stale.is_stale_spec() =>
+                {
+                    let mut admission = admission;
+                    let mut tool = tool;
+                    let mut reload_attempts = 0usize;
+                    while matches!(
+                        &admission,
+                        Err(ToolExecutionAdmissionRejection::Deferred(stale))
+                            if stale.is_stale_spec()
+                    ) {
+                        if reload_attempts >= MAX_STALE_SPEC_RELOAD_ATTEMPTS {
+                            let last_rejection = match &admission {
+                                Err(rejection) => rejection.to_string(),
+                                Ok(()) => String::new(),
+                            };
+                            warn!(
+                                "Stale deferred-tool spec reload attempts exhausted: tool_name={}, tool_id={}, session_id={}, attempts={}, last_rejection={}",
+                                tool_name, tool_id, task.context.session_id, reload_attempts, last_rejection
+                            );
+                            break;
+                        }
+                        reload_attempts += 1;
+                        match self
+                            .reload_stale_deferred_tool_spec(&task, &tool_name)
+                            .await
+                        {
+                            StaleSpecReloadOutcome::Reloaded(updated_specs) => {
+                                task.context.loaded_deferred_tool_specs = updated_specs.clone();
+                                self.record_session_loaded_deferred_specs(
+                                    &task.context.session_id,
+                                    &updated_specs,
+                                )
+                                .await;
+                                info!(
+                                    "Automatically reloaded stale deferred-tool spec: tool_name={}, tool_id={}, session_id={}, attempt={}",
+                                    tool_name, tool_id, task.context.session_id, reload_attempts
+                                );
+                                (admission, tool) =
+                                    self.resolve_tool_admission(&task, &tool_name, &tool_args)
+                                        .await;
+                            }
+                            StaleSpecReloadOutcome::NotReloadable(reason) => {
+                                warn!(
+                                    "Stale deferred-tool spec reload skipped, keeping admission rejection: tool_name={}, tool_id={}, session_id={}, reason={}",
+                                    tool_name, tool_id, task.context.session_id, reason
+                                );
+                                break;
+                            }
+                        }
+                    }
+                    (admission, tool)
+                }
+                _ => (admission, tool),
+            }
+        } else {
+            (admission, tool)
         };
 
         if let Err(err) = admission {
@@ -1653,6 +2487,12 @@ impl ToolPipeline {
             } else {
                 warn!("Tool execution admission rejected: {}", error_msg);
             }
+
+            // F3: mark the task so the result sink reports `AdmissionRejected`
+            // to the Warden audit — admission rejections (stale catalog,
+            // deferred gateway, runtime restrictions) are protocol-layer
+            // outcomes and must never count toward the tool-failure penalty.
+            self.admission_rejected_tasks.lock().await.insert(tool_id.clone());
 
             self.state_manager
                 .update_state(
@@ -2354,6 +3194,14 @@ impl ToolPipeline {
     }
 
     #[cfg(test)]
+    pub(crate) async fn session_loaded_specs_for_test(
+        &self,
+        session_id: &str,
+    ) -> Vec<LoadedDeferredToolSpec> {
+        self.cached_session_loaded_deferred_specs(session_id).await
+    }
+
+    #[cfg(test)]
     pub(crate) fn tool_task_is_cancelled_for_test(&self, tool_id: &str) -> bool {
         self.state_manager
             .get_task(tool_id)
@@ -2363,6 +3211,7 @@ impl ToolPipeline {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::field_reassign_with_default)] // test fixtures build options via field assignment
     use super::*;
     use crate::agentic::core::ToolExecutionState;
     use crate::agentic::events::{EventQueue, EventQueueConfig};
@@ -2798,6 +3647,7 @@ mod tests {
             deferred_tools: Vec::new(),
             loaded_deferred_tool_specs: Vec::new(),
             allowed_tools: Vec::new(),
+            user_enabled_tools: Vec::new(),
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             steering_interrupt: None,
             workspace_services: None,
@@ -2930,6 +3780,8 @@ mod tests {
             session_id: "parent-session".to_string(),
             dialog_turn_id: "parent-turn".to_string(),
             tool_call_id: parent_tool_call_id.to_string(),
+            depth: None,
+            role: None,
         });
         context
     }
@@ -2979,6 +3831,44 @@ mod tests {
             .result_for_assistant
             .as_deref()
             .is_some_and(|message| message.contains("current permission policy")));
+    }
+
+    #[tokio::test]
+    async fn runtime_operation_class_restriction_rejects_tool_in_pipeline() {
+        let pipeline = test_tool_pipeline();
+        register_static_test_tool(&pipeline, "Bash", json!({ "ok": true }), 0).await;
+
+        // Read-only operation class is allowed; Bash resolves to ExecuteCode by
+        // default, so the Warden operation-level gate must reject it inside the
+        // pipeline before any tool side effect can run.
+        let mut context = test_tool_execution_context();
+        let mut restrictions = ToolRuntimeRestrictions::default();
+        restrictions
+            .allowed_operation_classes
+            .insert(bitfun_agent_tools::OperationClass::ReadOnly);
+        context.runtime_tool_restrictions = restrictions;
+
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("op-gate", "Bash")],
+                context,
+                ToolExecutionOptions::default(),
+            )
+            .await
+            .expect("operation-class denial surfaces as a tool result");
+
+        assert!(matches!(
+            pipeline
+                .state_manager
+                .get_task("op-gate")
+                .map(|task| task.state),
+            Some(ToolExecutionState::Failed { .. })
+        ));
+        assert!(results[0]
+            .result
+            .result_for_assistant
+            .as_deref()
+            .is_some_and(|message| message.contains("not allowed by runtime restrictions")));
     }
 
     fn permission_test_manager(store: Arc<MemoryPermissionStore>) -> Arc<PermissionRequestManager> {
@@ -4030,6 +4920,7 @@ mod tests {
             content: "test injection".to_string(),
             display_content: "test injection".to_string(),
             created_at: SystemTime::now(),
+            prepended_reminders: Vec::new(),
         }
     }
 
@@ -4382,6 +5273,8 @@ mod tests {
             denied_tool_names: ["Bash"].into_iter().map(str::to_string).collect(),
             denied_tool_messages: Default::default(),
             path_policy: Default::default(),
+            allowed_operation_classes: Default::default(),
+            denied_operation_classes: Default::default(),
         };
 
         let context = pipeline.build_tool_use_context(&task, CancellationToken::new());
@@ -4417,6 +5310,348 @@ mod tests {
     }
 
     #[test]
+    fn audit_poke_message_follows_warden_protocol() {
+        use bitfun_agent_tools::OperationClass;
+
+        let write_poke = ToolPipeline::build_audit_poke("tool-42", &OperationClass::WriteFile);
+        assert_eq!(write_poke.poke_type, PokeType::Audit);
+        assert_eq!(write_poke.poke_id, "audit-tool-42");
+        assert_eq!(write_poke.deadline_turns, 3);
+        assert_eq!(
+            write_poke.rule_ids,
+            vec!["R1: no_destructive_write", "R3: path_whitelist"]
+        );
+        assert!(write_poke.evidence_required.is_some());
+
+        let delete_poke = ToolPipeline::build_audit_poke("tool-43", &OperationClass::DeleteFile);
+        assert_eq!(
+            delete_poke.rule_ids,
+            vec!["R1: no_destructive_write", "R3: path_whitelist"]
+        );
+
+        let exec_poke = ToolPipeline::build_audit_poke("tool-44", &OperationClass::ExecuteCode);
+        assert_eq!(exec_poke.rule_ids, vec!["R2: execution_safety"]);
+
+        let read_poke = ToolPipeline::build_audit_poke("tool-45", &OperationClass::ReadOnly);
+        assert!(read_poke.rule_ids.is_empty());
+        assert_eq!(read_poke.poke_type, PokeType::Audit);
+        assert_eq!(read_poke.deadline_turns, 3);
+
+        // Serializes so the message is transportable through the model-visible
+        // channel (result_for_assistant / prepended_reminders).
+        let json = serde_json::to_string(&write_poke).expect("serialize poke");
+        assert!(json.contains("audit-tool-42"));
+        assert!(json.contains("\"audit\""));
+    }
+
+    /// Test port with a scripted judgement result and captured request.
+    struct FakeWardenJudgementPort {
+        result: std::sync::Mutex<
+            bitfun_runtime_ports::PortResult<bitfun_runtime_ports::WardenAuditJudgementResponse>,
+        >,
+        captured_requests:
+            Arc<TokioMutex<Vec<bitfun_runtime_ports::WardenAuditJudgementRequest>>>,
+    }
+
+    impl FakeWardenJudgementPort {
+        fn new(
+            result: bitfun_runtime_ports::PortResult<
+                bitfun_runtime_ports::WardenAuditJudgementResponse,
+            >,
+        ) -> Self {
+            Self {
+                result: std::sync::Mutex::new(result),
+                captured_requests: Arc::new(TokioMutex::new(Vec::new())),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl bitfun_runtime_ports::WardenModelJudgementPort for FakeWardenJudgementPort {
+        async fn judge_audit(
+            &self,
+            request: bitfun_runtime_ports::WardenAuditJudgementRequest,
+        ) -> bitfun_runtime_ports::PortResult<
+            bitfun_runtime_ports::WardenAuditJudgementResponse,
+        > {
+            self.captured_requests
+                .lock()
+                .await
+                .push(request.clone());
+            self.result.lock().unwrap().clone()
+        }
+    }
+
+    #[tokio::test]
+    async fn audit_poke_without_port_uses_mechanical_rules() {
+        use bitfun_agent_tools::OperationClass;
+
+        let pipeline = test_tool_pipeline();
+        let task = test_tool_task("tool-42", "Write");
+        let mechanical = ToolPipeline::build_audit_poke("tool-42", &OperationClass::WriteFile);
+
+        let decision = pipeline
+            .warden_audit_poke_decision(&task, "Write", &mechanical)
+            .await
+            .expect("no port means the mechanical poke is sent");
+        assert_eq!(decision.poke_id, mechanical.poke_id);
+        assert_eq!(decision.poke_type, PokeType::Audit);
+        assert_eq!(decision.rule_ids, mechanical.rule_ids);
+        assert_eq!(decision.deadline_turns, mechanical.deadline_turns);
+        assert_eq!(decision.evidence_required, mechanical.evidence_required);
+    }
+
+    #[tokio::test]
+    async fn audit_poke_port_unavailable_falls_back_to_mechanical_rules() {
+        use bitfun_agent_tools::OperationClass;
+        use bitfun_runtime_ports::{PortError, PortErrorKind};
+
+        let pipeline = test_tool_pipeline();
+        pipeline.set_warden_model_judgement(Arc::new(FakeWardenJudgementPort::new(Err(
+            PortError::new(
+                PortErrorKind::NotAvailable,
+                "model judgement not supported by this provider",
+            ),
+        ))));
+
+        let task = test_tool_task("tool-43", "Write");
+        let mechanical = ToolPipeline::build_audit_poke("tool-43", &OperationClass::WriteFile);
+
+        let decision = pipeline
+            .warden_audit_poke_decision(&task, "Write", &mechanical)
+            .await
+            .expect("port failure must fall back to the mechanical poke");
+        assert_eq!(decision.poke_id, "audit-tool-43");
+        assert_eq!(decision.poke_type, PokeType::Audit);
+        assert_eq!(decision.rule_ids, mechanical.rule_ids);
+        assert_eq!(decision.deadline_turns, 3);
+        assert_eq!(decision.evidence_required, mechanical.evidence_required);
+    }
+
+    #[tokio::test]
+    async fn audit_poke_model_verdict_replaces_rules_and_can_decline() {
+        use bitfun_agent_tools::OperationClass;
+        use bitfun_runtime_ports::WardenAuditJudgementResponse;
+
+        let confirm_port = FakeWardenJudgementPort::new(Ok(WardenAuditJudgementResponse {
+            should_poke: true,
+            rule_ids: vec!["R2: execution_safety".to_string()],
+            evidence_requested: vec!["tool_call_log".to_string()],
+        }));
+        let confirm_port = Arc::new(confirm_port);
+        let pipeline = test_tool_pipeline();
+        pipeline.set_warden_model_judgement(confirm_port.clone());
+
+        let task = test_tool_task("tool-44", "ExecCommand");
+        let mechanical = ToolPipeline::build_audit_poke("tool-44", &OperationClass::ExecuteCode);
+        let decision = pipeline
+            .warden_audit_poke_decision(&task, "ExecCommand", &mechanical)
+            .await
+            .expect("confirmed poke is sent");
+        assert_eq!(decision.rule_ids, vec!["R2: execution_safety"]);
+        assert_eq!(
+            decision.evidence_required,
+            Some(vec!["tool_call_log".to_string()])
+        );
+        assert_eq!(decision.deadline_turns, 3);
+
+        // The judgement request carries the mechanical candidates.
+        let captured = confirm_port.captured_requests.lock().await;
+        assert_eq!(captured.len(), 1);
+        assert_eq!(captured[0].session_id, "session_1");
+        assert_eq!(captured[0].tool_name, "ExecCommand");
+        assert_eq!(
+            captured[0].rule_ids,
+            vec!["R2: execution_safety"],
+            "mechanical candidate rules are handed to the model"
+        );
+        assert!(captured[0].tool_args.is_some());
+        drop(captured);
+
+        let decline_port = Arc::new(FakeWardenJudgementPort::new(Ok(
+            WardenAuditJudgementResponse {
+                should_poke: false,
+                rule_ids: Vec::new(),
+                evidence_requested: Vec::new(),
+            },
+        )));
+        let pipeline = test_tool_pipeline();
+        pipeline.set_warden_model_judgement(decline_port);
+        let decision = pipeline
+            .warden_audit_poke_decision(&task, "ExecCommand", &mechanical)
+            .await;
+        assert!(
+            decision.is_none(),
+            "a declining model verdict suppresses the Audit-Poke"
+        );
+    }
+
+    #[tokio::test]
+    async fn audit_poke_same_tool_is_debounced_within_window() {
+        // WARDEN-02: repeated destructive calls of the same tool+session
+        // within the debounce window are judged by the model only once.
+        use bitfun_agent_tools::OperationClass;
+        use bitfun_runtime_ports::WardenAuditJudgementResponse;
+
+        let confirm_port = FakeWardenJudgementPort::new(Ok(WardenAuditJudgementResponse {
+            should_poke: true,
+            rule_ids: Vec::new(),
+            evidence_requested: Vec::new(),
+        }));
+        let confirm_port = Arc::new(confirm_port);
+        let pipeline = test_tool_pipeline();
+        pipeline.set_warden_model_judgement(confirm_port.clone());
+
+        let task = test_tool_task("tool-debounce", "Write");
+        let mechanical = ToolPipeline::build_audit_poke("tool-debounce", &OperationClass::WriteFile);
+
+        let first = pipeline
+            .warden_audit_poke_decision(&task, "Write", &mechanical)
+            .await
+            .expect("first call is judged and pokes");
+        assert_eq!(first.poke_id, mechanical.poke_id);
+        assert_eq!(confirm_port.captured_requests.lock().await.len(), 1);
+
+        // The second call within the window is debounced: no model round-trip,
+        // and an exploratory (count 0) occurrence sends no extra poke.
+        let second = pipeline
+            .warden_audit_poke_decision(&task, "Write", &mechanical)
+            .await;
+        assert!(second.is_none(), "debounced exploratory occurrence sends no poke");
+        assert_eq!(
+            confirm_port.captured_requests.lock().await.len(),
+            1,
+            "the model is not asked twice for the same tool within the window"
+        );
+    }
+
+    #[tokio::test]
+    async fn audit_poke_distinct_scenes_of_same_tool_are_judged_separately() {
+        // WARDEN-02: the debounce is scene-scoped — two different argument
+        // shapes of the same tool within the window each get their own model
+        // verdict instead of sharing one debounced judgement.
+        use bitfun_agent_tools::OperationClass;
+        use bitfun_runtime_ports::WardenAuditJudgementResponse;
+
+        let confirm_port = FakeWardenJudgementPort::new(Ok(WardenAuditJudgementResponse {
+            should_poke: true,
+            rule_ids: Vec::new(),
+            evidence_requested: Vec::new(),
+        }));
+        let confirm_port = Arc::new(confirm_port);
+        let pipeline = test_tool_pipeline();
+        pipeline.set_warden_model_judgement(confirm_port.clone());
+
+        let mechanical = ToolPipeline::build_audit_poke("tool-scene-a", &OperationClass::WriteFile);
+        let mut scene_a = test_tool_task("tool-scene-a", "Write");
+        scene_a.invocation.effective_arguments = json!({ "path": "a.md", "content": "alpha" });
+        let mut scene_b = test_tool_task("tool-scene-b", "Write");
+        scene_b.invocation.effective_arguments = json!({ "path": "b.md", "content": "beta" });
+        assert_ne!(
+            tool_failure_scene_key("Write", &scene_a.invocation.effective_arguments),
+            tool_failure_scene_key("Write", &scene_b.invocation.effective_arguments),
+            "the two argument shapes must map to distinct scenes"
+        );
+
+        pipeline
+            .warden_audit_poke_decision(&scene_a, "Write", &mechanical)
+            .await
+            .expect("first scene is judged and pokes");
+        pipeline
+            .warden_audit_poke_decision(&scene_b, "Write", &mechanical)
+            .await
+            .expect("second scene is judged separately and pokes");
+        assert_eq!(
+            confirm_port.captured_requests.lock().await.len(),
+            2,
+            "distinct scenes of the same tool are judged independently"
+        );
+    }
+
+    #[tokio::test]
+    async fn audit_poke_must_poke_floor_on_repeated_scene_failures() {
+        // WARDEN-03: on a scene with repeated tool failures the model verdict
+        // cannot cancel the poke — it may only add rules/evidence. The
+        // judgement still receives the scene failure count and last error.
+        use bitfun_agent_tools::OperationClass;
+        use bitfun_runtime_ports::WardenAuditJudgementResponse;
+
+        let (pipeline, warden) = test_pipeline_with_warden().await;
+        let task = test_tool_task("tool-floor", "Write");
+        let scene = tool_failure_scene_key("Write", &task.invocation.effective_arguments);
+        {
+            let mut guard = warden.lock().await;
+            guard
+                .on_tool_outcome("session_1", "Write", &scene, WardenToolOutcome::ExecutionFailed)
+                .await;
+            guard
+                .on_tool_outcome("session_1", "Write", &scene, WardenToolOutcome::ExecutionFailed)
+                .await;
+            guard.record_tool_error("session_1", &scene, "permission denied");
+            guard.take_pending_reminders("session_1");
+        }
+
+        let decline_port = Arc::new(FakeWardenJudgementPort::new(Ok(
+            WardenAuditJudgementResponse {
+                should_poke: false,
+                rule_ids: Vec::new(),
+                evidence_requested: Vec::new(),
+            },
+        )));
+        pipeline.set_warden_model_judgement(decline_port.clone());
+
+        let mechanical = ToolPipeline::build_audit_poke("tool-floor", &OperationClass::WriteFile);
+        let decision = pipeline
+            .warden_audit_poke_decision(&task, "Write", &mechanical)
+            .await
+            .expect("repeated-failure poke cannot be cancelled by the model");
+        assert_eq!(decision.poke_id, mechanical.poke_id);
+
+        // The evidence handed to the model includes the failure context.
+        let captured = decline_port.captured_requests.lock().await;
+        assert_eq!(captured.len(), 1);
+        let evidence = captured[0].evidence.as_ref().expect("evidence present");
+        assert_eq!(evidence["consecutiveToolFailures"], json!(1));
+        assert_eq!(evidence["lastToolError"], json!("permission denied"));
+    }
+
+    #[tokio::test]
+    async fn audit_poke_request_summarizes_content_args() {
+        // WARDEN-08: content-like tool args are masked to a length marker in
+        // the request sent to the model.
+        use bitfun_agent_tools::OperationClass;
+        use bitfun_runtime_ports::WardenAuditJudgementResponse;
+
+        let confirm_port = FakeWardenJudgementPort::new(Ok(WardenAuditJudgementResponse {
+            should_poke: true,
+            rule_ids: Vec::new(),
+            evidence_requested: Vec::new(),
+        }));
+        let confirm_port = Arc::new(confirm_port);
+        let pipeline = test_tool_pipeline();
+        pipeline.set_warden_model_judgement(confirm_port.clone());
+
+        let mut task = test_tool_task("tool-content", "Write");
+        task.invocation.effective_arguments =
+            json!({ "file_path": "a.md", "content": "hello world" });
+        let mechanical = ToolPipeline::build_audit_poke("tool-content", &OperationClass::WriteFile);
+        let decision = pipeline
+            .warden_audit_poke_decision(&task, "Write", &mechanical)
+            .await
+            .expect("poke sent");
+        assert_eq!(decision.poke_id, mechanical.poke_id);
+
+        let captured = confirm_port.captured_requests.lock().await;
+        let args = captured[0].tool_args.as_ref().expect("tool_args present");
+        assert_eq!(args["file_path"], json!("a.md"));
+        assert_eq!(args["content"]["contentLength"], json!(13));
+        assert!(
+            !args.to_string().contains("hello world"),
+            "bulk content is not sent to the model"
+        );
+    }
+
+    #[test]
     fn deferred_tool_requires_loaded_catalog_spec() {
         let mut task = test_tool_task("tool_1", "WebFetch");
         task.context.deferred_tools = vec!["WebFetch".to_string()];
@@ -4425,6 +5660,8 @@ mod tests {
             tool_name: &task.tool_call.tool_name,
             allowed_tools: &task.context.allowed_tools,
             runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
+            user_enabled_tools: &task.context.user_enabled_tools,
+            tool_arguments: &task.tool_call.arguments,
             invocation_is_deferred: true,
             deferred_tools: &task.context.deferred_tools,
             loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
@@ -4448,6 +5685,8 @@ mod tests {
             tool_name: &task.tool_call.tool_name,
             allowed_tools: &task.context.allowed_tools,
             runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
+            user_enabled_tools: &task.context.user_enabled_tools,
+            tool_arguments: &task.tool_call.arguments,
             invocation_is_deferred: false,
             deferred_tools: &task.context.deferred_tools,
             loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
@@ -4465,5 +5704,760 @@ mod tests {
     fn task_tool_manages_its_own_execution_timeout() {
         let task_tool = TaskTool::new();
         assert!(task_tool.manages_own_execution_timeout());
+    }
+
+    fn test_warden_session_manager() -> Arc<crate::agentic::session::SessionManager> {
+        use crate::agentic::persistence::PersistenceManager;
+        use crate::agentic::session::{
+            PromptCachePolicy, SessionContextStore, SessionManager, SessionManagerConfig,
+        };
+        use crate::infrastructure::app_paths::PathManager;
+
+        let root = std::env::temp_dir().join(format!(
+            "bitfun-pipeline-warden-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(root.join("user-root")));
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(path_manager).expect("persistence manager"));
+        Arc::new(SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            persistence_manager,
+            SessionManagerConfig {
+                max_active_sessions: 100,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: false,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        ))
+    }
+
+    async fn test_pipeline_with_warden() -> (ToolPipeline, Arc<TokioMutex<WardenRuntime>>) {
+        use crate::agentic::warden::ChallengePokeConfig;
+        use std::collections::BTreeSet;
+
+        let pipeline = test_tool_pipeline();
+        let warden = Arc::new(TokioMutex::new(WardenRuntime::new(
+            test_warden_session_manager(),
+        )));
+        // Challenge disabled for deterministic penalty assertions.
+        warden
+            .lock()
+            .await
+            .set_challenge_config(ChallengePokeConfig::new(f64::INFINITY, 1, BTreeSet::new()));
+        pipeline.set_warden_runtime(warden.clone());
+        (pipeline, warden)
+    }
+
+    struct FailingTestTool {
+        name: String,
+    }
+
+    #[async_trait]
+    impl Tool for FailingTestTool {
+        fn name(&self) -> &str {
+            &self.name
+        }
+
+        fn is_readonly(&self) -> bool {
+            false
+        }
+
+        async fn description(&self) -> BitFunResult<String> {
+            Ok("Tool that always fails during execution".to_string())
+        }
+
+        fn short_description(&self) -> String {
+            "Tool that always fails during execution".to_string()
+        }
+
+        fn input_schema(&self) -> serde_json::Value {
+            json!({ "type": "object" })
+        }
+
+        fn permission_intents(
+            &self,
+            _input: &serde_json::Value,
+            _context: &ToolUseContext,
+        ) -> BitFunResult<Vec<PermissionIntent>> {
+            // No permission prompts: the test targets the execution-failure
+            // path, not the permission-planning path.
+            Ok(Vec::new())
+        }
+
+        async fn validate_input(
+            &self,
+            _input: &serde_json::Value,
+            _context: Option<&ToolUseContext>,
+        ) -> ValidationResult {
+            ValidationResult {
+                result: true,
+                message: None,
+                error_code: None,
+                meta: None,
+            }
+        }
+
+        async fn call_impl(
+            &self,
+            _input: &serde_json::Value,
+            _context: &ToolUseContext,
+        ) -> BitFunResult<Vec<ToolResult>> {
+            Err(BitFunError::tool("injected execution failure"))
+        }
+    }
+
+    #[tokio::test]
+    async fn admission_rejected_tool_does_not_trigger_warden_penalty() {
+        let (pipeline, warden) = test_pipeline_with_warden().await;
+        register_static_test_tool(&pipeline, "Bash", json!({ "ok": true }), 0).await;
+
+        // Bash resolves to ExecuteCode by default; the Warden operation-level
+        // gate rejects it inside the pipeline before any tool side effect can
+        // run (same admission path as the runtime-restriction unit test).
+        let mut context = test_tool_execution_context();
+        let mut restrictions = ToolRuntimeRestrictions::default();
+        restrictions
+            .allowed_operation_classes
+            .insert(bitfun_agent_tools::OperationClass::ReadOnly);
+        context.runtime_tool_restrictions = restrictions;
+
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("op-gate-warden", "Bash")],
+                context,
+                ToolExecutionOptions::default(),
+            )
+            .await
+            .expect("admission rejection surfaces as a tool result");
+
+        assert!(matches!(
+            pipeline
+                .state_manager
+                .get_task("op-gate-warden")
+                .map(|task| task.state),
+            Some(ToolExecutionState::Failed { .. })
+        ));
+        assert_eq!(results.len(), 1);
+
+        // F3: admission rejection is a protocol-layer outcome — no tool
+        // failure count, no penalty reminder, no shame-wall record.
+        let mut warden_guard = warden.lock().await;
+        assert_eq!(warden_guard.tool_failures("session_1"), 0);
+        assert!(
+            warden_guard.take_pending_reminders("session_1").is_empty(),
+            "no L1 reminder for an admission rejection"
+        );
+        assert!(
+            warden_guard.shame_wall().entry_for_session("session_1").is_none(),
+            "no shame-wall record"
+        );
+    }
+
+    #[tokio::test]
+    async fn real_execution_failure_still_fires_warden_l1_penalty() {
+        use crate::agentic::warden::PenaltyLevel;
+
+        let (pipeline, warden) = test_pipeline_with_warden().await;
+        pipeline
+            .tool_registry
+            .write()
+            .await
+            .register_tool(Arc::new(FailingTestTool {
+                name: "FailingProbe".to_string(),
+            }));
+
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("real-fail-1", "FailingProbe")],
+                test_tool_execution_context(),
+                ToolExecutionOptions::default(),
+            )
+            .await
+            .expect("execution failure surfaces as a tool result");
+
+        assert!(matches!(
+            pipeline
+                .state_manager
+                .get_task("real-fail-1")
+                .map(|task| task.state),
+            Some(ToolExecutionState::Failed { .. })
+        ));
+        assert_eq!(results.len(), 1);
+
+        // The first failure of a scene is exploratory and is not counted.
+        let mut warden_guard = warden.lock().await;
+        assert_eq!(warden_guard.tool_failures("session_1"), 0);
+        assert!(
+            warden_guard.take_pending_reminders("session_1").is_empty(),
+            "no L1 reminder for the exploratory first failure"
+        );
+        drop(warden_guard);
+
+        // A repeated failure of the same scene (same tool, same arguments)
+        // counts and fires L1.
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("real-fail-2", "FailingProbe")],
+                test_tool_execution_context(),
+                ToolExecutionOptions::default(),
+            )
+            .await
+            .expect("execution failure surfaces as a tool result");
+        assert_eq!(results.len(), 1);
+        assert!(matches!(
+            pipeline
+                .state_manager
+                .get_task("real-fail-2")
+                .map(|task| task.state),
+            Some(ToolExecutionState::Failed { .. })
+        ));
+
+        let mut warden_guard = warden.lock().await;
+        assert_eq!(warden_guard.tool_failures("session_1"), 1);
+        assert_eq!(
+            warden_guard.take_pending_reminders("session_1").len(),
+            1,
+            "L1 fires on the repeated real tool failure"
+        );
+        assert_eq!(
+            warden_guard
+                .shame_wall()
+                .entry_for_session("session_1")
+                .unwrap()
+                .cumulative_penalty_level,
+            PenaltyLevel::L1
+        );
+    }
+
+    fn test_pipeline_with_global_registry() -> ToolPipeline {
+        let registry = crate::agentic::tools::registry::get_global_tool_registry();
+        let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+        let state_manager = Arc::new(ToolStateManager::new(event_queue));
+        ToolPipeline::new(registry, state_manager, None)
+    }
+
+    fn test_deferred_list_models_invocation() -> ResolvedToolInvocation {
+        ResolvedToolInvocation::from_wire_call(
+            CALL_DEFERRED_TOOL_NAME,
+            json!({
+                "tool_name": "ListModels",
+                "args": {},
+            }),
+        )
+        .expect("valid deferred ListModels invocation")
+    }
+
+    fn test_deferred_list_models_task(
+        tool_id: &str,
+        stale_generation: u64,
+    ) -> ToolTask {
+        let mut context = test_tool_execution_context();
+        context.agent_type = "agentic".to_string();
+        context.deferred_tools = vec!["ListModels".to_string()];
+        context.loaded_deferred_tool_specs = vec![loaded_spec("ListModels", stale_generation)];
+        ToolTask::new_resolved(
+            ToolCall {
+                tool_id: tool_id.to_string(),
+                tool_name: CALL_DEFERRED_TOOL_NAME.to_string(),
+                arguments: json!({
+                    "tool_name": "ListModels",
+                    "args": {},
+                }),
+                raw_arguments: None,
+                is_error: false,
+                parse_error: None,
+                recovered_from_truncation: false,
+                repair_kind: Default::default(),
+            },
+            test_deferred_list_models_invocation(),
+            None,
+            context,
+            ToolExecutionOptions::default(),
+        )
+    }
+
+    #[test]
+    fn merge_loaded_deferred_tool_specs_upserts_by_tool_name() {
+        let existing = vec![loaded_spec("WebFetch", 41), loaded_spec("Git", 42)];
+        let fresh = vec![loaded_spec("WebFetch", 42)];
+
+        let merged = merge_loaded_deferred_tool_specs(&existing, &fresh);
+
+        assert_eq!(
+            merged,
+            vec![loaded_spec("Git", 42), loaded_spec("WebFetch", 42)]
+        );
+    }
+
+    #[tokio::test]
+    async fn stale_deferred_spec_auto_reloads_and_continues_execution() {
+        let pipeline = test_pipeline_with_global_registry();
+        let current_generation = {
+            let registry = crate::agentic::tools::registry::get_global_tool_registry();
+            let guard = registry.read().await;
+            assert!(
+                guard.get_tool("ListModels").is_some(),
+                "F2 test requires the product-full global registry with ListModels"
+            );
+            guard.current_snapshot_generation()
+        };
+
+        let tool_id = "f2-stale-reload";
+        let task = test_deferred_list_models_task(tool_id, current_generation.saturating_sub(1));
+        pipeline.insert_tool_task_for_test(task).await;
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(20),
+            pipeline.execute_single_tool(tool_id.to_string()),
+        )
+        .await
+        .expect("stale auto-reload path must not hang");
+
+        // The admission gate must auto-reload the stale spec and let the call
+        // through; whatever happens afterwards is execution-layer behavior.
+        // In this test environment ListModels fails to load model config, so
+        // the observable contract is: no stale-spec / GetToolSpec admission
+        // error may surface.
+        match result {
+            Ok(execution_result) => {
+                assert_eq!(execution_result.effective_tool_name, "ListModels");
+            }
+            Err(error) => {
+                let message = error.to_string();
+                assert!(
+                    !message.contains("stale"),
+                    "stale spec must be auto-reloaded before admission, got: {message}"
+                );
+                assert!(
+                    !message.contains("Call GetToolSpec first"),
+                    "auto-reloaded admission must not fall back to RequiresGetToolSpec, got: {message}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn reload_stale_deferred_tool_spec_observes_fresh_generation() {
+        let pipeline = test_pipeline_with_global_registry();
+        let current_generation = {
+            let registry = crate::agentic::tools::registry::get_global_tool_registry();
+            let guard = registry.read().await;
+            assert!(
+                guard.get_tool("ListModels").is_some(),
+                "F2 test requires the product-full global registry with ListModels"
+            );
+            guard.current_snapshot_generation()
+        };
+
+        let task = test_deferred_list_models_task(
+            "f2-reload-unit",
+            current_generation.saturating_sub(1),
+        );
+        let outcome = pipeline
+            .reload_stale_deferred_tool_spec(&task, "ListModels")
+            .await;
+        let StaleSpecReloadOutcome::Reloaded(updated) = outcome else {
+            panic!("reload must observe a fresh spec");
+        };
+        let refreshed = updated
+            .iter()
+            .find(|spec| spec.tool_name == "ListModels")
+            .expect("refreshed spec must contain ListModels");
+        assert_eq!(
+            refreshed.catalog_generation,
+            crate::agentic::tools::registry::get_global_tool_registry()
+                .read()
+                .await
+                .current_snapshot_generation(),
+            "reloaded spec generation must match the current catalog generation"
+        );
+    }
+
+    #[tokio::test]
+    async fn stale_reload_records_session_cache_for_later_rounds() {
+        // F2 round 1: the stale task triggers the auto-reload and the
+        // refreshed spec must land in the session-scoped cache so a later
+        // round does not re-trigger the recovery.
+        let pipeline = test_pipeline_with_global_registry();
+        let current_generation = {
+            let registry = crate::agentic::tools::registry::get_global_tool_registry();
+            let guard = registry.read().await;
+            assert!(
+                guard.get_tool("ListModels").is_some(),
+                "F2 test requires the product-full global registry with ListModels"
+            );
+            guard.current_snapshot_generation()
+        };
+        let stale_generation = current_generation.saturating_sub(1);
+
+        let tool_id = "f2-cache-round-1";
+        let task = test_deferred_list_models_task(tool_id, stale_generation);
+        pipeline.insert_tool_task_for_test(task).await;
+        let result = tokio::time::timeout(
+            Duration::from_secs(20),
+            pipeline.execute_single_tool(tool_id.to_string()),
+        )
+        .await
+        .expect("round-1 stale auto-reload path must not hang");
+        match &result {
+            Ok(execution_result) => assert_eq!(execution_result.effective_tool_name, "ListModels"),
+            Err(error) => {
+                let message = error.to_string();
+                assert!(
+                    !message.contains("stale"),
+                    "round-1 must auto-reload before admission, got: {message}"
+                );
+                assert!(
+                    !message.contains("Call GetToolSpec first"),
+                    "round-1 must not fall back to RequiresGetToolSpec, got: {message}"
+                );
+            }
+        }
+
+        let cached = pipeline.session_loaded_specs_for_test("session_1").await;
+        let cached_list_models = cached
+            .iter()
+            .find(|spec| spec.tool_name == "ListModels")
+            .expect("the auto-reloaded spec must be cached for the session");
+        assert_eq!(
+            cached_list_models.catalog_generation, current_generation,
+            "the cached spec must carry the refreshed catalog generation"
+        );
+    }
+
+    #[tokio::test]
+    async fn second_round_rebuilds_loaded_specs_from_cache_without_recovery() {
+        // F2 round 2: the next round rebuilds loaded specs from the message
+        // history, which still carries only the stale generation (the
+        // synthesized GetToolSpec result never becomes part of the
+        // conversation). execute_tools must merge the session cache at its
+        // entry so the invocation passes admission directly — no recovery
+        // action and no reload.
+        let pipeline = test_pipeline_with_global_registry();
+        let current_generation = {
+            let registry = crate::agentic::tools::registry::get_global_tool_registry();
+            let guard = registry.read().await;
+            assert!(
+                guard.get_tool("ListModels").is_some(),
+                "F2 test requires the product-full global registry with ListModels"
+            );
+            guard.current_snapshot_generation()
+        };
+        let stale_generation = current_generation.saturating_sub(1);
+
+        // Seed the session cache exactly like round 1's auto-reload would.
+        pipeline
+            .record_session_loaded_deferred_specs(
+                "session_1",
+                &[loaded_spec("ListModels", current_generation)],
+            )
+            .await;
+
+        let mut context = test_tool_execution_context();
+        context.agent_type = "agentic".to_string();
+        context.deferred_tools = vec!["ListModels".to_string()];
+        context.loaded_deferred_tool_specs = vec![loaded_spec("ListModels", stale_generation)];
+        let results = tokio::time::timeout(
+            Duration::from_secs(20),
+            pipeline.execute_tools(
+                vec![ToolCall {
+                    tool_id: "f2-cache-round-2".to_string(),
+                    tool_name: CALL_DEFERRED_TOOL_NAME.to_string(),
+                    arguments: json!({
+                        "tool_name": "ListModels",
+                        "args": {},
+                    }),
+                    raw_arguments: None,
+                    is_error: false,
+                    parse_error: None,
+                    recovered_from_truncation: false,
+                    repair_kind: Default::default(),
+                }],
+                context,
+                ToolExecutionOptions::default(),
+            ),
+        )
+        .await
+        .expect("round-2 execute_tools must not hang")
+        .expect("round-2 execute_tools must not fail at the pipeline level");
+
+        // The created task must observe the merged fresh generation from the
+        // start — an auto-reload only mutates the local clone inside
+        // execute_single_tool, so a cache miss here would leave the stored
+        // task stale and prove the round still needed recovery.
+        let task = pipeline
+            .state_manager
+            .get_task("f2-cache-round-2")
+            .expect("round-2 task must exist");
+        let task_loaded = task
+            .context
+            .loaded_deferred_tool_specs
+            .iter()
+            .find(|spec| spec.tool_name == "ListModels")
+            .expect("round-2 task must carry the ListModels loaded spec");
+        assert_eq!(
+            task_loaded.catalog_generation, current_generation,
+            "round-2 task must see the cached generation merged over the rebuilt stale one"
+        );
+
+        // No stale-spec admission error may surface to the model.
+        let execution = results
+            .first()
+            .expect("round-2 must produce one execution result");
+        let visible = execution
+            .result
+            .result_for_assistant
+            .as_deref()
+            .unwrap_or_default();
+        assert!(
+            !visible.contains("stale"),
+            "round-2 must pass admission without a stale-spec error, got: {visible}"
+        );
+    }
+
+    struct RefreshProbeTool(String);
+
+    #[async_trait]
+    impl Tool for RefreshProbeTool {
+        fn name(&self) -> &str {
+            &self.0
+        }
+
+        async fn description(&self) -> BitFunResult<String> {
+            Ok(format!("Refresh probe {}", self.0))
+        }
+
+        fn short_description(&self) -> String {
+            format!("Refresh probe {}", self.0)
+        }
+
+        fn input_schema(&self) -> serde_json::Value {
+            json!({ "type": "object" })
+        }
+
+        async fn call_impl(
+            &self,
+            _input: &serde_json::Value,
+            _context: &ToolUseContext,
+        ) -> BitFunResult<Vec<ToolResult>> {
+            Ok(vec![ToolResult::Result {
+                data: json!({ "ok": true }),
+                result_for_assistant: Some("refresh probe executed".to_string()),
+                image_attachments: None,
+            }])
+        }
+    }
+
+    #[tokio::test]
+    async fn stale_reload_retries_when_registry_generation_advances_during_reload() {
+        // F2 loop retry: a registry refresh racing the reload bumps the
+        // catalog generation again after the first reload observed it; the
+        // loop must reload again instead of surfacing the stale-spec
+        // rejection.
+        let pipeline = test_pipeline_with_global_registry();
+        let registry = crate::agentic::tools::registry::get_global_tool_registry();
+        let stale_generation = {
+            let guard = registry.read().await;
+            assert!(
+                guard.get_tool("ListModels").is_some(),
+                "F2 test requires the product-full global registry with ListModels"
+            );
+            guard.current_snapshot_generation()
+        };
+
+        let tool_id = "f2-retry-loop";
+        let task = test_deferred_list_models_task(tool_id, stale_generation.saturating_sub(1));
+        pipeline.insert_tool_task_for_test(task).await;
+
+        let pipeline_runner = pipeline.clone();
+        let handle = tokio::spawn(async move {
+            pipeline_runner.execute_single_tool(tool_id.to_string()).await
+        });
+
+        // Wait until the first reload has landed in the session cache, then
+        // advance the catalog generation twice (registering probe tools) to
+        // simulate a refresh racing the reload. The first reload observes the
+        // generation the test read above, so the poll is satisfied by any
+        // entry at or above that baseline.
+        let first_reloaded = async {
+            loop {
+                let cached = pipeline.session_loaded_specs_for_test("session_1").await;
+                if cached.iter().any(|spec| {
+                    spec.tool_name == "ListModels" && spec.catalog_generation >= stale_generation
+                }) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(2)).await;
+            }
+        };
+        tokio::time::timeout(Duration::from_secs(10), first_reloaded)
+            .await
+            .expect("the first reload must land in the session cache");
+        for probe_index in 0..2 {
+            registry
+                .write()
+                .await
+                .register_tool(Arc::new(RefreshProbeTool(format!(
+                    "F2RefreshProbe{probe_index}"
+                ))));
+        }
+
+        let result = tokio::time::timeout(Duration::from_secs(20), handle)
+            .await
+            .expect("stale reload retry loop must not hang")
+            .expect("tool execution join must not fail");
+
+        // Cleanup: remove the probe tools so other tests keep a stable catalog.
+        for probe_index in 0..2 {
+            registry
+                .write()
+                .await
+                .unregister_tool(&format!("F2RefreshProbe{probe_index}"));
+        }
+
+        match result {
+            Ok(execution_result) => {
+                assert_eq!(execution_result.effective_tool_name, "ListModels");
+            }
+            Err(error) => {
+                let message = error.to_string();
+                assert!(
+                    !message.contains("stale"),
+                    "registry refresh racing the reload must be absorbed by the retry loop, got: {message}"
+                );
+                assert!(
+                    !message.contains("Call GetToolSpec first"),
+                    "the retry loop must not fall back to RequiresGetToolSpec, got: {message}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn stale_spec_reload_reports_not_reloadable_when_tool_leaves_deferred_catalog() {
+        // F2 failure classification: the tool is tracked as loaded by the task
+        // but no longer part of the deferred catalog. The reload cannot
+        // observe a fresh spec and must be classified as not reloadable with a
+        // semantic reason; the original stale-spec rejection stays visible.
+        let pipeline = test_pipeline_with_global_registry();
+        let current_generation = {
+            let registry = crate::agentic::tools::registry::get_global_tool_registry();
+            let guard = registry.read().await;
+            assert!(
+                guard.get_tool("ListModels").is_some(),
+                "F2 test requires the product-full global registry with ListModels"
+            );
+            guard.current_snapshot_generation()
+        };
+
+        let mut context = test_tool_execution_context();
+        context.agent_type = "agentic".to_string();
+        context.deferred_tools = vec!["MissingDeferredTool".to_string()];
+        context.loaded_deferred_tool_specs = vec![loaded_spec(
+            "MissingDeferredTool",
+            current_generation.saturating_sub(1),
+        )];
+        let invocation = ResolvedToolInvocation::from_wire_call(
+            CALL_DEFERRED_TOOL_NAME,
+            json!({
+                "tool_name": "MissingDeferredTool",
+                "args": {},
+            }),
+        )
+        .expect("valid deferred MissingDeferredTool invocation");
+        let task = ToolTask::new_resolved(
+            ToolCall {
+                tool_id: "f2-not-reloadable".to_string(),
+                tool_name: CALL_DEFERRED_TOOL_NAME.to_string(),
+                arguments: json!({
+                    "tool_name": "MissingDeferredTool",
+                    "args": {},
+                }),
+                raw_arguments: None,
+                is_error: false,
+                parse_error: None,
+                recovered_from_truncation: false,
+                repair_kind: Default::default(),
+            },
+            invocation,
+            None,
+            context,
+            ToolExecutionOptions::default(),
+        );
+
+        let outcome = pipeline
+            .reload_stale_deferred_tool_spec(&task, "MissingDeferredTool")
+            .await;
+        let StaleSpecReloadOutcome::NotReloadable(reason) = outcome else {
+            panic!("a tool outside the deferred catalog must be classified as not reloadable");
+        };
+        assert!(
+            reason.contains("not in the deferred catalog"),
+            "unexpected not-reloadable reason: {reason}"
+        );
+
+        // End-to-end: the admission rejection keeps its original stale-spec
+        // semantics instead of being silently swallowed.
+        pipeline.insert_tool_task_for_test(task).await;
+        let err = pipeline
+            .execute_single_tool("f2-not-reloadable".to_string())
+            .await
+            .expect_err("the stale-spec rejection must be preserved");
+        let message = err.to_string();
+        assert!(
+            message.contains("stale"),
+            "original stale-spec rejection must surface, got: {message}"
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_deferred_spec_still_requires_explicit_get_tool_spec() {
+        let pipeline = test_pipeline_with_global_registry();
+        let mut task = test_deferred_list_models_task("f2-require-spec", 0);
+        task.context.loaded_deferred_tool_specs = Vec::new();
+        pipeline.insert_tool_task_for_test(task).await;
+
+        let result = pipeline.execute_single_tool("f2-require-spec".to_string()).await;
+        let err = result.expect_err("unloaded deferred tools must still require GetToolSpec");
+        let message = err.to_string();
+        assert!(
+            message.contains("Call GetToolSpec first"),
+            "unexpected error: {message}"
+        );
+    }
+
+    #[tokio::test]
+    async fn direct_deferred_invocation_still_requires_gateway() {
+        let pipeline = test_pipeline_with_global_registry();
+        let mut context = test_tool_execution_context();
+        context.agent_type = "agentic".to_string();
+        context.deferred_tools = vec!["ListModels".to_string()];
+        let task = ToolTask::new(
+            ToolCall {
+                tool_id: "f2-direct-gateway".to_string(),
+                tool_name: "ListModels".to_string(),
+                arguments: json!({}),
+                raw_arguments: None,
+                is_error: false,
+                parse_error: None,
+                recovered_from_truncation: false,
+                repair_kind: Default::default(),
+            },
+            context,
+            ToolExecutionOptions::default(),
+        );
+        pipeline.insert_tool_task_for_test(task).await;
+
+        let result = pipeline
+            .execute_single_tool("f2-direct-gateway".to_string())
+            .await;
+        let err = result.expect_err("direct deferred invocation must be rejected");
+        let message = err.to_string();
+        assert!(
+            message.contains("cannot be called directly"),
+            "unexpected error: {message}"
+        );
     }
 }

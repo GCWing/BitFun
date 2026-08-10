@@ -34,7 +34,7 @@ import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
 import { getReviewerContextBySubagentId } from '@/shared/services/reviewTeamService';
 import type { ReviewerContext } from '@/shared/services/reviewTeamService';
 import { loadBtwSessionHistory, openBtwSessionInAuxPane } from '../services/btwSessionPane';
-import { flowChatStore } from '../store/FlowChatStore';
+import { flowChatStore, isSessionConfirmedDeleted } from '../store/FlowChatStore';
 import { useSessionGoalModeActive } from '../hooks/useSessionGoalModeActive';
 import { deriveSubagentExecutionStatus } from '../utils/subagentProjection';
 import { deriveReviewTaskOutcome } from '../utils/reviewTaskOutcome';
@@ -177,7 +177,11 @@ function readLinkedSubagentSnapshot(sessionId: string): string {
   }
   const session = flowChatStore.getState().sessions.get(sessionId);
   const turn = session?.dialogTurns?.[session.dialogTurns.length - 1];
+  // Include the confirmed-deleted flag so a session recorded as deleted
+  // (backend tombstone pre-warm or deletion event) renders the deleted
+  // placeholder even when a stale store entry still exists.
   return JSON.stringify([
+    isSessionConfirmedDeleted(sessionId),
     session?.mode ?? '',
     session?.config?.agentType ?? '',
     session?.config?.modelName ?? '',
@@ -534,6 +538,15 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   const effectiveIsRunning = projectedSubagentStatus == null
     ? isRunning
     : projectedSubagentIsRunning;
+  const linkedSubagentSessionMissing = Boolean(
+    linkedSubagentSessionId &&
+    (
+      // A backend-confirmed deletion (deletion event or tombstone pre-warm)
+      // renders the deleted placeholder even when a stale store entry exists.
+      isSessionConfirmedDeleted(linkedSubagentSessionId) ||
+      (!linkedSubagentSession && !effectiveIsRunning)
+    ),
+  );
   const isFailed = !projectedSubagentIsRunning && (
     displayStatus === 'error' || (
       !isCancelledResult &&
@@ -805,6 +818,11 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
                     {t(reviewOutcome.key)}
                   </span>
                 )}
+                {linkedSubagentSessionMissing && (
+                  <span className="task-deleted-session-badge" role="status">
+                    {t('toolCards.taskTool.deletedSessionLabel')}
+                  </span>
+                )}
                 {canStopSyncSubagent && (
                   <button
                     type="button"
@@ -840,7 +858,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
               </div>
             </div>
           </div>
-          {!isCancelAction && (
+          {!isCancelAction && !linkedSubagentSessionMissing && (
             <div className="task-header-rail" data-bf-component="task-tool-display" data-bf-part="rail">
               <button
                 type="button"

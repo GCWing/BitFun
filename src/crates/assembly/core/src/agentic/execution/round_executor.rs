@@ -132,6 +132,7 @@ impl RoundExecutor {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn record_retry_diagnostic(
         &self,
         context: &RoundContext,
@@ -346,7 +347,13 @@ impl RoundExecutor {
                 Err(_) => Default::default(),
             };
         let allow_normal_tool_json_repair = global_config.ai.allow_tool_json_repair;
-        let max_attempts = Self::MAX_STREAM_ATTEMPTS;
+        // 阈值参数配置化：ai.thresholds.model_retry.max_attempts
+        let max_attempts = global_config
+            .ai
+            .thresholds
+            .model_retry
+            .max_attempts
+            .max(1);
         let mut local_attempt_index = 0usize;
         let (stream_result, send_to_stream_ms, stream_processing_ms, final_trace_handle) = loop {
             let attempt_number = lifecycle.begin_attempt();
@@ -421,8 +428,16 @@ impl RoundExecutor {
                             &[],
                         )
                         .await;
-                        let delay_ms =
-                            Self::retry_delay_ms_for_error(local_attempt_index, &err_msg);
+                        let model_retry = &global_config.ai.thresholds.model_retry;
+                        let delay_ms = Self::retry_delay_ms_for_error_with_config(
+                            local_attempt_index,
+                            &err_msg,
+                            model_retry.base_delay_ms.max(1),
+                            model_retry.rate_limit_base_delay_ms.max(1),
+                            model_retry.max_exponential_delay_ms.max(1),
+                            model_retry.max_rate_limit_delay_ms.max(1),
+                            model_retry.max_exponent_shift.max(1),
+                        );
                         warn!(
                             "Retrying AI request after connection failure: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, error={}",
                             context.session_id,
@@ -554,8 +569,16 @@ impl RoundExecutor {
                                 Self::trace_response_from_stream_result("partial", &result),
                             )
                             .await;
-                            let delay_ms =
-                                Self::retry_delay_ms_for_error(local_attempt_index, &err_msg);
+                            let model_retry = &global_config.ai.thresholds.model_retry;
+                            let delay_ms = Self::retry_delay_ms_for_error_with_config(
+                                local_attempt_index,
+                                &err_msg,
+                                model_retry.base_delay_ms.max(1),
+                                model_retry.rate_limit_base_delay_ms.max(1),
+                                model_retry.max_exponential_delay_ms.max(1),
+                                model_retry.max_rate_limit_delay_ms.max(1),
+                                model_retry.max_exponent_shift.max(1),
+                            );
                             warn!(
                                 "Retrying stream because tool arguments were interrupted before valid JSON completed: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, invalid_tool_calls={}, error={}",
                                 context.session_id,
@@ -657,9 +680,15 @@ impl RoundExecutor {
                             Self::trace_response_from_stream_result("partial", &result),
                         )
                         .await;
-                        let delay_ms = Self::retry_delay_ms_for_error(
+                        let model_retry = &global_config.ai.thresholds.model_retry;
+                        let delay_ms = Self::retry_delay_ms_for_error_with_config(
                             local_attempt_index,
                             partial_recovery_reason,
+                            model_retry.base_delay_ms.max(1),
+                            model_retry.rate_limit_base_delay_ms.max(1),
+                            model_retry.max_exponential_delay_ms.max(1),
+                            model_retry.max_rate_limit_delay_ms.max(1),
+                            model_retry.max_exponent_shift.max(1),
                         );
                         warn!(
                             "Retrying stream because tool calls arrived on an interrupted network stream without assistant text: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, tool_calls={}, reason={}",
@@ -700,7 +729,16 @@ impl RoundExecutor {
                                 ),
                             )
                             .await;
-                            let delay_ms = Self::retry_delay_ms(local_attempt_index);
+                            let model_retry = &global_config.ai.thresholds.model_retry;
+                            let delay_ms = Self::retry_delay_ms_for_error_with_config(
+                                local_attempt_index,
+                                "",
+                                model_retry.base_delay_ms.max(1),
+                                model_retry.rate_limit_base_delay_ms.max(1),
+                                model_retry.max_exponential_delay_ms.max(1),
+                                model_retry.max_rate_limit_delay_ms.max(1),
+                                model_retry.max_exponent_shift.max(1),
+                            );
                             warn!(
                                 "Retrying stream because provider returned only invalid tool arguments: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, tool_calls={}",
                                 context.session_id,
@@ -820,8 +858,16 @@ impl RoundExecutor {
                             &[],
                         )
                         .await;
-                        let delay_ms =
-                            Self::retry_delay_ms_for_error(local_attempt_index, &err_msg);
+                        let model_retry = &global_config.ai.thresholds.model_retry;
+                        let delay_ms = Self::retry_delay_ms_for_error_with_config(
+                            local_attempt_index,
+                            &err_msg,
+                            model_retry.base_delay_ms.max(1),
+                            model_retry.rate_limit_base_delay_ms.max(1),
+                            model_retry.max_exponential_delay_ms.max(1),
+                            model_retry.max_rate_limit_delay_ms.max(1),
+                            model_retry.max_exponent_shift.max(1),
+                        );
                         warn!(
                             "Retrying stream after transient error with no effective output: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, error={}",
                             context.session_id,
@@ -1048,6 +1094,7 @@ impl RoundExecutor {
                 deferred_tools: context.deferred_tools.clone(),
                 loaded_deferred_tool_specs: context.loaded_deferred_tool_specs.clone(),
                 allowed_tools,
+                user_enabled_tools: context.user_enabled_tools.clone(),
                 runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
                 steering_interrupt: context.steering_interrupt.clone(),
                 workspace_services: context.workspace_services.clone(),
@@ -1489,21 +1536,43 @@ impl RoundExecutor {
     }
 
     fn retry_delay_ms_for_error(attempt_index: usize, error_message: &str) -> u64 {
+        Self::retry_delay_ms_for_error_with_config(
+            attempt_index,
+            error_message,
+            Self::RETRY_BASE_DELAY_MS,
+            Self::RATE_LIMIT_RETRY_BASE_DELAY_MS,
+            Self::MAX_EXPONENTIAL_DELAY_MS,
+            Self::MAX_RATE_LIMIT_DELAY_MS,
+            Self::MAX_RETRY_EXPONENT_SHIFT,
+        )
+    }
+
+    /// Same as [`Self::retry_delay_ms_for_error`] but with explicit backoff
+    /// parameters (阈值参数配置化：`ai.thresholds.model_retry.*`).
+    fn retry_delay_ms_for_error_with_config(
+        attempt_index: usize,
+        error_message: &str,
+        retry_base_delay_ms: u64,
+        rate_limit_base_delay_ms: u64,
+        max_exponential_delay_ms: u64,
+        max_rate_limit_delay_ms: u64,
+        max_retry_exponent_shift: u32,
+    ) -> u64 {
         let shift = u32::try_from(attempt_index)
             .unwrap_or(u32::MAX)
-            .min(Self::MAX_RETRY_EXPONENT_SHIFT);
+            .min(max_retry_exponent_shift);
         let msg = error_message.to_lowercase();
         let is_rate_limit =
             msg.contains("429") || msg.contains("rate limit") || msg.contains("too many requests");
 
         if is_rate_limit {
-            Self::RATE_LIMIT_RETRY_BASE_DELAY_MS
+            rate_limit_base_delay_ms
                 .saturating_mul(1u64 << shift)
-                .min(Self::MAX_RATE_LIMIT_DELAY_MS)
+                .min(max_rate_limit_delay_ms.max(1))
         } else {
-            Self::RETRY_BASE_DELAY_MS
+            retry_base_delay_ms
                 .saturating_mul(1u64 << shift)
-                .min(Self::MAX_EXPONENTIAL_DELAY_MS)
+                .min(max_exponential_delay_ms.max(1))
         }
     }
 
@@ -1737,6 +1806,7 @@ mod tests {
             workspace: None,
             model_exchange_trace_dir: None,
             available_tools: Vec::new(),
+            user_enabled_tools: Vec::new(),
             deferred_tools: Vec::new(),
             loaded_deferred_tool_specs: Vec::new(),
             model_config_id: "model-1".to_string(),

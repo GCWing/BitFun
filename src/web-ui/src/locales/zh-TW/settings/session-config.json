@@ -8,6 +8,12 @@
     "subtitle": "加速工作區搜尋、工具執行、工具定義載入、Computer use、瀏覽器控制與偵錯模式"
   },
   "features": {
+    "externalInstructionSources": {
+      "title": "外部指令來源",
+      "subtitle": "控制是否將其他 AI 程式設計工具的指令檔案載入到會話上下文。",
+      "enable": "載入外部使用者指令",
+      "description": "開啟時，BitFun 會將 ~/.claude/CLAUDE.md 與 rules/、OpenCode AGENTS.md、Codex AGENTS.md 讀入使用者上下文。關閉後完全不再讀取這些外部檔案。專案內指令檔案（工作區中的 AGENTS.md 與 .claude/rules）始終生效。"
+    },
     "agentCompanion": {
       "title": "Agent 夥伴",
       "subtitle": "控制 BitFun 夥伴的顯示方式。",

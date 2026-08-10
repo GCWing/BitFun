@@ -4,6 +4,7 @@ import { Archive, FolderOpen } from 'lucide-react';
 import {
   Alert,
   Button,
+  NumberInput,
   Select,
   Switch,
   Tooltip,
@@ -984,6 +985,181 @@ function BasicsNotificationsSection() {
   );
 }
 
+/**
+ * Legion deployment thresholds (legion 阈值参数配置化）。
+ *
+ * Front-end entry for `ai.legion_max_nodes` (per-topology node cap, default 20),
+ * `ai.legion_max_total_nodes` (cross-deployment total cap, default 60) and
+ * `ai.legion_deploy_frequency_per_hour` (deployments per creator per hour,
+ * default 10, 0 = unlimited). Saving writes the config keys directly so the
+ * LegionControl tool picks them up at the next call (hot, no restart needed).
+ */
+function BasicsLegionThresholdsSection() {
+  const { t } = useTranslation('settings/basics');
+  const [maxNodes, setMaxNodes] = useState(20);
+  const [maxTotalNodes, setMaxTotalNodes] = useState(60);
+  const [frequencyPerHour, setFrequencyPerHour] = useState(10);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        setLoading(true);
+        const [nodes, total, frequency] = await Promise.all([
+          configManager.getConfig<number>('ai.legion_max_nodes'),
+          configManager.getConfig<number>('ai.legion_max_total_nodes'),
+          configManager.getConfig<number>('ai.legion_deploy_frequency_per_hour'),
+        ]);
+        if (!cancelled) {
+          setMaxNodes(nodes ?? 20);
+          setMaxTotalNodes(total ?? 60);
+          setFrequencyPerHour(frequency ?? 10);
+        }
+      } catch (error) {
+        log.error('Failed to load legion threshold config', error);
+        if (!cancelled) {
+          setMessage({ type: 'error', text: t('legion.messages.loadFailed') });
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
+
+  const persist = useCallback(async (path: string, value: number) => {
+    try {
+      await configManager.setConfig(path, value);
+      configManager.clearCache();
+      return true;
+    } catch (error) {
+      log.error(`Failed to save legion threshold ${path}`, { value, error });
+      return false;
+    }
+  }, []);
+
+  const handleMaxNodesChange = useCallback(async (value: number) => {
+    setSaving(true);
+    const previous = maxNodes;
+    setMaxNodes(value);
+    try {
+      if (value < 1) {
+        // A per-topology cap below 1 is meaningless; the backend clamps to the
+        // default anyway. Surface it and restore the previous value.
+        setMessage({ type: 'error', text: t('legion.messages.invalidNodeCap') });
+        setMaxNodes(previous);
+        return;
+      }
+      const ok = await persist('ai.legion_max_nodes', value);
+      setMessage({ type: ok ? 'success' : 'error', text: ok ? t('legion.messages.saved') : t('legion.messages.saveFailed') });
+    } finally {
+      setSaving(false);
+    }
+  }, [maxNodes, persist, t]);
+
+  const handleMaxTotalNodesChange = useCallback(async (value: number) => {
+    setSaving(true);
+    const previous = maxTotalNodes;
+    setMaxTotalNodes(value);
+    try {
+      if (value < 1) {
+        setMessage({ type: 'error', text: t('legion.messages.invalidTotalCap') });
+        setMaxTotalNodes(previous);
+        return;
+      }
+      const ok = await persist('ai.legion_max_total_nodes', value);
+      setMessage({ type: ok ? 'success' : 'error', text: ok ? t('legion.messages.saved') : t('legion.messages.saveFailed') });
+    } finally {
+      setSaving(false);
+    }
+  }, [maxTotalNodes, persist, t]);
+
+  const handleFrequencyChange = useCallback(async (value: number) => {
+    setSaving(true);
+    const previous = frequencyPerHour;
+    setFrequencyPerHour(value);
+    try {
+      const ok = await persist('ai.legion_deploy_frequency_per_hour', value);
+      setMessage({ type: ok ? 'success' : 'error', text: ok ? t('legion.messages.saved') : t('legion.messages.saveFailed') });
+      if (!ok) setFrequencyPerHour(previous);
+    } finally {
+      setSaving(false);
+    }
+  }, [frequencyPerHour, persist, t]);
+
+  if (loading) {
+    return <ConfigPageLoading text={t('legion.messages.loading')} />;
+  }
+
+  return (
+    <div className="bitfun-legion-thresholds-config" data-bf-component="basics-config" data-bf-part="legion">
+      <div className="bitfun-legion-thresholds-config__content">
+        <ConfigPageMessage message={message} />
+        <ConfigPageSection
+          title={t('legion.sections.title')}
+          description={t('legion.sections.hint')}
+        >
+          <ConfigPageRow
+            label={t('legion.maxNodes.label')}
+            description={t('legion.maxNodes.description')}
+            align="center"
+          >
+            <NumberInput
+              value={maxNodes}
+              onChange={(value) => void handleMaxNodesChange(value)}
+              min={1}
+              max={1000}
+              step={1}
+              size="small"
+              variant="compact"
+              disabled={saving}
+            />
+          </ConfigPageRow>
+          <ConfigPageRow
+            label={t('legion.maxTotalNodes.label')}
+            description={t('legion.maxTotalNodes.description')}
+            align="center"
+          >
+            <NumberInput
+              value={maxTotalNodes}
+              onChange={(value) => void handleMaxTotalNodesChange(value)}
+              min={1}
+              max={10000}
+              step={1}
+              size="small"
+              variant="compact"
+              disabled={saving}
+            />
+          </ConfigPageRow>
+          <ConfigPageRow
+            label={t('legion.frequency.label')}
+            description={t('legion.frequency.description')}
+            align="center"
+          >
+            <NumberInput
+              value={frequencyPerHour}
+              onChange={(value) => void handleFrequencyChange(value)}
+              min={0}
+              max={10000}
+              step={1}
+              size="small"
+              variant="compact"
+              disabled={saving}
+            />
+          </ConfigPageRow>
+        </ConfigPageSection>
+      </div>
+    </div>
+  );
+}
+
 const BasicsConfig: React.FC = () => {
   const { t } = useTranslation('settings/basics');
 
@@ -998,6 +1174,7 @@ const BasicsConfig: React.FC = () => {
         <BasicsLoggingSection />
         <BasicsTerminalSection />
         <BasicsNotificationsSection />
+        <BasicsLegionThresholdsSection />
       </ConfigPageContent>
     </ConfigPageLayout>
   );

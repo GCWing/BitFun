@@ -6,9 +6,10 @@
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, ChevronUp, GitPullRequest, Keyboard, MoreHorizontal, Search, Square, SquareTerminal, Terminal, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, GitPullRequest, Keyboard, MoreHorizontal, Maximize2, Minimize2, Move, Search, Square, SquareTerminal, Terminal, X } from 'lucide-react';
 import { Tooltip, IconButton, Input } from '@/component-library';
 import { useTranslation } from 'react-i18next';
+import { useApp, useChatFullWidth } from '@/app/hooks/useApp';
 import { SessionFilesBadge } from './SessionFilesBadge';
 import { SessionTreePopover, type SessionTreeSelection } from './SessionTreePopover';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -102,6 +103,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   onStopAllBackgroundCommands,
 }) => {
   const { t } = useTranslation('flow-chat');
+  const { toggleChatFullWidth } = useApp();
+  const isChatFullWidth = useChatFullWidth();
   const { currentWorkspace } = useWorkspaceContext();
   const [isBackgroundCommandPanelOpen, setIsBackgroundCommandPanelOpen] = useState(false);
   const [isBackgroundCommandSectionMenuOpen, setIsBackgroundCommandSectionMenuOpen] = useState(false);
@@ -279,7 +282,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     observer.observe(rightActions);
 
     return () => observer.disconnect();
-  }, [isSearchOpen, totalTurns, visible]);
+  }, [isSearchOpen, totalTurns, visible, sessionId]);
 
   const handleOpenSearch = useCallback(() => {
     setIsSearchOpen(true);
@@ -464,7 +467,12 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     count: backgroundCommandCount,
   });
 
-  if (!visible || totalTurns === 0) {
+  // Render whenever there is an active session, even before the first turn is
+  // produced: the header hosts the full-width toggle and the L0 drag handle,
+  // which must be reachable from the very first message (or an empty session).
+  // Previously `totalTurns === 0` returned null, hiding those actions entirely
+  // in empty/new sessions — the reported "changes not effective" symptom.
+  if (!visible && !sessionId) {
     return null;
   }
 
@@ -501,6 +509,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
           aria-label={t('flowChatHeader.jumpToCurrentTurn', {
             turn: currentTurn
           })}
+          style={totalTurns > 0 ? undefined : { display: 'none' }}
         >
           <span
             className="flowchat-header__turn-badge"
@@ -763,6 +772,42 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             <Search size={14} />
           </IconButton>
         )}
+
+        {/* Drag L0 conversation into the auxiliary canvas — same row as the
+            header action group, non-floating (original icon style) */}
+        {sessionId ? (
+          <IconButton
+            className="flowchat-header__drag-session-btn"
+            variant="ghost"
+            size="xs"
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData(
+                'application/x-bitfun-chat-session',
+                JSON.stringify({ sessionId, title: currentUserMessage || 'Chat' }),
+              );
+              e.dataTransfer.effectAllowed = 'copy';
+            }}
+            tooltip={t('flowChatHeader.dragToAuxiliary')}
+            aria-label={t('flowChatHeader.dragToAuxiliary')}
+            data-testid="flowchat-header-drag-session"
+          >
+            <Move size={14} />
+          </IconButton>
+        ) : null}
+
+        {/* Full-width tiled chat toggle — same row as the header action group */}
+        <IconButton
+          className="flowchat-header__fullwidth-btn"
+          variant="ghost"
+          size="xs"
+          onClick={() => toggleChatFullWidth()}
+          tooltip={t(isChatFullWidth ? 'layout.fullWidth.exit' : 'layout.fullWidth.enter')}
+          aria-label={t(isChatFullWidth ? 'layout.fullWidth.exit' : 'layout.fullWidth.enter')}
+          data-testid="session-fullwidth-toggle"
+        >
+          {isChatFullWidth ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+        </IconButton>
       </div>
     </div>
   );

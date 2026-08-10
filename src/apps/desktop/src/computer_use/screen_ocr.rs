@@ -555,7 +555,11 @@ mod windows_backend {
         // This must run on a thread initialized with COINIT_APARTMENTTHREADED
         // Windows.Media.Ocr requires STA thread
         let mut co_init = None;
+        // SAFETY: CoIncrementMTAUsage is a thread-affine COM call with no
+        // unsafe arguments; its result is checked below.
         if unsafe { CoIncrementMTAUsage() }.is_err() {
+            // SAFETY: CoInitializeEx is a thread-affine COM init call; the
+            // HRESULT is checked and matched by CoUninitialize on this thread.
             let hr =
                 unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) };
             if hr.is_err() {
@@ -632,6 +636,7 @@ mod windows_backend {
 
         // Uninitialize COM if we initialized it
         if co_init.is_some() {
+            // SAFETY: Matches the CoInitializeEx call on this same thread above.
             unsafe { CoUninitialize() };
         }
 

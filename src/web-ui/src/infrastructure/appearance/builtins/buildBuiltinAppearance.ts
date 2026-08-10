@@ -291,6 +291,11 @@ function createCssTokens(palette: AppearancePalette): Record<string, string> {
     '--bf-appearance-token-flowchat-control-pad-x': '0.75rem',
     '--bf-appearance-token-flowchat-content-inline-pad': '3rem',
     '--bf-appearance-token-flowchat-content-inline-pad-mobile': '1.5rem',
+    // Reading column max-width (single source of truth, converged to 900px
+    // hardcode on 2026-08-08): referenced uniformly by VirtualItemRenderer
+    // (message column) / ExploreRegion (explore collapse group) / ChatInput
+    // (input box + file edit bar) / BtwSessionPanel to avoid 900px drift.
+    '--bf-appearance-token-flowchat-content-max-width': '900px',
     '--bf-appearance-token-flowchat-card-gap': '0.42rem',
     '--bf-appearance-token-flowchat-card-radius': effects.radius.base,
     '--bf-appearance-token-flowchat-card-pad-y': '0.625rem',

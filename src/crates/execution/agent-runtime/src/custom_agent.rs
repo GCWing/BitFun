@@ -108,6 +108,7 @@ impl CustomAgentDefinitionError {
 }
 
 impl CustomAgentDefinition {
+    #[allow(clippy::too_many_arguments)] // field-level constructor; matches from_front_matter_fields
     pub fn new(
         id: String,
         name: String,

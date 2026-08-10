@@ -152,6 +152,63 @@ impl Default for GetFileDiffTool {
 }
 
 impl GetFileDiffTool {
+    /// Resolve the configured prepared-diff page budget
+    /// (`ai.thresholds.tool_timeout.diff_page_chars`).
+    async fn configured_diff_page_chars() -> usize {
+        let Ok(config_service) = crate::service::config::get_global_config_service().await else {
+            return PREPARED_REVIEW_DIFF_PAGE_CHARS;
+        };
+        let Ok(thresholds) = config_service
+            .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+            .await
+        else {
+            return PREPARED_REVIEW_DIFF_PAGE_CHARS;
+        };
+        let chars = thresholds.tool_timeout.diff_page_chars;
+        if chars == 0 {
+            return PREPARED_REVIEW_DIFF_PAGE_CHARS;
+        }
+        chars
+    }
+
+    /// Resolve the configured prepared-diff total budget
+    /// (`ai.thresholds.tool_timeout.diff_total_chars`).
+    async fn configured_diff_total_chars() -> usize {
+        let Ok(config_service) = crate::service::config::get_global_config_service().await else {
+            return PREPARED_REVIEW_DIFF_TOTAL_CHARS;
+        };
+        let Ok(thresholds) = config_service
+            .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+            .await
+        else {
+            return PREPARED_REVIEW_DIFF_TOTAL_CHARS;
+        };
+        let chars = thresholds.tool_timeout.diff_total_chars;
+        if chars == 0 {
+            return PREPARED_REVIEW_DIFF_TOTAL_CHARS;
+        }
+        chars
+    }
+
+    /// Resolve the configured new-file content limit
+    /// (`ai.thresholds.tool_timeout.diff_new_file_bytes`).
+    async fn configured_diff_new_file_bytes() -> u64 {
+        let Ok(config_service) = crate::service::config::get_global_config_service().await else {
+            return REVIEW_NEW_FILE_CONTENT_LIMIT;
+        };
+        let Ok(thresholds) = config_service
+            .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+            .await
+        else {
+            return REVIEW_NEW_FILE_CONTENT_LIMIT;
+        };
+        let bytes = thresholds.tool_timeout.diff_new_file_bytes;
+        if bytes == 0 {
+            return REVIEW_NEW_FILE_CONTENT_LIMIT;
+        }
+        bytes
+    }
+
     fn review_budget_identity(context: &ToolUseContext) -> Option<(&str, &str)> {
         let parent_turn_id = context
             .custom_data
@@ -349,7 +406,7 @@ impl GetFileDiffTool {
                 deletions += 1;
             }
         }
-        Self::paginate_prepared_diff(
+        Self::paginate_prepared_diff_with_budget(
             json!({
                 "file_path": logical_path,
                 "diff_type": "review_target",
@@ -369,6 +426,8 @@ impl GetFileDiffTool {
             diff_offset,
             cursor_binding,
             logical_path,
+            Self::configured_diff_page_chars().await,
+            Self::configured_diff_total_chars().await,
         )
     }
 
@@ -487,7 +546,7 @@ impl GetFileDiffTool {
                 deletions += 1;
             }
         }
-        Ok(Some(Self::paginate_prepared_diff(
+        Ok(Some(Self::paginate_prepared_diff_with_budget(
             json!({
                 "file_path": logical_path,
                 "diff_type": "review_target",
@@ -507,6 +566,8 @@ impl GetFileDiffTool {
             diff_offset,
             evidence.fingerprint(),
             logical_path,
+            Self::configured_diff_page_chars().await,
+            Self::configured_diff_total_chars().await,
         )?))
     }
 
@@ -547,10 +608,31 @@ impl GetFileDiffTool {
     }
 
     fn paginate_prepared_diff(
+        data: Value,
+        diff_offset: usize,
+        cursor_binding: &str,
+        logical_path: &str,
+    ) -> BitFunResult<Value> {
+        Self::paginate_prepared_diff_with_budget(
+            data,
+            diff_offset,
+            cursor_binding,
+            logical_path,
+            PREPARED_REVIEW_DIFF_PAGE_CHARS,
+            PREPARED_REVIEW_DIFF_TOTAL_CHARS,
+        )
+    }
+
+    /// Same as [`Self::paginate_prepared_diff`] but with explicit page/total
+    /// budgets (阈值参数配置化：`ai.thresholds.tool_timeout.diff_page_chars` /
+    /// `diff_total_chars`).
+    fn paginate_prepared_diff_with_budget(
         mut data: Value,
         diff_offset: usize,
         cursor_binding: &str,
         logical_path: &str,
+        page_chars: usize,
+        total_budget_chars: usize,
     ) -> BitFunResult<Value> {
         let diff = data
             .get("diff_content")
@@ -558,7 +640,9 @@ impl GetFileDiffTool {
             .unwrap_or_default();
         let chars = diff.chars().collect::<Vec<_>>();
         let total_chars = chars.len();
-        let consumable_chars = total_chars.min(PREPARED_REVIEW_DIFF_TOTAL_CHARS);
+        let page_chars = page_chars.max(1);
+        let total_chars_budget = total_budget_chars.max(page_chars);
+        let consumable_chars = total_chars.min(total_chars_budget);
         if diff_offset > consumable_chars {
             return Err(BitFunError::tool(format!(
                 "diff_offset {} exceeds prepared Review diff budget {}",
@@ -567,7 +651,7 @@ impl GetFileDiffTool {
         }
 
         let end = diff_offset
-            .saturating_add(PREPARED_REVIEW_DIFF_PAGE_CHARS)
+            .saturating_add(page_chars)
             .min(consumable_chars);
         let page = chars[diff_offset..end].iter().collect::<String>();
         let has_more = end < consumable_chars;
@@ -1110,10 +1194,11 @@ impl GetFileDiffTool {
                     )));
                     }
                     let size = metadata.len();
-                    if size > REVIEW_NEW_FILE_CONTENT_LIMIT {
+                    let new_file_limit = Self::configured_diff_new_file_bytes().await;
+                    if size > new_file_limit {
                         return Some(Err(BitFunError::tool(format!(
                             "Prepared Review new file exceeds the {} byte safety limit",
-                            REVIEW_NEW_FILE_CONTENT_LIMIT
+                            new_file_limit
                         ))));
                     }
                     let content = match fs::read_to_string(file_path) {
@@ -1763,7 +1848,7 @@ Usage:
                 Ok(data) => {
                     debug!("GetFileDiff tool using git diff");
                     let data = if prepared_review {
-                        Self::paginate_prepared_diff(
+                        Self::paginate_prepared_diff_with_budget(
                             data,
                             diff_offset,
                             prepared_evidence
@@ -1771,6 +1856,8 @@ Usage:
                                 .map(ReviewTargetEvidence::fingerprint)
                                 .unwrap_or_default(),
                             relative_path.as_deref().unwrap_or(file_path),
+                            Self::configured_diff_page_chars().await,
+                            Self::configured_diff_total_chars().await,
                         )?
                     } else {
                         data

@@ -13,6 +13,7 @@ export interface SubagentProjectionState {
   round: ModelRound | null;
   items: FlowItem[];
   isRunning: boolean;
+  executionStatus: SubagentExecutionStatus | null;
 }
 
 export interface SubagentProjectionOptions {
@@ -179,5 +180,6 @@ export function getSubagentProjectionState(
     round,
     items,
     isRunning: isActiveTurn(turn),
+    executionStatus: deriveSubagentExecutionStatus(turn),
   };
 }

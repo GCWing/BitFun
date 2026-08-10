@@ -1,4 +1,5 @@
 [package]
+license.workspace = true
 name = "bitfun-runtime-services"
 version.workspace = true
 authors.workspace = true

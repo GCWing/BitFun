@@ -808,9 +808,20 @@ impl PersistenceManager {
             .map_err(Self::json_store_error)
     }
 
-    async fn write_text_atomic(&self, path: &Path, text: &str) -> BitFunResult<()> {
+    pub(crate) async fn write_text_atomic(&self, path: &Path, text: &str) -> BitFunResult<()> {
         JsonFileStore
             .write_text_atomic(path, text)
+            .await
+            .map_err(Self::json_store_error)
+    }
+
+    /// Atomically replace a UTF-8 text file without ever falling back to a
+    /// direct overwrite on Windows permission transients (d4-P2-8). Used by
+    /// durability-critical registries (deletion tombstones) where a torn
+    /// write must be impossible.
+    pub(crate) async fn write_text_atomic_strict(&self, path: &Path, text: &str) -> BitFunResult<()> {
+        JsonFileStore
+            .write_text_atomic_strict(path, text)
             .await
             .map_err(Self::json_store_error)
     }
@@ -1035,6 +1046,7 @@ impl PersistenceManager {
             workspace_hostname: workspace_hostname.as_deref(),
             new_session_memory_mode: new_session_memory_mode_from_global_config().await,
             existing,
+            is_daemon: session.config.is_daemon,
         })
     }
 
@@ -1171,12 +1183,31 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
     ) -> BitFunResult<Vec<SessionMetadata>> {
+        self.list_session_metadata_with_options(workspace_path, false)
+            .await
+    }
+
+    /// Lists session metadata. With `include_internal`, hidden Subagent/
+    /// Ephemeral sessions are included for full conversation management.
+    pub async fn list_session_metadata_with_options(
+        &self,
+        workspace_path: &Path,
+        include_internal: bool,
+    ) -> BitFunResult<Vec<SessionMetadata>> {
         if !workspace_path.exists() {
             return Ok(Vec::new());
         }
 
         if self.existing_project_sessions_dir(workspace_path).is_none() {
             return Ok(Vec::new());
+        }
+
+        if include_internal {
+            return self
+                .session_metadata_store(workspace_path)
+                .list_metadata_including_internal()
+                .await
+                .map_err(Self::session_metadata_store_error);
         }
 
         self.session_metadata_store(workspace_path)
@@ -1191,12 +1222,32 @@ impl PersistenceManager {
         cursor: Option<&str>,
         limit: usize,
     ) -> BitFunResult<SessionMetadataPage> {
+        self.list_session_metadata_page_with_options(workspace_path, cursor, limit, false)
+            .await
+    }
+
+    /// Paginated variant of [`list_session_metadata_with_options`].
+    pub async fn list_session_metadata_page_with_options(
+        &self,
+        workspace_path: &Path,
+        cursor: Option<&str>,
+        limit: usize,
+        include_internal: bool,
+    ) -> BitFunResult<SessionMetadataPage> {
         if !workspace_path.exists() {
             return Ok(empty_session_metadata_page());
         }
 
         if self.existing_project_sessions_dir(workspace_path).is_none() {
             return Ok(empty_session_metadata_page());
+        }
+
+        if include_internal {
+            return self
+                .session_metadata_store(workspace_path)
+                .list_metadata_page_with_options(cursor, limit, true)
+                .await
+                .map_err(Self::session_metadata_store_error);
         }
 
         self.session_metadata_store(workspace_path)
@@ -1515,7 +1566,7 @@ impl PersistenceManager {
             .map_err(Self::session_metadata_store_error)
     }
 
-    async fn load_stored_session_state(
+    pub(crate) async fn load_stored_session_state(
         &self,
         workspace_path: &Path,
         session_id: &str,
@@ -2109,9 +2160,14 @@ impl PersistenceManager {
         let existing_metadata = self
             .load_session_metadata(workspace_path, &session.session_id)
             .await?;
-        let metadata = self
+        let mut metadata = self
             .build_session_metadata(workspace_path, session, existing_metadata.as_ref())
             .await;
+        metadata.runtime_state =
+            Some(serde_json::to_value(sanitize_persisted_session_state(
+                &session.state,
+            ))
+            .unwrap_or(serde_json::Value::Null));
         self.save_session_metadata_locked(workspace_path, &metadata)
             .await?;
 
@@ -2525,6 +2581,11 @@ impl PersistenceManager {
                 created_at: Self::unix_ms_to_system_time(metadata.created_at),
                 last_activity_at: Self::unix_ms_to_system_time(metadata.last_active_at),
                 state,
+                parent_session_id: metadata
+                    .relationship
+                    .as_ref()
+                    .and_then(|r| r.parent_session_id.clone()),
+                is_daemon: metadata.is_daemon,
             });
         }
 

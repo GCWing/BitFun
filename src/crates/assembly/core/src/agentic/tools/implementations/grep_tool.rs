@@ -408,6 +408,30 @@ impl GrepTool {
             }
         }
     }
+
+    /// 判定一次 workspace-search 空结果是否因索引不可信而需要降级到 rg 库引擎。
+    ///
+    /// flashgrep daemon（闭源）在 ReadyDirty 相位（映射为 TrackingChanges）+ 子路径
+    /// scope 下存在 overlay 路径匹配 bug：返回 `Ok(空)`（candidate_docs=0,
+    /// matched_lines=0）且不触发 scan fallback，导致代理反复 0 匹配误判空转。
+    /// 判定规则（RECON-防呆机制-20260807）：
+    ///   - total_matches > 0 → 有命中，索引可信（false）。
+    ///   - total_matches == 0 且：
+    ///       - phase 非 Ready（索引不完整/正在重建/受限/脏）→ 不可信（true）；
+    ///       - candidate_docs == 0（索引无候选文档）→ 不可信（true）；
+    ///       - search_path 为子路径（非仓库根 scope）→ 不可信（true）；
+    ///       - 否则（Ready + 仓库根 scope + 有候选文档）→ 真实空结果（false）。
+    fn is_index_result_untrustworthy(
+        total_matches: usize,
+        phase: crate::service::search::WorkspaceSearchRepoPhase,
+        candidate_docs: usize,
+        search_path: Option<&std::path::Path>,
+    ) -> bool {
+        total_matches == 0
+            && (phase != crate::service::search::WorkspaceSearchRepoPhase::Ready
+                || candidate_docs == 0
+                || search_path.is_some())
+    }
 }
 
 fn render_workspace_search_result_lines(
@@ -598,6 +622,9 @@ Usage:
                         .as_ref()
                         .map(|path| path.to_string_lossy().to_string())
                         .unwrap_or_else(|| request.repo_root.to_string_lossy().to_string());
+                    // 在 request 被 search_content 消费前取子路径 scope（供
+                    // is_index_result_untrustworthy 判定），避免 move 后借用。
+                    let scoped_search_path = request.search_path.clone();
                     let repo_root = request.repo_root.to_string_lossy().to_string();
                     let preferred_connection_id = context
                         .workspace
@@ -644,6 +671,34 @@ Usage:
                         workspace_search_elapsed_ms,
                     );
 
+                    // d5-P2-1：远程索引结果同样需要防呆判定。flashgrep/daemon
+                    // overlay 在远程场景（非 Ready 相位 / 索引无候选文档 / 子路径
+                    // scope）同样可能返回假空。与本地分支对齐：total_matches == 0
+                    // 且判定为索引不可信时，放弃索引结果，降级到远程 shell
+                    // rg/grep 重新搜（call_remote）。
+                    // 注：远程无法做 service 层 rg 交叉校验（需远端文件系统
+                    // 访问，超授权范围，文档 0926debdd 已声明），因此降级目标
+                    // 为 shell rg/grep 路径（call_remote）。
+                    let index_untrustworthy = Self::is_index_result_untrustworthy(
+                        total_matches,
+                        search_result.repo_status.phase,
+                        search_result.candidate_docs,
+                        scoped_search_path.as_deref(),
+                    );
+                    if index_untrustworthy {
+                        log::warn!(
+                            "Grep tool remote workspace-search returned empty while index may be untrustworthy; falling back to remote shell grep: pattern={}, path={}, repo_phase={:?}, candidate_docs={}, total_matches={}",
+                            pattern,
+                            path,
+                            search_result.repo_status.phase,
+                            search_result.candidate_docs,
+                            total_matches,
+                        );
+                        return Err(BitFunError::tool(
+                            "remote index result untrustworthy; fall back to shell grep".to_string(),
+                        ));
+                    }
+
                     Ok::<Vec<ToolResult>, BitFunError>(vec![ToolResult::Result {
                         data: json!({
                             "pattern": pattern,
@@ -668,7 +723,7 @@ Usage:
                     Ok(results) => return Ok(results),
                     Err(error) => {
                         log::warn!(
-                            "Grep tool remote workspace-search failed; falling back to shell grep: {}",
+                            "Grep tool remote workspace-search failed or fell back; switching to shell grep: {}",
                             error
                         );
                     }
@@ -682,60 +737,105 @@ Usage:
                 let (request, output_mode, show_line_numbers, offset, head_limit) =
                     self.build_workspace_search_request(input, context)?;
                 let pattern = request.pattern.clone();
+                let scoped_search_path = request.search_path.clone();
                 let path = request
                     .search_path
                     .as_ref()
                     .map(|path| path.to_string_lossy().to_string())
                     .unwrap_or_else(|| request.repo_root.to_string_lossy().to_string());
                 let search_started_at = Instant::now();
-                let search_result = search_service.search_content(request).await?;
-                let display_base = Self::display_base(context);
-                let (result_text, file_count, total_matches) = self.format_workspace_search_output(
-                    &output_mode,
-                    show_line_numbers,
-                    offset,
-                    head_limit,
-                    &search_result,
-                    display_base.as_deref(),
-                );
-                let workspace_search_elapsed_ms = search_started_at.elapsed().as_millis();
+                match search_service.search_content(request).await {
+                    Ok(search_result) => {
+                        let display_base = Self::display_base(context);
+                        let (result_text, file_count, total_matches) =
+                            self.format_workspace_search_output(
+                                &output_mode,
+                                show_line_numbers,
+                                offset,
+                                head_limit,
+                                &search_result,
+                                display_base.as_deref(),
+                            );
+                        let workspace_search_elapsed_ms = search_started_at.elapsed().as_millis();
 
-                log::info!(
-                    "Grep tool workspace-search result: pattern={}, path={}, output_mode={}, file_count={}, total_matches={}, backend={:?}, repo_phase={:?}, rebuild_recommended={}, dirty_modified={}, dirty_deleted={}, dirty_new={}, candidate_docs={}, matched_lines={}, matched_occurrences={}, workspace_search_ms={}",
-                    pattern,
-                    path,
-                    output_mode,
-                    file_count,
-                    total_matches,
-                    search_result.backend,
-                    search_result.repo_status.phase,
-                    search_result.repo_status.rebuild_recommended,
-                    search_result.repo_status.dirty_files.modified,
-                    search_result.repo_status.dirty_files.deleted,
-                    search_result.repo_status.dirty_files.new,
-                    search_result.candidate_docs,
-                    search_result.matched_lines,
-                    search_result.matched_occurrences,
-                    workspace_search_elapsed_ms,
-                );
+                        log::info!(
+                            "Grep tool workspace-search result: pattern={}, path={}, output_mode={}, file_count={}, total_matches={}, backend={:?}, repo_phase={:?}, rebuild_recommended={}, dirty_modified={}, dirty_deleted={}, dirty_new={}, candidate_docs={}, matched_lines={}, matched_occurrences={}, workspace_search_ms={}",
+                            pattern,
+                            path,
+                            output_mode,
+                            file_count,
+                            total_matches,
+                            search_result.backend,
+                            search_result.repo_status.phase,
+                            search_result.repo_status.rebuild_recommended,
+                            search_result.repo_status.dirty_files.modified,
+                            search_result.repo_status.dirty_files.deleted,
+                            search_result.repo_status.dirty_files.new,
+                            search_result.candidate_docs,
+                            search_result.matched_lines,
+                            search_result.matched_occurrences,
+                            workspace_search_elapsed_ms,
+                        );
 
-                return Ok(vec![ToolResult::Result {
-                    data: json!({
-                        "pattern": pattern,
-                        "path": path,
-                        "output_mode": output_mode,
-                        "file_count": file_count,
-                        "total_matches": total_matches,
-                        "backend": search_result.backend,
-                        "repo_phase": search_result.repo_status.phase,
-                        "rebuild_recommended": search_result.repo_status.rebuild_recommended,
-                        "applied_limit": head_limit,
-                        "applied_offset": if offset > 0 { Some(offset) } else { None::<usize> },
-                        "result": result_text,
-                    }),
-                    result_for_assistant: Some(result_text),
-                    image_attachments: None,
-                }]);
+                        // 防呆：flashgrep 索引在脏仓库（ReadyDirty→TrackingChanges）或局部
+                        // 子路径 scope 下可能返回"索引无命中"（空结果）而真实文件
+                        // 存在。此时若直接返回 0 匹配会让代理误判符号不存在并反复
+                        // 空转（RECON-防呆机制-20260807）。判定条件：
+                        //   - total_matches == 0 且
+                        //   - 仓库处于非 Ready 状态（索引不完整/正在重建/受限）或
+                        //     candidate_docs == 0（索引根本没有候选文档）或
+                        //     search_path 为子路径（daemon 在 ReadyDirty 相位 +
+                        //     子路径 scope 下索引 overlay 路径匹配有 bug，会返回
+                        //     Ok(空) 且不触发 scan fallback，闭源无法在 daemon 端修）
+                        // 满足即视为"索引不可信"，降级到 rg 库引擎重新搜。
+                        // Ready 相位 + 仓库根 scope + 有候选文档的空结果视为真实
+                        // 0 匹配，避免无谓降级。
+                        let index_untrustworthy = Self::is_index_result_untrustworthy(
+                            total_matches,
+                            search_result.repo_status.phase,
+                            search_result.candidate_docs,
+                            scoped_search_path.as_deref(),
+                        );
+                        if index_untrustworthy {
+                            log::warn!(
+                                "Grep tool workspace-search returned empty while index may be untrustworthy; falling back to rg engine: pattern={}, path={}, backend={:?}, repo_phase={:?}, candidate_docs={}, total_matches={}",
+                                pattern,
+                                path,
+                                search_result.backend,
+                                search_result.repo_status.phase,
+                                search_result.candidate_docs,
+                                total_matches,
+                            );
+                            // 落入下方 build_grep_options + grep_search 的 rg 库引擎路径。
+                        } else {
+                            return Ok(vec![ToolResult::Result {
+                                data: json!({
+                                    "pattern": pattern,
+                                    "path": path,
+                                    "output_mode": output_mode,
+                                    "file_count": file_count,
+                                    "total_matches": total_matches,
+                                    "backend": search_result.backend,
+                                    "repo_phase": search_result.repo_status.phase,
+                                    "rebuild_recommended": search_result.repo_status.rebuild_recommended,
+                                    "applied_limit": head_limit,
+                                    "applied_offset": if offset > 0 { Some(offset) } else { None::<usize> },
+                                    "result": result_text,
+                                }),
+                                result_for_assistant: Some(result_text),
+                                image_attachments: None,
+                            }]);
+                        }
+                    }
+                    Err(error) => {
+                        log::warn!(
+                            "Grep tool workspace-search failed; falling back to shell grep: pattern={}, path={}, error={}",
+                            pattern,
+                            path,
+                            error
+                        );
+                    }
+                }
             }
         }
 
@@ -881,6 +981,63 @@ mod tests {
             relativized,
             "src/main.rs:12:fn main()\nsrc/lib.rs:3:pub fn lib()"
         );
+    }
+
+    #[test]
+    fn index_result_untrustworthy_subpath_scope_in_dirty_repo() {
+        // daemon ReadyDirty 相位映射为 TrackingChanges：脏仓库 + 子路径 scope +
+        // 0 命中（candidate_docs=0）→ 索引不可信，必须降级 rg 重搜。
+        assert!(GrepTool::is_index_result_untrustworthy(
+            0,
+            WorkspaceSearchRepoPhase::TrackingChanges,
+            0,
+            Some(std::path::Path::new("src")),
+        ));
+        // 脏仓库 + 子路径 scope 但 candidate_docs>0 也一律降级（防止 daemon
+        // 子路径 overlay 匹配 bug 在候选存在时漏报）。
+        assert!(GrepTool::is_index_result_untrustworthy(
+            0,
+            WorkspaceSearchRepoPhase::TrackingChanges,
+            5,
+            Some(std::path::Path::new("src")),
+        ));
+    }
+
+    #[test]
+    fn index_result_untrustworthy_ready_phase_no_false_degradation() {
+        // Ready 相位 + 仓库根 scope（search_path=None）+ candidate_docs>0 →
+        // 0 匹配是真实空结果，不降级。
+        assert!(!GrepTool::is_index_result_untrustworthy(
+            0,
+            WorkspaceSearchRepoPhase::Ready,
+            5,
+            None,
+        ));
+        // Ready 相位 + 有命中 → 索引可信。
+        assert!(!GrepTool::is_index_result_untrustworthy(
+            3,
+            WorkspaceSearchRepoPhase::Ready,
+            5,
+            None,
+        ));
+    }
+
+    #[test]
+    fn index_result_untrustworthy_legacy_failure_modes_still_degrade() {
+        // 既有防呆逻辑回归：非 Ready 相位（如 Building）无候选 → 降级。
+        assert!(GrepTool::is_index_result_untrustworthy(
+            0,
+            WorkspaceSearchRepoPhase::Building,
+            0,
+            None,
+        ));
+        // Ready 但 candidate_docs==0 → 索引无候选文档，降级。
+        assert!(GrepTool::is_index_result_untrustworthy(
+            0,
+            WorkspaceSearchRepoPhase::Ready,
+            0,
+            None,
+        ));
     }
 
     #[test]

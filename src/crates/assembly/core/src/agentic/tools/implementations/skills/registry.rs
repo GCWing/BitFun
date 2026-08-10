@@ -918,10 +918,12 @@ impl SkillRegistry {
             .iter()
             .position(|root| root.source_id == "opencode")
             .expect("OpenCode project Skill root is registered");
-        let user_anchor = has_workspace
-            .then_some(PROJECT_SKILL_ROOTS.len())
-            .unwrap_or_default()
-            .saturating_add(
+        let user_anchor = (if has_workspace {
+            PROJECT_SKILL_ROOTS.len()
+        } else {
+            0
+        })
+        .saturating_add(
                 USER_HOME_SKILL_ROOTS
                     .iter()
                     .position(|root| root.source_id == "opencode")
@@ -930,12 +932,16 @@ impl SkillRegistry {
 
         for candidate in &mut standard {
             let original_priority = candidate.priority;
-            let project_shift = (has_project && original_priority >= project_anchor)
-                .then_some(OPENCODE_CONFIGURED_PRIORITY_BAND)
-                .unwrap_or_default();
-            let user_shift = (has_user && original_priority >= user_anchor)
-                .then_some(OPENCODE_CONFIGURED_PRIORITY_BAND)
-                .unwrap_or_default();
+            let project_shift = if has_project && original_priority >= project_anchor {
+                OPENCODE_CONFIGURED_PRIORITY_BAND
+            } else {
+                0
+            };
+            let user_shift = if has_user && original_priority >= user_anchor {
+                OPENCODE_CONFIGURED_PRIORITY_BAND
+            } else {
+                0
+            };
             candidate.priority = original_priority
                 .saturating_add(project_shift)
                 .saturating_add(user_shift);
@@ -943,11 +949,11 @@ impl SkillRegistry {
         for candidate in &mut configured {
             let anchor = match candidate.info.level {
                 SkillLocation::Project => project_anchor,
-                SkillLocation::User => user_anchor.saturating_add(
-                    has_project
-                        .then_some(OPENCODE_CONFIGURED_PRIORITY_BAND)
-                        .unwrap_or_default(),
-                ),
+                SkillLocation::User => user_anchor.saturating_add(if has_project {
+                    OPENCODE_CONFIGURED_PRIORITY_BAND
+                } else {
+                    0
+                }),
             };
             candidate.priority = candidate.priority.saturating_add(anchor);
         }

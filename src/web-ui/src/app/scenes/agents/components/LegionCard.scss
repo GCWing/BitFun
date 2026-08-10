@@ -1,0 +1,96 @@
+.legion-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--bf-appearance-token-color-bg-secondary, transparent);
+  border-radius: 10px;
+  background: var(--bf-appearance-token-color-bg-secondary, transparent);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    background: var(--bf-appearance-token-element-bg-hover, transparent);
+    border-color: var(--bf-appearance-token-color-accent-500, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--bf-appearance-token-color-accent-500, transparent);
+    outline-offset: 2px;
+  }
+}
+
+.legion-card__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.legion-card__icon-area {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--bf-appearance-token-element-bg-elevated, transparent);
+  color: var(--bf-appearance-token-color-accent-500, currentColor);
+  flex-shrink: 0;
+}
+
+.legion-card__header-info {
+  min-width: 0;
+}
+
+.legion-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legion-card__name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legion-card__badges {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.legion-card__body {
+  flex: 1;
+}
+
+.legion-card__desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: 0.85;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.legion-card__footer {
+  display: flex;
+  align-items: center;
+}
+
+.legion-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.legion-card__meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}

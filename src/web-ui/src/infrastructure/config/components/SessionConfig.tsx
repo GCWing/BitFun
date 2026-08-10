@@ -132,6 +132,8 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const [showPermissionModeControl, setShowPermissionModeControl] = useState(true);
   const [permissionModeControlVisibilitySaving, setPermissionModeControlVisibilitySaving] = useState(false);
   const [isGlobalPermissionRulesDialogOpen, setIsGlobalPermissionRulesDialogOpen] = useState(false);
+  const [externalInstructionSourcesEnabled, setExternalInstructionSourcesEnabled] = useState(true);
+  const [externalInstructionSourcesSaving, setExternalInstructionSourcesSaving] = useState(false);
 
   const { computerUseEnabled, setComputerUseEnabled } = useComputerUseEnabled();
   const [computerUseAccess, setComputerUseAccess] = useState(false);
@@ -234,6 +236,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         debugConfigData,
         computerUseCfg,
         browserControlPreferredBrowser,
+        loadedExternalInstructionSources,
         loadedToolPermissionConfig,
         loadedPermissionModeControlVisibility,
         loadedCompanionPets,
@@ -246,6 +249,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         configManager.getConfig<DebugModeConfig>('ai.debug_mode_config'),
         configManager.getConfig<boolean>('ai.computer_use_enabled'),
         configManager.getConfig<string>('ai.browser_control_preferred_browser'),
+        configManager.getConfig<boolean>('ai.external_instruction_sources'),
         permissionConfigService.getConfig(),
         configManager.getOptionalConfig<boolean>(SHOW_PERMISSION_MODE_CONTROL_CONFIG_PATH),
         listAgentCompanionPets(),
@@ -261,6 +265,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setSubagentBatchExecutionPolicy(normalizeSubagentBatchExecutionPolicy(loadedSubagentBatchExecutionPolicy));
       if (debugConfigData) setDebugConfig(debugConfigData);
       setPreferredBrowser(browserControlPreferredBrowser || DEFAULT_BROWSER_CONTROL_BROWSER);
+      setExternalInstructionSourcesEnabled(loadedExternalInstructionSources ?? true);
       setToolPermissionConfig(normalizeToolPermissionConfig(loadedToolPermissionConfig));
       setShowPermissionModeControl(loadedPermissionModeControlVisibility !== false);
 
@@ -352,6 +357,22 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       notificationService.error(t('messages.saveFailed'));
     } finally {
       setPermissionModeControlVisibilitySaving(false);
+    }
+  };
+
+  const handleExternalInstructionSourcesToggle = async (enabled: boolean) => {
+    const previous = externalInstructionSourcesEnabled;
+    setExternalInstructionSourcesEnabled(enabled);
+    setExternalInstructionSourcesSaving(true);
+    try {
+      await configManager.setConfig('ai.external_instruction_sources', enabled);
+      notificationService.success(t('messages.saveSuccess'), { duration: 2000 });
+    } catch (error) {
+      log.error('Failed to save external instruction sources switch', error);
+      setExternalInstructionSourcesEnabled(previous);
+      notificationService.error(t('messages.saveFailed'));
+    } finally {
+      setExternalInstructionSourcesSaving(false);
     }
   };
 
@@ -893,6 +914,27 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
 
         {variant === 'personalization' ? (
           <>
+
+        {/* ── External instruction sources ─────────────────────── */}
+        <ConfigPageSection
+          title={t('features.externalInstructionSources.title')}
+          description={t('features.externalInstructionSources.subtitle')}
+        >
+          <ConfigPageRow
+            label={t('features.externalInstructionSources.enable')}
+            description={t('features.externalInstructionSources.description')}
+            align="center"
+          >
+            <div className="bitfun-func-agent-config__row-control" data-bf-component="session-config" data-bf-part="control">
+              <Switch
+                checked={externalInstructionSourcesEnabled}
+                disabled={externalInstructionSourcesSaving}
+                onChange={(e) => void handleExternalInstructionSourcesToggle(e.target.checked)}
+                size="small"
+              />
+            </div>
+          </ConfigPageRow>
+        </ConfigPageSection>
 
         {/* ── Agent companion (collapsed input) ─────────────────── */}
         <ConfigPageSection

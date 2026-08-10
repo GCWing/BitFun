@@ -342,6 +342,7 @@ pub struct LoadedSession {
 
 /// Load and decrypt the session from disk.
 /// Returns `Ok(None)` if the file doesn't exist (not an error).
+#[allow(clippy::type_complexity)] // legacy tuple projection of the loaded session
 pub fn load_session() -> Result<Option<(String, String, [u8; 32], String)>> {
     Ok(load_session_detailed()?.map(|s| (s.token, s.user_id, s.master_key, s.relay_url)))
 }

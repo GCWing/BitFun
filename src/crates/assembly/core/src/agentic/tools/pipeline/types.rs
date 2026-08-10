@@ -54,6 +54,11 @@ pub struct SubagentParentInfo {
     pub tool_call_id: String,
     pub session_id: String,
     pub dialog_turn_id: String,
+    pub depth: Option<u32>,
+    /// Delegated role key (R-14 B4). None when the parent session has no
+    /// registered RBAC role; the child then inherits the default role at
+    /// session creation.
+    pub role: Option<String>,
 }
 
 impl SubagentParentInfo {
@@ -76,6 +81,8 @@ impl From<SubagentParentInfo> for EventSubagentParentInfo {
             tool_call_id: info.tool_call_id,
             session_id: info.session_id,
             dialog_turn_id: info.dialog_turn_id,
+            depth: info.depth,
+            role: info.role,
         }
     }
 }
@@ -101,6 +108,12 @@ pub struct ToolExecutionContext {
     /// If empty, allow all registered tools
     /// If not empty, only allow tools in the list to be executed
     pub allowed_tools: Vec<String>,
+    /// User-enabled tool set (mode default + profile resolution, BEFORE
+    /// dynamic MCP merge). The runtime RBAC gate unions this with the role
+    /// template whitelist so a tool the user checked in the agent profile is
+    /// executable (RBAC ↔ front-end 联动); tools not checked stay blocked
+    /// even when visible.
+    pub user_enabled_tools: Vec<String>,
     pub runtime_tool_restrictions: ToolRuntimeRestrictions,
     /// Optional cooperative interrupt used to stop remaining tool calls when a
     /// round injection is waiting for this turn.

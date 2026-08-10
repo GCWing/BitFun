@@ -81,6 +81,7 @@ impl AgentRegistry {
         let Some(entry) = entry else {
             return AgentToolPolicy {
                 allowed_tools: Vec::new(),
+                user_enabled_tools: Vec::new(),
                 exposure_overrides: Default::default(),
                 permission_constraints: Default::default(),
             };
@@ -93,8 +94,18 @@ impl AgentRegistry {
                 let profile_id = resolve_mode_config_profile_id(agent_type);
                 let default_tools = entry.agent.default_tools();
                 let config = mode_configs.get(profile_id.as_ref());
+                // resolved_tools is the effective user-enabled set (default −
+                // removed + added); it powers both model visibility and the
+                // runtime RBAC gate so front-end checked tools are executable
+                // (RBAC ↔ config 联动).
+                // 注意：Mode 类 agent 无 profile 覆盖时 resolved_tools = 该模式
+                // default_tools（非空）——user_enabled_tools 并集后会把模式
+                // default 中 Commander 模板外的工具（如 Team 的 AgentWait/
+                // GetFileDiff/LegionControl、Cowork 的 LS/GetFileDiff）一并放行。
+                // 这是设计意图（这些工具本就模式 default 可见，放行 = 可见即
+                // 可用的一致性修复），回归对照表（17 号文档 §9.5）如实记录。
                 let resolved_tools = resolve_effective_tools(&default_tools, config, &valid_tools);
-                let allowed_tools = merge_dynamic_mcp_tools(resolved_tools, &registered_tool_names);
+                let allowed_tools = merge_dynamic_mcp_tools(resolved_tools.clone(), &registered_tool_names);
                 let allowed_tool_set: HashSet<&str> =
                     allowed_tools.iter().map(String::as_str).collect();
                 let mut exposure_overrides = entry.agent.tool_exposure_overrides().clone();
@@ -103,6 +114,7 @@ impl AgentRegistry {
 
                 AgentToolPolicy {
                     allowed_tools,
+                    user_enabled_tools: resolved_tools,
                     exposure_overrides,
                     permission_constraints: entry.agent.permission_constraints().clone(),
                 }
@@ -116,7 +128,11 @@ impl AgentRegistry {
                     .retain(|tool_name, _| allowed_tool_set.contains(tool_name.as_str()));
 
                 AgentToolPolicy {
+                    // SubAgent/Hidden 无前端 profile 勾选（工具集由定义决定），
+                    // user_enabled_tools 留空 = RBAC 门只按模板白名单判定，
+                    // 保持原版行为逐字节不变（零回归）。
                     allowed_tools,
+                    user_enabled_tools: Vec::new(),
                     exposure_overrides,
                     permission_constraints: entry.agent.permission_constraints().clone(),
                 }
@@ -182,6 +198,40 @@ impl AgentRegistry {
                 .then_with(|| a.id.cmp(&b.id))
         });
         result
+    }
+
+    /// Return ids of all agents visible for session creation (modes + subagents).
+    ///
+    /// Modes cover builtin modes, user custom modes and ACP bridge agents
+    /// (`acp__<client_id>`); subagents cover builtin/user subagents plus the
+    /// project subagents of the given workspace (when provided).
+    pub async fn get_agent_ids_for_session_creation(
+        &self,
+        workspace_root: Option<&Path>,
+    ) -> Vec<String> {
+        self.ensure_user_custom_agents_loaded().await;
+        let mut ids: Vec<String> = {
+            let map = self.read_agents();
+            map.values()
+                .filter(|e| matches!(e.category, AgentCategory::Mode | AgentCategory::SubAgent))
+                .map(|e| e.agent.id().to_string())
+                .collect()
+        };
+        if let Some(workspace_root) = workspace_root {
+            if let Some(entries) = self.read_project_subagents().get(workspace_root) {
+                ids.extend(
+                    entries
+                        .values()
+                        .filter(|e| {
+                            matches!(e.category, AgentCategory::Mode | AgentCategory::SubAgent)
+                        })
+                        .map(|e| e.agent.id().to_string()),
+                );
+            }
+        }
+        ids.sort();
+        ids.dedup();
+        ids
     }
 
     /// check if a subagent is readonly (used for TaskTool.is_concurrency_safe etc.)

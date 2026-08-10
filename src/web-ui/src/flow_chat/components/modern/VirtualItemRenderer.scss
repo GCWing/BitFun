@@ -7,10 +7,12 @@
   width: 100%;
   /*
    * Single reading column shared by every item type (model rounds, explore
-   * groups, user messages, notices). Matches ChatInput's 900px so headers,
-   * `>` collapse rows, and bubbles all sit on the same leading edge.
+   * groups, user messages, notices). Matches ChatInput's content width so
+   * headers, `>` collapse rows, and bubbles all sit on the same leading edge.
+   * Width cap comes from the shared appearance token (single source of truth;
+   * RECON-折叠框宽度硬编码-20260808).
    */
-  max-width: 900px;
+  max-width: var(--bf-appearance-token-flowchat-content-max-width);
   margin: 0 auto;
   box-sizing: border-box;
   min-height: 1px;

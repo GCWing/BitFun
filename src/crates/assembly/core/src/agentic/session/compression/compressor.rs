@@ -96,6 +96,7 @@ impl ContextCompressor {
         runtime_messages: &[Message],
         context_window: usize,
         recent_target_tokens: usize,
+        max_retained_user_tokens: Option<usize>,
     ) -> BitFunResult<Option<CompressionPlan>> {
         let runtime_messages = if runtime_messages.iter().any(|message| {
             message
@@ -174,7 +175,9 @@ impl ContextCompressor {
         let mut summary_request_messages = runtime_messages[..system_message_count].to_vec();
         summary_request_messages.extend(summary_messages.clone());
 
-        let retained_user_token_budget = (context_window / 10).min(Self::MAX_RETAINED_USER_TOKENS);
+        let retained_user_token_budget = (context_window / 10).min(
+            max_retained_user_tokens.unwrap_or(Self::MAX_RETAINED_USER_TOKENS).max(1),
+        );
         let (retained_user_messages, retained_user_tokens) =
             Self::retain_historical_user_messages(&summary_messages, retained_user_token_budget);
         debug!(
@@ -484,7 +487,7 @@ mod tests {
         ];
 
         let plan = compressor
-            .plan_compression("session", &messages, 128_000, recent_target)
+            .plan_compression("session", &messages, 128_000, recent_target, None)
             .expect("planning succeeds")
             .expect("plan exists");
 
@@ -511,7 +514,7 @@ mod tests {
         ];
 
         let plan = compressor
-            .plan_compression("session", &messages, 128_000, recent_target)
+            .plan_compression("session", &messages, 128_000, recent_target, None)
             .expect("planning succeeds")
             .expect("plan exists");
 
@@ -571,11 +574,11 @@ mod tests {
         let atomic_tokens = assistant.estimate_tokens_with_reasoning(true)
             + result.estimate_tokens_with_reasoning(true);
         let too_small = compressor
-            .plan_compression("session", &messages, 128_000, atomic_tokens - 1)
+            .plan_compression("session", &messages, 128_000, atomic_tokens - 1, None)
             .expect("planning succeeds")
             .expect("plan exists");
         let exact = compressor
-            .plan_compression("session", &messages, 128_000, atomic_tokens)
+            .plan_compression("session", &messages, 128_000, atomic_tokens, None)
             .expect("planning succeeds")
             .expect("plan exists");
 
@@ -596,14 +599,14 @@ mod tests {
         ];
 
         let first = compressor
-            .plan_compression("session", &messages, 128_000, 1)
+            .plan_compression("session", &messages, 128_000, 1, None)
             .expect("planning succeeds")
             .expect("first plan exists");
         let next_target = first
             .next_recent_target_tokens
             .expect("another atomic unit can be retained");
         let second = compressor
-            .plan_compression("session", &messages, 128_000, next_target)
+            .plan_compression("session", &messages, 128_000, next_target, None)
             .expect("planning succeeds")
             .expect("second plan exists");
 
@@ -632,7 +635,7 @@ mod tests {
             assistant3.clone(),
         ];
         let plan = compressor
-            .plan_compression("session", &messages, 128_000, recent_target)
+            .plan_compression("session", &messages, 128_000, recent_target, None)
             .expect("planning succeeds")
             .expect("plan exists");
         let mut result = compressor
@@ -717,7 +720,7 @@ mod tests {
         ];
 
         let plan = compressor
-            .plan_compression("session", &messages, 128_000, 1)
+            .plan_compression("session", &messages, 128_000, 1, None)
             .expect("planning succeeds")
             .expect("plan exists");
 
@@ -775,7 +778,7 @@ mod tests {
         ];
 
         let plan = compressor
-            .plan_compression("session", &messages, 128_000, 100)
+            .plan_compression("session", &messages, 128_000, 100, None)
             .expect("planning succeeds")
             .expect("plan exists");
 
@@ -824,11 +827,11 @@ mod tests {
         ];
 
         let smaller = compressor
-            .plan_compression("session", &messages, 50_000, 1)
+            .plan_compression("session", &messages, 50_000, 1, None)
             .expect("planning succeeds")
             .expect("plan exists");
         let larger = compressor
-            .plan_compression("session", &messages, 200_000, 1)
+            .plan_compression("session", &messages, 200_000, 1, None)
             .expect("planning succeeds")
             .expect("plan exists");
 
@@ -904,7 +907,7 @@ mod tests {
             Message::assistant("Recent evidence".to_string()),
         ];
         let plan = compressor
-            .plan_compression("session", &messages, 8_000, 1)
+            .plan_compression("session", &messages, 8_000, 1, None)
             .expect("planning succeeds")
             .expect("plan exists");
         let compressed = compressor

@@ -90,7 +90,14 @@ pub enum MessageSemanticKind {
     ComputerUsePostActionSnapshot,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+// Serialization is hand-written so the three private variants below
+// (PokePenalty / ChallengePoke / LifecycleContext) are persisted as the
+// stable "generic" name: upstream builds do not know these variants and
+// would otherwise fail to deserialize snapshot JSON. Deserialization keeps
+// the derived snake_case mapping so legacy snapshots written by this build
+// still read back, and `#[serde(other)] Unknown` absorbs future/upstream
+// variant names instead of erroring.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum InternalReminderKind {
     Generic,
@@ -123,6 +130,63 @@ pub enum InternalReminderKind {
     HookContext,
     /// Instructions activated after a successful read of a matching file.
     ConditionalInstructions,
+    /// Warden penalty outcome injected after a violating turn (kept through
+    /// compaction so the agent sees the consequence).
+    PokePenalty,
+    /// Warden challenge poke injected when the poke-first protocol fires
+    /// (kept through compaction so the agent sees the challenge).
+    ChallengePoke,
+    /// Legion role / hierarchy context injected at SessionStart and
+    /// SubagentStart custom points (outside hook gating, so the lifecycle
+    /// context is not controlled by `app.hooks.enabled`).
+    LifecycleContext,
+    /// Fallback for variant names unknown to this build (e.g. written by a
+    /// newer or upstream build). Keeps deserialization from failing on an
+    /// unrecognized kind.
+    #[serde(other)]
+    Unknown,
+}
+
+impl Serialize for InternalReminderKind {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let name = match self {
+            Self::Generic => "generic",
+            Self::SkillListingDiff => "skill_listing_diff",
+            Self::AgentListingDiff => "agent_listing_diff",
+            Self::AgentMode => "agent_mode",
+            Self::SideQuestion => "side_question",
+            Self::InitAgentsMd => "init_agents_md",
+            Self::ScheduledJob => "scheduled_job",
+            Self::ForkSubagent => "fork_subagent",
+            Self::GoalMode => "goal_mode",
+            Self::GoalContinuation => "goal_continuation",
+            Self::GoalObjectiveUpdated => "goal_objective_updated",
+            Self::RemoteFileDelivery => "remote_file_delivery",
+            Self::SessionMessageRequest => "session_message_request",
+            Self::SessionMessageReply => "session_message_reply",
+            Self::LoopRecovery => "loop_recovery",
+            Self::PeriodicLoopRecovery => "periodic_loop_recovery",
+            Self::UserSteering => "user_steering",
+            Self::BackgroundResult => "background_result",
+            Self::InterruptedContinue => "interrupted_continue",
+            Self::ThinkingOnlyRescue => "thinking_only_rescue",
+            Self::FinalizeCacheAnchor => "finalize_cache_anchor",
+            Self::CompressionContinuation => "compression_continuation",
+            Self::StopHookBlock => "stop_hook_block",
+            Self::HookContext => "hook_context",
+            Self::ConditionalInstructions => "conditional_instructions",
+            // Private variants and the unknown fallback serialize as the stable
+            // "generic" name so upstream builds (which lack these variants)
+            // can still deserialize snapshot JSON.
+            Self::PokePenalty | Self::ChallengePoke | Self::LifecycleContext | Self::Unknown => {
+                "generic"
+            }
+        };
+        serializer.serialize_str(name)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -773,6 +837,58 @@ mod tests {
             ToolArgumentRepairKind::PermissiveNormalToolJsonRepair
         );
         assert!(!tool_call.recovered_from_truncation);
+    }
+
+    #[test]
+    fn private_reminder_kinds_serialize_as_generic_for_upstream_compat() {
+        use super::InternalReminderKind;
+
+        let cases = [
+            (InternalReminderKind::PokePenalty, "generic"),
+            (InternalReminderKind::ChallengePoke, "generic"),
+            (InternalReminderKind::LifecycleContext, "generic"),
+            (InternalReminderKind::Unknown, "generic"),
+            (InternalReminderKind::Generic, "generic"),
+            (InternalReminderKind::SkillListingDiff, "skill_listing_diff"),
+            (InternalReminderKind::HookContext, "hook_context"),
+            (InternalReminderKind::CompressionContinuation, "compression_continuation"),
+        ];
+        for (kind, expected) in cases {
+            assert_eq!(
+                serde_json::to_string(&kind).unwrap(),
+                format!("\"{}\"", expected),
+                "kind {:?} should serialize as {}",
+                kind,
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn private_reminder_kinds_deserialize_from_legacy_snapshots() {
+        use super::InternalReminderKind;
+
+        assert_eq!(
+            serde_json::from_str::<InternalReminderKind>("\"poke_penalty\"").unwrap(),
+            InternalReminderKind::PokePenalty
+        );
+        assert_eq!(
+            serde_json::from_str::<InternalReminderKind>("\"challenge_poke\"").unwrap(),
+            InternalReminderKind::ChallengePoke
+        );
+        assert_eq!(
+            serde_json::from_str::<InternalReminderKind>("\"lifecycle_context\"").unwrap(),
+            InternalReminderKind::LifecycleContext
+        );
+        assert_eq!(
+            serde_json::from_str::<InternalReminderKind>("\"generic\"").unwrap(),
+            InternalReminderKind::Generic
+        );
+        // Unknown future/upstream variant names fall back instead of erroring.
+        assert_eq!(
+            serde_json::from_str::<InternalReminderKind>("\"some_future_kind\"").unwrap(),
+            InternalReminderKind::Unknown
+        );
     }
 }
 

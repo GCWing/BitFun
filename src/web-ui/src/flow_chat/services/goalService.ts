@@ -9,6 +9,13 @@ import { sessionProjectWorkspacePath } from '../utils/sessionWorkspace';
 export { isGoalSlashCommand, parseGoalCommand } from './goalCommandParser';
 export type { GoalCommandAction } from './goalCommandParser';
 
+export interface GoalChainEntry {
+  sessionId: string;
+  sessionName: string;
+  goal: ThreadGoalSnapshot | null;
+  depth: number;
+}
+
 export interface ThreadGoalSnapshot {
   goalId?: string;
   objective: string;
@@ -63,26 +70,35 @@ function mapGoal(goal: {
   };
 }
 
-const GOAL_KICKOFF_CONTENT_PREFIX = 'Continue working toward the thread goal:';
-
+// UI-13: goal kickoff dedup now uses a structured marker
+// (metadata.threadGoalKickoff) instead of matching English text prefixes
+// (which breaks under localization).
+// Limitation: pending items without the threadGoalKickoff marker (pre-marker
+// history queue) can only be matched by the /goal command prefix fallback;
+// backend-injected kickoff text without the marker is no longer deduped here.
 function isRedundantGoalKickoffPendingItem(
   displayMessage: string | undefined,
-  content: string
+  content: string,
+  userMessageMetadata?: Record<string, unknown>,
 ): boolean {
   const display = displayMessage?.trim() ?? '';
   if (/^\/goal\b/i.test(display)) {
     return true;
   }
-  return (
-    content.startsWith(GOAL_KICKOFF_CONTENT_PREFIX) ||
-    /^\/goal\b/i.test(content.trim())
-  );
+  if (userMessageMetadata?.threadGoalKickoff === true) {
+    return true;
+  }
+  return /^\/goal\b/i.test(content.trim());
 }
 
 /** Drop legacy frontend kickoff rows; backend already steers via objective_updated. */
 function clearRedundantGoalKickoffPendingItems(sessionId: string): void {
   for (const item of pendingQueueManager.list(sessionId)) {
-    if (isRedundantGoalKickoffPendingItem(item.displayMessage, item.content)) {
+    if (isRedundantGoalKickoffPendingItem(
+      item.displayMessage,
+      item.content,
+      item.userMessageMetadata,
+    )) {
       pendingQueueManager.remove(sessionId, item.id);
     }
   }
@@ -91,6 +107,13 @@ function clearRedundantGoalKickoffPendingItems(sessionId: string): void {
 function syncGoalToStore(sessionId: string, goal: ThreadGoalSnapshot | null): void {
   if (!goal) {
     flowChatStore.setThreadGoal(sessionId, null);
+    return;
+  }
+  // UI-07: monotonic updatedAt comparison — only accept a goal newer than the
+  // latest write/clear recorded in the store, so late responses/events cannot
+  // write a stale cleared goal back into the UI (API responses always carry updatedAt).
+  const lastSeenAt = flowChatStore.getState().sessions.get(sessionId)?.threadGoalUpdatedAt ?? 0;
+  if (lastSeenAt > 0 && goal.updatedAt != null && goal.updatedAt < lastSeenAt) {
     return;
   }
   flowChatStore.setThreadGoal(sessionId, {
@@ -122,7 +145,10 @@ export async function fetchSessionThreadGoal(
   const base = await sessionRequestBase(session);
   const response = await agentAPI.getSessionThreadGoal(base);
   if (!response.goal) {
-    syncGoalToStore(session.sessionId, null);
+    // Read-only query: a null backend goal must NOT wipe a goal the user just
+    // set (still present in the store while backend propagation settles).
+    // Clearing is driven only by explicit clear semantics:
+    // runGoalCommand 'clear' / handleThreadGoalUpdated with goal=null.
     return null;
   }
   const snapshot = mapGoal(response.goal);
@@ -320,6 +346,68 @@ export async function saveThreadGoalObjective(
     duration: 5000,
   });
   return snapshot;
+}
+
+/**
+ * Walk up the parentSessionId chain from the given session to the root,
+ * fetch the thread goal for every ancestor, and return an ordered list
+ * from L0 (root) to the current session.
+ */
+export async function fetchGoalChain(session: Session): Promise<GoalChainEntry[]> {
+  const ancestors: Session[] = [];
+  const visited = new Set<string>();
+  let current: Session | undefined = session;
+
+  while (current && !visited.has(current.sessionId)) {
+    visited.add(current.sessionId);
+    ancestors.push(current);
+    if (current.parentSessionId) {
+      current = flowChatStore.getState().sessions.get(current.parentSessionId);
+    } else {
+      break;
+    }
+  }
+
+  // Reverse so the root (L0) comes first
+  ancestors.reverse();
+
+  const result: GoalChainEntry[] = [];
+  for (let i = 0; i < ancestors.length; i++) {
+    const s = ancestors[i];
+    let goal: ThreadGoalSnapshot | null = null;
+    if (s.workspacePath) {
+      try {
+        goal = await fetchSessionThreadGoal(s);
+      } catch {
+        // best-effort: goal fetch failure shouldn't block the chain
+      }
+    }
+    if (!goal) {
+      // Fallback to the store's existing snapshot so a read-only miss (or a
+      // session without workspacePath) cannot flip the chip back to L0 while
+      // the user's goal is still active in the UI.
+      const stored = flowChatStore.getState().sessions.get(s.sessionId)?.threadGoal;
+      if (stored) {
+        goal = {
+          goalId: stored.goalId,
+          objective: stored.objective,
+          status: stored.status,
+          tokensUsed: stored.tokensUsed,
+          tokenBudget: stored.tokenBudget,
+          timeUsedSeconds: stored.timeUsedSeconds,
+          updatedAt: stored.updatedAt,
+        };
+      }
+    }
+    result.push({
+      sessionId: s.sessionId,
+      sessionName: s.title || `Session ${s.sessionId}`,
+      goal,
+      depth: i,
+    });
+  }
+
+  return result;
 }
 
 function resolveGoalCommandError(error: unknown, params: GoalCommandParams): string {

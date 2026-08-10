@@ -33,6 +33,11 @@ pub fn ensure_thread_goal_tools(tools: &mut Vec<String>) {
 pub struct CreateGoalArgs {
     pub objective: String,
     pub token_budget: Option<i64>,
+    /// Workspace-relative reference files the goal tracks as authoritative
+    /// context (e.g. spec/task files the agent keeps in sync). Omitted when
+    /// the goal has no reference files.
+    #[serde(default)]
+    pub reference_files: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -80,8 +85,11 @@ pub fn parse_update_goal_status(raw: &str) -> Result<ThreadGoalStatus, ThreadGoa
     match raw.trim().to_ascii_lowercase().as_str() {
         "complete" => Ok(ThreadGoalStatus::Complete),
         "blocked" => Ok(ThreadGoalStatus::Blocked),
+        // `resume` maps to `Active`; the runtime transition gate enforces
+        // that only resumable statuses may move back to `Active`.
+        "resume" => Ok(ThreadGoalStatus::Active),
         other => Err(ThreadGoalToolError::validation(format!(
-            "update_goal status must be complete or blocked, got {other}"
+            "update_goal status must be complete, blocked, or resume, got {other}"
         ))),
     }
 }

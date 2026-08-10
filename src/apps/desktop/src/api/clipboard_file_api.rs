@@ -131,6 +131,9 @@ mod windows_clipboard {
     }
 
     pub(super) fn get_clipboard_files() -> Result<Vec<String>, String> {
+        // SAFETY: All clipboard calls are user32/shell32 FFI with no unsafe
+        // pointer dereferences in this block; hdrop from GetClipboardData is
+        // null-checked before use and the clipboard is closed via the guard.
         unsafe {
             if IsClipboardFormatAvailable(CF_HDROP) == 0 {
                 return Ok(Vec::new());
@@ -143,6 +146,8 @@ mod windows_clipboard {
             struct ClipboardGuard;
             impl Drop for ClipboardGuard {
                 fn drop(&mut self) {
+                    // SAFETY: CloseClipboard takes no arguments and matches the
+                    // OpenClipboard call in the enclosing function.
                     unsafe {
                         CloseClipboard();
                     }

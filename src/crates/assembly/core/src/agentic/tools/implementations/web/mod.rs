@@ -3,6 +3,7 @@
 mod fetch;
 mod readable;
 mod search;
+mod timeouts;
 
 pub use fetch::WebFetchTool;
 pub use search::WebSearchTool;

@@ -515,6 +515,38 @@ pub async fn run() {
     startup_timings.record_elapsed("initialize_global_config", step_started);
     startup_trace.record_elapsed_step("native_pre_tauri", "initialize_global_config", step_started);
 
+    // Inject the knowledge base root into the environment for the
+    // KnowledgeBaseSearch tool. The tool reads `BITFUN_KNOWLEDGE_BASE_ROOT`
+    // at call time (knowledge_base_search_tool.rs); without an injection
+    // source the product feature is unusable in default deployments
+    // (L6-P0-1). The value is optional: when the user configures
+    // `ai.knowledge_base_root` (a directory path) it is injected here so
+    // every model tool call sees it. The environment value wins over the
+    // config value when both exist (explicit env is the escape hatch).
+    if std::env::var_os("BITFUN_KNOWLEDGE_BASE_ROOT").is_none() {
+        if let Ok(config_service) = bitfun_core::service::config::get_global_config_service().await {
+            match config_service
+                .get_config::<String>(Some("ai.knowledge_base_root"))
+                .await
+            {
+                Ok(root) if !root.trim().is_empty() => {
+                    std::env::set_var("BITFUN_KNOWLEDGE_BASE_ROOT", root.trim());
+                    log::info!(
+                        "Injected ai.knowledge_base_root into BITFUN_KNOWLEDGE_BASE_ROOT: {}",
+                        root
+                    );
+                }
+                Ok(_) => {}
+                Err(error) => {
+                    log::debug!(
+                        "ai.knowledge_base_root is not configured; KnowledgeBaseSearch stays disabled: {}",
+                        error
+                    );
+                }
+            }
+        }
+    }
+
     // The three steps below only depend on the global config service (initialized
     // above) and write to disjoint global singletons, so they can run concurrently:
     // - initialize_global_i18n_service: reads config, sets the global i18n singleton
@@ -642,6 +674,7 @@ pub async fn run() {
         app_state.workspace_service.clone(),
         app_state.ssh_manager.clone(),
         app_state.acp_client_service.clone(),
+        ai_client_factory.clone(),
     ) {
         Ok(runtime) => runtime,
         Err(error) => {
@@ -649,6 +682,24 @@ pub async fn run() {
             return;
         }
     };
+    // ACP session lifecycle bridge: keeps the external ACP client process in
+    // sync with agentic session lifecycle events (start on `acp__*` session
+    // creation, release on deletion, cancel on dialog turn cancellation).
+    // Registered after AppState is available; the event router is the same
+    // instance created by `init_agentic_system`.
+    event_router.subscribe_internal(
+        "acp_session_lifecycle".to_string(),
+        Arc::new(runtime::AcpSessionLifecycleSubscriber::new(
+            app_state.acp_client_service.clone(),
+        )),
+    );
+    // Dedicated ACP tool family (`acp_control`/`acp_message`/`acp_history`)
+    // reaches the real external ACP process through this port; core keeps no
+    // dependency on the ACP crate.
+    coordinator.set_acp_client_port(Arc::new(runtime::DesktopAcpClientPort::new(
+        app_state.acp_client_service.clone(),
+        Some(coordinator.clone()),
+    )));
     startup_timings.record_elapsed("initialize_desktop_agent_runtime", step_started);
     startup_trace.record_elapsed_step(
         "native_pre_tauri",
@@ -1208,6 +1259,7 @@ pub async fn run() {
             api::agentic_api::read_background_command_output,
             api::agentic_api::list_background_command_activities,
             api::agentic_api::delete_session,
+            api::agentic_api::delete_session_tree,
             api::agentic_api::restore_session,
             api::agentic_api::restore_session_view,
             api::agentic_api::load_session_turn_window,
@@ -1481,6 +1533,7 @@ pub async fn run() {
             list_persisted_sessions,
             search_referenceable_sessions,
             list_persisted_sessions_page,
+            list_deleted_session_ids,
             get_session_lineage,
             load_session_turns,
             get_session_usage_report,
@@ -1609,6 +1662,8 @@ pub async fn run() {
             delete_cron_job,
             notify_cron_host_ready,
             api::config_api::canonicalize_agent_profile_configs,
+            create_legion_preset,
+            list_legion_presets,
             api::terminal_api::terminal_get_shells,
             api::terminal_api::terminal_create,
             api::terminal_api::terminal_get,

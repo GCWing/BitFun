@@ -152,6 +152,9 @@ impl CoordinationStore {
         .await
     }
 
+    /// Single-parent resolution kept for compatibility and tests; subtree/
+    /// global callers use [`Self::resolve_agent_id_in_scope`].
+    #[allow(dead_code)]
     pub(crate) async fn resolve_agent_id(
         &self,
         parent_session_id: &str,
@@ -170,6 +173,124 @@ impl CoordinationStore {
                 .map_err(db_error)?
                 .flatten()
                 .ok_or_else(|| BitFunError::tool(format!("Agent was not found: {agent_id}")))
+        })
+        .await
+    }
+
+    /// Global agent_id resolution for full background-task management.
+    ///
+    /// `agent_id` is unique per parent session (`UNIQUE(parent_session_id,
+    /// agent_id)`), so different parents may each own an `a1`. Resolution
+    /// strategy:
+    /// 1. Prefer a match inside `scope_session_ids` (the caller's session
+    ///    subtree). A single in-scope hit wins immediately; multiple in-scope
+    ///    hits are ambiguous and reported with candidates.
+    /// 2. If the scope has no match and `allow_global_fallback` is true, fall
+    ///    back to a whole-database match so a caller can manage subagents
+    ///    spawned outside its subtree. A unique global hit is returned;
+    ///    multiple hits report candidates instead of picking arbitrarily.
+    ///    When `allow_global_fallback` is false, a scope miss is reported as
+    ///    "not found" so mutating operations (cancel/send_input/history)
+    ///    cannot cross session-subtree boundaries.
+    pub(crate) async fn resolve_agent_id_in_scope(
+        &self,
+        scope_session_ids: &[String],
+        agent_id: &str,
+        allow_global_fallback: bool,
+    ) -> BitFunResult<String> {
+        let scope_session_ids = scope_session_ids.to_vec();
+        let agent_id = agent_id.to_string();
+        self.with_connection(move |connection| {
+            let scope_hits = if scope_session_ids.is_empty() {
+                Vec::new()
+            } else {
+                let placeholders: Vec<String> = (1..=scope_session_ids.len())
+                    .map(|i| format!("?{i}"))
+                    .collect();
+                let sql = format!(
+                    "SELECT parent_session_id, child_session_id FROM agents WHERE parent_session_id IN ({}) AND agent_id = ?{} AND state = 'active' ORDER BY agent_pk",
+                    placeholders.join(", "),
+                    scope_session_ids.len() + 1
+                );
+                let mut statement = connection.prepare(&sql).map_err(db_error)?;
+                let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> =
+                    Vec::with_capacity(scope_session_ids.len() + 1);
+                for id in &scope_session_ids {
+                    param_values.push(Box::new(id.clone()));
+                }
+                param_values.push(Box::new(agent_id.clone()));
+                let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+                    param_values.iter().map(|v| v.as_ref()).collect();
+                let rows = statement
+                    .query_map(param_refs.as_slice(), |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, Option<String>>(1)?,
+                        ))
+                    })
+                    .map_err(db_error)?;
+                rows.collect::<rusqlite::Result<Vec<_>>>()
+                    .map_err(db_error)?
+            };
+
+            match scope_hits.as_slice() {
+                [(_, Some(child_session_id))] => {
+                    return Ok(child_session_id.clone());
+                }
+                [] => {}
+                hits => {
+                    let candidates = hits
+                        .iter()
+                        .filter_map(|(parent, child)| {
+                            child.as_ref().map(|child| format!("{parent}/{child}"))
+                        })
+                        .collect::<Vec<_>>();
+                    return Err(BitFunError::tool(format!(
+                        "Agent id '{agent_id}' is ambiguous in the caller's session subtree; candidates: {}",
+                        candidates.join(", ")
+                    )));
+                }
+            }
+
+            // Fall back to a whole-database match so any caller can manage
+            // subagents spawned outside its subtree — unless the caller
+            // disallowed global fallback (mutating Task operations), in which
+            // case a scope miss is an authorization boundary.
+            if !allow_global_fallback {
+                return Err(BitFunError::tool(format!(
+                    "Agent was not found: {agent_id}"
+                )));
+            }
+            let mut statement = connection
+                .prepare(
+                    "SELECT parent_session_id, child_session_id FROM agents WHERE agent_id = ?1 AND state = 'active' ORDER BY agent_pk",
+                )
+                .map_err(db_error)?;
+            let rows = statement
+                .query_map(params![agent_id], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                    ))
+                })
+                .map_err(db_error)?;
+            let global_hits = rows.collect::<rusqlite::Result<Vec<_>>>().map_err(db_error)?;
+            match global_hits.as_slice() {
+                [(_, Some(child_session_id))] => Ok(child_session_id.clone()),
+                [] => Err(BitFunError::tool(format!("Agent was not found: {agent_id}"))),
+                hits => {
+                    let candidates = hits
+                        .iter()
+                        .filter_map(|(parent, child)| {
+                            child.as_ref().map(|child| format!("{parent}/{child}"))
+                        })
+                        .collect::<Vec<_>>();
+                    Err(BitFunError::tool(format!(
+                        "Agent id '{agent_id}' is ambiguous across sessions; candidates: {}",
+                        candidates.join(", ")
+                    )))
+                }
+            }
         })
         .await
     }
@@ -278,6 +399,14 @@ WHERE task_pk = ?5 AND status = 'running'
         .await
     }
 
+    /// Resolve the background tasks a caller may wait on.
+    ///
+    /// With an empty `requested_bg_task_ids`, only undelivered tasks are
+    /// returned (the "what is still pending" query). With explicit ids, every
+    /// matching record is returned, including already-delivered ones, so
+    /// callers can explicitly tell a delivered task apart from a
+    /// not-yet-completed one via [`BackgroundTaskRecord::delivered_at_ms`]
+    /// instead of silently losing it (COORD-09).
     pub(crate) async fn wait_candidates(
         &self,
         parent_session_id: &str,
@@ -300,23 +429,42 @@ WHERE task_pk = ?5 AND status = 'running'
             }
 
             let mut records = Vec::with_capacity(requested_bg_task_ids.len());
-            for bg_task_id in requested_bg_task_ids {
-                let record = connection
-                    .query_row(
-                        &format!(
-                            "{} WHERE tasks.parent_session_id = ?1 AND tasks.bg_task_id = ?2",
-                            BACKGROUND_TASK_SELECT
-                        ),
-                        params![parent_session_id, bg_task_id],
-                        background_task_from_row,
-                    )
-                    .optional()
-                    .map_err(db_error)?
-                    .ok_or_else(|| {
-                        BitFunError::tool(format!("Background task was not found: {bg_task_id}"))
-                    })?;
-                if record.delivered_at_ms.is_none() {
+            let mut found_ids = std::collections::HashSet::with_capacity(requested_bg_task_ids.len());
+
+            for chunk in requested_bg_task_ids.chunks(990) {
+                let placeholders: Vec<String> = (2..=chunk.len() + 1)
+                    .map(|i| format!("?{i}"))
+                    .collect();
+                let sql = format!(
+                    "{} WHERE tasks.parent_session_id = ?1 AND tasks.bg_task_id IN ({})",
+                    BACKGROUND_TASK_SELECT,
+                    placeholders.join(", ")
+                );
+                let mut statement = connection.prepare(&sql).map_err(db_error)?;
+                let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> =
+                    Vec::with_capacity(chunk.len() + 1);
+                param_values.push(Box::new(parent_session_id.clone()));
+                for id in chunk {
+                    param_values.push(Box::new(id.clone()));
+                }
+                let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+                    param_values.iter().map(|v| v.as_ref()).collect();
+                let rows = statement
+                    .query_map(param_refs.as_slice(), background_task_from_row)
+                    .map_err(db_error)?;
+                for row in rows {
+                    let record = row.map_err(db_error)?;
+                    found_ids.insert(record.bg_task_id.clone());
+                    // Keep delivered records in the result (marked by
+                    // delivered_at_ms) rather than dropping them silently.
                     records.push(record);
+                }
+            }
+            for bg_task_id in &requested_bg_task_ids {
+                if !found_ids.contains(bg_task_id.as_str()) {
+                    return Err(BitFunError::tool(format!(
+                        "Background task was not found: {bg_task_id}"
+                    )));
                 }
             }
             Ok(records)
@@ -330,21 +478,176 @@ WHERE task_pk = ?5 AND status = 'running'
     ) -> BitFunResult<Vec<BackgroundTaskRecord>> {
         let task_pks = task_pks.to_vec();
         self.with_connection(move |connection| {
-            let mut records = Vec::with_capacity(task_pks.len());
-            for task_pk in task_pks {
-                if let Some(record) = connection
-                    .query_row(
-                        &format!("{} WHERE tasks.task_pk = ?1", BACKGROUND_TASK_SELECT),
-                        params![task_pk],
-                        background_task_from_row,
-                    )
-                    .optional()
-                    .map_err(db_error)?
-                {
-                    records.push(record);
+            if task_pks.is_empty() {
+                return Ok(Vec::new());
+            }
+            let mut all_records = Vec::with_capacity(task_pks.len());
+            for chunk in task_pks.chunks(990) {
+                let placeholders: Vec<String> = (1..=chunk.len())
+                    .map(|i| format!("?{i}"))
+                    .collect();
+                let sql = format!(
+                    "{} WHERE tasks.task_pk IN ({})",
+                    BACKGROUND_TASK_SELECT,
+                    placeholders.join(", ")
+                );
+                let mut statement = connection.prepare(&sql).map_err(db_error)?;
+                let rows = statement
+                    .query_map(rusqlite::params_from_iter(chunk.iter().copied()), background_task_from_row)
+                    .map_err(db_error)?;
+                for row in rows {
+                    all_records.push(row.map_err(db_error)?);
                 }
             }
-            Ok(records)
+            Ok(all_records)
+        })
+        .await
+    }
+
+    /// Single-parent task list kept for compatibility; subtree/global callers
+    /// use [`Self::list_tasks_for_parents`].
+    #[allow(dead_code)]
+    pub(crate) async fn list_tasks(
+        &self,
+        parent_session_id: &str,
+    ) -> BitFunResult<Vec<BackgroundTaskRecord>> {
+        let parent_session_id = parent_session_id.to_string();
+        self.with_connection(move |connection| {
+            let mut statement = connection
+                .prepare(&format!(
+                    "{} WHERE tasks.parent_session_id = ?1 ORDER BY tasks.task_pk",
+                    BACKGROUND_TASK_SELECT
+                ))
+                .map_err(db_error)?;
+            let rows = statement
+                .query_map(params![parent_session_id], background_task_from_row)
+                .map_err(db_error)?;
+            collect_rows(rows)
+        })
+        .await
+    }
+
+    /// Lists background tasks spawned by any session in `parent_session_ids`
+    /// (typically the caller's subtree). Used by the Task `list` action so a
+    /// conversation can manage subagent tasks spawned anywhere in its subtree.
+    ///
+    /// Only `running` tasks are surfaced: a terminal task (completed,
+    /// cancelled, failed, partial_timeout, interrupted) is no longer
+    /// manageable through the Task tool — the session is either recycled
+    /// (one-shot `persistent=false`) or retained as history — so listing it
+    /// only makes the caller see a "ghost" it can never remove (its `cancel`
+    /// reports `cancelled_background_tasks: 0` or `Agent was not found` after
+    /// the one-shot session was recycled). Terminal records stay in the
+    /// database for `AgentWait`/audit; they are simply not listed as
+    /// manageable background runs. This closes the ghost-task root cause where
+    /// completed/cancelled subagent sessions remained visible in Task `list`
+    /// and could not be cleaned up (ghost-delete-fix S-31/S-38).
+    pub(crate) async fn list_tasks_for_parents(
+        &self,
+        parent_session_ids: &[String],
+    ) -> BitFunResult<Vec<BackgroundTaskRecord>> {
+        let parent_session_ids = parent_session_ids.to_vec();
+        self.with_connection(move |connection| {
+            if parent_session_ids.is_empty() {
+                return Ok(Vec::new());
+            }
+            let mut all_records = Vec::new();
+            for chunk in parent_session_ids.chunks(990) {
+                let placeholders: Vec<String> = (1..=chunk.len())
+                    .map(|i| format!("?{i}"))
+                    .collect();
+                let sql = format!(
+                    "{} WHERE tasks.parent_session_id IN ({}) AND tasks.status = 'running' ORDER BY tasks.task_pk",
+                    BACKGROUND_TASK_SELECT,
+                    placeholders.join(", ")
+                );
+                let mut statement = connection.prepare(&sql).map_err(db_error)?;
+                let rows = statement
+                    .query_map(
+                        rusqlite::params_from_iter(chunk.iter()),
+                        background_task_from_row,
+                    )
+                    .map_err(db_error)?;
+                all_records.extend(collect_rows(rows)?);
+            }
+            Ok(all_records)
+        })
+        .await
+    }
+
+    /// Test-only variant of [`Self::list_tasks_for_parents`] that keeps the
+    /// pre-fix behaviour (all statuses). Used to assert that terminal records
+    /// are retained for `AgentWait`/audit even though the manageable Task
+    /// `list` output filters them.
+    #[cfg(test)]
+    pub(crate) async fn list_tasks_for_parents_including_terminal_for_test(
+        &self,
+        parent_session_ids: &[String],
+    ) -> BitFunResult<Vec<BackgroundTaskRecord>> {
+        let parent_session_ids = parent_session_ids.to_vec();
+        self.with_connection(move |connection| {
+            if parent_session_ids.is_empty() {
+                return Ok(Vec::new());
+            }
+            let mut all_records = Vec::new();
+            for chunk in parent_session_ids.chunks(990) {
+                let placeholders: Vec<String> = (1..=chunk.len())
+                    .map(|i| format!("?{i}"))
+                    .collect();
+                let sql = format!(
+                    "{} WHERE tasks.parent_session_id IN ({}) ORDER BY tasks.task_pk",
+                    BACKGROUND_TASK_SELECT,
+                    placeholders.join(", ")
+                );
+                let mut statement = connection.prepare(&sql).map_err(db_error)?;
+                let rows = statement
+                    .query_map(
+                        rusqlite::params_from_iter(chunk.iter()),
+                        background_task_from_row,
+                    )
+                    .map_err(db_error)?;
+                all_records.extend(collect_rows(rows)?);
+            }
+            Ok(all_records)
+        })
+        .await
+    }
+
+    /// Collect all descendant session ids under `root_session_id` by walking
+    /// the persisted `agents` parent→child edges (iterative BFS).
+    ///
+    /// The in-memory session tree is lazily loaded and can be empty/incomplete
+    /// right after a restart, so `agent_id` subtree scopes must not depend on
+    /// it alone. This persisted walk reconstructs the subtree from the
+    /// coordination database, which is authoritative for registered
+    /// background-task agents (COORD-06).
+    pub(crate) async fn descendant_session_ids(
+        &self,
+        root_session_id: &str,
+    ) -> BitFunResult<Vec<String>> {
+        let root_session_id = root_session_id.to_string();
+        self.with_connection(move |connection| {
+            let mut descendants = Vec::new();
+            let mut seen = std::collections::HashSet::new();
+            let mut stack = vec![root_session_id];
+            while let Some(parent) = stack.pop() {
+                let mut statement = connection
+                    .prepare(
+                        "SELECT child_session_id FROM agents WHERE parent_session_id = ?1 AND child_session_id IS NOT NULL AND state = 'active' ORDER BY agent_pk",
+                    )
+                    .map_err(db_error)?;
+                let rows = statement
+                    .query_map(params![parent], |row| row.get::<_, String>(0))
+                    .map_err(db_error)?;
+                for child in rows {
+                    let child = child.map_err(db_error)?;
+                    if seen.insert(child.clone()) {
+                        descendants.push(child.clone());
+                        stack.push(child);
+                    }
+                }
+            }
+            Ok(descendants)
         })
         .await
     }
@@ -359,42 +662,73 @@ WHERE task_pk = ?5 AND status = 'running'
         let task_pks = task_pks.to_vec();
         let delivered_parent_dialog_turn_id = delivered_parent_dialog_turn_id.to_string();
         self.with_connection(move |connection| {
+            if task_pks.is_empty() {
+                return Ok(Vec::new());
+            }
             let transaction = connection
                 .transaction_with_behavior(TransactionBehavior::Immediate)
                 .map_err(db_error)?;
-            let mut claimed = Vec::new();
-            for task_pk in task_pks {
-                let changed = transaction
-                    .execute(
-                        r#"
-UPDATE background_tasks
-SET delivered_at_ms = ?1, delivered_parent_dialog_turn_id = ?2
-WHERE task_pk = ?3
-  AND parent_session_id = ?4
-  AND status != 'running'
-  AND delivered_at_ms IS NULL
-                        "#,
-                        params![
-                            unix_time_ms() as i64,
-                            delivered_parent_dialog_turn_id,
-                            task_pk,
-                            parent_session_id,
-                        ],
-                    )
-                    .map_err(db_error)?;
-                if changed == 0 {
-                    continue;
-                }
-                claimed.push(
-                    transaction
-                        .query_row(
-                            &format!("{} WHERE tasks.task_pk = ?1", BACKGROUND_TASK_SELECT),
-                            params![task_pk],
-                            background_task_from_row,
-                        )
-                        .map_err(db_error)?,
+
+            let delivered_at_ms = unix_time_ms() as i64;
+            let mut claimed = Vec::with_capacity(task_pks.len());
+
+            for chunk in task_pks.chunks(990) {
+                let in_placeholders: Vec<String> = (3..=chunk.len() + 2)
+                    .map(|i| format!("?{i}"))
+                    .collect();
+                let in_clause = in_placeholders.join(", ");
+                let update_sql = format!(
+                    "UPDATE background_tasks SET delivered_at_ms = ?1, delivered_parent_dialog_turn_id = ?2 WHERE task_pk IN ({}) AND parent_session_id = ?{} AND status != 'running' AND delivered_at_ms IS NULL",
+                    in_clause,
+                    chunk.len() + 3
                 );
+
+                let mut update_params: Vec<Box<dyn rusqlite::types::ToSql>> =
+                    Vec::with_capacity(chunk.len() + 3);
+                update_params.push(Box::new(delivered_at_ms));
+                update_params.push(Box::new(delivered_parent_dialog_turn_id.clone()));
+                for pk in chunk {
+                    update_params.push(Box::new(*pk));
+                }
+                update_params.push(Box::new(parent_session_id.clone()));
+                let update_param_refs: Vec<&dyn rusqlite::types::ToSql> =
+                    update_params.iter().map(|v| v.as_ref()).collect();
+                transaction
+                    .execute(&update_sql, update_param_refs.as_slice())
+                    .map_err(db_error)?;
+
+                // SELECT only the rows that were just updated.
+                let select_in_placeholders: Vec<String> = (1..=chunk.len())
+                    .map(|i| format!("?{i}"))
+                    .collect();
+                let select_in_clause = select_in_placeholders.join(", ");
+                let select_sql = format!(
+                    "{} WHERE tasks.task_pk IN ({}) AND tasks.parent_session_id = ?{} AND tasks.delivered_parent_dialog_turn_id = ?{}",
+                    BACKGROUND_TASK_SELECT,
+                    select_in_clause,
+                    chunk.len() + 1,
+                    chunk.len() + 2,
+                );
+
+                let mut select_params: Vec<Box<dyn rusqlite::types::ToSql>> =
+                    Vec::with_capacity(chunk.len() + 2);
+                for pk in chunk {
+                    select_params.push(Box::new(*pk));
+                }
+                select_params.push(Box::new(parent_session_id.clone()));
+                select_params.push(Box::new(delivered_parent_dialog_turn_id.clone()));
+                let select_param_refs: Vec<&dyn rusqlite::types::ToSql> =
+                    select_params.iter().map(|v| v.as_ref()).collect();
+
+                {
+                    let mut statement = transaction.prepare(&select_sql).map_err(db_error)?;
+                    let rows = statement
+                        .query_map(select_param_refs.as_slice(), background_task_from_row)
+                        .map_err(db_error)?;
+                    claimed.extend(rows.flatten());
+                }
             }
+
             transaction.commit().map_err(db_error)?;
             Ok(claimed)
         })
@@ -482,37 +816,55 @@ WHERE task_pk = ?3
             let transaction = connection
                 .transaction_with_behavior(TransactionBehavior::Immediate)
                 .map_err(db_error)?;
-            let mut deleted_task_pks = Vec::new();
-            for turn_id in parent_dialog_turn_ids {
-                {
-                    let mut statement = transaction
-                        .prepare(
-                            "SELECT task_pk FROM background_tasks WHERE parent_session_id = ?1 AND parent_dialog_turn_id = ?2",
-                        )
-                        .map_err(db_error)?;
-                    deleted_task_pks.extend(
-                        statement
-                            .query_map(params![parent_session_id, turn_id], |row| {
-                                row.get::<_, i64>(0)
-                            })
-                            .map_err(db_error)?
-                            .collect::<rusqlite::Result<Vec<_>>>()
-                            .map_err(db_error)?,
-                    );
-                }
-                transaction
-                    .execute(
-                        "DELETE FROM background_tasks WHERE parent_session_id = ?1 AND parent_dialog_turn_id = ?2",
-                        params![parent_session_id, turn_id],
-                    )
-                    .map_err(db_error)?;
-                transaction
-                    .execute(
-                        "UPDATE background_tasks SET delivered_at_ms = NULL, delivered_parent_dialog_turn_id = NULL WHERE parent_session_id = ?1 AND delivered_parent_dialog_turn_id = ?2",
-                        params![parent_session_id, turn_id],
-                    )
-                    .map_err(db_error)?;
+            if parent_dialog_turn_ids.is_empty() {
+                return Ok(Vec::new());
             }
+            let mut deleted_task_pks = Vec::new();
+            for chunk in parent_dialog_turn_ids.chunks(990) {
+                let turn_placeholders: Vec<String> = (2..=chunk.len() + 1)
+                    .map(|i| format!("?{i}"))
+                    .collect();
+                let in_clause = turn_placeholders.join(", ");
+
+                // Build dynamic parameter slice: ?1 = parent_session_id, ?2.. = turn_ids
+                let mut param_refs: Vec<&dyn rusqlite::types::ToSql> =
+                    Vec::with_capacity(1 + chunk.len());
+                param_refs.push(&parent_session_id);
+                for id in chunk {
+                    param_refs.push(id);
+                }
+                let params: &[&dyn rusqlite::types::ToSql] = param_refs.as_slice();
+
+                // Single SELECT with IN clause
+                let select_sql = format!(
+                    "SELECT task_pk FROM background_tasks WHERE parent_session_id = ?1 AND parent_dialog_turn_id IN ({})",
+                    in_clause
+                );
+                {
+                    let mut statement = transaction.prepare(&select_sql).map_err(db_error)?;
+                    let rows = statement
+                        .query_map(params, |row| row.get::<_, i64>(0))
+                        .map_err(db_error)?;
+                    for row in rows {
+                        deleted_task_pks.push(row.map_err(db_error)?);
+                    }
+                }
+
+                // Single DELETE with IN clause
+                let delete_sql = format!(
+                    "DELETE FROM background_tasks WHERE parent_session_id = ?1 AND parent_dialog_turn_id IN ({})",
+                    in_clause
+                );
+                transaction.execute(&delete_sql, params).map_err(db_error)?;
+
+                // Single UPDATE with IN clause
+                let update_sql = format!(
+                    "UPDATE background_tasks SET delivered_at_ms = NULL, delivered_parent_dialog_turn_id = NULL WHERE parent_session_id = ?1 AND delivered_parent_dialog_turn_id IN ({})",
+                    in_clause
+                );
+                transaction.execute(&update_sql, params).map_err(db_error)?;
+            }
+
             transaction.commit().map_err(db_error)?;
             Ok(deleted_task_pks)
         })
@@ -777,16 +1129,21 @@ fn initialize_schema(connection: &Connection) -> BitFunResult<()> {
     if version == SCHEMA_VERSION {
         return Ok(());
     }
+    // Idempotent schema initialization: `CREATE ... IF NOT EXISTS` makes the
+    // version-0 upgrade safe even when a previous run created the tables but
+    // crashed before persisting `PRAGMA user_version` (COORD-13). A table that
+    // already exists keeps its columns; the `PRAGMA user_version` bump below
+    // still records the schema as initialized.
     connection
         .execute_batch(
             r#"
-CREATE TABLE coordination_sessions (
+CREATE TABLE IF NOT EXISTS coordination_sessions (
     parent_session_id TEXT PRIMARY KEY,
     next_auto_agent_seq INTEGER NOT NULL DEFAULT 1,
     updated_at_ms INTEGER NOT NULL
 );
 
-CREATE TABLE agents (
+CREATE TABLE IF NOT EXISTS agents (
     agent_pk INTEGER PRIMARY KEY AUTOINCREMENT,
     parent_session_id TEXT NOT NULL,
     agent_id TEXT NOT NULL,
@@ -798,7 +1155,7 @@ CREATE TABLE agents (
     UNIQUE(parent_session_id, child_session_id)
 );
 
-CREATE TABLE background_tasks (
+CREATE TABLE IF NOT EXISTS background_tasks (
     task_pk INTEGER PRIMARY KEY AUTOINCREMENT,
     parent_session_id TEXT NOT NULL,
     agent_pk INTEGER NOT NULL,
@@ -822,9 +1179,9 @@ CREATE TABLE background_tasks (
     FOREIGN KEY(agent_pk) REFERENCES agents(agent_pk) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_background_tasks_wait
+CREATE INDEX IF NOT EXISTS idx_background_tasks_wait
     ON background_tasks(parent_session_id, delivered_at_ms, status, task_pk);
-CREATE INDEX idx_background_tasks_parent_turn
+CREATE INDEX IF NOT EXISTS idx_background_tasks_parent_turn
     ON background_tasks(parent_session_id, parent_dialog_turn_id);
 
 PRAGMA user_version = 1;
@@ -923,6 +1280,185 @@ mod tests {
                 .expect("resolve named agent"),
             "child-reviewer"
         );
+    }
+
+    #[tokio::test]
+    async fn global_agent_resolution_prefers_subtree_then_falls_back_globally() {
+        let (_root, store) = test_store();
+        store
+            .register_background_task(registration("parent-1", "child-1", "parent-turn-1", None))
+            .await
+            .expect("register parent-1 task");
+        store
+            .register_background_task(registration("parent-2", "child-2", "parent-turn-1", None))
+            .await
+            .expect("register parent-2 task");
+        store
+            .register_background_task(registration(
+                "parent-2",
+                "child-reviewer",
+                "parent-turn-2",
+                Some("reviewer"),
+            ))
+            .await
+            .expect("register reviewer task");
+
+        // Subtree preference: caller subtree [parent-1] resolves its own a1.
+        assert_eq!(
+            store
+                .resolve_agent_id_in_scope(&["parent-1".to_string()], "a1", false)
+                .await
+                .expect("subtree-local a1"),
+            "child-1"
+        );
+        // Global fallback: reviewer exists only under parent-2, still resolvable
+        // when the caller explicitly allows the whole-database fallback.
+        assert_eq!(
+            store
+                .resolve_agent_id_in_scope(&["parent-1".to_string()], "reviewer", true)
+                .await
+                .expect("global reviewer"),
+            "child-reviewer"
+        );
+        // Without global fallback, the same scope miss is "not found".
+        assert!(store
+            .resolve_agent_id_in_scope(&["parent-1".to_string()], "reviewer", false)
+            .await
+            .is_err());
+        // Ambiguity: caller subtree covering both parents sees two a1 matches.
+        let error = store
+            .resolve_agent_id_in_scope(
+                &["parent-1".to_string(), "parent-2".to_string()],
+                "a1",
+                false,
+            )
+            .await
+            .expect_err("ambiguous a1 must be rejected");
+        assert!(error.to_string().contains("ambiguous"));
+
+        // Unknown agent.
+        assert!(store
+            .resolve_agent_id_in_scope(&["parent-1".to_string()], "missing", false)
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn descendant_session_ids_walks_persisted_tree_across_generations() {
+        // COORD-06: `agent_id` subtree scopes must be rebuildable from the
+        // persisted `agents` parent→child edges even when the in-memory session
+        // tree is incomplete right after a restart.
+        let (_root, store) = test_store();
+        store
+            .register_background_task(registration("parent", "child", "turn-1", None))
+            .await
+            .expect("register parent-child edge");
+        store
+            .register_background_task(registration("child", "grandchild", "turn-2", None))
+            .await
+            .expect("register child-grandchild edge");
+        store
+            .register_background_task(registration("unrelated", "child-x", "turn-1", None))
+            .await
+            .expect("register unrelated edge");
+
+        let mut descendants = store
+            .descendant_session_ids("parent")
+            .await
+            .expect("walk persisted subtree");
+        descendants.sort();
+        assert_eq!(
+            descendants,
+            vec!["child".to_string(), "grandchild".to_string()]
+        );
+
+        // A leaf has no descendants; an unknown root yields an empty walk.
+        assert!(store
+            .descendant_session_ids("grandchild")
+            .await
+            .expect("leaf walk")
+            .is_empty());
+        assert!(store
+            .descendant_session_ids("missing")
+            .await
+            .expect("unknown root walk")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn list_tasks_for_parents_covers_multiple_parents() {
+        let (_root, store) = test_store();
+        store
+            .register_background_task(registration("parent-1", "child-1", "turn-1", None))
+            .await
+            .expect("parent-1 task");
+        store
+            .register_background_task(registration("parent-2", "child-2", "turn-1", None))
+            .await
+            .expect("parent-2 task");
+        let tasks = store
+            .list_tasks_for_parents(&["parent-1".to_string(), "parent-2".to_string()])
+            .await
+            .expect("list across parents");
+        assert_eq!(tasks.len(), 2);
+        assert!(tasks.iter().any(|t| t.parent_session_id == "parent-1"));
+        assert!(tasks.iter().any(|t| t.parent_session_id == "parent-2"));
+        assert!(store
+            .list_tasks_for_parents(&[])
+            .await
+            .expect("empty scope")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn list_tasks_for_parents_filters_terminal_tasks_from_manageable_list() {
+        // Ghost-task root cause: a completed/cancelled subagent session stays in
+        // the Task `list` output forever and cannot be cancelled, so the caller
+        // sees an undelatable "ghost". Terminal tasks must not be surfaced as
+        // manageable background runs, while running tasks stay listed.
+        let (_root, store) = test_store();
+        let running = store
+            .register_background_task(registration("parent-1", "child-running", "turn-1", None))
+            .await
+            .expect("running task");
+        let completed = store
+            .register_background_task(registration("parent-1", "child-completed", "turn-2", None))
+            .await
+            .expect("completed task");
+        store
+            .update_task_status(completed.task_pk, BackgroundTaskStatus::Completed, None, None)
+            .await
+            .expect("complete the second task");
+        let cancelled = store
+            .register_background_task(registration("parent-1", "child-cancelled", "turn-3", None))
+            .await
+            .expect("cancelled task");
+        store
+            .update_task_status(
+                cancelled.task_pk,
+                BackgroundTaskStatus::Cancelled,
+                Some("user".to_string()),
+                Some("user cancelled".to_string()),
+            )
+            .await
+            .expect("cancel the third task");
+
+        let tasks = store
+            .list_tasks_for_parents(&["parent-1".to_string()])
+            .await
+            .expect("list for parent");
+        assert_eq!(tasks.len(), 1, "only the running task is manageable");
+        assert_eq!(tasks[0].task_pk, running.task_pk);
+        assert_eq!(tasks[0].child_session_id, "child-running");
+
+        // The terminal records remain queryable through the raw store so
+        // AgentWait / audit can still find them; only the manageable list is
+        // filtered.
+        let all = store
+            .list_tasks_for_parents_including_terminal_for_test(&["parent-1".to_string()])
+            .await
+            .expect("full list for parent");
+        assert_eq!(all.len(), 3);
     }
 
     #[tokio::test]
@@ -1104,5 +1640,106 @@ mod tests {
             .await
             .expect("load remaining tasks")
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn wait_candidates_with_explicit_ids_includes_delivered_tasks() {
+        let (_root, store) = test_store();
+        let delivered = store
+            .register_background_task(registration("parent", "child-1", "spawn-turn-1", None))
+            .await
+            .expect("register delivered task");
+        store
+            .update_task_status(
+                delivered.task_pk,
+                BackgroundTaskStatus::Completed,
+                None,
+                None,
+            )
+            .await
+            .expect("complete delivered task");
+        store
+            .claim_terminal_tasks("parent", &[delivered.task_pk], "delivery-turn")
+            .await
+            .expect("claim delivered task");
+
+        // An explicit-id query must return the delivered record explicitly
+        // (distinguishable via delivered_at_ms) instead of silently dropping
+        // it (COORD-09).
+        let candidates = store
+            .wait_candidates("parent", &[delivered.bg_task_id.clone()])
+            .await
+            .expect("load explicit candidates");
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].bg_task_id, delivered.bg_task_id);
+        assert!(candidates[0].delivered_at_ms.is_some());
+
+        // The empty-request query still reports only undelivered tasks.
+        let pending = store
+            .wait_candidates("parent", &[])
+            .await
+            .expect("load pending candidates");
+        assert!(pending.is_empty());
+    }
+
+    #[tokio::test]
+    async fn descendant_session_ids_walks_the_persisted_agents_tree() {
+        let (_root, store) = test_store();
+        store
+            .register_background_task(registration("parent", "child-1", "turn-1", None))
+            .await
+            .expect("register child");
+        store
+            .register_background_task(registration("child-1", "grandchild-1", "turn-2", None))
+            .await
+            .expect("register grandchild");
+        store
+            .register_background_task(registration(
+                "unrelated",
+                "other-child",
+                "turn-3",
+                None,
+            ))
+            .await
+            .expect("register unrelated branch");
+
+        // The persisted parent→child walk must cover the whole subtree below
+        // the root but stay within it (COORD-06).
+        let descendants = store
+            .descendant_session_ids("parent")
+            .await
+            .expect("walk persisted tree");
+        assert!(descendants.contains(&"child-1".to_string()));
+        assert!(descendants.contains(&"grandchild-1".to_string()));
+        assert!(!descendants.contains(&"other-child".to_string()));
+        assert!(store
+            .descendant_session_ids("missing")
+            .await
+            .expect("unknown root")
+            .is_empty());
+    }
+
+    #[test]
+    fn initialize_schema_is_idempotent_when_tables_exist_but_version_is_zero() {
+        let root = tempfile::tempdir().expect("coordination store temp directory");
+        let db_path = root.path().join("coordination.sqlite");
+        // Simulate an interrupted earlier initialization: a table exists but
+        // `PRAGMA user_version` was never persisted (still 0). Re-initializing
+        // must not fail on the already-existing table (COORD-13).
+        let first = Connection::open(&db_path).expect("open db");
+        first
+            .execute_batch(
+                "CREATE TABLE coordination_sessions (parent_session_id TEXT PRIMARY KEY, next_auto_agent_seq INTEGER NOT NULL DEFAULT 1, updated_at_ms INTEGER NOT NULL);",
+            )
+            .expect("create coordination_sessions");
+        drop(first);
+
+        let connection = open_connection(db_path).expect("reopen and re-initialize");
+        let version = connection
+            .lock()
+            .expect("connection lock")
+            .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+            .expect("read user_version");
+        assert_eq!(version, SCHEMA_VERSION);
     }
 }

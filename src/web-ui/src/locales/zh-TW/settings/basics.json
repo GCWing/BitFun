@@ -237,6 +237,32 @@
       "saveFailed": "儲存通知設置失敗"
     }
   },
+  "legion": {
+    "sections": {
+      "title": "軍團部署參數",
+      "hint": "LEGION 軍團部署的節點上限與頻率限制，修改後立即生效"
+    },
+    "maxNodes": {
+      "label": "單拓撲節點上限",
+      "description": "單次 LegionControl 部署最多允許的節點數（預設 20）。"
+    },
+    "maxTotalNodes": {
+      "label": "跨部署總量上限",
+      "description": "同一建立者會話名下所有軍團節點會話的總量上限（預設 60）。"
+    },
+    "frequency": {
+      "label": "每小時部署次數上限",
+      "description": "同一建立者會話在 1 小時滑動視窗內最多允許的部署次數（預設 10；設為 0 表示不限制）。"
+    },
+    "messages": {
+      "loading": "載入中…",
+      "loadFailed": "無法讀取軍團部署參數",
+      "saved": "軍團部署參數已儲存",
+      "saveFailed": "儲存軍團部署參數失敗",
+      "invalidNodeCap": "單拓撲節點上限必須至少為 1",
+      "invalidTotalCap": "跨部署總量上限必須至少為 1"
+    }
+  },
   "autoUpdate": {
     "sections": {
       "title": "更新",

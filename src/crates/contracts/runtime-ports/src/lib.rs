@@ -17,6 +17,7 @@ pub use bitfun_core_types::{
     WorktreeSummary,
 };
 
+mod acp_client_port;
 mod local_workspace_snapshot;
 #[cfg(feature = "permission")]
 mod permission;
@@ -34,6 +35,13 @@ pub use bitfun_product_domains::tool_permissions::{
     PermissionRequestSourceKind, PermissionResourceCaseSensitivity, PermissionRule,
     PermissionRuleset, PermissionRuntimeCeiling, PermissionRuntimeCeilingValidationError,
     ResolvedPermissionMode, ResolvedPermissionPolicy, ToolPermissionConfig,
+};
+pub use acp_client_port::{
+    acp_backend_error, acp_flow_client_id_from_session_id, looks_like_uuid,
+    AcpClientBitfunMessageRequest, AcpClientCancelRequest, AcpClientCreateRequest,
+    AcpClientCreateResult, AcpClientHistoryEntry, AcpClientHistoryRequest, AcpClientHistoryResult,
+    AcpClientListResult, AcpClientMessageRequest, AcpClientMessageResult, AcpClientPort,
+    AcpClientReleaseRequest, AcpClientStreamChunk, AcpClientStreamChunkSink, AcpClientSummary,
 };
 pub use local_workspace_snapshot::{
     LocalWorkspaceSnapshotPort, LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotStats,
@@ -106,6 +114,77 @@ impl std::fmt::Display for PortError {
 
 impl std::error::Error for PortError {}
 
+/// Shared agent type used by SessionControl and SessionMessage tools.
+///
+/// Known built-in variants have canonical serde representations:
+/// - `Agentic` → `"agentic"` (canonical)
+/// - `Plan` → `"Plan"` (canonical)
+/// - `Cowork` → `"Cowork"` (canonical)
+///
+/// Any unrecognised string deserializes into `Other(String)`, so the enum
+/// automatically tolerates agent types added by custom or external registries
+/// without requiring a crate-level code change.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum AgentType {
+    /// Known built-in variant: `agentic`.
+    #[serde(rename = "agentic", alias = "Agentic", alias = "AGENTIC")]
+    Agentic,
+    /// Known built-in variant: `Plan`.
+    #[serde(rename = "Plan", alias = "plan", alias = "PLAN")]
+    Plan,
+    /// Known built-in variant: `Cowork`.
+    #[serde(rename = "Cowork", alias = "cowork", alias = "COWORK")]
+    Cowork,
+    /// Known built-in variant: `DeepResearch` (official research agent).
+    #[serde(rename = "DeepResearch", alias = "deepresearch", alias = "DEEPRESEARCH")]
+    DeepResearch,
+    /// Catch-all for any agent type string not in the known set (custom / external).
+    #[serde(untagged)]
+    Other(String),
+}
+
+impl AgentType {
+    /// Returns the canonical wire representation.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Agentic => "agentic",
+            Self::Plan => "Plan",
+            Self::Cowork => "Cowork",
+            Self::DeepResearch => "DeepResearch",
+            Self::Other(value) => value.as_str(),
+        }
+    }
+
+    /// Default agent type used when none is specified.
+    pub const fn default_value() -> Self {
+        Self::Agentic
+    }
+
+    /// Returns `true` if this is one of the three known built-in variants.
+    pub fn is_known_builtin(&self) -> bool {
+        matches!(self, Self::Agentic | Self::Plan | Self::Cowork | Self::DeepResearch)
+    }
+}
+
+impl From<&str> for AgentType {
+    fn from(value: &str) -> Self {
+        match value {
+            "agentic" | "Agentic" | "AGENTIC" => Self::Agentic,
+            "Plan" | "plan" | "PLAN" => Self::Plan,
+            "Cowork" | "cowork" | "COWORK" => Self::Cowork,
+            "DeepResearch" | "deepresearch" | "DEEPRESEARCH" => Self::DeepResearch,
+            other => Self::Other(other.to_string()),
+        }
+    }
+}
+
+impl std::fmt::Display for AgentType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RuntimeServiceCapability {
@@ -124,6 +203,7 @@ pub enum RuntimeServiceCapability {
     RemoteWorkspace,
     RemoteProjection,
     RemoteCapabilities,
+    AcpClient,
 }
 
 impl RuntimeServiceCapability {
@@ -144,6 +224,7 @@ impl RuntimeServiceCapability {
             Self::RemoteWorkspace => "remote_workspace",
             Self::RemoteProjection => "remote_projection",
             Self::RemoteCapabilities => "remote_capabilities",
+            Self::AcpClient => "acp_client",
         }
     }
 }
@@ -1158,6 +1239,10 @@ pub struct AgentSessionListRequest {
     pub remote_connection_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_ssh_host: Option<String>,
+    /// When true, hidden Subagent/Ephemeral sessions are included in the
+    /// listing (full conversation management).
+    #[serde(default)]
+    pub include_hidden: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1179,6 +1264,15 @@ pub struct AgentSessionSummary {
     pub turn_count: usize,
     pub created_at_ms: u64,
     pub last_active_at_ms: u64,
+    /// Optional parent session ID for tree-structured display.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_session_id: Option<String>,
+    /// Optional session runtime status (e.g. "idle", "active", "error").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    /// Warden daemon session marker.
+    #[serde(default)]
+    pub is_daemon: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1615,7 +1709,7 @@ pub struct AgentSubmissionRequest {
     pub metadata: serde_json::Map<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(
     tag = "kind",
@@ -1624,17 +1718,12 @@ pub struct AgentSubmissionRequest {
     deny_unknown_fields
 )]
 pub enum AgentDialogTurnExecution {
+    #[default]
     Standard,
     FreshExternalSubagent {
         ecosystem_id: String,
         logical_id: String,
     },
-}
-
-impl Default for AgentDialogTurnExecution {
-    fn default() -> Self {
-        Self::Standard
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1666,6 +1755,22 @@ pub struct AgentDialogTurnRequest {
     pub metadata: serde_json::Map<String, serde_json::Value>,
 }
 
+// ---------------------------------------------------------------------------
+// prepended_reminders kind constants (Warden bootstrap/penalty injection kinds)
+// ---------------------------------------------------------------------------
+
+/// `prepended_reminders` kind value for penalty/violation record injection.
+///
+/// Injected into a violating session's context at every turn until cleared.
+pub const POKE_PENALTY_KIND: &str = "PokePenalty";
+
+/// `prepended_reminders` kind value for self-boot check (iron-rule summary +
+/// Warden protocol declaration).
+pub const SELF_BOOT_CHECK_KIND: &str = "SelfBootCheck";
+
+/// `prepended_reminders` kind value for RBAC role-reminder injection.
+pub const RBAC_ROLE_REMINDER_KIND: &str = "RbacRoleReminder";
+
 /// Text-only steering request for one exact running dialog turn.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1675,6 +1780,8 @@ pub struct AgentDialogSteerRequest {
     pub content: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub display_content: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub prepended_reminders: Vec<AgentDialogPrependedReminder>,
 }
 
 impl AgentDialogTurnExecution {
@@ -1973,6 +2080,7 @@ pub struct RoundInjection {
     pub content: String,
     pub display_content: String,
     pub created_at: std::time::SystemTime,
+    pub prepended_reminders: Vec<AgentDialogPrependedReminder>,
 }
 
 /// Observes round-boundary injections for a given running turn.
@@ -2006,7 +2114,18 @@ pub const MAX_THREAD_GOAL_OBJECTIVE_CHARS: usize = 4_000;
 pub const MAX_CONTEXT_SUMMARY_CHARS: usize = 12_000;
 
 /// Max automatic goal continuation dialog turns per objective (legacy goal_mode parity).
-pub const MAX_THREAD_GOAL_AUTO_CONTINUATIONS: u32 = 100;
+///
+/// This is a defense-in-depth upper bound, not a user-configurable value. The thread-goal
+/// auto-continuation counter (`auto_continuation_count` on `ThreadGoal`) is incremented
+/// once per continuation turn and compared against this constant. When exceeded, the
+/// goal transitions to `Blocked` to prevent runaway autonomous turns.
+///
+/// Safety note: This value is intentionally bounded (10) because:
+/// - Each continuation turn consumes model tokens (cost).
+/// - The token budget (`token_budget` on `ThreadGoal`) acts as the primary soft limit.
+/// - The task-level depth check (`Task` tool `max_depth`) acts as the structural hard limit.
+/// - This counter is a secondary failsafe for edge cases where budgets are unset.
+pub const MAX_THREAD_GOAL_AUTO_CONTINUATIONS: u32 = 10;
 
 /// Alias retained for migration from legacy `goal_mode` metadata and docs.
 pub const MAX_GOAL_CONTINUATIONS: u32 = MAX_THREAD_GOAL_AUTO_CONTINUATIONS;
@@ -2065,6 +2184,12 @@ pub struct ThreadGoal {
     /// Auto-continuation dialog turns scheduled toward this goal (resets on new objective).
     #[serde(default)]
     pub auto_continuation_count: u32,
+    /// Files the goal references as authoritative context (workspace-relative
+    /// paths the agent should keep in sync while pursuing the goal). Attached
+    /// to model-backed Warden audit judgements so the LLM can decide pokes
+    /// against the actual goal context.
+    #[serde(default)]
+    pub reference_files: Vec<String>,
 }
 
 impl ThreadGoal {
@@ -2124,6 +2249,10 @@ pub struct AgentThreadGoalCreateRequest {
     pub objective: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token_budget: Option<i64>,
+    /// Workspace-relative reference files the goal tracks as authoritative
+    /// context.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reference_files: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2302,6 +2431,72 @@ pub trait AgentSubmissionPort: Send + Sync {
     ) -> PortResult<AgentSubmissionResult>;
 
     async fn resolve_session_agent_type(&self, session_id: &str) -> PortResult<Option<String>>;
+}
+
+/// Request for a model-backed Warden audit judgement.
+///
+/// The judgement provider decides whether a finished tool call or failed turn
+/// deserves a poke, which candidate rules apply, and what evidence should be
+/// attached. When the port is unavailable or the judgement times out, the
+/// caller falls back to the mechanical rule ladder.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WardenAuditJudgementRequest {
+    /// Session whose tool call / turn is being judged.
+    pub session_id: String,
+    /// Effective tool name of the finished tool call.
+    pub tool_name: String,
+    /// Effective arguments of the finished tool call (scene fingerprint).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_args: Option<serde_json::Value>,
+    /// Candidate rule ids the mechanical ladder would apply.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rule_ids: Vec<String>,
+    /// Evidence summary available to the judgement (failure counts, error
+    /// text, phase/target facts the caller can provide).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence: Option<serde_json::Value>,
+}
+
+/// Judgement result produced by a model-backed Warden provider.
+///
+/// A provider must not fail the audit loop: `should_poke = false` with empty
+/// rule ids is a valid "no poke" verdict.
+///
+/// WARDEN-07: `shouldPoke` is intentionally *not* `#[serde(default)]`. A
+/// verdict missing the field (or an empty object) fails to deserialize, so a
+/// malformed model response falls back to the mechanical rule ladder instead
+/// of silently defaulting to `false` and suppressing a poke.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WardenAuditJudgementResponse {
+    pub should_poke: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rule_ids: Vec<String>,
+    /// Evidence items the model wants to see before poking (follow-ups).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub evidence_requested: Vec<String>,
+}
+
+/// Model-backed judgement for Warden audit decisions.
+///
+/// Providers construct a judgement prompt from the request, parse the model
+/// response as [`WardenAuditJudgementResponse`], and return an error when the
+/// response cannot be parsed or the judgement times out; the caller then
+/// falls back to the mechanical rule ladder. Providers that do not support
+/// model judgement keep the default typed unsupported response.
+#[async_trait::async_trait]
+pub trait WardenModelJudgementPort: Send + Sync {
+    async fn judge_audit(
+        &self,
+        request: WardenAuditJudgementRequest,
+    ) -> PortResult<WardenAuditJudgementResponse> {
+        let _ = request;
+        Err(PortError::new(
+            PortErrorKind::NotAvailable,
+            "model-backed warden judgement is not supported by this provider",
+        ))
+    }
 }
 
 #[async_trait::async_trait]
@@ -2952,12 +3147,17 @@ impl DelegationPolicy {
     }
 
     pub fn spawn_child(self) -> Self {
+        let new_depth = self.nesting_depth.saturating_add(1);
         Self {
-            allow_subagent_spawn: false,
-            nesting_depth: self.nesting_depth.saturating_add(1),
+            allow_subagent_spawn: new_depth < MAX_FISSION_DEPTH,
+            nesting_depth: new_depth,
         }
     }
 }
+
+/// Maximum allowed fission depth for subagent delegation trees.
+/// Forwarded from the authoritative definition in `bitfun_core_types::session_tree`.
+pub use bitfun_core_types::session_tree::MAX_FISSION_DEPTH;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -3718,6 +3918,7 @@ mod tests {
                 content: "result".to_string(),
                 display_content: "result".to_string(),
                 created_at: std::time::SystemTime::UNIX_EPOCH,
+                prepended_reminders: Vec::new(),
             },
         };
 
@@ -3746,6 +3947,7 @@ mod tests {
             created_at: 1,
             updated_at: 2,
             auto_continuation_count: 0,
+            reference_files: Vec::new(),
         };
         assert!(active.is_active());
         assert_eq!(active.remaining_tokens(), Some(9_900));
@@ -3921,6 +4123,7 @@ mod tests {
             turn_id: "turn_1".to_string(),
             content: "Please also check the tests".to_string(),
             display_content: Some("Also check tests".to_string()),
+            prepended_reminders: Vec::new(),
         };
         let outcome = DialogSteerOutcome::Buffered {
             session_id: "session_1".to_string(),
@@ -4002,6 +4205,7 @@ mod tests {
                 created_at: 1,
                 updated_at: 2,
                 auto_continuation_count: 0,
+                reference_files: Vec::new(),
             },
         };
 
@@ -4029,6 +4233,7 @@ mod tests {
             workspace_path: "/workspace/project".to_string(),
             objective: "Ship the refactor".to_string(),
             token_budget: Some(1000),
+            reference_files: None,
         };
         let update_request = AgentThreadGoalUpdateStatusRequest {
             session_id: "session_1".to_string(),
@@ -4187,6 +4392,7 @@ mod tests {
             workspace_path: "/workspace/project".to_string(),
             remote_connection_id: Some("conn-1".to_string()),
             remote_ssh_host: Some("host-1".to_string()),
+            include_hidden: false,
         };
         let summary = AgentSessionSummary {
             session_id: "session_1".to_string(),
@@ -4199,6 +4405,9 @@ mod tests {
             turn_count: 3,
             created_at_ms: 1000,
             last_active_at_ms: 2000,
+            parent_session_id: None,
+            status: None,
+            is_daemon: false,
         };
         let delete_request = AgentSessionDeleteRequest {
             workspace_path: "/workspace/project".to_string(),
@@ -4462,7 +4671,7 @@ mod tests {
 
         let child = top_level.spawn_child();
 
-        assert!(!child.allow_subagent_spawn);
+        assert!(child.allow_subagent_spawn);
         assert_eq!(child.nesting_depth, 1);
         assert_eq!(child.spawn_child().nesting_depth, 2);
     }

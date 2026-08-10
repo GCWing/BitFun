@@ -114,6 +114,7 @@ impl McpItem {
 
 /// Action returned from the MCP selector
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)] // item carries the full server entry; boxing adds indirection per selection
 pub(crate) enum McpAction {
     /// Toggle (start/stop) the selected server
     Toggle(McpItem),
@@ -317,7 +318,7 @@ impl McpSelectorState {
             return;
         }
 
-        let provisional_width = area.width.saturating_sub(4).min(72).max(1);
+        let provisional_width = area.width.saturating_sub(4).clamp(1, 72);
         let confirmation_height = self
             .confirm_external_id
             .as_ref()

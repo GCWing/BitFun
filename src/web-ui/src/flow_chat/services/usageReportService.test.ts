@@ -34,7 +34,7 @@ const createSession = (overrides: Partial<Session> = {}): Session => ({
   error: null,
   isHistorical: false,
   todos: [],
-  maxContextTokens: 128128,
+  maxContextTokens: 1048576,
   mode: 'agentic',
   workspacePath: 'D:/workspace/BitFun',
   isTransient: false,

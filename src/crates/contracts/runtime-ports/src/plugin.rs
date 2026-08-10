@@ -306,6 +306,7 @@ pub struct PermissionPromptDescriptor {
     tag = "status"
 )]
 #[non_exhaustive]
+#[allow(clippy::large_enum_variant)] // contract type; boxing changes the public API surface
 pub enum PluginPermissionGate {
     PolicyAllowed {
         audit: PluginAuditRef,

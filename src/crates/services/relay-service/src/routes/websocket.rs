@@ -270,7 +270,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         }
         match msg_result {
             Ok(Message::Text(text)) => {
-                if !handle_text_message(
+                let keep_going = handle_text_message(
                     &text,
                     conn_id,
                     &state,
@@ -278,8 +278,8 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                     &force_close_tx,
                     &mut token_expiry_task,
                 )
-                .await
-                {
+                .await;
+                if !keep_going {
                     break;
                 }
             }

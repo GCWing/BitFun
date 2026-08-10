@@ -159,7 +159,10 @@ Example usage:
         let requested_format =
             normalize_requested_format(input.get("format").and_then(|v| v.as_str()))?;
 
-        let response = WebToolNetworkProvider::fetch_text(url)
+        // 阈值参数配置化：ai.thresholds.tool_timeout.web_fetch_secs
+        let fetch_timeout_secs = crate::agentic::tools::implementations::web::timeouts::configured_web_fetch_timeout_secs()
+            .await;
+        let response = WebToolNetworkProvider::fetch_text_with_timeout(url, fetch_timeout_secs)
             .await
             .map_err(|error| BitFunError::tool(error.to_string()))?;
         let content_type = response.content_type;

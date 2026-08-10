@@ -14,6 +14,9 @@ use crate::agentic::keyed_lock::{KeyedAsyncLock, KeyedAsyncLockGuard};
 use crate::agentic::memories::db::{MemoryDatabase, MEMORY_PHASE2_GLOBAL_JOB_KEY};
 use crate::agentic::persistence::{MaterializedSessionReferenceTranscript, PersistenceManager};
 use crate::agentic::session::revert::SessionRevertPhase;
+use crate::agentic::session::session_gc::{
+    classify_orphaned_metadata, SessionGcReport, TransientSweepCandidate,
+};
 use crate::agentic::session::session_store_port::CoreSessionStorePort;
 use crate::agentic::session::{
     prompt_cache_persist_action, reconcile_prompt_cache_restore, CachedSystemPrompt,
@@ -53,10 +56,9 @@ use bitfun_core_types::SessionExecutionTarget;
 pub use bitfun_runtime_ports::SessionViewRestoreTiming;
 use bitfun_runtime_ports::{PermissionMode, SessionStoragePathRequest, SessionStorePort};
 use bitfun_services_core::session::{
-    apply_session_lineage, collect_hidden_subagent_cascade as collect_hidden_subagent_cascade_ids,
-    merge_session_custom_metadata as merge_session_custom_metadata_value,
+    apply_session_lineage, merge_session_custom_metadata as merge_session_custom_metadata_value,
     set_deep_review_run_manifest, set_review_target_evidence, set_session_relationship,
-    SessionStorageLayout, SessionWriteLock,
+    SessionRelationshipKind, SessionStorageLayout, SessionWriteLock,
 };
 use dashmap::{mapref::entry::Entry, DashMap};
 use log::{debug, error, info, warn};
@@ -69,6 +71,31 @@ use std::time::Instant;
 use std::time::{Duration, SystemTime};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio::time;
+
+/// File name of the persistent deletion tombstone registry. Stored in the
+/// workspace runtime directory (the parent of the sessions directory, i.e.
+/// `<sessions>/../deleted-session-ids.json`) so a later process restart can
+/// still answer "was this session id confirmed deleted" for the workspace.
+/// The frontend initialization path pulls this registry to guard against
+/// ghost resurrection of deleted subagent sessions.
+const DELETED_SESSION_IDS_FILE_NAME: &str = "deleted-session-ids.json";
+
+/// Upper bound for tombstone entries per workspace. The registry is a
+/// best-effort guard; entries are kept in deletion order and the oldest are
+/// dropped beyond the cap so a workspace with heavy churn cannot grow it
+/// without bound.
+///
+/// Loss semantics (L4-P2-C): when the cap is exceeded the oldest ids are
+/// evicted and lose their precise "confirmed deleted" interception. This is an
+/// accepted capacity trade-off — a deletion also removes the on-disk session
+/// directory, so a truly deleted session cannot reappear on its own; the only
+/// resurrection risk is residual disk metadata that survives deletion, which
+/// the reconcile-on-list path (`reconcile_loaded_sessions_with_disk`) removes
+/// on the next listing. The frontend confirmed-deleted localStorage registry
+/// provides a second, independent fallback. A registry entry is therefore the
+/// fast path, not the only line of defense. Evictions are logged so an
+/// operator can raise the cap for pathological churn workspaces.
+const DELETED_SESSION_IDS_MAX_ENTRIES: usize = 2000;
 
 #[cfg(test)]
 tokio::task_local! {
@@ -262,6 +289,16 @@ pub struct SessionManager {
     /// The Session lifecycle remains the only owner of acquisition and release.
     session_write_locks: Arc<DashMap<String, SessionWriteLock>>,
 
+    /// Serializes the read-modify-write of one workspace's persistent deletion
+    /// tombstone registry (`deleted-session-ids.json`). Keyed by the resolved
+    /// tombstone file path (derived from the workspace runtime directory) so
+    /// concurrent deletions of different sessions in the same workspace cannot
+    /// interleave and lose entries, while different workspaces never contend.
+    /// Independent from `session_mutation_locks` (which keys by session id and
+    /// is already released by the time the tombstone write happens) and from
+    /// `session_write_locks` (per-session tail-write ownership).
+    tombstone_registry_locks: KeyedAsyncLock,
+
     /// Sub-components
     context_store: Arc<SessionContextStore>,
     prompt_cache_store: Arc<SessionPromptCacheStore>,
@@ -279,10 +316,32 @@ pub struct SessionManager {
     persistence_manager: Arc<PersistenceManager>,
     memory_database: Arc<MemoryDatabase>,
 
+    /// Cache of parent_session_id → subagent children (child_session_id, parent_dialog_turn_id).
+    /// Incrementally maintained to avoid full metadata scans during cascade traversal.
+    subagent_children: Arc<DashMap<String, Vec<(String, String)>>>,
+    /// Set to true when sessions are created or deleted so the subagent_children
+    /// cache is rebuilt on the next cascade traversal.
+    subagent_children_dirty: Arc<std::sync::atomic::AtomicBool>,
+
+    /// Loaded session IDs whose on-disk storage was removed externally (for
+    /// example a directory-level GC or manual deletion) while the runtime
+    /// still holds them. Auto-save skips these IDs so a deleted session cannot
+    /// resurrect its storage directory; the next reconcile unloads the session
+    /// from runtime memory once it is no longer processing.
+    disk_removed_loaded_ids: Arc<DashMap<String, ()>>,
+
+    /// Session IDs explicitly deleted through the session lifecycle API while
+    /// their in-flight tail writes (turn finalization spawned by the turn
+    /// execution task) may still be in flight. Turn finalization consults this
+    /// set before recreating on-disk session metadata so a deleted session
+    /// cannot resurrect as a ghost "Recovered Session".
+    deleted_session_ids: Arc<DashMap<String, ()>>,
+
     /// Configuration
     config: SessionManagerConfig,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn clear_session_runtime_stores(
     session_id: &str,
     context_store: &SessionContextStore,
@@ -609,10 +668,23 @@ impl SessionManager {
             .map(|tokens| tokens as usize)
     }
 
+    /// Product-guaranteed minimum session context window. Session configs are
+    /// never downgraded below this value; model windows cap the effective
+    /// execution window at runtime instead. Subagent sessions are forced to
+    /// exactly this window at creation (coordinator) so there is a single
+    /// source of truth for the "1M" guarantee.
+    pub(crate) const SESSION_CONTEXT_WINDOW_MIN_TOKENS: usize = 1_048_576;
+
     fn session_context_window_from_ai_config(
         session: &Session,
         ai_config: &crate::service::config::types::AIConfig,
     ) -> Option<usize> {
+        // Subagent sessions are created with a forced 1M context window and must
+        // not be downgraded by model-window refresh or model updates.
+        if session.kind == SessionKind::Subagent || session.kind == SessionKind::EphemeralSubagent {
+            return None;
+        }
+
         let configured_model_id = session
             .config
             .model_id
@@ -625,7 +697,8 @@ impl SessionManager {
             return Self::context_window_for_model_selection(ai_config, configured_model_id);
         }
 
-        let fallback_model_id = (session.kind != SessionKind::Subagent)
+        let fallback_model_id = (session.kind != SessionKind::Subagent
+            && session.kind != SessionKind::EphemeralSubagent)
             .then(|| ai_config.agent_model_defaults.mode.trim().to_string())
             .filter(|model_id| !Self::is_auto_model_selector(model_id));
 
@@ -640,8 +713,13 @@ impl SessionManager {
         ai_config: &crate::service::config::types::AIConfig,
     ) -> Option<usize> {
         let context_window = Self::session_context_window_from_ai_config(session, ai_config)?;
-        session.config.max_context_tokens = context_window;
-        Some(context_window)
+        // Sessions keep the product-guaranteed 1M context window. Model
+        // windows only cap the effective execution window at runtime via
+        // min() in execute_dialog_turn_impl; they must not downgrade the
+        // session's configured window below 1M.
+        let kept = context_window.max(Self::SESSION_CONTEXT_WINDOW_MIN_TOKENS);
+        session.config.max_context_tokens = kept;
+        Some(kept)
     }
 
     async fn normalize_session_reasoning_preset(
@@ -759,7 +837,7 @@ impl SessionManager {
     fn should_persist_session_kind(kind: SessionKind) -> bool {
         match kind {
             SessionKind::Standard | SessionKind::Subagent => true,
-            SessionKind::EphemeralChild => false,
+            SessionKind::EphemeralChild | SessionKind::EphemeralSubagent => false,
         }
     }
 
@@ -786,13 +864,18 @@ impl SessionManager {
     fn collect_auto_save_snapshots(
         sessions: &DashMap<String, Session>,
         transient_session_ids: &DashMap<String, ()>,
+        disk_removed_loaded_ids: &DashMap<String, ()>,
     ) -> Vec<SessionAutoSaveSnapshot> {
         sessions
             .iter()
             .filter_map(|entry| {
                 let session = entry.value();
                 if !Self::should_persist_session_with_transient_ids(session, transient_session_ids)
+                    || disk_removed_loaded_ids.contains_key(&session.session_id)
                 {
+                    // Sessions whose on-disk storage was removed externally are
+                    // never written back: persisting them would resurrect a
+                    // deleted session on the next list.
                     return None;
                 }
                 Some(SessionAutoSaveSnapshot {
@@ -884,6 +967,192 @@ impl SessionManager {
                 .get(session_id)
                 .map(|session| self.should_persist_session(&session))
                 .unwrap_or(true)
+    }
+
+    /// Records a session id as explicitly deleted through the session
+    /// lifecycle API. Kept process-locally: after a process restart there is
+    /// no in-flight tail write left to protect.
+    pub(crate) fn mark_session_deleted(&self, session_id: &str) {
+        self.deleted_session_ids.insert(session_id.to_string(), ());
+    }
+
+    /// Returns true when the session was explicitly deleted through the
+    /// session lifecycle API. Turn finalization consults this before
+    /// recreating on-disk session metadata so a deleted session cannot
+    /// resurrect as a ghost "Recovered Session".
+    pub(crate) fn is_session_deleted(&self, session_id: &str) -> bool {
+        self.deleted_session_ids.contains_key(session_id)
+    }
+
+    /// Removes the deleted marker for a session id, durably. Called when a
+    /// session is (re)created or restored successfully, and when a deletion
+    /// fails after the early marker was set (rollback), so the marker only
+    /// covers the actual deletion window and cannot poison a later re-created
+    /// id. The on-disk tombstone registry is cleared too: an in-memory-only
+    /// unmark would leave the id in the disk registry, so a later restart
+    /// would keep hiding the re-created/restored session from lists and
+    /// restore paths (ghost-session root cause R3 registry counterpart).
+    /// Best-effort by contract: a registry write failure only logs and must
+    /// never fail the calling create/restore/rollback path.
+    pub(crate) async fn unmark_session_deleted(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) {
+        self.deleted_session_ids.remove(session_id);
+        let Some(workspace_runtime_path) = session_storage_path.parent() else {
+            return;
+        };
+        let tombstone_path = workspace_runtime_path.join(DELETED_SESSION_IDS_FILE_NAME);
+        // Serialize the tombstone read-modify-write with any concurrent
+        // record/unmark for the same workspace so no entry can be lost by an
+        // interleaved read of a stale registry snapshot.
+        let _tombstone_guard = self
+            .tombstone_registry_locks
+            .lock(&tombstone_path.to_string_lossy())
+            .await;
+        let Ok(ids) = self.list_deleted_session_ids(session_storage_path).await else {
+            return;
+        };
+        if !ids.iter().any(|id| id == session_id) {
+            return;
+        }
+        let remaining: Vec<String> = ids.into_iter().filter(|id| id != session_id).collect();
+        if let Ok(payload) = serde_json::to_string(&remaining) {
+            // Atomic replace (temp + rename) so a concurrent reader or a crash
+            // can never observe a partially written registry. Strict variant:
+            // never degrades to a direct overwrite on Windows permission
+            // transients (d4-P2-8) — the tombstone contract forbids torn
+            // writes.
+            if let Err(error) = self
+                .persistence_manager
+                .write_text_atomic_strict(&tombstone_path, &payload)
+                .await
+            {
+                warn!(
+                    "Failed to persist deleted session id unmark: session_id={}, error={}",
+                    session_id, error
+                );
+            }
+        }
+    }
+
+    /// Loads the persistent deletion tombstone registry for the workspace.
+    /// `session_storage_path` is the workspace sessions directory; the
+    /// registry file lives next to it in the workspace runtime directory.
+    /// A missing registry reads as an empty list; a corrupt registry surfaces
+    /// an error (and leaves the file untouched) instead of silently returning
+    /// an empty list, which would mask a torn write and let every tombstone
+    /// evaporate (upstream PR #2139 review item 8).
+    pub(crate) async fn list_deleted_session_ids(
+        &self,
+        session_storage_path: &Path,
+    ) -> BitFunResult<Vec<String>> {
+        let Some(workspace_runtime_path) = session_storage_path.parent() else {
+            return Ok(Vec::new());
+        };
+        let tombstone_path = workspace_runtime_path.join(DELETED_SESSION_IDS_FILE_NAME);
+        let raw = match tokio::fs::read_to_string(&tombstone_path).await {
+            Ok(raw) => raw,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => {
+                // 非 NotFound 读取错误（权限/磁盘故障）必须 Err 传播，与 corrupt
+                // 分支对齐（4859f95dc）：静默返回空列表会让幽灵防护在读取失败时
+                // 失效——tombstoned 会话可被 restore / 已删除会话重新出现在 list
+                // （d4-P1-1）。
+                return Err(BitFunError::Service(format!(
+                    "Failed to read deleted session ids tombstone {}: {}; \
+                     the registry is left untouched so a torn write or IO \
+                     failure cannot silently clear it",
+                    tombstone_path.display(),
+                    error
+                )));
+            }
+        };
+        match serde_json::from_str::<Vec<String>>(&raw) {
+            Ok(ids) => Ok(ids),
+            Err(error) => Err(BitFunError::Service(format!(
+                "Failed to parse deleted session ids tombstone {}: {}; \
+                 the file is left untouched so a torn write cannot silently \
+                 clear the registry",
+                tombstone_path.display(),
+                error
+            ))),
+        }
+    }
+
+    /// Records a session id in the persistent deletion tombstone registry
+    /// for the workspace. Best-effort by contract: a registry write failure
+    /// is logged by the caller and must never roll back an already-successful
+    /// session deletion.
+    pub(crate) async fn record_deleted_session_id(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<()> {
+        let Some(workspace_runtime_path) = session_storage_path.parent() else {
+            return Ok(());
+        };
+        let tombstone_path = workspace_runtime_path.join(DELETED_SESSION_IDS_FILE_NAME);
+        // Serialize the tombstone read-modify-write with any concurrent
+        // record/unmark for the same workspace so no entry can be lost by an
+        // interleaved read of a stale registry snapshot.
+        let _tombstone_guard = self
+            .tombstone_registry_locks
+            .lock(&tombstone_path.to_string_lossy())
+            .await;
+        let mut ids = self.list_deleted_session_ids(session_storage_path).await?;
+        if ids.iter().any(|id| id == session_id) {
+            return Ok(());
+        }
+        ids.push(session_id.to_string());
+        if ids.len() > DELETED_SESSION_IDS_MAX_ENTRIES {
+            let evicted = ids.len() - DELETED_SESSION_IDS_MAX_ENTRIES;
+            log::warn!(
+                "Deleted-session-ids tombstone exceeded {} entries; evicting {} oldest id(s) (L4-P2-C: evicted ids lose precise ghost interception; on-disk session removal + reconcile remain the fallback): workspace_runtime_path={}",
+                DELETED_SESSION_IDS_MAX_ENTRIES,
+                evicted,
+                workspace_runtime_path.display()
+            );
+            ids.drain(..evicted);
+        }
+        let payload = serde_json::to_string(&ids)?;
+        // Ensure the workspace runtime directory exists: deletion can succeed
+        // while persistence is disabled, in which case the sessions directory
+        // (and its parent runtime directory) may never have been created. The
+        // tombstone write is the only stage that touches this path in that
+        // configuration, so it must create the parent itself (ghost-session
+        // root cause R3).
+        tokio::fs::create_dir_all(workspace_runtime_path).await?;
+        // Atomic replace (temp + rename) so a concurrent reader or a crash can
+        // never observe a partially written registry. Strict variant: no
+        // direct-overwrite fallback on Windows permission transients
+        // (d4-P2-8), so the "no torn write" guarantee is not silently
+        // downgraded.
+        self.persistence_manager
+            .write_text_atomic_strict(&tombstone_path, &payload)
+            .await?;
+        Ok(())
+    }
+
+    /// Returns true when the loaded session's on-disk storage was removed
+    /// externally (directory-level GC, manual deletion, or a concurrent
+    /// process) while the runtime still holds it. Turn finalization skips
+    /// these ids too, otherwise the tail write would recreate the storage the
+    /// external removal deleted (same ghost-resurrection shape as R1, via the
+    /// out-of-band removal path that does not set the explicit deleted marker).
+    pub(crate) fn is_session_disk_removed(&self, session_id: &str) -> bool {
+        self.disk_removed_loaded_ids.contains_key(session_id)
+    }
+
+    /// Snapshot of every loaded session (durable and transient) in memory.
+    /// Used by cascade traversal to discover descendants whose persisted
+    /// relationship may be broken.
+    pub(crate) fn loaded_sessions_snapshot(&self) -> Vec<Session> {
+        self.sessions
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect()
     }
 
     pub(crate) fn is_transient_session(&self, session_id: &str) -> bool {
@@ -1879,6 +2148,7 @@ impl SessionManager {
             session_storage_path_index: Arc::new(DashMap::new()),
             session_mutation_locks: KeyedAsyncLock::default(),
             session_write_locks: Arc::new(DashMap::new()),
+            tombstone_registry_locks: KeyedAsyncLock::default(),
             context_store,
             prompt_cache_store: Arc::new(SessionPromptCacheStore::new()),
             prompt_cache_operation_locks: KeyedAsyncLock::default(),
@@ -1890,6 +2160,10 @@ impl SessionManager {
             evidence_ledger: Arc::new(SessionEvidenceLedger::new()),
             persistence_manager,
             memory_database,
+            subagent_children: Arc::new(DashMap::new()),
+            subagent_children_dirty: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+            disk_removed_loaded_ids: Arc::new(DashMap::new()),
+            deleted_session_ids: Arc::new(DashMap::new()),
             config,
         };
 
@@ -2210,6 +2484,7 @@ impl SessionManager {
         let session_storage_path_index = self.session_storage_path_index.clone();
         let session_mutation_locks = self.session_mutation_locks.clone();
         let session_write_locks = self.session_write_locks.clone();
+        let tombstone_registry_locks = self.tombstone_registry_locks.clone();
         let context_store = self.context_store.clone();
         let prompt_cache_store = self.prompt_cache_store.clone();
         let prompt_cache_operation_locks = self.prompt_cache_operation_locks.clone();
@@ -2222,6 +2497,7 @@ impl SessionManager {
         let evidence_ledger = self.evidence_ledger.clone();
         let persistence_manager = self.persistence_manager.clone();
         let memory_database = self.memory_database.clone();
+        let deleted_session_ids = self.deleted_session_ids.clone();
         let manager_config = self.config.clone();
 
         tokio::spawn(async move {
@@ -2243,6 +2519,7 @@ impl SessionManager {
                 session_storage_path_index,
                 session_mutation_locks,
                 session_write_locks,
+                tombstone_registry_locks,
                 context_store,
                 prompt_cache_store,
                 prompt_cache_operation_locks,
@@ -2254,6 +2531,10 @@ impl SessionManager {
                 evidence_ledger,
                 persistence_manager,
                 memory_database,
+                subagent_children: Arc::new(DashMap::new()),
+                subagent_children_dirty: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+                disk_removed_loaded_ids: Arc::new(DashMap::new()),
+                deleted_session_ids,
                 config: manager_config,
             };
 
@@ -2406,6 +2687,7 @@ impl SessionManager {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn create_session_with_id_and_details_internal(
         &self,
         session_id: Option<String>,
@@ -2549,10 +2831,23 @@ impl SessionManager {
 
         info!("Session created: session_name={}", session.session_name);
 
+        // R-FIX-1: a successfully re-created session id must not inherit the
+        // deleted marker from a previous incarnation, otherwise its turn
+        // finalization would be skipped and its data would never be persisted.
+        // The durable unmark also clears the on-disk tombstone so a restart
+        // cannot keep hiding the re-created session from lists.
+        self.unmark_session_deleted(&session_storage_path, &session_id)
+            .await;
+
         Ok(session)
     }
 
-    /// Get session
+    /// Get session.
+    /// Hot-path: cloning the full Session is intentional to avoid holding
+    /// the DashMap shard lock across await points.  The session struct is
+    /// relatively lightweight for typical workloads; the heaviest field
+    /// (dialog_turn_ids) is a Vec<String> that rarely exceeds a few
+    /// hundred entries.
     pub fn get_session(&self, session_id: &str) -> Option<Session> {
         self.sessions.get(session_id).map(|s| s.clone())
     }
@@ -2654,6 +2949,33 @@ impl SessionManager {
                 .await;
         }
         stored
+    }
+
+    /// P-18：读取该 session 最近一次实际注入 User Context 时的缓存世代。
+    /// None = 从未注入（新对话首轮应注入）。
+    pub async fn user_context_injected_generation(&self, session_id: &str) -> Option<u64> {
+        self.ensure_prompt_cache_loaded(session_id).await;
+        self.prompt_cache_store.user_context_injected_generation(session_id)
+    }
+
+    /// P-18：记录该 session 已在指定缓存世代实际注入过 User Context（会话级一次）。
+    pub async fn remember_user_context_injected_generation(
+        &self,
+        session_id: &str,
+        generation: u64,
+    ) {
+        self.ensure_prompt_cache_loaded(session_id).await;
+        self.prompt_cache_store
+            .remember_user_context_injected_generation(session_id, generation);
+    }
+
+    /// P-18：清除该 session 的 User Context 注入标记（回到"从未注入"态）。
+    /// 每个用户消息回合（turn）开始时调用，使该回合首轮重新注入 User Context；
+    /// 同回合工具轮仍由 remember_user_context_injected_generation 抑制。
+    pub async fn clear_user_context_injected_generation(&self, session_id: &str) {
+        self.ensure_prompt_cache_loaded(session_id).await;
+        self.prompt_cache_store
+            .clear_user_context_injected_generation(session_id);
     }
 
     pub async fn clone_prompt_cache(
@@ -3550,6 +3872,31 @@ impl SessionManager {
                     last_active_at,
                 )
                 .await?;
+        } else if let Some(workspace_path) = workspace_path.as_ref() {
+            // 断点 1 修复（2026-08-08，RECON-子对话rename-list不同步-20260808）：
+            // transient 会话（Task persistent=false 的 EphemeralSubagent）rename
+            // 只改内存不写盘 → SessionControl list（读磁盘 metadata.session_name）
+            // 显示旧名。用户显式改名必须持久化：对该类会话也尽力写磁盘 title
+            // metadata（区分「用户显式改名必须持久化」vs「自动标题不写」）。
+            // 无磁盘 metadata（纯内存 transient）时 NotFound 忽略——list 本就不列它。
+            let last_active_at = now
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
+            let transient_write = self
+                .persistence_manager
+                .update_session_title_metadata(
+                    workspace_path,
+                    session_id,
+                    &updated_session.session_name,
+                    last_active_at,
+                )
+                .await;
+            if let Err(error) = transient_write {
+                if !matches!(error, BitFunError::NotFound(_)) {
+                    return Err(error);
+                }
+            }
         }
 
         let Some(mut session) = self.sessions.get_mut(session_id) else {
@@ -4216,7 +4563,7 @@ impl SessionManager {
     /// Sync session context window from AI config without requiring an explicit model_id.
     ///
     /// Subagent sessions created via `build_session_config_for_workspace` use
-    /// `SessionConfig::default()` which hardcodes `max_context_tokens: 128128`.
+    /// `SessionConfig::default()` which hardcodes `max_context_tokens: 1M`.
     /// This method reloads the AI config and updates `max_context_tokens` to the
     /// model's actual configured `context_window`, so subagents with large-context
     /// models are not prematurely capped.
@@ -4300,12 +4647,29 @@ impl SessionManager {
                 workspace_path,
             )
             .await;
-        self.delete_session_from_paths_locked(
-            &cleanup_workspace_path,
-            &session_storage_path,
-            session_id,
-        )
-        .await
+        // R-FIX-2: mark the session as deleted BEFORE the fallible deletion
+        // stage. This closes the check-then-delete race for an in-flight turn
+        // finalization tail write: from this point on finalization sees the
+        // session as deleted and skips metadata/turn recreation even while the
+        // in-memory session still exists. A failed deletion rolls the marker
+        // back so it cannot poison a re-created id.
+        self.mark_session_deleted(session_id);
+        let delete_result = self
+            .delete_session_from_paths_locked(
+                &cleanup_workspace_path,
+                &session_storage_path,
+                session_id,
+            )
+            .await;
+        if delete_result.is_err() {
+            // Rollback the early marker; the tombstone was never written in
+            // this window, so the durable unmark is a no-op registry-wise.
+            self.unmark_session_deleted(&session_storage_path, session_id)
+                .await;
+        }
+        delete_result?;
+        self.invalidate_subagent_children_cache();
+        Ok(())
     }
 
     pub(crate) async fn delete_session_by_id(&self, session_id: &str) -> BitFunResult<()> {
@@ -4342,12 +4706,234 @@ impl SessionManager {
                 &session_storage_path,
             )
             .await;
-        self.delete_session_from_paths_locked(
-            &cleanup_workspace_path,
-            &session_storage_path,
-            session_id,
-        )
-        .await
+        // R-FIX-2: mark before the fallible deletion stage (see
+        // `delete_session_locked`); roll back on failure.
+        self.mark_session_deleted(session_id);
+        let delete_result = self
+            .delete_session_from_paths_locked(
+                &cleanup_workspace_path,
+                &session_storage_path,
+                session_id,
+            )
+            .await;
+        if delete_result.is_err() {
+            // Rollback the early marker; the tombstone was never written in
+            // this window, so the durable unmark is a no-op registry-wise.
+            self.unmark_session_deleted(&session_storage_path, session_id)
+                .await;
+        }
+        delete_result
+    }
+
+    /// Report-only disk scan: find orphaned session metadata in one workspace.
+    /// Nothing is deleted by this scan; callers decide whether to act.
+    pub async fn scan_orphaned_sessions_in_workspace(
+        &self,
+        workspace_path: &Path,
+    ) -> BitFunResult<SessionGcReport> {
+        let metadata = self
+            .persistence_manager()
+            .list_session_metadata_including_internal(workspace_path)
+            .await?;
+        Ok(classify_orphaned_metadata(&metadata))
+    }
+
+    /// Report-only process-local sweep: transient sessions that have finished
+    /// executing (not Processing) and whose parent (if any) is no longer
+    /// loaded, so no reuse reference can remain. Nothing is discarded by this
+    /// scan; callers decide whether to act.
+    pub fn list_transient_sweep_candidates(&self) -> Vec<TransientSweepCandidate> {
+        let sessions = self
+            .sessions
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect::<Vec<_>>();
+        let mut candidates = Vec::new();
+        for session in sessions {
+            if !self.transient_session_ids.contains_key(&session.session_id) {
+                continue;
+            }
+            if matches!(session.state, SessionState::Processing { .. }) {
+                continue;
+            }
+            let parent_session_id = session
+                .created_by
+                .as_deref()
+                .and_then(|marker| marker.strip_prefix("session-"))
+                .map(str::to_string);
+            // Sessions without a `session-{parent}` creator marker (top-level
+            // and Commander-owner sessions) are structurally exempt from orphan
+            // classification and must never be swept.
+            let Some(parent_session_id) = parent_session_id else {
+                continue;
+            };
+            let parent_alive = self.get_session(&parent_session_id).is_some();
+            if parent_alive {
+                // A live parent may still reuse this session.
+                continue;
+            }
+            candidates.push(TransientSweepCandidate {
+                session_id: session.session_id,
+                parent_session_id: Some(parent_session_id),
+            });
+        }
+        candidates
+    }
+
+    /// Periodic orphan recycling: archive-then-delete with guards.
+    ///
+    /// Runs on the 60-second cleanup ticker. Candidates come from two
+    /// report-only scans:
+    /// - `scan_orphaned_sessions_in_workspace` (persisted metadata whose
+    ///   parent is missing from the workspace scan);
+    /// - `list_transient_sweep_candidates` (finished transient sessions whose
+    ///   parent is no longer loaded).
+    ///
+    /// Disposal is deliberately conservative:
+    /// - daemon/warden sessions are never recycled;
+    /// - Processing sessions are skipped until they finish;
+    /// - sessions without a `session-{parent}` creator marker (top-level and
+    ///   Commander-owner sessions) are never recycled;
+    /// - a candidate is archived first (`SessionStatus::Archived`, the same
+    ///   write the frontend archive RPC performs) and only deleted through
+    ///   the full `delete_session` chain once the archive succeeded.
+    pub(crate) async fn recycle_orphaned_sessions(&self) {
+        let mut workspaces: Vec<PathBuf> = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for session in self.loaded_sessions_snapshot() {
+            if let Some(workspace_path) = session.config.workspace_path {
+                if seen.insert(workspace_path.clone()) {
+                    workspaces.push(PathBuf::from(workspace_path));
+                }
+            }
+        }
+        for binding in self.session_storage_path_index.iter() {
+            if seen.insert(binding.value().path.to_string_lossy().to_string()) {
+                workspaces.push(binding.value().path.clone());
+            }
+        }
+        for workspace_path in workspaces {
+            if let Err(error) = self
+                .recycle_orphaned_sessions_in_workspace(&workspace_path)
+                .await
+            {
+                warn!(
+                    "Failed to recycle orphaned sessions: workspace_path={}, error={}",
+                    workspace_path.display(),
+                    error
+                );
+            }
+        }
+        for candidate in self.list_transient_sweep_candidates() {
+            let Some(session) = self.get_session(&candidate.session_id) else {
+                continue;
+            };
+            if session.config.is_daemon || session.agent_type.starts_with("warden-") {
+                continue;
+            }
+            let Some(workspace_path) = session.config.workspace_path.clone() else {
+                continue;
+            };
+            if let Err(error) = self
+                .discard_transient_session(
+                    Path::new(&workspace_path),
+                    session.config.remote_connection_id.as_deref(),
+                    session.config.remote_ssh_host.as_deref(),
+                    &candidate.session_id,
+                )
+                .await
+            {
+                warn!(
+                    "Failed to discard transient orphan session: session_id={}, error={}",
+                    candidate.session_id, error
+                );
+            }
+        }
+    }
+
+    /// Archive-then-delete orphan candidates reported for one workspace.
+    ///
+    /// Deletion failures are propagated (S-80: delete-class fixes must surface
+    /// errors) instead of being swallowed with a `warn!`, so the periodic
+    /// caller can observe and aggregate them. All candidates are still
+    /// processed — failures are collected and the first one is returned once
+    /// the scan finishes, so one failed recycle never starves the rest.
+    pub(crate) async fn recycle_orphaned_sessions_in_workspace(
+        &self,
+        workspace_path: &Path,
+    ) -> BitFunResult<()> {
+        let report = self
+            .scan_orphaned_sessions_in_workspace(workspace_path)
+            .await?;
+        let mut first_error: Option<BitFunError> = None;
+        for orphan in report.orphaned {
+            if self
+                .orphan_recycle_guard_blocks(workspace_path, &orphan.session_id)
+                .await
+            {
+                debug!(
+                    "Skipping orphan recycle by guard: session_id={}",
+                    orphan.session_id
+                );
+                continue;
+            }
+            let archive_result = self
+                .update_session_metadata(workspace_path, &orphan.session_id, |metadata| {
+                    metadata.status = SessionStatus::Archived;
+                })
+                .await;
+            if let Err(error) = archive_result {
+                warn!(
+                    "Failed to archive orphaned session before recycle: session_id={}, error={}",
+                    orphan.session_id, error
+                );
+                first_error.get_or_insert(error);
+                continue;
+            }
+            if let Err(error) = self.delete_session(workspace_path, &orphan.session_id).await {
+                warn!(
+                    "Failed to delete archived orphaned session: session_id={}, error={}",
+                    orphan.session_id, error
+                );
+                first_error.get_or_insert(error);
+            }
+        }
+        if let Some(error) = first_error {
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    /// Guard gate for one orphan candidate. Returns true when the candidate
+    /// must not be recycled: daemon/warden sessions, Processing sessions, and
+    /// sessions without a `session-{parent}` creator marker (top-level and
+    /// Commander-owner sessions are structurally exempt from orphan
+    /// classification, so this is a defensive second gate).
+    async fn orphan_recycle_guard_blocks(&self, workspace_path: &Path, session_id: &str) -> bool {
+        let loaded = self.get_session(session_id);
+        if let Some(session) = loaded.as_ref() {
+            if session.config.is_daemon || session.agent_type.starts_with("warden-") {
+                return true;
+            }
+            if matches!(session.state, SessionState::Processing { .. }) {
+                return true;
+            }
+        }
+        let metadata = self
+            .load_session_metadata(workspace_path, session_id)
+            .await
+            .ok()
+            .flatten();
+        if let Some(metadata) = metadata.as_ref() {
+            if metadata.is_daemon || metadata.agent_type.starts_with("warden-") {
+                return true;
+            }
+        }
+        let created_by = loaded
+            .as_ref()
+            .and_then(|session| session.created_by.as_deref())
+            .or_else(|| metadata.as_ref().and_then(|m| m.created_by.as_deref()));
+        !created_by.is_some_and(|marker| marker.starts_with("session-"))
     }
 
     /// Discards one loaded non-durable Session without touching persisted
@@ -4426,7 +5012,7 @@ impl SessionManager {
         Ok(family)
     }
 
-    fn transient_descendants_postorder(&self, root_session_id: &str) -> Vec<Session> {
+    pub(crate) fn transient_descendants_postorder(&self, root_session_id: &str) -> Vec<Session> {
         fn visit(
             parent_session_id: &str,
             sessions: &[Session],
@@ -4761,7 +5347,31 @@ impl SessionManager {
             elapsed_ms_u64(memory_stage_started_at)
         );
         self.session_storage_path_index.remove(session_id);
+        self.disk_removed_loaded_ids.remove(session_id);
+        // The deleted marker was set before this stage by
+        // `delete_session_locked`/`delete_session_by_id` (R-FIX-2) so the
+        // in-flight finalization window is closed from the start of deletion.
         self.release_session_write_lock(session_id);
+
+        // Persist a deletion tombstone so a later process restart can answer
+        // "was this session confirmed deleted" for the workspace (the
+        // frontend initialization path pulls this registry to guard against
+        // ghost resurrection of deleted subagent sessions). The registry
+        // write is intentionally decoupled from `enable_persistence`: even
+        // when persistence is disabled (and the on-disk deletion stage is
+        // skipped), the deletion fact must still be recorded so a residual
+        // session directory cannot be loaded back as a ghost on the next
+        // restart (ghost-session root cause R3). Best-effort: a registry
+        // write failure must not roll back an already-completed deletion.
+        if let Err(error) = self
+            .record_deleted_session_id(session_storage_path, session_id)
+            .await
+        {
+            warn!(
+                "Failed to record deleted session id tombstone: session_id={}, error={}",
+                session_id, error
+            );
+        }
 
         info!(
             "Session deletion completed: session_id={}, cleanup_workspace_path={}, session_storage_path={}, duration_ms={}",
@@ -4772,6 +5382,157 @@ impl SessionManager {
         );
 
         Ok(())
+    }
+
+    /// Reconcile runtime loaded sessions against on-disk session storage.
+    ///
+    /// Sessions whose storage directory was removed externally (directory-level
+    /// GC, manual deletion, or a concurrent process) are unloaded from runtime
+    /// memory once they are not processing, and any on-disk remnants (a running
+    /// turn may have re-saved the directory before this reconcile) are removed
+    /// so the deleted session cannot resurrect through a later list. Sessions
+    /// still processing are kept until they finish; auto-save skips them so a
+    /// finished deleted session is never persisted again.
+    ///
+    /// `sessions_dir` is the resolved sessions storage root (same path
+    /// semantics as `list_sessions`).
+    pub async fn reconcile_loaded_sessions_with_disk(
+        &self,
+        sessions_dir: &Path,
+    ) -> BitFunResult<()> {
+        if !self.config.enable_persistence {
+            return Ok(());
+        }
+        let disk_metadata = self
+            .persistence_manager
+            .list_session_metadata_including_internal(sessions_dir)
+            .await?;
+        let disk_ids: HashSet<&str> = disk_metadata
+            .iter()
+            .map(|metadata| metadata.session_id.as_str())
+            .collect();
+        let normalized_sessions_dir = Self::normalize_session_storage_path(sessions_dir);
+
+        // Snapshot the loaded sessions bound to this storage path so the
+        // DashMap can be mutated while iterating.
+        let loaded: Vec<Session> = self
+            .sessions
+            .iter()
+            .filter_map(|entry| {
+                let session = entry.value();
+                let bound_path = self
+                    .session_storage_path_index
+                    .get(&session.session_id)
+                    .map(|binding| binding.path.clone())
+                    .unwrap_or_default();
+                (bound_path == normalized_sessions_dir).then(|| session.clone())
+            })
+            .collect();
+
+        for session in loaded {
+            if self.is_transient_session(&session.session_id) {
+                continue;
+            }
+            let on_disk = disk_ids.contains(session.session_id.as_str());
+            let is_marked_removed = self
+                .disk_removed_loaded_ids
+                .contains_key(&session.session_id);
+            if on_disk && !is_marked_removed {
+                // Normal session: storage is present and no external deletion
+                // was observed.
+                continue;
+            }
+            if on_disk && is_marked_removed {
+                // The session was externally deleted while processing and a
+                // running turn re-saved its storage. Keep the deletion marker
+                // until the session finishes so it is not silently restored;
+                // once idle it is unloaded and its storage removed below.
+                if matches!(session.state, SessionState::Processing { .. }) {
+                    continue;
+                }
+                info!(
+                    "Externally deleted session finished running; unloading and removing storage: session_id={}, sessions_dir={}",
+                    session.session_id,
+                    normalized_sessions_dir.display()
+                );
+                self.unload_disk_removed_session(&session.session_id);
+                if let Err(error) = self
+                    .persistence_manager
+                    .delete_session(sessions_dir, &session.session_id)
+                    .await
+                {
+                    // Propagate instead of swallowing: a failed removal means
+                    // the deleted session's re-saved storage survives on disk
+                    // and can resurrect through a later list. The caller must
+                    // see the failure so it can retry or surface it.
+                    warn!(
+                        "Failed to remove disk remnants of externally deleted session: session_id={}, error={}",
+                        session.session_id, error
+                    );
+                    return Err(error);
+                }
+                continue;
+            }
+
+            // Storage is missing while the session stays loaded: the session
+            // was removed externally. Auto-save skips it (see
+            // `collect_auto_save_snapshots`) so the storage cannot resurrect.
+            self.disk_removed_loaded_ids
+                .insert(session.session_id.clone(), ());
+            if matches!(session.state, SessionState::Processing { .. }) {
+                warn!(
+                    "Loaded session storage was removed externally; keeping running session until it finishes: session_id={}, sessions_dir={}",
+                    session.session_id,
+                    normalized_sessions_dir.display()
+                );
+                continue;
+            }
+            info!(
+                "Loaded session storage was removed externally; unloading from runtime memory: session_id={}, sessions_dir={}",
+                session.session_id,
+                normalized_sessions_dir.display()
+            );
+            self.unload_disk_removed_session(&session.session_id);
+            if let Err(error) = self
+                .persistence_manager
+                .delete_session(sessions_dir, &session.session_id)
+                .await
+            {
+                warn!(
+                    "Failed to remove disk remnants of externally deleted session: session_id={}, error={}",
+                    session.session_id, error
+                );
+                return Err(error);
+            }
+        }
+        Ok(())
+    }
+
+    /// Unload a session from runtime memory without persisting it.
+    ///
+    /// Used by [`Self::reconcile_loaded_sessions_with_disk`] for sessions whose
+    /// on-disk storage was removed externally. The normal delete path
+    /// (`delete_session_from_paths_locked`) removes storage first and then
+    /// memory; this path must never write the session back to disk, so it skips
+    /// the pre-unload save that `unload_session_from_memory` performs.
+    fn unload_disk_removed_session(&self, session_id: &str) {
+        self.sessions.remove(session_id);
+        self.transient_session_ids.remove(session_id);
+        self.release_active_session_reservation(session_id);
+        clear_session_runtime_stores(
+            session_id,
+            self.context_store.as_ref(),
+            self.prompt_cache_store.as_ref(),
+            self.token_anchor_store.as_ref(),
+            self.turn_skill_agent_snapshot_store.as_ref(),
+            self.skill_agent_baseline_override_snapshot_store.as_ref(),
+            self.file_read_state_store.as_ref(),
+            self.evidence_ledger.as_ref(),
+        );
+        self.session_storage_path_index.remove(session_id);
+        self.release_session_write_lock(session_id);
+        self.disk_removed_loaded_ids.remove(session_id);
+        self.invalidate_subagent_children_cache();
     }
 
     /// Restore session from a local or legacy workspace path.
@@ -4854,6 +5615,12 @@ impl SessionManager {
                 include_internal,
             )
             .await?;
+        // R-FIX-1: a restored session id is live again; clear any deleted
+        // marker left by a previous incarnation so finalization persists.
+        // The durable unmark also clears the on-disk tombstone so a restart
+        // cannot keep hiding the restored session from lists and restores.
+        self.unmark_session_deleted(&session_storage_path, session_id)
+            .await;
         Ok(session)
     }
 
@@ -5128,7 +5895,7 @@ impl SessionManager {
             .is_some_and(|metadata| !include_internal && metadata.should_hide_from_user_lists())
         {
             return Err(BitFunError::NotFound(format!(
-                "Session not found: {}",
+                "Session exists but is hidden: {}",
                 session_id
             )));
         }
@@ -5388,7 +6155,7 @@ impl SessionManager {
             .is_some_and(|metadata| !include_internal && metadata.should_hide_from_user_lists())
         {
             return Err(BitFunError::NotFound(format!(
-                "Session not found: {}",
+                "Session exists but is hidden: {}",
                 session_id
             )));
         }
@@ -5471,7 +6238,11 @@ impl SessionManager {
                 external_sources_supported,
                 Some(session.config.agent_route_owner),
             );
-            if let Some(binding) = persisted_binding {
+            // 契约升级：resolve_primary_agent_for_turn 现返回 Result
+            // （OwnerMismatch/CandidateUnavailable）。按原有语义适配——
+            // Err 视为无绑定：External owner 继续 fail-closed（保持绑定），
+            // 非 External 走可执行 fallback。
+            if let Some(binding) = persisted_binding.ok() {
                 if session.config.agent_route_owner != binding.route_owner {
                     session.config.agent_route_owner = binding.route_owner;
                     should_persist_restored_session = true;
@@ -6144,12 +6915,119 @@ impl SessionManager {
 
     /// List all sessions
     pub async fn list_sessions(&self, workspace_path: &Path) -> BitFunResult<Vec<SessionSummary>> {
+        self.list_sessions_with_options(workspace_path, false).await
+    }
+
+    /// Lists sessions, optionally including hidden Subagent/Ephemeral sessions
+    /// for full conversation management.
+    ///
+    /// Session ids recorded in the workspace deletion tombstone registry are
+    /// filtered out: a confirmed-deleted session must never be listed again,
+    /// even when residual disk metadata survives (backend double insurance,
+    /// mirroring the product-runtime list path and the frontend pre-warm path).
+    pub async fn list_sessions_with_options(
+        &self,
+        workspace_path: &Path,
+        include_internal: bool,
+    ) -> BitFunResult<Vec<SessionSummary>> {
         if self.config.enable_persistence {
-            self.persistence_manager.list_sessions(workspace_path).await
+            // Reconcile runtime memory against disk first so sessions whose
+            // storage was removed externally (directory-level GC / manual
+            // deletion) stop being listed and cannot be auto-saved back.
+            // `reconcile_loaded_sessions_with_disk` compares against the
+            // resolved sessions directory bound in `session_storage_path_index`,
+            // so resolve the workspace path first: passing the raw workspace
+            // root here would normalize to a different path and silently no-op
+            // the reconcile (scheduler / direct-call list paths).
+            let storage_path = self
+                .resolve_storage_path_for_workspace_path(workspace_path)
+                .await;
+            self.reconcile_loaded_sessions_with_disk(&storage_path)
+                .await?;
+                let metadata_list = self
+                    .persistence_manager
+                    .list_session_metadata_with_options(workspace_path, include_internal)
+                    .await?;
+                // Backend tombstone filter (F6): read the durable deletion
+                // registry once and drop any confirmed-deleted session id so
+                // every list consumer (SessionControl list, tools, scheduler,
+                // coordinator) is protected even when the frontend pre-warm
+                // filter is bypassed. Fail-closed by contract (L4-P2-A): a
+                // corrupt/unreadable registry propagates Err via `?` (see
+                // list_deleted_session_ids) instead of silently degrading to an
+                // empty filter — silently returning nothing to filter would let
+                // tombstoned sessions reappear in listings. This mirrors the
+                // product-runtime list path and the corrupt-tombstone test
+                // (corrupt_tombstone_surfaces_error_and_keeps_file_untouched).
+                let deleted_ids = self.list_deleted_session_ids(&storage_path).await?;
+                let deleted: HashSet<&str> = deleted_ids.iter().map(String::as_str).collect();
+                let mut summaries = Vec::with_capacity(metadata_list.len());
+                for metadata in metadata_list {
+                    if deleted.contains(metadata.session_id.as_str()) {
+                        continue;
+                    }
+                    let reasoning_preset = self
+                        .persistence_manager
+                        .load_stored_session_state(workspace_path, &metadata.session_id)
+                        .await?
+                        .and_then(|value| value.config.reasoning_preset);
+                    let state = metadata
+                        .runtime_state
+                        .as_ref()
+                        .and_then(|v| serde_json::from_value::<SessionState>(v.clone()).ok())
+                        .unwrap_or(SessionState::Idle);
+                    summaries.push(SessionSummary {
+                        session_id: metadata.session_id,
+                        session_name: metadata.session_name,
+                        agent_type: metadata.agent_type,
+                        model_id: (!metadata.model_name.trim().is_empty())
+                            .then_some(metadata.model_name),
+                        reasoning_preset,
+                        last_user_dialog_agent_type: metadata.last_user_dialog_agent_type,
+                        last_submitted_agent_type: metadata.last_submitted_agent_type,
+                        created_by: metadata.created_by,
+                        kind: metadata.session_kind,
+                        turn_count: metadata.turn_count,
+                        created_at: std::time::UNIX_EPOCH
+                            + std::time::Duration::from_millis(metadata.created_at),
+                        last_activity_at: std::time::UNIX_EPOCH
+                            + std::time::Duration::from_millis(metadata.last_active_at),
+                        state,
+                        parent_session_id: metadata
+                            .relationship
+                            .as_ref()
+                            .and_then(|r| r.parent_session_id.clone()),
+                        is_daemon: metadata.is_daemon,
+                    });
+                }
+                summaries.sort_by_key(|summary| std::cmp::Reverse(summary.last_activity_at));
+                return Ok(summaries);
         } else {
+            // Non-persistent mode: the in-memory sessions table is the only
+            // source. A confirmed-deleted session is already removed from
+            // memory, but the durable tombstone registry still guards against
+            // ghost resurrection through a residual directory on restart.
+            // Mirror the persistent-branch tombstone filter (defensive
+            // depth): any session id present in the registry is dropped from
+            // the listing even if a runtime remnant were ever re-inserted.
+            let storage_path = self
+                .resolve_storage_path_for_workspace_path(workspace_path)
+                .await;
+            let deleted_ids = self.list_deleted_session_ids(&storage_path).await?;
+            let deleted: HashSet<&str> = deleted_ids.iter().map(String::as_str).collect();
             let summaries: Vec<_> = self
                 .sessions
                 .iter()
+                .filter(|entry| {
+                    !deleted.contains(entry.value().session_id.as_str())
+                        && (include_internal
+                            || !matches!(
+                                entry.value().kind,
+                                SessionKind::Subagent
+                                    | SessionKind::EphemeralChild
+                                    | SessionKind::EphemeralSubagent
+                            ))
+                })
                 .map(|entry| {
                     let session = entry.value();
                     SessionSummary {
@@ -6166,13 +7044,9 @@ impl SessionManager {
                         created_at: session.created_at,
                         last_activity_at: session.last_activity_at,
                         state: session.state.clone(),
+                        parent_session_id: None,
+                        is_daemon: session.config.is_daemon,
                     }
-                })
-                .filter(|summary| {
-                    !matches!(
-                        summary.kind,
-                        SessionKind::Subagent | SessionKind::EphemeralChild
-                    )
                 })
                 .collect();
             Ok(summaries)
@@ -6378,10 +7252,15 @@ impl SessionManager {
         session_id: &str,
         relationship: SessionRelationship,
     ) -> BitFunResult<()> {
-        self.update_persisted_session_metadata(session_id, |metadata| {
-            set_session_relationship(metadata, relationship)
-        })
-        .await
+        let result = self
+            .update_persisted_session_metadata(session_id, |metadata| {
+                set_session_relationship(metadata, relationship)
+            })
+            .await;
+        if result.is_ok() {
+            self.invalidate_subagent_children_cache();
+        }
+        result
     }
 
     pub async fn persist_session_lineage(
@@ -6389,10 +7268,15 @@ impl SessionManager {
         session_id: &str,
         relationship: SessionRelationship,
     ) -> BitFunResult<()> {
-        self.update_persisted_session_metadata(session_id, |metadata| {
-            apply_session_lineage(metadata, relationship)
-        })
-        .await
+        let result = self
+            .update_persisted_session_metadata(session_id, |metadata| {
+                apply_session_lineage(metadata, relationship)
+            })
+            .await;
+        if result.is_ok() {
+            self.invalidate_subagent_children_cache();
+        }
+        result
     }
 
     pub async fn collect_hidden_subagent_cascade_for_parent_turns(
@@ -6405,15 +7289,101 @@ impl SessionManager {
             return Ok(Vec::new());
         }
 
+        self.ensure_subagent_children_cache(workspace_path).await?;
+        Ok(collect_hidden_subagent_cascade_from_index(
+            &self.subagent_children,
+            parent_session_id,
+            parent_dialog_turn_ids,
+        ))
+    }
+
+    /// Collect the hidden subagent cascade ids for a parent session's dialog
+    /// turns. Thin delegation over
+    /// [`Self::collect_hidden_subagent_cascade_for_parent_turns`] keeping the
+    /// services-core-owned cascade semantics reachable from the session
+    /// manager facade.
+    pub async fn collect_hidden_subagent_cascade_ids(
+        &self,
+        workspace_path: &Path,
+        parent_session_id: &str,
+        parent_dialog_turn_ids: &HashSet<String>,
+    ) -> BitFunResult<Vec<String>> {
+        self.collect_hidden_subagent_cascade_for_parent_turns(
+            workspace_path,
+            parent_session_id,
+            parent_dialog_turn_ids,
+        )
+        .await
+    }
+
+    /// Enumerate every descendant session id in the subagent tree rooted at
+    /// `session_id`, excluding `session_id` itself.
+    ///
+    /// The traversal covers the full subtree (nested child sessions at any
+    /// depth) using the subagent-children index rebuilt from persisted
+    /// metadata when dirty. Returns an empty list when the workspace is
+    /// unknown, the session has no descendants, or persistence is disabled.
+    pub async fn session_tree_descendants(
+        &self,
+        workspace_path: Option<&Path>,
+        session_id: &str,
+    ) -> BitFunResult<Vec<String>> {
+        let Some(workspace_path) = workspace_path else {
+            return Ok(Vec::new());
+        };
+        self.ensure_subagent_children_cache(workspace_path).await?;
+        let mut visited = HashSet::new();
+        let mut ordered_session_ids = Vec::new();
+        collect_subagent_post_order_from_index(
+            &self.subagent_children,
+            session_id,
+            &mut visited,
+            &mut ordered_session_ids,
+        );
+        // Post-order traversal appends the root itself last; descendants
+        // precede it, so popping the tail excludes the root.
+        ordered_session_ids.pop();
+        Ok(ordered_session_ids)
+    }
+
+    async fn ensure_subagent_children_cache(&self, workspace_path: &Path) -> BitFunResult<()> {
+        if !self
+            .subagent_children_dirty
+            .swap(false, std::sync::atomic::Ordering::AcqRel)
+        {
+            return Ok(());
+        }
         let metadata_list = self
             .persistence_manager
             .list_session_metadata_including_internal(workspace_path)
             .await?;
-        Ok(collect_hidden_subagent_cascade_ids(
-            metadata_list,
-            parent_session_id,
-            parent_dialog_turn_ids,
-        ))
+        self.subagent_children.clear();
+        for metadata in &metadata_list {
+            let Some(ref relationship) = metadata.relationship else {
+                continue;
+            };
+            if !matches!(relationship.kind, Some(SessionRelationshipKind::Subagent)) {
+                continue;
+            }
+            let Some(ref parent_id) = relationship.parent_session_id else {
+                continue;
+            };
+            let dialog_turn_id = relationship
+                .parent_dialog_turn_id
+                .clone()
+                .unwrap_or_default();
+            self.subagent_children
+                .entry(parent_id.clone())
+                .or_default()
+                .push((metadata.session_id.clone(), dialog_turn_id));
+        }
+        Ok(())
+    }
+
+    /// Mark subagent children cache as dirty, forcing a rebuild on next cascade traversal.
+    fn invalidate_subagent_children_cache(&self) {
+        self.subagent_children_dirty
+            .store(true, std::sync::atomic::Ordering::Release);
     }
 
     pub async fn set_session_deep_review_run_manifest(
@@ -6669,6 +7639,7 @@ impl SessionManager {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn start_dialog_turn_with_prepended_messages(
         &self,
         session_id: &str,
@@ -6941,15 +7912,13 @@ impl SessionManager {
                     let mut order_index = 0usize;
 
                     match &msg.content {
-                        MessageContent::Text(text) => {
-                            if !text.trim().is_empty() {
-                                text_items.push(Self::make_text_item(
-                                    &format!("{}-text-{}", round_id, order_index),
-                                    text,
-                                    timestamp,
-                                    order_index,
-                                ));
-                            }
+                        MessageContent::Text(text) if !text.trim().is_empty() => {
+                            text_items.push(Self::make_text_item(
+                                &format!("{}-text-{}", round_id, order_index),
+                                text,
+                                timestamp,
+                                order_index,
+                            ));
                         }
                         MessageContent::Mixed {
                             reasoning_content,
@@ -7742,6 +8711,12 @@ impl SessionManager {
         )
     }
 
+    /// Reset the review-spin counters after a force-serve (d5-P1-2: 放行一次即清零).
+    pub fn reset_review_read_spin_counters(&self, session_id: &str, logical_path: &str) -> bool {
+        self.file_read_state_store
+            .reset_review_read_spin_counters(session_id, logical_path)
+    }
+
     /// Get dialog turn count
     pub fn get_turn_count(&self, session_id: &str) -> usize {
         self.sessions
@@ -7935,6 +8910,7 @@ impl SessionManager {
     fn spawn_auto_save_task(&self) {
         let sessions = self.sessions.clone();
         let transient_session_ids = self.transient_session_ids.clone();
+        let disk_removed_loaded_ids = self.disk_removed_loaded_ids.clone();
         let persistence = self.persistence_manager.clone();
         let session_mutation_locks = self.session_mutation_locks.clone();
         let interval = self.config.auto_save_interval;
@@ -7945,8 +8921,11 @@ impl SessionManager {
             loop {
                 ticker.tick().await;
 
-                for snapshot in Self::collect_auto_save_snapshots(&sessions, &transient_session_ids)
-                {
+                for snapshot in Self::collect_auto_save_snapshots(
+                    &sessions,
+                    &transient_session_ids,
+                    &disk_removed_loaded_ids,
+                ) {
                     let _mutation_guard = session_mutation_locks.lock(&snapshot.session_id).await;
                     if !Self::auto_save_snapshot_is_current(&sessions, &snapshot) {
                         continue;
@@ -7982,12 +8961,14 @@ impl SessionManager {
     fn spawn_cleanup_task(&self) {
         let sessions = self.sessions.clone();
         let transient_session_ids = self.transient_session_ids.clone();
+        let disk_removed_loaded_ids = self.disk_removed_loaded_ids.clone();
         let active_session_permits = self.active_session_permits.clone();
         let timeout = self.config.session_idle_timeout;
         let persistence = self.persistence_manager.clone();
         let enable_persistence = self.config.enable_persistence;
         let session_mutation_locks = self.session_mutation_locks.clone();
         let session_write_locks = self.session_write_locks.clone();
+        let tombstone_registry_locks = self.tombstone_registry_locks.clone();
         let context_store = self.context_store.clone();
         let prompt_cache_store = self.prompt_cache_store.clone();
         let token_anchor_store = self.token_anchor_store.clone();
@@ -7997,12 +8978,54 @@ impl SessionManager {
         let edit_constraints_store = self.edit_constraints_store.clone();
         let file_read_state_store = self.file_read_state_store.clone();
         let evidence_ledger = self.evidence_ledger.clone();
+        // Orphan recycling rebuilds a thin `Self` handle inside the ticker (the
+        // same pattern used by `spawn_model_reconciliation_listener`) so the
+        // full `&self` archive/delete chain can be reused.
+        let active_session_capacity = self.active_session_capacity.clone();
+        let session_storage_path_index = self.session_storage_path_index.clone();
+        let prompt_cache_operation_locks = self.prompt_cache_operation_locks.clone();
+        let memory_database = self.memory_database.clone();
+        let subagent_children = self.subagent_children.clone();
+        let subagent_children_dirty = self.subagent_children_dirty.clone();
+        let deleted_session_ids = self.deleted_session_ids.clone();
+        let manager_config = self.config.clone();
 
         tokio::spawn(async move {
+            // The thin handle clones the shared Arc fields: the loop body below
+            // still borrows the original locals (e.g. for the expired-session
+            // cleanup path), and Arc clones share the same underlying maps.
+            let manager = Self {
+                sessions: sessions.clone(),
+                transient_session_ids: transient_session_ids.clone(),
+                active_session_capacity: active_session_capacity.clone(),
+                active_session_permits: active_session_permits.clone(),
+                session_storage_path_index: session_storage_path_index.clone(),
+                session_mutation_locks: session_mutation_locks.clone(),
+                session_write_locks: session_write_locks.clone(),
+                tombstone_registry_locks: tombstone_registry_locks.clone(),
+                context_store: context_store.clone(),
+                prompt_cache_store: prompt_cache_store.clone(),
+                prompt_cache_operation_locks: prompt_cache_operation_locks.clone(),
+                token_anchor_store: token_anchor_store.clone(),
+                turn_skill_agent_snapshot_store: turn_skill_agent_snapshot_store.clone(),
+                skill_agent_baseline_override_snapshot_store: skill_agent_baseline_override_snapshot_store.clone(),
+                edit_constraints_store: edit_constraints_store.clone(),
+                file_read_state_store: file_read_state_store.clone(),
+                evidence_ledger: evidence_ledger.clone(),
+                persistence_manager: persistence.clone(),
+                memory_database: memory_database.clone(),
+                subagent_children: subagent_children.clone(),
+                subagent_children_dirty: subagent_children_dirty.clone(),
+                disk_removed_loaded_ids: disk_removed_loaded_ids.clone(),
+                deleted_session_ids: deleted_session_ids.clone(),
+                config: manager_config,
+            };
             let mut ticker = time::interval(Duration::from_secs(60));
 
             loop {
                 ticker.tick().await;
+
+                manager.recycle_orphaned_sessions().await;
 
                 let now = SystemTime::now();
                 let candidates = Self::collect_expired_session_candidates(
@@ -8030,7 +9053,13 @@ impl SessionManager {
                     };
 
                     let mut can_remove = true;
+                    // Sessions whose storage was removed externally must not be
+                    // written back by the pre-eviction save: persisting them
+                    // would resurrect the deleted session on the next list.
+                    let skip_pre_evict_save =
+                        disk_removed_loaded_ids.contains_key(&candidate.session_id);
                     if enable_persistence
+                        && !skip_pre_evict_save
                         && Self::should_persist_session_with_transient_ids(
                             &session,
                             &transient_session_ids,
@@ -8102,6 +9131,93 @@ impl SessionManager {
 
         debug!("Cleanup task started");
     }
+
+    /// Test-only: a thin `Self` handle sharing the same Arc state as `self`
+    /// (including the tombstone registry lock) so concurrent tombstone tests
+    /// can drive `record_deleted_session_id` from separate tasks without
+    /// cloning the full manager.
+    #[cfg(test)]
+    fn clone_for_tombstone_test(&self) -> Self {
+        Self {
+            sessions: self.sessions.clone(),
+            transient_session_ids: self.transient_session_ids.clone(),
+            active_session_capacity: self.active_session_capacity.clone(),
+            active_session_permits: self.active_session_permits.clone(),
+            session_storage_path_index: self.session_storage_path_index.clone(),
+            session_mutation_locks: self.session_mutation_locks.clone(),
+            session_write_locks: self.session_write_locks.clone(),
+            tombstone_registry_locks: self.tombstone_registry_locks.clone(),
+            context_store: self.context_store.clone(),
+            prompt_cache_store: self.prompt_cache_store.clone(),
+            prompt_cache_operation_locks: self.prompt_cache_operation_locks.clone(),
+            token_anchor_store: self.token_anchor_store.clone(),
+            turn_skill_agent_snapshot_store: self.turn_skill_agent_snapshot_store.clone(),
+            skill_agent_baseline_override_snapshot_store: self
+                .skill_agent_baseline_override_snapshot_store
+                .clone(),
+            edit_constraints_store: self.edit_constraints_store.clone(),
+            file_read_state_store: self.file_read_state_store.clone(),
+            evidence_ledger: self.evidence_ledger.clone(),
+            persistence_manager: self.persistence_manager.clone(),
+            memory_database: self.memory_database.clone(),
+            subagent_children: self.subagent_children.clone(),
+            subagent_children_dirty: self.subagent_children_dirty.clone(),
+            disk_removed_loaded_ids: self.disk_removed_loaded_ids.clone(),
+            deleted_session_ids: self.deleted_session_ids.clone(),
+            config: self.config.clone(),
+        }
+    }
+}
+
+/// Traverse the subagent_children index in post-order to collect hidden subagent
+/// session IDs matching the given parent session and dialog turn IDs.
+fn collect_hidden_subagent_cascade_from_index(
+    subagent_children: &DashMap<String, Vec<(String, String)>>,
+    parent_session_id: &str,
+    parent_dialog_turn_ids: &HashSet<String>,
+) -> Vec<String> {
+    let mut root_session_ids = Vec::new();
+    if let Some(children) = subagent_children.get(parent_session_id) {
+        for (child_id, dialog_turn_id) in children.iter() {
+            if parent_dialog_turn_ids.contains(dialog_turn_id.as_str()) {
+                root_session_ids.push(child_id.clone());
+            }
+        }
+    }
+
+    let mut visited = HashSet::new();
+    let mut ordered_session_ids = Vec::new();
+    for root_id in root_session_ids {
+        collect_subagent_post_order_from_index(
+            subagent_children,
+            &root_id,
+            &mut visited,
+            &mut ordered_session_ids,
+        );
+    }
+    ordered_session_ids
+}
+
+fn collect_subagent_post_order_from_index(
+    subagent_children: &DashMap<String, Vec<(String, String)>>,
+    session_id: &str,
+    visited: &mut HashSet<String>,
+    ordered_session_ids: &mut Vec<String>,
+) {
+    if !visited.insert(session_id.to_string()) {
+        return;
+    }
+    if let Some(children) = subagent_children.get(session_id) {
+        for (child_id, _) in children.iter() {
+            collect_subagent_post_order_from_index(
+                subagent_children,
+                child_id,
+                visited,
+                ordered_session_ids,
+            );
+        }
+    }
+    ordered_session_ids.push(session_id.to_string());
 }
 
 #[cfg(test)]
@@ -8109,7 +9225,7 @@ mod tests {
     use super::{
         should_auto_migrate_session_model, CoreSessionStorePort, PermissionMode,
         SessionExecutionBindingError, SessionExecutionBindingUpdate, SessionManager,
-        SessionManagerConfig, TEST_MODEL_RESOLUTION_AI_CONFIG,
+        SessionManagerConfig, TEST_MODEL_RESOLUTION_AI_CONFIG, DELETED_SESSION_IDS_FILE_NAME,
     };
     use crate::agentic::core::{
         CompressionState, Message, MessageContent, MessageRole, ProcessingPhase, Session,
@@ -8129,9 +9245,9 @@ mod tests {
     };
     use crate::service::session::{
         DialogTurnData, DialogTurnKind, ModelRoundData, SessionContextUsage,
-        SessionContextUsageSource, SessionKind, SessionMetadata, SessionRelationship,
-        SessionRelationshipKind, ToolCallData, ToolItemData, ToolResultData, TurnStatus,
-        UserMessageData,
+        SessionContextUsageSource, SessionKind, SessionMemoryMode, SessionMetadata,
+        SessionRelationship, SessionRelationshipKind, SessionStatus, ToolCallData,
+        ToolItemData, ToolResultData, TurnStatus, UserMessageData,
     };
     use crate::util::errors::BitFunError;
     use bitfun_core_types::{
@@ -9184,6 +10300,102 @@ mod tests {
 
         assert!(manager.get_session(&session.session_id).is_none());
         assert!(!manager.is_transient_session(&session.session_id));
+    }
+
+    #[tokio::test]
+    async fn transient_session_rename_persists_disk_metadata_when_present() {
+        // 断点 1 修复（RECON-子对话rename-list不同步-20260808）：transient 子对话
+        // （Task persistent=false 的 EphemeralSubagent）rename 只改内存不写盘 →
+        // SessionControl list（读磁盘 metadata.session_name）显示旧名。用户显式
+        // 改名必须持久化：对该类会话也尽力写磁盘 title metadata（有则写新名，
+        // 无则仅内存 NotFound 忽略）。
+        let workspace = TestWorkspace::new();
+        let manager = in_memory_test_manager();
+        let session = manager
+            .create_transient_session_with_id_and_details(
+                None,
+                "Transient Child".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+                None,
+                SessionKind::EphemeralSubagent,
+            )
+            .await
+            .expect("transient session should create");
+        assert!(manager.is_transient_session(&session.session_id));
+
+        // 模拟「已 restore 的 transient」：磁盘已有 metadata（restore 前提）。
+        let storage_path = manager
+            .effective_session_storage_path(&session.session_id)
+            .await
+            .expect("storage path");
+        manager
+            .persistence_manager()
+            .save_session(&storage_path, &session)
+            .await
+            .expect("transient session should be persisted as fixture");
+
+        manager
+            .update_session_title(&session.session_id, "Renamed Child")
+            .await
+            .expect("rename should succeed");
+
+        // 内存 + 磁盘都应是新名（list 读盘不再旧名）。
+        assert_eq!(
+            manager
+                .get_session(&session.session_id)
+                .expect("session stays loaded")
+                .session_name,
+            "Renamed Child"
+        );
+        let metadata = manager
+            .persistence_manager()
+            .load_session_metadata(&storage_path, &session.session_id)
+            .await
+            .expect("metadata should load")
+            .expect("metadata should exist");
+        assert_eq!(
+            metadata.session_name, "Renamed Child",
+            "transient session rename must persist disk metadata when present"
+        );
+    }
+
+    #[tokio::test]
+    async fn transient_session_rename_without_disk_metadata_keeps_in_memory_only() {
+        // 断点 1 反向用例：transient 无磁盘 metadata（纯内存）时 rename 仅内存，
+        // NotFound 被忽略不报错——list 本就不列该会话，维持现状。
+        let workspace = TestWorkspace::new();
+        let manager = in_memory_test_manager();
+        let session = manager
+            .create_transient_session_with_id_and_details(
+                None,
+                "Memory Only".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+                None,
+                SessionKind::EphemeralSubagent,
+            )
+            .await
+            .expect("transient session should create");
+
+        manager
+            .update_session_title(&session.session_id, "Memory Renamed")
+            .await
+            .expect("rename without disk metadata must not fail");
+
+        assert_eq!(
+            manager
+                .get_session(&session.session_id)
+                .expect("session stays loaded")
+                .session_name,
+            "Memory Renamed"
+        );
     }
 
     #[tokio::test]
@@ -10496,7 +11708,7 @@ mod tests {
         );
         let manager = test_manager(persistence_manager.clone());
         let ai_config = ServiceAIConfig {
-            models: vec![test_model("deepseek-v4-flash", 200_000)],
+            models: vec![test_model("deepseek-v4-flash", 2_000_000)],
             ..Default::default()
         };
 
@@ -10518,12 +11730,12 @@ mod tests {
             .await
             .expect("session should create");
 
-        assert_eq!(session.config.max_context_tokens, 200_000);
+        assert_eq!(session.config.max_context_tokens, 2_000_000);
         let persisted = persistence_manager
             .load_session(workspace.path(), &session.session_id)
             .await
             .expect("persisted session should load");
-        assert_eq!(persisted.config.max_context_tokens, 200_000);
+        assert_eq!(persisted.config.max_context_tokens, 2_000_000);
     }
 
     #[test]
@@ -10547,8 +11759,10 @@ mod tests {
         let resolved =
             SessionManager::sync_session_context_window_from_ai_config(&mut session, &ai_config);
 
-        assert_eq!(resolved, Some(1_000_000));
-        assert_eq!(session.config.max_context_tokens, 1_000_000);
+        // Model window 1M is below the product-guaranteed default window
+        // (1_048_576), so the stale 256K session is lifted to the default.
+        assert_eq!(resolved, Some(1_048_576));
+        assert_eq!(session.config.max_context_tokens, 1_048_576);
     }
 
     #[test]
@@ -10577,8 +11791,10 @@ mod tests {
         let resolved =
             SessionManager::sync_session_context_window_from_ai_config(&mut session, &ai_config);
 
-        assert_eq!(resolved, Some(1_000_000));
-        assert_eq!(session.config.max_context_tokens, 1_000_000);
+        // Mode-default model window 1M is below the product-guaranteed
+        // default window (1_048_576), so the session keeps the default.
+        assert_eq!(resolved, Some(1_048_576));
+        assert_eq!(session.config.max_context_tokens, 1_048_576);
 
         ai_config.agent_model_defaults.mode = "auto".to_string();
         session.config.max_context_tokens = 256_000;
@@ -10586,12 +11802,15 @@ mod tests {
         let resolved =
             SessionManager::sync_session_context_window_from_ai_config(&mut session, &ai_config);
 
-        assert_eq!(resolved, Some(512_000));
-        assert_eq!(session.config.max_context_tokens, 512_000);
+        // Main sessions keep the product-guaranteed 1M window even when the
+        // resolved model window is smaller; the execution engine caps the
+        // effective window with min() at runtime.
+        assert_eq!(resolved, Some(1_048_576));
+        assert_eq!(session.config.max_context_tokens, 1_048_576);
     }
 
     #[test]
-    fn sync_session_context_window_resolves_subagent_auto_through_primary() {
+    fn sync_session_context_window_keeps_subagent_at_one_million() {
         let mut ai_config = ServiceAIConfig {
             models: vec![
                 test_model("primary-model", 512_000),
@@ -10608,17 +11827,49 @@ mod tests {
             "Explore".to_string(),
             SessionConfig {
                 model_id: Some("auto".to_string()),
-                max_context_tokens: 256_000,
+                max_context_tokens: 1_000_000,
                 ..Default::default()
             },
         );
         session.kind = SessionKind::Subagent;
 
+        // Subagent sessions are created with a forced 1M context window and must
+        // not be downgraded by model-window refresh or model updates.
         let resolved =
             SessionManager::sync_session_context_window_from_ai_config(&mut session, &ai_config);
 
-        assert_eq!(resolved, Some(512_000));
-        assert_eq!(session.config.max_context_tokens, 512_000);
+        assert_eq!(resolved, None);
+        assert_eq!(session.config.max_context_tokens, 1_000_000);
+    }
+
+    #[test]
+    fn sync_session_context_window_keeps_main_session_at_one_million() {
+        let mut ai_config = ServiceAIConfig {
+            models: vec![test_model("primary-model", 512_000)],
+            ..Default::default()
+        };
+        ai_config.default_models.primary = Some("primary-model".to_string());
+        ai_config.agent_model_defaults.mode = "auto".to_string();
+
+        let mut session = Session::new_with_id(
+            "main-session".to_string(),
+            "Main session".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                model_id: Some("auto".to_string()),
+                max_context_tokens: 1_000_000,
+                ..Default::default()
+            },
+        );
+
+        // Main sessions keep the product-guaranteed 1M window even when the
+        // resolved model window is smaller; the execution engine caps the
+        // effective window with min() at runtime.
+        let resolved =
+            SessionManager::sync_session_context_window_from_ai_config(&mut session, &ai_config);
+
+        assert_eq!(resolved, Some(1_048_576));
+        assert_eq!(session.config.max_context_tokens, 1_048_576);
     }
 
     #[tokio::test]
@@ -10650,6 +11901,7 @@ mod tests {
         let snapshots = SessionManager::collect_auto_save_snapshots(
             &manager.sessions,
             &manager.transient_session_ids,
+            &manager.disk_removed_loaded_ids,
         );
         assert!(snapshots
             .iter()
@@ -10660,6 +11912,173 @@ mod tests {
             TryResult::Absent => panic!("session should remain present"),
             TryResult::Locked => panic!("snapshot collection should not retain session map guards"),
         };
+    }
+
+    #[tokio::test]
+    async fn reconcile_unloads_loaded_session_whose_storage_was_removed_externally() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Reconcile target".to_string(),
+                "agent".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let sessions_dir = persistence_manager
+            .path_manager()
+            .project_sessions_dir(workspace.path());
+        assert!(manager.get_session(&session.session_id).is_some());
+
+        // Simulate an external directory-level deletion (GC / manual removal).
+        std::fs::remove_dir_all(sessions_dir.join(&session.session_id))
+            .expect("session dir should be removable");
+        assert!(sessions_dir.join(&session.session_id).exists() == false);
+
+        let summaries = manager
+            .list_sessions(&sessions_dir)
+            .await
+            .expect("list should succeed");
+        assert!(
+            summaries
+                .iter()
+                .all(|summary| summary.session_id != session.session_id),
+            "deleted session must not be listed"
+        );
+        assert!(
+            manager.get_session(&session.session_id).is_none(),
+            "deleted session must be unloaded from runtime memory"
+        );
+        assert!(!sessions_dir.join(&session.session_id).exists());
+
+        // A second list stays clean: the unloaded session cannot resurrect.
+        let summaries = manager
+            .list_sessions(&sessions_dir)
+            .await
+            .expect("second list should succeed");
+        assert!(summaries
+            .iter()
+            .all(|summary| summary.session_id != session.session_id));
+    }
+
+    #[tokio::test]
+    async fn auto_save_snapshots_skip_disk_removed_loaded_sessions() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Auto-save skip".to_string(),
+                "agent".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let sessions_dir = persistence_manager
+            .path_manager()
+            .project_sessions_dir(workspace.path());
+        std::fs::remove_dir_all(sessions_dir.join(&session.session_id))
+            .expect("session dir should be removable");
+        manager
+            .disk_removed_loaded_ids
+            .insert(session.session_id.clone(), ());
+
+        let snapshots = SessionManager::collect_auto_save_snapshots(
+            &manager.sessions,
+            &manager.transient_session_ids,
+            &manager.disk_removed_loaded_ids,
+        );
+        assert!(
+            snapshots
+                .iter()
+                .all(|snapshot| snapshot.session_id != session.session_id),
+            "auto-save must skip externally deleted sessions"
+        );
+    }
+
+    #[tokio::test]
+    async fn reconcile_keeps_processing_session_until_it_finishes() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Processing reconcile".to_string(),
+                "agent".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let sessions_dir = persistence_manager
+            .path_manager()
+            .project_sessions_dir(workspace.path());
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("session should be loaded")
+            .state = SessionState::Processing {
+            current_turn_id: "turn-1".to_string(),
+            phase: ProcessingPhase::Thinking,
+        };
+        std::fs::remove_dir_all(sessions_dir.join(&session.session_id))
+            .expect("session dir should be removable");
+
+        manager
+            .reconcile_loaded_sessions_with_disk(&sessions_dir)
+            .await
+            .expect("reconcile should succeed");
+
+        // A processing session must not be unloaded mid-execution, but it is
+        // marked so auto-save cannot persist it.
+        assert!(manager.get_session(&session.session_id).is_some());
+        assert!(manager
+            .disk_removed_loaded_ids
+            .contains_key(&session.session_id));
+
+        // A running turn may re-save the storage directory while the session
+        // is still processing; the deletion marker must survive that so the
+        // session is not silently restored.
+        std::fs::create_dir_all(sessions_dir.join(&session.session_id))
+            .expect("session dir should be re-creatable");
+        manager
+            .reconcile_loaded_sessions_with_disk(&sessions_dir)
+            .await
+            .expect("reconcile with re-saved storage should succeed");
+        assert!(manager.get_session(&session.session_id).is_some());
+        assert!(manager
+            .disk_removed_loaded_ids
+            .contains_key(&session.session_id));
+
+        // Once the session finishes, the next reconcile unloads it and removes
+        // the re-saved storage so the deleted session cannot resurrect.
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("session should be loaded")
+            .state = SessionState::Idle;
+        manager
+            .reconcile_loaded_sessions_with_disk(&sessions_dir)
+            .await
+            .expect("second reconcile should succeed");
+        assert!(manager.get_session(&session.session_id).is_none());
+        assert!(!sessions_dir.join(&session.session_id).exists());
     }
 
     #[tokio::test]
@@ -11055,6 +12474,7 @@ mod tests {
                     parent_tool_call_id: None,
                     subagent_type: None,
                     continuation_policy: None,
+                    ..Default::default()
                 },
             )
             .await
@@ -11077,6 +12497,7 @@ mod tests {
                 parent_tool_call_id: None,
                 subagent_type: None,
                 continuation_policy: None,
+                ..Default::default()
             })
         );
 
@@ -11117,6 +12538,7 @@ mod tests {
             parent_tool_call_id: Some("tool-1".to_string()),
             subagent_type: Some("Explore".to_string()),
             continuation_policy: None,
+            ..Default::default()
         });
         persistence_manager
             .save_session_metadata(workspace.path(), &matched_root)
@@ -11139,6 +12561,7 @@ mod tests {
             parent_tool_call_id: Some("tool-child".to_string()),
             subagent_type: Some("Explore".to_string()),
             continuation_policy: None,
+            ..Default::default()
         });
         persistence_manager
             .save_session_metadata(workspace.path(), &matched_grandchild)
@@ -11161,6 +12584,7 @@ mod tests {
             parent_tool_call_id: Some("tool-2".to_string()),
             subagent_type: Some("Explore".to_string()),
             continuation_policy: None,
+            ..Default::default()
         });
         persistence_manager
             .save_session_metadata(workspace.path(), &unmatched_root)
@@ -11182,6 +12606,7 @@ mod tests {
             parent_tool_call_id: None,
             subagent_type: None,
             continuation_policy: None,
+            ..Default::default()
         });
         persistence_manager
             .save_session_metadata(workspace.path(), &visible_review_child)
@@ -11202,6 +12627,115 @@ mod tests {
             cascade,
             vec!["grandchild".to_string(), "child-root".to_string()]
         );
+    }
+
+    #[tokio::test]
+    async fn session_tree_descendants_covers_full_subtree_and_excludes_root() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+
+        let mut child_root = SessionMetadata::new(
+            "child-root".to_string(),
+            "Subagent: root".to_string(),
+            "Explore".to_string(),
+            "model".to_string(),
+        );
+        child_root.session_kind = SessionKind::Subagent;
+        child_root.relationship = Some(SessionRelationship {
+            kind: Some(SessionRelationshipKind::Subagent),
+            parent_session_id: Some("parent-session".to_string()),
+            parent_dialog_turn_id: Some("turn-2".to_string()),
+            ..Default::default()
+        });
+        persistence_manager
+            .save_session_metadata(workspace.path(), &child_root)
+            .await
+            .expect("child-root should save");
+
+        let mut grandchild = SessionMetadata::new(
+            "grandchild".to_string(),
+            "Subagent: grandchild".to_string(),
+            "Explore".to_string(),
+            "model".to_string(),
+        );
+        grandchild.session_kind = SessionKind::Subagent;
+        grandchild.relationship = Some(SessionRelationship {
+            kind: Some(SessionRelationshipKind::Subagent),
+            parent_session_id: Some("child-root".to_string()),
+            parent_dialog_turn_id: Some("child-turn".to_string()),
+            ..Default::default()
+        });
+        persistence_manager
+            .save_session_metadata(workspace.path(), &grandchild)
+            .await
+            .expect("grandchild should save");
+
+        let mut other_child = SessionMetadata::new(
+            "child-other-turn".to_string(),
+            "Subagent: other turn".to_string(),
+            "Explore".to_string(),
+            "model".to_string(),
+        );
+        other_child.session_kind = SessionKind::Subagent;
+        other_child.relationship = Some(SessionRelationship {
+            kind: Some(SessionRelationshipKind::Subagent),
+            parent_session_id: Some("parent-session".to_string()),
+            parent_dialog_turn_id: Some("turn-1".to_string()),
+            ..Default::default()
+        });
+        persistence_manager
+            .save_session_metadata(workspace.path(), &other_child)
+            .await
+            .expect("other child should save");
+
+        let mut review_child = SessionMetadata::new(
+            "review-child".to_string(),
+            "Review child".to_string(),
+            "DeepReview".to_string(),
+            "model".to_string(),
+        );
+        review_child.relationship = Some(SessionRelationship {
+            kind: Some(SessionRelationshipKind::DeepReview),
+            parent_session_id: Some("parent-session".to_string()),
+            parent_dialog_turn_id: Some("turn-2".to_string()),
+            ..Default::default()
+        });
+        persistence_manager
+            .save_session_metadata(workspace.path(), &review_child)
+            .await
+            .expect("review child should save");
+
+        let descendants = manager
+            .session_tree_descendants(Some(workspace.path()), "parent-session")
+            .await
+            .expect("descendant lookup should succeed");
+        let descendant_set: HashSet<&str> =
+            descendants.iter().map(|id| id.as_str()).collect();
+        assert_eq!(
+            descendant_set,
+            HashSet::from(["child-root", "grandchild", "child-other-turn"])
+        );
+        // Non-subagent relationships are not part of the subagent tree.
+        assert!(!descendant_set.contains("review-child"));
+        // The root session itself is excluded.
+        assert!(!descendant_set.contains("parent-session"));
+
+        // Nested lookup starts from the given root.
+        let nested = manager
+            .session_tree_descendants(Some(workspace.path()), "child-root")
+            .await
+            .expect("nested descendant lookup should succeed");
+        assert_eq!(nested, vec!["grandchild".to_string()]);
+
+        // Unknown workspace yields no descendants.
+        let no_workspace = manager
+            .session_tree_descendants(None, "parent-session")
+            .await
+            .expect("no-workspace lookup should succeed");
+        assert!(no_workspace.is_empty());
     }
 
     #[tokio::test]
@@ -11423,6 +12957,56 @@ mod tests {
             .await
             .expect("workspace restore should use remote identity");
 
+        assert_eq!(restored.session_id, session_id);
+    }
+
+    #[tokio::test]
+    async fn hidden_subagent_restore_rejects_user_list_but_internal_restore_succeeds() {
+        // P-04 防回退：SessionControl 子代理（session_kind=Subagent，隐藏）在
+        // idle>1h 内存驱逐后，用户列表语义 restore 必须拒绝（列表仍隐藏），
+        // 精确寻址（投递路径）restore 必须放行（方案 B + C）。
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session_id = Uuid::new_v4().to_string();
+        let mut session = Session::new_with_id(
+            session_id.clone(),
+            "Hidden subagent".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+        session.kind = SessionKind::Subagent;
+        persistence_manager
+            .save_session(workspace.path(), &session)
+            .await
+            .expect("hidden subagent should save");
+
+        // 用户列表语义：非 internal restore 必须拒绝隐藏子代理并带原因。
+        let user_list_request = SessionStoragePathRequest {
+            workspace_path: workspace.path().to_path_buf(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
+        let rejection = manager
+            .restore_session_for_workspace(user_list_request.clone(), &session_id)
+            .await
+            .expect_err("user-list restore must reject a hidden subagent");
+        assert!(
+            rejection.to_string().contains("Session exists but is hidden"),
+            "rejection should carry the hidden reason: {}",
+            rejection
+        );
+
+        // 精确寻址（投递路径）：internal restore 必须放行隐藏子代理。
+        let restored = manager
+            .restore_internal_session_for_workspace(user_list_request, &session_id)
+            .await
+            .expect("internal restore must allow the hidden subagent");
         assert_eq!(restored.session_id, session_id);
     }
 
@@ -12889,6 +14473,11 @@ mod tests {
                 .map(|entry| entry.path.clone()),
             Some(expected_storage_path)
         );
+        // A deletion marker left by a previous reconcile must also be cleared
+        // so the normal delete path fully resets the runtime session table.
+        manager
+            .disk_removed_loaded_ids
+            .insert(session.session_id.clone(), ());
 
         manager
             .delete_session(workspace.path(), &session.session_id)
@@ -12899,6 +14488,10 @@ mod tests {
             .session_storage_path_index
             .get(&session.session_id)
             .is_none());
+        assert!(!manager
+            .disk_removed_loaded_ids
+            .contains_key(&session.session_id));
+        assert!(!session_storage_dir.join(&session.session_id).exists());
     }
 
     #[tokio::test]
@@ -12930,6 +14523,296 @@ mod tests {
 
         assert!(manager.get_session(&session.session_id).is_none());
         assert!(!resolved_sessions_dir.join(&session.session_id).exists());
+    }
+
+    #[tokio::test]
+    async fn corrupt_tombstone_surfaces_error_and_keeps_file_untouched() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session_storage_path = manager
+            .resolve_storage_path_for_workspace_path(workspace.path())
+            .await;
+        let tombstone_path = session_storage_path
+            .parent()
+            .expect("sessions dir has a parent")
+            .join(DELETED_SESSION_IDS_FILE_NAME);
+        tokio::fs::create_dir_all(tombstone_path.parent().expect("runtime dir"))
+            .await
+            .expect("runtime dir should create");
+        // A torn write (crash mid-append) leaves a half-written registry.
+        let corrupt = "[\"id-1\", \"id-2\"".to_string();
+        tokio::fs::write(&tombstone_path, &corrupt)
+            .await
+            .expect("corrupt registry should write");
+
+        let result = manager
+            .list_deleted_session_ids(&session_storage_path)
+            .await;
+        assert!(
+            result.is_err(),
+            "a corrupt tombstone must surface an error instead of a silent empty list"
+        );
+        let raw = tokio::fs::read_to_string(&tombstone_path)
+            .await
+            .expect("tombstone file should still exist");
+        assert_eq!(
+            raw, corrupt,
+            "the corrupt file must be left untouched so the registry is not silently cleared"
+        );
+    }
+
+    #[tokio::test]
+    async fn delete_session_records_tombstone_even_when_persistence_is_disabled() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager_with_config(
+            persistence_manager,
+            SessionManagerConfig {
+                max_active_sessions: 100,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: false,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        );
+        let session = manager
+            .create_session(
+                "Tombstone without persistence".to_string(),
+                "agent".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        manager
+            .delete_session(workspace.path(), &session.session_id)
+            .await
+            .expect("session should delete");
+
+        let session_storage_path = manager
+            .resolve_storage_path_for_workspace_path(workspace.path())
+            .await;
+        let deleted_ids = manager
+            .list_deleted_session_ids(&session_storage_path)
+            .await
+            .expect("tombstone registry should be readable");
+        assert!(
+            deleted_ids.contains(&session.session_id),
+            "a successful deletion must record a tombstone even when persistence is disabled"
+        );
+    }
+
+    #[tokio::test]
+    async fn list_sessions_filters_tombstoned_sessions_from_both_visibility_modes() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let storage_path = manager
+            .resolve_storage_path_for_workspace_path(workspace.path())
+            .await;
+
+        // Two standard sessions plus one hidden Subagent session, all with
+        // on-disk metadata. The tombstones are recorded directly without
+        // touching the disk directories, simulating the worst ghost scenario:
+        // residual metadata survives while the id is confirmed deleted.
+        let mut standard_ids = Vec::new();
+        for name in ["kept-a", "tombstoned-a"] {
+            let session = manager
+                .create_session(
+                    name.to_string(),
+                    "agent".to_string(),
+                    SessionConfig {
+                        workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .expect("standard session should create");
+            standard_ids.push(session.session_id);
+        }
+        let hidden = manager
+            .create_session_with_id_and_details(
+                None,
+                "tombstoned-hidden".to_string(),
+                "agent".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+                None,
+                SessionKind::Subagent,
+            )
+            .await
+            .expect("hidden session should create");
+        let hidden_id = hidden.session_id;
+
+        manager
+            .record_deleted_session_id(&storage_path, &standard_ids[1])
+            .await
+            .expect("tombstone should record");
+        manager
+            .record_deleted_session_id(&storage_path, &hidden_id)
+            .await
+            .expect("tombstone should record");
+
+        let visible = manager
+            .list_sessions(workspace.path())
+            .await
+            .expect("list sessions");
+        let visible_ids: Vec<_> = visible.iter().map(|s| s.session_id.as_str()).collect();
+        assert!(
+            visible_ids.contains(&standard_ids[0].as_str()),
+            "kept session must be listed"
+        );
+        assert!(
+            !visible_ids.contains(&standard_ids[1].as_str()),
+            "tombstoned session must not be listed"
+        );
+
+        let all = manager
+            .list_sessions_with_options(workspace.path(), true)
+            .await
+            .expect("list sessions with internal");
+        let all_ids: Vec<_> = all.iter().map(|s| s.session_id.as_str()).collect();
+        assert!(
+            !all_ids.contains(&standard_ids[1].as_str()),
+            "tombstoned session must not be listed even with include_internal"
+        );
+        assert!(
+            !all_ids.contains(&hidden_id.as_str()),
+            "tombstoned hidden session must not be listed even with include_internal"
+        );
+    }
+
+    #[tokio::test]
+    async fn recreated_session_durably_clears_tombstone() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session_id = format!("recreated-tombstone-{}", Uuid::new_v4());
+        let session = manager
+            .create_session_with_id(
+                Some(session_id.clone()),
+                "First incarnation".to_string(),
+                "agent".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        assert_eq!(session.session_id, session_id);
+
+        manager
+            .delete_session(workspace.path(), &session_id)
+            .await
+            .expect("session should delete");
+
+        let session_storage_path = manager
+            .resolve_storage_path_for_workspace_path(workspace.path())
+            .await;
+        let deleted_ids = manager
+            .list_deleted_session_ids(&session_storage_path)
+            .await
+            .expect("tombstone registry should be readable");
+        assert!(
+            deleted_ids.contains(&session_id),
+            "precondition: deletion must record a tombstone"
+        );
+
+        // Re-create the same session id: the durable unmark must clear the
+        // on-disk tombstone, otherwise a restart would keep hiding the
+        // re-created session from lists and restore paths.
+        manager
+            .create_session_with_id(
+                Some(session_id.clone()),
+                "Second incarnation".to_string(),
+                "agent".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("same id should be re-creatable after deletion");
+
+        let deleted_ids_after_recreate = manager
+            .list_deleted_session_ids(&session_storage_path)
+            .await
+            .expect("tombstone registry should be readable");
+        assert!(
+            !deleted_ids_after_recreate.contains(&session_id),
+            "re-creation must durably clear the on-disk tombstone"
+        );
+    }
+
+    #[tokio::test]
+    async fn concurrent_tombstone_records_for_same_workspace_lose_no_ids() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session_storage_path = manager
+            .resolve_storage_path_for_workspace_path(workspace.path())
+            .await;
+
+        let session_ids: Vec<String> =
+            (0..32).map(|index| format!("concurrent-deleted-{index}")).collect();
+        let mut handles = Vec::new();
+        for session_id in session_ids.clone() {
+            let manager = manager.clone_for_tombstone_test();
+            let storage_path = session_storage_path.clone();
+            handles.push(tokio::spawn(async move {
+                manager
+                    .record_deleted_session_id(&storage_path, &session_id)
+                    .await
+                    .expect("tombstone record should succeed");
+            }));
+        }
+        for handle in handles {
+            handle.await.expect("concurrent record task should finish");
+        }
+
+        let deleted_ids = manager
+            .list_deleted_session_ids(&session_storage_path)
+            .await
+            .expect("tombstone registry should be readable");
+        let deleted: HashSet<String> = deleted_ids.into_iter().collect();
+        for session_id in &session_ids {
+            assert!(
+                deleted.contains(session_id),
+                "concurrent tombstone records must not lose session_id={session_id}"
+            );
+        }
+
+        // A re-read sees the complete, parseable registry: the file itself is
+        // intact after the atomic temp+rename writes.
+        let raw = tokio::fs::read_to_string(
+            session_storage_path
+                .parent()
+                .expect("sessions dir has a parent")
+                .join(DELETED_SESSION_IDS_FILE_NAME),
+        )
+        .await
+        .expect("tombstone file should exist");
+        let reparsed: Vec<String> =
+            serde_json::from_str(&raw).expect("tombstone file must stay parseable");
+        let reparsed: HashSet<String> = reparsed.into_iter().collect();
+        assert_eq!(reparsed, deleted);
     }
 
     #[tokio::test]
@@ -13967,5 +15850,292 @@ mod tests {
                 .await,
             None
         );
+    }
+
+    fn orphan_test_metadata(session_id: &str, created_by: Option<&str>) -> SessionMetadata {
+        SessionMetadata {
+            session_id: session_id.to_string(),
+            session_name: format!("test-{}", session_id),
+            agent_type: "agentic".to_string(),
+            last_user_dialog_agent_type: None,
+            last_submitted_agent_type: None,
+            created_by: created_by.map(str::to_string),
+            session_kind: SessionKind::Standard,
+            memory_mode: SessionMemoryMode::Enabled,
+            model_name: "primary".to_string(),
+            created_at: 1,
+            last_active_at: 1,
+            last_finished_at: None,
+            turn_count: 0,
+            message_count: 0,
+            tool_call_count: 0,
+            status: SessionStatus::Active,
+            terminal_session_id: None,
+            snapshot_session_id: None,
+            tags: Vec::new(),
+            custom_metadata: None,
+            current_context_usage: None,
+            relationship: None,
+            todos: None,
+            review_action_state: None,
+            deep_review_run_manifest: None,
+            review_target_evidence: None,
+            deep_review_cache: None,
+            workspace_path: None,
+            project_workspace_path: None,
+            execution_target: None,
+            workspace_hostname: None,
+            unread_completion: None,
+            needs_user_attention: None,
+            runtime_state: None,
+            is_daemon: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn orphan_recycle_archives_and_deletes_orphaned_session() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let mut metadata = orphan_test_metadata("orphan-1", Some("session-ghost-parent"));
+        metadata.workspace_path = Some(workspace.path().to_string_lossy().to_string());
+        manager
+            .save_session_metadata(workspace.path(), &metadata)
+            .await
+            .expect("orphan metadata should save");
+
+        let report = manager
+            .scan_orphaned_sessions_in_workspace(workspace.path())
+            .await
+            .expect("scan should succeed");
+        assert_eq!(report.orphaned.len(), 1);
+        assert_eq!(report.orphaned[0].session_id, "orphan-1");
+
+        manager
+            .recycle_orphaned_sessions_in_workspace(workspace.path())
+            .await
+            .expect("recycle should succeed");
+
+        assert!(
+            manager
+                .load_session_metadata(workspace.path(), "orphan-1")
+                .await
+                .expect("metadata load should succeed")
+                .is_none(),
+            "orphaned session should be deleted after archive-then-delete recycle"
+        );
+        let storage_path = manager
+            .resolve_storage_path_for_workspace_path(workspace.path())
+            .await;
+        let tombstones = manager
+            .list_deleted_session_ids(&storage_path)
+            .await
+            .expect("tombstone list should load");
+        assert!(
+            tombstones.contains(&"orphan-1".to_string()),
+            "recycled orphan should be recorded in the deletion tombstone registry"
+        );
+    }
+
+    #[tokio::test]
+    async fn orphan_recycle_skips_daemon_sessions() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let mut metadata = orphan_test_metadata("daemon-orphan", Some("session-ghost-parent"));
+        metadata.is_daemon = true;
+        manager
+            .save_session_metadata(workspace.path(), &metadata)
+            .await
+            .expect("daemon orphan metadata should save");
+
+        manager
+            .recycle_orphaned_sessions_in_workspace(workspace.path())
+            .await
+            .expect("recycle should succeed");
+
+        let remaining = manager
+            .load_session_metadata(workspace.path(), "daemon-orphan")
+            .await
+            .expect("metadata load should succeed")
+            .expect("daemon orphan must not be recycled");
+        assert_eq!(remaining.status, SessionStatus::Active);
+    }
+
+    #[tokio::test]
+    async fn orphan_recycle_skips_processing_loaded_session() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Processing orphan".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        // Rewrite on-disk metadata as an orphan while the runtime session is processing.
+        let mut metadata =
+            orphan_test_metadata(&session.session_id, Some("session-ghost-parent"));
+        metadata.workspace_path = Some(workspace.path().to_string_lossy().to_string());
+        manager
+            .save_session_metadata(workspace.path(), &metadata)
+            .await
+            .expect("orphan metadata should save");
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("session should remain loaded")
+            .state = SessionState::Processing {
+            current_turn_id: "turn-1".to_string(),
+            phase: ProcessingPhase::Thinking,
+        };
+
+        manager
+            .recycle_orphaned_sessions_in_workspace(workspace.path())
+            .await
+            .expect("recycle should succeed");
+
+        assert!(
+            manager.get_session(&session.session_id).is_some(),
+            "processing orphan must stay loaded"
+        );
+        assert!(
+            manager
+                .load_session_metadata(workspace.path(), &session.session_id)
+                .await
+                .expect("metadata load should succeed")
+                .is_some(),
+            "processing orphan metadata must stay"
+        );
+    }
+
+    #[tokio::test]
+    async fn orphan_recycle_discards_transient_orphan_candidates() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Transient orphan".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        // Make it a finished transient child of a vanished parent. The persisted
+        // metadata keeps its original (non-orphan) shape; only the in-memory
+        // transient entry is an orphan candidate.
+        manager
+            .transient_session_ids
+            .insert(session.session_id.clone(), ());
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("session should remain loaded")
+            .created_by = Some("session-ghost-parent".to_string());
+
+        let candidates = manager.list_transient_sweep_candidates();
+        assert!(
+            candidates.iter().any(|c| c.session_id == session.session_id),
+            "transient orphan should be a sweep candidate"
+        );
+
+        manager.recycle_orphaned_sessions().await;
+
+        assert!(
+            manager.get_session(&session.session_id).is_none(),
+            "transient orphan should be discarded"
+        );
+    }
+
+    #[tokio::test]
+    async fn in_memory_list_sessions_filters_hidden_session_kinds() {
+        let manager = in_memory_test_manager();
+        let workspace = TestWorkspace::new();
+        let workspace_path = workspace.path().to_string_lossy().to_string();
+        let mut standard_ids = Vec::new();
+        let mut hidden_ids = Vec::new();
+        for (name, kind) in [
+            ("Standard visible".to_string(), SessionKind::Standard),
+            ("Hidden subagent".to_string(), SessionKind::Subagent),
+            (
+                "Hidden ephemeral child".to_string(),
+                SessionKind::EphemeralChild,
+            ),
+            (
+                "Hidden ephemeral subagent".to_string(),
+                SessionKind::EphemeralSubagent,
+            ),
+        ] {
+            let session = manager
+                .create_session_with_id_and_details(
+                    None,
+                    name,
+                    "agentic".to_string(),
+                    SessionConfig {
+                        workspace_path: Some(workspace_path.clone()),
+                        ..Default::default()
+                    },
+                    None,
+                    kind,
+                )
+                .await
+                .expect("session should be created");
+            if matches!(
+                kind,
+                SessionKind::Subagent | SessionKind::EphemeralChild | SessionKind::EphemeralSubagent
+            ) {
+                hidden_ids.push(session.session_id);
+            } else {
+                standard_ids.push(session.session_id);
+            }
+        }
+
+        let visible = manager
+            .list_sessions(workspace.path())
+            .await
+            .expect("list sessions");
+        let visible_ids: Vec<_> = visible.iter().map(|s| s.session_id.as_str()).collect();
+        assert!(!visible_ids.is_empty(), "standard sessions must be listed");
+        for hidden_id in &hidden_ids {
+            assert!(
+                !visible_ids.contains(&hidden_id.as_str()),
+                "hidden session must not leak: {hidden_id}"
+            );
+        }
+        for standard_id in &standard_ids {
+            assert!(
+                visible_ids.contains(&standard_id.as_str()),
+                "standard session must be listed: {standard_id}"
+            );
+        }
+
+        let all = manager
+            .list_sessions_with_options(workspace.path(), true)
+            .await
+            .expect("list sessions with internal");
+        let all_ids: Vec<_> = all.iter().map(|s| s.session_id.as_str()).collect();
+        for hidden_id in &hidden_ids {
+            assert!(
+                all_ids.contains(&hidden_id.as_str()),
+                "internal listing must include hidden session: {hidden_id}"
+            );
+        }
     }
 }

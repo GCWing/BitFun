@@ -351,6 +351,20 @@ export interface AIConfig {
   subagent_batch_execution_policy?: 'safe_only' | 'force_parallel' | 'serial';
   computer_use_enabled?: boolean;
   browser_control_preferred_browser?: string;
+  /**
+   * User-controllable master switch for the RBAC/Warden mechanism (R-26).
+   * When false, RBAC tool-restriction checks and the Warden runtime are
+   * fully bypassed. Defaults to true.
+   */
+  rbac_enabled?: boolean;
+  /**
+   * Master switch for loading external user instruction sources
+   * (~/.claude/CLAUDE.md + rules/, OpenCode AGENTS.md, Codex AGENTS.md) into
+   * the User Context. When false, external instruction files are not read at
+   * all; workspace instruction files (project AGENTS.md / .claude/rules) are
+   * unaffected. Defaults to true.
+   */
+  external_instruction_sources?: boolean;
 }
 
 export interface StoredAgentProfileConfigItem {

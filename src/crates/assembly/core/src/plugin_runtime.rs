@@ -610,6 +610,7 @@ export const WorkspaceToolsPlugin: Plugin = async () => ({
             fs::create_dir_all(source_path.parent().expect("source parent"))
                 .expect("create package");
             fs::create_dir_all(user.join("plugins")).expect("create user plugins");
+            fs::create_dir_all(user.join("runtime")).expect("create user runtime");
             fs::write(&source_path, plugin_source).expect("write plugin source");
             let file_hash = format!(
                 "sha256:{}",

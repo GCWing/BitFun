@@ -51,7 +51,7 @@ export const RIGHT_PANEL_CONFIG = {
   MAX_WIDTH: 1200,              // Max width
 
   // Snap points
-  SNAP_POINTS: [300, 400, 540, 700, 900],
+  SNAP_POINTS: [300, 400, 540, 700, 900, 1200],
   SNAP_RANGE: 20,               // Snap range (px)
 
   // Animation
@@ -77,9 +77,20 @@ export const PANEL_COMMON_CONFIG = {
   RESIZER_WIDTH: 4,             // Resizer width
   RESIZE_STEP: 10,              // Keyboard resize step
   RESIZE_STEP_SHIFT: 50,        // Shift key accelerated step
-  MIN_CENTER_WIDTH: 400,        // Minimum center panel width
+  MIN_CENTER_WIDTH: 400,        // Minimum center panel width — chat keeps at least one page
   TOUCH_THRESHOLD: 150,         // Touch device delay threshold (ms)
   DOUBLE_CLICK_DELAY: 300,      // Double-click detection delay (ms)
+} as const;
+
+// ==================== Chat full-width (tiled) mode ====================
+// Full-width tiled chat: the right panel is collapsed and the chat pane
+// stretches edge to edge. Entered by double-clicking the right resizer or
+// Mod+Alt+T. Exit restores the remembered right panel width.
+export const CHAT_FULL_WIDTH_CONFIG = {
+  /** Width assigned to the right panel while chat full-width is active. */
+  COLLAPSED_WIDTH: 0,
+  /** i18n label key of the mode (flow-chat layout namespace). */
+  MODE_LABEL_KEY: 'layout.panelMode.fullWidth',
 } as const;
 
 // ==================== Shortcut config ====================
@@ -128,6 +139,22 @@ export function getModeWidth(
 }
 
 /**
+ * Maximum allowed right-panel width for a given container width.
+ * Pure dynamic upper bound: container − resizer − min chat width, so dragging
+ * the right panel stretches until the chat pane reaches its one-page minimum
+ * (MIN_CENTER_WIDTH). No hard cap from MAX_WIDTH — a wide container lets the
+ * right panel exceed 1200px, a narrow container clamps to what leaves one page
+ * of chat. MAX_WIDTH only backs the un-laid-out (containerWidth <= 0) case.
+ */
+export function getRightPanelMaxWidth(
+  containerWidth: number,
+  minChatWidth: number = PANEL_COMMON_CONFIG.MIN_CENTER_WIDTH
+): number {
+  if (containerWidth <= 0) return RIGHT_PANEL_CONFIG.MAX_WIDTH;
+  return containerWidth - PANEL_COMMON_CONFIG.RESIZER_WIDTH - minChatWidth;
+}
+
+/**
  * Compute snapped width.
  * @param width Current width
  * @param config Panel configuration
@@ -154,7 +181,7 @@ export function getSnappedWidth(
 
 /**
  * Get next mode.
- * Used for double-click toggle: compact <-> comfortable <-> expanded
+ * Used for double-click toggle: compact <-> comfortable <-> expanded <-> full-width chat.
  */
 export function getNextMode(currentMode: PanelDisplayMode): PanelDisplayMode {
   switch (currentMode) {
@@ -169,28 +196,6 @@ export function getNextMode(currentMode: PanelDisplayMode): PanelDisplayMode {
     default:
       return 'comfortable';
   }
-}
-
-/**
- * Validate and clamp width within valid range.
- */
-export function clampWidth(
-  width: number,
-  config: typeof LEFT_PANEL_CONFIG | typeof RIGHT_PANEL_CONFIG | typeof BOTTOM_TERMINAL_PANEL_CONFIG,
-  containerWidth?: number
-): number {
-  let maxWidth: number = config.MAX_WIDTH;
-  
-  // If container width is provided, compute dynamic max width
-  if (containerWidth) {
-    const dynamicMax = containerWidth - PANEL_COMMON_CONFIG.MIN_CENTER_WIDTH - PANEL_COMMON_CONFIG.RESIZER_WIDTH;
-    maxWidth = Math.min(config.MAX_WIDTH, dynamicMax);
-  }
-  
-  // Width cannot be less than compact width (unless collapsed)
-  const minWidth: number = config.COMPACT_WIDTH;
-  
-  return Math.max(minWidth, Math.min(maxWidth, width));
 }
 
 // ==================== Local storage keys ====================

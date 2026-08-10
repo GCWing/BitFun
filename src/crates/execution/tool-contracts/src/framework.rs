@@ -119,6 +119,16 @@ impl fmt::Display for DeferredToolUsageError {
 
 impl std::error::Error for DeferredToolUsageError {}
 
+impl DeferredToolUsageError {
+    /// Whether the error reports a stale loaded spec that the runtime may
+    /// recover from by reloading the spec and re-running admission. The
+    /// `RequiresGetToolSpec` state is deliberately not auto-recovered: the
+    /// model must still call GetToolSpec first to unlock a deferred tool.
+    pub fn is_stale_spec(&self) -> bool {
+        matches!(self, Self::StaleSpec { .. })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolExecutionAccessError {
     NotInAllowedList {
@@ -2215,6 +2225,105 @@ pub fn build_tool_path_policy_denial_message(
     )
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum OperationClass {
+    WriteFile,
+    DeleteFile,
+    ExecuteCode,
+    ReadOnly,
+    Communicate,
+}
+
+/// Classify an ExecCommand/Bash tool input by inspecting the command string.
+/// Returns the most specific [`OperationClass`] based on heuristics.
+fn classify_exec_command(input: &Value) -> OperationClass {
+    let cmd = input
+        .get("cmd")
+        .and_then(|v| v.as_str())
+        .or_else(|| input.get("command").and_then(|v| v.as_str()))
+        .unwrap_or("");
+
+    let cmd_lower = cmd.to_lowercase();
+
+    // ── Delete operations ──────────────────────────────────────────────
+    // Detect file/directory deletion commands: rm, rmdir, del, Remove-Item,
+    // erase, unlink, rd. The `erase` and `unlink` aliases were previously
+    // missed, so `erase foo.txt` was classified ExecuteCode and could slip
+    // past DeleteFile-only gates.
+    //
+    // `rm -rf` 无空格变体（rm-rf、rm-rf/、rm-f 等）也必须命中；`mv`/`move`/
+    // `ren`/`rename` 可覆盖目标文件（覆盖即删除目标），同样归为删除类。
+    if cmd_lower.contains("rm ")
+        || cmd_lower.contains("rm-r")
+        || cmd_lower.contains("rm-f")
+        || cmd_lower.contains("rmdir ")
+        || cmd_lower.starts_with("rmdir")
+        || cmd_lower.contains("del ")
+        || cmd_lower.contains("remove-item")
+        || cmd_lower.contains("erase ")
+        || cmd_lower.starts_with("erase")
+        || cmd_lower.contains("unlink ")
+        || cmd_lower.starts_with("unlink")
+        || cmd_lower.contains("rd ")
+        || cmd_lower.starts_with("rd ")
+        || cmd_lower.contains("mv ")
+        || cmd_lower.contains("mv-f")
+        || cmd_lower.contains("move ")
+        || cmd_lower.starts_with("move")
+        || cmd_lower.contains("move-item")
+        || cmd_lower.contains("ren ")
+        || cmd_lower.contains("rename ")
+        || cmd_lower.starts_with("rename")
+        || cmd_lower.contains("rename-item")
+    {
+        return OperationClass::DeleteFile;
+    }
+
+    // ── Write operations ───────────────────────────────────────────────
+    // Shell redirects (>, >>) write to a file or device
+    if cmd.contains('>') {
+        return OperationClass::WriteFile;
+    }
+
+    // tee command writes output to files (in addition to stdout)
+    if cmd_lower.contains(" tee ") || cmd_lower.starts_with("tee ") {
+        return OperationClass::WriteFile;
+    }
+
+    // PowerShell write cmdlets
+    if cmd_lower.contains("out-file")
+        || cmd_lower.contains("set-content")
+        || cmd_lower.contains("add-content")
+    {
+        return OperationClass::WriteFile;
+    }
+
+    // Default: arbitrary/unknown commands are ExecuteCode
+    OperationClass::ExecuteCode
+}
+
+/// Map a tool name and its input arguments to the corresponding [`OperationClass`].
+///
+/// This is used by the RBAC system to enforce operation-level restrictions
+/// on tool calls, beyond simple tool-name allow/deny lists.
+pub fn classify_tool_call(tool_name: &str, input: &Value) -> OperationClass {
+    match tool_name {
+        "Write" | "Edit" => OperationClass::WriteFile,
+        "Delete" => OperationClass::DeleteFile,
+        "ExecCommand" | "Bash" => classify_exec_command(input),
+        // read-only scanners belong to ReadOnly; the session todo
+        // list writer belongs to Communicate so RBAC gates it like the other
+        // session-mutating tools instead of defaulting to ExecuteCode.
+        "Read" | "Grep" | "Glob" | "SessionHistory" | "KnowledgeBaseSearch" | "WorkspaceScan" => {
+            OperationClass::ReadOnly
+        }
+        "SessionMessage" | "SessionControl" | "LegionControl" | "TodoWrite" => {
+            OperationClass::Communicate
+        }
+        _ => OperationClass::ExecuteCode,
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolRuntimeRestrictions {
     #[serde(default)]
@@ -2225,6 +2334,10 @@ pub struct ToolRuntimeRestrictions {
     pub denied_tool_messages: BTreeMap<String, String>,
     #[serde(default)]
     pub path_policy: ToolPathPolicy,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub allowed_operation_classes: BTreeSet<OperationClass>,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub denied_operation_classes: BTreeSet<OperationClass>,
 }
 
 const MINIAPP_HEADLESS_AGENT_SURFACE: &str = "miniapp_agent";
@@ -2371,6 +2484,68 @@ pub fn tool_restrictions_for_delegation_policy(
     restrictions
 }
 
+/// Tool set for delegated subagent runs (Task spawn chain and SessionControl /
+/// SessionMessage work sessions).
+///
+/// Subagents must not reach interactive host surfaces (ControlHub / GenerativeUI),
+/// hosted review flows (ReviewPlatform), MiniApp lifecycle management
+/// (InitMiniApp / FinalizeMiniApp / PublishMiniApp / PageDeploy / PagePublish) or
+/// block on background-task coordination (AgentWait). AskUserQuestion is kept
+/// deliberately: subagents may still ask their commander for decisions.
+pub fn subagent_tool_restrictions() -> ToolRuntimeRestrictions {
+    const DENIED_TOOLS: &[(&str, &str)] = &[
+        (
+            "ControlHub",
+            "ControlHub is unavailable in delegated subagent runs.",
+        ),
+        (
+            "GenerativeUI",
+            "GenerativeUI is unavailable in delegated subagent runs.",
+        ),
+        (
+            "ReviewPlatform",
+            "ReviewPlatform is unavailable in delegated subagent runs.",
+        ),
+        (
+            "InitMiniApp",
+            "InitMiniApp is unavailable in delegated subagent runs.",
+        ),
+        (
+            "FinalizeMiniApp",
+            "FinalizeMiniApp is unavailable in delegated subagent runs.",
+        ),
+        (
+            "PublishMiniApp",
+            "PublishMiniApp is unavailable in delegated subagent runs.",
+        ),
+        (
+            "PageDeploy",
+            "PageDeploy is unavailable in delegated subagent runs.",
+        ),
+        (
+            "PagePublish",
+            "PagePublish is unavailable in delegated subagent runs.",
+        ),
+        (
+            "AgentWait",
+            "AgentWait is unavailable in delegated subagent runs.",
+        ),
+    ];
+
+    let mut denied_tool_names = BTreeSet::new();
+    let mut denied_tool_messages = BTreeMap::new();
+    for (name, message) in DENIED_TOOLS {
+        denied_tool_names.insert((*name).to_string());
+        denied_tool_messages.insert((*name).to_string(), (*message).to_string());
+    }
+
+    ToolRuntimeRestrictions {
+        denied_tool_names,
+        denied_tool_messages,
+        ..Default::default()
+    }
+}
+
 impl ToolRuntimeRestrictions {
     pub fn is_tool_allowed(&self, tool_name: &str) -> bool {
         (self.allowed_tool_names.is_empty() || self.allowed_tool_names.contains(tool_name))
@@ -2393,6 +2568,102 @@ impl ToolRuntimeRestrictions {
 
         Ok(())
     }
+
+    /// Check whether the given [`OperationClass`] is allowed by these restrictions.
+    ///
+    /// Returns `Ok(())` if the operation class is not denied and is either explicitly
+    /// allowed or the allowed set is empty (allow by default).
+    pub fn ensure_operation_allowed(
+        &self,
+        class: OperationClass,
+        tool_name: &str,
+    ) -> Result<(), ToolRestrictionError> {
+        if self.denied_operation_classes.contains(&class) {
+            return Err(ToolRestrictionError::OperationClassNotAllowed {
+                operation_class: class,
+                tool_name: tool_name.to_string(),
+            });
+        }
+
+        if !self.allowed_operation_classes.is_empty()
+            && !self.allowed_operation_classes.contains(&class)
+        {
+            return Err(ToolRestrictionError::OperationClassNotAllowed {
+                operation_class: class,
+                tool_name: tool_name.to_string(),
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Merge another restriction set into this one (used for static injection at
+    /// session creation: role template + subagent deny list).
+    ///
+    /// Deny sets are unioned (the merged result denies everything either side
+    /// denies). Allow sets are intersected when both sides are non-empty, so a
+    /// narrow role template cannot widen a deny list, and vice versa.
+    pub fn merge(&mut self, other: &ToolRuntimeRestrictions) {
+        for name in &other.denied_tool_names {
+            self.denied_tool_names.insert(name.clone());
+        }
+        for (name, message) in &other.denied_tool_messages {
+            self.denied_tool_messages
+                .insert(name.clone(), message.clone());
+        }
+        self.allowed_tool_names = merge_allow_sets(&self.allowed_tool_names, &other.allowed_tool_names);
+        self.allowed_operation_classes = merge_allow_sets(
+            &self.allowed_operation_classes,
+            &other.allowed_operation_classes,
+        );
+        for class in &other.denied_operation_classes {
+            self.denied_operation_classes.insert(class.clone());
+        }
+    }
+
+    /// Apply a runtime patch to modify restrictions on-the-fly.
+    pub fn apply_patch(&mut self, patch: ToolRuntimeRestrictionsPatch) {
+        if let Some(allowed) = patch.allowed_tool_names {
+            self.allowed_tool_names = allowed;
+        }
+        if let Some(denied) = patch.denied_tool_names {
+            self.denied_tool_names = denied;
+        }
+        if let Some(allowed_ops) = patch.allowed_operation_classes {
+            self.allowed_operation_classes = allowed_ops;
+        }
+        if let Some(denied_ops) = patch.denied_operation_classes {
+            self.denied_operation_classes = denied_ops;
+        }
+        if let Some(path_policy) = patch.path_policy {
+            self.path_policy = path_policy;
+        }
+    }
+}
+
+fn merge_allow_sets<T: Ord + Clone>(
+    current: &BTreeSet<T>,
+    other: &BTreeSet<T>,
+) -> BTreeSet<T> {
+    if other.is_empty() {
+        current.clone()
+    } else if current.is_empty() {
+        other.clone()
+    } else {
+        current.intersection(other).cloned().collect()
+    }
+}
+
+/// Runtime patch for modifying a session's tool restrictions.
+///
+/// Only `Some` fields are applied; `None` fields leave the current value unchanged.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ToolRuntimeRestrictionsPatch {
+    pub allowed_tool_names: Option<BTreeSet<String>>,
+    pub denied_tool_names: Option<BTreeSet<String>>,
+    pub allowed_operation_classes: Option<BTreeSet<OperationClass>>,
+    pub denied_operation_classes: Option<BTreeSet<OperationClass>>,
+    pub path_policy: Option<ToolPathPolicy>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2402,6 +2673,10 @@ pub enum ToolRestrictionError {
         message: Option<String>,
     },
     NotAllowed {
+        tool_name: String,
+    },
+    OperationClassNotAllowed {
+        operation_class: OperationClass,
         tool_name: String,
     },
 }
@@ -2424,6 +2699,14 @@ impl fmt::Display for ToolRestrictionError {
                 formatter,
                 "Tool '{}' is not allowed by runtime restrictions",
                 tool_name
+            ),
+            Self::OperationClassNotAllowed {
+                operation_class,
+                tool_name,
+            } => write!(
+                formatter,
+                "Operation class '{:?}' from tool '{}' is not allowed by runtime restrictions",
+                operation_class, tool_name
             ),
         }
     }
@@ -2513,6 +2796,7 @@ impl ToolResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bitfun_runtime_ports::MAX_FISSION_DEPTH;
     use serde_json::json;
 
     struct TestTool {
@@ -2607,9 +2891,21 @@ mod tests {
 
     #[test]
     fn delegation_policy_tool_restrictions_block_recursive_subagents() {
-        let restrictions =
-            tool_restrictions_for_delegation_policy(DelegationPolicy::top_level().spawn_child());
+        // At depth 1 (top_level.spawn_child()), further subagent spawn is allowed
+        // because MAX_FISSION_DEPTH is 10. Only at depth >= MAX_FISSION_DEPTH
+        // should Task be blocked.
+        let child = DelegationPolicy::top_level().spawn_child();
+        assert!(child.allow_subagent_spawn);
+        let restrictions = tool_restrictions_for_delegation_policy(child);
+        assert!(restrictions.is_tool_allowed("Task"));
 
+        // At MAX_FISSION_DEPTH, further subagent spawn is blocked.
+        let mut deep = DelegationPolicy::top_level();
+        for _ in 0..MAX_FISSION_DEPTH {
+            deep = deep.spawn_child();
+        }
+        assert!(!deep.allow_subagent_spawn);
+        let restrictions = tool_restrictions_for_delegation_policy(deep);
         assert!(!restrictions.is_tool_allowed("Task"));
         assert!(restrictions.is_tool_allowed("Read"));
         assert_eq!(
@@ -2659,6 +2955,8 @@ mod tests {
             denied_tool_names: ["Write"].into_iter().map(str::to_string).collect(),
             denied_tool_messages: Default::default(),
             path_policy: ToolPathPolicy::default(),
+            allowed_operation_classes: Default::default(),
+            denied_operation_classes: Default::default(),
         };
 
         assert!(!restrictions.is_tool_allowed("Write"));
@@ -2724,6 +3022,420 @@ mod tests {
             .expect("provider entries should materialize");
 
         assert_eq!(registry.get_tool_names(), vec!["Read", "Write"]);
+    }
+
+    // ── classify_exec_command tests ────────────────────────────────────
+
+    #[test]
+    fn classify_exec_command_rm_is_delete() {
+        let input = json!({ "cmd": "rm -rf /data" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::DeleteFile
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_rmdir_is_delete() {
+        let input = json!({ "cmd": "rmdir /s /q temp_dir" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::DeleteFile
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_del_is_delete() {
+        let input = json!({ "cmd": "del /f old_file.txt" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::DeleteFile
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_remove_item_is_delete() {
+        let input = json!({ "cmd": "Remove-Item -Path 'C:\\temp\\file.txt'" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::DeleteFile
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_redirect_write_is_write() {
+        let input = json!({ "cmd": "echo x >> file" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_redirect_overwrite_is_write() {
+        let input = json!({ "cmd": "echo x > file" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_tee_is_write() {
+        let input = json!({ "cmd": "echo 'hello' | tee output.txt" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_standalone_tee_is_write() {
+        let input = json!({ "cmd": "tee output.txt" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_out_file_is_write() {
+        let input = json!({ "cmd": "Out-File -FilePath test.txt -InputObject $data" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_set_content_is_write() {
+        let input = json!({ "cmd": "Set-Content -Path file.txt -Value 'data'" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_add_content_is_write() {
+        let input = json!({ "cmd": "Add-Content -Path file.txt -Value 'data'" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_echo_alone_is_execute() {
+        // echo without redirect does NOT write a file
+        let input = json!({ "cmd": "echo hello" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_cat_alone_is_execute() {
+        // cat without redirect does NOT write a file
+        let input = json!({ "cmd": "cat file.txt" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_cat_pipe_is_execute() {
+        // pipe to cat (without redirect) does NOT write a file
+        let input = json!({ "cmd": "ls | cat" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_dir_is_execute() {
+        let input = json!({ "cmd": "dir" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_ls_is_execute() {
+        let input = json!({ "cmd": "ls -la" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_grep_is_execute() {
+        let input = json!({ "cmd": "grep pattern file.txt" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_echo_pipe_grep_is_execute() {
+        let input = json!({ "cmd": "echo 'pattern' | grep foo" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_multi_line_redirect_is_write() {
+        let input = json!({ "cmd": "cat > file.txt << EOF\nhello\nEOF" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_piped_tee_is_write() {
+        let input = json!({ "cmd": "ls -la | tee listing.txt" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_empty_cmd_is_execute() {
+        let input = json!({ "cmd": "" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_missing_cmd_is_execute() {
+        let input = json!({});
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_uses_cmd_field_before_command_field() {
+        let input = json!({ "cmd": "echo hello", "command": "rm file" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_falls_back_to_command_field() {
+        let input = json!({ "command": "rm file.txt" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::DeleteFile
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_erase_is_delete() {
+        // Windows `erase` alias must classify as DeleteFile.
+        let input = json!({ "cmd": "erase report.tmp" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::DeleteFile
+        );
+        let input = json!({ "cmd": "erase" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::DeleteFile
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_unlink_is_delete() {
+        // POSIX `unlink` single-file deletion alias.
+        let input = json!({ "cmd": "unlink lockfile" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::DeleteFile
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_rd_is_delete() {
+        // Windows `rd` (remove directory) alias.
+        let input = json!({ "cmd": "rd /s /q build" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::DeleteFile
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_rm_rf_no_space_is_delete() {
+        // `rm -rf` 无空格变体（省略 rm 与旗标之间的空格）。
+        let cases = [
+            "rm-rf /data",
+            "rm-rf/data",
+            "rm-r /data",
+            "rm-f /data/file.txt",
+        ];
+        for c in cases {
+            assert_eq!(
+                classify_exec_command(&json!({ "cmd": c })),
+                OperationClass::DeleteFile,
+                "cmd: {c}"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_exec_command_move_is_delete() {
+        // `mv`/`move` 可覆盖（覆盖即删除）目标文件。
+        let cases = [
+            "mv a.txt b.txt",
+            "mv -f a.txt b.txt",
+            "mv-f a.txt b.txt",
+            "move /y a.txt b.txt",
+            "move a.txt b.txt",
+            "move-item -Path a.txt -Destination b.txt -Force",
+        ];
+        for c in cases {
+            assert_eq!(
+                classify_exec_command(&json!({ "cmd": c })),
+                OperationClass::DeleteFile,
+                "cmd: {c}"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_exec_command_ren_is_delete() {
+        // `ren`/`rename`/`rename-item` 可覆盖（覆盖即删除）目标文件。
+        let cases = [
+            "ren a.txt b.txt",
+            "rename a.txt b.txt",
+            "rename-item -Path a.txt -NewName b.txt",
+        ];
+        for c in cases {
+            assert_eq!(
+                classify_exec_command(&json!({ "cmd": c })),
+                OperationClass::DeleteFile,
+                "cmd: {c}"
+            );
+        }
+    }
+
+    // ── classify_tool_call tests ──────────────────────────────────────
+
+    #[test]
+    fn classify_tool_call_write_is_write_file() {
+        assert_eq!(
+            classify_tool_call("Write", &json!({})),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[test]
+    fn classify_tool_call_edit_is_write_file() {
+        assert_eq!(
+            classify_tool_call("Edit", &json!({})),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[test]
+    fn classify_tool_call_delete_is_delete_file() {
+        assert_eq!(
+            classify_tool_call("Delete", &json!({})),
+            OperationClass::DeleteFile
+        );
+    }
+
+    #[test]
+    fn classify_tool_call_read_is_readonly() {
+        assert_eq!(
+            classify_tool_call("Read", &json!({})),
+            OperationClass::ReadOnly
+        );
+    }
+
+    #[test]
+    fn classify_tool_call_grep_is_readonly() {
+        assert_eq!(
+            classify_tool_call("Grep", &json!({})),
+            OperationClass::ReadOnly
+        );
+    }
+
+    #[test]
+    fn classify_tool_call_glob_is_readonly() {
+        assert_eq!(
+            classify_tool_call("Glob", &json!({})),
+            OperationClass::ReadOnly
+        );
+    }
+
+    #[test]
+    fn classify_tool_call_session_message_is_communicate() {
+        assert_eq!(
+            classify_tool_call("SessionMessage", &json!({})),
+            OperationClass::Communicate
+        );
+    }
+
+    #[test]
+    fn classify_tool_call_legion_control_is_communicate() {
+        assert_eq!(
+            classify_tool_call("LegionControl", &json!({"action": "load"})),
+            OperationClass::Communicate
+        );
+    }
+
+    #[test]
+    fn classify_tool_call_unknown_is_execute_code() {
+        assert_eq!(
+            classify_tool_call("UnknownTool", &json!({})),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[test]
+    fn classify_tool_call_knowledge_base_search_is_readonly() {
+        // The local knowledge-base scanner is strictly read-only.
+        assert_eq!(
+            classify_tool_call("KnowledgeBaseSearch", &json!({ "keyword": "rule" })),
+            OperationClass::ReadOnly
+        );
+    }
+
+    #[test]
+    fn classify_tool_call_workspace_scan_is_readonly() {
+        // WorkspaceScan lists workspaces without modifying them.
+        assert_eq!(
+            classify_tool_call("WorkspaceScan", &json!({ "scope": "opened" })),
+            OperationClass::ReadOnly
+        );
+    }
+
+    #[test]
+    fn classify_tool_call_todo_write_is_communicate() {
+        // TodoWrite mutates the session todo list, so it belongs to
+        // the Communicate class like the other session-mutating tools instead of
+        // defaulting to ExecuteCode.
+        assert_eq!(
+            classify_tool_call("TodoWrite", &json!({ "todos": [] })),
+            OperationClass::Communicate
+        );
     }
 
     #[test]

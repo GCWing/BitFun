@@ -167,7 +167,10 @@ pub struct DispatchAppendRequest {
 
 /// The wire shape and structural limits come from the shared contract; the
 /// controller only adds transport-owned policy (the device inline budget).
-pub(super) use bitfun_services_core::dispatch_contract::DispatchAttachment as DispatchAttachmentPayload;
+///
+/// Crate-internal alias: the module is private and the public dispatch facade
+/// re-exports the request structs, not this name.
+pub(crate) use bitfun_services_core::dispatch_contract::DispatchAttachment as DispatchAttachmentPayload;
 
 pub(super) fn validate_attachment_payloads(
     attachments: &[DispatchAttachmentPayload],

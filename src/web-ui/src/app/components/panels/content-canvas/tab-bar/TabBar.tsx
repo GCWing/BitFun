@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback, useMemo, useLayoutEffect } from 'react';
-import { X } from 'lucide-react';
+import { Table2, X, Combine, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@/component-library';
 import { Tab } from './Tab';
@@ -46,6 +46,25 @@ export interface TabBarProps {
   onCloseAllTabs?: () => Promise<void> | void;
   /** Pop out tab as independent scene */
   onTabPopOut?: (tabId: string) => void;
+  /** Optional grid template toggle rendered in the actions area (primary
+   *  group): four-cell (2x2), six-cell (2x3) and nine-cell (3x3) presets. */
+  grid9Slot?: {
+    active: boolean;
+    onToggle: () => void;
+    label: string;
+    /** Preset templates shown in the dropdown: [cols, rows, i18n key]. */
+    templates?: Array<{ cols: number; rows: number; label: string }>;
+    onApplyTemplate?: (cols: number, rows: number) => void;
+  };
+  /** Merge this grid9 cell's tabs into a neighbour (free split/merge). Only
+   *  shown in grid9 mode on non-primary cells with content. */
+  onMergeCell?: () => void;
+  /** Whether merge affordance is available (grid9 + non-primary + has tabs). */
+  canMergeCell?: boolean;
+  /** Remove this blank grid9 cell (shrink + re-tile remaining cells). */
+  onRemoveCell?: () => void;
+  /** Whether the remove affordance is available (blank cell, grid large enough). */
+  canRemoveCell?: boolean;
 }
 
 /**
@@ -97,12 +116,19 @@ export const TabBar: React.FC<TabBarProps> = ({
   onOpenMissionControl,
   onCloseAllTabs,
   onTabPopOut,
+  grid9Slot,
+  onMergeCell,
+  canMergeCell = false,
+  onRemoveCell,
+  canRemoveCell = false,
 }) => {
   const { t } = useTranslation('components');
   const [visibleTabsCount, setVisibleTabsCount] = useState(tabs.length);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   // Track initial layout measurement completion
   const [layoutReady, setLayoutReady] = useState(false);
+  // Grid template dropdown open state (four/six/nine-cell presets)
+  const [grid9MenuOpen, setGrid9MenuOpen] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const tabsListRef = useRef<HTMLDivElement>(null);
@@ -340,6 +366,126 @@ export const TabBar: React.FC<TabBarProps> = ({
 
       {/* Actions area */}
       <div ref={actionsRef} className="canvas-tab-bar__actions" data-bf-component="canvas-tab-bar" data-bf-part="actions" data-bf-group={groupId}>
+        {/* Grid template toggle (right panel top-right): clicking opens the
+            four/six/nine-cell presets; the button itself toggles the last
+            applied grid on/off. */}
+        {grid9Slot && (
+          <div className="canvas-tab-bar__grid9-wrap" data-bf-component="canvas-tab-bar" data-bf-part="gridTemplate">
+            <Tooltip content={grid9Slot.label} placement="bottom">
+              <button
+                type="button"
+                data-bf-component="canvas-tab-bar"
+                data-bf-part="action"
+                data-bf-state={grid9Slot.active ? 'active' : ''}
+                className={`canvas-tab-bar__action-btn canvas-tab-bar__grid9-btn${grid9Slot.active ? ' is-active' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Grid active → clicking the button exits the grid (M1:
+                  // previously templates always existed so the click only
+                  // opened the menu and the grid could never be turned off
+                  // from this button).
+                  if (grid9Slot.active) {
+                    setGrid9MenuOpen(false);
+                    grid9Slot.onToggle();
+                    return;
+                  }
+                  // Inactive → open the template dropdown (four/six/nine-cell).
+                  if (!grid9Slot.templates?.length) {
+                    grid9Slot.onToggle();
+                    return;
+                  }
+                  setGrid9MenuOpen(!grid9MenuOpen);
+                }}
+                aria-label={grid9Slot.label}
+                aria-pressed={grid9Slot.active}
+                aria-expanded={grid9MenuOpen}
+              >
+                <Table2 size={14} />
+              </button>
+            </Tooltip>
+            {grid9MenuOpen && grid9Slot.templates && (
+              <div
+                className="canvas-tab-bar__grid9-menu"
+                data-bf-component="canvas-tab-bar"
+                data-bf-part="gridTemplateMenu"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {grid9Slot.templates.map((tpl) => (
+                  <button
+                    key={`${tpl.cols}x${tpl.rows}`}
+                    type="button"
+                    className="canvas-tab-bar__grid9-menu-item"
+                    data-bf-component="canvas-tab-bar"
+                    data-bf-part="gridTemplateItem"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setGrid9MenuOpen(false);
+                      grid9Slot.onApplyTemplate?.(tpl.cols, tpl.rows);
+                    }}
+                  >
+                    {tpl.label}
+                  </button>
+                ))}
+                {grid9Slot.active && (
+                  <button
+                    type="button"
+                    className="canvas-tab-bar__grid9-menu-item canvas-tab-bar__grid9-menu-item--exit"
+                    data-bf-component="canvas-tab-bar"
+                    data-bf-part="gridTemplateExit"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setGrid9MenuOpen(false);
+                      grid9Slot.onToggle();
+                    }}
+                  >
+                    {t('tabs.exitGrid')}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Merge cell (grid9 free split/merge): merge this cell's tabs into a
+            neighbour so two small windows become one big window. */}
+        {onMergeCell && canMergeCell && (
+          <Tooltip content={t('tabs.mergeCell')} placement="bottom">
+            <button
+              type="button"
+              data-bf-component="canvas-tab-bar"
+              data-bf-part="action"
+              className="canvas-tab-bar__action-btn canvas-tab-bar__merge-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onMergeCell();
+              }}
+              aria-label={t('tabs.mergeCell')}
+            >
+              <Combine size={14} />
+            </button>
+          </Tooltip>
+        )}
+
+        {/* Remove blank grid9 cell: shrink the grid and re-tile the rest so the
+            remaining conversations fill the panel. */}
+        {onRemoveCell && canRemoveCell && (
+          <Tooltip content={t('tabs.removeCell')} placement="bottom">
+            <button
+              type="button"
+              data-bf-component="canvas-tab-bar"
+              data-bf-part="action"
+              className="canvas-tab-bar__action-btn canvas-tab-bar__remove-cell-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemoveCell();
+              }}
+              aria-label={t('tabs.removeCell')}
+            >
+              <Trash2 size={14} />
+            </button>
+          </Tooltip>
+        )}
+
         {/* Overflow menu (all groups; mission control only in primary) */}
         {visibleTabs.length > 0 && layoutReady && (
           <TabOverflowMenu

@@ -17,14 +17,16 @@ use crate::service::workspace::get_global_workspace_service;
 use crate::service::workspace::RelatedPath;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::prompt::{
-    render_project_layout, render_runtime_context_reminder, render_user_context_reminder,
-    render_workspace_context, PrependedPromptReminders, ProjectLayoutFacts, PromptRelatedPath,
-    RemoteExecutionHints, RuntimeContextFacts, RuntimeContextNeeds, RuntimeShellFacts,
+    render_project_layout, render_runtime_context_reminder, render_runtime_facts_reminder,
+    render_user_context_reminder, render_workspace_context, PrependedPromptReminders,
+    ProjectLayoutFacts, PromptRelatedPath, RemoteExecutionHints, RuntimeContextFacts,
+    RuntimeContextNeeds, RuntimeFactsInput, RuntimeFactsUsage, RuntimeShellFacts,
     ToolListingSections, UserContextPolicy, UserContextSection, WorkspaceContextFacts,
     WorktreeContextFacts,
 };
 use bitfun_agent_runtime::remote_file_delivery::user_workspace_relative_file_link;
 use bitfun_core_types::SessionExecutionTargetKind;
+use chrono::Datelike;
 use log::{debug, info, warn};
 use std::path::Path;
 
@@ -288,6 +290,24 @@ impl PromptBuilder {
         })
     }
 
+    /// Build the per-turn runtime facts reminder: current local/UTC time,
+    /// weekday, timezone offset (chrono::Local, same shape as the GetTime
+    /// tool) plus the live context usage ratio and tiered guidance.
+    pub fn build_runtime_facts_reminder(&self, usage: RuntimeFactsUsage) -> String {
+        let now = chrono::Local::now();
+        let utc = now.with_timezone(&chrono::Utc);
+        render_runtime_facts_reminder(&RuntimeFactsInput {
+            local_time_rfc3339: now.to_rfc3339_opts(chrono::SecondsFormat::Secs, false),
+            utc_time_rfc3339: utc.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            weekday_name: now.format("%A").to_string(),
+            weekday_number: now.weekday().number_from_monday(),
+            local_hhmm: now.format("%H:%M").to_string(),
+            timezone_offset: now.format("%:z").to_string(),
+            context_usage_ratio: usage.context_usage_ratio,
+            compression_preview_ratio: usage.compression_preview_ratio,
+        })
+    }
+
     /// Get workspace context that is intentionally injected outside the system prompt cache.
     pub fn get_workspace_context(&self) -> String {
         render_workspace_context(&WorkspaceContextFacts {
@@ -426,12 +446,14 @@ impl PromptBuilder {
     pub async fn build_prepended_reminders(
         &self,
         user_context_policy: &UserContextPolicy,
+        runtime_facts_usage: RuntimeFactsUsage,
     ) -> PrependedPromptReminders {
         PrependedPromptReminders {
             deferred_tool_listing: self.build_deferred_tool_listing_reminder(),
             skill_listing: self.build_skill_listing_reminder(),
             agent_listing: self.build_agent_listing_reminder(),
             runtime_context: self.build_runtime_context_reminder().await,
+            runtime_facts: Some(self.build_runtime_facts_reminder(runtime_facts_usage)),
             user_context: self.build_user_context_reminder(user_context_policy).await,
         }
     }
@@ -646,6 +668,7 @@ mod tests {
     use super::PromptBuilderContext;
     use super::RemoteExecutionHints;
     use super::RuntimeContextNeeds;
+    use super::RuntimeFactsUsage;
     use super::ToolListingSections;
     use crate::agentic::agents::UserContextPolicy;
     use crate::agentic::WorkspaceBinding;
@@ -672,6 +695,10 @@ mod tests {
                 &UserContextPolicy::empty()
                     .with_workspace_context()
                     .with_workspace_instructions(),
+                RuntimeFactsUsage {
+                    context_usage_ratio: Some(0.35),
+                    compression_preview_ratio: Some(0.9),
+                },
             )
             .await;
         let reminders_for_order = reminders.clone();
@@ -690,6 +717,7 @@ mod tests {
         let runtime_context = reminders
             .runtime_context
             .expect("runtime context should build");
+        let runtime_facts = reminders.runtime_facts.expect("runtime facts should build");
 
         assert!(skill_listing.contains("# Skill Listing"));
         assert!(skill_listing
@@ -712,6 +740,8 @@ mod tests {
         assert!(!runtime_context.contains("## ExecCommand Shell"));
         assert!(!runtime_context.contains("## Local Client"));
         assert!(!runtime_context.contains("ExecCommand shell:"));
+        assert!(runtime_facts.contains("[Runtime Facts]"));
+        assert!(runtime_facts.contains("当前上下文占比: 35%"));
         assert_eq!(
             ordered_reminders,
             vec![
@@ -719,6 +749,7 @@ mod tests {
                 skill_listing.as_str(),
                 agent_listing.as_str(),
                 runtime_context.as_str(),
+                runtime_facts.as_str(),
                 user_context.as_str(),
             ]
         );
@@ -728,7 +759,7 @@ mod tests {
     async fn prepended_reminders_omit_runtime_context_without_runtime_tool_needs() {
         let context = PromptBuilderContext::new(r"workspace\root", None, None);
         let reminders = PromptBuilder::new(context)
-            .build_prepended_reminders(&UserContextPolicy::empty())
+            .build_prepended_reminders(&UserContextPolicy::empty(), RuntimeFactsUsage::default())
             .await;
 
         assert_eq!(reminders.skill_listing, None);
@@ -736,6 +767,28 @@ mod tests {
         assert_eq!(reminders.deferred_tool_listing, None);
         assert_eq!(reminders.user_context, None);
         assert_eq!(reminders.runtime_context, None);
+        assert!(reminders
+            .runtime_facts
+            .expect("runtime facts should always build")
+            .contains("[Runtime Facts]"));
+    }
+
+    #[test]
+    fn build_runtime_facts_reminder_includes_time_weekday_and_offset_shape() {
+        let context = PromptBuilderContext::new(r"workspace\root", None, None);
+        let reminder = PromptBuilder::new(context).build_runtime_facts_reminder(RuntimeFactsUsage {
+            context_usage_ratio: Some(0.5),
+            compression_preview_ratio: Some(0.9),
+        });
+
+        // Time facts come from chrono::Local at build time; assert the key
+        // shape (date/time/weekday/offset) without locking specific seconds.
+        assert!(reminder.contains("[Runtime Facts]"));
+        assert!(reminder.contains("当前本地时间: "));
+        assert!(reminder.contains("UTC 时间: "));
+        assert!(reminder.contains("时区偏移: "));
+        assert!(reminder.contains("周"));
+        assert!(reminder.contains("当前上下文占比: 50%"));
     }
 
     #[tokio::test]

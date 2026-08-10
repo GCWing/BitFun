@@ -6,7 +6,7 @@ define_readonly_subagent!(
     "Explore",
     r#"Read-only subagent for **wide** codebase exploration. Prefer search-first workflows: use Grep and Glob to narrow the space, then Read the small set of relevant files. Use LS only sparingly to confirm directory shape after search has narrowed the target. Do **not** use for narrow tasks: a known path, a single class/symbol lookup, one obvious Grep pattern, or reading a handful of files — the main agent should handle those directly. When calling, set thoroughness in the prompt: "quick", "medium", or "very thorough"."#,
     "explore_agent",
-    &["Grep", "Glob", "Read", "LS"]
+    &["Grep", "Glob", "Read", "LS", "Skill"]
 );
 
 #[cfg(test)]
@@ -24,6 +24,7 @@ mod tests {
                 "Glob".to_string(),
                 "Read".to_string(),
                 "LS".to_string(),
+                "Skill".to_string(),
             ]
         );
     }

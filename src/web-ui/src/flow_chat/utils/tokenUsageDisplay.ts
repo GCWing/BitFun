@@ -1,6 +1,6 @@
 import type { DialogTurn, Session, TokenUsage } from '../types/flow-chat';
 
-export const DEFAULT_MAX_CONTEXT_TOKENS = 128128;
+export const DEFAULT_MAX_CONTEXT_TOKENS = 1048576;
 
 export type ContextUsageSource = 'agent_prompt' | 'acp_context';
 

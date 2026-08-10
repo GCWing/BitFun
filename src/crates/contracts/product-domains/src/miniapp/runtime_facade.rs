@@ -208,6 +208,7 @@ impl<'a> MiniAppRuntimeFacade<'a> {
         Ok(next)
     }
 
+    #[allow(clippy::too_many_arguments)] // shared private install funnel; refactor out of scope
     async fn install_strict_package(
         &self,
         id: String,

@@ -7,6 +7,7 @@ pub enum SessionKind {
     Standard,
     Subagent,
     EphemeralChild,
+    EphemeralSubagent,
 }
 
 /// Whether a persisted subagent session may accept another delegated turn.

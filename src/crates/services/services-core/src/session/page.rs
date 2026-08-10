@@ -36,10 +36,23 @@ pub fn build_session_metadata_page(
     cursor: Option<&str>,
     limit: usize,
 ) -> SessionMetadataPage {
+    build_session_metadata_page_with_options(indexed_sessions, cursor, limit, false)
+}
+
+/// Paginated session metadata builder. With `include_hidden`, sessions hidden
+/// from user lists (Subagent/Ephemeral) participate in pagination for full
+/// conversation management.
+pub fn build_session_metadata_page_with_options(
+    indexed_sessions: Vec<SessionMetadata>,
+    cursor: Option<&str>,
+    limit: usize,
+    include_hidden: bool,
+) -> SessionMetadataPage {
     let visible_sessions = indexed_sessions
         .into_iter()
         .filter(|metadata| {
-            !metadata.should_hide_from_user_lists() && metadata.status != SessionStatus::Archived
+            (include_hidden || !metadata.should_hide_from_user_lists())
+                && metadata.status != SessionStatus::Archived
         })
         .collect::<Vec<_>>();
     let visible_ids = visible_sessions

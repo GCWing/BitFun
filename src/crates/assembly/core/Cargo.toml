@@ -1,4 +1,5 @@
 [package]
+license.workspace = true
 name = "bitfun-core"
 version.workspace = true
 authors.workspace = true
@@ -109,6 +110,7 @@ fluent-bundle = { workspace = true }
 unic-langid = { workspace = true }
 
 sha2 = { workspace = true }
+rand = { workspace = true, optional = true }
 
 # QR code generation
 
@@ -174,7 +176,15 @@ product-full = [
     "product-domains",
     "runtime-services",
     "tool-packs",
+    "warden-poke",
 ]
+# Warden Challenge-Poke scheduling (Poisson scheduler) is part of the
+# agentic runtime core: the Warden runtime is embedded in the scheduler
+# and tool pipeline and compiles unconditionally under agent-runtime, so
+# rand is owned by the agent-runtime feature (like md5/similar/rusqlite).
+# warden-poke remains as a stable empty alias for product assemblies that
+# reference it; it has no functional effect.
+warden-poke = []
 # Core compatibility facade and concrete product Agent Runtime assembly. This
 # owns the existing agent/session/tool lifecycle, not app presentation or
 # external ecosystem discovery.
@@ -194,6 +204,7 @@ agent-runtime = [
     "dep:indexmap",
     "dep:image",
     "dep:md5",
+    "dep:rand",
     "dep:reqwest",
     "dep:semver",
     "dep:rusqlite",

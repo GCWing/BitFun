@@ -7,6 +7,7 @@ use crate::util::errors::*;
 #[cfg(feature = "agent-runtime")]
 use log::warn;
 use log::{debug, info};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::OnceLock;
 use tokio::sync::RwLock;
@@ -17,6 +18,97 @@ static GLOBAL_CONFIG_SERVICE: OnceLock<Arc<RwLock<Option<Arc<ConfigService>>>>> 
 /// Configuration update notification channel.
 static CONFIG_UPDATE_SENDER: OnceLock<tokio::sync::broadcast::Sender<ConfigUpdateEvent>> =
     OnceLock::new();
+
+/// Cached RBAC/Warden master switch (R-26).
+///
+/// Mirrors `ai.rbac_enabled` in the settings document. Kept as a process-level
+/// cache so synchronous hot paths (tool restriction gates) can read it without
+/// awaiting the config service. Refreshed on config initialize / reload /
+/// update; defaults to `true` (mechanism on).
+static RBAC_ENABLED_CACHE: AtomicBool = AtomicBool::new(true);
+
+/// Dot-path of the RBAC/Warden master switch inside the settings document.
+/// Config paths resolve against the serialized `GlobalConfig`, where `AIConfig`
+/// lives under `ai`.
+pub(crate) const RBAC_ENABLED_CONFIG_PATH: &str = "ai.rbac_enabled";
+
+/// Current value of the RBAC/Warden master switch (cached, synchronous).
+///
+/// Hot-path safe: never awaits the config service. The cache is refreshed from
+/// the settings document on config initialize / reload / update.
+pub fn rbac_enabled() -> bool {
+    RBAC_ENABLED_CACHE.load(Ordering::Relaxed)
+}
+
+/// Override the cached RBAC/Warden master switch.
+///
+/// Used by the config service when the settings document changes and by tests.
+pub fn set_rbac_enabled(enabled: bool) {
+    RBAC_ENABLED_CACHE.store(enabled, Ordering::Relaxed);
+}
+
+/// Refresh the cached RBAC/Warden master switch from the global config.
+///
+/// Best-effort: hosts without an initialized config service keep the default
+/// (`true`). Called after config initialize, reload, and service replacement.
+pub(crate) async fn refresh_rbac_enabled_cache() {
+    let enabled = match get_global_config_service().await {
+        Ok(service) => service
+            .get_config::<bool>(Some(RBAC_ENABLED_CONFIG_PATH))
+            .await
+            .unwrap_or(true),
+        Err(_) => true,
+    };
+    RBAC_ENABLED_CACHE.store(enabled, Ordering::Relaxed);
+}
+
+/// Cached master switch for external user instruction sources.
+///
+/// Mirrors `ai.external_instruction_sources` in the settings document. Kept as
+/// a process-level cache so synchronous hot paths (instruction context
+/// assembly gates) can read it without awaiting the config service. Refreshed
+/// on config initialize / reload / update; defaults to `true` (load external
+/// CLAUDE.md / OpenCode / Codex user instructions), preserving the historical
+/// behavior.
+static EXTERNAL_INSTRUCTION_SOURCES_ENABLED_CACHE: AtomicBool = AtomicBool::new(true);
+
+/// Dot-path of the external user instruction sources switch inside the
+/// settings document. Config paths resolve against the serialized
+/// `GlobalConfig`, where `AIConfig` lives under `ai`.
+pub(crate) const EXTERNAL_INSTRUCTION_SOURCES_CONFIG_PATH: &str =
+    "ai.external_instruction_sources";
+
+/// Current value of the external user instruction sources switch (cached,
+/// synchronous).
+///
+/// Hot-path safe: never awaits the config service. The cache is refreshed from
+/// the settings document on config initialize / reload / update.
+pub fn external_instruction_sources_enabled() -> bool {
+    EXTERNAL_INSTRUCTION_SOURCES_ENABLED_CACHE.load(Ordering::Relaxed)
+}
+
+/// Override the cached external user instruction sources switch.
+///
+/// Used by the config service when the settings document changes and by tests.
+pub fn set_external_instruction_sources_enabled(enabled: bool) {
+    EXTERNAL_INSTRUCTION_SOURCES_ENABLED_CACHE.store(enabled, Ordering::Relaxed);
+}
+
+/// Refresh the cached external user instruction sources switch from the global
+/// config.
+///
+/// Best-effort: hosts without an initialized config service keep the default
+/// (`true`). Called after config initialize, reload, and service replacement.
+pub(crate) async fn refresh_external_instruction_sources_enabled_cache() {
+    let enabled = match get_global_config_service().await {
+        Ok(service) => service
+            .get_config::<bool>(Some(EXTERNAL_INSTRUCTION_SOURCES_CONFIG_PATH))
+            .await
+            .unwrap_or(true),
+        Err(_) => true,
+    };
+    EXTERNAL_INSTRUCTION_SOURCES_ENABLED_CACHE.store(enabled, Ordering::Relaxed);
+}
 
 /// Configuration update events.
 #[derive(Debug, Clone)]
@@ -110,6 +202,8 @@ impl GlobalConfigManager {
         })?;
 
         info!("Global config service initialized");
+        refresh_rbac_enabled_cache().await;
+        refresh_external_instruction_sources_enabled_cache().await;
 
         #[cfg(feature = "agent-runtime")]
         {
@@ -159,6 +253,8 @@ impl GlobalConfigManager {
         }
 
         Self::broadcast_update(ConfigUpdateEvent::ConfigReloaded).await;
+        refresh_rbac_enabled_cache().await;
+        refresh_external_instruction_sources_enabled_cache().await;
 
         debug!("Global config service updated");
         Ok(())
@@ -181,6 +277,8 @@ impl GlobalConfigManager {
             );
         }
         Self::broadcast_update(ConfigUpdateEvent::ConfigReloaded).await;
+        refresh_rbac_enabled_cache().await;
+        refresh_external_instruction_sources_enabled_cache().await;
         Ok(())
     }
 

@@ -1,4 +1,5 @@
 [package]
+license.workspace = true
 name = "bitfun-acp"
 version.workspace = true
 authors.workspace = true
@@ -32,6 +33,7 @@ dashmap = { workspace = true }
 log = { workspace = true }
 uuid = { workspace = true }
 sha2 = { workspace = true }
+which = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }

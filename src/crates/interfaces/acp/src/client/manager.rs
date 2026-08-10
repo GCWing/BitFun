@@ -7,18 +7,19 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use agent_client_protocol::schema::{
-    AgentCapabilities, CancelNotification, ClientCapabilities, CloseSessionRequest, Implementation,
-    InitializeRequest, LoadSessionRequest, LoadSessionResponse, NewSessionRequest,
-    NewSessionResponse, PermissionOption, PermissionOptionKind, ProtocolVersion,
-    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse,
-    ResumeSessionRequest, ResumeSessionResponse, SelectedPermissionOutcome, SessionConfigOption,
-    SessionConfigOptionValue, SessionModelState, SetSessionConfigOptionRequest,
-    SetSessionModelRequest, StopReason,
+    AgentCapabilities, CancelNotification, ClientCapabilities, CloseSessionRequest, ContentBlock,
+    Implementation, InitializeRequest, ImageContent, LoadSessionRequest, LoadSessionResponse,
+    NewSessionRequest, NewSessionResponse, PermissionOption, PermissionOptionKind, PromptRequest,
+    PromptResponse, ProtocolVersion, RequestPermissionOutcome, RequestPermissionRequest,
+    RequestPermissionResponse, ResumeSessionRequest, ResumeSessionResponse,
+    SelectedPermissionOutcome, SessionConfigOption, SessionConfigOptionValue, SessionModelState,
+    SetSessionConfigOptionRequest, SetSessionModelRequest, StopReason, TextContent,
 };
 use agent_client_protocol::{
     ActiveSession, Agent, ByteStreams, Client, ConnectionTo, Error, SessionMessage,
 };
 use bitfun_agent_tools::ACP_TOOL_PREFIX;
+use bitfun_core::agentic::image_analysis::ImageContextData;
 use bitfun_core::agentic::tools::registry::get_global_tool_registry;
 use bitfun_core::infrastructure::events::{emit_global_event, BackendEvent};
 use bitfun_core::infrastructure::PathManager;
@@ -42,13 +43,17 @@ use super::config::{
     AcpClientConfig, AcpClientConfigFile, AcpClientInfo, AcpClientPermissionMode,
     AcpClientRequirementProbe, AcpClientStatus, RemoteAcpClientRequirementSnapshot,
 };
+use super::launch_policy::apply_launch_policy;
+use super::probe::{TryConnectResult, TRY_CONNECT_TOTAL_TIMEOUT_SECS};
 use super::remote_capability_store::RemoteAcpCapabilityStore;
 use super::remote_session::{preferred_resume_strategies, AcpRemoteSessionStrategy};
 use super::remote_shell::{remote_user_shell_command, render_remote_env_assignments, shell_escape};
 use super::requirements::{
-    acp_requirement_spec, apply_command_environment, install_npm_cli_package,
-    install_remote_npm_cli_package, predownload_npm_adapter, probe_executable, probe_npm_adapter,
-    probe_remote_executable, probe_remote_npx_adapter, resolve_configured_command,
+    acp_requirement_spec, apply_command_environment, expand_env_vars,
+    install_npm_cli_package_with_timeout, install_remote_npm_cli_package_with_timeout,
+    predownload_npm_adapter_with_timeout, probe_executable_with_timeout,
+    probe_npm_adapter_with_timeout, probe_remote_executable, probe_remote_npx_adapter,
+    resolve_configured_command,
 };
 use super::session_options::{
     model_config_id, session_options_from_state, AcpAvailableCommand, AcpSessionContextUsage,
@@ -64,9 +69,39 @@ use super::tool::AcpAgentTool;
 
 const CONFIG_PATH: &str = "acp_clients";
 const CLIENT_STARTUP_TIMEOUT_SECS: u64 = 60;
-const CLIENT_STARTUP_TIMEOUT: Duration = Duration::from_secs(CLIENT_STARTUP_TIMEOUT_SECS);
-const PERMISSION_TIMEOUT: Duration = Duration::from_secs(600);
-const SESSION_CLOSE_TIMEOUT: Duration = Duration::from_secs(5);
+const SESSION_CLOSE_TIMEOUT_SECS: u64 = 5;
+
+/// Resolved ACP client timeouts from `ai.thresholds.acp_timeout.*`
+/// (阈值参数配置化). Defaults mirror the legacy constants so an unconfigured
+/// or unavailable config service is a zero-regression fallback.
+#[derive(Debug, Clone, Copy)]
+struct ResolvedAcpTimeouts {
+    client_startup_secs: u64,
+    permission_secs: u64,
+    session_close_secs: u64,
+    cli_detect_secs: u64,
+    handshake_secs: u64,
+    try_connect_total_secs: u64,
+    requirement_probe_secs: u64,
+    adapter_download_secs: u64,
+    cli_install_secs: u64,
+}
+
+impl Default for ResolvedAcpTimeouts {
+    fn default() -> Self {
+        Self {
+            client_startup_secs: CLIENT_STARTUP_TIMEOUT_SECS,
+            permission_secs: 600,
+            session_close_secs: SESSION_CLOSE_TIMEOUT_SECS,
+            cli_detect_secs: super::probe::CLI_DETECT_TIMEOUT_SECS,
+            handshake_secs: super::probe::ACP_HANDSHAKE_TIMEOUT_SECS,
+            try_connect_total_secs: TRY_CONNECT_TOTAL_TIMEOUT_SECS,
+            requirement_probe_secs: 3,
+            adapter_download_secs: 120,
+            cli_install_secs: 600,
+        }
+    }
+}
 const LOAD_REPLAY_DRAIN_QUIET_WINDOW: Duration = Duration::from_millis(250);
 const LOAD_REPLAY_DRAIN_MAX_DURATION: Duration = Duration::from_secs(2);
 const SESSION_METADATA_DRAIN_QUIET_WINDOW: Duration = Duration::from_millis(250);
@@ -300,6 +335,8 @@ impl AcpClientService {
                 id,
                 status,
                 session_count,
+                category: config.category.clone(),
+                description: config.description.clone(),
             });
         }
         infos.sort_by(|a, b| a.id.cmp(&b.id));
@@ -337,12 +374,22 @@ impl AcpClientService {
         }
         ids.sort();
 
+        let requirement_probe_timeout =
+            Duration::from_secs(self.resolved_acp_timeouts().await.requirement_probe_secs);
         let mut probes = Vec::with_capacity(ids.len());
         for id in ids {
             let spec = acp_requirement_spec(&id, configs.get(&id));
-            let tool = probe_executable(spec.tool_command).await;
+            let tool = probe_executable_with_timeout(spec.tool_command, requirement_probe_timeout)
+                .await;
             let adapter = match spec.adapter {
-                Some(adapter) => Some(probe_npm_adapter(adapter.package, adapter.bin).await),
+                Some(adapter) => Some(
+                    probe_npm_adapter_with_timeout(
+                        adapter.package,
+                        adapter.bin,
+                        requirement_probe_timeout,
+                    )
+                    .await,
+                ),
                 None => None,
             };
             let runnable = tool.installed
@@ -493,7 +540,14 @@ impl AcpClientService {
             ))
         })?;
 
-        predownload_npm_adapter(adapter.package, adapter.bin).await
+        let adapter_download_timeout =
+            Duration::from_secs(self.resolved_acp_timeouts().await.adapter_download_secs);
+        predownload_npm_adapter_with_timeout(
+            adapter.package,
+            adapter.bin,
+            adapter_download_timeout,
+        )
+        .await
     }
 
     pub async fn install_client_cli(
@@ -514,6 +568,8 @@ impl AcpClientService {
             ))
         })?;
 
+        let cli_install_timeout =
+            Duration::from_secs(self.resolved_acp_timeouts().await.cli_install_secs);
         if let Some(remote_connection_id) = remote_connection_id {
             let remote_manager = get_remote_workspace_manager().ok_or_else(|| {
                 BitFunError::service("Remote workspace manager is not initialized".to_string())
@@ -521,9 +577,15 @@ impl AcpClientService {
             let ssh_manager = remote_manager.get_ssh_manager().await.ok_or_else(|| {
                 BitFunError::service("SSH manager is not available for remote ACP".to_string())
             })?;
-            install_remote_npm_cli_package(&ssh_manager, remote_connection_id, package).await
+            install_remote_npm_cli_package_with_timeout(
+                &ssh_manager,
+                remote_connection_id,
+                package,
+                cli_install_timeout,
+            )
+            .await
         } else {
-            install_npm_cli_package(package).await
+            install_npm_cli_package_with_timeout(package, cli_install_timeout).await
         }
     }
 
@@ -557,7 +619,14 @@ impl AcpClientService {
                 match status {
                     AcpClientStatus::Running => return Ok(()),
                     AcpClientStatus::Starting => {
-                        return wait_for_client_connection(existing, connection_id).await;
+                        let startup_timeout_secs =
+                            self.resolved_acp_timeouts().await.client_startup_secs;
+                        return wait_for_client_connection(
+                            existing,
+                            connection_id,
+                            Duration::from_secs(startup_timeout_secs),
+                        )
+                        .await;
                     }
                     AcpClientStatus::Configured
                     | AcpClientStatus::Stopped
@@ -589,7 +658,14 @@ impl AcpClientService {
                     match status {
                         AcpClientStatus::Running => return Ok(()),
                         AcpClientStatus::Starting => {
-                            return wait_for_client_connection(existing, connection_id).await;
+                            let startup_timeout_secs =
+                                self.resolved_acp_timeouts().await.client_startup_secs;
+                            return wait_for_client_connection(
+                                existing,
+                                connection_id,
+                                Duration::from_secs(startup_timeout_secs),
+                            )
+                            .await;
                         }
                         AcpClientStatus::Configured
                         | AcpClientStatus::Stopped
@@ -641,6 +717,8 @@ impl AcpClientService {
         let (cx_tx, cx_rx) = oneshot::channel();
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         *connection.shutdown_tx.lock().await = Some(shutdown_tx);
+        let startup_timeout_secs = self.resolved_acp_timeouts().await.client_startup_secs;
+        let startup_timeout = Duration::from_secs(startup_timeout_secs);
 
         let connect_task = tokio::spawn(async move {
             let result = Client
@@ -689,9 +767,7 @@ impl AcpClientService {
             connection_for_task.sessions.clear();
         });
 
-        let (cx, agent_capabilities) = match tokio::time::timeout(CLIENT_STARTUP_TIMEOUT, cx_rx)
-            .await
-        {
+        let (cx, agent_capabilities) = match tokio::time::timeout(startup_timeout, cx_rx).await {
             Ok(Ok(result)) => result,
             Ok(Err(_)) => {
                 connect_task.abort();
@@ -706,7 +782,7 @@ impl AcpClientService {
                         "ACP client startup timed out during initialize: id={} connection_id={} timeout_secs={}",
                         client_id,
                         connection_id,
-                        CLIENT_STARTUP_TIMEOUT_SECS
+                        startup_timeout_secs
                     );
                 connect_task.abort();
                 self.cleanup_failed_startup(connection_id).await;
@@ -779,6 +855,7 @@ impl AcpClientService {
             .collect::<Vec<_>>();
         let mut released = false;
         let mut idle_client_ids = Vec::new();
+        let session_close_timeout_secs = self.resolved_acp_timeouts().await.session_close_secs;
 
         for client in clients {
             let session_keys = client
@@ -835,6 +912,7 @@ impl AcpClientService {
                     connection,
                     &remote_session_id,
                     supports_close,
+                    Duration::from_secs(session_close_timeout_secs),
                 )
                 .await;
             }
@@ -1138,6 +1216,7 @@ impl AcpClientService {
         ))
     }
 
+    #[allow(clippy::too_many_arguments)] // public convenience entry point over resolved session fields
     pub async fn prompt_agent(
         self: &Arc<Self>,
         client_id: &str,
@@ -1179,16 +1258,36 @@ impl AcpClientService {
         };
 
         if let Some(seconds) = timeout_seconds.filter(|seconds| *seconds > 0) {
-            tokio::time::timeout(Duration::from_secs(seconds), run)
-                .await
-                .map_err(|_| {
-                    BitFunError::tool(format!("ACP client timed out after {}s", seconds))
-                })?
+            match tokio::time::timeout(Duration::from_secs(seconds), run).await {
+                Ok(result) => result,
+                Err(_) => {
+                    // 超时 = drop future 后外部 agent 进程仍在执行（孤儿执行
+                    // 窗口），残留 SessionMessage/StopReason 会滞留在更新流，
+                    // 下一次 prompt_agent 的 read_turn_to_string 会读到上一
+                    // turn 的残留事件（跨 turn 污染）。根因级修复（d3-P1-1）：
+                    // 发送 CancelNotification 取消外部 turn，使下一轮从干净
+                    // 状态开始。
+                    if let Err(cancel_error) = self
+                        .cancel_bitfun_session(&bitfun_session_id)
+                        .await
+                    {
+                        warn!(
+                            "ACP client turn timed out after {}s and cancel failed: client_id={}, bitfun_session_id={}, cancel_error={}",
+                            seconds, client_id, bitfun_session_id, cancel_error
+                        );
+                    }
+                    Err(BitFunError::tool(format!(
+                        "ACP client turn timed out after {}s",
+                        seconds
+                    )))
+                }
+            }
         } else {
             run.await
         }
     }
 
+    #[allow(clippy::too_many_arguments)] // public streaming entry point over resolved session fields
     pub async fn prompt_agent_stream<F>(
         self: &Arc<Self>,
         client_id: &str,
@@ -1198,6 +1297,8 @@ impl AcpClientService {
         bitfun_session_id: String,
         session_storage_path: Option<PathBuf>,
         timeout_seconds: Option<u64>,
+        image_contexts: Option<Vec<ImageContextData>>,
+        user_message_metadata: Option<serde_json::Value>,
         mut on_event: F,
     ) -> BitFunResult<()>
     where
@@ -1225,23 +1326,31 @@ impl AcpClientService {
             .await?;
 
             discard_pending_session_updates_if_needed(&mut session).await;
-            {
+            let prompt_future = {
                 let active = session
                     .active
                     .as_mut()
                     .ok_or_else(|| BitFunError::service("ACP session was not initialized"))?;
-                active.send_prompt(prompt).map_err(protocol_error)?;
-            }
+                send_acp_prompt(active, prompt, image_contexts, user_message_metadata)
+                    .map_err(protocol_error)?
+                    .block_task()
+            };
+            let mut prompt_future = std::pin::pin!(prompt_future);
             let mut round_tracker = AcpStreamRoundTracker::new();
             let mut tool_call_tracker = AcpToolCallTracker::new();
 
-            loop {
+            let stop_reason = loop {
                 let message = {
                     let active = session
                         .active
                         .as_mut()
                         .ok_or_else(|| BitFunError::service("ACP session was not initialized"))?;
-                    active.read_update().await.map_err(protocol_error)?
+                    tokio::select! {
+                        message = active.read_update() => message.map_err(protocol_error)?,
+                        response = &mut prompt_future => {
+                            break response.map_err(protocol_error)?.stop_reason;
+                        }
+                    }
                 };
 
                 match message {
@@ -1258,34 +1367,46 @@ impl AcpClientService {
                             }
                         }
                     }
-                    SessionMessage::StopReason(stop_reason) => {
-                        drain_pending_turn_updates(
-                            &mut session,
-                            &mut tool_call_tracker,
-                            &mut round_tracker,
-                            &mut on_event,
-                        )
-                        .await?;
-                        let event = if matches!(stop_reason, StopReason::Cancelled) {
-                            AcpClientStreamEvent::Cancelled
-                        } else {
-                            AcpClientStreamEvent::Completed
-                        };
-                        on_event(event)?;
-                        break;
-                    }
                     _ => {}
                 }
-            }
+            };
+            drain_pending_turn_updates(
+                &mut session,
+                &mut tool_call_tracker,
+                &mut round_tracker,
+                &mut on_event,
+            )
+            .await?;
+            let event = if matches!(stop_reason, StopReason::Cancelled) {
+                AcpClientStreamEvent::Cancelled
+            } else {
+                AcpClientStreamEvent::Completed
+            };
+            on_event(event)?;
             Ok(())
         };
 
         if let Some(seconds) = timeout_seconds.filter(|seconds| *seconds > 0) {
-            tokio::time::timeout(Duration::from_secs(seconds), run)
-                .await
-                .map_err(|_| {
-                    BitFunError::tool(format!("ACP client timed out after {}s", seconds))
-                })?
+            match tokio::time::timeout(Duration::from_secs(seconds), run).await {
+                Ok(result) => result,
+                Err(_) => {
+                    // 同 prompt_agent 超时语义（d3-P1-1）：取消外部 turn 防
+                    // 孤儿执行 + 残留事件跨 turn 污染下一次流式回复。
+                    if let Err(cancel_error) = self
+                        .cancel_bitfun_session(&bitfun_session_id)
+                        .await
+                    {
+                        warn!(
+                            "ACP client stream timed out after {}s and cancel failed: client_id={}, bitfun_session_id={}, cancel_error={}",
+                            seconds, client_id, bitfun_session_id, cancel_error
+                        );
+                    }
+                    Err(BitFunError::tool(format!(
+                        "ACP client turn timed out after {}s",
+                        seconds
+                    )))
+                }
+            }
         } else {
             run.await
         }
@@ -1540,12 +1661,13 @@ impl AcpClientService {
     where
         F: Future<Output = Result<T, Error>>,
     {
-        match tokio::time::timeout(CLIENT_STARTUP_TIMEOUT, future).await {
+        let startup_timeout_secs = self.resolved_acp_timeouts().await.client_startup_secs;
+        match tokio::time::timeout(Duration::from_secs(startup_timeout_secs), future).await {
             Ok(result) => result,
             Err(_) => {
                 warn!(
                     "ACP client startup timed out: id={} connection_id={} phase={} timeout_secs={}",
-                    client.client_id, client.id, phase, CLIENT_STARTUP_TIMEOUT_SECS
+                    client.client_id, client.id, phase, startup_timeout_secs
                 );
                 self.cleanup_failed_startup(&client.id).await;
                 Err(agent_client_protocol::util::internal_error(
@@ -1555,6 +1677,7 @@ impl AcpClientService {
         }
     }
 
+    #[allow(clippy::too_many_arguments)] // remote session attach carries protocol resolution state
     async fn attach_remote_session(
         &self,
         client: &Arc<AcpClientConnection>,
@@ -1617,6 +1740,34 @@ impl AcpClientService {
             .unwrap_or_else(|_| json!({ "acpClients": {} })))
     }
 
+    /// Resolve the configured ACP client timeouts
+    /// (`ai.thresholds.acp_timeout.*`), falling back to the legacy constants
+    /// when the config service is unavailable or the value is unset/zero.
+    /// (阈值参数配置化)
+    async fn resolved_acp_timeouts(&self) -> ResolvedAcpTimeouts {
+        let Ok(thresholds) = self
+            .config_service
+            .get_config::<bitfun_core::service::config::types::AiThresholdsConfig>(
+                Some("ai.thresholds"),
+            )
+            .await
+        else {
+            return ResolvedAcpTimeouts::default();
+        };
+        let t = &thresholds.acp_timeout;
+        ResolvedAcpTimeouts {
+            client_startup_secs: t.client_startup_secs.max(1),
+            permission_secs: t.permission_secs.max(1),
+            session_close_secs: t.session_close_secs.max(1),
+            cli_detect_secs: t.cli_detect_secs.max(1),
+            handshake_secs: t.handshake_secs.max(1),
+            try_connect_total_secs: t.try_connect_total_secs.max(1),
+            requirement_probe_secs: t.requirement_probe_secs.max(1),
+            adapter_download_secs: t.adapter_download_secs.max(1),
+            cli_install_secs: t.cli_install_secs.max(1),
+        }
+    }
+
     async fn register_configured_tools(
         self: &Arc<Self>,
         configs: &HashMap<String, AcpClientConfig>,
@@ -1638,6 +1789,35 @@ impl AcpClientService {
             debug!("Registering ACP client tool: name={}", tool.name());
             registry.register_tool(tool);
         }
+        drop(registry);
+
+        // Also register each ACP client as a SubAgent in the global AgentRegistry
+        // so they appear in the agent selector and can be targeted by
+        // SessionControl / SessionMessage for legion orchestration.
+        let agent_registry =
+            bitfun_core::agentic::agents::get_agent_registry();
+        // Clean up ALL previously registered ACP agents first, mirroring the
+        // tool-side `unregister_tools_by_prefix` above — otherwise clients
+        // that were disabled or removed keep their `acp__<id>` agent (Mode)
+        // registered forever.
+        agent_registry.unregister_agents_by_prefix(
+            bitfun_core::agentic::agents::AcpAgent::agent_id_prefix(),
+        );
+        for (client_id, config) in configs.iter().filter(|(_, c)| c.enabled) {
+            let agent = Arc::new(
+                bitfun_core::agentic::agents::AcpAgent::new(
+                    client_id.clone(),
+                    config.name.clone().unwrap_or_else(|| client_id.clone()),
+                ),
+            );
+            agent_registry.register_agent(
+                agent,
+                bitfun_core::agentic::agents::AgentCategory::Mode,
+                bitfun_core::agentic::agents::AgentSource::Builtin,
+                None,
+                None,
+            );
+        }
     }
 
     async fn handle_permission_request(
@@ -1651,6 +1831,16 @@ impl AcpClientService {
                 return Ok(select_permission_by_kind(
                     &request,
                     PermissionOptionKind::AllowOnce,
+                    true,
+                ));
+            }
+            AcpClientPermissionMode::AllowAlways => {
+                // No-approval automation mode: auto-select the allow-always
+                // option (falling back to any approve-style option) without
+                // human intervention.
+                return Ok(select_permission_by_kind(
+                    &request,
+                    PermissionOptionKind::AllowAlways,
                     true,
                 ));
             }
@@ -1690,7 +1880,8 @@ impl AcpClientService {
             warn!("Failed to emit ACP permission request: {}", error);
         }
 
-        match tokio::time::timeout(PERMISSION_TIMEOUT, rx).await {
+        let permission_timeout_secs = self.resolved_acp_timeouts().await.permission_secs;
+        match tokio::time::timeout(Duration::from_secs(permission_timeout_secs), rx).await {
             Ok(Ok(response)) => Ok(response),
             Ok(Err(_)) => Ok(RequestPermissionResponse::new(
                 RequestPermissionOutcome::Cancelled,
@@ -1711,6 +1902,10 @@ impl AcpClientService {
             .unwrap_or(AcpClientPermissionMode::Ask)
     }
 
+    fn expand_configured_args(args: &[String]) -> Vec<String> {
+        args.iter().map(|arg| expand_env_vars(arg)).collect()
+    }
+
     async fn start_local_transport(
         &self,
         client_id: &str,
@@ -1720,12 +1915,25 @@ impl AcpClientService {
         let program = resolve_configured_command(&config.command, &config.env);
         let mut command = bitfun_core::util::process_manager::create_tokio_command(&program);
         command
-            .args(&config.args)
+            .args(Self::expand_configured_args(&config.args))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit());
         apply_command_environment(&mut command, Some(&config.env));
         configure_process_group(&mut command);
+
+        // Apply per-backend launch policy (e.g. codex workspace-write sandbox)
+        // so external ACP clients run with the configured execution environment.
+        let launch_policy = apply_launch_policy(config, client_id);
+        command.args(&launch_policy.additional_args);
+        apply_command_environment(
+            &mut command,
+            if launch_policy.additional_env.is_empty() {
+                None
+            } else {
+                Some(&launch_policy.additional_env)
+            },
+        );
 
         let mut child = command.spawn().map_err(|error| {
             BitFunError::service(format!(
@@ -1858,6 +2066,212 @@ impl AcpClientService {
             config,
         })
     }
+
+    pub async fn detect_client_cli(
+        self: &Arc<Self>,
+        client_id: &str,
+    ) -> BitFunResult<Option<String>> {
+        let config_file = self.load_config_file().await?;
+        let config = resolve_config_for_client(&config_file, client_id, None)
+            .ok_or_else(|| BitFunError::NotFound(format!("ACP client not found: {}", client_id)))?;
+        Ok(super::cli_detect::detect_cli(&config.command).await)
+    }
+
+    pub async fn try_connect_client(
+        self: &Arc<Self>,
+        client_id: &str,
+    ) -> BitFunResult<TryConnectResult> {
+        let timeouts = self.resolved_acp_timeouts().await;
+        let cli_detect_secs = timeouts.cli_detect_secs;
+        let handshake_secs = timeouts.handshake_secs;
+        let cli_result = tokio::time::timeout(
+            Duration::from_secs(cli_detect_secs),
+            self.detect_client_cli(client_id),
+        )
+        .await;
+
+        match cli_result {
+            Ok(Ok(Some(_path))) => {}
+            Ok(Ok(None)) => {
+                let config_file = self.load_config_file().await?;
+                let config =
+                    resolve_config_for_client(&config_file, client_id, None).ok_or_else(|| {
+                        BitFunError::NotFound(format!("ACP client not found: {}", client_id))
+                    })?;
+                return Ok(TryConnectResult::FailCli {
+                    error: format!("{} is not available on PATH", config.command),
+                });
+            }
+            Ok(Err(error)) => {
+                return Ok(TryConnectResult::FailCli {
+                    error: error.to_string(),
+                });
+            }
+            Err(_) => {
+                let config_file = self.load_config_file().await?;
+                let config =
+                    resolve_config_for_client(&config_file, client_id, None).ok_or_else(|| {
+                        BitFunError::NotFound(format!("ACP client not found: {}", client_id))
+                    })?;
+                return Ok(TryConnectResult::FailCli {
+                    error: format!(
+                        "CLI detection timed out after {}s for {}",
+                        cli_detect_secs, config.command,
+                    ),
+                });
+            }
+        }
+
+        // 两步探测（cli detect + handshake）受总预算 `try_connect_total_secs`
+        // 上限约束；默认 35 = cli 5 + handshake 30，零回归。
+        let handshake_budget = timeouts
+            .try_connect_total_secs
+            .saturating_sub(cli_detect_secs)
+            .min(handshake_secs)
+            .max(1);
+        match tokio::time::timeout(
+            Duration::from_secs(handshake_budget),
+            self.run_probe_handshake(client_id),
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(_) => Ok(TryConnectResult::FailAcp {
+                error: format!(
+                    "ACP handshake timed out after {}s",
+                    handshake_budget,
+                ),
+            }),
+        }
+    }
+
+    async fn run_probe_handshake(
+        self: &Arc<Self>,
+        client_id: &str,
+    ) -> BitFunResult<TryConnectResult> {
+        let handshake_secs = self.resolved_acp_timeouts().await.handshake_secs;
+        let config_file = self.load_config_file().await?;
+        let config = resolve_config_for_client(&config_file, client_id, None)
+            .ok_or_else(|| BitFunError::NotFound(format!("ACP client not found: {}", client_id)))?;
+
+        let program = resolve_configured_command(&config.command, &config.env);
+        let mut command = bitfun_core::util::process_manager::create_tokio_command(&program);
+        command
+            .args(Self::expand_configured_args(&config.args))
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit());
+        apply_command_environment(&mut command, Some(&config.env));
+        configure_process_group(&mut command);
+
+        let mut child = command.spawn().map_err(|error| {
+            BitFunError::service(format!(
+                "Failed to spawn ACP client '{}': {}",
+                client_id, error
+            ))
+        })?;
+
+        let stdout = match child.stdout.take() {
+            Some(stdout) => stdout,
+            None => {
+                terminate_child_process_tree("probe", child).await;
+                return Err(BitFunError::service(format!(
+                    "ACP client '{}' stdout is unavailable",
+                    client_id
+                )));
+            }
+        };
+        let stdin = match child.stdin.take() {
+            Some(stdin) => stdin,
+            None => {
+                terminate_child_process_tree("probe", child).await;
+                return Err(BitFunError::service(format!(
+                    "ACP client '{}' stdin is unavailable",
+                    client_id
+                )));
+            }
+        };
+
+        let transport = ByteStreams::new(Box::pin(stdin.compat_write()), Box::pin(stdout.compat()));
+
+        let (result_tx, mut result_rx) =
+            oneshot::channel::<Result<(), agent_client_protocol::Error>>();
+
+        let probe_task = tokio::spawn(async move {
+            let connect_result = Client
+                .builder()
+                .name("bitfun-acp-probe")
+                .on_receive_request(
+                    async move |_request: RequestPermissionRequest, responder, _cx| {
+                        responder.respond_with_result(Ok(RequestPermissionResponse::new(
+                            RequestPermissionOutcome::Cancelled,
+                        )))
+                    },
+                    agent_client_protocol::on_receive_request!(),
+                )
+                .connect_with(transport, async move |cx| {
+                    let init = InitializeRequest::new(ProtocolVersion::V1)
+                        .client_capabilities(ClientCapabilities::new())
+                        .client_info(Implementation::new(
+                            "bitfun-desktop",
+                            env!("CARGO_PKG_VERSION"),
+                        ));
+                    let _init_response = cx.send_request(init).block_task().await?;
+
+                    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                    let _session_response = cx
+                        .send_request(NewSessionRequest::new(&cwd))
+                        .block_task()
+                        .await?;
+
+                    Ok(())
+                })
+                .await;
+
+            match connect_result {
+                Ok(()) => {
+                    let _ = result_tx.send(Ok(()));
+                }
+                Err(error) => {
+                    let _ = result_tx.send(Err(error));
+                }
+            }
+        });
+
+        let handshake_result = tokio::time::timeout(
+            Duration::from_secs(handshake_secs),
+            &mut result_rx,
+        )
+        .await;
+
+        probe_task.abort();
+        terminate_child_process_tree("probe", child).await;
+
+        match handshake_result {
+            Ok(Ok(Ok(()))) => Ok(TryConnectResult::Success),
+            Ok(Ok(Err(error))) => {
+                if is_auth_error(&error) {
+                    Ok(TryConnectResult::FailAuth {
+                        error: error.to_string(),
+                        login_hint: auth_login_hint(client_id),
+                    })
+                } else {
+                    Ok(TryConnectResult::FailAcp {
+                        error: error.to_string(),
+                    })
+                }
+            }
+            Ok(Err(_)) => Ok(TryConnectResult::FailAcp {
+                error: "ACP client exited before handshake completed".to_string(),
+            }),
+            Err(_) => Ok(TryConnectResult::FailAcp {
+                error: format!(
+                    "ACP handshake timed out after {}s",
+                    handshake_secs,
+                ),
+            }),
+        }
+    }
 }
 
 fn resolve_config_for_client(
@@ -1929,6 +2343,87 @@ fn current_unix_timestamp_ms() -> u64 {
         .unwrap_or(0)
 }
 
+/// Build the ACP `session/prompt` content blocks for one user message.
+///
+/// L2-P2-1: the frontend sends `imageContexts`/`userMessageMetadata` alongside
+/// the text. The text prompt is always the first block; each image is appended
+/// as an `Image` content block (base64 `data_url` or `uri`), and the metadata
+/// object is attached as the request `_meta` so external ACP agents receive
+/// the same image/context they would via the internal executor path. A prompt
+/// with no images and no metadata is sent exactly as before (single text
+/// block, no `_meta`), keeping the wire shape stable for existing clients.
+fn build_acp_prompt_blocks(
+    prompt: &str,
+    image_contexts: Option<&[ImageContextData]>,
+    user_message_metadata: Option<&serde_json::Value>,
+) -> (Vec<ContentBlock>, Option<serde_json::Map<String, serde_json::Value>>) {
+    let mut blocks = Vec::new();
+    let mut has_image = false;
+    if let Some(images) = image_contexts {
+        for image in images {
+            let data = image.data_url.clone().or_else(|| image.image_path.clone());
+            let mime_type = image.mime_type.clone();
+            match data {
+                Some(data) => {
+                    let image = ImageContent::new(data, mime_type);
+                    blocks.push(ContentBlock::Image(image));
+                    has_image = true;
+                }
+                None => {
+                    warn!(
+                        "ACP prompt image skipped: missing data_url/image_path: id={}",
+                        image.id
+                    );
+                }
+            }
+        }
+    }
+    let mut meta = None;
+    if let Some(serde_json::Value::Object(metadata)) = user_message_metadata {
+        if !metadata.is_empty() {
+            meta = Some(metadata.clone());
+        }
+    }
+    if has_image {
+        // Text and image blocks coexist in one user message: text first.
+        let mut with_text = Vec::with_capacity(blocks.len() + 1);
+        with_text.push(ContentBlock::Text(TextContent::new(prompt.to_string())));
+        with_text.extend(blocks);
+        (with_text, meta)
+    } else {
+        (vec![ContentBlock::Text(TextContent::new(prompt.to_string()))], meta)
+    }
+}
+
+/// Send one ACP prompt to the active remote session and return the
+/// `SentRequest` response future.
+///
+/// Unlike `ActiveSession::send_prompt` (text-only, StopReason injected into the
+/// session update channel), this builds a full `PromptRequest` — text block +
+/// image blocks (L2-P2-1) + optional `_meta` — and hands the caller the
+/// response future so it can `tokio::select!` between stream updates and the
+/// prompt completion. The caller is responsible for driving the response to
+/// completion (which yields `PromptResponse.stop_reason`).
+fn send_acp_prompt(
+    active: &mut ActiveSession<'static, Agent>,
+    prompt: String,
+    image_contexts: Option<Vec<ImageContextData>>,
+    user_message_metadata: Option<serde_json::Value>,
+) -> Result<agent_client_protocol::SentRequest<PromptResponse>, agent_client_protocol::Error> {
+    let (blocks, meta) = build_acp_prompt_blocks(
+        &prompt,
+        image_contexts.as_deref(),
+        user_message_metadata.as_ref(),
+    );
+    let mut request = PromptRequest::new(active.session_id().clone(), blocks);
+    if let Some(meta) = meta {
+        request = request.meta(meta);
+    }
+    Ok(active
+        .connection()
+        .send_request_to(Agent, request))
+}
+
 impl AcpClientConnection {
     fn new(id: String, client_id: String, config: AcpClientConfig) -> Self {
         Self {
@@ -1974,6 +2469,7 @@ fn claim_client_start(
 async fn wait_for_client_connection(
     client: Arc<AcpClientConnection>,
     connection_id: &str,
+    startup_timeout: Duration,
 ) -> BitFunResult<()> {
     let started_at = Instant::now();
     loop {
@@ -1989,7 +2485,7 @@ async fn wait_for_client_connection(
             )));
         }
 
-        if started_at.elapsed() >= CLIENT_STARTUP_TIMEOUT {
+        if started_at.elapsed() >= startup_timeout {
             return Err(startup_timeout_error(&client.client_id, "initialize"));
         }
 
@@ -2159,6 +2655,7 @@ async fn close_or_cancel_remote_session(
     connection: Option<ConnectionTo<Agent>>,
     remote_session_id: &str,
     supports_close: bool,
+    session_close_timeout: Duration,
 ) {
     let connection = match connection {
         Some(connection) => connection,
@@ -2178,7 +2675,7 @@ async fn close_or_cancel_remote_session(
         let close = connection
             .send_request(CloseSessionRequest::new(remote_session_id.to_string()))
             .block_task();
-        match tokio::time::timeout(SESSION_CLOSE_TIMEOUT, close).await {
+        match tokio::time::timeout(session_close_timeout, close).await {
             Ok(Ok(_)) => {
                 debug!(
                     "ACP remote session closed: client_id={} remote_session_id={}",
@@ -2196,7 +2693,7 @@ async fn close_or_cancel_remote_session(
                     "Timed out closing ACP remote session: client_id={} remote_session_id={} timeout_ms={}",
                     client.id,
                     remote_session_id,
-                    SESSION_CLOSE_TIMEOUT.as_millis()
+                    session_close_timeout.as_millis()
                 );
             }
         }
@@ -2528,6 +3025,44 @@ fn is_startup_timeout_error(error: &BitFunError) -> bool {
     error.to_string().contains(STARTUP_TIMEOUT_ERROR_PREFIX)
 }
 
+fn is_auth_error(error: &agent_client_protocol::Error) -> bool {
+    let msg = error.to_string().to_lowercase();
+    msg.contains("auth")
+        || msg.contains("unauthorized")
+        || msg.contains("401")
+        || msg.contains("403")
+        || msg.contains("api key")
+        || msg.contains("apikey")
+}
+
+/// Returns login guidance for a client that surfaced an auth error.
+///
+/// Only built-in clients with a known login command produce a hint; custom
+/// clients return None so we never guess at provider-specific instructions.
+// Ref: AionCore crates/aionui-ai-agent/src/protocol/send_error.rs:279-290 — AuthRequired
+// 映射为 CheckAgentLogin 引导；custom_agent_probe.rs:234-240 — probe 阶段显式区分
+// "可达但需登录"。Rust 翻译实现，非 Cargo 依赖。
+fn auth_login_hint(client_id: &str) -> Option<String> {
+    match client_id {
+        "codex" => Some(
+            "Codex requires login. Run `codex login` in a terminal to authenticate with your \
+             ChatGPT account."
+                .to_string(),
+        ),
+        "claude-code" => Some(
+            "Claude Code requires login. Run `claude /login` in a terminal (or start \
+             `npx @anthropic-ai/claude-code` once) to authenticate."
+                .to_string(),
+        ),
+        "opencode" => Some(
+            "OpenCode requires authorization. Run `opencode auth login` in a terminal to \
+             authenticate."
+                .to_string(),
+        ),
+        _ => None,
+    }
+}
+
 fn select_permission_by_kind(
     request: &RequestPermissionRequest,
     preferred: PermissionOptionKind,
@@ -2598,6 +3133,8 @@ mod tests {
                 enabled: true,
                 readonly: false,
                 permission_mode: AcpClientPermissionMode::Ask,
+                category: None,
+                description: None,
             },
         ))
     }
@@ -2635,6 +3172,37 @@ mod tests {
     }
 
     #[test]
+    fn allow_always_mode_auto_approves_with_allow_always_option() {
+        let request = RequestPermissionRequest::new(
+            "session-1".to_string(),
+            agent_client_protocol::schema::ToolCallUpdate::new(
+                "tool-1",
+                agent_client_protocol::schema::ToolCallUpdateFields::default(),
+            ),
+            vec![
+                PermissionOption::new(
+                    "allow-once",
+                    "Allow Once",
+                    PermissionOptionKind::AllowOnce,
+                ),
+                PermissionOption::new(
+                    "allow-always",
+                    "Always Allow",
+                    PermissionOptionKind::AllowAlways,
+                ),
+                PermissionOption::new("no-once", "Reject", PermissionOptionKind::RejectOnce),
+            ],
+        );
+
+        let response = select_permission_by_kind(&request, PermissionOptionKind::AllowAlways, true);
+
+        let RequestPermissionOutcome::Selected(selected) = response.outcome else {
+            panic!("AllowAlways must auto-select a permission option");
+        };
+        assert_eq!(selected.option_id, "allow-always".into());
+    }
+
+    #[test]
     fn selects_actual_permission_option_id_for_rejection() {
         let options = vec![
             PermissionOption::new("allow-always", "Allow", PermissionOptionKind::AllowAlways),
@@ -2642,6 +3210,21 @@ mod tests {
         ];
 
         assert_eq!(select_permission_option_id(&options, false), "no-once");
+    }
+
+    #[test]
+    fn auth_login_hint_covers_builtin_clients_only() {
+        let codex = auth_login_hint("codex").expect("codex hint");
+        assert!(codex.contains("codex login"));
+
+        let claude = auth_login_hint("claude-code").expect("claude-code hint");
+        assert!(claude.contains("claude /login"));
+
+        let opencode = auth_login_hint("opencode").expect("opencode hint");
+        assert!(opencode.contains("opencode auth login"));
+
+        assert!(auth_login_hint("custom-agent").is_none());
+        assert!(auth_login_hint("").is_none());
     }
 
     #[test]
@@ -2680,6 +3263,8 @@ mod tests {
             enabled: true,
             readonly: false,
             permission_mode: AcpClientPermissionMode::Ask,
+            category: None,
+            description: None,
         };
 
         let command = render_remote_client_command(&config, Some("/srv/my repo")).expect("command");
@@ -2706,6 +3291,8 @@ mod tests {
                     enabled: true,
                     readonly: false,
                     permission_mode: AcpClientPermissionMode::Ask,
+                    category: None,
+                    description: None,
                 },
             )]),
         };
@@ -2720,5 +3307,19 @@ mod tests {
         );
         assert_eq!(resolved.env.get("BASE").map(String::as_str), Some("1"));
         assert!(resolved.enabled);
+    }
+
+    #[test]
+    fn new_session_request_serializes_with_explicit_empty_mcp_servers() {
+        // Regression guard: some ACP agents (e.g. codebuddy) strictly validate
+        // session/new and reject a request whose JSON omits the mcpServers key
+        // (-32602). NewSessionRequest::new must keep serializing the explicit
+        // empty array, so mcp_servers must not gain skip_serializing_if.
+        let request = NewSessionRequest::new(PathBuf::from("/tmp/work"));
+        let json = serde_json::to_value(&request).expect("serialize new session request");
+        assert_eq!(
+            json.get("mcpServers"),
+            Some(&serde_json::Value::Array(vec![]))
+        );
     }
 }

@@ -32,6 +32,7 @@ export const SETTINGS_TAB_I18N_NAMESPACES: Record<ConfigTab, readonly I18nNamesp
   'voice-input': ['settings/voice-input'],
   review: ['settings/review'],
   memories: ['settings/memories'],
+  'ai-thresholds': ['settings/thresholds'],
   'mcp-tools': ['settings/mcp-tools', 'settings/mcp', 'shared'],
   'external-sources': ['settings/external-sources', 'settings/hooks', 'shared'],
   hooks: ['settings/external-sources', 'settings/hooks', 'shared'],

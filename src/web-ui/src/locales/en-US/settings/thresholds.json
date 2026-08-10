@@ -1,0 +1,122 @@
+{
+  "title": "AI Thresholds",
+  "subtitle": "Tune AI behavior thresholds in one place: compression budgets, retry backoff, tool output caps and timeouts, knowledge-base search, ACP timeouts, memory and goal continuation. Defaults match the built-in behavior.",
+  "actions": {
+    "resetToDefaults": "Reset to defaults"
+  },
+  "messages": {
+    "loading": "Loading thresholds…",
+    "saved": "Thresholds saved",
+    "saveFailed": "Failed to save thresholds",
+    "settingsReset": "Thresholds reset to defaults",
+    "settingsResetFailed": "Failed to reset thresholds"
+  },
+  "fields": {
+    "subagent": {
+      "__title": "Subagents",
+      "max_hard_cap": "Subagent concurrency hard cap",
+      "timeout_grace_secs": "Subagent cancellation grace (s)",
+      "session_references_per_turn": "Session references per turn"
+    },
+    "compression": {
+      "__title": "Context compression",
+      "safety_reserve_tokens": "Auto-compression safety reserve (tokens)",
+      "overflow_attempts": "Compression overflow attempts",
+      "main_context_overflow_recoveries": "Main-context overflow recoveries",
+      "consecutive_failures": "Consecutive compression failures",
+      "failed_tool_recovery_attempts": "Failed-tool recovery attempts",
+      "stop_hook_continuations": "Stop-hook continuations",
+      "same_round_passes": "Same-round compression passes",
+      "recent_context_tokens": "Recent-context tokens",
+      "retry_step_tokens": "Compression retry step (tokens)",
+      "max_retained_user_tokens": "Max retained user tokens",
+      "image_bearing_messages": "Image-bearing message rounds"
+    },
+    "model_retry": {
+      "__title": "Model stream retry",
+      "max_attempts": "Stream max attempts",
+      "base_delay_ms": "Retry base delay (ms)",
+      "rate_limit_base_delay_ms": "Rate-limit base delay (ms)",
+      "max_exponential_delay_ms": "Max exponential delay (ms)",
+      "max_rate_limit_delay_ms": "Max rate-limit delay (ms)",
+      "max_exponent_shift": "Max retry exponent shift"
+    },
+    "tool_output_cap": {
+      "__title": "Tool output caps",
+      "default_chars": "Default per-tool cap (chars)",
+      "per_round_chars": "Per-round aggregate cap (chars)",
+      "preview_chars": "Persisted preview (chars)",
+      "read_chars": "Read tool cap (chars)",
+      "shell_chars": "Bash/shell cap (chars)"
+    },
+    "tool_timeout": {
+      "__title": "Tool timeouts",
+      "bash_default_ms": "Bash default timeout (ms)",
+      "bash_max_ms": "Bash max timeout (ms)",
+      "exec_command_yield_ms": "ExecCommand yield (ms)",
+      "remote_shell_probe_ms": "Remote shell probe (ms)",
+      "document_conversion_secs": "Document conversion (s)",
+      "web_fetch_secs": "WebFetch timeout (s)",
+      "exa_secs": "Exa search timeout (s)",
+      "agent_wait_default_ms": "AgentWait default (ms)",
+      "agent_wait_max_ms": "AgentWait max (ms)",
+      "mcp_render_chars": "MCP render cap (chars)",
+      "diff_page_chars": "Diff page budget (chars)",
+      "diff_total_chars": "Diff total budget (chars)",
+      "diff_new_file_bytes": "Diff new-file limit (bytes)"
+    },
+    "knowledge_search": {
+      "__title": "Knowledge-base search",
+      "max_scan_file_bytes": "Max scanned file (bytes)",
+      "max_scan_depth": "Max scan depth",
+      "default_max_results": "Default result cap",
+      "max_results_cap": "Hard result cap"
+    },
+    "acp_timeout": {
+      "__title": "ACP timeouts",
+      "client_startup_secs": "Client startup (s)",
+      "permission_secs": "Permission request (s)",
+      "session_close_secs": "Session close (s)",
+      "cli_detect_secs": "CLI detect probe (s)",
+      "handshake_secs": "Handshake (s)",
+      "try_connect_total_secs": "Try-connect total (s)",
+      "requirement_probe_secs": "Requirement probe (s)",
+      "adapter_download_secs": "Adapter download (s)",
+      "cli_install_secs": "CLI install (s)",
+      "direct_secs": "Direct delivery window (s)",
+      "task_secs": "Task delegation window (s)"
+    },
+    "warden": {
+      "__title": "Warden",
+      "max_defer_count": "Max consecutive defers",
+      "max_rate": "Max poke rate",
+      "judgement_timeout_secs": "Judgement timeout (s)"
+    },
+    "deep_review": {
+      "__title": "Deep review",
+      "diff_max_chars_per_turn": "Diff chars per turn",
+      "diff_max_acquisitions_per_turn": "Diff acquisitions per turn",
+      "max_parallel_instances": "Max parallel reviewers",
+      "max_queue_wait_secs": "Queue wait (s)",
+      "auto_retry_elapsed_guard_secs": "Auto-retry guard (s)"
+    },
+    "memories": {
+      "__title": "Memory token limits",
+      "summary_token_limit": "Memory summary tokens",
+      "message_content_token_limit": "Transcript message tokens",
+      "tool_input_token_limit": "Transcript tool-input tokens",
+      "tool_result_token_limit": "Transcript tool-result tokens",
+      "tool_error_token_limit": "Transcript tool-error tokens",
+      "rollout_token_limit": "Rollout token limit"
+    },
+    "output_tokens": {
+      "__title": "Output token tiers",
+      "ratio_percent": "Output-token ratio (% of window)"
+    },
+    "goal": {
+      "__title": "Goal continuation",
+      "idle_wakeup_delay_ms": "Goal idle-wakeup delay (ms)",
+      "max_auto_continuations": "Max goal auto-continuations"
+    }
+  }
+}

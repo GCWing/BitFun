@@ -8,6 +8,12 @@
     "subtitle": "Accelerated workspace search, tool execution, tool definition loading, Computer use, browser control, and debug mode"
   },
   "features": {
+    "externalInstructionSources": {
+      "title": "External instruction sources",
+      "subtitle": "Control whether user instruction files from other AI coding tools are loaded into the conversation context.",
+      "enable": "Load external user instructions",
+      "description": "When enabled, BitFun reads ~/.claude/CLAUDE.md and rules/, OpenCode AGENTS.md, and Codex AGENTS.md into the User Context. Turn this off to stop reading these files entirely. Project instruction files (AGENTS.md and .claude/rules inside the workspace) are always honored."
+    },
     "agentCompanion": {
       "title": "Agent companion",
       "subtitle": "Control where the BitFun companion appears.",

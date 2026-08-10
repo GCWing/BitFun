@@ -5335,3 +5335,33 @@ pub async fn refresh_subscription_account(
     .await
     .map_err(|e| format!("Failed to refresh subscription account: {e:#}"))
 }
+
+/// Create (or overwrite) a saved Legion preset.
+///
+/// The front-end `CreateLegionPage` calls `create_legion_preset` through
+/// `LegionPresetAPI.createPreset` with a `{ request }` payload. This command
+/// bridges that call to the core `team_presets::create_preset` storage layer
+/// (JSON file under `<user-config>/legions/<id>.json`). The command was
+/// previously unregistered, so the UI creation flow failed with a
+/// "command not found" rejection; wiring it restores the Legion preset
+/// creation path (L1-P0-1).
+#[tauri::command]
+pub async fn create_legion_preset(
+    request: bitfun_core::agentic::agents::team_presets::LegionPreset,
+) -> Result<(), String> {
+    bitfun_core::agentic::agents::team_presets::create_preset(&request)
+        .map_err(|e| format!("Failed to create legion preset: {e}"))
+}
+
+/// List all saved Legion presets (sorted by id). Bridges the front-end
+/// LegionCard gallery to `team_presets::list_presets` (d7-P2-1 wiring:
+/// previously the component and its appearance descriptor existed but no
+/// consumer rendered them, so the registry entry was a no-op contract).
+#[tauri::command]
+pub async fn list_legion_presets() -> Result<
+    Vec<bitfun_core::agentic::agents::team_presets::LegionPreset>,
+    String,
+> {
+    bitfun_core::agentic::agents::team_presets::list_presets()
+        .map_err(|e| format!("Failed to list legion presets: {e}"))
+}

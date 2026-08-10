@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next';
 import {
   Bot,
   Cpu,
+  GitBranch,
   RotateCcw,
   Pencil,
   Plus,
@@ -25,6 +26,11 @@ import {
 import AgentCard from './components/AgentCard';
 import CoreAgentCard, { type CoreAgentMeta } from './components/CoreAgentCard';
 import CreateAgentPage from './components/CreateAgentPage';
+import CreateLegionPage from './components/CreateLegionPage';
+import LegionCard from './components/LegionCard';
+import { LegionPresetAPI } from '@/infrastructure/api/service-api/LegionPresetAPI';
+import type { CreatePresetRequest } from '@/infrastructure/api/service-api/LegionPresetAPI';
+import type { LegionPattern } from './data/orchestration-patterns';
 import {
   AgentCapabilityTooltip,
   type AgentCapabilityTooltipField,
@@ -142,6 +148,36 @@ function subagentSourceLabel(
   }
 }
 
+/** Convert a saved legion preset (backend shape) into the built-in pattern
+ *  shape consumed by LegionCard. The backend stores the same id/name/
+ *  description/nodes/edges fields (camelCase via serde), so this is a plain
+ *  shape adapter; complexityLevel is absent from persisted presets and
+ *  defaults to the node count floor (L1-L7 range used by the badge). */
+function presetToPattern(preset: CreatePresetRequest): LegionPattern {
+  const complexityLevel = Math.min(
+    7,
+    Math.max(1, Math.ceil((preset.nodes?.length ?? 0) / 2)),
+  );
+  return {
+    id: preset.id,
+    name: preset.name,
+    description: preset.description,
+    complexityLevel,
+    nodes: (preset.nodes ?? []).map((n) => ({
+      id: n.id,
+      agent: n.agent,
+      role: n.role,
+      prompt: n.prompt,
+      gate: n.gate,
+    })),
+    edges: (preset.edges ?? []).map((e) => ({
+      from: e.from,
+      to: e.to,
+      condition: e.condition,
+    })),
+  };
+}
+
 function subagentTooltipFields(
   subagent: SubagentInfo,
   t: TFunction<'scenes/agents'>,
@@ -175,6 +211,7 @@ const AgentsHomeView: React.FC = () => {
   const { openScene } = useSceneManager();
   const setSettingsTab = useSettingsStore((state) => state.setActiveTab);
   const [deletingAgent, setDeletingAgent] = useState(false);
+  const [savedLegionPresets, setSavedLegionPresets] = useState<CreatePresetRequest[]>([]);
   const {
     searchQuery,
     agentFilterLevel,
@@ -183,6 +220,7 @@ const AgentsHomeView: React.FC = () => {
     setAgentFilterLevel,
     setAgentFilterType,
     openCreateAgent,
+    openCreateLegion,
     openEditAgent,
   } = useAgentsStore();
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
@@ -241,6 +279,27 @@ const AgentsHomeView: React.FC = () => {
       void loadAgents();
     },
   });
+
+  // Saved legion presets power the LegionCard gallery (d7-P2-1 wiring).
+  // Mount-only load: presets are static data, and the effect must not depend
+  // on notification/t (unstable identities in some environments would retrigger
+  // the effect on every render and loop forever).
+  useEffect(() => {
+    let cancelled = false;
+    LegionPresetAPI.listPresets()
+      .then((presets) => {
+        if (!cancelled) setSavedLegionPresets(presets ?? []);
+      })
+      .catch(() => {
+        // Surface a stable localized message; do not let a load failure
+        // block the scene.
+        notification.error(t('legionsZone.loadFailed'));
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only
+  }, []);
 
   const coreAgentMeta = useMemo((): Record<string, CoreAgentMeta> => ({
     agentic: {
@@ -757,6 +816,15 @@ const AgentsHomeView: React.FC = () => {
               </div>
               <button
                 type="button"
+                className="gallery-action-btn"
+                onClick={openCreateLegion}
+                data-testid="agents-create-legion-btn"
+              >
+                <GitBranch size={15} />
+                <span>{t('page.newLegion')}</span>
+              </button>
+              <button
+                type="button"
                 className="gallery-action-btn gallery-action-btn--primary"
                 onClick={openCreateAgent}
                 data-testid="agents-create-agent-btn"
@@ -800,6 +868,29 @@ const AgentsHomeView: React.FC = () => {
                 />
               ))}
             </GalleryGrid>
+          ) : null}
+
+          {!loading && savedLegionPresets.length > 0 ? (
+            <GalleryZone
+              id="legions-zone"
+              data-testid="agents-legions-zone"
+              title={t('legionsZone.title')}
+              subtitle={t('legionsZone.subtitle')}
+              tools={(
+                <span className="gallery-zone-count">{savedLegionPresets.length}</span>
+              )}
+            >
+              <GalleryGrid minCardWidth={360} data-bf-scene="agents" data-bf-part="legionsGrid">
+                {savedLegionPresets.map((preset, index) => (
+                  <LegionCard
+                    key={preset.id}
+                    pattern={presetToPattern(preset)}
+                    index={index}
+                    onOpenDetails={openCreateLegion}
+                  />
+                ))}
+              </GalleryGrid>
+            </GalleryZone>
           ) : null}
         </GalleryZone>
       </div>
@@ -1323,6 +1414,14 @@ const AgentsScene: React.FC = () => {
     return (
       <div className="bitfun-agents-scene bitfun-agents-scene--page" data-bf-scene="agents" data-bf-part="root">
         <CreateAgentPage />
+      </div>
+    );
+  }
+
+  if (page === 'createLegion') {
+    return (
+      <div className="bitfun-agents-scene bitfun-agents-scene--page">
+        <CreateLegionPage onBack={openHome} />
       </div>
     );
   }

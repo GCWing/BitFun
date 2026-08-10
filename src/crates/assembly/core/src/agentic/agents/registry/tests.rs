@@ -508,6 +508,85 @@ async fn task_visible_subagents_are_filtered_by_parent_agent() {
         .any(|agent| agent.id == "ReviewWorker"));
 }
 
+#[tokio::test]
+async fn session_creation_agent_ids_include_acp_bridge_modes_and_project_subagents() {
+    let registry = AgentRegistry::new();
+
+    // ACP bridge agents (`acp__<client_id>`) are registered as Mode entries,
+    // exactly like builtin modes, so session creation must be able to select them.
+    registry.register_agent(
+        Arc::new(TestAgent {
+            id: "acp__client-a".to_string(),
+        }),
+        AgentCategory::Mode,
+        AgentSource::Builtin,
+        None,
+        None,
+    );
+    registry.register_agent(
+        Arc::new(TestAgent {
+            id: "Plan".to_string(),
+        }),
+        AgentCategory::Mode,
+        AgentSource::Builtin,
+        None,
+        None,
+    );
+    registry.register_agent(
+        Arc::new(TestAgent {
+            id: "Explore".to_string(),
+        }),
+        AgentCategory::SubAgent,
+        AgentSource::Builtin,
+        Some(SubAgentSource::Builtin),
+        None,
+    );
+    // Hidden agents (not Modes/SubAgents) must stay out of the creation surface.
+    registry.register_agent(
+        Arc::new(TestAgent {
+            id: "ghost-hidden".to_string(),
+        }),
+        AgentCategory::Hidden,
+        AgentSource::Builtin,
+        None,
+        None,
+    );
+
+    let mut project_entries = HashMap::new();
+    project_entries.insert(
+        "zProject".to_string(),
+        test_project_entry("zProject", "fast"),
+    );
+    registry
+        .write_project_subagents()
+        .insert(PathBuf::from("D:/workspace/project-c"), project_entries);
+    registry.set_user_custom_agents_loaded(true);
+
+    let unscoped = registry.get_agent_ids_for_session_creation(None).await;
+    assert!(
+        unscoped.iter().any(|id| id == "acp__client-a"),
+        "acp bridge modes must be selectable for session creation"
+    );
+    assert!(unscoped.iter().any(|id| id == "Plan"));
+    assert!(unscoped.iter().any(|id| id == "Explore"));
+    assert!(
+        !unscoped.iter().any(|id| id == "ghost-hidden"),
+        "hidden agents must not be listed for session creation"
+    );
+    assert!(
+        !unscoped.iter().any(|id| id == "zProject"),
+        "project subagents are only listed for their own workspace"
+    );
+
+    let scoped = registry
+        .get_agent_ids_for_session_creation(Some(Path::new("D:/workspace/project-c")))
+        .await;
+    assert!(
+        scoped.iter().any(|id| id == "zProject"),
+        "project subagents merge in when the workspace is provided"
+    );
+}
+
 #[test]
 fn merge_dynamic_mcp_tools_appends_registered_mcp_tools_once() {
     let configured_tools = vec!["Read".to_string(), "ExecCommand".to_string()];
@@ -1361,6 +1440,34 @@ async fn external_routes_are_workspace_scoped_fail_closed_and_generation_leased(
 }
 
 #[tokio::test]
+async fn unregister_agents_by_prefix_removes_only_matching_agents() {
+    let registry = AgentRegistry::new();
+    for id in ["acp__client-a", "acp__client-b", "builtin", "acp"] {
+        registry.register_agent(
+            Arc::new(TestAgent { id: id.to_string() }),
+            AgentCategory::SubAgent,
+            AgentSource::Builtin,
+            Some(SubAgentSource::Builtin),
+            None,
+        );
+    }
+    assert_eq!(
+        registry.unregister_agents_by_prefix("acp__"),
+        2,
+        "only acp__-prefixed agents are removed"
+    );
+    assert!(registry.get_agent("acp__client-a", None).is_none());
+    assert!(registry.get_agent("acp__client-b", None).is_none());
+    assert!(registry.get_agent("builtin", None).is_some());
+    assert!(registry.get_agent("acp", None).is_some());
+    assert_eq!(
+        registry.unregister_agents_by_prefix("acp__"),
+        0,
+        "second cleanup removes nothing"
+    );
+}
+
+#[tokio::test]
 async fn external_routes_use_one_canonical_workspace_identity_for_all_operations() {
     let registry = AgentRegistry::new();
     let workspace = tempfile::tempdir().expect("workspace");
@@ -1417,7 +1524,7 @@ fn persisted_external_owner_never_falls_back_to_a_same_name_local_mode() {
             true,
             Some(bitfun_core_types::SessionAgentRouteOwner::External),
         )
-        .is_none());
+        .is_err());
     let local = registry
         .resolve_primary_agent_for_turn(
             "agentic",
@@ -1430,6 +1537,44 @@ fn persisted_external_owner_never_falls_back_to_a_same_name_local_mode() {
         local.route_owner,
         bitfun_core_types::SessionAgentRouteOwner::Local
     );
+}
+
+#[test]
+fn local_subagent_type_resolves_as_primary_agent_for_turn() {
+    let registry = AgentRegistry::new();
+    registry.register_agent(
+        Arc::new(TestAgent {
+            id: "custom-handoff".to_string(),
+        }),
+        AgentCategory::SubAgent,
+        AgentSource::User,
+        Some(SubAgentSource::User),
+        None,
+    );
+
+    let binding = registry
+        .resolve_primary_agent_for_turn(
+            "custom-handoff",
+            None,
+            false,
+            Some(bitfun_core_types::SessionAgentRouteOwner::Local),
+        )
+        .expect("a session owned by a registered subagent type must resolve for continued dialog turns");
+    assert_eq!(binding.runtime_agent_key, "custom-handoff");
+    assert_eq!(
+        binding.route_owner,
+        bitfun_core_types::SessionAgentRouteOwner::Local
+    );
+
+    // The fail-closed guard for persisted external owners is unaffected.
+    assert!(registry
+        .resolve_primary_agent_for_turn(
+            "custom-handoff",
+            None,
+            false,
+            Some(bitfun_core_types::SessionAgentRouteOwner::External),
+        )
+        .is_err());
 }
 
 #[tokio::test]
@@ -1552,7 +1697,7 @@ fn persisted_primary_route_owner_rejects_same_name_route_takeover() {
             true,
             Some(bitfun_core_types::SessionAgentRouteOwner::Local),
         )
-        .is_none());
+        .is_err());
 
     registry.install_external_subagent_routes(
         &workspace,
@@ -1568,7 +1713,7 @@ fn persisted_primary_route_owner_rejects_same_name_route_takeover() {
             true,
             Some(bitfun_core_types::SessionAgentRouteOwner::External),
         )
-        .is_none());
+        .is_err());
 }
 
 #[test]
@@ -1628,9 +1773,7 @@ fn builtin_review_agents_resolve_as_local_session_primaries() {
     for agent_type in ["CodeReview", "DeepReview", "ReviewFixer"] {
         let binding = registry
             .resolve_primary_agent_for_turn(agent_type, None, false, None)
-            .unwrap_or_else(|| {
-                panic!("{agent_type} must resolve as a session primary agent for review children")
-            });
+            .expect("{agent_type} must resolve as a session primary agent for review children");
         assert_eq!(binding.runtime_agent_key, agent_type);
         assert_eq!(
             binding.route_owner,
@@ -1643,19 +1786,15 @@ fn builtin_review_agents_resolve_as_local_session_primaries() {
 fn non_session_primary_subagents_and_unknown_ids_do_not_resolve() {
     let registry = AgentRegistry::new();
 
-    // Registered subagents that are not session-capable stay restricted.
-    for agent_type in ["ReviewWorker", "ReviewJudge"] {
-        assert!(
-            registry
-                .resolve_primary_agent_for_turn(agent_type, None, false, None)
-                .is_none(),
-            "{agent_type} must not resolve as a session primary agent"
-        );
-    }
+    // Registered subagents that are not upstream-whitelisted still resolve under
+    // the local full-open customization (super-set of the upstream whitelist).
+    assert!(registry
+        .resolve_primary_agent_for_turn("ReviewWorker", None, false, None)
+        .is_ok());
     // Unknown ids remain unknown.
     assert!(registry
         .resolve_primary_agent_for_turn("does-not-exist", None, false, None)
-        .is_none());
+        .is_err());
     // The external-owner guard still fails closed for review agents.
     for agent_type in ["CodeReview", "DeepReview", "ReviewFixer"] {
         assert!(
@@ -1666,7 +1805,7 @@ fn non_session_primary_subagents_and_unknown_ids_do_not_resolve() {
                     false,
                     Some(bitfun_core_types::SessionAgentRouteOwner::External),
                 )
-                .is_none(),
+                .is_err(),
             "{agent_type} must fail closed for an external owner"
         );
     }
@@ -1688,7 +1827,7 @@ fn non_builtin_same_name_review_agent_does_not_resolve_as_session_primary() {
     assert!(
         registry
             .resolve_primary_agent_for_turn("ReviewFixer", None, false, None)
-            .is_none(),
+            .is_err(),
         "a non-Builtin entry named ReviewFixer must not resolve as a session primary agent"
     );
 }
@@ -1714,7 +1853,7 @@ fn local_route_resolves_review_agents_as_session_primaries() {
     for agent_type in ["CodeReview", "DeepReview", "ReviewFixer"] {
         let binding = registry
             .resolve_primary_agent_for_turn(agent_type, Some(&workspace), true, None)
-            .unwrap_or_else(|| panic!("{agent_type} must resolve through an explicit Local route"));
+            .expect("{agent_type} must resolve through an explicit Local route");
         assert_eq!(binding.runtime_agent_key, agent_type);
         assert_eq!(
             binding.route_owner,
@@ -1722,13 +1861,102 @@ fn local_route_resolves_review_agents_as_session_primaries() {
         );
     }
 
-    // Non-session-primary subagents stay restricted even under a Local route.
-    for agent_type in ["ReviewWorker", "ReviewJudge"] {
+    // Non-whitelisted subagents stay resolvable under a Local route via the
+    // local full-open customization (upstream restricted them to whitelist-only).
+    assert!(registry
+        .resolve_primary_agent_for_turn("ReviewWorker", Some(&workspace), true, None)
+        .is_ok());
+    assert!(registry
+        .resolve_primary_agent_for_turn("ReviewJudge", Some(&workspace), true, None)
+        .is_ok());
+}
+
+// ── get_agent_tool_policy 契约测试（L5-P2-1）──────────────────────────────
+// bitfun-core 此前无 AgentToolPolicy/user_enabled_tools 专项契约测试（门 2a
+// union 仅有 tool-contracts 6 个单测）。以下用例钉住 query.rs 的 K-1（Mode
+// 分支）与 K-2（SubAgent/Hidden 分支）语义：Mode 经 resolve_effective_tools
+// 产出 user_enabled_tools；SubAgent/Hidden 恒为空（模板语义不变）。
+
+#[tokio::test]
+async fn tool_policy_unknown_agent_returns_empty_policy() {
+    let registry = AgentRegistry::new();
+    registry.set_user_custom_agents_loaded(true);
+
+    let policy = registry.get_agent_tool_policy("no-such-agent", None).await;
+    assert!(policy.allowed_tools.is_empty());
+    assert!(policy.user_enabled_tools.is_empty());
+    assert!(policy.exposure_overrides.is_empty());
+}
+
+#[tokio::test]
+async fn tool_policy_subagent_has_empty_user_enabled_tools() {
+    let registry = AgentRegistry::new();
+    registry.register_agent(
+        Arc::new(TestAgent {
+            id: "tool-policy-sub".to_string(),
+        }),
+        AgentCategory::SubAgent,
+        AgentSource::Builtin,
+        Some(SubAgentSource::Builtin),
+        None,
+    );
+    registry.set_user_custom_agents_loaded(true);
+
+    let policy = registry.get_agent_tool_policy("tool-policy-sub", None).await;
+    // K-2：SubAgent 无前端 profile 勾选，user_enabled_tools 留空（RBAC 门
+    // 只按模板白名单判定，保持原版行为零回归）。allowed_tools 来自该
+    // agent 自身的 default_tools（TestAgent = ["Read"]）。
+    assert_eq!(policy.allowed_tools, vec!["Read".to_string()]);
+    assert!(policy.user_enabled_tools.is_empty());
+}
+
+#[tokio::test]
+async fn tool_policy_hidden_has_empty_user_enabled_tools() {
+    let registry = AgentRegistry::new();
+    registry.register_agent(
+        Arc::new(TestAgent {
+            id: "tool-policy-hidden".to_string(),
+        }),
+        AgentCategory::Hidden,
+        AgentSource::Builtin,
+        None,
+        None,
+    );
+    registry.set_user_custom_agents_loaded(true);
+
+    let policy = registry.get_agent_tool_policy("tool-policy-hidden", None).await;
+    assert_eq!(policy.allowed_tools, vec!["Read".to_string()]);
+    assert!(policy.user_enabled_tools.is_empty());
+}
+
+#[tokio::test]
+async fn tool_policy_mode_user_enabled_tools_from_default_tools() {
+    let registry = AgentRegistry::new();
+    registry.register_agent(
+        Arc::new(TestAgent {
+            id: "tool-policy-mode".to_string(),
+        }),
+        AgentCategory::Mode,
+        AgentSource::Builtin,
+        None,
+        None,
+    );
+    registry.set_user_custom_agents_loaded(true);
+
+    let policy = registry.get_agent_tool_policy("tool-policy-mode", None).await;
+    // K-1：Mode 分支经 resolve_effective_tools 产出 user_enabled_tools 并
+    // 并入 allowed_tools（动态 MCP 也并入）。钉住的核心契约：
+    // ① user_enabled_tools 非空（Mode 默认工具集，含 TestAgent 的 Read）
+    // ② allowed_tools 是 user_enabled_tools 的超集（merge_dynamic_mcp_tools）
+    // ③ 每个 user_enabled_tools 成员都出现在 allowed_tools。
+    assert!(!policy.user_enabled_tools.is_empty());
+    assert!(policy.user_enabled_tools.contains(&"Read".to_string()));
+    assert!(policy.allowed_tools.len() >= policy.user_enabled_tools.len());
+    for tool in &policy.user_enabled_tools {
         assert!(
-            registry
-                .resolve_primary_agent_for_turn(agent_type, Some(&workspace), true, None)
-                .is_none(),
-            "{agent_type} must not resolve through a Local route"
+            policy.allowed_tools.contains(tool),
+            "allowed_tools must include every user_enabled_tools member: missing {}",
+            tool
         );
     }
 }

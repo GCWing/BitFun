@@ -27,12 +27,12 @@ use bitfun_agent_tools::{
     sort_tool_manifest_definitions, summarize_get_tool_spec_deferred_tools,
     tool_path_is_effectively_absolute, validate_deferred_tool_usage, validate_get_tool_spec_input,
     validate_mcp_tool_bridge_input, validate_tool_allowed_by_list,
-    validate_tool_execution_admission, CallDeferredToolInputError, DynamicMcpToolInfo,
-    DynamicToolInfo, GetToolSpecDeferredToolSummary, GetToolSpecExecutionError,
-    GetToolSpecExecutionPlan, GetToolSpecLoadObservation, GetToolSpecRuntime, InputValidator,
-    LoadedDeferredToolSpec, McpToolBridgeBehaviorHints, McpToolBridgeDefinitionInput,
-    PromptVisibleToolManifestItem, ResolvedToolInvocation, ToolContextFacts,
-    ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, ToolExposure,
+    validate_tool_execution_admission, CallDeferredToolInputError, DeferredToolUsageError,
+    DynamicMcpToolInfo, DynamicToolInfo, GetToolSpecDeferredToolSummary,
+    GetToolSpecExecutionError, GetToolSpecExecutionPlan, GetToolSpecLoadObservation,
+    GetToolSpecRuntime, InputValidator, LoadedDeferredToolSpec, McpToolBridgeBehaviorHints,
+    McpToolBridgeDefinitionInput, PromptVisibleToolManifestItem, ResolvedToolInvocation,
+    ToolContextFacts, ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, ToolExposure,
     ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool, ToolPathBackend,
     ToolPathOperation, ToolPathResolution, ToolRenderOptions, ToolResult, ToolRuntimeRestrictions,
     ToolWorkspaceKind, ValidationResult, CALL_DEFERRED_TOOL_NAME, GET_TOOL_SPEC_TOOL_NAME,
@@ -717,6 +717,8 @@ fn runtime_restrictions_keep_allow_deny_semantics_without_core_dependency() {
         denied_tool_names: ["Write"].into_iter().map(str::to_string).collect(),
         denied_tool_messages: Default::default(),
         path_policy: Default::default(),
+        allowed_operation_classes: Default::default(),
+        denied_operation_classes: Default::default(),
     };
 
     assert!(restrictions.is_tool_allowed("Read"));
@@ -1459,6 +1461,51 @@ fn deferred_tool_usage_gate_preserves_get_tool_spec_unlock_contract() {
 }
 
 #[test]
+fn deferred_stale_spec_error_classification_enables_auto_reload_only() {
+    let stale = DeferredToolUsageError::StaleSpec {
+        tool_name: "WebFetch".to_string(),
+        loaded_generation: 41,
+        current_generation: 42,
+        get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME.to_string(),
+    };
+    assert!(stale.is_stale_spec(), "stale specs must be auto-reloadable");
+
+    let requires = DeferredToolUsageError::RequiresGetToolSpec {
+        tool_name: "WebFetch".to_string(),
+        get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME.to_string(),
+    };
+    assert!(
+        !requires.is_stale_spec(),
+        "RequiresGetToolSpec must keep requiring an explicit GetToolSpec call"
+    );
+
+    let gateway = DeferredToolUsageError::RequiresGateway {
+        tool_name: "WebFetch".to_string(),
+        gateway_tool_name: CALL_DEFERRED_TOOL_NAME.to_string(),
+    };
+    assert!(
+        !gateway.is_stale_spec(),
+        "gateway contract violations must not be auto-recovered"
+    );
+
+    let admission_stale = ToolExecutionAdmissionRejection::Deferred(stale);
+    let admission_requires = ToolExecutionAdmissionRejection::Deferred(requires);
+    let admission_gateway = ToolExecutionAdmissionRejection::Deferred(gateway);
+    assert!(matches!(
+        &admission_stale,
+        ToolExecutionAdmissionRejection::Deferred(error) if error.is_stale_spec()
+    ));
+    assert!(!matches!(
+        &admission_requires,
+        ToolExecutionAdmissionRejection::Deferred(error) if error.is_stale_spec()
+    ));
+    assert!(!matches!(
+        &admission_gateway,
+        ToolExecutionAdmissionRejection::Deferred(error) if error.is_stale_spec()
+    ));
+}
+
+#[test]
 fn tool_allowed_list_gate_preserves_pipeline_rejection_contract() {
     validate_tool_allowed_by_list("Read", &[])
         .expect("empty allowed-list should preserve allow-all behavior");
@@ -1485,6 +1532,8 @@ fn tool_execution_admission_gate_preserves_pipeline_rejection_order() {
         tool_name: "WebFetch",
         allowed_tools: &["Read".to_string()],
         runtime_tool_restrictions: &restrictions,
+        user_enabled_tools: &[],
+        tool_arguments: &json!({}),
         invocation_is_deferred: true,
         deferred_tools: &["WebFetch".to_string()],
         loaded_deferred_tool_specs: &[],
@@ -1508,6 +1557,8 @@ fn tool_execution_admission_gate_preserves_pipeline_rejection_order() {
         tool_name: "WebFetch",
         allowed_tools: &["WebFetch".to_string()],
         runtime_tool_restrictions: &restrictions,
+        user_enabled_tools: &[],
+        tool_arguments: &json!({}),
         invocation_is_deferred: true,
         deferred_tools: &["WebFetch".to_string()],
         loaded_deferred_tool_specs: &[],
@@ -1531,6 +1582,8 @@ fn tool_execution_admission_gate_preserves_pipeline_rejection_order() {
         tool_name: "WebFetch",
         allowed_tools: &["WebFetch".to_string()],
         runtime_tool_restrictions: &ToolRuntimeRestrictions::default(),
+        user_enabled_tools: &[],
+        tool_arguments: &json!({}),
         invocation_is_deferred: true,
         deferred_tools: &["WebFetch".to_string()],
         loaded_deferred_tool_specs: &[],

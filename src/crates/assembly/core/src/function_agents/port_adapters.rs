@@ -543,6 +543,13 @@ not json
     #[tokio::test]
     async fn git_adapter_startchat_snapshot_matches_legacy_empty_state_when_not_git_repo() {
         let repo = TestTempDir::new("not-a-git-repo");
+        // Prevent git from walking up into a parent repository.
+        // On some machines the temp directory itself lives inside a git
+        // worktree (e.g. the user home dir is a git repo), so we
+        // set the ceiling to the temp directory's immediate parent.
+        if let Some(parent) = repo.path().parent() {
+            std::env::set_var("GIT_CEILING_DIRECTORIES", parent);
+        }
 
         let adapter = CoreFunctionAgentGitAdapter;
         let snapshot = adapter

@@ -1857,6 +1857,7 @@ mod tests {
 
     /// Windows shape: window title in `name`, executable basename in
     /// `process_name`.
+    #[allow(dead_code)]
     fn windows_app(window_title: &str, exe: &str) -> ComputerUseForegroundApplication {
         ComputerUseForegroundApplication {
             name: Some(window_title.to_string()),

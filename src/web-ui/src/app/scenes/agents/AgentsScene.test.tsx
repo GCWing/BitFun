@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
+import React from 'react';
 import { useAgentsStore } from './agentsStore';
 import { isLocallyManageableSubagent } from './agentVisibility';
 
@@ -61,8 +62,13 @@ vi.mock('./components/SkillGroupPicker', () => ({
 
 vi.mock('@/component-library', () => ({
   Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-  Button: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
-    <button type="button" onClick={onClick}>{children}</button>
+  Button: ({ children, onClick, disabled, 'data-testid': testId }: {
+    children: React.ReactNode;
+    onClick?: () => void;
+    disabled?: boolean;
+    'data-testid'?: string;
+  }) => (
+    <button type="button" onClick={onClick} disabled={disabled} data-testid={testId}>{children}</button>
   ),
   IconButton: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
     <button type="button" onClick={onClick}>{children}</button>
@@ -82,7 +88,11 @@ vi.mock('@/app/components', () => ({
   ),
   GalleryPageHeader: () => <header />,
   GallerySkeleton: () => <div />,
-  GalleryZone: ({ children }: { children: React.ReactNode }) => <section>{children}</section>,
+  // Spread props so data-testid/id reach the DOM like the real GalleryZone
+  // (production spreads ...sectionProps onto <section>).
+  GalleryZone: ({ children, tools, ...props }: { children: React.ReactNode; tools?: React.ReactNode } & React.HTMLAttributes<HTMLElement>) => (
+    <section {...props}>{tools}{children}</section>
+  ),
 }));
 
 vi.mock('./hooks/useAgentsList', () => ({
@@ -141,6 +151,19 @@ vi.mock('@/infrastructure/api/service-api/SubagentAPI', () => ({
   },
 }));
 
+vi.mock('@/infrastructure/api/service-api/LegionPresetAPI', () => ({
+  LegionPresetAPI: {
+    createPreset: vi.fn(async () => {}),
+    listPresets: vi.fn(async () => []),
+  },
+}));
+
+vi.mock('./components/LegionCard', () => ({
+  default: ({ pattern }: { pattern: { id: string; name: string } }) => (
+    <div data-testid="legion-list-item" data-legion-id={pattern.id}>{pattern.name}</div>
+  ),
+}));
+
 let JSDOMCtor: (new (
   html?: string,
   options?: { pretendToBeVisual?: boolean }
@@ -196,7 +219,8 @@ describeWithJsdom('AgentsScene', () => {
     mockAgentsList();
     container = document.createElement('div');
     document.body.appendChild(container);
-    root = createRoot(container);
+    root = createRoot(container, {
+    });
   });
 
   afterEach(() => {
@@ -246,7 +270,9 @@ describeWithJsdom('AgentsScene', () => {
       'utf8',
     );
 
-    expect(sceneSource.match(/<GalleryGrid\b[^>]*\bminCardWidth=\{360\}[^>]*>/g)).toHaveLength(2);
+    // Two minCardWidth=360 grids in the base scene (core agents + agents) plus
+    // the legion gallery grid added by the LegionCard wiring (d7-P2-1/L1-P1-1).
+    expect(sceneSource.match(/<GalleryGrid\b[^>]*\bminCardWidth=\{360\}[^>]*>/g)).toHaveLength(3);
     expect(agentCardStyles).toMatch(/\.agent-card \{\s+width: 100%;\s+min-width: 0;/);
     expect(coreCardSurfaceStyles).toMatch(/width: 100%;\s+min-width: 0;/);
     expect(agentCardStyles).not.toContain('width: 360px;');
@@ -254,6 +280,7 @@ describeWithJsdom('AgentsScene', () => {
   });
 
   it('shows skill grouping and editing for a custom subagent with the Skill tool', async () => {
+
     const subagent = {
       key: 'user::skill-worker',
       id: 'skill-worker',
@@ -304,4 +331,77 @@ describeWithJsdom('AgentsScene', () => {
     });
     expect(container.querySelector('[data-testid="agent-detail-skill-groups"]')).toBeTruthy();
   });
+
+  // ── Legion chain regression tests (L1-P1-3) ─────────────────────────
+  // Guard the two historical break-points: the create entry (L1-P0-1: the
+  // create_legion_preset command was never registered on the Rust side) and
+  // the disabled save button (L1-P0-2: LEGION_CREATE_BACKEND_READY=false).
+  // Plus the LegionCard gallery (L1-P1-1 wiring).
+
+  it('renders the create-legion entry button and opens the CreateLegionPage', async () => {
+    const { default: AgentsScene } = await import('./AgentsScene');
+
+    await act(async () => {
+      root.render(<AgentsScene />);
+    });
+
+    const createBtn = container.querySelector<HTMLButtonElement>('[data-testid="agents-create-legion-btn"]');
+    expect(createBtn).toBeTruthy();
+
+    await act(async () => {
+      createBtn?.click();
+    });
+    expect(container.querySelector('[data-testid="create-legion-page"]')).toBeTruthy();
+  }, 10_000);
+
+  it('keeps the CreateLegionPage save button enabled (P0-2 regression)', async () => {
+    const { default: AgentsScene } = await import('./AgentsScene');
+
+    await act(async () => {
+      root.render(<AgentsScene />);
+    });
+    // Open the create-legion page through the same button the user clicks
+    // (L1-P0-2 regression: the save button used to be hard-disabled).
+    const createBtn = container.querySelector<HTMLButtonElement>('[data-testid="agents-create-legion-btn"]');
+    await act(async () => {
+      createBtn?.click();
+    });
+
+    const saveBtn = container.querySelector<HTMLButtonElement>('[data-testid="create-legion-save"]');
+    expect(saveBtn).toBeTruthy();
+    expect(saveBtn?.disabled).toBe(false);
+    // Pattern options are rendered from the built-in patterns list.
+    expect(container.querySelectorAll('[data-testid="legion-pattern-option"]').length).toBeGreaterThan(0);
+  }, 10_000);
+
+  it('renders saved legion presets through the LegionCard gallery (P1-1 wiring)', async () => {
+    const { LegionPresetAPI } = await import('@/infrastructure/api/service-api/LegionPresetAPI');
+    const listPresets = LegionPresetAPI.listPresets as ReturnType<typeof vi.fn>;
+    listPresets.mockResolvedValue([
+      {
+        id: 'sparc-dev',
+        name: 'SPARC Development',
+        description: '5-stage SPARC development pipeline',
+        nodes: [{ id: 'researcher', agent: 'Plan', role: 'Research Bee', prompt: 'Gather requirements' }],
+        edges: [],
+      },
+    ]);
+    const { default: AgentsScene } = await import('./AgentsScene');
+
+    await act(async () => {
+      root.render(<AgentsScene />);
+    });
+    // Flush the listPresets() promise chain (effect -> resolve -> setState -> re-render).
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const zone = container.querySelector('[data-testid="agents-legions-zone"]');
+    expect(zone).toBeTruthy();
+    const card = container.querySelector('[data-testid="legion-list-item"]');
+    expect(card).toBeTruthy();
+    expect(card?.getAttribute('data-legion-id')).toBe('sparc-dev');
+  }, 10_000);
 });

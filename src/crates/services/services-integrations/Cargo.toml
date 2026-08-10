@@ -1,4 +1,5 @@
 [package]
+license.workspace = true
 name = "bitfun-services-integrations"
 version.workspace = true
 authors.workspace = true
@@ -35,7 +36,11 @@ futures = { workspace = true, optional = true }
 futures-util = { workspace = true, optional = true }
 fs2 = { workspace = true, optional = true }
 git2 = { workspace = true, optional = true }
+globset = { workspace = true, optional = true }
+grep-regex = { workspace = true, optional = true }
+grep-searcher = { workspace = true, optional = true }
 hostname = { workspace = true, optional = true }
+ignore = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 keyring-core = { workspace = true, optional = true }
@@ -356,6 +361,10 @@ workspace-search = [
     "bitfun-services-core/filesystem",
     "bitfun-services-core/process-runtime",
     "dunce",
+    "globset",
+    "grep-regex",
+    "grep-searcher",
+    "ignore",
     "thiserror",
     "tokio/io-util",
     "tokio/rt",

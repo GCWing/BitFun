@@ -52,12 +52,47 @@ struct MemoryTranscriptToolFunction {
     arguments: String,
 }
 
+/// Per-item token limits for memory phase-1 transcripts
+/// (阈值参数配置化：`ai.thresholds.memories.*`).
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct MemoryTranscriptTokenLimits {
+    pub message_content: usize,
+    pub tool_input: usize,
+    pub tool_result: usize,
+    pub tool_error: usize,
+}
+
+impl Default for MemoryTranscriptTokenLimits {
+    fn default() -> Self {
+        Self {
+            message_content: MESSAGE_CONTENT_TOKEN_LIMIT,
+            tool_input: TOOL_INPUT_TOKEN_LIMIT,
+            tool_result: TOOL_RESULT_TOKEN_LIMIT,
+            tool_error: TOOL_ERROR_TOKEN_LIMIT,
+        }
+    }
+}
+
 pub(crate) fn render_memory_phase1_transcript(
     turns: &[DialogTurnData],
     token_limit: usize,
     external_context_policy: MemoryExternalContextPolicy,
 ) -> BitFunResult<String> {
-    let items = collect_memory_transcript_items(turns, external_context_policy);
+    render_memory_phase1_transcript_with_limits(
+        turns,
+        token_limit,
+        external_context_policy,
+        &MemoryTranscriptTokenLimits::default(),
+    )
+}
+
+pub(crate) fn render_memory_phase1_transcript_with_limits(
+    turns: &[DialogTurnData],
+    token_limit: usize,
+    external_context_policy: MemoryExternalContextPolicy,
+    limits: &MemoryTranscriptTokenLimits,
+) -> BitFunResult<String> {
+    let items = collect_memory_transcript_items(turns, external_context_policy, limits);
     if items.is_empty() {
         return Ok(String::new());
     }
@@ -85,6 +120,7 @@ pub(crate) fn redact_memory_secrets(text: &str) -> String {
 fn collect_memory_transcript_items(
     turns: &[DialogTurnData],
     external_context_policy: MemoryExternalContextPolicy,
+    limits: &MemoryTranscriptTokenLimits,
 ) -> Vec<MemoryTranscriptMessage> {
     let mut messages = Vec::new();
     for turn in turns {
@@ -96,7 +132,7 @@ fn collect_memory_transcript_items(
         if !user_content.trim().is_empty() {
             messages.push(MemoryTranscriptMessage::User {
                 role: "user",
-                content: truncate_middle_tokens(user_content.trim(), MESSAGE_CONTENT_TOKEN_LIMIT),
+                content: truncate_middle_tokens(user_content.trim(), limits.message_content),
             });
         }
 
@@ -121,7 +157,7 @@ fn collect_memory_transcript_items(
                     kind: "function",
                     function: MemoryTranscriptToolFunction {
                         name: tool.effective_name().to_string(),
-                        arguments: serialize_tool_arguments(tool.effective_input()),
+                        arguments: serialize_tool_arguments(tool.effective_input(), limits.tool_input),
                     },
                 })
                 .collect::<Vec<_>>();
@@ -130,7 +166,7 @@ fn collect_memory_transcript_items(
                     role: "assistant",
                     content: truncate_middle_tokens(
                         &assistant_content,
-                        MESSAGE_CONTENT_TOKEN_LIMIT,
+                        limits.message_content,
                     ),
                     tool_calls,
                 });
@@ -147,8 +183,9 @@ fn collect_memory_transcript_items(
                                 tool,
                                 result.success,
                                 external_context_policy,
+                                limits.tool_error,
                             ),
-                            TOOL_RESULT_TOKEN_LIMIT,
+                            limits.tool_result,
                         ),
                     });
                 }
@@ -166,8 +203,8 @@ fn tool_call_id(tool: &ToolItemData) -> String {
     }
 }
 
-fn serialize_tool_arguments(input: &Value) -> String {
-    let input = truncate_json_value(input, TOOL_INPUT_TOKEN_LIMIT);
+fn serialize_tool_arguments(input: &Value, token_limit: usize) -> String {
+    let input = truncate_json_value(input, token_limit);
     serde_json::to_string(&input).unwrap_or_else(|_| "{}".to_string())
 }
 
@@ -175,6 +212,7 @@ fn memory_tool_result_content(
     tool: &ToolItemData,
     success: bool,
     external_context_policy: MemoryExternalContextPolicy,
+    tool_error_limit: usize,
 ) -> String {
     let Some(result) = tool.tool_result.as_ref() else {
         return String::new();
@@ -204,7 +242,7 @@ fn memory_tool_result_content(
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .map(|value| truncate_middle_tokens(value, TOOL_ERROR_TOKEN_LIMIT));
+        .map(|value| truncate_middle_tokens(value, tool_error_limit));
     if success {
         content
     } else {

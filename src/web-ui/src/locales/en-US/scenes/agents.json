@@ -11,7 +11,8 @@
     "title": "Agents",
     "subtitle": "Review and manage core modes, agents, and sub-agents, including tools and skills.",
     "searchPlaceholder": "Search agents by name or description…",
-    "newAgent": "New Agent"
+    "newAgent": "New Agent",
+    "newLegion": "New Legion"
   },
   "nav": {
     "coreAgents": "Core Agents",
@@ -345,5 +346,39 @@
     "Debug": "Debug mode: systematically diagnose and fix errors in code",
     "Claw": "Claw mode: extract and integrate information from external sources",
     "Team": "Team mode: coordinate multiple agents to collaboratively complete complex tasks"
+  },
+  "legionsZone": {
+    "title": "Legions",
+    "subtitle": "Saved legion presets",
+    "loadFailed": "Failed to load legion presets: "
+  },
+  "legionPattern": {
+    "gate": "Gate",
+    "back": "Back",
+    "choosePattern": "Choose a pattern",
+    "orchestrationPatterns": "Orchestration patterns",
+    "overview": "Overview",
+    "complexity": "Complexity L{{level}}",
+    "nodesCount": "{{count}} nodes",
+    "edgesCount": "{{count}} edges",
+    "nodes": "Nodes ({{count}})",
+    "edges": "Edges ({{count}})",
+    "noEdges": "No edges",
+    "usePattern": "Use this pattern",
+    "planning": "Planning",
+    "saved": "Legion preset \"{{name}}\" saved",
+    "saveFailed": "Failed to save legion preset",
+    "meta": {
+      "gate": "gates"
+    },
+    "complexityLabel": {
+      "l1": "L1",
+      "l2": "L2",
+      "l3": "L3",
+      "l4": "L4",
+      "l5": "L5",
+      "l6": "L6",
+      "l7": "L7"
+    }
   }
 }

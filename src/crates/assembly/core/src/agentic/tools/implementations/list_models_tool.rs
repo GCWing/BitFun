@@ -54,9 +54,7 @@ fn fuzzy_match_score(term: &str, field: &str) -> Option<usize> {
     let mut next_index = 0;
     let mut gaps = 0;
     for character in term.chars() {
-        let Some(found) = field[next_index..].find(character) else {
-            return None;
-        };
+        let found = field[next_index..].find(character)?;
         gaps += found;
         next_index += found + character.len_utf8();
     }
@@ -267,6 +265,7 @@ impl Tool for ListModelsTool {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::field_reassign_with_default)] // test fixtures build configs via field assignment
     use super::build_list_models_result;
     use crate::service::config::types::{AIConfig, AIModelConfig};
 

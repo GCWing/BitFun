@@ -11,7 +11,8 @@
     "title": "專業智能體",
     "subtitle": "查看與管理核心模式、Agent 與 Sub-Agent，設定工具與 Skills。",
     "searchPlaceholder": "搜尋 Agent 名稱或描述…",
-    "newAgent": "新增 Agent"
+    "newAgent": "新增 Agent",
+    "newLegion": "新增軍團"
   },
   "nav": {
     "coreAgents": "核心智能體",
@@ -345,5 +346,39 @@
     "Debug": "除錯模式：系統性地診斷和修復程式碼中的錯誤",
     "Claw": "抓取模式：從外部來源提取和整合資訊",
     "Team": "團隊模式：協調多個智慧體協同完成複雜任務"
+  },
+  "legionsZone": {
+    "title": "軍團",
+    "subtitle": "已儲存的軍團預設",
+    "loadFailed": "載入軍團預設失敗："
+  },
+  "legionPattern": {
+    "gate": "閘門",
+    "back": "返回",
+    "choosePattern": "選擇編排模式",
+    "orchestrationPatterns": "軍團編排模式",
+    "overview": "概覽",
+    "complexity": "複雜度 L{{level}}",
+    "nodesCount": "{{count}} 個節點",
+    "edgesCount": "{{count}} 條連線",
+    "nodes": "節點（{{count}}）",
+    "edges": "連線（{{count}}）",
+    "noEdges": "無連線",
+    "usePattern": "使用此模式",
+    "planning": "規劃中",
+    "saved": "軍團編排模式「{{name}}」已儲存",
+    "saveFailed": "儲存軍團編排模式失敗",
+    "meta": {
+      "gate": "個閘門"
+    },
+    "complexityLabel": {
+      "l1": "L1",
+      "l2": "L2",
+      "l3": "L3",
+      "l4": "L4",
+      "l5": "L5",
+      "l6": "L6",
+      "l7": "L7"
+    }
   }
 }
