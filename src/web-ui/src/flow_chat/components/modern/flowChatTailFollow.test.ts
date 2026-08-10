@@ -9,6 +9,7 @@ import {
   tailHoldMaxGapPx,
   tailSnapBackScrollTop,
   tailSpacerPxForViewport,
+  turnTopAlignmentEntersReservedBlank,
   type TailFollowState,
 } from './flowChatTailFollow';
 
@@ -52,6 +53,40 @@ describe('tailSpacerPxForViewport', () => {
 
   it('reserves nothing before the scroller has been measured', () => {
     expect(tailSpacerPxForViewport(0, BOTTOM_INSET)).toBe(0);
+  });
+});
+
+describe('turnTopAlignmentEntersReservedBlank', () => {
+  it('leaves a Turn with content below it top-aligned', () => {
+    expect(turnTopAlignmentEntersReservedBlank({
+      turnTopScrollTop: 400,
+      contentEndScrollTop: 3000,
+    })).toBe(false);
+  });
+
+  it('clamps a Turn whose top lies past the end of real content', () => {
+    // Everything below it is the reserved blank, which follow-output holds for
+    // output that is arriving. Nothing arrives under a navigated Turn.
+    expect(turnTopAlignmentEntersReservedBlank({
+      turnTopScrollTop: 3200,
+      contentEndScrollTop: 3000,
+    })).toBe(true);
+  });
+
+  it('asks nothing about which Turn it is', () => {
+    // The last Turn of a long transcript top-aligns like any other; short and
+    // long is the result of the comparison, not an input to it.
+    expect(turnTopAlignmentEntersReservedBlank({
+      turnTopScrollTop: 3000 - VIEWPORT,
+      contentEndScrollTop: 3000,
+    })).toBe(false);
+  });
+
+  it('treats the content end itself as still on the transcript', () => {
+    expect(turnTopAlignmentEntersReservedBlank({
+      turnTopScrollTop: 3000,
+      contentEndScrollTop: 3000,
+    })).toBe(false);
   });
 });
 

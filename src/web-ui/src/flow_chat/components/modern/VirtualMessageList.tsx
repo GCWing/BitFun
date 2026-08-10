@@ -57,6 +57,7 @@ import {
   FLOWCHAT_TURN_TOP_GAP_PX,
   isViewportAtTail,
   tailSpacerPxForViewport,
+  turnTopAlignmentEntersReservedBlank,
 } from './flowChatTailFollow';
 import { VirtualItemRenderer } from './VirtualItemRenderer';
 import { getLeadingVirtualItemIndexDelta } from './virtualMessageListLayout';
@@ -425,20 +426,33 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     })
   ), []);
 
+  /**
+   * The content-end scroll, issued *through Virtuoso*.
+   *
+   * Writing the scroller directly is cheaper, but it leaves any pending
+   * `scrollToIndex` retry in place — Virtuoso re-aims at its original target
+   * for up to a second after the list changes under it. A caller correcting
+   * one of its own `scrollToIndex` calls has to replace that retry rather than
+   * outrun it, and only another `scrollToIndex` does.
+   */
+  const scrollVirtuosoToContentEnd = useCallback((behavior: 'auto' | 'smooth') => {
+    const lastIndex = Math.max(0, virtualItems.length - 1);
+    virtuosoRef.current?.scrollToIndex({
+      index: lastIndex,
+      align: 'end',
+      offset: endAlignedTailOffsetPx(lastIndex, virtualItems.length, tailSpacerPxRef.current),
+      behavior,
+    });
+  }, [virtualItems.length]);
+
   const scrollToContentEnd = useCallback((behavior: ScrollBehavior) => {
     const scroller = scrollerElementRef.current;
     if (scroller) {
       scroller.scrollTo({ top: readContentEndScrollTop(scroller), behavior });
       return;
     }
-    const lastIndex = Math.max(0, virtualItems.length - 1);
-    virtuosoRef.current?.scrollToIndex({
-      index: lastIndex,
-      align: 'end',
-      offset: endAlignedTailOffsetPx(lastIndex, virtualItems.length, tailSpacerPxRef.current),
-      behavior: normalizeVirtuosoBehavior(behavior),
-    });
-  }, [readContentEndScrollTop, virtualItems.length]);
+    scrollVirtuosoToContentEnd(normalizeVirtuosoBehavior(behavior));
+  }, [readContentEndScrollTop, scrollVirtuosoToContentEnd]);
 
   const scrollTurnToTop = useCallback((turnId: string) => {
     const targetIndex = virtualItems.findIndex(item => (
@@ -771,6 +785,16 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     updateIsAtBottom,
   ]);
 
+  /**
+   * Top-align a Turn, without scrolling into the reserved blank to do it.
+   *
+   * The branch is on what is *knowable*, not on where the Turn is. A rendered
+   * Turn has a resolvable offset, so the clamp is decided before anything
+   * moves and the requested behaviour survives. An unrendered one is known
+   * only to Virtuoso, so it is placed instantly and the answer read back —
+   * both writes land in the same task, so the correction costs a second scroll
+   * but not a second visible movement.
+   */
   const navigateToTurnWithStatus = useCallback((
     turnId: string,
     options?: TurnNavigationOptions,
@@ -780,14 +804,54 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     ));
     if (targetIndex < 0 || !virtuosoRef.current) return 'rejected';
     exitFollowOutput('scroll-to-turn');
+
+    const behavior = normalizeVirtuosoBehavior(options?.behavior ?? 'auto');
+    const alignTurnToTop = () => virtuosoRef.current?.scrollToIndex({
+      index: targetIndex,
+      align: 'start',
+      offset: -FLOWCHAT_TURN_TOP_GAP_PX,
+      behavior,
+    });
+    const scroller = scrollerElementRef.current;
+    const renderedTurnTopScrollTop = resolveTurnTopScrollTop(turnId);
+
+    if (scroller && renderedTurnTopScrollTop !== null) {
+      if (turnTopAlignmentEntersReservedBlank({
+        turnTopScrollTop: renderedTurnTopScrollTop,
+        contentEndScrollTop: readContentEndScrollTop(scroller),
+      })) {
+        scrollVirtuosoToContentEnd(behavior);
+      } else {
+        alignTurnToTop();
+      }
+      return 'settled';
+    }
+
+    // Placed instantly on purpose: an animated scroll has not arrived yet, so
+    // there would be nothing to read back. The requested behaviour is spent on
+    // the placement, which is what turn-rail navigation already asks for.
     virtuosoRef.current.scrollToIndex({
       index: targetIndex,
       align: 'start',
       offset: -FLOWCHAT_TURN_TOP_GAP_PX,
-      behavior: normalizeVirtuosoBehavior(options?.behavior ?? 'auto'),
+      behavior: 'auto',
     });
+    if (scroller && turnTopAlignmentEntersReservedBlank({
+      turnTopScrollTop: scroller.scrollTop,
+      // Re-read: placing the viewport renders items, which re-measures the
+      // transcript and moves the content end with it.
+      contentEndScrollTop: readContentEndScrollTop(scroller),
+    })) {
+      scrollVirtuosoToContentEnd('auto');
+    }
     return 'settled';
-  }, [exitFollowOutput, virtualItems]);
+  }, [
+    exitFollowOutput,
+    readContentEndScrollTop,
+    resolveTurnTopScrollTop,
+    scrollVirtuosoToContentEnd,
+    virtualItems,
+  ]);
 
   const navigateToTurn = useCallback((turnId: string, options?: TurnNavigationOptions) => (
     navigateToTurnWithStatus(turnId, options) !== 'rejected'

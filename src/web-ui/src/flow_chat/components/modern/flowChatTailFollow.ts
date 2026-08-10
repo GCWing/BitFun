@@ -140,6 +140,33 @@ export function endAlignedTailOffsetPx(
   return targetIndex >= itemCount - 1 && tailSpacerPx > 0 ? -tailSpacerPx : 0;
 }
 
+export interface TurnTopAlignmentInput {
+  /** Offset that would place the Turn's user message at the viewport top. */
+  turnTopScrollTop: number;
+  contentEndScrollTop: number;
+}
+
+/**
+ * Whether top-aligning a Turn would park the viewport in the reserved blank.
+ *
+ * The blank belongs to follow-output. `pin-turn-top` holds it for output that
+ * is on its way, and nothing is on its way under a Turn the user navigated to
+ * — so a navigation that lands there shows a screen of nothing, and the snap
+ * back then reclaims it as a second, visible movement.
+ *
+ * A clamp at the content end is the whole rule. There is no "is this the last
+ * Turn" test and no measurement of what lies below it: a Turn with a viewport
+ * of content under it has its top above the content end already, so this
+ * returns false and the alignment stands. Before the resident spacer the
+ * browser did exactly this for free, by clamping at the end of the scroll
+ * range; reserving the blank is what removed the clamp.
+ */
+export function turnTopAlignmentEntersReservedBlank(
+  input: TurnTopAlignmentInput,
+): boolean {
+  return input.turnTopScrollTop > input.contentEndScrollTop;
+}
+
 /**
  * Resolve the next follow target.
  *

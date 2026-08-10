@@ -17,7 +17,49 @@ const mocks = vi.hoisted(() => ({
   setVisibleTurnInfo: vi.fn(),
   enterFollowOutput: vi.fn(),
   exitFollowOutput: vi.fn(),
+  /** False stands in for a Turn Virtuoso can place but the DOM cannot resolve. */
+  renderItemMetadata: true,
 }));
+
+/** Input-stack footer the chat-input mock produces: 140 + 4 + 24. */
+const BOTTOM_INSET = 168;
+
+/**
+ * jsdom has no layout engine, so both halves of the navigation clamp have to be
+ * supplied: the scroller's own box, and where a user message sits inside it.
+ */
+function fakeLayout(options: {
+  clientHeight: number;
+  scrollHeight: number;
+  turnTopFromScrollerTop: number;
+}) {
+  const originals = (['clientHeight', 'scrollHeight'] as const).map(name => {
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, name);
+    Object.defineProperty(HTMLElement.prototype, name, {
+      configurable: true,
+      get: () => (name === 'clientHeight' ? options.clientHeight : options.scrollHeight),
+    });
+    return [name, descriptor] as const;
+  });
+  const originalRect = HTMLElement.prototype.getBoundingClientRect;
+  HTMLElement.prototype.getBoundingClientRect = function getRect(this: HTMLElement) {
+    const top = this.classList.contains('virtual-item-wrapper')
+      ? options.turnTopFromScrollerTop
+      : 0;
+    return { ...new DOMRect(0, top, 0, 40), top, bottom: top + 40 } as DOMRect;
+  };
+
+  return () => {
+    HTMLElement.prototype.getBoundingClientRect = originalRect;
+    originals.forEach(([name, descriptor]) => {
+      if (descriptor) {
+        Object.defineProperty(HTMLElement.prototype, name, descriptor);
+      } else {
+        delete (HTMLElement.prototype as unknown as Record<string, unknown>)[name];
+      }
+    });
+  };
+}
 
 vi.mock('react-virtuoso', async () => {
   const ReactModule = await import('react');
@@ -95,7 +137,7 @@ vi.mock('./VirtualItemRenderer', () => ({
   VirtualItemRenderer: ({ item, index }: { item: any; index: number }) => (
     <div
       className="virtual-item-wrapper"
-      data-item-type={item.type}
+      data-item-type={mocks.renderItemMetadata ? item.type : undefined}
       data-turn-id={item.turnId}
       data-virtual-index={index}
     >
@@ -147,6 +189,7 @@ describe('VirtualMessageList natural scroll contract', () => {
     mocks.exitFollowOutput.mockReset();
     mocks.setVisibleTurnInfo.mockReset();
     mocks.virtuosoProps = null;
+    mocks.renderItemMetadata = true;
     vi.stubGlobal('ResizeObserver', class {
       observe() {}
       disconnect() {}
@@ -232,6 +275,100 @@ describe('VirtualMessageList natural scroll contract', () => {
       behavior: 'auto',
     });
     expect(container.querySelector('.message-list-footer')?.getAttribute('style')).toContain('168px');
+  });
+
+  it('top-aligns a Turn that still has a transcript below it', () => {
+    const listRef = React.createRef<VirtualMessageListRef>();
+    // Content end at 3000 - 392 - 600 = 2008, well below the Turn's top at 492.
+    const restoreLayout = fakeLayout({
+      clientHeight: 600,
+      scrollHeight: 3000,
+      turnTopFromScrollerTop: 500,
+    });
+    try {
+      act(() => root.render(<VirtualMessageList ref={listRef} />));
+      act(() => { listRef.current?.navigateToTurn('turn-2', { behavior: 'smooth' }); });
+
+      expect(mocks.scrollToIndex).toHaveBeenCalledTimes(1);
+      expect(mocks.scrollToIndex).toHaveBeenCalledWith({
+        index: 1,
+        align: 'start',
+        offset: -FLOWCHAT_TURN_TOP_GAP_PX,
+        // A resolvable Turn is clamped before anything moves, so the requested
+        // animation survives.
+        behavior: 'smooth',
+      });
+    } finally {
+      restoreLayout();
+    }
+  });
+
+  it('stops a short tail Turn at the content end rather than in the blank', () => {
+    const listRef = React.createRef<VirtualMessageListRef>();
+    // Content end at 1000 - 392 - 600 = 8; top-aligning would mean 492, which
+    // is a screen of reserved blank nothing is going to fill.
+    const restoreLayout = fakeLayout({
+      clientHeight: 600,
+      scrollHeight: 1000,
+      turnTopFromScrollerTop: 500,
+    });
+    try {
+      act(() => root.render(<VirtualMessageList ref={listRef} />));
+      act(() => { listRef.current?.navigateToTurn('turn-2', { behavior: 'smooth' }); });
+
+      expect(mocks.scrollToIndex).toHaveBeenCalledTimes(1);
+      expect(mocks.scrollToIndex).toHaveBeenCalledWith({
+        index: 1,
+        align: 'end',
+        offset: -tailSpacerPxForViewport(600, BOTTOM_INSET),
+        behavior: 'smooth',
+      });
+    } finally {
+      restoreLayout();
+    }
+  });
+
+  it('reads an unrendered Turn back from Virtuoso, and corrects through it', () => {
+    const listRef = React.createRef<VirtualMessageListRef>();
+    const restoreLayout = fakeLayout({
+      clientHeight: 600,
+      scrollHeight: 1000,
+      turnTopFromScrollerTop: 500,
+    });
+    try {
+      mocks.renderItemMetadata = false;
+      act(() => root.render(<VirtualMessageList ref={listRef} />));
+      const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller]')!;
+      Object.defineProperty(scroller, 'scrollTop', {
+        configurable: true,
+        writable: true,
+        value: 0,
+      });
+      // Only Virtuoso knows where the Turn is; it lands the viewport in the blank.
+      mocks.scrollToIndex.mockImplementation(() => { scroller.scrollTop = 900; });
+
+      act(() => { listRef.current?.navigateToTurn('turn-2', { behavior: 'smooth' }); });
+
+      expect(mocks.scrollToIndex).toHaveBeenCalledTimes(2);
+      // Placed instantly, because an animation would not have arrived yet and
+      // there would be nothing to read back.
+      expect(mocks.scrollToIndex).toHaveBeenNthCalledWith(1, {
+        index: 1,
+        align: 'start',
+        offset: -FLOWCHAT_TURN_TOP_GAP_PX,
+        behavior: 'auto',
+      });
+      // Corrected through Virtuoso, not the scroller: a direct write would
+      // leave the first call's retry pending, and it re-aims at the top.
+      expect(mocks.scrollToIndex).toHaveBeenNthCalledWith(2, {
+        index: 1,
+        align: 'end',
+        offset: -tailSpacerPxForViewport(600, BOTTOM_INSET),
+        behavior: 'auto',
+      });
+    } finally {
+      restoreLayout();
+    }
   });
 
   it('prepares history navigation without manufacturing bottom range', () => {

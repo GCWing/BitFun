@@ -258,6 +258,28 @@ coordinator, and the reasons there is no coordinator are unchanged (see below).
   as different alignments. The header renders at the same constant so they
   cannot drift. Both the one-shot scroll and the offset the follow loop
   re-asserts every frame carry it — if only one did, they would fight.
+- Turn navigation never scrolls into the reserved blank to top-align a Turn. A
+  Turn whose top lies past the content end is stopped at the content end
+  instead, which is where the tail rests. The blank belongs to follow-output —
+  `pin-turn-top` holds it for output that is arriving, and nothing arrives under
+  a Turn the user navigated to. There is no "is this the last Turn" test and no
+  measurement of what lies below it: a Turn with a viewport of content under it
+  has its top above the content end already, so the clamp does not bind and the
+  final Turns of a long transcript still top-align. Before the resident spacer
+  the browser did this for free by clamping at the end of the scroll range.
+- The clamp branches on what is *knowable*, not on where the Turn is. A rendered
+  Turn resolves its own offset, so the decision is made before anything moves
+  and the requested `behavior` survives. An unrendered one is known only to
+  Virtuoso, so it is placed with `behavior: 'auto'` and the landing read back;
+  an animated placement would not have arrived yet, so there would be nothing to
+  read. Both writes land in the same task, so the correction costs a second
+  scroll but not a second visible movement.
+- A navigation correcting its own `scrollToIndex` must re-issue through
+  Virtuoso, never by writing the scroller. Virtuoso re-aims at its original
+  target for up to a second after the list changes under it (`retrying to scroll
+  to`), and only another `scrollToIndex` replaces that pending retry. Writing
+  the scroller directly is what left the tail Turn top-aligning, being pulled to
+  the content end, and being re-aimed at the top again.
 - Session open enters follow-output as `session-open`, even with nothing
   streaming. The frame loop then runs on a `SETTLE_FRAMES` budget that refreshes
   whenever the target actually moves, so it tracks measurement and paging and
@@ -476,6 +498,12 @@ confirm:
     blank: the last Turn and the input clearance stay visible above the
     reservation. Repeat with the composer expanded, which is where the reserve
     falls back to the hold-gap floor.
+16. Click the last Turn on the Turn Rail while it is short. It must land in one
+    movement at the end of the transcript — no top-align followed by a slide
+    back down. Do it from near the tail *and* from the top of a long session:
+    those are the rendered and unrendered branches, and they take different
+    paths. Then click a final Turn whose answer is longer than the viewport: it
+    must still top-align.
 
 ## Related Files
 
