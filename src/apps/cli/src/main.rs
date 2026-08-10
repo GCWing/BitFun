@@ -738,6 +738,42 @@ fn terminal_scripts_dir() -> std::path::PathBuf {
         .join("scripts")
 }
 
+/// Inject `ai.knowledge_base_root` into the `BITFUN_KNOWLEDGE_BASE_ROOT`
+/// environment variable when the environment does not already carry an
+/// explicit value (UX-P1-3).
+///
+/// Mirrors the desktop host injection (desktop/lib.rs:518-548): the
+/// KnowledgeBaseSearch tool resolves its root from this environment variable
+/// at call time, so without an injection source the feature is unusable even
+/// when the user configures the key. The caller resolves the configured value
+/// (`ai.knowledge_base_root`) and passes it here; `None`/empty keeps the
+/// environment unset (fail-closed). An explicit environment value wins over
+/// the config value (explicit env is the escape hatch).
+///
+/// The function takes the already-resolved value instead of a config service
+/// so the three-way decision (env already set / value present / value absent)
+/// is testable without touching the process-global config service or path
+/// manager singletons.
+async fn inject_knowledge_base_root_if_needed(configured_root: Option<String>) {
+    if std::env::var_os("BITFUN_KNOWLEDGE_BASE_ROOT").is_some() {
+        return;
+    }
+    match configured_root {
+        Some(root) if !root.trim().is_empty() => {
+            std::env::set_var("BITFUN_KNOWLEDGE_BASE_ROOT", root.trim());
+            tracing::info!(
+                "Injected ai.knowledge_base_root into BITFUN_KNOWLEDGE_BASE_ROOT: {}",
+                root
+            );
+        }
+        Some(_) | None => {
+            tracing::debug!(
+                "ai.knowledge_base_root is not configured; KnowledgeBaseSearch stays disabled"
+            );
+        }
+    }
+}
+
 async fn initialize_terminal_service() {
     use bitfun_core::infrastructure::try_get_path_manager_arc;
     use bitfun_core::service::runtime::RuntimeManager;
@@ -807,6 +843,38 @@ async fn initialize_core_services_for_deployment(
         .await
         .map_err(|error| anyhow!("Failed to initialize global config service: {error}"))?;
     tracing::info!("Global config service initialized");
+
+    // Inject the knowledge base root into the environment for the
+    // KnowledgeBaseSearch tool (UX-P1-3, mirroring desktop/lib.rs:518-548).
+    // The tool reads `BITFUN_KNOWLEDGE_BASE_ROOT` at call time
+    // (knowledge_base_search_tool.rs); without an injection source the
+    // product feature is unusable in CLI deployments even when the user
+    // configures `ai.knowledge_base_root` (L6-P0-1 was desktop-only before).
+    // The value is optional: when the user configures the key it is injected
+    // here so every model tool call sees it. An explicit environment value
+    // wins over the config value when both exist (explicit env is the escape
+    // hatch) — matching the desktop behavior exactly.
+    // Inject the knowledge base root into the environment for the
+    // KnowledgeBaseSearch tool (UX-P1-3, mirroring desktop/lib.rs:518-548).
+    // The tool reads `BITFUN_KNOWLEDGE_BASE_ROOT` at call time
+    // (knowledge_base_search_tool.rs); without an injection source the
+    // product feature is unusable in CLI deployments even when the user
+    // configures `ai.knowledge_base_root` (L6-P0-1 was desktop-only before).
+    // The value is optional: when the user configures the key it is injected
+    // here so every model tool call sees it. An explicit environment value
+    // wins over the config value when both exist (explicit env is the escape
+    // hatch) — matching the desktop behavior exactly.
+    let configured_knowledge_base_root = match bitfun_core::service::config::get_global_config_service()
+        .await
+    {
+        Ok(service) => service
+            .get_config::<String>(Some("ai.knowledge_base_root"))
+            .await
+            .ok(),
+        Err(_) => None,
+    };
+    inject_knowledge_base_root_if_needed(configured_knowledge_base_root).await;
+
     let path_manager = bitfun_core::infrastructure::try_get_path_manager_arc()
         .map_err(|error| anyhow!(error.to_string()))?;
     let entrypoint = match (deployment, bootstrap_profile) {
@@ -1863,6 +1931,86 @@ mod bootstrap_profile_tests {
         .map(std::ffi::OsString::from);
 
         assert!(exec_requests_json_output(&args));
+    }
+}
+
+#[cfg(test)]
+mod knowledge_base_injection_tests {
+    use super::inject_knowledge_base_root_if_needed;
+    use std::sync::Mutex;
+
+    /// Serializes the three tests: `BITFUN_KNOWLEDGE_BASE_ROOT` is a
+    /// process-global environment variable, so the cases must not interleave.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn configured_knowledge_base_root_is_injected_when_env_absent() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        unsafe {
+            std::env::remove_var("BITFUN_KNOWLEDGE_BASE_ROOT");
+        }
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        runtime.block_on(inject_knowledge_base_root_if_needed(Some(
+            "/fake/knowledge/base".to_string(),
+        )));
+
+        assert_eq!(
+            std::env::var_os("BITFUN_KNOWLEDGE_BASE_ROOT")
+                .map(|value| value.to_string_lossy().to_string()),
+            Some("/fake/knowledge/base".to_string()),
+            "configured ai.knowledge_base_root must be injected"
+        );
+    }
+
+    #[test]
+    fn existing_env_knowledge_base_root_wins_over_config() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        unsafe {
+            std::env::set_var("BITFUN_KNOWLEDGE_BASE_ROOT", "/fake/from/env");
+        }
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        runtime.block_on(inject_knowledge_base_root_if_needed(Some(
+            "/fake/from/config".to_string(),
+        )));
+
+        assert_eq!(
+            std::env::var_os("BITFUN_KNOWLEDGE_BASE_ROOT")
+                .map(|value| value.to_string_lossy().to_string()),
+            Some("/fake/from/env".to_string()),
+            "an explicit env value must not be overwritten by the config value"
+        );
+    }
+
+    #[test]
+    fn unconfigured_knowledge_base_root_leaves_env_absent() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        unsafe {
+            std::env::remove_var("BITFUN_KNOWLEDGE_BASE_ROOT");
+        }
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        runtime.block_on(inject_knowledge_base_root_if_needed(None));
+
+        assert!(
+            std::env::var_os("BITFUN_KNOWLEDGE_BASE_ROOT").is_none(),
+            "no config value must leave the env unset (fail-closed)"
+        );
+    }
+
+    #[test]
+    fn empty_configured_root_leaves_env_absent() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        unsafe {
+            std::env::remove_var("BITFUN_KNOWLEDGE_BASE_ROOT");
+        }
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        runtime.block_on(inject_knowledge_base_root_if_needed(Some(
+            "   ".to_string(),
+        )));
+
+        assert!(
+            std::env::var_os("BITFUN_KNOWLEDGE_BASE_ROOT").is_none(),
+            "a blank configured value must be treated as unset"
+        );
     }
 }
 
