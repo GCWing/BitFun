@@ -53,6 +53,8 @@ import { useFlowChatFollowOutput } from './useFlowChatFollowOutput';
 import {
   contentEndScrollTop,
   endAlignedTailOffsetPx,
+  FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX as AT_CONTENT_END_THRESHOLD_PX,
+  isViewportAtTail,
   tailSpacerPxForViewport,
 } from './flowChatTailFollow';
 import { VirtualItemRenderer } from './VirtualItemRenderer';
@@ -67,12 +69,30 @@ import './VirtualMessageList.scss';
 const VIRTUOSO_FIRST_ITEM_INDEX_BASE = 1_000_000;
 const SEARCH_NAVIGATION_MAX_ATTEMPTS = 24;
 const FLOW_CHAT_VIRTUOSO_OVERSCAN = { main: 600, reverse: 600 } as const;
-/** Distance from the end of real content still treated as "at the bottom". */
-const AT_CONTENT_END_THRESHOLD_PX = 50;
 /** Consecutive quiet frames that mark the opening viewport as settled. */
 const OPEN_REVEAL_QUIET_FRAMES = 2;
 /** Hard cap so the transcript is always revealed, settled or not. */
 const OPEN_REVEAL_MAX_FRAMES = 40;
+/**
+ * Quiet period after the last scroll event that stands in for `scrollend`.
+ *
+ * Only used where the event is missing. It has to outlast the gap between
+ * frames of a momentum scroll without making the snap back feel detached from
+ * the gesture that caused it.
+ */
+const SCROLL_SETTLE_FALLBACK_MS = 140;
+/**
+ * Resize callbacks over which a viewport resting at the end is re-aligned after
+ * the scroller's own box changes.
+ *
+ * One correction is not enough. A width change reflows every item, and a height
+ * change makes Virtuoso render a different number of them; either way it
+ * re-measures and re-estimates over the following passes, so the content end
+ * keeps moving after the first callback. The window closes on its own so that
+ * streaming content growth, which arrives through the same observer, never
+ * inherits it.
+ */
+const TAIL_REALIGN_RESIZE_CALLBACKS = 6;
 const FLOW_CHAT_VIRTUOSO_VIEWPORT_INCREASE = { top: 600, bottom: 600 } as const;
 const IDLE_HISTORY_WINDOW_BOUNDARY_STATE: Record<
   SessionHistoryWindowDirection,
@@ -290,6 +310,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const scrollerElementRef = useRef<HTMLElement | null>(null);
   const [scrollerElement, setScrollerElement] = useState<HTMLElement | null>(null);
   const [viewportHeightPx, setViewportHeightPx] = useState(0);
+  /** Last scroller box the resize observer saw, to tell it apart from a content change. */
+  const observedViewportBoxRef = useRef({ width: 0, height: 0 });
+  /** Remaining resize callbacks over which to keep a resting viewport at the end. */
+  const tailRealignCallbacksRef = useRef(0);
+  /** Synchronous mirror of `isAtBottom`, read by a resize for the pre-resize answer. */
+  const isAtTailRef = useRef(true);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [isOpenViewportSettled, setIsOpenViewportSettled] = useState(false);
   const preparedTurnNavigationRef = useRef<PreparedTurnNavigation | null>(null);
@@ -432,6 +458,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     scheduleFollowToLatest,
     handleUserScrollIntent,
     handleScroll,
+    handleScrollSettled,
+    handleViewportResize,
+    getFollowTargetScrollTop,
   } = useFlowChatFollowOutput({
     activeSessionId: activeSessionId ?? undefined,
     latestTurnId,
@@ -568,13 +597,63 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     };
   }, [isOpenViewportSettled, readContentEndScrollTop, scrollerElement, virtualItems.length]);
 
-  // "At bottom" means the end of real content, not the end of the tail spacer.
+  /*
+   * "At the bottom" is a band, not a point. Its upper edge is the end of real
+   * content and its lower edge is whatever the follow rule owns, so a pinned
+   * Turn and a held collapse gap both count as being at the end — neither is a
+   * reason to offer a jump to the latest output. Below the band is reserved
+   * blank, which is: without the lower edge, parking a viewport deep in the
+   * spacer read as "at the bottom" and hid the only way back.
+   */
   const updateIsAtBottom = useCallback(() => {
     const scroller = scrollerElementRef.current;
     if (!scroller) return;
-    const distanceFromContentEnd = readContentEndScrollTop(scroller) - scroller.scrollTop;
-    setIsAtBottom(distanceFromContentEnd <= AT_CONTENT_END_THRESHOLD_PX);
-  }, [readContentEndScrollTop]);
+    const contentEnd = readContentEndScrollTop(scroller);
+    const atTail = isViewportAtTail({
+      scrollTop: scroller.scrollTop,
+      contentEndScrollTop: contentEnd,
+      // Nothing owns an offset outside follow, so the band collapses onto the
+      // content end.
+      followTargetScrollTop: getFollowTargetScrollTop() ?? contentEnd,
+      thresholdPx: AT_CONTENT_END_THRESHOLD_PX,
+    });
+    // Mirrored to a ref because a resize needs the answer from before it, and
+    // the state update does not land until the next render.
+    isAtTailRef.current = atTail;
+    setIsAtBottom(atTail);
+  }, [getFollowTargetScrollTop, readContentEndScrollTop]);
+
+  /*
+   * Snap out of the reserved blank once a gesture is over.
+   *
+   * `scrollend` is the accurate signal — it knows when momentum has actually
+   * died, which a quiet timer can only approximate — but it is recent enough
+   * that the WebKit-backed builds may not have it. Where it is missing, a quiet
+   * period after the last scroll event stands in.
+   */
+  useEffect(() => {
+    if (!scrollerElement) return;
+
+    if ('onscrollend' in window) {
+      const handleScrollEnd = () => handleScrollSettled();
+      scrollerElement.addEventListener('scrollend', handleScrollEnd, { passive: true });
+      return () => scrollerElement.removeEventListener('scrollend', handleScrollEnd);
+    }
+
+    let settleTimer: number | null = null;
+    const handleScrollTick = () => {
+      if (settleTimer !== null) window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(() => {
+        settleTimer = null;
+        handleScrollSettled();
+      }, SCROLL_SETTLE_FALLBACK_MS);
+    };
+    scrollerElement.addEventListener('scroll', handleScrollTick, { passive: true });
+    return () => {
+      if (settleTimer !== null) window.clearTimeout(settleTimer);
+      scrollerElement.removeEventListener('scroll', handleScrollTick);
+    };
+  }, [handleScrollSettled, scrollerElement]);
 
   useEffect(() => {
     if (!scrollerElement) return;
@@ -611,7 +690,40 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   useEffect(() => {
     if (!scrollerElement) return;
     const observer = new ResizeObserver(() => {
-      setViewportHeightPx(scrollerElement.clientHeight);
+      const nextViewportBox = {
+        width: scrollerElement.clientWidth,
+        height: scrollerElement.clientHeight,
+      };
+      /*
+       * This observer watches the content too. Content growth moves the follow
+       * target away from a resting viewport and can never strand it, so only a
+       * change to the scroller's own box opens the re-alignment window — a
+       * width change reflows the transcript, a height change moves the content
+       * end directly, and both keep settling for a few callbacks afterwards.
+       */
+      const previousViewportBox = observedViewportBoxRef.current;
+      const viewportBoxChanged = nextViewportBox.width !== previousViewportBox.width
+        || nextViewportBox.height !== previousViewportBox.height;
+      if (viewportBoxChanged) {
+        observedViewportBoxRef.current = nextViewportBox;
+        tailRealignCallbacksRef.current = TAIL_REALIGN_RESIZE_CALLBACKS;
+      }
+      setViewportHeightPx(nextViewportBox.height);
+
+      if (tailRealignCallbacksRef.current > 0) {
+        tailRealignCallbacksRef.current -= 1;
+        handleViewportResize({
+          // Non-zero only on the callback that carries the change itself; the
+          // rest of the window is there for the reflow settling afterwards.
+          viewportHeightDeltaPx: viewportBoxChanged
+            ? nextViewportBox.height - previousViewportBox.height
+            : 0,
+          // The band check from before this resize, so this must run ahead of
+          // `updateIsAtBottom` below.
+          wasAtTail: isAtTailRef.current,
+        });
+      }
+
       scheduleFollowToLatest();
       scheduleVisibleTurnInfoUpdate();
       updateIsAtBottom();
@@ -621,6 +733,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     observer.observe(scrollerElement);
     return () => observer.disconnect();
   }, [
+    handleViewportResize,
     scheduleFollowToLatest,
     scheduleVisibleTurnInfoUpdate,
     scrollerElement,
@@ -903,6 +1016,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     setScrollerElement(scroller);
     if (scroller) {
       setViewportHeightPx(scroller.clientHeight);
+      // Seed the box so the observer's first callback is not read as a resize.
+      observedViewportBoxRef.current = {
+        width: scroller.clientWidth,
+        height: scroller.clientHeight,
+      };
     }
   }, []);
 

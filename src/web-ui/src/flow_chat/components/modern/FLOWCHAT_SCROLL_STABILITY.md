@@ -64,6 +64,111 @@ tolerable only because more output is about to fill it. Do not reuse it to
 absorb anything else — applied to a foreign forward move it parks the content
 end mid-viewport permanently, since nothing pulls the target back down.
 
+## Snapping Back Out of the Reserved Blank
+
+The spacer is a full viewport the user can scroll into, and under slow streaming
+it can take a long time for output to push it away. So a gesture that comes to
+rest **below the follow target** returns to that target and hands the viewport
+to follow, whether or not follow owned it before.
+
+Three properties carry the whole design:
+
+**The target is the follow target, never the content end.** A short new Turn is
+pinned above the content end, so snapping to the content end would scroll *up*
+and shove the message the user just sent into the middle of the viewport. A
+held collapse gap is likewise a legitimate offset up to `tailHoldMaxGapPx` past
+the content end; judged against the content end it would read as an overshoot
+and fight the hold rule on every collapse. `memorylessFollowState` computes the
+target from live geometry with no remembered offset, because the offset the hold
+rule was protecting stopped being meaningful the moment the user took over.
+
+**It acts on rest, never during the gesture.** `scrollend` where available, a
+quiet period after the last scroll event where it is not. Correcting inside a
+`scroll` handler fights momentum and the virtualizer's own writes; correcting
+after the gesture ends fights nothing.
+
+**Re-entering follow here does not violate "no intent from geometry".** The
+region below the follow target is reserved blank — it carries no content, so a
+gesture ending there can only mean "take me to the end". Scrolling up to read
+history can never satisfy the condition. That asymmetry is the licence; do not
+extend it to any position that has content in it.
+
+The pin's *identity* therefore outlives a user takeover; only its *activity*
+stops. Three things retire a pin: the crossover to `hold-tail`, a newer Turn,
+and a session change. The crossover has to be one-way — a collapse can pull
+content back under one viewport, and re-pinning there would jump the viewport
+backwards. Since nothing re-pins a Turn whose identity was dropped, that is
+automatic.
+
+The snap completes on a second settle, and only when the viewport actually
+arrived: a gesture that overrode the animation mid-flight belongs to the user
+and keeps the viewport.
+
+## Resizing Anchors the Viewport Bottom
+
+A plain scroller preserves `scrollTop` across a resize, which anchors the **top**
+edge — the bottom is where content gets revealed or swallowed. For a transcript
+that is backwards, because the interesting end is the bottom.
+`handleViewportResize` anchors there instead. Follow output already behaves this
+way for a viewport it owns; this is the same rule for one it does not, so the
+same drag stops producing two different results depending on whether the user
+had scrolled.
+
+The two halves are not equally capable, and the difference is the useful part:
+
+- **A height change moves no content.** Preserving `scrollTop + clientHeight` is
+  exact and needs no judgement about what the user was doing, so it is applied
+  unconditionally. It also preserves the distance to the content end, which
+  makes "was at the end, stays at the end" fall out for free rather than being a
+  case. Growing the viewport is additionally a *restoration*: the browser used
+  to clamp a bottom-anchored viewport at `scrollHeight - clientHeight`, and the
+  resident spacer removed that clamp.
+- **A width change reflows the transcript.** Where the line that was on the
+  bottom edge went is a DOM question, and by the time the resize is observed the
+  reflow has already happened, so it cannot be answered after the fact.
+  Answering it would mean sampling an element anchor on the scroll path, which
+  is a `getBoundingClientRect` per scroll event. Instead only the one position
+  that can be recomputed from geometry is restored — the end of the transcript —
+  which needs `wasAtTail`, the band check from *before* the resize.
+  `VirtualMessageList` mirrors `isAtBottom` into a ref for that, and calls the
+  handler ahead of recomputing it.
+
+**One correction is not enough.** A width change reflows every item and a height
+change makes Virtuoso render a different number of them; either way it
+re-measures and re-estimates over the following passes, so the content end keeps
+moving after the first callback. The correction therefore repeats over
+`TAIL_REALIGN_RESIZE_CALLBACKS`, a window opened only by a change to the
+scroller's own box. Streaming content growth arrives through the same observer
+and must never inherit that window — it moves the content end away from a
+resting viewport and can never strand it, so reacting to it would be all risk
+and no benefit.
+
+Two properties are shared with the gesture path, and one is not:
+
+- **Instant, never animated.** A height change moves the viewport by exactly the
+  height that was added or removed, so nothing appears to move at all; the rest
+  is a correction the user is already watching happen under the cursor. An
+  animation would add a scroll nobody asked for.
+- **No transfer of ownership** — unlike the gesture path. A gesture ending in
+  the blank says "take me to the end"; a layout change says nothing. The
+  browser's clamp never changed who owned the viewport either.
+
+Native scroll anchoring cannot help here: `overflow-anchor: none` is set
+throughout the transcript, because it fights the virtualizer.
+
+## The Frame Loop Yields to Its Own Animated Scrolls
+
+`applyFollowTarget` assigns `scrollTop` outright, which cancels an in-flight
+smooth scroll on the very next frame. Both `'smooth'` requests in
+`useFlowChatFollowOutput` — the jump to latest and the post-streaming settle —
+were therefore jumps in practice. `runContentEndScroll` now hands the loop a
+frame budget to stay quiet for.
+
+This is a budget rather than a flag on purpose: a missing completion signal
+costs a few idle frames, where a stuck flag would stall follow entirely. It is
+also the only place where one FlowChat writer defers to another; it is not a
+coordinator, and the reasons there is no coordinator are unchanged (see below).
+
 ## Current Behavior
 
 - A newly submitted Turn scrolls to the viewport top and enters follow-output.
@@ -83,7 +188,8 @@ end mid-viewport permanently, since nothing pulls the target back down.
   **not** force the content end. A collapse resizes content too, and the hold
   rule is what keeps that from moving the viewport.
 - Ordinary `scroll` events do not transfer viewport ownership; only explicit
-  wheel, touch, or keyboard navigation exits follow-output.
+  wheel, touch, or keyboard navigation exits follow-output. A gesture that comes
+  to rest inside the reserved blank hands it back.
 - The pinned Turn's offset is re-resolved from live layout every frame. Virtuoso
   re-estimates unrendered item heights, so a cached absolute offset would drift.
 - When streaming stops, `hold-tail` settles any remaining blank with one smooth
@@ -91,8 +197,11 @@ end mid-viewport permanently, since nothing pulls the target back down.
 - Tool-card expansion and collapse use normal layout reflow and dispatch only
   `tool-card-toggle`. There is still no pre-collapse intent event and no
   per-card compensation.
-- "At bottom" is measured against the end of real content, not the end of the
-  spacer. Virtuoso's own `atBottomStateChange` is therefore unused.
+- "At bottom" is a band, not a point: from the end of real content down to
+  whatever the follow rule owns. A pinned Turn and a held collapse gap are both
+  inside it, so neither raises the jump-to-latest affordance; the reserved blank
+  is outside it, so parking there does. Virtuoso's own `atBottomStateChange`
+  remains unused.
 
 ## Virtuoso Footer Coupling
 
@@ -114,12 +223,22 @@ too high or too low. Re-check the offset math before bumping the dependency.
 
 ## Known Gaps
 
-- Users can still scroll down into the reserved blank. Clamping or snapping that
-  gesture is deliberately not implemented yet; it fights momentum scrolling and
-  is pure polish.
+- Dragging the scrollbar does not exit follow-output. It produces only `scroll`
+  events, which are deliberately not treated as intent, so a drag during
+  streaming is a tug of war with the frame loop.
 - A collapse larger than `tailHoldMaxGapPx` still moves the viewport, by the
   excess only.
+- An animated scroll aims at the target it was issued for. Jumping to latest
+  while output is arriving therefore ends with one catch-up step covering
+  whatever content grew during the animation.
+- A width change anchors the viewport bottom only for a viewport that was at the
+  end of the transcript. Everywhere else the reflow moves content out from under
+  the bottom edge and nothing puts it back, because the anchor would have to be
+  captured before the reflow. Closing this means sampling an element anchor on
+  the scroll path.
 - On a very short transcript the scrollbar exposes a viewport of empty range.
+  The snap back makes this more visible, not less: the range is draggable and
+  bounces back.
 - The opening reveal has a hard frame cap. A session that pages for longer than
   the cap is revealed mid-settle; raising the cap trades that against a longer
   blank on open.
@@ -232,6 +351,19 @@ confirm:
 4. Turn Rail and Usage Report navigation can now top-align the final Turns.
 5. Session switching and history paging do not restore stale footer height.
 6. Session open still lands at the end of the transcript, not inside the spacer.
+7. Scrolling down into the reserved blank and letting go returns to the end of
+   real content, and streaming resumes following from there.
+8. Doing the same right after submitting a short Turn returns that Turn to the
+   viewport top, not to the content end.
+9. Pressing End scrolls to the bottom of the scroll range and then comes back —
+   that key is the cheapest way to land deep in the spacer.
+10. Jump to latest is now animated rather than an instant jump.
+11. With the viewport resting at the end but *not* following — scroll away and
+    back, and check the jump-to-latest affordance is hidden — resizing the
+    window keeps content against the bottom in every direction: taller reveals
+    more history above, shorter does not cut the last lines off, and narrower
+    does not push them off screen as the text rewraps. Repeat while reading
+    history: nothing should move.
 
 ## Related Files
 

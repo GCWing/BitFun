@@ -15,6 +15,16 @@
 /** Blank tail tolerated below the live output, as a share of the viewport. */
 export const FLOWCHAT_TAIL_HOLD_GAP_RATIO = 0.6;
 
+/**
+ * Distance from an owned offset still treated as being on it.
+ *
+ * One constant deliberately serves both "the viewport is at the end" and "the
+ * viewport has come to rest too far below the end". They are the two sides of
+ * the same band; separate tolerances would leave a seam where the jump-to-latest
+ * affordance is shown but nothing snaps back, or the reverse.
+ */
+export const FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX = 50;
+
 export type TailFollowMode = 'pin-turn-top' | 'hold-tail';
 
 export interface TailFollowState {
@@ -115,4 +125,71 @@ export function nextTailFollowState(
       Math.min(previous.target, input.desiredScrollTop + input.maxGapPx),
     ),
   };
+}
+
+/**
+ * The state the follow rule would hold right now, judged from live geometry
+ * alone.
+ *
+ * `hold-tail` normally refuses to move backwards, and that refusal is what
+ * keeps a collapse from dragging earlier content down. The memory it refuses
+ * with belongs to a viewport the follow rule has been holding continuously;
+ * once the user has taken over and come to rest somewhere else there is nothing
+ * left to preserve, and carrying the stale offset forward would land them on a
+ * position neither side chose.
+ *
+ * The returned mode still matters: a pinned Turn whose answer has outgrown the
+ * viewport reports `hold-tail`, which is how a caller learns the pin has
+ * crossed over even though no follow loop was running to notice.
+ */
+export function memorylessFollowState(
+  mode: TailFollowMode,
+  input: TailFollowInput,
+): TailFollowState {
+  return nextTailFollowState({ mode, target: input.desiredScrollTop }, input);
+}
+
+export interface TailSnapBackInput {
+  scrollTop: number;
+  /** Offset the follow rule owns, from `memorylessFollowTarget`. */
+  followTargetScrollTop: number;
+  thresholdPx: number;
+}
+
+/**
+ * Offset to snap back to once a gesture has come to rest below the follow
+ * target, or `null` when it has not.
+ *
+ * Only the region *below* the target qualifies, and that region is the reserved
+ * tail spacer. It carries no content, so a gesture ending there can only mean
+ * "take me to the end" — the one direction in which reading intent from
+ * geometry is unambiguous. Scrolling up to read history can never satisfy this,
+ * and neither can a pinned Turn or a held collapse gap, because both are the
+ * target rather than a departure from it.
+ */
+export function tailSnapBackScrollTop(input: TailSnapBackInput): number | null {
+  return input.scrollTop - input.followTargetScrollTop > input.thresholdPx
+    ? input.followTargetScrollTop
+    : null;
+}
+
+export interface ViewportAtTailInput {
+  scrollTop: number;
+  contentEndScrollTop: number;
+  /** Upper bound of the band; the content end when nothing owns the viewport. */
+  followTargetScrollTop: number;
+  thresholdPx: number;
+}
+
+/**
+ * Whether the viewport counts as being at the end of the transcript.
+ *
+ * The band runs from the content end down to whatever the follow rule owns, so
+ * a pinned Turn and a held collapse gap both sit inside it — neither is a
+ * reason to offer a jump to the latest output. Past the lower bound is reserved
+ * blank, which is.
+ */
+export function isViewportAtTail(input: ViewportAtTailInput): boolean {
+  return input.scrollTop >= input.contentEndScrollTop - input.thresholdPx
+    && input.scrollTop <= input.followTargetScrollTop + input.thresholdPx;
 }

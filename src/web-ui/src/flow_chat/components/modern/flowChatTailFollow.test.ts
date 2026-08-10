@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   contentEndScrollTop,
   endAlignedTailOffsetPx,
+  FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX,
+  isViewportAtTail,
+  memorylessFollowState,
   nextTailFollowState,
   tailHoldMaxGapPx,
+  tailSnapBackScrollTop,
   tailSpacerPxForViewport,
   type TailFollowState,
 } from './flowChatTailFollow';
@@ -11,6 +15,7 @@ import {
 const VIEWPORT = 800;
 const SPACER = tailSpacerPxForViewport(VIEWPORT);
 const MAX_GAP = tailHoldMaxGapPx(VIEWPORT);
+const THRESHOLD = FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX;
 
 function holding(target: number): TailFollowState {
   return { mode: 'hold-tail', target };
@@ -162,5 +167,116 @@ describe('nextTailFollowState pin-turn-top', () => {
       maxGapPx: MAX_GAP,
     });
     expect(next).toEqual({ mode: 'pin-turn-top', target: 4300 });
+  });
+});
+
+describe('memorylessFollowState', () => {
+  it('drops a held collapse gap the user has already scrolled away from', () => {
+    // The hold rule's refusal to move backwards protects a viewport it has been
+    // holding continuously. After a takeover there is nothing left to protect,
+    // and reinstating the old offset would land on a position nobody chose.
+    expect(memorylessFollowState('hold-tail', {
+      desiredScrollTop: 3700,
+      pinScrollTop: null,
+      maxGapPx: MAX_GAP,
+    }).target).toBe(3700);
+  });
+
+  it('still prefers a pinned Turn over the content end', () => {
+    expect(memorylessFollowState('pin-turn-top', {
+      desiredScrollTop: 4300,
+      pinScrollTop: 5000,
+      maxGapPx: MAX_GAP,
+    })).toEqual({ mode: 'pin-turn-top', target: 5000 });
+  });
+
+  it('reports the crossover so a suspended pin can be retired', () => {
+    // No frame loop runs while the user owns the viewport, so this is the only
+    // place a pin whose answer outgrew the viewport can be noticed.
+    expect(memorylessFollowState('pin-turn-top', {
+      desiredScrollTop: 5200,
+      pinScrollTop: 5000,
+      maxGapPx: MAX_GAP,
+    })).toEqual({ mode: 'hold-tail', target: 5200 });
+  });
+});
+
+describe('tailSnapBackScrollTop', () => {
+  it('returns the follow target when the viewport rests below it', () => {
+    expect(tailSnapBackScrollTop({
+      scrollTop: 4000 + SPACER,
+      followTargetScrollTop: 4000,
+      thresholdPx: THRESHOLD,
+    })).toBe(4000);
+  });
+
+  it('ignores an overshoot inside the tolerance', () => {
+    expect(tailSnapBackScrollTop({
+      scrollTop: 4000 + THRESHOLD,
+      followTargetScrollTop: 4000,
+      thresholdPx: THRESHOLD,
+    })).toBeNull();
+  });
+
+  it('never fires while the user reads history above the target', () => {
+    // Reading upwards is the case the whole rule must stay away from: the
+    // region below the target carries no content, the region above is the
+    // transcript.
+    expect(tailSnapBackScrollTop({
+      scrollTop: 100,
+      followTargetScrollTop: 4000,
+      thresholdPx: THRESHOLD,
+    })).toBeNull();
+  });
+
+  it('leaves a pinned Turn alone even though it sits past the content end', () => {
+    // The pin *is* the target here, so the blank below it is not an overshoot.
+    expect(tailSnapBackScrollTop({
+      scrollTop: 5000,
+      followTargetScrollTop: 5000,
+      thresholdPx: THRESHOLD,
+    })).toBeNull();
+  });
+});
+
+describe('isViewportAtTail', () => {
+  const contentEnd = 4000;
+
+  it('counts the content end itself', () => {
+    expect(isViewportAtTail({
+      scrollTop: contentEnd,
+      contentEndScrollTop: contentEnd,
+      followTargetScrollTop: contentEnd,
+      thresholdPx: THRESHOLD,
+    })).toBe(true);
+  });
+
+  it('counts a pinned Turn, which is at the tail by its own rule', () => {
+    expect(isViewportAtTail({
+      scrollTop: 5000,
+      contentEndScrollTop: contentEnd,
+      followTargetScrollTop: 5000,
+      thresholdPx: THRESHOLD,
+    })).toBe(true);
+  });
+
+  it('excludes a viewport parked in the reserved blank', () => {
+    // The one-sided test this replaced reported "at the bottom" here, which hid
+    // the jump-to-latest affordance on a screen with nothing on it.
+    expect(isViewportAtTail({
+      scrollTop: contentEnd + SPACER,
+      contentEndScrollTop: contentEnd,
+      followTargetScrollTop: contentEnd,
+      thresholdPx: THRESHOLD,
+    })).toBe(false);
+  });
+
+  it('excludes a viewport scrolled up into the transcript', () => {
+    expect(isViewportAtTail({
+      scrollTop: 100,
+      contentEndScrollTop: contentEnd,
+      followTargetScrollTop: contentEnd,
+      thresholdPx: THRESHOLD,
+    })).toBe(false);
   });
 });

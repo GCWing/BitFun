@@ -3,6 +3,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { tailSpacerPxForViewport } from './flowChatTailFollow';
 import { useFlowChatFollowOutput } from './useFlowChatFollowOutput';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -55,7 +56,8 @@ function Harness({
     isStreaming,
     isViewportActive: true,
     scrollerRef,
-    getTailSpacerPx: () => TAIL_SPACER,
+    // The spacer tracks the viewport, exactly as the component's state does.
+    getTailSpacerPx: () => tailSpacerPxForViewport(scroller.clientHeight),
     scrollToContentEnd,
     scrollTurnToTop,
     resolveTurnTopScrollTop,
@@ -71,6 +73,7 @@ describe('useFlowChatFollowOutput', () => {
   let scroller: HTMLDivElement;
   let controller: Controller | null;
   let frames: FrameRequestCallback[];
+  let scrollTo: ReturnType<typeof vi.fn>;
 
   function runNextFrame() {
     const frame = frames.shift();
@@ -82,6 +85,10 @@ describe('useFlowChatFollowOutput', () => {
     container = document.createElement('div');
     scroller = document.createElement('div');
     document.body.append(container, scroller);
+    // jsdom has no layout engine, so the animated scroll is a no-op here and
+    // the tests place the viewport where the animation would have left it.
+    scrollTo = vi.fn();
+    scroller.scrollTo = scrollTo as unknown as HTMLElement['scrollTo'];
     root = createRoot(container);
     controller = null;
     frames = [];
@@ -450,5 +457,330 @@ describe('useFlowChatFollowOutput', () => {
     });
     act(() => controller?.enterFollowOutput('jump-to-latest'));
     expect(scrollToContentEnd).toHaveBeenCalledWith('smooth');
+  });
+
+  it('yields the frame loop to its own animated scroll instead of overwriting it', () => {
+    // The loop assigns scrollTop outright, which cancels an in-flight smooth
+    // scroll on the very next frame: `jump-to-latest` asked for an animation
+    // and got a jump.
+    setScrollerMetrics(scroller, {
+      scrollHeight: 1500 + TAIL_SPACER,
+      clientHeight: VIEWPORT,
+      scrollTop: 0,
+    });
+    act(() => {
+      root.render(
+        <Harness
+          latestTurnId="turn-1"
+          scroller={scroller}
+          onController={next => { controller = next; }}
+        />,
+      );
+    });
+    runNextFrame();
+    expect(scroller.scrollTop).toBe(1000);
+
+    scroller.scrollTop = 0;
+    act(() => controller?.enterFollowOutput('jump-to-latest'));
+    runNextFrame();
+
+    expect(scroller.scrollTop).toBe(0);
+  });
+
+  describe('snapping back out of the reserved blank', () => {
+    /** Places the viewport where a gesture into the tail spacer would leave it. */
+    function restInBlank(scrollTop: number) {
+      scroller.scrollTop = scrollTop;
+      act(() => controller?.handleScrollSettled());
+    }
+
+    it('returns an idle transcript to the end of real content', () => {
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1500 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 0,
+      });
+      act(() => {
+        root.render(
+          <Harness
+            latestTurnId="turn-1"
+            isStreaming={false}
+            scroller={scroller}
+            onController={next => { controller = next; }}
+          />,
+        );
+      });
+      act(() => controller?.handleUserScrollIntent());
+
+      restInBlank(1000 + TAIL_SPACER);
+
+      expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: 'smooth' });
+    });
+
+    it('returns a short new Turn to the viewport top, not to the content end', () => {
+      // The pin outlives the user takeover on purpose. Snapping to the content
+      // end here would scroll *up* and shove the message the user just sent
+      // into the middle of the viewport.
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1200 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 900,
+      });
+      const props = {
+        scroller,
+        scrollTurnToTop: () => true,
+        resolveTurnTopScrollTop: () => 900,
+        onController: (next: Controller) => { controller = next; },
+      };
+      act(() => {
+        root.render(<Harness {...props} latestTurnId="turn-1" />);
+      });
+      act(() => {
+        root.render(<Harness {...props} latestTurnId="turn-2" />);
+      });
+      act(() => controller?.handleUserScrollIntent());
+
+      restInBlank(1400);
+
+      expect(scrollTo).toHaveBeenCalledWith({ top: 900, behavior: 'smooth' });
+    });
+
+    it('leaves a viewport resting above the target alone', () => {
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1500 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 0,
+      });
+      act(() => {
+        root.render(
+          <Harness
+            latestTurnId="turn-1"
+            isStreaming={false}
+            scroller={scroller}
+            onController={next => { controller = next; }}
+          />,
+        );
+      });
+      act(() => controller?.handleUserScrollIntent());
+      scrollTo.mockClear();
+
+      restInBlank(200);
+
+      expect(scrollTo).not.toHaveBeenCalled();
+      expect(controller?.isFollowingOutput).toBe(false);
+    });
+
+    it('hands the viewport back to follow once the snap arrives', () => {
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1500 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 0,
+      });
+      act(() => {
+        root.render(
+          <Harness
+            latestTurnId="turn-1"
+            isStreaming={false}
+            scroller={scroller}
+            onController={next => { controller = next; }}
+          />,
+        );
+      });
+      act(() => controller?.handleUserScrollIntent());
+      restInBlank(1000 + TAIL_SPACER);
+
+      restInBlank(1000);
+
+      expect(controller?.isFollowingOutput).toBe(true);
+    });
+
+    it('does not take the viewport back when a gesture overrode the snap', () => {
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1500 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 0,
+      });
+      act(() => {
+        root.render(
+          <Harness
+            latestTurnId="turn-1"
+            isStreaming={false}
+            scroller={scroller}
+            onController={next => { controller = next; }}
+          />,
+        );
+      });
+      act(() => controller?.handleUserScrollIntent());
+      restInBlank(1000 + TAIL_SPACER);
+
+      restInBlank(200);
+
+      expect(controller?.isFollowingOutput).toBe(false);
+    });
+  });
+
+  describe('anchoring the viewport bottom across a resize', () => {
+    /** Mounts at the content end, then hands the viewport to the user. */
+    function restAtContentEnd() {
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1500 + VIEWPORT,
+        clientHeight: VIEWPORT,
+        scrollTop: 0,
+      });
+      act(() => {
+        root.render(
+          <Harness
+            latestTurnId="turn-1"
+            isStreaming={false}
+            scroller={scroller}
+            onController={next => { controller = next; }}
+          />,
+        );
+      });
+      runNextFrame();
+      expect(scroller.scrollTop).toBe(1000);
+      act(() => controller?.handleUserScrollIntent());
+    }
+
+    /** Content and footer stay at 1500; only the viewport, and so the spacer, change. */
+    function resizeViewportTo(clientHeight: number, scrollTop: number) {
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1500 + clientHeight,
+        clientHeight,
+        scrollTop,
+      });
+    }
+
+    it('keeps content against the viewport bottom when the viewport grows', () => {
+      // A viewport 200px taller lowers the content end by 200px. Without the
+      // clamp the spacer removed, the resting viewport is left that far into
+      // the blank.
+      restAtContentEnd();
+      resizeViewportTo(VIEWPORT + 200, 1000);
+
+      act(() => controller?.handleViewportResize({
+        viewportHeightDeltaPx: 200,
+        wasAtTail: true,
+      }));
+
+      expect(scroller.scrollTop).toBe(800);
+    });
+
+    it('keeps content against the viewport bottom when the viewport shrinks', () => {
+      // The opposite direction: the content end moves down past the viewport,
+      // cutting off the bottom of what was on screen.
+      restAtContentEnd();
+      resizeViewportTo(VIEWPORT - 200, 1000);
+
+      act(() => controller?.handleViewportResize({
+        viewportHeightDeltaPx: -200,
+        wasAtTail: true,
+      }));
+
+      expect(scroller.scrollTop).toBe(1200);
+    });
+
+    it('anchors the bottom for a viewport reading history too', () => {
+      // The rule is not about the tail. A plain scroller preserves scrollTop
+      // and reveals or swallows content at the bottom edge; for a transcript
+      // the bottom edge is the one worth holding still.
+      restAtContentEnd();
+      resizeViewportTo(VIEWPORT + 200, 600);
+
+      act(() => controller?.handleViewportResize({
+        viewportHeightDeltaPx: 200,
+        wasAtTail: false,
+      }));
+
+      expect(scroller.scrollTop).toBe(400);
+    });
+
+    it('does not drag a viewport reading history to the tail', () => {
+      restAtContentEnd();
+      resizeViewportTo(VIEWPORT - 200, 600);
+
+      act(() => controller?.handleViewportResize({
+        viewportHeightDeltaPx: -200,
+        wasAtTail: false,
+      }));
+
+      // Bottom-anchored, and nowhere near the content end at 1200.
+      expect(scroller.scrollTop).toBe(800);
+    });
+
+    it('corrects instantly, since the content does not appear to move', () => {
+      restAtContentEnd();
+      scrollTo.mockClear();
+      resizeViewportTo(VIEWPORT + 200, 1000);
+
+      act(() => controller?.handleViewportResize({
+        viewportHeightDeltaPx: 200,
+        wasAtTail: true,
+      }));
+
+      expect(scrollTo).not.toHaveBeenCalled();
+    });
+
+    it('does not hand the viewport back to follow', () => {
+      // A gesture ending in the blank means "take me to the end"; a layout
+      // change means nothing at all.
+      restAtContentEnd();
+      resizeViewportTo(VIEWPORT + 200, 1000);
+
+      act(() => controller?.handleViewportResize({
+        viewportHeightDeltaPx: 200,
+        wasAtTail: true,
+      }));
+
+      expect(controller?.isFollowingOutput).toBe(false);
+    });
+
+    it('follows the content end while a reflow keeps moving it', () => {
+      // A width change reflows every item, and arithmetic cannot track where
+      // the bottom line went. The end of the transcript is the one position
+      // that can be recomputed, so a viewport resting on it is put back on it —
+      // repeatedly, because the virtualizer re-estimates over several passes.
+      restAtContentEnd();
+
+      // Narrower: the same text wraps into 300px more content.
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1800 + VIEWPORT,
+        clientHeight: VIEWPORT,
+        scrollTop: 1000,
+      });
+      act(() => controller?.handleViewportResize({
+        viewportHeightDeltaPx: 0,
+        wasAtTail: true,
+      }));
+      expect(scroller.scrollTop).toBe(1300);
+
+      // Re-measurement adds another 200px above the viewport.
+      setScrollerMetrics(scroller, {
+        scrollHeight: 2000 + VIEWPORT,
+        clientHeight: VIEWPORT,
+        scrollTop: 1300,
+      });
+      act(() => controller?.handleViewportResize({
+        viewportHeightDeltaPx: 0,
+        wasAtTail: true,
+      }));
+      expect(scroller.scrollTop).toBe(1500);
+    });
+
+    it('leaves a reflow alone for a viewport that was not at the end', () => {
+      restAtContentEnd();
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1800 + VIEWPORT,
+        clientHeight: VIEWPORT,
+        scrollTop: 200,
+      });
+
+      act(() => controller?.handleViewportResize({
+        viewportHeightDeltaPx: 0,
+        wasAtTail: false,
+      }));
+
+      expect(scroller.scrollTop).toBe(200);
+    });
   });
 });
