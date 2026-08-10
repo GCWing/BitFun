@@ -809,8 +809,6 @@ Usage notes:
 
         let tool_name = self.name().to_string();
 
-        const DEFAULT_TIMEOUT_MS: u64 = 120_000;
-        const MAX_TIMEOUT_MS: u64 = 600_000;
         // 阈值参数配置化：ai.thresholds.tool_timeout.bash_default_ms / bash_max_ms
         let (bash_default_ms, bash_max_ms) = Self::configured_bash_timeout_bounds().await;
         let timeout_ms = Some(

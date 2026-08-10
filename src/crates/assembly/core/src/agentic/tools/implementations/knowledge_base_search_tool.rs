@@ -53,10 +53,6 @@ const MAX_RESULTS_CAP: usize = 200;
 /// an empty scan) or an unbounded result set. `validate_input` rejects
 /// out-of-range values as a first line of defense; this clamp is the second,
 /// in the execution path itself.
-fn resolve_max_results(max_results: Option<usize>) -> usize {
-    resolve_max_results_with_cap(max_results, DEFAULT_MAX_RESULTS, MAX_RESULTS_CAP)
-}
-
 /// Resolve the effective result cap with configurable default/cap
 /// (阈值参数配置化：`ai.thresholds.knowledge_search.*`).
 fn resolve_max_results_with_cap(
@@ -622,16 +618,41 @@ mod tests {
     #[test]
     fn resolve_max_results_clamps_into_1_200() {
         // 未提供 → 默认 50
-        assert_eq!(resolve_max_results(None), DEFAULT_MAX_RESULTS);
+        assert_eq!(
+            resolve_max_results_with_cap(None, DEFAULT_MAX_RESULTS, MAX_RESULTS_CAP),
+            DEFAULT_MAX_RESULTS
+        );
         // 合法范围原样
-        assert_eq!(resolve_max_results(Some(1)), 1);
-        assert_eq!(resolve_max_results(Some(200)), 200);
-        assert_eq!(resolve_max_results(Some(42)), 42);
+        assert_eq!(
+            resolve_max_results_with_cap(Some(1), DEFAULT_MAX_RESULTS, MAX_RESULTS_CAP),
+            1
+        );
+        assert_eq!(
+            resolve_max_results_with_cap(Some(200), DEFAULT_MAX_RESULTS, MAX_RESULTS_CAP),
+            200
+        );
+        assert_eq!(
+            resolve_max_results_with_cap(Some(42), DEFAULT_MAX_RESULTS, MAX_RESULTS_CAP),
+            42
+        );
         // 下限 clamp：0 / 越界负值（绕过 validate 的非 schema 路径）→ 1
-        assert_eq!(resolve_max_results(Some(0)), 1);
+        assert_eq!(
+            resolve_max_results_with_cap(Some(0), DEFAULT_MAX_RESULTS, MAX_RESULTS_CAP),
+            1
+        );
         // 上限 clamp：>200 → 200（运行时护栏，防无界结果集）
-        assert_eq!(resolve_max_results(Some(MAX_RESULTS_CAP + 1)), MAX_RESULTS_CAP);
-        assert_eq!(resolve_max_results(Some(10_000)), MAX_RESULTS_CAP);
+        assert_eq!(
+            resolve_max_results_with_cap(
+                Some(MAX_RESULTS_CAP + 1),
+                DEFAULT_MAX_RESULTS,
+                MAX_RESULTS_CAP
+            ),
+            MAX_RESULTS_CAP
+        );
+        assert_eq!(
+            resolve_max_results_with_cap(Some(10_000), DEFAULT_MAX_RESULTS, MAX_RESULTS_CAP),
+            MAX_RESULTS_CAP
+        );
     }
 
     #[tokio::test]

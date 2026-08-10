@@ -95,7 +95,6 @@ impl ModelRoundLifecycle {
 }
 
 impl RoundExecutor {
-    const MAX_STREAM_ATTEMPTS: usize = 10;
     const RETRY_BASE_DELAY_MS: u64 = 500;
     const RATE_LIMIT_RETRY_BASE_DELAY_MS: u64 = 2_000;
     const MAX_EXPONENTIAL_DELAY_MS: u64 = 30_000;

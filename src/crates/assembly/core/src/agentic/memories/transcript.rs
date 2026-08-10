@@ -73,19 +73,8 @@ impl Default for MemoryTranscriptTokenLimits {
     }
 }
 
-pub(crate) fn render_memory_phase1_transcript(
-    turns: &[DialogTurnData],
-    token_limit: usize,
-    external_context_policy: MemoryExternalContextPolicy,
-) -> BitFunResult<String> {
-    render_memory_phase1_transcript_with_limits(
-        turns,
-        token_limit,
-        external_context_policy,
-        &MemoryTranscriptTokenLimits::default(),
-    )
-}
-
+/// Render the stage-one memory transcript with explicit per-segment token
+/// limits (阈值参数配置化：`ai.thresholds.memories.transcript_limits.*`).
 pub(crate) fn render_memory_phase1_transcript_with_limits(
     turns: &[DialogTurnData],
     token_limit: usize,
@@ -494,9 +483,13 @@ mod tests {
         });
         turn.model_rounds.push(round);
 
-        let transcript =
-            render_memory_phase1_transcript(&[turn], 20_000, MemoryExternalContextPolicy::Allow)
-                .unwrap();
+        let transcript = render_memory_phase1_transcript_with_limits(
+            &[turn],
+            20_000,
+            MemoryExternalContextPolicy::Allow,
+            &MemoryTranscriptTokenLimits::default(),
+        )
+        .unwrap();
 
         assert!(transcript.contains("\"role\":\"assistant\""));
         assert!(transcript.contains("\"tool_calls\":["));
@@ -567,9 +560,13 @@ mod tests {
         });
         turn.model_rounds.push(round);
 
-        let transcript =
-            render_memory_phase1_transcript(&[turn], 20_000, MemoryExternalContextPolicy::Allow)
-                .unwrap();
+        let transcript = render_memory_phase1_transcript_with_limits(
+            &[turn],
+            20_000,
+            MemoryExternalContextPolicy::Allow,
+            &MemoryTranscriptTokenLimits::default(),
+        )
+        .unwrap();
 
         assert!(transcript.contains("\"function\":{\"name\":\"GetToolSpec\""));
         assert!(transcript.contains("\\\"tool_name\\\":\\\"Git\\\""));
@@ -627,10 +624,11 @@ mod tests {
         });
         turn.model_rounds.push(round);
 
-        let transcript = render_memory_phase1_transcript(
+        let transcript = render_memory_phase1_transcript_with_limits(
             &[turn],
             20_000,
             MemoryExternalContextPolicy::ClearToolResults,
+            &MemoryTranscriptTokenLimits::default(),
         )
         .unwrap();
 
@@ -687,9 +685,13 @@ mod tests {
         });
         turn.model_rounds.push(round);
 
-        let transcript =
-            render_memory_phase1_transcript(&[turn], 120_000, MemoryExternalContextPolicy::Allow)
-                .unwrap();
+        let transcript = render_memory_phase1_transcript_with_limits(
+            &[turn],
+            120_000,
+            MemoryExternalContextPolicy::Allow,
+            &MemoryTranscriptTokenLimits::default(),
+        )
+        .unwrap();
 
         assert!(transcript.contains("tokens truncated"));
         assert!(transcript.contains("\\\"truncated\\\":true"));
@@ -706,9 +708,13 @@ mod tests {
             base_turn(&format!("{}-tail", "z".repeat(10_000))),
         ];
 
-        let transcript =
-            render_memory_phase1_transcript(&turns, 256, MemoryExternalContextPolicy::Allow)
-                .unwrap();
+        let transcript = render_memory_phase1_transcript_with_limits(
+            &turns,
+            256,
+            MemoryExternalContextPolicy::Allow,
+            &MemoryTranscriptTokenLimits::default(),
+        )
+        .unwrap();
 
         assert!(transcript.contains("head-"));
         assert!(transcript.contains("-tail"));
@@ -752,9 +758,13 @@ mod tests {
         });
         turn.model_rounds.push(round);
 
-        let transcript =
-            render_memory_phase1_transcript(&[turn], 20_000, MemoryExternalContextPolicy::Allow)
-                .unwrap();
+        let transcript = render_memory_phase1_transcript_with_limits(
+            &[turn],
+            20_000,
+            MemoryExternalContextPolicy::Allow,
+            &MemoryTranscriptTokenLimits::default(),
+        )
+        .unwrap();
 
         assert!(transcript.contains("actual request"));
         assert!(!transcript.contains("AGENTS.md"));
@@ -768,9 +778,13 @@ mod tests {
             "<system_reminder>\n# Skill Listing\n<available_skills></available_skills>\n</system_reminder>",
         );
 
-        let transcript =
-            render_memory_phase1_transcript(&[turn], 20_000, MemoryExternalContextPolicy::Allow)
-                .unwrap();
+        let transcript = render_memory_phase1_transcript_with_limits(
+            &[turn],
+            20_000,
+            MemoryExternalContextPolicy::Allow,
+            &MemoryTranscriptTokenLimits::default(),
+        )
+        .unwrap();
 
         assert!(transcript.is_empty());
     }

@@ -1066,10 +1066,6 @@ impl Drop for SubagentConcurrencyPermitGuard {
     }
 }
 
-fn normalize_subagent_max_concurrency(raw: usize) -> usize {
-    normalize_subagent_max_concurrency_with_cap(raw, MAX_SUBAGENT_MAX_CONCURRENCY)
-}
-
 /// Clamp a subagent concurrency value into `1..=hard_cap` (阈值参数配置化：
 /// `ai.thresholds.subagent.max_hard_cap` replaces the legacy hard-coded
 /// `MAX_SUBAGENT_MAX_CONCURRENCY`).
@@ -1744,15 +1740,6 @@ impl ConversationCoordinator {
             Some(value) => serde_json::json!({ "raw_metadata": value }),
             None => serde_json::json!({}),
         }
-    }
-
-    fn session_reference_locators_from_metadata(
-        metadata: Option<&serde_json::Value>,
-    ) -> BitFunResult<Vec<SessionReferenceLocator>> {
-        Self::session_reference_locators_from_metadata_with_cap(
-            metadata,
-            MAX_SESSION_REFERENCES_PER_TURN,
-        )
     }
 
     fn session_reference_locators_from_metadata_with_cap(
@@ -14710,8 +14697,7 @@ mod tests {
         build_subagent_session_relationship, lineage_active_turn_after_transcript,
         lineage_post_admission_cancellation_error,
         lineage_session_is_settling_without_active_state, logical_subagent_type_or_runtime,
-        merge_prepended_messages_for_turn, normalize_subagent_max_concurrency,
-        normalize_subagent_max_concurrency_with_cap,
+        merge_prepended_messages_for_turn, normalize_subagent_max_concurrency_with_cap,
         permission_mode_from_metadata, register_session_tree_edge_idempotent,
         resolve_agent_session_create_created_by, resolve_agent_submission_turn_id,
         resolve_subagent_model_selection, resolve_submission_permission_mode,
@@ -19130,9 +19116,9 @@ mod tests {
 
     #[test]
     fn clamps_subagent_max_concurrency_into_safe_range() {
-        assert_eq!(normalize_subagent_max_concurrency(0), 1);
-        assert_eq!(normalize_subagent_max_concurrency(5), 5);
-        assert_eq!(normalize_subagent_max_concurrency(usize::MAX), 64);
+        assert_eq!(normalize_subagent_max_concurrency_with_cap(0, 64), 1);
+        assert_eq!(normalize_subagent_max_concurrency_with_cap(5, 64), 5);
+        assert_eq!(normalize_subagent_max_concurrency_with_cap(usize::MAX, 64), 64);
         // 阈值参数配置化：可调硬上限参与钳制。
         assert_eq!(normalize_subagent_max_concurrency_with_cap(0, 16), 1);
         assert_eq!(normalize_subagent_max_concurrency_with_cap(32, 16), 16);

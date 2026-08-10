@@ -279,14 +279,6 @@ fn serialize_tool_result_content(result: &ToolResult) -> BitFunResult<(String, b
         })
 }
 
-fn effective_per_tool_limit(tool_name: &str, policy: ToolResultStoragePolicy) -> usize {
-    match tool_name {
-        READ_TOOL_NAME => READ_MAX_TOOL_RESULT_CHARS,
-        BASH_TOOL_NAME => SHELL_MAX_TOOL_RESULT_CHARS,
-        _ => policy.per_tool_limit_chars,
-    }
-}
-
 /// Resolve the effective per-tool limit, honoring the configured caps for the
 /// Read / Bash tools (阈值参数配置化：`ai.thresholds.tool_output_cap.*`).
 fn effective_per_tool_limit_resolved(

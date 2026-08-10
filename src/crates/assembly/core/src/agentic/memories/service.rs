@@ -637,11 +637,7 @@ fn current_unix_secs() -> i64 {
         .as_secs() as i64
 }
 
-fn stage_one_rollout_token_limit(config: &bitfun_ai_adapters::AIConfig) -> usize {
-    stage_one_rollout_token_limit_with_fallback(config, DEFAULT_ROLLOUT_TOKEN_LIMIT)
-}
-
-/// Same as [`stage_one_rollout_token_limit`] but with an explicit fallback
+/// Resolve the stage-one rollout token limit with an explicit fallback
 /// (阈值参数配置化：`ai.thresholds.memories.rollout_token_limit`).
 fn stage_one_rollout_token_limit_with_fallback(
     config: &bitfun_ai_adapters::AIConfig,
@@ -1367,7 +1363,7 @@ mod tests {
 
         assert_eq!(stage_one_output_max_tokens(&config), 32_000);
         assert_eq!(
-            stage_one_rollout_token_limit(&config),
+            stage_one_rollout_token_limit_with_fallback(&config, DEFAULT_ROLLOUT_TOKEN_LIMIT),
             (128_000usize - 32_000usize) * STAGE_ONE_CONTEXT_WINDOW_PERCENT / 100
         );
     }
@@ -1378,7 +1374,7 @@ mod tests {
 
         assert_eq!(stage_one_output_max_tokens(&config), 8_192);
         assert_eq!(
-            stage_one_rollout_token_limit(&config),
+            stage_one_rollout_token_limit_with_fallback(&config, DEFAULT_ROLLOUT_TOKEN_LIMIT),
             (128_000usize - 8_192usize) * STAGE_ONE_CONTEXT_WINDOW_PERCENT / 100
         );
     }
@@ -1389,7 +1385,7 @@ mod tests {
 
         assert_eq!(stage_one_output_max_tokens(&config), 4_096);
         assert_eq!(
-            stage_one_rollout_token_limit(&config),
+            stage_one_rollout_token_limit_with_fallback(&config, DEFAULT_ROLLOUT_TOKEN_LIMIT),
             DEFAULT_ROLLOUT_TOKEN_LIMIT
         );
     }

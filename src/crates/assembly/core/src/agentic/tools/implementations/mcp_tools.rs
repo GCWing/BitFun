@@ -375,9 +375,7 @@ impl Tool for ListMCPResourcesTool {
     }
 }
 
-pub struct ReadMCPResourceTool {
-    max_render_chars: usize,
-}
+pub struct ReadMCPResourceTool {}
 
 impl Default for ReadMCPResourceTool {
     fn default() -> Self {
@@ -387,9 +385,7 @@ impl Default for ReadMCPResourceTool {
 
 impl ReadMCPResourceTool {
     pub fn new() -> Self {
-        Self {
-            max_render_chars: DEFAULT_RENDER_CHAR_LIMIT,
-        }
+        Self {}
     }
 }
 
@@ -632,9 +628,7 @@ impl Tool for ListMCPPromptsTool {
     }
 }
 
-pub struct GetMCPPromptTool {
-    max_render_chars: usize,
-}
+pub struct GetMCPPromptTool {}
 
 impl Default for GetMCPPromptTool {
     fn default() -> Self {
@@ -644,9 +638,7 @@ impl Default for GetMCPPromptTool {
 
 impl GetMCPPromptTool {
     pub fn new() -> Self {
-        Self {
-            max_render_chars: DEFAULT_RENDER_CHAR_LIMIT,
-        }
+        Self {}
     }
 }
 

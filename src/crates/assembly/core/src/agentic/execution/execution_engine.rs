@@ -43,9 +43,10 @@ use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::native_hooks::{self, NativeHookSessionFacts};
 use crate::service::config::get_global_config_service;
+#[cfg(test)]
+use crate::service::config::types::{automatic_max_output_tokens, MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT};
 use crate::service::config::types::{
-    automatic_max_output_tokens, model_runtime_binding_fingerprint, ModelCapability, ModelCategory,
-    MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT,
+    model_runtime_binding_fingerprint, ModelCapability, ModelCategory,
 };
 use crate::service::instruction_context::{
     build_local_workspace_instruction_files_context_with_fs_detailed,
@@ -823,32 +824,6 @@ impl ExecutionEngine {
         }
     }
 
-    fn compression_trigger_budget(
-        context_window: usize,
-        configured_max_tokens: Option<u32>,
-    ) -> CompressionTriggerBudget {
-        Self::compression_trigger_budget_with_safety(
-            context_window,
-            configured_max_tokens,
-            Self::AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS,
-        )
-    }
-
-    /// Same as [`Self::compression_trigger_budget`] but with an explicit safety
-    /// reserve (阈值参数配置化：`ai.thresholds.compression.safety_reserve_tokens`).
-    fn compression_trigger_budget_with_safety(
-        context_window: usize,
-        configured_max_tokens: Option<u32>,
-        safety_reserve_tokens: usize,
-    ) -> CompressionTriggerBudget {
-        Self::compression_trigger_budget_with_output_reserve(
-            context_window,
-            configured_max_tokens,
-            safety_reserve_tokens,
-            automatic_max_output_tokens(context_window as u32) as usize,
-        )
-    }
-
     /// Resolve the configured output-reserve for a compression trigger budget,
     /// honoring `ai.thresholds.output_tokens.automatic_tiers` (阈值参数配置化).
     async fn compression_trigger_budget_configured(
@@ -874,22 +849,23 @@ impl ExecutionEngine {
         )
     }
 
-    fn compression_trigger_budget_with_output_reserve(
+    /// Legacy synchronous compression-trigger budget with hard-coded reserve
+    /// defaults; used by unit tests (生产路径走 `compression_trigger_budget_configured`).
+    #[cfg(test)]
+    fn compression_trigger_budget(
         context_window: usize,
         configured_max_tokens: Option<u32>,
-        safety_reserve_tokens: usize,
-        output_reserve_tokens: usize,
     ) -> CompressionTriggerBudget {
         Self::compression_trigger_budget_with_output_reserve_and_ratio(
             context_window,
             configured_max_tokens,
-            safety_reserve_tokens,
-            output_reserve_tokens,
+            Self::AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS,
+            automatic_max_output_tokens(context_window as u32) as usize,
             MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT,
         )
     }
 
-    /// Same as [`Self::compression_trigger_budget_with_output_reserve`] but with
+    /// Same as [`Self::compression_trigger_budget_configured`] but with
     /// an explicit output-reserve ratio cap in percent
     /// (阈值参数配置化：`ai.thresholds.output_tokens.ratio_percent` replaces the
     /// legacy hard-coded `MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT = 40`).

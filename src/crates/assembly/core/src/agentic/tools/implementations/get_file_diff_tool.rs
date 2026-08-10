@@ -607,23 +607,7 @@ impl GetFileDiffTool {
         Ok(offset)
     }
 
-    fn paginate_prepared_diff(
-        data: Value,
-        diff_offset: usize,
-        cursor_binding: &str,
-        logical_path: &str,
-    ) -> BitFunResult<Value> {
-        Self::paginate_prepared_diff_with_budget(
-            data,
-            diff_offset,
-            cursor_binding,
-            logical_path,
-            PREPARED_REVIEW_DIFF_PAGE_CHARS,
-            PREPARED_REVIEW_DIFF_TOTAL_CHARS,
-        )
-    }
-
-    /// Same as [`Self::paginate_prepared_diff`] but with explicit page/total
+    /// Same as [`Self::paginate_prepared_diff_with_budget`] but with explicit page/total
     /// budgets (阈值参数配置化：`ai.thresholds.tool_timeout.diff_page_chars` /
     /// `diff_total_chars`).
     fn paginate_prepared_diff_with_budget(
@@ -2465,7 +2449,7 @@ mod tests {
         let diff = (0..5_000)
             .map(|index| format!("+changed line {index:04} with enough content\n"))
             .collect::<String>();
-        let first = GetFileDiffTool::paginate_prepared_diff(
+        let first = GetFileDiffTool::paginate_prepared_diff_with_budget(
             json!({
                 "diff_content": diff,
                 "original_content": "must be removed",
@@ -2474,6 +2458,8 @@ mod tests {
             0,
             "binding",
             "src/lib.rs",
+            PREPARED_REVIEW_DIFF_PAGE_CHARS,
+            PREPARED_REVIEW_DIFF_TOTAL_CHARS,
         )
         .expect("first page should be available");
         let next_cursor = first["next_cursor"]
@@ -2482,11 +2468,13 @@ mod tests {
         let next =
             GetFileDiffTool::review_cursor_offset(Some(next_cursor), "binding", "src/lib.rs")
                 .expect("cursor should be valid");
-        let second = GetFileDiffTool::paginate_prepared_diff(
+        let second = GetFileDiffTool::paginate_prepared_diff_with_budget(
             json!({ "diff_content": diff }),
             next,
             "binding",
             "src/lib.rs",
+            PREPARED_REVIEW_DIFF_PAGE_CHARS,
+            PREPARED_REVIEW_DIFF_TOTAL_CHARS,
         )
         .expect("second page should be available");
 
