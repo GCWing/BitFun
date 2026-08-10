@@ -50,6 +50,7 @@ import {
 import { RuntimeStatusSlot } from './RuntimeStatusSlot';
 import { StickyTaskIndicator } from '../StickyTaskIndicator';
 import { useFlowChatFollowOutput } from './useFlowChatFollowOutput';
+import { contentEndScrollTop, tailSpacerPxForViewport } from './flowChatTailFollow';
 import { VirtualItemRenderer } from './VirtualItemRenderer';
 import { getLeadingVirtualItemIndexDelta } from './virtualMessageListLayout';
 import { resolveVisibleFlowChatTurnIds } from './flowChatVisibleTurns';
@@ -58,6 +59,8 @@ import './VirtualMessageList.scss';
 const VIRTUOSO_FIRST_ITEM_INDEX_BASE = 1_000_000;
 const SEARCH_NAVIGATION_MAX_ATTEMPTS = 24;
 const FLOW_CHAT_VIRTUOSO_OVERSCAN = { main: 600, reverse: 600 } as const;
+/** Distance from the end of real content still treated as "at the bottom". */
+const AT_CONTENT_END_THRESHOLD_PX = 50;
 const FLOW_CHAT_VIRTUOSO_VIEWPORT_INCREASE = { top: 600, bottom: 600 } as const;
 const IDLE_HISTORY_WINDOW_BOUNDARY_STATE: Record<
   SessionHistoryWindowDirection,
@@ -131,6 +134,7 @@ export interface VirtualMessageListProps {
 
 type FlowChatVirtuosoContext = {
   bottomLayoutInsetPx: number;
+  tailSpacerPx: number;
   previousHistoryBoundaryStatusNode: React.ReactNode;
   nextHistoryBoundaryStatusNode: React.ReactNode;
   runtimeStatusSessionId: string | null;
@@ -158,18 +162,35 @@ const FlowChatVirtuosoHeader = ({ context }: ContextProp<FlowChatVirtuosoContext
 );
 
 const FlowChatVirtuosoFooter = ({ context }: ContextProp<FlowChatVirtuosoContext>) => (
-  <div
-    className="message-list-footer"
-    data-bf-component="virtual-message-list"
-    data-bf-part="footer"
-    style={{
-      height: `${context.bottomLayoutInsetPx}px`,
-      minHeight: `${context.bottomLayoutInsetPx}px`,
-    }}
-  >
-    {context.nextHistoryBoundaryStatusNode}
-    <RuntimeStatusSlot sessionId={context.runtimeStatusSessionId} placement="footer" />
-  </div>
+  <>
+    <div
+      className="message-list-footer"
+      data-bf-component="virtual-message-list"
+      data-bf-part="footer"
+      style={{
+        height: `${context.bottomLayoutInsetPx}px`,
+        minHeight: `${context.bottomLayoutInsetPx}px`,
+      }}
+    >
+      {context.nextHistoryBoundaryStatusNode}
+      <RuntimeStatusSlot sessionId={context.runtimeStatusSessionId} placement="footer" />
+    </div>
+    {/*
+      Resident tail reservation of roughly one viewport. Its height tracks the
+      viewport and nothing else — it must never react to a measured content
+      change, or it becomes the compensation scheme this replaced.
+    */}
+    <div
+      className="message-list-tail-spacer"
+      data-bf-component="virtual-message-list"
+      data-bf-part="tailSpacer"
+      aria-hidden="true"
+      style={{
+        height: `${context.tailSpacerPx}px`,
+        minHeight: `${context.tailSpacerPx}px`,
+      }}
+    />
+  </>
 );
 
 const FLOW_CHAT_VIRTUOSO_COMPONENTS: Components<VirtualItem, FlowChatVirtuosoContext> = {
@@ -256,6 +277,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const scrollerElementRef = useRef<HTMLElement | null>(null);
   const [scrollerElement, setScrollerElement] = useState<HTMLElement | null>(null);
+  const [viewportHeightPx, setViewportHeightPx] = useState(0);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const preparedTurnNavigationRef = useRef<PreparedTurnNavigation | null>(null);
   const historyPrependAnchorRef = useRef<HistoryPrependAnchor | null>(null);
@@ -316,13 +338,33 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const inputHeight = useChatInputState(state => state.inputHeight);
   const bottomLayoutInsetPx = computeFlowChatInputStackFooterPx(inputHeight);
 
-  const scrollToTail = useCallback((behavior: ScrollBehavior) => {
+  const tailSpacerPx = tailSpacerPxForViewport(viewportHeightPx);
+  const tailSpacerPxRef = useRef(tailSpacerPx);
+  useLayoutEffect(() => {
+    tailSpacerPxRef.current = tailSpacerPx;
+  }, [tailSpacerPx]);
+  const getTailSpacerPx = useCallback(() => tailSpacerPxRef.current, []);
+
+  const getRenderedUserMessageElement = useCallback((turnId: string) => (
+    Array.from(
+      scrollerElementRef.current?.querySelectorAll<HTMLElement>(
+        '.virtual-item-wrapper[data-item-type="user-message"]',
+      ) ?? [],
+    ).find(element => element.dataset.turnId === turnId) ?? null
+  ), []);
+
+  const readContentEndScrollTop = useCallback((scroller: HTMLElement) => (
+    contentEndScrollTop({
+      scrollHeight: scroller.scrollHeight,
+      clientHeight: scroller.clientHeight,
+      tailSpacerPx: tailSpacerPxRef.current,
+    })
+  ), []);
+
+  const scrollToContentEnd = useCallback((behavior: ScrollBehavior) => {
     const scroller = scrollerElementRef.current;
     if (scroller) {
-      scroller.scrollTo({
-        top: Math.max(0, scroller.scrollHeight - scroller.clientHeight),
-        behavior,
-      });
+      scroller.scrollTo({ top: readContentEndScrollTop(scroller), behavior });
       return;
     }
     virtuosoRef.current?.scrollToIndex({
@@ -330,7 +372,28 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       align: 'end',
       behavior: normalizeVirtuosoBehavior(behavior),
     });
-  }, [virtualItems.length]);
+  }, [readContentEndScrollTop, virtualItems.length]);
+
+  const scrollTurnToTop = useCallback((turnId: string) => {
+    const targetIndex = virtualItems.findIndex(item => (
+      item.turnId === turnId && item.type === 'user-message'
+    ));
+    if (targetIndex < 0 || !virtuosoRef.current) return false;
+    virtuosoRef.current.scrollToIndex({ index: targetIndex, align: 'start', behavior: 'auto' });
+    return true;
+  }, [virtualItems]);
+
+  const resolveTurnTopScrollTop = useCallback((turnId: string) => {
+    const scroller = scrollerElementRef.current;
+    const element = getRenderedUserMessageElement(turnId);
+    if (!scroller || !element) return null;
+    return Math.max(
+      0,
+      scroller.scrollTop
+        + element.getBoundingClientRect().top
+        - scroller.getBoundingClientRect().top,
+    );
+  }, [getRenderedUserMessageElement]);
 
   const {
     enterFollowOutput,
@@ -345,7 +408,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     isStreaming: isStreamingOutput,
     isViewportActive,
     scrollerRef: scrollerElementRef,
-    scrollToTail,
+    getTailSpacerPx,
+    scrollToContentEnd,
+    scrollTurnToTop,
+    resolveTurnTopScrollTop,
   });
 
   const notifyUserScrollIntent = useCallback(() => {
@@ -416,14 +482,18 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     }
   }, []);
 
+  // "At bottom" means the end of real content, not the end of the tail spacer.
+  const updateIsAtBottom = useCallback(() => {
+    const scroller = scrollerElementRef.current;
+    if (!scroller) return;
+    const distanceFromContentEnd = readContentEndScrollTop(scroller) - scroller.scrollTop;
+    setIsAtBottom(distanceFromContentEnd <= AT_CONTENT_END_THRESHOLD_PX);
+  }, [readContentEndScrollTop]);
+
   useEffect(() => {
     if (!scrollerElement) return;
     const handleNativeScroll = () => {
-      const distanceFromBottom = Math.max(
-        0,
-        scrollerElement.scrollHeight - scrollerElement.clientHeight - scrollerElement.scrollTop,
-      );
-      setIsAtBottom(distanceFromBottom <= 50);
+      updateIsAtBottom();
       handleScroll();
       scheduleVisibleTurnInfoUpdate();
     };
@@ -444,27 +514,32 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       scrollerElement.removeEventListener('touchmove', handleTouchMove);
       scrollerElement.removeEventListener('keydown', handleKeyDown);
     };
-  }, [handleScroll, notifyUserScrollIntent, scheduleVisibleTurnInfoUpdate, scrollerElement]);
+  }, [
+    handleScroll,
+    notifyUserScrollIntent,
+    scheduleVisibleTurnInfoUpdate,
+    scrollerElement,
+    updateIsAtBottom,
+  ]);
 
   useEffect(() => {
     if (!scrollerElement) return;
     const observer = new ResizeObserver(() => {
+      setViewportHeightPx(scrollerElement.clientHeight);
       scheduleFollowToLatest();
       scheduleVisibleTurnInfoUpdate();
+      updateIsAtBottom();
     });
     const content = scrollerElement.firstElementChild;
     if (content) observer.observe(content);
     observer.observe(scrollerElement);
     return () => observer.disconnect();
-  }, [scheduleFollowToLatest, scheduleVisibleTurnInfoUpdate, scrollerElement]);
-
-  const getRenderedUserMessageElement = useCallback((turnId: string) => (
-    Array.from(
-      scrollerElementRef.current?.querySelectorAll<HTMLElement>(
-        '.virtual-item-wrapper[data-item-type="user-message"]',
-      ) ?? [],
-    ).find(element => element.dataset.turnId === turnId) ?? null
-  ), []);
+  }, [
+    scheduleFollowToLatest,
+    scheduleVisibleTurnInfoUpdate,
+    scrollerElement,
+    updateIsAtBottom,
+  ]);
 
   const navigateToTurnWithStatus = useCallback((
     turnId: string,
@@ -690,6 +765,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     const scroller = element instanceof HTMLElement ? element : null;
     scrollerElementRef.current = scroller;
     setScrollerElement(scroller);
+    if (scroller) {
+      setViewportHeightPx(scroller.clientHeight);
+    }
   }, []);
 
   const scrollToPhysicalBottom = useCallback(() => {
@@ -768,10 +846,17 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   ), [historyBoundaryState.after, presentationMode, t]);
   const virtuosoContext = useMemo<FlowChatVirtuosoContext>(() => ({
     bottomLayoutInsetPx,
+    tailSpacerPx,
     previousHistoryBoundaryStatusNode,
     nextHistoryBoundaryStatusNode,
     runtimeStatusSessionId: activeSessionId,
-  }), [activeSessionId, bottomLayoutInsetPx, nextHistoryBoundaryStatusNode, previousHistoryBoundaryStatusNode]);
+  }), [
+    activeSessionId,
+    bottomLayoutInsetPx,
+    nextHistoryBoundaryStatusNode,
+    previousHistoryBoundaryStatusNode,
+    tailSpacerPx,
+  ]);
   const computeVirtuosoItemKey = useCallback((_: number, item: VirtualItem) => (
     `${activeSessionId ?? 'no-active-session'}:${getVirtualItemStableKey(item)}`
   ), [activeSessionId]);
@@ -817,8 +902,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         alignToBottom={false}
         overscan={FLOW_CHAT_VIRTUOSO_OVERSCAN}
         increaseViewportBy={FLOW_CHAT_VIRTUOSO_VIEWPORT_INCREASE}
-        atBottomThreshold={50}
-        atBottomStateChange={setIsAtBottom}
         rangeChanged={handleRangeChanged}
         scrollerRef={handleScrollerRef}
         context={virtuosoContext}

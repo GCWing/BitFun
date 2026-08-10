@@ -116,6 +116,18 @@
     overflow-anchor: none;
   }
 
+  /*
+   * Resident tail reservation (~1 viewport, supplied inline). It exists so the
+   * browser cannot clamp scrollTop when content shrinks; see
+   * `flowChatTailFollow.ts`. Height must stay a function of the viewport only.
+   */
+  .message-list-tail-spacer {
+    width: 100%;
+    flex-shrink: 0;
+    pointer-events: none;
+    overflow-anchor: none;
+  }
+
   &__projection-handoff-items {
     width: 100%;
   }

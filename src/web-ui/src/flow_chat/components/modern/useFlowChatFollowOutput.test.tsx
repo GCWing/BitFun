@@ -9,6 +9,12 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 type Controller = ReturnType<typeof useFlowChatFollowOutput>;
 
+const VIEWPORT = 500;
+/** Matches `tailSpacerPxForViewport(VIEWPORT)`. */
+const TAIL_SPACER = 500;
+/** Matches `tailHoldMaxGapPx(VIEWPORT)`. */
+const MAX_GAP = 300;
+
 function setScrollerMetrics(
   scroller: HTMLElement,
   metrics: { scrollHeight: number; clientHeight: number; scrollTop: number },
@@ -20,19 +26,25 @@ function setScrollerMetrics(
   });
 }
 
+interface HarnessProps {
+  latestTurnId: string;
+  isStreaming?: boolean;
+  scroller: HTMLElement;
+  scrollToContentEnd?: (behavior: ScrollBehavior) => void;
+  scrollTurnToTop?: (turnId: string) => boolean;
+  resolveTurnTopScrollTop?: (turnId: string) => number | null;
+  onController: (controller: Controller) => void;
+}
+
 function Harness({
   latestTurnId,
   isStreaming = true,
   scroller,
-  scrollToTail,
+  scrollToContentEnd = () => {},
+  scrollTurnToTop = () => false,
+  resolveTurnTopScrollTop = () => null,
   onController,
-}: {
-  latestTurnId: string;
-  isStreaming?: boolean;
-  scroller: HTMLElement;
-  scrollToTail: (behavior: ScrollBehavior) => void;
-  onController: (controller: Controller) => void;
-}) {
+}: HarnessProps) {
   const scrollerRef = React.useRef<HTMLElement | null>(scroller);
   const controller = useFlowChatFollowOutput({
     activeSessionId: 'session-1',
@@ -41,7 +53,10 @@ function Harness({
     isStreaming,
     isViewportActive: true,
     scrollerRef,
-    scrollToTail,
+    getTailSpacerPx: () => TAIL_SPACER,
+    scrollToContentEnd,
+    scrollTurnToTop,
+    resolveTurnTopScrollTop,
   });
   onController(controller);
   return <div data-following={String(controller.isFollowingOutput)} />;
@@ -52,6 +67,13 @@ describe('useFlowChatFollowOutput', () => {
   let root: Root;
   let scroller: HTMLDivElement;
   let controller: Controller | null;
+  let frames: FrameRequestCallback[];
+
+  function runNextFrame() {
+    const frame = frames.shift();
+    expect(frame).toBeDefined();
+    act(() => frame?.(16));
+  }
 
   beforeEach(() => {
     container = document.createElement('div');
@@ -59,7 +81,11 @@ describe('useFlowChatFollowOutput', () => {
     document.body.append(container, scroller);
     root = createRoot(container);
     controller = null;
-    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    frames = [];
+    vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    }));
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
   });
 
@@ -70,47 +96,246 @@ describe('useFlowChatFollowOutput', () => {
     vi.unstubAllGlobals();
   });
 
-  it('enters natural tail follow when a new Turn appears before streaming starts', () => {
-    const scrollToTail = vi.fn();
+  it('opens a newly submitted Turn at the viewport top instead of the tail', () => {
+    const scrollTurnToTop = vi.fn(() => true);
+    const scrollToContentEnd = vi.fn();
+    const props = {
+      scroller,
+      scrollToContentEnd,
+      scrollTurnToTop,
+      onController: (next: Controller) => { controller = next; },
+    };
+
+    act(() => {
+      root.render(<Harness {...props} latestTurnId="turn-1" isStreaming={false} />);
+    });
+    act(() => {
+      root.render(<Harness {...props} latestTurnId="turn-2" isStreaming={false} />);
+    });
+
+    expect(scrollTurnToTop).toHaveBeenCalledWith('turn-2');
+    expect(scrollToContentEnd).not.toHaveBeenCalled();
+    expect(controller?.isFollowingOutput).toBe(true);
+  });
+
+  it('falls back to the content end when the new Turn cannot be targeted', () => {
+    const scrollToContentEnd = vi.fn();
+    const props = {
+      scroller,
+      scrollToContentEnd,
+      scrollTurnToTop: () => false,
+      onController: (next: Controller) => { controller = next; },
+    };
+
+    act(() => {
+      root.render(<Harness {...props} latestTurnId="turn-1" isStreaming={false} />);
+    });
+    act(() => {
+      root.render(<Harness {...props} latestTurnId="turn-2" isStreaming={false} />);
+    });
+
+    expect(scrollToContentEnd).toHaveBeenCalledWith('auto');
+    expect(controller?.isFollowingOutput).toBe(true);
+  });
+
+  it('holds the pinned Turn at the top while its answer is shorter than the viewport', () => {
+    // Real content ends at 1200, so the tail target is 700 — well above the
+    // pinned Turn at 900. The pin must win until the answer overflows.
+    setScrollerMetrics(scroller, {
+      scrollHeight: 1200 + TAIL_SPACER,
+      clientHeight: VIEWPORT,
+      scrollTop: 900,
+    });
+    const props = {
+      scroller,
+      scrollTurnToTop: () => true,
+      resolveTurnTopScrollTop: () => 900,
+      onController: (next: Controller) => { controller = next; },
+    };
+
+    act(() => {
+      root.render(<Harness {...props} latestTurnId="turn-1" />);
+    });
+    act(() => {
+      root.render(<Harness {...props} latestTurnId="turn-2" />);
+    });
+
+    scroller.scrollTop = 0;
+    runNextFrame();
+    expect(scroller.scrollTop).toBe(900);
+  });
+
+  it('hands the pinned Turn off to tail follow once the answer overflows', () => {
+    setScrollerMetrics(scroller, {
+      scrollHeight: 2000 + TAIL_SPACER,
+      clientHeight: VIEWPORT,
+      scrollTop: 900,
+    });
+    const props = {
+      scroller,
+      scrollTurnToTop: () => true,
+      resolveTurnTopScrollTop: () => 900,
+      onController: (next: Controller) => { controller = next; },
+    };
+
+    act(() => {
+      root.render(<Harness {...props} latestTurnId="turn-1" />);
+    });
+    act(() => {
+      root.render(<Harness {...props} latestTurnId="turn-2" />);
+    });
+
+    runNextFrame();
+    // Content end (2000 - 500) has overtaken the pin, so the tail owns it.
+    expect(scroller.scrollTop).toBe(1500);
+  });
+
+  it('follows content growth against the content end, not the tail spacer', () => {
+    setScrollerMetrics(scroller, {
+      scrollHeight: 1500 + TAIL_SPACER,
+      clientHeight: VIEWPORT,
+      scrollTop: 1000,
+    });
+
     act(() => {
       root.render(
         <Harness
           latestTurnId="turn-1"
-          isStreaming={false}
           scroller={scroller}
-          scrollToTail={scrollToTail}
           onController={next => { controller = next; }}
         />,
       );
+    });
+    expect(controller?.isFollowingOutput).toBe(true);
+
+    setScrollerMetrics(scroller, {
+      scrollHeight: 1800 + TAIL_SPACER,
+      clientHeight: VIEWPORT,
+      scrollTop: 1000,
+    });
+    runNextFrame();
+
+    expect(scroller.scrollTop).toBe(1300);
+  });
+
+  it('holds its offset when a collapse shrinks content under the viewport', () => {
+    // The regression this whole mechanism exists for: a tool card collapsing
+    // above the live output must not drag earlier content down.
+    setScrollerMetrics(scroller, {
+      scrollHeight: 1500 + TAIL_SPACER,
+      clientHeight: VIEWPORT,
+      scrollTop: 0,
     });
     act(() => {
       root.render(
         <Harness
-          latestTurnId="turn-2"
-          isStreaming={false}
+          latestTurnId="turn-1"
           scroller={scroller}
-          scrollToTail={scrollToTail}
           onController={next => { controller = next; }}
         />,
       );
     });
+    runNextFrame();
+    expect(scroller.scrollTop).toBe(1000);
 
-    expect(scrollToTail).toHaveBeenCalledWith('auto');
-    expect(controller?.isFollowingOutput).toBe(true);
+    setScrollerMetrics(scroller, {
+      scrollHeight: 1200 + TAIL_SPACER,
+      clientHeight: VIEWPORT,
+      scrollTop: 1000,
+    });
+    runNextFrame();
 
+    expect(scroller.scrollTop).toBe(1000);
+  });
+
+  it('gives ground only past the tolerated gap after a very large collapse', () => {
+    setScrollerMetrics(scroller, {
+      scrollHeight: 1500 + TAIL_SPACER,
+      clientHeight: VIEWPORT,
+      scrollTop: 0,
+    });
     act(() => {
       root.render(
         <Harness
-          latestTurnId="turn-2"
-          isStreaming
+          latestTurnId="turn-1"
           scroller={scroller}
-          scrollToTail={scrollToTail}
           onController={next => { controller = next; }}
         />,
       );
     });
+    runNextFrame();
 
-    expect(controller?.isFollowingOutput).toBe(true);
+    setScrollerMetrics(scroller, {
+      scrollHeight: 700 + TAIL_SPACER,
+      clientHeight: VIEWPORT,
+      scrollTop: 1000,
+    });
+    runNextFrame();
+
+    expect(scroller.scrollTop).toBe(200 + MAX_GAP);
+  });
+
+  it('does not force the content end when a resize re-asserts follow', () => {
+    const scrollToContentEnd = vi.fn();
+    setScrollerMetrics(scroller, {
+      scrollHeight: 1500 + TAIL_SPACER,
+      clientHeight: VIEWPORT,
+      scrollTop: 0,
+    });
+    act(() => {
+      root.render(
+        <Harness
+          latestTurnId="turn-1"
+          scroller={scroller}
+          scrollToContentEnd={scrollToContentEnd}
+          onController={next => { controller = next; }}
+        />,
+      );
+    });
+    runNextFrame();
+    scrollToContentEnd.mockClear();
+
+    setScrollerMetrics(scroller, {
+      scrollHeight: 1200 + TAIL_SPACER,
+      clientHeight: VIEWPORT,
+      scrollTop: 1000,
+    });
+    act(() => controller?.scheduleFollowToLatest());
+
+    expect(scrollToContentEnd).not.toHaveBeenCalled();
+    expect(scroller.scrollTop).toBe(1000);
+  });
+
+  it('settles the held blank once streaming stops', () => {
+    const scrollToContentEnd = vi.fn();
+    const props = {
+      scroller,
+      scrollToContentEnd,
+      onController: (next: Controller) => { controller = next; },
+    };
+    setScrollerMetrics(scroller, {
+      scrollHeight: 1500 + TAIL_SPACER,
+      clientHeight: VIEWPORT,
+      scrollTop: 0,
+    });
+    act(() => {
+      root.render(<Harness {...props} latestTurnId="turn-1" />);
+    });
+    runNextFrame();
+
+    setScrollerMetrics(scroller, {
+      scrollHeight: 1200 + TAIL_SPACER,
+      clientHeight: VIEWPORT,
+      scrollTop: 1000,
+    });
+    runNextFrame();
+    scrollToContentEnd.mockClear();
+
+    act(() => {
+      root.render(<Harness {...props} latestTurnId="turn-1" isStreaming={false} />);
+    });
+
+    expect(scrollToContentEnd).toHaveBeenCalledWith('smooth');
   });
 
   it('lets explicit user scroll intent exit follow immediately', () => {
@@ -119,7 +344,6 @@ describe('useFlowChatFollowOutput', () => {
         <Harness
           latestTurnId="turn-1"
           scroller={scroller}
-          scrollToTail={vi.fn()}
           onController={next => { controller = next; }}
         />,
       );
@@ -132,59 +356,19 @@ describe('useFlowChatFollowOutput', () => {
     expect(cancelAnimationFrame).toHaveBeenCalled();
   });
 
-  it('keeps following when layout growth moves the natural tail', () => {
-    const frames: FrameRequestCallback[] = [];
-    vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
-      frames.push(callback);
-      return frames.length;
-    }));
-    setScrollerMetrics(scroller, {
-      scrollHeight: 1500,
-      clientHeight: 500,
-      scrollTop: 1000,
-    });
-
-    act(() => {
-      root.render(
-        <Harness
-          latestTurnId="turn-1"
-          scroller={scroller}
-          scrollToTail={vi.fn()}
-          onController={next => { controller = next; }}
-        />,
-      );
-    });
-    expect(controller?.isFollowingOutput).toBe(true);
-
-    setScrollerMetrics(scroller, {
-      scrollHeight: 1800,
-      clientHeight: 500,
-      scrollTop: 1000,
-    });
-    act(() => controller?.handleScroll());
-    expect(controller?.isFollowingOutput).toBe(true);
-
-    const nextFrame = frames.shift();
-    expect(nextFrame).toBeDefined();
-    act(() => nextFrame?.(16));
-
-    expect(scroller.scrollTop).toBe(1300);
-    expect(controller?.isFollowingOutput).toBe(true);
-  });
-
   it('uses smooth behavior only for an explicit jump to latest', () => {
-    const scrollToTail = vi.fn();
+    const scrollToContentEnd = vi.fn();
     act(() => {
       root.render(
         <Harness
           latestTurnId="turn-1"
           scroller={scroller}
-          scrollToTail={scrollToTail}
+          scrollToContentEnd={scrollToContentEnd}
           onController={next => { controller = next; }}
         />,
       );
     });
     act(() => controller?.enterFollowOutput('jump-to-latest'));
-    expect(scrollToTail).toHaveBeenCalledWith('smooth');
+    expect(scrollToContentEnd).toHaveBeenCalledWith('smooth');
   });
 });

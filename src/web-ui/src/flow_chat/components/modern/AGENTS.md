@@ -14,16 +14,26 @@ Also follow the repository and Web UI instructions in the parent guides.
 
 ## Current Contract
 
-- FlowChat uses the natural browser scroll range.
-- Do not add synthetic tail space, bottom reservations, sticky Turn modes,
-  pre-collapse compensation, or persistent element-anchor guards.
+- FlowChat reserves a resident tail spacer of about one viewport, sized from
+  `scroller.clientHeight` and nothing else.
+- Static reservation is allowed; reactive compensation is not. Do not derive any
+  reserved height from a measured content height, a collapse delta, an animation
+  duration, or a streaming rate.
+- Do not add sticky Turn modes, pre-collapse compensation, or persistent
+  element-anchor guards.
+- The follow target lives in `flowChatTailFollow.ts` as pure functions over
+  geometry. Keep it free of timers and mutation observers.
+- `scheduleFollowToLatest` must not force the content end — the hold rule is
+  what keeps a collapse from moving the viewport.
 - `useFlowChatFollowOutput` is the only continuous outer viewport writer.
-- Keep Virtuoso `followOutput={false}`.
+- Keep Virtuoso `followOutput={false}`. "At bottom" is measured against the end
+  of real content, so Virtuoso's `atBottomStateChange` stays unused.
 - One-shot Turn/search/history navigation remains inside `VirtualMessageList`.
 - Tool cards reflow naturally and dispatch only `tool-card-toggle` after an
   expanded-state change so Virtuoso can remeasure.
 - Footer height represents only the current input-stack layout and real footer
-  content such as history state and `RuntimeStatusSlot`.
+  content such as history state and `RuntimeStatusSlot`. The tail spacer is a
+  separate sibling and must not be folded into it.
 - Stable virtual-item keys and projection identity must be preserved.
 
 ## Verification
@@ -38,6 +48,7 @@ pnpm --dir src/web-ui run test:run <focused-test-files>
 
 Relevant tests include:
 
+- `flowChatTailFollow.test.ts`
 - `useFlowChatFollowOutput.test.tsx`
 - `VirtualMessageList.layout.test.ts`
 - `VirtualMessageList.session-boundary.test.tsx`
