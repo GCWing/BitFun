@@ -81,22 +81,8 @@
     white-space: nowrap;
   }
 
-  &__row-control--model {
-    width: 100%;
-    align-items: stretch;
-
-    .model-selection-radio {
-      width: auto;
-      justify-content: flex-end;
-    }
-
-    .model-selection-radio--horizontal .model-selection-radio__option--custom {
-      flex-grow: 0;
-    }
-  }
-
-  .bitfun-config-page-row.bitfun-func-agent-config__model-row {
-    grid-template-columns: minmax(0, 4fr) minmax(0, 6fr);
+  &__appearance-host {
+    display: contents;
   }
 
   &__warning {

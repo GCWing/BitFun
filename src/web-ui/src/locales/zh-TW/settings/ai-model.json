@@ -27,10 +27,9 @@
   "sessionTitle": {
     "title": "會話標題自動生成",
     "subtitle": "新對話時 AI 自動生成簡潔標題",
-    "enable": "啟用",
     "loadFailed": "載入會話標題設定失敗",
     "model": {
-      "label": "模型",
+      "label": "會話標題生成模型",
       "primary": "主力模型",
       "fast": "快速模型"
     },
