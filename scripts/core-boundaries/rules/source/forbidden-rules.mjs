@@ -216,7 +216,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/product-capabilities/tests/product_sdk_assembly.rs',
+    path: 'src/crates/assembly/product-capabilities/tests/product_capability_contracts/product_sdk_assembly.rs',
     patterns: [
       {
         regex: /\bbitfun_core\b/,

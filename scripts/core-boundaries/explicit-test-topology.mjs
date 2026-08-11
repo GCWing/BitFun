@@ -108,6 +108,111 @@ export const externalSourcesIntegrationTestTargets = [
   },
 ];
 
+export const coreTypesIntegrationTestTargets = [
+  {
+    name: 'core_type_contracts',
+    path: 'tests/core_type_contracts.rs',
+    leaves: [
+      'tests/core_type_contracts/lsp_contracts.rs',
+      'tests/core_type_contracts/session_contracts.rs',
+      'tests/core_type_contracts/session_usage_contracts.rs',
+      'tests/core_type_contracts/surface_contracts.rs',
+    ],
+    forbidRequiredFeatures: true,
+  },
+];
+
+export const runtimePortsIntegrationTestTargets = [
+  {
+    name: 'runtime_port_contracts',
+    path: 'tests/runtime_port_contracts.rs',
+    leaves: [
+      'tests/runtime_port_contracts/git_port_contracts.rs',
+      'tests/runtime_port_contracts/plugin_runtime_contracts.rs',
+      'tests/runtime_port_contracts/plugin_runtime_diagnostics_contracts.rs',
+      'tests/runtime_port_contracts/script_tool_port_contracts.rs',
+      'tests/runtime_port_contracts/session_store_contracts.rs',
+    ],
+    forbidRequiredFeatures: true,
+  },
+];
+
+export const productDomainsIntegrationTestTargets = [
+  {
+    name: 'product_domain_contracts',
+    path: 'tests/product_domain_contracts.rs',
+    leaves: [
+      'tests/product_domain_contracts/canvas_contracts.rs',
+      'tests/product_domain_contracts/tool_permission_contracts.rs',
+    ],
+    forbidRequiredFeatures: true,
+  },
+  {
+    name: 'external_source_contracts',
+    path: 'tests/external_source_contracts.rs',
+    leaves: [
+      'tests/external_source_contracts/external_hook_catalog_contracts.rs',
+      'tests/external_source_contracts/external_hook_contribution_contracts.rs',
+      'tests/external_source_contracts/external_source_contracts.rs',
+      'tests/external_source_contracts/workspace_reference_contracts.rs',
+    ],
+    requiredFeatures: ['external-sources'],
+  },
+  {
+    name: 'function_agent_contracts',
+    path: 'tests/function_agent_contracts.rs',
+    requiredFeatures: ['function-agents'],
+  },
+  {
+    name: 'miniapp_contracts',
+    path: 'tests/miniapp_contracts.rs',
+    requiredFeatures: ['miniapp'],
+  },
+  {
+    name: 'plugin_source_contracts',
+    path: 'tests/plugin_source_contracts.rs',
+    requiredFeatures: ['plugin-source'],
+  },
+];
+
+export const aiAdaptersIntegrationTestTargets = [
+  {
+    name: 'ai_protocol_contracts',
+    path: 'tests/ai_protocol_contracts.rs',
+    leaves: [
+      'tests/ai_protocol_contracts/model_selector.rs',
+      'tests/ai_protocol_contracts/openai_empty_content_parts.rs',
+    ],
+    forbidRequiredFeatures: true,
+  },
+  {
+    name: 'ai_stream_contracts',
+    path: 'tests/ai_stream_contracts.rs',
+    leaves: [
+      'tests/ai_stream_contracts/common.rs',
+      'tests/ai_stream_contracts/stream_processor_anthropic.rs',
+      'tests/ai_stream_contracts/stream_processor_openai.rs',
+      'tests/ai_stream_contracts/stream_processor_tool_arguments.rs',
+      'tests/ai_stream_contracts/stream_replay_regressions.rs',
+      'tests/ai_stream_contracts/stream_test_harness.rs',
+    ],
+    forbidRequiredFeatures: true,
+  },
+];
+
+export const productCapabilitiesIntegrationTestTargets = [
+  {
+    name: 'product_capability_contracts',
+    path: 'tests/product_capability_contracts.rs',
+    leaves: [
+      'tests/product_capability_contracts/plugin_product_shape.rs',
+      'tests/product_capability_contracts/product_capabilities.rs',
+      'tests/product_capability_contracts/product_sdk_assembly.rs',
+    ],
+    forbidRequiredFeatures: true,
+  },
+];
+
 function decodeBasicTomlKey(token) {
   let decoded = '';
   const simpleEscapes = new Map([
@@ -155,6 +260,34 @@ function tomlFieldName(line) {
   return token.startsWith('"') ? decodeBasicTomlKey(token) : token;
 }
 
+function parseTomlStringArrayValue(line) {
+  const equalsIndex = line.indexOf('=');
+  const value = equalsIndex === -1 ? '' : line.slice(equalsIndex + 1).trim();
+  const array = value.match(/^\[(.*)\]\s*(?:#.*)?$/);
+  if (!array) {
+    return null;
+  }
+  const inner = array[1];
+  const values = [];
+  const stringPattern = /'[^']*'|"(?:[^"\\]|\\.)*"/g;
+  let cursor = 0;
+  for (const match of inner.matchAll(stringPattern)) {
+    if (!/^[\s,]*$/.test(inner.slice(cursor, match.index))) {
+      return null;
+    }
+    const token = match[0];
+    const decoded = token.startsWith("'")
+      ? token.slice(1, -1)
+      : decodeBasicTomlKey(token);
+    if (decoded === null) {
+      return null;
+    }
+    values.push(decoded);
+    cursor = match.index + token.length;
+  }
+  return /^[\s,]*$/.test(inner.slice(cursor)) ? values : null;
+}
+
 function parseExplicitTestTargets(manifestText) {
   const targets = [];
   let current = null;
@@ -178,6 +311,7 @@ function parseExplicitTestTargets(manifestText) {
     }
     if (current && tomlFieldName(trimmed) === 'required-features') {
       current.hasRequiredFeatures = true;
+      current.requiredFeatures = parseTomlStringArrayValue(trimmed);
     }
     const field = current && trimmed.match(/^(name|path)\s*=\s*"([^"]+)"\s*$/);
     if (field) {
@@ -515,6 +649,24 @@ export function validateExplicitIntegrationTestTopology({
       errors.push(`explicit test target ${name} must not declare required-features`);
     }
   }
+  for (const { name, path, requiredFeatures } of expectedTargets) {
+    if (requiredFeatures === undefined) {
+      continue;
+    }
+    const actual = actualTargets.find(
+      (target) => target.name === name && target.path === path,
+    );
+    const actualRequiredFeatures = actual?.requiredFeatures;
+    if (
+      actualRequiredFeatures === null
+      || actualRequiredFeatures === undefined
+      || [...actualRequiredFeatures].sort().join('\n') !== [...requiredFeatures].sort().join('\n')
+    ) {
+      errors.push(
+        `explicit test target ${name} required-features must be exactly: ${requiredFeatures.join(', ')}`,
+      );
+    }
+  }
 
   const expectedRoots = expectedTargets.map(({ path }) => path).sort();
   if ([...topLevelRustFiles].sort().join('\n') !== expectedRoots.join('\n')) {
@@ -715,5 +867,33 @@ export function checkServiceIntegrationTestTopologies(root) {
   return [
     ...checkServicesCoreIntegrationTestTopology(root),
     ...checkServicesIntegrationsIntegrationTestTopology(root),
+  ];
+}
+
+export function checkBuildGraphContractIntegrationTestTopologies(root) {
+  const topologies = [
+    ['src/crates/contracts/core-types', coreTypesIntegrationTestTargets],
+    ['src/crates/contracts/runtime-ports', runtimePortsIntegrationTestTargets],
+    ['src/crates/contracts/product-domains', productDomainsIntegrationTestTargets],
+    [
+      'src/crates/adapters/ai-adapters',
+      aiAdaptersIntegrationTestTargets,
+      ['tests/common', 'tests/fixtures'],
+    ],
+    ['src/crates/assembly/product-capabilities', productCapabilitiesIntegrationTestTargets],
+  ];
+  return topologies.flatMap(([cratePath, expectedTargets, ignoredDirectories]) => (
+    checkExplicitIntegrationTestTopology(root, {
+      cratePath,
+      expectedTargets,
+      ignoredDirectories,
+    })
+  ));
+}
+
+export function checkReviewedIntegrationTestTopologies(root) {
+  return [
+    ...checkServiceIntegrationTestTopologies(root),
+    ...checkBuildGraphContractIntegrationTestTopologies(root),
   ];
 }

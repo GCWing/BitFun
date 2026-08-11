@@ -79,7 +79,6 @@ toml = { workspace = true }
 # Session management
 uuid = { workspace = true }
 chrono = { workspace = true }
-dashmap = { workspace = true }
 
 # Async trait
 async-trait = { workspace = true }
@@ -98,7 +97,6 @@ similar = { workspace = true }
 
 # Syntax highlighting for code blocks and tool cards
 syntect = { workspace = true }
-syntect-tui = { workspace = true }
 
 # Lazy initialization for syntax highlighter singleton
 once_cell = { workspace = true }

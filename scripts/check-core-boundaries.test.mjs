@@ -260,6 +260,137 @@ test('service integration tests keep their reviewed explicit target topology', (
   assert.deepEqual(checkServicesIntegrationsIntegrationTestTopology(repositoryRoot), []);
 });
 
+test('contract and AI adapter tests keep reviewed feature and failure-domain topology', async () => {
+  const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
+  const topology = await import('./core-boundaries/explicit-test-topology.mjs');
+
+  assert.deepEqual(topology.coreTypesIntegrationTestTargets, [
+    {
+      name: 'core_type_contracts',
+      path: 'tests/core_type_contracts.rs',
+      leaves: [
+        'tests/core_type_contracts/lsp_contracts.rs',
+        'tests/core_type_contracts/session_contracts.rs',
+        'tests/core_type_contracts/session_usage_contracts.rs',
+        'tests/core_type_contracts/surface_contracts.rs',
+      ],
+      forbidRequiredFeatures: true,
+    },
+  ]);
+  assert.deepEqual(topology.runtimePortsIntegrationTestTargets, [
+    {
+      name: 'runtime_port_contracts',
+      path: 'tests/runtime_port_contracts.rs',
+      leaves: [
+        'tests/runtime_port_contracts/git_port_contracts.rs',
+        'tests/runtime_port_contracts/plugin_runtime_contracts.rs',
+        'tests/runtime_port_contracts/plugin_runtime_diagnostics_contracts.rs',
+        'tests/runtime_port_contracts/script_tool_port_contracts.rs',
+        'tests/runtime_port_contracts/session_store_contracts.rs',
+      ],
+      forbidRequiredFeatures: true,
+    },
+  ]);
+  assert.deepEqual(topology.productDomainsIntegrationTestTargets, [
+    {
+      name: 'product_domain_contracts',
+      path: 'tests/product_domain_contracts.rs',
+      leaves: [
+        'tests/product_domain_contracts/canvas_contracts.rs',
+        'tests/product_domain_contracts/tool_permission_contracts.rs',
+      ],
+      forbidRequiredFeatures: true,
+    },
+    {
+      name: 'external_source_contracts',
+      path: 'tests/external_source_contracts.rs',
+      leaves: [
+        'tests/external_source_contracts/external_hook_catalog_contracts.rs',
+        'tests/external_source_contracts/external_hook_contribution_contracts.rs',
+        'tests/external_source_contracts/external_source_contracts.rs',
+        'tests/external_source_contracts/workspace_reference_contracts.rs',
+      ],
+      requiredFeatures: ['external-sources'],
+    },
+    {
+      name: 'function_agent_contracts',
+      path: 'tests/function_agent_contracts.rs',
+      requiredFeatures: ['function-agents'],
+    },
+    {
+      name: 'miniapp_contracts',
+      path: 'tests/miniapp_contracts.rs',
+      requiredFeatures: ['miniapp'],
+    },
+    {
+      name: 'plugin_source_contracts',
+      path: 'tests/plugin_source_contracts.rs',
+      requiredFeatures: ['plugin-source'],
+    },
+  ]);
+  assert.deepEqual(topology.aiAdaptersIntegrationTestTargets, [
+    {
+      name: 'ai_protocol_contracts',
+      path: 'tests/ai_protocol_contracts.rs',
+      leaves: [
+        'tests/ai_protocol_contracts/model_selector.rs',
+        'tests/ai_protocol_contracts/openai_empty_content_parts.rs',
+      ],
+      forbidRequiredFeatures: true,
+    },
+    {
+      name: 'ai_stream_contracts',
+      path: 'tests/ai_stream_contracts.rs',
+      leaves: [
+        'tests/ai_stream_contracts/common.rs',
+        'tests/ai_stream_contracts/stream_processor_anthropic.rs',
+        'tests/ai_stream_contracts/stream_processor_openai.rs',
+        'tests/ai_stream_contracts/stream_processor_tool_arguments.rs',
+        'tests/ai_stream_contracts/stream_replay_regressions.rs',
+        'tests/ai_stream_contracts/stream_test_harness.rs',
+      ],
+      forbidRequiredFeatures: true,
+    },
+  ]);
+  assert.deepEqual(topology.productCapabilitiesIntegrationTestTargets, [
+    {
+      name: 'product_capability_contracts',
+      path: 'tests/product_capability_contracts.rs',
+      leaves: [
+        'tests/product_capability_contracts/plugin_product_shape.rs',
+        'tests/product_capability_contracts/product_capabilities.rs',
+        'tests/product_capability_contracts/product_sdk_assembly.rs',
+      ],
+      forbidRequiredFeatures: true,
+    },
+  ]);
+  assert.deepEqual(topology.checkBuildGraphContractIntegrationTestTopologies(repositoryRoot), []);
+
+  const widenedOwnerErrors = validateExplicitIntegrationTestTopology({
+    manifestText: [
+      '[package]',
+      'autotests = false',
+      '[[test]]',
+      'name = "external_source_contracts"',
+      'path = "tests/external_source_contracts.rs"',
+      'required-features = ["product-full"]',
+    ].join('\n'),
+    expectedTargets: [{
+      name: 'external_source_contracts',
+      path: 'tests/external_source_contracts.rs',
+      requiredFeatures: ['external-sources'],
+    }],
+    topLevelRustFiles: ['tests/external_source_contracts.rs'],
+    rootSources: new Map([[
+      'tests/external_source_contracts.rs',
+      '#![cfg(feature = "product-full")]\n',
+    ]]),
+    leafRustFiles: [],
+    leafSources: new Map(),
+  });
+  assert.match(widenedOwnerErrors.join('\n'), /required-features.*external-sources/);
+});
+
 test('external source integration tests keep reviewed owner and process boundaries', () => {
   const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
 

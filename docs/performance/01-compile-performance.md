@@ -2,7 +2,7 @@
 
 > 最近核实：2026-08-11
 >
-> 实现复核基线：`gcwing/main@9f8b56082`
+> 实现复核基线：`gcwing/main@3d8ee4bc0`
 >
 > 性能 A/B 基线：`gcwing/main@1f538b96d`
 >
@@ -16,11 +16,11 @@
 
 | 结论 | 说明 |
 |---|---|
-| 集成测试链接拓扑已收敛 | Services 两个 crate 的集成 target 总数从 33 降到 25；External Sources 的 adapter/assembly target 从 22 降到 7，进程和外部系统失败域保持独立 |
+| 集成测试链接拓扑已收敛 | Services 两个 crate 的集成 target 总数从 33 降到 25；External Sources 的 adapter/assembly target 从 22 降到 7；五个 Contracts/AI/Assembly crate 又从 28 降到 10，feature、平台和外部系统失败域保持独立 |
 | Agent Runtime 基线不再隐藏重型 capability | `bitfun-core/agent-runtime` 只保留生命周期和基础工具 owner；文档转换与订阅认证也改为产品显式 modifier。在最新主线 A/B 中，三平台 normal/build 闭包进一步减少 69/64/110 个版本化 package instance |
 | App Server 不继承未消费能力 | App Server 保持现有 Agent/Git/外部来源 handler 边界，不再因 Core 基线携带文档转换和本地订阅凭据，三平台闭包减少 61/56/78 |
 | SDK Host 使用显式能力闭包 | SDK Host 保留当前本机协议和工具能力，但不再通过 `product-full` 携带协议未暴露的 Remote Connect、SSH、Function Agent 等能力；Windows/macOS/Linux normal/build 闭包减少 66/68/76 |
-| 完整产品行为和闭包保持 | `product-full` 显式组合全部 owner，Windows normal/build 闭包保持 570；CLI 保持 649。ACP 只退出未选择或未使用的隐含能力，累计在 Windows/macOS/Linux 分别减少 12/15/24 |
+| 完整产品行为保持 | `product-full` 显式组合全部 owner且三平台闭包不变；CLI 删除未调用适配层时显式保留原先实际生效的 Oniguruma 高亮后端，三平台闭包进一步减少 6/7/7。ACP 只退出未选择或未使用的隐含能力 |
 | Installer 删除未使用的直接能力 | 独立 manifest 的直接 dependency 从 18 降到 10，Windows normal/build 闭包减少 6；不把 Installer 并入根 workspace，本 PR 按要求不提交其生成 lockfile |
 | focused test 仍保持精确 | 同 owner、feature、平台和进程语义的源文件进入分组 target；使用 `--test <target> <module>::<filter>` 运行单模块 |
 
@@ -102,6 +102,26 @@ target 多 1。PDB 大小会随工具链变化，只比较同次 A/B：
 | local-storage | 13 → 6 | 25.2 → 19.2 MiB | 135.7 → 91.9 MiB |
 | 基础 Remote SSH | 3 → 2 | 3.9 → 2.8 MiB | 53.5 → 43.8 MiB |
 
+#### Contracts、AI adapters 与 Product Assembly
+
+五个纯合同/组装 owner 使用显式 wrapper target；AI 的纯协议测试与真实 loopback SSE 测试继续分成两个
+失败域，Product Domains 的默认、Plugin Source、External Sources、Function Agent 与 MiniApp 也继续按
+owner feature 分开。270 个 integration tests 不变，模块过滤仍可聚焦单个 leaf：
+
+| 范围 | 变更前 target | 变更后 target | 集成测试数 |
+|---|---:|---:|---:|
+| `core-types` | 4 | 1 | 10 |
+| `runtime-ports` | 5 | 1 | 21 |
+| `product-domains` | 9 | 5 | 179 |
+| `ai-adapters` | 7 | 2 | 29 |
+| `product-capabilities` | 3 | 1 | 31 |
+| 合计 | 28 | 10 | 270 |
+
+对应五个 lib test harness 的 test executable 总数从 33 降到 15；workspace integration target 从
+91 降到 73。该变化减少 18 次重复链接，但单叶变更会重链所属分组，因此这里只报告确定的拓扑收益，
+不在缺少同机多轮 A/B 时宣称 wall-clock 提速。边界检查锁定 exact leaf、owner feature 和空
+`required-features` 的默认 target，避免以后用 `product-full` 扩大测试闭包。
+
 ### 3.2 依赖与 feature
 
 闭包使用 `cargo tree -e normal,build` 按目标平台统计版本化 package instance；它衡量进入编译图的
@@ -136,19 +156,35 @@ normal dependency，根 lock package 集合不变。前两类收益来自 `anydo
 SSH、密钥和连接子图退出。完整产品 package 集合不变，
 因此这里只报告依赖图收敛，不宣称 `product-full` wall-clock 提速。
 
+以下是以 `gcwing/main@3d8ee4bc0` 为变更前基线、使用同样三个 target triple 和去重口径复算的最新 A/B：
+
+| 最新闭包 | Windows | macOS | Linux | 行为边界 |
+|---|---:|---:|---:|---|
+| Core `--no-default-features` | 104 → 102 | 93 → 91 | 92 → 90 | 删除 Core 不再消费的 `tokio-stream`、`urlencoding` 直接边 |
+| Core `product-full` | 570 → 570 | 557 → 557 | 601 → 601 | 完整产品仍从真实 adapter/service owner 获得两项依赖 |
+| CLI | 649 → 643 | 649 → 642 | 672 → 665 | 删除未调用的 `syntect-tui`/`dashmap`；显式保留既有 Oniguruma 高亮后端 |
+| Desktop | 792 → 790 | 807 → 805 | 892 → 887 | 删除从未注册、没有调用方的 global-shortcut 插件和 ACL |
+| MiniApp Market | 205 → 204 | 208 → 207 | 206 → 205 | 删除服务从未消费的 `urlencoding` 直接边 |
+| Page Function tests | 38 → 35 | 38 → 35 | 38 → 35 | 删除同步 Rust 测试未使用的 dev-only Tokio 闭包 |
+
+Syntect 不能机械地只删适配层：旧 feature union 同时启用 `regex-fancy` 与 `regex-onig` 时，实际由
+Oniguruma 后端处理。当前 manifest 直接选择 `regex-onig`，因此运行后端、默认 syntax/theme 和
+Syntect→Ratatui 样式转换保持不变，同时让未生效的 fancy 后端与未消费的 YAML loader 退出。
+
 Package instance 会低估“同一个大 crate 少编译了多少 feature 代码”。在 Windows
 `agent-runtime` 闭包中，`bitfun-services-integrations` 的 Cargo active feature 从 61 个降到 6 个，
 只保留 `workspace-search` 及其 5 个直接依赖 feature；`bitfun-product-domains` 从 13 个降到 5 个，
 只保留 Agent Runtime 实际使用的 external-subagent contract slice。Function Agent、MiniApp、
 Plugin Source 由各自 owner 选择，完整产品仍经 `product-full` 显式恢复。
 
-根 `Cargo.lock` 与实现复核基线保持一致，package 记录不增加；Installer 自己生成的
-`BitFun-Installer/src-tauri/Cargo.lock` 本 PR 不提交。
+根 `Cargo.lock` 从 1176 降到 1169，精确删除 `syntect-tui`、`custom_error`、`fancy-regex`、
+`yaml-rust`、`linked-hash-map`、`tauri-plugin-global-shortcut` 和 `global-hotkey`；没有新增、升级或
+降级 package。Installer 自己生成的 `BitFun-Installer/src-tauri/Cargo.lock` 本 PR 不提交。
 
 | 状态 | 范围 | 处理结论 |
 |---|---|---|
 | 已稳定 | 根 `Cargo.lock`、Reqwest Rustls 单栈、workspace Tokio 最小基线 | 不重复治理 |
-| 本轮完成 | Core Agent Runtime capability、文档转换与订阅认证 modifier、SDK Host 显式 owner closure、Installer 未使用直接依赖 | 以真实入口 closure 收敛，不建立新的产品 umbrella，也不扩大根依赖宇宙 |
+| 本轮完成 | Core Agent Runtime capability、文档转换与订阅认证 modifier、SDK Host 显式 owner closure、Installer/CLI/Desktop/Core/MiniApp Market/Page Function 未使用直接依赖 | 以真实入口 closure 收敛，不建立新的产品 umbrella；根 lock 只减少 package |
 | 当前不动 | App Server / Server | 只为保持现有 handler 编译显式声明其已消费的 Core owner；不在改造稳定前继续拆其生产路径 |
 | 明确保留 | Desktop screenshots backend | 替换方案必须同时保持三平台坐标/权限/区域捕获语义且不增加根 lock package；当前候选不满足 |
 | 明确保留 | `portable-pty 0.8/0.9` | 非 OHOS 与 OHOS 的平台兼容选择，不为去重破坏 |
@@ -179,6 +215,8 @@ Plugin Source 由各自 owner 选择，完整产品仍经 `product-full` 显式�
 | Agent Runtime 测试 | 28 个 integration executable 已收敛为 5 个职责/平台 target |
 | Services 测试 | 两个服务 crate 使用显式 target；选中闭包少 8 个 integration executable，进程/feature/external-system 边界保持独立 |
 | External Sources 测试 | 四个 adapter/assembly crate 从 22 个 target 收敛到 7 个；MCP、插件服务和脚本 runtime 继续独立 |
+| Contracts/AI/Assembly 测试 | 五个 crate 从 28 个 target 收敛到 10 个；AI loopback 与纯协议、Product Domains 各 owner feature 保持独立 |
+| 未使用直接依赖 | 删除 CLI/Desktop/Core/MiniApp Market/Page Function 的失效直接边；保留 Syntect 实际 Oniguruma 后端，根 lock 只减 7 个 package |
 
 内置 Agent 内容已经移到无第三方依赖的 `bitfun-agent-content`，减少了 Core build-script 工作；
 但 Core 仍直接依赖该 crate。没有足够产品收益前，不为消除这一编译指纹引入动态 provider、

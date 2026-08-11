@@ -30,7 +30,6 @@ tokio = { workspace = true, features = ["fs", "rt", "sync", "time"] }
 tower-http = { version = "0.6.11", features = ["fs", "set-header", "trace"] }
 tracing = { workspace = true }
 url = { workspace = true }
-urlencoding = { workspace = true }
 uuid = { workspace = true }
 zip = { workspace = true }
 

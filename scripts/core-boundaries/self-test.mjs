@@ -3238,7 +3238,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/assembly/product-capabilities/tests/product_capabilities.rs',
+      path: 'src/crates/assembly/product-capabilities/tests/product_capability_contracts/product_capabilities.rs',
       contracts: [
         'product_assembly_plan_exposes_build_feature_groups_explicitly',
         'product_runtime_assembly_reports_runtime_service_capability_gaps',
@@ -3246,7 +3246,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/assembly/product-capabilities/tests/plugin_product_shape.rs',
+      path: 'src/crates/assembly/product-capabilities/tests/product_capability_contracts/plugin_product_shape.rs',
       contracts: [
         'executable_plugin_runtime_is_limited_to_product_full_desktop_and_cli',
         'executable_plugin_runtime_client_builds_agent_runtime_parts',
@@ -3285,7 +3285,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/assembly/product-capabilities/tests/product_sdk_assembly.rs',
+      path: 'src/crates/assembly/product-capabilities/tests/product_capability_contracts/product_sdk_assembly.rs',
       contracts: [
         'product_runtime_parts_can_build_agent_runtime_sdk_without_core',
         'sdk_delivery_profile_builds_shared_runtime_owner_ceiling_without_bitfun_core',
