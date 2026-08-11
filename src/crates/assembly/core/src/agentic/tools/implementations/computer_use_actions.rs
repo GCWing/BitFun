@@ -427,8 +427,15 @@ impl ComputerUseActions {
                     host.key_chord(select_all).await?;
                 }
                 host.key_chord(paste_chord).await?;
+                // A paste lands in whatever already had focus and never moves
+                // the pointer, so it is not a reason to demand a fresh capture.
+                // This must run for *every* paste, not just `submit: true`:
+                // pasting and then sending a separate Enter `key_chord` is the
+                // common shape, and leaving the guard armed refuses that Enter
+                // with advice ("call `screenshot` first") that a text-only model
+                // cannot act on.
+                host.computer_use_trust_pointer_after_text_input();
                 if submit {
-                    host.computer_use_trust_pointer_after_text_input();
                     host.key_chord(submit_keys.clone()).await?;
                 }
 
@@ -542,9 +549,9 @@ impl ComputerUseActions {
     // ── Desktop AX-first dispatch (Codex parity) ──────────────────────
     // Routes the seven new app-targeted actions through the typed
     // `ComputerUseHost` API. Every successful response carries a
-    // unified envelope: `target_app`, `background_input`,
-    // `before_digest` and (for state queries) `app_state` /
-    // `app_state_nodes` so the model can reason about the AX tree
+    // unified envelope: `target_app`, `background_input`, `before_digest`
+    // and (for state queries) `app_state`, whose `tree_text` is the single
+    // rendering of the AX tree — so the model can reason about state
     // before/after each action without re-querying.
     async fn handle_desktop_ax(
         &self,
@@ -755,6 +762,16 @@ impl ComputerUseActions {
         // the heavy `screenshot` payload (it is attached out-of-band as a
         // multimodal image, not as base64 inside the JSON tree, to keep token
         // budgets under control and let the provider deliver it as `image_url`).
+        //
+        // `tree_text` is the **only** rendering of the AX tree we send. Results
+        // used to carry a sibling `app_state_nodes` array holding the same
+        // nodes as verbose JSON — one object per node, ~15 lines each. It was
+        // strictly redundant (`render_tree_text` already emits idx, role,
+        // title, value, identifier, description, help, url, frame and the
+        // enabled/focused/selected/expanded flags, with parentage implied by
+        // indentation) and nothing consumed it, yet it accounted for ~78% of a
+        // `get_app_state` result: a single observation of a windowless app
+        // measured 107 KB, of which 82 KB was that duplicate.
         fn snap_state_json(
             snap: &crate::agentic::tools::computer_use_host::AppStateSnapshot,
         ) -> serde_json::Value {
@@ -764,6 +781,7 @@ impl ComputerUseActions {
                 "digest": snap.digest,
                 "captured_at_ms": snap.captured_at_ms,
                 "tree_text": snap.tree_text,
+                "node_count": snap.nodes.len(),
                 "has_screenshot": snap.screenshot.is_some(),
             });
             if let Some(shot) = snap.screenshot.as_ref() {
@@ -904,7 +922,6 @@ impl ComputerUseActions {
             let mut v = json!({
                 "target_app": app,
                 "app_state": snap_state_json(&res.snapshot),
-                "app_state_nodes": res.snapshot.nodes,
                 "loop_warning": res.snapshot.loop_warning,
                 "execution_note": res.execution_note,
                 "interactive_view": res.view.as_ref().map(build_interactive_view_json),
@@ -925,7 +942,6 @@ impl ComputerUseActions {
             let mut v = json!({
                 "target_app": app,
                 "app_state": snap_state_json(&res.snapshot),
-                "app_state_nodes": res.snapshot.nodes,
                 "loop_warning": res.snapshot.loop_warning,
                 "execution_note": res.execution_note,
                 "visual_mark_view": res.view.as_ref().map(build_visual_mark_view_json),
@@ -1069,7 +1085,6 @@ impl ComputerUseActions {
                     "background_input": bg,
                     "ax_tree": ax,
                     "app_state": snap_state_json(&snap),
-                    "app_state_nodes": snap.nodes,
                     "before_digest": snap.digest,
                     "loop_warning": snap.loop_warning,
                 });
@@ -1164,7 +1179,6 @@ impl ComputerUseActions {
                     "background_input": bg,
                     "before_digest": before,
                     "app_state": snap_state_json(&after),
-                    "app_state_nodes": after.nodes,
                     "loop_warning": after.loop_warning,
                 });
                 Ok(vec![snap_result(data, Some("clicked".to_string()), &after)])
@@ -1212,7 +1226,6 @@ impl ComputerUseActions {
                     "focus": focus,
                     "before_digest": before,
                     "app_state": snap_state_json(&after),
-                    "app_state_nodes": after.nodes,
                     "loop_warning": after.loop_warning,
                 });
                 Ok(vec![snap_result(
@@ -1237,7 +1250,6 @@ impl ComputerUseActions {
                     "dy": dy,
                     "focus": focus,
                     "app_state": snap_state_json(&after),
-                    "app_state_nodes": after.nodes,
                     "loop_warning": after.loop_warning,
                 });
                 Ok(vec![snap_result(
@@ -1268,7 +1280,6 @@ impl ComputerUseActions {
                     "keys": keys,
                     "focus_idx": focus_idx,
                     "app_state": snap_state_json(&after),
-                    "app_state_nodes": after.nodes,
                     "loop_warning": after.loop_warning,
                 });
                 Ok(vec![snap_result(
@@ -1302,7 +1313,6 @@ impl ComputerUseActions {
                     "background_input": bg,
                     "predicate": predicate,
                     "app_state": snap_state_json(&after),
-                    "app_state_nodes": after.nodes,
                     "loop_warning": after.loop_warning,
                 });
                 Ok(vec![snap_result(
