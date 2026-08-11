@@ -15,11 +15,35 @@ import { useGroupChatStore } from '../../../../../flow_chat/store/groupChatStore
 import type { GroupChatRoom } from '../../../../../flow_chat/types/flow-chat';
 
 vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({
-  useWorkspaceContext: () => ({ currentWorkspace: { rootPath: '/ws' } }),
+  useWorkspaceContext: () => ({
+    currentWorkspace: { rootPath: '/ws' },
+    workspacePath: '/ws',
+    workspaceName: 'ws',
+    activeWorkspace: null,
+    loading: false,
+    error: null,
+    hasWorkspace: true,
+    openedWorkspaces: { values: () => [] },
+  }),
+  useOptionalWorkspaceContext: () => ({ workspacePath: '/ws' }),
+  useCurrentWorkspace: () => ({
+    workspace: null,
+    loading: false,
+    error: null,
+    hasWorkspace: true,
+    workspaceName: 'ws',
+    workspacePath: '/ws',
+  }),
 }));
 
 vi.mock('@/infrastructure/api/service-api/ApiClient', () => ({
   api: { invoke: vi.fn() },
+}));
+
+// The shared ChatInput is a heavy composer with deep store dependencies; stub
+// it so the wiring test stays focused on the nav -> pane mount chain.
+vi.mock('../../../../../flow_chat/components/ChatInput', () => ({
+  ChatInput: () => React.createElement('div', { 'data-testid': 'chat-input-stub' }),
 }));
 
 vi.mock('@/component-library/components/ConfirmDialog/confirmService', () => ({
